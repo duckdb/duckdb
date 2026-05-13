@@ -5,9 +5,6 @@
 require parquet
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 COPY (SELECT i, i + 1 AS j, i + 2 AS k, -i AS l FROM range(10) t(i)) TO '{TEST_DIR}/late_materialization.parquet';
 
 statement ok
@@ -45,6 +42,18 @@ query II
 explain SELECT i FROM test ORDER BY i LIMIT 2;
 ----
 logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+# projection columns are all already required by the pushed-down filter
+query II
+explain SELECT j FROM test WHERE j > 3 ORDER BY i LIMIT 2;
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+query I
+SELECT j FROM test WHERE j > 3 ORDER BY i LIMIT 2;
+----
+4
+5
 
 # we cannot do this with volatile expressions
 query II

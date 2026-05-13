@@ -5,9 +5,6 @@
 require json
 
 statement ok
-pragma enable_verification
-
-statement ok
 create table t1 as select range + 10 n, range v from range(10)
 
 query T

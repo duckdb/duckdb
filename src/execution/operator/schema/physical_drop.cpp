@@ -6,6 +6,9 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/parser/parsed_data/extra_drop_info.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
 
@@ -48,6 +51,28 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		SecretManager::Get(context.client)
 		    .DropSecretByName(context.client, info->name, info->if_not_found, extra_info.persist_mode,
 		                      extra_info.secret_storage);
+		break;
+	}
+	case CatalogType::TRIGGER_ENTRY: {
+		// Triggers are stored per-table; must be dropped through the table, not the schema
+		if (!info->extra_drop_info) {
+			throw InternalException("DROP TRIGGER: missing extra_drop_info (expected ExtraDropTriggerInfo)");
+		}
+		auto &trigger_extra = info->extra_drop_info->Cast<ExtraDropTriggerInfo>();
+		if (!trigger_extra.base_table) {
+			throw InternalException("DROP TRIGGER: ExtraDropTriggerInfo has no base_table");
+		}
+		auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
+		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context.client, info->catalog, info->schema,
+		                                                         base_table_ref.table_name);
+		auto &duck_table = table_entry.Cast<DuckTableEntry>();
+		auto transaction = duck_table.catalog.GetCatalogTransaction(context.client);
+		if (!duck_table.DropTrigger(transaction, info->name, info->cascade)) {
+			if (info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+				throw CatalogException("Trigger with name \"%s\" does not exist on table \"%s\"", info->name,
+				                       base_table_ref.table_name);
+			}
+		}
 		break;
 	}
 	default: {

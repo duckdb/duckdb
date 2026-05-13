@@ -11,6 +11,7 @@
 #include "json_scan.hpp"
 #include "json_transform.hpp"
 #include "json_multi_file_info.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 
 namespace duckdb {
 

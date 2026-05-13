@@ -1,0 +1,32 @@
+# name: test/sql/join/inner/test_prefix_range_filter_non_utf8.test
+# description: PrefixRangeFilter does not crash on parquet stats with non-UTF-8 bytes
+# group: [inner]
+
+require parquet
+
+require strinline
+
+statement ok
+SET disabled_optimizers = 'join_order,build_side_probe_side';
+
+statement ok
+COPY (
+    SELECT CASE WHEN i < 5 THEN 'ascii' || lpad(i::VARCHAR, 3, '0')
+                ELSE            chr(26085) || chr(26412) || chr(35486) || lpad(i::VARCHAR, 4, '0')
+           END AS k,
+           (i % 3)::INTEGER AS g
+    FROM range(10) t(i)
+) TO '{TEST_DIR}/prf_non_utf8_probe.parquet' (ROW_GROUP_SIZE 5);
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_non_utf8 (k VARCHAR, g INTEGER, payload INTEGER);
+
+statement ok
+INSERT INTO prf_build_non_utf8 VALUES ('a', 0, 1), ('z', 0, 2), ('m', 1, 3);
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/prf_non_utf8_probe.parquet') p
+JOIN prf_build_non_utf8 b ON p.k = b.k AND p.g >= b.g;
+----
+0

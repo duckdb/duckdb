@@ -44,9 +44,9 @@ public:
 	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
 	void RevertAppend(row_t new_count) override;
 
-	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
+	void Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index, Vector &update_vector,
 	            row_t *row_ids, idx_t update_count, idx_t row_group_start) override;
-	void UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
+	void UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, const vector<column_t> &column_path,
 	                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth,
 	                  idx_t row_group_start) override;
 

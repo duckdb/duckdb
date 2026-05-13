@@ -161,7 +161,7 @@ PRAGMA explain_output = PHYSICAL_ONLY;
 query II
 explain select count(*) from t where b <=3 and b>=0;
 ----
-physical_plan	<REGEX>:.*b<=3.*
+physical_plan	<REGEX>:.*\(b <= 3\).*
 
 # test time pushdown
 

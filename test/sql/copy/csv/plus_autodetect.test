@@ -3,9 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE phone_numbers AS SELECT * FROM read_csv_auto('{DATA_DIR}/csv/phonenumbers.csv')
 
 query I

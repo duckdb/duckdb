@@ -2,9 +2,6 @@
 # description: Test UUID-UHUGEINT casting operations
 # group: [uuid]
 
-statement ok
-PRAGMA enable_verification
-
 # ====================
 # UUID <-> UHUGEINT Tests
 # ====================

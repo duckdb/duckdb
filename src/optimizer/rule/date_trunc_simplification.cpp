@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
@@ -37,8 +38,10 @@ DateTruncSimplificationRule::DateTruncSimplificationRule(ExpressionRewriter &rew
 
 unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                           bool &changes_made, bool is_root) {
-	auto &expr = bindings[0].get().Cast<BoundComparisonExpression>();
+	auto &expr = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto comparison_type = expr.GetExpressionType();
+	auto &left = BoundComparisonExpression::LeftMutable(expr);
+	auto &right = BoundComparisonExpression::RightMutable(expr);
 
 	auto &date_part = bindings[2].get().Cast<BoundConstantExpression>();
 	// We must have only a column on the LHS.
@@ -50,7 +53,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 	auto &rhs = bindings[4].get().Cast<BoundConstantExpression>();
 
 	// Determine whether or not the column name is on the lhs or rhs.
-	const bool col_is_lhs = (expr.left->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION);
+	const bool col_is_lhs = (left->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION);
 
 	// We want to treat rhs >= col equivalently to col <= rhs.
 	// So, get the expression type if it was ordered such that the constant was actually on the right hand side.
@@ -97,20 +100,20 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 					return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 				}
 
-				auto trunc = CreateTrunc(date_part, rhs, column_part.return_type);
+				auto trunc = CreateTrunc(date_part, rhs, column_part.GetReturnType());
 				if (!trunc) {
 					return nullptr;
 				}
 
-				auto trunc_add = CreateTruncAdd(date_part, rhs, column_part.return_type);
+				auto trunc_add = CreateTruncAdd(date_part, rhs, column_part.GetReturnType());
 				if (!trunc_add) {
 					return nullptr;
 				}
 
-				auto gteq = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-				                                                 column_part.Copy(), std::move(trunc));
-				auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, column_part.Copy(),
-				                                               std::move(trunc_add));
+				auto gteq = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+				                                              column_part.Copy(), std::move(trunc));
+				auto lt = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHAN, column_part.Copy(),
+				                                            std::move(trunc_add));
 
 				// For IS NOT DISTINCT FROM, we also have to add the extra NULL term.
 				if (rhs_comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
@@ -165,20 +168,20 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 					return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
 				}
 
-				auto trunc = CreateTrunc(date_part, rhs, column_part.return_type);
+				auto trunc = CreateTrunc(date_part, rhs, column_part.GetReturnType());
 				if (!trunc) {
 					return nullptr;
 				}
 
-				auto trunc_add = CreateTruncAdd(date_part, rhs, column_part.return_type);
+				auto trunc_add = CreateTruncAdd(date_part, rhs, column_part.GetReturnType());
 				if (!trunc_add) {
 					return nullptr;
 				}
 
-				auto lt = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, column_part.Copy(),
-				                                               std::move(trunc));
-				auto gteq = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-				                                                 column_part.Copy(), std::move(trunc_add));
+				auto lt = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHAN, column_part.Copy(),
+				                                            std::move(trunc));
+				auto gteq = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+				                                              column_part.Copy(), std::move(trunc_add));
 
 				// If this is a DISTINCT FROM, we need to add the 'column IS NULL' term.
 				if (rhs_comparison_type == ExpressionType::COMPARE_DISTINCT_FROM) {
@@ -210,32 +213,32 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 			// use the rhs as-is, instead of using trunc(rhs + 1 date_part).
 			if (!is_truncated) {
 				// Create date_trunc(part, date_add(rhs, INTERVAL 1 part)) and fold the constant.
-				auto trunc = CreateTruncAdd(date_part, rhs, column_part.return_type);
+				auto trunc = CreateTruncAdd(date_part, rhs, column_part.GetReturnType());
 				if (!trunc) {
 					return nullptr; // Something went wrong---don't do the optimization.
 				}
 
 				if (col_is_lhs) {
-					expr.left = column_part.Copy();
-					expr.right = std::move(trunc);
+					left = column_part.Copy();
+					right = std::move(trunc);
 				} else {
-					expr.right = column_part.Copy();
-					expr.left = std::move(trunc);
+					right = column_part.Copy();
+					left = std::move(trunc);
 				}
 			} else {
 				// If the RHS is already truncated (i.e.  date_trunc(part, rhs) = rhs), then we can use
 				// it as-is.
 				if (col_is_lhs) {
-					expr.left = column_part.Copy();
+					left = column_part.Copy();
 					// Determine whether the RHS needs to be casted.
-					if (rhs.return_type.id() != expr.left->return_type.id()) {
-						expr.right = CastAndEvaluate(std::move(expr.right), expr.left->return_type);
+					if (rhs.GetReturnType().id() != left->GetReturnType().id()) {
+						right = CastAndEvaluate(std::move(right), left->GetReturnType());
 					}
 				} else {
-					expr.right = column_part.Copy();
+					right = column_part.Copy();
 					// Determine whether the RHS needs to be casted.
-					if (rhs.return_type.id() != expr.right->return_type.id()) {
-						expr.left = CastAndEvaluate(std::move(expr.left), expr.right->return_type);
+					if (rhs.GetReturnType().id() != right->GetReturnType().id()) {
+						left = CastAndEvaluate(std::move(left), right->GetReturnType());
 					}
 				}
 			}
@@ -252,31 +255,31 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 		//                                                                                    INTERVAL 1 part))
 		{
 			// Create date_trunc(part, date_add(rhs, INTERVAL 1 part)) and fold the constant.
-			auto trunc = CreateTruncAdd(date_part, rhs, column_part.return_type);
+			auto trunc = CreateTruncAdd(date_part, rhs, column_part.GetReturnType());
 			if (!trunc) {
 				return nullptr; // Something went wrong---don't do the optimization.
 			}
 
 			if (col_is_lhs) {
-				expr.left = column_part.Copy();
-				expr.right = std::move(trunc);
+				left = column_part.Copy();
+				right = std::move(trunc);
 			} else {
-				expr.right = column_part.Copy();
-				expr.left = std::move(trunc);
+				right = column_part.Copy();
+				left = std::move(trunc);
 			}
 
 			// > needs to become >=, and <= needs to become <.
 			if (rhs_comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 				if (col_is_lhs) {
-					expr.SetExpressionTypeUnsafe(ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+					BoundComparisonExpression::SetType(expr, ExpressionType::COMPARE_GREATERTHANOREQUALTO);
 				} else {
-					expr.SetExpressionTypeUnsafe(ExpressionType::COMPARE_LESSTHANOREQUALTO);
+					BoundComparisonExpression::SetType(expr, ExpressionType::COMPARE_LESSTHANOREQUALTO);
 				}
 			} else {
 				if (col_is_lhs) {
-					expr.SetExpressionTypeUnsafe(ExpressionType::COMPARE_LESSTHAN);
+					BoundComparisonExpression::SetType(expr, ExpressionType::COMPARE_LESSTHAN);
 				} else {
-					expr.SetExpressionTypeUnsafe(ExpressionType::COMPARE_GREATERTHAN);
+					BoundComparisonExpression::SetType(expr, ExpressionType::COMPARE_GREATERTHAN);
 				}
 			}
 
@@ -347,7 +350,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTrunc(const BoundConst
 	auto trunc = binder.BindScalarFunction(DEFAULT_SCHEMA, "date_trunc", std::move(args), error);
 
 	// Ensure that the RHS type matches the column type.
-	if (trunc->return_type.id() != return_type.id()) {
+	if (trunc->GetReturnType().id() != return_type.id()) {
 		trunc = BoundCastExpression::AddDefaultCastToType(std::move(trunc), return_type, true);
 	}
 
@@ -397,7 +400,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundCo
 	auto trunc = binder.BindScalarFunction(DEFAULT_SCHEMA, "date_trunc", std::move(args3), error);
 
 	// Ensure that the RHS type matches the column type.
-	if (trunc->return_type.id() != return_type.id()) {
+	if (trunc->GetReturnType().id() != return_type.id()) {
 		trunc = BoundCastExpression::AddDefaultCastToType(std::move(trunc), return_type, true);
 	}
 
@@ -421,7 +424,7 @@ bool DateTruncSimplificationRule::DateIsTruncated(const BoundConstantExpression 
 	}
 
 	// Create the node date_trunc(date_part, rhs).
-	auto trunc = CreateTrunc(date_part, rhs, rhs.return_type);
+	auto trunc = CreateTrunc(date_part, rhs, rhs.GetReturnType());
 
 	Value trunc_result, result;
 	if (!ExpressionExecutor::TryEvaluateScalar(rewriter.context, *trunc, trunc_result)) {

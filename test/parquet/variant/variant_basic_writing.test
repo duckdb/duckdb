@@ -97,7 +97,8 @@ create macro data() as table (
 			'dec_9_4', -- can't roundtrip with json
 			'dec_18_6', -- can't roundtrip with json
 			'dec38_10', -- can't roundtrip with json
-			'blob' -- data is base64-encoded in parquet read
+			'blob', -- data is base64-encoded in parquet read
+			'geometry' -- FIXME: not supported for now
 		]
 	])::VARIANT as "\0" from test_all_types()
 )

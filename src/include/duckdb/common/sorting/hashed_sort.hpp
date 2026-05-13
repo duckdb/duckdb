@@ -51,7 +51,7 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Non-Standard Interface
 	//===--------------------------------------------------------------------===//
-	void SortColumnData(ExecutionContext &context, hash_t hash_bin, OperatorSinkFinalizeInput &finalize) override;
+	void SortColumnData(ExecutionContext &context, hash_t hash_bin, OperatorSinkFinalizeInput &finalize) const override;
 
 	SourceResultType MaterializeColumnData(ExecutionContext &context, idx_t hash_bin,
 	                                       OperatorSourceInput &source) const override;
@@ -62,6 +62,8 @@ public:
 	SortedRunPtr GetSortedRun(ClientContext &client, idx_t hash_bin, OperatorSourceInput &source) const override;
 
 	const ChunkRows &GetHashGroups(GlobalSourceState &global_state) const override;
+
+	void RegisterHyperLogLog(LocalSinkState &local_state, ParallelHyperLogLogLocalState &hll_state) const override;
 
 public:
 	//! The host's estimated row count

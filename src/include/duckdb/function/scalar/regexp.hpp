@@ -18,8 +18,10 @@ namespace duckdb {
 namespace regexp_util {
 
 bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &constant_string);
-void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr);
-void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace = nullptr);
+void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr,
+                       bool *no_match_returns_input = nullptr);
+void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace = nullptr,
+                       bool *no_match_returns_input = nullptr);
 void ParseGroupNameList(ClientContext &context, const string &function_name, Expression &group_expr,
                         const string &pattern_string, RE2::Options &options, bool require_constant_pattern,
                         vector<string> &out_names, child_list_t<LogicalType> &out_struct_children);
@@ -30,19 +32,11 @@ inline duckdb_re2::StringPiece CreateStringPiece(const string_t &input) {
 	return duckdb_re2::StringPiece(input.GetData(), input.GetSize());
 }
 
-inline string_t Extract(const string_t &input, StringHeap &heap, const RE2 &re,
-                        const duckdb_re2::StringPiece &rewrite) {
-	string extracted;
-	RE2::Extract(input.GetString(), re, rewrite, &extracted);
-	return heap.AddString(extracted.c_str(), extracted.size());
-}
-
 } // namespace regexp_util
 
 struct RegexpExtractAll {
 	static void Execute(DataChunk &args, ExpressionState &state, Vector &result);
-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                     vector<unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input);
 	static unique_ptr<FunctionLocalState> InitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
 	                                                     FunctionData *bind_data);
 };
@@ -80,8 +74,7 @@ struct RegexpExtractAllStructBindData : public RegexpBaseBindData {
 
 struct RegexpExtractAllStruct {
 	static void Execute(DataChunk &args, ExpressionState &state, Vector &result);
-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                     vector<unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input);
 	static unique_ptr<FunctionLocalState> InitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
 	                                                     FunctionData *bind_data);
 };
@@ -112,10 +105,14 @@ struct RegexpReplaceBindData : public RegexpBaseBindData {
 struct RegexpExtractBindData : public RegexpBaseBindData {
 	RegexpExtractBindData();
 	RegexpExtractBindData(duckdb_re2::RE2::Options options, string constant_string, bool constant_pattern,
-	                      string group_string);
+	                      int8_t group_index, bool no_match_returns_input = false);
 
-	string group_string;
-	duckdb_re2::StringPiece rewrite;
+	// `regexp_extract` always extracts a single capture group. -1 represents "no group requested"
+	// (e.g. NULL group argument), which the runtime treats as a no-match (returns empty/input).
+	int8_t group_index = 0;
+	// On no match, return the input instead of an empty string (set via the `k` option, also used by
+	// the regexp_replace -> regexp_extract optimizer rewrite).
+	bool no_match_returns_input = false;
 
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
@@ -192,7 +189,6 @@ struct RegexLocalState : public FunctionLocalState {
 
 unique_ptr<FunctionLocalState> RegexInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
                                                    FunctionData *bind_data);
-unique_ptr<FunctionData> RegexpMatchesBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments);
+unique_ptr<FunctionData> RegexpMatchesBind(BindScalarFunctionInput &input);
 
 } // namespace duckdb

@@ -2,9 +2,6 @@
 # description: Test bug from issue 10273
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 FROM read_csv('{DATA_DIR}/csv/bug_10273.csv', header=0)
 ----

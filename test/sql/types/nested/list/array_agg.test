@@ -2,9 +2,6 @@
 # description: Test array_agg function
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 # scalar array agg
 query II
 SELECT ARRAY_AGG(NULL), ARRAY_AGG(42)

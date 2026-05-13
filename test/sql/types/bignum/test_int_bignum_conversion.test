@@ -2,9 +2,6 @@
 # description: Test basics of bignum type
 # group: [bignum]
 
-statement ok
-PRAGMA enable_verification
-
 foreach int_type tinyint utinyint smallint usmallint integer uinteger bigint ubigint hugeint uhugeint double float
 
 query I

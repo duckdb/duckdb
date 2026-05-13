@@ -10,7 +10,6 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
 	std::unordered_set<std::string> internal_error_messages = {"Unoptimized Result differs from original result!",
 	                                                           "INTERNAL"};
-	con.Query("PRAGMA enable_verification");
 	try {
 		auto result = con.Query(input);
 		if (result->HasError()) {

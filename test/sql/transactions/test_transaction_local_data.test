@@ -2,9 +2,6 @@
 # description: Test operations on transaction local data
 # group: [transactions]
 
-statement ok
-PRAGMA enable_verification
-
 # perform different operations on the same data within one transaction
 statement ok
 BEGIN TRANSACTION

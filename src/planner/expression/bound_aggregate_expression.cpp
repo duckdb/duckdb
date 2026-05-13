@@ -8,18 +8,19 @@
 
 namespace duckdb {
 
-BoundAggregateExpression::BoundAggregateExpression(AggregateFunction function, vector<unique_ptr<Expression>> children,
+BoundAggregateExpression::BoundAggregateExpression(BoundAggregateFunction function,
+                                                   vector<unique_ptr<Expression>> children,
                                                    unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info,
                                                    AggregateType aggr_type)
     : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.GetReturnType()),
       function(std::move(function)), children(std::move(children)), bind_info(std::move(bind_info)),
       aggr_type(aggr_type), filter(std::move(filter)) {
-	D_ASSERT(!this->function.name.empty());
+	D_ASSERT(!this->function.GetName().empty());
 }
 
 string BoundAggregateExpression::ToString() const {
 	return FunctionExpression::ToString<BoundAggregateExpression, Expression, BoundOrderModifier>(
-	    *this, string(), string(), function.name, false, IsDistinct(), filter.get(), order_bys.get());
+	    *this, string(), string(), function.GetName(), false, IsDistinct(), filter.get(), order_bys.get());
 }
 
 hash_t BoundAggregateExpression::Hash() const {
@@ -61,8 +62,9 @@ bool BoundAggregateExpression::Equals(const BaseExpression &other_p) const {
 }
 
 bool BoundAggregateExpression::PropagatesNullValues() const {
-	return function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING ? false
-	                                                                            : Expression::PropagatesNullValues();
+	return function.GetProperties().GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING
+	           ? false
+	           : Expression::PropagatesNullValues();
 }
 
 unique_ptr<Expression> BoundAggregateExpression::Copy() const {
@@ -93,7 +95,7 @@ void BoundAggregateExpression::Serialize(Serializer &serializer) const {
 unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
-	auto entry = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+	auto entry = FunctionSerializer::Deserialize<BoundAggregateFunction, AggregateFunctionCatalogEntry>(
 	    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, return_type);
 	auto aggregate_type = deserializer.ReadProperty<AggregateType>(203, "aggregate_type");
 	auto filter =

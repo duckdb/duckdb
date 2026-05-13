@@ -27,7 +27,7 @@ namespace duckdb {
 void VariantValue::AddChild(const string &key, VariantValue &&val) {
 	D_ASSERT(value_type == VariantValueType::OBJECT);
 	if (val.IsMissing()) {
-		throw InternalException("Adding a missing value to an object");
+		return;
 	}
 	object_children.emplace(key, std::move(val));
 }
@@ -35,9 +35,50 @@ void VariantValue::AddChild(const string &key, VariantValue &&val) {
 void VariantValue::AddItem(VariantValue &&val) {
 	D_ASSERT(value_type == VariantValueType::ARRAY);
 	if (val.IsMissing()) {
-		throw InternalException("Adding a missing value to an array");
+		//! SPEC: If a Variant is missing in a context where a value is required, readers must return a Variant null
+		val = VariantValue::NullValue();
 	}
 	array_items.push_back(std::move(val));
+}
+
+void VariantValue::SetItems(vector<VariantValue> &&values) {
+	D_ASSERT(value_type == VariantValueType::ARRAY);
+	for (auto &value : values) {
+		if (value.IsMissing()) {
+			//! SPEC: If a Variant is missing in a context where a value is required, readers must return a Variant null
+			value = VariantValue::NullValue();
+		}
+	}
+	array_items = std::move(values);
+}
+
+void VariantValue::ReserveItems(idx_t count) {
+	array_items.reserve(count);
+}
+
+void VariantValue::AddItems(vector<VariantValue>::iterator begin, vector<VariantValue>::iterator end) {
+	D_ASSERT(value_type == VariantValueType::ARRAY);
+	for (; begin != end; begin++) {
+		auto &value = *begin;
+		if (value.IsMissing()) {
+			//! SPEC: If a Variant is missing in a context where a value is required, readers must return a Variant null
+			value = VariantValue::NullValue();
+		}
+		array_items.push_back(std::move(value));
+	}
+}
+
+map<string, VariantValue> VariantValue::TakeObjectChildren() {
+	D_ASSERT(value_type == VariantValueType::OBJECT);
+	return std::move(object_children);
+}
+
+const map<string, VariantValue> &VariantValue::ObjectChildren() const {
+	return object_children;
+}
+
+const vector<VariantValue> &VariantValue::ArrayItems() const {
+	return array_items;
 }
 
 static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offsets) {
@@ -50,7 +91,7 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offset
 	switch (value.value_type) {
 	case VariantValueType::OBJECT: {
 		//! Write the count of the children
-		auto &children = value.object_children;
+		auto &children = value.ObjectChildren();
 		data_offset += GetVarintSize(children.size());
 		if (!children.empty()) {
 			//! Write the children offset
@@ -66,7 +107,7 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offset
 	}
 	case VariantValueType::ARRAY: {
 		//! Write the count of the children
-		auto &children = value.array_items;
+		auto &children = value.ArrayItems();
 		data_offset += GetVarintSize(children.size());
 		if (!children.empty()) {
 			//! Write the children offset
@@ -140,6 +181,10 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offset
 		}
 		case LogicalTypeId::TIMESTAMP_TZ: {
 			data_offset += sizeof(timestamp_tz_t);
+			break;
+		}
+		case LogicalTypeId::TIMESTAMP_TZ_NS: {
+			data_offset += sizeof(timestamp_tz_ns_t);
 			break;
 		}
 		case LogicalTypeId::TIMESTAMP: {
@@ -226,8 +271,6 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offset
 		}
 		break;
 	}
-	case VariantValueType::MISSING:
-		throw InternalException("Unexpected MISSING value in Variant AnalyzeValue");
 	default:
 		throw InternalException("VariantValueType not handled");
 	}
@@ -254,7 +297,7 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 	switch (value.value_type) {
 	case VariantValueType::OBJECT: {
 		//! Write the count of the children
-		auto &children = value.object_children;
+		auto &children = value.ObjectChildren();
 
 		//! values
 		result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::OBJECT);
@@ -295,7 +338,7 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 	}
 	case VariantValueType::ARRAY: {
 		//! Write the count of the children
-		auto &children = value.array_items;
+		auto &children = value.ArrayItems();
 
 		//! values
 		result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::ARRAY);
@@ -428,6 +471,13 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 			result.type_ids_data[values_list_offset + values_offset] =
 			    static_cast<uint8_t>(VariantLogicalType::TIMESTAMP_MICROS_TZ);
 			Store(primitive.GetValueUnsafe<timestamp_tz_t>(), blob_data + data_offset);
+			data_offset += sizeof(timestamp_tz_t);
+			break;
+		}
+		case LogicalTypeId::TIMESTAMP_TZ_NS: {
+			result.type_ids_data[values_list_offset + values_offset] =
+			    static_cast<uint8_t>(VariantLogicalType::TIMESTAMP_NANOS_TZ);
+			Store(primitive.GetValueUnsafe<timestamp_tz_ns_t>(), blob_data + data_offset);
 			data_offset += sizeof(timestamp_tz_t);
 			break;
 		}
@@ -599,27 +649,20 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 	auto blob_sizes = variant::OffsetData::GetBlob(offsets);
 
 	for (idx_t i = 0; i < count; i++) {
-		auto &keys_entry = keys_data[i];
-		auto &children_entry = children_data[i];
-		auto &values_entry = values_data[i];
-
 		//! keys
-		keys_entry.length = keys_sizes[i];
-		keys_entry.offset = keys_offset;
-		keys_offset += keys_entry.length;
+		keys_data.WriteValue(list_entry_t(keys_offset, keys_sizes[i]));
+		keys_offset += keys_sizes[i];
 
 		//! children
-		children_entry.length = children_sizes[i];
-		children_entry.offset = children_offset;
-		children_offset += children_entry.length;
+		children_data.WriteValue(list_entry_t(children_offset, children_sizes[i]));
+		children_offset += children_sizes[i];
 
 		//! values
-		values_entry.length = values_sizes[i];
-		values_entry.offset = values_offset;
-		values_offset += values_entry.length;
+		values_data.WriteValue(list_entry_t(values_offset, values_sizes[i]));
+		values_offset += values_sizes[i];
 
 		//! value
-		blob_data[i].EmptyString(blob_sizes[i]);
+		blob_data.WriteEmptyString(blob_sizes[i]);
 	}
 
 	//! Reserve for the children of the lists
@@ -652,7 +695,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &value = input[i];
-		if (value.IsNull()) {
+		if (value.IsNull() || value.IsMissing()) {
 			continue;
 		}
 		AnalyzeValue(value, i, analyze_offsets);
@@ -663,7 +706,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	InitializeVariants(analyze_offsets, result, keys_selvec, keys_selvec_size);
 
 	auto &keys = VariantVector::GetKeys(result);
-	auto &keys_entry = ListVector::GetEntry(keys);
+	auto &keys_entry = ListVector::GetChildMutable(keys);
 	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
 
 	DataChunk conversion_offsets;
@@ -676,7 +719,8 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	VariantVectorData variant_data(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto &value = input[i];
-		if (value.IsNull()) {
+		if (value.IsNull() || value.IsMissing()) {
+			//! SPEC: If a Variant is missing in a context where a value is required, readers must return a Variant null
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}
@@ -715,12 +759,8 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
 
 	keys_entry.Slice(keys_selvec, keys_selvec_size);
-	keys_entry.Flatten(keys_selvec_size);
-
-	if (input.size() == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(count);
+	FlatVector::SetSize(result, count);
+	result.Verify();
 }
 
 yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc) const {
@@ -760,6 +800,10 @@ yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc
 			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
 		}
 		case LogicalTypeId::TIMESTAMP_TZ: {
+			auto value_str = primitive_value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
+			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
+		}
+		case LogicalTypeId::TIMESTAMP_TZ_NS: {
 			auto value_str = primitive_value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
 		}

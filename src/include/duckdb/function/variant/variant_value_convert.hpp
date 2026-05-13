@@ -54,6 +54,10 @@ struct ValueConverter {
 		return Value::TIMESTAMPTZ(val);
 	}
 
+	static Value VisitTimestampTZNanos(timestamp_tz_ns_t val) {
+		return Value::TIMESTAMPTZNS(val);
+	}
+
 	static Value VisitFloat(float val) {
 		return Value::FLOAT(val);
 	}

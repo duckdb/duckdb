@@ -1,9 +1,17 @@
 #pragma once
 
+#include <stdint.h>
+#include <stdlib.h>
+#include <string>
+
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/variant_value.hpp"
 #include "yyjson.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/vector.hpp"
 
 using namespace duckdb_yyjson;
 

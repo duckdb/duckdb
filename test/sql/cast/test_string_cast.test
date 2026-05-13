@@ -2,9 +2,6 @@
 # description: Test string casts
 # group: [cast]
 
-statement ok
-PRAGMA enable_verification
-
 query TTT
 SELECT (1=1)::VARCHAR, (1=0)::VARCHAR, NULL::BOOLEAN::VARCHAR
 ----

@@ -101,6 +101,26 @@ private:
 	BaseQueryResult *open_result = nullptr;
 };
 
+//! RAII wrapper that ensures the active query is reset if an exception occurs during preparation
+struct ActiveQueryGuard {
+	unique_ptr<ActiveQueryContext> &active_query;
+	bool set_active_query;
+
+	ActiveQueryGuard(unique_ptr<ActiveQueryContext> &active_query_p, const string &query)
+	    : active_query(active_query_p), set_active_query(false) {
+		if (!active_query) {
+			active_query = make_uniq<ActiveQueryContext>();
+			set_active_query = true;
+			active_query->query = query;
+		}
+	}
+	~ActiveQueryGuard() {
+		if (set_active_query) {
+			active_query.reset();
+		}
+	}
+};
+
 #ifdef DEBUG
 struct DebugClientContextState : public ClientContextState {
 	~DebugClientContextState() override {
@@ -443,7 +463,14 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 		}
 	}
 
-	if (config.enable_optimizer && logical_plan->RequireOptimizer()) {
+	bool optimize = config.enable_optimizer;
+	if (Settings::Get<DebugDisableOptimizerSetting>(*this)) {
+		// verify disable optimizer - disable EXCEPT for explain, otherwise every single EXPLAIN query breaks
+		if (logical_plan->type != LogicalOperatorType::LOGICAL_EXPLAIN) {
+			optimize = false;
+		}
+	}
+	if (optimize && logical_plan->RequireOptimizer()) {
 		profiler.StartPhase(MetricType::ALL_OPTIMIZERS);
 		Optimizer optimizer(*logical_planner.binder, *this);
 		logical_plan = optimizer.Optimize(std::move(logical_plan));
@@ -762,7 +789,7 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 		}
 
 		ColumnBindingResolver resolver;
-		resolver.Verify(*plan);
+		resolver.Verify(*this, *plan);
 		resolver.VisitOperator(*plan);
 
 		plan->ResolveOperatorTypes();
@@ -779,7 +806,10 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 	PendingQueryParameters parameters;
 	RunFunctionInTransactionInternal(
 	    lock,
-	    [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement), parameters); },
+	    [&]() {
+		    ActiveQueryGuard guard(active_query, statement_query);
+		    prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement), parameters);
+	    },
 	    false);
 	prepared_data->unbound_statement = std::move(unbound_statement);
 	return make_uniq<PreparedStatement>(shared_from_this(), std::move(prepared_data), std::move(statement_query),
@@ -902,70 +932,8 @@ bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult &res
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
-#ifdef DUCKDB_ALTERNATIVE_VERIFY
-	if (statement && statement->type != StatementType::LOGICAL_PLAN_STATEMENT) {
-		statement = statement->Copy();
-	}
-#endif
-	if (statement && config.query_verification_enabled) {
-		// query verification is enabled
-		// create a copy of the statement, and use the copy
-		// this way we verify that the copy correctly copies all properties
-		auto copied_statement = statement->Copy();
-		switch (statement->type) {
-		case StatementType::SELECT_STATEMENT: {
-			// in case this is a select query, we verify the original statement
-			ErrorData error;
-			try {
-				error = VerifyQuery(lock, query, std::move(statement), parameters);
-			} catch (std::exception &ex) {
-				error = ErrorData(ex);
-			}
-			if (error.HasError()) {
-				// error in verifying query
-				return ErrorResult<PendingQueryResult>(std::move(error), query);
-			}
-			statement = std::move(copied_statement);
-			break;
-		}
-		default: {
-#ifndef DUCKDB_ALTERNATIVE_VERIFY
-			bool reparse_statement = true;
-#else
-			bool reparse_statement = false;
-#endif
-			statement = std::move(copied_statement);
-			if (statement->type == StatementType::RELATION_STATEMENT) {
-				reparse_statement = false;
-			}
-			if (reparse_statement) {
-				try {
-					Parser parser(GetParserOptions());
-					ErrorData error;
-					parser.ParseQuery(statement->ToString());
-					// FIXME: these properties don't round-trip in ToString(), so we overwrite them manually
-					if (statement->type == StatementType::UPDATE_STATEMENT) {
-						// re-apply `prioritize_table_when_binding` (which is normally set during transform)
-						parser.statements[0]->Cast<UpdateStatement>().node->prioritize_table_when_binding =
-						    statement->Cast<UpdateStatement>().node->prioritize_table_when_binding;
-					} else if (statement->type == StatementType::TRANSACTION_STATEMENT) {
-						// re-apply invalidation policy
-						auto &reparsed_transaction_stmt = parser.statements[0]->Cast<TransactionStatement>();
-						auto &previous_transaction_stmt = statement->Cast<TransactionStatement>();
-						reparsed_transaction_stmt.info->invalidation_policy =
-						    previous_transaction_stmt.info->invalidation_policy;
-						// re-apply auto rollback
-						parser.statements[0]->Cast<TransactionStatement>().info->auto_rollback =
-						    statement->Cast<TransactionStatement>().info->auto_rollback;
-					}
-					statement = std::move(parser.statements[0]);
-				} catch (const NotImplementedException &) {
-					// ToString was not implemented, just use the copied statement
-				}
-			}
-			break;
-		}
-		}
+	if (statement) {
+		StatementVerification(lock, query, statement, parameters);
 	}
 	return PendingStatementOrPreparedStatement(lock, query, std::move(statement), prepared, parameters);
 }
@@ -1000,10 +968,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			invalidate_query = false;
 		} else if (Exception::InvalidatesDatabase(error.Type())) {
 			// fatal exceptions invalidate the entire database
-			if (!config.query_verification_enabled) {
-				auto &db_instance = DatabaseInstance::GetDatabase(*this);
-				ValidChecker::Invalidate(db_instance, error.RawMessage());
-			}
+			auto &db_instance = DatabaseInstance::GetDatabase(*this);
+			ValidChecker::Invalidate(db_instance, error.RawMessage());
 		}
 		// other types of exceptions do invalidate the current transaction
 		pending = ErrorResult<PendingQueryResult>(std::move(error), query);
@@ -1041,6 +1007,9 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, QueryParameters parameters) {
 	auto pending_query = PendingQuery(std::move(statement), parameters);
 	if (pending_query->HasError()) {
+		if (transaction.HasActiveTransaction() && transaction.GetAutoRollback()) {
+			transaction.Rollback(pending_query->GetErrorObject());
+		}
 		return ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
 	}
 	return pending_query->Execute();
@@ -1391,21 +1360,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
                                                                    QueryParameters query_parameters) {
 	InitialCleanup(lock);
 
-	string query;
-	if (config.query_verification_enabled) {
-		// run the ToString method of any relation we run, mostly to ensure it doesn't crash
-		relation->ToString();
-		relation->GetAlias();
-		if (relation->IsReadOnly()) {
-			// verify read only statements by running a select statement
-			auto select = make_uniq<SelectStatement>();
-			select->node = relation->GetQueryNode();
-			PendingQueryParameters parameters;
-			parameters.query_parameters = query_parameters;
-			parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
-			RunStatementInternal(lock, query, std::move(select), parameters);
-		}
-	}
+#ifdef DEBUG
+	// run the ToString method of any relation we run, mostly to ensure it doesn't crash
+	relation->ToString();
+	relation->GetAlias();
+#endif
 
 	auto relation_stmt = make_uniq<RelationStatement>(relation);
 	PendingQueryParameters parameters;
@@ -1497,6 +1456,7 @@ ParserOptions ClientContext::GetParserOptions() const {
 	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
+	options.parser_cache = &db->GetParserCache();
 	return options;
 }
 

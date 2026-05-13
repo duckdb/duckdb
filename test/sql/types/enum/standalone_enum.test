@@ -2,9 +2,6 @@
 # description: Test stand-alone enums
 # group: [enum]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT 'hello'::ENUM('world', 'hello');
 ----

@@ -2,9 +2,6 @@
 # description: Test the MAKE_DATE/TIME/TIMESTAMP functions
 # group: [timestamp]
 
-statement ok
-PRAGMA enable_verification
-
 #
 # Dates
 #

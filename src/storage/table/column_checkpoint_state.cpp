@@ -102,7 +102,7 @@ void PartialBlockForCheckpoint::Merge(PartialBlock &other_p, idx_t offset, idx_t
 	// pin the target block
 	auto new_handle = buffer_manager.Pin(block_handle);
 	// memcpy the contents of the old block to the new block
-	memcpy(new_handle.Ptr() + offset, old_handle.Ptr(), other_size);
+	memcpy(new_handle.GetDataMutable() + offset, old_handle.Ptr(), other_size);
 
 	// now copy over all segments to the new block
 	// move over the uninitialized regions
@@ -176,7 +176,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 			// pin the target block
 			auto new_handle = buffer_manager.Pin(pstate.block_handle);
 			// memcpy the contents of the old block to the new block
-			memcpy(new_handle.Ptr() + offset_in_block, old_handle.Ptr(), segment_size);
+			memcpy(new_handle.GetDataMutable() + offset_in_block, old_handle.Ptr(), segment_size);
 			pstate.AddSegmentToTail(*result_column, *segment, offset_in_block);
 		} else {
 			// Create a new block for future reuse.

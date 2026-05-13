@@ -140,8 +140,16 @@ select start, token_type, word from sql_tokenize('from ''hello world''');
 0	KEYWORD	from
 5	TABLE_NAME	'hello world'
 
-query III 
+query III
 select start, token_type, word from sql_tokenize('from ''hello world');
 ----
 0	KEYWORD	from
 5	STRING_LITERAL	'hello world
+
+query III
+select start, token_type, word from sql_tokenize($$select r.e100$$);
+----
+0	KEYWORD	select
+7	TABLE_NAME	r
+8	NUMBER_LITERAL	.
+9	COLUMN_NAME	e100

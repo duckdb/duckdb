@@ -6,26 +6,25 @@
 namespace duckdb {
 
 void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
-	input.Flatten(count);
+	input.Flatten();
 
 	auto &input_keys = MapVector::GetKeys(input);
 	auto &input_values = MapVector::GetValues(input);
 
 	// Copy the list offsets and top-level validity
-	auto result_data = FlatVector::GetDataMutable<list_entry_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
-	for (auto entry : input.Values<list_entry_t>(count)) {
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
+	for (auto entry : input.Values<list_entry_t>()) {
 		if (!entry.IsValid()) {
-			result_validity.SetInvalid(entry.index);
+			result_data.WriteNull();
 			continue;
 		}
-		result_data[entry.index] = entry.value;
+		result_data.WriteValue(entry.GetValue());
 	}
 	ListVector::SetListSize(result, ListVector::GetListSize(input));
 
 	// Copy the struct validity
-	auto &result_struct = ListVector::GetEntry(result);
-	FlatVector::SetValidity(result_struct, FlatVector::Validity(ListVector::GetEntry(input)));
+	auto &result_struct = ListVector::GetChildMutable(result);
+	FlatVector::SetValidity(result_struct, FlatVector::Validity(ListVector::GetChild(input)));
 
 	// reference the keys / values
 	auto &result_keys = MapVector::GetKeys(result);

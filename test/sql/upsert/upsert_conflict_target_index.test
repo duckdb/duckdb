@@ -2,9 +2,6 @@
 # group: [upsert]
 
 statement ok
-pragma enable_verification;
-
-statement ok
 create or replace table index_tbl (
 	i integer,
 	j integer

@@ -176,9 +176,6 @@ void SQLLogicTestRunner::Reconnect() {
 	auto &client_config = ClientConfig::GetConfig(*con->context);
 	client_config.enable_progress_bar = true;
 	client_config.print_progress_bar = false;
-	if (enable_verification) {
-		con->EnableQueryVerification();
-	}
 	// Set the local extension repo for autoinstalling extensions
 	if (!local_extension_repo.empty()) {
 		auto res1 = con->Query("SET autoinstall_extension_repository='" + local_extension_repo + "'");
@@ -265,129 +262,6 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 	}
 
 	return input;
-}
-
-bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<string> &result) {
-	if (parameter.empty()) {
-		return true;
-	}
-	auto token_name = StringUtil::Lower(parameter);
-	StringUtil::Trim(token_name);
-	bool collection = false;
-	bool is_compression = token_name == "<compression>";
-	bool is_all = token_name == "<alltypes>";
-	bool is_numeric = is_all || token_name == "<numeric>";
-	bool is_integral = is_numeric || token_name == "<integral>";
-	bool is_signed = is_integral || token_name == "<signed>";
-	bool is_unsigned = is_integral || token_name == "<unsigned>";
-	bool is_all_types_column = token_name == "<all_types_columns>";
-	if (token_name[0] == '!') {
-		// !token tries to remove the token from the list of tokens
-		auto entry = std::find(result.begin(), result.end(), parameter.substr(1));
-		if (entry == result.end()) {
-			// not found - insert as-is
-			return false;
-		}
-		// found - erase the entry
-		result.erase(entry);
-		collection = true;
-	}
-	if (is_signed) {
-		result.push_back("tinyint");
-		result.push_back("smallint");
-		result.push_back("integer");
-		result.push_back("bigint");
-		result.push_back("hugeint");
-		collection = true;
-	}
-	if (is_unsigned) {
-		result.push_back("utinyint");
-		result.push_back("usmallint");
-		result.push_back("uinteger");
-		result.push_back("ubigint");
-		result.push_back("uhugeint");
-		collection = true;
-	}
-	if (is_numeric) {
-		result.push_back("float");
-		result.push_back("double");
-		collection = true;
-	}
-	if (is_all) {
-		result.push_back("bool");
-		result.push_back("interval");
-		result.push_back("varchar");
-		collection = true;
-	}
-	if (is_compression) {
-		result.push_back("none");
-		result.push_back("uncompressed");
-		result.push_back("rle");
-		result.push_back("bitpacking");
-		result.push_back("dictionary");
-		result.push_back("fsst");
-		result.push_back("dict_fsst");
-		result.push_back("alp");
-		result.push_back("alprd");
-		collection = true;
-	}
-	if (is_all_types_column) {
-		result.push_back("bool");
-		result.push_back("tinyint");
-		result.push_back("smallint");
-		result.push_back("int");
-		result.push_back("bigint");
-		result.push_back("hugeint");
-		result.push_back("uhugeint");
-		result.push_back("utinyint");
-		result.push_back("usmallint");
-		result.push_back("uint");
-		result.push_back("ubigint");
-		result.push_back("date");
-		result.push_back("time");
-		result.push_back("timestamp");
-		result.push_back("timestamp_s");
-		result.push_back("timestamp_ms");
-		result.push_back("timestamp_ns");
-		result.push_back("time_tz");
-		result.push_back("timestamp_tz");
-		result.push_back("float");
-		result.push_back("double");
-		result.push_back("dec_4_1");
-		result.push_back("dec_9_4");
-		result.push_back("dec_18_6");
-		result.push_back("dec38_10");
-		result.push_back("uuid");
-		result.push_back("interval");
-		result.push_back("varchar");
-		result.push_back("blob");
-		result.push_back("bit");
-		result.push_back("small_enum");
-		result.push_back("medium_enum");
-		result.push_back("large_enum");
-		result.push_back("int_array");
-		result.push_back("double_array");
-		result.push_back("date_array");
-		result.push_back("timestamp_array");
-		result.push_back("timestamptz_array");
-		result.push_back("varchar_array");
-		result.push_back("nested_int_array");
-		result.push_back("struct");
-		result.push_back("struct_of_arrays");
-		result.push_back("array_of_structs");
-		result.push_back("map");
-		result.push_back("union");
-		result.push_back("fixed_int_array");
-		result.push_back("fixed_varchar_array");
-		result.push_back("fixed_nested_int_array");
-		result.push_back("fixed_nested_varchar_array");
-		result.push_back("fixed_struct_array");
-		result.push_back("struct_of_fixed_array");
-		result.push_back("fixed_array_of_int_list");
-		result.push_back("list_of_fixed_int_array");
-		collection = true;
-	}
-	return collection;
 }
 
 static string ParseExplanation(SQLLogicParser &parser, const vector<string> &params, size_t &index) {
@@ -620,6 +494,12 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	}
 	if (param == "allow_unsigned_extensions") {
 		if (Settings::Get<AllowUnsignedExtensionsSetting>(*config)) {
+			return RequireResult::PRESENT;
+		}
+		return RequireResult::MISSING;
+	}
+	if (param == "vacuum_rebuild_indexes") {
+		if (Settings::Get<VacuumRebuildIndexesSetting>(*config) > 0) {
 			return RequireResult::PRESENT;
 		}
 		return RequireResult::MISSING;
@@ -1077,9 +957,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			def.loop_iterator_name = token.parameters[0];
 			for (idx_t i = 1; i < token.parameters.size(); i++) {
 				D_ASSERT(!token.parameters[i].empty());
-				if (!ForEachTokenReplace(token.parameters[i], def.tokens)) {
-					def.tokens.push_back(token.parameters[i]);
-				}
+				def.tokens.push_back(token.parameters[i]);
 			}
 			def.loop_idx = 0;
 			def.loop_start = 0;

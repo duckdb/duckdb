@@ -52,7 +52,8 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 			return false;
 		}
 		if (op_type == LogicalOperatorType::LOGICAL_FILTER ||
-		    op_type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		    op_type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ||
+		    op_type == LogicalOperatorType::LOGICAL_DISTINCT) {
 			row_limit.SetInvalid();
 			row_offset.SetInvalid();
 		}
@@ -113,13 +114,13 @@ optional_ptr<LogicalOrder> RowGroupPruner::FindLogicalOrder(const LogicalLimit &
 	}
 
 	auto &logical_order = current_op.get().Cast<LogicalOrder>();
-	auto order_column_type = logical_order.orders[0].expression->return_type;
+	auto order_column_type = logical_order.orders[0].expression->GetReturnType();
 	if (!order_column_type.IsNumeric() && !order_column_type.IsTemporal() &&
 	    order_column_type != LogicalType::VARCHAR) {
 		return nullptr;
 	}
 
-	if (logical_order.orders[0].expression->type != ExpressionType::BOUND_COLUMN_REF) {
+	if (logical_order.orders[0].expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return nullptr;
 	}
 
@@ -161,7 +162,7 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
                                                const StorageIndex &storage_index, LogicalLimit &logical_limit) const {
 	const auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
 	const auto column_type =
-	    colref.return_type == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
+	    colref.GetReturnType() == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
 	const auto order_type = primary_order.type;
 	const auto null_order = primary_order.null_order;
 	const auto order_by = order_type == OrderType::ASCENDING ? OrderByStatistics::MIN : OrderByStatistics::MAX;

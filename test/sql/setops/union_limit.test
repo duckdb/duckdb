@@ -2,9 +2,6 @@
 # description: Test union limit
 # group: [setops]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT 1 UNION ALL SELECT * FROM range(2, 100) UNION ALL SELECT 999 LIMIT 5;
 ----

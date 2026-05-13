@@ -3,9 +3,6 @@
 # group: [binder]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE src("Name" VARCHAR, CreatedAt TIMESTAMP, userID VARCHAR, "Version" VARCHAR, Clients BIGINT, HasDocumentation BOOLEAN, HasCustomAddress BOOLEAN, HasHostname BOOLEAN, RunningContainers BIGINT, HasActions BOOLEAN);
 
 statement ok

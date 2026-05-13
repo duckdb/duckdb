@@ -1,18 +1,18 @@
-ca_zip|ca_city|sum
-25281|Bethel|24.58
-30059|Centerville|22.34
-33604|Pleasant Hill|188.50
-46614|Providence|84.59
-46867|Jamestown|61.73
-50162|Stringtown|44.37
-59303|Springfield|220.27
-59843|Oakland|128.99
-64489|Woodbury|111.15
-69127|NULL|39.69
-71904|Midway|262.75
-71952|Sunnyside|145.52
-83003|Hillcrest|29.14
-89101|Franklin|64.96
-89431|New Hope|68.06
-98014|Clifton|130.03
-NULL|NULL|7.52
+ca_zip|ca_city|sum(ws_sales_price)
+25281|Bethel|50.54
+30059|Centerville|157.13
+33604|Pleasant Hill|37.23
+46614|Providence|176.52
+46867|Jamestown|49.92
+50162|Stringtown|59.17
+59303|Springfield|57.06
+59843|Oakland|84.30
+64489|Woodbury|0.00
+68482|NULL|14.85
+71904|Midway|80.11
+71952|Sunnyside|97.83
+83003|Hillcrest|27.93
+89101|Franklin|115.69
+89431|New Hope|179.38
+98014|Clifton|41.38
+NULL|NULL|36.25

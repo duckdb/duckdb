@@ -1,40 +1,49 @@
 #include "column_writer.hpp"
 
-#include "duckdb.hpp"
-#include "parquet_geometry.hpp"
-#include "parquet_rle_bp_decoder.hpp"
-#include "parquet_bss_encoder.hpp"
-#include "parquet_statistics.hpp"
+#include <cmath>
+#include <limits>
+#include <type_traits>
+#include <unordered_map>
+#include <utility>
+
 #include "parquet_writer.hpp"
 #include "writer/array_column_writer.hpp"
 #include "writer/boolean_column_writer.hpp"
 #include "writer/decimal_column_writer.hpp"
 #include "writer/enum_column_writer.hpp"
 #include "writer/list_column_writer.hpp"
-#include "writer/primitive_column_writer.hpp"
 #include "writer/struct_column_writer.hpp"
 #include "writer/variant_column_writer.hpp"
 #include "writer/templated_column_writer.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/common/serializer/write_stream.hpp"
-#include "duckdb/common/string_map_set.hpp"
-#include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/time.hpp"
-#include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-
 #include "brotli/encode.h"
 #include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
-
-#include <cmath>
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/double_na_equal.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/uhugeint.hpp"
+#include "miniz.hpp"
+#include "parquet_field_id.hpp"
+#include "parquet_shredding.hpp"
+#include "parquet_timestamp.hpp"
+#include "parquet_types.h"
+#include "writer/parquet_write_operators.hpp"
+#include "writer/parquet_write_stats.hpp"
 
 namespace duckdb {
+class ClientContext;
+struct GeometryStatsData;
 
 using namespace duckdb_parquet; // NOLINT
 using namespace duckdb_miniz;   // NOLINT
@@ -113,6 +122,24 @@ ColumnWriter::ColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_s
 	can_have_nulls = column_schema.repetition_type == duckdb_parquet::FieldRepetitionType::OPTIONAL;
 }
 ColumnWriter::~ColumnWriter() {
+}
+
+bool ColumnWriter::TryExportPreparedShreddingType(ShreddingType &result) const {
+	bool has_shredding = false;
+	auto writer_shredding_type = ShreddingType(Type());
+	for (auto &child_writer : ChildWriters()) {
+		ShreddingType child_shredding_type;
+		if (!child_writer->TryExportPreparedShreddingType(child_shredding_type)) {
+			continue;
+		}
+		writer_shredding_type.AddChild(child_writer->Schema().name, std::move(child_shredding_type));
+		has_shredding = true;
+	}
+	if (!has_shredding) {
+		return false;
+	}
+	result = std::move(writer_shredding_type);
+	return true;
 }
 
 ColumnWriterState::~ColumnWriterState() {
@@ -280,7 +307,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		child_types.emplace_back("value", LogicalType::BLOB);
 		if (is_shredded) {
 			auto &typed_value_type = shredding_type->type;
-			if (typed_value_type.id() != LogicalTypeId::ANY) {
+			if (typed_value_type.id() != LogicalTypeId::SQLNULL) {
 				child_types.emplace_back("typed_value",
 				                         VariantColumnWriter::TransformTypedValueRecursive(typed_value_type));
 			}
@@ -299,6 +326,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		for (auto &entry : child_types) {
 			auto &child_name = entry.first;
 			auto &child_type = entry.second;
+			optional_ptr<const ShreddingType> child_shredding;
 			bool is_optional;
 			if (child_name == "metadata") {
 				is_optional = false;
@@ -311,11 +339,14 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 				}
 			} else {
 				D_ASSERT(child_name == "typed_value");
+				//! Only set shredding for the 'typed_value', just in case there's a child by the name of 'metadata' or
+				//! 'value'
+				child_shredding = shredding_type;
 				is_optional = true;
 			}
 
 			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name,
-			                                              allow_geometry, child_field_ids, shredding_type, max_repeat,
+			                                              allow_geometry, child_field_ids, child_shredding, max_repeat,
 			                                              max_define + 1, is_optional));
 		}
 		return make_uniq<VariantColumnWriter>(writer, std::move(variant_column), path_in_schema,
@@ -449,6 +480,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		return make_uniq<StandardColumnWriter<uhugeint_t, double, ParquetUhugeintOperator>>(writer, std::move(schema),
 		                                                                                    std::move(path_in_schema));
 	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		if (parquet_write_timestamp_as_int96) {
 			return make_uniq<StandardColumnWriter<int64_t, Int96, ParquetTimestampNSInt96Operator>>(
 			    writer, std::move(schema), std::move(path_in_schema));

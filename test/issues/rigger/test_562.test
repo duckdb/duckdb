@@ -2,9 +2,6 @@
 # description: Issue 562
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # SELECT with CASE expression causes an assertion failure 'Assertion `!entry.first->Equals(&expr)' failed'
 statement ok
 CREATE TABLE t0(c0 INT);

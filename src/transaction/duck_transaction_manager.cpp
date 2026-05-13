@@ -64,9 +64,9 @@ DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
 Transaction &DuckTransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the transaction lock during this function
 	auto &meta_transaction = MetaTransaction::Get(context);
-	unique_ptr<lock_guard<mutex>> start_lock;
+	unique_lock<mutex> start_lock(start_transaction_lock, std::defer_lock);
 	if (!meta_transaction.IsReadOnly()) {
-		start_lock = make_uniq<lock_guard<mutex>>(start_transaction_lock);
+		start_lock.lock();
 	}
 	lock_guard<mutex> lock(transaction_lock);
 	if (current_start_timestamp >= TRANSACTION_ID_START) { // LCOV_EXCL_START
@@ -298,7 +298,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	auto undo_properties = transaction.GetUndoProperties();
 	auto checkpoint_decision = CanCheckpoint(transaction, lock, undo_properties);
 	ErrorData error;
-	unique_ptr<lock_guard<mutex>> held_wal_lock;
+	unique_lock<mutex> held_wal_lock;
 	unique_ptr<StorageCommitState> commit_state;
 	bool skip_wal_write_due_to_checkpoint = false;
 	if (checkpoint_decision.can_checkpoint) {
@@ -343,8 +343,11 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		if (should_write_to_wal && skip_wal_write_due_to_checkpoint && !checkpoint_decision.can_checkpoint) {
 			// we have not written to the WAL but we have now realized we can't checkpoint after all
 			// in order to commit we need backpeddle and write to the WAL after all
-			D_ASSERT(held_wal_lock);
+			D_ASSERT(held_wal_lock.owns_lock());
+			// unlock the transaction lock while we are writing to the WAL
+			t_lock.unlock();
 			error = transaction.WriteToWAL(context, db, commit_state);
+			t_lock.lock();
 			skip_wal_write_due_to_checkpoint = false;
 		}
 	}
@@ -416,8 +419,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	t_lock.unlock();
 	// if we have skipped the WAL write due to checkpoint, we keep the WAL lock while checkpointing
 	// this prevents any concurrent transactions from happening during this time
-	if (!skip_wal_write_due_to_checkpoint) {
-		held_wal_lock.reset();
+	if (!skip_wal_write_due_to_checkpoint && held_wal_lock.owns_lock()) {
+		held_wal_lock.unlock();
 	}
 
 	CleanupTransactions();
@@ -433,7 +436,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		CheckpointOptions options;
 		options.action = CheckpointAction::ALWAYS_CHECKPOINT;
 		options.type = checkpoint_decision.type;
-		options.wal_lock = held_wal_lock.get();
+		options.wal_lock = held_wal_lock.owns_lock() ? &held_wal_lock : nullptr;
 		auto &storage_manager = db.GetStorageManager();
 		try {
 			storage_manager.CreateCheckpoint(context, options);

@@ -38,7 +38,7 @@ void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		ExtractCommonSubExpresions(op);
+		ExtractCommonSubExpressions(op);
 		break;
 	default:
 		break;
@@ -101,7 +101,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 		if (column_entry == state.column_map.end()) {
 			// not there yet: push the expression
 			auto new_col_ref = make_uniq<BoundColumnRefExpression>(
-			    bound_column_ref.GetAlias(), bound_column_ref.return_type, bound_column_ref.binding);
+			    bound_column_ref.GetAlias(), bound_column_ref.GetReturnType(), bound_column_ref.binding);
 			auto new_column_index = ColumnBinding::PushExpression(state.expressions, std::move(new_col_ref));
 			state.column_map[bound_column_ref.binding] = new_column_index;
 			bound_column_ref.binding = ColumnBinding(state.projection_index, new_column_index);
@@ -118,7 +118,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 			// this expression occurs more than once! push it into the projection
 			// check if it has already been pushed into the projection
 			auto alias = expr.GetAlias();
-			auto type = expr.return_type;
+			auto type = expr.GetReturnType();
 			if (!node.column_index.IsValid()) {
 				// has not been pushed yet: push it
 				node.column_index = ColumnBinding::PushExpression(state.expressions, std::move(expr_ptr));
@@ -137,7 +137,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 	                                      [&](unique_ptr<Expression> &child) { PerformCSEReplacement(child, state); });
 }
 
-void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &op) {
+void CommonSubExpressionOptimizer::ExtractCommonSubExpressions(LogicalOperator &op) {
 	D_ASSERT(op.children.size() == 1);
 
 	// first we count for each expression with children how many types it occurs

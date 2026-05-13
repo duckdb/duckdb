@@ -210,8 +210,8 @@ string ExpressionClassToString(ExpressionClass type) {
 		return "BOUND_CAST";
 	case ExpressionClass::BOUND_COLUMN_REF:
 		return "BOUND_COLUMN_REF";
-	case ExpressionClass::BOUND_COMPARISON:
-		return "BOUND_COMPARISON";
+	case ExpressionClass::LEGACY_BOUND_COMPARISON:
+		return "LEGACY_BOUND_COMPARISON";
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return "BOUND_CONJUNCTION";
 	case ExpressionClass::BOUND_CONSTANT:
@@ -230,8 +230,8 @@ string ExpressionClassToString(ExpressionClass type) {
 		return "BOUND_SUBQUERY";
 	case ExpressionClass::BOUND_WINDOW:
 		return "BOUND_WINDOW";
-	case ExpressionClass::BOUND_BETWEEN:
-		return "BOUND_BETWEEN";
+	case ExpressionClass::LEGACY_BOUND_BETWEEN:
+		return "LEGACY_BOUND_BETWEEN";
 	case ExpressionClass::BOUND_UNNEST:
 		return "BOUND_UNNEST";
 	case ExpressionClass::BOUND_LAMBDA:

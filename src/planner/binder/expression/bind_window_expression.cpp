@@ -73,7 +73,7 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = BoundExpression::GetExpression(*expr);
 	QueryErrorContext error_context(bound->GetQueryLocation());
-	if (bound->return_type == LogicalType::SQLNULL) {
+	if (bound->GetReturnType() == LogicalType::SQLNULL) {
 		throw BinderException(error_context, "Window RANGE expressions cannot be NULL");
 	}
 	children.emplace_back(std::move(bound));
@@ -86,17 +86,17 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	}
 	// +/- can be applied to non-scalar types,
 	// so we can't rely on function binding to catch all problems.
-	if (!IsRangeType(function->return_type)) {
+	if (!IsRangeType(function->GetReturnType())) {
 		throw BinderException(error_context, "Invalid type for Window RANGE expression");
 	}
 	bound = std::move(function);
-	return bound->return_type;
+	return bound->GetReturnType();
 }
 
 BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_t depth) {
 	QueryErrorContext error_context(window.GetQueryLocation());
-	//	Check for macros pretending to be aggregates
 
+	//	Check for macros pretending to be aggregates
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, window.function_name, error_context);
 	auto entry = GetCatalogEntry(window.catalog, window.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (entry && entry->type == CatalogType::MACRO_ENTRY) {
@@ -107,13 +107,19 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		return BindMacro(*macro, entry->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
 	}
 
-	auto name = window.alias;
+	auto name = window.GetAlias();
 
+	if (inside_try) {
+		throw BinderException("window functions are not allowed in try");
+	}
+	if (inside_aggregate) {
+		throw BinderException(window, "aggregate function calls cannot contain window function calls");
+	}
 	if (inside_window) {
-		throw BinderException(error_context, "window function calls cannot be nested");
+		throw BinderException(window, "window function calls cannot be nested");
 	}
 	if (depth > 0) {
-		throw BinderException(error_context, "correlated columns in window functions not supported");
+		throw BinderException(window, "correlated columns in window functions not supported");
 	}
 
 	//  Look up the aggregate function in the catalog
@@ -151,7 +157,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		}
 		auto &order_expr = order.expression;
 		auto &bound_order = BoundExpression::GetExpression(*order_expr);
-		const auto type_id = bound_order->return_type.id();
+		const auto type_id = bound_order->GetReturnType().id();
 		if (type_id == LogicalTypeId::TIME || type_id == LogicalTypeId::TIME_TZ) {
 			//	Convert to time + epoch and rebind
 			unique_ptr<ParsedExpression> epoch = make_uniq<ConstantExpression>(Value::DATE(date_t::epoch()));
@@ -177,16 +183,16 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	for (auto &order : window.arg_orders) {
 		auto &order_expr = order.expression;
 		auto &bound_order = BoundExpression::GetExpression(*order_expr);
-		ExpressionBinder::PushCollation(context, bound_order, bound_order->return_type);
+		ExpressionBinder::PushCollation(context, bound_order, bound_order->GetReturnType());
 	}
 	for (auto &part_expr : window.partitions) {
 		auto &bound_partition = BoundExpression::GetExpression(*part_expr);
-		ExpressionBinder::PushCollation(context, bound_partition, bound_partition->return_type);
+		ExpressionBinder::PushCollation(context, bound_partition, bound_partition->GetReturnType());
 	}
 	for (auto &order : window.orders) {
 		auto &order_expr = order.expression;
 		auto &bound_order = BoundExpression::GetExpression(*order_expr);
-		ExpressionBinder::PushCollation(context, bound_order, bound_order->return_type);
+		ExpressionBinder::PushCollation(context, bound_order, bound_order->GetReturnType());
 	}
 	// successfully bound all children: create bound window function
 	vector<LogicalType> types;
@@ -195,13 +201,13 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		D_ASSERT(child.get());
 		D_ASSERT(child->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &bound = BoundExpression::GetExpression(*child);
-		types.push_back(bound->return_type);
+		types.push_back(bound->GetReturnType());
 		children.push_back(std::move(bound));
 	}
 	//  Determine the function type.
 	LogicalType sql_type;
-	unique_ptr<AggregateFunction> aggregate;
-	unique_ptr<WindowFunction> window_func;
+	unique_ptr<BoundAggregateFunction> aggregate;
+	unique_ptr<BoundWindowFunction> window_func;
 	unique_ptr<FunctionData> bind_info;
 	if (entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		auto &func = entry->Cast<AggregateFunctionCatalogEntry>();
@@ -220,14 +226,14 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		}
 
 		// found a matching function! bind it as an aggregate
-		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+		const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
 		auto window_bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
-		aggregate = make_uniq<AggregateFunction>(window_bound_aggregate->function);
+		aggregate = make_uniq<BoundAggregateFunction>(window_bound_aggregate->function);
 		bind_info = std::move(window_bound_aggregate->bind_info);
 		children = std::move(window_bound_aggregate->children);
-		sql_type = window_bound_aggregate->return_type;
+		sql_type = window_bound_aggregate->GetReturnType();
 	} else {
 		auto &func = entry->Cast<WindowFunctionCatalogEntry>();
 
@@ -241,23 +247,27 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		}
 
 		// found a matching function! bind it as a window
-		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+		const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
-		if (window.distinct && !bound_function.can_distinct) {
+		if (window.distinct && !bound_function.CanDistinct()) {
 			throw BinderException(error_context, "DISTINCT is not implemented for the window function \"%s\"",
 			                      window.function_name);
 		}
-		if (window.filter_expr && !bound_function.can_filter) {
+		if (window.filter_expr && !bound_function.CanFilter()) {
 			throw BinderException(error_context, "FILTER is not implemented for the window function \"%s\"",
 			                      window.function_name);
 		}
-		if (!window.arg_orders.empty() && !bound_function.can_order_by) {
+		if (!window.arg_orders.empty() && !bound_function.CanOrderBy()) {
 			throw BinderException(error_context, "ORDER BY is not supported for the window function \"%s\"",
 			                      window.function_name);
 		}
 		if (window.exclude_clause != WindowExcludeMode::NO_OTHER && !window.arg_orders.empty() &&
-		    !bound_function.can_exclude) {
+		    !bound_function.CanExclude()) {
 			throw BinderException(error_context, "EXCLUDE is not supported for the window function \"%s\"",
+			                      bound_function.name);
+		}
+		if (window.has_ignore_nulls && !bound_function.CanIgnoreNulls()) {
+			throw BinderException(error_context, "RESPECT/IGNORE NULLS is not supported for the window function \"%s\"",
 			                      bound_function.name);
 		}
 
@@ -274,7 +284,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		window_func = std::move(window_bound_function->window);
 		bind_info = std::move(window_bound_function->bind_info);
 		children = std::move(window_bound_function->children);
-		sql_type = window_bound_function->return_type;
+		sql_type = window_bound_function->GetReturnType();
 	}
 	auto result =
 	    make_uniq<BoundWindowExpression>(sql_type, std::move(aggregate), std::move(window_func), std::move(bind_info));
@@ -286,7 +296,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	result->distinct = window.distinct;
 
 	// Convert RANGE boundary expressions to ORDER +/- expressions.
-	// Note that PRECEEDING and FOLLOWING refer to the sequential order in the frame,
+	// Note that PRECEDING and FOLLOWING refer to the sequential order in the frame,
 	// not the natural ordering of the type. This means that the offset arithmetic must be reversed
 	// for ORDER BY DESC.
 	auto &config = DBConfig::GetConfig(context);
@@ -327,7 +337,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		D_ASSERT(order_expr.get());
 		D_ASSERT(order_expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &bound_order = BoundExpression::GetExpression(*order_expr);
-		auto order_type = bound_order->return_type;
+		auto order_type = bound_order->GetReturnType();
 		if (window.start_expr) {
 			order_type = LogicalType::MaxLogicalType(context, order_type, start_type);
 		}
@@ -363,7 +373,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	result->exclude_clause = window.exclude_clause;
 
 	// move the WINDOW expression into the set of bound windows
-	auto &window_type = result->return_type;
+	auto &window_type = result->GetReturnType();
 	auto window_idx = ColumnBinding::PushExpression(node.windows, std::move(result));
 	auto colref = make_uniq<BoundColumnRefExpression>(std::move(name), window_type,
 	                                                  ColumnBinding(node.window_index, window_idx), depth);

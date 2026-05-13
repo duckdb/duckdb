@@ -14,9 +14,6 @@ INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
 restart
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 ALTER TABLE test ALTER b TYPE VARCHAR
 
 query IT

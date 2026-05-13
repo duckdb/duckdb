@@ -38,7 +38,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		return nullptr;
 	}
 	D_ASSERT(root);
-	auto in_type = expr.children[0]->return_type;
+	auto in_type = expr.children[0]->GetReturnType();
 	bool is_regular_in = expr.GetExpressionType() == ExpressionType::COMPARE_IN;
 	bool all_scalar = true;
 	// IN clause with many children: try to generate a mark join that replaces this IN expression
@@ -53,9 +53,9 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		// only one child
 		// IN: turn into X = 1
 		// NOT IN: turn into X <> 1
-		return make_uniq<BoundComparisonExpression>(is_regular_in ? ExpressionType::COMPARE_EQUAL
-		                                                          : ExpressionType::COMPARE_NOTEQUAL,
-		                                            std::move(expr.children[0]), std::move(expr.children[1]));
+		return BoundComparisonExpression::Create(is_regular_in ? ExpressionType::COMPARE_EQUAL
+		                                                       : ExpressionType::COMPARE_NOTEQUAL,
+		                                         std::move(expr.children[0]), std::move(expr.children[1]));
 	}
 	if (expr.children.size() < 6 || !all_scalar) {
 		// low amount of children or not all scalar
@@ -64,7 +64,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		auto conjunction = make_uniq<BoundConjunctionExpression>(is_regular_in ? ExpressionType::CONJUNCTION_OR
 		                                                                       : ExpressionType::CONJUNCTION_AND);
 		for (idx_t i = 1; i < expr.children.size(); i++) {
-			conjunction->children.push_back(make_uniq<BoundComparisonExpression>(
+			conjunction->children.push_back(BoundComparisonExpression::Create(
 			    is_regular_in ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOTEQUAL,
 			    expr.children[0]->Copy(), std::move(expr.children[i])));
 		}
@@ -87,9 +87,8 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 			// error while evaluating scalar
 			return nullptr;
 		}
-		idx_t index = chunk.size();
 		chunk.SetCardinality(chunk.size() + 1);
-		chunk.SetValue(0, index, value);
+		chunk.data[0].Append(value);
 		if (chunk.size() == STANDARD_VECTOR_SIZE || i + 1 == expr.children.size()) {
 			// chunk full: append to chunk collection
 			collection->Append(append_state, chunk);

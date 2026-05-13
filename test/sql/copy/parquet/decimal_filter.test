@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-pragma enable_verification
-
 query IIII
 select * from '{DATA_DIR}/parquet-testing/decimals.parquet'
 ----

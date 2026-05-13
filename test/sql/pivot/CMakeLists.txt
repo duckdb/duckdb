@@ -1,4 +1,4 @@
 add_library_unity(test_pivot OBJECT multi_statement_parsing.cpp)
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_pivot>
+set(UNITTEST_OBJECT_FILES
+    ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_pivot>
     PARENT_SCOPE)

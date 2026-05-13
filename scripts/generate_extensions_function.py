@@ -800,7 +800,8 @@ struct ExtensionFunctionOverloadEntry {
 static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
     {"parquet", "parquet"},
     {"json", "json"},
-    {"avro", "avro"}
+    {"avro", "avro"},
+    {"iceberg", "iceberg"}
 }; // END_OF_EXTENSION_COPY_FUNCTIONS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py

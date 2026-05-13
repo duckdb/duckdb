@@ -1,0 +1,11 @@
+# name: test/issues/general/test_21832.test
+# description: Issue 21832: DuckDB 1.5.1: ORDER BY ... LIMIT on some VARCHAR values containing Til Ærø raises InvalidInputException
+# group: [general]
+
+statement ok
+CREATE TABLE t AS SELECT 'Til Ærø' AS name;
+
+query I
+SELECT name FROM t ORDER BY 1 LIMIT 3;
+----
+Til Ærø

@@ -89,7 +89,7 @@ struct ReplacePivotAggregateOperator {
 
 	static void HandleAggregate(unique_ptr<ParsedExpression> &expr, FunctionExpression &aggr_function,
 	                            TYPE &replacement_expr) {
-		if (replacement_expr->type != ExpressionType::COLUMN_REF) {
+		if (replacement_expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
 			throw BinderException(*expr, "Pivot expression can only have one aggregate");
 		}
 		auto aggr = std::move(expr);
@@ -375,7 +375,7 @@ static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, Piv
 			auto &pivot_aggr_name = aggregate_names[aggr_name_idx++];
 			// replace column ref with name
 			ReplacePivotColumnRef(*aggr, pivot_aggr_name);
-			aggr->alias = pivot_aggr_name;
+			aggr->SetAlias(pivot_aggr_name);
 
 			final_pivot_operator->select_list.push_back(std::move(aggr));
 		}
@@ -424,6 +424,9 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 	result.bind_index = GenerateTableIndex();
 	result.child_binder = Binder::CreateBinder(context, this);
 	result.child = result.child_binder->Bind(*ref.source);
+	if (!result.child_binder->correlated_columns.empty()) {
+		throw BinderException("PIVOT is not supported in correlated subqueries yet");
+	}
 
 	auto &aggregates = result.bound_pivot.aggregates;
 	ExtractPivotAggregates(result.child, aggregates);
@@ -491,7 +494,7 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 			}
 			result.bound_pivot.pivot_values.push_back(std::move(pivot_str));
 			names.push_back(std::move(name));
-			types.push_back(aggr->return_type);
+			types.push_back(aggr->GetReturnType());
 		}
 	}
 	result.bound_pivot.group_count = ref.bound_group_names.size();
@@ -873,7 +876,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	// construct the UNNEST expression for the set of names (constant)
 	auto unpivot_list = Value::LIST(LogicalType::VARCHAR, std::move(unpivot_names));
 	auto unpivot_name_expr = make_uniq<ConstantExpression>(std::move(unpivot_list));
-	unpivot_name_expr->alias = select_names[column_count];
+	unpivot_name_expr->SetAlias(select_names[column_count]);
 	select_node->select_list.push_back(std::move(unpivot_name_expr));
 
 	// construct the unpivot lists for the set of unpivoted columns
@@ -883,7 +886,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	}
 	for (idx_t i = 0; i < unpivot_expressions.size(); i++) {
 		auto list_expr = make_uniq<FunctionExpression>("unpivot_list", std::move(unpivot_expressions[i]));
-		list_expr->alias = select_names[column_count + 1 + i];
+		list_expr->SetAlias(select_names[column_count + 1 + i]);
 		select_node->select_list.push_back(std::move(list_expr));
 	}
 

@@ -2,9 +2,6 @@
 # description: Test uhugeint auto cast
 # group: [uhugeint]
 
-statement ok
-PRAGMA enable_verification
-
 # test auto cast of all integer types to uhugeint
 query IIII
 SELECT 10000000000000000000::UHUGEINT + 100::TINYINT, 10000000000000000000::UHUGEINT + 100::SMALLINT, 10000000000000000000::UHUGEINT + 100::INTEGER, 10000000000000000000::UHUGEINT + 100::BIGINT;

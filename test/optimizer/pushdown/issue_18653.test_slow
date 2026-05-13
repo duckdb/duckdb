@@ -63,7 +63,7 @@ from test_table2 t
 cross join json_each(t.values) as kv(key, value)
 where t.id = 87100;
 ----
-analyzed_plan	<REGEX>:.*DELIM_JOIN.*Filters:.*id=87100.*
+analyzed_plan	<REGEX>:.*DELIM_JOIN.*Filters:.*id = 87100.*
 
 
 

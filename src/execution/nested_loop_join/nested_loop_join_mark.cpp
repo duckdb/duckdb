@@ -9,8 +9,8 @@ template <class T, class OP>
 static void TemplatedMarkJoin(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
 	using MATCH_OP = ComparisonOperationWrapper<OP>;
 
-	auto left_entries = left.Values<T>(lcount);
-	auto right_entries = right.Values<T>(rcount);
+	auto left_entries = left.Values<T>();
+	auto right_entries = right.Values<T>();
 	for (idx_t i = 0; i < lcount; i++) {
 		if (found_match[i]) {
 			continue;
@@ -42,7 +42,7 @@ static void MarkJoinNested(Vector &left, Vector &right, idx_t lcount, idx_t rcou
 		if (found_match[i]) {
 			continue;
 		}
-		ConstantVector::Reference(left_reference, left, i, rcount);
+		ConstantVector::Reference(left_reference, count_t(rcount), left, i, lcount);
 		idx_t count;
 		switch (comparison_type) {
 		case ExpressionType::COMPARE_EQUAL:

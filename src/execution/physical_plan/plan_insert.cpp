@@ -1,3 +1,4 @@
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -120,14 +121,14 @@ PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGe
 		plan = planner.ResolveDefaultsProjection(op, *plan);
 	}
 	if (use_batch_index && !parallel_streaming_insert) {
-		auto &insert = planner.Make<PhysicalBatchInsert>(op.types, op.table, std::move(op.bound_constraints),
-		                                                 op.estimated_cardinality);
+		auto &insert = planner.Make<PhysicalBatchInsert>(op.types, op.table.Cast<DuckTableEntry>(),
+		                                                 std::move(op.bound_constraints), op.estimated_cardinality);
 		insert.children.push_back(*plan);
 		return insert;
 	}
 
 	auto &insert = planner.Make<PhysicalInsert>(
-	    op.types, op.table, std::move(op.bound_constraints), std::move(op.expressions),
+	    op.types, op.table.Cast<DuckTableEntry>(), std::move(op.bound_constraints), std::move(op.expressions),
 	    std::move(op.on_conflict_info.set_columns), std::move(op.on_conflict_info.set_types), op.estimated_cardinality,
 	    op.return_chunk, parallel_streaming_insert && num_threads > 1, op.on_conflict_info.action_type,
 	    std::move(op.on_conflict_info.on_conflict_condition), std::move(op.on_conflict_info.do_update_condition),

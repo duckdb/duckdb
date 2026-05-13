@@ -233,9 +233,9 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		child_list_t<LogicalType> select_list;
 		// Let's verify if any on these columns have not null constraints
 		vector<string> not_null_columns;
-		for (auto &constaint : table.GetConstraints()) {
-			if (constaint->type == ConstraintType::NOT_NULL) {
-				auto &not_null_constraint = constaint->Cast<NotNullConstraint>();
+		for (auto &constraint : table.GetConstraints()) {
+			if (constraint->type == ConstraintType::NOT_NULL) {
+				auto &not_null_constraint = constraint->Cast<NotNullConstraint>();
 				not_null_columns.push_back(table.GetColumn(not_null_constraint.index).GetName());
 			}
 		}

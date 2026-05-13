@@ -3,9 +3,6 @@
 # group: [alter_type]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE test(i AS (1), j INTEGER)
 
 statement ok

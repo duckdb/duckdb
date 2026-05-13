@@ -57,7 +57,7 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjs
 static inline void DeepMergeReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_val *objs[], const idx_t count) {
 	UnifiedVectorFormat input_data;
 	auto &input_vector = input;
-	input_vector.ToUnifiedFormat(count, input_data);
+	input_vector.ToUnifiedFormat(input_data);
 	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -98,9 +98,9 @@ static void DeepMergeFunction(DataChunk &args, ExpressionState &state, Vector &r
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (origs[i] == nullptr) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 		} else {
-			result_data[i].AssignWithoutCopying(JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc));
+			result_data.WriteStringRef(JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc));
 		}
 	}
 
@@ -109,8 +109,8 @@ static void DeepMergeFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 ScalarFunctionSet JSONFunctions::GetDeepMergeFunction() {
 	ScalarFunction fun("json_deep_merge", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
-	                   DeepMergeFunction, nullptr, nullptr, nullptr, JSONFunctionLocalState::Init);
-	fun.varargs = LogicalType::JSON();
+	                   DeepMergeFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
+	fun.SetVarArgs(LogicalType::JSON());
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	return ScalarFunctionSet(fun);

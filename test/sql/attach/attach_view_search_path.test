@@ -3,9 +3,6 @@
 # group: [attach]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 ATTACH DATABASE '{TEST_DIR}/view_search_path.db' AS view_search_path;
 
 statement ok

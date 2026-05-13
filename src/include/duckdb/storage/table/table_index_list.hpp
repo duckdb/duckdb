@@ -67,10 +67,8 @@ public:
 	TableIndexIterationHelper<Index> Indexes() const;
 	//! Adds an index entry to the list of index entries.
 	void AddIndex(unique_ptr<Index> index);
-	//! Removes an index entry from the list of index entries.
+	//! Removes an index entry from the list of index entries and release any storage the index owns.
 	void RemoveIndex(const string &name);
-	//! Removes all remaining memory of an index after dropping the catalog entry.
-	void CommitDrop(const string &name);
 	//! Returns true, if the index name does not exist.
 	bool NameIsUnique(const string &name);
 	//! Returns an optional pointer to the index matching the name.
@@ -91,6 +89,8 @@ public:
 		lock_guard<mutex> lock(index_entries_lock);
 		return unbound_count != 0;
 	}
+	//! Returns the set of distinct index types across all bound indexes.
+	unordered_set<string> DistinctIndexTypes() const;
 	//! Overwrite this list with the other list.
 	void Move(TableIndexList &other) {
 		D_ASSERT(index_entries.empty());

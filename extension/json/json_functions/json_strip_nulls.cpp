@@ -35,21 +35,20 @@ static void StripNullsFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto alc = lstate.json_allocator->GetYYAlc();
 
 	auto &inputs = args.data[0];
-	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
-	    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
-		    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
-		    auto mut_doc = yyjson_doc_mut_copy(doc, alc);
-		    auto root = yyjson_mut_doc_get_root(mut_doc);
-		    StripNulls(root);
-		    return JSONCommon::WriteVal<yyjson_mut_val>(root, alc);
-	    });
+	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
+		auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
+		auto mut_doc = yyjson_doc_mut_copy(doc, alc);
+		auto root = yyjson_mut_doc_get_root(mut_doc);
+		StripNulls(root);
+		return JSONCommon::WriteVal<yyjson_mut_val>(root, alc);
+	});
 
 	JSONAllocator::AddBuffer(result, alc);
 }
 
 static void GetStripNullsFunctionInternal(ScalarFunctionSet &set, const LogicalType &json) {
 	set.AddFunction(ScalarFunction("json_strip_nulls", {json}, LogicalType::JSON(), StripNullsFunction, nullptr,
-	                               nullptr, nullptr, JSONFunctionLocalState::Init));
+	                               nullptr, JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetStripNullsFunction() {

@@ -3,10 +3,6 @@
 # group: [function]
 
 statement ok
-PRAGMA enable_verification
-
-
-statement ok
 CREATE TABLE test_tbl (id INT, name string);
 
 statement ok

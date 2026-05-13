@@ -276,6 +276,18 @@ private:
 		return ptr;
 	}
 
+	// Deserialize a duckdb_optional
+	template <class T, typename ELEMENT_TYPE = typename is_duckdb_optional<T>::ELEMENT_TYPE>
+	inline typename std::enable_if<is_duckdb_optional<T>::value, T>::type Read() {
+		auto is_present = OnNullableBegin();
+		T result;
+		if (is_present) {
+			result = Read<ELEMENT_TYPE>();
+		}
+		OnNullableEnd();
+		return result;
+	}
+
 	// Deserialize a vector
 	template <typename T = void>
 	inline typename std::enable_if<is_vector<T>::value, T>::type Read() {

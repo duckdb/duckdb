@@ -3,9 +3,6 @@
 # group: [general]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t AS (SELECT 'hello' AS x UNION ALL SELECT 'WORLD' AS x UNION ALL SELECT 'WoRlD' AS x);
 
 # 3 groups because no collation

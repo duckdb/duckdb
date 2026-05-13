@@ -28,7 +28,7 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 	//! if the semantics do not change, which only happens when BOTH casts
 	//! are invertible.
 	auto target_type = cast_expression.source_type();
-	if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.return_type)) {
+	if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.GetReturnType())) {
 		return nullptr;
 	}
 	vector<unique_ptr<BoundConstantExpression>> cast_list;

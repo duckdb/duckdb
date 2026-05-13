@@ -61,13 +61,13 @@ public:
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
 
-	DUCKDB_API unique_ptr<Expression> BindScalarFunction(ScalarFunction bound_function,
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const ScalarFunction &bound_function,
 	                                                     vector<unique_ptr<Expression>> children,
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
 
 	DUCKDB_API unique_ptr<BoundAggregateExpression>
-	BindAggregateFunction(AggregateFunction bound_function, vector<unique_ptr<Expression>> children,
+	BindAggregateFunction(const AggregateFunction &bound_function, vector<unique_ptr<Expression>> children,
 	                      unique_ptr<Expression> filter = nullptr,
 	                      AggregateType aggr_type = AggregateType::NON_DISTINCT);
 
@@ -76,20 +76,35 @@ public:
 	                                           optional_ptr<vector<GroupingSet>> grouping_sets);
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr);
 
-	DUCKDB_API unique_ptr<BoundWindowExpression>
-	BindWindowFunction(WindowFunction bound_function, vector<unique_ptr<Expression>> children,
-	                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders,
-	                   AggregateType aggr_type = AggregateType::NON_DISTINCT);
+	DUCKDB_API unique_ptr<BoundWindowExpression> BindWindowFunction(const WindowFunction &function,
+	                                                                vector<unique_ptr<Expression>> children,
+	                                                                vector<OrderByNode> &orders,
+	                                                                vector<OrderByNode> &arg_orders);
 
 	//! Cast a set of expressions to the arguments of this function
-	void CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children);
+	void CastToFunctionArguments(BoundSimpleFunction &function, vector<unique_ptr<Expression>> &children);
 
-	void ResolveTemplateTypes(BaseScalarFunction &bound_function, const vector<unique_ptr<Expression>> &children);
-	void CheckTemplateTypesResolved(const BaseScalarFunction &bound_function);
+	void ResolveTemplateTypes(BoundSimpleFunction &bound_function, const vector<unique_ptr<Expression>> &children);
+	void CheckTemplateTypesResolved(const BoundSimpleFunction &bound_function);
+
+	pair<BoundScalarFunction, unique_ptr<FunctionData>> ResolveFunction(const ScalarFunction &function,
+	                                                                    vector<unique_ptr<Expression>> &children);
+
+	pair<BoundAggregateFunction, unique_ptr<FunctionData>> ResolveFunction(const AggregateFunction &function,
+	                                                                       vector<unique_ptr<Expression>> &children);
+
+	pair<BoundWindowFunction, unique_ptr<FunctionData>>
+	ResolveFunction(const WindowFunction &function, vector<unique_ptr<Expression>> &children,
+	                optional_ptr<vector<OrderByNode>> orders = nullptr,
+	                optional_ptr<vector<OrderByNode>> arg_orders = nullptr);
 
 private:
 	optional_idx BindVarArgsFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments);
 	optional_idx BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments);
+
+	optional_idx BindVarArgsFunctionCost(const SimpleNamedParameterFunction &func,
+	                                     const vector<LogicalType> &arguments);
+	optional_idx BindFunctionCost(const SimpleNamedParameterFunction &func, const vector<LogicalType> &arguments);
 
 	template <class T>
 	vector<idx_t> BindFunctionsFromArguments(const string &name, FunctionSet<T> &functions,

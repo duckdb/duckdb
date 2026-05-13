@@ -2,9 +2,6 @@
 # description: Test interval comparisons
 # group: [interval]
 
-statement ok
-PRAGMA enable_verification
-
 # 30 days = 1 month for ordering purposes
 query T
 SELECT INTERVAL '30' DAY > INTERVAL '1' MONTH

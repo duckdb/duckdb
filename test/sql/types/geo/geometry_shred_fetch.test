@@ -28,9 +28,8 @@ select g, id from t1 where id = 1500;
 ----
 POINT (1500 1500)	1500
 
-
 statement ok
-pragma verify_fetch_row;
+SET debug_force_fetch_row=true;
 
 # Now do a point-lookup
 query II rowsort

@@ -23,6 +23,7 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/expression.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
@@ -575,6 +576,7 @@ void SerializedCSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<CSVOption<string>>(141, "multi_byte_delimiter", options.GetMultiByteDelimiter());
 	serializer.WritePropertyWithDefault<bool>(142, "multi_file_reader", options.multi_file_reader);
 	serializer.WriteProperty<CSVOption<idx_t>>(143, "buffer_size_option", options.buffer_size_option);
+	serializer.WritePropertyWithDefault<idx_t>(144, "rejects_line_size_limit", options.rejects_line_size_limit, 10000);
 }
 
 SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer &deserializer) {
@@ -660,6 +662,7 @@ SerializedCSVReaderOptions SerializedCSVReaderOptions::Deserialize(Deserializer 
 	result.options.dialect_options.state_machine_options.strict_mode = options_dialect_options_state_machine_options_strict_mode;
 	deserializer.ReadPropertyWithDefault<bool>(142, "multi_file_reader", result.options.multi_file_reader);
 	deserializer.ReadProperty<CSVOption<idx_t>>(143, "buffer_size_option", result.options.buffer_size_option);
+	deserializer.ReadPropertyWithExplicitDefault<idx_t>(144, "rejects_line_size_limit", result.options.rejects_line_size_limit, 10000);
 	return result;
 }
 
@@ -732,12 +735,12 @@ TableColumn TableColumn::Deserialize(Deserializer &deserializer) {
 }
 
 void TableFilterSet::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<map<ProjectionIndex, unique_ptr<TableFilter>>>(100, "filters", filters);
+	serializer.WritePropertyWithDefault<map<ProjectionIndex, unique_ptr<TableFilter>>>(100, "filters", GetTableFiltersForSerialization(serializer));
 }
 
 TableFilterSet TableFilterSet::Deserialize(Deserializer &deserializer) {
 	TableFilterSet result;
-	deserializer.ReadPropertyWithDefault<map<ProjectionIndex, unique_ptr<TableFilter>>>(100, "filters", result.filters);
+	deserializer.ReadPropertyWithDefault<map<ProjectionIndex, unique_ptr<TableFilter>>>(100, "filters", result.GetTableFiltersForDeserialization(deserializer));
 	return result;
 }
 

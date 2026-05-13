@@ -1,0 +1,130 @@
+# name: test/sql/merge/merge_into_invalid_column_reference.test
+# description: Test that MERGE INTO rejects invalid column references in match contexts
+# group: [merge]
+
+# This test verifies that column references from the "wrong side" of a match context
+# are rejected at bind time instead of silently resolving to NULL.
+# - In WHEN NOT MATCHED BY TARGET, target columns don't exist (no target row)
+# - In WHEN NOT MATCHED BY SOURCE, source columns don't exist (no source row)
+
+# Setup target table
+statement ok
+CREATE TABLE target(id INT PRIMARY KEY, val INT);
+
+statement ok
+INSERT INTO target VALUES (1, 10);
+
+# Case A: Target column in NOT MATCHED BY TARGET INSERT (should error)
+# Previously this silently inserted NULL for t.val
+statement error
+MERGE INTO target AS t
+USING (VALUES (2, 99)) AS s(id, val)
+ON t.id = s.id
+WHEN NOT MATCHED BY TARGET THEN INSERT VALUES (s.id, t.val);
+----
+<REGEX>:Binder Error.*cannot be referenced in a WHEN NOT MATCHED BY TARGET.*
+
+# Case B: Source column in NOT MATCHED BY SOURCE UPDATE (should error)
+# Previously this silently updated val to NULL
+statement ok
+CREATE TABLE target2(id INT PRIMARY KEY, val INT);
+
+statement ok
+INSERT INTO target2 VALUES (1, 10), (2, 20);
+
+statement error
+MERGE INTO target2 AS t
+USING (VALUES (1, 99)) AS s(id, val)
+ON t.id = s.id
+WHEN MATCHED THEN DO NOTHING
+WHEN NOT MATCHED BY SOURCE THEN UPDATE SET val = s.val;
+----
+<REGEX>:Binder Error.*cannot be referenced in a WHEN NOT MATCHED BY SOURCE.*
+
+# Case C: Source column in NOT MATCHED BY SOURCE condition (should error)
+# Previously this made the condition always-false due to NULL comparison
+statement ok
+CREATE TABLE target3(id INT PRIMARY KEY, val INT);
+
+statement ok
+INSERT INTO target3 VALUES (1, 10), (2, 20), (3, 30);
+
+statement error
+MERGE INTO target3 AS t
+USING (VALUES (1, 99)) AS s(id, val)
+ON t.id = s.id
+WHEN MATCHED THEN DO NOTHING
+WHEN NOT MATCHED BY SOURCE AND s.val > 50 THEN DELETE;
+----
+<REGEX>:Binder Error.*cannot be referenced in a WHEN NOT MATCHED BY SOURCE.*
+
+# Case D: Target column in NOT MATCHED BY TARGET condition (should error)
+# Previously this made the condition always-false due to NULL comparison
+statement ok
+CREATE TABLE target4(id INT PRIMARY KEY, val INT);
+
+statement ok
+INSERT INTO target4 VALUES (1, 10);
+
+statement error
+MERGE INTO target4 AS t
+USING (VALUES (2, 99), (3, 50)) AS s(id, val)
+ON t.id = s.id
+WHEN NOT MATCHED BY TARGET AND t.val > 5 THEN INSERT VALUES (s.id, s.val);
+----
+<REGEX>:Binder Error.*cannot be referenced in a WHEN NOT MATCHED BY TARGET.*
+
+# Verify that valid column references still work correctly
+
+# Valid: source columns in NOT MATCHED BY TARGET
+statement ok
+CREATE TABLE target5(id INT PRIMARY KEY, val INT);
+
+statement ok
+MERGE INTO target5 AS t
+USING (VALUES (1, 100)) AS s(id, val)
+ON t.id = s.id
+WHEN NOT MATCHED BY TARGET THEN INSERT VALUES (s.id, s.val);
+
+query II
+SELECT * FROM target5;
+----
+1	100
+
+# Valid: target columns in NOT MATCHED BY SOURCE
+statement ok
+CREATE TABLE target6(id INT PRIMARY KEY, val INT);
+
+statement ok
+INSERT INTO target6 VALUES (1, 10), (2, 20);
+
+statement ok
+MERGE INTO target6 AS t
+USING (VALUES (1, 99)) AS s(id, val)
+ON t.id = s.id
+WHEN MATCHED THEN DO NOTHING
+WHEN NOT MATCHED BY SOURCE THEN UPDATE SET val = t.val + 1;
+
+query II
+SELECT * FROM target6 ORDER BY id;
+----
+1	10
+2	21
+
+# Valid: both source and target columns in WHEN MATCHED
+statement ok
+CREATE TABLE target7(id INT PRIMARY KEY, val INT);
+
+statement ok
+INSERT INTO target7 VALUES (1, 10);
+
+statement ok
+MERGE INTO target7 AS t
+USING (VALUES (1, 99)) AS s(id, val)
+ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET val = t.val + s.val;
+
+query II
+SELECT * FROM target7;
+----
+1	109

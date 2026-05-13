@@ -1,7 +1,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -81,17 +81,17 @@ struct ICUTableRange {
 
 		bool initialized_row = false;
 		idx_t current_input_row = 0;
-		timestamp_t current_state;
+		timestamp_tz_t current_state;
 
-		timestamp_t start;
-		timestamp_t end;
+		timestamp_tz_t start;
+		timestamp_tz_t end;
 		interval_t increment;
 		bool inclusive_bound;
 		bool greater_than_check;
 
 		bool empty_range = false;
 
-		bool Finished(timestamp_t current_value) const {
+		bool Finished(timestamp_tz_t current_value) const {
 			if (greater_than_check) {
 				if (inclusive_bound) {
 					return current_value > end;
@@ -113,8 +113,8 @@ struct ICUTableRange {
 		input.Flatten();
 		for (idx_t c = 0; c < input.ColumnCount(); c++) {
 			if (FlatVector::IsNull(input.data[c], row_id)) {
-				result.start = timestamp_t(0);
-				result.end = timestamp_t(0);
+				result.start = timestamp_tz_t(0);
+				result.end = timestamp_tz_t(0);
 				result.increment = interval_t();
 				result.greater_than_check = true;
 				result.inclusive_bound = false;
@@ -122,12 +122,12 @@ struct ICUTableRange {
 			}
 		}
 
-		result.start = FlatVector::GetValue<timestamp_t>(input.data[0], row_id);
-		result.end = FlatVector::GetValue<timestamp_t>(input.data[1], row_id);
+		result.start = FlatVector::GetValue<timestamp_tz_t>(input.data[0], row_id);
+		result.end = FlatVector::GetValue<timestamp_tz_t>(input.data[1], row_id);
 		result.increment = FlatVector::GetValue<interval_t>(input.data[2], row_id);
 
 		// Infinities either cause errors or infinite loops, so just ban them
-		if (!Timestamp::IsFinite(result.start) || !Timestamp::IsFinite(result.end)) {
+		if (!result.start.IsFinite() || !result.end.IsFinite()) {
 			throw BinderException("RANGE with infinite bounds is not supported");
 		}
 
@@ -207,12 +207,13 @@ struct ICUTableRange {
 				return OperatorResultType::HAVE_MORE_OUTPUT;
 			}
 			idx_t size = 0;
-			auto data = FlatVector::GetDataMutable<timestamp_t>(output.data[0]);
+			auto data = FlatVector::ScatterWriter<timestamp_tz_t>(output.data[0]);
 			while (true) {
 				if (state.Finished(state.current_state)) {
 					break;
 				}
-				data[size++] = state.current_state;
+				data[size] = state.current_state;
+				size++;
 				state.current_state = ICUDateFunc::Add(calendar, state.current_state, state.increment);
 				if (size >= STANDARD_VECTOR_SIZE) {
 					break;
@@ -224,7 +225,7 @@ struct ICUTableRange {
 				state.initialized_row = false;
 				continue;
 			}
-			output.SetCardinality(size);
+			output.SetChildCardinality(size);
 			return OperatorResultType::HAVE_MORE_OUTPUT;
 		}
 	}

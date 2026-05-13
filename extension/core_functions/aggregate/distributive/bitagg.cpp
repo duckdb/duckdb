@@ -18,20 +18,20 @@ struct BitState {
 };
 
 template <class T>
-LogicalType GetBitStateType(const AggregateFunction &function) {
+LogicalType GetBitStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> child_types;
 	child_types.emplace_back("is_set", LogicalType::BOOLEAN);
 
-	LogicalType value_type = function.return_type;
+	LogicalType value_type = function.GetReturnType();
 	child_types.emplace_back("value", value_type);
 
 	return LogicalType::STRUCT(std::move(child_types));
 }
 
-LogicalType GetBitStringStateType(const AggregateFunction &function) {
+LogicalType GetBitStringStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> child_types;
 	child_types.emplace_back("is_set", LogicalType::BOOLEAN);
-	child_types.emplace_back("value", function.return_type);
+	child_types.emplace_back("value", function.GetReturnType());
 	return LogicalType::STRUCT(std::move(child_types));
 }
 

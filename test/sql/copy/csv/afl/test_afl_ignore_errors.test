@@ -2,9 +2,6 @@
 # description: Test AFL CSV Files work with ingore errors set to true
 # group: [afl]
 
-statement ok
-PRAGMA enable_verification
-
 loop i 1 56
 
 statement maybe

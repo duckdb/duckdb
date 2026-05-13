@@ -78,13 +78,20 @@ struct ChunkMetaData {
 	unordered_set<uint32_t> block_ids;
 	//! The number of entries in the chunk
 	uint16_t count;
+	//! Total allocation size for this chunk
+	optional_idx allocation_size;
 };
 
 class ColumnDataCollectionSegment {
 public:
 	ColumnDataCollectionSegment(shared_ptr<ColumnDataAllocator> allocator, vector<LogicalType> types_p);
 
+public:
+	//! The allocator and allocation statistics
 	shared_ptr<ColumnDataAllocator> allocator;
+	idx_t total_allocated;
+	idx_t last_chunk_total_allocated;
+
 	//! The types of the chunks
 	vector<LogicalType> types;
 	//! The number of entries in the internal column data
@@ -132,6 +139,8 @@ public:
 	idx_t SizeInBytes() const;
 	//! Get the currently allocated size in bytes (cached)
 	idx_t AllocationSize() const;
+	//! Get the allocation size of the chunk
+	idx_t GetChunkAllocationSize(idx_t chunk_index) const;
 
 	void FetchChunk(idx_t chunk_idx, DataChunk &result);
 	void FetchChunk(idx_t chunk_idx, DataChunk &result, const vector<column_t> &column_ids);

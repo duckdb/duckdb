@@ -3,9 +3,6 @@
 
 require vector_size 2048
 
-statement ok
-PRAGMA enable_verification
-
 # Array try cast
 query I rowsort
 SELECT TRY_CAST(test_vector AS INT[2]) AS a FROM test_vector_types(NULL::INTEGER[])

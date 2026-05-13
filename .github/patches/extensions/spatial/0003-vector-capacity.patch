@@ -1,0 +1,15 @@
+diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
+index 804b7c9..bd8b172 100644
+--- a/src/spatial/operators/spatial_join_physical.cpp
++++ b/src/spatial/operators/spatial_join_physical.cpp
+@@ -670,8 +670,8 @@ SinkFinalizeType PhysicalSpatialJoin::Finalize(Pipeline &pipeline, Event &event,
+ 	// We need to keep everything pinned so that we can probe the pointers later
+ 	TupleDataChunkIterator iterator(*gstate.collection, TupleDataPinProperties::KEEP_EVERYTHING_PINNED, true);
+ 
+-	const auto rows_ptr = iterator.GetRowLocations();
+-	Vector row_pointer_vector(LogicalType::POINTER, reinterpret_cast<data_ptr_t>(rows_ptr));
++	auto &row_pointer_vector = iterator.GetChunkState().row_locations;
++	auto rows_ptr = FlatVector::GetData<data_ptr_t>(row_pointer_vector);
+ 
+ 	auto &sel = *FlatVector::IncrementalSelectionVector();
+ 

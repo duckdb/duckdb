@@ -81,6 +81,14 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 			default_table = QualifiedName::Parse(StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR)));
 			continue;
 		}
+
+		if (entry.first == "hidden") {
+			auto is_hidden = BooleanValue::Get(entry.second.DefaultCastAs(LogicalType::BOOLEAN));
+			if (is_hidden) {
+				visibility = AttachVisibility::HIDDEN;
+			}
+			continue;
+		}
 		options.emplace(entry.first, entry.second);
 	}
 }
@@ -97,6 +105,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
 		unordered_map<string, Value> options;
 		AttachOptions attach_options(options, AccessMode::READ_WRITE);
+		options["storage_version"] = "latest";
 		storage = make_uniq<SingleFileStorageManager>(*this, string(IN_MEMORY_PATH), attach_options);
 	}
 

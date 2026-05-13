@@ -6,7 +6,7 @@
 namespace duckdb {
 
 VariantVectorData::VariantVectorData(Vector &variant)
-    : variant(variant), keys_index_validity(FlatVector::Validity(VariantVector::GetChildrenKeysIndex(variant))),
+    : variant(variant), keys_index_validity(FlatVector::ValidityMutable(VariantVector::GetChildrenKeysIndex(variant))),
       keys(VariantVector::GetKeys(variant)) {
 	blob_data = FlatVector::GetDataMutable<string_t>(VariantVector::GetData(variant));
 	type_ids_data = FlatVector::GetDataMutable<uint8_t>(VariantVector::GetValuesTypeId(variant));

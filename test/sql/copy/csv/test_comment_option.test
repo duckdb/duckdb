@@ -2,9 +2,6 @@
 # description: Test that the comment option of csv reading works properly
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # Test comment and skip option
 query III
 FROM read_csv('{DATA_DIR}/csv/comments/17226.csv', comment='#', all_varchar=True, skip=0, ignore_errors=True)

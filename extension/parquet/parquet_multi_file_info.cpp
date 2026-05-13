@@ -1,12 +1,44 @@
 #include "parquet_multi_file_info.hpp"
+
+#include <stdint.h>
+#include <atomic>
+#include <unordered_map>
+#include <vector>
+
 #include "duckdb/common/multi_file/multi_file_function.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "parquet_crypto.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
+#include "duckdb/common/multi_file/multi_file_options.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_states.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/function/partition_stats.hpp"
+#include "duckdb/parallel/async_result.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_file_metadata_cache.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
+class BaseStatistics;
+class ClientContext;
+class DataChunk;
+class ExecutionContext;
+class Expression;
+class LogicalGet;
+class PhysicalOperator;
 
 struct ParquetMetadataCacheEntry {
 	ParquetMetadataCacheEntry(shared_ptr<ParquetFileMetadataCache> metadata, ParquetCacheValidity validity,
@@ -182,6 +214,17 @@ static bool GetBooleanArgument(const string &key, const vector<Value> &option_va
 }
 
 static bool ParquetScanPushdownExpression(ClientContext &context, const LogicalGet &get, Expression &expr) {
+	return true;
+}
+
+static bool ParquetScanSupportPushdownExtract(const FunctionData &bind_data_p, const LogicalIndex &col_idx) {
+	auto &bind_data = bind_data_p.Cast<MultiFileBindData>();
+
+	auto &column = bind_data.columns[col_idx.index];
+	auto &column_type = column.type;
+	if (column_type.id() != LogicalTypeId::STRUCT) {
+		return false;
+	}
 	return true;
 }
 
@@ -377,7 +420,8 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
 	table_function.named_parameters["parquet_version"] = LogicalType::VARCHAR;
 	table_function.named_parameters["can_have_nan"] = LogicalType::BOOLEAN;
-	table_function.statistics = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStats;
+	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
+	table_function.supports_pushdown_extract = ParquetScanSupportPushdownExtract;
 	table_function.serialize = ParquetScanSerialize;
 	table_function.deserialize = ParquetScanDeserialize;
 	table_function.get_row_id_columns = ParquetGetRowIdColumns;

@@ -178,31 +178,20 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 
 void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op,
                          optional_ptr<bound_parameter_map_t> map) {
-	auto &config = DBConfig::GetConfig(context);
-#ifdef DUCKDB_ALTERNATIVE_VERIFY
-	{
-		auto &serialize_comp = config.options.serialization_compatibility;
-		auto latest_version = SerializationCompatibility::Latest();
-		if (serialize_comp.manually_set &&
-		    serialize_comp.serialization_version != latest_version.serialization_version) {
-			// Serialization should not be skipped, this test relies on the serialization to remove certain fields for
-			// compatibility with older versions. This might change behavior, not doing this might make this test fail.
-		} else {
-			// if alternate verification is enabled we run the original operator
-			return;
-		}
+	if (!op) {
+		return;
 	}
-#endif
-	if (!op || !ClientConfig::GetConfig(context).verify_serializer) {
+	// verify the column bindings of the plan
+	ColumnBindingResolver::Verify(context, *op);
+	if (!Settings::Get<DebugVerifySerializerSetting>(context)) {
 		return;
 	}
 	//! SELECT only for now
 	if (!OperatorSupportsSerialization(*op)) {
 		return;
 	}
-	// verify the column bindings of the plan
-	ColumnBindingResolver::Verify(*op);
 
+	auto &config = DBConfig::GetConfig(context);
 	// format (de)serialization of this operator
 	try {
 		MemoryStream stream(Allocator::Get(context));

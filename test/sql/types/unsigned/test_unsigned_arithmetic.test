@@ -3,9 +3,6 @@
 # group: [unsigned]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE unsigned(a UTINYINT,b USMALLINT, c UINTEGER, d UBIGINT);
 
 statement ok

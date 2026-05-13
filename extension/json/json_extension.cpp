@@ -21,7 +21,7 @@ static const DefaultMacro JSON_MACROS[] = {
     {DEFAULT_SCHEMA, "json", "(x) AS json_extract(x, '$')"},
     {DEFAULT_SCHEMA, "json_copy_strftime_if_date", "(x, format) AS x, (x DATE, format) AS strftime(x, format);"},
     {DEFAULT_SCHEMA, "json_copy_strftime_if_timestamp",
-     "(x, format) AS x, (x TIMESTAMP, format) AS strftime(x, format);"},
+     "(x, format) AS x, (x TIMESTAMP, format) AS strftime(x, format), (x TIMESTAMPTZ, format) AS strftime(x, format);"},
     {nullptr, nullptr, nullptr}};
 
 static void LoadInternal(ExtensionLoader &loader) {

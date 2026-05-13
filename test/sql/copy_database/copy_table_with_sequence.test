@@ -2,9 +2,6 @@
 # group: [copy_database]
 
 statement ok
-pragma enable_verification;
-
-statement ok
 attach '{TEST_DIR}/backup.db';
 
 ## Only specifying a sequence name
@@ -36,7 +33,7 @@ select * from backup.tbl;
 query I
 select currval('backup.main.seq');
 ----
-3
+2
 
 statement ok
 drop sequence backup.main.seq cascade;

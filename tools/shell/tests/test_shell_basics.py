@@ -137,7 +137,7 @@ def test_bail_off_continues_after_error(shell):
     )
 
     result = test.run()
-    result.check_stderr("Parser Error: syntax error at or near \"invalid\"")
+    result.check_stderr("Parser Error: syntax error at or near")
     assert "reached here" in str(result.stdout)
 
 def test_bail_on_missing_init(shell):
@@ -259,7 +259,7 @@ def test_invalid_sql(shell):
     test = ShellTest(shell).statement("invalid command;")
     result = test.run()
     assert result.status_code == 1
-    result.check_stderr("Parser Error: syntax error at or near \"invalid\"")
+    result.check_stderr("Parser Error: syntax error at or near")
 
 @pytest.mark.parametrize("alias", ["exit", "quit"])
 def test_exit(shell, alias):

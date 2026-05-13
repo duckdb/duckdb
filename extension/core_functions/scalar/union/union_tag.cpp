@@ -9,17 +9,18 @@ namespace duckdb {
 
 namespace {
 
-unique_ptr<FunctionData> UnionTagBind(ClientContext &context, ScalarFunction &bound_function,
-                                      vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> UnionTagBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.empty()) {
 		throw BinderException("Missing required arguments for union_tag function.");
 	}
 
-	if (LogicalTypeId::UNKNOWN == arguments[0]->return_type.id()) {
+	if (LogicalTypeId::UNKNOWN == arguments[0]->GetReturnType().id()) {
 		throw ParameterNotResolvedException();
 	}
 
-	if (LogicalTypeId::UNION != arguments[0]->return_type.id()) {
+	if (LogicalTypeId::UNION != arguments[0]->GetReturnType().id()) {
 		throw BinderException("First argument to union_tag function must be a union type.");
 	}
 
@@ -27,19 +28,18 @@ unique_ptr<FunctionData> UnionTagBind(ClientContext &context, ScalarFunction &bo
 		throw BinderException("Too many arguments, union_tag takes at most one argument.");
 	}
 
-	auto member_count = UnionType::GetMemberCount(arguments[0]->return_type);
+	auto member_count = UnionType::GetMemberCount(arguments[0]->GetReturnType());
 	if (member_count == 0) {
 		// this should never happen, empty unions are not allowed
 		throw InternalException("Can't get tags from an empty union");
 	}
 
-	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 
 	auto varchar_vector = Vector(LogicalType::VARCHAR, member_count);
 	auto result_data = FlatVector::Writer<string_t>(varchar_vector, member_count);
 	for (idx_t i = 0; i < member_count; i++) {
-		auto str = string_t(UnionType::GetMemberName(arguments[0]->return_type, i));
-		result_data[i] = str;
+		result_data.WriteValue(string_t(UnionType::GetMemberName(arguments[0]->GetReturnType(), i)));
 	}
 	auto enum_type = LogicalType::ENUM(varchar_vector, member_count);
 	bound_function.SetReturnType(enum_type);

@@ -31,119 +31,105 @@ static unique_ptr<BoundCastData> BindListToArrayCast(BindCastInput &input, const
 
 unique_ptr<FunctionLocalState> ListBoundCastData::InitListLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
-	if (!cast_data.child_cast_info.init_local_state) {
+	if (!cast_data.child_cast_info.HasInitLocalState()) {
 		return nullptr;
 	}
-	CastLocalStateParameters child_parameters(parameters, cast_data.child_cast_info.cast_data);
-	return cast_data.child_cast_info.init_local_state(child_parameters);
+	CastLocalStateParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData());
+	return cast_data.child_cast_info.InitLocalState(child_parameters);
 }
 
 bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
 
 	// only handle constant and flat vectors here for now
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(source.GetVectorType());
-		const bool is_null = ConstantVector::IsNull(source);
-		ConstantVector::SetNull(result, is_null);
-
-		if (!is_null) {
-			auto ldata = ConstantVector::GetData<list_entry_t>(source);
-			auto tdata = ConstantVector::GetData<list_entry_t>(result);
-			*tdata = *ldata;
+	auto source_data = source.Values<list_entry_t>();
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
+	for (idx_t r = 0; r < count; r++) {
+		auto source_list = source_data[r];
+		if (!source_list.IsValid()) {
+			result_data.WriteNull();
+			continue;
 		}
-	} else {
-		source.Flatten(count);
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		FlatVector::SetValidity(result, FlatVector::Validity(source));
-
-		auto ldata = FlatVector::GetData<list_entry_t>(source);
-		auto tdata = FlatVector::GetDataMutable<list_entry_t>(result);
-		for (idx_t i = 0; i < count; i++) {
-			tdata[i] = ldata[i];
-		}
+		result_data.WriteValue(source_list.GetValue());
 	}
-	auto &source_cc = ListVector::GetEntry(source);
+	auto &source_cc = ListVector::GetChildMutable(source);
 	auto source_size = ListVector::GetListSize(source);
 
 	ListVector::Reserve(result, source_size);
-	auto &append_vector = ListVector::GetEntry(result);
+	auto &append_vector = ListVector::GetChildMutable(result);
 
-	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
-	bool all_succeeded = cast_data.child_cast_info.function(source_cc, append_vector, source_size, child_parameters);
+	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
+	bool all_succeeded = cast_data.child_cast_info.Cast(source_cc, append_vector, source_size, child_parameters);
 	ListVector::SetListSize(result, source_size);
 	D_ASSERT(ListVector::GetListSize(result) == source_size);
 	return all_succeeded;
 }
 
 static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	// first cast the child vector to varchar
+	// first cast the child vector to varchar[]
 	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
+	FlatVector::SetSize(varchar_list, count);
 	ListCast::ListToListCast(source, varchar_list, count, parameters);
 
-	auto &child_vec = ListVector::GetEntry(source);
+	// now construct the actual varchar vector
+	auto &child_vec = ListVector::GetChild(source);
 	auto child_is_nested = child_vec.GetType().IsNested();
 	auto string_length_func = child_is_nested ? VectorCastHelpers::CalculateStringLength
 	                                          : VectorCastHelpers::CalculateEscapedStringLength<false>;
 	auto write_string_func =
 	    child_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString<false>;
 
-	// now construct the actual varchar vector
-	varchar_list.Flatten(count);
-	auto &child = ListVector::GetEntry(varchar_list);
-	auto list_data = FlatVector::GetData<list_entry_t>(varchar_list);
-	auto &validity = FlatVector::Validity(varchar_list);
+	auto values = varchar_list.Values<VectorListType<string_t>>();
 
-	child.Flatten(ListVector::GetListSize(varchar_list));
-	auto child_data = FlatVector::GetData<string_t>(child);
-	auto &child_validity = FlatVector::Validity(child);
-
-	static constexpr const idx_t SEP_LENGTH = 2;
-	static constexpr const idx_t NULL_LENGTH = 4;
+	static constexpr idx_t SEP_LENGTH = 2;
+	static constexpr idx_t NULL_LENGTH = 4;
 	unsafe_unique_array<bool> needs_quotes;
 	idx_t needs_quotes_length = DConstants::INVALID_INDEX;
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
-		if (!validity.RowIsValid(i)) {
-			result_data.SetInvalid(i);
+		auto list_entry = values[i];
+		if (!list_entry.IsValid()) {
+			result_data.WriteNull();
 			continue;
 		}
-		auto list = list_data[i];
+		auto list = list_entry.GetValue();
 		// figure out how long the result needs to be
-		idx_t list_length = 2; // "[" and "]"
 		if (!needs_quotes || list.length > needs_quotes_length) {
 			needs_quotes = make_unsafe_uniq_array_uninitialized<bool>(list.length);
 			needs_quotes_length = list.length;
 		}
-		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
-			auto idx = list.offset + list_idx;
+		idx_t list_length = 2; // "[" and "]"
+		idx_t list_idx = 0;
+		for (auto child_value : list_entry.GetChildValues()) {
 			if (list_idx > 0) {
 				list_length += SEP_LENGTH; // ", "
 			}
 			// string length, or "NULL"
-			if (child_validity.RowIsValid(idx)) {
-				list_length += string_length_func(child_data[idx], needs_quotes[list_idx]);
+			if (child_value.IsValid()) {
+				list_length += string_length_func(child_value.GetValue(), needs_quotes[list_idx]);
 			} else {
 				list_length += NULL_LENGTH;
 			}
+			list_idx++;
 		}
-		auto &result_str = result_data[i].EmptyString(list_length);
+		auto &result_str = result_data.WriteEmptyString(list_length);
 		auto dataptr = result_str.GetDataWriteable();
 		idx_t offset = 0;
 		dataptr[offset++] = '[';
-		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
-			auto idx = list.offset + list_idx;
+		list_idx = 0;
+		for (auto child_value : list_entry.GetChildValues()) {
 			if (list_idx > 0) {
 				memcpy(dataptr + offset, ", ", SEP_LENGTH);
 				offset += SEP_LENGTH;
 			}
-			if (child_validity.RowIsValid(idx)) {
-				offset += write_string_func(dataptr + offset, child_data[idx], needs_quotes[list_idx]);
+			if (child_value.IsValid()) {
+				offset += write_string_func(dataptr + offset, child_value.GetValue(), needs_quotes[list_idx]);
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;
 			}
+			list_idx++;
 		}
 		dataptr[offset] = ']';
 		result_str.Finalize();
@@ -159,7 +145,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(source.GetVectorType());
 		if (ConstantVector::IsNull(source)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 			return true;
 		}
 
@@ -169,19 +155,19 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 			auto msg = StringUtil::Format("Cannot cast list with length %llu to array with length %u", ldata.length,
 			                              array_size);
 			HandleCastError::AssignError(msg, parameters);
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 			return false;
 		}
 
-		auto &source_cc = ListVector::GetEntry(source);
-		auto &result_cc = ArrayVector::GetEntry(result);
+		auto &source_cc = ListVector::GetChildMutable(source);
+		auto &result_cc = ArrayVector::GetChildMutable(result);
 
-		CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
+		CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 
 		if (ldata.offset == 0) {
 			// Fast path: offset is zero, we can just cast `array_size` elements of the child vectors directly
 			// Since the list was constant, there can only be one sequence of data in the child vector
-			return cast_data.child_cast_info.function(source_cc, result_cc, array_size, child_parameters);
+			return cast_data.child_cast_info.Cast(source_cc, result_cc, array_size, child_parameters);
 		}
 
 		// Else, we need to copy the range we want to cast to a new vector and cast that
@@ -191,15 +177,15 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 
 		Vector payload_vector(source_cc.GetType(), array_size);
 		VectorOperations::Copy(source_cc, payload_vector, ldata.offset + array_size, ldata.offset, 0);
-		return cast_data.child_cast_info.function(payload_vector, result_cc, array_size, child_parameters);
+		return cast_data.child_cast_info.Cast(payload_vector, result_cc, array_size, child_parameters);
 
 	} else {
-		source.Flatten(count);
+		source.Flatten();
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
 		auto child_type = ArrayType::GetChildType(result.GetType());
-		auto &source_cc = ListVector::GetEntry(source);
-		auto &result_cc = ArrayVector::GetEntry(result);
+		auto &source_cc = ListVector::GetChildMutable(source);
+		auto &result_cc = ArrayVector::GetChildMutable(result);
 		auto ldata = FlatVector::GetData<list_entry_t>(source);
 
 		auto child_count = array_size * count;
@@ -233,15 +219,15 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 			}
 		}
 
-		CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
+		CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 
 		// Fast path: No lists are null
 		// We can just cast the child vector directly
 		// Note: Its worth doing a CheckAllValid here, the slow path is significantly more expensive
-		if (FlatVector::Validity(result).CheckAllValid(count)) {
+		if (FlatVector::ValidityMutable(result).CheckAllValid(count)) {
 			Vector payload_vector(result_cc.GetType(), child_count);
 
-			bool ok = cast_data.child_cast_info.function(source_cc, payload_vector, child_count, child_parameters);
+			bool ok = cast_data.child_cast_info.Cast(source_cc, payload_vector, child_count, child_parameters);
 			if (all_ok && !ok) {
 				all_ok = false;
 				HandleCastError::AssignError(*child_parameters.error_message, parameters);
@@ -270,7 +256,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 				                       0);
 
 				bool ok =
-				    cast_data.child_cast_info.function(list_cast_input, list_cast_output, array_size, child_parameters);
+				    cast_data.child_cast_info.Cast(list_cast_input, list_cast_output, array_size, child_parameters);
 				if (all_ok && !ok) {
 					all_ok = false;
 					HandleCastError::AssignError(*child_parameters.error_message, parameters);

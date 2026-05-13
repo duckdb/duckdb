@@ -24,7 +24,7 @@ struct HistogramFunctor {
 	}
 
 	static void PrepareData(Vector &input, idx_t count, bool &, UnifiedVectorFormat &result) {
-		input.ToUnifiedFormat(count, result);
+		input.ToUnifiedFormat(result);
 	}
 
 	template <class T>
@@ -71,7 +71,7 @@ struct HistogramStringFunctor : HistogramStringFunctorBase {
 	}
 
 	static void PrepareData(Vector &input, idx_t count, bool &, UnifiedVectorFormat &result) {
-		input.ToUnifiedFormat(count, result);
+		input.ToUnifiedFormat(result);
 	}
 };
 
@@ -89,10 +89,10 @@ struct HistogramGenericFunctor : HistogramStringFunctorBase {
 	static void PrepareData(Vector &input, idx_t count, Vector &extra_state, UnifiedVectorFormat &result) {
 		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 		CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, extra_state);
-		input.Flatten(count);
-		extra_state.Flatten(count);
-		FlatVector::Validity(extra_state).Initialize(FlatVector::Validity(input));
-		extra_state.ToUnifiedFormat(count, result);
+		input.Flatten();
+		extra_state.Flatten();
+		FlatVector::ValidityMutable(extra_state).Initialize(FlatVector::Validity(input));
+		extra_state.ToUnifiedFormat(result);
 	}
 };
 

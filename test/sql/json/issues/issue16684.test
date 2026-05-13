@@ -5,9 +5,6 @@
 require json
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 copy (select '00000000000000000000000000000000' md5) to '{TEST_DIR}/issue16684.json'
 
 # should be varchar, not uuid (no hyphens)

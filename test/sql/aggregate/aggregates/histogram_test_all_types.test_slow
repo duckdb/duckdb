@@ -3,9 +3,6 @@
 # group: [aggregates]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table all_types as from test_all_types()
 
 foreach col <all_types_columns>

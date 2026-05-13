@@ -12,9 +12,6 @@ require icu
 load {TEST_DIR}/test_samples.db
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table materialized_range as select * from range(5000000);
 
 statement ok

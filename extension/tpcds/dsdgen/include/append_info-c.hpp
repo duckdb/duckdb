@@ -35,7 +35,7 @@ struct tpcds_append_information {
 
 	tpcds_table_def table_def;
 
-	bool IsNull();
+	bool IsNull(int nColumn);
 };
 
 } // namespace tpcds

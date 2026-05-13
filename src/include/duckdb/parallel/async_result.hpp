@@ -55,7 +55,7 @@ public:
 	// Check whether there are tasks associated
 	bool HasTasks() const;
 	AsyncResultType GetResultType() const;
-	// Extract associated tasks, moving them away, will empty async_tasks and trasnform to INVALID
+	// Extract associated tasks, moving them away, will empty async_tasks and transform to INVALID
 	vector<unique_ptr<AsyncTask>> &&ExtractAsyncTasks();
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE

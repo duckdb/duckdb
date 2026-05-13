@@ -9,6 +9,8 @@ add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
 add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
 add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
 
+set(UNITTEST_OBJECT_FILES)
+
 if(${ENABLE_UNITTEST_CPP_TESTS})
   add_subdirectory(api)
   add_subdirectory(appender)
@@ -17,7 +19,6 @@ if(${ENABLE_UNITTEST_CPP_TESTS})
   add_subdirectory(common)
   add_subdirectory(logging)
   add_subdirectory(memoryleak)
-  add_subdirectory(parallel_csv)
   add_subdirectory(secrets)
   add_subdirectory(optimizer)
   add_subdirectory(serialize)
@@ -47,14 +48,24 @@ else()
   add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
 endif()
 
-add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
+add_executable(unittest unittest.cpp ${UNITTEST_OBJECT_FILES})
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(unittest PRIVATE -Wno-error=maybe-uninitialized)
 endif()
 
-target_link_libraries(unittest duckdb_static test_helpers)
+if(TARGET duckdb AND NOT WIN32)
+  # Some tests reference internal third-party symbols (e.g. re2/mbedtls) that
+  # are linked into duckdb but not exported from the shared library.
+  target_link_libraries(unittest duckdb test_helpers duckdb_re2 duckdb_mbedtls)
+else()
+  # On Windows, tests require internal DuckDB symbols that are not DLL-exported.
+  target_link_libraries(unittest duckdb_static test_helpers)
+  link_extension_libraries(unittest "")
+endif()
 
-link_extension_libraries(unittest "")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_link_libraries(unittest atomic)
+endif()
 
 duckdb_codesign_for_debugging(unittest)

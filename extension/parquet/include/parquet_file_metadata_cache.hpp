@@ -7,13 +7,23 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
+#include <string>
+
 #include "duckdb.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "parquet_geometry.hpp"
 #include "parquet_types.h"
+#include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 struct CachingFileHandle;
+class ClientContext;
+
 using duckdb_parquet::FileCryptoMetaData;
 
 enum class ParquetCacheValidity { VALID, INVALID, UNKNOWN };

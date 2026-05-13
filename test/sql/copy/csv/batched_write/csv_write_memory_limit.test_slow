@@ -2,14 +2,9 @@
 # description: Verify data is streamed and memory limit is not exceeded in CSV write
 # group: [batched_write]
 
-mode skip
-
 require parquet
 
 require 64bit
-
-statement ok
-PRAGMA enable_verification
 
 # 100M rows, 2 BIGINT columns = 1.6GB uncompressed
 statement ok

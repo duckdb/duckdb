@@ -115,7 +115,6 @@ public:
 			memcpy(GetDataWriteable(), ptr, size);
 		}
 		Finalize();
-		VerifyCharacters();
 	}
 
 	bool Empty() const {
@@ -157,9 +156,10 @@ public:
 	}
 
 	void Verify() const;
+	//! Verify also in release mode
+	void ForceVerify() const;
 	void VerifyUTF8() const;
 	void VerifyCharacters() const;
-	void VerifyNull() const;
 
 	struct StringComparisonOperators {
 		static inline bool Equals(const string_t &a, const string_t &b) {

@@ -70,7 +70,7 @@ ConvertKnownColRefToConstants(ClientContext &context, unique_ptr<Expression> &ex
 			} else {
 				// hive partitioning column - cast the value to the target type
 				result_val = HivePartitioning::GetValue(context, partition_val.key, partition_val.value,
-				                                        bound_colref.return_type);
+				                                        bound_colref.GetReturnType());
 			}
 			expr = make_uniq<BoundConstantExpression>(std::move(result_val));
 		}
@@ -240,14 +240,14 @@ static inline Value GetHiveKeyNullValue(const LogicalType &type) {
 template <class T>
 static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionKey> &keys, const idx_t col_idx,
                                             const idx_t count) {
-	auto entries = input.Values<T>(count);
+	auto entries = input.Values<T>();
 	const auto &type = input.GetType();
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &key = keys[i];
 		auto entry = entries[i];
 		if (entry.IsValid()) {
-			key.values[col_idx] = GetHiveKeyValue(entry.value, type);
+			key.values[col_idx] = GetHiveKeyValue(entry.GetValue(), type);
 		} else {
 			key.values[col_idx] = GetHiveKeyNullValue(type);
 		}
@@ -324,7 +324,7 @@ void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataApp
 	const auto count = input.size();
 
 	input.Hash(group_by_columns, hashes_v);
-	hashes_v.Flatten(count);
+	hashes_v.Flatten();
 
 	for (idx_t col_idx = 0; col_idx < group_by_columns.size(); col_idx++) {
 		auto &group_by_col = input.data[group_by_columns[col_idx]];
@@ -332,16 +332,16 @@ void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataApp
 	}
 
 	const auto hashes = FlatVector::GetData<hash_t>(hashes_v);
-	const auto partition_indices = FlatVector::GetDataMutable<idx_t>(state.partition_indices);
+	auto partition_indices = FlatVector::Writer<idx_t>(state.partition_indices, count);
 	for (idx_t i = 0; i < count; i++) {
 		auto &key = keys[i];
 		key.hash = hashes[i];
 		auto lookup = local_partition_map.find(key);
 		if (lookup == local_partition_map.end()) {
 			idx_t new_partition_id = RegisterNewPartition(key, state);
-			partition_indices[i] = new_partition_id;
+			partition_indices.WriteValue(new_partition_id);
 		} else {
-			partition_indices[i] = lookup->second;
+			partition_indices.WriteValue(lookup->second);
 		}
 	}
 }

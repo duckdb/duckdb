@@ -1,9 +1,22 @@
 #include "decoder/delta_byte_array_decoder.hpp"
+
+#include <string.h>
+#include <stdexcept>
+#include <utility>
+
 #include "column_reader.hpp"
 #include "parquet_reader.hpp"
-#include "reader/templated_column_reader.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_dbp_decoder.hpp"
+#include "parquet_types.h"
+#include "resizable_buffer.hpp"
 
 namespace duckdb {
+class Allocator;
+class Vector;
 
 DeltaByteArrayDecoder::DeltaByteArrayDecoder(ColumnReader &reader) : reader(reader) {
 }

@@ -22,7 +22,7 @@ class JSONReader;
 struct JSONTransformOptions {
 public:
 	JSONTransformOptions();
-	JSONTransformOptions(bool strict_cast, bool error_duplicate_key, bool error_missing_key, bool error_unkown_key);
+	JSONTransformOptions(bool strict_cast, bool error_duplicate_key, bool error_missing_key, bool error_unknown_key);
 
 public:
 	//! Throws an error if the cast doesn't work (instead of NULL-ing it)

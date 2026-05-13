@@ -8,10 +8,30 @@
 
 #pragma once
 
+#include <stddef.h>
+#include <stdint.h>
+#include <string>
+#include <vector>
+
 #include "duckdb.hpp"
 #include "parquet_types.h"
 #include "parquet_column_schema.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+
+namespace duckdb_parquet {
+class RowGroup;
+class SchemaElement;
+} // namespace duckdb_parquet
 
 namespace duckdb {
 class MemoryStream;
@@ -22,6 +42,12 @@ struct ChildFieldIDs;
 struct ShreddingType;
 class ResizeableBuffer;
 class ParquetBloomFilter;
+class AllocatedData;
+class BoundReferenceExpression;
+class ClientContext;
+class Expression;
+class Vector;
+struct ValidityMask;
 
 class ColumnWriterState {
 public:
@@ -144,6 +170,8 @@ public:
 	virtual void AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState &state) {
 		throw NotImplementedException("Writer doesn't require an AnalyzeSchemaFinalize pass");
 	}
+
+	virtual bool TryExportPreparedShreddingType(ShreddingType &result) const;
 
 	virtual idx_t FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) = 0;
 

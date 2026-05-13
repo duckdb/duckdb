@@ -73,7 +73,7 @@ protected:
 	Vector statep;
 	//! Input data chunk, used for leaf segment aggregation
 	DataChunk leaves;
-	//! The rows beging updated.
+	//! The rows beginning updated.
 	SelectionVector update_sel;
 	//! Count of buffered values
 	idx_t flush_count;
@@ -107,7 +107,7 @@ WindowNaiveLocalState::WindowNaiveLocalState(ExecutionContext &context, const Wi
 	data_ptr_t state_ptr = state.data();
 	D_ASSERT(statef.GetVectorType() == VectorType::FLAT_VECTOR);
 	statef.SetVectorType(VectorType::CONSTANT_VECTOR);
-	statef.Flatten(STANDARD_VECTOR_SIZE);
+	statef.Flatten();
 	auto fdata = FlatVector::GetDataMutable<data_ptr_t>(statef);
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; ++i) {
 		fdata[i] = state_ptr;
@@ -135,7 +135,7 @@ void WindowNaiveLocalState::Finalize(ExecutionContext &context, WindowAggregator
 		vector<BoundOrderByNode> orders;
 		for (const auto &order_by : aggregator.wexpr.arg_orders) {
 			auto order = order_by.Copy();
-			const auto &type = order.expression->return_type;
+			const auto &type = order.expression->GetReturnType();
 			order.expression = make_uniq<BoundReferenceExpression>(type, orders.size());
 			orders.emplace_back(std::move(order));
 		}
@@ -175,7 +175,7 @@ size_t WindowNaiveLocalState::Hash(idx_t rid) {
 	D_ASSERT(cursor->RowIsVisible(rid));
 	auto s = cursor->RowOffset(rid);
 	auto &scanned = cursor->chunk;
-	SelectionVector sel(&s);
+	SelectionVector sel(&s, 1);
 	leaves.Slice(scanned, sel, 1);
 	leaves.Hash(hashes);
 
@@ -193,7 +193,7 @@ bool WindowNaiveLocalState::KeyEqual(const idx_t &lidx, const idx_t &ridx) {
 
 	auto &scanned = cursor->chunk;
 	auto l = cursor->RowOffset(lhs);
-	SelectionVector lsel(&l);
+	SelectionVector lsel(&l, 1);
 
 	auto rreader = cursor.get();
 	if (!cursor->RowIsVisible(rhs)) {
@@ -203,10 +203,10 @@ bool WindowNaiveLocalState::KeyEqual(const idx_t &lidx, const idx_t &ridx) {
 	}
 	auto rscanned = &rreader->chunk;
 	auto r = rreader->RowOffset(rhs);
-	SelectionVector rsel(&r);
+	SelectionVector rsel(&r, 1);
 
 	sel_t f = 0;
-	SelectionVector fsel(&f);
+	SelectionVector fsel(&f, 1);
 
 	for (column_t c = 0; c < scanned.ColumnCount(); ++c) {
 		Vector left(scanned.data[c], lsel, 1);

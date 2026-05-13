@@ -11,19 +11,9 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 	// If the return type is not a bool, return the position
 	const auto return_pos = std::is_same<RETURN_TYPE, int32_t>::value;
 
-	const auto input_count = ListVector::GetListSize(input_list);
-
-	UnifiedVectorFormat list_format;
-	input_list.ToUnifiedFormat(count, list_format);
-	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_format);
-
-	UnifiedVectorFormat child_format;
-	list_child.ToUnifiedFormat(input_count, child_format);
-	const auto child_data = UnifiedVectorFormat::GetData<T>(child_format);
-
-	UnifiedVectorFormat target_format;
-	target.ToUnifiedFormat(count, target_format);
-	const auto target_data = UnifiedVectorFormat::GetData<T>(target_format);
+	const auto list_entries = input_list.Values<list_entry_t>();
+	const auto child_data = list_child.Values<T>();
+	const auto target_data = target.Values<T>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<RETURN_TYPE>(result, count);
@@ -31,59 +21,63 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 	idx_t total_matches = 0;
 
 	for (idx_t row_idx = 0; row_idx < count; ++row_idx) {
-		const auto list_entry_idx = list_format.sel->get_index(row_idx);
+		auto list_entry = list_entries[row_idx];
 
 		// The entire list is NULL, the result is also NULL.
-		if (!list_format.validity.RowIsValid(list_entry_idx)) {
-			result_data.SetInvalid(row_idx);
+		if (!list_entry.IsValid()) {
+			result_data.WriteNull();
 			continue;
 		}
+		auto list = list_entry.GetValue();
+		auto target_entry = target_data[row_idx];
 
-		const auto target_entry_idx = target_format.sel->get_index(row_idx);
-		const bool target_valid = target_format.validity.RowIsValid(target_entry_idx);
+		const bool target_valid = target_entry.IsValid();
 
 		// We are finished, if we are not looking for NULL, and the target is NULL.
 		const auto finished = !FIND_NULLS && !target_valid;
 		// We did not find the target (finished, or list is empty).
-		if (finished || list_entries[list_entry_idx].length == 0) {
+		if (finished || list.length == 0) {
 			if (finished || return_pos) {
 				// Return NULL as the position.
-				result_data.SetInvalid(row_idx);
+				result_data.WriteNull();
 			} else {
 				// Set 'contains' to false.
-				result_data[row_idx] = false;
+				result_data.WriteValue(RETURN_TYPE(false));
 			}
 			continue;
 		}
 
-		const auto entry_length = list_entries[list_entry_idx].length;
-		const auto entry_offset = list_entries[list_entry_idx].offset;
+		const auto entry_length = list.length;
+		const auto entry_offset = list.offset;
 
 		bool found = false;
+		RETURN_TYPE found_value {};
 
 		for (auto list_idx = entry_offset; list_idx < entry_length + entry_offset && !found; list_idx++) {
-			const auto child_entry_idx = child_format.sel->get_index(list_idx);
-			const bool child_valid = child_format.validity.RowIsValid(child_entry_idx);
+			auto child_entry = child_data[list_idx];
+			const bool child_valid = child_entry.IsValid();
 
 			if ((FIND_NULLS && !child_valid && !target_valid) ||
 			    (child_valid && target_valid &&
-			     Equals::Operation<T>(child_data[child_entry_idx], target_data[target_entry_idx]))) {
+			     Equals::Operation<T>(child_entry.GetValue(), target_entry.GetValue()))) {
 				found = true;
 				total_matches++;
 				if (return_pos) {
-					result_data[row_idx] = UnsafeNumericCast<int32_t>(1 + list_idx - entry_offset);
+					found_value = UnsafeNumericCast<int32_t>(1 + list_idx - entry_offset);
 				} else {
-					result_data[row_idx] = true;
+					found_value = RETURN_TYPE(true);
 				}
 			}
 		}
 
 		if (!found) {
 			if (return_pos) {
-				result_data.SetInvalid(row_idx);
+				result_data.WriteNull();
 			} else {
-				result_data[row_idx] = false;
+				result_data.WriteValue(RETURN_TYPE(false));
 			}
+		} else {
+			result_data.WriteValue(found_value);
 		}
 	}
 

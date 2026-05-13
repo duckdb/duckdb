@@ -41,19 +41,19 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 	}
 	if (total_row_count > gstate.capacity) {
 		// We must resize our result vector
-		gstate.result.Resize(gstate.capacity, gstate.capacity * 2);
+		gstate.result.Reserve(gstate.capacity * 2);
 		gstate.capacity *= 2;
 	}
 
-	auto entries = chunk.data[0].Values<string_t>(chunk.size());
-	auto result_data = FlatVector::Writer<string_t>(gstate.result, gstate.size + chunk.size());
+	auto entries = chunk.data[0].Values<string_t>();
+	auto result_data = FlatVector::ScatterWriter<string_t>(gstate.result);
 	// Input vector has NULL value, we just throw an exception
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto vec_entry = entries[i];
 		if (!vec_entry.IsValid()) {
 			continue;
 		}
-		auto str = vec_entry.value;
+		auto str = vec_entry.GetValue();
 		auto found = gstate.found_strings.find(str);
 		if (found != gstate.found_strings.end()) {
 			// entry was already found - skip
@@ -63,6 +63,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 		gstate.found_strings.insert(result_data[gstate.size]);
 		gstate.size++;
 	}
+	FlatVector::SetSize(gstate.result, gstate.size);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

@@ -61,7 +61,7 @@ BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const 
 		BindCastInput input(*this, bind_function.info.get(), get_input.context);
 		input.query_location = get_input.query_location;
 		auto result = bind_function.function(input, source, target);
-		if (result.function) {
+		if (result.HasFunction()) {
 			// found a cast function! return it
 			return result;
 		}

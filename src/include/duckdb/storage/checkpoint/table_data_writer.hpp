@@ -46,7 +46,23 @@ public:
 	void SetRowGroupCount(optional_idx row_group_count_p) {
 		row_group_count = row_group_count_p;
 	}
+	bool GetRebuildIndexes() const {
+		return rebuild_indexes;
+	}
+	void SetRebuildIndexes() {
+		rebuild_indexes = true;
+	}
+	bool RequireLegacyStartRow() const {
+		return require_legacy_start_row;
+	}
+	void SetRowIdsChanged() {
+		row_ids_changed = true;
+	}
+	bool RowIdsChanged() const {
+		return row_ids_changed;
+	}
 
+	AttachedDatabase &GetAttached();
 	DatabaseInstance &GetDatabase();
 	unique_ptr<TaskExecutor> CreateTaskExecutor();
 
@@ -57,6 +73,9 @@ protected:
 	vector<RowGroupPointer> row_group_pointers;
 
 	optional_idx row_group_count;
+	bool rebuild_indexes = false;
+	bool require_legacy_start_row = false;
+	atomic<bool> row_ids_changed {false};
 };
 
 class SingleFileTableDataWriter : public TableDataWriter {

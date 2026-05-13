@@ -166,9 +166,9 @@ void RoaringAnalyzeState::Analyze<PhysicalType::BIT>(Vector &input, idx_t count)
 template <>
 void RoaringAnalyzeState::Analyze<PhysicalType::BOOL>(Vector &input, idx_t count) {
 	auto &self = *this;
-	input.Flatten(count);
+	input.Flatten();
 	Vector bitpacked_vector(LogicalType::UBIGINT, count);
-	auto &bitpacked_vector_validity = FlatVector::Validity(bitpacked_vector);
+	auto &bitpacked_vector_validity = FlatVector::ValidityMutable(bitpacked_vector);
 	bitpacked_vector_validity.EnsureWritable();
 	auto dst = data_ptr_cast(bitpacked_vector_validity.GetData());
 	const bool *src = FlatVector::GetData<bool>(input);

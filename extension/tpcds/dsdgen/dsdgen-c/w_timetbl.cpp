@@ -81,16 +81,16 @@ int mk_w_time(void *info_arr, ds_key_t index) {
 
 	void *info = append_info_get(info_arr, TIME);
 	append_row_start(info);
-	append_key(info, r->t_time_sk);
-	append_varchar(info, r->t_time_id);
-	append_integer(info, r->t_time);
-	append_integer(info, r->t_hour);
-	append_integer(info, r->t_minute);
-	append_integer(info, r->t_second);
-	append_varchar(info, r->t_am_pm);
-	append_varchar(info, r->t_shift);
-	append_varchar(info, r->t_sub_shift);
-	append_varchar(info, r->t_meal_time);
+	append_key(info, r->t_time_sk, T_TIME_SK);
+	append_varchar(info, r->t_time_id, T_TIME_ID);
+	append_integer(info, r->t_time, T_TIME);
+	append_integer(info, r->t_hour, T_HOUR);
+	append_integer(info, r->t_minute, T_MINUTE);
+	append_integer(info, r->t_second, T_SECOND);
+	append_varchar(info, r->t_am_pm, T_AM_PM);
+	append_varchar(info, r->t_shift, T_SHIFT);
+	append_varchar(info, r->t_sub_shift, T_SUB_SHIFT);
+	append_varchar(info, r->t_meal_time, T_MEAL_TIME);
 	append_row_end(info);
 
 	return 0;

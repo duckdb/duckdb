@@ -3,9 +3,6 @@
 # group: [cross_product]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
 
 statement ok

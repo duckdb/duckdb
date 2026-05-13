@@ -29,19 +29,19 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 	for (auto &expr : op->expressions) {
 		if (expr->GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
 			auto &func = expr->Cast<BoundFunctionExpression>();
-			if (func.function.name != "regexp_full_match" || func.children.size() != 2) {
+			if (func.function.GetName() != "regexp_full_match" || func.children.size() != 2) {
 				continue;
 			}
 			auto &info = func.bind_info->Cast<RegexpMatchesBindData>();
 			if (!info.range_success) {
 				continue;
 			}
-			auto filter_left = make_uniq<BoundComparisonExpression>(
+			auto filter_left = BoundComparisonExpression::Create(
 			    ExpressionType::COMPARE_GREATERTHANOREQUALTO, func.children[0]->Copy(),
 			    make_uniq<BoundConstantExpression>(Value::BLOB_RAW(info.range_min)));
-			auto filter_right = make_uniq<BoundComparisonExpression>(
-			    ExpressionType::COMPARE_LESSTHANOREQUALTO, func.children[0]->Copy(),
-			    make_uniq<BoundConstantExpression>(Value::BLOB_RAW(info.range_max)));
+			auto filter_right =
+			    BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHANOREQUALTO, func.children[0]->Copy(),
+			                                      make_uniq<BoundConstantExpression>(Value::BLOB_RAW(info.range_max)));
 			auto filter_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
 			                                                         std::move(filter_left), std::move(filter_right));
 

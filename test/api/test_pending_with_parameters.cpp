@@ -55,7 +55,6 @@ static void CheckSimpleQueryAfterModification(Connection &con) {
 TEST_CASE("Pending Query with Parameters", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	CreateSimpleTable(con);
 	CheckSimpleQuery(con);
@@ -65,7 +64,6 @@ TEST_CASE("Pending Query with Parameters", "[api]") {
 TEST_CASE("Pending Query with Parameters Catalog Error", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	CreateSimpleTable(con);
 
@@ -78,7 +76,6 @@ TEST_CASE("Pending Query with Parameters Catalog Error", "[api]") {
 TEST_CASE("Pending Query with Parameters Type Conversion Error", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	CreateSimpleTable(con);
 
@@ -93,7 +90,6 @@ TEST_CASE("Pending Query with Parameters with transactions", "[api]") {
 	Connection con1(db);
 	Connection con2(db);
 	duckdb::vector<Value> empty_values = {};
-	con1.EnableQueryVerification();
 
 	CreateSimpleTable(con1);
 

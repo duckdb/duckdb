@@ -14,6 +14,9 @@ namespace duckdb {
 struct ResultColumnMapping;
 struct ColumnMapper;
 
+//! Evaluates a TableFilter against a concrete constant Value. Returns true iff the filter matches.
+bool EvaluateTableFilterAgainstConstant(ClientContext &context, const TableFilter &filter, const Value &constant);
+
 class MultiFileColumnMapper {
 public:
 	MultiFileColumnMapper(ClientContext &context, MultiFileReader &multi_file_reader, MultiFileReaderData &reader_data,
@@ -35,7 +38,7 @@ private:
 	ReaderInitializeType EvaluateConstantFilters(ResultColumnMapping &mapping,
 	                                             map<MultiFileGlobalIndex, reference<TableFilter>> &remaining_filters);
 	Value GetConstantValue(MultiFileGlobalIndex global_index);
-	bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &constant);
+	bool EvaluateFilterAgainstConstant(const TableFilter &filter, const Value &constant);
 
 private:
 	ClientContext &context;

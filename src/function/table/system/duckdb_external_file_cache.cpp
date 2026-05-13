@@ -44,18 +44,22 @@ void DuckDBExternalFileCacheFunction(ClientContext &context, TableFunctionInput 
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// path, VARCHAR
+	auto &path = output.data[0];
+	// nr_bytes, BIGINT
+	auto &nr_bytes = output.data[1];
+	// location, BIGINT
+	auto &location = output.data[2];
+	// loaded, BOOLEAN
+	auto &loaded = output.data[3];
+
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
-		// return values:
-		idx_t col = 0;
-		// path, VARCHAR
-		output.SetValue(col++, count, entry.path);
-		// nr_bytes, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.nr_bytes)));
-		// location, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.location)));
-		// loaded, BOOLEAN
-		output.SetValue(col++, count, entry.loaded);
+		path.Append(Value(entry.path));
+		nr_bytes.Append(Value::BIGINT(NumericCast<int64_t>(entry.nr_bytes)));
+		location.Append(Value::BIGINT(NumericCast<int64_t>(entry.location)));
+		loaded.Append(Value::BOOLEAN(entry.loaded));
 		count++;
 	}
 	output.SetCardinality(count);

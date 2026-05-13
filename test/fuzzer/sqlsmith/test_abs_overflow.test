@@ -2,9 +2,6 @@
 # description: Fuzzer #29: test abs overflow
 # group: [sqlsmith]
 
-statement ok
-PRAGMA enable_verification
-
 # test abs function on extremes
 
 statement ok

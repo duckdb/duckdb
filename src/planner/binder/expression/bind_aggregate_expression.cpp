@@ -14,7 +14,6 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
@@ -114,16 +113,28 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 }
 
 BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry &func, idx_t depth) {
+	if (inside_try) {
+		throw BinderException("aggregates are not allowed inside the TRY expression");
+	}
+	if (inside_aggregate_filter) {
+		throw BinderException(aggr, "aggregate functions are not allowed in FILTER");
+	}
+	if (inside_aggregate) {
+		throw BinderException(aggr, "aggregate function calls cannot be nested");
+	}
 	// first bind the child of the aggregate expression (if any)
 	this->bound_aggregate = true;
 	unique_ptr<Expression> bound_filter;
-	AggregateBinder aggregate_binder(binder, context);
 	ErrorData error;
 
+	inside_aggregate_filter = true;
+	this->inside_aggregate = true;
+	auto initial_bound_column_count = GetBoundColumns().size();
 	// Now we bind the filter (if any)
 	if (aggr.filter) {
-		aggregate_binder.BindChild(aggr.filter, 0, error);
+		BindChild(aggr.filter, 0, error);
 	}
+	inside_aggregate_filter = false;
 
 	// Handle ordered-set aggregates by moving the single ORDER BY expression to the front of the children.
 	//	https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-ORDEREDSET-TABLE
@@ -147,7 +158,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	for (idx_t i = 0; i < aggr.children.size(); ++i) {
 		auto &child = aggr.children[i];
-		aggregate_binder.BindChild(child, 0, error);
+		BindChild(child, 0, error);
 		// We have to negate the fractions for PERCENTILE_XXXX DESC
 		if (!error.HasError() && ordered_set_agg && i == aggr.children.size() - 1) {
 			NegatePercentileFractions(context, child, negate_fractions);
@@ -159,7 +170,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		for (auto &order : aggr.order_bys->orders) {
 			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &const_expr = order.expression->Cast<ConstantExpression>();
-				if (!const_expr.value.type().IsIntegral()) {
+				if (!const_expr.GetValue().type().IsIntegral()) {
 					auto order_by_non_integer_literal = Settings::Get<OrderByNonIntegerLiteralSetting>(context);
 					if (!order_by_non_integer_literal) {
 						throw BinderException(
@@ -170,18 +181,21 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 					}
 				}
 			}
-			aggregate_binder.BindChild(order.expression, 0, error);
+			BindChild(order.expression, 0, error);
 		}
 	}
 
+	inside_aggregate = false;
+	bool bound_columns = GetBoundColumns().size() > initial_bound_column_count;
+	TruncateBoundColumns(initial_bound_column_count);
 	if (error.HasError()) {
 		// failed to bind child
-		if (aggregate_binder.HasBoundColumns()) {
+		if (bound_columns) {
 			for (idx_t i = 0; i < aggr.children.size(); i++) {
 				// however, we bound columns!
 				// that means this aggregation belongs to this node
 				// check if we have to resolve any errors by binding with parent binders
-				auto result = aggregate_binder.BindCorrelatedColumns(aggr.children[i], error);
+				auto result = BindCorrelatedColumns(aggr.children[i], error);
 				// if there is still an error after this, we could not successfully bind the aggregate
 				if (result.HasError()) {
 					result.error.Throw();
@@ -190,7 +204,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				ExtractCorrelatedExpressions(binder, *bound_expr);
 			}
 			if (aggr.filter) {
-				auto result = aggregate_binder.BindCorrelatedColumns(aggr.filter, error);
+				auto result = BindCorrelatedColumns(aggr.filter, error);
 				// if there is still an error after this, we could not successfully bind the aggregate
 				if (result.HasError()) {
 					result.error.Throw();
@@ -200,7 +214,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 			}
 			if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
 				for (auto &order : aggr.order_bys->orders) {
-					auto result = aggregate_binder.BindCorrelatedColumns(order.expression, error);
+					auto result = BindCorrelatedColumns(order.expression, error);
 					if (result.HasError()) {
 						result.error.Throw();
 					}
@@ -212,7 +226,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 			// we didn't bind columns, try again in children
 			return BindResult(std::move(error));
 		}
-	} else if (depth > 0 && !aggregate_binder.HasBoundColumns()) {
+	} else if (depth > 0 && !bound_columns) {
 		return BindResult("Aggregate with only constant parameters has to be bound in the root subquery");
 	}
 
@@ -233,8 +247,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		if (aggr.children.size() < ordered_set_agg) {
 			for (auto &order : aggr.order_bys->orders) {
 				auto &child = BoundExpression::GetExpression(*order.expression);
-				types.push_back(child->return_type);
-				arguments.push_back(child->return_type);
+				types.push_back(child->GetReturnType());
+				arguments.push_back(child->GetReturnType());
 				if (order_sensitive) {
 					children.push_back(child->Copy());
 				} else {
@@ -249,8 +263,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
 		auto &child = BoundExpression::GetExpression(*aggr.children[i]);
-		types.push_back(child->return_type);
-		arguments.push_back(child->return_type);
+		types.push_back(child->GetReturnType());
+		arguments.push_back(child->GetReturnType());
 		children.push_back(std::move(child));
 	}
 
@@ -262,10 +276,10 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		error.Throw();
 	}
 	// found a matching function!
-	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+	const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
 	if (!bound_function.CanAggregate() && bound_function.CanWindow()) {
-		auto msg = StringUtil::Format("Function '%s' can only be used as a window function", bound_function.name);
+		auto msg = StringUtil::Format("Function '%s' can only be used as a window function", bound_function.GetName());
 		error = BinderException(msg);
 		error.AddQueryLocation(aggr);
 		error.Throw();
@@ -278,7 +292,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = BoundExpression::GetExpression(*order.expression);
-			PushCollation(context, order_expr, order_expr->return_type);
+			PushCollation(context, order_expr, order_expr->GetReturnType());
 			const auto sense = config.ResolveOrder(context, order.type);
 			const auto null_order = config.ResolveNullOrder(context, sense, order.null_order);
 			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr));
@@ -321,7 +335,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// now create a column reference referring to the aggregate
 	auto colref = make_uniq<BoundColumnRefExpression>(aggr.GetAlias().empty() ? bound_aggr.ToString() : aggr.GetAlias(),
-	                                                  bound_aggr.return_type,
+	                                                  bound_aggr.GetReturnType(),
 	                                                  ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates
 	return BindResult(std::move(colref));

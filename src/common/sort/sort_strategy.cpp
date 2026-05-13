@@ -18,7 +18,8 @@ SortStrategy::SortStrategy(const Types &input_types) : payload_types(input_types
 void SortStrategy::Synchronize(const GlobalSinkState &source, GlobalSinkState &target) const {
 }
 
-void SortStrategy::SortColumnData(ExecutionContext &context, hash_t hash_bin, OperatorSinkFinalizeInput &finalize) {
+void SortStrategy::SortColumnData(ExecutionContext &context, hash_t hash_bin,
+                                  OperatorSinkFinalizeInput &finalize) const {
 	//	Nothing to sort
 	return;
 }
@@ -41,6 +42,10 @@ unique_ptr<SortStrategy> SortStrategy::Factory(ClientContext &client,
 	} else {
 		return make_uniq<NaturalSort>(payload_types);
 	}
+}
+
+void SortStrategy::RegisterHyperLogLog(LocalSinkState &, ParallelHyperLogLogLocalState &) const {
+	// NOP for all but HashedSort
 }
 
 } // namespace duckdb

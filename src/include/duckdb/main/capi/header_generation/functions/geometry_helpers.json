@@ -1,0 +1,24 @@
+{
+    "group": "geometry_helpers",
+    "deprecated": false,
+    "description": "Functions to operate on GEOMETRY types`.",
+    "entries": [
+        {
+            "name": "duckdb_geometry_type_get_crs",
+            "return_type": "char*",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                }
+            ],
+            "comment": {
+                "description": "Gets the CRS (Coordinate Reference System) of a GEOMETRY type.\nResult must be freed with `duckdb_free`.\n\n",
+                "param_comments": {
+                    "type": "The GEOMETRY type."
+                },
+                "return_value": "The CRS of the GEOMETRY type, or NULL if the type is not a GEOMETRY type."
+            }
+        }
+    ]
+}

@@ -1,11 +1,12 @@
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
 #include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
 
 bool ExpressionMatcher::Match(Expression &expr, vector<reference<Expression>> &bindings) {
-	if (type && !type->Match(expr.return_type)) {
+	if (type && !type->Match(expr.GetReturnType())) {
 		return false;
 	}
 	if (expr_type && !expr_type->Match(expr.GetExpressionType())) {
@@ -37,11 +38,11 @@ bool ComparisonExpressionMatcher::Match(Expression &expr_p, vector<reference<Exp
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
-	auto &expr = expr_p.Cast<BoundComparisonExpression>();
-	vector<reference<Expression>> expressions;
-	expressions.push_back(*expr.left);
-	expressions.push_back(*expr.right);
-	return SetMatcher::Match(matchers, expressions, bindings, policy);
+	auto &expr = expr_p.Cast<BoundFunctionExpression>();
+	if (!BoundComparisonExpression::IsComparison(expr.GetExpressionType())) {
+		return false;
+	}
+	return SetMatcher::Match(matchers, expr.children, bindings, policy);
 }
 
 bool CastExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
@@ -83,7 +84,7 @@ bool FunctionExpressionMatcher::Match(Expression &expr_p, vector<reference<Expre
 		return false;
 	}
 	auto &expr = expr_p.Cast<BoundFunctionExpression>();
-	if (!FunctionMatcher::Match(function, expr.function.name)) {
+	if (!FunctionMatcher::Match(function, expr.function.GetName())) {
 		return false;
 	}
 	if (!SetMatcher::Match(matchers, expr.children, bindings, policy)) {
@@ -97,7 +98,7 @@ bool AggregateExpressionMatcher::Match(Expression &expr_p, vector<reference<Expr
 		return false;
 	}
 	auto &expr = expr_p.Cast<BoundAggregateExpression>();
-	if (!FunctionMatcher::Match(function, expr.function.name)) {
+	if (!FunctionMatcher::Match(function, expr.function.GetName())) {
 		return false;
 	}
 	// we should create matchers for these in the future

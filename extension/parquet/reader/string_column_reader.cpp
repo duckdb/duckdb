@@ -1,9 +1,22 @@
 #include "reader/string_column_reader.hpp"
+
+#include <stddef.h>
+#include <utility>
+
 #include "utf8proc_wrapper.hpp"
 #include "parquet_reader.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/vector_buffer.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
+class Vector;
+struct SelectionVector;
 
 //===--------------------------------------------------------------------===//
 // String Column Reader

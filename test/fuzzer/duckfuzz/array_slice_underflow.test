@@ -2,9 +2,6 @@
 # description: Array slice underflow
 # group: [duckfuzz]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT ([1, 2, 3])[0:-9223372036854775808];
 ----

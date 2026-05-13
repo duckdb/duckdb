@@ -3,9 +3,6 @@
 # group: [general]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE test(d DATE, i INTEGER);
 
 statement ok

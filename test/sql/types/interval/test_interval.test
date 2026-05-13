@@ -2,9 +2,6 @@
 # description: Test basic interval usage
 # group: [interval]
 
-statement ok
-PRAGMA enable_verification
-
 # 2 years
 query T
 SELECT INTERVAL '2 years'
@@ -79,6 +76,13 @@ query T
 SELECT INTERVAL '2Y 4 days 1 MinUteS 3S 20mS 16uS ago  '::VARCHAR;
 ----
 -2 years -4 days -00:01:03.020016
+
+statement error
+SELECT interval '-2147483648 months' AS without_ago,
+       interval '-2147483648 months ago' AS with_ago,
+       interval '-2147483648 months' = interval '-2147483648 months ago' AS are_equal;
+----
+AGO interval value is out of range
 
 # months and hours, with optional @
 query T

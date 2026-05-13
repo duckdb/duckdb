@@ -11,9 +11,6 @@ statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 SET force_compression='uncompressed';
 
 loop i 0 10

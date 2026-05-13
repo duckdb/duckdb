@@ -258,7 +258,8 @@ idx_t VariantColumnData::ScanWithCallback(
 			callback(*sub_columns[1], state.child_states[2], child_vectors[1], target_count);
 			scan_count = callback(*validity, state.child_states[0], unshredding_intermediate, target_count);
 
-			intermediate.Shred(unshredding_intermediate);
+			FlatVector::SetSize(unshredding_intermediate, count_t(scan_count));
+			intermediate.Shred(unshredding_intermediate, scan_count);
 		} else {
 			scan_count = callback(*validity, state.child_states[0], intermediate, target_count);
 			callback(*sub_columns[0], state.child_states[1], intermediate, target_count);
@@ -304,7 +305,8 @@ idx_t VariantColumnData::ScanWithCallback(
 			callback(*sub_columns[1], state.child_states[2], child_vectors[1], target_count);
 			auto scan_count = callback(*validity, state.child_states[0], intermediate, target_count);
 
-			result.Shred(intermediate);
+			FlatVector::SetSize(intermediate, count_t(scan_count));
+			result.Shred(intermediate, scan_count);
 			return scan_count;
 		}
 		auto scan_count = callback(*validity, state.child_states[0], result, target_count);
@@ -329,7 +331,7 @@ idx_t VariantColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t
 	    state, result, count, [&](ColumnData &col, ColumnScanState &child_state, Vector &target_vector, idx_t count) {
 		    return col.ScanCount(child_state, target_vector, count, result_offset);
 	    });
-	result.Flatten(result_count);
+	result.Flatten();
 	return result_count;
 }
 
@@ -394,7 +396,7 @@ static void AppendShredded(Vector &input, Vector &append_vector, idx_t count, Va
 void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		Vector append_vector(Vector::Ref(vector));
-		append_vector.Flatten(count);
+		append_vector.Flatten();
 		Append(stats, state, append_vector, count);
 		return;
 	}
@@ -426,12 +428,12 @@ idx_t VariantColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &res
 	throw NotImplementedException("VARIANT Fetch");
 }
 
-void VariantColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+void VariantColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                                Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	throw NotImplementedException("VARIANT Update is not supported.");
 }
 
-void VariantColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+void VariantColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry,
                                      const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
                                      idx_t update_count, idx_t depth, idx_t row_group_start) {
 	throw NotImplementedException("VARIANT Update Column is not supported");

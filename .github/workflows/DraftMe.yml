@@ -11,15 +11,17 @@ concurrency:
 jobs:
   mark-as-draft:
     name: Mark as draft
-    if: github.event.pull_request.draft == false && github.event.pull_request.user.login != 'smvv'
+    if: github.event.pull_request.draft == false && !contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
     runs-on: ubuntu-latest
     steps:
       - name: Save PR number
         env:
           PR_NUMBER: ${{ github.event.pull_request.node_id }}
+          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
         run: |
           mkdir -p ./pr
           echo "$PR_NUMBER" > ./pr/pr_number
+          echo "AUTHOR_ASSOCIATION: $AUTHOR_ASSOCIATION"
       - uses: actions/upload-artifact@v7
         with:
           name: pr_number

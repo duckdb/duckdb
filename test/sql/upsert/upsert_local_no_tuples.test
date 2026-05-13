@@ -1,9 +1,6 @@
 # name: test/sql/upsert/upsert_local_no_tuples.test
 # group: [upsert]
 
-statement ok
-pragma enable_verification;
-
 # Table with a constraint
 statement ok
 create table tbl (

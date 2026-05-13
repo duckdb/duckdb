@@ -4565,6 +4565,7 @@ namespace Catch {
         virtual int endOffset() const = 0;
         virtual int endOffsetPercentage() const = 0;
         virtual bool outputSQL() const = 0;
+        virtual bool printFailingTests() const = 0;
         virtual UseColour::YesOrNo useColour() const = 0;
         virtual std::vector<std::string> const& getSectionsToRun() const = 0;
         virtual Verbosity verbosity() const = 0;
@@ -5329,6 +5330,7 @@ namespace Catch {
         int endOffsetPercentage = -1;
 
 	    bool outputSQL = false;
+	    bool printFailingTests = false;
 
         bool benchmarkNoAnalysis = false;
         unsigned int benchmarkSamples = 100;
@@ -5400,6 +5402,7 @@ namespace Catch {
         int endOffset() const override;
         int endOffsetPercentage() const override;
         bool outputSQL() const override;
+        bool printFailingTests() const override;
         UseColour::YesOrNo useColour() const override;
         bool shouldDebugBreak() const override;
         int abortAfter() const override;
@@ -6255,6 +6258,7 @@ namespace Catch {
 
     private:
         bool m_headerPrinted = false;
+        std::vector<std::string> m_failedTestNames;
     };
 
 } // end namespace Catch
@@ -9966,6 +9970,9 @@ namespace Catch {
             | Opt( config.outputSQL, "true|false" )
                 ["--output-sql"]
                 ( "if set, only output SQL statements to stderr rather than running the tests" )
+            | Opt( config.printFailingTests )
+                ["--print-failing-tests"]
+                ( "if set, print the names of all failing tests at the end of the run" )
             | Opt( config.libIdentify )
                 ["--libidentify"]
                 ( "report name and version according to libidentify standard" )
@@ -10095,6 +10102,7 @@ namespace Catch {
     int Config::startOffsetPercentage() const          { return m_data.startOffsetPercentage; }
     int Config::endOffsetPercentage() const            { return m_data.endOffsetPercentage; }
     bool Config::outputSQL() const                     { return m_data.outputSQL; }
+    bool Config::printFailingTests() const             { return m_data.printFailingTests; }
     UseColour::YesOrNo Config::useColour() const       { return m_data.useColour; }
     bool Config::shouldDebugBreak() const              { return m_data.shouldDebugBreak; }
     int Config::abortAfter() const                     { return m_data.abortAfter; }
@@ -11166,8 +11174,20 @@ namespace Catch {
 // end catch_reporter_listening.h
 namespace Catch {
 
+    namespace {
+        struct NullStreambuf : std::streambuf {
+            int overflow(int c) override { return c; }
+        };
+        std::ostream& getNullStream() {
+            static NullStreambuf nullBuf;
+            static std::ostream nullStream(&nullBuf);
+            return nullStream;
+        }
+    }
+
     ReporterConfig::ReporterConfig( IConfigPtr const& _fullConfig )
-    :   m_stream( &_fullConfig->stream() ), m_fullConfig( _fullConfig ) {}
+    :   m_stream( _fullConfig->printFailingTests() ? &getNullStream() : &_fullConfig->stream() ),
+        m_fullConfig( _fullConfig ) {}
 
     ReporterConfig::ReporterConfig( IConfigPtr const& _fullConfig, std::ostream& _stream )
     :   m_stream( &_stream ), m_fullConfig( _fullConfig ) {}
@@ -13560,10 +13580,12 @@ namespace Catch {
                             current_test++;
                             continue;
                         }
-                        renderTestProgress(current_test, total_tests_run, testCase->name);
+                        if (!m_config->printFailingTests()) {
+                            renderTestProgress(current_test, total_tests_run, testCase->name);
+                        }
                         totals += m_context.runTest(*testCase);
                         current_test++;
-                        if (current_test == total_tests_run) {
+                        if (current_test == total_tests_run && !m_config->printFailingTests()) {
                             renderTestProgress(current_test, total_tests_run, testCase->name);
                             std::cout << std::endl;
                         }
@@ -16802,6 +16824,9 @@ void ConsoleReporter::benchmarkFailed(std::string const& error) {
 
 void ConsoleReporter::testCaseEnded(TestCaseStats const& _testCaseStats) {
     m_tablePrinter->close();
+    if (_testCaseStats.totals.testCases.failed > 0) {
+        m_failedTestNames.push_back(_testCaseStats.testInfo.name);
+    }
     StreamingReporterBase::testCaseEnded(_testCaseStats);
     m_headerPrinted = false;
 }
@@ -16815,9 +16840,15 @@ void ConsoleReporter::testGroupEnded(TestGroupStats const& _testGroupStats) {
     StreamingReporterBase::testGroupEnded(_testGroupStats);
 }
 void ConsoleReporter::testRunEnded(TestRunStats const& _testRunStats) {
-    printTotalsDivider(_testRunStats.totals);
-    printTotals(_testRunStats.totals);
-    stream << std::endl;
+    if (m_config->printFailingTests()) {
+        for (auto const& name : m_failedTestNames) {
+            std::cout << name << "\n";
+        }
+    } else {
+        printTotalsDivider(_testRunStats.totals);
+        printTotals(_testRunStats.totals);
+        stream << std::endl;
+    }
     StreamingReporterBase::testRunEnded(_testRunStats);
 }
 void ConsoleReporter::testRunStarting(TestRunInfo const& _testInfo) {

@@ -196,7 +196,7 @@ protected:
 	shared_ptr<CSVBufferHandle> cur_buffer_handle;
 
 	//! Hold the current buffer ptr
-	char *buffer_handle_ptr = nullptr;
+	const char *buffer_handle_ptr = nullptr;
 
 	//! If this scanner has been initialized
 	bool initialized = false;

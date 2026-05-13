@@ -8,12 +8,27 @@
 
 #pragma once
 
+#include <stddef.h>
+#include <stdint.h>
+#include <string>
+
 #include "column_writer.hpp"
 #include "writer/parquet_write_stats.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "parquet_statistics.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
+class ParquetWriter;
+class Vector;
+class WriteStream;
+struct ParquetColumnSchema;
 
 struct PageInformation {
 	idx_t offset = 0;

@@ -10,12 +10,13 @@ bool VectorOperations::TryCast(CastFunctionSet &set, GetCastFunctionInput &input
                                idx_t count, string *error_message, bool strict, const bool nullify_parent) {
 	auto cast_function = set.GetCastFunction(source.GetType(), result.GetType(), input);
 	unique_ptr<FunctionLocalState> local_state;
-	if (cast_function.init_local_state) {
-		CastLocalStateParameters lparameters(input.context, cast_function.cast_data);
-		local_state = cast_function.init_local_state(lparameters);
+	if (cast_function.HasInitLocalState()) {
+		CastLocalStateParameters lparameters(input.context, cast_function.GetCastData());
+		local_state = cast_function.InitLocalState(lparameters);
 	}
-	CastParameters parameters(cast_function.cast_data.get(), strict, error_message, local_state.get(), nullify_parent);
-	return cast_function.function(source, result, count, parameters);
+	CastParameters parameters(cast_function.GetCastData().get(), strict, error_message, local_state.get(),
+	                          nullify_parent);
+	return cast_function.Cast(source, result, count, parameters);
 }
 
 bool VectorOperations::DefaultTryCast(Vector &source, Vector &result, idx_t count, string *error_message, bool strict) {

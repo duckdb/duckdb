@@ -91,6 +91,24 @@ ALTER TABLE IF EXISTS t1 ALTER COLUMN IF EXISTS c0 TYPE varchar;
 ----
 Parser Error: syntax error at or near "EXISTS"
 
+statement ok
+CREATE TABLE t_default (c0 INT, c1 BOOLEAN);
+
+statement ok
+ALTER TABLE t_default ADD COLUMN IF NOT EXISTS c1 BOOLEAN DEFAULT false;
+
+statement ok
+ALTER TABLE t_default ADD COLUMN IF NOT EXISTS c2 BOOLEAN DEFAULT false;
+
+statement ok
+INSERT INTO t_default VALUES (1, true, true);
+
+query III
+SELECT * FROM t_default;
+----
+1	true	true
+
+
 # 'rowid' pseudo-column
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);

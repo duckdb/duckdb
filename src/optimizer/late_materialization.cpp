@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/late_materialization.hpp"
 
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/optimizer/late_materialization_helper.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -211,9 +212,16 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 		}
 	}
 	auto &get = child.get().Cast<LogicalGet>();
-	if (column_references.size() >= get.GetColumnIds().size()) {
+	column_binding_set_t required_columns;
+	for (auto &entry : column_references) {
+		required_columns.insert(entry.first);
+	}
+	for (auto &filter_entry : get.table_filters) {
+		required_columns.insert(ColumnBinding(get.table_index, filter_entry.GetIndex()));
+	}
+	if (required_columns.size() >= get.GetColumnIds().size()) {
 		// we do not benefit from late materialization
-		// we need all of the columns to compute the root node anyway (Top-N/Limit/etc)
+		// every column the scan reads is already required upstream (Top-N/Limit/etc) or by its pushed-down filters
 		return false;
 	}
 	if (!get.function.late_materialization) {

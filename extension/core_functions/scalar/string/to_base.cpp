@@ -6,12 +6,13 @@ namespace duckdb {
 
 static const char alphabet[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-static unique_ptr<FunctionData> ToBaseBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ToBaseBind(BindScalarFunctionInput &input) {
+	auto &arguments = input.GetArguments();
 	// If no min_length is specified, default to 0
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments.size() == 2) {
 		arguments.push_back(make_uniq_base<Expression, BoundConstantExpression>(Value::INTEGER(0)));
+		input.GetBoundFunction().GetArguments().push_back(LogicalType::INTEGER);
 	}
 	return nullptr;
 }

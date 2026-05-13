@@ -333,12 +333,12 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 		// truncate the WAL
 		if (has_wal) {
-			unique_ptr<lock_guard<mutex>> owned_wal_lock;
-			optional_ptr<lock_guard<mutex>> wal_lock;
+			unique_lock<mutex> owned_wal_lock;
+			optional_ptr<unique_lock<mutex>> wal_lock;
 			if (!options.wal_lock) {
 				// not holding the WAL lock yet - grab it
 				owned_wal_lock = storage_manager.GetWALLock();
-				wal_lock = *owned_wal_lock;
+				wal_lock = owned_wal_lock;
 			} else {
 				// we already have the WAL lock - just refer to it
 				wal_lock = options.wal_lock;
@@ -566,7 +566,8 @@ void CheckpointReader::ReadTrigger(CatalogTransaction transaction, Deserializer 
 // Sequences
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, Serializer &serializer) {
-	serializer.WriteProperty(100, "sequence", &seq);
+	auto info = seq.GetInfo();
+	serializer.WriteProperty(100, "sequence", info.get());
 }
 
 void CheckpointReader::ReadSequence(CatalogTransaction transaction, Deserializer &deserializer) {

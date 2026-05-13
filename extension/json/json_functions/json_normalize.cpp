@@ -64,14 +64,14 @@ static void NormalizeFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 	const auto count = args.size();
 	UnifiedVectorFormat input_data;
-	args.data[0].ToUnifiedFormat(count, input_data);
+	args.data[0].ToUnifiedFormat(input_data);
 	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(idx)) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -81,14 +81,14 @@ static void NormalizeFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 		SortKeys(root);
 
-		result_data[i].AssignWithoutCopying(JSONCommon::WriteVal<yyjson_mut_val>(root, alc));
+		result_data.WriteStringRef(JSONCommon::WriteVal<yyjson_mut_val>(root, alc));
 	}
 	JSONAllocator::AddBuffer(result, alc);
 }
 
 static void GetNormalizeFunctionInternal(ScalarFunctionSet &set, const LogicalType &json) {
 	set.AddFunction(ScalarFunction("json_normalize", {json}, LogicalType::VARCHAR, NormalizeFunction, nullptr, nullptr,
-	                               nullptr, JSONFunctionLocalState::Init));
+	                               JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetNormalizeFunction() {

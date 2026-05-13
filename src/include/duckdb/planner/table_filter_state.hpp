@@ -49,7 +49,12 @@ struct ExpressionFilterState : public TableFilterState {
 public:
 	ExpressionFilterState(ClientContext &context, const Expression &expression);
 
-	ExpressionExecutor executor;
+	ClientContext &GetContext() {
+		D_ASSERT(executor);
+		return executor->GetContext();
+	}
+
+	unique_ptr<ExpressionExecutor> executor;
 };
 
 struct JoinFilterTableFilterState final : public TableFilterState {

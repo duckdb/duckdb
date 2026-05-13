@@ -32,7 +32,7 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 	if (!prefix_expr.IsFoldable()) {
 		return nullptr;
 	}
-	D_ASSERT(root.return_type.id() == LogicalTypeId::BOOLEAN);
+	D_ASSERT(root.GetReturnType().id() == LogicalTypeId::BOOLEAN);
 
 	auto prefix_value = ExpressionExecutor::EvaluateScalar(GetContext(), prefix_expr);
 
@@ -40,7 +40,7 @@ unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector
 		return make_uniq<BoundConstantExpression>(Value(LogicalType::BOOLEAN));
 	}
 
-	D_ASSERT(prefix_value.type() == prefix_expr.return_type);
+	D_ASSERT(prefix_value.type() == prefix_expr.GetReturnType());
 	if (prefix_value.type().InternalType() != PhysicalType::VARCHAR) {
 		return nullptr;
 	}

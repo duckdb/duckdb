@@ -59,7 +59,7 @@ TableFunction::TableFunction() : TableFunction("", {}, nullptr, nullptr, nullptr
 }
 
 bool TableFunction::operator==(const TableFunction &rhs) const {
-	return name == rhs.name && arguments == rhs.arguments && varargs == rhs.varargs && bind == rhs.bind &&
+	return name == rhs.name && arguments == rhs.GetArguments() && varargs == rhs.GetVarArgs() && bind == rhs.bind &&
 	       bind_replace == rhs.bind_replace && bind_operator == rhs.bind_operator && init_global == rhs.init_global &&
 	       init_local == rhs.init_local && function == rhs.function && in_out_function == rhs.in_out_function &&
 	       in_out_function_final == rhs.in_out_function_final && statistics == rhs.statistics &&
@@ -84,17 +84,17 @@ bool TableFunction::operator!=(const TableFunction &rhs) const {
 
 bool TableFunction::Equal(const TableFunction &rhs) const {
 	// number of types
-	if (this->arguments.size() != rhs.arguments.size()) {
+	if (this->GetArguments().size() != rhs.GetArguments().size()) {
 		return false;
 	}
 	// argument types
-	for (idx_t i = 0; i < this->arguments.size(); ++i) {
-		if (this->arguments[i] != rhs.arguments[i]) {
+	for (idx_t i = 0; i < this->GetArguments().size(); ++i) {
+		if (this->GetArguments()[i] != rhs.GetArguments()[i]) {
 			return false;
 		}
 	}
 	// varargs
-	if (this->varargs != rhs.varargs) {
+	if (this->GetVarArgs() != rhs.GetVarArgs()) {
 		return false;
 	}
 

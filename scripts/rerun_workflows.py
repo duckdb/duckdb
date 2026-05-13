@@ -44,7 +44,9 @@ proc = subprocess.Popen(
 )
 text = proc.stdout.read().decode('utf8')
 df = pd.read_json(StringIO(text))
-result = duckdb.query(f"select headSha from df where displayTitle LIKE '%{query}%' limit 1").fetchall()
+result = duckdb.query(
+    f"select headSha from df where displayTitle LIKE concat('%', ?, '%') limit 1", params=(query,)
+).fetchall()
 if len(result) == 0:
     print(
         f"No workflows found in the latest {nlimit} workflows that contain the text {query}.\nPerhaps try running with a higher --max_workflows parameter?"
@@ -54,7 +56,8 @@ if len(result) == 0:
 headSha = result[0][0]
 
 result = duckdb.query(
-    f"select databaseId from df where conclusion IN ('failure', 'cancelled') AND displayTitle LIKE '%{query}%' and headSha='{headSha}'"
+    f"select databaseId from df where conclusion IN ('failure', 'cancelled') AND displayTitle LIKE concat('%', ?, '%') and headSha=?",
+    params=(query, headSha),
 ).fetchall()
 if len(result) == 0:
     print(f"Found runs that match the text {query} but no failing or cancelled runs were found")

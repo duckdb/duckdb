@@ -8,7 +8,12 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include "duckdb.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 

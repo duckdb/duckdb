@@ -72,6 +72,8 @@ public:
 	bool Generated() const;
 	DUCKDB_API ColumnDefinition Copy() const;
 
+	string ToSQLString() const;
+
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static ColumnDefinition Deserialize(Deserializer &deserializer);
 

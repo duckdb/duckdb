@@ -3,6 +3,7 @@
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -210,9 +211,19 @@ public:
 		buffer.push_back(c);
 	}
 	void Write(double value) {
+		auto start = buffer.size();
 		duckdb_fmt::format_to(std::back_inserter(buffer), "{}", value);
-		// Remove trailing zero
-		if (buffer.back() == '0') {
+		// Remove trailing ".0" (e.g. "10.0" -> "10"), but only when the number
+		// is in fixed notation. Scientific notation like "1e+20" must not be
+		// touched — stripping the trailing '0' would corrupt the exponent.
+		bool has_exponent = false;
+		for (auto i = start; i < buffer.size(); i++) {
+			if (buffer[i] == 'e' || buffer[i] == 'E') {
+				has_exponent = true;
+				break;
+			}
+		}
+		if (!has_exponent && buffer.back() == '0') {
 			buffer.pop_back();
 			if (buffer.back() == '.') {
 				buffer.pop_back();
@@ -257,13 +268,21 @@ public:
 
 	void Match(const char *str) {
 		if (!TryMatch(str)) {
-			throw InvalidInputException("Expected '%s' but got '%c' at position %zu", str, *pos, pos - beg);
+			// Check if this would go EOF
+			if (pos + strlen(str) >= end) {
+				throw MakeError("Expected '%s' but got end of input", str);
+			}
+
+			throw MakeError("Expected '%s' but got '%c'", str, *pos);
 		}
 	}
 
 	void Match(char c) {
 		if (!TryMatch(c)) {
-			throw InvalidInputException("Expected '%c' but got '%c' at position %zu", c, *pos, pos - beg);
+			if (pos >= end) {
+				throw MakeError("Expected '%c' but got end of input", c);
+			}
+			throw MakeError("Expected '%c' but got '%c'", c, *pos);
 		}
 	}
 
@@ -272,7 +291,7 @@ public:
 		double num;
 		const auto res = duckdb_fast_float::from_chars(pos, end, num);
 		if (res.ec != std::errc()) {
-			throw InvalidInputException("Expected number at position %zu", pos - beg);
+			throw MakeError("Expected number");
 		}
 
 		pos = res.ptr; // update position to the end of the parsed number
@@ -289,25 +308,52 @@ public:
 		pos = beg;
 	}
 
-private:
+	template <class... ARGS>
+	InvalidInputException MakeError(const char *raw_msg, ARGS... args) const {
+		const auto byte_offset = UnsafeNumericCast<idx_t>(pos - beg);
+		auto msg = StringUtil::Format("Failed to parse geometry: %s at offset %lu",
+		                              StringUtil::Format(raw_msg, args...), byte_offset);
+		if (query_location.IsValid()) {
+			const auto expr_offset = optional_idx(query_location.GetIndex() + byte_offset);
+			return InvalidInputException(Exception::InitializeExtraInfo(expr_offset), msg);
+		} else {
+			return InvalidInputException(msg);
+		}
+	}
+
+	void SetQueryLocation(optional_idx location) {
+		query_location = location;
+	}
+
 	void SkipWhitespace() {
 		while (pos < end && isspace(*pos)) {
 			pos++;
 		}
 	}
 
+private:
 	const char *beg;
 	const char *pos;
 	const char *end;
+	optional_idx query_location;
 };
 
 void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth, bool parent_has_z, bool parent_has_m) {
 	if (depth == Geometry::MAX_RECURSION_DEPTH) {
-		throw InvalidInputException("Geometry string exceeds maximum recursion depth of %d",
-		                            Geometry::MAX_RECURSION_DEPTH);
+		throw reader.MakeError("Geometry string exceeds maximum recursion depth of %d", Geometry::MAX_RECURSION_DEPTH);
 	}
 
-	GeometryType type;
+	// Skip leading whitespace
+	reader.SkipWhitespace();
+
+	// EWKT dialect (ignore SRID if present)
+	if (reader.TryMatch("SRID")) {
+		reader.Match('=');
+		reader.MatchNumber();
+		reader.Match(';');
+	}
+
+	GeometryType type = GeometryType::INVALID;
 
 	if (reader.TryMatch("point")) {
 		type = GeometryType::POINT;
@@ -324,7 +370,7 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 	} else if (reader.TryMatch("geometrycollection")) {
 		type = GeometryType::GEOMETRYCOLLECTION;
 	} else {
-		throw InvalidInputException("Unknown geometry type at position %zu", reader.GetPosition());
+		throw reader.MakeError("Unknown geometry type");
 	}
 
 	const auto has_z = reader.TryMatch("z");
@@ -333,8 +379,7 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 	const auto is_empty = reader.TryMatch("empty");
 
 	if ((depth != 0) && ((parent_has_z != has_z) || (parent_has_m != has_m))) {
-		throw InvalidInputException("Geometry has inconsistent Z/M dimensions, starting at position %zu",
-		                            reader.GetPosition());
+		throw reader.MakeError("Geometry has inconsistent Z/M dimensions");
 	}
 
 	// How many dimensions does this geometry have?
@@ -433,6 +478,7 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 			}
 			part_count.value++;
 		} while (reader.TryMatch(','));
+		reader.Match(')');
 		writer.Write(part_count);
 	} break;
 	case GeometryType::MULTILINESTRING: {
@@ -448,18 +494,23 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 			writer.Write<uint8_t>(1);
 			writer.Write<uint32_t>(part_meta);
 
-			auto vert_count = writer.Reserve<uint32_t>();
-			reader.Match('(');
-			do {
-				for (uint32_t d_idx = 0; d_idx < dims; d_idx++) {
-					auto value = reader.MatchNumber();
-					writer.Write<double>(value);
-				}
-				vert_count.value++;
-			} while (reader.TryMatch(','));
-			reader.Match(')');
-			writer.Write(vert_count);
-			part_count.value++;
+			if (reader.TryMatch("EMPTY")) {
+				writer.Write<uint32_t>(0); // No vertices in empty linestring
+				part_count.value++;
+			} else {
+				auto vert_count = writer.Reserve<uint32_t>();
+				reader.Match('(');
+				do {
+					for (uint32_t d_idx = 0; d_idx < dims; d_idx++) {
+						auto value = reader.MatchNumber();
+						writer.Write<double>(value);
+					}
+					vert_count.value++;
+				} while (reader.TryMatch(','));
+				reader.Match(')');
+				writer.Write(vert_count);
+				part_count.value++;
+			}
 		} while (reader.TryMatch(','));
 		reader.Match(')');
 		writer.Write(part_count);
@@ -477,25 +528,30 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 			writer.Write<uint8_t>(1);
 			writer.Write<uint32_t>(part_meta);
 
-			auto ring_count = writer.Reserve<uint32_t>();
-			reader.Match('(');
-			do {
-				auto vert_count = writer.Reserve<uint32_t>();
+			if (reader.TryMatch("EMPTY")) {
+				writer.Write<uint32_t>(0); // No rings in empty polygon
+				part_count.value++;
+			} else {
+				auto ring_count = writer.Reserve<uint32_t>();
 				reader.Match('(');
 				do {
-					for (uint32_t d_idx = 0; d_idx < dims; d_idx++) {
-						auto value = reader.MatchNumber();
-						writer.Write<double>(value);
-					}
-					vert_count.value++;
+					auto vert_count = writer.Reserve<uint32_t>();
+					reader.Match('(');
+					do {
+						for (uint32_t d_idx = 0; d_idx < dims; d_idx++) {
+							auto value = reader.MatchNumber();
+							writer.Write<double>(value);
+						}
+						vert_count.value++;
+					} while (reader.TryMatch(','));
+					reader.Match(')');
+					writer.Write(vert_count);
+					ring_count.value++;
 				} while (reader.TryMatch(','));
 				reader.Match(')');
-				writer.Write(vert_count);
-				ring_count.value++;
-			} while (reader.TryMatch(','));
-			reader.Match(')');
-			writer.Write(ring_count);
-			part_count.value++;
+				writer.Write(ring_count);
+				part_count.value++;
+			}
 		} while (reader.TryMatch(','));
 		reader.Match(')');
 		writer.Write(part_count);
@@ -516,8 +572,7 @@ void FromStringRecursive(TextReader &reader, BlobWriter &writer, uint32_t depth,
 		writer.Write(part_count);
 	} break;
 	default:
-		throw InvalidInputException("Unknown geometry type %d at position %zu", static_cast<int>(type),
-		                            reader.GetPosition());
+		throw reader.MakeError("Unknown geometry type %d", static_cast<int>(type));
 	}
 }
 
@@ -1025,16 +1080,14 @@ bool Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool stri
 	}
 
 	auto all_ok = true;
-	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(source, result, count,
-	                                                    [&](const string_t &wkb, ValidityMask &mask, idx_t idx) {
-		                                                    string_t geom;
-		                                                    if (!FromBinary(wkb, geom, heap, false)) {
-			                                                    all_ok = false;
-			                                                    mask.SetInvalid(idx);
-			                                                    return string_t();
-		                                                    }
-		                                                    return geom;
-	                                                    });
+	UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](const string_t &wkb) -> optional<string_t> {
+		string_t geom;
+		if (!FromBinary(wkb, geom, heap, false)) {
+			all_ok = false;
+			return nullopt;
+		}
+		return geom;
+	});
 	return all_ok;
 }
 
@@ -1043,8 +1096,10 @@ void Geometry::ToBinary(Vector &source, Vector &result, idx_t count) {
 	result.Reinterpret(source);
 }
 
-bool Geometry::FromString(const string_t &wkt_text, string_t &result, StringHeap &heap, bool strict) {
+bool Geometry::FromString(const string_t &wkt_text, string_t &result, StringHeap &heap, bool strict,
+                          optional_idx query_location) {
 	TextReader reader(wkt_text.GetData(), static_cast<uint32_t>(wkt_text.GetSize()));
+	reader.SetQueryLocation(query_location);
 	BlobWriter writer;
 
 	FromStringRecursive(reader, writer, 0, false, false);
@@ -1052,6 +1107,10 @@ bool Geometry::FromString(const string_t &wkt_text, string_t &result, StringHeap
 	const auto &buffer = writer.GetBuffer();
 	result = heap.AddBlob(buffer.data(), buffer.size());
 	return true;
+}
+
+bool Geometry::FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict) {
+	return FromString(wkt_text, result, StringVector::GetStringHeap(result_vector), strict, optional_idx::Invalid());
 }
 
 string_t Geometry::ToString(StringHeap &heap, const string_t &geom) {
@@ -1218,24 +1277,17 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &
 
 template <class V = VertexXY>
 static void ToPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
-	// Flatten the source vector to extract all vertices
-	source_vec.Flatten(row_count);
-
-	const auto geom_data = FlatVector::GetData<string_t>(source_vec);
-	auto &vert_parts = StructVector::GetEntries(target_vec);
-	double *vert_data[V::WIDTH];
-
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	const auto geom_data = source_vec.Values<string_t>();
+	auto vert_writer = FlatVector::Writer<typename V::STRUCT_TYPE>(target_vec, row_count);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+		auto geom_entry = geom_data[row_idx];
+		if (!geom_entry.IsValid()) {
+			vert_writer.WriteNull();
 			continue;
 		}
 
-		const auto &blob = geom_data[row_idx];
+		const auto &blob = geom_entry.GetValue();
 		const auto blob_data = blob.GetData();
 		const auto blob_size = blob.GetSize();
 
@@ -1244,36 +1296,24 @@ static void ToPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
 		// Skip byte order and type/meta
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 
-		for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-			vert_data[dim_idx][row_idx] = reader.Read<double>();
-		}
+		vert_writer.ForEach([&](auto &child_writer) { child_writer.WriteValue(reader.Read<double>()); });
 	}
 }
 
 template <class V = VertexXY>
 static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
-	// Flatten the source vector to extract all vertices
-	source_vec.Flatten(row_count);
-
-	auto &vert_parts = StructVector::GetEntries(source_vec);
-	auto geom_data = FlatVector::GetDataMutable<string_t>(target_vec);
-	double *vert_data[V::WIDTH];
-
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
-
+	auto vert_iter = source_vec.Values<typename V::STRUCT_TYPE>();
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		const auto out_idx = result_offset + row_idx;
-
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, out_idx, true);
+		const auto vert_entry = vert_iter[row_idx];
+		if (!vert_entry.IsValid()) {
+			result_data.WriteNull();
 			continue;
 		}
 
 		// byte order + type/meta + vertex data
 		const auto blob_size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(V);
-		auto blob = StringVector::EmptyString(target_vec, blob_size);
+		auto &blob = result_data.WriteEmptyString(blob_size);
 		const auto blob_data = blob.GetDataWriteable();
 
 		FixedSizeBlobWriter writer(blob_data, static_cast<uint32_t>(blob_size));
@@ -1284,824 +1324,343 @@ static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, 
 		writer.Write<uint32_t>(meta); // Type/meta
 
 		// Write vertex data
-		for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-			writer.Write<double>(vert_data[dim_idx][row_idx]);
-		}
+		vert_entry.ForEach([&](const auto &v) { writer.Write<double>(v.GetValueUnsafe()); });
 
 		blob.Finalize();
-		geom_data[out_idx] = blob;
 	}
 }
 
 template <class V = VertexXY>
 static void ToLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count) {
-	// Flatten the source vector to extract all vertices
-	source_vec.Flatten(row_count);
+	auto geom_data = source_vec.Values<string_t>();
+	auto list_writer = FlatVector::Writer<VectorListType<typename V::STRUCT_TYPE>>(target_vec, row_count);
 
-	idx_t vert_total = 0;
-	idx_t vert_start = 0;
-
-	// First pass, figure out how many vertices are in this linestring
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+		auto geom_entry = geom_data[row_idx];
+		if (!geom_entry.IsValid()) {
+			list_writer.WriteNull();
 			continue;
 		}
 
-		const auto &blob = FlatVector::GetData<string_t>(source_vec)[row_idx];
-		const auto blob_data = blob.GetData();
-		const auto blob_size = blob.GetSize();
+		const auto &blob = geom_entry.GetValue();
+		BlobReader reader(blob.GetData(), static_cast<uint32_t>(blob.GetSize()));
 
-		BlobReader reader(blob_data, static_cast<uint32_t>(blob_size));
 		// Skip byte order and type/meta
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 		const auto vert_count = reader.Read<uint32_t>();
 
-		vert_total += vert_count;
-	}
-
-	ListVector::Reserve(target_vec, vert_total);
-	ListVector::SetListSize(target_vec, vert_total);
-
-	auto list_data = FlatVector::GetDataMutable<list_entry_t>(target_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(target_vec));
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
-
-	// Second pass, write out the linestrings
-
-	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			continue;
+		for (auto &vert_writer : list_writer.WriteList(vert_count)) {
+			vert_writer.ForEach([&](auto &dim_writer) { dim_writer.WriteValue(reader.Read<double>()); });
 		}
-
-		const auto &blob = FlatVector::GetData<string_t>(source_vec)[row_idx];
-		const auto blob_data = blob.GetData();
-		const auto blob_size = blob.GetSize();
-
-		BlobReader reader(blob_data, static_cast<uint32_t>(blob_size));
-		// Skip byte order and type/meta
-		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
-		const auto vert_count = reader.Read<uint32_t>();
-
-		// Set list entry
-		auto &list_entry = list_data[row_idx];
-		list_entry.offset = vert_start;
-		list_entry.length = vert_count;
-
-		// Read vertices
-		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-			for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-				vert_data[dim_idx][vert_start + vert_idx] = reader.Read<double>();
-			}
-		}
-
-		vert_start += vert_count;
 	}
-
-	D_ASSERT(vert_start == vert_total);
 }
 
 template <class V = VertexXY>
 static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
-	// Flatten the source vector to extract all vertices
-	source_vec.Flatten(row_count);
-
-	const auto line_data = FlatVector::GetData<list_entry_t>(source_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(source_vec));
-
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto line_iter = source_vec.Values<VectorListType<typename V::STRUCT_TYPE>>();
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		const auto out_idx = result_offset + row_idx;
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, out_idx, true);
+		const auto line_entry = line_iter[row_idx];
+		if (!line_entry.IsValid()) {
+			result_data.WriteNull();
 			continue;
 		}
 
-		const auto &line_entry = line_data[row_idx];
-		const auto vert_count = line_entry.length;
+		const auto vert_count = line_entry.GetListLength();
 
-		// byte order + type/meta + vertex data
+		// byte order + type/meta + vertex count + vertex data
 		const auto blob_size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t) + vert_count * sizeof(V);
-		auto blob = StringVector::EmptyString(target_vec, blob_size);
-		const auto blob_data = blob.GetDataWriteable();
-
-		FixedSizeBlobWriter writer(blob_data, static_cast<uint32_t>(blob_size));
+		auto &blob = result_data.WriteEmptyString(blob_size);
+		FixedSizeBlobWriter writer(blob.GetDataWriteable(), static_cast<uint32_t>(blob_size));
 
 		const auto meta =
 		    static_cast<uint32_t>(GeometryType::LINESTRING) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
 
-		writer.Write<uint8_t>(1);                                        // Little-endian
-		writer.Write<uint32_t>(meta);                                    // Type/meta
-		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(vert_count)); // Vertex count
+		writer.Write<uint8_t>(1);
+		writer.Write<uint32_t>(meta);
+		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(vert_count));
 
-		// Write vertex data
-		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-			for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-				writer.Write<double>(vert_data[dim_idx][line_entry.offset + vert_idx]);
-			}
+		for (const auto vert_entry : line_entry.GetChildValues()) {
+			vert_entry.ForEach([&](const auto &v) { writer.Write<double>(v.GetValueUnsafe()); });
 		}
 
 		blob.Finalize();
-		FlatVector::GetDataMutable<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
 template <class V = VertexXY>
 static void ToPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) {
-	source_vec.Flatten(row_count);
-
-	idx_t vert_total = 0;
-	idx_t ring_total = 0;
-	idx_t vert_start = 0;
-	idx_t ring_start = 0;
-
-	// First pass, figure out how many vertices and rings are in this polygon
+	auto geom_data = source_vec.Values<string_t>();
+	auto poly_writer =
+	    FlatVector::Writer<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>(target_vec, row_count);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+		auto geom_entry = geom_data[row_idx];
+		if (!geom_entry.IsValid()) {
+			poly_writer.WriteNull();
 			continue;
 		}
-
-		const auto &blob = FlatVector::GetData<string_t>(source_vec)[row_idx];
-		const auto blob_data = blob.GetData();
-		const auto blob_size = blob.GetSize();
-
-		BlobReader reader(blob_data, static_cast<uint32_t>(blob_size));
-
-		// Skip byte order and type/meta
+		const auto &blob = geom_entry.GetValue();
+		BlobReader reader(blob.GetData(), static_cast<uint32_t>(blob.GetSize()));
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
-
 		const auto ring_count = reader.Read<uint32_t>();
-		for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
+		for (auto &ring_writer : poly_writer.WriteList(ring_count)) {
 			const auto vert_count = reader.Read<uint32_t>();
-
-			// Skip vertices
-			reader.Skip(sizeof(V) * vert_count);
-
-			vert_total += vert_count;
-		}
-		ring_total += ring_count;
-	}
-
-	// Reserve space in the target vector
-	ListVector::Reserve(target_vec, ring_total);
-	ListVector::SetListSize(target_vec, ring_total);
-
-	auto &ring_vec = ListVector::GetEntry(target_vec);
-	ListVector::Reserve(ring_vec, vert_total);
-	ListVector::SetListSize(ring_vec, vert_total);
-
-	auto poly_data = FlatVector::GetDataMutable<list_entry_t>(target_vec);
-	auto ring_data = FlatVector::GetDataMutable<list_entry_t>(ring_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
-	double *vert_data[V::WIDTH];
-
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
-
-	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			continue;
-		}
-
-		const auto &blob = FlatVector::GetData<string_t>(source_vec)[row_idx];
-		const auto blob_data = blob.GetData();
-		const auto blob_size = blob.GetSize();
-
-		BlobReader reader(blob_data, static_cast<uint32_t>(blob_size));
-
-		// Skip byte order and type/meta
-		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
-
-		const auto ring_count = reader.Read<uint32_t>();
-		// Set polygon entry
-		auto &poly_entry = poly_data[row_idx];
-		poly_entry.offset = ring_start;
-		poly_entry.length = ring_count;
-
-		for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
-			const auto vert_count = reader.Read<uint32_t>();
-
-			// Set ring entry
-			auto &ring_entry = ring_data[ring_start + ring_idx];
-			ring_entry.offset = vert_start;
-			ring_entry.length = vert_count;
-
-			// Read vertices
-			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-				for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-					vert_data[dim_idx][vert_start + vert_idx] = reader.Read<double>();
-				}
+			for (auto &vert_writer : ring_writer.WriteList(vert_count)) {
+				vert_writer.ForEach([&](auto &dim_writer) { dim_writer.WriteValue(reader.Read<double>()); });
 			}
-
-			vert_start += vert_count;
 		}
-
-		ring_start += ring_count;
 	}
-
-	D_ASSERT(vert_start == vert_total);
-	D_ASSERT(ring_start == ring_total);
 }
 
 template <class V = VertexXY>
 static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
-	source_vec.Flatten(row_count);
-
-	const auto poly_data = FlatVector::GetData<list_entry_t>(source_vec);
-	auto &ring_vec = ListVector::GetEntry(source_vec);
-	const auto ring_data = FlatVector::GetData<list_entry_t>(ring_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
-
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto poly_iter = source_vec.Values<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>();
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		const auto out_idx = result_offset + row_idx;
-
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, out_idx, true);
+		const auto poly_entry = poly_iter[row_idx];
+		if (!poly_entry.IsValid()) {
+			result_data.WriteNull();
 			continue;
 		}
 
-		const auto &poly_entry = poly_data[row_idx];
-		const auto ring_count = poly_entry.length;
+		const auto ring_count = poly_entry.GetListLength();
 
-		// First, compute total size
-		idx_t blob_size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t); // byte order + type/meta + ring count
-
-		for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
-			const auto &ring_entry = ring_data[poly_entry.offset + ring_idx];
-			const auto vert_count = ring_entry.length;
-			// vertex count
-			blob_size += sizeof(uint32_t);
-			// vertex data
-			blob_size += vert_count * sizeof(V);
+		// byte order + type/meta + ring count
+		idx_t blob_size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t);
+		for (const auto ring_entry : poly_entry.GetChildValues()) {
+			blob_size += sizeof(uint32_t) + ring_entry.GetListLength() * sizeof(V);
 		}
-
-		auto blob = StringVector::EmptyString(target_vec, blob_size);
-		const auto blob_data = blob.GetDataWriteable();
-
-		FixedSizeBlobWriter writer(blob_data, static_cast<uint32_t>(blob_size));
+		auto &blob = result_data.WriteEmptyString(blob_size);
+		FixedSizeBlobWriter writer(blob.GetDataWriteable(), static_cast<uint32_t>(blob_size));
 
 		const auto meta = static_cast<uint32_t>(GeometryType::POLYGON) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
 
-		writer.Write<uint8_t>(1);                                        // Little-endian
-		writer.Write<uint32_t>(meta);                                    // Type/meta
-		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(ring_count)); // Ring count
+		writer.Write<uint8_t>(1);
+		writer.Write<uint32_t>(meta);
+		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(ring_count));
 
-		for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
-			const auto &ring_entry = ring_data[poly_entry.offset + ring_idx];
-			const auto vert_count = ring_entry.length;
-
-			writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(vert_count)); // Vertex count
-
-			// Write vertex data
-			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-				for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-					writer.Write<double>(vert_data[dim_idx][ring_entry.offset + vert_idx]);
-				}
+		for (const auto ring_entry : poly_entry.GetChildValues()) {
+			writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(ring_entry.GetListLength()));
+			for (const auto vert_entry : ring_entry.GetChildValues()) {
+				vert_entry.ForEach([&](const auto &v) { writer.Write<double>(v.GetValueUnsafe()); });
 			}
 		}
 
 		blob.Finalize();
-		FlatVector::GetDataMutable<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
 template <class V = VertexXY>
 static void ToMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
-	source_vec.Flatten(row_count);
-
-	const auto geom_data = FlatVector::GetData<string_t>(source_vec);
-
-	idx_t vert_total = 0;
-	idx_t vert_start = 0;
-
-	// First pass, figure out how many vertices are in this multipoint
+	auto geom_data = source_vec.Values<string_t>();
+	auto mult_writer = FlatVector::Writer<VectorListType<typename V::STRUCT_TYPE>>(target_vec, row_count);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+		auto geom_value = geom_data[row_idx];
+		if (!geom_value.IsValid()) {
+			mult_writer.WriteNull();
 			continue;
 		}
-		const auto &blob = geom_data[row_idx];
-		const auto blob_data = blob.GetData();
-		const auto blob_size = blob.GetSize();
-
-		BlobReader reader(blob_data, static_cast<uint32_t>(blob_size));
-
-		// Skip byte order and type/meta
+		const auto &blob = geom_value.GetValue();
+		BlobReader reader(blob.GetData(), static_cast<uint32_t>(blob.GetSize()));
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 		const auto part_count = reader.Read<uint32_t>();
-		vert_total += part_count;
-	}
-
-	// Reserve space in the target vector
-	ListVector::Reserve(target_vec, vert_total);
-	ListVector::SetListSize(target_vec, vert_total);
-
-	auto mult_data = FlatVector::GetDataMutable<list_entry_t>(target_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(target_vec));
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
-
-	// Second pass, write out the multipoints
-	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			continue;
-		}
-
-		const auto &blob = geom_data[row_idx];
-		const auto blob_data = blob.GetData();
-		const auto blob_size = blob.GetSize();
-
-		BlobReader reader(blob_data, static_cast<uint32_t>(blob_size));
-
-		// Skip byte order and type/meta
-		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
-		const auto part_count = reader.Read<uint32_t>();
-
-		// Set multipoint entry
-		auto &mult_entry = mult_data[row_idx];
-		mult_entry.offset = vert_start;
-		mult_entry.length = part_count;
-
-		for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
-			// Skip byte order and type/meta of the point
+		for (auto &vert_writer : mult_writer.WriteList(part_count)) {
 			reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
-
-			for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-				vert_data[dim_idx][vert_start + part_idx] = reader.Read<double>();
-			}
+			vert_writer.ForEach([&](auto &dim_writer) { dim_writer.WriteValue(reader.Read<double>()); });
 		}
-
-		vert_start += part_count;
 	}
-
-	D_ASSERT(vert_start == vert_total);
 }
 
 template <class V = VertexXY>
 static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
-	// Flatten the source vector to extract all vertices
-	source_vec.Flatten(row_count);
-
-	const auto mult_data = FlatVector::GetData<list_entry_t>(source_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(source_vec));
-
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto mult_iter = source_vec.Values<VectorListType<typename V::STRUCT_TYPE>>();
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		const auto out_idx = result_offset + row_idx;
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, out_idx, true);
+		const auto mult_entry = mult_iter[row_idx];
+		if (!mult_entry.IsValid()) {
+			result_data.WriteNull();
 			continue;
 		}
 
-		const auto &mult_entry = mult_data[row_idx];
-		const auto part_count = mult_entry.length;
+		const auto part_count = mult_entry.GetListLength();
 
-		// First, compute total size
-		// byte order + type/meta + part count
-		idx_t blob_size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t);
+		// byte order + type/meta + part count + (point header + vertex) per part
+		const auto blob_size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t) +
+		                       part_count * (sizeof(uint8_t) + sizeof(uint32_t) + sizeof(V));
 
-		for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
-			// point byte order + type/meta + vertex data
-			blob_size += sizeof(uint8_t) + sizeof(uint32_t) + sizeof(V);
-		}
-
-		auto blob = StringVector::EmptyString(target_vec, blob_size);
-		const auto blob_data = blob.GetDataWriteable();
-
-		FixedSizeBlobWriter writer(blob_data, static_cast<uint32_t>(blob_size));
+		auto &blob = result_data.WriteEmptyString(blob_size);
+		FixedSizeBlobWriter writer(blob.GetDataWriteable(), static_cast<uint32_t>(blob_size));
 
 		const auto meta =
 		    static_cast<uint32_t>(GeometryType::MULTIPOINT) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
 
-		writer.Write<uint8_t>(1);                                        // Little-endian
-		writer.Write<uint32_t>(meta);                                    // Type/meta
-		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(part_count)); // Part count
+		writer.Write<uint8_t>(1);
+		writer.Write<uint32_t>(meta);
+		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(part_count));
 
-		for (uint32_t part_idx = 0; part_idx < part_count; part_idx++) {
-			// Write point byte order and type/meta
-			const auto point_meta =
-			    static_cast<uint32_t>(GeometryType::POINT) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
-			writer.Write<uint8_t>(1);           // Little-endian
-			writer.Write<uint32_t>(point_meta); // Type/meta
-
-			// Write vertex data
-			for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-				writer.Write<double>(vert_data[dim_idx][mult_entry.offset + part_idx]);
-			}
+		const auto point_meta =
+		    static_cast<uint32_t>(GeometryType::POINT) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
+		for (const auto vert_entry : mult_entry.GetChildValues()) {
+			writer.Write<uint8_t>(1);
+			writer.Write<uint32_t>(point_meta);
+			vert_entry.ForEach([&](const auto &v) { writer.Write<double>(v.GetValueUnsafe()); });
 		}
 
 		blob.Finalize();
-		FlatVector::GetDataMutable<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
 template <class V = VertexXY>
 static void ToMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count) {
-	// Flatten the source vector to extract all vertices
-	source_vec.Flatten(row_count);
-
-	// This is basically the same as Polygons
-
-	idx_t vert_total = 0;
-	idx_t line_total = 0;
-	idx_t vert_start = 0;
-	idx_t line_start = 0;
-
-	// First pass, figure out how many vertices and lines are in this multilinestring
+	source_vec.Flatten();
+	const auto geom_data = FlatVector::GetData<string_t>(source_vec);
+	auto mult_writer =
+	    FlatVector::Writer<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>(target_vec, row_count);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+			mult_writer.WriteNull();
 			continue;
 		}
-
-		const auto &blob = FlatVector::GetData<string_t>(source_vec)[row_idx];
-		const auto blob_data = blob.GetData();
-		const auto blob_size = blob.GetSize();
-
-		BlobReader reader(blob_data, static_cast<uint32_t>(blob_size));
-
-		// Skip byte order and type/meta
-		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
-
-		// Line count
-		const auto line_count = reader.Read<uint32_t>();
-		for (uint32_t line_idx = 0; line_idx < line_count; line_idx++) {
-			// Skip line metadata
-			reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
-
-			// Read vertex count
-			const auto vert_count = reader.Read<uint32_t>();
-			// Skip vertices
-			reader.Skip(sizeof(V) * vert_count);
-
-			vert_total += vert_count;
-		}
-		line_total += line_count;
-	}
-
-	// Reserve space in the target vector
-	ListVector::Reserve(target_vec, line_total);
-	ListVector::SetListSize(target_vec, line_total);
-
-	auto &line_vec = ListVector::GetEntry(target_vec);
-	ListVector::Reserve(line_vec, vert_total);
-	ListVector::SetListSize(line_vec, vert_total);
-
-	auto mult_data = FlatVector::GetDataMutable<list_entry_t>(target_vec);
-	auto line_data = FlatVector::GetDataMutable<list_entry_t>(line_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(line_vec));
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
-
-	// Second pass, write out the multilinestrings
-	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			continue;
-		}
-		const auto &blob = FlatVector::GetData<string_t>(source_vec)[row_idx];
-		const auto blob_data = blob.GetData();
-		const auto blob_size = blob.GetSize();
-
-		BlobReader reader(blob_data, static_cast<uint32_t>(blob_size));
-		// Skip byte order and type/meta
+		const auto &blob = geom_data[row_idx];
+		BlobReader reader(blob.GetData(), static_cast<uint32_t>(blob.GetSize()));
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 		const auto line_count = reader.Read<uint32_t>();
-
-		// Set multilinestring entry
-		auto &mult_entry = mult_data[row_idx];
-		mult_entry.offset = line_start;
-		mult_entry.length = line_count;
-
-		for (uint32_t line_idx = 0; line_idx < line_count; line_idx++) {
-			// Skip line byte order and type/meta
+		for (auto &line_writer : mult_writer.WriteList(line_count)) {
 			reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
-
-			// Read vertex count
 			const auto vert_count = reader.Read<uint32_t>();
-
-			// Set line entry
-			auto &line_entry = line_data[line_start + line_idx];
-			line_entry.offset = vert_start;
-			line_entry.length = vert_count;
-
-			// Read vertices
-			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-				for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-					vert_data[dim_idx][vert_start + vert_idx] = reader.Read<double>();
-				}
+			for (auto &vert_writer : line_writer.WriteList(vert_count)) {
+				vert_writer.ForEach([&](auto &dim_writer) { dim_writer.WriteValue(reader.Read<double>()); });
 			}
-
-			vert_start += vert_count;
 		}
-		line_start += line_count;
 	}
-
-	D_ASSERT(vert_start == vert_total);
-	D_ASSERT(line_start == line_total);
 }
 
 template <class V = VertexXY>
 static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
-	// Flatten the source vector to extract all vertices
-
-	source_vec.Flatten(row_count);
-
-	const auto mult_data = FlatVector::GetData<list_entry_t>(source_vec);
-	auto &line_vec = ListVector::GetEntry(source_vec);
-	const auto line_data = FlatVector::GetData<list_entry_t>(line_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(line_vec));
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto mult_iter = source_vec.Values<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>();
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		const auto out_idx = result_offset + row_idx;
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, out_idx, true);
+		const auto mult_entry = mult_iter[row_idx];
+		if (!mult_entry.IsValid()) {
+			result_data.WriteNull();
 			continue;
 		}
 
-		const auto &mult_entry = mult_data[row_idx];
-		const auto line_count = mult_entry.length;
+		const auto line_count = mult_entry.GetListLength();
 
-		// First, compute total size
 		// byte order + type/meta + line count
 		idx_t blob_size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t);
-
-		for (uint32_t line_idx = 0; line_idx < line_count; line_idx++) {
-			const auto &line_entry = line_data[mult_entry.offset + line_idx];
-			const auto vert_count = line_entry.length;
-			// line byte order + type/meta + vertex count
-			blob_size += sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t);
-			// vertex data
-			blob_size += vert_count * sizeof(V);
+		for (const auto line_entry : mult_entry.GetChildValues()) {
+			// line header (byte order + type/meta + vertex count) + vertex data
+			blob_size += sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t) + line_entry.GetListLength() * sizeof(V);
 		}
 
-		auto blob = StringVector::EmptyString(target_vec, blob_size);
-		const auto blob_data = blob.GetDataWriteable();
-
-		FixedSizeBlobWriter writer(blob_data, static_cast<uint32_t>(blob_size));
+		auto &blob = result_data.WriteEmptyString(blob_size);
+		FixedSizeBlobWriter writer(blob.GetDataWriteable(), static_cast<uint32_t>(blob_size));
 
 		const auto meta =
 		    static_cast<uint32_t>(GeometryType::MULTILINESTRING) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
 
-		writer.Write<uint8_t>(1);                                        // Little-endian
-		writer.Write<uint32_t>(meta);                                    // Type/meta
-		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(line_count)); // Line count
+		writer.Write<uint8_t>(1);
+		writer.Write<uint32_t>(meta);
+		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(line_count));
 
-		for (uint32_t line_idx = 0; line_idx < line_count; line_idx++) {
-			const auto &line_entry = line_data[mult_entry.offset + line_idx];
-			const auto vert_count = line_entry.length;
-
-			// Write line byte order and type/meta
-			const auto line_meta =
-			    static_cast<uint32_t>(GeometryType::LINESTRING) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
-			writer.Write<uint8_t>(1);                                        // Little-endian
-			writer.Write<uint32_t>(line_meta);                               // Type/meta
-			writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(vert_count)); // Vertex count
-
-			// Write vertex data
-			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-				for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-					writer.Write<double>(vert_data[dim_idx][line_entry.offset + vert_idx]);
-				}
+		const auto line_meta =
+		    static_cast<uint32_t>(GeometryType::LINESTRING) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
+		for (const auto line_entry : mult_entry.GetChildValues()) {
+			writer.Write<uint8_t>(1);
+			writer.Write<uint32_t>(line_meta);
+			writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(line_entry.GetListLength()));
+			for (const auto vert_entry : line_entry.GetChildValues()) {
+				vert_entry.ForEach([&](const auto &v) { writer.Write<double>(v.GetValueUnsafe()); });
 			}
 		}
+
 		blob.Finalize();
-		FlatVector::GetDataMutable<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
 template <class V = VertexXY>
 static void ToMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) {
-	// Flatten the source vector to extract all vertices
-	source_vec.Flatten(row_count);
-
-	idx_t vert_total = 0;
-	idx_t ring_total = 0;
-	idx_t poly_total = 0;
-	idx_t vert_start = 0;
-	idx_t ring_start = 0;
-	idx_t poly_start = 0;
-
-	// First pass, figure out how many vertices, rings and polygons are in this multipolygon
+	source_vec.Flatten();
+	const auto geom_data = FlatVector::GetData<string_t>(source_vec);
+	auto mult_writer = FlatVector::Writer<VectorListType<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>>(
+	    target_vec, row_count);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+			mult_writer.WriteNull();
 			continue;
 		}
-
-		const auto &blob = FlatVector::GetData<string_t>(source_vec)[row_idx];
-		const auto blob_data = blob.GetData();
-		const auto blob_size = blob.GetSize();
-		BlobReader reader(blob_data, static_cast<uint32_t>(blob_size));
-
-		// Skip byte order and type/meta
-		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
-
-		const auto poly_count = reader.Read<uint32_t>();
-		for (uint32_t poly_idx = 0; poly_idx < poly_count; poly_idx++) {
-			// Skip polygon byte order and metadata
-			reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
-
-			// Read ring count
-			const auto ring_count = reader.Read<uint32_t>();
-			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
-				// Read vertex count
-				const auto vert_count = reader.Read<uint32_t>();
-				// Skip vertices
-				reader.Skip(sizeof(V) * vert_count);
-
-				vert_total += vert_count;
-			}
-			ring_total += ring_count;
-		}
-		poly_total += poly_count;
-	}
-
-	// Reserve space in the target vector
-	ListVector::Reserve(target_vec, poly_total);
-	ListVector::SetListSize(target_vec, poly_total);
-	auto &poly_vec = ListVector::GetEntry(target_vec);
-	ListVector::Reserve(poly_vec, ring_total);
-	ListVector::SetListSize(poly_vec, ring_total);
-	auto &ring_vec = ListVector::GetEntry(poly_vec);
-	ListVector::Reserve(ring_vec, vert_total);
-	ListVector::SetListSize(ring_vec, vert_total);
-
-	auto mult_data = FlatVector::GetDataMutable<list_entry_t>(target_vec);
-	auto poly_data = FlatVector::GetDataMutable<list_entry_t>(poly_vec);
-	auto ring_data = FlatVector::GetDataMutable<list_entry_t>(ring_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
-
-	// Second pass, write out the multipolygons
-	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			continue;
-		}
-		const auto &blob = FlatVector::GetData<string_t>(source_vec)[row_idx];
-		const auto blob_data = blob.GetData();
-		const auto blob_size = blob.GetSize();
-
-		BlobReader reader(blob_data, static_cast<uint32_t>(blob_size));
-
-		// Skip byte order and type/meta
+		const auto &blob = geom_data[row_idx];
+		BlobReader reader(blob.GetData(), static_cast<uint32_t>(blob.GetSize()));
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 		const auto poly_count = reader.Read<uint32_t>();
-
-		// Set multipolygon entry
-		auto &mult_entry = mult_data[row_idx];
-		mult_entry.offset = poly_start;
-		mult_entry.length = poly_count;
-
-		// Read polygons
-		for (uint32_t poly_idx = 0; poly_idx < poly_count; poly_idx++) {
-			// Skip polygon byte order and type/meta
+		for (auto &poly_writer : mult_writer.WriteList(poly_count)) {
 			reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
-
-			// Read ring count
 			const auto ring_count = reader.Read<uint32_t>();
-
-			// Set polygon entry
-			auto &poly_entry = poly_data[poly_start + poly_idx];
-			poly_entry.offset = ring_start;
-			poly_entry.length = ring_count;
-
-			// Read rings
-			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
-				// Read vertex count
+			for (auto &ring_writer : poly_writer.WriteList(ring_count)) {
 				const auto vert_count = reader.Read<uint32_t>();
-				// Set ring entry
-				auto &ring_entry = ring_data[ring_start + ring_idx];
-				ring_entry.offset = vert_start;
-				ring_entry.length = vert_count;
-
-				// Read vertices
-				for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-					for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-						vert_data[dim_idx][vert_start + vert_idx] = reader.Read<double>();
-					}
+				for (auto &vert_writer : ring_writer.WriteList(vert_count)) {
+					vert_writer.ForEach([&](auto &dim_writer) { dim_writer.WriteValue(reader.Read<double>()); });
 				}
-				vert_start += vert_count;
 			}
-			ring_start += ring_count;
 		}
-		poly_start += poly_count;
 	}
 }
 
 template <class V = VertexXY>
 static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
-	// Flatten the source vector to extract all vertices
-	source_vec.Flatten(row_count);
-
-	const auto mult_data = FlatVector::GetData<list_entry_t>(source_vec);
-	auto &poly_vec = ListVector::GetEntry(source_vec);
-	const auto poly_data = FlatVector::GetData<list_entry_t>(poly_vec);
-	auto &ring_vec = ListVector::GetEntry(poly_vec);
-	const auto ring_data = FlatVector::GetData<list_entry_t>(ring_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetEntry(ring_vec));
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto mult_iter = source_vec.Values<VectorListType<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>>();
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		const auto out_idx = result_offset + row_idx;
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, out_idx, true);
+		const auto mult_entry = mult_iter[row_idx];
+		if (!mult_entry.IsValid()) {
+			result_data.WriteNull();
 			continue;
 		}
 
-		const auto &mult_entry = mult_data[row_idx];
-		const auto poly_count = mult_entry.length;
+		const auto poly_count = mult_entry.GetListLength();
 
-		// First, compute total size
 		// byte order + type/meta + polygon count
 		idx_t blob_size = sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t);
-
-		for (uint32_t poly_idx = 0; poly_idx < poly_count; poly_idx++) {
-			const auto &poly_entry = poly_data[mult_entry.offset + poly_idx];
-			const auto ring_count = poly_entry.length;
-			// polygon byte order + type/meta + ring count
+		for (const auto poly_entry : mult_entry.GetChildValues()) {
+			// polygon header (byte order + type/meta + ring count)
 			blob_size += sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t);
-
-			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
-				const auto &ring_entry = ring_data[poly_entry.offset + ring_idx];
-				const auto vert_count = ring_entry.length;
-				// vertex count
-				blob_size += sizeof(uint32_t);
-				// vertex data
-				blob_size += vert_count * sizeof(V);
+			for (const auto ring_entry : poly_entry.GetChildValues()) {
+				blob_size += sizeof(uint32_t) + ring_entry.GetListLength() * sizeof(V);
 			}
 		}
 
-		auto blob = StringVector::EmptyString(target_vec, blob_size);
-		const auto blob_data = blob.GetDataWriteable();
-
-		FixedSizeBlobWriter writer(blob_data, static_cast<uint32_t>(blob_size));
+		auto &blob = result_data.WriteEmptyString(blob_size);
+		FixedSizeBlobWriter writer(blob.GetDataWriteable(), static_cast<uint32_t>(blob_size));
 
 		const auto meta =
 		    static_cast<uint32_t>(GeometryType::MULTIPOLYGON) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
-		writer.Write<uint8_t>(1);                                        // Little-endian
-		writer.Write<uint32_t>(meta);                                    // Type/meta
-		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(poly_count)); // Polygon count
+		writer.Write<uint8_t>(1);
+		writer.Write<uint32_t>(meta);
+		writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(poly_count));
 
-		for (uint32_t poly_idx = 0; poly_idx < poly_count; poly_idx++) {
-			const auto &poly_entry = poly_data[mult_entry.offset + poly_idx];
-			const auto ring_count = poly_entry.length;
+		const auto poly_meta =
+		    static_cast<uint32_t>(GeometryType::POLYGON) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
+		for (const auto poly_entry : mult_entry.GetChildValues()) {
+			writer.Write<uint8_t>(1);
+			writer.Write<uint32_t>(poly_meta);
+			writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(poly_entry.GetListLength()));
 
-			// Write polygon byte order and type/meta
-			const auto poly_meta =
-			    static_cast<uint32_t>(GeometryType::POLYGON) + (V::HAS_Z ? 1000 : 0) + (V::HAS_M ? 2000 : 0);
-			writer.Write<uint8_t>(1);                                        // Little-endian
-			writer.Write<uint32_t>(poly_meta);                               // Type/meta
-			writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(ring_count)); // Ring count
-
-			for (uint32_t ring_idx = 0; ring_idx < ring_count; ring_idx++) {
-				const auto &ring_entry = ring_data[poly_entry.offset + ring_idx];
-				const auto vert_count = ring_entry.length;
-
-				writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(vert_count)); // Vertex count
-
-				// Write vertex data
-				for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-					for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-						writer.Write<double>(vert_data[dim_idx][ring_entry.offset + vert_idx]);
-					}
+			for (const auto ring_entry : poly_entry.GetChildValues()) {
+				writer.Write<uint32_t>(UnsafeNumericCast<uint32_t>(ring_entry.GetListLength()));
+				for (const auto vert_entry : ring_entry.GetChildValues()) {
+					vert_entry.ForEach([&](const auto &v) { writer.Write<double>(v.GetValueUnsafe()); });
 				}
 			}
 		}
 
 		blob.Finalize();
-		FlatVector::GetDataMutable<string_t>(target_vec)[out_idx] = blob;
 	}
 }
 
@@ -2486,10 +2045,10 @@ void Geometry::FromSpatialGeometry(const string_t &source, string_t &target, Vec
 }
 
 void Geometry::FromSpatialGeometry(Vector &source_vec, Vector &target_vec, idx_t count, idx_t result_offset) {
-	auto entries = source_vec.Values<string_t>(count);
+	auto entries = source_vec.Values<string_t>();
 	auto target_data = FlatVector::GetDataMutable<string_t>(target_vec);
 
-	auto &target_mask = FlatVector::Validity(target_vec);
+	auto &target_mask = FlatVector::ValidityMutable(target_vec);
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto entry = entries[row_idx];
@@ -2501,7 +2060,7 @@ void Geometry::FromSpatialGeometry(Vector &source_vec, Vector &target_vec, idx_t
 			continue;
 		}
 
-		const auto &source = entry.value;
+		const auto &source = entry.GetValue();
 		BlobReader reader(source.GetData(), static_cast<uint32_t>(source.GetSize()));
 		const auto required_size = FromLegacyGeometryRequiredSize(reader);
 

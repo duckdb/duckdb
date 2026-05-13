@@ -3,9 +3,6 @@
 # group: [exists]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create or replace table t1(c1 int64);
 
 statement ok

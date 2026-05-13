@@ -2,9 +2,6 @@
 # description: Test scalar lists
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT LIST_EXTRACT(NULL, 1)
 ----

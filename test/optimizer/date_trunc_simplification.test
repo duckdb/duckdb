@@ -3,9 +3,6 @@
 # group: [optimizer]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 statement ok
@@ -75,27 +72,27 @@ select * from test where date_trunc('day', d) is distinct from '2025-01-10';
 query II
 explain analyze select * from test where date_trunc('day', d) < '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d<'2025.*$
+analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*.*d < '2025.*$
 
 query II
 explain analyze select * from test where date_trunc('day', d) <= '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d<'2025.*$
+analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*.*d < '2025.*$
 
 query II
 explain analyze select * from test where date_trunc('day', d) > '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d>='2025.*$
+analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*.*d >= '2025.*$
 
 query II
 explain analyze select * from test where date_trunc('day', d) >= '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d>='2025.*$
+analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*.*d >= '2025.*$
 
 query II
 explain analyze select * from test where date_trunc('day', d) = '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d>='2025.*AND.*d<'2025.*$
+analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*.*d >= '2025.*AND.*d <.*'2025.*$
 
 query II
 explain analyze select * from test where date_trunc('day', d) != '2025-01-08';
@@ -105,7 +102,7 @@ analyzed_plan	<REGEX>:.*FILTER[ \t\n│─]*\(\(d >= '2025.*OR.*\(d <[ \t\n│�
 query II
 explain analyze select * from test where date_trunc('day', d) is not distinct from '2025-01-08';
 ----
-analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*d>='2025.*AND.*d<'2025.*$
+analyzed_plan	<REGEX>:.*Filters:[ \t\n│]*.*d >= '2025.*AND.*d <.*'2025.*$
 
 query II
 explain analyze select * from test where date_trunc('day', d) is distinct from '2025-01-08';

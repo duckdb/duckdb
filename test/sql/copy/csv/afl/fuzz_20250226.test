@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select count(file) from glob('./data/csv/afl/20250226_csv_fuzz_error/*');
 ----

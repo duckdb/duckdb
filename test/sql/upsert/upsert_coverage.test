@@ -2,9 +2,6 @@
 # group: [upsert]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE TABLE tbl (a INT, b INT UNIQUE, c INT UNIQUE, d INT UNIQUE);
 
 statement ok

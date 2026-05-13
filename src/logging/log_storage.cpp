@@ -476,11 +476,8 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 unique_ptr<TableRef> FileLogStorage::BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input,
                                                          const string &path, const string &select_clause,
                                                          const string &csv_columns) {
-	string sub_query_string;
-
-	string escaped_path = KeywordHelper::WriteOptionallyQuoted(path);
-	sub_query_string =
-	    StringUtil::Format("%s FROM read_csv_auto(%s, columns={%s})", select_clause, escaped_path, csv_columns);
+	string sub_query_string =
+	    StringUtil::Format("%s FROM read_csv_auto(%s, columns={%s})", select_clause, SQLString(path), csv_columns);
 
 	Parser parser(context.GetParserOptions());
 	parser.ParseQuery(sub_query_string);
@@ -607,26 +604,26 @@ static void WriteLoggingContextsToChunk(DataChunk &chunk, const RegisteredLoggin
 		auto client_context_data = FlatVector::GetDataMutable<idx_t>(chunk.data[col++]);
 		client_context_data[size] = context.context.connection_id.GetIndex();
 	} else {
-		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+		FlatVector::ValidityMutable(chunk.data[col++]).SetInvalid(size);
 	}
 	if (context.context.transaction_id.IsValid()) {
 		auto client_context_data = FlatVector::GetDataMutable<idx_t>(chunk.data[col++]);
 		client_context_data[size] = context.context.transaction_id.GetIndex();
 	} else {
-		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+		FlatVector::ValidityMutable(chunk.data[col++]).SetInvalid(size);
 	}
 	if (context.context.query_id.IsValid()) {
 		auto client_context_data = FlatVector::GetDataMutable<idx_t>(chunk.data[col++]);
 		client_context_data[size] = context.context.query_id.GetIndex();
 	} else {
-		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+		FlatVector::ValidityMutable(chunk.data[col++]).SetInvalid(size);
 	}
 
 	if (context.context.thread_id.IsValid()) {
 		auto thread_data = FlatVector::GetDataMutable<idx_t>(chunk.data[col++]);
 		thread_data[size] = context.context.thread_id.GetIndex();
 	} else {
-		FlatVector::Validity(chunk.data[col++]).SetInvalid(size);
+		FlatVector::ValidityMutable(chunk.data[col++]).SetInvalid(size);
 	}
 
 	chunk.SetCardinality(size + 1);

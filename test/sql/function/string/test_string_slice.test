@@ -3,9 +3,6 @@
 # group: [string]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);
 
 statement ok
@@ -21,22 +18,27 @@ INSERT INTO nulltable VALUES (NULL)
 statement error
 SELECT NULL::VARCHAR[off:length+off] FROM strings
 ----
+Parser Error
 
 statement error
 SELECT NULL::VARCHAR[NULL:length+NULL] FROM strings
 ----
+Parser Error
 
 statement error
 SELECT NULL::VARCHAR[off:NULL+off] FROM strings
 ----
+Parser Error
 
 statement error
 SELECT NULL::VARCHAR[off:NULL+off] FROM strings
 ----
+Parser Error
 
 statement error
 SELECT NULL::VARCHAR[NULL:NULL+NULL] FROM strings
 ----
+Parser Error
 
 # test zero length
 query II

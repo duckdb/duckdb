@@ -24,7 +24,7 @@ static void CachedFunction(Vector &constant, Vector &other, Vector &result, Data
 	auto val = constant.GetValue(0);
 	idx_t count = args.size();
 	if (val.IsNull()) {
-		auto &result_validity = FlatVector::Validity(result);
+		auto &result_validity = FlatVector::ValidityMutable(result);
 		result_validity.SetAllInvalid(count);
 		return;
 	}

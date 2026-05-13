@@ -2,9 +2,12 @@
 
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -22,6 +25,26 @@
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
+
+static bool IsDirectNullCheckFilter(const TableFilter &filter) {
+	switch (filter.filter_type) {
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr = filter.Cast<ExpressionFilter>().expr;
+		if (expr->GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
+			return false;
+		}
+		auto &op = expr->Cast<BoundOperatorExpression>();
+		if ((op.GetExpressionType() != ExpressionType::OPERATOR_IS_NULL &&
+		     op.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) ||
+		    op.children.size() != 1) {
+			return false;
+		}
+		return op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
+	}
+	default:
+		return false;
+	}
+}
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
                        ColumnDataType data_type_p, optional_ptr<ColumnData> parent_p)
@@ -272,7 +295,7 @@ void ColumnData::FetchUpdates(TransactionData transaction, idx_t vector_index, V
 	if (update_type == UpdateScanType::DISALLOW_UPDATES && updates->HasUncommittedUpdates(vector_index)) {
 		throw TransactionException("Cannot create index with outstanding updates");
 	}
-	result.Flatten(scan_count);
+	result.Flatten();
 	updates->FetchUpdates(transaction, vector_index, result);
 }
 
@@ -284,14 +307,14 @@ void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vecto
 	updates->FetchRow(transaction, NumericCast<idx_t>(row_id), result, result_idx);
 }
 
-void ColumnData::UpdateInternal(TransactionData transaction, DataTable &data_table, idx_t column_index,
+void ColumnData::UpdateInternal(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                                 Vector &update_vector, row_t *row_ids, idx_t update_count, Vector &base_vector,
                                 idx_t row_group_start) {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
 		updates = make_uniq<UpdateSegment>(*this);
 	}
-	updates->Update(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
+	updates->Update(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,
 	                row_group_start);
 }
 
@@ -330,10 +353,10 @@ void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_g
 	ColumnScanState child_state(nullptr);
 	InitializeScanWithOffset(child_state, offset_in_row_group);
 	bool has_updates = HasUpdates();
-	auto scan_count = ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
+	ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
 	if (has_updates) {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-		result.Flatten(scan_count);
+		result.Flatten();
 		updates->FetchCommittedRange(offset_in_row_group, s_count, result);
 	}
 }
@@ -351,15 +374,17 @@ void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnS
                         SelectionVector &sel, idx_t &s_count, const TableFilter &filter,
                         TableFilterState &filter_state) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
+	FlatVector::SetSize(result, count_t(scan_count));
 
 	UnifiedVectorFormat vdata;
-	result.ToUnifiedFormat(scan_count, vdata);
+	result.ToUnifiedFormat(vdata);
 	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, scan_count, s_count);
 }
 
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                         SelectionVector &sel, idx_t s_count) {
-	Scan(transaction, vector_index, state, result);
+	idx_t scan_count = Scan(transaction, vector_index, state, result);
+	FlatVector::SetSize(result, count_t(scan_count));
 	result.Slice(sel, s_count);
 }
 
@@ -369,7 +394,7 @@ void ColumnData::Skip(ColumnScanState &state, idx_t s_count) {
 
 void ColumnData::Append(BaseStatistics &append_stats, ColumnAppendState &state, Vector &vector, idx_t append_count) {
 	UnifiedVectorFormat vdata;
-	vector.ToUnifiedFormat(append_count, vdata);
+	vector.ToUnifiedFormat(vdata);
 	AppendData(append_stats, state, vdata, append_count);
 }
 
@@ -393,7 +418,11 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
-		prune_result = filter.CheckStatistics(state.current->GetNode().stats.statistics);
+		auto &segment_stats =
+		    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
+		        ? state.child_states[0].current->GetNode().stats.statistics
+		        : state.current->GetNode().stats.statistics;
+		prune_result = filter.CheckStatistics(segment_stats);
 		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
@@ -583,26 +612,26 @@ idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector
 		throw InternalException("ColumnData::FetchUpdateData out of range");
 	}
 	auto fetch_count = ColumnData::Fetch(state, row_ids[0] - UnsafeNumericCast<row_t>(row_group_start), base_vector);
-	base_vector.Flatten(fetch_count);
+	base_vector.Flatten();
 	return fetch_count;
 }
 
-void ColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
-                        row_t *row_ids, idx_t update_count, idx_t row_group_start) {
+void ColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
+                        Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	Vector base_vector(type);
 	ColumnScanState state(nullptr);
 	FetchUpdateData(state, row_ids, base_vector, row_group_start);
 
-	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
+	UpdateInternal(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,
 	               row_group_start);
 }
 
-void ColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
-                              Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth,
-                              idx_t row_group_start) {
+void ColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry,
+                              const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
+                              idx_t update_count, idx_t depth, idx_t row_group_start) {
 	// this method should only be called at the end of the path in the base column case
 	D_ASSERT(depth >= column_path.size());
-	ColumnData::Update(transaction, data_table, column_path[0], update_vector, row_ids, update_count, row_group_start);
+	ColumnData::Update(transaction, table_entry, column_path[0], update_vector, row_ids, update_count, row_group_start);
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {

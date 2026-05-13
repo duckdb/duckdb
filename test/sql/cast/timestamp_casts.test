@@ -1,0 +1,32 @@
+# name: test/sql/cast/timestamp_casts.test
+# description: Test the TIMESTAMP cast functions
+# group: [cast]
+
+statement ok
+CREATE TABLE tss AS 
+	FROM VALUES ('2026-04-09 11:48:07.123456'::TIMESTAMP) tbl(t);
+
+query I
+select t::TIMESTAMP_NS from tss;
+----
+2026-04-09 11:48:07.123456
+
+query I
+select t::TIMESTAMP from tss;
+----
+2026-04-09 11:48:07.123456
+
+query I
+select t::TIMESTAMP_MS from tss;
+----
+2026-04-09 11:48:07.123
+
+query I
+select t::TIMESTAMP_S from tss;
+----
+2026-04-09 11:48:07
+
+query I
+select t::DATE from tss;
+----
+2026-04-09

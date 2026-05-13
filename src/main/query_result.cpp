@@ -97,7 +97,7 @@ const string &QueryResult::ColumnName(idx_t index) const {
 	return names[index];
 }
 
-string QueryResult::ToBox(ClientContext &context, const BoxRendererConfig &config) {
+string QueryResult::ToBox(BoxRendererContext &context, const BoxRendererConfig &config) {
 	return ToString();
 }
 

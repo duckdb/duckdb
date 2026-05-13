@@ -76,7 +76,7 @@ public:
 			return sorted->key_data->GetLayout().GetSortKeyType();
 		}
 
-		void IntializeMatches();
+		void InitializeMatches();
 
 		//! Combine local states
 		void Combine(ExecutionContext &context, LocalSortedTable &ltable);

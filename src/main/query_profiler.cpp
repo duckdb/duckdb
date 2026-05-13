@@ -391,7 +391,7 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 			info.AddMetric(MetricType::OPERATOR_CARDINALITY, chunk->size());
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::RESULT_SET_SIZE) && chunk) {
-			auto result_set_size = chunk->GetAllocationSize();
+			auto result_set_size = chunk->GetDataSize();
 			info.AddMetric(MetricType::RESULT_SET_SIZE, result_set_size);
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {

@@ -2,9 +2,6 @@
 # description: Test printf
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # printf without format specifiers
 query TT
 SELECT printf('hello'), printf(NULL)

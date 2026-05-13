@@ -14,6 +14,7 @@
 
 namespace duckdb {
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class ConstantFilter : public TableFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::CONSTANT_COMPARISON;
@@ -27,7 +28,6 @@ public:
 	Value constant;
 
 public:
-	bool Compare(const Value &value) const;
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
 	string ToString(const string &column_name) const override;
 	bool Equals(const TableFilter &other) const override;

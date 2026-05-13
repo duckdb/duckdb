@@ -45,6 +45,8 @@ public:
 	DUCKDB_API static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj,
 	                                        LogicalUpdate &update, physical_index_set_t &bound_columns);
 
+	static void RewriteInPlaceUpdates(LogicalOperator &update_op);
+
 protected:
 	vector<ColumnBinding> GetColumnBindings() override;
 	void ResolveTypes() override;

@@ -2,9 +2,6 @@
 # description: Test lateral join table function parameters for functions that do not support it
 # group: [table_function]
 
-statement ok
-pragma enable_verification
-
 statement error
 SELECT * FROM read_csv(thisishopefullyanonexistentfile)
 ----

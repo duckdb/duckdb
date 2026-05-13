@@ -2,9 +2,6 @@
 # description: test query() function
 # group: [function]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT * FROM query('SELECT 42');
 ----

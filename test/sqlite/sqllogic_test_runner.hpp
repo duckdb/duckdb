@@ -65,7 +65,6 @@ public:
 	duckdb::unique_ptr<Command> top_level_loop;
 	bool original_sqlite_test = false;
 	bool output_sql = false;
-	bool enable_verification = false;
 	bool skip_reload = false;
 	unordered_map<string, string> environment_variables;
 	string local_extension_repo;
@@ -96,7 +95,6 @@ public:
 	void EndLoop();
 	string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
 	string LoopReplacement(string text, const vector<LoopDefinition> &loops);
-	bool ForEachTokenReplace(const string &parameter, vector<string> &result);
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 
 private:

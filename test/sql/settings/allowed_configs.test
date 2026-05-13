@@ -2,9 +2,6 @@
 # description: Test allowed_configs setting together with lock_configuration
 # group: [settings]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SET allowed_configs=['lock_configuration']
 ----

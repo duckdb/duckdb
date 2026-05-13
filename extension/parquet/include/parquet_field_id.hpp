@@ -1,11 +1,24 @@
 #pragma once
 
+#include <stdint.h>
+#include <string>
+#include <unordered_set>
+
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
 struct FieldID;
+class Deserializer;
+class Serializer;
+
 struct ChildFieldIDs {
 	ChildFieldIDs();
 	ChildFieldIDs Copy() const;

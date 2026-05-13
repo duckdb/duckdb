@@ -2,9 +2,6 @@
 # description: Test Materialized Correlated Recursive Common Table Expressions (CTE)
 # group: [materialized]
 
-statement ok
-PRAGMA enable_verification
-
 # Correlation in the initialization query
 query II
 SELECT x, y

@@ -118,25 +118,25 @@ int mk_w_promotion(void *info_arr, ds_key_t index) {
 
 	void *info = append_info_get(info_arr, PROMOTION);
 	append_row_start(info);
-	append_key(info, r->p_promo_sk);
-	append_varchar(info, r->p_promo_id);
-	append_key(info, r->p_start_date_id);
-	append_key(info, r->p_end_date_id);
-	append_key(info, r->p_item_sk);
-	append_decimal(info, &r->p_cost);
-	append_integer(info, r->p_response_target);
-	append_varchar(info, &r->p_promo_name[0]);
-	append_varchar(info, r->p_channel_dmail ? "Y" : "N");
-	append_varchar(info, r->p_channel_email ? "Y" : "N");
-	append_varchar(info, r->p_channel_catalog ? "Y" : "N");
-	append_varchar(info, r->p_channel_tv ? "Y" : "N");
-	append_varchar(info, r->p_channel_radio ? "Y" : "N");
-	append_varchar(info, r->p_channel_press ? "Y" : "N");
-	append_varchar(info, r->p_channel_event ? "Y" : "N");
-	append_varchar(info, r->p_channel_demo ? "Y" : "N");
-	append_varchar(info, &r->p_channel_details[0]);
-	append_varchar(info, r->p_purpose);
-	append_varchar(info, r->p_discount_active ? "Y" : "N");
+	append_key(info, r->p_promo_sk, P_PROMO_SK);
+	append_varchar(info, r->p_promo_id, P_PROMO_ID);
+	append_key(info, r->p_start_date_id, P_START_DATE_ID);
+	append_key(info, r->p_end_date_id, P_END_DATE_ID);
+	append_key(info, r->p_item_sk, P_ITEM_SK);
+	append_decimal(info, &r->p_cost, P_COST);
+	append_integer(info, r->p_response_target, P_RESPONSE_TARGET);
+	append_varchar(info, &r->p_promo_name[0], P_PROMO_NAME);
+	append_varchar(info, r->p_channel_dmail ? "Y" : "N", P_CHANNEL_DMAIL);
+	append_varchar(info, r->p_channel_email ? "Y" : "N", P_CHANNEL_EMAIL);
+	append_varchar(info, r->p_channel_catalog ? "Y" : "N", P_CHANNEL_CATALOG);
+	append_varchar(info, r->p_channel_tv ? "Y" : "N", P_CHANNEL_TV);
+	append_varchar(info, r->p_channel_radio ? "Y" : "N", P_CHANNEL_RADIO);
+	append_varchar(info, r->p_channel_press ? "Y" : "N", P_CHANNEL_PRESS);
+	append_varchar(info, r->p_channel_event ? "Y" : "N", P_CHANNEL_EVENT);
+	append_varchar(info, r->p_channel_demo ? "Y" : "N", P_CHANNEL_DEMO);
+	append_varchar(info, &r->p_channel_details[0], P_CHANNEL_DETAILS);
+	append_varchar(info, r->p_purpose, P_PURPOSE);
+	append_varchar(info, r->p_discount_active ? "Y" : "N", P_DISCOUNT_ACTIVE);
 
 	append_row_end(info);
 

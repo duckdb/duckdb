@@ -179,7 +179,7 @@ constexpr T ClampValue(T v, T min, T max) {
 
 template <typename T>
 T AbsValue(T a) {
-	return a < 0 ? -a : a;
+	return a < 0 ? static_cast<T>(-a) : a;
 }
 
 //! Align value (ceiling) (not for pointer types)
@@ -248,14 +248,16 @@ template<typename T>
 using const_reference = std::reference_wrapper<const T>;
 
 //! Returns whether or not two reference wrappers refer to the same object
-template<class T>
-bool RefersToSameObject(const reference<T> &a, const reference<T> &b) {
-	return &a.get() == &b.get();
+template<class T, class U>
+bool RefersToSameObject(const reference<T> &a, const reference<U> &b) {
+	return RefersToSameObject(a.get(), b.get());
 }
 
-template<class T>
-bool RefersToSameObject(const T &a, const T &b) {
-	return &a == &b;
+template<class T, class U>
+bool RefersToSameObject(const T &a, const U &b) {
+	static_assert(std::is_same_v<T, U> || std::is_base_of_v<T, U> || std::is_base_of_v<U, T>,
+	              "RefersToSameObject requires T and U to be related by inheritance");
+	return static_cast<const void *>(&a) == static_cast<const void *>(&b);
 }
 
 template<class T, class SRC>

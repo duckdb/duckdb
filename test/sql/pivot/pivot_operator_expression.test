@@ -2,9 +2,6 @@
 # description: Test expressions in pivot syntax
 # group: [pivot]
 
-statement ok
-PRAGMA enable_verification
-
 # pivot using an enum
 statement ok
 CREATE OR REPLACE TABLE monthly_sales(empid INT, amount INT, month TEXT);

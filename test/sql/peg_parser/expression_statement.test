@@ -2,11 +2,6 @@
 # description: Test expression statement
 # group: [peg_parser]
 
-require autocomplete
-
-statement ok 
-call enable_peg_parser();
-
 query I
 1 + 1; 
 ----

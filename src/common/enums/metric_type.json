@@ -1,7 +1,7 @@
 [
   {
     "group": "core",
-    "description": "core metrics",
+    "description": "Core metrics",
     "metrics": [
       {
         "name": "CPU_TIME",
@@ -84,7 +84,7 @@
   },
   {
     "group": "execution",
-    "description": "metrics that are collected during query execution",
+    "description": "Metrics that are collected during query execution",
     "metrics": [
       {
         "name": "BLOCKED_THREAD_TIME",
@@ -125,7 +125,7 @@
   },
   {
     "group": "file",
-    "description": "metrics that are collected during file operations",
+    "description": "Metrics that are collected during file operations",
     "metrics": [
       {
         "name": "ATTACH_LOAD_STORAGE_LATENCY",
@@ -221,12 +221,13 @@
   },
   {
     "group": "phase_timing",
-    "description": "",
+    "description": "This group contains metrics related to the planner and the physical planner. The planner is responsible for generating the logical plan, whereas the physical planner is responsible for generating the physical plan from the logical plan.",
     "metrics": [
       {
         "name": "ALL_OPTIMIZERS",
         "enum_value": 18,
-        "description": "Enables all optimizers"
+        "description": "Enables all optimizers",
+        "query_root": true
       },
       {
         "name": "CUMULATIVE_OPTIMIZER_TIMING",
@@ -234,6 +235,7 @@
         "description": "Time spent in all optimizers",
         "type": "double",
         "unit": "milliseconds",
+        "query_root": true,
         "collection_method": "cumulative_operators"
       },
       {
@@ -241,35 +243,40 @@
         "enum_value": 22,
         "description": "The time spent generating the physical plan",
         "type": "double",
-        "unit": "milliseconds"
+        "unit": "milliseconds",
+        "query_root": true
       },
       {
         "name": "PHYSICAL_PLANNER_COLUMN_BINDING",
         "enum_value": 23,
         "description": "The time spent binding the columns in the logical plan to physical columns",
         "type": "double",
-        "unit": "milliseconds"
+        "unit": "milliseconds",
+        "query_root": true
       },
       {
         "name": "PHYSICAL_PLANNER_CREATE_PLAN",
         "enum_value": 25,
         "description": "The time spent creating the physical plan",
         "type": "double",
-        "unit": "milliseconds"
+        "unit": "milliseconds",
+        "query_root": true
       },
       {
         "name": "PHYSICAL_PLANNER_RESOLVE_TYPES",
         "enum_value": 24,
         "description": "The time spent resolving the types in the logical plan to physical types",
         "type": "double",
-        "unit": "milliseconds"
+        "unit": "milliseconds",
+        "query_root": true
       },
       {
         "name": "PLANNER",
         "enum_value": 20,
         "description": "The time to generate the logical plan from the parsed SQL nodes.",
         "type": "double",
-        "unit": "milliseconds"
+        "unit": "milliseconds",
+        "query_root": true
       },
       {
         "name": "PARSER",
@@ -283,13 +290,14 @@
         "enum_value": 21,
         "description": "The time taken to bind the logical plan.",
         "type": "double",
-        "unit": "milliseconds"
+        "unit": "milliseconds",
+        "query_root": true
       }
     ]
   },
   {
     "group": "operator",
-    "description": "metrics that are collected for each operator",
+    "description": "Metrics that are collected for each operator",
     "metrics": [
       {
         "name": "OPERATOR_CARDINALITY",
@@ -333,7 +341,7 @@
   },
   {
     "group": "optimizer",
-    "description": "metrics that are collected for each optimizer",
+    "description": "Metrics that are collected for each optimizer",
     "generated": true,
     "metrics": []
   }

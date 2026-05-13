@@ -1,0 +1,9 @@
+# name: test/sql/aggregate/aggregates/duckdb_fuzzer_4313.test
+# description: Test is_histogram_other_bin with NULL values
+# group: [aggregates]
+
+query I
+SELECT is_histogram_other_bin(x::BIGINT) FROM(VALUES(1), (NULL)) t(x);
+----
+false
+NULL

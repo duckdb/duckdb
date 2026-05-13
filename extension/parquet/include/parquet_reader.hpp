@@ -8,6 +8,13 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <exception>
+#include <atomic>
+#include <memory>
+#include <string>
+#include <utility>
+
 #include "duckdb.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
@@ -16,6 +23,7 @@
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_adaptive_filter_cache.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -25,10 +33,36 @@
 #include "parquet_types.h"
 #include "resizable_buffer.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/parallel/async_result.hpp"
+#include "parquet_column_schema.hpp"
+#include "thrift/protocol/TProtocol.h"
 
-#include <exception>
+namespace duckdb_apache {
+namespace thrift {
+class TBase;
+} // namespace thrift
+} // namespace duckdb_apache
 
 namespace duckdb_parquet {
+class EncryptionAlgorithm;
+class FileMetaData;
+class RowGroup;
+class SchemaElement;
+
 namespace format {
 class FileMetaData;
 }
@@ -41,6 +75,17 @@ class BaseStatistics;
 class TableFilterSet;
 class ParquetEncryptionConfig;
 class ParquetReader;
+class DataChunk;
+class Deserializer;
+class EncryptionUtil;
+class PhysicalOperator;
+class Serializer;
+class TableFilter;
+struct CryptoMetaData;
+struct GlobalTableFunctionState;
+struct LocalTableFunctionState;
+struct PartitionStatistics;
+struct TableFilterState;
 
 struct ParquetReaderPrefetchConfig {
 	// Percentage of data in a row group span that should be scanned for enabling whole group prefetch
@@ -58,12 +103,16 @@ struct ParquetScanFilter {
 };
 
 struct ParquetReaderScanState {
+public:
+	ColumnReader &GetColumnReader(idx_t i);
+
+public:
 	vector<idx_t> group_idx_list;
 	int64_t current_group;
 	idx_t offset_in_group;
 	idx_t group_offset;
 	unique_ptr<CachingFileHandle> file_handle;
-	unique_ptr<ColumnReader> root_reader;
+	vector<unique_ptr<ColumnReader>> column_readers;
 	duckdb_base_std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
 
 	bool finished;
@@ -75,8 +124,8 @@ struct ParquetReaderScanState {
 	bool prefetch_mode = false;
 	bool current_group_prefetched = false;
 
-	//! Adaptive filter
-	unique_ptr<AdaptiveFilter> adaptive_filter;
+	//! Per-thread adaptive filter cache
+	MultiFileAdaptiveFilterCache adaptive_filter_cache;
 	//! Table filter list
 	vector<ParquetScanFilter> scan_filters;
 
@@ -229,8 +278,7 @@ private:
 	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,
 	                                         idx_t &next_file_idx, ClientContext &context);
 
-	unique_ptr<ColumnReader> CreateReader(ClientContext &context) const;
-	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const vector<ColumnIndex> &indexes,
+	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const ColumnIndex &index,
 	                                               const ParquetColumnSchema &schema) const;
 	const duckdb_parquet::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);

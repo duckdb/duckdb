@@ -3,42 +3,66 @@
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from typing import TextIO
 
-PULL_REQUEST_JOBS = [
-    "linux-debug",
-    "linux-debug-tests",
-    "regression",
+COMMON_JOBS = [
+    "linux-relassert",
+    "linux-relassert-tests",
     "tidy-check",
     "extensions",
     "wasm-eh",
     "linux-release",
+    "linux-release-tests",
     "linux-release-cli",
     "linux-musl-release-cli",
-    "upload-libduckdb-src",
     "swift",
     "windows",
     "no-string-inline",
     "vector-sizes",
     "threadsan",
-    "amalgamation-tests",
     "linux-configs",
+    "static-libs-linux",
 ]
+
+PULL_REQUEST_ONLY_JOBS = [
+    "regression",
+]
+
+PULL_REQUEST_JOBS = COMMON_JOBS + PULL_REQUEST_ONLY_JOBS
 
 NIGHTLY_ONLY_JOBS = [
     "main_julia",
     "valgrind",
+    "static-libs-osx",
+    "static-libs-windows-mingw",
 ]
 
-NIGHTLY_JOBS = PULL_REQUEST_JOBS + NIGHTLY_ONLY_JOBS
+NIGHTLY_JOBS = COMMON_JOBS + NIGHTLY_ONLY_JOBS
 
 MERGE_GROUP_JOBS = [
-    "linux-debug",
+    "linux-relassert",
     "linux-release",
+    "linux-release-tests",
     "tidy-check",
 ]
+
+RELEASE_JOBS = [
+    "osx",
+    "static-libs-linux",
+    "static-libs-osx",
+    "static-libs-windows-mingw",
+]
+
+SKIP_TESTS_JOBS = {
+    "linux-relassert-tests",
+    "regression",
+    "swift",
+    "linux-configs",
+    "linux-release-tests",
+}
 
 PREPARE_JOBS = [
     "prepare",
@@ -48,7 +72,13 @@ SUMMARY_JOBS = [
     "summary",
 ]
 
-ALL_JOBS = set(PREPARE_JOBS) | set(PULL_REQUEST_JOBS) | set(NIGHTLY_JOBS) | set(MERGE_GROUP_JOBS) | set(SUMMARY_JOBS)
+ALL_JOBS = set(PREPARE_JOBS)
+ALL_JOBS |= set(PULL_REQUEST_JOBS)
+ALL_JOBS |= set(NIGHTLY_JOBS)
+ALL_JOBS |= set(MERGE_GROUP_JOBS)
+ALL_JOBS |= set(SUMMARY_JOBS)
+ALL_JOBS |= set(RELEASE_JOBS)
+SELECTABLE_JOBS = ALL_JOBS - set(SUMMARY_JOBS)
 
 
 @dataclass(frozen=True)
@@ -57,28 +87,70 @@ class JobSelection:
     save_cache: bool
 
 
-def should_save_cache(event_name: str, ref_name: str, repository: str) -> bool:
+@dataclass(frozen=True)
+class JobSelectionInput:
+    event_name: str
+    ref_name: str
+    repository: str
+    skip_tests: bool
+    changed_keys: set[str]
+
+
+def should_save_cache(selection_input: JobSelectionInput) -> bool:
     return (
-        repository != "duckdb/duckdb"
-        or ref_name == "main"
-        or ref_name == "v1.5-variegata"
-        or (event_name == "push" and ref_name.startswith("gh-readonly-queue/"))
+        selection_input.repository != "duckdb/duckdb"
+        or selection_input.ref_name == "main"
+        or selection_input.ref_name == "v1.5-variegata"
+        or selection_input.event_name == "merge_group"
     )
 
 
-def enabled_jobs(event_name: str, ref_name: str) -> list[str]:
-    if event_name == "push" and ref_name.startswith("gh-readonly-queue/"):
-        return MERGE_GROUP_JOBS.copy()
+def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:
+    if selection_input.event_name == "merge_group":
+        selected_jobs = MERGE_GROUP_JOBS.copy()
+    elif selection_input.ref_name == "main":
+        selected_jobs = NIGHTLY_JOBS.copy()
+    else:
+        selected_jobs = PULL_REQUEST_JOBS.copy()
 
-    if ref_name == "main":
-        return NIGHTLY_JOBS.copy()
-    return PULL_REQUEST_JOBS.copy()
+    if selection_input.skip_tests:
+        selected_jobs = [job for job in selected_jobs if job not in SKIP_TESTS_JOBS]
+
+    if "julia" in selection_input.changed_keys or "capi" in selection_input.changed_keys:
+        selected_jobs.append("main_julia")
+
+    if selection_input.event_name in {"workflow_dispatch", "repository_dispatch"}:
+        selected_jobs.extend(RELEASE_JOBS)
+
+    override = parse_job_selection_override(os.getenv("OVERRIDE_JOBS"))
+    if override is not None:
+        return override
+
+    return selected_jobs
 
 
-def compute_job_selection(event_name: str, ref_name: str, repository: str) -> JobSelection:
+def parse_job_selection_override(value: str | None) -> list[str] | None:
+    if value is None:
+        return None
+    parsed_jobs = [token for token in re.split(r"[\s,]+", value.strip()) if token]
+    if not parsed_jobs:
+        return PREPARE_JOBS.copy()
+
+    invalid_jobs = sorted(set(parsed_jobs) - SELECTABLE_JOBS)
+    if invalid_jobs:
+        raise ValueError(f"invalid jobs in OVERRIDE_JOBS: {', '.join(invalid_jobs)}")
+
+    seen: set[str] = set()
+    deduplicated = [job for job in parsed_jobs if not (job in seen or seen.add(job))]
+    if "prepare" not in seen:
+        deduplicated = PREPARE_JOBS + deduplicated
+    return deduplicated
+
+
+def compute_job_selection(selection_input: JobSelectionInput) -> JobSelection:
     return JobSelection(
-        enabled_jobs=enabled_jobs(event_name, ref_name),
-        save_cache=should_save_cache(event_name, ref_name, repository),
+        enabled_jobs=enabled_jobs(selection_input),
+        save_cache=should_save_cache(selection_input),
     )
 
 
@@ -92,12 +164,36 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--event", dest="event_name", required=True)
     parser.add_argument("--ref_name", required=True)
     parser.add_argument("--repository", default="duckdb/duckdb")
+    parser.add_argument("--skip-tests", default="false")
+    parser.add_argument("--changed-keys", default="")
     return parser.parse_args()
+
+
+def parse_bool(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off", ""}:
+        return False
+    raise ValueError(f"invalid boolean value: {value!r}")
+
+
+def parse_changed_keys(value: str) -> set[str]:
+    # changed-files may emit keys separated by spaces/newlines, and can be configured
+    # to use commas. Support both delimiters defensively.
+    return {token.lower() for token in re.split(r"[\s,]+", value.strip()) if token}
 
 
 def main() -> int:
     args = parse_args()
-    selection = compute_job_selection(args.event_name, args.ref_name, args.repository)
+    selection_input = JobSelectionInput(
+        event_name=args.event_name,
+        ref_name=args.ref_name,
+        repository=args.repository,
+        skip_tests=parse_bool(args.skip_tests),
+        changed_keys=parse_changed_keys(args.changed_keys),
+    )
+    selection = compute_job_selection(selection_input)
 
     # Emit to stderr so helper output stays visible in CI logs without polluting stdout pipelines.
     write_outputs(selection, sys.stderr)

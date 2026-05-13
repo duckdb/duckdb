@@ -31,6 +31,7 @@ end
 function my_main_function_print(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
     bind_info = DuckDB.get_bind_info(info, MyBindStruct)
     init_info = DuckDB.get_init_info(info, MyInitStruct)
+    io = IOBuffer()
 
     result_array = DuckDB.get_array(output, 1, Int64)
     count = 0
@@ -39,8 +40,8 @@ function my_main_function_print(info::DuckDB.FunctionInfo, output::DuckDB.DataCh
             break
         end
         result_array[count + 1] = init_info.pos % 2 == 0 ? 42 : 84
-        # We print within the table function to test behavior with synchronous API calls in Julia table functions
-        println(result_array[count + 1])
+        # Exercise synchronous API calls with Julia-side IO without spamming CI logs.
+        println(io, result_array[count + 1])
         count += 1
         init_info.pos += 1
     end

@@ -12,7 +12,7 @@ statement ok
 CALL dbgen(sf=0.001);
 
 statement ok
-PRAGMA verify_external;
+SET debug_force_external=true;
 
 statement ok
 SELECT quantile_disc(0.1::decimal(4,1), [0.1, 0.5, 0.9]);

@@ -2,9 +2,6 @@
 # description: Test IGNORE NULLS window syntax
 # group: [window]
 
-statement ok
-PRAGMA enable_verification
-
 # Issue #2549
 statement ok
 CREATE TABLE issue2549 AS SELECT * FROM (VALUES
@@ -350,5 +347,12 @@ SELECT SUM(x {modifier} NULLS) OVER (PARTITION BY (x / 3) ORDER BY x % 3)
 FROM range(10) tbl(x)
 ----
 Binder Error: RESPECT/IGNORE NULLS is not supported for windowed aggregates
+
+# Windowed fill
+statement error
+SELECT FILL(x {modifier} NULLS) OVER (PARTITION BY (x / 3) ORDER BY x % 3)
+FROM range(10) tbl(x)
+----
+Binder Error: RESPECT/IGNORE NULLS is not supported for the window function "fill"
 
 endloop

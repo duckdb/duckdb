@@ -1,0 +1,13 @@
+diff --git a/src/hnsw/hnsw_optimize_topk.cpp b/src/hnsw/hnsw_optimize_topk.cpp
+index 5e3a4b8..5d16215 100644
+--- a/src/hnsw/hnsw_optimize_topk.cpp
++++ b/src/hnsw/hnsw_optimize_topk.cpp
+@@ -36,7 +36,7 @@ static unique_ptr<Expression> CreateListOrderByExpr(ClientContext &context, uniq
+ 	vector<unique_ptr<Expression>> arguments;
+ 	arguments.push_back(std::move(elem_expr));
+ 
+-	auto agg_bind_data = func.bind(context, func, arguments);
++	auto agg_bind_data = func.Bind(context, arguments);
+ 	auto new_agg_expr =
+ 	    make_uniq<BoundAggregateExpression>(func, std::move(arguments), std::move(std::move(filter_expr)),
+ 	                                        std::move(agg_bind_data), AggregateType::NON_DISTINCT);

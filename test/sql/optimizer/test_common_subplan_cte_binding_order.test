@@ -1,0 +1,68 @@
+# name: test/sql/optimizer/test_common_subplan_cte_binding_order.test
+# description: Materialized common subplans keep the same projected shape as their CTE refs
+# group: [optimizer]
+
+statement ok
+CREATE TABLE orders (id INT, amount INT, status VARCHAR, created_at TIMESTAMP);
+
+statement ok
+CREATE TABLE line_items (id INT, order_id INT, sku VARCHAR, extracted_at TIMESTAMP);
+
+statement ok
+INSERT INTO orders VALUES
+	(1, 50, 'paid', '2025-01-01'),
+	(2, 75, 'paid', '2025-01-02'),
+	(3, 30, 'refunded', '2025-01-03');
+
+statement ok
+INSERT INTO line_items VALUES
+	(1, 1, 'WIDGET', '2025-01-01'),
+	(2, 2, 'GADGET', '2025-01-02'),
+	(3, 3, 'WIDGET', '2025-01-03');
+
+statement ok
+CREATE VIEW orders_deduped AS
+	SELECT id, amount, status
+	FROM orders
+	QUALIFY row_number() OVER (PARTITION BY id ORDER BY created_at DESC) = 1;
+
+statement ok
+CREATE VIEW line_items_deduped AS
+	SELECT order_id, sku
+	FROM line_items
+	QUALIFY row_number() OVER (PARTITION BY id ORDER BY extracted_at DESC) = 1;
+
+statement ok
+CREATE VIEW order_lifecycle AS
+	WITH sku_agg AS (
+		SELECT order_id, sum(CASE WHEN sku = 'WIDGET' THEN 1 ELSE 0 END) AS widget_count
+		FROM line_items_deduped
+		GROUP BY order_id
+	)
+	SELECT
+		o.amount,
+		CASE WHEN COALESCE(s.widget_count, 0) > 0 THEN 'widget_order' ELSE 'other' END AS order_type,
+		(o.status != 'refunded') AS is_net_order
+	FROM orders_deduped o
+	LEFT JOIN sku_agg s ON o.id = s.order_id;
+
+query TTTT
+WITH survey_daily AS (
+	SELECT order_type, count(*) AS responses, sum(amount) AS revenue
+	FROM (SELECT amount, order_type FROM order_lifecycle) survey_results
+	GROUP BY order_type
+),
+daily_totals AS (
+	SELECT count(*) AS total_orders
+	FROM order_lifecycle
+	WHERE is_net_order
+)
+SELECT order_type, responses::VARCHAR, revenue::VARCHAR, total_orders::VARCHAR
+FROM (
+	SELECT s.order_type, s.responses, s.revenue, dt.total_orders
+	FROM survey_daily s, daily_totals dt
+) result
+ORDER BY order_type;
+----
+other	1	75	2
+widget_order	2	80	2

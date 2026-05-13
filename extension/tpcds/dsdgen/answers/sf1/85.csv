@@ -1,2 +1,7 @@
-substring|avg1|avg2|avg
-Did not like the col|94.0000000000000000|3078.9800000000000000|92.9700000000000000
+main."substring"(r_reason_desc, 1, 20)|avg1|avg2|avg(wr_fee)
+Did not get it on ti|27.5|520.405|21.615
+No service location |76.0|464.36|8.62
+Not working any more|7.0|129.42|38.65
+Parts missing|9.0|15.3|52.18
+reason 55|1.0|82.58|54.11
+reason 64|70.0|876.67|46.67

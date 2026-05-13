@@ -136,7 +136,7 @@ public:
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 
 		handle = buffer_manager.Pin(segment.block);
-		auto dataptr = handle.Ptr();
+		auto dataptr = handle.GetDataMutable();
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
 		auto start_of_data_segment = dataptr + segment.GetBlockOffset() + ChimpPrimitives::HEADER_SIZE;

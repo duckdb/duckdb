@@ -7,7 +7,7 @@ require skip_reload
 statement error
 override
 ----
-Parser Error: syntax error at or near "override"
+Catalog Error: Table with name override does not exist!
 
 statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
@@ -17,11 +17,14 @@ set allow_parser_override_extension=doesnotexist;
 ----
 unrecognized value "doesnotexist" for enum "AllowParserOverride"
 
+statement ok
+set allow_parser_override_extension=default;
+
 # Default behavior is not using the parser override
 statement error
 override
 ----
-Parser Error: syntax error at or near "override"
+Catalog Error: Table with name override does not exist!
 
 # Fallback behavior is trying the parser override and if they error falling back to the default parser
 statement ok
@@ -37,8 +40,7 @@ The DuckDB parser has been overridden
 statement error
 overri
 ----
-Parser Error: syntax error at or near "overri"
-
+Catalog Error: Table with name overri does not exist!
 
 query I
 SELECT 1;
@@ -58,7 +60,7 @@ overri
 ----
 Parser Error: Parser overridden, query equaled "overri" but not "override"
 
-statement error
+query I
 SELECT 1;
 ----
-Not implemented Error: QuackParser has not yet implemented the statements to transform this query
+1

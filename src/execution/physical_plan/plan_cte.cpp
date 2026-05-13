@@ -27,6 +27,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMaterializedCTE &op) 
 	auto &cast_cte = cte.Cast<PhysicalCTE>();
 	cast_cte.working_table = working_table;
 	cast_cte.cte_scans = materialized_ctes[op.table_index];
+	cast_cte.cte_body_is_dml = op.children[0]->HasSideEffects();
 	return cte;
 }
 

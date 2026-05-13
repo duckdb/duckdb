@@ -11,6 +11,7 @@ class MetricDef:
     name: str
     group: str  # e.g., "file", "default", ...
     type: str  # e.g., "double", "uint64", "string", "map", "uint8"
+    unit: str  # e.g., "milliseconds", "absolute", "bytes
     query_root: bool = False
     is_default: bool = False
     collection_method: Optional[str] = None
@@ -25,8 +26,9 @@ class MetricIndex:
     OPTIMIZER_RANGE_START = 26
     OPTIMIZER_RANGE_END = 90
 
-    def __init__(self, defs: Iterable[MetricDef], optimizers: List[Tuple[str, int]]):
+    def __init__(self, defs: Iterable[MetricDef], optimizers: List[Tuple[str, int]], group_info: dict):
         self.defs: List[MetricDef] = list(defs)
+        self.group_info: dict = group_info
 
         # Build name -> explicit value mapping
         self._value_of: Dict[str, int] = {}
@@ -75,6 +77,22 @@ class MetricIndex:
                 )
             value_to_name[val] = name
 
+        # Add "optimizers" to defs with appropriate enum values and descriptions
+
+        for metric_name in optimizer_names:
+            self.defs.append(
+                MetricDef(
+                    name=metric_name,
+                    group="optimizer",
+                    type="double",
+                    unit="seconds",
+                    is_default=False,
+                    query_root=True,
+                    description=f"Time spent in {metric_name}",
+                    enum_value=self._value_of.get(metric_name),
+                )
+            )
+
         # Add "all"
         all_set = set().union(*by_group.values()) if by_group else set()
         by_group["all"] = sorted(all_set)
@@ -119,6 +137,12 @@ class MetricIndex:
 
     def all_metrics(self) -> List[str]:
         return self.metrics_by_group["all"]
+
+    def group_names(self) -> List[str]:
+        return self.group_names
+
+    def group_description(self, group_name) -> str:
+        return self.group_info[group_name]
 
     def metrics_per_group(self, group: str) -> List[str]:
         return self.metrics_by_group[group]
@@ -166,12 +190,16 @@ class MetricIndex:
 
 def build_all_metrics(metrics_json: list[dict], optimizers: list[tuple[str, int]]) -> MetricIndex:
     defs: list[MetricDef] = []
+    group_info: dict = {}
     for group in metrics_json:
-        gname = group.get("group")
+        g_name = group.get("group")
+        g_description = group.get("description", "")
+        group_info[g_name] = g_description
         for metric in group.get("metrics", []):
             name = metric["name"]
-            validate_identifier(name, gname)
+            validate_identifier(name, g_name)
             mtype = metric.get("type", "double")
+            munit = metric.get("unit", "--")
             is_default = metric.get("is_default", False)
             query_root = "query_root" in metric
             collection_method = metric.get("collection_method")
@@ -181,8 +209,9 @@ def build_all_metrics(metrics_json: list[dict], optimizers: list[tuple[str, int]
             defs.append(
                 MetricDef(
                     name=name,
-                    group=gname,
+                    group=g_name,
                     type=mtype if name != "OPERATOR_TYPE" else "uint8",
+                    unit=munit,
                     is_default=is_default,
                     query_root=query_root,
                     collection_method=collection_method,
@@ -191,4 +220,4 @@ def build_all_metrics(metrics_json: list[dict], optimizers: list[tuple[str, int]
                     enum_value=enum_value,
                 )
             )
-    return MetricIndex(defs, optimizers)
+    return MetricIndex(defs, optimizers, group_info)

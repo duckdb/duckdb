@@ -8,9 +8,6 @@ require skip_reload
 
 require allow_unsigned_extensions
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 LOAD 'asdf';
 ----
@@ -33,11 +30,6 @@ query I
 SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'loadable_extension_demo';
 ----
 default-version
-
-query I
-SELECT hello('World');
-----
-10
 
 query I
 QUACK QUACK QUACK

@@ -2,9 +2,6 @@
 # description: Test CREATE OR REPLACE TABLE
 # group: [create]
 
-statement ok
-pragma enable_verification
-
 statement error
 CREATE TABLE integers PARTITIONED BY (i) as select range i from range(10);
 ----

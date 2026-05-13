@@ -226,7 +226,7 @@ jobs:
 
       - uses: ./.github/actions/ccache-action
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         name: Download all extensions
         with:
           pattern: '{main-extensions*,rust-based-extensions*,external-extensions*}'
@@ -256,7 +256,7 @@ jobs:
           DUCKDB_DEPLOY_SCRIPT_MODE: for_real
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
-          python3 scripts/ci/retry.py -- pip install --break-system-packages awscli
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | sudo bash
           make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/repository_generation
 
       - name: Setup Build Environment
@@ -298,23 +298,39 @@ jobs:
           find build/release/repository -type f ! -path "build/release/repository/*/linux_amd64/*" -delete
           tree build/release/repository
 
+      # Disable downloading release because extension_entries.hpp check fails
+      # in CI because some extensions are not available.
+      - name: Download linux release artifact
+        if: ${{ false && !inputs.skip_tests }}
+        id: linux_release_artifact
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: linux-release-build
+          path: build
+
+      - name: Extract linux release artifact
+        if: ${{ steps.linux_release_artifact.outcome == 'success' }}
+        run: |
+          rm -rf build/release
+          tar -xzf build/release-artifact.tar.gz -C build
+
       - name: Install format tools
         if: ${{ !inputs.skip_tests }}
-        run: python3 scripts/ci/retry.py -- make format_tools
+        run: python3 scripts/ci/retry.py -- make -j4 format_tools
 
       - name: Check if extension_entries.hpp is up to date
         if: ${{ !inputs.skip_tests }}
+        id: check_extension_entries
         env:
           EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake'
         run: |
-          make extension_configuration
-          python scripts/generate_extensions_function.py
-          make format-fix
+          make check-extension-entries
 
-          if git diff --exit-code src/include/duckdb/main/extension_entries.hpp; then
-            echo "No differences found"
-          else
-            git --no-pager diff -- src/include/duckdb/main/extension_entries.hpp
-            echo "error: differences found in src/include/duckdb/main/extension_entries.hpp"
-            exit 1
-          fi
+      - name: Upload extension entries diff
+        if: ${{ always() && steps.check_extension_entries.outcome == 'failure' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: extension-entries-diff
+          path: extension_entries.hpp.diff
+          if-no-files-found: error

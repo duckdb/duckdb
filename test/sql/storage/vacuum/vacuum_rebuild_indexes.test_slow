@@ -1,0 +1,70 @@
+# name: test/sql/storage/vacuum/vacuum_rebuild_indexes.test_slow
+# description: Test that vacuum correctly rebuilds indexes when empty row groups are dropped
+# group: [vacuum]
+
+require vacuum_rebuild_indexes
+
+load {TEST_DIR}/vacuum_rebuild_indexes.db
+
+statement ok
+SET wal_autocheckpoint='100GB'
+
+statement ok
+CREATE TABLE t(i INTEGER);
+
+statement ok
+CREATE INDEX idx ON t(i);
+
+# insert enough rows for 2 row groups (122880 rows each)
+statement ok
+INSERT INTO t SELECT i FROM range(245760) tbl(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t')
+----
+2
+
+# delete all rows in the first row group
+statement ok
+DELETE FROM t WHERE i < 122880
+
+statement ok
+CHECKPOINT
+
+# the empty first row group is dropped, shifting row IDs of the second group
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('t')
+----
+1
+
+# verify index scan is used after rebuild
+query II
+EXPLAIN ANALYZE SELECT i, rowid FROM t WHERE i = 122880
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# verify index lookups return correct row IDs after shift
+# RG0 dropped, RG1 shifts to rowid 0
+query II
+SELECT i, rowid FROM t WHERE i = 122880
+----
+122880	0
+
+query II
+SELECT i, rowid FROM t WHERE i = 245759
+----
+245759	122879
+
+query I
+SELECT COUNT(*) FROM t
+----
+122880
+
+# verify that the setting cannot be changed while the database is running
+statement error
+SET vacuum_rebuild_indexes = 100
+----
+Cannot change vacuum_rebuild_indexes setting while database is running

@@ -33,8 +33,9 @@ void UnionValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	ConstantVector::GetData<union_tag_t>(tag_vector)[0] = 0;
 }
 
-unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFunction &bound_function,
-                                        vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> UnionValueBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.size() != 1) {
 		throw BinderException("union_value takes exactly one argument");
 	}
@@ -46,7 +47,7 @@ unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFunction &
 
 	child_list_t<LogicalType> union_members;
 
-	union_members.push_back(make_pair(child->GetAlias(), child->return_type));
+	union_members.push_back(make_pair(child->GetAlias(), child->GetReturnType()));
 
 	bound_function.SetReturnType(LogicalType::UNION(std::move(union_members)));
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
@@ -56,7 +57,7 @@ unique_ptr<FunctionData> UnionValueBind(ClientContext &context, ScalarFunction &
 
 ScalarFunction UnionValueFun::GetFunction() {
 	ScalarFunction fun("union_value", {}, LogicalTypeId::UNION, UnionValueFunction, UnionValueBind, nullptr, nullptr);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);

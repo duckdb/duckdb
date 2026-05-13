@@ -1,8 +1,26 @@
 #include "reader/row_number_column_reader.hpp"
+
 #include "parquet_reader.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "parquet_types.h"
+
+namespace duckdb_apache {
+namespace thrift {
+namespace protocol {
+class TProtocol;
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
 
 namespace duckdb {
+class TableFilter;
+class Vector;
+struct ParquetColumnSchema;
+struct SelectionVector;
+struct TableFilterState;
 
 //===--------------------------------------------------------------------===//
 // Row NumberColumn Reader
@@ -20,10 +38,12 @@ void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<C
 	}
 }
 
-void RowNumberColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out,
-                                   Vector &result_out, const TableFilter &filter, TableFilterState &filter_state,
-                                   SelectionVector &sel, idx_t &approved_tuple_count, bool is_first_filter) {
+void RowNumberColumnReader::Filter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
+                                   TableFilterState &filter_state, SelectionVector &sel, idx_t &approved_tuple_count,
+                                   bool is_first_filter) {
 	// check the row id stats if this filter has any chance of passing
+
+	auto &num_values = input.num_values;
 	auto prune_result = RowGroup::CheckRowIdFilter(filter, row_group_offset, row_group_offset + num_values);
 	if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 		// filter is always false - don't read anything
@@ -31,14 +51,15 @@ void RowNumberColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, d
 		Skip(num_values);
 		return;
 	}
-	ColumnReader::Filter(num_values, define_out, repeat_out, result_out, filter, filter_state, sel,
-	                     approved_tuple_count, is_first_filter);
+	ColumnReader::Filter(input, result, filter, filter_state, sel, approved_tuple_count, is_first_filter);
 }
 
-idx_t RowNumberColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
-	auto data_ptr = FlatVector::GetDataMutable<int64_t>(result);
+idx_t RowNumberColumnReader::Read(ColumnReaderInput &input, Vector &result) {
+	auto &num_values = input.num_values;
+
+	auto data_ptr = FlatVector::Writer<int64_t>(result, num_values);
 	for (idx_t i = 0; i < num_values; i++) {
-		data_ptr[i] = UnsafeNumericCast<int64_t>(row_group_offset++);
+		data_ptr.WriteValue(UnsafeNumericCast<int64_t>(row_group_offset++));
 	}
 	return num_values;
 }

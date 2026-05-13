@@ -37,6 +37,7 @@ struct VertexXY {
 	static constexpr auto HAS_Z = false;
 	static constexpr auto HAS_M = false;
 	static constexpr auto WIDTH = 2;
+	using STRUCT_TYPE = VectorStructType<double, double>;
 
 	double x;
 	double y;
@@ -51,6 +52,7 @@ struct VertexXYZ {
 	static constexpr auto HAS_Z = true;
 	static constexpr auto HAS_M = false;
 	static constexpr auto WIDTH = 3;
+	using STRUCT_TYPE = VectorStructType<double, double, double>;
 
 	double x;
 	double y;
@@ -65,6 +67,7 @@ struct VertexXYM {
 	static constexpr auto HAS_M = true;
 	static constexpr auto HAS_Z = false;
 	static constexpr auto WIDTH = 3;
+	using STRUCT_TYPE = VectorStructType<double, double, double>;
 
 	double x;
 	double y;
@@ -80,6 +83,7 @@ struct VertexXYZM {
 	static constexpr auto HAS_Z = true;
 	static constexpr auto HAS_M = true;
 	static constexpr auto WIDTH = 4;
+	using STRUCT_TYPE = VectorStructType<double, double, double, double>;
 
 	double x;
 	double y;
@@ -251,7 +255,9 @@ public:
 	static LogicalType GetSpatialGeometryType();
 
 	//! Convert from WKT
-	DUCKDB_API static bool FromString(const string_t &wkt_text, string_t &result, StringHeap &heap, bool strict);
+	DUCKDB_API static bool FromString(const string_t &wkt_text, string_t &result, StringHeap &heap, bool strict,
+	                                  optional_idx query_location);
+	DUCKDB_API static bool FromString(const string_t &wkt_text, string_t &result, Vector &result_vector, bool strict);
 
 	//! Convert to WKT
 	DUCKDB_API static string_t ToString(StringHeap &heap, const string_t &geom);

@@ -2,9 +2,6 @@
 # description: NOW function
 # group: [timestamp]
 
-statement ok
-PRAGMA enable_verification
-
 # the NOW function should return the start time of the transaction
 # hence during a transaction it should not change
 statement ok
