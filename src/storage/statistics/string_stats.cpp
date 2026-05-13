@@ -20,8 +20,8 @@ BaseStatistics StringStats::CreateUnknown(LogicalType type) {
 	string_data.max_string_length = 0;
 	string_data.has_max_string_length = false;
 	string_data.has_unicode = true;
-	string_data.min_type = StringStatsType::EMPTY_STATS;
-	string_data.max_type = StringStatsType::EMPTY_STATS;
+	string_data.min_type = StringStatsType::NO_STATS;
+	string_data.max_type = StringStatsType::NO_STATS;
 	return result;
 }
 
