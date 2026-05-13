@@ -146,6 +146,47 @@ require-env B: 1
         self.assertIn("require-env A: 3", proc.stdout)
         self.assertIn("require-env B: 1", proc.stdout)
 
+    def test_does_not_double_count_summary_when_in_stdout_and_stderr(self):
+        test_list_path = create_temp_file("test/sql/a.test\n")
+        skip_summary = """
+All tests passed (4 skipped tests, 100 assertions in 1 test cases)
+
+Skipped tests for the following reasons:
+require json: 3
+require-env FOO: 1
+"""
+        try:
+            with mock.patch(
+                "scripts.ci.run_tests.run_batch",
+                return_value={
+                    "failed": False,
+                    "stdout": skip_summary,
+                    "stderr": skip_summary,
+                    "message": None,
+                    "peak_rss_bytes": 0,
+                },
+            ):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("(4 skipped tests)", proc.stdout)
+        self.assertIn("require json: 3", proc.stdout)
+        self.assertIn("require-env FOO: 1", proc.stdout)
+
     def test_retry_only_counts_skips_from_successful_attempt(self):
         test_list_path = create_temp_file("test/sql/a.test\n")
         try:

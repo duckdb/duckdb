@@ -351,6 +351,20 @@ def parse_skipped_test_reasons(output: str):
     return reasons
 
 
+def extract_skipped_test_output(stdout: str, stderr: str):
+    stdout_count = parse_skipped_tests_count(stdout)
+    stdout_reasons = parse_skipped_test_reasons(stdout)
+    if stdout_count > 0 or stdout_reasons:
+        return stdout
+
+    stderr_count = parse_skipped_tests_count(stderr)
+    stderr_reasons = parse_skipped_test_reasons(stderr)
+    if stderr_count > 0 or stderr_reasons:
+        return stderr
+
+    return ""
+
+
 def run_batch(config: TestRunnerConfig, batch):
     failed = False
     stdout = ""
@@ -662,9 +676,9 @@ def run_tests(config: TestRunnerConfig, batches):
                     if handle_failed_batch(ctx, batch_info, result):
                         continue
                 else:
-                    combined_output = "\n".join([result["stdout"], result["stderr"]])
-                    total_skipped_tests += parse_skipped_tests_count(combined_output)
-                    for reason, count in parse_skipped_test_reasons(combined_output).items():
+                    skipped_output = extract_skipped_test_output(result["stdout"], result["stderr"])
+                    total_skipped_tests += parse_skipped_tests_count(skipped_output)
+                    for reason, count in parse_skipped_test_reasons(skipped_output).items():
                         skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
                 progress.advance(next_batch_idx - len(future_to_batch))
 
