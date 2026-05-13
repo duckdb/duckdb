@@ -267,12 +267,10 @@ public:
 	void RegisterCreateSequence();
 	void RegisterCreateTable();
 	void RegisterCreateType();
-	void RegisterCreateView();
 	void RegisterCreateTrigger();
 	void RegisterDelete();
 	void RegisterDescribe();
 	void RegisterDrop();
-	void RegisterExecute();
 	void RegisterExplain();
 	void RegisterExpression();
 	void RegisterInsert();

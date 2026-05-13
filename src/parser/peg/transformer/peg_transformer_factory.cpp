@@ -356,10 +356,6 @@ void PEGTransformerFactory::RegisterCreateType() {
 	REGISTER_TRANSFORM(TransformEnumStringLiteralList);
 }
 
-void PEGTransformerFactory::RegisterCreateView() {
-	REGISTER_TRANSFORM(TransformCreateViewStmt);
-}
-
 void PEGTransformerFactory::RegisterCreateTrigger() {
 	REGISTER_TRANSFORM(TransformCreateTriggerStmt);
 	REGISTER_TRANSFORM(TransformForEachClause);
@@ -415,11 +411,6 @@ void PEGTransformerFactory::RegisterDrop() {
 	REGISTER_TRANSFORM(TransformDropSecret);
 	REGISTER_TRANSFORM(TransformDropSecretStorage);
 	REGISTER_TRANSFORM(TransformDropTrigger);
-}
-
-void PEGTransformerFactory::RegisterExecute() {
-	// execute.gram
-	REGISTER_TRANSFORM(TransformExecuteStatement);
 }
 
 void PEGTransformerFactory::RegisterExplain() {
@@ -1046,12 +1037,10 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCreateSequence();
 	RegisterCreateTable();
 	RegisterCreateType();
-	RegisterCreateView();
 	RegisterCreateTrigger();
 	RegisterDelete();
 	RegisterDescribe();
 	RegisterDrop();
-	RegisterExecute();
 	RegisterExplain();
 	RegisterExpression();
 	RegisterInsert();
