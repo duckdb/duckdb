@@ -1,0 +1,129 @@
+# name: test/optimizer/partial_aggregate_pushdown.test
+# description: Test partial aggregate pushdown below joins
+# group: [optimizer]
+
+statement ok
+CREATE TABLE fact AS SELECT
+  i % 1000 AS dim_key,
+  (i * 17) % 100 AS measure
+FROM range(100000) _(i);
+
+statement ok
+CREATE TABLE dim AS SELECT
+  i AS dim_key,
+  'group_' || (i % 7)::VARCHAR AS group_label
+FROM range(1000) _(i);
+
+statement ok
+ANALYZE;
+
+# Baseline: result is correct without PAP.
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query I
+SELECT round(sum(measure)::DOUBLE) FROM fact JOIN dim USING (dim_key) WHERE group_label = 'group_3'
+----
+712140
+
+statement ok
+RESET disabled_optimizers
+
+# Result identical with PAP enabled.
+query I
+SELECT round(sum(measure)::DOUBLE) FROM fact JOIN dim USING (dim_key) WHERE group_label = 'group_3'
+----
+712140
+
+# The optimization fires for fact ⋈ dim ➜ GROUP BY dim attribute, with the
+# pre-aggregated state showing up as `finalize_combine_aggr` in the plan.
+query II
+EXPLAIN
+SELECT group_label, sum(measure)
+FROM fact JOIN dim USING (dim_key)
+GROUP BY group_label
+----
+physical_plan	<REGEX>:.*finalize_combine_aggr.*
+
+# ROLLUP across the same shape — verify all rollup levels survive after PAP.
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query I
+SELECT COUNT(*) FROM (
+  SELECT group_label, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY ROLLUP(group_label)
+)
+----
+8
+
+statement ok
+RESET disabled_optimizers
+
+query I
+SELECT COUNT(*) FROM (
+  SELECT group_label, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY ROLLUP(group_label)
+)
+----
+8
+
+# Numerically: ROLLUP grand total = sum of group totals.
+query I
+SELECT round(sum(s)::DOUBLE) FROM (
+  SELECT group_label, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY ROLLUP(group_label)
+)
+----
+9900000
+
+# COUNT_STAR is not pushable through this path — should not crash.
+query I
+SELECT count(*) FROM fact JOIN dim USING (dim_key) WHERE group_label = 'group_3'
+----
+14286
+
+# AVG with single grouping set: result is identical with or without PAP.
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query I
+SELECT round(sum(avg_m)::DOUBLE, 2) FROM (
+  SELECT group_label, avg(measure)::DOUBLE AS avg_m
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY group_label
+)
+----
+346.4
+
+statement ok
+RESET disabled_optimizers
+
+query I
+SELECT round(sum(avg_m)::DOUBLE, 2) FROM (
+  SELECT group_label, avg(measure)::DOUBLE AS avg_m
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY group_label
+)
+----
+346.4
+
+# Highly selective dimension filter — PAP should bail out (1/8 selectivity
+# guard), so plan should NOT contain finalize_combine_aggr.
+query II
+EXPLAIN
+SELECT group_label, sum(measure)
+FROM fact JOIN dim USING (dim_key)
+WHERE dim_key < 5
+GROUP BY group_label
+----
+physical_plan	<!REGEX>:.*finalize_combine_aggr.*
+
+# The optimizer is queryable.
+query I
+SELECT count(*) FROM duckdb_optimizers() WHERE name = 'partial_aggregate_pushdown'
+----
+1

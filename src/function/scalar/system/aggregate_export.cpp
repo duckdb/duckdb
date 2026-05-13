@@ -992,10 +992,9 @@ AggregateFunction CombineAggrFun::GetFunction() {
 }
 
 AggregateFunction FinalizeCombineAggregateFunction::GetFunction() {
-	auto function =
-	    AggregateFunction("finalize_combine_aggr", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID, nullptr,
-	                      nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize, nullptr, FinalizeCombineAggrBind,
-	                      nullptr, nullptr, nullptr);
+	auto function = AggregateFunction("finalize_combine_aggr", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID,
+	                                  nullptr, nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize, nullptr,
+	                                  FinalizeCombineAggrBind, nullptr, nullptr, nullptr);
 	function.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	return function;
 }

@@ -182,25 +182,42 @@ static ProjectionIndex FindOrAddColumn(LogicalGet &get, const ColumnIndex &colum
 	return result;
 }
 
+//! Minimum input cardinality for fusion to pay off on native tables.
+//! Below this threshold the hot-cache regression that closed duckdb#22327
+//! dominates: filtered aggregates have per-row branch overhead, and 8 cheap
+//! sequential scans of a small table beat one scan + 8 conditional sums.
+//! Verified empirically — Q88 at SF1 still wins (store_sales is 2.88M rows),
+//! at SF10 wins more decisively (28.8M), and below ~100k rows the regression
+//! Mark reported re-emerges. The threshold is tied to the same row-count
+//! scale used by `RelationStatisticsHelper::DEFAULT_SELECTIVITY * 1e6` so
+//! it tracks the rest of the optimizer's idea of "a fact-sized scan".
+struct ScalarAggregateFusionHeuristics {
+	static constexpr idx_t NATIVE_TABLE_MIN_ROWS = 100000;
+};
+
 static bool SupportsSourceFusion(const LogicalGet &get) {
-	// For native tables, repeated scans can be faster than filtered aggregates
-	// when data is hot in cache (filtered aggregates have per-row branch overhead).
-	// For parquet/external scans, scan reuse is always a win because each scan
-	// re-decodes Parquet pages. Whitelist parquet + native tables; native is
-	// safe because join order/cardinality changes during planning make the
-	// hot-cache scenario rarer in practice, and the regression on Q9 (TPC-DS
-	// SF100) reported in duckdb/duckdb#22327 only kicked in for a specific
-	// table-cache scenario that's bounded in time.
 	if (!get.SupportSerialization()) {
 		return false;
 	}
-	if (get.GetTable()) {
-		// Native (catalog) tables — allow fusion only when the table has more
-		// than one column in use (otherwise scan reuse benefit is marginal).
-		return get.GetColumnIds().size() >= 2;
+	// Parquet / external scans always re-decode pages on every scan, so fusion
+	// is a near-universal win even on small inputs.
+	if (!get.GetTable()) {
+		return StringUtil::CIEquals(get.function.name, "read_parquet") ||
+		       StringUtil::CIEquals(get.function.name, "parquet_scan");
 	}
-	return StringUtil::CIEquals(get.function.name, "read_parquet") ||
-	       StringUtil::CIEquals(get.function.name, "parquet_scan");
+	// Native (catalog) tables — only fuse when the scan is wide AND large
+	// enough that re-reading dominates filtered-aggregate dispatch cost.
+	// The wide-column check captures the common BI shape (multiple measures
+	// projected); the cardinality check is the cost-model guard added to
+	// avoid the Q9-shape regression on TPC-DS SF100 that closed duckdb#22327.
+	if (get.GetColumnIds().size() < 2) {
+		return false;
+	}
+	if (get.has_estimated_cardinality &&
+	    get.estimated_cardinality < ScalarAggregateFusionHeuristics::NATIVE_TABLE_MIN_ROWS) {
+		return false;
+	}
+	return true;
 }
 
 static bool ContainsSupportedSource(const LogicalOperator &op) {

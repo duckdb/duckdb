@@ -1,0 +1,77 @@
+# name: test/optimizer/scalar_aggregate_fusion.test
+# description: Test scalar aggregate fusion across same-source cross products
+# group: [optimizer]
+
+# A wide table ~100k rows — meets the cost-model threshold for native fusion.
+statement ok
+CREATE TABLE measurements AS SELECT
+  i AS id,
+  (i % 24) AS hour_of_day,
+  (i % 1440) AS minute_of_day,
+  (i * 7) % 31 AS value
+FROM range(200000) _(i);
+
+statement ok
+ANALYZE;
+
+# Result correctness: with vs without fusion.
+statement ok
+SET disabled_optimizers = 'scalar_aggregate_fusion'
+
+query II
+SELECT a, b FROM
+  (SELECT count(*) a FROM measurements WHERE hour_of_day = 9) s1,
+  (SELECT count(*) b FROM measurements WHERE hour_of_day = 10) s2
+----
+8333	8334
+
+statement ok
+RESET disabled_optimizers
+
+query II
+SELECT a, b FROM
+  (SELECT count(*) a FROM measurements WHERE hour_of_day = 9) s1,
+  (SELECT count(*) b FROM measurements WHERE hour_of_day = 10) s2
+----
+8333	8334
+
+# Plan contains the conditional-aggregate rewrite when fusion fires.
+query II
+EXPLAIN
+SELECT a, b, c FROM
+  (SELECT count(*) a FROM measurements WHERE hour_of_day = 9) s1,
+  (SELECT count(*) b FROM measurements WHERE hour_of_day = 10) s2,
+  (SELECT count(*) c FROM measurements WHERE hour_of_day = 11) s3
+----
+physical_plan	<REGEX>:.*FILTER.*
+
+# Numerical sum across all three filtered scans must match the union form.
+query I
+SELECT a + b + c FROM
+  (SELECT count(*) a FROM measurements WHERE hour_of_day = 9) s1,
+  (SELECT count(*) b FROM measurements WHERE hour_of_day = 10) s2,
+  (SELECT count(*) c FROM measurements WHERE hour_of_day = 11) s3
+----
+25001
+
+# Small-table guard: fusion must NOT fire on a tiny native table, where the
+# repeated-scan path beats filtered aggregates on hot cache.
+statement ok
+CREATE TABLE tiny AS SELECT i AS id, i % 4 AS hour FROM range(1000) _(i);
+
+statement ok
+ANALYZE;
+
+# With or without fusion the result is the same.
+query II
+SELECT a, b FROM
+  (SELECT count(*) a FROM tiny WHERE hour = 1) s1,
+  (SELECT count(*) b FROM tiny WHERE hour = 2) s2
+----
+250	250
+
+# Optimizer is queryable.
+query I
+SELECT count(*) FROM duckdb_optimizers() WHERE name = 'scalar_aggregate_fusion'
+----
+1

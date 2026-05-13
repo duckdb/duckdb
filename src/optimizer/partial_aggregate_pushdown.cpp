@@ -64,22 +64,27 @@ static bool IsSupportedAggregate(const BoundAggregateExpression &expr, bool mult
 	if (expr.children.size() != 1) {
 		return false;
 	}
-	auto name = StringUtil::Lower(expr.function.GetName());
-	// SUM / COUNT / MIN / MAX have non-destructive combine semantics — their
-	// AGGREGATE_STATE pipeline produces numerically exact results regardless of
-	// how many times finalize_combine_aggr is invoked across grouping sets.
-	if (name == "sum" || name == "sum_no_overflow" || name == "count" || name == "min" || name == "max") {
-		return true;
+	// Gate on the EXPORT_STATE / FINALIZE_COMBINE infrastructure rather than on
+	// a hard-coded name list (per Mark's review on duckdb#22572). Any aggregate
+	// that exposes a state-combine callback can be split into a lower partial
+	// aggregate (yielding AGGREGATE_STATE) and an upper finalize_combine_aggr
+	// (consuming that state) — that's exactly the pipeline this pass builds.
+	if (!expr.function.HasStateCombineCallback()) {
+		return false;
 	}
-	// AVG goes through the same pipeline but the exported state representation
-	// loses precision at shallow ROLLUP/CUBE levels (verified on TPC-DS Q22:
-	// the `(i_product_name)` and grand-total rows produced `inf` while
-	// (a,b,c,d) was numerically exact). Restrict AVG to single-grouping-set
-	// queries until the state serialization is widened.
-	if (name == "avg" && !multi_grouping_set) {
-		return true;
+	// AVG's exported state stores SUM as a hugeint internally but serializes
+	// to a fixed blob that overflows to `inf` on a final divide once many
+	// partial states get combined at shallow ROLLUP/CUBE levels (verified on
+	// TPC-DS Q22 at SF1: the `(i_product_name)` and grand-total rows produced
+	// `inf` while the (a,b,c,d) leaf level was numerically exact). Hold AVG
+	// to single-grouping-set queries until the state serialization is widened.
+	// The `AggregateFunctionRewriter` already rewrites AVG -> SUM/COUNT for
+	// ROLLUP queries (duckdb#22572 + this branch's d697820), so this guard
+	// is a defensive belt rather than the primary path.
+	if (multi_grouping_set && StringUtil::Lower(expr.function.GetName()) == "avg") {
+		return false;
 	}
-	return false;
+	return true;
 }
 
 static bool ContainsAggregateInput(const LogicalOperator &op) {
@@ -331,8 +336,8 @@ static vector<unique_ptr<Expression>> CreateLowerGroups(const PartialAggregatePu
 }
 
 static unique_ptr<LogicalAggregate> CreateLowerAggregate(LogicalAggregate &aggr, LogicalComparisonJoin &join,
-                                                        PartialAggregatePushdownInfo &info,
-                                                        vector<unique_ptr<Expression>> lower_aggregates) {
+                                                         PartialAggregatePushdownInfo &info,
+                                                         vector<unique_ptr<Expression>> lower_aggregates) {
 	auto lower_aggr =
 	    make_uniq<LogicalAggregate>(info.lower_group_index, info.lower_aggregate_index, std::move(lower_aggregates));
 	lower_aggr->groups = CreateLowerGroups(info);
@@ -394,9 +399,9 @@ static vector<unique_ptr<Expression>> CreateUpperGroups(LogicalAggregate &aggr, 
 }
 
 static unique_ptr<LogicalAggregate> CreateUpperAggregate(LogicalAggregate &aggr,
-                                                        unique_ptr<LogicalComparisonJoin> new_join,
-                                                        const PartialAggregatePushdownInfo &info,
-                                                        vector<unique_ptr<Expression>> upper_aggregates) {
+                                                         unique_ptr<LogicalComparisonJoin> new_join,
+                                                         const PartialAggregatePushdownInfo &info,
+                                                         vector<unique_ptr<Expression>> upper_aggregates) {
 	auto upper_aggr = make_uniq<LogicalAggregate>(aggr.group_index, aggr.aggregate_index, std::move(upper_aggregates));
 	upper_aggr->groups = CreateUpperGroups(aggr, *new_join, info);
 	// Preserve ROLLUP / CUBE / GROUPING SETS. The grouping_sets vector contains
