@@ -792,6 +792,10 @@ void ColumnReader::Select(ColumnReaderInput &input, Vector &result, const Select
 		DirectSelect(input, result, sel, approved_tuple_count);
 		return;
 	}
+	if (!protocol) {
+		Read(input, result);
+		return;
+	}
 	BeginRead(input.define_out, input.repeat_out);
 	idx_t result_offset = 0;
 
