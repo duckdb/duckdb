@@ -89,11 +89,18 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 }
 
 BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {
+	if (inside_try) {
+		throw BinderException("TRY can not be used in combination with a scalar subquery");
+	}
 	if (expr.subquery->node->type != QueryNodeType::BOUND_SUBQUERY_NODE) {
 		// first bind the actual subquery in a new binder
-		auto subquery_binder = Binder::CreateBinder(context, &binder);
+		auto subquery_binder = Binder::CreateBinder(context, binder);
 		subquery_binder->can_contain_nulls = true;
+
+		subquery_binder->BeginSubqueryBind(binder, *this);
 		auto bound_node = subquery_binder->BindNode(*expr.subquery->node);
+		subquery_binder->FinishSubqueryBind();
+
 		// check the correlated columns of the subquery for correlated columns with depth > 1
 		for (idx_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {
 			CorrelatedColumnInfo corr = subquery_binder->correlated_columns[i];

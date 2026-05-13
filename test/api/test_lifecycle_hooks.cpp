@@ -55,7 +55,7 @@ TEST_CASE("Test ClientContextState", "[api]") {
 	    });
 
 	ExtensionInfo extension_info {};
-	ExtensionActiveLoad load_info {*db.instance, extension_info, "test_extension"};
+	ExtensionActiveLoad load_info {*db.instance, extension_info, "test_extension", ""};
 	ExtensionLoader loader {load_info};
 	loader.RegisterFunction(table_fun);
 

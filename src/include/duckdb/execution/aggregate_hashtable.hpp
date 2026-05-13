@@ -15,6 +15,7 @@
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
+#include "duckdb/common/clustered_aggregate.hpp"
 
 namespace duckdb {
 
@@ -143,6 +144,14 @@ private:
 		unique_ptr<Vector> dictionary_addresses;
 		unsafe_unique_array<bool> found_entry;
 		idx_t capacity = 0;
+		//! For the clustered-aggregate fast path: track whether every state pointer added to this
+		//! dictionary shares the same high (64 - SLOT_GID_BITS) bits. The clustered path stores only
+		//! the low SLOT_GID_BITS of each pointer, so if any two pointers differ in their high bits
+		//! we cannot reuse the truncated form to disambiguate them and must fall back to scatter.
+		//! address_high_bits starts at the sentinel ~0 ("no address seen yet"); a real high-bits
+		//! value always has its low SLOT_GID_BITS cleared so ~0 cannot collide with a valid value.
+		uint64_t address_high_bits = ~uint64_t(0);
+		bool address_high_bits_uniform = true;
 	};
 
 	//! If we have this many or more radix bits, we use the unpartitioned data collection too
@@ -202,6 +211,8 @@ private:
 		RowOperationsState row_state;
 	} state;
 
+	ClusteredAggrState clustered_state;
+
 private:
 	//! Disabled the copy constructor
 	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
@@ -218,7 +229,8 @@ private:
 	//! Reinserts tuples (triggered by Resize)
 	void ReinsertTuples(PartitionedTupleData &data);
 
-	void UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter);
+	void UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter, bool ht_offsets_valid = true);
+	bool UpdateAggregatesClustered(DataChunk &payload, const unsafe_vector<idx_t> &filter, bool ht_offsets_valid);
 
 	//! Does the actual group matching / creation
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,

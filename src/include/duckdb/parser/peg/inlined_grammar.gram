@@ -1135,7 +1135,8 @@ RelOptionArgumentOpt <- '=' DefArg
 DefArg <- NullLiteral / ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral / Expression
 NoneLiteral <- 'NONE'
 
-LoadStatement <- 'LOAD' ColIdOrString
+LoadStatement <- 'LOAD' ColIdOrString ExtensionAlias?
+ExtensionAlias <- 'AS' Identifier
 InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
 UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
 FromSource <- 'FROM' (Identifier / StringLiteral)
@@ -1444,9 +1445,7 @@ VariableList <- List(Expression)
 ResetStatement <- 'RESET' (SetVariable / SetSetting)
 
 ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOptionList?
-
 ExportSource <- CatalogName 'TO'
-
 ImportStatement <- 'IMPORT' 'DATABASE' StringLiteral
 
 CheckpointStatement <- 'FORCE'? 'CHECKPOINT' CatalogName?
@@ -1652,7 +1651,8 @@ DetachStatement <- 'DETACH' Database? IfExists? CatalogName
 UseStatement <- 'USE' UseTarget
 
 UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
-UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName ('.' Identifier)*
+UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
+DotIdentifier <- '.' Identifier
 
 CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments
 
