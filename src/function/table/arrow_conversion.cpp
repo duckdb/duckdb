@@ -1459,7 +1459,11 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 		default:
 			throw NotImplementedException("ArrowArrayPhysicalType not recognized");
 		};
-		// the dictionary buffer holds dict_length entries plus one trailing NULL sentinel slot
+		// the dictionary buffer holds dict_length entries plus one trailing NULL sentinel slot.
+		// the inner ColumnArrowToDuckDB call may have replaced the buffer via FlatVector::SetData
+		// (e.g. DirectConversion's zero-copy path), shrinking capacity from dict_length+1 to
+		// dict_length. Re-extend before sizing so the sentinel slot stays in bounds.
+		base_vector->Reserve(dict_length + 1);
 		FlatVector::SetSize(*base_vector, count_t(dict_length + 1));
 		array_state.AddDictionary(std::move(base_vector), array.dictionary);
 	}
