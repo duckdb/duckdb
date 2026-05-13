@@ -1,0 +1,24 @@
+# name: test/sql/merge/merge_into_table_alias_distinct.test
+# description: Test MERGE INTO with table-alias row comparison in action condition
+# group: [merge]
+
+statement ok
+CREATE TABLE tickers (
+    tableticker VARCHAR NOT NULL,
+    figi VARCHAR,
+    cik VARCHAR,
+    lastupdated DATE NOT NULL
+);
+
+statement ok
+MERGE INTO tickers AS T
+USING (
+    SELECT
+        'tablepermaticker' AS tableticker,
+        'figi' AS figi,
+        'secfilings' AS secfilings,
+        DATE '2026-05-01' AS lastupdated
+) AS Q
+ON T.tableticker = Q.tableticker
+WHEN MATCHED AND T IS DISTINCT FROM Q THEN UPDATE
+WHEN NOT MATCHED THEN INSERT;

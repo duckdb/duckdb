@@ -76,7 +76,34 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 		} else {
 			ProjectionBinder proj_binder(*this, context, proj_index, expressions, "WHERE clause");
 			proj_binder.target_type = LogicalType::BOOLEAN;
+
+			auto condition_expr_start_idx = expressions.size();
 			auto cond = proj_binder.Bind(action.condition);
+			//
+			auto rewrite_projection_self_references = [&](unique_ptr<Expression> &expression, idx_t current_idx) {
+				ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+				    expression, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &current_expr) {
+					    if (bound_colref.binding.table_index != proj_index) {
+						    return;
+					    }
+
+					    auto col_idx = bound_colref.binding.column_index.GetIndex();
+
+					    // Only rewrite references to earlier projection expressions. References
+					    // to this expression itself or later expressions would indicate a
+					    // different invalid plan shape.
+					    if (col_idx >= current_idx) {
+						    return;
+					    }
+
+					    current_expr = expressions[col_idx]->Copy();
+				    });
+			};
+
+			for (idx_t i = condition_expr_start_idx; i < expressions.size(); i++) {
+				rewrite_projection_self_references(expressions[i], i);
+			}
+
 			result->condition = std::move(cond);
 		}
 	}
