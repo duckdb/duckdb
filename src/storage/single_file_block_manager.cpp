@@ -175,7 +175,7 @@ bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 
 void MainHeader::Write(WriteStream &ser) {
 	ser.WriteData(const_data_ptr_cast(MAGIC_BYTES), MAGIC_BYTE_SIZE);
-	ser.Write<uint64_t>(version_number);
+	ser.Write<StorageVersion>(version_number);
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		ser.Write<uint64_t>(flags[i]);
 	}
@@ -212,19 +212,22 @@ MainHeader MainHeader::Read(ReadStream &source) {
 		throw IOException("The file is not a valid DuckDB database file!");
 	}
 
-	header.version_number = source.Read<uint64_t>();
+	header.version_number = source.Read<StorageVersion>();
 
 	// Check the version number to determine if we can read this file.
-	if (header.version_number < VERSION_NUMBER_LOWER || header.version_number > VERSION_NUMBER_UPPER) {
+	if (header.version_number < static_cast<StorageVersion>(VERSION_NUMBER_LOWER) ||
+	    header.version_number > static_cast<StorageVersion>(VERSION_NUMBER_UPPER)) {
 		auto version = GetDuckDBVersions(header.version_number);
 		string version_text;
 		if (!version.empty()) {
 			// Known version.
 			version_text = "DuckDB version " + string(version);
 		} else {
-			version_text = string("an ") +
-			               (VERSION_NUMBER_UPPER > header.version_number ? "older development" : "newer") +
-			               string(" version of DuckDB");
+			version_text =
+			    string("an ") +
+			    (static_cast<StorageVersion>(VERSION_NUMBER_UPPER) > header.version_number ? "older development"
+			                                                                               : "newer") +
+			    string(" version of DuckDB");
 		}
 		throw IOException(
 		    "Trying to read a database file with version number %lld, but we can only read versions between %lld and "
@@ -260,7 +263,7 @@ void DatabaseHeader::Write(WriteStream &ser) {
 	ser.Write<uint64_t>(block_count);
 	ser.Write<idx_t>(block_alloc_size);
 	ser.Write<idx_t>(vector_size);
-	ser.Write<idx_t>(storage_compatibility);
+	ser.Write<idx_t>(static_cast<idx_t>(storage_compatibility));
 }
 
 DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &source) {
@@ -287,8 +290,10 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 		                  STANDARD_VECTOR_SIZE, header.vector_size);
 	}
 
-	// Default to 1 for version 64, else read from file.
-	header.storage_compatibility = main_header.version_number == 64 ? 1 : source.Read<idx_t>();
+	// Default to 1 for version < DuckDB V1.0.0, else read from file.
+	header.storage_compatibility = main_header.version_number == StorageVersion::V0_10_2
+	                                   ? StorageVersion::V0_10_2
+	                                   : static_cast<StorageVersion>(source.Read<idx_t>());
 
 	return header;
 }
@@ -344,20 +349,20 @@ FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
 }
 
 void SingleFileBlockManager::AddStorageVersionTag() {
-	db.tags["storage_version"] = GetStorageVersionName(options.storage_version.GetIndex(), true);
+	db.tags["storage_version"] = GetStorageVersionName(options.storage_version, true);
 }
 
-uint64_t SingleFileBlockManager::GetVersionNumber() const {
-	auto storage_version = options.storage_version.GetIndex();
-	if (storage_version < 4) {
-		return VERSION_NUMBER;
+StorageVersion SingleFileBlockManager::GetVersionNumber() const {
+	auto storage_version = options.storage_version;
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version)) {
+		return static_cast<StorageVersion>(VERSION_NUMBER);
 	}
 	// Look up the matching version number.
 	auto version_name = GetStorageVersionName(storage_version, false);
-	return GetStorageVersion(version_name.c_str()).GetIndex();
+	return GetStorageVersion(version_name.c_str());
 }
 
-MainHeader ConstructMainHeader(idx_t version_number) {
+MainHeader ConstructMainHeader(StorageVersion version_number) {
 	MainHeader header;
 	header.version_number = version_number;
 	memset(header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
@@ -471,10 +476,10 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	header_buffer.Clear();
 
 	options.version_number = GetVersionNumber();
-	db.GetStorageManager().SetStorageVersion(options.storage_version.GetIndex());
+	db.GetStorageManager().SetStorageVersion(options.storage_version);
 	AddStorageVersionTag();
 
-	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
+	MainHeader main_header = ConstructMainHeader(options.version_number);
 
 	// Derive the encryption key and add it to the cache.
 	// Not used for plain databases.
@@ -483,7 +488,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// We need the unique database identifier, if the storage version is new enough.
 	// If encryption is enabled, we also use it as the salt.
 	memset(options.db_identifier, 0, MainHeader::DB_IDENTIFIER_LEN);
-	if (encryption_enabled || options.version_number.GetIndex() >= 67) {
+	if (encryption_enabled || StorageManager::TargetAtLeastVersion(StorageVersion::V1_4_0, options.version_number)) {
 		GenerateDBIdentifier(options.db_identifier);
 	}
 
@@ -539,7 +544,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h1.block_alloc_size = GetBlockAllocSize();
 	h1.vector_size = STANDARD_VECTOR_SIZE;
-	h1.storage_compatibility = options.storage_version.GetIndex();
+	h1.storage_compatibility = options.storage_version;
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.GetDataMutable());
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE);
 
@@ -552,7 +557,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h2.block_alloc_size = GetBlockAllocSize();
 	h2.vector_size = STANDARD_VECTOR_SIZE;
-	h2.storage_compatibility = options.storage_version.GetIndex();
+	h2.storage_compatibility = options.storage_version;
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.GetDataMutable());
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 
@@ -766,9 +771,9 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
 	max_block = NumericCast<block_id_t>(header.block_count);
-	if (options.storage_version.IsValid()) {
+	if (options.storage_version != StorageVersion::INVALID) {
 		// storage version specified explicitly - use requested storage version
-		auto requested_compat_version = options.storage_version.GetIndex();
+		auto requested_compat_version = options.storage_version;
 		if (requested_compat_version < header.storage_compatibility) {
 			throw InvalidInputException(
 			    "Error opening \"%s\": cannot initialize database with storage version %d - which is lower than what "
@@ -786,7 +791,7 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 		    path);
 	}
 
-	db.GetStorageManager().SetStorageVersion(options.storage_version.GetIndex());
+	db.GetStorageManager().SetStorageVersion(options.storage_version);
 
 	if (block_alloc_size.IsValid() && block_alloc_size.GetIndex() != header.block_alloc_size) {
 		throw InvalidInputException(
@@ -1306,7 +1311,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	header.block_count = NumericCast<idx_t>(max_block);
 	lock.unlock();
 
-	header.storage_compatibility = options.storage_version.GetIndex();
+	header.storage_compatibility = options.storage_version;
 
 	auto debug_checkpoint_abort = Settings::Get<DebugCheckpointAbortSetting>(db.GetDatabase());
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
@@ -1318,10 +1323,10 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 
 	header_buffer.Clear();
 	// if we are upgrading the database from version 64 -> version 65, we need to re-write the main header
-	if (options.version_number.GetIndex() == 64 && options.storage_version.GetIndex() >= 4) {
+	if (options.version_number == StorageVersion::V0_10_2 && options.storage_version >= StorageVersion::V1_2_0) {
 		// rewrite the main header
-		options.version_number = 65;
-		MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
+		options.version_number = StorageVersion::V1_2_0;
+		MainHeader main_header = ConstructMainHeader(options.version_number);
 		SerializeHeaderStructure<MainHeader>(main_header, header_buffer.GetDataMutable());
 		// now write the header to the file
 		ChecksumAndWrite(context, header_buffer, 0);

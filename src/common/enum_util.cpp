@@ -198,6 +198,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -4713,6 +4714,48 @@ SequenceInfo EnumUtil::FromString<SequenceInfo>(const char *value) {
 	return static_cast<SequenceInfo>(StringUtil::StringToEnum(GetSequenceInfoValues(), 6, "SequenceInfo", value));
 }
 
+const StringUtil::EnumStringLiteral *GetSerializationVersionDeprecatedValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V0_10_0), "V0_10_0" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V0_10_1), "V0_10_1" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V0_10_2), "V0_10_2" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V0_10_3), "V0_10_3" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_0_0), "V1_0_0" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_1_0), "V1_1_0" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_1_1), "V1_1_1" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_1_2), "V1_1_2" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_1_3), "V1_1_3" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_2_0), "V1_2_0" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_2_1), "V1_2_1" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_2_2), "V1_2_2" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_3_0), "V1_3_0" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_3_1), "V1_3_1" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_3_2), "V1_3_2" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_4_0), "V1_4_0" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_4_1), "V1_4_1" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_4_2), "V1_4_2" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_4_3), "V1_4_3" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_4_4), "V1_4_4" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_0), "V1_5_0" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_1), "V1_5_1" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V1_5_2), "V1_5_2" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::V2_0_0), "V2_0_0" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::LATEST), "LATEST" },
+		{ static_cast<uint32_t>(SerializationVersionDeprecated::INVALID), "INVALID" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SerializationVersionDeprecated>(SerializationVersionDeprecated value) {
+	return StringUtil::EnumToString(GetSerializationVersionDeprecatedValues(), 26, "SerializationVersionDeprecated", static_cast<uint32_t>(value));
+}
+
+template<>
+SerializationVersionDeprecated EnumUtil::FromString<SerializationVersionDeprecated>(const char *value) {
+	return static_cast<SerializationVersionDeprecated>(StringUtil::StringToEnum(GetSerializationVersionDeprecatedValues(), 26, "SerializationVersionDeprecated", value));
+}
+
 const StringUtil::EnumStringLiteral *GetSetOperationTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(SetOperationType::NONE), "NONE" },
@@ -5124,6 +5167,87 @@ const char* EnumUtil::ToChars<StorageIndexType>(StorageIndexType value) {
 template<>
 StorageIndexType EnumUtil::FromString<StorageIndexType>(const char *value) {
 	return static_cast<StorageIndexType>(StringUtil::StringToEnum(GetStorageIndexTypeValues(), 2, "StorageIndexType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetStorageVersionValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(StorageVersion::V0_0_4), "V0_0_4" },
+		{ static_cast<uint32_t>(StorageVersion::V0_1_0), "V0_1_0" },
+		{ static_cast<uint32_t>(StorageVersion::V0_1_1), "V0_1_1" },
+		{ static_cast<uint32_t>(StorageVersion::V0_1_2), "V0_1_2" },
+		{ static_cast<uint32_t>(StorageVersion::V0_1_3), "V0_1_3" },
+		{ static_cast<uint32_t>(StorageVersion::V0_1_4), "V0_1_4" },
+		{ static_cast<uint32_t>(StorageVersion::V0_1_5), "V0_1_5" },
+		{ static_cast<uint32_t>(StorageVersion::V0_1_6), "V0_1_6" },
+		{ static_cast<uint32_t>(StorageVersion::V0_1_7), "V0_1_7" },
+		{ static_cast<uint32_t>(StorageVersion::V0_1_8), "V0_1_8" },
+		{ static_cast<uint32_t>(StorageVersion::V0_1_9), "V0_1_9" },
+		{ static_cast<uint32_t>(StorageVersion::V0_2_0), "V0_2_0" },
+		{ static_cast<uint32_t>(StorageVersion::V0_2_1), "V0_2_1" },
+		{ static_cast<uint32_t>(StorageVersion::V0_2_2), "V0_2_2" },
+		{ static_cast<uint32_t>(StorageVersion::V0_2_3), "V0_2_3" },
+		{ static_cast<uint32_t>(StorageVersion::V0_2_4), "V0_2_4" },
+		{ static_cast<uint32_t>(StorageVersion::V0_2_5), "V0_2_5" },
+		{ static_cast<uint32_t>(StorageVersion::V0_2_6), "V0_2_6" },
+		{ static_cast<uint32_t>(StorageVersion::V0_2_7), "V0_2_7" },
+		{ static_cast<uint32_t>(StorageVersion::V0_2_8), "V0_2_8" },
+		{ static_cast<uint32_t>(StorageVersion::V0_2_9), "V0_2_9" },
+		{ static_cast<uint32_t>(StorageVersion::V0_3_0), "V0_3_0" },
+		{ static_cast<uint32_t>(StorageVersion::V0_3_1), "V0_3_1" },
+		{ static_cast<uint32_t>(StorageVersion::V0_3_2), "V0_3_2" },
+		{ static_cast<uint32_t>(StorageVersion::V0_3_3), "V0_3_3" },
+		{ static_cast<uint32_t>(StorageVersion::V0_3_4), "V0_3_4" },
+		{ static_cast<uint32_t>(StorageVersion::V0_3_5), "V0_3_5" },
+		{ static_cast<uint32_t>(StorageVersion::V0_4_0), "V0_4_0" },
+		{ static_cast<uint32_t>(StorageVersion::V0_5_0), "V0_5_0" },
+		{ static_cast<uint32_t>(StorageVersion::V0_5_1), "V0_5_1" },
+		{ static_cast<uint32_t>(StorageVersion::V0_6_0), "V0_6_0" },
+		{ static_cast<uint32_t>(StorageVersion::V0_6_1), "V0_6_1" },
+		{ static_cast<uint32_t>(StorageVersion::V0_7_0), "V0_7_0" },
+		{ static_cast<uint32_t>(StorageVersion::V0_7_1), "V0_7_1" },
+		{ static_cast<uint32_t>(StorageVersion::V0_8_0), "V0_8_0" },
+		{ static_cast<uint32_t>(StorageVersion::V0_8_1), "V0_8_1" },
+		{ static_cast<uint32_t>(StorageVersion::V0_9_0), "V0_9_0" },
+		{ static_cast<uint32_t>(StorageVersion::V0_9_1), "V0_9_1" },
+		{ static_cast<uint32_t>(StorageVersion::V0_9_2), "V0_9_2" },
+		{ static_cast<uint32_t>(StorageVersion::V0_10_0), "V0_10_0" },
+		{ static_cast<uint32_t>(StorageVersion::V0_10_1), "V0_10_1" },
+		{ static_cast<uint32_t>(StorageVersion::V0_10_2), "V0_10_2" },
+		{ static_cast<uint32_t>(StorageVersion::V0_10_3), "V0_10_3" },
+		{ static_cast<uint32_t>(StorageVersion::V1_0_0), "V1_0_0" },
+		{ static_cast<uint32_t>(StorageVersion::V1_1_0), "V1_1_0" },
+		{ static_cast<uint32_t>(StorageVersion::V1_1_1), "V1_1_1" },
+		{ static_cast<uint32_t>(StorageVersion::V1_1_2), "V1_1_2" },
+		{ static_cast<uint32_t>(StorageVersion::V1_1_3), "V1_1_3" },
+		{ static_cast<uint32_t>(StorageVersion::V1_2_0), "V1_2_0" },
+		{ static_cast<uint32_t>(StorageVersion::V1_2_1), "V1_2_1" },
+		{ static_cast<uint32_t>(StorageVersion::V1_2_2), "V1_2_2" },
+		{ static_cast<uint32_t>(StorageVersion::V1_3_0), "V1_3_0" },
+		{ static_cast<uint32_t>(StorageVersion::V1_3_1), "V1_3_1" },
+		{ static_cast<uint32_t>(StorageVersion::V1_3_2), "V1_3_2" },
+		{ static_cast<uint32_t>(StorageVersion::V1_4_0), "V1_4_0" },
+		{ static_cast<uint32_t>(StorageVersion::V1_4_1), "V1_4_1" },
+		{ static_cast<uint32_t>(StorageVersion::V1_4_2), "V1_4_2" },
+		{ static_cast<uint32_t>(StorageVersion::V1_4_3), "V1_4_3" },
+		{ static_cast<uint32_t>(StorageVersion::V1_4_4), "V1_4_4" },
+		{ static_cast<uint32_t>(StorageVersion::V1_5_0), "V1_5_0" },
+		{ static_cast<uint32_t>(StorageVersion::V1_5_1), "V1_5_1" },
+		{ static_cast<uint32_t>(StorageVersion::V1_5_2), "V1_5_2" },
+		{ static_cast<uint32_t>(StorageVersion::V2_0_0), "V2_0_0" },
+		{ static_cast<uint32_t>(StorageVersion::LATEST), "LATEST" },
+		{ static_cast<uint32_t>(StorageVersion::INVALID), "INVALID" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<StorageVersion>(StorageVersion value) {
+	return StringUtil::EnumToString(GetStorageVersionValues(), 65, "StorageVersion", static_cast<uint32_t>(value));
+}
+
+template<>
+StorageVersion EnumUtil::FromString<StorageVersion>(const char *value) {
+	return static_cast<StorageVersion>(StringUtil::StringToEnum(GetStorageVersionValues(), 65, "StorageVersion", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStrTimeSpecifierValues() {

@@ -27,6 +27,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -117,7 +118,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 	auto it = info.options.find("storage_version");
 	if (it != info.options.end()) {
 		// If this is an existing index with a saved storage version, use it.
-		storage_version = it->second.GetValue<StorageVersion>();
+		storage_version = static_cast<StorageVersion>(it->second.GetValue<uint64_t>());
 	} else {
 		// Otherwise, this must be an existing index without a saved storage version.
 		// We started saving the storage version in v1.5.0, so if it is not present,
@@ -1017,9 +1018,9 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 	info.root = tree.Get();
 	info.options = options;
 
-	// It never hurts to serialize the storage version, even to olde r formats
+	// It never hurts to serialize the storage version, even to older formats
 	if (storage_version != StorageVersion::INVALID) {
-		info.options["storage_version"] = Value::UBIGINT(storage_version);
+		info.options["storage_version"] = Value::UBIGINT(static_cast<uint64_t>(storage_version));
 	}
 
 	for (auto &allocator : *allocators) {

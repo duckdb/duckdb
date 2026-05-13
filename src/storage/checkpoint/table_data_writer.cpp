@@ -174,7 +174,9 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	auto v1_0_0_storage = serializer.GetOptions().storage_compatibility.storage_version < 3;
+	// prior: ser version 3
+	auto v1_0_0_storage = StorageManager::IsPriorToVersion(
+	    StorageVersion::V1_1_0, serializer.GetOptions().storage_compatibility.storage_version);
 	IndexSerializationInfo serialization_info;
 	if (!v1_0_0_storage) {
 		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);

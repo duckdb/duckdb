@@ -48,7 +48,7 @@ struct StorageManagerOptions {
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	optional_idx block_alloc_size;
 	StorageVersion storage_version;
-	optional_idx version_number;
+	StorageVersion version_number;
 	optional_idx block_header_size;
 	//! Unique database identifier and optional encryption salt.
 	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
@@ -131,7 +131,7 @@ public:
 		return iteration_count;
 	}
 	//! Return the version number of the file.
-	uint64_t GetVersionNumber() const;
+	StorageVersion GetVersionNumber() const;
 	//! Return the database identifier.
 	data_ptr_t GetDBIdentifier() {
 		return options.db_identifier;

@@ -227,10 +227,10 @@ vector<string> GetStorageCandidates() {
 	return candidates;
 }
 
-string GetDuckDBVersions(idx_t version_number) {
+string GetDuckDBVersions(const StorageVersion version_number) {
 	vector<string> versions;
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
-		if (version_number == static_cast<idx_t>(storage_version_info[i].storage_version)) {
+		if (version_number == storage_version_info[i].storage_version) {
 			versions.push_back(string(storage_version_info[i].version_name));
 		}
 	}

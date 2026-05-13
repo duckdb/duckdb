@@ -218,7 +218,7 @@ struct SerializationVersionInfo {
 extern const uint64_t VERSION_NUMBER;
 extern const uint64_t VERSION_NUMBER_LOWER;
 extern const uint64_t VERSION_NUMBER_UPPER;
-string GetDuckDBVersions(const idx_t version_number);
+string GetDuckDBVersions(const StorageVersion version_number);
 string GetStorageVersionNameInternal(const idx_t storage_version);
 string GetStorageVersionName(const StorageVersion storage_version, const bool add_suffix);
 idx_t GetSerializationVersionDeprecated(const char *version_string);
@@ -244,7 +244,7 @@ public:
 	static const char CANARY[];
 
 	//! The (storage) version of the database.
-	uint64_t version_number;
+	StorageVersion version_number;
 	//! The set of flags used by the database.
 	uint64_t flags[FLAG_COUNT];
 	//! Encryption version
@@ -372,8 +372,8 @@ struct DatabaseHeader {
 	idx_t block_alloc_size = 0;
 	//! The vector size of the database file
 	idx_t vector_size = 0;
-	//! The serialization compatibility version
-	idx_t storage_compatibility = 0;
+	//! The storage compatibility version
+	StorageVersion storage_compatibility = StorageVersion::INVALID;
 
 	void Write(WriteStream &ser);
 	static DatabaseHeader Read(const MainHeader &header, ReadStream &source);
