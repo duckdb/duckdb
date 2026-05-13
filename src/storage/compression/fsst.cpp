@@ -19,13 +19,6 @@
 namespace duckdb {
 struct FSSTScanState;
 
-typedef struct {
-	uint32_t dict_size;
-	uint32_t dict_end;
-	uint32_t bitpacking_width;
-	uint32_t fsst_symbol_table_offset;
-} fsst_compression_header_t;
-
 // Counts and offsets used during scanning/fetching
 //                                         |               ColumnSegment to be scanned / fetched from				 |
 //                                         | untouched | bp align | unused d-values | to scan | bp align | untouched |

@@ -54,6 +54,8 @@ struct CSVReaderOptions {
 	CSVOption<string> rejects_scan_name = {"reject_scans"};
 	//! Rejects table entry limit (0 = no limit)
 	idx_t rejects_limit = 0;
+	//! Rejects line size limit (0 = no limit)
+	idx_t rejects_line_size_limit = 10000;
 	//! Number of samples to buffer
 	idx_t buffer_sample_size = static_cast<idx_t>(STANDARD_VECTOR_SIZE * 50);
 	//! Specifies the strings that represents a null value

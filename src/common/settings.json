@@ -834,6 +834,16 @@
         ]
     },
     {
+        "name": "initial_column_segment_size",
+        "description": "The initial memory (in bytes) reserved for the first transient column segment. Must be a power of two. Internally, we subtract the block header size (typically 8 bytes) for segments with or exceeding 1024 bytes. Subsequent segments double in size until reaching the block size.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "2048",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "integer_division",
         "description": "Whether or not the / operator defaults to integer division, or to floating point division",
         "type": "BOOLEAN",

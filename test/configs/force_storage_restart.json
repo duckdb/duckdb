@@ -65,6 +65,12 @@
       ]
     },
     {
+      "reason": "Tests transient segment structure before checkpoint. force_restart checkpoints after every statement, merging segments.",
+      "paths": [
+        "test/sql/storage/adaptive_segment_allocation.test"
+      ]
+    },
+    {
       "reason": "Test checks which columns are loaded",
       "paths": [
         "test/sql/storage/metadata/partial_column_metadata_reuse.test",
