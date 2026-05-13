@@ -374,6 +374,9 @@ static bool ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStat
 	if (!result.CanHaveNoNull()) {
 		return true;
 	}
+	if (!StringStats::HasMinMax(input)) {
+		return false;
+	}
 
 	auto min = StringStats::Min(input);
 	auto max = StringStats::Max(input);
