@@ -19,7 +19,6 @@
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
-
 namespace duckdb {
 
 ExpressionFilter::ExpressionFilter(unique_ptr<Expression> expr_p)
@@ -113,8 +112,29 @@ static bool ContainsInternalTableFilterFunction(const Expression &expr) {
 	return found;
 }
 
+static unique_ptr<Expression> UnwrapOptionalFiltersForConstantEvaluation(const Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
+			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+			return data.child_filter_expr ? UnwrapOptionalFiltersForConstantEvaluation(*data.child_filter_expr)
+			                              : make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+		}
+		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
+			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+			return data.child_filter_expr ? UnwrapOptionalFiltersForConstantEvaluation(*data.child_filter_expr)
+			                              : make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+		}
+	}
+	auto result = expr.Copy();
+	ExpressionIterator::EnumerateChildren(
+	    *result, [&](unique_ptr<Expression> &child) { child = UnwrapOptionalFiltersForConstantEvaluation(*child); });
+	return result;
+}
+
 bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value &val) const {
-	ExpressionExecutor executor(context, *expr);
+	auto constant_eval_expr = UnwrapOptionalFiltersForConstantEvaluation(*expr);
+	ExpressionExecutor executor(context, *constant_eval_expr);
 	return EvaluateWithConstant(executor, val);
 }
 
