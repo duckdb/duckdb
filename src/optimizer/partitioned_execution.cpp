@@ -164,7 +164,7 @@ static bool PartitionedExecutionCanUseStats(const unique_ptr<BaseStatistics> &st
 	switch (stats->GetStatsType()) {
 	case StatisticsType::NUMERIC_STATS:
 		return NumericStats::HasMinMax(*stats);
-	case StatisticsType::STRING_STATS:
+	case StatisticsType::STRING_STATS: {
 		// Let's not mess with BLOB for now
 		if (stats->GetType() != LogicalType::VARCHAR) {
 			return false;
@@ -172,8 +172,9 @@ static bool PartitionedExecutionCanUseStats(const unique_ptr<BaseStatistics> &st
 		if (!StringStats::HasMinMax(*stats)) {
 			return false;
 		}
-		// Truncated multibyte UTF-8 sequences produce invalid string bytes in min/max; skip those row groups
-		return Value::StringIsValid(StringStats::Min(*stats)) && Value::StringIsValid(StringStats::Max(*stats));
+		// Truncated multibyte UTF-8 sequences produce invalid string bytes in min/max - make these valid UTF8
+		return !StringStats::TryGetValidMin(*stats).IsNull() && !StringStats::TryGetValidMax(*stats).IsNull();
+	}
 	default:
 		return false; // Only numeric/string supported for now
 	}
@@ -243,8 +244,9 @@ static void PartitionedExecutionAddStatsNodes(const BaseStatistics &stats, const
 		max = NumericStats::Max(stats);
 		break;
 	case StatisticsType::STRING_STATS:
-		min = StringStats::Min(stats);
-		max = StringStats::Max(stats);
+		min = StringStats::TryGetValidMin(stats);
+		max = StringStats::TryGetValidMax(stats);
+		D_ASSERT(!min.IsNull() && !max.IsNull()); // guaranteed by PartitionedExecutionCanUseStats
 		break;
 	default:
 		throw NotImplementedException("PartitionedExecutionAddStatsNodes for %s",

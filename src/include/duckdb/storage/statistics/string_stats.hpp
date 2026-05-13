@@ -66,6 +66,10 @@ struct StringStats {
 	DUCKDB_API static string Min(const BaseStatistics &stats);
 	//! Returns the max value
 	DUCKDB_API static string Max(const BaseStatistics &stats);
+	//! Returns a valid UTF-8 lower bound for the min value, or NULL if stats have no min
+	DUCKDB_API static Value TryGetValidMin(const BaseStatistics &stats);
+	//! Returns a valid UTF-8 upper bound for the max value, or NULL if no finite bound exists
+	DUCKDB_API static Value TryGetValidMax(const BaseStatistics &stats);
 
 	//! Construct string stats from a constant
 	DUCKDB_API static void FromConstant(BaseStatistics &stats, string_t input);

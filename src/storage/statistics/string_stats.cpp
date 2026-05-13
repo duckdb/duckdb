@@ -1,4 +1,5 @@
 #include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -130,6 +131,30 @@ string StringStats::Max(const BaseStatistics &stats) {
 		                        "StringStats::HasMinMax first");
 	}
 	return string_data.max.GetString();
+}
+
+Value StringStats::TryGetValidMin(const BaseStatistics &stats) {
+	auto min = Min(stats);
+	if (GetMinType(stats) == StringStatsType::EXACT_STATS) {
+		return Value(std::move(min));
+	}
+	string result;
+	if (!Utf8Proc::ValidLowerBound(min, result)) {
+		return Value();
+	}
+	return Value(std::move(result));
+}
+
+Value StringStats::TryGetValidMax(const BaseStatistics &stats) {
+	auto max = Max(stats);
+	if (GetMaxType(stats) == StringStatsType::EXACT_STATS) {
+		return Value(std::move(max));
+	}
+	string result;
+	if (!Utf8Proc::ValidUpperBound(max, result)) {
+		return Value();
+	}
+	return Value(std::move(result));
 }
 
 void StringStats::ResetMaxStringLength(BaseStatistics &stats) {

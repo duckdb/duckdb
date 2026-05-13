@@ -442,9 +442,12 @@ static bool ConvertShreddedStats(BaseStatistics &result, optional_ptr<BaseStatis
 
 bool StringStatsAreValid(const string &stats, bool is_varchar, StringStatsType stats_type) {
 	if (stats_type == StringStatsType::TRUNCATED_STATS) {
-		// truncated stats are always valid
+		// truncated stats can contain invalid UTF8 due to truncation - this is fine
 		return true;
 	}
+	// for exact stats we need the stats to be valid because we might emit them
+	// we could optionally convert these into truncated stats...
+	// but if a file has corrupt exact string stats it's likely these are bogus, so just ignore them
 	return StringColumnReader::IsValid(stats, is_varchar);
 }
 
