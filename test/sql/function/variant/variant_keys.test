@@ -1,6 +1,8 @@
 # name: test/sql/function/variant/variant_keys.test
 # group: [variant]
 
+require json
+
 statement ok
 CREATE MACRO struct_cast_data() AS TABLE (
 	SELECT {'a': [
@@ -29,63 +31,94 @@ CREATE MACRO struct_cast_data() AS TABLE (
 	}}::VARIANT
 );
 
+# Can have VARCHAR as input for variant parameter.
+
 query I
 select variant_keys('{"a": 1, "b": {"c": 12, "d": 10}}');
 ----
 [a, b]
 
+# Can have JSON as input for variant parameter.
+
+query I
+select variant_keys('{"a": 1, "b": {"c": 12, "d": 10}}'::JSON);
+----
+[a, b]
+
 # No path supplied
 
-# query I
-# select variant_keys(a) from struct_cast_data();
-# ----
-# [a]
-# [a, b, c]
+query I
+select variant_keys(a, '') from struct_cast_data();
+----
+[a]
+[a, b, c]
+
+# Empty path supplied
+
+query I
+select variant_keys(a, '') from struct_cast_data();
+----
+[a]
+[a, b, c]
 
 # Single path supplied
 
-# query I
-# select variant_keys(a, 'c') from struct_cast_data();
-# ----
-# []
-# [d]
+query I
+select variant_keys(a, 'c') from struct_cast_data();
+----
+[]
+[d]
 
 # Multiple paths supplied
 
-# query I
-# select variant_keys(a, ['', 'c']) from struct_cast_data();
-# ----
-# [[a], []]
-# [[a, b, c], [d]]
+query I
+select variant_keys(a, ['', 'c']) from struct_cast_data();
+----
+[[a], []]
+[[a, b, c], [d]]
 
 # Arrays do not have keys
 
-# query I
-# select variant_keys(['duck', 'goose']::VARIANT) from struct_cast_data();
-# ----
-# []
-#
-# statement ok
-# create table t1 as
-# select range, case when range % 2 = 0 then {"duck": 42}::VARIANT else {"duck": 42, "goose": 43}::VARIANT end j
-# from range(10000)
-#
-# query II
-# select range % 2 g, sum(length(variant_keys(j))) c
-# from t1
-# group by g
-# order by all
-# ----
-# 0	5000
-# 1	10000
-#
-# statement ok
-# create table t2 as
-# select range, {'duck': {'key1': 42}, 'goose': {'key1': 42, 'key2': 43}}::VARIANT j
-# from range(10000)
-#
-# query T
-# select sum(list_sum([length(l) for l in variant_keys(j, ['duck', 'goose'])])) s
-# from t2
-# ----
-# 30000
+query I
+select variant_keys(['duck', 'goose']::VARIANT);
+----
+[]
+
+# Primitive values do not have keys
+
+query I
+select variant_keys(''::VARIANT);
+----
+[]
+
+query I
+select variant_keys(42::VARIANT);
+----
+[]
+
+statement ok
+create table t1 as
+select range, case when range % 2 = 0 then {"duck": 42}::VARIANT else {"duck": 42, "goose": 43}::VARIANT end j
+from range(10000)
+
+query II
+select range % 2 g, sum(length(variant_keys(j))) c
+from t1
+group by g
+order by all
+----
+0	5000
+1	10000
+
+statement ok
+create table t2 as
+select range, {'duck': {'key1': 42}, 'goose': {'key1': 42, 'key2': 43}}::VARIANT j
+from range(10000)
+
+query T
+select sum(list_sum([length(l) for l in variant_keys(j, ['duck', 'goose'])])) s
+from t2
+----
+30000
+
+# --- shredded variant --- #
