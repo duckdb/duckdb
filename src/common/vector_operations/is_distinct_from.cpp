@@ -33,10 +33,9 @@ void VectorOperations::NotDistinctFrom(const Vector &left, const Vector &right, 
 }
 
 template <class FILL_FN, class PREDICATE>
-static idx_t DistinctComparatorSelect(const Vector &left, const Vector &right,
-                                      optional_ptr<const SelectionVector> sel, idx_t count,
-                                      optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
-                                      FILL_FN fill_fn, PREDICATE predicate) {
+static idx_t DistinctComparatorSelect(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
+                                      idx_t count, optional_ptr<SelectionVector> true_sel,
+                                      optional_ptr<SelectionVector> false_sel, FILL_FN fill_fn, PREDICATE predicate) {
 	Vector comparator_result(LogicalType::TINYINT, count);
 	fill_fn(left, right, comparator_result, count);
 	auto cmp_data = comparator_result.Values<int8_t>();
@@ -61,19 +60,19 @@ static idx_t DistinctComparatorSelect(const Vector &left, const Vector &right,
 }
 
 // true := A != B with nulls being equal
-idx_t VectorOperations::DistinctFrom(const Vector &left, const Vector &right,
-                                     optional_ptr<const SelectionVector> sel, idx_t count,
-                                     optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
-	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel, VectorOperations::DistinctComparatorFill,
-	                                [](int8_t v) { return v != 0; });
+idx_t VectorOperations::DistinctFrom(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
+                                     idx_t count, optional_ptr<SelectionVector> true_sel,
+                                     optional_ptr<SelectionVector> false_sel) {
+	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel,
+	                                VectorOperations::DistinctComparatorFill, [](int8_t v) { return v != 0; });
 }
 // true := A == B with nulls being equal
 idx_t VectorOperations::NotDistinctFrom(const Vector &left, const Vector &right,
                                         optional_ptr<const SelectionVector> sel, idx_t count,
                                         optional_ptr<SelectionVector> true_sel,
                                         optional_ptr<SelectionVector> false_sel) {
-	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel, VectorOperations::DistinctComparatorFill,
-	                                [](int8_t v) { return v == 0; });
+	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel,
+	                                VectorOperations::DistinctComparatorFill, [](int8_t v) { return v == 0; });
 }
 
 // true := A > B with nulls being maximal
@@ -82,8 +81,8 @@ idx_t VectorOperations::DistinctGreaterThan(const Vector &left, const Vector &ri
                                             optional_ptr<SelectionVector> true_sel,
                                             optional_ptr<SelectionVector> false_sel,
                                             optional_ptr<ValidityMask> null_mask) {
-	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel, VectorOperations::DistinctComparatorFill,
-	                                [](int8_t v) { return v > 0; });
+	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel,
+	                                VectorOperations::DistinctComparatorFill, [](int8_t v) { return v > 0; });
 }
 
 // true := A > B with nulls being minimal
@@ -102,8 +101,8 @@ idx_t VectorOperations::DistinctGreaterThanEquals(const Vector &left, const Vect
                                                   optional_ptr<SelectionVector> true_sel,
                                                   optional_ptr<SelectionVector> false_sel,
                                                   optional_ptr<ValidityMask> null_mask) {
-	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel, VectorOperations::DistinctComparatorFill,
-	                                [](int8_t v) { return v >= 0; });
+	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel,
+	                                VectorOperations::DistinctComparatorFill, [](int8_t v) { return v >= 0; });
 }
 // true := A < B with nulls being maximal
 idx_t VectorOperations::DistinctLessThan(const Vector &left, const Vector &right,
@@ -111,8 +110,8 @@ idx_t VectorOperations::DistinctLessThan(const Vector &left, const Vector &right
                                          optional_ptr<SelectionVector> true_sel,
                                          optional_ptr<SelectionVector> false_sel,
                                          optional_ptr<ValidityMask> null_mask) {
-	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel, VectorOperations::DistinctComparatorFill,
-	                                [](int8_t v) { return v < 0; });
+	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel,
+	                                VectorOperations::DistinctComparatorFill, [](int8_t v) { return v < 0; });
 }
 
 // true := A < B with nulls being minimal
@@ -131,24 +130,24 @@ idx_t VectorOperations::DistinctLessThanEquals(const Vector &left, const Vector 
                                                optional_ptr<SelectionVector> true_sel,
                                                optional_ptr<SelectionVector> false_sel,
                                                optional_ptr<ValidityMask> null_mask) {
-	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel, VectorOperations::DistinctComparatorFill,
-	                                [](int8_t v) { return v <= 0; });
+	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel,
+	                                VectorOperations::DistinctComparatorFill, [](int8_t v) { return v <= 0; });
 }
 
 // true := A != B with nulls being equal, inputs selected
 idx_t VectorOperations::NestedNotEquals(const Vector &left, const Vector &right,
                                         optional_ptr<const SelectionVector> sel, idx_t count,
-                                        optional_ptr<SelectionVector> true_sel,
-                                        optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
-	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel, VectorOperations::DistinctComparatorFill,
-	                                [](int8_t v) { return v != 0; });
+                                        optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+                                        optional_ptr<ValidityMask> null_mask) {
+	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel,
+	                                VectorOperations::DistinctComparatorFill, [](int8_t v) { return v != 0; });
 }
 // true := A == B with nulls being equal, inputs selected
 idx_t VectorOperations::NestedEquals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
                                      idx_t count, optional_ptr<SelectionVector> true_sel,
                                      optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
-	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel, VectorOperations::DistinctComparatorFill,
-	                                [](int8_t v) { return v == 0; });
+	return DistinctComparatorSelect(left, right, sel, count, true_sel, false_sel,
+	                                VectorOperations::DistinctComparatorFill, [](int8_t v) { return v == 0; });
 }
 
 } // namespace duckdb

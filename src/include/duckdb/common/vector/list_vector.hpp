@@ -112,7 +112,7 @@ struct ListVector {
 	DUCKDB_API static idx_t GetConsecutiveChildList(const Vector &list, Vector &result, idx_t offset, idx_t count);
 	//! Returns information to only copy a section of a list child vector
 	DUCKDB_API static ConsecutiveChildListInfo GetConsecutiveChildListInfo(const Vector &list, idx_t offset,
-	                                                                        idx_t count);
+	                                                                       idx_t count);
 	//! Slice and flatten a child vector to only contain a consecutive subsection of the child entries
 	DUCKDB_API static void GetConsecutiveChildSelVector(const Vector &list, SelectionVector &sel, idx_t offset,
 	                                                    idx_t count);

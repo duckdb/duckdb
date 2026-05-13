@@ -30,7 +30,7 @@ typedef void (*initialize_t)(ArrowAppendData &result, const LogicalType &type, i
 // to: The last index of the input we're scanning
 // input_size: The total size of the 'input' Vector.
 typedef void (*append_vector_t)(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to,
-                               idx_t input_size);
+                                idx_t input_size);
 typedef void (*finalize_t)(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result);
 
 // This struct is used to save state for appending a column

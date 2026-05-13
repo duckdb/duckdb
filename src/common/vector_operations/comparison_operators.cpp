@@ -207,9 +207,8 @@ static idx_t GetComparisonCount(const Vector &left, const Vector &right, const c
 	const bool left_is_const = left.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	const bool right_is_const = right.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	if (!left_is_const && !right_is_const && left.size() != right.size()) {
-		throw InternalException(
-		    "Mismatch in input vector sizes for %s - left has %d rows but right has %d", fname, left.size(),
-		    right.size());
+		throw InternalException("Mismatch in input vector sizes for %s - left has %d rows but right has %d", fname,
+		                        left.size(), right.size());
 	}
 	return left_is_const ? right.size() : left.size();
 }
@@ -535,8 +534,8 @@ static void ListOrArrayComparator(const Vector &left, const Vector &right, int8_
 	}
 }
 
-static void ListComparator(const Vector &left, const Vector &right, int8_t *result_data,
-                           const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
+static void ListComparator(const Vector &left, const Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
+                           const SelectionVector &rhs_sel, idx_t sel_count,
                            optional_ptr<ValidityMask> result_validity = nullptr) {
 	ListEntryAccessor accessor;
 	ListOrArrayComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor, result_validity);
@@ -550,8 +549,7 @@ static void ArrayComparator(const Vector &left, const Vector &right, int8_t *res
 }
 
 static void VariantComparator(const Vector &left, const Vector &right, int8_t *result_data,
-                              const SelectionVector &lhs_sel,
-                              const SelectionVector &rhs_sel, idx_t sel_count,
+                              const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
                               optional_ptr<ValidityMask> result_validity = nullptr) {
 	RecursiveUnifiedVectorFormat left_recursive_data, right_recursive_data;
 	Vector::RecursiveToUnifiedFormat(left, left_recursive_data);
@@ -757,8 +755,8 @@ void VectorOperations::Comparator(const Vector &left, const Vector &right, Vecto
 template <class T, class OP>
 static void DistinctExecuteGenericLoop(const T *__restrict ldata, const T *__restrict rdata,
                                        int8_t *__restrict result_data, const SelectionVector *__restrict lsel,
-                                       const SelectionVector *__restrict rsel, idx_t count,
-                                       const ValidityMask &lmask, const ValidityMask &rmask) {
+                                       const SelectionVector *__restrict rsel, idx_t count, const ValidityMask &lmask,
+                                       const ValidityMask &rmask) {
 	for (idx_t i = 0; i < count; i++) {
 		auto lindex = lsel->get_index(i);
 		auto rindex = rsel->get_index(i);
@@ -794,7 +792,8 @@ static void DistinctExecute(const Vector &left, const Vector &right, Vector &res
 }
 
 template <class OP>
-static bool TryPrimitiveDistinctComparatorExecute(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+static bool TryPrimitiveDistinctComparatorExecute(const Vector &left, const Vector &right, Vector &result,
+                                                  idx_t count) {
 #ifdef DUCKDB_SMALLER_BINARY
 	return false;
 #else

@@ -95,8 +95,8 @@ struct VectorOperations {
 	                       idx_t count, optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
 	                       optional_ptr<ValidityMask> null_mask = nullptr);
 	static idx_t GreaterThan(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
-	                         idx_t count, optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
-	                         optional_ptr<ValidityMask> null_mask = nullptr);
+	                         idx_t count, optional_ptr<SelectionVector> true_sel,
+	                         optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask = nullptr);
 	static idx_t GreaterThanEquals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
 	                               idx_t count, optional_ptr<SelectionVector> true_sel,
 	                               optional_ptr<SelectionVector> false_sel,
@@ -136,8 +136,7 @@ struct VectorOperations {
 	// true := A <= B with nulls being maximal
 	static idx_t DistinctLessThanEquals(const Vector &left, const Vector &right,
 	                                    optional_ptr<const SelectionVector> sel, idx_t count,
-	                                    optional_ptr<SelectionVector> true_sel,
-	                                    optional_ptr<SelectionVector> false_sel,
+	                                    optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
 	                                    optional_ptr<ValidityMask> null_mask = nullptr);
 	// true := A > B with nulls being minimal
 	static idx_t DistinctGreaterThanNullsFirst(const Vector &left, const Vector &right,
@@ -163,8 +162,7 @@ struct VectorOperations {
 	// true := A == B with nulls being equal
 	static idx_t NestedEquals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
 	                          idx_t count, optional_ptr<SelectionVector> true_sel,
-	                          optional_ptr<SelectionVector> false_sel,
-	                          optional_ptr<ValidityMask> null_mask = nullptr);
+	                          optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask = nullptr);
 
 	//===--------------------------------------------------------------------===//
 	// Hash functions

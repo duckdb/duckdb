@@ -77,8 +77,7 @@ ScalarFunction GetBitFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 static void SetBitOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	TernaryExecutor::Execute<string_t, int32_t, int32_t, string_t>(
-	    args.data[0], args.data[1], args.data[2], result,
-	    [&](string_t input, int32_t n, int32_t new_value) {
+	    args.data[0], args.data[1], args.data[2], result, [&](string_t input, int32_t n, int32_t new_value) {
 		    if (new_value != 0 && new_value != 1) {
 			    throw InvalidInputException("The new bit must be 1 or 0");
 		    }

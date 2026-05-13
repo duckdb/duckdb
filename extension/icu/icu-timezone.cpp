@@ -602,17 +602,16 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 				throw InternalException("ICUTimeZone called with constant NULL tz");
 			}
 			SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
-			UnaryExecutor::Execute<SRC, DST>(ts_vec, result,
-			                                 [&](SRC ts) { return OP::Operation(calendar, ts); });
+			UnaryExecutor::Execute<SRC, DST>(ts_vec, result, [&](SRC ts) { return OP::Operation(calendar, ts); });
 		} else {
 			BinaryExecutor::Execute<string_t, SRC, DST>(tz_vec, ts_vec, result, [&](string_t tz_id, SRC ts) {
-				                                            if (ts.IsFinite()) {
-					                                            SetTimeZone(calendar, tz_id);
-					                                            return OP::Operation(calendar, ts);
-				                                            } else {
-					                                            return ICUCast::Operation<SRC, DST>(ts);
-				                                            }
-			                                            });
+				if (ts.IsFinite()) {
+					SetTimeZone(calendar, tz_id);
+					return OP::Operation(calendar, ts);
+				} else {
+					return ICUCast::Operation<SRC, DST>(ts);
+				}
+			});
 		}
 	}
 

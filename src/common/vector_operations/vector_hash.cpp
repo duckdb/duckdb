@@ -526,9 +526,8 @@ void VectorOperations::CombineHash(Vector &hashes, const Vector &input) {
 	const bool hashes_const = hashes.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	const bool input_const = input.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	if (!hashes_const && !input_const && hashes.size() != input.size()) {
-		throw InternalException(
-		    "Mismatch in input vector sizes for CombineHash - hashes has %d rows but input has %d", hashes.size(),
-		    input.size());
+		throw InternalException("Mismatch in input vector sizes for CombineHash - hashes has %d rows but input has %d",
+		                        hashes.size(), input.size());
 	}
 	CombineHash(hashes, input, hashes_const ? input.size() : hashes.size());
 }

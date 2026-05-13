@@ -31,8 +31,7 @@ static void AgeFunction(DataChunk &input, ExpressionState &state, Vector &result
 	D_ASSERT(input.ColumnCount() == 2);
 
 	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t>(
-	    input.data[0], input.data[1], result,
-	    [&](timestamp_t input1, timestamp_t input2) -> optional<interval_t> {
+	    input.data[0], input.data[1], result, [&](timestamp_t input1, timestamp_t input2) -> optional<interval_t> {
 		    if (input1.IsFinite() && input2.IsFinite()) {
 			    return Interval::GetAge(input1, input2);
 		    } else {

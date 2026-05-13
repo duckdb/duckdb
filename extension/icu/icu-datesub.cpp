@@ -235,15 +235,14 @@ struct ICUCalendarDiff : public ICUDateFunc {
 				const auto part = GetDatePartSpecifier(specifier);
 				auto trunc_func = DiffTruncationFactory(part);
 				auto sub_func = SubtractFactory(part);
-				BinaryExecutor::Execute<T, T, int64_t>(startdate_arg, enddate_arg, result,
-				                                       [&](T start_date, T end_date) -> optional<int64_t> {
-					                                       if (start_date.IsFinite() && end_date.IsFinite()) {
-						                                       return DifferenceFunc<T>(calendar, start_date, end_date,
-						                                                                trunc_func, sub_func);
-					                                       } else {
-						                                       return nullopt;
-					                                       }
-				                                       });
+				BinaryExecutor::Execute<T, T, int64_t>(
+				    startdate_arg, enddate_arg, result, [&](T start_date, T end_date) -> optional<int64_t> {
+					    if (start_date.IsFinite() && end_date.IsFinite()) {
+						    return DifferenceFunc<T>(calendar, start_date, end_date, trunc_func, sub_func);
+					    } else {
+						    return nullopt;
+					    }
+				    });
 			}
 		} else {
 			TernaryExecutor::Execute<string_t, T, T, int64_t>(

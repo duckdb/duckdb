@@ -204,8 +204,8 @@ idx_t SelectComparison<LessThan>(const Vector &left, const Vector &right, const 
 }
 
 template <>
-idx_t SelectComparison<LessThanEquals>(const Vector &left, const Vector &right, const SelectionVector &sel,
-                                       idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t SelectComparison<LessThanEquals>(const Vector &left, const Vector &right, const SelectionVector &sel, idx_t count,
+                                       SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::DistinctLessThanEquals(left, right, &sel, count, true_sel, false_sel);
 }
 

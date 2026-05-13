@@ -82,7 +82,8 @@ void RowOperations::UpdateFilteredStates(RowOperationsState &state, AggregateFil
 	UpdateStates(state, aggr, filtered_addresses, filter_data.filtered_payload, arg_idx);
 }
 
-void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &layout, Vector &sources, Vector &targets) {
+void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &layout, Vector &sources,
+                                  Vector &targets) {
 	if (sources.size() != targets.size()) {
 		throw InternalException("Mismatch in vector sizes for CombineStates - sources has %d rows but targets has %d",
 		                        sources.size(), targets.size());

@@ -179,8 +179,7 @@ void StringDecompressFunction(DataChunk &args, ExpressionState &state, Vector &r
 	auto &allocator = ExecuteFunctionState::GetFunctionState(state)->Cast<StringDecompressLocalState>().allocator;
 	allocator.Reset();
 	UnaryExecutor::Execute<INPUT_TYPE, string_t>(
-	    args.data[0], result,
-	    [&](const INPUT_TYPE &input) { return StringDecompress<INPUT_TYPE>(input, allocator); },
+	    args.data[0], result, [&](const INPUT_TYPE &input) { return StringDecompress<INPUT_TYPE>(input, allocator); },
 	    FunctionErrors::CANNOT_ERROR);
 }
 

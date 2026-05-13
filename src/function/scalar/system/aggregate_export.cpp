@@ -142,8 +142,7 @@ struct AggregateStateLayout {
 struct LoadFieldOp {
 	template <class T>
 	static void Operation(idx_t root_stride, const Vector &struct_vec, idx_t field_idx,
-	                      const UnifiedVectorFormat &state_data, idx_t count, data_ptr_t base_ptr,
-	                      idx_t field_offset) {
+	                      const UnifiedVectorFormat &state_data, idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
 		const auto &child = StructVector::GetEntries(struct_vec)[field_idx];
 		auto child_data = FlatVector::GetData<T>(child);
 

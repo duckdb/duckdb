@@ -432,7 +432,7 @@ public:
 	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
 	static void ExecuteTernary(const Vector &a, const Vector &b, const Vector &c, Vector &result, FUNC fun) {
 		ExecuteTernaryInternal<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUNC>(a, b, c, result,
-		                                                                   GetExecuteCount({&a, &b, &c}), fun);
+		                                                                  GetExecuteCount({&a, &b, &c}), fun);
 	}
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class D_TYPE, class RESULT_TYPE,
 	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
@@ -444,9 +444,8 @@ public:
 	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
 	static void ExecuteQuaternary(const Vector &a, const Vector &b, const Vector &c, const Vector &d, Vector &result,
 	                              FUNC fun) {
-		ExecuteQuaternaryInternal<A_TYPE, B_TYPE, C_TYPE, D_TYPE, RESULT_TYPE, FUNC>(a, b, c, d, result,
-		                                                                               GetExecuteCount({&a, &b, &c, &d}),
-		                                                                               fun);
+		ExecuteQuaternaryInternal<A_TYPE, B_TYPE, C_TYPE, D_TYPE, RESULT_TYPE, FUNC>(
+		    a, b, c, d, result, GetExecuteCount({&a, &b, &c, &d}), fun);
 	}
 };
 

@@ -33,8 +33,7 @@ void ExecuteMakeDate(DataChunk &input, ExpressionState &state, Vector &result) {
 	const auto &mm = input.data[1];
 	const auto &dd = input.data[2];
 
-	TernaryExecutor::Execute<T, T, T, date_t>(yyyy, mm, dd, result,
-	                                          MakeDateOperator::Operation<T, T, T, date_t>);
+	TernaryExecutor::Execute<T, T, T, date_t>(yyyy, mm, dd, result, MakeDateOperator::Operation<T, T, T, date_t>);
 }
 
 template <typename T>

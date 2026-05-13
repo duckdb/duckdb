@@ -47,8 +47,7 @@ static void JaccardFunction(DataChunk &args, ExpressionState &state, Vector &res
 	const auto &tgt_vec = args.data[1];
 
 	BinaryExecutor::Execute<string_t, string_t, double>(
-	    str_vec, tgt_vec, result,
-	    [&](string_t str, string_t tgt) { return JaccardScalarFunction(result, str, tgt); });
+	    str_vec, tgt_vec, result, [&](string_t str, string_t tgt) { return JaccardScalarFunction(result, str, tgt); });
 }
 
 ScalarFunction JaccardFun::GetFunction() {

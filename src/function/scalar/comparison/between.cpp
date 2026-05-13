@@ -87,9 +87,8 @@ struct ExclusiveBetweenOperator {
 
 template <class OP>
 static idx_t BetweenLoopTypeSwitch(const Vector &input, const Vector &lower, const Vector &upper,
-                                   optional_ptr<const SelectionVector> sel,
-                                   idx_t count, optional_ptr<SelectionVector> true_sel,
-                                   optional_ptr<SelectionVector> false_sel) {
+                                   optional_ptr<const SelectionVector> sel, idx_t count,
+                                   optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
 	switch (input.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

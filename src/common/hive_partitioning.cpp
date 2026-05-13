@@ -260,8 +260,7 @@ static void GetNestedHivePartitionValues(const Vector &input, vector<HivePartiti
 	}
 }
 
-static void GetHivePartitionValuesTypeSwitch(const Vector &input, vector<HivePartitionKey> &keys,
-                                             const idx_t col_idx) {
+static void GetHivePartitionValuesTypeSwitch(const Vector &input, vector<HivePartitionKey> &keys, const idx_t col_idx) {
 	const auto &type = input.GetType();
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:

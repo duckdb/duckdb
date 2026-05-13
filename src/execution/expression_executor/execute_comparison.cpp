@@ -202,9 +202,8 @@ idx_t VectorOperations::LessThan(const Vector &left, const Vector &right, option
 	                                 [](int8_t v) { return v < 0; });
 }
 
-idx_t VectorOperations::LessThanEquals(const Vector &left, const Vector &right,
-                                       optional_ptr<const SelectionVector> sel, idx_t count,
-                                       optional_ptr<SelectionVector> true_sel,
+idx_t VectorOperations::LessThanEquals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
+                                       idx_t count, optional_ptr<SelectionVector> true_sel,
                                        optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 	idx_t result;
 	if (TryPrimitiveSelectOperation<duckdb::GreaterThanEquals>(right, left, sel, count, true_sel, false_sel, null_mask,

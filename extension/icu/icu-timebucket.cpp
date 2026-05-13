@@ -601,8 +601,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 			}
 		} else {
 			TernaryExecutor::Execute<interval_t, timestamp_tz_t, string_t, timestamp_tz_t>(
-			    bucket_width_arg, ts_arg, tz_arg, result,
-			    [&](interval_t bucket_width, timestamp_tz_t ts, string_t tz) {
+			    bucket_width_arg, ts_arg, tz_arg, result, [&](interval_t bucket_width, timestamp_tz_t ts, string_t tz) {
 				    return TimeZoneTernaryOperator::Operation(bucket_width, ts, tz, calendar);
 			    });
 		}

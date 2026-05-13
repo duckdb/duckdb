@@ -75,8 +75,8 @@ struct SelectFunctor {
 	}
 };
 
-idx_t RadixPartitioning::Select(const Vector &hashes, const SelectionVector *sel, const idx_t count, const idx_t radix_bits,
-                                const ValidityMask &partition_mask, SelectionVector *true_sel,
+idx_t RadixPartitioning::Select(const Vector &hashes, const SelectionVector *sel, const idx_t count,
+                                const idx_t radix_bits, const ValidityMask &partition_mask, SelectionVector *true_sel,
                                 SelectionVector *false_sel) {
 	return RadixBitsSwitch<SelectFunctor, idx_t>(radix_bits, hashes, sel, count, partition_mask, true_sel, false_sel);
 }

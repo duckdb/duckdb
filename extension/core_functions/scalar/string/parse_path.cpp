@@ -161,8 +161,7 @@ static void TrimPathFunction(DataChunk &args, ExpressionState &state, Vector &re
 	ReadOptionalArgs(args, separator, trim_extension, FRONT_TRIM);
 
 	TernaryExecutor::Execute<string_t, string_t, bool, string_t>(
-	    path, separator, trim_extension, result,
-	    [&](string_t &inputs, string_t input_sep, bool trim_extension) {
+	    path, separator, trim_extension, result, [&](string_t &inputs, string_t input_sep, bool trim_extension) {
 		    auto data = inputs.GetData();
 		    auto input_size = inputs.GetSize();
 		    auto sep = GetSeparator(input_sep.GetString());

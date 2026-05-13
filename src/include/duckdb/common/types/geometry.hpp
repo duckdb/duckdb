@@ -277,8 +277,8 @@ public:
 	DUCKDB_API static uint32_t GetExtent(const string_t &wkb, GeometryExtent &extent, bool &has_any_empty);
 
 	//! Convert to vectorized format
-	DUCKDB_API static void ToVectorizedFormat(const Vector &source, Vector &target, idx_t count,
-	                                          GeometryType geom_type, VertexType vert_type);
+	DUCKDB_API static void ToVectorizedFormat(const Vector &source, Vector &target, idx_t count, GeometryType geom_type,
+	                                          VertexType vert_type);
 	DUCKDB_API static void ToVectorizedFormat(const Vector &source, Vector &target, idx_t count,
 	                                          GeometryStorageType type);
 	//! Convert from vectorized format

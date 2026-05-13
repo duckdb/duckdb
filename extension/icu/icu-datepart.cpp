@@ -309,8 +309,7 @@ struct ICUDatePart : public ICUDateFunc {
 		auto calendar = calendar_ptr.get();
 
 		BinaryExecutor::Execute<string_t, INPUT_TYPE, RESULT_TYPE>(
-		    part_arg, date_arg, result,
-		    [&](string_t specifier, INPUT_TYPE input) -> optional<RESULT_TYPE> {
+		    part_arg, date_arg, result, [&](string_t specifier, INPUT_TYPE input) -> optional<RESULT_TYPE> {
 			    if (input.IsFinite()) {
 				    const auto micros = SetTime(calendar, input);
 				    auto adapter = PartCodeBigintFactory(GetDatePartSpecifier(specifier.GetString()));

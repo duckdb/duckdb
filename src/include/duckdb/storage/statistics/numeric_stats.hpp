@@ -111,7 +111,8 @@ private:
 	static Value MinOrNull(const BaseStatistics &stats);
 	static Value MaxOrNull(const BaseStatistics &stats);
 	template <class T>
-	static void TemplatedVerify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count);
+	static void TemplatedVerify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel,
+	                            idx_t count);
 };
 
 } // namespace duckdb

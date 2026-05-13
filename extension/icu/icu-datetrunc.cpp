@@ -150,17 +150,16 @@ struct ICUDateTrunc : public ICUDateFunc {
 				}
 			});
 		} else {
-			BinaryExecutor::Execute<string_t, T, T>(
-			    part_arg, date_arg, result, [&](string_t specifier, T input) {
-				    if (input.IsFinite()) {
-					    auto truncator = TruncationFactory(GetDatePartSpecifier(specifier.GetString()));
-					    auto micros = SetTime(calendar.get(), input);
-					    truncator(calendar.get(), micros);
-					    return GetTimeUnsafe(calendar.get(), micros);
-				    } else {
-					    return input;
-				    }
-			    });
+			BinaryExecutor::Execute<string_t, T, T>(part_arg, date_arg, result, [&](string_t specifier, T input) {
+				if (input.IsFinite()) {
+					auto truncator = TruncationFactory(GetDatePartSpecifier(specifier.GetString()));
+					auto micros = SetTime(calendar.get(), input);
+					truncator(calendar.get(), micros);
+					return GetTimeUnsafe(calendar.get(), micros);
+				} else {
+					return input;
+				}
+			});
 		}
 	}
 

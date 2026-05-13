@@ -7,7 +7,8 @@
 namespace duckdb {
 
 template <class T, class RETURN_TYPE, bool FIND_NULLS>
-idx_t ListSearchSimpleOp(const Vector &input_list, const Vector &list_child, const Vector &target, Vector &result, const idx_t count) {
+idx_t ListSearchSimpleOp(const Vector &input_list, const Vector &list_child, const Vector &target, Vector &result,
+                         const idx_t count) {
 	// If the return type is not a bool, return the position
 	const auto return_pos = std::is_same<RETURN_TYPE, int32_t>::value;
 
@@ -105,7 +106,8 @@ idx_t ListSearchNestedOp(const Vector &list_vec, const Vector &source_vec, const
 //! usually the "source" vector is the list child vector, but it is passed separately to enable searching nested
 //! children, for example when searching the keys of a MAP vectors.
 template <class RETURN_TYPE, bool FIND_NULLS = false>
-idx_t ListSearchOp(const Vector &list_v, const Vector &source_v, const Vector &target_v, Vector &result_v, idx_t target_count) {
+idx_t ListSearchOp(const Vector &list_v, const Vector &source_v, const Vector &target_v, Vector &result_v,
+                   idx_t target_count) {
 	const auto type = target_v.GetType().InternalType();
 	switch (type) {
 	case PhysicalType::BOOL:

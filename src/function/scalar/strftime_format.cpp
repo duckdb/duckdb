@@ -746,8 +746,8 @@ void StrfTimeFormat::ConvertTimestampNSVector(const Vector &input, Vector &resul
 	         input.GetType().id() == LogicalTypeId::TIMESTAMP_TZ_NS);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<timestamp_ns_t, string_t>(input, result,
-	                                                 [&](timestamp_ns_t ts) { return ConvertTimestampValue(ts, heap); });
+	UnaryExecutor::Execute<timestamp_ns_t, string_t>(
+	    input, result, [&](timestamp_ns_t ts) { return ConvertTimestampValue(ts, heap); });
 }
 
 void StrpTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) {

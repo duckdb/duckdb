@@ -16,7 +16,8 @@ void ArrowStructData::Initialize(ArrowAppendData &result, const LogicalType &typ
 	}
 }
 
-void ArrowStructData::Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to, idx_t input_size) {
+void ArrowStructData::Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to,
+                             idx_t input_size) {
 	UnifiedVectorFormat format;
 	input.ToUnifiedFormat(format);
 	idx_t size = to - from;
