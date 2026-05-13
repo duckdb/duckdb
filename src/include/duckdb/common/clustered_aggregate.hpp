@@ -10,10 +10,23 @@
 
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 
 class Vector;
+struct ClusteredAggrState;
+
+//! Per-dictionary-ID properties cached on ClusteredAggrState.
+//! Present in the map ⇒ dict has been inspected. `safe_vals` nullptr means inspected-and-rejected
+//! (so we skip without re-checking). Non-null `safe_vals` means eligible for the fast clustered
+//! sum path: every value in [0, eff_size) fits in int32 and is copied here; positions [eff_size,
+//! dict_size) are zeroed so out-of-range index loads add 0 instead of garbage.
+struct DictProps {
+	idx_t eff_size = 0;
+	unsafe_unique_array<int32_t> safe_vals;
+};
 
 //! Per-chunk tuple clustering by group. Built once and passed to aggregate kernels.
 //! Clustered-aware kernels can use per-run accumulation; everyone else keeps the
@@ -41,6 +54,10 @@ struct ClusteredAggr {
 
 	idx_t n_group_runs = 0;
 	GroupRun group_runs[MAX_RUNS];
+
+	//! Back-pointer to the per-pipeline state. Set by TryBuild. Used by kernels to look up
+	//! per-dict-id cached properties without growing AggregateInputData.
+	const ClusteredAggrState *state = nullptr;
 
 	//! Build a clustered permutation of 0..count-1 from raw integer group ids.
 	//! On success fills group_runs[].sel/gid/count.
@@ -76,8 +93,17 @@ struct ClusteredAggrState {
 	idx_t skipped_opportunities = 0;
 	idx_t retry_backoff = 1;
 
+	//! Per-dictionary-ID properties cache. Populated on first use of a given dict id; reused across
+	//! aggregates and chunks for as long as the pipeline state lives. Mirrors the pattern of the
+	//! per-dict cache in GroupedAggregateHashTable.
+	mutable unordered_map<string, DictProps> dict_props;
+
 	void Initialize();
 	bool TryBuild(ClusteredAggr &clustered, const uint64_t *group_ids, idx_t count);
+
+	//! Look up (or compute) the dict properties for the given DICTIONARY_VECTOR input.
+	//! Returns nullptr when the dict has no id (filter-slice DICTs are not cached here).
+	const DictProps *GetDictProps(const Vector &input) const;
 };
 
 } // namespace duckdb

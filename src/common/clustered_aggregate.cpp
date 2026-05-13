@@ -1,6 +1,8 @@
 #include "duckdb/common/clustered_aggregate.hpp"
 
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
@@ -267,6 +269,16 @@ const sel_t *ClusteredAggr::ClusterIter(const Vector &input, idx_t count) const 
 	if (dict_data == nullptr) {
 		return nullptr;
 	}
+	// Only cache for filter-slice DICTs: either the dictionary is the size of a full vector
+	// (each row has its own entry), or the DictionaryVector has no id (filter-applied wrapping).
+	// Parquet-native DICTs have a small dict with an id; every column has its own dict_sel so the
+	// single-entry cache cannot help across aggregates. Fall through to SIMPLE_DICT=false path.
+	const auto dict_size_opt = DictionaryVector::DictionarySize(input);
+	const idx_t dict_size = dict_size_opt.IsValid() ? dict_size_opt.GetIndex() : STANDARD_VECTOR_SIZE;
+	const bool is_filter_slice = dict_size >= STANDARD_VECTOR_SIZE || DictionaryVector::DictionaryId(input).empty();
+	if (!is_filter_slice) {
+		return nullptr;
+	}
 	if (cached_dict_sel == dict_data) {
 		return composed_sel_data;
 	}
@@ -304,6 +316,7 @@ bool ClusteredAggrState::TryBuild(ClusteredAggr &clustered, const uint64_t *grou
 	}
 	if (count >= ClusteredAggr::SAMPLE_SIZE &&
 	    clustered.TryClustered(group_ids, static_cast<sel_t>(count), arena.get(), slots.get())) {
+		clustered.state = this;
 		skipped_opportunities = 0;
 		retry_backoff = 1;
 		return true;
@@ -312,4 +325,117 @@ bool ClusteredAggrState::TryBuild(ClusteredAggr &clustered, const uint64_t *grou
 	retry_backoff = MinValue<idx_t>(NumericLimits<idx_t>::Maximum() / 2, retry_backoff) * 2;
 	return false;
 }
+
+const DictProps *ClusteredAggrState::GetDictProps(const Vector &input) const {
+	if (input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+		return nullptr;
+	}
+	const auto &dict_id = DictionaryVector::DictionaryId(input);
+	if (dict_id.empty()) {
+		return nullptr;
+	}
+	auto it = dict_props.find(dict_id);
+	if (it != dict_props.end()) {
+		return &it->second;
+	}
+
+	// Default-insert a rejected entry up-front; we'll overwrite safe_vals if all conditions hold.
+	auto &slot = dict_props[dict_id];
+
+	static constexpr idx_t MAX_DICT_SIZE = 250;
+	const auto dict_size_opt = DictionaryVector::DictionarySize(input);
+	if (!dict_size_opt.IsValid()) {
+		return &slot;
+	}
+	const idx_t dict_size = dict_size_opt.GetIndex();
+	if (dict_size == 0 || dict_size > MAX_DICT_SIZE) {
+		return &slot;
+	}
+	auto &child = DictionaryVector::Child(input);
+	if (child.GetVectorType() != VectorType::FLAT_VECTOR) {
+		return &slot;
+	}
+
+	// effective_dict_size = position of the first zero validity bit, capped at dict_size.
+	idx_t eff_size = dict_size;
+	auto &child_validity = FlatVector::Validity(child);
+	if (child_validity.CanHaveNull()) {
+		const uint64_t *raw = child_validity.GetData();
+		if (raw) {
+			eff_size = 0;
+			for (idx_t w = 0; w * 64 < dict_size; w++) {
+				const uint64_t inv = ~raw[w];
+				if (!inv) {
+					eff_size = (w + 1) * 64;
+				} else {
+					eff_size = w * 64 + CountZeros<uint64_t>::Trailing(inv);
+					break;
+				}
+			}
+			if (eff_size > dict_size) {
+				eff_size = dict_size;
+			}
+			// Require nulls (if any) to live ONLY in the trailing range [eff_size, dict_size).
+			// I.e. every word covering positions >= eff_size has the bits up to eff_size set and
+			// all higher bits inside dict_size clear (we only need to verify no '1' bits appear
+			// after the first '0', within the dict_size window).
+			for (idx_t w = (eff_size + 63) / 64; w * 64 < dict_size; w++) {
+				const uint64_t bits_in_window =
+				    raw[w] & ((dict_size - w * 64 >= 64) ? ~uint64_t(0) : ((uint64_t(1) << (dict_size - w * 64)) - 1));
+				if (bits_in_window != 0) {
+					// nulls aren't strictly trailing — reject
+					return &slot;
+				}
+			}
+		}
+	}
+	if (eff_size == 0) {
+		return &slot;
+	}
+
+	// int32 fit: every value in [0, eff_size) fits in [INT32_MIN, INT32_MAX]. Allocate the safe_vals
+	// buffer up-front so we can populate as we scan; release it on rejection.
+	auto buffer = make_unsafe_uniq_array_uninitialized<int32_t>(dict_size);
+	const auto child_phys = child.GetType().InternalType();
+	const int64_t kMin = static_cast<int64_t>(NumericLimits<int32_t>::Minimum());
+	const int64_t kMax = static_cast<int64_t>(NumericLimits<int32_t>::Maximum());
+	auto try_copy = [&](auto src) -> bool {
+		for (idx_t i = 0; i < eff_size; i++) {
+			const int64_t v = static_cast<int64_t>(src[i]);
+			if (v < kMin || v > kMax) {
+				return false;
+			}
+			buffer[i] = static_cast<int32_t>(v);
+		}
+		return true;
+	};
+	bool ok = false;
+	switch (child_phys) {
+	case PhysicalType::INT8:
+		ok = try_copy(FlatVector::GetData<int8_t>(child));
+		break;
+	case PhysicalType::INT16:
+		ok = try_copy(FlatVector::GetData<int16_t>(child));
+		break;
+	case PhysicalType::INT32:
+		ok = try_copy(FlatVector::GetData<int32_t>(child));
+		break;
+	case PhysicalType::INT64:
+		ok = try_copy(FlatVector::GetData<int64_t>(child));
+		break;
+	default:
+		break;
+	}
+	if (!ok) {
+		return &slot;
+	}
+	// Zero the trailing null positions so an out-of-range dict index just adds 0 in the kernel.
+	for (idx_t i = eff_size; i < dict_size; i++) {
+		buffer[i] = 0;
+	}
+	slot.eff_size = eff_size;
+	slot.safe_vals = std::move(buffer);
+	return &slot;
+}
+
 } // namespace duckdb

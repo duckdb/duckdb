@@ -52,6 +52,11 @@ struct ClusteredAddOp {
 
 template <class BASE, class LOCAL_OP>
 struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
+	// Tag picked up by the clustered aggregate executor: when true, an int input is summed into
+	// a hugeint state and the kernel can use an int64 local accumulator (with a no-overflow check
+	// on the dictionary) instead of doing per-row hugeint arithmetic.
+	static constexpr bool kClusteredI64HugeintSum = std::is_same<LOCAL_OP, ClusteredAddOp<AddToHugeint>>::value;
+
 	template <class INPUT_TYPE, class STATE>
 	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
 		LOCAL_OP::template Execute<STATE>(local, input);
