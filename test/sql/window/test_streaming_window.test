@@ -534,15 +534,22 @@ INSERT INTO issue17621 VALUES (1,1,1),
 	(1,2,4),
 	(1,4,4);
 
-# No data because scan order is non-deterministic.
-statement ok
+# Specify window and output order because the rollup aggregate output order is not deterministic.
+query IRIR
 SELECT 
 	k, 
 	STDDEV_POP(i), 
 	SUM(j), 
-	STDDEV_SAMP(k) OVER (ROWS UNBOUNDED PRECEDING) std_wf 
+	STDDEV_SAMP(k) OVER (ORDER BY k NULLS FIRST ROWS UNBOUNDED PRECEDING) std_wf 
 FROM issue17621 
 GROUP BY ROLLUP(k)
+ORDER BY k NULLS FIRST
+----
+NULL	0.0	48	NULL
+1	0.0	15	NULL
+2	0.0	11	0.7071067811865476
+3	0.0	11	1.0
+4	0.0	11	1.2909944487358056
 
 # UNION multiple local states
 query II

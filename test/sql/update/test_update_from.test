@@ -103,7 +103,7 @@ SELECT * FROM test
 # test with multiple updates per row (which is undefined),
 # but in this case the last value in the table will win
 # FIXME:
-mode skip
+mode skip instable
 
 statement ok
 INSERT INTO src VALUES (7)

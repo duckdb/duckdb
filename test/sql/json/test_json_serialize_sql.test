@@ -54,6 +54,12 @@ SELECT json_deserialize_sql(json_serialize_sql('SELECT AND LAUNCH ROCKETS WHERE 
 ----
 Parser Error: Error parsing json: parser: syntax error at or near "AND"
 
+# Deserialize large double constants
+query I
+SELECT json_deserialize_sql(json_serialize_sql('SELECT 1e10000'));
+----
+SELECT 1e1000
+
 # Test Execute JSON Serialized SQL
 query I
 SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT 1 + 2'));

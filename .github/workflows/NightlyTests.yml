@@ -475,6 +475,10 @@ jobs:
         shell: bash
         run: python3 scripts/ci/run_tests.py --test-config=test/configs/block_size_16kB.json ./build/relassert/test/unittest "*"
 
+      - name: All tests with a smaller initial column segment size
+        shell: bash
+        run: python3 scripts/ci/run_tests.py --test-config=test/configs/initial_column_segment_size.json ./build/relassert/test/unittest "*"
+
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
     runs-on: ubuntu-24.04
@@ -626,13 +630,22 @@ jobs:
        run: make unittest_relassert T="--track-runtime 30 --batch-timeout 120 --test-config=test/configs/hash_zero.json"
 
 
-  bwc_build:
+  bwc-build:
     name: Build DuckDB
     runs-on: ubuntu-latest
+    outputs:
+      groups: ${{ steps.resolve.outputs.groups }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Resolve versions
+        id: resolve
+        run: |
+          groups_json=$(python3 test/bwc/list_versions.py --groups-json)
+          echo "groups=${groups_json}" >> "$GITHUB_OUTPUT"
+          echo "Resolved BWC version groups: ${groups_json}"
 
       - name: Install
         run: python3 scripts/ci/retry.py -- make toolsci
@@ -653,28 +666,13 @@ jobs:
           path: build/release/duckdb
 
   bwc-test:
-    name: BWC Test (DuckDB ${{ matrix.old_duckdb_version }})
+    name: BWC Test (DuckDB ${{ matrix.series.group }})
     runs-on: ubuntu-latest
-    needs: bwc_build
+    needs: bwc-build
     strategy:
       fail-fast: false
       matrix:
-        old_duckdb_version:
-          - v1.1.0
-          - v1.1.1
-          - v1.1.2
-          - v1.1.3
-          - v1.2.0
-          - v1.2.1
-          - v1.2.2
-          - v1.3.0
-          - v1.3.1
-          - v1.3.2
-          - v1.4.0
-          - v1.4.1
-          - v1.4.2
-          - v1.4.3
-          - v1.4.4
+        series: ${{ fromJSON(needs.bwc-build.outputs.groups) }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -696,46 +694,64 @@ jobs:
       - name: Install Python dependencies
         run: python3 scripts/ci/retry.py -- pip install duckdb git+https://github.com/duckdb/duckdb-sqllogictest-python.git
 
-      - name: Download BWC cache
-        if: ${{ vars.ENABLE_BWC_CACHE_DOWNLOAD == 'true' }}
+      - name: Run BWC series
         run: |
-          VERSION=${{ matrix.old_duckdb_version }}
-          CACHE_ARCHIVE="runtime_${VERSION}.tar.gz"
+          versions='${{ toJson(matrix.series.versions) }}'
+          mapfile -t VERSION_LIST < <(python3 -c 'import json,sys; [print(v) for v in json.loads(sys.argv[1])]' "$versions")
+          FAILED=0
+          FAILED_VERSIONS=""
           RUNTIME_DIR="duckdb_unittest_tempdir/bwc/runtime"
           mkdir -p "${RUNTIME_DIR}"
+          mkdir -p duckdb_unittest_tempdir/bwc/cache
 
-          # Download the cache archive from test-utils repo
-          DOWNLOAD_URL="https://raw.githubusercontent.com/duckdb/bwc-test-utils/main/cache/${CACHE_ARCHIVE}"
-          HTTP_CODE=$(curl -sL -w '%{http_code}' -o "/tmp/${CACHE_ARCHIVE}" "${DOWNLOAD_URL}" || true)
+          for VERSION in "${VERSION_LIST[@]}"; do
+            echo "============================================================"
+            echo "Running BWC for ${VERSION} (group: ${{ matrix.series.group }})"
+            echo "============================================================"
 
-          if [ "${HTTP_CODE}" != "200" ]; then
-            echo "Failed to download cache for ${VERSION} (HTTP ${HTTP_CODE})"
+            if [ "${{ vars.ENABLE_BWC_CACHE_DOWNLOAD }}" = "true" ]; then
+              CACHE_ARCHIVE="runtime_${VERSION}.tar.gz"
+              DOWNLOAD_URL="https://raw.githubusercontent.com/duckdb/bwc-test-utils/main/cache/${CACHE_ARCHIVE}"
+              HTTP_CODE=$(curl -sL -w '%{http_code}' -o "/tmp/${CACHE_ARCHIVE}" "${DOWNLOAD_URL}" || true)
+              if [ "${HTTP_CODE}" = "200" ]; then
+                tar xzf "/tmp/${CACHE_ARCHIVE}" -C "${RUNTIME_DIR}"
+                CACHED=$(find "${RUNTIME_DIR}/${VERSION}" -name "*.plan.bin" | wc -l)
+                echo "Extracted cache for ${VERSION}: ${CACHED} cached test plans"
+              else
+                echo "Failed to download cache for ${VERSION} (HTTP ${HTTP_CODE})"
+                FAILED=1
+                FAILED_VERSIONS="${FAILED_VERSIONS} ${VERSION}(cache)"
+              fi
+            fi
+
+            if ! python3.11 test/bwc/runner.py --old_duckdb_version="${VERSION}"; then
+              FAILED=1
+              FAILED_VERSIONS="${FAILED_VERSIONS} ${VERSION}(tests)"
+            fi
+
+            if ! python3.11 test/bwc/export_cache.py --version "${VERSION}" --output-dir duckdb_unittest_tempdir/bwc/cache; then
+              FAILED=1
+              FAILED_VERSIONS="${FAILED_VERSIONS} ${VERSION}(export)"
+            fi
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "BWC series had failures:${FAILED_VERSIONS}"
             exit 1
           fi
-
-          tar xzf "/tmp/${CACHE_ARCHIVE}" -C "${RUNTIME_DIR}"
-          CACHED=$(find "${RUNTIME_DIR}/${VERSION}" -name "*.plan.bin" | wc -l)
-          echo "Extracted cache for ${VERSION}: ${CACHED} cached test plans"
-
-      - name: Run BWC tests
-        run: python3.11 test/bwc/runner.py --old_duckdb_version=${{ matrix.old_duckdb_version }}
-
-      - name: Export BWC cache
-        if: always()
-        run: python3.11 test/bwc/export_cache.py --version ${{ matrix.old_duckdb_version }} --output-dir duckdb_unittest_tempdir/bwc/cache
 
       - name: Upload BWC cache
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: bwc-cache-${{ matrix.old_duckdb_version }}
-          path: duckdb_unittest_tempdir/bwc/cache/runtime_${{ matrix.old_duckdb_version }}.tar.gz
+          name: bwc-cache-${{ matrix.series.group }}
+          path: duckdb_unittest_tempdir/bwc/cache/runtime_*.tar.gz
 
       - name: Upload test artifacts
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: bwc-test-results-${{ matrix.old_duckdb_version }}
+          name: bwc-test-results-${{ matrix.series.group }}
           path: |
             duckdb_unittest_tempdir/bwc/tests_summary_*.txt
             duckdb_unittest_tempdir/bwc/reports/test_report_*.duckdb

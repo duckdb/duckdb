@@ -274,7 +274,7 @@ where t1.f1 = ss.f1;
 doh!	4567890123456789	123	4567890123456789	doh!
 
 # FIXME: lateral chain with star
-mode skip
+mode skip instable
 
 query IIIIIII
 select * from
@@ -346,7 +346,7 @@ NULL	123456
 NULL	2147483647
 
 # FIXME: INTERNAL Error: Logical operator type "DELIM_JOIN" for dependent join
-mode skip
+mode skip instable
 
 query IIII rowsort qlateral
 select *, (select r from (select q1 as q2) x, (select q2 as r) y) from int8_tbl;
@@ -359,7 +359,7 @@ select *, (select r from (select q1 as q2) x, lateral (select q2 as r) y) from i
 mode unskip
 
 # FIXME: Not implemented Error: LATERAL not implemented
-mode skip
+mode skip instable
 
 query I
 select count(*) from tenk1 a, lateral generate_series(1,two) g;
@@ -413,7 +413,7 @@ select * from ((select f1/2 as x from int4_tbl) ss1 join int4_tbl i4 on x = f1) 
 0	0	0
 
 # FIXME: Not implemented Error: LATERAL not implemented
-mode skip
+mode skip instable
 
 query II
 select * from (values(1)) x(lb),

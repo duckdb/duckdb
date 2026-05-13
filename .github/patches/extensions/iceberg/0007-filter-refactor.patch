@@ -1,0 +1,582 @@
+diff --git a/src/iceberg_functions/iceberg_multi_file_list.cpp b/src/iceberg_functions/iceberg_multi_file_list.cpp
+index de141b97..7f29dc3b 100644
+--- a/src/iceberg_functions/iceberg_multi_file_list.cpp
++++ b/src/iceberg_functions/iceberg_multi_file_list.cpp
+@@ -17,9 +17,15 @@
+ #include "duckdb/parallel/task_notifier.hpp"
+ #include "duckdb/parser/tableref/table_function_ref.hpp"
+ #include "duckdb/parser/expression/constant_expression.hpp"
+-#include "duckdb/planner/filter/struct_filter.hpp"
++#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
++#include "duckdb/planner/expression/bound_function_expression.hpp"
++#include "duckdb/planner/expression/bound_reference_expression.hpp"
++#include "duckdb/planner/expression_iterator.hpp"
++#include "duckdb/planner/filter/expression_filter.hpp"
++#include "duckdb/planner/filter/table_filter_functions.hpp"
+ #include "duckdb/execution/executor.hpp"
+ #include "duckdb/optimizer/filter_combiner.hpp"
++#include "duckdb/function/scalar/struct_utils.hpp"
+ 
+ #include "metadata/iceberg_predicate_stats.hpp"
+ #include "metadata/iceberg_table_metadata.hpp"
+@@ -28,6 +34,120 @@ namespace duckdb {
+ 
+ namespace {
+ 
++static unique_ptr<Expression> CreateReferenceExpression(const LogicalType &type) {
++	return make_uniq<BoundReferenceExpression>(type, 0ULL);
++}
++
++static void AppendColumnPath(const ColumnIndex &column_index, vector<idx_t> &path) {
++	for (auto &child_index : column_index.GetChildIndexes()) {
++		path.push_back(child_index.GetPrimaryIndex());
++		AppendColumnPath(child_index, path);
++	}
++}
++
++static vector<idx_t> GetColumnPath(const ColumnIndex &column_index) {
++	column_index.VerifySinglePath();
++	vector<idx_t> path;
++	AppendColumnPath(column_index, path);
++	return path;
++}
++
++static bool TryGetFilterPath(const Expression &expr, vector<idx_t> &path) {
++	switch (expr.GetExpressionClass()) {
++	case ExpressionClass::BOUND_REF:
++	case ExpressionClass::BOUND_COLUMN_REF:
++		return true;
++	case ExpressionClass::BOUND_FUNCTION: {
++		auto &func = expr.Cast<BoundFunctionExpression>();
++		idx_t child_idx;
++		if (!TryGetStructExtractChildIndex(func, child_idx) || func.children.empty()) {
++			return false;
++		}
++		if (!TryGetFilterPath(*func.children[0], path)) {
++			return false;
++		}
++		path.push_back(child_idx);
++		return true;
++	}
++	default:
++		return false;
++	}
++}
++
++enum class FilterPathMatch : uint8_t { NONE, MATCH, OTHER };
++
++static FilterPathMatch GetFilterPathMatch(const Expression &expr, const vector<idx_t> &path) {
++	vector<idx_t> expr_path;
++	if (TryGetFilterPath(expr, expr_path)) {
++		return expr_path == path ? FilterPathMatch::MATCH : FilterPathMatch::OTHER;
++	}
++	auto result = FilterPathMatch::NONE;
++	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
++		if (result == FilterPathMatch::OTHER) {
++			return;
++		}
++		auto child_result = GetFilterPathMatch(child, path);
++		if (child_result == FilterPathMatch::OTHER) {
++			result = FilterPathMatch::OTHER;
++		} else if (child_result == FilterPathMatch::MATCH) {
++			result = FilterPathMatch::MATCH;
++		}
++	});
++	return result;
++}
++
++static bool MatchesFilterPath(const Expression &expr, const vector<idx_t> &path) {
++	vector<idx_t> expr_path;
++	return TryGetFilterPath(expr, expr_path) && expr_path == path;
++}
++
++static void ReplaceFilterPathExpressions(unique_ptr<Expression> &expr, const vector<idx_t> &path) {
++	if (MatchesFilterPath(*expr, path)) {
++		expr = CreateReferenceExpression(expr->GetReturnType());
++		return;
++	}
++	ExpressionIterator::EnumerateChildren(
++	    *expr, [&](unique_ptr<Expression> &child) { ReplaceFilterPathExpressions(child, path); });
++}
++
++static unique_ptr<Expression> ExtractFilterExpressionForPath(const Expression &expr, const vector<idx_t> &path) {
++	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
++		auto &func = expr.Cast<BoundFunctionExpression>();
++		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
++			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
++			return data.child_filter_expr ? ExtractFilterExpressionForPath(*data.child_filter_expr, path) : nullptr;
++		}
++		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
++			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
++			return data.child_filter_expr ? ExtractFilterExpressionForPath(*data.child_filter_expr, path) : nullptr;
++		}
++	}
++	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
++	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
++		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
++		auto result = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
++		for (auto &child : conjunction.children) {
++			auto extracted_child = ExtractFilterExpressionForPath(*child, path);
++			if (extracted_child) {
++				result->children.push_back(std::move(extracted_child));
++			}
++		}
++		if (result->children.empty()) {
++			return nullptr;
++		}
++		if (result->children.size() == 1) {
++			return std::move(result->children[0]);
++		}
++		return std::move(result);
++	}
++	if (GetFilterPathMatch(expr, path) != FilterPathMatch::MATCH) {
++		return nullptr;
++	}
++	auto result = expr.Copy();
++	ReplaceFilterPathExpressions(result, path);
++	return result;
++}
++
+ class ManifestReadTask : public BaseExecutorTask {
+ public:
+ 	ManifestReadTask(IcebergManifestReadingState &state)
+@@ -132,33 +252,23 @@ bool IcebergMultiFileList::FinishedScanningDeletes() const {
+ 	return !delete_manifest_reader || delete_manifest_reader->Finished();
+ }
+ 
+-optional_ptr<const TableFilter> IcebergMultiFileList::GetFilterForColumnIndex(const IcebergTableFilters &filter_set,
+-                                                                              const ColumnIndex &column_index) const {
++unique_ptr<ExpressionFilter> IcebergMultiFileList::GetFilterForColumnIndex(const IcebergTableFilters &filter_set,
++                                                                           const ColumnIndex &column_index) const {
+ 	auto primary_index = column_index.GetPrimaryIndex();
+ 	auto filter = filter_set.TryGetFilterByColumnIndex(primary_index);
+ 	if (!filter) {
+ 		return nullptr;
+ 	}
+-
+-	auto &parent_filter = *filter;
+-	auto &child_indexes = column_index.GetChildIndexes();
+-
+-	reference<const TableFilter> current_filter(parent_filter);
+-	for (idx_t i = 0; i < child_indexes.size(); i++) {
+-		auto &table_filter = current_filter.get();
+-		auto &child_index = child_indexes[i];
+-		auto index = child_index.GetPrimaryIndex();
+-		if (table_filter.filter_type != TableFilterType::STRUCT_EXTRACT) {
+-			return nullptr;
+-		}
+-		auto &struct_extract = table_filter.Cast<StructFilter>();
+-		if (struct_extract.child_idx != index) {
+-			//! This filter is not targeting the column on which a partition exists
+-			return nullptr;
+-		}
+-		current_filter = *struct_extract.child_filter;
++	auto path = GetColumnPath(column_index);
++	if (path.empty()) {
++		return filter->Copy();
+ 	}
+-	return current_filter.get();
++	auto child_expr = ExtractFilterExpressionForPath(*filter->expr, path);
++	if (!child_expr) {
++		//! This filter is not targeting the column on which a partition exists
++		return nullptr;
++	}
++	return make_uniq<ExpressionFilter>(std::move(child_expr));
+ }
+ 
+ void IcebergMultiFileList::Bind(vector<LogicalType> &return_types, vector<string> &names) {
+@@ -212,7 +322,8 @@ void IcebergMultiFileList::Bind(vector<LogicalType> &return_types, vector<string
+ }
+ 
+ unique_ptr<IcebergMultiFileList> IcebergMultiFileList::PushdownInternal(ClientContext &context,
+-                                                                        TableFilterSet &new_filters, vector<column_t> column_indexes) const {
++                                                                        TableFilterSet &new_filters,
++                                                                        vector<column_t> column_indexes) const {
+ 	auto filtered_list = make_uniq<IcebergMultiFileList>(context, scan_info, path, this->options);
+ 
+ 	IcebergTableFilters result_filter_set;
+@@ -226,7 +337,9 @@ unique_ptr<IcebergMultiFileList> IcebergMultiFileList::PushdownInternal(ClientCo
+ 	for (auto &entry : new_filters) {
+ 		auto column_idx = column_indexes[entry.GetIndex().GetIndex()];
+ 		if (column_idx < names.size()) {
+-			result_filter_set.PushFilter(column_idx, entry.Filter().Copy());
++			auto &filter =
++			    ExpressionFilter::GetExpressionFilter(entry.Filter(), "IcebergMultiFileList::PushdownInternal");
++			result_filter_set.PushFilter(column_idx, filter.Copy());
+ 		}
+ 	}
+ 
+@@ -247,7 +360,8 @@ IcebergMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiF
+ 
+ 	TableFilterSet filters_copy;
+ 	for (auto &entry : filters) {
+-		auto &filter = entry.Filter();
++		auto &filter =
++		    ExpressionFilter::GetExpressionFilter(entry.Filter(), "IcebergMultiFileList::DynamicFilterPushdown");
+ 		auto column_id = column_ids[entry.GetIndex().GetIndex()];
+ 		auto previously_pushed_down_filter = table_filters.TryGetFilterByColumnIndex(column_id);
+ 		if (previously_pushed_down_filter && filter.Equals(*previously_pushed_down_filter)) {
+@@ -421,7 +535,7 @@ bool IcebergMultiFileList::FileMatchesFilter(const IcebergManifestEntry &manifes
+ 
+ 	auto &schema = GetSchema().columns;
+ 
+-	for(auto &entry : table_filters) {
++	for (auto &entry : table_filters) {
+ 		auto index = entry.first;
+ 		auto &column = *schema[index];
+ 		auto &metadata = GetMetadata();
+diff --git a/src/iceberg_predicate.cpp b/src/iceberg_predicate.cpp
+index e34bcace..de61589b 100644
+--- a/src/iceberg_predicate.cpp
++++ b/src/iceberg_predicate.cpp
+@@ -1,14 +1,12 @@
+ #include "iceberg_predicate.hpp"
+-#include "duckdb/planner/expression/bound_operator_expression.hpp"
+ #include "duckdb/planner/expression/bound_comparison_expression.hpp"
++#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+ #include "duckdb/planner/expression/bound_constant_expression.hpp"
++#include "duckdb/planner/expression/bound_function_expression.hpp"
++#include "duckdb/planner/expression/bound_operator_expression.hpp"
+ #include "duckdb/planner/expression/bound_reference_expression.hpp"
+-#include "duckdb/planner/filter/constant_filter.hpp"
+-#include "duckdb/planner/filter/conjunction_filter.hpp"
+-#include "duckdb/planner/filter/null_filter.hpp"
+-#include "duckdb/planner/filter/in_filter.hpp"
+-#include "duckdb/planner/filter/optional_filter.hpp"
+ #include "duckdb/planner/filter/expression_filter.hpp"
++#include "duckdb/planner/filter/table_filter_functions.hpp"
+ 
+ #include "duckdb/planner/logical_operator_visitor.hpp"
+ #include "duckdb/execution/expression_executor.hpp"
+@@ -38,7 +36,7 @@ public:
+ } // namespace
+ 
+ template <class TRANSFORM>
+-bool MatchBoundsTemplated(ClientContext &context, const TableFilter &filter, const IcebergPredicateStats &stats,
++bool MatchBoundsTemplated(ClientContext &context, const ExpressionFilter &filter, const IcebergPredicateStats &stats,
+                           const IcebergTransform &transform);
+ 
+ template <class TRANSFORM>
+@@ -79,12 +77,6 @@ static bool MatchBoundsConstant(const Value &constant, ExpressionType comparison
+ 	}
+ }
+ 
+-template <class TRANSFORM>
+-static bool MatchBoundsConstantFilter(const ConstantFilter &constant_filter, const IcebergPredicateStats &stats,
+-                                      const IcebergTransform &transform) {
+-	return MatchBoundsConstant<TRANSFORM>(constant_filter.constant, constant_filter.comparison_type, stats, transform);
+-}
+-
+ template <class TRANSFORM>
+ static bool MatchBoundsIsNullFilter(const IcebergPredicateStats &stats, const IcebergTransform &transform) {
+ 	return stats.has_null == true;
+@@ -95,17 +87,6 @@ static bool MatchBoundsIsNotNullFilter(const IcebergPredicateStats &stats, const
+ 	return stats.has_not_null == true;
+ }
+ 
+-template <class TRANSFORM>
+-static bool MatchBoundsConjunctionAndFilter(ClientContext &context, const ConjunctionAndFilter &conjunction_and,
+-                                            const IcebergPredicateStats &stats, const IcebergTransform &transform) {
+-	for (auto &child : conjunction_and.child_filters) {
+-		if (!MatchBoundsTemplated<TRANSFORM>(context, *child, stats, transform)) {
+-			return false;
+-		}
+-	}
+-	return true;
+-}
+-
+ template <class TRANSFORM>
+ bool MatchTransformedBounds(ClientContext &context, ExpressionType comparison_type, const Expression &left,
+                             const Expression &right, const IcebergPredicateStats &stats,
+@@ -137,111 +118,133 @@ bool MatchTransformedBounds(ClientContext &context, ExpressionType comparison_ty
+ 	return MatchBoundsConstant<TRANSFORM>(right_constant, comparison_type, transformed_stats, transform);
+ }
+ 
+-template <class TRANSFORM>
+-bool MatchBoundsTemplated(ClientContext &context, const TableFilter &filter, const IcebergPredicateStats &stats,
+-                          const IcebergTransform &transform) {
+-	//! TODO: support more filter types
+-	switch (filter.filter_type) {
+-	case TableFilterType::CONSTANT_COMPARISON: {
+-		auto &constant_filter = filter.Cast<ConstantFilter>();
+-		return MatchBoundsConstantFilter<TRANSFORM>(constant_filter, stats, transform);
+-	}
+-	case TableFilterType::CONJUNCTION_AND: {
+-		auto &conjunction_and_filter = filter.Cast<ConjunctionAndFilter>();
+-		return MatchBoundsConjunctionAndFilter<TRANSFORM>(context, conjunction_and_filter, stats, transform);
+-	}
+-	case TableFilterType::IS_NULL: {
+-		//! FIXME: these are never hit, because it goes through ExpressionFilter instead?
+-		return MatchBoundsIsNullFilter<TRANSFORM>(stats, transform);
+-	}
+-	case TableFilterType::IS_NOT_NULL: {
+-		//! FIXME: these are never hit, because it goes through ExpressionFilter instead?
+-		return MatchBoundsIsNotNullFilter<TRANSFORM>(stats, transform);
+-	}
+-	case TableFilterType::OPTIONAL_FILTER: {
+-		auto &optional_filter = filter.Cast<OptionalFilter>();
+-		if (optional_filter.child_filter) {
+-			return MatchBoundsTemplated<TRANSFORM>(context, *optional_filter.child_filter, stats, transform);
+-		}
+-		//! child filter wasn't populated (yet?) for some reason, just be conservative
++static bool IsDirectReference(const Expression &expr) {
++	switch (expr.GetExpressionClass()) {
++	case ExpressionClass::BOUND_REF:
++	case ExpressionClass::BOUND_COLUMN_REF:
+ 		return true;
++	default:
++		return false;
+ 	}
+-	case TableFilterType::IN_FILTER: {
+-		auto &in_filter = filter.Cast<InFilter>();
+-		D_ASSERT(!in_filter.values.empty());
+-		for (auto &value : in_filter.values) {
+-			if (MatchBoundsConstant<TRANSFORM>(value, ExpressionType::COMPARE_EQUAL, stats, transform)) {
++}
++
++template <class TRANSFORM>
++static bool MatchBoundsExpression(ClientContext &context, const Expression &expr, const IcebergPredicateStats &stats,
++                                  const IcebergTransform &transform) {
++	if (BoundComparisonExpression::IsComparison(expr)) {
++		auto &compare_expr = expr.Cast<BoundFunctionExpression>();
++		auto comparison_type = compare_expr.GetExpressionType();
++		auto &left = BoundComparisonExpression::Left(compare_expr);
++		auto &right = BoundComparisonExpression::Right(compare_expr);
++		if (IsDirectReference(left) && right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
++			return MatchBoundsConstant<TRANSFORM>(right.Cast<BoundConstantExpression>().value, comparison_type, stats,
++			                                      transform);
++		}
++		if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT && IsDirectReference(right)) {
++			return MatchBoundsConstant<TRANSFORM>(left.Cast<BoundConstantExpression>().value,
++			                                      FlipComparisonExpression(comparison_type), stats, transform);
++		}
++		if (transform.Type() == IcebergTransformType::IDENTITY) {
++			//! No further processing has been done on the stats (lower/upper bounds)
++			bool left_foldable = left.IsFoldable();
++			bool right_foldable = right.IsFoldable();
++			if (!left_foldable && !right_foldable) {
++				//! Both are not foldable, can't evaluate at all
+ 				return true;
+ 			}
++			if (left_foldable) {
++				return MatchTransformedBounds<TRANSFORM>(context, comparison_type, right, left, stats, transform);
++			}
++			return MatchTransformedBounds<TRANSFORM>(context, comparison_type, left, right, stats, transform);
+ 		}
+-		return false;
++		return true;
+ 	}
+-	case TableFilterType::EXPRESSION_FILTER: {
+-		//! Expressions can be arbitrarily complex, and we currently only support IS NULL/IS NOT NULL checks against the
+-		//! column itself, i.e. where the expression is a BOUND_OPERATOR with type OPERATOR_IS_NULL/_IS_NOT_NULL with a
+-		//! single child expression of type BOUND_REF.
+-		//!
+-		//! See duckdb/duckdb-iceberg#464
+-		auto &expression_filter = filter.Cast<ExpressionFilter>();
+-		auto &expr = *expression_filter.expr;
+ 
++	switch (expr.GetExpressionClass()) {
++	case ExpressionClass::BOUND_CONJUNCTION: {
++		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
++		if (conjunction.GetExpressionType() != ExpressionType::CONJUNCTION_AND) {
++			return true;
++		}
++		for (auto &child : conjunction.children) {
++			if (!MatchBoundsExpression<TRANSFORM>(context, *child, stats, transform)) {
++				return false;
++			}
++		}
++		return true;
++	}
++	case ExpressionClass::BOUND_OPERATOR: {
++		auto &bound_operator_expr = expr.Cast<BoundOperatorExpression>();
+ 		switch (expr.GetExpressionType()) {
+ 		case ExpressionType::OPERATOR_IS_NULL:
+ 		case ExpressionType::OPERATOR_IS_NOT_NULL: {
+-			D_ASSERT(expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR);
+-			auto &bound_operator_expr = expr.Cast<BoundOperatorExpression>();
+-
+-			D_ASSERT(bound_operator_expr.children.size() == 1);
+-			auto &child_expr = bound_operator_expr.children[0];
+-			if (child_expr->GetExpressionType() != ExpressionType::BOUND_REF) {
++			//! Expressions can be arbitrarily complex, and we currently only support IS NULL/IS NOT NULL checks against
++			//! the column itself, i.e. where the expression is a BOUND_OPERATOR with type OPERATOR_IS_NULL/_IS_NOT_NULL
++			//! with a single child expression of type BOUND_REF.
++			//!
++			//! See duckdb/duckdb-iceberg#464
++			if (bound_operator_expr.children.size() != 1 || !IsDirectReference(*bound_operator_expr.children[0])) {
+ 				//! We can't evaluate expressions that aren't direct column references
+ 				return true;
+ 			}
+-
+ 			if (expr.GetExpressionType() == ExpressionType::OPERATOR_IS_NULL) {
+ 				return MatchBoundsIsNullFilter<TRANSFORM>(stats, transform);
+ 			}
+ 			D_ASSERT(expr.GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL);
+ 			return MatchBoundsIsNotNullFilter<TRANSFORM>(stats, transform);
+ 		}
+-		case ExpressionType::COMPARE_GREATERTHAN:
+-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+-		case ExpressionType::COMPARE_LESSTHAN:
+-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+-		case ExpressionType::COMPARE_EQUAL: {
+-			D_ASSERT(expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION);
+-			auto &compare_expr = expr.Cast<BoundFunctionExpression>();
+-			if (transform.Type() == IcebergTransformType::IDENTITY) {
+-				//! No further processing has been done on the stats (lower/upper bounds)
+-				auto &left = BoundComparisonExpression::Left(compare_expr);
+-				auto &right = BoundComparisonExpression::Right(compare_expr);
+-
+-				bool left_foldable = left.IsFoldable();
+-				bool right_foldable = right.IsFoldable();
+-				if (!left_foldable && !right_foldable) {
+-					//! Both are not foldable, can't evaluate at all
++		case ExpressionType::COMPARE_IN: {
++			if (bound_operator_expr.children.empty() || !IsDirectReference(*bound_operator_expr.children[0])) {
++				return true;
++			}
++			for (idx_t i = 1; i < bound_operator_expr.children.size(); i++) {
++				if (bound_operator_expr.children[i]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+ 					return true;
+ 				}
+-
+-				if (left_foldable) {
+-					return MatchTransformedBounds<TRANSFORM>(context, expr.GetExpressionType(), right, left, stats, transform);
+-				} else {
+-					return MatchTransformedBounds<TRANSFORM>(context, expr.GetExpressionType(), left, right, stats, transform);
++				auto &value = bound_operator_expr.children[i]->Cast<BoundConstantExpression>().value;
++				if (MatchBoundsConstant<TRANSFORM>(value, ExpressionType::COMPARE_EQUAL, stats, transform)) {
++					return true;
+ 				}
+-				return true;
+ 			}
++			return false;
+ 		}
+ 		default:
+ 			return true;
+ 		}
+ 	}
++	case ExpressionClass::BOUND_FUNCTION: {
++		auto &func = expr.Cast<BoundFunctionExpression>();
++		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
++			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
++			if (data.child_filter_expr) {
++				return MatchBoundsExpression<TRANSFORM>(context, *data.child_filter_expr, stats, transform);
++			}
++			//! child filter wasn't populated (yet?) for some reason, just be conservative
++			return true;
++		}
++		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
++			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
++			if (data.child_filter_expr) {
++				return MatchBoundsExpression<TRANSFORM>(context, *data.child_filter_expr, stats, transform);
++			}
++			//! child filter wasn't populated (yet?) for some reason, just be conservative
++			return true;
++		}
++		return true;
++	}
+ 	default:
+ 		//! Conservative approach: we don't know what this is, just say it doesn't filter anything
+ 		return true;
+ 	}
+ }
+ 
+-bool IcebergPredicate::MatchBounds(ClientContext &context, const TableFilter &filter,
++template <class TRANSFORM>
++bool MatchBoundsTemplated(ClientContext &context, const ExpressionFilter &filter, const IcebergPredicateStats &stats,
++                          const IcebergTransform &transform) {
++	return MatchBoundsExpression<TRANSFORM>(context, *filter.expr, stats, transform);
++}
++
++bool IcebergPredicate::MatchBounds(ClientContext &context, const ExpressionFilter &filter,
+                                    const IcebergPredicateStats &stats, const IcebergTransform &transform) {
+ 	switch (transform.Type()) {
+ 	case IcebergTransformType::IDENTITY:
+diff --git a/src/include/iceberg_multi_file_list.hpp b/src/include/iceberg_multi_file_list.hpp
+index 335f7c6b..33fd2138 100644
+--- a/src/include/iceberg_multi_file_list.hpp
++++ b/src/include/iceberg_multi_file_list.hpp
+@@ -18,8 +18,7 @@
+ #include "duckdb/common/multi_file/multi_file_data.hpp"
+ #include "duckdb/common/list.hpp"
+ #include "duckdb/common/unordered_map.hpp"
+-#include "duckdb/planner/filter/constant_filter.hpp"
+-#include "duckdb/planner/filter/null_filter.hpp"
++#include "duckdb/planner/filter/expression_filter.hpp"
+ #include "duckdb/planner/table_filter.hpp"
+ 
+ #include "deletes/equality_delete.hpp"
+@@ -31,17 +30,18 @@
+ namespace duckdb {
+ 
+ struct IcebergTableFilters {
+-	using filter_set_t = unordered_map<idx_t, unique_ptr<TableFilter>>;
++	using filter_set_t = unordered_map<idx_t, unique_ptr<ExpressionFilter>>;
+ 	using iterator = filter_set_t::iterator;
+ 	using const_iterator = filter_set_t::const_iterator;
++
+ public:
+ 	bool HasFilters() const {
+ 		return !table_filters.empty();
+ 	}
+-	void PushFilter(column_t column_idx, unique_ptr<TableFilter> table_filter) {
++	void PushFilter(column_t column_idx, unique_ptr<ExpressionFilter> table_filter) {
+ 		table_filters[column_idx] = std::move(table_filter);
+ 	}
+-	optional_ptr<const TableFilter> TryGetFilterByColumnIndex(column_t column_idx) const {
++	optional_ptr<const ExpressionFilter> TryGetFilterByColumnIndex(column_t column_idx) const {
+ 		auto entry = table_filters.find(column_idx);
+ 		if (entry == table_filters.end()) {
+ 			return nullptr;
+@@ -61,6 +61,7 @@ public:
+ 	const_iterator end() const { // NOLINT: match stl API
+ 		return table_filters.end();
+ 	}
++
+ private:
+ 	filter_set_t table_filters;
+ };
+@@ -101,7 +102,8 @@ public:
+ 	bool FinishedScanningDeletes() const;
+ 
+ 	void Bind(vector<LogicalType> &return_types, vector<string> &names);
+-	unique_ptr<IcebergMultiFileList> PushdownInternal(ClientContext &context, TableFilterSet &new_filters, vector<column_t> column_indexes) const;
++	unique_ptr<IcebergMultiFileList> PushdownInternal(ClientContext &context, TableFilterSet &new_filters,
++	                                                  vector<column_t> column_indexes) const;
+ 	void ScanPositionalDeleteFile(const IcebergManifestEntry &manifest_entry, DataChunk &result) const;
+ 	void ScanEqualityDeleteFile(const IcebergManifestEntry &manifest_entry, DataChunk &result,
+ 	                            vector<MultiFileColumnDefinition> &columns,
+@@ -145,8 +147,8 @@ protected:
+ 	//! NOTE: this requires the lock because it modifies the 'data_files' vector, potentially invalidating references
+ 	optional_ptr<const IcebergManifestEntry> GetDataFile(idx_t file_id, lock_guard<mutex> &guard) const;
+ 
+-	optional_ptr<const TableFilter> GetFilterForColumnIndex(const IcebergTableFilters &filter_set,
+-	                                                        const ColumnIndex &column_index) const;
++	unique_ptr<ExpressionFilter> GetFilterForColumnIndex(const IcebergTableFilters &filter_set,
++	                                                     const ColumnIndex &column_index) const;
+ 
+ private:
+ 	bool PopulateEntryBuffer(lock_guard<mutex> &guard) const;
+diff --git a/src/include/iceberg_predicate.hpp b/src/include/iceberg_predicate.hpp
+index 687a9e98..3efedf5c 100644
+--- a/src/include/iceberg_predicate.hpp
++++ b/src/include/iceberg_predicate.hpp
+@@ -1,7 +1,7 @@
+ #pragma once
+ #include "metadata/iceberg_transform.hpp"
+ #include "metadata/iceberg_predicate_stats.hpp"
+-#include "duckdb/planner/table_filter.hpp"
++#include "duckdb/planner/filter/expression_filter.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -10,7 +10,7 @@ public:
+ 	IcebergPredicate() = delete;
+ 
+ public:
+-	static bool MatchBounds(ClientContext &context, const TableFilter &filter, const IcebergPredicateStats &stats,
++	static bool MatchBounds(ClientContext &context, const ExpressionFilter &filter, const IcebergPredicateStats &stats,
+ 	                        const IcebergTransform &transform);
+ };
+ 

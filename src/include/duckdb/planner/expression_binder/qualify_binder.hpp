@@ -17,9 +17,7 @@ struct SelectBindState;
 //! The QUALIFY binder is responsible for binding an expression within the QUALIFY clause of a SQL statement
 class QualifyBinder : public BaseSelectBinder {
 public:
-	QualifyBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
-
-	bool DoesColumnAliasExist(const ColumnRefExpression &colref) override;
+	QualifyBinder(Binder &binder, ClientContext &context, BoundSelectNode &node);
 
 protected:
 	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
