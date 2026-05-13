@@ -188,6 +188,7 @@
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
@@ -1126,6 +1127,25 @@ const char* EnumUtil::ToChars<CheckpointOnDetach>(CheckpointOnDetach value) {
 template<>
 CheckpointOnDetach EnumUtil::FromString<CheckpointOnDetach>(const char *value) {
 	return static_cast<CheckpointOnDetach>(StringUtil::StringToEnum(GetCheckpointOnDetachValues(), 3, "CheckpointOnDetach", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCheckpointRowGroupLineageKindValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CheckpointRowGroupLineageKind::DROP), "DROP" },
+		{ static_cast<uint32_t>(CheckpointRowGroupLineageKind::REMAP), "REMAP" },
+		{ static_cast<uint32_t>(CheckpointRowGroupLineageKind::MERGE), "MERGE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CheckpointRowGroupLineageKind>(CheckpointRowGroupLineageKind value) {
+	return StringUtil::EnumToString(GetCheckpointRowGroupLineageKindValues(), 3, "CheckpointRowGroupLineageKind", static_cast<uint32_t>(value));
+}
+
+template<>
+CheckpointRowGroupLineageKind EnumUtil::FromString<CheckpointRowGroupLineageKind>(const char *value) {
+	return static_cast<CheckpointRowGroupLineageKind>(StringUtil::StringToEnum(GetCheckpointRowGroupLineageKindValues(), 3, "CheckpointRowGroupLineageKind", value));
 }
 
 const StringUtil::EnumStringLiteral *GetChunkInfoTypeValues() {

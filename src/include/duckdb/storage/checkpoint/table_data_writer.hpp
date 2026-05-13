@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
 namespace duckdb {
@@ -52,6 +53,12 @@ public:
 	void SetRebuildIndexes() {
 		rebuild_indexes = true;
 	}
+	void AddCheckpointTableEvent(const CheckpointTableEvent &event) {
+		checkpoint_table_events.push_back(event);
+	}
+	const vector<CheckpointTableEvent> &GetCheckpointTableEvents() const {
+		return checkpoint_table_events;
+	}
 	bool RequireLegacyStartRow() const {
 		return require_legacy_start_row;
 	}
@@ -64,6 +71,7 @@ public:
 
 	AttachedDatabase &GetAttached();
 	DatabaseInstance &GetDatabase();
+	idx_t GetTableOid() const;
 	unique_ptr<TaskExecutor> CreateTaskExecutor();
 
 protected:
@@ -76,6 +84,7 @@ protected:
 	bool rebuild_indexes = false;
 	bool require_legacy_start_row = false;
 	atomic<bool> row_ids_changed {false};
+	vector<CheckpointTableEvent> checkpoint_table_events;
 };
 
 class SingleFileTableDataWriter : public TableDataWriter {

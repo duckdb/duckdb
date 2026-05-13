@@ -10,6 +10,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
@@ -1192,6 +1193,13 @@ private:
 // Vacuum
 //===--------------------------------------------------------------------===//
 struct VacuumState {
+	struct LineageTargetInfo {
+		bool dropped = false;
+		bool merged = false;
+		optional_idx target_segment_idx;
+		idx_t target_segment_count = 0;
+	};
+
 	bool can_vacuum_deletes = true;
 	bool can_change_row_ids = false;
 	//! Whether we are allowed to rebuild indexes after a vacuum (only true when vacuum_rebuild_indexes
@@ -1199,10 +1207,116 @@ struct VacuumState {
 	bool can_rebuild_indexes = false;
 	//! Whether any operation (empty group drop or vacuum merge) actually remapped row IDs
 	bool row_ids_changed = false;
+	optional_idx first_changed_old_row_group;
+	bool collect_checkpoint_events = false;
+	idx_t old_row_group_count = 0;
 	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
 	vector<optional_idx> row_group_counts;
+	vector<LineageTargetInfo> lineage;
+
+	void MarkRowIDsChanged(idx_t row_group_idx) {
+		row_ids_changed = true;
+		if (!first_changed_old_row_group.IsValid() || row_group_idx < first_changed_old_row_group.GetIndex()) {
+			first_changed_old_row_group = row_group_idx;
+		}
+	}
+
+	void MarkDroppedRowGroup(idx_t row_group_idx) {
+		if (!collect_checkpoint_events) {
+			return;
+		}
+		if (lineage.empty()) {
+			lineage.resize(old_row_group_count);
+		}
+		lineage[row_group_idx].dropped = true;
+	}
+
+	void MarkMergedRowGroup(idx_t row_group_idx, idx_t target_segment_idx, idx_t target_segment_count) {
+		if (!collect_checkpoint_events) {
+			return;
+		}
+		if (lineage.empty()) {
+			lineage.resize(old_row_group_count);
+		}
+		lineage[row_group_idx].merged = true;
+		lineage[row_group_idx].target_segment_idx = target_segment_idx;
+		lineage[row_group_idx].target_segment_count = target_segment_count;
+	}
 };
+
+static void AppendCheckpointRowGroupLineage(vector<CheckpointRowGroupLineageEntry> &lineage,
+                                            CheckpointRowGroupLineageKind kind, idx_t old_row_group_index,
+                                            idx_t old_row_group_count,
+                                            optional_idx new_row_group_index = optional_idx(),
+                                            idx_t new_row_group_count = 0) {
+	if (old_row_group_count == 0) {
+		return;
+	}
+	if (!lineage.empty()) {
+		auto &last = lineage.back();
+		const auto old_adjacent = last.old_row_group_index + last.old_row_group_count == old_row_group_index;
+		if (last.kind == kind && old_adjacent) {
+			if (kind == CheckpointRowGroupLineageKind::DROP && !last.new_row_group_index.IsValid() &&
+			    !new_row_group_index.IsValid()) {
+				last.old_row_group_count += old_row_group_count;
+				return;
+			}
+			if (kind == CheckpointRowGroupLineageKind::REMAP && last.new_row_group_index.IsValid() &&
+			    new_row_group_index.IsValid() &&
+			    last.new_row_group_index.GetIndex() + last.new_row_group_count == new_row_group_index.GetIndex()) {
+				last.old_row_group_count += old_row_group_count;
+				last.new_row_group_count += new_row_group_count;
+				return;
+			}
+			if (kind == CheckpointRowGroupLineageKind::MERGE && last.new_row_group_index == new_row_group_index &&
+			    last.new_row_group_count == new_row_group_count) {
+				last.old_row_group_count += old_row_group_count;
+				return;
+			}
+		}
+	}
+	lineage.push_back({kind, old_row_group_index, old_row_group_count, new_row_group_index, new_row_group_count});
+}
+
+static vector<CheckpointRowGroupLineageEntry>
+BuildCheckpointRowGroupLineage(const VacuumState &vacuum_state, CollectionCheckpointState &checkpoint_state) {
+	vector<CheckpointRowGroupLineageEntry> result;
+	if (vacuum_state.lineage.empty()) {
+		return result;
+	}
+	vector<optional_idx> final_row_group_indices(checkpoint_state.SegmentCount());
+	idx_t next_final_row_group = 0;
+	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
+		if (!checkpoint_state.GetSegment(segment_idx)) {
+			continue;
+		}
+		final_row_group_indices[segment_idx] = next_final_row_group++;
+	}
+
+	for (idx_t old_row_group_idx = 0; old_row_group_idx < vacuum_state.lineage.size(); old_row_group_idx++) {
+		const auto &target = vacuum_state.lineage[old_row_group_idx];
+		if (target.dropped) {
+			AppendCheckpointRowGroupLineage(result, CheckpointRowGroupLineageKind::DROP, old_row_group_idx, 1);
+			continue;
+		}
+		if (target.merged) {
+			D_ASSERT(target.target_segment_idx.IsValid());
+			auto new_row_group_index = final_row_group_indices[target.target_segment_idx.GetIndex()];
+			D_ASSERT(new_row_group_index.IsValid());
+			AppendCheckpointRowGroupLineage(result, CheckpointRowGroupLineageKind::MERGE, old_row_group_idx, 1,
+			                                new_row_group_index, target.target_segment_count);
+			continue;
+		}
+		auto new_row_group_index = final_row_group_indices[old_row_group_idx];
+		if (!new_row_group_index.IsValid() || new_row_group_index.GetIndex() == old_row_group_idx) {
+			continue;
+		}
+		AppendCheckpointRowGroupLineage(result, CheckpointRowGroupLineageKind::REMAP, old_row_group_idx, 1,
+		                                new_row_group_index, 1);
+	}
+	return result;
+}
 
 class VacuumTask : public BaseCheckpointTask {
 public:
@@ -1333,6 +1447,9 @@ private:
 
 void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
                                                optional_idx checkpoint_row_group_count) {
+	auto callbacks = CheckpointCallback::Iterate(checkpoint_state.writer.GetDatabase());
+	state.collect_checkpoint_events = callbacks.begin() != callbacks.end();
+	state.old_row_group_count = checkpoint_state.SegmentCount();
 	auto options = checkpoint_state.writer.GetCheckpointOptions();
 	// currently we can only vacuum deletes if we are doing a full checkpoint
 	state.can_vacuum_deletes = options.type != CheckpointType::CONCURRENT_CHECKPOINT;
@@ -1367,7 +1484,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		state.can_vacuum_deletes = false;
 		return;
 	}
-	bool dropped_any_rowgroups = false;
+	optional_idx first_dropped_row_group;
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
 		auto row_group_count = row_group.GetCommittedRowCount();
@@ -1385,14 +1502,17 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			// empty row group - we can drop it entirely.
 			row_group.CommitDrop();
 			checkpoint_state.DropSegment(entry.GetIndex());
-			dropped_any_rowgroups = true;
+			state.MarkDroppedRowGroup(entry.GetIndex());
+			if (!first_dropped_row_group.IsValid()) {
+				first_dropped_row_group = entry.GetIndex();
+			}
 			state.row_group_counts.push_back(row_group_count);
 			continue;
 		}
-		if (dropped_any_rowgroups) {
+		if (first_dropped_row_group.IsValid()) {
 			// if there are any dropped row groups before a live row group, all the row ids of the row groups following
 			// the dropped row group will have their row ids shifted forward (to keep row ids contiguous).
-			state.row_ids_changed = true;
+			state.MarkRowIDsChanged(first_dropped_row_group.GetIndex());
 		}
 		state.row_group_counts.push_back(row_group_count);
 	}
@@ -1415,6 +1535,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			D_ASSERT(entry.GetIndex() == segment_idx);
 			row_group.CommitDrop();
 			checkpoint_state.DropSegment(segment_idx);
+			state.MarkDroppedRowGroup(segment_idx);
 		}
 	}
 }
@@ -1499,6 +1620,13 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		return false;
 	}
 	// schedule the vacuum task
+	for (idx_t c_idx = segment_idx; c_idx < next_idx; c_idx++) {
+		if (state.row_group_counts[c_idx] == 0) {
+			continue;
+		}
+		state.MarkMergedRowGroup(c_idx, segment_idx, target_count);
+	}
+	state.MarkRowIDsChanged(segment_idx);
 	DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx, merge_count,
 	           target_count, merge_rows, state.row_start);
 	auto vacuum_task =
@@ -1810,6 +1938,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	total_rows = new_total_rows;
 	SetRowGroups(std::move(new_row_groups));
 	Verify();
+	vector<CheckpointRowGroupLineageEntry> row_group_lineage;
+	if (vacuum_state.collect_checkpoint_events) {
+		row_group_lineage = BuildCheckpointRowGroupLineage(vacuum_state, checkpoint_state);
+	}
+	bool indexes_rebuilt = false;
 	// Rebuild indexes if:
 	// 1) can_rebuild_indexes is set (it is set when the vacuum_rebuild_indexes
 	// threshold is set, the table's row count is within the threshold,
@@ -1818,6 +1951,17 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	// 2) we have changed rowids.
 	if (vacuum_state.can_rebuild_indexes && vacuum_state.row_ids_changed) {
 		writer.SetRebuildIndexes();
+		indexes_rebuilt = true;
+	}
+	if (vacuum_state.collect_checkpoint_events &&
+	    (vacuum_state.row_ids_changed || indexes_rebuilt || !row_group_lineage.empty())) {
+		CheckpointTableEvent event;
+		event.table_oid = writer.GetTableOid();
+		event.first_affected_old_row_group = vacuum_state.first_changed_old_row_group;
+		event.row_ids_remapped = vacuum_state.row_ids_changed;
+		event.indexes_rebuilt = indexes_rebuilt;
+		event.row_group_lineage = std::move(row_group_lineage);
+		writer.AddCheckpointTableEvent(event);
 	}
 }
 

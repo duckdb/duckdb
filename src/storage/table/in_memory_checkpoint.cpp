@@ -59,6 +59,7 @@ void InMemoryCheckpointer::WriteTable(TableCatalogEntry &table, Serializer &seri
 	// Write the table data
 	auto table_lock = table.GetStorage().GetCheckpointLock();
 	table.GetStorage().Checkpoint(data_writer, serializer);
+	AddCheckpointTableEvents(data_writer.GetCheckpointTableEvents());
 	// flush any partial blocks BEFORE releasing the table lock
 	// flushing partial blocks updates where data lives and is not thread-safe
 	partial_block_manager.FlushPartialBlocks();

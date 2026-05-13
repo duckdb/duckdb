@@ -696,6 +696,7 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 	auto writer = GetTableDataWriter(table);
 	if (writer) {
 		writer->WriteTableData(serializer);
+		AddCheckpointTableEvents(writer->GetCheckpointTableEvents());
 	}
 }
 

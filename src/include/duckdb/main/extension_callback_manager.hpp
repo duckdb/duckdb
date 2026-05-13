@@ -17,6 +17,7 @@ namespace duckdb {
 
 class ClientContext;
 class DatabaseInstance;
+class CheckpointCallback;
 class ExtensionCallback;
 class OperatorExtension;
 class OptimizerExtension;
@@ -43,12 +44,14 @@ public:
 	void Register(shared_ptr<OperatorExtension> extension);
 	void Register(const string &name, shared_ptr<StorageExtension> extension);
 	void Register(shared_ptr<ExtensionCallback> extension);
+	void Register(shared_ptr<CheckpointCallback> extension);
 
 	ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> OperatorExtensions() const;
 	ExtensionCallbackIteratorHelper<OptimizerExtension> OptimizerExtensions() const;
 	ExtensionCallbackIteratorHelper<ParserExtension> ParserExtensions() const;
 	ExtensionCallbackIteratorHelper<PlannerExtension> PlannerExtensions() const;
 	ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallbacks() const;
+	ExtensionCallbackIteratorHelper<shared_ptr<CheckpointCallback>> CheckpointCallbacks() const;
 	optional_ptr<StorageExtension> FindStorageExtension(const string &name) const;
 	bool HasParserExtensions() const;
 
