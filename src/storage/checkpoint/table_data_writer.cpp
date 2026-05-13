@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -52,6 +53,10 @@ unique_ptr<TaskExecutor> TableDataWriter::CreateTaskExecutor() {
 		return make_uniq<TaskExecutor>(*context);
 	}
 	return make_uniq<TaskExecutor>(TaskScheduler::GetScheduler(GetDatabase()));
+}
+
+optional_ptr<ClientContext> TableDataWriter::TryGetClientContext() const {
+	return context;
 }
 
 SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager,

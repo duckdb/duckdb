@@ -64,6 +64,7 @@ public:
 	AttachedDatabase &GetAttached();
 	DatabaseInstance &GetDatabase();
 	unique_ptr<TaskExecutor> CreateTaskExecutor();
+	optional_ptr<ClientContext> TryGetClientContext() const;
 
 protected:
 	DuckTableEntry &table;

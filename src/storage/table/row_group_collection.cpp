@@ -4,6 +4,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/profiling_utils.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
@@ -1198,6 +1200,11 @@ public:
 	}
 
 	void ExecuteTask() override {
+		ActiveTimer vacuum_task_timer;
+		auto context = checkpoint_state.writer.TryGetClientContext();
+		if (context) {
+			vacuum_task_timer = QueryProfiler::Get(*context).StartTimer(MetricType::CUMULATIVE_VACUUM_TIME);
+		}
 		auto &collection = checkpoint_state.collection;
 		const idx_t row_group_size = collection.GetRowGroupSize();
 		auto &types = collection.GetTypes();
@@ -1294,6 +1301,7 @@ public:
 			    "Mismatch in row group count %d vs verify count %d in RowGroupCollection::Checkpoint", merge_rows,
 			    total_append_count);
 		}
+		vacuum_task_timer.EndTimer();
 		// merging is complete - execute checkpoint tasks of the target row groups
 		for (idx_t i = 0; i < target_count; i++) {
 			auto checkpoint_task = collection.GetCheckpointTask(checkpoint_state, segment_idx + i);
