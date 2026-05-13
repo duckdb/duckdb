@@ -265,7 +265,6 @@ public:
 	void RegisterCreateIndex();
 	void RegisterCreateMacro();
 	void RegisterCreateSequence();
-	void RegisterCreateSecret();
 	void RegisterCreateTable();
 	void RegisterCreateType();
 	void RegisterCreateView();
@@ -1237,6 +1236,17 @@ private:
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<CreateStatement> TransformCreateSchemaStmt(const bool &if_not_exists,
 	                                                             const QualifiedName &qualified_name);
+	static unique_ptr<TransformResultValue> TransformCreateSecretStmtInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<CreateStatement> TransformCreateSecretStmt(const bool &if_not_exists, const string &secret_name,
+	                                                             const string &secret_storage_specifier,
+	                                                             vector<GenericCopyOption> generic_copy_option_list);
+	static unique_ptr<TransformResultValue> TransformSecretStorageSpecifierInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static string TransformSecretStorageSpecifier(const string &identifier);
+	static unique_ptr<TransformResultValue> TransformSecretNameInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static string TransformSecretName(const string &col_id);
 	static unique_ptr<TransformResultValue> TransformDetachStatementInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformDetachStatement(const bool &if_exists, const string &catalog_name);

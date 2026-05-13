@@ -110,6 +110,37 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateSchemaStm
 	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateSecretStmtInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool if_not_exists {};
+	transformer.TransformOptional(list_pr, 1, if_not_exists);
+	string secret_name {};
+	transformer.TransformOptional(list_pr, 2, secret_name);
+	string secret_storage_specifier {};
+	transformer.TransformOptional(list_pr, 3, secret_storage_specifier);
+	auto generic_copy_option_list = transformer.Transform<vector<GenericCopyOption>>(list_pr, 4);
+	auto result = TransformCreateSecretStmt(if_not_exists, secret_name, secret_storage_specifier,
+	                                        std::move(generic_copy_option_list));
+	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformSecretStorageSpecifierInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto identifier = list_pr.Child<IdentifierParseResult>(1).identifier;
+	auto result = TransformSecretStorageSpecifier(identifier);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSecretNameInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_id = transformer.Transform<string>(list_pr, 0);
+	auto result = TransformSecretName(col_id);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDetachStatementInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -239,6 +270,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CheckpointStatement", &PEGTransformerFactory::TransformCheckpointStatementInternal},
 	    {"CheckpointForce", &PEGTransformerFactory::TransformCheckpointForceInternal},
 	    {"CreateSchemaStmt", &PEGTransformerFactory::TransformCreateSchemaStmtInternal},
+	    {"CreateSecretStmt", &PEGTransformerFactory::TransformCreateSecretStmtInternal},
+	    {"SecretStorageSpecifier", &PEGTransformerFactory::TransformSecretStorageSpecifierInternal},
+	    {"SecretName", &PEGTransformerFactory::TransformSecretNameInternal},
 	    {"DetachStatement", &PEGTransformerFactory::TransformDetachStatementInternal},
 	    {"ExportStatement", &PEGTransformerFactory::TransformExportStatementInternal},
 	    {"ExportSource", &PEGTransformerFactory::TransformExportSourceInternal},

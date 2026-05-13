@@ -882,15 +882,35 @@ def _extract_func_signature(text, func_name):
     return None
 
 
+def _norm_ws(s):
+    return re.sub(r'\s+', ' ', s).strip()
+
+
 def _find_already_implemented(gram_stem, body_stubs):
-    """Return set of rule_names that already have any implementation in transform_{gram_stem}.cpp."""
+    """Return set of rule_names whose body stub signature matches what is in transform_{gram_stem}.cpp.
+
+    Matches from PEGTransformerFactory:: onwards (normalized whitespace) so that return types
+    split across lines and multi-line param lists are handled correctly. A function with the
+    right name but wrong signature (e.g. an old Internal wrapper) is NOT considered implemented.
+    """
     cpp_path = transformer_dir / f"transform_{gram_stem}.cpp"
     if not cpp_path.exists():
         return set()
     text = cpp_path.read_text()
-    return {
-        rule_name for rule_name, _ in body_stubs if _extract_func_signature(text, f'Transform{rule_name}') is not None
-    }
+    prefix = 'PEGTransformerFactory::'
+    implemented = set()
+    for rule_name, stub_cpp in body_stubs:
+        first_line = stub_cpp.split('\n')[0]
+        expected = _norm_ws(first_line.rstrip('{').rstrip())
+        actual = _extract_func_signature(text, f'Transform{rule_name}')
+        if actual is None:
+            continue
+        actual = _norm_ws(actual)
+        expected_norm = expected[expected.find(prefix) :] if prefix in expected else expected
+        actual_norm = actual[actual.find(prefix) :] if prefix in actual else actual
+        if expected_norm == actual_norm:
+            implemented.add(rule_name)
+    return implemented
 
 
 def print_manual_steps(all_results):
@@ -960,6 +980,7 @@ def main():
         'call.gram',
         'checkpoint.gram',
         'create_schema.gram',
+        'create_secret.gram',
         'detach.gram',
         'export.gram',
         'transaction.gram',
