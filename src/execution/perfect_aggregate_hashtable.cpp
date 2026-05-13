@@ -256,7 +256,6 @@ static void ReconstructGroupVector(uint32_t group_values[], Value &min, idx_t re
 	default:
 		throw InternalException("Invalid type for perfect aggregate HT group");
 	}
-	FlatVector::SetSize(result, count_t(entry_count));
 }
 
 void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {

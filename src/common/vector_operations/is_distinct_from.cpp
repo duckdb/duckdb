@@ -15,7 +15,6 @@ void VectorOperations::DistinctFrom(const Vector &left, const Vector &right, Vec
 	for (idx_t i = 0; i < count; i++) {
 		result_data.WriteValue(cmp_data[i].GetValueUnsafe() != 0);
 	}
-	FlatVector::SetSize(result, count);
 }
 
 void VectorOperations::NotDistinctFrom(const Vector &left, const Vector &right, Vector &result) {
@@ -29,7 +28,6 @@ void VectorOperations::NotDistinctFrom(const Vector &left, const Vector &right, 
 	for (idx_t i = 0; i < count; i++) {
 		result_data.WriteValue(cmp_data[i].GetValueUnsafe() == 0);
 	}
-	FlatVector::SetSize(result, count);
 }
 
 template <class FILL_FN, class PREDICATE>

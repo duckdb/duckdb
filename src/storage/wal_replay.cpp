@@ -1164,13 +1164,12 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 			column_ids.emplace_back(col.StorageOid());
 		}
 		Vector row_id_vector(LogicalType::ROW_TYPE, STANDARD_VECTOR_SIZE);
-		auto row_ids = FlatVector::GetDataMutable<row_t>(row_id_vector);
 		auto current_row_id = storage.GetTotalRows();
 		for (auto &chunk : new_row_groups.Chunks(transaction, column_ids)) {
+			auto row_id_writer = FlatVector::Writer<row_t>(row_id_vector, chunk.size());
 			for (idx_t r = 0; r < chunk.size(); r++) {
-				row_ids[r] = NumericCast<row_t>(current_row_id + r);
+				row_id_writer.WriteValue(NumericCast<row_t>(current_row_id + r));
 			}
-			FlatVector::SetSize(row_id_vector, chunk.size());
 			current_row_id += chunk.size();
 			for (auto &index : indexes.Indexes()) {
 				if (!index.IsBound()) {

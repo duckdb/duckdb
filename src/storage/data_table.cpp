@@ -1323,10 +1323,10 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 		Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_data), STANDARD_VECTOR_SIZE);
 		idx_t scan_count = MinValue<idx_t>(count, row_groups->GetTotalRows() - start_row);
 		ScanTableSegment(transaction, start_row, scan_count, [&](DataChunk &chunk) {
+			auto row_id_writer = FlatVector::Writer<row_t>(row_identifiers, chunk.size());
 			for (idx_t i = 0; i < chunk.size(); i++) {
-				row_data[i] = NumericCast<row_t>(current_row_base + i);
+				row_id_writer.WriteValue(NumericCast<row_t>(current_row_base + i));
 			}
-			FlatVector::SetSize(row_identifiers, chunk.size());
 			for (auto &entry : info->indexes.IndexEntries()) {
 				lock_guard<mutex> guard(entry.lock);
 				auto &index = *entry.index;

@@ -463,7 +463,6 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 		auto dict_idx = offsets.get_index(i);
 		result_addresses.WriteValue(dict_addresses[dict_idx]);
 	}
-	FlatVector::SetSize(state.addresses, groups.size());
 
 	// finally process the aggregates
 	UpdateAggregates(payload, filter);
@@ -510,7 +509,6 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	for (idx_t i = 0; i < payload.size(); i++) {
 		result_addresses.WriteValue(aggregate_address);
 	}
-	FlatVector::SetSize(state.addresses, payload.size());
 	state.addresses.SetVectorType(VectorType::CONSTANT_VECTOR);
 	UpdateAggregates(payload, filter);
 	state.addresses.SetVectorType(VectorType::FLAT_VECTOR);

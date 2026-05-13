@@ -128,7 +128,6 @@ void VectorOperations::ReadFromStorage(data_ptr_t source, idx_t count, Vector &r
 	default:
 		throw NotImplementedException("Unimplemented type for ReadFromStorage");
 	}
-	FlatVector::SetSize(result, count);
 }
 
 } // namespace duckdb

@@ -165,13 +165,12 @@ static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const 
 		hashes_v.Flatten();
 	} else {
 		hashes_v.Flatten();
-		auto salts = FlatVector::GetDataMutable<hash_t>(salt_v);
+		auto salt_data = FlatVector::Writer<hash_t>(salt_v, count_t(count));
 		auto hashes = FlatVector::GetDataMutable<hash_t>(hashes_v);
 		for (idx_t i = 0; i < count; i++) {
-			salts[i] = ht_entry_t::ExtractSalt(hashes[i]);
+			salt_data.WriteValue(ht_entry_t::ExtractSalt(hashes[i]));
 			hashes[i] &= bitmask;
 		}
-		FlatVector::SetSize(salt_v, count_t(count));
 	}
 }
 
@@ -813,11 +812,10 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	InsertState insert_state(*this);
 	do {
 		const auto count = iterator.GetCurrentChunkCount();
-		auto hash_data = FlatVector::GetDataMutable<hash_t>(hashes);
+		auto hash_data = FlatVector::Writer<hash_t>(hashes, count_t(count));
 		for (idx_t i = 0; i < count; i++) {
-			hash_data[i] = Load<hash_t>(row_locations[i] + pointer_offset);
+			hash_data.WriteValue(Load<hash_t>(row_locations[i] + pointer_offset));
 		}
-		FlatVector::SetSize(hashes, count_t(count));
 		TupleDataChunkState &chunk_state = iterator.GetChunkState();
 
 		InsertHashes(hashes, chunk_state, insert_state, parallel);

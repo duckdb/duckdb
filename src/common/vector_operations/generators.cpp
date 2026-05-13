@@ -48,7 +48,6 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t sta
 	default:
 		throw NotImplementedException("Unimplemented type for generate sequence");
 	}
-	FlatVector::SetSize(result, count);
 }
 
 template <class T>
@@ -88,7 +87,6 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, const Selec
 	default:
 		throw NotImplementedException("Unimplemented type for generate sequence");
 	}
-	FlatVector::SetSize(result, count);
 }
 
 } // namespace duckdb

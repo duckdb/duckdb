@@ -26,7 +26,6 @@ static void IsNullLoop(const Vector &input, Vector &result) {
 		for (idx_t i = 0; i < count; i++) {
 			result_data.WriteValue(INVERSE ? entries.IsValid(i) : !entries.IsValid(i));
 		}
-		FlatVector::SetSize(result, count);
 	}
 }
 
