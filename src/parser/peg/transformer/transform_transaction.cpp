@@ -23,6 +23,14 @@ TransactionModifierType PEGTransformerFactory::TransformReadOnlyOrReadWrite(PEGT
 	return transformer.TransformEnum<TransactionModifierType>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
+TransactionModifierType PEGTransformerFactory::TransformReadOnly(PEGTransformer &transformer) {
+	return TransactionModifierType::TRANSACTION_READ_ONLY;
+}
+
+TransactionModifierType PEGTransformerFactory::TransformReadWrite(PEGTransformer &transformer) {
+	return TransactionModifierType::TRANSACTION_READ_WRITE;
+}
+
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommitTransaction(PEGTransformer &transformer) {
 	return make_uniq<TransactionStatement>(make_uniq<TransactionInfo>(TransactionType::COMMIT));
 }

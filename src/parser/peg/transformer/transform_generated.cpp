@@ -267,6 +267,26 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformReadOrWriteInte
 	return make_uniq<TypedTransformResult<TransactionModifierType>>(result);
 }
 
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformReadOnlyOrReadWriteInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<TransactionModifierType>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<TransactionModifierType>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformReadOnlyInternal(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	auto result = TransformReadOnly(transformer);
+	return make_uniq<TypedTransformResult<TransactionModifierType>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformReadWriteInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto result = TransformReadWrite(transformer);
+	return make_uniq<TypedTransformResult<TransactionModifierType>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformUseStatementInternal(PEGTransformer &transformer,
                                                                                       ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -338,6 +358,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"RollbackTransaction", &PEGTransformerFactory::TransformRollbackTransactionInternal},
 	    {"CommitTransaction", &PEGTransformerFactory::TransformCommitTransactionInternal},
 	    {"ReadOrWrite", &PEGTransformerFactory::TransformReadOrWriteInternal},
+	    {"ReadOnlyOrReadWrite", &PEGTransformerFactory::TransformReadOnlyOrReadWriteInternal},
+	    {"ReadOnly", &PEGTransformerFactory::TransformReadOnlyInternal},
+	    {"ReadWrite", &PEGTransformerFactory::TransformReadWriteInternal},
 	    {"UseStatement", &PEGTransformerFactory::TransformUseStatementInternal},
 	    {"UseTarget", &PEGTransformerFactory::TransformUseTargetInternal},
 	    {"UseTargetCatalogSchema", &PEGTransformerFactory::TransformUseTargetCatalogSchemaInternal},

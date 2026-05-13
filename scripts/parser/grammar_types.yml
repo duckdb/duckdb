@@ -872,6 +872,13 @@ LogicalType:
     - Type
     - EnumStringLiteralList
 
+TransactionModifierType:
+  type: "TransactionModifierType"
+  by_value: false
+  rules:
+    - ReadOnly
+    - ReadWrite
+
 # ---------------------------------------------------------------------------
 # Structs passed by value (contain move-only members like unique_ptr<T>)
 # ---------------------------------------------------------------------------

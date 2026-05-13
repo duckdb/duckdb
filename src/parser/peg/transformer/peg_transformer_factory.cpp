@@ -836,10 +836,6 @@ void PEGTransformerFactory::RegisterSet() {
 	REGISTER_TRANSFORM(TransformZoneIntervalWithPrecision);
 }
 
-void PEGTransformerFactory::RegisterTransaction() {
-	REGISTER_TRANSFORM(TransformReadOnlyOrReadWrite);
-}
-
 void PEGTransformerFactory::RegisterUpdate() {
 	// update.gram
 	REGISTER_TRANSFORM(TransformUpdateStatement);
@@ -888,9 +884,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<Value>("TrueLiteral", Value(true));
 	RegisterEnum<Value>("NullLiteral", Value());
 	RegisterEnum<Value>("UnknownLiteral", Value());
-
-	RegisterEnum<TransactionModifierType>("ReadOnly", TransactionModifierType::TRANSACTION_READ_ONLY);
-	RegisterEnum<TransactionModifierType>("ReadWrite", TransactionModifierType::TRANSACTION_READ_WRITE);
 
 	RegisterEnum<CopyDatabaseType>("CopySchema", CopyDatabaseType::COPY_SCHEMA);
 	RegisterEnum<CopyDatabaseType>("CopyData", CopyDatabaseType::COPY_DATA);
@@ -1051,7 +1044,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterPrepare();
 	RegisterSelect();
 	RegisterSet();
-	RegisterTransaction();
 	RegisterUpdate();
 	RegisterVacuum();
 	RegisterKeywordsAndIdentifiers();

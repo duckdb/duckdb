@@ -281,7 +281,6 @@ public:
 	void RegisterPrepare();
 	void RegisterSelect();
 	void RegisterSet();
-	void RegisterTransaction();
 	void RegisterUpdate();
 	void RegisterVacuum();
 	void RegisterKeywordsAndIdentifiers();
@@ -455,16 +454,6 @@ private:
 	static MacroParameter TransformMacroParameter(PEGTransformer &transformer, ParseResult &parse_result);
 	static MacroParameter TransformSimpleParameter(PEGTransformer &transformer, ParseResult &parse_result);
 
-	// create_schema.gram
-	static unique_ptr<CreateStatement> TransformCreateSchemaStmt(PEGTransformer &transformer,
-	                                                             ParseResult &parse_result);
-
-	// create_secret.gram
-	static unique_ptr<CreateStatement> TransformCreateSecretStmt(PEGTransformer &transformer,
-	                                                             ParseResult &parse_result);
-	static string TransformSecretStorageSpecifier(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformSecretName(PEGTransformer &transformer, ParseResult &parse_result);
-
 	// create_sequence.gram
 	static unique_ptr<CreateStatement> TransformCreateSequenceStmt(PEGTransformer &transformer,
 	                                                               ParseResult &parse_result);
@@ -556,9 +545,6 @@ private:
 	static unique_ptr<SelectStatement> TransformEnumSelectType(PEGTransformer &transformer, ParseResult &parse_result);
 	static LogicalType TransformEnumStringLiteralList(PEGTransformer &transformer, ParseResult &parse_result);
 
-	// create_view.gram
-	static unique_ptr<CreateStatement> TransformCreateViewStmt(PEGTransformer &transformer, ParseResult &parse_result);
-
 	// create_trigger.gram
 	static unique_ptr<CreateStatement> TransformCreateTriggerStmt(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
@@ -572,10 +558,6 @@ private:
 	static TriggerEventInfo TransformTriggerEventUpdateOf(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<string> TransformTriggerColumnList(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformTriggerBody(PEGTransformer &transformer, ParseResult &parse_result);
-
-	// deallocate.gram
-	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,
-	                                                             ParseResult &parse_result);
 
 	// describe.gram
 	static unique_ptr<SelectStatement> TransformDescribeStatement(PEGTransformer &transformer,
@@ -615,9 +597,6 @@ private:
 	static unique_ptr<DropStatement> TransformDropSecret(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformDropSecretStorage(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropTrigger(PEGTransformer &transformer, ParseResult &parse_result);
-
-	// execute.gram
-	static unique_ptr<SQLStatement> TransformExecuteStatement(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// explain.gram
 	static unique_ptr<SQLStatement> TransformExplainStatement(PEGTransformer &transformer, ParseResult &parse_result);
@@ -1301,6 +1280,14 @@ private:
 	                                                                     ParseResult &parse_result);
 	static TransactionModifierType TransformReadOrWrite(PEGTransformer &transformer,
 	                                                    const TransactionModifierType &read_only_or_read_write);
+	static unique_ptr<TransformResultValue> TransformReadOnlyOrReadWriteInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformReadOnlyInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static TransactionModifierType TransformReadOnly(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformReadWriteInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static TransactionModifierType TransformReadWrite(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformUseStatementInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer, const QualifiedName &use_target);
