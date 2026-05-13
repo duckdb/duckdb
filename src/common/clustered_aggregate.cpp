@@ -98,10 +98,14 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 	constexpr idx_t SLICE_HALF_VECS = MAX_HOT_PER_CURSOR + 1;
 	sel_t *const slice1 = arena;
 	sel_t *const slice2 = arena + SLICE_HALF_VECS * HALF_VEC;
-	SlotTab st1 {reinterpret_cast<Slot *>(slots), slice1, slice1, 
-	             slice1 + MAX_HOT_PER_CURSOR * HALF_VEC, 0, 0, 0};
-	SlotTab st2 {reinterpret_cast<Slot *>(slots + HASHTAB_SZ), slice2, slice2,
-	             slice2 + MAX_HOT_PER_CURSOR * HALF_VEC, HALF_VEC, 0, 0};
+	SlotTab st1 {reinterpret_cast<Slot *>(slots), slice1, slice1, slice1 + MAX_HOT_PER_CURSOR * HALF_VEC, 0, 0, 0};
+	SlotTab st2 {reinterpret_cast<Slot *>(slots + HASHTAB_SZ),
+	             slice2,
+	             slice2,
+	             slice2 + MAX_HOT_PER_CURSOR * HALF_VEC,
+	             HALF_VEC,
+	             0,
+	             0};
 
 	auto finish_run = [&](SlotTab &st, const Slot s) -> uint64_t {
 		const idx_t cnt = static_cast<idx_t>((st.slice + s.val.bitfields.cursor) - group_runs[s.val.bitfields.idx].sel);
