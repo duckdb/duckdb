@@ -35,7 +35,8 @@ SELECT a, b FROM
 ----
 8333	8334
 
-# Plan contains the conditional-aggregate rewrite when fusion fires.
+# Plan signal: fusion eliminates the cross-products by collapsing N sibling
+# aggregates into a single aggregate node, so CROSS_PRODUCT must not appear.
 query II
 EXPLAIN
 SELECT a, b, c FROM
@@ -43,7 +44,23 @@ SELECT a, b, c FROM
   (SELECT count(*) b FROM measurements WHERE hour_of_day = 10) s2,
   (SELECT count(*) c FROM measurements WHERE hour_of_day = 11) s3
 ----
-physical_plan	<REGEX>:.*FILTER.*
+physical_plan	<!REGEX>:.*CROSS_PRODUCT.*
+
+# With fusion disabled, the same query must keep its cross-products.
+statement ok
+SET disabled_optimizers = 'scalar_aggregate_fusion'
+
+query II
+EXPLAIN
+SELECT a, b, c FROM
+  (SELECT count(*) a FROM measurements WHERE hour_of_day = 9) s1,
+  (SELECT count(*) b FROM measurements WHERE hour_of_day = 10) s2,
+  (SELECT count(*) c FROM measurements WHERE hour_of_day = 11) s3
+----
+physical_plan	<REGEX>:.*CROSS_PRODUCT.*
+
+statement ok
+RESET disabled_optimizers
 
 # Numerical sum across all three filtered scans must match the union form.
 query I

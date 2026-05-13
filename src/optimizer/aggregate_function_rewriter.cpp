@@ -58,12 +58,13 @@ public:
 
 public:
 	bool ShouldSkip(const LogicalAggregate &aggr) const override {
-		// We used to bail out for ROLLUP/CUBE/GROUPING SETS — but SUM(x)/COUNT(x) is
-		// mathematically identical to AVG(x) under any grouping (both ignore NULLs
-		// identically), and decomposing here is the prerequisite for partial-aggregate
-		// pushdown (PAP) to fire on Q22-shape queries. Keep the guard only for
-		// grouping_functions, which produce per-row grouping-set bitmasks that the
-		// rewrite doesn't know how to track.
+		// AVG -> SUM/COUNT is correct under any grouping (both ignore NULLs
+		// identically), so ROLLUP/CUBE/GROUPING SETS are safe to rewrite.
+		// Decomposing here is also the prerequisite for partial-aggregate
+		// pushdown to fire on AVG queries. The remaining guard is for
+		// grouping_functions: their per-row grouping-set bitmasks reference
+		// the original AVG column directly, and the rewrite has no way to
+		// translate those references.
 		return !aggr.grouping_functions.empty();
 	}
 

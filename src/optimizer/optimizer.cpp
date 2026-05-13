@@ -256,8 +256,8 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = optimizer.Optimize(std::move(plan));
 	});
 
-	// Pre-aggregate SUM aggregates below joins when it can reduce join work
-	// (Q22-shaped queries: GROUP BY product_name FROM fact JOIN dim — push SUM below)
+	// Pre-aggregate SUM/COUNT below joins when GROUP BY is on dimension columns
+	// and the fact side dominates cardinality — reduces probe-side work.
 	RunOptimizer(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN, [&]() {
 		PartialAggregatePushdown partial_aggregate_pushdown(*this);
 		partial_aggregate_pushdown.VisitOperator(plan);

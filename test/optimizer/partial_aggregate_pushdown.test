@@ -45,7 +45,16 @@ GROUP BY group_label
 ----
 physical_plan	<REGEX>:.*finalize_combine_aggr.*
 
-# ROLLUP across the same shape — verify all rollup levels survive after PAP.
+# ROLLUP across the same shape — PAP must fire (finalize_combine_aggr present)
+# and every rollup level must survive.
+query II
+EXPLAIN
+SELECT group_label, sum(measure)
+FROM fact JOIN dim USING (dim_key)
+GROUP BY ROLLUP(group_label)
+----
+physical_plan	<REGEX>:.*finalize_combine_aggr.*
+
 statement ok
 SET disabled_optimizers = 'partial_aggregate_pushdown'
 

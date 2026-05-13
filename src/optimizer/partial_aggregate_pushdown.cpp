@@ -17,6 +17,11 @@ PartialAggregatePushdown::PartialAggregatePushdown(Optimizer &optimizer_p) : opt
 struct PartialAggregatePushdownHeuristics {
 	static constexpr idx_t MIN_DIMENSION_GROUPS = 4;
 	static constexpr idx_t MIN_AGGREGATE_TO_DIMENSION_RATIO = 4;
+	// Skip pushdown when the join shrinks the fact stream to <1/N of its
+	// original size — at that point post-join aggregation is cheaper than
+	// pre-join. Calibrated against Q92, where a date_dim filter cuts web_sales
+	// from 719K to ~1k rows.
+	static constexpr idx_t MAX_JOIN_SELECTIVITY_INV = 8;
 };
 
 struct PartialAggregatePushdownInfo {
@@ -72,15 +77,11 @@ static bool IsSupportedAggregate(const BoundAggregateExpression &expr, bool mult
 	if (!expr.function.HasStateCombineCallback()) {
 		return false;
 	}
-	// AVG's exported state stores SUM as a hugeint internally but serializes
-	// to a fixed blob that overflows to `inf` on a final divide once many
-	// partial states get combined at shallow ROLLUP/CUBE levels (verified on
-	// TPC-DS Q22 at SF1: the `(i_product_name)` and grand-total rows produced
-	// `inf` while the (a,b,c,d) leaf level was numerically exact). Hold AVG
-	// to single-grouping-set queries until the state serialization is widened.
-	// The `AggregateFunctionRewriter` already rewrites AVG -> SUM/COUNT for
-	// ROLLUP queries (duckdb#22572 + this branch's d697820), so this guard
-	// is a defensive belt rather than the primary path.
+	// AVG's exported state serializes to a fixed blob that overflows to `inf`
+	// on the final divide once many partial states get combined at shallow
+	// ROLLUP/CUBE levels. AggregateFunctionRewriter rewrites AVG -> SUM/COUNT
+	// for ROLLUP queries (duckdb#22572), so this guard is a defensive belt
+	// rather than the primary path.
 	if (multi_grouping_set && StringUtil::Lower(expr.function.GetName()) == "avg") {
 		return false;
 	}
@@ -176,12 +177,9 @@ static bool PassesCardinalityHeuristic(const LogicalComparisonJoin &join, const 
 	    PartialAggregatePushdownHeuristics::MIN_AGGREGATE_TO_DIMENSION_RATIO * dimension_child.estimated_cardinality) {
 		return false;
 	}
-	// Reject when the join is highly selective on the aggregate side — if the
-	// join already shrinks the fact stream to <1/8 of its original size, doing
-	// the aggregation AFTER the join is cheaper than before. (Without this
-	// guard, Q92's inner subquery pushed SUM/COUNT below a date_dim filter
-	// that cuts web_sales from 719K to ~1k rows, doing ~700x more work.)
-	if (join.has_estimated_cardinality && join.estimated_cardinality * 8 < aggregate_child.estimated_cardinality) {
+	if (join.has_estimated_cardinality &&
+	    join.estimated_cardinality * PartialAggregatePushdownHeuristics::MAX_JOIN_SELECTIVITY_INV <
+	        aggregate_child.estimated_cardinality) {
 		return false;
 	}
 	return true;
@@ -404,11 +402,10 @@ static unique_ptr<LogicalAggregate> CreateUpperAggregate(LogicalAggregate &aggr,
                                                          vector<unique_ptr<Expression>> upper_aggregates) {
 	auto upper_aggr = make_uniq<LogicalAggregate>(aggr.group_index, aggr.aggregate_index, std::move(upper_aggregates));
 	upper_aggr->groups = CreateUpperGroups(aggr, *new_join, info);
-	// Preserve ROLLUP / CUBE / GROUPING SETS. The grouping_sets vector contains
-	// indices into the `groups` vector, and CreateUpperGroups produces the upper
-	// groups in the same order as `aggr.groups`, so the indices stay valid.
-	// Without this copy, a 5-set ROLLUP collapses to a single set on the upper
-	// side and silently over-aggregates (verified on TPC-DS Q22).
+	// Preserve ROLLUP / CUBE / GROUPING SETS. CreateUpperGroups builds the
+	// upper groups in the same order as `aggr.groups`, so the indices stored
+	// in grouping_sets remain valid. Without this copy the upper aggregate
+	// collapses to a single set and silently over-aggregates.
 	upper_aggr->grouping_sets = aggr.grouping_sets;
 	upper_aggr->grouping_functions = aggr.grouping_functions;
 	upper_aggr->children.push_back(std::move(new_join));

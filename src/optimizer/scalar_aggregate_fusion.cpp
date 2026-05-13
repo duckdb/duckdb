@@ -3,6 +3,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -19,18 +20,11 @@ namespace duckdb {
 
 namespace {
 
-struct BindingReplacement {
-	ColumnBinding old_binding;
-	ColumnBinding new_binding;
-	LogicalType new_type;
-	bool replace_type = false;
-};
-
 struct BranchInfo {
 	LogicalAggregate *aggregate = nullptr;
 	LogicalFilter *filter = nullptr;
 	vector<LogicalGet *> source_gets;
-	vector<BindingReplacement> replacements_to_primary;
+	vector<ReplacementBinding> replacements_to_primary;
 	vector<unique_ptr<Expression>> canonical_predicates;
 	vector<bool> common_predicates;
 };
@@ -41,35 +35,32 @@ static bool IsCrossProduct(const LogicalOperator &op) {
 	return op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT;
 }
 
-static void ReplaceExpressionBindings(unique_ptr<Expression> &expr, const vector<BindingReplacement> &replacements) {
+//! Apply column-binding substitutions to a single expression (or its subtree).
+//! Mirrors the matching half of ColumnBindingReplacer::VisitExpression so that
+//! callers who only have an expression (not an operator) can reuse the same
+//! replacement vector format.
+static void ReplaceExpressionBindings(unique_ptr<Expression> &expr,
+                                      const vector<ReplacementBinding> &replacements) {
 	if (replacements.empty()) {
 		return;
 	}
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &) {
-		    for (idx_t iteration = 0; iteration < replacements.size(); iteration++) {
-			    bool replaced = false;
-			    for (auto &replacement : replacements) {
-				    if (colref.binding == replacement.old_binding) {
-					    if (colref.binding == replacement.new_binding) {
-						    return;
-					    }
-					    colref.binding = replacement.new_binding;
-					    if (replacement.replace_type) {
-						    colref.SetReturnType(replacement.new_type);
-					    }
-					    replaced = true;
-					    break;
-				    }
+		    for (auto &replacement : replacements) {
+			    if (colref.binding != replacement.old_binding) {
+				    continue;
 			    }
-			    if (!replaced) {
-				    return;
+			    colref.binding = replacement.new_binding;
+			    if (replacement.replace_type) {
+				    colref.SetReturnType(replacement.new_type);
 			    }
+			    return;
 		    }
 	    });
 }
 
-static void ReplaceOperatorExpressionBindings(LogicalOperator &op, const vector<BindingReplacement> &replacements) {
+static void ReplaceOperatorExpressionBindings(LogicalOperator &op,
+                                              const vector<ReplacementBinding> &replacements) {
 	if (replacements.empty()) {
 		return;
 	}
@@ -131,8 +122,8 @@ static bool ExtractSources(LogicalOperator &op, BranchInfo &branch) {
 				continue;
 			}
 			auto &expression = projection.expressions[binding_idx];
-			branch.replacements_to_primary.push_back(
-			    {projection_bindings[binding_idx], child_bindings[binding_idx], expression->GetReturnType(), true});
+			branch.replacements_to_primary.emplace_back(projection_bindings[binding_idx],
+			                                            child_bindings[binding_idx], expression->GetReturnType());
 		}
 		return ExtractSources(*projection.children[0], branch);
 	}
@@ -182,15 +173,10 @@ static ProjectionIndex FindOrAddColumn(LogicalGet &get, const ColumnIndex &colum
 	return result;
 }
 
-//! Minimum input cardinality for fusion to pay off on native tables.
-//! Below this threshold the hot-cache regression that closed duckdb#22327
-//! dominates: filtered aggregates have per-row branch overhead, and 8 cheap
-//! sequential scans of a small table beat one scan + 8 conditional sums.
-//! Verified empirically — Q88 at SF1 still wins (store_sales is 2.88M rows),
-//! at SF10 wins more decisively (28.8M), and below ~100k rows the regression
-//! Mark reported re-emerges. The threshold is tied to the same row-count
-//! scale used by `RelationStatisticsHelper::DEFAULT_SELECTIVITY * 1e6` so
-//! it tracks the rest of the optimizer's idea of "a fact-sized scan".
+//! Minimum input cardinality for fusion to pay off on native tables. Below
+//! this threshold the hot-cache regression that closed duckdb#22327 dominates:
+//! filtered aggregates have per-row branch overhead, and N cheap sequential
+//! scans of a small hot table beat one scan + N conditional sums.
 struct ScalarAggregateFusionHeuristics {
 	static constexpr idx_t NATIVE_TABLE_MIN_ROWS = 100000;
 };
@@ -207,9 +193,8 @@ static bool SupportsSourceFusion(const LogicalGet &get) {
 	}
 	// Native (catalog) tables — only fuse when the scan is wide AND large
 	// enough that re-reading dominates filtered-aggregate dispatch cost.
-	// The wide-column check captures the common BI shape (multiple measures
-	// projected); the cardinality check is the cost-model guard added to
-	// avoid the Q9-shape regression on TPC-DS SF100 that closed duckdb#22327.
+	// The cardinality check is the cost-model guard against the hot-cache
+	// regression that closed duckdb#22327.
 	if (get.GetColumnIds().size() < 2) {
 		return false;
 	}
@@ -399,7 +384,7 @@ static bool BuildPrimaryBindingMap(BranchInfo &primary, BranchInfo &branch) {
 				continue;
 			}
 			auto type = primary_get.GetColumnType(branch_column);
-			branch.replacements_to_primary.push_back({old_binding, new_binding, type, true});
+			branch.replacements_to_primary.emplace_back(old_binding, new_binding, type);
 		}
 	}
 	return true;
@@ -414,13 +399,13 @@ static unique_ptr<LogicalOperator> BuildCrossProduct(vector<unique_ptr<LogicalOp
 	return result;
 }
 
-static unique_ptr<Expression> CanonicalCopy(const Expression &expr, const vector<BindingReplacement> &replacements) {
+static unique_ptr<Expression> CanonicalCopy(const Expression &expr, const vector<ReplacementBinding> &replacements) {
 	auto result = expr.Copy();
 	ReplaceExpressionBindings(result, replacements);
 	return result;
 }
 
-static bool PreparePredicates(vector<BranchInfo> &branches) {
+static void PreparePredicates(vector<BranchInfo> &branches) {
 	for (auto &branch : branches) {
 		for (auto &predicate : branch.filter->expressions) {
 			branch.canonical_predicates.push_back(CanonicalCopy(*predicate, branch.replacements_to_primary));
@@ -455,7 +440,6 @@ static bool PreparePredicates(vector<BranchInfo> &branches) {
 			}
 		}
 	}
-	return true;
 }
 
 static vector<unique_ptr<Expression>> GetBranchPredicates(const BranchInfo &branch) {
@@ -469,9 +453,7 @@ static vector<unique_ptr<Expression>> GetBranchPredicates(const BranchInfo &bran
 }
 
 static unique_ptr<LogicalOperator> CreateFusedAggregate(Optimizer &optimizer, vector<BranchInfo> &branches) {
-	if (!PreparePredicates(branches)) {
-		return nullptr;
-	}
+	PreparePredicates(branches);
 
 	vector<unique_ptr<Expression>> common_predicates;
 	for (idx_t predicate_idx = 0; predicate_idx < branches[0].canonical_predicates.size(); predicate_idx++) {
@@ -599,10 +581,9 @@ static unique_ptr<LogicalOperator> OptimizeRecursive(Optimizer &optimizer, uniqu
 		}
 	}
 
-	vector<BindingReplacement> replacements;
+	vector<ReplacementBinding> replacements;
 	for (auto &child : op->children) {
 		auto old_bindings = child->GetColumnBindings();
-		auto old_types = child->types;
 		child = OptimizeRecursive(optimizer, std::move(child));
 		auto new_bindings = child->GetColumnBindings();
 		if (old_bindings == new_bindings) {
@@ -612,11 +593,17 @@ static unique_ptr<LogicalOperator> OptimizeRecursive(Optimizer &optimizer, uniqu
 			throw InternalException("Scalar aggregate fusion changed a child binding count unexpectedly");
 		}
 		for (idx_t binding_idx = 0; binding_idx < old_bindings.size(); binding_idx++) {
-			auto replacement_type = binding_idx < old_types.size() ? old_types[binding_idx] : LogicalType();
-			replacements.push_back({old_bindings[binding_idx], new_bindings[binding_idx], replacement_type, false});
+			replacements.emplace_back(old_bindings[binding_idx], new_bindings[binding_idx]);
 		}
 	}
 	ReplaceOperatorExpressionBindings(*op, replacements);
+	// The recursive descent above may have turned a child into a new cross
+	// product (e.g., after fusing a sibling). Only re-attempt fusion if we are
+	// actually sitting on one — the function early-returns otherwise but the
+	// dispatch isn't free across an entire plan.
+	if (!IsCrossProduct(*op)) {
+		return op;
+	}
 	return TryFuseCrossProduct(optimizer, std::move(op));
 }
 
