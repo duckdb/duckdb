@@ -692,6 +692,27 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 
+set(DUCKDB_RELEASE_LINK_JOBS
+    4
+    CACHE STRING "Maximum number of concurrent linker jobs for Release builds")
+set(DUCKDB_DEBUG_LINK_JOBS
+    2
+    CACHE STRING "Maximum number of concurrent linker jobs for non-Release builds")
+
+# Throttle linker concurrency (mainly effective for Ninja) to avoid OOM in debug-like builds.
+set_property(GLOBAL PROPERTY JOB_POOLS
+             release_link_jobs=${DUCKDB_RELEASE_LINK_JOBS}
+             debug_link_jobs=${DUCKDB_DEBUG_LINK_JOBS})
+if(NOT DEFINED CMAKE_JOB_POOL_LINK)
+  if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_JOB_POOL_LINK release_link_jobs)
+  else()
+    set(CMAKE_JOB_POOL_LINK debug_link_jobs)
+  endif()
+endif()
+message(STATUS
+        "Build workers: compile=$ENV{CMAKE_BUILD_PARALLEL_LEVEL} link_release=${DUCKDB_RELEASE_LINK_JOBS} link_non_release=${DUCKDB_DEBUG_LINK_JOBS}")
+
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(DEFAULT_BUILD_TYPE "Release")
   message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}'.")
