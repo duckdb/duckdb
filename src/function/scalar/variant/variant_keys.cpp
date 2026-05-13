@@ -72,8 +72,8 @@ bool VariantKeysBindData::Equals(const FunctionData &other) const {
 	return true;
 }
 
-static vector<vector<string>> CollectVariantKeys(const UnifiedVariantVectorData &variant, const vector<VariantPathComponent> &components,
-                            idx_t count) {
+static vector<vector<string>> CollectVariantKeys(const UnifiedVariantVectorData &variant,
+                                                 const vector<VariantPathComponent> &components, idx_t count) {
 	vector<vector<string>> rows;
 	rows.resize(count);
 
@@ -151,7 +151,7 @@ static vector<vector<string>> CollectVariantKeys(const UnifiedVariantVectorData 
 
 // TODO: Add fast path for shredded variant vector.
 static void UnaryVariantKeys(const Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
-                        idx_t count) {
+                             idx_t count) {
 	RecursiveUnifiedVectorFormat source_format;
 	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
 	const UnifiedVariantVectorData variant(source_format);
@@ -164,21 +164,20 @@ static void UnaryVariantKeys(const Vector &variant_vec, const vector<VariantPath
 	for (idx_t row_idx = 0; row_idx < rows.size(); row_idx++) {
 		auto row_writer = result_writer.WriteList(rows[row_idx].size());
 		idx_t child_idx = 0;
-		for (auto &child_writer: row_writer) {
+		for (auto &child_writer : row_writer) {
 			child_writer.WriteValue(rows[row_idx][child_idx++]);
 		}
 	}
 }
 
-static void ManyVariantKeys(const Vector &variant_vec, const vector<vector<VariantPathComponent>> &paths, Vector &result,
-						idx_t count) {
+static void ManyVariantKeys(const Vector &variant_vec, const vector<vector<VariantPathComponent>> &paths,
+                            Vector &result, idx_t count) {
 	vector<vector<vector<string>>> path_results;
 	path_results.reserve(paths.size());
 
 	RecursiveUnifiedVectorFormat source_format;
 	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
 	const UnifiedVariantVectorData variant(source_format);
-
 
 	for (const auto &path : paths) {
 		path_results.push_back(CollectVariantKeys(variant, path, count));
@@ -194,7 +193,7 @@ static void ManyVariantKeys(const Vector &variant_vec, const vector<vector<Varia
 			auto path_writer = list_writer.WriteList(path_results[path_idx][row_idx].size());
 
 			idx_t key_idx = 0;
-			for (auto &key_writer: path_writer) {
+			for (auto &key_writer : path_writer) {
 				key_writer.WriteValue(path_results[path_idx][row_idx][key_idx++]);
 			}
 
