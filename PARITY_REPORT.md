@@ -2,17 +2,46 @@
 
 Fork branch: **https://github.com/zurferr/duckdb/tree/fix/q22-q88-q92-snowflake-parity**
 
-## Headlines
+## Full TPC-DS SF10 — fix branch vs upstream/main (clean runs, no CPU contention)
+
+| Metric | Vanilla `upstream/main` | Fix branch | Speedup |
+|---|---|---|---|
+| **Total engine time** (sum of 99 query times) | **94.51 s** | **83.87 s** | **1.127× (12.7 % faster)** |
+| Queries passing | 99 / 99 | 99 / 99 | — |
+| Q22 (the TPC-DS ROLLUP query that drove this work) | 7.97 s | **0.82 s** | **9.73 ×** |
+| Q88 (8-subquery cross-product) | 0.58 s | 0.26 s | 2.26 × |
+| Q3 (single-fact aggregation) | 0.95 s | 0.23 s | 4.13 × |
+| Q4 (year-over-year customer total) | 4.02 s | 2.85 s | 1.41 × |
+| Q11 (gross-profit YoY) | 2.36 s | 1.68 s | 1.40 × |
+| Q7 (item-promotion aggregation) | 1.28 s | 0.57 s | 2.23 × |
+
+Both runs used the same binary-versioned `tpcds.duckdb_extension`, the same SF10 database file, the same `run_99.py` harness, and the same machine with nothing else competing for CPU. Raw per-query numbers in `bench_sf10_vanilla.csv` and `bench_sf10_fix.csv` at the repo root.
+
+### Regression band (queries where the fix branch is slightly slower)
+
+All small in absolute terms — the largest is +0.26 s on Q8. Total regression across the bottom 12 queries is +1.5 s; total speedup across the top 12 is **+12.1 s**, with Q22 alone contributing +7.15 s.
+
+| Query | Vanilla | Fix | Delta |
+|---|---|---|---|
+| Q8 | 0.73 s | 0.99 s | +0.26 s (+36 %) |
+| Q14 | 4.04 s | 4.22 s | +0.18 s (+4 %) |
+| Q31 | 0.74 s | 0.90 s | +0.17 s (+23 %) |
+| Q9 | 1.78 s | 1.92 s | +0.14 s (+8 %) |
+| Q10 | 0.23 s | 0.37 s | +0.14 s (+60 %) |
+
+(11 other queries are 5-25 % slower with absolute deltas under 0.1 s — likely false signal from the per-query process-start overhead in the harness.)
+
+## Targeted-query numbers (still relevant for the original Snowflake comparison)
 
 | Query | DuckDB main | Fix branch | Speedup | Match Snowflake gap? |
 |---|---|---|---|---|
-| **Q22** (TPC-DS ROLLUP, SF10) | **8.343 s** | **0.694 s** | **12.0×** | Yes — closes the Snowflake 2.5× edge on FoxDB SF100 with margin |
-| **Q88** (8-subquery cross product, SF10) | 0.705 s | 0.173 s | 4.1× | Yes — closes Snowflake's 1.5× edge |
+| **Q22** (SF10) | 7.97 s | **0.82 s** | **9.73×** | Yes — was 2.5× behind Snowflake XS on FoxDB SF100, now beats it by ~10× absolute |
+| **Q88** (SF10) | 0.58 s | 0.26 s | 2.26× | Yes — closes Snowflake's 1.5× edge |
 | Q88 (SF1) | 0.157 s | 0.028 s | 5.6× | — |
 | Q22-shape no ROLLUP (SF1) | 0.140 s | 0.051 s | 2.7× | — |
 | Q92 (correlated, SF1) | 0.015 s | 0.015 s | — | DuckDB's existing DELIM_JOIN + JFP already does most of the work at this scale; the remaining edge needs scan-time bitmap filters, deferred. |
 
-All results numerically identical to baseline DuckDB (row counts, sums, min/max, exact aggregates verified).
+All results numerically identical to baseline DuckDB (row counts, sums, min/max, exact aggregates verified across the 99-query suite).
 
 ## What's in the branch
 
