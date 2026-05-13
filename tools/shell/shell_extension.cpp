@@ -20,7 +20,7 @@ namespace duckdb {
 
 static void GetEnvFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
 		string env_name = input.GetString();
 		auto env_value = getenv(env_name.c_str());
 		if (!env_value) {

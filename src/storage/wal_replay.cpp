@@ -1170,6 +1170,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 			for (idx_t r = 0; r < chunk.size(); r++) {
 				row_ids[r] = NumericCast<row_t>(current_row_id + r);
 			}
+			FlatVector::SetSize(row_id_vector, chunk.size());
 			current_row_id += chunk.size();
 			for (auto &index : indexes.Indexes()) {
 				if (!index.IsBound()) {

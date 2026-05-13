@@ -190,7 +190,7 @@ void ArrayColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.child_appends.push_back(std::move(child_append));
 }
 
-void ArrayColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
+void ArrayColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, const Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		Vector append_vector(Vector::Ref(vector));
 		append_vector.Flatten();
@@ -202,7 +202,7 @@ void ArrayColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Ve
 	validity->Append(stats, state.child_appends[0], vector, count);
 	// Append child column
 	auto array_size = ArrayType::GetSize(type);
-	auto &child_vec = ArrayVector::GetChildMutable(vector);
+	const auto &child_vec = ArrayVector::GetChild(vector);
 	child_column->Append(ArrayStats::GetChildStats(stats), state.child_appends[1], child_vec, count * array_size);
 
 	this->count += count;

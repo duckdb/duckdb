@@ -129,7 +129,7 @@ int8_t Comparator::Operation(const double &left, const double &right) {
 // Fast path: direct BinaryExecutor for primitive types (single pass, no intermediate vector)
 //===--------------------------------------------------------------------===//
 template <class OP>
-static bool TryPrimitiveComparisonExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
+static bool TryPrimitiveComparisonExecute(const Vector &left, const Vector &right, Vector &result) {
 #ifdef DUCKDB_SMALLER_BINARY
 	return false;
 #else
@@ -137,46 +137,46 @@ static bool TryPrimitiveComparisonExecute(Vector &left, Vector &right, Vector &r
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		BinaryExecutor::Execute<int8_t, int8_t, bool, OP>(left, right, result, count);
+		BinaryExecutor::Execute<int8_t, int8_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::INT16:
-		BinaryExecutor::Execute<int16_t, int16_t, bool, OP>(left, right, result, count);
+		BinaryExecutor::Execute<int16_t, int16_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::INT32:
-		BinaryExecutor::Execute<int32_t, int32_t, bool, OP>(left, right, result, count);
+		BinaryExecutor::Execute<int32_t, int32_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::INT64:
-		BinaryExecutor::Execute<int64_t, int64_t, bool, OP>(left, right, result, count);
+		BinaryExecutor::Execute<int64_t, int64_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::UINT8:
-		BinaryExecutor::Execute<uint8_t, uint8_t, bool, OP>(left, right, result, count);
+		BinaryExecutor::Execute<uint8_t, uint8_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::UINT16:
-		BinaryExecutor::Execute<uint16_t, uint16_t, bool, OP>(left, right, result, count);
+		BinaryExecutor::Execute<uint16_t, uint16_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::UINT32:
-		BinaryExecutor::Execute<uint32_t, uint32_t, bool, OP>(left, right, result, count);
+		BinaryExecutor::Execute<uint32_t, uint32_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::UINT64:
-		BinaryExecutor::Execute<uint64_t, uint64_t, bool, OP>(left, right, result, count);
+		BinaryExecutor::Execute<uint64_t, uint64_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::INT128:
-		BinaryExecutor::Execute<hugeint_t, hugeint_t, bool, OP>(left, right, result, count);
+		BinaryExecutor::Execute<hugeint_t, hugeint_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::UINT128:
-		BinaryExecutor::Execute<uhugeint_t, uhugeint_t, bool, OP>(left, right, result, count);
+		BinaryExecutor::Execute<uhugeint_t, uhugeint_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::FLOAT:
-		BinaryExecutor::Execute<float, float, bool, OP>(left, right, result, count);
+		BinaryExecutor::Execute<float, float, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::DOUBLE:
-		BinaryExecutor::Execute<double, double, bool, OP>(left, right, result, count);
+		BinaryExecutor::Execute<double, double, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::INTERVAL:
-		BinaryExecutor::Execute<interval_t, interval_t, bool, OP>(left, right, result, count);
+		BinaryExecutor::Execute<interval_t, interval_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::VARCHAR:
-		BinaryExecutor::Execute<string_t, string_t, bool, OP>(left, right, result, count);
+		BinaryExecutor::Execute<string_t, string_t, bool, OP>(left, right, result);
 		return true;
 	default:
 		return false;
@@ -185,10 +185,11 @@ static bool TryPrimitiveComparisonExecute(Vector &left, Vector &right, Vector &r
 }
 
 template <class PREDICATE>
-static void ComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx_t count, PREDICATE predicate) {
+static void ComparatorToBoolean(const Vector &left, const Vector &right, Vector &result, PREDICATE predicate) {
 	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
-	Vector comparator_result(LogicalType::TINYINT, count);
-	VectorOperations::Comparator(left, right, comparator_result, count);
+	Vector comparator_result(LogicalType::TINYINT);
+	VectorOperations::Comparator(left, right, comparator_result);
+	const auto count = comparator_result.size();
 	auto cmp_data = comparator_result.Values<int8_t>();
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<bool>(result, count);
@@ -202,60 +203,77 @@ static void ComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx
 	}
 }
 
-void VectorOperations::Equals(Vector &left, Vector &right, Vector &result, idx_t count) {
-	if (TryPrimitiveComparisonExecute<duckdb::Equals>(left, right, result, count)) {
-		return;
+static idx_t GetComparisonCount(const Vector &left, const Vector &right, const char *fname) {
+	const bool left_is_const = left.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	const bool right_is_const = right.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	if (!left_is_const && !right_is_const && left.size() != right.size()) {
+		throw InternalException(
+		    "Mismatch in input vector sizes for %s - left has %d rows but right has %d", fname, left.size(),
+		    right.size());
 	}
-	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v == 0; });
+	return left_is_const ? right.size() : left.size();
 }
 
-void VectorOperations::NotEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
-	if (TryPrimitiveComparisonExecute<duckdb::NotEquals>(left, right, result, count)) {
-		return;
+void VectorOperations::Equals(const Vector &left, const Vector &right, Vector &result) {
+	const auto count = GetComparisonCount(left, right, "Equals");
+	if (!TryPrimitiveComparisonExecute<duckdb::Equals>(left, right, result)) {
+		ComparatorToBoolean(left, right, result, [](int8_t v) { return v == 0; });
 	}
-	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v != 0; });
+	FlatVector::SetSize(result, count);
 }
 
-void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result, idx_t count) {
-	if (TryPrimitiveComparisonExecute<duckdb::GreaterThan>(left, right, result, count)) {
-		return;
+void VectorOperations::NotEquals(const Vector &left, const Vector &right, Vector &result) {
+	const auto count = GetComparisonCount(left, right, "NotEquals");
+	if (!TryPrimitiveComparisonExecute<duckdb::NotEquals>(left, right, result)) {
+		ComparatorToBoolean(left, right, result, [](int8_t v) { return v != 0; });
 	}
-	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v > 0; });
+	FlatVector::SetSize(result, count);
 }
 
-void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
-	if (TryPrimitiveComparisonExecute<duckdb::GreaterThanEquals>(left, right, result, count)) {
-		return;
+void VectorOperations::GreaterThan(const Vector &left, const Vector &right, Vector &result) {
+	const auto count = GetComparisonCount(left, right, "GreaterThan");
+	if (!TryPrimitiveComparisonExecute<duckdb::GreaterThan>(left, right, result)) {
+		ComparatorToBoolean(left, right, result, [](int8_t v) { return v > 0; });
 	}
-	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v >= 0; });
+	FlatVector::SetSize(result, count);
 }
 
-void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::GreaterThanEquals(const Vector &left, const Vector &right, Vector &result) {
+	const auto count = GetComparisonCount(left, right, "GreaterThanEquals");
+	if (!TryPrimitiveComparisonExecute<duckdb::GreaterThanEquals>(left, right, result)) {
+		ComparatorToBoolean(left, right, result, [](int8_t v) { return v >= 0; });
+	}
+	FlatVector::SetSize(result, count);
+}
+
+void VectorOperations::LessThan(const Vector &left, const Vector &right, Vector &result) {
+	const auto count = GetComparisonCount(left, right, "LessThan");
 	// NOLINTNEXTLINE: flip right / left (left < right is equal to right > left)
-	if (TryPrimitiveComparisonExecute<duckdb::GreaterThan>(right, left, result, count)) {
-		return;
+	if (!TryPrimitiveComparisonExecute<duckdb::GreaterThan>(right, left, result)) {
+		ComparatorToBoolean(left, right, result, [](int8_t v) { return v < 0; });
 	}
-	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v < 0; });
+	FlatVector::SetSize(result, count);
 }
 
-void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::LessThanEquals(const Vector &left, const Vector &right, Vector &result) {
+	const auto count = GetComparisonCount(left, right, "LessThanEquals");
 	// NOLINTNEXTLINE: flip right / left (left <= right is equal to right >= left)
-	if (TryPrimitiveComparisonExecute<duckdb::GreaterThanEquals>(right, left, result, count)) {
-		return;
+	if (!TryPrimitiveComparisonExecute<duckdb::GreaterThanEquals>(right, left, result)) {
+		ComparatorToBoolean(left, right, result, [](int8_t v) { return v <= 0; });
 	}
-	ComparatorToBoolean(left, right, result, count, [](int8_t v) { return v <= 0; });
+	FlatVector::SetSize(result, count);
 }
 
 struct StandardComparatorExecute {
 	template <class T>
-	static inline void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
+	static inline void Execute(const Vector &left, const Vector &right, Vector &result, idx_t count) {
 		BinaryExecutor::Execute<T, T, int8_t, duckdb::Comparator>(left, right, result, count);
 	}
 };
 
 struct DistinctComparatorExecute {
 	template <class T>
-	static void Execute(Vector &left, Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
+	static void Execute(const Vector &left, const Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
 	                    const SelectionVector &rhs_sel, idx_t sel_count) {
 		UnifiedVectorFormat left_format, right_format;
 		left.ToUnifiedFormat(left_format);
@@ -273,7 +291,7 @@ struct DistinctComparatorExecute {
 };
 
 // forward declaration - nested comparators call DistinctComparator recursively for children
-static void DistinctComparatorTypeSwitch(Vector &left, Vector &right, int8_t *result_data,
+static void DistinctComparatorTypeSwitch(const Vector &left, const Vector &right, int8_t *result_data,
                                          const SelectionVector &lhs_sel, const SelectionVector &rhs_sel,
                                          idx_t sel_count);
 
@@ -288,8 +306,8 @@ static int8_t DistinctNullComparator(bool left_null, bool right_null) {
 	return Comparator::RIGHT_IS_GREATER;
 }
 
-static void StructComparator(Vector &left, Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
-                             const SelectionVector &rhs_sel, idx_t sel_count,
+static void StructComparator(const Vector &left, const Vector &right, int8_t *result_data,
+                             const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
                              optional_ptr<ValidityMask> result_validity = nullptr) {
 	if (sel_count == 0) {
 		return;
@@ -365,12 +383,11 @@ static void StructComparator(Vector &left, Vector &right, int8_t *result_data, c
 }
 
 struct ListEntryAccessor {
-	static Vector &GetChild(Vector &vector) {
-		return ListVector::GetChildMutable(vector);
+	static const Vector &GetChild(const Vector &vector) {
+		return ListVector::GetChild(vector);
 	}
-	static void FlattenChild(Vector &vector) {
-		auto &child = ListVector::GetChildMutable(vector);
-		child.Flatten();
+	static void FlattenChild(const Vector &) {
+		// no-op: ToUnifiedFormat handles all vector types without needing to flatten first
 	}
 	static idx_t GetOffset(UnifiedVectorFormat &format, idx_t sel_idx) {
 		auto entries = UnifiedVectorFormat::GetData<list_entry_t>(format);
@@ -387,12 +404,11 @@ struct ListEntryAccessor {
 struct ArrayEntryAccessor {
 	explicit ArrayEntryAccessor(idx_t array_size) : array_size(array_size) {
 	}
-	Vector &GetChild(Vector &vector) {
-		return ArrayVector::GetChildMutable(vector);
+	static const Vector &GetChild(const Vector &vector) {
+		return ArrayVector::GetChild(vector);
 	}
-	void FlattenChild(Vector &vector) {
-		auto &child = ArrayVector::GetChildMutable(vector);
-		child.Flatten();
+	static void FlattenChild(const Vector &) {
+		// no-op: ToUnifiedFormat handles all vector types without needing to flatten first
 	}
 	idx_t GetOffset(UnifiedVectorFormat &format, idx_t sel_idx) {
 		return format.sel->get_index(sel_idx) * array_size;
@@ -404,13 +420,13 @@ struct ArrayEntryAccessor {
 };
 
 template <class ACCESSOR>
-static void ListOrArrayComparator(Vector &left, Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
-                                  const SelectionVector &rhs_sel, idx_t sel_count, ACCESSOR accessor,
-                                  optional_ptr<ValidityMask> result_validity = nullptr) {
+static void ListOrArrayComparator(const Vector &left, const Vector &right, int8_t *result_data,
+                                  const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
+                                  ACCESSOR accessor, optional_ptr<ValidityMask> result_validity = nullptr) {
 	if (sel_count == 0) {
 		return;
 	}
-	// recursively flatten child vectors so they can be indexed directly via selection vectors
+	// FlattenChild is a no-op; ToUnifiedFormat handles all vector types in the recursive comparators
 	accessor.FlattenChild(left);
 	accessor.FlattenChild(right);
 	// step 1: handle top-level validity
@@ -519,21 +535,22 @@ static void ListOrArrayComparator(Vector &left, Vector &right, int8_t *result_da
 	}
 }
 
-static void ListComparator(Vector &left, Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
-                           const SelectionVector &rhs_sel, idx_t sel_count,
+static void ListComparator(const Vector &left, const Vector &right, int8_t *result_data,
+                           const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
                            optional_ptr<ValidityMask> result_validity = nullptr) {
 	ListEntryAccessor accessor;
 	ListOrArrayComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor, result_validity);
 }
 
-static void ArrayComparator(Vector &left, Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
-                            const SelectionVector &rhs_sel, idx_t sel_count,
+static void ArrayComparator(const Vector &left, const Vector &right, int8_t *result_data,
+                            const SelectionVector &lhs_sel, const SelectionVector &rhs_sel, idx_t sel_count,
                             optional_ptr<ValidityMask> result_validity = nullptr) {
 	ArrayEntryAccessor accessor(ArrayType::GetSize(left.GetType()));
 	ListOrArrayComparator(left, right, result_data, lhs_sel, rhs_sel, sel_count, accessor, result_validity);
 }
 
-static void VariantComparator(Vector &left, Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
+static void VariantComparator(const Vector &left, const Vector &right, int8_t *result_data,
+                              const SelectionVector &lhs_sel,
                               const SelectionVector &rhs_sel, idx_t sel_count,
                               optional_ptr<ValidityMask> result_validity = nullptr) {
 	RecursiveUnifiedVectorFormat left_recursive_data, right_recursive_data;
@@ -584,7 +601,7 @@ static void VariantComparator(Vector &left, Vector &right, int8_t *result_data, 
 	}
 }
 
-static void DistinctComparatorTypeSwitchInternal(Vector &left, Vector &right, int8_t *result_data,
+static void DistinctComparatorTypeSwitchInternal(const Vector &left, const Vector &right, int8_t *result_data,
                                                  const SelectionVector &lhs_sel, const SelectionVector &rhs_sel,
                                                  idx_t sel_count) {
 	D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType());
@@ -650,13 +667,13 @@ static void DistinctComparatorTypeSwitchInternal(Vector &left, Vector &right, in
 	}
 }
 
-static void DistinctComparatorTypeSwitch(Vector &left, Vector &right, int8_t *result_data,
+static void DistinctComparatorTypeSwitch(const Vector &left, const Vector &right, int8_t *result_data,
                                          const SelectionVector &lhs_sel, const SelectionVector &rhs_sel,
                                          idx_t sel_count) {
 	DistinctComparatorTypeSwitchInternal(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 }
 
-static void ComparatorTypeSwitch(Vector &left, Vector &right, Vector &result, idx_t count) {
+static void ComparatorTypeSwitch(const Vector &left, const Vector &right, Vector &result, idx_t count) {
 	D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType() &&
 	         result.GetType() == LogicalType::TINYINT);
 	switch (left.GetType().InternalType()) {
@@ -727,15 +744,21 @@ static void ComparatorTypeSwitch(Vector &left, Vector &right, Vector &result, id
 	}
 }
 
-void VectorOperations::Comparator(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::ComparatorFill(const Vector &left, const Vector &right, Vector &result, idx_t count) {
 	ComparatorTypeSwitch(left, right, result, count);
+	FlatVector::SetSize(result, count);
+}
+
+void VectorOperations::Comparator(const Vector &left, const Vector &right, Vector &result) {
+	const auto count = GetComparisonCount(left, right, "Comparator");
+	ComparatorFill(left, right, result, count);
 }
 
 template <class T, class OP>
 static void DistinctExecuteGenericLoop(const T *__restrict ldata, const T *__restrict rdata,
                                        int8_t *__restrict result_data, const SelectionVector *__restrict lsel,
-                                       const SelectionVector *__restrict rsel, idx_t count, ValidityMask &lmask,
-                                       ValidityMask &rmask) {
+                                       const SelectionVector *__restrict rsel, idx_t count,
+                                       const ValidityMask &lmask, const ValidityMask &rmask) {
 	for (idx_t i = 0; i < count; i++) {
 		auto lindex = lsel->get_index(i);
 		auto rindex = rsel->get_index(i);
@@ -745,7 +768,7 @@ static void DistinctExecuteGenericLoop(const T *__restrict ldata, const T *__res
 }
 
 template <class T, class OP>
-static void DistinctExecuteConstant(Vector &left, Vector &right, Vector &result) {
+static void DistinctExecuteConstant(const Vector &left, const Vector &right, Vector &result) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	auto ldata = ConstantVector::GetData<T>(left);
 	auto rdata = ConstantVector::GetData<T>(right);
@@ -755,7 +778,7 @@ static void DistinctExecuteConstant(Vector &left, Vector &right, Vector &result)
 }
 
 template <class T, class OP>
-static void DistinctExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
+static void DistinctExecute(const Vector &left, const Vector &right, Vector &result, idx_t count) {
 	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		DistinctExecuteConstant<T, OP>(left, right, result);
 	} else {
@@ -771,7 +794,7 @@ static void DistinctExecute(Vector &left, Vector &right, Vector &result, idx_t c
 }
 
 template <class OP>
-static bool TryPrimitiveDistinctComparatorExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
+static bool TryPrimitiveDistinctComparatorExecute(const Vector &left, const Vector &right, Vector &result, idx_t count) {
 #ifdef DUCKDB_SMALLER_BINARY
 	return false;
 #else
@@ -826,26 +849,34 @@ static bool TryPrimitiveDistinctComparatorExecute(Vector &left, Vector &right, V
 #endif
 }
 
-void VectorOperations::DistinctComparator(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::DistinctComparatorFill(const Vector &left, const Vector &right, Vector &result, idx_t count) {
 	D_ASSERT(result.GetType() == LogicalType::TINYINT);
-	if (TryPrimitiveDistinctComparatorExecute<duckdb::DistinctComparator>(left, right, result, count)) {
-		return;
+	if (!TryPrimitiveDistinctComparatorExecute<duckdb::DistinctComparator>(left, right, result, count)) {
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		auto result_data = FlatVector::GetDataMutable<int8_t>(result);
+		auto &sel = *FlatVector::IncrementalSelectionVector();
+		DistinctComparatorTypeSwitchInternal(left, right, result_data, sel, sel, count);
 	}
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetDataMutable<int8_t>(result);
-	auto &sel = *FlatVector::IncrementalSelectionVector();
-	DistinctComparatorTypeSwitchInternal(left, right, result_data, sel, sel, count);
+	FlatVector::SetSize(result, count);
 }
 
-void VectorOperations::DistinctComparatorNullsFirst(Vector &left, Vector &right, Vector &result, idx_t count) {
+void VectorOperations::DistinctComparator(const Vector &left, const Vector &right, Vector &result) {
+	const auto count = GetComparisonCount(left, right, "DistinctComparator");
+	DistinctComparatorFill(left, right, result, count);
+}
+
+void VectorOperations::DistinctComparatorNullsFirstFill(const Vector &left, const Vector &right, Vector &result,
+                                                        idx_t count) {
 	if (TryPrimitiveDistinctComparatorExecute<duckdb::DistinctComparatorNullsFirst>(left, right, result, count)) {
+		FlatVector::SetSize(result, count);
 		return;
 	}
 	// run the NULLS LAST comparator, then flip the sign for NULL-involving rows
 	// note that even for NULLS FIRST, ONLY the top-level is NULLS FIRST,
 	// i.e. within structs we still use NULLS LAST semantics
-	VectorOperations::DistinctComparator(left, right, result, count);
+	DistinctComparatorFill(left, right, result, count);
 	result.Flatten();
+	FlatVector::SetSize(result, count);
 	auto result_data = FlatVector::GetDataMutable<int8_t>(result);
 	auto left_validity = left.Validity();
 	auto right_validity = right.Validity();
@@ -859,6 +890,11 @@ void VectorOperations::DistinctComparatorNullsFirst(Vector &left, Vector &right,
 			result_data[i] = UnsafeNumericCast<int8_t>(-result_data[i]);
 		}
 	}
+}
+
+void VectorOperations::DistinctComparatorNullsFirst(const Vector &left, const Vector &right, Vector &result) {
+	const auto count = GetComparisonCount(left, right, "DistinctComparatorNullsFirst");
+	DistinctComparatorNullsFirstFill(left, right, result, count);
 }
 
 } // namespace duckdb

@@ -2042,7 +2042,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 		}
 
 		// Verify the NOT NULL constraint.
-		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
+		if (VectorOperations::HasNull(scan_chunk.data[0])) {
 			auto name = parent.Columns()[physical_index].GetName();
 			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->GetTableName(), name);
 		}

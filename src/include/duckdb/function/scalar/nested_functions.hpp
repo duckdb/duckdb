@@ -50,7 +50,7 @@ struct PositionFunctor {
 };
 
 struct MapUtil {
-	static void ReinterpretMap(Vector &target, Vector &other, idx_t count);
+	static void ReinterpretMap(Vector &target, const Vector &other);
 };
 
 struct VariableReturnBindData : public FunctionData {

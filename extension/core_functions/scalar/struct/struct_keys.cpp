@@ -34,7 +34,7 @@ struct StructKeysBindData : public FunctionData {
 };
 
 static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input = args.data[0];
+	const auto &input = args.data[0];
 	const idx_t count = args.size();
 
 	auto &data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<StructKeysBindData>();

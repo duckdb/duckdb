@@ -568,8 +568,7 @@ static unique_ptr<FunctionData> BoundedMaxBind(BindScalarFunctionInput &input) {
 static void BoundedAddFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
-	const auto count = args.size();
-	BinaryExecutor::Execute<int32_t, int32_t, int32_t>(left_vector, right_vector, result, count,
+	BinaryExecutor::Execute<int32_t, int32_t, int32_t>(left_vector, right_vector, result,
 	                                                   [&](int32_t left, int32_t right) { return left + right; });
 }
 
@@ -622,27 +621,22 @@ static unique_ptr<FunctionData> BoundedInvertBind(BindScalarFunctionInput &input
 
 static void BoundedInvertFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &source_vector = args.data[0];
-	const auto count = args.size();
-
 	auto result_type = result.GetType();
 	auto output_max_val = BoundedType::GetMaxValue(result_type);
 
-	UnaryExecutor::Execute<int32_t, int32_t>(source_vector, result, count,
+	UnaryExecutor::Execute<int32_t, int32_t>(source_vector, result,
 	                                         [&](int32_t input) { return std::min(-input, output_max_val); });
 }
 
 static void BoundedEvenFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &source_vector = args.data[0];
-	const auto count = args.size();
-	UnaryExecutor::Execute<int32_t, bool>(source_vector, result, count, [&](int32_t input) { return input % 2 == 0; });
+	UnaryExecutor::Execute<int32_t, bool>(source_vector, result, [&](int32_t input) { return input % 2 == 0; });
 }
 
 static void BoundedToAsciiFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &source_vector = args.data[0];
-	const auto count = args.size();
-
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<int32_t, string_t>(source_vector, result, count, [&](int32_t input) {
+	UnaryExecutor::Execute<int32_t, string_t>(source_vector, result, [&](int32_t input) {
 		if (input < 0) {
 			throw NotImplementedException("Negative values not supported");
 		}

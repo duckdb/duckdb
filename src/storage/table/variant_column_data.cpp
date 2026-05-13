@@ -370,7 +370,8 @@ struct VariantShreddedAppendInput {
 
 } // namespace
 
-static void AppendShredded(Vector &input, Vector &append_vector, idx_t count, VariantShreddedAppendInput &append_data) {
+static void AppendShredded(const Vector &input, Vector &append_vector, idx_t count,
+                           VariantShreddedAppendInput &append_data) {
 	D_ASSERT(append_vector.GetType().id() == LogicalTypeId::STRUCT);
 	auto &child_vectors = StructVector::GetEntries(append_vector);
 	D_ASSERT(child_vectors.size() == 2);
@@ -393,7 +394,7 @@ static void AppendShredded(Vector &input, Vector &append_vector, idx_t count, Va
 	shredded.Append(shredded_stats, shredded_append_state, shredded_vector, count);
 }
 
-void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
+void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, const Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		Vector append_vector(Vector::Ref(vector));
 		append_vector.Flatten();

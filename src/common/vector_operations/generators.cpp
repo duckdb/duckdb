@@ -7,7 +7,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
@@ -49,6 +48,7 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, int64_t sta
 	default:
 		throw NotImplementedException("Unimplemented type for generate sequence");
 	}
+	FlatVector::SetSize(result, count);
 }
 
 template <class T>
@@ -88,6 +88,7 @@ void VectorOperations::GenerateSequence(Vector &result, idx_t count, const Selec
 	default:
 		throw NotImplementedException("Unimplemented type for generate sequence");
 	}
+	FlatVector::SetSize(result, count);
 }
 
 } // namespace duckdb

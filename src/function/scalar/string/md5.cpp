@@ -33,15 +33,15 @@ struct MD5Number128Operator {
 };
 
 void MD5Function(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input = args.data[0];
+	const auto &input = args.data[0];
 
-	UnaryExecutor::ExecuteString<string_t, string_t, MD5Operator>(input, result, args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, MD5Operator>(input, result);
 }
 
 void MD5NumberFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input = args.data[0];
+	const auto &input = args.data[0];
 
-	UnaryExecutor::Execute<string_t, uhugeint_t, MD5Number128Operator>(input, result, args.size());
+	UnaryExecutor::Execute<string_t, uhugeint_t, MD5Number128Operator>(input, result);
 }
 
 } // namespace

@@ -46,7 +46,7 @@ void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateInputData
 	VectorOperations::Hash(input, hash_vec, count);
 
 	auto agg_state = reinterpret_cast<ApproxDistinctCountState *>(state);
-	agg_state->hll.Update(input, hash_vec, count);
+	agg_state->hll.Update(input, hash_vec);
 }
 
 void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector,

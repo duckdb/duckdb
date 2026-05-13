@@ -42,7 +42,8 @@ inline uint64_t GetMask(const hash_t hash) {
 	return mask;
 }
 
-void BloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
+void BloomFilter::InsertHashes(const Vector &hashes_v) const {
+	const idx_t count = hashes_v.size();
 	auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
 	for (idx_t i = 0; i < count; i++) {
 		InsertOne(hashes[i]);
@@ -88,7 +89,7 @@ string BFTableFilter::ToString(const string &column_name) const {
 idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
                             JoinFilterTableFilterState &state) const {
 	state.PrepareSlicedKeys(keys_v, sel, approved_tuple_count);
-	VectorOperations::Hash(state.keys_sliced_v, state.hashes_v, approved_tuple_count);
+	VectorOperations::Hash(state.keys_sliced_v, state.hashes_v);
 
 	idx_t found_count;
 	if (state.hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {

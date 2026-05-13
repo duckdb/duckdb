@@ -68,9 +68,9 @@ void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, id
 
 	auto &input = inputs[0];
 
-	auto extra_state = OP::CreateExtraState(count);
+	auto extra_state = OP::CreateExtraState();
 	UnifiedVectorFormat input_data;
-	OP::PrepareData(input, count, extra_state, input_data);
+	OP::PrepareData(input, extra_state, input_data);
 
 	auto states = state_vector.Values<HistogramAggState<T, typename MAP_TYPE::MAP_TYPE> *>();
 	auto input_values = UnifiedVectorFormat::GetData<T>(input_data);

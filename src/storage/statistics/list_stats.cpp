@@ -92,9 +92,9 @@ child_list_t<Value> ListStats::ToStruct(const BaseStatistics &stats) {
 	return result;
 }
 
-void ListStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void ListStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &child_stats = ListStats::GetChildStats(stats);
-	auto &child_entry = ListVector::GetChildMutable(vector);
+	const auto &child_entry = ListVector::GetChild(vector);
 	auto entries = vector.Values<list_entry_t>();
 
 	idx_t total_list_count = 0;

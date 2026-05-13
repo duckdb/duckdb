@@ -50,7 +50,8 @@ struct ArrowVarcharData {
 	}
 
 	template <bool LARGE_STRING>
-	static void AppendTemplated(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+	static void AppendTemplated(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to,
+	                            idx_t input_size) {
 		idx_t size = to - from;
 		UnifiedVectorFormat format;
 		input.ToUnifiedFormat(format);
@@ -110,7 +111,7 @@ struct ArrowVarcharData {
 		append_data.row_count += size;
 	}
 
-	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+	static void Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		if (append_data.options.arrow_offset_size == ArrowOffsetSize::REGULAR) {
 			// Check if the offset exceeds the max supported value
 			AppendTemplated<false>(append_data, input, from, to, input_size);
@@ -133,7 +134,7 @@ struct ArrowVarcharToStringViewData {
 		result.GetBufferSizeBuffer().reserve(sizeof(int64_t));
 	}
 
-	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+	static void Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		idx_t size = to - from;
 		UnifiedVectorFormat format;
 		input.ToUnifiedFormat(format);

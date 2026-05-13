@@ -93,7 +93,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	if (alter_table_info) {
 		auto row_count = lstate.key_chunk.size();
 		for (idx_t i = 0; i < lstate.key_chunk.ColumnCount(); i++) {
-			if (VectorOperations::HasNull(lstate.key_chunk.data[i], row_count)) {
+			if (VectorOperations::HasNull(lstate.key_chunk.data[i])) {
 				throw ConstraintException("NOT NULL constraint failed: %s", info->index_name);
 			}
 		}

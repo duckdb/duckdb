@@ -81,7 +81,8 @@ static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value
 	}
 }
 
-static void ComputeGroupLocation(Vector &group, Value &min, uintptr_t *address_data, idx_t current_shift, idx_t count) {
+static void ComputeGroupLocation(const Vector &group, Value &min, uintptr_t *address_data, idx_t current_shift) {
+	const idx_t count = group.size();
 	UnifiedVectorFormat vdata;
 	group.ToUnifiedFormat(vdata);
 
@@ -126,7 +127,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	idx_t current_shift = total_required_bits;
 	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
 		current_shift -= required_bits[i];
-		ComputeGroupLocation(groups.data[i], group_minima[i], address_data, current_shift, groups.size());
+		ComputeGroupLocation(groups.data[i], group_minima[i], address_data, current_shift);
 	}
 	// now we have the HT entry number for every tuple
 	// compute the actual pointer to the data by adding it to the base HT pointer and multiplying by the tuple size
@@ -141,6 +142,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		group_is_set[group] = true;
 		address_data[i] = uintptr_t(data) + group * tuple_size;
 	}
+	FlatVector::SetSize(addresses, groups.size());
 
 	// after finding the group location we update the aggregates
 	idx_t payload_idx = 0;
@@ -153,11 +155,11 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 			RowOperations::UpdateFilteredStates(row_state, filter_set.GetFilterData(aggr_idx), aggregate, addresses,
 			                                    payload, payload_idx);
 		} else {
-			RowOperations::UpdateStates(row_state, aggregate, addresses, payload, payload_idx, payload.size());
+			RowOperations::UpdateStates(row_state, aggregate, addresses, payload, payload_idx);
 		}
 		// move to the next aggregate
 		payload_idx += input_count;
-		VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggregate.payload_size), payload.size());
+		VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggregate.payload_size));
 	}
 }
 
@@ -184,14 +186,18 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 			target_addresses_ptr[combine_count] = target_ptr;
 			combine_count++;
 			if (combine_count == STANDARD_VECTOR_SIZE) {
-				RowOperations::CombineStates(row_state, *layout_ptr, source_addresses, target_addresses, combine_count);
+				FlatVector::SetSize(source_addresses, combine_count);
+				FlatVector::SetSize(target_addresses, combine_count);
+				RowOperations::CombineStates(row_state, *layout_ptr, source_addresses, target_addresses);
 				combine_count = 0;
 			}
 		}
 		source_ptr += tuple_size;
 		target_ptr += tuple_size;
 	}
-	RowOperations::CombineStates(row_state, *layout_ptr, source_addresses, target_addresses, combine_count);
+	FlatVector::SetSize(source_addresses, combine_count);
+	FlatVector::SetSize(target_addresses, combine_count);
+	RowOperations::CombineStates(row_state, *layout_ptr, source_addresses, target_addresses);
 
 	// FIXME: after moving the arena allocator, we currently have to ensure that the pointer is not nullptr, because the
 	// FIXME: Destroy()-function of the hash table expects an allocator in some cases (e.g., for sorted aggregates)
@@ -309,12 +315,14 @@ void PerfectAggregateHashTable::Destroy() {
 	for (idx_t i = 0; i < total_groups; i++) {
 		data_pointers[count++] = payload_ptr;
 		if (count == STANDARD_VECTOR_SIZE) {
-			RowOperations::DestroyStates(row_state, *layout_ptr, addresses, count);
+			FlatVector::SetSize(addresses, count);
+			RowOperations::DestroyStates(row_state, *layout_ptr, addresses);
 			count = 0;
 		}
 		payload_ptr += tuple_size;
 	}
-	RowOperations::DestroyStates(row_state, *layout_ptr, addresses, count);
+	FlatVector::SetSize(addresses, count);
+	RowOperations::DestroyStates(row_state, *layout_ptr, addresses);
 }
 
 } // namespace duckdb

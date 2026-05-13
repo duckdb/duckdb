@@ -394,13 +394,13 @@ void ColumnData::Skip(ColumnScanState &state, idx_t s_count) {
 	state.Next(s_count);
 }
 
-void ColumnData::Append(BaseStatistics &append_stats, ColumnAppendState &state, Vector &vector, idx_t append_count) {
+void ColumnData::Append(BaseStatistics &append_stats, ColumnAppendState &state, const Vector &vector, idx_t append_count) {
 	UnifiedVectorFormat vdata;
 	vector.ToUnifiedFormat(vdata);
 	AppendData(append_stats, state, vdata, append_count);
 }
 
-void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t append_count) {
+void ColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t append_count) {
 	if (!stats) {
 		throw InternalException("ColumnData::Append called on a column with a parent or without stats");
 	}

@@ -109,8 +109,8 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.bind_info->Cast<RegexpBaseBindData>();
 
-	auto &strings = args.data[0];
-	auto &patterns = args.data[1];
+	const auto &strings = args.data[0];
+	const auto &patterns = args.data[1];
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	auto strings_entries = strings.Values<string_t>();
@@ -248,7 +248,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 #endif
 
 	// Expect arguments: string, pattern, list_of_group_names [, options]
-	auto &strings = args.data[0];
+	const auto &strings = args.data[0];
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto &struct_vector = ListVector::GetChildMutable(result);

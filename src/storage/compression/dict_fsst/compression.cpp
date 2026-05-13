@@ -830,11 +830,12 @@ DictionaryAppendState DictFSSTCompressionState::TryEncode() {
 	return new_state;
 }
 
-void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
+void DictFSSTCompressionState::Compress(const Vector &scan_vector) {
 	UnifiedVectorFormat vector_format;
 	scan_vector.ToUnifiedFormat(vector_format);
 	auto strings = UnifiedVectorFormat::GetData<string_t>(vector_format);
 
+	const auto count = scan_vector.size();
 	EncodedInput encoded_input;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vector_format.sel->get_index(i);

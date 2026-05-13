@@ -9,7 +9,7 @@ namespace duckdb {
 
 static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
-	auto &input = args.data[0];
+	const auto &input = args.data[0];
 	const idx_t count = args.size();
 
 	auto &input_children = StructVector::GetEntries(input);

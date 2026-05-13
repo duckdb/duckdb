@@ -34,8 +34,8 @@ static void StripNullsFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 
-	auto &inputs = args.data[0];
-	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
+	const auto &inputs = args.data[0];
+	UnaryExecutor::Execute<string_t, string_t>(inputs, result, [&](string_t input) {
 		auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
 		auto mut_doc = yyjson_doc_mut_copy(doc, alc);
 		auto root = yyjson_mut_doc_get_root(mut_doc);

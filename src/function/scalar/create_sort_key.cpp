@@ -87,7 +87,7 @@ struct SortKeyVectorData {
 	static constexpr data_t LIST_DELIMITER = 0;
 	static constexpr data_t BLOB_ESCAPE_CHARACTER = 1;
 
-	SortKeyVectorData(Vector &input, idx_t size, OrderModifiers modifiers) : vec(input) {
+	SortKeyVectorData(const Vector &input, idx_t size, OrderModifiers modifiers) : vec(input) {
 		if (size != 0) {
 			input.ToUnifiedFormat(format);
 		} else {
@@ -116,13 +116,13 @@ struct SortKeyVectorData {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			auto &child_entry = ArrayVector::GetChildMutable(input);
+			const auto &child_entry = ArrayVector::GetChild(input);
 			auto array_size = ArrayType::GetSize(input.GetType());
 			child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, size * array_size, child_modifiers));
 			break;
 		}
 		case PhysicalType::LIST: {
-			auto &child_entry = ListVector::GetChildMutable(input);
+			const auto &child_entry = ListVector::GetChild(input);
 			auto child_size = size == 0 ? 0 : ListVector::GetListSize(input);
 			child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, child_size, child_modifiers));
 			break;
@@ -142,7 +142,7 @@ struct SortKeyVectorData {
 		return vec.GetType().InternalType();
 	}
 
-	Vector &vec;
+	const Vector &vec;
 	idx_t size;
 	UnifiedVectorFormat format;
 	vector<unique_ptr<SortKeyVectorData>> child_data;
@@ -889,9 +889,9 @@ void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
 
 } // namespace
 
-void CreateSortKeyHelpers::CreateSortKey(Vector &input, idx_t input_count, OrderModifiers order_modifier,
-                                         Vector &result) {
+void CreateSortKeyHelpers::CreateSortKey(const Vector &input, OrderModifiers order_modifier, Vector &result) {
 	// prepare the sort key data
+	const auto input_count = input.size();
 	vector<OrderModifiers> modifiers {order_modifier};
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
 	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier));
@@ -908,13 +908,14 @@ void CreateSortKeyHelpers::CreateSortKey(DataChunk &input, const vector<OrderMod
 	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input.size());
 }
 
-void CreateSortKeyHelpers::CreateSortKeyWithValidity(Vector &input, Vector &result, const OrderModifiers &modifiers,
-                                                     const idx_t count) {
-	CreateSortKey(input, count, modifiers, result);
+void CreateSortKeyHelpers::CreateSortKeyWithValidity(const Vector &input, Vector &result,
+                                                     const OrderModifiers &modifiers) {
+	CreateSortKey(input, modifiers, result);
 	UnifiedVectorFormat format;
 	input.ToUnifiedFormat(format);
 	auto &validity = FlatVector::ValidityMutable(result);
 
+	const auto count = input.size();
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = format.sel->get_index(i);
 		if (!format.validity.RowIsValid(idx)) {
@@ -1335,7 +1336,7 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<SortKeyBindData>();
 
 	const auto count = args.size();
-	auto &sort_key_vec = args.data[0];
+	const auto &sort_key_vec = args.data[0];
 	UnifiedVectorFormat sort_key_vec_format;
 	sort_key_vec.ToUnifiedFormat(sort_key_vec_format);
 

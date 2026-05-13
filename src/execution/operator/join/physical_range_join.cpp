@@ -373,7 +373,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 	const auto count = keys.size();
 
 	size_t all_constant = 0;
-	for (auto &v : keys.data) {
+	for (const auto &v : keys.data) {
 		if (v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			++all_constant;
 		}
@@ -385,7 +385,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 			if (conditions[c].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM) {
 				continue;
 			}
-			auto &v = keys.data[c];
+			const auto &v = keys.data[c];
 			if (ConstantVector::IsNull(v)) {
 				ConstantVector::SetNull(primary, count_t(count));
 				return count;
@@ -404,7 +404,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 				continue;
 			}
 			//	ToUnifiedFormat the rest, as the sort code will do this anyway.
-			auto &v = keys.data[c];
+			const auto &v = keys.data[c];
 			UnifiedVectorFormat vdata;
 			v.ToUnifiedFormat(vdata);
 			auto &vvalidity = vdata.validity;
@@ -442,7 +442,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		}
 		return count - pvalidity.CountValid(count);
 	} else {
-		return count - VectorOperations::CountNotNull(primary, count);
+		return count - VectorOperations::CountNotNull(primary);
 	}
 }
 
@@ -477,7 +477,8 @@ static void TemplatedSliceSortedPayload(DataChunk &chunk, const SortedRun &sorte
 
 	// Scan
 	chunk.Reset();
-	scan_state.Scan(sorted_run, sort_key_pointers, result_size, chunk);
+	FlatVector::SetSize(sort_key_pointers, result_size);
+	scan_state.Scan(sorted_run, sort_key_pointers, chunk);
 }
 
 void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &table,
@@ -530,7 +531,7 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &chunk, GlobalSortedTable &
 	}
 }
 
-idx_t PhysicalRangeJoin::SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
+idx_t PhysicalRangeJoin::SelectJoinTail(const ExpressionType &condition, const Vector &left, const Vector &right,
                                         const SelectionVector *sel, idx_t count, SelectionVector *true_sel) {
 	switch (condition) {
 	case ExpressionType::COMPARE_NOTEQUAL:

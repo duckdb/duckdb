@@ -15,7 +15,7 @@ public:
 	explicit DictFSSTAnalyzeState(const CompressionInfo &info);
 
 public:
-	bool Analyze(Vector &input, idx_t count);
+	bool Analyze(const Vector &input);
 	idx_t FinalAnalyze();
 
 public:

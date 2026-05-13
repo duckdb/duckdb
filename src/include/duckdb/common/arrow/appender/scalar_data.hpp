@@ -89,7 +89,7 @@ struct ArrowUUIDBlobConverter {
 
 template <class TGT, class SRC = TGT, class OP = ArrowScalarConverter>
 struct ArrowScalarBaseData {
-	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+	static void Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		D_ASSERT(to >= from);
 		idx_t size = to - from;
 		D_ASSERT(size <= input_size);

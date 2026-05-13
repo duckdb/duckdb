@@ -10,7 +10,7 @@ namespace duckdb {
 template <bool FROM_STRING>
 static void BitStringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, int32_t, string_t>(
-	    args.data[0], args.data[1], result, args.size(), [&](string_t input, int32_t n) {
+	    args.data[0], args.data[1], result, [&](string_t input, int32_t n) {
 		    if (n < 0) {
 			    throw InvalidInputException("The bitstring length cannot be negative");
 		    }
@@ -77,7 +77,7 @@ ScalarFunction GetBitFun::GetFunction() {
 //===--------------------------------------------------------------------===//
 static void SetBitOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	TernaryExecutor::Execute<string_t, int32_t, int32_t, string_t>(
-	    args.data[0], args.data[1], args.data[2], result, args.size(),
+	    args.data[0], args.data[1], args.data[2], result,
 	    [&](string_t input, int32_t n, int32_t new_value) {
 		    if (new_value != 0 && new_value != 1) {
 			    throw InvalidInputException("The new bit must be 1 or 0");

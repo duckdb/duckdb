@@ -178,8 +178,8 @@ struct ICUStrptime : public ICUDateFunc {
 	template <typename T>
 	static void Parse(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
-		auto &str_arg = args.data[0];
-		auto &fmt_arg = args.data[1];
+		const auto &str_arg = args.data[0];
+		const auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
@@ -187,7 +187,7 @@ struct ICUStrptime : public ICUDateFunc {
 		auto calendar = calendar_ptr.get();
 
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
-		UnaryExecutor::Execute<string_t, T>(str_arg, result, args.size(), [&](string_t input) {
+		UnaryExecutor::Execute<string_t, T>(str_arg, result, [&](string_t input) {
 			T parsed;
 			ParseOne(calendar, input, info.formats, parsed);
 			return parsed;
@@ -235,8 +235,8 @@ struct ICUStrptime : public ICUDateFunc {
 	template <typename T>
 	static void TryParse(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
-		auto &str_arg = args.data[0];
-		auto &fmt_arg = args.data[1];
+		const auto &str_arg = args.data[0];
+		const auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
@@ -248,7 +248,7 @@ struct ICUStrptime : public ICUDateFunc {
 		if (ConstantVector::IsNull(fmt_arg)) {
 			ConstantVector::SetNull(result, count_t(args.size()));
 		} else {
-			UnaryExecutor::Execute<string_t, T>(str_arg, result, args.size(), [&](string_t input) -> optional<T> {
+			UnaryExecutor::Execute<string_t, T>(str_arg, result, [&](string_t input) -> optional<T> {
 				T result;
 				if (TryParseOne(calendar, input, info.formats, result)) {
 					return result;
@@ -513,7 +513,7 @@ struct ICUStrptime : public ICUDateFunc {
 bind_scalar_function_t ICUStrptime::bind_strptime = nullptr; // NOLINT
 
 struct ICUStrftime : public ICUDateFunc {
-	static void ParseFormatSpecifier(string_t &format_str, StrfTimeFormat &format) {
+	static void ParseFormatSpecifier(const string_t &format_str, StrfTimeFormat &format) {
 		const auto format_specifier = format_str.GetString();
 		const auto error = StrTimeFormat::ParseFormatSpecifier(format_specifier, format);
 		if (!error.empty()) {
@@ -581,8 +581,8 @@ struct ICUStrftime : public ICUDateFunc {
 	template <typename T>
 	static void ICUStrftimeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
-		auto &src_arg = args.data[0];
-		auto &fmt_arg = args.data[1];
+		const auto &src_arg = args.data[0];
+		const auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<BindData>();
@@ -597,7 +597,7 @@ struct ICUStrftime : public ICUDateFunc {
 			StrfTimeFormat format;
 			ParseFormatSpecifier(*ConstantVector::GetData<string_t>(fmt_arg), format);
 
-			UnaryExecutor::Execute<T, string_t>(src_arg, result, args.size(), [&](T input) {
+			UnaryExecutor::Execute<T, string_t>(src_arg, result, [&](T input) {
 				if (input.IsFinite()) {
 					return Operation(calendar.get(), input, tz_name, format, result);
 				} else {
@@ -606,7 +606,7 @@ struct ICUStrftime : public ICUDateFunc {
 			});
 		} else {
 			BinaryExecutor::Execute<T, string_t, string_t>(
-			    src_arg, fmt_arg, result, args.size(), [&](T input, string_t format_specifier) {
+			    src_arg, fmt_arg, result, [&](T input, string_t format_specifier) {
 				    if (input.IsFinite()) {
 					    StrfTimeFormat format;
 					    ParseFormatSpecifier(format_specifier, format);

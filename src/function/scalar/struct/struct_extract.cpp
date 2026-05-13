@@ -16,10 +16,10 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &info = func_expr.bind_info->Cast<StructExtractBindData>();
 
 	// this should be guaranteed by the binder
-	auto &vec = args.data[0];
+	const auto &vec = args.data[0];
 
 	vec.Verify();
-	auto &children = StructVector::GetEntries(vec);
+	const auto &children = StructVector::GetEntries(vec);
 	D_ASSERT(info.index < children.size());
 	auto &struct_child = children[info.index];
 	result.Reference(struct_child);

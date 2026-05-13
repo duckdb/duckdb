@@ -130,13 +130,13 @@ struct FinalizeGenericValueFunctor {
 
 struct AggregateFunctor {
 	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
-	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
+	static void ListExecuteFunction(Vector &result, const Vector &state_vector, idx_t count) {
 	}
 };
 
 struct DistinctFunctor {
 	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
-	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
+	static void ListExecuteFunction(Vector &result, const Vector &state_vector, idx_t count) {
 		UnifiedVectorFormat sdata;
 		state_vector.ToUnifiedFormat(sdata);
 		auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
@@ -179,7 +179,7 @@ struct DistinctFunctor {
 
 struct UniqueFunctor {
 	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
-	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
+	static void ListExecuteFunction(Vector &result, const Vector &state_vector, idx_t count) {
 		UnifiedVectorFormat sdata;
 		state_vector.ToUnifiedFormat(sdata);
 		auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);

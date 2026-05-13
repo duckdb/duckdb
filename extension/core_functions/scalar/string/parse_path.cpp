@@ -155,13 +155,13 @@ static void ReadOptionalArgs(DataChunk &args, Vector &sep, Vector &trim, const b
 template <bool FRONT_TRIM>
 static void TrimPathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// set default values
-	Vector &path = args.data[0];
+	const Vector &path = args.data[0];
 	Vector separator(string_t("default"), count_t(args.size()));
 	Vector trim_extension(Value::BOOLEAN(false), count_t(args.size()));
 	ReadOptionalArgs(args, separator, trim_extension, FRONT_TRIM);
 
 	TernaryExecutor::Execute<string_t, string_t, bool, string_t>(
-	    path, separator, trim_extension, result, args.size(),
+	    path, separator, trim_extension, result,
 	    [&](string_t &inputs, string_t input_sep, bool trim_extension) {
 		    auto data = inputs.GetData();
 		    auto input_size = inputs.GetSize();
@@ -201,14 +201,14 @@ static void TrimPathFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 static void ParseDirpathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// set default values
-	Vector &path = args.data[0];
+	const Vector &path = args.data[0];
 	Vector separator(string_t("default"), count_t(args.size()));
 	Vector trim_extension(Value::BOOLEAN(false), count_t(args.size()));
 	ReadOptionalArgs(args, separator, trim_extension, true);
 
 	auto &heap = StringVector::GetStringHeap(result);
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
-	    path, separator, result, args.size(), [&](string_t input_path, string_t input_sep) {
+	    path, separator, result, [&](string_t input_path, string_t input_sep) {
 		    auto path = input_path.GetData();
 		    auto path_size = input_path.GetSize();
 		    auto sep = GetSeparator(input_sep.GetString());

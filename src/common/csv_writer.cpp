@@ -318,7 +318,7 @@ void CSVWriter::WriteQuotedString(WriteStream &writer, const char *str, idx_t le
 void CSVWriter::WriteChunk(DataChunk &input, MemoryStream &writer, CSVReaderOptions &options, bool &written_anything,
                            CSVWriterOptions &writer_options) {
 	vector<VectorIterator<string_t>> input_iterators;
-	for (auto &col : input.data) {
+	for (const auto &col : input.data) {
 		input_iterators.emplace_back(col.Values<string_t>());
 	}
 	// now loop over the vectors and output the values

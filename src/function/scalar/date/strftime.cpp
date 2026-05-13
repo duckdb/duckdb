@@ -76,7 +76,7 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
 	}
-	info.format.ConvertDateVector(args.data[REVERSED ? 1 : 0], result, args.size());
+	info.format.ConvertDateVector(args.data[REVERSED ? 1 : 0], result);
 }
 
 template <bool REVERSED>
@@ -88,7 +88,7 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
 	}
-	info.format.ConvertTimestampVector(args.data[REVERSED ? 1 : 0], result, args.size());
+	info.format.ConvertTimestampVector(args.data[REVERSED ? 1 : 0], result);
 }
 
 template <bool REVERSED>
@@ -100,7 +100,7 @@ static void StrfTimeFunctionTimestampNS(DataChunk &args, ExpressionState &state,
 		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
 	}
-	info.format.ConvertTimestampNSVector(args.data[REVERSED ? 1 : 0], result, args.size());
+	info.format.ConvertTimestampNSVector(args.data[REVERSED ? 1 : 0], result);
 }
 
 struct StrpTimeBindData : public FunctionData {
@@ -160,7 +160,7 @@ struct StrpTimeFunction {
 			ConstantVector::SetNull(result, count_t(args.size()));
 			return;
 		}
-		UnaryExecutor::Execute<string_t, T>(args.data[0], result, args.size(), [&](string_t input) {
+		UnaryExecutor::Execute<string_t, T>(args.data[0], result, [&](string_t input) {
 			StrpTimeFormat::ParseResult result;
 			for (auto &format : info.formats) {
 				if (format.Parse(input, result)) {
@@ -181,7 +181,7 @@ struct StrpTimeFunction {
 			return;
 		}
 
-		UnaryExecutor::Execute<string_t, T>(args.data[0], result, args.size(), [&](string_t input) -> optional<T> {
+		UnaryExecutor::Execute<string_t, T>(args.data[0], result, [&](string_t input) -> optional<T> {
 			T result;
 			string error;
 			for (auto &format : info.formats) {

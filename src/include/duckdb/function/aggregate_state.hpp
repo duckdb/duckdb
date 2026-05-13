@@ -52,13 +52,14 @@ struct AggregateUnaryInput {
 };
 
 struct AggregateBinaryInput {
-	AggregateBinaryInput(AggregateInputData &input_p, ValidityMask &left_mask_p, ValidityMask &right_mask_p)
+	AggregateBinaryInput(AggregateInputData &input_p, const ValidityMask &left_mask_p,
+	                     const ValidityMask &right_mask_p)
 	    : input(input_p), left_mask(left_mask_p), right_mask(right_mask_p) {
 	}
 
 	AggregateInputData &input;
-	ValidityMask &left_mask;
-	ValidityMask &right_mask;
+	const ValidityMask &left_mask;
+	const ValidityMask &right_mask;
 	idx_t lidx;
 	idx_t ridx;
 };

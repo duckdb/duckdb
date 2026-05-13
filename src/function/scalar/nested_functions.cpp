@@ -5,11 +5,12 @@
 
 namespace duckdb {
 
-void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
+void MapUtil::ReinterpretMap(Vector &result, const Vector &input) {
 	input.Flatten();
+	const auto count = input.size();
 
-	auto &input_keys = MapVector::GetKeys(input);
-	auto &input_values = MapVector::GetValues(input);
+	const auto &input_keys = MapVector::GetKeys(input);
+	const auto &input_values = MapVector::GetValues(input);
 
 	// Copy the list offsets and top-level validity
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);

@@ -26,9 +26,9 @@ unique_ptr<AnalyzeState> FixedSizeInitAnalyze(ColumnData &col_data, PhysicalType
 	return make_uniq<FixedSizeAnalyzeState>(info);
 }
 
-bool FixedSizeAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
+bool FixedSizeAnalyze(AnalyzeState &state_p, const Vector &input) {
 	auto &state = state_p.Cast<FixedSizeAnalyzeState>();
-	state.count += count;
+	state.count += input.size();
 	return true;
 }
 
@@ -108,15 +108,16 @@ unique_ptr<CompressionState> UncompressedFunctions::InitCompression(ColumnDataCh
 	return make_uniq<UncompressedCompressState>(checkpoint_data, state->info);
 }
 
-void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, idx_t count) {
+void UncompressedFunctions::Compress(CompressionState &state_p, const Vector &data) {
 	auto &state = state_p.Cast<UncompressedCompressState>();
 	UnifiedVectorFormat vdata;
 	data.ToUnifiedFormat(vdata);
 
 	idx_t offset = 0;
-	while (count > 0) {
-		idx_t appended = state.current_segment->Append(state.append_state, vdata, offset, count);
-		if (appended == count) {
+	idx_t remaining = data.size();
+	while (remaining > 0) {
+		idx_t appended = state.current_segment->Append(state.append_state, vdata, offset, remaining);
+		if (appended == remaining) {
 			// appended everything: finished
 			return;
 		}
@@ -126,7 +127,7 @@ void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, id
 		// now create a new segment and continue appending
 		state.CreateEmptySegment();
 		offset += appended;
-		count -= appended;
+		remaining -= appended;
 	}
 }
 

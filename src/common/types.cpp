@@ -1766,11 +1766,11 @@ LogicalType LogicalType::TYPE() {
 //===--------------------------------------------------------------------===//
 // Enum Type
 //===--------------------------------------------------------------------===//
-LogicalType LogicalType::ENUM(Vector &ordered_data, idx_t size) {
+LogicalType LogicalType::ENUM(const Vector &ordered_data, idx_t size) {
 	return EnumTypeInfo::CreateType(ordered_data, size);
 }
 
-LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx_t size) {
+LogicalType LogicalType::ENUM(const string &enum_name, const Vector &ordered_data, idx_t size) {
 	return LogicalType::ENUM(ordered_data, size);
 }
 

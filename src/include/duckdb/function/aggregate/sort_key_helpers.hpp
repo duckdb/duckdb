@@ -22,7 +22,7 @@ struct AggregateSortKeyHelpers {
 
 		Vector sort_key(LogicalType::BLOB);
 		auto modifiers = OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
-		CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, sort_key);
+		CreateSortKeyHelpers::CreateSortKey(input, modifiers, sort_key);
 
 		UnifiedVectorFormat idata;
 		if (IGNORE_NULLS) {

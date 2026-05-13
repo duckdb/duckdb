@@ -9,8 +9,7 @@ namespace duckdb {
 namespace {
 template <class T>
 
-void CopyToStorageLoop(Vector &source, idx_t count, data_ptr_t target) {
-	D_ASSERT(source.size() == count);
+void CopyToStorageLoop(const Vector &source, data_ptr_t target) {
 	auto result_data = (T *)target;
 	for (auto entry : source.Values<T>()) {
 		if (!entry.IsValid()) {
@@ -32,51 +31,51 @@ void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
 
 } // namespace
 
-void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t target) {
-	if (count == 0) {
+void VectorOperations::WriteToStorage(const Vector &source, data_ptr_t target) {
+	if (source.size() == 0) {
 		return;
 	}
 
 	switch (source.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		CopyToStorageLoop<int8_t>(source, count, target);
+		CopyToStorageLoop<int8_t>(source, target);
 		break;
 	case PhysicalType::INT16:
-		CopyToStorageLoop<int16_t>(source, count, target);
+		CopyToStorageLoop<int16_t>(source, target);
 		break;
 	case PhysicalType::INT32:
-		CopyToStorageLoop<int32_t>(source, count, target);
+		CopyToStorageLoop<int32_t>(source, target);
 		break;
 	case PhysicalType::INT64:
-		CopyToStorageLoop<int64_t>(source, count, target);
+		CopyToStorageLoop<int64_t>(source, target);
 		break;
 	case PhysicalType::UINT8:
-		CopyToStorageLoop<uint8_t>(source, count, target);
+		CopyToStorageLoop<uint8_t>(source, target);
 		break;
 	case PhysicalType::UINT16:
-		CopyToStorageLoop<uint16_t>(source, count, target);
+		CopyToStorageLoop<uint16_t>(source, target);
 		break;
 	case PhysicalType::UINT32:
-		CopyToStorageLoop<uint32_t>(source, count, target);
+		CopyToStorageLoop<uint32_t>(source, target);
 		break;
 	case PhysicalType::UINT64:
-		CopyToStorageLoop<uint64_t>(source, count, target);
+		CopyToStorageLoop<uint64_t>(source, target);
 		break;
 	case PhysicalType::INT128:
-		CopyToStorageLoop<hugeint_t>(source, count, target);
+		CopyToStorageLoop<hugeint_t>(source, target);
 		break;
 	case PhysicalType::UINT128:
-		CopyToStorageLoop<uhugeint_t>(source, count, target);
+		CopyToStorageLoop<uhugeint_t>(source, target);
 		break;
 	case PhysicalType::FLOAT:
-		CopyToStorageLoop<float>(source, count, target);
+		CopyToStorageLoop<float>(source, target);
 		break;
 	case PhysicalType::DOUBLE:
-		CopyToStorageLoop<double>(source, count, target);
+		CopyToStorageLoop<double>(source, target);
 		break;
 	case PhysicalType::INTERVAL:
-		CopyToStorageLoop<interval_t>(source, count, target);
+		CopyToStorageLoop<interval_t>(source, target);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for WriteToStorage");
@@ -129,6 +128,7 @@ void VectorOperations::ReadFromStorage(data_ptr_t source, idx_t count, Vector &r
 	default:
 		throw NotImplementedException("Unimplemented type for ReadFromStorage");
 	}
+	FlatVector::SetSize(result, count);
 }
 
 } // namespace duckdb

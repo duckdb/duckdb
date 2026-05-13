@@ -988,8 +988,9 @@ unique_ptr<const SortStrategy> PartitionedCopy::ConstructSortStrategy() const {
 	vector<BoundOrderByNode> order_bys;
 	vector<unique_ptr<BaseStatistics>> partition_stats;
 
-	return SortStrategy::Factory(context, partition_bys, order_bys, op.children[0].get().GetTypes(), partition_stats,
-	                             op.children[0].get().estimated_cardinality);
+	const auto &input_types = op.children.empty() ? op.expected_types : op.children[0].get().GetTypes();
+	const idx_t cardinality = op.children.empty() ? 0 : op.children[0].get().estimated_cardinality;
+	return SortStrategy::Factory(context, partition_bys, order_bys, input_types, partition_stats, cardinality);
 }
 
 void PartitionedCopy::CreateNextState() {
@@ -1147,6 +1148,11 @@ public:
 		annotated_lock_guard<annotated_mutex> global_guard(partitioned_copy.lock);
 		if (!partitioned_copy.flushing_state) {
 			partitioned_copy.InitializeFlush();
+		}
+		if (!partitioned_copy.flushing_state) {
+			// All work was already completed synchronously (e.g. via FinalizePartitionedSync)
+			SetTasks({});
+			return;
 		}
 		auto &flushing_state = *partitioned_copy.flushing_state;
 
@@ -1786,6 +1792,26 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 	gstate.TryFinalizeOwnedFileState();
 
 	return SinkFinalizeType::READY;
+}
+
+void PhysicalCopyToFile::FinalizePartitionedSync(ExecutionContext &execution_context,
+                                                 InterruptState &interrupt_state) const {
+	if (!partition_output || !sink_state) {
+		return;
+	}
+	auto &gstate = sink_state->Cast<CopyToFileGlobalState>();
+	if (!gstate.partitioned_copy) {
+		return;
+	}
+	auto &pc = *gstate.partitioned_copy;
+	{
+		annotated_lock_guard<annotated_mutex> guard(pc.lock);
+		pc.InitializeFlush();
+	}
+	while (pc.flushing.load(std::memory_order_relaxed)) {
+		pc.Flush(execution_context, interrupt_state);
+	}
+	gstate.TryFinalizeOwnedFileState();
 }
 
 void PhysicalCopyToFile::PrepareAndFlushBatch(ClientContext &context, GlobalSinkState &gstate_p,

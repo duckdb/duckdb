@@ -45,7 +45,7 @@ public:
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
-	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
+	void Append(BaseStatistics &stats, ColumnAppendState &state, const Vector &vector, idx_t count) override;
 	void RevertAppend(row_t new_count) override;
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index, row_t row_id,
@@ -74,7 +74,7 @@ public:
 
 	void Verify(RowGroup &parent) override;
 
-	static void ShredVariantData(Vector &input, Vector &output, idx_t count);
+	static void ShredVariantData(const Vector &input, Vector &output, idx_t count);
 
 	void SetValidityData(shared_ptr<ValidityColumnData> validity_p);
 	void SetChildData(vector<shared_ptr<ColumnData>> child_data);

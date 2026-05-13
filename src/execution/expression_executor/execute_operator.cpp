@@ -41,7 +41,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			Vector comp_res(LogicalType::BOOLEAN);
 
 			Execute(*expr.children[child], state->child_states[child].get(), sel, count, vector_to_check);
-			VectorOperations::Equals(left, vector_to_check, comp_res, count);
+			VectorOperations::Equals(left, vector_to_check, comp_res);
 
 			if (child == 1) {
 				// first child: move to result
@@ -49,13 +49,13 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			} else {
 				// otherwise OR together
 				Vector new_result(LogicalType::BOOLEAN);
-				VectorOperations::Or(intermediate, comp_res, new_result, count);
+				VectorOperations::Or(intermediate, comp_res, new_result);
 				intermediate.Reference(new_result);
 			}
 		}
 		if (expression_type == ExpressionType::COMPARE_NOT_IN) {
 			// NOT IN: invert result
-			VectorOperations::Not(intermediate, result, count);
+			VectorOperations::Not(intermediate, result);
 		} else {
 			// directly use the result
 			result.Reference(intermediate);
@@ -162,15 +162,15 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		Execute(*expr.children[0], state->child_states[0].get(), sel, count, child);
 		switch (expr.GetExpressionType()) {
 		case ExpressionType::OPERATOR_NOT: {
-			VectorOperations::Not(child, result, count);
+			VectorOperations::Not(child, result);
 			break;
 		}
 		case ExpressionType::OPERATOR_IS_NULL: {
-			VectorOperations::IsNull(child, result, count);
+			VectorOperations::IsNull(child, result);
 			break;
 		}
 		case ExpressionType::OPERATOR_IS_NOT_NULL: {
-			VectorOperations::IsNotNull(child, result, count);
+			VectorOperations::IsNotNull(child, result);
 			break;
 		}
 		default:

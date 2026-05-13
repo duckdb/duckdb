@@ -85,7 +85,7 @@ void InSearchPathFunction(DataChunk &input, ExpressionState &state, Vector &resu
 	auto &context = state.GetContext();
 	auto &search_path = ClientData::Get(context).catalog_search_path;
 	BinaryExecutor::Execute<string_t, string_t, bool>(
-	    input.data[0], input.data[1], result, input.size(), [&](string_t db_name, string_t schema_name) {
+	    input.data[0], input.data[1], result, [&](string_t db_name, string_t schema_name) {
 		    return search_path->SchemaInSearchPath(context, db_name.GetString(), schema_name.GetString());
 	    });
 }

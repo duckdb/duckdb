@@ -47,12 +47,12 @@ namespace duckdb {
 
 struct DictionaryCompressionStorage {
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
-	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
+	static bool StringAnalyze(AnalyzeState &state_p, const Vector &input);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> state);
-	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
+	static void Compress(CompressionState &state_p, const Vector &scan_vector);
 	static void FinalizeCompress(CompressionState &state_p);
 
 	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
@@ -78,9 +78,9 @@ unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnD
 	return make_uniq<DictionaryCompressionAnalyzeState>(info);
 }
 
-bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
+bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {
 	auto &state = state_p.Cast<DictionaryCompressionAnalyzeState>();
-	return state.analyze_state->UpdateState(input, count);
+	return state.analyze_state->UpdateState(input);
 }
 
 idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
@@ -110,9 +110,9 @@ unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(Colum
 	                                                     actual_state.max_unique_count_across_segments);
 }
 
-void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void DictionaryCompressionStorage::Compress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = state_p.Cast<DictionaryCompressionCompressState>();
-	state.UpdateState(scan_vector, count);
+	state.UpdateState(scan_vector);
 }
 
 void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {

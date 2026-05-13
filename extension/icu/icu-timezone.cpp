@@ -595,18 +595,17 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 
 		// Two cases: constant TZ, variable TZ
 		D_ASSERT(input.ColumnCount() == 2);
-		auto &tz_vec = input.data[0];
-		auto &ts_vec = input.data[1];
+		const auto &tz_vec = input.data[0];
+		const auto &ts_vec = input.data[1];
 		if (tz_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(tz_vec)) {
 				throw InternalException("ICUTimeZone called with constant NULL tz");
 			}
 			SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
-			UnaryExecutor::Execute<SRC, DST>(ts_vec, result, input.size(),
+			UnaryExecutor::Execute<SRC, DST>(ts_vec, result,
 			                                 [&](SRC ts) { return OP::Operation(calendar, ts); });
 		} else {
-			BinaryExecutor::Execute<string_t, SRC, DST>(tz_vec, ts_vec, result, input.size(),
-			                                            [&](string_t tz_id, SRC ts) {
+			BinaryExecutor::Execute<string_t, SRC, DST>(tz_vec, ts_vec, result, [&](string_t tz_id, SRC ts) {
 				                                            if (ts.IsFinite()) {
 					                                            SetTimeZone(calendar, tz_id);
 					                                            return OP::Operation(calendar, ts);

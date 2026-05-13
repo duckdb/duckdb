@@ -44,21 +44,21 @@ public:
 	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &lhs_output_columns,
 	                                         DataChunk &chunk, OperatorState &state);
 
-	void FillSelectionVectorSwitchProbe(Vector &source, const idx_t &count, SelectionVector &probe_sel_vec,
+	void FillSelectionVectorSwitchProbe(const Vector &source, const idx_t &count, SelectionVector &probe_sel_vec,
 	                                    idx_t &probe_sel_count, optional_ptr<SelectionVector> build_sel_vec) const;
 
 private:
 	template <bool BUILD_SEL_VEC>
-	void FillSelectionVectorSwitchProbe(Vector &source, const idx_t &count, SelectionVector &probe_sel_vec,
+	void FillSelectionVectorSwitchProbe(const Vector &source, const idx_t &count, SelectionVector &probe_sel_vec,
 	                                    idx_t &probe_sel_count, SelectionVector *build_sel_vec) const;
 	template <typename T, bool BUILD_SEL_VEC>
-	void TemplatedFillSelectionVectorProbe(Vector &source, const idx_t &count, SelectionVector &probe_sel_vec,
+	void TemplatedFillSelectionVectorProbe(const Vector &source, const idx_t &count, SelectionVector &probe_sel_vec,
 	                                       idx_t &probe_sel_count, SelectionVector *build_sel_vec) const;
 
-	bool FillSelectionVectorSwitchBuild(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
+	bool FillSelectionVectorSwitchBuild(const Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
 	                                    idx_t count);
 	template <typename T>
-	bool TemplatedFillSelectionVectorBuild(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
+	bool TemplatedFillSelectionVectorBuild(const Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
 	                                       idx_t count);
 	bool FullScanHashTable();
 

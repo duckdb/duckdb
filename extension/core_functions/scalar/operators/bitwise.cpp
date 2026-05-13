@@ -98,7 +98,7 @@ struct BitwiseANDOperator {
 
 void BitwiseANDOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
-	BinaryExecutor::Execute<string_t, string_t, string_t>(args.data[0], args.data[1], result, args.size(),
+	BinaryExecutor::Execute<string_t, string_t, string_t>(args.data[0], args.data[1], result,
 	                                                      [&](string_t rhs, string_t lhs) {
 		                                                      string_t target = heap.EmptyString(rhs.GetSize());
 
@@ -136,7 +136,7 @@ struct BitwiseOROperator {
 
 void BitwiseOROperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
-	BinaryExecutor::Execute<string_t, string_t, string_t>(args.data[0], args.data[1], result, args.size(),
+	BinaryExecutor::Execute<string_t, string_t, string_t>(args.data[0], args.data[1], result,
 	                                                      [&](string_t rhs, string_t lhs) {
 		                                                      string_t target = heap.EmptyString(rhs.GetSize());
 
@@ -174,7 +174,7 @@ struct BitwiseXOROperator {
 
 void BitwiseXOROperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
-	BinaryExecutor::Execute<string_t, string_t, string_t>(args.data[0], args.data[1], result, args.size(),
+	BinaryExecutor::Execute<string_t, string_t, string_t>(args.data[0], args.data[1], result,
 	                                                      [&](string_t rhs, string_t lhs) {
 		                                                      string_t target = heap.EmptyString(rhs.GetSize());
 
@@ -212,7 +212,7 @@ struct BitwiseNotOperator {
 
 void BitwiseNOTOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
 		string_t target = heap.EmptyString(input.GetSize());
 
 		Bit::BitwiseNot(input, target);
@@ -269,7 +269,7 @@ struct BitwiseShiftLeftOperator {
 
 void BitwiseShiftLeftOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, int32_t, string_t>(
-	    args.data[0], args.data[1], result, args.size(), [&](string_t input, int32_t shift) {
+	    args.data[0], args.data[1], result, [&](string_t input, int32_t shift) {
 		    auto max_shift = UnsafeNumericCast<int32_t>(Bit::BitLength(input));
 		    if (shift == 0) {
 			    return input;
@@ -322,7 +322,7 @@ struct BitwiseShiftRightOperator {
 
 void BitwiseShiftRightOperation(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, int32_t, string_t>(
-	    args.data[0], args.data[1], result, args.size(), [&](string_t input, int32_t shift) {
+	    args.data[0], args.data[1], result, [&](string_t input, int32_t shift) {
 		    auto max_shift = UnsafeNumericCast<int32_t>(Bit::BitLength(input));
 		    if (shift == 0) {
 			    return input;

@@ -573,8 +573,8 @@ bool DataTable::CanFetch(DuckTransaction &transaction, const row_t row_id) {
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, idx_t count, const string &col_name) {
-	if (!VectorOperations::HasNull(vector, count)) {
+static void VerifyNotNullConstraint(TableCatalogEntry &table, const Vector &vector, const string &col_name) {
+	if (!VectorOperations::HasNull(vector)) {
 		return;
 	}
 
@@ -688,7 +688,7 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	DataChunk dst_chunk;
 	dst_chunk.InitializeEmpty(types);
 	for (idx_t i = 0; i < src_keys_ptr.get().size(); i++) {
-		auto &src_chunk = chunk.data[src_keys_ptr.get()[i].index];
+		const auto &src_chunk = chunk.data[src_keys_ptr.get()[i].index];
 		dst_chunk.data[dst_keys_ptr.get()[i].index].Reference(src_chunk);
 	}
 
@@ -930,7 +930,7 @@ void DataTable::VerifyAppendConstraints(ConstraintState &constraint_state, Clien
 			auto &bound_not_null = constraint->Cast<BoundNotNullConstraint>();
 			auto &not_null = base_constraint->Cast<NotNullConstraint>();
 			auto &col = table.GetColumns().GetColumn(LogicalIndex(not_null.index));
-			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index.index], chunk.size(), col.Name());
+			VerifyNotNullConstraint(table, chunk.data[bound_not_null.index.index], col.Name());
 			break;
 		}
 		case ConstraintType::CHECK: {
@@ -1326,6 +1326,7 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 			for (idx_t i = 0; i < chunk.size(); i++) {
 				row_data[i] = NumericCast<row_t>(current_row_base + i);
 			}
+			FlatVector::SetSize(row_identifiers, chunk.size());
 			for (auto &entry : info->indexes.IndexEntries()) {
 				lock_guard<mutex> guard(entry.lock);
 				auto &index = *entry.index;
@@ -1671,7 +1672,7 @@ void DataTable::VerifyUpdateConstraints(ConstraintState &state, ClientContext &c
 				if (column_ids[col_idx] == bound_not_null.index) {
 					// found the column id: check the data in
 					auto &col = table.GetColumn(LogicalIndex(not_null.index));
-					VerifyNotNullConstraint(table, chunk.data[col_idx], chunk.size(), col.Name());
+					VerifyNotNullConstraint(table, chunk.data[col_idx], col.Name());
 					break;
 				}
 			}

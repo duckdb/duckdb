@@ -90,7 +90,7 @@ struct NumericStats {
 		UpdateValue<T>(new_value, nstats.min.GetReferenceUnsafe<T>(), nstats.max.GetReferenceUnsafe<T>());
 	}
 
-	static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
+	static void Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count);
 
 	template <class T>
 	static T GetMin(const BaseStatistics &stats) {
@@ -111,7 +111,7 @@ private:
 	static Value MinOrNull(const BaseStatistics &stats);
 	static Value MaxOrNull(const BaseStatistics &stats);
 	template <class T>
-	static void TemplatedVerify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
+	static void TemplatedVerify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count);
 };
 
 } // namespace duckdb

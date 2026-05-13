@@ -6,8 +6,8 @@ namespace duckdb {
 
 struct InitialNestedLoopJoin {
 	template <class T, class OP>
-	static idx_t Operation(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos, idx_t &rpos,
-	                       SelectionVector &lvector, SelectionVector &rvector, idx_t current_match_count) {
+	static idx_t Operation(const Vector &left, const Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos,
+	                       idx_t &rpos, SelectionVector &lvector, SelectionVector &rvector, idx_t current_match_count) {
 		using MATCH_OP = ComparisonOperationWrapper<OP>;
 
 		// initialize phase of nested loop join
@@ -42,8 +42,8 @@ struct InitialNestedLoopJoin {
 
 struct RefineNestedLoopJoin {
 	template <class T, class OP>
-	static idx_t Operation(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos, idx_t &rpos,
-	                       SelectionVector &lvector, SelectionVector &rvector, idx_t current_match_count) {
+	static idx_t Operation(const Vector &left, const Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos,
+	                       idx_t &rpos, SelectionVector &lvector, SelectionVector &rvector, idx_t current_match_count) {
 		using MATCH_OP = ComparisonOperationWrapper<OP>;
 
 		auto left_entries = left.Values<T>();
@@ -73,8 +73,8 @@ struct RefineNestedLoopJoin {
 };
 
 template <class NLTYPE, class OP>
-static idx_t NestedLoopJoinTypeSwitch(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos,
-                                      idx_t &rpos, SelectionVector &lvector, SelectionVector &rvector,
+static idx_t NestedLoopJoinTypeSwitch(const Vector &left, const Vector &right, idx_t left_size, idx_t right_size,
+                                      idx_t &lpos, idx_t &rpos, SelectionVector &lvector, SelectionVector &rvector,
                                       idx_t current_match_count) {
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
@@ -126,8 +126,8 @@ static idx_t NestedLoopJoinTypeSwitch(Vector &left, Vector &right, idx_t left_si
 }
 
 template <class NLTYPE>
-idx_t NestedLoopJoinComparisonSwitch(Vector &left, Vector &right, idx_t left_size, idx_t right_size, idx_t &lpos,
-                                     idx_t &rpos, SelectionVector &lvector, SelectionVector &rvector,
+idx_t NestedLoopJoinComparisonSwitch(const Vector &left, const Vector &right, idx_t left_size, idx_t right_size,
+                                     idx_t &lpos, idx_t &rpos, SelectionVector &lvector, SelectionVector &rvector,
                                      idx_t current_match_count, ExpressionType comparison_type) {
 	D_ASSERT(left.GetType() == right.GetType());
 	switch (comparison_type) {

@@ -16,7 +16,7 @@ void ArrowUnionData::Initialize(ArrowAppendData &result, const LogicalType &type
 	}
 }
 
-void ArrowUnionData::Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+void ArrowUnionData::Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to, idx_t input_size) {
 	UnifiedVectorFormat format;
 	input.ToUnifiedFormat(format);
 	idx_t size = to - from;

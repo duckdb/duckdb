@@ -21,9 +21,10 @@ struct MapVector {
 	DUCKDB_API static Vector &GetKeys(Vector &vector);
 	DUCKDB_API static Vector &GetValues(Vector &vector);
 	DUCKDB_API static MapInvalidReason
-	CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
+	CheckMapValidity(const Vector &map, idx_t count,
+	                 const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
 	DUCKDB_API static void EvalMapInvalidReason(MapInvalidReason reason);
-	DUCKDB_API static void MapConversionVerify(Vector &vector, idx_t count);
+	DUCKDB_API static void MapConversionVerify(const Vector &vector, idx_t count);
 };
 
 } // namespace duckdb

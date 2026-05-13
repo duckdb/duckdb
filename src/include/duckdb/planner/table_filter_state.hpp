@@ -62,7 +62,7 @@ public:
 	explicit JoinFilterTableFilterState(const LogicalType &key_logical_type);
 
 public:
-	void PrepareSlicedKeys(Vector &keys_v, SelectionVector &sel, idx_t approved_tuple_count);
+	void PrepareSlicedKeys(const Vector &keys_v, SelectionVector &sel, idx_t approved_tuple_count);
 
 public:
 	idx_t current_capacity;

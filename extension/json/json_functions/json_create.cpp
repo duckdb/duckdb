@@ -278,7 +278,7 @@ inline yyjson_mut_val *CreateJSONValueFromJSON(yyjson_mut_doc *doc, const string
 static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                          idx_t count);
 
-static void AddKeyValuePairs(yyjson_mut_doc *doc, yyjson_mut_val *objs[], Vector &key_v, yyjson_mut_val *vals[],
+static void AddKeyValuePairs(yyjson_mut_doc *doc, yyjson_mut_val *objs[], const Vector &key_v, yyjson_mut_val *vals[],
                              idx_t count) {
 	auto keys = key_v.Values<string_t>();
 	for (idx_t i = 0; i < count; i++) {
@@ -292,7 +292,7 @@ static void AddKeyValuePairs(yyjson_mut_doc *doc, yyjson_mut_val *objs[], Vector
 }
 
 static void CreateKeyValuePairs(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *objs[],
-                                yyjson_mut_val *vals[], Vector &key_v, Vector &value_v, idx_t count) {
+                                yyjson_mut_val *vals[], const Vector &key_v, Vector &value_v, idx_t count) {
 	CreateValues(names, doc, vals, value_v, count);
 	AddKeyValuePairs(doc, objs, key_v, vals, count);
 }
@@ -304,7 +304,7 @@ static void CreateValuesNull(yyjson_mut_doc *doc, yyjson_mut_val *vals[], idx_t 
 }
 
 template <class INPUT_TYPE, class TARGET_TYPE>
-static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count) {
+static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], const Vector &value_v, idx_t count) {
 	UnifiedVectorFormat value_data;
 	value_v.ToUnifiedFormat(value_data);
 	auto values = UnifiedVectorFormat::GetData<INPUT_TYPE>(value_data);
@@ -323,7 +323,7 @@ static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], V
 	}
 }
 
-static void CreateRawValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count) {
+static void CreateRawValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], const Vector &value_v, idx_t count) {
 	UnifiedVectorFormat value_data;
 	value_v.ToUnifiedFormat(value_data);
 	auto values = UnifiedVectorFormat::GetData<string_t>(value_data);

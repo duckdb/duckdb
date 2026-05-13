@@ -49,7 +49,7 @@ public:
 
 	bool CompressInternal(UnifiedVectorFormat &vector_format, const string_t &str, bool is_null,
 	                      EncodedInput &encoded_input, const idx_t i, idx_t count, bool fail_on_no_space);
-	void Compress(Vector &scan_vector, idx_t count);
+	void Compress(const Vector &scan_vector);
 	void FinalizeCompress();
 	void Flush(bool final);
 

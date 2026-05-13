@@ -469,9 +469,10 @@ void Vector::Shred(Vector &shredded_data, idx_t capacity) {
 }
 
 // FIXME: This should ideally be const
-void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_serialization) {
+void Vector::Serialize(Serializer &serializer, bool compressed_serialization) {
 	auto &logical_type = GetType();
 
+	auto count = size();
 	UnifiedVectorFormat vdata;
 
 	// serialize compressed vectors to save space, but skip this if serializing into older versions
@@ -508,14 +509,14 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 					serializer.WriteProperty(90, "vector_type", VectorType::DICTIONARY_VECTOR);
 					serializer.WriteProperty(91, "sel_vector", sel_data, sizeof(sel_t) * count);
 					serializer.WriteProperty(92, "dict_count", used_count);
-					return dict.Serialize(serializer, used_count, false);
+					return dict.Serialize(serializer, false);
 				}
 			}
 		} else if (vtype == VectorType::CONSTANT_VECTOR && count >= 1) {
 			serializer.WriteProperty(90, "vector_type", VectorType::CONSTANT_VECTOR);
 			// Resize to 1 so that size() == count == 1 during the recursive call, then restore
 			FlatVector::SetSize(*this, 1);
-			Vector::Serialize(serializer, 1, false); // just serialize one value
+			Vector::Serialize(serializer, false); // just serialize one value
 			FlatVector::SetSize(*this, count);
 			return;
 		} else if (vtype == VectorType::SEQUENCE_VECTOR) {
@@ -550,7 +551,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		// constant size type: simple copy
 		idx_t write_size = GetTypeIdSize(logical_type.InternalType()) * count;
 		auto ptr = make_unsafe_uniq_array_uninitialized<data_t>(write_size);
-		VectorOperations::WriteToStorage(*this, count, ptr.get());
+		VectorOperations::WriteToStorage(*this, ptr.get());
 		serializer.WriteProperty(102, "data", ptr.get(), write_size);
 	} else if (logical_type.id() == LogicalTypeId::GEOMETRY) {
 		auto geoms = UnifiedVectorFormat::GetData<string_t>(vdata);
@@ -628,8 +629,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 
 			// Serialize entries as a list
 			serializer.WriteList(103, "children", entries.size(), [&](Serializer::List &list, idx_t i) {
-				list.WriteObject(
-				    [&](Serializer &object) { entries[i].Serialize(object, count, compressed_serialization); });
+				list.WriteObject([&](Serializer &object) { entries[i].Serialize(object, compressed_serialization); });
 			});
 			break;
 		}
@@ -658,9 +658,8 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 					object.WriteProperty(101, "length", entries[i].length);
 				});
 			});
-			serializer.WriteObject(106, "child", [&](Serializer &object) {
-				child.Serialize(object, list_size, compressed_serialization);
-			});
+			serializer.WriteObject(106, "child",
+			                       [&](Serializer &object) { child.Serialize(object, compressed_serialization); });
 			break;
 		}
 		case PhysicalType::ARRAY: {
@@ -671,9 +670,8 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			auto array_size = ArrayType::GetSize(serialized_vector.GetType());
 			auto child_size = array_size * count;
 			serializer.WriteProperty<uint64_t>(103, "array_size", array_size);
-			serializer.WriteObject(104, "child", [&](Serializer &object) {
-				child.Serialize(object, child_size, compressed_serialization);
-			});
+			serializer.WriteObject(104, "child",
+			                       [&](Serializer &object) { child.Serialize(object, compressed_serialization); });
 			break;
 		}
 		default:
@@ -874,7 +872,8 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) const {
 	buffer->Verify(GetType(), sel, count);
 }
 
-void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
+void Vector::DebugTransformToDictionary(Vector &vector) {
+	const auto count = vector.size();
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		// only supported for flat vectors currently
 		return;
@@ -915,13 +914,14 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 	vector.Verify();
 }
 
-void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
+void Vector::DebugShuffleNestedVector(Vector &vector) {
+	const auto count = vector.size();
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::STRUCT: {
 		auto &entries = StructVector::GetEntries(vector);
 		// recurse into child elements
 		for (auto &entry : entries) {
-			Vector::DebugShuffleNestedVector(entry, count);
+			Vector::DebugShuffleNestedVector(entry);
 		}
 		break;
 	}
@@ -961,7 +961,7 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 		ListVector::SetListSize(vector, child_count);
 
 		// recurse into child elements
-		Vector::DebugShuffleNestedVector(child_vector, child_count);
+		Vector::DebugShuffleNestedVector(child_vector);
 		break;
 	}
 	default:

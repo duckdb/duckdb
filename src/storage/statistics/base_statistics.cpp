@@ -475,7 +475,7 @@ string BaseStatistics::ToString() const {
 	return ToStruct().ToString();
 }
 
-void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count, const bool ignore_has_null) const {
+void BaseStatistics::Verify(const Vector &vector, const SelectionVector &sel, idx_t count, const bool ignore_has_null) const {
 	D_ASSERT(vector.GetType() == this->type);
 	switch (GetStatsType()) {
 	case StatisticsType::NUMERIC_STATS:
@@ -523,7 +523,7 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 	}
 }
 
-void BaseStatistics::Verify(Vector &vector, idx_t count) const {
+void BaseStatistics::Verify(const Vector &vector, idx_t count) const {
 	auto sel = FlatVector::IncrementalSelectionVector();
 	Verify(vector, *sel, count, false);
 }

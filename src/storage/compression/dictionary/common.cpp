@@ -43,7 +43,7 @@ DictionaryCompressionState::DictionaryCompressionState(const CompressionInfo &in
 DictionaryCompressionState::~DictionaryCompressionState() {
 }
 
-bool DictionaryCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
+bool DictionaryCompressionState::UpdateState(const Vector &scan_vector) {
 	Verify();
 
 	for (auto entry : scan_vector.Values<string_t>()) {

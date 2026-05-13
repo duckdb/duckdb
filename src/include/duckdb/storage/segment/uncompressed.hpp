@@ -16,7 +16,7 @@ class DatabaseInstance;
 struct UncompressedFunctions {
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> state);
-	static void Compress(CompressionState &state_p, Vector &data, idx_t count);
+	static void Compress(CompressionState &state_p, const Vector &data);
 	static void FinalizeCompress(CompressionState &state_p);
 	static void EmptySkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
 	}

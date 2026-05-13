@@ -315,12 +315,11 @@ struct MinMaxFixedValue {
 	}
 
 	// Nothing to do here
-	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
+	static EXTRA_STATE CreateExtraState() {
 		return false;
 	}
 
-	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &, UnifiedVectorFormat &format,
-	                        const bool nulls_last) {
+	static void PrepareData(const Vector &input, EXTRA_STATE &, UnifiedVectorFormat &format, const bool nulls_last) {
 		input.ToUnifiedFormat(format);
 	}
 };
@@ -338,12 +337,11 @@ struct MinMaxStringValue {
 	}
 
 	// Nothing to do here
-	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
+	static EXTRA_STATE CreateExtraState() {
 		return false;
 	}
 
-	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &, UnifiedVectorFormat &format,
-	                        const bool nulls_last) {
+	static void PrepareData(const Vector &input, EXTRA_STATE &, UnifiedVectorFormat &format, const bool nulls_last) {
 		input.ToUnifiedFormat(format);
 	}
 };
@@ -363,15 +361,15 @@ struct MinMaxFallbackValue {
 		CreateSortKeyHelpers::DecodeSortKey(value, vector, idx, modifiers);
 	}
 
-	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
+	static EXTRA_STATE CreateExtraState() {
 		return Vector(LogicalTypeId::BLOB);
 	}
 
-	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format,
+	static void PrepareData(const Vector &input, EXTRA_STATE &extra_state, UnifiedVectorFormat &format,
 	                        const bool nulls_last) {
 		auto order_by_null_type = nulls_last ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
 		const OrderModifiers modifiers(OrderType::ASCENDING, order_by_null_type);
-		CreateSortKeyHelpers::CreateSortKeyWithValidity(input, extra_state, modifiers, count);
+		CreateSortKeyHelpers::CreateSortKeyWithValidity(input, extra_state, modifiers);
 		input.Flatten();
 		extra_state.ToUnifiedFormat(format);
 	}
@@ -412,11 +410,11 @@ struct MinMaxFixedValueOrNull {
 		FlatVector::GetDataMutable<T>(vector)[idx] = value.value;
 	}
 
-	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
+	static EXTRA_STATE CreateExtraState() {
 		return false;
 	}
 
-	static void PrepareData(Vector &input, const idx_t count, EXTRA_STATE &extra_state, UnifiedVectorFormat &format,
+	static void PrepareData(const Vector &input, EXTRA_STATE &extra_state, UnifiedVectorFormat &format,
 	                        const bool nulls_last) {
 		input.ToUnifiedFormat(format);
 	}

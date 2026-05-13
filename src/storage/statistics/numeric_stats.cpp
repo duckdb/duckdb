@@ -557,7 +557,7 @@ child_list_t<Value> NumericStats::ToStruct(const BaseStatistics &stats) {
 }
 
 template <class T>
-void NumericStats::TemplatedVerify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel,
+void NumericStats::TemplatedVerify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel,
                                    idx_t count) {
 	auto entries = vector.Values<T>();
 	auto min_value = NumericStats::MinOrNull(stats);
@@ -580,7 +580,7 @@ void NumericStats::TemplatedVerify(const BaseStatistics &stats, Vector &vector, 
 	}
 }
 
-void NumericStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void NumericStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &type = stats.GetType();
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:

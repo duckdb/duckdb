@@ -48,12 +48,12 @@ namespace dict_fsst {
 
 struct DictFSSTCompressionStorage {
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
-	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
+	static bool StringAnalyze(AnalyzeState &state_p, const Vector &input);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> state);
-	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
+	static void Compress(CompressionState &state_p, const Vector &scan_vector);
 	static void FinalizeCompress(CompressionState &state_p);
 
 	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
@@ -79,9 +79,9 @@ unique_ptr<AnalyzeState> DictFSSTCompressionStorage::StringInitAnalyze(ColumnDat
 	return make_uniq<DictFSSTAnalyzeState>(info);
 }
 
-bool DictFSSTCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
+bool DictFSSTCompressionStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {
 	auto &analyze_state = state_p.Cast<DictFSSTAnalyzeState>();
-	return analyze_state.Analyze(input, count);
+	return analyze_state.Analyze(input);
 }
 
 idx_t DictFSSTCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
@@ -98,9 +98,9 @@ unique_ptr<CompressionState> DictFSSTCompressionStorage::InitCompression(ColumnD
 	                                           unique_ptr_cast<AnalyzeState, DictFSSTAnalyzeState>(std::move(state)));
 }
 
-void DictFSSTCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void DictFSSTCompressionStorage::Compress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = state_p.Cast<DictFSSTCompressionState>();
-	state.Compress(scan_vector, count);
+	state.Compress(scan_vector);
 }
 
 void DictFSSTCompressionStorage::FinalizeCompress(CompressionState &state_p) {

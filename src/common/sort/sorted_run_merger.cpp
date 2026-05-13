@@ -715,7 +715,8 @@ void SortedRunMergerLocalState::TemplatedScanPartition(SortedRunMergerGlobalStat
 	merged_partition_index += count;
 
 	// Scan
-	sorted_run_scan_state.Scan(*gstate.merger.sorted_runs[0], sort_key_pointers, count, chunk);
+	FlatVector::SetSize(sort_key_pointers, count);
+	sorted_run_scan_state.Scan(*gstate.merger.sorted_runs[0], sort_key_pointers, chunk);
 }
 
 void SortedRunMergerLocalState::MaterializePartition(SortedRunMergerGlobalState &gstate) {

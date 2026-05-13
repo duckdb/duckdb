@@ -58,7 +58,7 @@ void HandleCastError::AssignError(const string &error_message, string *error_mes
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
 bool DefaultCasts::TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	bool success = true;
-	if (VectorOperations::HasNotNull(source, count)) {
+	if (VectorOperations::HasNotNull(source)) {
 		HandleCastError::AssignError(TryCast::UnimplementedCastMessage(source.GetType(), result.GetType()), parameters);
 		success = false;
 	}

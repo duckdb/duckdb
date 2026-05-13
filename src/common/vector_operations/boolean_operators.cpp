@@ -4,7 +4,6 @@
 // operations AND OR !
 //===--------------------------------------------------------------------===//
 
-#include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
@@ -15,7 +14,8 @@ namespace {
 // AND/OR
 //===--------------------------------------------------------------------===//
 template <class OP>
-void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t count) {
+void TemplatedBooleanNullmask(const Vector &left, const Vector &right, Vector &result) {
+	const auto count = (left.GetVectorType() == VectorType::CONSTANT_VECTOR) ? right.size() : left.size();
 	D_ASSERT(left.GetType().id() == LogicalTypeId::BOOLEAN && right.GetType().id() == LogicalTypeId::BOOLEAN &&
 	         result.GetType().id() == LogicalTypeId::BOOLEAN);
 
@@ -40,6 +40,7 @@ void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t
 	auto right_data = right.Values<uint8_t>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::SetSize(result, count);
 	auto result_data = FlatVector::ScatterWriter<bool>(result);
 	if (left_data.CanHaveNull() || right_data.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
@@ -165,17 +166,29 @@ struct NotOperator {
 
 } // namespace
 
-void VectorOperations::And(Vector &left, Vector &right, Vector &result, idx_t count) {
-	TemplatedBooleanNullmask<TernaryAnd>(left, right, result, count);
+void VectorOperations::And(const Vector &left, const Vector &right, Vector &result) {
+	const bool left_is_const = left.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	const bool right_is_const = right.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	if (!left_is_const && !right_is_const && left.size() != right.size()) {
+		throw InternalException("Mismatch in input vector sizes for And - left has %d rows but right has %d",
+		                        left.size(), right.size());
+	}
+	TemplatedBooleanNullmask<TernaryAnd>(left, right, result);
 }
 
-void VectorOperations::Or(Vector &left, Vector &right, Vector &result, idx_t count) {
-	TemplatedBooleanNullmask<TernaryOr>(left, right, result, count);
+void VectorOperations::Or(const Vector &left, const Vector &right, Vector &result) {
+	const bool left_is_const = left.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	const bool right_is_const = right.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	if (!left_is_const && !right_is_const && left.size() != right.size()) {
+		throw InternalException("Mismatch in input vector sizes for Or - left has %d rows but right has %d",
+		                        left.size(), right.size());
+	}
+	TemplatedBooleanNullmask<TernaryOr>(left, right, result);
 }
 
-void VectorOperations::Not(Vector &input, Vector &result, idx_t count) {
+void VectorOperations::Not(const Vector &input, Vector &result) {
 	D_ASSERT(input.GetType() == LogicalType::BOOLEAN && result.GetType() == LogicalType::BOOLEAN);
-	UnaryExecutor::Execute<bool, bool, NotOperator>(input, result, count);
+	UnaryExecutor::Execute<bool, bool, NotOperator>(input, result);
 }
 
 } // namespace duckdb

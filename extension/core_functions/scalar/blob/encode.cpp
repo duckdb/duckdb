@@ -52,14 +52,14 @@ struct UnaryBlobDecodeOperator {
 
 void UnaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
-	UnaryExecutor::Execute<string_t, string_t, UnaryBlobDecodeOperator>(args.data[0], result, args.size());
+	UnaryExecutor::Execute<string_t, string_t, UnaryBlobDecodeOperator>(args.data[0], result);
 	StringVector::AddHeapReference(result, args.data[0]);
 }
 
 void BinaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
-	    args.data[0], args.data[1], result, args.size(), [&](string_t input, string_t error_option) {
+	    args.data[0], args.data[1], result, [&](string_t input, string_t error_option) {
 		    auto input_data = input.GetDataWriteable();
 		    auto input_length = input.GetSize();
 

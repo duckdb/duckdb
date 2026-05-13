@@ -182,7 +182,7 @@ void ListColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.child_appends.push_back(std::move(child_append_state));
 }
 
-void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
+void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, const Vector &vector, idx_t count) {
 	D_ASSERT(count > 0);
 
 	// construct the list_entry_t entries to append to the column data

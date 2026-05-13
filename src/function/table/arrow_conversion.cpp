@@ -318,7 +318,7 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 	}
 }
 
-static void ArrowToDuckDBMapVerify(Vector &vector, idx_t count) {
+static void ArrowToDuckDBMapVerify(const Vector &vector, idx_t count) {
 	auto valid_check = MapVector::CheckMapValidity(vector, count);
 	switch (valid_check) {
 	case MapInvalidReason::VALID:

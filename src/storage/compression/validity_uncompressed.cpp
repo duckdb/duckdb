@@ -186,9 +186,9 @@ unique_ptr<AnalyzeState> ValidityInitAnalyze(ColumnData &col_data, PhysicalType 
 	return make_uniq<ValidityAnalyzeState>(info);
 }
 
-bool ValidityAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
+bool ValidityAnalyze(AnalyzeState &state_p, const Vector &input) {
 	auto &state = state_p.Cast<ValidityAnalyzeState>();
-	state.count += count;
+	state.count += input.size();
 	return true;
 }
 

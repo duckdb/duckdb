@@ -29,11 +29,11 @@ struct MakeDateOperator {
 template <typename T>
 void ExecuteMakeDate(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 3);
-	auto &yyyy = input.data[0];
-	auto &mm = input.data[1];
-	auto &dd = input.data[2];
+	const auto &yyyy = input.data[0];
+	const auto &mm = input.data[1];
+	const auto &dd = input.data[2];
 
-	TernaryExecutor::Execute<T, T, T, date_t>(yyyy, mm, dd, result, input.size(),
+	TernaryExecutor::Execute<T, T, T, date_t>(yyyy, mm, dd, result,
 	                                          MakeDateOperator::Operation<T, T, T, date_t>);
 }
 
@@ -51,7 +51,7 @@ template <typename T>
 void ExecuteStructMakeDate(DataChunk &input, ExpressionState &state, Vector &result) {
 	// this should be guaranteed by the binder
 	D_ASSERT(input.ColumnCount() == 1);
-	auto &vec = input.data[0];
+	const auto &vec = input.data[0];
 	const auto count = input.size();
 
 	auto iter = vec.Values<VectorStructType<T, T, T>>();
@@ -92,11 +92,11 @@ struct MakeTimeOperator {
 template <typename T>
 void ExecuteMakeTime(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 3);
-	auto &yyyy = input.data[0];
-	auto &mm = input.data[1];
-	auto &dd = input.data[2];
+	const auto &yyyy = input.data[0];
+	const auto &mm = input.data[1];
+	const auto &dd = input.data[2];
 
-	TernaryExecutor::Execute<T, T, double, dtime_t>(yyyy, mm, dd, result, input.size(),
+	TernaryExecutor::Execute<T, T, double, dtime_t>(yyyy, mm, dd, result,
 	                                                MakeTimeOperator::Operation<T, T, double, dtime_t>);
 }
 
@@ -122,7 +122,7 @@ template <typename T>
 void ExecuteMakeTimestamp(DataChunk &input, ExpressionState &state, Vector &result) {
 	if (input.ColumnCount() == 1) {
 		auto func = MakeTimestampOperator::Operation<T, timestamp_t>;
-		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, input.size(), func);
+		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, func);
 		return;
 	}
 
@@ -137,7 +137,7 @@ void ExecuteMakeTimestampNs(DataChunk &input, ExpressionState &state, Vector &re
 	D_ASSERT(input.ColumnCount() == 1);
 
 	auto func = MakeTimestampOperator::Operation<T, timestamp_ns_t>;
-	UnaryExecutor::Execute<T, timestamp_ns_t>(input.data[0], result, input.size(), func);
+	UnaryExecutor::Execute<T, timestamp_ns_t>(input.data[0], result, func);
 	return;
 }
 

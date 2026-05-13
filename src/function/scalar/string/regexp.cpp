@@ -128,19 +128,19 @@ struct RegexFullMatch {
 
 template <class OP>
 static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &strings = args.data[0];
-	auto &patterns = args.data[1];
+	const auto &strings = args.data[0];
+	const auto &patterns = args.data[1];
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<RegexpMatchesBindData>();
 
 	if (info.constant_pattern) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
-		UnaryExecutor::Execute<string_t, bool>(strings, result, args.size(), [&](string_t input) {
+		UnaryExecutor::Execute<string_t, bool>(strings, result, [&](string_t input) {
 			return OP::Operation(CreateStringPiece(input), lstate.constant_pattern);
 		});
 	} else {
-		BinaryExecutor::Execute<string_t, string_t, bool>(strings, patterns, result, args.size(),
+		BinaryExecutor::Execute<string_t, string_t, bool>(strings, patterns, result,
 		                                                  [&](string_t input, string_t pattern) {
 			                                                  RE2 re(CreateStringPiece(pattern), info.options);
 			                                                  if (!re.ok()) {
@@ -189,15 +189,15 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<RegexpReplaceBindData>();
 
-	auto &strings = args.data[0];
-	auto &patterns = args.data[1];
-	auto &replaces = args.data[2];
+	const auto &strings = args.data[0];
+	const auto &patterns = args.data[1];
+	const auto &replaces = args.data[2];
 
 	auto &heap = StringVector::GetStringHeap(result);
 	if (info.constant_pattern) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
-		    strings, replaces, result, args.size(), [&](string_t input, string_t replace) {
+		    strings, replaces, result, [&](string_t input, string_t replace) {
 			    std::string sstring = input.GetString();
 			    if (info.global_replace) {
 				    RE2::GlobalReplace(&sstring, lstate.constant_pattern, CreateStringPiece(replace));
@@ -208,7 +208,7 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 		    });
 	} else {
 		TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
-		    strings, patterns, replaces, result, args.size(), [&](string_t input, string_t pattern, string_t replace) {
+		    strings, patterns, replaces, result, [&](string_t input, string_t pattern, string_t replace) {
 			    RE2 re(CreateStringPiece(pattern), info.options);
 			    if (!re.ok()) {
 				    throw InvalidInputException(re.error());
@@ -251,8 +251,8 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.bind_info->Cast<RegexpExtractBindData>();
 
-	auto &strings = args.data[0];
-	auto &patterns = args.data[1];
+	const auto &strings = args.data[0];
+	const auto &patterns = args.data[1];
 	// Result strings are zero-copy slices of the input vector (or the input itself when
 	// no_match_returns_input is set), so register the heap reference once per chunk regardless of
 	// per-row outcomes.
@@ -261,12 +261,12 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 	if (info.constant_pattern) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		const auto &re = lstate.constant_pattern;
-		UnaryExecutor::Execute<string_t, string_t>(strings, result, args.size(), [&](string_t input) {
+		UnaryExecutor::Execute<string_t, string_t>(strings, result, [&](string_t input) {
 			return ExtractCaptureGroup(input, re, info.group_index, info.no_match_returns_input);
 		});
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
-		    strings, patterns, result, args.size(), [&](string_t input, string_t pattern) {
+		    strings, patterns, result, [&](string_t input, string_t pattern) {
 			    RE2 re(CreateStringPiece(pattern), info.options);
 			    return ExtractCaptureGroup(input, re, info.group_index, info.no_match_returns_input);
 		    });
@@ -284,8 +284,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 	}
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 
-	const auto count = args.size();
-	auto &input = args.data[0];
+	const auto &input = args.data[0];
 
 	auto &child_entries = StructVector::GetEntries(result);
 	const auto groupSize = child_entries.size();
@@ -307,7 +306,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result, count_t(count));
+			ConstantVector::SetNull(result, count_t(args.size()));
 		} else {
 			ConstantVector::SetNull(result, false);
 			auto idata = ConstantVector::GetData<string_t>(input);

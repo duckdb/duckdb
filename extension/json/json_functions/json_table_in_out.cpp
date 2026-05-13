@@ -250,7 +250,7 @@ static void InitializeLocalState(JSONTableInOutLocalState &lstate, DataChunk &in
 	// Parse path, default to root if not given
 	Value path_value("$");
 	if (input.data.size() > 1) {
-		auto &path_vector = input.data[1];
+		const auto &path_vector = input.data[1];
 		if (ConstantVector::IsNull(path_vector)) {
 			return;
 		}

@@ -23,7 +23,7 @@ public:
 	BloomFilter() = default;
 	void Initialize(ClientContext &context_p, idx_t number_of_rows);
 
-	void InsertHashes(const Vector &hashes_v, idx_t count) const;
+	void InsertHashes(const Vector &hashes_v) const;
 	idx_t LookupHashes(const Vector &hashes_v, SelectionVector &result_sel, idx_t count) const;
 
 	void InsertOne(hash_t hash) const;

@@ -44,7 +44,7 @@ void IntegralCompressFunction(DataChunk &args, ExpressionState &state, Vector &r
 	D_ASSERT(args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR);
 	const auto min_val = ConstantVector::GetData<INPUT_TYPE>(args.data[1])[0];
 	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(
-	    args.data[0], result, args.size(),
+	    args.data[0], result,
 	    [&](const INPUT_TYPE &input) {
 		    return TemplatedIntegralCompress<INPUT_TYPE, RESULT_TYPE>::Operation(input, min_val);
 	    },
@@ -134,7 +134,7 @@ void IntegralDecompressFunction(DataChunk &args, ExpressionState &state, Vector 
 	D_ASSERT(args.data[1].GetType() == result.GetType());
 	const auto min_val = ConstantVector::GetData<RESULT_TYPE>(args.data[1])[0];
 	UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(
-	    args.data[0], result, args.size(),
+	    args.data[0], result,
 	    [&](const INPUT_TYPE &input) {
 		    return TemplatedIntegralDecompress<INPUT_TYPE, RESULT_TYPE>::Operation(input, min_val);
 	    },

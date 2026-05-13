@@ -105,7 +105,7 @@ void GeoColumnData::Skip(ColumnScanState &state, idx_t count) {
 void GeoColumnData::InitializeAppend(ColumnAppendState &state) {
 	base_column->InitializeAppend(state);
 }
-void GeoColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t add_count) {
+void GeoColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, const Vector &vector, idx_t add_count) {
 	base_column->Append(stats, state, vector, add_count);
 	count += add_count;
 }
@@ -590,11 +590,11 @@ void GeoColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
 //----------------------------------------------------------------------------------------------------------------------
 // Specialize
 //----------------------------------------------------------------------------------------------------------------------
-void GeoColumnData::Specialize(Vector &source, Vector &target, idx_t count, GeometryStorageType type) {
+void GeoColumnData::Specialize(const Vector &source, Vector &target, idx_t count, GeometryStorageType type) {
 	Geometry::ToVectorizedFormat(source, target, count, type);
 }
 
-void GeoColumnData::Reassemble(Vector &source, Vector &target, idx_t count, GeometryStorageType type,
+void GeoColumnData::Reassemble(const Vector &source, Vector &target, idx_t count, GeometryStorageType type,
                                idx_t result_offset) {
 	Geometry::FromVectorizedFormat(source, target, count, type, result_offset);
 }

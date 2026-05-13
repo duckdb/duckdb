@@ -47,7 +47,7 @@ OperatorResultType VerifyEmitConstantVectors(const DataChunk &input, DataChunk &
 OperatorResultType VerifyEmitDictionaryVectors(const DataChunk &input, DataChunk &chunk, OperatorState &state) {
 	input.Copy(chunk);
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-		Vector::DebugTransformToDictionary(chunk.data[c], chunk.size());
+		Vector::DebugTransformToDictionary(chunk.data[c]);
 	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }
@@ -214,7 +214,7 @@ OperatorResultType VerifyEmitSequenceVector(const DataChunk &input_p, DataChunk 
 OperatorResultType VerifyEmitNestedShuffleVector(const DataChunk &input, DataChunk &chunk, OperatorState &state) {
 	input.Copy(chunk);
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-		Vector::DebugShuffleNestedVector(chunk.data[c], chunk.size());
+		Vector::DebugShuffleNestedVector(chunk.data[c]);
 	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }

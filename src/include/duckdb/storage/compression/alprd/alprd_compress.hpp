@@ -310,11 +310,11 @@ unique_ptr<CompressionState> AlpRDInitCompression(ColumnDataCheckpointData &chec
 }
 
 template <class T>
-void AlpRDCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void AlpRDCompress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = (AlpRDCompressionState<T> &)state_p;
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(vdata);
-	state.Append(vdata, count);
+	state.Append(vdata, scan_vector.size());
 }
 
 template <class T>

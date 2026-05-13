@@ -224,7 +224,7 @@ public:
 	void FlushSegment();
 	void FlushContainer();
 	template <PhysicalType TYPE>
-	void Analyze(Vector &input, idx_t count) {
+	void Analyze(const Vector &input) {
 		static_assert(AlwaysFalse<std::integral_constant<PhysicalType, TYPE>>::VALUE,
 		              "No specialization exists for this type");
 	}
@@ -265,9 +265,9 @@ public:
 	vector<ContainerMetadata> container_metadata;
 };
 template <>
-void RoaringAnalyzeState::Analyze<PhysicalType::BIT>(Vector &input, idx_t count);
+void RoaringAnalyzeState::Analyze<PhysicalType::BIT>(const Vector &input);
 template <>
-void RoaringAnalyzeState::Analyze<PhysicalType::BOOL>(Vector &input, idx_t count);
+void RoaringAnalyzeState::Analyze<PhysicalType::BOOL>(const Vector &input);
 
 //===--------------------------------------------------------------------===//
 // Compress
@@ -351,9 +351,9 @@ public:
 	void Finalize();
 	void FlushContainer();
 	void NextContainer();
-	void Compress(Vector &input, idx_t count);
+	void Compress(const Vector &input);
 	template <PhysicalType TYPE>
-	void Compress(Vector &input, idx_t count) {
+	void Compress(const Vector &input) {
 		static_assert(AlwaysFalse<std::integral_constant<PhysicalType, TYPE>>::VALUE,
 		              "No specialization exists for this type");
 	}
@@ -380,9 +380,9 @@ public:
 };
 
 template <>
-void RoaringCompressState::Compress<PhysicalType::BIT>(Vector &input, idx_t count);
+void RoaringCompressState::Compress<PhysicalType::BIT>(const Vector &input);
 template <>
-void RoaringCompressState::Compress<PhysicalType::BOOL>(Vector &input, idx_t count);
+void RoaringCompressState::Compress<PhysicalType::BOOL>(const Vector &input);
 
 //===--------------------------------------------------------------------===//
 // Scan

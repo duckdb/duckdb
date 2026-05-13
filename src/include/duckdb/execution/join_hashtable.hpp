@@ -389,8 +389,7 @@ private:
 
 private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
-	void InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkState &chunk_state, InsertState &insert_statebool,
-	                  bool parallel);
+	void InsertHashes(Vector &hashes_v, TupleDataChunkState &chunk_state, InsertState &insert_state, bool parallel);
 	//! Prepares keys by filtering NULLs
 	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);

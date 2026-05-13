@@ -23,7 +23,7 @@ namespace duckdb {
 struct PrimitiveTypeState {
 	UnifiedVectorFormat main_data;
 
-	void PrepareVector(Vector &input, idx_t count) {
+	void PrepareVector(const Vector &input) {
 		input.ToUnifiedFormat(main_data);
 	}
 };
@@ -57,8 +57,8 @@ struct StructTypeState {
 	UnifiedVectorFormat main_data;
 	UnifiedVectorFormat child_data[CHILD_COUNT];
 
-	void PrepareVector(Vector &input, idx_t count) {
-		auto &entries = StructVector::GetEntries(input);
+	void PrepareVector(const Vector &input) {
+		const auto &entries = StructVector::GetEntries(input);
 
 		input.ToUnifiedFormat(main_data);
 
@@ -250,11 +250,11 @@ struct GenericListType {
 struct GenericExecutor {
 private:
 	template <class A_TYPE, class RESULT_TYPE, class FUNC>
-	static void ExecuteUnaryInternal(Vector &input, Vector &result, idx_t count, FUNC &fun) {
+	static void ExecuteUnaryInternal(const Vector &input, Vector &result, idx_t count, FUNC &fun) {
 		auto constant = input.GetVectorType() == VectorType::CONSTANT_VECTOR;
 
 		typename A_TYPE::STRUCT_STATE state;
-		state.PrepareVector(input, count);
+		state.PrepareVector(input);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto idx = state.main_data.sel->get_index(i);
@@ -275,14 +275,14 @@ private:
 	}
 
 	template <class A_TYPE, class B_TYPE, class RESULT_TYPE, class FUNC>
-	static void ExecuteBinaryInternal(Vector &a, Vector &b, Vector &result, idx_t count, FUNC &fun) {
+	static void ExecuteBinaryInternal(const Vector &a, const Vector &b, Vector &result, idx_t count, FUNC &fun) {
 		auto constant =
 		    a.GetVectorType() == VectorType::CONSTANT_VECTOR && b.GetVectorType() == VectorType::CONSTANT_VECTOR;
 
 		typename A_TYPE::STRUCT_STATE a_state;
 		typename B_TYPE::STRUCT_STATE b_state;
-		a_state.PrepareVector(a, count);
-		b_state.PrepareVector(b, count);
+		a_state.PrepareVector(a);
+		b_state.PrepareVector(b);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto a_idx = a_state.main_data.sel->get_index(i);
@@ -305,7 +305,8 @@ private:
 	}
 
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class FUNC>
-	static void ExecuteTernaryInternal(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUNC &fun) {
+	static void ExecuteTernaryInternal(const Vector &a, const Vector &b, const Vector &c, Vector &result, idx_t count,
+	                                   FUNC &fun) {
 		auto constant = a.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 		                b.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 		                c.GetVectorType() == VectorType::CONSTANT_VECTOR;
@@ -314,9 +315,9 @@ private:
 		typename B_TYPE::STRUCT_STATE b_state;
 		typename C_TYPE::STRUCT_STATE c_state;
 
-		a_state.PrepareVector(a, count);
-		b_state.PrepareVector(b, count);
-		c_state.PrepareVector(c, count);
+		a_state.PrepareVector(a);
+		b_state.PrepareVector(b);
+		c_state.PrepareVector(c);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto a_idx = a_state.main_data.sel->get_index(i);
@@ -343,8 +344,8 @@ private:
 	}
 
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class D_TYPE, class RESULT_TYPE, class FUNC>
-	static void ExecuteQuaternaryInternal(Vector &a, Vector &b, Vector &c, Vector &d, Vector &result, idx_t count,
-	                                      FUNC &fun) {
+	static void ExecuteQuaternaryInternal(const Vector &a, const Vector &b, const Vector &c, const Vector &d,
+	                                      Vector &result, idx_t count, FUNC &fun) {
 		auto constant =
 		    a.GetVectorType() == VectorType::CONSTANT_VECTOR && b.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 		    c.GetVectorType() == VectorType::CONSTANT_VECTOR && d.GetVectorType() == VectorType::CONSTANT_VECTOR;
@@ -354,10 +355,10 @@ private:
 		typename C_TYPE::STRUCT_STATE c_state;
 		typename D_TYPE::STRUCT_STATE d_state;
 
-		a_state.PrepareVector(a, count);
-		b_state.PrepareVector(b, count);
-		c_state.PrepareVector(c, count);
-		d_state.PrepareVector(d, count);
+		a_state.PrepareVector(a);
+		b_state.PrepareVector(b);
+		c_state.PrepareVector(c);
+		d_state.PrepareVector(d);
 
 		for (idx_t i = 0; i < (constant ? 1 : count); i++) {
 			auto a_idx = a_state.main_data.sel->get_index(i);
@@ -385,24 +386,67 @@ private:
 		}
 	}
 
+	static idx_t GetExecuteCount(std::initializer_list<const Vector *> inputs) {
+		idx_t result = 0;
+		for (auto *v : inputs) {
+			if (v->GetVectorType() != VectorType::CONSTANT_VECTOR) {
+				if (result != 0 && result != v->size()) {
+					throw InternalException("Mismatch in input vector sizes for GenericExecutor - "
+					                        "expected %d rows but got %d",
+					                        result, v->size());
+				}
+				result = v->size();
+			}
+		}
+		if (result == 0) {
+			// all constant - use the first one's size
+			result = (*inputs.begin())->size();
+		}
+		return result;
+	}
+
 public:
 	template <class A_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
-	static void ExecuteUnary(Vector &input, Vector &result, idx_t count, FUNC fun) {
+	static void ExecuteUnary(const Vector &input, Vector &result, idx_t count, FUNC fun) {
 		ExecuteUnaryInternal<A_TYPE, RESULT_TYPE, FUNC>(input, result, count, fun);
 	}
+	template <class A_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
+	static void ExecuteUnary(const Vector &input, Vector &result, FUNC fun) {
+		ExecuteUnaryInternal<A_TYPE, RESULT_TYPE, FUNC>(input, result, input.size(), fun);
+	}
 	template <class A_TYPE, class B_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
-	static void ExecuteBinary(Vector &a, Vector &b, Vector &result, idx_t count, FUNC fun) {
+	static void ExecuteBinary(const Vector &a, const Vector &b, Vector &result, idx_t count, FUNC fun) {
 		ExecuteBinaryInternal<A_TYPE, B_TYPE, RESULT_TYPE, FUNC>(a, b, result, count, fun);
+	}
+	template <class A_TYPE, class B_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
+	static void ExecuteBinary(const Vector &a, const Vector &b, Vector &result, FUNC fun) {
+		ExecuteBinaryInternal<A_TYPE, B_TYPE, RESULT_TYPE, FUNC>(a, b, result, GetExecuteCount({&a, &b}), fun);
 	}
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE,
 	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
-	static void ExecuteTernary(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUNC fun) {
+	static void ExecuteTernary(const Vector &a, const Vector &b, const Vector &c, Vector &result, idx_t count,
+	                           FUNC fun) {
 		ExecuteTernaryInternal<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUNC>(a, b, c, result, count, fun);
+	}
+	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE,
+	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
+	static void ExecuteTernary(const Vector &a, const Vector &b, const Vector &c, Vector &result, FUNC fun) {
+		ExecuteTernaryInternal<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUNC>(a, b, c, result,
+		                                                                   GetExecuteCount({&a, &b, &c}), fun);
 	}
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class D_TYPE, class RESULT_TYPE,
 	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
-	static void ExecuteQuaternary(Vector &a, Vector &b, Vector &c, Vector &d, Vector &result, idx_t count, FUNC fun) {
+	static void ExecuteQuaternary(const Vector &a, const Vector &b, const Vector &c, const Vector &d, Vector &result,
+	                              idx_t count, FUNC fun) {
 		ExecuteQuaternaryInternal<A_TYPE, B_TYPE, C_TYPE, D_TYPE, RESULT_TYPE, FUNC>(a, b, c, d, result, count, fun);
+	}
+	template <class A_TYPE, class B_TYPE, class C_TYPE, class D_TYPE, class RESULT_TYPE,
+	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
+	static void ExecuteQuaternary(const Vector &a, const Vector &b, const Vector &c, const Vector &d, Vector &result,
+	                              FUNC fun) {
+		ExecuteQuaternaryInternal<A_TYPE, B_TYPE, C_TYPE, D_TYPE, RESULT_TYPE, FUNC>(a, b, c, d, result,
+		                                                                               GetExecuteCount({&a, &b, &c, &d}),
+		                                                                               fun);
 	}
 };
 

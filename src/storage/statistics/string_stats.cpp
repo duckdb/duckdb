@@ -315,7 +315,7 @@ child_list_t<Value> StringStats::ToStruct(const BaseStatistics &stats) {
 	return result;
 }
 
-void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void StringStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 
 	auto entries = vector.Values<string_t>();

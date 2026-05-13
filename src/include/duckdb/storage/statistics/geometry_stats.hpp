@@ -281,7 +281,7 @@ struct GeometryStats {
 
 	DUCKDB_API static void Update(BaseStatistics &stats, const string_t &value);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
-	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
+	DUCKDB_API static void Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count);
 
 	//! Check if a spatial predicate check with a constant could possibly be satisfied by rows given the statistics
 	DUCKDB_API static FilterPropagateResult CheckZonemap(const BaseStatistics &stats,

@@ -96,13 +96,13 @@ unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type)
 }
 
 template <class T>
-bool RLEAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
+bool RLEAnalyze(AnalyzeState &state, const Vector &input) {
 	auto &rle_state = state.template Cast<RLEAnalyzeState<T>>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(vdata);
 
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < input.size(); i++) {
 		auto idx = vdata.sel->get_index(i);
 		rle_state.state.Update(data, vdata.validity, idx);
 	}
@@ -239,12 +239,12 @@ unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointData &checkp
 }
 
 template <class T, bool WRITE_STATISTICS>
-void RLECompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void RLECompress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = state_p.Cast<RLECompressState<T, WRITE_STATISTICS>>();
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(vdata);
 
-	state.Append(vdata, count);
+	state.Append(vdata, scan_vector.size());
 }
 
 template <class T, bool WRITE_STATISTICS>

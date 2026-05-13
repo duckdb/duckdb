@@ -14,11 +14,11 @@ static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *or
 	return yyjson_mut_merge_patch(doc, orig, patch);
 }
 
-static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_val *objs[], const idx_t count) {
+static inline void ReadObjects(yyjson_mut_doc *doc, const Vector &input, yyjson_mut_val *objs[]) {
 	auto entries = input.Values<string_t>();
 
 	// Read the documents
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < input.size(); i++) {
 		auto entry = entries[i];
 		if (!entry.IsValid()) {
 			objs[i] = nullptr;
@@ -39,12 +39,12 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	// Read the first json arg
 	auto origs = JSONCommon::AllocateArray<yyjson_mut_val *>(alc, count);
-	ReadObjects(doc, args.data[0], origs, count);
+	ReadObjects(doc, args.data[0], origs);
 
 	// Read the next json args one by one and merge them into the first json arg
 	auto patches = JSONCommon::AllocateArray<yyjson_mut_val *>(alc, count);
 	for (idx_t arg_idx = 1; arg_idx < args.data.size(); arg_idx++) {
-		ReadObjects(doc, args.data[arg_idx], patches, count);
+		ReadObjects(doc, args.data[arg_idx], patches);
 		for (idx_t i = 0; i < count; i++) {
 			if (patches[i] == nullptr) {
 				// Next json arg is NULL, obj becomes NULL
