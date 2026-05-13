@@ -21,7 +21,7 @@ namespace duckdb {
 // - repeating keys: rolling up an ordered dataframe, or aggregating back to the PK of a FK-PK join.
 //   e.g. change SELECT l_returnflag, l_shipmode into SELECT l_orderkey>>2, .. GROUP BY ALL
 //   (orderkey repeats 4 times avg -- this is not enough, I put the threshold at 6, hence >>2)
-// - (very) heavy hittng keys in a GROUP BY with potentially many groups
+// - (very) heavy hittng keys in a GROUP BY with potentially many groups, e.g. when 75% is 0:
 //   e.g. change SELECT l_returnflag, l_shipmode into SELECT ((l_orderkey>>1)&l_orderkey&1)*l_orderkey,
 //
 // We also can deploy clustering on top of the dictionary-lookup optimization (mostly the few keys case)
@@ -35,6 +35,8 @@ namespace duckdb {
 //   mixed_loop per cursor (hot via HT, cold via seq region).
 // - At the end, memmove st2's grouop_run slice down next to st1's so consumers see one contiguous range.
 //   (we construct separate group_run[] arrays for the two cursors but concatenate in them eventually)
+//
+// Eventually we declare success iff >75% of the inputs ends up in a large run (>= 6).
 
 // Slot bitfield widths come from ClusteredAggr (header). Pull them into file scope for brevity.
 constexpr idx_t SLOT_GRP_BITS = ClusteredAggr::SLOT_GRP_BITS;
@@ -96,14 +98,10 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 	constexpr idx_t SLICE_HALF_VECS = MAX_HOT_PER_CURSOR + 1;
 	sel_t *const slice1 = arena;
 	sel_t *const slice2 = arena + SLICE_HALF_VECS * HALF_VEC;
-	SlotTab st1 {reinterpret_cast<Slot *>(slots), slice1, slice1, slice1 + MAX_HOT_PER_CURSOR * HALF_VEC, 0, 0, 0};
-	SlotTab st2 {reinterpret_cast<Slot *>(slots + HASHTAB_SZ),
-	             slice2,
-	             slice2,
-	             slice2 + MAX_HOT_PER_CURSOR * HALF_VEC,
-	             HALF_VEC,
-	             0,
-	             0};
+	SlotTab st1 {reinterpret_cast<Slot *>(slots), slice1, slice1, 
+	             slice1 + MAX_HOT_PER_CURSOR * HALF_VEC, 0, 0, 0};
+	SlotTab st2 {reinterpret_cast<Slot *>(slots + HASHTAB_SZ), slice2, slice2,
+	             slice2 + MAX_HOT_PER_CURSOR * HALF_VEC, HALF_VEC, 0, 0};
 
 	auto finish_run = [&](SlotTab &st, const Slot s) -> uint64_t {
 		const idx_t cnt = static_cast<idx_t>((st.slice + s.val.bitfields.cursor) - group_runs[s.val.bitfields.idx].sel);
@@ -211,8 +209,8 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 
 	if (!fully_clustered) { // use hash strategy until we find too many distinct hot keys
 		for (; pos < half && st1.n_runs < MAX_HOT_PER_CURSOR && st2.n_runs < MAX_HOT_PER_CURSOR; pos++) {
-			cur1 = hash_store(st1, group_ids[pos], pos);
-			cur2 = hash_store(st2, group_ids[pos + half], pos + half);
+			cur1 = hash_store(st1, group_ids[pos] & GID_MASK, pos);
+			cur2 = hash_store(st2, group_ids[pos + half] & GID_MASK, pos + half);
 		}
 	}
 	// All key insertions are done; new runs created beyond this point are sequential.
