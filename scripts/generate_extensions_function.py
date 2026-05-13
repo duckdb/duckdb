@@ -332,9 +332,6 @@ def get_extension_names() -> List[str]:
         next(f)
         for line in f:
             extension_name = line.split(',')[0].rstrip()
-            if "jemalloc" in extension_name:
-                # We skip jemalloc as it doesn't produce a loadable extension but is in the config
-                continue
             extension_names.append(extension_name)
     return extension_names
 

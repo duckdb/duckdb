@@ -48,10 +48,6 @@
 #define DUCKDB_EXTENSION_JSON_LINKED false
 #endif
 
-#ifndef DUCKDB_EXTENSION_JEMALLOC_LINKED
-#define DUCKDB_EXTENSION_JEMALLOC_LINKED false
-#endif
-
 #ifndef DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
 #define DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED false
 #endif
@@ -86,10 +82,6 @@
 #include "json_extension.hpp"
 #endif
 
-#if DUCKDB_EXTENSION_JEMALLOC_LINKED
-#include "jemalloc_extension.hpp"
-#endif
-
 #if DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
 #include "autocomplete_extension.hpp"
 #endif
@@ -110,7 +102,6 @@ static const DefaultExtension internal_extensions[] = {
     {"tpcds", "Adds TPC-DS data generation and query support", DUCKDB_EXTENSION_TPCDS_LINKED},
     {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", DUCKDB_EXTENSION_HTTPFS_LINKED},
     {"json", "Adds support for JSON operations", DUCKDB_EXTENSION_JSON_LINKED},
-    {"jemalloc", "Overwrites system allocator with JEMalloc", DUCKDB_EXTENSION_JEMALLOC_LINKED},
     {"autocomplete", "Adds support for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
     {"motherduck", "Enables motherduck integration with the system", false},
     {"mysql_scanner", "Adds support for connecting to a MySQL database", false},
