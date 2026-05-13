@@ -709,9 +709,9 @@ class GramFileResult:
     declarations: list
     implementations: list
     registrations: list
-    skipped: list        # (rule_name, reason) — nothing generated
+    skipped: list  # (rule_name, reason) — nothing generated
     manual_bodies: list  # (rule_name, reason) — Internal generated, body is hand-written
-    body_stubs: list     # cpp definition stubs for bodies that need hand-implementation
+    body_stubs: list  # cpp definition stubs for bodies that need hand-implementation
 
 
 def collect_generated(gram_stem, rules, rule_types, excluded_rules):
@@ -878,7 +878,7 @@ def _extract_func_signature(text, func_name):
         elif char == ')':
             depth -= 1
             if depth == 0:
-                return text[line_start:paren_start + i + 1]
+                return text[line_start : paren_start + i + 1]
     return None
 
 
@@ -888,7 +888,9 @@ def _find_already_implemented(gram_stem, body_stubs):
     if not cpp_path.exists():
         return set()
     text = cpp_path.read_text()
-    return {rule_name for rule_name, _ in body_stubs if _extract_func_signature(text, f'Transform{rule_name}') is not None}
+    return {
+        rule_name for rule_name, _ in body_stubs if _extract_func_signature(text, f'Transform{rule_name}') is not None
+    }
 
 
 def print_manual_steps(all_results):
