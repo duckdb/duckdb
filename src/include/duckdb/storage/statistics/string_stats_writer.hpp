@@ -20,6 +20,10 @@ struct StringStatsWriter {
 
 	explicit StringStatsWriter(const LogicalType &type)
 	    : is_varchar(type.id() == LogicalTypeId::VARCHAR), is_geometry(type.id() == LogicalTypeId::GEOMETRY) {
+		Clear();
+	}
+
+	inline void Clear() {
 		if (!is_geometry) {
 			for (idx_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
 				min[i] = 0xFF;

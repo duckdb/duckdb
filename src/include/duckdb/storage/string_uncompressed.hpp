@@ -104,7 +104,7 @@ public:
 
 		idx_t remaining_space = RemainingSpace(segment, handle);
 		auto base_count = segment.count.load();
-		StringStatsWriter writer(stats.statistics.GetType());
+		StringStatsWriter stats_writer(stats.statistics.GetType());
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = data.sel->get_index(offset + i);
 			auto target_idx = base_count + i;
@@ -150,8 +150,7 @@ public:
 			}
 
 			// we have space: write the string
-			stats.statistics.SetHasNoNullFast();
-			writer.Update(source_data[source_idx]);
+			UpdateStringStats(stats, stats_writer, source_data[source_idx]);
 
 			if (DUCKDB_UNLIKELY(use_overflow_block)) {
 				// write to overflow blocks
@@ -191,7 +190,7 @@ public:
 			GetDictionary(segment, handle).Verify(segment.GetBlockSize());
 #endif
 		}
-		writer.Merge(stats.statistics);
+		stats_writer.Merge(stats.statistics);
 		segment.count += count;
 		return count;
 	}
@@ -224,13 +223,10 @@ public:
 	static idx_t FinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats);
 
 public:
-	static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &new_value) {
+	static inline void UpdateStringStats(SegmentStatistics &stats, StringStatsWriter &writer,
+	                                     const string_t &new_value) {
 		stats.statistics.SetHasNoNullFast();
-		if (stats.statistics.GetStatsType() == StatisticsType::GEOMETRY_STATS) {
-			GeometryStats::Update(stats.statistics, new_value);
-		} else {
-			StringStats::Update(stats.statistics, new_value);
-		}
+		writer.Update(new_value);
 	}
 
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer dict);
