@@ -1,3 +1,4 @@
+#include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/sorting/sort.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -446,16 +447,6 @@ struct SortedAggregateFunction {
 		buffered.SetCardinality(count);
 	}
 
-	static void SimpleUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
-	                         idx_t count) {
-		const auto order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
-		DataChunk arg_input;
-		ProjectInputs(inputs, order_bind, input_count, count, arg_input);
-
-		const auto order_state = reinterpret_cast<SortedAggregateState *>(state);
-		order_state->Update(aggr_input_data, arg_input);
-	}
-
 	static void ScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
 	                          idx_t count) {
 		if (!count) {
@@ -492,7 +483,7 @@ struct SortedAggregateFunction {
 				order_state->sel.Initialize(sel_data.data() + order_state->offset, count - order_state->offset);
 				start += order_state->nsel;
 			}
-			sel_data[order_state->offset++] = UnsafeNumericCast<sel_t>(sidx);
+			sel_data[order_state->offset++] = UnsafeNumericCast<sel_t>(i);
 		}
 
 		// Append nonempty slices to the arguments
@@ -551,7 +542,7 @@ struct SortedAggregateFunction {
 		// Inner aggregate APIs
 		auto initialize = aggr.GetCallbacks().GetStateInitCallback();
 		auto destructor = aggr.GetCallbacks().GetStateDestructorCallback();
-		auto simple_update = aggr.GetCallbacks().GetStateSimpleUpdateCallback();
+		auto cluster_update = aggr.GetCallbacks().GetStateClusterUpdateCallback();
 		auto update = aggr.GetCallbacks().GetStateUpdateCallback();
 		auto finalize = aggr.GetCallbacks().GetStateFinalizeCallback();
 
@@ -634,10 +625,13 @@ struct SortedAggregateFunction {
 					}
 					sliced.SetCardinality(input_count);
 
-					// These are all simple updates, so use it if available
-					if (simple_update) {
-						simple_update(sliced.data.data(), aggr_bind_info, sliced.data.size(), agg_state.data(),
-						              sliced.size());
+					if (cluster_update) {
+						ClusteredAggr clustered;
+						clustered.SetSingleRun(agg_state.data(), sliced.size());
+						aggr_bind_info.clustered = &clustered;
+						cluster_update(sliced.data.data(), aggr_bind_info, sliced.data.size(), clustered,
+						               sliced.size());
+						aggr_bind_info.clustered = nullptr;
 					} else {
 						// We are only updating a constant state
 						agg_state_vec.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -726,8 +720,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, bound_function.GetProperties().GetNullHandling(),
-	    SortedAggregateFunction::SimpleUpdate, nullptr,
+	    SortedAggregateFunction::Finalize, bound_function.GetProperties().GetNullHandling(), nullptr, nullptr,
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::WindowBatch);
 
@@ -783,8 +776,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, aggregate.GetProperties().GetNullHandling(),
-	    SortedAggregateFunction::SimpleUpdate, nullptr,
+	    SortedAggregateFunction::Finalize, aggregate.GetProperties().GetNullHandling(), nullptr, nullptr,
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::WindowBatch);
 	ordered_aggregate.SetWindowCallback(SortedAggregateFunction::Window);
