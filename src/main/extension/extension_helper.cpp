@@ -119,6 +119,7 @@ static const DefaultExtension internal_extensions[] = {
     {"fts", "Adds support for Full-Text Search Indexes", false},
     {"ui", "Adds local UI for DuckDB", false},
     {"ducklake", "Adds support for DuckLake, SQL as a Lakehouse Format", false},
+    {"quack", "The DuckDB 'Quack' Client/Server Protocol", false},
     {"vortex", "Adds support for reading and writing files using the Vortex file format", false},
     {"lance", "Adds support for querying Lance datasets", false},
     {nullptr, nullptr, false}};

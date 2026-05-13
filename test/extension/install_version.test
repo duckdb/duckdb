@@ -19,13 +19,13 @@ set custom_extension_repository='${LOCAL_EXTENSION_REPO}'
 # TODO: the script to create a local extension repo should be able to produce versioned extension paths then we can properly
 # test this
 statement error
-INSTALL quack FROM '${LOCAL_EXTENSION_REPO}' VERSION 'myversion';
+INSTALL waddle FROM '${LOCAL_EXTENSION_REPO}' VERSION 'myversion';
 ----
-/quack/myversion/
+/waddle/myversion/
 
 # Using the default extension repository
 statement error
-INSTALL quack VERSION 'myversion';
+INSTALL waddle VERSION 'myversion';
 ----
-/quack/myversion/
+/waddle/myversion/
 
