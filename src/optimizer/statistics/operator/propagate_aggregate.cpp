@@ -91,14 +91,8 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 			// No min/max statistics availabe
 			return false;
 		}
-		// String statistics store at most an 8-byte prefix of the min/max
-		// values (see StringStatsData::MAX_STRING_MINMAX_SIZE). If the
-		// actual maximum string length exceeds that prefix, the stored
-		// prefix is not the true min/max even when the underlying source
-		// (e.g. Parquet `is_min_value_exact` / `is_max_value_exact`)
-		// reports the bounds as exact. Returning the prefix in that case
-		// silently truncates MIN()/MAX() results for VARCHAR aggregates
-		// over Parquet (issue #22515).
+		// String statistics store at most an 8-byte prefix of the min/max values.
+		// If the actual maximum string length exceeds that prefix, the stored prefix is not the true min/max
 		if (!StringStats::HasMaxStringLength(*column_stats) ||
 		    StringStats::MaxStringLength(*column_stats) > StringStatsData::MAX_STRING_MINMAX_SIZE) {
 			return false;
