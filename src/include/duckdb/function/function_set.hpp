@@ -8,11 +8,13 @@
 
 #pragma once
 
+// IWYU pragma: begin_exports
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
 #include "duckdb/function/window_function.hpp"
+// IWYU pragma: end_exports
 
 namespace duckdb {
 

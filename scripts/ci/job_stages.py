@@ -22,6 +22,7 @@ COMMON_JOBS = [
     "windows",
     "no-string-inline",
     "vector-sizes",
+    "include-what-you-use",
     "threadsan",
     "linux-configs",
     "static-libs-linux",
