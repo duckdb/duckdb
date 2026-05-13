@@ -195,7 +195,12 @@ void RegisterSqllogictests() {
 	    "test/index/view/10/slt_good_2.test",
 	    // strange error in hash comparison, results appear correct...
 	    "test/index/random/10/slt_good_7.test", "test/index/random/10/slt_good_9.test"};
+
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+
+	// spool && de-dupe -- first insert wins; testRunner<false> >>> true
+	unordered_map<string, std::pair<bool, string>> tests;
+
 	listFiles(*fs, fs->JoinPath(fs->JoinPath("third_party", "sqllogictest"), "test"), [&](const string &path) {
 		if (endsWith(path, ".test")) {
 			for (auto &excl : excludes) {
@@ -203,23 +208,34 @@ void RegisterSqllogictests() {
 					return;
 				}
 			}
-			REGISTER_TEST_CASE(testRunner, StringUtil::Replace(path, "\\", "/"), "[sqlitelogic][.]");
-		}
-	});
-	listFiles(*fs, "test", [&](const string &path) {
-		if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
-			// parse the name / group from the test
-			REGISTER_TEST_CASE(testRunner<false>, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
+			auto path_canon = fs->CanonicalizePath(path);
+			(void)tests.insert({path_canon, {false, "[sqlitelogic][.]"}});
 		}
 	});
 
+	// canonicalize these relative paths -> abs
+	listFiles(*fs, Path::FromString(fs->GetWorkingDirectory()).Join("test").ToString(), [&](const string &path) {
+		if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
+			// parse the name / group from the test
+			(void)tests.insert({path, {false, ParseGroupFromPath(path)}});
+		}
+	});
+
+	// and these typically absolute paths
 	for (const auto &extension_test_path : ExtensionHelper::LoadedExtensionTestPaths()) {
 		listFiles(*fs, extension_test_path, [&](const string &path) {
 			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
-				auto fun = testRunner<true>;
-				REGISTER_TEST_CASE(fun, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
+				// auto fun = testRunner<true>;
+				auto path_canon = fs->CanonicalizePath(StringUtil::Replace(path, "\\", "/"));
+				(void)tests.insert({path_canon, {true, ParseGroupFromPath(path_canon)}});
 			}
 		});
+	}
+
+	// now the rel + abs paths are de-duped, let's unspool and go
+	for (const auto &test_elt : tests) {
+		auto fun = test_elt.second.first ? testRunner<true> : testRunner<false>; // c++17 fixes?
+		REGISTER_TEST_CASE(fun, test_elt.first, test_elt.second.second);
 	}
 }
 } // namespace duckdb
