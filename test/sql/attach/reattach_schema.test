@@ -100,7 +100,7 @@ SELECT one()
 1
 
 # FIXME - this leads to infinite recursion
-mode skip
+mode skip instable
 
 query I
 SELECT * FROM range(3)
