@@ -59,7 +59,7 @@ select 1 where (1,2) not in (select 1,2);
 statement error
 SELECT (1, 2) IN (SELECT (i, i + 1, i + 2) FROM integers)
 ----
-Cannot compare values of type
+Cannot cast STRUCTs of different size
 
 # FIXME: correlated not yet supported
 statement error

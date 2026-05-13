@@ -23,7 +23,7 @@ NULL
 statement error
 SELECT 3 IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v
 ----
-explicit cast is required
+Could not convert string
 
 query T
 SELECT '3' IN (SELECT * FROM strings WHERE v=s1.v) FROM strings s1 ORDER BY v
@@ -95,4 +95,3 @@ SELECT (SELECT v FROM strings WHERE v=s1.v OR (v='hello' AND s1.v IS NULL)) FROM
 hello
 hello
 world
-

@@ -13,12 +13,12 @@ SELECT * FROM t0;
 ----
 1
 
-query I
+statement error
 SELECT c0>=(2147483647 + 1 IS NOT NULL) FROM t0;
 ----
-true
+Overflow in addition
 
-query I
+statement error
 SELECT * FROM t0 WHERE c0>=(2147483647 + 1 IS NOT NULL);
 ----
-1
+Overflow in addition
