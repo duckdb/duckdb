@@ -522,6 +522,12 @@ endif()
 
 # Load extensions passed through cmake config var
 foreach(EXT IN LISTS BUILD_EXTENSIONS)
+    if("${EXT}" STREQUAL "jemalloc")
+        message(WARNING "The 'jemalloc' allocator is no longer provided as an extension, use 'ENABLE_JEMALLOC=ON' to include jemalloc instead")
+        set(ENABLE_JEMALLOC ON CACHE BOOL "Use jemalloc as the memory allocator for DuckDB" FORCE)
+        continue()
+    endif()
+
     if(NOT "${EXT}" STREQUAL "")
         if (EXISTS "${EXTENSION_CONFIG_BASE_DIR}/${EXT}.cmake")
             # out-of-tree extension: load cmake file
@@ -532,6 +538,15 @@ foreach(EXT IN LISTS BUILD_EXTENSIONS)
         endif()
     endif()
 endforeach()
+
+# Check if jemalloc is ignored, and if so disable it
+list (FIND SKIP_EXTENSIONS "jemalloc" _index)
+if (${_index} GREATER -1)
+    message(WARNING "The 'jemalloc' allocator is no longer provided as an extension, use 'ENABLE_JEMALLOC=OFF' to disable jemalloc instead")
+    set(ENABLE_JEMALLOC OFF CACHE BOOL "Use jemalloc as the memory allocator for DuckDB" FORCE)
+endif()
+
+
 
 # Custom extension configs passed in DUCKDB_EXTENSION_CONFIGS parameter
 foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)
