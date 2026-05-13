@@ -217,8 +217,8 @@ void StringStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) 
 	deserializer.ReadProperty(202, "has_unicode", string_data.has_unicode);
 	deserializer.ReadProperty(203, "has_max_string_length", string_data.has_max_string_length);
 	deserializer.ReadProperty(204, "max_string_length", string_data.max_string_length);
-	string_data.min = LegacyReadMinMax(min_data);
-	string_data.max = LegacyReadMinMax(max_data);
+	string_data.min = AssignString(base, LegacyReadMinMax(min_data), true);
+	string_data.max = AssignString(base, LegacyReadMinMax(max_data), false);
 	string_data.min_type =
 	    LegacyGetMinMaxType(min_data, max_data, string_data.has_max_string_length, string_data.max_string_length);
 	string_data.max_type = string_data.min_type;
