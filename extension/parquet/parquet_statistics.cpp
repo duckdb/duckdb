@@ -490,11 +490,11 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 			// subject to such truncation, so when the flag is missing we mirror arrow-rs
 			// (parquet/src/file/statistics.rs ValueStatistics::new) and treat them as exact.
 			if (schema.parquet_type == Type::BYTE_ARRAY || schema.parquet_type == Type::FIXED_LEN_BYTE_ARRAY) {
-				min_stats_type = StringStatsType::EXACT_STATS;
-				max_stats_type = StringStatsType::EXACT_STATS;
-			} else {
 				min_stats_type = StringStatsType::TRUNCATED_STATS;
 				max_stats_type = StringStatsType::TRUNCATED_STATS;
+			} else {
+				min_stats_type = StringStatsType::EXACT_STATS;
+				max_stats_type = StringStatsType::EXACT_STATS;
 			}
 		} else {
 			min_stats_type =
