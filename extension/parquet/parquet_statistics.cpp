@@ -480,12 +480,28 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 	case LogicalTypeId::VARCHAR: {
 		auto string_stats = StringStats::CreateUnknown(type);
 		const bool is_varchar = type.id() == LogicalTypeId::VARCHAR;
-		auto min_stats_type = parquet_stats.__isset.is_min_value_exact && parquet_stats.is_min_value_exact
-		                          ? StringStatsType::EXACT_STATS
-		                          : StringStatsType::TRUNCATED_STATS;
-		auto max_stats_type = parquet_stats.__isset.is_max_value_exact && parquet_stats.is_max_value_exact
-		                          ? StringStatsType::EXACT_STATS
-		                          : StringStatsType::TRUNCATED_STATS;
+		StringStatsType min_stats_type;
+		StringStatsType max_stats_type;
+		if (!parquet_stats.__isset.is_min_value_exact || !parquet_stats.__isset.is_max_value_exact) {
+			// if is_min_value_exact and is_max_value_exact are not set
+			// Pre-PARQUET-2352 (Oct 2023) the spec required min/max, when present, to be the exact
+			// min/max; in practice some writers truncated long binary values, and PARQUET-2352 added
+			// is_*_value_exact so readers could detect that. Fixed-width physical types are not
+			// subject to such truncation, so when the flag is missing we mirror arrow-rs
+			// (parquet/src/file/statistics.rs ValueStatistics::new) and treat them as exact.
+			if (schema.parquet_type == Type::BYTE_ARRAY || schema.parquet_type == Type::FIXED_LEN_BYTE_ARRAY) {
+				min_stats_type = StringStatsType::EXACT_STATS;
+				max_stats_type = StringStatsType::EXACT_STATS;
+			} else {
+				min_stats_type = StringStatsType::TRUNCATED_STATS;
+				max_stats_type = StringStatsType::TRUNCATED_STATS;
+			}
+		} else {
+			min_stats_type =
+			    parquet_stats.is_min_value_exact ? StringStatsType::EXACT_STATS : StringStatsType::TRUNCATED_STATS;
+			max_stats_type =
+			    parquet_stats.is_max_value_exact ? StringStatsType::EXACT_STATS : StringStatsType::TRUNCATED_STATS;
+		}
 		if (parquet_stats.__isset.min_value && StringColumnReader::IsValid(parquet_stats.min_value, is_varchar)) {
 			StringStats::SetMin(string_stats, parquet_stats.min_value, min_stats_type);
 		} else if (parquet_stats.__isset.min && StringColumnReader::IsValid(parquet_stats.min, is_varchar)) {

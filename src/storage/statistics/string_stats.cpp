@@ -146,18 +146,6 @@ void StringStats::SetContainsUnicode(BaseStatistics &stats) {
 	GetDataUnsafe(stats).has_unicode = true;
 }
 
-StringStatsType LegacyGetMinMaxType(const LogicalType &type, data_t min[], data_t max[]) {
-	if (min[0] > max[0]) {
-		// if min > max then we have empty stats
-		return StringStatsType::EMPTY_STATS;
-	}
-	if (StringStatsWriter::AllCharsEqualTo(min, 0x00) && StringStatsWriter::AllCharsEqualTo(max, 0xFF)) {
-		// if min is 0x00... and max is 0xFF... then we have no min/max (nothing can ever be pruned)
-		return StringStatsType::NO_STATS;
-	}
-	return StringStatsType::TRUNCATED_STATS;
-}
-
 void LegacyConstructMinMax(string_t input, StringStatsType type, data_t result[], bool is_min) {
 	auto input_data = const_data_ptr_cast(input.GetData());
 	if (type == StringStatsType::EMPTY_STATS) {
@@ -174,7 +162,7 @@ void LegacyConstructMinMax(string_t input, StringStatsType type, data_t result[]
 }
 
 string_t LegacyReadMinMax(const data_t result[]) {
-	// truncate any trailing 0-bytes
+	// truncate any trailing 0-bytes - there's no reason to keep them around
 	uint32_t len = StringStatsData::MAX_STRING_MINMAX_SIZE;
 	for (; len > 0; len--) {
 		if (result[len - 1] != '\0') {
@@ -182,6 +170,29 @@ string_t LegacyReadMinMax(const data_t result[]) {
 		}
 	}
 	return string_t(const_char_ptr_cast(result), len);
+}
+
+StringStatsType LegacyGetMinMaxType(const data_t min[], const data_t max[], bool has_max_length, idx_t max_length) {
+	if (min[0] > max[0]) {
+		// if min > max then we have empty stats
+		return StringStatsType::EMPTY_STATS;
+	}
+	if (StringStatsWriter::AllCharsEqualTo(min, 0x00) && StringStatsWriter::AllCharsEqualTo(max, 0xFF)) {
+		// if min is 0x00... and max is 0xFF... then we have no min/max (nothing can ever be pruned)
+		return StringStatsType::NO_STATS;
+	}
+	if (has_max_length && max_length <= StringStatsData::MAX_STRING_MINMAX_SIZE) {
+		// when:
+		// (1) max length is known, and
+		// (2) max length is <= 8, and
+		// (3) min/max are equivalent to the max length
+		// We know the min/max are exact because they have not been truncated
+		// if min/max are not equal to the max length - we can't distinguish between e.g. `hello\0` and `hello`
+		if (max_length == 0 || (min[max_length - 1] != '\0' && max[max_length - 1] != '\0')) {
+			return StringStatsType::EXACT_STATS;
+		}
+	}
+	return StringStatsType::TRUNCATED_STATS;
 }
 
 void StringStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
@@ -208,7 +219,8 @@ void StringStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) 
 	deserializer.ReadProperty(204, "max_string_length", string_data.max_string_length);
 	string_data.min = LegacyReadMinMax(min_data);
 	string_data.max = LegacyReadMinMax(max_data);
-	string_data.min_type = LegacyGetMinMaxType(base.GetType(), min_data, max_data);
+	string_data.min_type =
+	    LegacyGetMinMaxType(min_data, max_data, string_data.has_max_string_length, string_data.max_string_length);
 	string_data.max_type = string_data.min_type;
 }
 
@@ -266,10 +278,10 @@ void StringStats::SetMax(BaseStatistics &stats, const string_t &value, StringSta
 void StringStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
 	auto &string_data = GetDataUnsafe(stats);
 	auto &other_data = GetDataUnsafe(other);
-	if (other_data.min_type != StringStatsType::EMPTY_STATS) {
+	if (StatsIsSet(other_data.min_type)) {
 		string_data.min = AssignString(stats, other_data.min, true);
 	}
-	if (other_data.max_type != StringStatsType::EMPTY_STATS) {
+	if (StatsIsSet(other_data.max_type)) {
 		string_data.max = AssignString(stats, other_data.max, false);
 	}
 }
@@ -337,8 +349,8 @@ void StringStats::Merge(BaseStatistics &stats, const StringStatsWriter &stats_wr
 	StringStatsData other_data;
 	other_data.min = LegacyReadMinMax(stats_writer.min);
 	other_data.max = LegacyReadMinMax(stats_writer.max);
-	other_data.min_type = StringStatsType::TRUNCATED_STATS;
-	other_data.max_type = StringStatsType::TRUNCATED_STATS;
+	other_data.min_type = LegacyGetMinMaxType(stats_writer.min, stats_writer.max, true, stats_writer.max_string_length);
+	other_data.max_type = other_data.min_type;
 	other_data.has_unicode = stats_writer.has_unicode;
 	other_data.has_max_string_length = true;
 	other_data.max_string_length = stats_writer.max_string_length;

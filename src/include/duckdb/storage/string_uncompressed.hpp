@@ -110,8 +110,8 @@ public:
 			auto target_idx = base_count + i;
 			if (remaining_space < sizeof(int32_t)) {
 				// string index does not fit in the block at all
-				segment.count += i;
-				return i;
+				count = i;
+				break;
 			}
 			remaining_space -= sizeof(int32_t);
 			const bool is_null = !data.validity.RowIsValid(source_idx);
@@ -145,8 +145,8 @@ public:
 			}
 			if (DUCKDB_UNLIKELY(required_space > remaining_space)) {
 				// no space remaining: return how many tuples we ended up writing
-				segment.count += i;
-				return i;
+				count = i;
+				break;
 			}
 
 			// we have space: write the string
