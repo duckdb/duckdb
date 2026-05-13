@@ -1,0 +1,63 @@
+# name: test/sql/logging/logging_file_truncate_rewrite.test
+# description: File log truncate must rewrite a valid header (no leading blank; append mode reset)
+# group: [logging]
+
+require noforcestorage
+
+# Due to different file locking behaviour, this currently fails on windows
+require notwindows
+
+statement ok
+CALL enable_logging(['FileSystem'], storage='file', storage_config={'path': '{TEMP_DIR}/logging_truncate_rewrite.csv', 'normalize': false});
+
+statement ok
+FROM "{DATA_DIR}/csv/big_number.csv"
+
+statement ok
+CALL truncate_duckdb_logs();
+
+# Only the header row exists as data; count should still be zero
+query I
+SELECT COUNT(*) FROM "{TEMP_DIR}/logging_truncate_rewrite.csv";
+----
+0
+
+# CSV must still parse with the expected schema (no blank line before header)
+query IIIIII
+DESCRIBE FROM '{TEMP_DIR}/logging_truncate_rewrite.csv';
+----
+context_id	BIGINT	YES	NULL	NULL	NULL
+scope	VARCHAR	YES	NULL	NULL	NULL
+connection_id	BIGINT	YES	NULL	NULL	NULL
+transaction_id	BIGINT	YES	NULL	NULL	NULL
+query_id	BIGINT	YES	NULL	NULL	NULL
+thread_id	VARCHAR	YES	NULL	NULL	NULL
+timestamp	TIMESTAMP WITH TIME ZONE	YES	NULL	NULL	NULL
+type	VARCHAR	YES	NULL	NULL	NULL
+log_level	VARCHAR	YES	NULL	NULL	NULL
+message	VARCHAR	YES	NULL	NULL	NULL
+
+statement ok
+CALL truncate_duckdb_logs();
+
+query I
+SELECT COUNT(*) FROM "{TEMP_DIR}/logging_truncate_rewrite.csv";
+----
+0
+
+query IIIIII
+DESCRIBE FROM '{TEMP_DIR}/logging_truncate_rewrite.csv';
+----
+context_id	BIGINT	YES	NULL	NULL	NULL
+scope	VARCHAR	YES	NULL	NULL	NULL
+connection_id	BIGINT	YES	NULL	NULL	NULL
+transaction_id	BIGINT	YES	NULL	NULL	NULL
+query_id	BIGINT	YES	NULL	NULL	NULL
+thread_id	VARCHAR	YES	NULL	NULL	NULL
+timestamp	TIMESTAMP WITH TIME ZONE	YES	NULL	NULL	NULL
+type	VARCHAR	YES	NULL	NULL	NULL
+log_level	VARCHAR	YES	NULL	NULL	NULL
+message	VARCHAR	YES	NULL	NULL	NULL
+
+statement ok
+CALL disable_logging();
