@@ -113,7 +113,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	}
 	for (idx_t child_idx = 0; child_idx < args_size; child_idx++) {
 		if (args.data[child_idx].GetType() == LogicalType::SQLNULL ||
-			ListVector::GetListSize(args.data[child_idx]) == 0) {
+		    ListVector::GetListSize(args.data[child_idx]) == 0) {
 			struct_entries[child_idx]->SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(*struct_entries[child_idx], true);
 		} else {
