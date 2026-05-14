@@ -478,15 +478,19 @@ void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 				throw InternalException("Invalid unicode detected in vector: %s", vector.ToString());
 			}
 		}
-		auto min_cmp = CompareStringStats(value, string_data.min, string_data.min_type);
-		if (min_cmp < 0) {
-			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
-			                        stats.ToString(), vector.ToString());
+		if (StatsIsSet(string_data.min_type)) {
+			auto min_cmp = CompareStringStats(value, string_data.min, string_data.min_type);
+			if (min_cmp < 0) {
+				throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
+				                        stats.ToString(), vector.ToString());
+			}
 		}
-		auto max_cmp = CompareStringStats(value, string_data.max, string_data.max_type);
-		if (max_cmp > 0) {
-			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
-			                        stats.ToString(), vector.ToString());
+		if (StatsIsSet(string_data.max_type)) {
+			auto max_cmp = CompareStringStats(value, string_data.max, string_data.max_type);
+			if (max_cmp > 0) {
+				throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
+				                        stats.ToString(), vector.ToString());
+			}
 		}
 		// LCOV_EXCL_STOP
 	}
