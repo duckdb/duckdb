@@ -44,6 +44,7 @@ def test_info(shell):
     result.check_stdout("INFO:")
     result.check_stdout("LOAD HTTP")
 
+
 @pytest.mark.skip(reason="Needs a new warning")
 def test_warning(shell):
     test = ShellTest(shell).statement("SELECT list_transform([1], x -> x);")
