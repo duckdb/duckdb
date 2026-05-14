@@ -68,7 +68,7 @@ int64_t JemallocExtension::DecayDelay() {
 
 void JemallocExtension::ThreadFlush(idx_t threshold) {
 	// We flush after exceeding the threshold
-	if (GetJemallocCTL<uint64_t>("thread.peak.read") > threshold) {
+	if (GetJemallocCTL<uint64_t>("thread.peak.read") <= threshold) {
 		return;
 	}
 
