@@ -1,0 +1,42 @@
+# name: test/optimizer/joins/join_filter_build_side.test
+# description: Prefer filtered build sides when they can drive join filter pushdown
+# group: [joins]
+
+statement ok
+CREATE TABLE jf_probe AS SELECT range::INTEGER AS id FROM range(1000000);
+
+statement ok
+CREATE TABLE jf_build AS SELECT
+	range::INTEGER AS id,
+	range < 10 AS keep,
+	(range::VARCHAR || '1111') a,
+	(range::VARCHAR || '2222') b,
+	(range::VARCHAR || '3333') c,
+	(range::VARCHAR || '4444') d,
+	(range::VARCHAR || '5555') e,
+	(range::VARCHAR || '6666') f,
+	(range::VARCHAR || '7777') g,
+	(range::VARCHAR || '8888') h,
+	(range::VARCHAR || '9999') i,
+	(range::VARCHAR || '0000') j
+FROM range(100000);
+
+statement ok
+ANALYZE jf_probe;
+
+statement ok
+ANALYZE jf_build;
+
+statement ok
+PRAGMA explain_output='physical_only';
+
+# jf_build is wide enough that the normal build-side cost prefers jf_probe.
+# The filter on jf_build can generate a dynamic filter for the large jf_probe scan,
+# so jf_build should remain on the build side.
+query II
+EXPLAIN SELECT *
+FROM jf_probe p
+JOIN jf_build b ON p.id = b.id
+WHERE b.keep;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*jf_probe.*jf_build.*

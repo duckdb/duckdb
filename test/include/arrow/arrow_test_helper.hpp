@@ -89,12 +89,11 @@ public:
 	static bool RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream);
 
 private:
-	static bool CompareResults(Connection &con, unique_ptr<QueryResult> arrow, unique_ptr<MaterializedQueryResult> duck,
-	                           const string &query);
+	static bool CompareResults(Connection &con, shared_ptr<Relation> arrow_tbl, const string &query);
 
 public:
-	static unique_ptr<QueryResult> ScanArrowObject(Connection &con, vector<Value> &params);
 	static vector<Value> ConstructArrowScan(ArrowTestFactory &factory);
 	static vector<Value> ConstructArrowScan(ArrowArrayStream &stream);
+	static unique_ptr<QueryResult> ScanArrowObject(Connection &con, vector<Value> &params);
 };
 } // namespace duckdb

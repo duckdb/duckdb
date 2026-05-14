@@ -14,9 +14,8 @@
 #include "duckdb/function/scalar/struct_utils.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/filter/prefix_range_filter.hpp"
 
 namespace duckdb {
 
@@ -776,74 +775,11 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMapping(MultiFileColumnMa
 	}
 }
 
-bool EvaluateTableFilterAgainstConstant(ClientContext &context, const TableFilter &filter, const Value &constant) {
-	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
-		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "EvaluateTableFilterAgainstConstant");
-		return expr_filter.EvaluateWithConstant(context, constant);
-	}
-	const auto type = filter.filter_type;
+static unique_ptr<Expression> GetFilterExpression(const TableFilter &filter);
 
-	switch (type) {
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &or_filter = filter.Cast<ConjunctionOrFilter>();
-		for (auto &it : or_filter.child_filters) {
-			if (EvaluateTableFilterAgainstConstant(context, *it, constant)) {
-				return true;
-			}
-		}
-		return false;
-	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &and_filter = filter.Cast<ConjunctionAndFilter>();
-		auto res = make_uniq<ConjunctionAndFilter>();
-		for (auto &it : and_filter.child_filters) {
-			if (!EvaluateTableFilterAgainstConstant(context, *it, constant)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	case TableFilterType::OPTIONAL_FILTER: {
-		auto &optional_filter = filter.Cast<OptionalFilter>();
-		if (optional_filter.child_filter) {
-			return EvaluateTableFilterAgainstConstant(context, *optional_filter.child_filter, constant);
-		}
-		return true;
-	}
-	case TableFilterType::DYNAMIC_FILTER: {
-		auto &dynamic_filter = filter.Cast<DynamicFilter>();
-		if (!dynamic_filter.filter_data) {
-			//! No filter_data assigned (does this mean the DynamicFilter is broken??)
-			return true;
-		}
-		lock_guard<mutex> lock(dynamic_filter.filter_data->lock);
-		if (!dynamic_filter.filter_data->initialized) {
-			//! Not initialized
-			return true;
-		}
-		if (constant.IsNull()) {
-			return false;
-		}
-		auto column = make_uniq<BoundReferenceExpression>(constant.type(), 0ULL);
-		auto expression = dynamic_filter.filter_data->ToExpression(*column);
-		return ExpressionFilter(std::move(expression)).EvaluateWithConstant(context, constant);
-	}
-	case TableFilterType::BLOOM_FILTER: {
-		auto &bloom_filter = filter.Cast<BFTableFilter>();
-		return bloom_filter.FilterValue(constant);
-	}
-	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
-		auto &perfect_hash_join_filter = filter.Cast<PerfectHashJoinFilter>();
-		return perfect_hash_join_filter.FilterValue(constant);
-	}
-	case TableFilterType::PREFIX_RANGE_FILTER: {
-		auto &prefix_range_filter = filter.Cast<PrefixRangeTableFilter>();
-		return prefix_range_filter.FilterValue(constant);
-	}
-	default:
-		throw NotImplementedException("Can't evaluate TableFilterType (%s) against a constant",
-		                              EnumUtil::ToString(type));
-	}
+bool EvaluateTableFilterAgainstConstant(ClientContext &context, const TableFilter &filter, const Value &constant) {
+	auto expression = GetFilterExpression(filter);
+	return ExpressionFilter(std::move(expression)).EvaluateWithConstant(context, constant);
 }
 
 bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &filter, const Value &constant) {
@@ -896,6 +832,11 @@ MultiFileColumnMapper::EvaluateConstantFilters(ResultColumnMapping &mapping,
 
 static unique_ptr<Expression> CreateReferenceExpression(const LogicalType &type) {
 	return make_uniq<BoundReferenceExpression>(type, 0ULL);
+}
+
+static unique_ptr<Expression> GetFilterExpression(const TableFilter &filter) {
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "GetFilterExpression");
+	return expr_filter.expr->Copy();
 }
 
 static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expression> source_expr,
@@ -961,10 +902,59 @@ static RewrittenMappedExpression RewriteMappedValueExpression(const Expression &
 	}
 }
 
+static unique_ptr<Expression> RewriteDynamicFilterExpression(const shared_ptr<DynamicFilterData> &filter_data,
+                                                             const LogicalType &target_type) {
+	if (!filter_data || !filter_data->initialized) {
+		return nullptr;
+	}
+	lock_guard<mutex> lock(filter_data->lock);
+	auto new_constant = filter_data->constant;
+	if (!TryCastConstant(new_constant, target_type)) {
+		return nullptr;
+	}
+	return BoundComparisonExpression::Create(filter_data->comparison_type, CreateReferenceExpression(target_type),
+	                                         make_uniq<BoundConstantExpression>(std::move(new_constant)));
+}
+
 static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, const MultiFileIndexMapping &mapping,
                                                       const LogicalType &target_type) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		if (func.function.GetName() == OptionalFilterScalarFun::NAME) {
+			if (!func.bind_info) {
+				return CreateOptionalFilterExpression(nullptr, target_type);
+			}
+			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+			auto child_expr = data.child_filter_expr
+			                      ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
+			                      : nullptr;
+			if (data.child_filter_expr && !child_expr) {
+				return nullptr;
+			}
+			return CreateOptionalFilterExpression(std::move(child_expr), target_type);
+		}
+		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME) {
+			if (!func.bind_info) {
+				return CreateSelectivityOptionalFilterExpression(nullptr, target_type, 0.5f, idx_t(6));
+			}
+			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+			auto child_expr = data.child_filter_expr
+			                      ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
+			                      : nullptr;
+			if (data.child_filter_expr && !child_expr) {
+				return nullptr;
+			}
+			return CreateSelectivityOptionalFilterExpression(std::move(child_expr), target_type,
+			                                                 data.selectivity_threshold, data.n_vectors_to_check);
+		}
+		if (func.function.GetName() == DynamicFilterScalarFun::NAME) {
+			if (!func.bind_info) {
+				return nullptr;
+			}
+			auto &data = func.bind_info->Cast<DynamicFilterFunctionData>();
+			return RewriteDynamicFilterExpression(data.filter_data, target_type);
+		}
 		if (!BoundComparisonExpression::IsComparison(expr)) {
 			return nullptr;
 		}
@@ -1048,78 +1038,12 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 
 static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filter, MultiFileIndexMapping &mapping,
                                                   const LogicalType &target_type) {
-	if (global_filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
-		auto &expr_filter = ExpressionFilter::GetExpressionFilter(global_filter, "TryCastTableFilter");
-		auto rewritten_expr = TryCastFilterExpression(*expr_filter.expr, mapping, target_type);
-		if (!rewritten_expr) {
-			return nullptr;
-		}
-		return make_uniq<ExpressionFilter>(std::move(rewritten_expr));
+	auto filter_expression = GetFilterExpression(global_filter);
+	auto rewritten_expr = TryCastFilterExpression(*filter_expression, mapping, target_type);
+	if (!rewritten_expr) {
+		return nullptr;
 	}
-	auto type = global_filter.filter_type;
-
-	switch (type) {
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &or_filter = global_filter.Cast<ConjunctionOrFilter>();
-		auto res = make_uniq<ConjunctionOrFilter>();
-		for (auto &it : or_filter.child_filters) {
-			auto child_filter = TryCastTableFilter(*it, mapping, target_type);
-			if (!child_filter) {
-				return nullptr;
-			}
-			res->child_filters.push_back(std::move(child_filter));
-		}
-		return std::move(res);
-	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &and_filter = global_filter.Cast<ConjunctionAndFilter>();
-		auto res = make_uniq<ConjunctionAndFilter>();
-		for (auto &it : and_filter.child_filters) {
-			auto child_filter = TryCastTableFilter(*it, mapping, target_type);
-			if (!child_filter) {
-				return nullptr;
-			}
-			res->child_filters.push_back(std::move(child_filter));
-		}
-		return std::move(res);
-	}
-	case TableFilterType::OPTIONAL_FILTER: {
-		auto &optional_filter = global_filter.Cast<OptionalFilter>();
-		auto child_result = TryCastTableFilter(*optional_filter.child_filter, mapping, target_type);
-		if (!child_result) {
-			return nullptr;
-		}
-		return make_uniq<OptionalFilter>(std::move(child_result));
-	}
-	case TableFilterType::DYNAMIC_FILTER: {
-		// we can't transfer dynamic filters over casts directly
-		// BUT we can copy the current state of the filter and push that
-		// FIXME: we could solve this in a different manner as well by pushing the dynamic filter directly
-		auto &dynamic_filter = global_filter.Cast<DynamicFilter>();
-		if (!dynamic_filter.filter_data) {
-			return nullptr;
-		}
-		if (!dynamic_filter.filter_data->initialized) {
-			return nullptr;
-		}
-		lock_guard<mutex> lock(dynamic_filter.filter_data->lock);
-		auto new_constant = dynamic_filter.filter_data->constant;
-		if (!StatisticsPropagator::CanPropagateCast(new_constant.type(), target_type)) {
-			// type cannot be converted - abort
-			return nullptr;
-		}
-		if (!new_constant.DefaultTryCastAs(target_type)) {
-			return nullptr;
-		}
-		auto lhs = make_uniq<BoundReferenceExpression>(target_type, 0ULL);
-		auto rhs = make_uniq<BoundConstantExpression>(std::move(new_constant));
-		return make_uniq<ExpressionFilter>(BoundComparisonExpression::Create(
-		    dynamic_filter.filter_data->comparison_type, std::move(lhs), std::move(rhs)));
-	}
-	default:
-		throw NotImplementedException("Can't convert TableFilterType (%s) from global to local indexes",
-		                              EnumUtil::ToString(type));
-	}
+	return make_uniq<ExpressionFilter>(std::move(rewritten_expr));
 }
 
 static void SetIndexToZero(unique_ptr<Expression> &root_expr) {
@@ -1151,7 +1075,7 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 	map<idx_t, MultiFileGlobalIndex> local_to_global;
 	for (auto &it : filters) {
 		auto &global_index = it.first;
-		auto &global_filter = it.second.get();
+		auto &global_filter = it.second.get().Cast<ExpressionFilter>();
 
 		auto local_it = global_to_local.find(global_index);
 		if (local_it == global_to_local.end()) {

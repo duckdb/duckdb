@@ -3,6 +3,7 @@ import argparse
 import concurrent.futures
 import contextlib
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -315,6 +316,73 @@ def normalize_output(output):
     return output or ""
 
 
+SKIPPED_TESTS_PATTERN = re.compile(r"All tests passed \((\d+) skipped tests,")
+SKIP_REASON_PATTERN = re.compile(r"(.+):\s+(\d+)$")
+MODE_SKIP_REASON_PATTERN = re.compile(r"^mode skip(?:\s+(.*\S))?\s*$")
+ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+
+
+def strip_ansi(text: str):
+    return ANSI_ESCAPE_PATTERN.sub("", text)
+
+
+def parse_skipped_tests_count(output: str):
+    match = SKIPPED_TESTS_PATTERN.search(strip_ansi(output))
+    if not match:
+        return 0
+    return int(match.group(1))
+
+
+def parse_skipped_test_reasons(output: str):
+    reasons = {}
+    lines = strip_ansi(output).splitlines()
+    for idx, line in enumerate(lines):
+        if line.strip() != "Skipped tests for the following reasons:":
+            continue
+
+        for reason_line in lines[idx + 1 :]:
+            reason_line = reason_line.strip()
+            if not reason_line:
+                break
+            match = SKIP_REASON_PATTERN.match(reason_line)
+            if not match:
+                break
+            reasons[match.group(1)] = reasons.get(match.group(1), 0) + int(match.group(2))
+        break
+    return reasons
+
+
+def parse_mode_skip_reasons(output: str):
+    reasons = {}
+    for line in strip_ansi(output).splitlines():
+        stripped = line.strip()
+        if SKIP_REASON_PATTERN.match(stripped):
+            continue
+        match = MODE_SKIP_REASON_PATTERN.match(stripped)
+        if not match:
+            continue
+        reason = match.group(1) or "unspecified"
+        reason_key = f"mode skip {reason}"
+        reasons[reason_key] = reasons.get(reason_key, 0) + 1
+    return reasons
+
+
+def extract_skipped_test_output(stdout: str, stderr: str):
+    stdout_count = parse_skipped_tests_count(stdout)
+    stdout_reasons = parse_skipped_test_reasons(stdout)
+    stdout_mode_skip_reasons = parse_mode_skip_reasons(stdout)
+    if stdout_count > 0 or stdout_reasons or stdout_mode_skip_reasons:
+        return stdout
+
+    stderr_count = parse_skipped_tests_count(stderr)
+    stderr_reasons = parse_skipped_test_reasons(stderr)
+    stderr_mode_skip_reasons = parse_mode_skip_reasons(stderr)
+    if stderr_count > 0 or stderr_reasons or stderr_mode_skip_reasons:
+        return stderr
+
+    return ""
+
+
 def run_batch(config: TestRunnerConfig, batch):
     failed = False
     stdout = ""
@@ -596,6 +664,8 @@ def run_tests(config: TestRunnerConfig, batches):
     start = time.monotonic()
     state = BatchRunState()
     progress = DotProgressBar(len(batches))
+    total_skipped_tests = 0
+    skipped_reason_counts = {}
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.workers) as executor:
         future_to_batch = {}
@@ -623,6 +693,13 @@ def run_tests(config: TestRunnerConfig, batches):
                 if result["failed"]:
                     if handle_failed_batch(ctx, batch_info, result):
                         continue
+                else:
+                    skipped_output = extract_skipped_test_output(result["stdout"], result["stderr"])
+                    total_skipped_tests += parse_skipped_tests_count(skipped_output)
+                    for reason, count in parse_skipped_test_reasons(skipped_output).items():
+                        skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
+                    for reason, count in parse_mode_skip_reasons(skipped_output).items():
+                        skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
                 progress.advance(next_batch_idx - len(future_to_batch))
 
             if not state.stop_launching:
@@ -634,7 +711,15 @@ def run_tests(config: TestRunnerConfig, batches):
         print(f"error: found {state.failed_count} test batch failures in {elapsed:.0f}s")
         return 1
 
-    print(f"all tests passed in {elapsed:.0f}s")
+    if total_skipped_tests > 0:
+        print(f"all tests passed in {elapsed:.0f}s ({total_skipped_tests} skipped tests)")
+    else:
+        print(f"all tests passed in {elapsed:.0f}s")
+    if skipped_reason_counts:
+        print()
+        print("Skipped tests for the following reasons:")
+        for reason in sorted(skipped_reason_counts):
+            print(f"{reason}: {skipped_reason_counts[reason]}")
     return 0
 
 
