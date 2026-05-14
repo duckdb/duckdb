@@ -67,6 +67,12 @@ void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_group
 
 	row_groups.unflushed_row_groups.insert(row_groups.complete_row_groups);
 	row_groups.complete_row_groups++;
+	auto allocated_size = row_groups.collection->GetAllocationSize();
+	if (row_groups.prev_allocated_size > allocated_size) {
+		throw InternalException("Row group prev allocated size is larger than currently allocated size");
+	}
+	row_groups.unflushed_data_size += allocated_size - row_groups.prev_allocated_size;
+	row_groups.prev_allocated_size = allocated_size;
 	auto unflushed_row_groups = row_groups.unflushed_row_groups.size();
 	// check if we should flush the row groups
 	// first check the amount of row groups
@@ -79,7 +85,7 @@ void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_group
 		if (!memory_limit.IsValid()) {
 			memory_limit = config.options.maximum_memory / 5 / (config.options.maximum_threads + 1);
 		}
-		if (row_groups.collection->GetAllocationSize() >= memory_limit.GetIndex()) {
+		if (row_groups.unflushed_data_size >= memory_limit.GetIndex()) {
 			// we exhausted our memory available for buffering - flush
 			need_to_flush = true;
 		}
@@ -95,6 +101,7 @@ void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_group
 		}
 		FlushToDisk(row_groups, to_flush, segment_indexes);
 		row_groups.unflushed_row_groups.clear();
+		row_groups.unflushed_data_size = 0;
 	}
 }
 
