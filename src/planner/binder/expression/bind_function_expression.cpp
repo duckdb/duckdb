@@ -233,14 +233,7 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 			}
 			return lambda_bind_result;
 		}
-		return BindResult(msg);
-	}
-	if (StringUtil::Contains(lambda_bind_result.error.RawMessage(), "Deprecated lambda arrow (->) detected.")) {
-		if (warn_deprecated_syntax) {
-			DUCKDB_LOG_WARNING(context, msg);
-		}
-
-		return lambda_bind_result;
+		throw BinderException(msg);
 	}
 
 	auto json_bind_result = BindFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
