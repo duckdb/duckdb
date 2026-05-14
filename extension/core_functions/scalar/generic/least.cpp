@@ -140,7 +140,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			continue;
 		}
 
-		auto entries = input.data[col_idx].template Values<T>(input.size());
+		auto entries = input.data[col_idx].template Values<T>();
 
 		if (entries.CanHaveNull()) {
 			// potential new null entries: have to check the null mask

@@ -166,7 +166,14 @@ static bool PartitionedExecutionCanUseStats(const unique_ptr<BaseStatistics> &st
 		return NumericStats::HasMinMax(*stats);
 	case StatisticsType::STRING_STATS:
 		// Let's not mess with BLOB for now
-		return stats->GetType() == LogicalType::VARCHAR;
+		if (stats->GetType() != LogicalType::VARCHAR) {
+			return false;
+		}
+		if (!StringStats::HasMinMax(*stats)) {
+			return false;
+		}
+		// Truncated multibyte UTF-8 sequences produce invalid string bytes in min/max; skip those row groups
+		return Value::StringIsValid(StringStats::Min(*stats)) && Value::StringIsValid(StringStats::Max(*stats));
 	default:
 		return false; // Only numeric/string supported for now
 	}
@@ -467,7 +474,7 @@ void PartitionedExecutionSplitPipeline(Optimizer &optimizer, unique_ptr<LogicalO
 
 		// Create lower bound filter
 		if (!range.min.IsNull()) {
-			filter->expressions.emplace_back(make_uniq<BoundComparisonExpression>(
+			filter->expressions.emplace_back(BoundComparisonExpression::Create(
 			    ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 			    make_uniq<BoundColumnRefExpression>(range.min.type(), column.column_binding),
 			    make_uniq<BoundConstantExpression>(range.min)));
@@ -475,7 +482,7 @@ void PartitionedExecutionSplitPipeline(Optimizer &optimizer, unique_ptr<LogicalO
 
 		// Create upper bound filter
 		if (!range.max.IsNull()) {
-			filter->expressions.emplace_back(make_uniq<BoundComparisonExpression>(
+			filter->expressions.emplace_back(BoundComparisonExpression::Create(
 			    ExpressionType::COMPARE_LESSTHAN,
 			    make_uniq<BoundColumnRefExpression>(range.max.type(), column.column_binding),
 			    make_uniq<BoundConstantExpression>(range.max)));

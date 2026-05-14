@@ -1,6 +1,4 @@
-#include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "include/icu-datepart.hpp"
 #include "include/icu-datefunc.hpp"
@@ -13,7 +11,6 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -290,7 +287,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 		UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(date_arg, result, args.size(),
 		                                                [&](INPUT_TYPE input) -> optional<RESULT_TYPE> {
-			                                                if (Timestamp::IsFinite(input)) {
+			                                                if (input.IsFinite()) {
 				                                                const auto micros = SetTime(calendar, input);
 				                                                return info.adapters[0](calendar, micros);
 			                                                } else {
@@ -314,7 +311,7 @@ struct ICUDatePart : public ICUDateFunc {
 		BinaryExecutor::Execute<string_t, INPUT_TYPE, RESULT_TYPE>(
 		    part_arg, date_arg, result, args.size(),
 		    [&](string_t specifier, INPUT_TYPE input) -> optional<RESULT_TYPE> {
-			    if (Timestamp::IsFinite(input)) {
+			    if (input.IsFinite()) {
 				    const auto micros = SetTime(calendar, input);
 				    auto adapter = PartCodeBigintFactory(GetDatePartSpecifier(specifier.GetString()));
 				    return adapter(calendar, micros);
@@ -380,7 +377,7 @@ struct ICUDatePart : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 1);
 		const auto count = args.size();
 		Vector &input = args.data[0];
-		auto entries = input.Values<INPUT_TYPE>(count);
+		auto entries = input.Values<INPUT_TYPE>();
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto &child_entries = StructVector::GetEntries(result);
@@ -394,7 +391,7 @@ struct ICUDatePart : public ICUDateFunc {
 			if (entry.IsValid()) {
 				res_valid.SetValid(i);
 				auto micros = SetTime(calendar, entry.GetValue());
-				const auto is_finite = Timestamp::IsFinite(entry.GetValue());
+				const auto is_finite = entry.GetValue().IsFinite();
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
 					if (is_finite) {
@@ -420,7 +417,7 @@ struct ICUDatePart : public ICUDateFunc {
 			}
 		}
 
-		result.Verify(count);
+		result.Verify();
 	}
 
 	template <typename BIND_TYPE>
@@ -473,7 +470,7 @@ struct ICUDatePart : public ICUDateFunc {
 			bound_function.GetArguments().erase(bound_function.GetArguments().begin());
 			bound_function.SetName(part_name);
 			bound_function.SetReturnType(LogicalType::DOUBLE);
-			bound_function.SetFunctionCallback(UnaryTimestampFunction<timestamp_t, double>);
+			bound_function.SetFunctionCallback(UnaryTimestampFunction<timestamp_tz_t, double>);
 
 			return BindUnaryDatePart(input);
 		} while (false);
@@ -563,7 +560,7 @@ struct ICUDatePart : public ICUDateFunc {
 	                                      const LogicalType &result_type = LogicalType::BIGINT,
 	                                      ArgProperties unary_arg0_props = {}) {
 		ScalarFunctionSet set(name);
-		set.AddFunction(GetUnaryPartCodeFunction<timestamp_t, RESULT_TYPE>(LogicalType::TIMESTAMP_TZ, result_type));
+		set.AddFunction(GetUnaryPartCodeFunction<timestamp_tz_t, RESULT_TYPE>(LogicalType::TIMESTAMP_TZ, result_type));
 		set.SetUnaryArgProperties(unary_arg0_props);
 		loader.RegisterFunction(set);
 	}
@@ -586,8 +583,8 @@ struct ICUDatePart : public ICUDateFunc {
 
 	static void AddDatePartFunctions(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
-		set.AddFunction(GetBinaryPartCodeFunction<timestamp_t, int64_t>(LogicalType::TIMESTAMP_TZ));
-		set.AddFunction(GetStructFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetBinaryPartCodeFunction<timestamp_tz_t, int64_t>(LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetStructFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		for (auto &func : set.functions) {
 			func.SetFallible();
 		}
@@ -610,7 +607,7 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 	static void AddLastDayFunctions(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
-		set.AddFunction(GetLastDayFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetLastDayFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		loader.RegisterFunction(set);
 	}
 
@@ -629,7 +626,7 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 	static void AddMonthNameFunctions(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
-		set.AddFunction(GetMonthNameFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetMonthNameFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		loader.RegisterFunction(set);
 	}
 
@@ -648,7 +645,7 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 	static void AddDayNameFunctions(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
-		set.AddFunction(GetDayNameFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetDayNameFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		loader.RegisterFunction(set);
 	}
 };

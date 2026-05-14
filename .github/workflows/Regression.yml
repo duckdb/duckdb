@@ -74,7 +74,7 @@ jobs:
           ref: ${{ env.GIT_REF }}
 
       - name: Install tools
-        run: python3 scripts/ci/retry.py -- make toolsci
+        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
@@ -84,7 +84,7 @@ jobs:
         env:
           BUILD_BENCHMARK: 1
           BUILD_JEMALLOC: 1
-          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
           DISABLE_SANITIZER: 1
         with:
           build: python3 scripts/ci/retry.py -- make release
@@ -129,7 +129,7 @@ jobs:
         env:
           BUILD_BENCHMARK: 1
           BUILD_JEMALLOC: 1
-          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
           DISABLE_SANITIZER: 1
         with:
           build: python3 scripts/ci/retry.py -- make release

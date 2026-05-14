@@ -101,10 +101,15 @@ void VectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, i
 void VectorBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	if (sel.IsSet()) {
 		for (idx_t i = 0; i < Size(); i++) {
-			D_ASSERT(sel.get_index(i) < Size());
+			if (sel.get_index(i) >= Size()) {
+				throw InternalException("Selection vector entry %d out of range for vector of size %d",
+				                        sel.get_index(i), Size());
+			}
 		}
 	} else {
-		D_ASSERT(count <= Size());
+		if (count > Size()) {
+			throw InternalException("Count %d out of range for vector of size %d", count, Size());
+		}
 	}
 }
 
@@ -133,18 +138,13 @@ string VectorBuffer::ToString(const LogicalType &type) const {
 	return "";
 }
 
-void VectorBuffer::Resize(idx_t current_size, idx_t new_size) {
-	throw InternalException("VectorBuffer::Resize not supported for this vector type");
-}
-
-void VectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+void VectorBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	throw InternalException("ToUnifiedFormat not supported for this buffer type - flatten first");
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, idx_t count) const {
-	count = v_size;
-	auto result = FlattenSliceInternal(type, *FlatVector::IncrementalSelectionVector(), count);
-	if (result && (result->Size() != count)) {
+buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type) const {
+	auto result = FlattenSliceInternal(type, *FlatVector::IncrementalSelectionVector(), Size());
+	if (result && (result->Size() != Size())) {
 		throw InternalException("FlattenSliceInternal did not set size correctly");
 	}
 	return result;
@@ -254,8 +254,7 @@ void VectorBuffer::Reserve(idx_t required_capacity, VectorAppendMode append_mode
 		throw InternalException("Can't append to vector without resizing - but resizing was explicitly disabled");
 	}
 	auto new_capacity = GetReserveSize(required_capacity);
-	D_ASSERT(new_capacity >= required_capacity);
-	Resize(capacity, new_capacity);
+	ReserveInternal(new_capacity);
 }
 
 void VectorBuffer::AppendValue(const LogicalType &type, const Value &val, VectorAppendMode append_mode) {
@@ -352,6 +351,10 @@ void VectorBuffer::CopyInternal(const Vector &source, const SelectionVector &sou
 
 Value VectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	throw InternalException("Unimplemented GetValue for this buffer type");
+}
+
+void VectorBuffer::ReserveInternal(idx_t new_size) {
+	throw InternalException("VectorBuffer::ReserveInternal not supported for this vector type");
 }
 
 PinnedBufferHolder::PinnedBufferHolder(BufferHandle handle) : handle(std::move(handle)) {

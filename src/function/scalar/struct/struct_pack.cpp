@@ -35,7 +35,7 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 	// differ when the caller is collapsing all-constant inputs to a single argument row.
 	result.BufferMutable().SetVectorTypeOnly(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	result.BufferMutable().SetVectorSizeOnly(children_size);
-	result.Verify(children_size);
+	result.Verify();
 }
 
 template <bool IS_STRUCT_PACK>

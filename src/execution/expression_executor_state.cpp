@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-void ExpressionState::AddChild(Expression &child_expr) {
+void ExpressionState::AddChild(const Expression &child_expr) {
 	types.push_back(child_expr.GetReturnType());
 	auto child_state = ExpressionExecutor::InitializeState(child_expr, root);
 	child_states.push_back(std::move(child_state));

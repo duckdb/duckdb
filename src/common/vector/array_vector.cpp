@@ -93,13 +93,13 @@ void VectorArrayBuffer::VerifyInternal(const LogicalType &type, const SelectionV
 	// FIXME: verify NULL-ness in child
 }
 
-buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, idx_t count) const {
+buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type) const {
 	if (vector_type == VectorType::FLAT_VECTOR) {
 		// already flat - recursively flatten the child vector
-		child->Flatten(GetChildSize());
+		child->Flatten();
 		return nullptr;
 	}
-	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), Size());
 }
 
 buffer_ptr<VectorBuffer> VectorArrayBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
@@ -150,17 +150,17 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::ConstantSliceInternal(const LogicalT
 	return result;
 }
 
-void VectorArrayBuffer::Resize(idx_t current_size, idx_t new_size) {
+void VectorArrayBuffer::ReserveInternal(idx_t new_size) {
 	// resize the validity
 	validity.Resize(new_size);
 	// resize the child
-	child->Resize(current_size * array_size, new_size * array_size);
+	child->Reserve(new_size * array_size);
 	capacity = new_size;
 }
 
-void VectorArrayBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+void VectorArrayBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
+		format.sel = ConstantVector::ZeroSelectionVector(Size(), format.owned_sel);
 	} else {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}

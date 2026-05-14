@@ -548,10 +548,41 @@ struct DebugSkipCheckpointOnCommitSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugVerificationModeSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "debug_verification_mode";
+	static constexpr const char *Description = "DEBUG SETTING: toggle the verification mode.";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct DebugVerificationProjectionSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verification_projection";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: add internal verification projections to stress optimizers";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugVerifyBlocksSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_verify_blocks";
 	static constexpr const char *Description = "DEBUG SETTING: verify block metadata during checkpointing";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugVerifyColumnBindingsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_column_bindings";
+	static constexpr const char *Description = "DEBUG SETTING: run extra internal verification of column bindings";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;

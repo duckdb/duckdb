@@ -266,7 +266,7 @@ static FilterPropagateResult CheckIntersectionFilter(const GeometryStatsData &da
 }
 
 FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, const unique_ptr<Expression> &expr) {
-	if (expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
+	if (expr->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	if (expr->GetReturnType() != LogicalType::BOOLEAN) {

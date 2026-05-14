@@ -12,4 +12,17 @@ fi
 python "$GRAMMAR_FILE" --grammar-file
 python "$GRAMMAR_FILE"
 
-echo "Successfully build grammar files"
+echo "Successfully built grammar files"
+
+# Generate Internal transformer wrappers for auto-generatable grammar rules
+GEN_TRANSFORMER_FILE="scripts/parser/gen_transformer_v2.py"
+if [[ ! -f "$GEN_TRANSFORMER_FILE" ]]; then
+  echo "Error: $GEN_TRANSFORMER_FILE not found"
+  exit 1
+fi
+
+python "$GEN_TRANSFORMER_FILE" --write
+
+echo "Successfully generated transformer wrappers"
+
+make format-fix

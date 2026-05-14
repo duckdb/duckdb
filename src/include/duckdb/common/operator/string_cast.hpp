@@ -18,8 +18,6 @@
 namespace duckdb {
 
 struct date_t;
-struct timestamp_t;
-struct timestamp_ns_t;
 
 //! StringCast
 class StringHeap;

@@ -108,7 +108,7 @@ struct ListFilterFunctor {
 		SelectionVector sel(elem_cnt);
 
 		// compute the new lengths and offsets, and create a selection vector
-		for (auto entry : lambda_vector.Values<bool>(elem_cnt)) {
+		for (auto entry : lambda_vector.Values<bool>()) {
 			// set length and offset of empty lists
 			while (info.row_idx < info.entry_lengths.size() && !info.entry_lengths[info.row_idx]) {
 				result_entries[info.row_idx].offset = info.offset;
@@ -158,7 +158,7 @@ vector<LambdaFunctions::ColumnInfo> LambdaFunctions::GetColumnInfo(DataChunk &ar
 	// skip the input list and then insert all remaining input vectors
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
 		data.emplace_back(args.data[i]);
-		args.data[i].ToUnifiedFormat(row_count, data.back().format);
+		args.data[i].ToUnifiedFormat(data.back().format);
 	}
 	return data;
 }
@@ -270,9 +270,8 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 	auto mutable_column_infos = LambdaFunctions::GetMutableColumnInfo(info.column_infos);
 
 	// special-handling for the child_vector
-	auto child_vector_size = ListVector::GetListSize(args.data[0]);
 	LambdaFunctions::ColumnInfo child_info(*info.child_vector);
-	info.child_vector->ToUnifiedFormat(child_vector_size, child_info.format);
+	info.child_vector->ToUnifiedFormat(child_info.format);
 
 	// get the expression executor
 	LambdaExecuteInfo execute_info(state.GetContext(), *info.lambda_expr, args, info.has_index, *info.child_vector);

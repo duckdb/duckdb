@@ -270,11 +270,7 @@ void Vector::AddHeapReference(const Vector &other) {
 	AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(auxiliary_data));
 }
 
-void Vector::Reserve(idx_t to_reserve) {
-	Resize(buffer ? buffer->Capacity() : 0, to_reserve);
-}
-
-void Vector::Resize(idx_t size, idx_t to_reserve_p) {
+void Vector::Reserve(idx_t to_reserve_p) {
 	auto reserve_size = VectorBuffer::GetReserveSize(to_reserve_p);
 	if (!buffer) {
 		Initialize(VectorDataInitialization::UNINITIALIZED, reserve_size);
@@ -284,7 +280,11 @@ void Vector::Resize(idx_t size, idx_t to_reserve_p) {
 	if (reserve_size <= capacity) {
 		return;
 	}
-	buffer->Resize(size, reserve_size);
+	buffer->Reserve(reserve_size, VectorAppendMode::ALLOW_RESIZE);
+}
+
+void Vector::Resize(idx_t, idx_t to_reserve_p) {
+	Reserve(to_reserve_p);
 }
 
 void Vector::Append(const Value &value, VectorAppendMode append_mode) {
@@ -350,24 +350,24 @@ string VectorTypeToString(VectorType type) {
 	}
 }
 
-string Vector::ToString(idx_t count) const {
-	string retval =
-	    VectorTypeToString(GetVectorType()) + " " + GetType().ToString() + ": " + to_string(count) + " = [ ";
-	retval += Buffer().ToString(GetType(), count);
-	retval += "]";
-	return retval;
+string Vector::ToString(idx_t) const {
+	return ToString();
 }
 
-void Vector::Print(idx_t count) const {
-	Printer::Print(ToString(count));
+void Vector::Print(idx_t) const {
+	Print();
 }
 
-idx_t Vector::GetDataSize(idx_t cardinality) const {
-	return Buffer().GetDataSize(type, cardinality);
+idx_t Vector::GetDataSize() const {
+	return GetDataSize(size());
+}
+
+idx_t Vector::GetDataSize(idx_t count) const {
+	return Buffer().GetDataSize(type, count);
 }
 
 idx_t Vector::GetAllocationSize(idx_t cardinality) const {
-	return GetDataSize(cardinality);
+	return GetDataSize();
 }
 
 idx_t Vector::GetAllocationSize() const {
@@ -378,8 +378,10 @@ idx_t Vector::GetAllocationSize() const {
 }
 
 string Vector::ToString() const {
-	string retval = VectorTypeToString(GetVectorType()) + " " + GetType().ToString() + ": (UNKNOWN COUNT) [ ";
-	retval += Buffer().ToString(GetType());
+	auto count = size();
+	string retval =
+	    VectorTypeToString(GetVectorType()) + " " + GetType().ToString() + ": " + to_string(count) + " = [ ";
+	retval += Buffer().ToString(GetType(), count);
 	retval += "]";
 	return retval;
 }
@@ -390,7 +392,11 @@ void Vector::Print() const {
 // LCOV_EXCL_STOP
 
 void Vector::Flatten(idx_t count) const {
-	auto new_buffer = Buffer().Flatten(GetType(), count);
+	Flatten();
+}
+
+void Vector::Flatten() const {
+	auto new_buffer = Buffer().Flatten(GetType());
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
@@ -404,32 +410,37 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) const {
 }
 
 void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+	ToUnifiedFormat(format);
+}
+
+void Vector::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	format.physical_type = GetType().InternalType();
 	auto vtype = GetVectorType();
 	if (vtype != VectorType::FLAT_VECTOR && vtype != VectorType::CONSTANT_VECTOR &&
 	    vtype != VectorType::DICTIONARY_VECTOR) {
 		// FSST/SEQUENCE/SHREDDED: flatten first so the buffer can provide unified format
-		Flatten(count);
+		Flatten();
 	}
-	Buffer().ToUnifiedFormat(count, format);
+	Buffer().ToUnifiedFormat(format);
 }
 
-void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
-	input.ToUnifiedFormat(count, data.unified);
+void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t, RecursiveUnifiedVectorFormat &data) {
+	RecursiveToUnifiedFormat(input, data);
+}
+
+void Vector::RecursiveToUnifiedFormat(const Vector &input, RecursiveUnifiedVectorFormat &data) {
+	input.ToUnifiedFormat(data.unified);
 	data.logical_type = input.GetType();
 
 	if (input.GetType().InternalType() == PhysicalType::LIST) {
 		auto &child = ListVector::GetChild(input);
-		auto child_count = ListVector::GetListSize(input);
 		data.children.emplace_back();
-		Vector::RecursiveToUnifiedFormat(child, child_count, data.children.back());
+		RecursiveToUnifiedFormat(child, data.children.back());
 
 	} else if (input.GetType().InternalType() == PhysicalType::ARRAY) {
 		auto &child = ArrayVector::GetChild(input);
-		auto array_size = ArrayType::GetSize(input.GetType());
-		auto child_count = count * array_size;
 		data.children.emplace_back();
-		Vector::RecursiveToUnifiedFormat(child, child_count, data.children.back());
+		RecursiveToUnifiedFormat(child, data.children.back());
 
 	} else if (input.GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &children = StructVector::GetEntries(input);
@@ -437,7 +448,7 @@ void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, Recursiv
 			data.children.emplace_back();
 		}
 		for (idx_t i = 0; i < children.size(); i++) {
-			Vector::RecursiveToUnifiedFormat(children[i], count, data.children[i]);
+			RecursiveToUnifiedFormat(children[i], data.children[i]);
 		}
 	}
 }
@@ -502,7 +513,11 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			}
 		} else if (vtype == VectorType::CONSTANT_VECTOR && count >= 1) {
 			serializer.WriteProperty(90, "vector_type", VectorType::CONSTANT_VECTOR);
-			return Vector::Serialize(serializer, 1, false); // just serialize one value
+			// Resize to 1 so that size() == count == 1 during the recursive call, then restore
+			FlatVector::SetSize(*this, 1);
+			Vector::Serialize(serializer, 1, false); // just serialize one value
+			FlatVector::SetSize(*this, count);
+			return;
 		} else if (vtype == VectorType::SEQUENCE_VECTOR) {
 			serializer.WriteProperty(90, "vector_type", VectorType::SEQUENCE_VECTOR);
 			auto &sequence = buffer->Cast<SequenceBuffer>();
@@ -513,7 +528,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			// TODO: other compressed vector types (SHREDDED, FSST)
 		}
 	}
-	ToUnifiedFormat(count, vdata);
+	ToUnifiedFormat(vdata);
 
 	if (logical_type.id() == LogicalTypeId::GEOMETRY && serializer.ShouldSerialize(Geometry::VERSION_ADDED)) {
 		serializer.WriteProperty<GeometryStorageType>(99, "geometry_format", GeometryStorageType::WKB);
@@ -650,7 +665,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		}
 		case PhysicalType::ARRAY: {
 			Vector serialized_vector(Vector::Ref(*this));
-			serialized_vector.Flatten(count);
+			serialized_vector.Flatten();
 
 			auto &child = ArrayVector::GetChildMutable(serialized_vector);
 			auto array_size = ArrayType::GetSize(serialized_vector.GetType());
@@ -835,7 +850,14 @@ void Vector::SetVectorType(VectorType new_vector_type) {
 	}
 }
 
+void Vector::Verify(idx_t) const {
+	Verify();
+}
+
 void Vector::Verify() const {
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_VECTORS) {
+		return;
+	}
 	if (!buffer) {
 		return;
 	}
@@ -843,14 +865,13 @@ void Vector::Verify() const {
 }
 
 void Vector::Verify(const SelectionVector &sel, idx_t count) const {
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_VECTORS) {
+		return;
+	}
 	if (!buffer) {
 		return;
 	}
 	buffer->Verify(GetType(), sel, count);
-}
-
-void Vector::Verify(idx_t count) const {
-	Verify();
 }
 
 void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
@@ -872,7 +893,7 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 	auto reusable_dict = DictionaryVector::CreateReusableDictionary(vector.type, verify_count);
 	auto &inverted_vector = reusable_dict->data;
 	inverted_vector.Slice(vector, inverted_sel, verify_count);
-	inverted_vector.Flatten(verify_count);
+	inverted_vector.Flatten();
 	// now insert the NULL values at every other position
 	for (idx_t i = 0; i < count; i++) {
 		FlatVector::SetNull(inverted_vector, i * 2, true);
@@ -891,7 +912,7 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 	} else {
 		vector.Dictionary(reusable_dict, original_sel, count);
 	}
-	vector.Verify(count);
+	vector.Verify();
 }
 
 void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
@@ -936,7 +957,7 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 			list_entries[r].offset = position;
 		}
 		child_vector.Slice(child_sel, child_count);
-		child_vector.Flatten(child_count);
+		child_vector.Flatten();
 		ListVector::SetListSize(vector, child_count);
 
 		// recurse into child elements

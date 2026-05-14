@@ -94,7 +94,7 @@ static vector<VariantValue> UnshredTypedObject(UnifiedVariantVectorData &variant
 	}
 
 	//! Then compose the OBJECT value by combining all the children
-	auto validity = typed_value.Validity(count);
+	auto validity = typed_value.Validity();
 	for (idx_t child_idx = 0; child_idx < child_entries.size(); child_idx++) {
 		auto &child_name = child_types[child_idx].first;
 		auto &values = child_values[child_idx];
@@ -126,7 +126,7 @@ static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant,
 
 	D_ASSERT(typed_value.GetType().id() == LogicalTypeId::LIST);
 
-	auto list_data = typed_value.Values<list_entry_t>(count);
+	auto list_data = typed_value.Values<list_entry_t>();
 	idx_t child_size = 0;
 	for (uint32_t i = 0; i < count; i++) {
 		auto entry = list_data[i];
@@ -208,7 +208,7 @@ static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &s
 		return res;
 	}
 	// if we have any untyped values - unshred them
-	auto untyped_data = untyped_value_index->Values<uint32_t>(count);
+	auto untyped_data = untyped_value_index->Values<uint32_t>();
 	for (uint32_t i = 0; i < count; i++) {
 		auto entry = untyped_data[i];
 		if (!entry.IsValid()) {
@@ -249,7 +249,7 @@ void VariantUtils::UnshredVariantData(Vector &input, Vector &output, idx_t count
 	auto &shredded = child_vectors[1];
 
 	RecursiveUnifiedVectorFormat recursive_format;
-	Vector::RecursiveToUnifiedFormat(unshredded, count, recursive_format);
+	Vector::RecursiveToUnifiedFormat(unshredded, recursive_format);
 	UnifiedVariantVectorData variant(recursive_format);
 
 	auto variant_values = Unshred(variant, shredded, count, nullptr);

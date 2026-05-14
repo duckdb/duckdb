@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/rule/equal_or_null_simplification.hpp"
 
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 
@@ -43,7 +44,7 @@ static unique_ptr<Expression> TryRewriteEqualOrIsNull(Expression &equal_expr, Ex
 		return nullptr;
 	}
 
-	auto &equal_cast = equal_expr.Cast<BoundComparisonExpression>();
+	auto &equal_cast = equal_expr.Cast<BoundFunctionExpression>();
 	auto &and_cast = and_expr.Cast<BoundConjunctionExpression>();
 
 	if (and_cast.children.size() != 2) {
@@ -51,8 +52,8 @@ static unique_ptr<Expression> TryRewriteEqualOrIsNull(Expression &equal_expr, Ex
 	}
 
 	// Make sure on the AND conjunction the relevant conditions appear
-	auto &a_exp = *equal_cast.left;
-	auto &b_exp = *equal_cast.right;
+	auto &a_exp = BoundComparisonExpression::Left(equal_cast);
+	auto &b_exp = BoundComparisonExpression::Right(equal_cast);
 	bool a_is_null_found = false;
 	bool b_is_null_found = false;
 
@@ -76,8 +77,9 @@ static unique_ptr<Expression> TryRewriteEqualOrIsNull(Expression &equal_expr, Ex
 		}
 	}
 	if (a_is_null_found && b_is_null_found) {
-		return make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-		                                            std::move(equal_cast.left), std::move(equal_cast.right));
+		return BoundComparisonExpression::Create(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+		                                         std::move(BoundComparisonExpression::LeftMutable(equal_cast)),
+		                                         std::move(BoundComparisonExpression::RightMutable(equal_cast)));
 	}
 	return nullptr;
 }

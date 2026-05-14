@@ -38,7 +38,7 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 		result.BufferMutable().SetVectorTypeOnly(VectorType::FLAT_VECTOR);
 
 		// Make result validity to mirror input's nulls
-		auto validity_entries = input.Validity(count);
+		auto validity_entries = input.Validity();
 
 		if (validity_entries.CanHaveNull()) {
 			auto &validity = FlatVector::ValidityMutable(result);

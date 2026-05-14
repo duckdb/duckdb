@@ -4,7 +4,6 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
-#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
@@ -42,7 +41,7 @@ static bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastPara
 	auto result_vector_type =
 	    source.GetVectorType() == VectorType::CONSTANT_VECTOR ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
 
-	auto source_data = source.Values<string_t>(count);
+	auto source_data = source.Values<string_t>();
 	auto result_data = FlatVector::ScatterWriter<T>(result);
 
 	VectorTryCastData vector_cast_data(result, parameters);
@@ -158,8 +157,8 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 	// set the list size after the child cast, since the cast may have replaced the child buffer
 	ListVector::SetListSize(result, total_list_size);
 	if (!all_converted && parameters.nullify_parent) {
-		auto result_child_validity = result_child.Validity(total_list_size);
-		auto varchar_vector_validity = varchar_vector.Validity(total_list_size);
+		auto result_child_validity = result_child.Validity();
+		auto varchar_vector_validity = varchar_vector.Validity();
 		// Something went wrong in the conversion, we need to nullify the parent
 		for (idx_t i = 0; i < count; i++) {
 			for (idx_t j = list_data[i].offset; j < list_data[i].offset + list_data[i].length; j++) {
@@ -430,7 +429,7 @@ static bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, 
 	default: {
 		UnifiedVectorFormat unified_source;
 
-		source.ToUnifiedFormat(count, unified_source);
+		source.ToUnifiedFormat(unified_source);
 		auto source_sel = unified_source.sel;
 		auto source_data = UnifiedVectorFormat::GetData<string_t>(unified_source);
 		auto &source_mask = unified_source.validity;
@@ -466,10 +465,10 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_ns_t, duckdb::TryCastToTimestampNS>);
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return BoundCastInfo(
-		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_t, duckdb::TryCastToTimestampSec>);
+		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_sec_t, duckdb::TryCastToTimestampSec>);
 	case LogicalTypeId::TIMESTAMP_MS:
 		return BoundCastInfo(
-		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_t, duckdb::TryCastToTimestampMS>);
+		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_ms_t, duckdb::TryCastToTimestampMS>);
 	case LogicalTypeId::BLOB:
 		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, duckdb::TryCastToBlob>);
 	case LogicalTypeId::BIT:

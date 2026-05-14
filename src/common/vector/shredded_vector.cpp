@@ -32,7 +32,7 @@ void ShreddedVectorBuffer::VerifyInternal(const LogicalType &type, const Selecti
 string ShreddedVectorBuffer::ToString(const LogicalType &type, idx_t count) const {
 	auto &shredded = StructVector::GetEntries(*shredded_data)[1];
 	auto &unshredded = StructVector::GetEntries(*shredded_data)[0];
-	return "Shredded: " + shredded.ToString(count) + ", Unshredded: " + unshredded.ToString(count);
+	return "Shredded: " + shredded.ToString() + ", Unshredded: " + unshredded.ToString();
 }
 
 Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const {
@@ -66,9 +66,10 @@ buffer_ptr<VectorBuffer> ShreddedVectorBuffer::FlattenSliceInternal(const Logica
 	}
 	// unshred the (optionally sliced) vector
 	Vector unshredded_vector(LogicalType::VARIANT(), MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE));
+	FlatVector::SetSize(unshredded_vector, count);
 	VariantUtils::UnshredVariantData(*source, unshredded_vector, count);
 	// now flatten the unshredded vector
-	unshredded_vector.Flatten(count);
+	unshredded_vector.Flatten();
 	auto result = unshredded_vector.GetBufferRef();
 	result->SetVectorSize(count);
 	return result;

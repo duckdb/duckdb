@@ -104,14 +104,6 @@ static FilterPropagateResult CheckZonemapAgainstConstants(const BaseStatistics &
 	}
 }
 
-static FilterPropagateResult CheckFunctionStatistics(const BoundFunctionExpression &func_expr, BaseStatistics &stats) {
-	if (!func_expr.function.HasFilterPruneCallback()) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	FunctionStatisticsPruneInput input(func_expr.bind_info.get(), stats);
-	return func_expr.function.GetFilterPruneCallback()(input);
-}
-
 static optional_ptr<const BaseStatistics> TryGetFilterStats(const Expression &expr, const BaseStatistics &stats,
                                                             vector<unique_ptr<BaseStatistics>> &owned_stats) {
 	switch (expr.GetExpressionClass()) {
@@ -135,18 +127,20 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(const Expression &ex
 	}
 }
 
-static FilterPropagateResult CheckComparisonStatistics(const BoundComparisonExpression &comp_expr,
+static FilterPropagateResult CheckComparisonStatistics(const BoundFunctionExpression &comp_expr,
                                                        BaseStatistics &stats) {
 	vector<unique_ptr<BaseStatistics>> owned_stats;
 	optional_ptr<const BaseStatistics> filter_stats;
 	optional_ptr<const BoundConstantExpression> constant_expr;
 	auto comparison_type = comp_expr.GetExpressionType();
-	if (comp_expr.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		filter_stats = TryGetFilterStats(*comp_expr.left, stats, owned_stats);
-		constant_expr = &comp_expr.right->Cast<BoundConstantExpression>();
-	} else if (comp_expr.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		filter_stats = TryGetFilterStats(*comp_expr.right, stats, owned_stats);
-		constant_expr = &comp_expr.left->Cast<BoundConstantExpression>();
+	auto &left = BoundComparisonExpression::Left(comp_expr);
+	auto &right = BoundComparisonExpression::Right(comp_expr);
+	if (right.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		filter_stats = TryGetFilterStats(left, stats, owned_stats);
+		constant_expr = &right.Cast<BoundConstantExpression>();
+	} else if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		filter_stats = TryGetFilterStats(right, stats, owned_stats);
+		constant_expr = &left.Cast<BoundConstantExpression>();
 		comparison_type = FlipComparisonExpression(comparison_type);
 	} else {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -166,6 +160,17 @@ static FilterPropagateResult CheckComparisonStatistics(const BoundComparisonExpr
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	return result;
+}
+
+static FilterPropagateResult CheckFunctionStatistics(const BoundFunctionExpression &func_expr, BaseStatistics &stats) {
+	if (BoundComparisonExpression::IsComparison(func_expr.GetExpressionType())) {
+		return CheckComparisonStatistics(func_expr, stats);
+	}
+	if (!func_expr.function.HasFilterPruneCallback()) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	FunctionStatisticsPruneInput input(func_expr.bind_info.get(), stats);
+	return func_expr.function.GetFilterPruneCallback()(input);
 }
 
 static FilterPropagateResult CheckNullOperatorStatistics(const BoundOperatorExpression &op_expr, BaseStatistics &stats,
@@ -278,8 +283,6 @@ FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(const Expressi
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION:
 		return CheckFunctionStatistics(expr.Cast<BoundFunctionExpression>(), stats);
-	case ExpressionClass::BOUND_COMPARISON:
-		return CheckComparisonStatistics(expr.Cast<BoundComparisonExpression>(), stats);
 	case ExpressionClass::BOUND_OPERATOR:
 		return CheckOperatorStatistics(expr.Cast<BoundOperatorExpression>(), stats);
 	case ExpressionClass::BOUND_CONJUNCTION:

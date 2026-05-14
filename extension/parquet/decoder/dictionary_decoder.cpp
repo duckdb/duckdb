@@ -60,7 +60,7 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 
 		// apply the filter
 		UnifiedVectorFormat vdata;
-		dictionary_data.ToUnifiedFormat(duckdb_dictionary_size, vdata);
+		dictionary_data.ToUnifiedFormat(vdata);
 		SelectionVector dict_sel;
 		filter_count = duckdb_dictionary_size;
 		ColumnSegment::FilterSelection(dict_sel, dictionary_data, vdata, *filter, *filter_state, duckdb_dictionary_size,

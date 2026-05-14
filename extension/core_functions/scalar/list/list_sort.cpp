@@ -123,7 +123,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &child_vector = ListVector::GetChildMutable(sort_result_vec);
 
 	// get the lists data
-	auto list_entries = sort_result_vec.Values<list_entry_t>(count);
+	auto list_entries = sort_result_vec.Values<list_entry_t>();
 
 	// create the lists_indices vector, this contains an element for each list's entry,
 	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4]
@@ -244,7 +244,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			}
 		} else {
 			child_vector.Slice(sel_sorted, sel_sorted_idx);
-			child_vector.Flatten(sel_sorted_idx);
+			child_vector.Flatten();
 		}
 	}
 }

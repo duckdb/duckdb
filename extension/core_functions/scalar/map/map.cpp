@@ -18,7 +18,7 @@ static void MapFunctionEmptyInput(Vector &result, const idx_t row_count) {
 
 	auto result_data = ConstantVector::GetData<list_entry_t>(result);
 	result_data[0] = list_entry_t();
-	result.Verify(row_count);
+	result.Verify();
 }
 
 static bool MapIsNull(DataChunk &chunk) {
@@ -63,23 +63,23 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 	// a LIST vector, where each row contains a LIST of KEYS
 	UnifiedVectorFormat keys_data;
-	keys.ToUnifiedFormat(row_count, keys_data);
+	keys.ToUnifiedFormat(keys_data);
 	auto keys_entries = UnifiedVectorFormat::GetData<list_entry_t>(keys_data);
 
 	// the KEYs child vector
 	auto &keys_child_vector = ListVector::GetChildMutable(keys);
 	UnifiedVectorFormat keys_child_data;
-	keys_child_vector.ToUnifiedFormat(ListVector::GetListSize(keys), keys_child_data);
+	keys_child_vector.ToUnifiedFormat(keys_child_data);
 
 	// a LIST vector, where each row contains a LIST of VALUES
 	UnifiedVectorFormat values_data;
-	values.ToUnifiedFormat(row_count, values_data);
+	values.ToUnifiedFormat(values_data);
 	auto values_entries = UnifiedVectorFormat::GetData<list_entry_t>(values_data);
 
 	// the VALUEs child vector
 	auto &values_child_vector = ListVector::GetChildMutable(values);
 	UnifiedVectorFormat values_child_data;
-	values_child_vector.ToUnifiedFormat(ListVector::GetListSize(values), values_child_data);
+	values_child_vector.ToUnifiedFormat(values_child_data);
 
 	// a LIST vector, where each row contains a MAP (LIST of STRUCTs)
 	auto result_entries = FlatVector::Writer<list_entry_t>(result, row_count);
@@ -152,11 +152,11 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 	ListVector::SetListSize(result, offset);
 	result_key_vector.Slice(keys_child_vector, sel_keys, offset);
-	result_key_vector.Flatten(offset);
+	result_key_vector.Flatten();
 	result_value_vector.Slice(values_child_vector, sel_values, offset);
-	result_value_vector.Flatten(offset);
+	result_value_vector.Flatten();
 	FlatVector::ValidityMutable(ListVector::GetChildMutable(result)).Resize(result_child_size);
-	result.Verify(row_count);
+	result.Verify();
 }
 
 ScalarFunctionSet MapFun::GetFunctions() {

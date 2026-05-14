@@ -93,10 +93,10 @@ static bool AggregateStateToStructReinterpret(Vector &source, Vector &result, id
 		result_entries[i].Reference(source_entries[i]);
 	}
 
-	source.Flatten(count);
+	source.Flatten();
 	FlatVector::ValidityMutable(result) = FlatVector::Validity(source);
 	FlatVector::SetSize(result, count_t(count));
-	result.Verify(count);
+	result.Verify();
 	return true;
 }
 
