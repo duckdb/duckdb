@@ -29,7 +29,8 @@ enum class StringStatsType {
 };
 
 struct StringStatsData {
-	constexpr static uint32_t MAX_STRING_MINMAX_SIZE = 8;
+	constexpr static uint32_t CURRENT_MAX_STRING_MINMAX_SIZE = 12;
+	constexpr static uint32_t LEGACY_MAX_STRING_MINMAX_SIZE = 8;
 
 	//! The minimum value of the segment, potentially truncated
 	string_t min;
@@ -41,6 +42,10 @@ struct StringStatsData {
 	bool has_max_string_length;
 	//! The maximum string length in bytes
 	uint32_t max_string_length;
+	//! WHether or not the total string length is known
+	bool has_total_string_length;
+	//! The total (summed) length of all strings
+	uint64_t total_string_length;
 	//! Min stats type
 	StringStatsType min_type;
 	//! Max stats type
@@ -60,6 +65,8 @@ struct StringStats {
 	DUCKDB_API static bool HasMaxStringLength(const BaseStatistics &stats);
 	//! Returns the maximum string length, or throws an exception if !HasMaxStringLength()
 	DUCKDB_API static uint32_t MaxStringLength(const BaseStatistics &stats);
+	//! Returns the total string length if known
+	DUCKDB_API static optional_idx TotalStringLength(const BaseStatistics &stats);
 	//! Whether or not the strings can contain unicode
 	DUCKDB_API static bool CanContainUnicode(const BaseStatistics &stats);
 	//! Returns the min value
