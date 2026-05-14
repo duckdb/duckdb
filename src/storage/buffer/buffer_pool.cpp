@@ -66,6 +66,17 @@ shared_ptr<BlockMemory> BufferEvictionNode::TryGetBlockMemory() {
 	return shared_memory_p;
 }
 
+bool BufferEvictionNode::IsDeadNode() {
+	auto shared_memory_p = memory_p.lock();
+	if (!shared_memory_p) {
+		return true;
+	}
+	if (handle_sequence_number != shared_memory_p->GetEvictionSequenceNumber()) {
+		return true;
+	}
+	return false;
+}
+
 typedef duckdb_moodycamel::ConcurrentQueue<BufferEvictionNode> eviction_queue_t;
 
 struct EvictionQueue {
@@ -109,7 +120,7 @@ public:
 
 private:
 	//! Bulk purge dead nodes from the eviction queue. Then, enqueue those that are still alive.
-	void PurgeIteration(const idx_t purge_size);
+	void PurgeIteration(const idx_t purge_size, vector<BufferEvictionNode> &alive_nodes_out);
 
 public:
 	//! The type of the buffers in this queue and helper function (both for verification only)
@@ -191,11 +202,19 @@ void EvictionQueue::Purge() {
 	// guaranteeing that we always exit the loop.
 
 	idx_t max_purges = approx_q_size / purge_size;
-	while (max_purges != 0) {
-		PurgeIteration(purge_size);
 
-		// update relevant sizes and potentially early-out
-		approx_q_size = q.size_approx();
+	// Accumulate alive nodes across all iterations and re-enqueue once at the end.
+	// This prevents the purge thread from feeding alive nodes back into its own
+	// moodycamel sub-queue between iterations, which would cause subsequent
+	// try_dequeue_bulk calls to re-drain those same alive nodes instead of
+	// reaching dead entries in worker thread sub-queues.
+	vector<BufferEvictionNode> alive_nodes_to_reenqueue;
+
+	while (max_purges != 0) {
+		PurgeIteration(purge_size, alive_nodes_to_reenqueue);
+
+		// The effective queue size includes alive nodes held in our buffer
+		approx_q_size = q.size_approx() + alive_nodes_to_reenqueue.size();
 
 		// early-out according to (2.1)
 		if (approx_q_size < purge_size * EARLY_OUT_MULTIPLIER) {
@@ -213,9 +232,14 @@ void EvictionQueue::Purge() {
 
 		max_purges--;
 	}
+
+	// Re-enqueue all alive nodes after the purge loop completes
+	if (!alive_nodes_to_reenqueue.empty()) {
+		q.enqueue_bulk(alive_nodes_to_reenqueue.begin(), alive_nodes_to_reenqueue.size());
+	}
 }
 
-void EvictionQueue::PurgeIteration(const idx_t purge_size) {
+void EvictionQueue::PurgeIteration(const idx_t purge_size, vector<BufferEvictionNode> &alive_nodes_out) {
 	// if this purge is significantly smaller or bigger than the previous purge, then
 	// we need to resize the purge_nodes vector. Note that this barely happens, as we
 	// purge queue_insertions * PURGE_SIZE_MULTIPLIER nodes
@@ -227,25 +251,21 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 	// bulk purge
 	const idx_t actually_dequeued = q.try_dequeue_bulk(purge_nodes.begin(), purge_size);
 
-	// retrieve all alive nodes that have been wrongly dequeued
-	idx_t alive_nodes = 0;
+	idx_t dead_count = 0;
 	auto debug_sleep_micros = debug_eviction_queue_sleep.load(std::memory_order_relaxed);
 	for (idx_t i = 0; i < actually_dequeued; i++) {
 		auto &node = purge_nodes[i];
-		auto handle = node.TryGetBlockMemory();
 		if (debug_sleep_micros > 0) {
-			// Debug race conditions regarding the ownership of the BlockMemory.
 			ThreadUtil::SleepMicroSeconds(debug_sleep_micros);
 		}
-		if (handle) {
-			purge_nodes[alive_nodes++] = std::move(node);
+		if (node.IsDeadNode()) {
+			dead_count++;
+		} else {
+			alive_nodes_out.push_back(std::move(node));
 		}
 	}
 
-	// bulk re-add (TODO order them by timestamp to better retain the LRU behavior)
-	q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
-
-	total_dead_nodes -= actually_dequeued - alive_nodes;
+	total_dead_nodes -= dead_count;
 }
 
 BufferPool::BufferPool(BlockAllocator &block_allocator, idx_t maximum_memory, bool track_eviction_timestamps,

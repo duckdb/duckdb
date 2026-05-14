@@ -34,7 +34,7 @@ BlockMemory::~BlockMemory() { // NOLINT: allow internal exceptions
 	// The block memory is being destroyed, meaning that any unswizzled pointers are now binary junk.
 	SetSwizzling(nullptr);
 	D_ASSERT(!GetBuffer() || GetBuffer()->GetBufferType() == GetBufferType());
-	if (GetBuffer() && GetBufferType() != FileBufferType::TINY_BUFFER) {
+	if (GetBufferType() != FileBufferType::TINY_BUFFER) {
 		// Kill the latest version in the eviction queue.
 		GetBufferManager().GetBufferPool().IncrementDeadNodes(*this);
 	}
