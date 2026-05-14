@@ -1,0 +1,10 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_usmallint.benchmark
+# description: Benchmark SQL append while computing USMALLINT zonemap statistics
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_usmallint.benchmark
+DESCRIPTION=Benchmark SQL append while computing USMALLINT zonemap statistics
+TYPE_NAME=USMALLINT
+TYPE=USMALLINT
+VALUE_MODULUS=10000

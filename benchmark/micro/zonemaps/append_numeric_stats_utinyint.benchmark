@@ -1,0 +1,10 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_utinyint.benchmark
+# description: Benchmark SQL append while computing UTINYINT zonemap statistics
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_utinyint.benchmark
+DESCRIPTION=Benchmark SQL append while computing UTINYINT zonemap statistics
+TYPE_NAME=UTINYINT
+TYPE=UTINYINT
+VALUE_MODULUS=100

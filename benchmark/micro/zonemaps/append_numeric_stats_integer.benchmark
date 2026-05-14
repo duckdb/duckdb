@@ -1,0 +1,10 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_integer.benchmark
+# description: Benchmark SQL append while computing INTEGER zonemap statistics
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_integer.benchmark
+DESCRIPTION=Benchmark SQL append while computing INTEGER zonemap statistics
+TYPE_NAME=INTEGER
+TYPE=INTEGER
+VALUE_MODULUS=1000000000

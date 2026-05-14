@@ -1,0 +1,10 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_hugeint.benchmark
+# description: Benchmark SQL append while computing HUGEINT zonemap statistics
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_hugeint.benchmark
+DESCRIPTION=Benchmark SQL append while computing HUGEINT zonemap statistics
+TYPE_NAME=HUGEINT
+TYPE=HUGEINT
+VALUE_MODULUS=10000000000

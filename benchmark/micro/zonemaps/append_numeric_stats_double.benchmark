@@ -1,0 +1,10 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_double.benchmark
+# description: Benchmark SQL append while computing DOUBLE zonemap statistics
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_double.benchmark
+DESCRIPTION=Benchmark SQL append while computing DOUBLE zonemap statistics
+TYPE_NAME=DOUBLE
+TYPE=DOUBLE
+VALUE_MODULUS=10000000000

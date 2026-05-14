@@ -1,0 +1,280 @@
+# name: test/sql/storage/append_contiguous_numeric_stats.test
+# description: Verify contiguous fixed-size appends preserve numeric statistics
+# group: [storage]
+
+# load the DB from disk
+load {TEST_DIR}/append_contiguous_numeric_stats.db
+
+statement ok
+CREATE TABLE append_contiguous_primitive_integers(
+	i8 TINYINT,
+	i16 SMALLINT,
+	i32 INTEGER,
+	i64 BIGINT,
+	u8 UTINYINT,
+	u16 USMALLINT,
+	u32 UINTEGER,
+	u64 UBIGINT
+)
+
+statement ok
+INSERT INTO append_contiguous_primitive_integers
+SELECT
+	CAST((i % 256) - 128 AS TINYINT),
+	CAST((i % 65536) - 32768 AS SMALLINT),
+	CAST(i - 150000 AS INTEGER),
+	CAST(i - 150000 AS BIGINT),
+	CAST(i % 256 AS UTINYINT),
+	CAST(i % 65536 AS USMALLINT),
+	CAST(i AS UINTEGER),
+	CAST(i AS UBIGINT)
+FROM range(300000) tbl(i)
+
+statement ok
+CREATE TABLE append_contiguous_floats(f FLOAT)
+
+statement ok
+INSERT INTO append_contiguous_floats VALUES ('nan'::FLOAT), ('inf'::FLOAT), ('-inf'::FLOAT), (-0.0::FLOAT), (0.0::FLOAT), (1.5::FLOAT), (-2.5::FLOAT)
+
+statement ok
+CREATE TABLE append_contiguous_doubles(d DOUBLE)
+
+statement ok
+INSERT INTO append_contiguous_doubles VALUES ('nan'::DOUBLE), ('inf'::DOUBLE), ('-inf'::DOUBLE), (-0.0::DOUBLE), (0.0::DOUBLE), (1.5::DOUBLE), (-2.5::DOUBLE)
+
+statement ok
+CREATE TABLE append_contiguous_all_nan_float(f FLOAT)
+
+statement ok
+INSERT INTO append_contiguous_all_nan_float SELECT 'nan'::FLOAT FROM range(4096)
+
+statement ok
+CREATE TABLE append_contiguous_all_nan_double(d DOUBLE)
+
+statement ok
+INSERT INTO append_contiguous_all_nan_double SELECT 'nan'::DOUBLE FROM range(4096)
+
+statement ok
+CREATE TABLE append_contiguous_nullable_integers(i INTEGER, u UINTEGER)
+
+statement ok
+INSERT INTO append_contiguous_nullable_integers
+SELECT
+	CASE WHEN i % 97 = 0 THEN NULL ELSE CAST(i - 2048 AS INTEGER) END,
+	CASE WHEN i % 97 = 0 THEN NULL ELSE CAST(i AS UINTEGER) END
+FROM range(4096) tbl(i)
+
+statement ok
+CREATE TABLE append_contiguous_nullable_float_special(f FLOAT)
+
+statement ok
+INSERT INTO append_contiguous_nullable_float_special
+SELECT
+	CASE
+		WHEN i % 97 = 0 THEN NULL
+		WHEN i % 11 = 0 THEN 'nan'::FLOAT
+		WHEN i % 13 = 0 THEN 'inf'::FLOAT
+		WHEN i % 17 = 0 THEN '-inf'::FLOAT
+		WHEN i % 2 = 0 THEN -0.0::FLOAT
+		ELSE CAST(i AS FLOAT)
+	END
+FROM range(4096) tbl(i)
+
+statement ok
+CREATE TABLE append_contiguous_nullable_double_special(d DOUBLE)
+
+statement ok
+INSERT INTO append_contiguous_nullable_double_special
+SELECT
+	CASE
+		WHEN i % 97 = 0 THEN NULL
+		WHEN i % 11 = 0 THEN 'nan'::DOUBLE
+		WHEN i % 13 = 0 THEN 'inf'::DOUBLE
+		WHEN i % 17 = 0 THEN '-inf'::DOUBLE
+		WHEN i % 2 = 0 THEN -0.0::DOUBLE
+		ELSE CAST(i AS DOUBLE)
+	END
+FROM range(4096) tbl(i)
+
+statement ok
+CREATE TABLE append_contiguous_all_null_integer(i INTEGER)
+
+statement ok
+INSERT INTO append_contiguous_all_null_integer SELECT NULL::INTEGER FROM range(4096)
+
+statement ok
+CREATE TABLE append_contiguous_all_null_float(f FLOAT)
+
+statement ok
+INSERT INTO append_contiguous_all_null_float SELECT NULL::FLOAT FROM range(4096)
+
+statement ok
+CHECKPOINT
+
+restart
+
+query III
+SELECT count(*), min(i8), max(i8) FROM append_contiguous_primitive_integers
+----
+300000	-128	127
+
+query III
+SELECT count(*), min(i16), max(i16) FROM append_contiguous_primitive_integers
+----
+300000	-32768	32767
+
+query III
+SELECT count(*), min(i32), max(i32) FROM append_contiguous_primitive_integers
+----
+300000	-150000	149999
+
+query III
+SELECT count(*), min(i64), max(i64) FROM append_contiguous_primitive_integers
+----
+300000	-150000	149999
+
+query III
+SELECT count(*), min(u8), max(u8) FROM append_contiguous_primitive_integers
+----
+300000	0	255
+
+query III
+SELECT count(*), min(u16), max(u16) FROM append_contiguous_primitive_integers
+----
+300000	0	65535
+
+query III
+SELECT count(*), min(u32), max(u32) FROM append_contiguous_primitive_integers
+----
+300000	0	299999
+
+query III
+SELECT count(*), min(u64), max(u64) FROM append_contiguous_primitive_integers
+----
+300000	0	299999
+
+query I
+SELECT count(*) FROM append_contiguous_floats WHERE f='nan'::FLOAT
+----
+1
+
+query I
+SELECT count(*) FROM append_contiguous_floats WHERE f>'inf'::FLOAT
+----
+1
+
+query I
+SELECT count(*) FROM append_contiguous_floats WHERE f<'-inf'::FLOAT
+----
+0
+
+query I
+SELECT count(*) FROM append_contiguous_floats WHERE f=0.0::FLOAT
+----
+2
+
+query I
+SELECT count(*) FROM append_contiguous_doubles WHERE d='nan'::DOUBLE
+----
+1
+
+query I
+SELECT count(*) FROM append_contiguous_doubles WHERE d>'inf'::DOUBLE
+----
+1
+
+query I
+SELECT count(*) FROM append_contiguous_doubles WHERE d<'-inf'::DOUBLE
+----
+0
+
+query I
+SELECT count(*) FROM append_contiguous_doubles WHERE d=0.0::DOUBLE
+----
+2
+
+query I
+SELECT count(*) FROM append_contiguous_all_nan_float WHERE f='nan'::FLOAT
+----
+4096
+
+query I
+SELECT count(*) FROM append_contiguous_all_nan_double WHERE d='nan'::DOUBLE
+----
+4096
+
+query IIIIIIII
+SELECT count(*), count(i), count(*) FILTER (WHERE i IS NULL), min(i), max(i), count(u), min(u), max(u)
+FROM append_contiguous_nullable_integers
+----
+4096	4053	43	-2047	2047	4053	1	4095
+
+query III
+SELECT count(*), count(f), count(*) FILTER (WHERE f IS NULL) FROM append_contiguous_nullable_float_special
+----
+4096	4053	43
+
+query I
+SELECT count(*) FROM append_contiguous_nullable_float_special WHERE f='nan'::FLOAT
+----
+369
+
+query I
+SELECT count(*) FROM append_contiguous_nullable_float_special WHERE f>'inf'::FLOAT
+----
+369
+
+query I
+SELECT count(*) FROM append_contiguous_nullable_float_special WHERE f<'-inf'::FLOAT
+----
+0
+
+query I
+SELECT count(*) FROM append_contiguous_nullable_float_special WHERE f=1.0::FLOAT
+----
+1
+
+query III
+SELECT count(*), count(d), count(*) FILTER (WHERE d IS NULL) FROM append_contiguous_nullable_double_special
+----
+4096	4053	43
+
+query I
+SELECT count(*) FROM append_contiguous_nullable_double_special WHERE d='nan'::DOUBLE
+----
+369
+
+query I
+SELECT count(*) FROM append_contiguous_nullable_double_special WHERE d>'inf'::DOUBLE
+----
+369
+
+query I
+SELECT count(*) FROM append_contiguous_nullable_double_special WHERE d<'-inf'::DOUBLE
+----
+0
+
+query I
+SELECT count(*) FROM append_contiguous_nullable_double_special WHERE d=1.0::DOUBLE
+----
+1
+
+query III
+SELECT count(*), count(i), count(*) FILTER (WHERE i IS NULL) FROM append_contiguous_all_null_integer
+----
+4096	0	4096
+
+query I
+SELECT count(*) FROM (SELECT min(i) AS m FROM append_contiguous_all_null_integer) tbl WHERE m IS NULL
+----
+1
+
+query III
+SELECT count(*), count(f), count(*) FILTER (WHERE f IS NULL) FROM append_contiguous_all_null_float
+----
+4096	0	4096
+
+query I
+SELECT count(*) FROM (SELECT min(f) AS m FROM append_contiguous_all_null_float) tbl WHERE m IS NULL
+----
+1

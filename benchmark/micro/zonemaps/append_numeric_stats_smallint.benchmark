@@ -1,0 +1,10 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_smallint.benchmark
+# description: Benchmark SQL append while computing SMALLINT zonemap statistics
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_smallint.benchmark
+DESCRIPTION=Benchmark SQL append while computing SMALLINT zonemap statistics
+TYPE_NAME=SMALLINT
+TYPE=SMALLINT
+VALUE_MODULUS=10000
