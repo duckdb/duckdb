@@ -19,6 +19,7 @@
 namespace duckdb {
 
 struct GlobalFileState;
+struct BoundOrderByNode;
 
 struct CopyToFileInfo {
 	explicit CopyToFileInfo(string file_path_p) : file_path(std::move(file_path_p)) {
@@ -141,6 +142,9 @@ public:
 	bool partition_output;
 	bool write_partition_columns;
 	bool hive_file_pattern;
+
+	//! If the data should be sorted
+	vector<BoundOrderByNode> order_columns;
 };
 
 } // namespace duckdb

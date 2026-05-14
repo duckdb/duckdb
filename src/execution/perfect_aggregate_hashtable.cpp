@@ -1,5 +1,6 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 
+#include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -23,8 +24,14 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	total_groups = (uint64_t)1 << total_required_bits;
 	// we don't need to store the groups in a perfect hash table, since the group keys can be deduced by their location
 	grouping_columns = group_types_p.size();
+	clustered_state.all_clustered = AllAggregatesClustered(aggregate_objects_p);
+	clustered_state.n_clustered = CountAggregatesClustered(aggregate_objects_p);
 	layout_ptr->Initialize(std::move(aggregate_objects_p));
 	tuple_size = layout_ptr->GetRowWidth();
+
+	if (clustered_state.n_clustered > 1) {
+		clustered_state.Initialize();
+	}
 
 	// allocate and null initialize the data
 	owned_data = make_unsafe_uniq_array_uninitialized<data_t>(tuple_size * total_groups);
@@ -124,14 +131,18 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	memset(address_data, 0, groups.size() * sizeof(uintptr_t));
 	D_ASSERT(groups.ColumnCount() == group_minima.size());
 
-	// then compute the actual group location by iterating over each of the groups
+	// Compute raw group ids first; convert them to state pointers below if needed.
 	idx_t current_shift = total_required_bits;
 	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
 		current_shift -= required_bits[i];
 		ComputeGroupLocation(groups.data[i], group_minima[i], address_data, current_shift);
 	}
-	// now we have the HT entry number for every tuple
-	// compute the actual pointer to the data by adding it to the base HT pointer and multiplying by the tuple size
+
+	if (AddChunkClustered(address_data, payload, groups.size())) {
+		return;
+	}
+
+	// Non-clustered path: convert group ids to state pointers and update aggregates.
 	for (idx_t i = 0; i < groups.size(); i++) {
 		const auto group = address_data[i];
 		if (group >= total_groups) {
@@ -144,23 +155,60 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		address_data[i] = uintptr_t(data) + group * tuple_size;
 	}
 
-	// after finding the group location we update the aggregates
 	idx_t payload_idx = 0;
 	auto &aggregates = layout_ptr->GetAggregates();
 	RowOperationsState row_state(*aggregate_allocator);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = aggregates[aggr_idx];
-		auto input_count = (idx_t)aggregate.child_count;
 		if (aggregate.filter) {
 			RowOperations::UpdateFilteredStates(row_state, filter_set.GetFilterData(aggr_idx), aggregate, addresses,
 			                                    payload, payload_idx);
 		} else {
 			RowOperations::UpdateStates(row_state, aggregate, addresses, payload, payload_idx);
 		}
-		// move to the next aggregate
-		payload_idx += input_count;
+		payload_idx += aggregate.child_count;
 		VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggregate.payload_size));
 	}
+}
+
+bool PerfectAggregateHashTable::AddChunkClustered(uintptr_t *address_data, DataChunk &payload, idx_t count) {
+	// Build the clustered permutation from raw group ids.
+	ClusteredAggr clustered;
+	uint64_t group_ids_buf[STANDARD_VECTOR_SIZE];
+	const uint64_t *group_ids_ptr;
+	if constexpr (sizeof(uintptr_t) == sizeof(uint64_t)) {
+		group_ids_ptr = reinterpret_cast<const uint64_t *>(address_data);
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			group_ids_buf[i] = static_cast<uint64_t>(address_data[i]);
+		}
+		group_ids_ptr = group_ids_buf;
+	}
+	if (total_groups >= ClusteredAggr::MAX_GID_COUNT) {
+		return false;
+	}
+	if (!clustered_state.TryBuild(clustered, group_ids_ptr, count)) {
+		return false;
+	}
+	clustered.InitializeStates([&](uint64_t gid) {
+		auto group_id = static_cast<idx_t>(gid);
+		group_is_set[group_id] = true;
+		return data + group_id * tuple_size;
+	});
+
+	// When all aggregates are clustered-aware, we can skip maintaining per-tuple addresses.
+	bool skip_addresses = clustered_state.all_clustered;
+	if (!skip_addresses) {
+		for (idx_t i = 0; i < count; i++) {
+			address_data[i] = uintptr_t(data) + address_data[i] * tuple_size;
+		}
+	}
+
+	auto &aggregates = layout_ptr->GetAggregates();
+	RowOperationsState row_state(*aggregate_allocator);
+	RowOperations::UpdateStatesClustered(row_state, aggregates, &filter_set, nullptr, addresses, payload, count,
+	                                     clustered, skip_addresses);
+	return true;
 }
 
 void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {

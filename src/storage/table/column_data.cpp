@@ -10,6 +10,7 @@
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -29,23 +30,17 @@
 namespace duckdb {
 
 static bool IsDirectNullCheckFilter(const TableFilter &filter) {
-	switch (filter.filter_type) {
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr = filter.Cast<ExpressionFilter>().expr;
-		if (expr->GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
-			return false;
-		}
-		auto &op = expr->Cast<BoundOperatorExpression>();
-		if ((op.GetExpressionType() != ExpressionType::OPERATOR_IS_NULL &&
-		     op.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) ||
-		    op.children.size() != 1) {
-			return false;
-		}
-		return op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
-	}
-	default:
+	auto &expr = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::IsDirectNullCheckFilter").expr;
+	if (expr->GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
 		return false;
 	}
+	auto &op = expr->Cast<BoundOperatorExpression>();
+	if ((op.GetExpressionType() != ExpressionType::OPERATOR_IS_NULL &&
+	     op.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) ||
+	    op.children.size() != 1) {
+		return false;
+	}
+	return op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
 }
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
@@ -417,7 +412,9 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	// for dynamic filters we never consider the segment being "checked" as it can always change
-	state.segment_checked = filter.filter_type != TableFilterType::DYNAMIC_FILTER;
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
+	bool is_dynamic = ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME);
+	state.segment_checked = !is_dynamic;
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
@@ -425,7 +422,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 		    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
 		        ? state.child_states[0].current->GetNode().stats.statistics
 		        : state.current->GetNode().stats.statistics;
-		prune_result = filter.CheckStatistics(segment_stats);
+		prune_result = expr_filter.CheckStatistics(segment_stats);
 		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
@@ -437,7 +434,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	}
 	auto update_stats = updates->GetStatistics();
 	// combine the update and original prune result
-	FilterPropagateResult update_result = filter.CheckStatistics(*update_stats);
+	FilterPropagateResult update_result = expr_filter.CheckStatistics(*update_stats);
 	if (prune_result == update_result) {
 		return prune_result;
 	}
@@ -454,9 +451,11 @@ FilterPropagateResult ColumnData::CheckZonemap(const StorageIndex &index, TableF
 		if (!child_stats) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		return filter.CheckStatistics(*child_stats);
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
+		return expr_filter.CheckStatistics(*child_stats);
 	}
-	return filter.CheckStatistics(stats->statistics);
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
+	return expr_filter.CheckStatistics(stats->statistics);
 }
 
 const BaseStatistics &ColumnData::GetStatisticsRef() const {

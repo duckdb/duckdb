@@ -3,7 +3,7 @@
 # group: [csv]
 
 # No way CI can handle this
-mode skip
+mode skip instable
 
 
 require tpch
