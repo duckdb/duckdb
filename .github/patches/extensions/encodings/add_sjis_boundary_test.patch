@@ -1,0 +1,56 @@
+commit b97648dc315e35c14a64ca7f4b41d5fc16cbbfea
+Author: coponhub <coponhtc@gmail.com>
+Date:   Tue Jan 20 19:29:44 2026 +0900
+
+    add test for boundary error with buffer size 100000
+
+diff --git a/data/shift_jis/boundary_line160_cp932.csv.gz b/data/shift_jis/boundary_line160_cp932.csv.gz
+new file mode 100644
+index 0000000000000000000000000000000000000000..486e4c1014235f235450ddb08595de16960614b6
+GIT binary patch
+literal 57989
+zcmeI)Z)*&20KoCvNv=IomON0K3Hi5W(`uG@woYqVD|J>*opC2^<JxL@;DNG}?Fpqk
+zp(tHxt}BPOW)Dn=L`Xa#+XHHA<>#4k%$wMQeZDW@^8&urmtwI*dv7LMPG?S}PYou|
+zbRW<3bRSEm`kEUX>QdQ($n2}<@f8(Sk=Ns;w$3XL>o2~^f0-+PPu+i+tNmXt*VS=-
+z_UlCDk>+b_cTKJ9-~D8=;X-`)ZT`cpkGX-yvC(f2Ql&MIdxp<;%(rG&&+Ql+{5e!S
+zJk?h<efr&tbo<S{BX^%Q{aXK{wmxhtgw4I7Za!?N4qI=8P06tHbJ(~qY@ZBU&fQ6r
+z@>ky{`X3!S5ElUg1PBlyK!5-N0t5&UAV7cs0RjXF5FkK+009C72oNAZfB*pk1PBly
+zK!5-N0t5&UAV7cs0RjXF5FkK+009C72oP9)0>6tbtD=#A?f+94Ie7G>2oNAZfB*pk
+z1PBlyK!5-N0t5&UAV7cs0RjXF5FkK+009C72oNAZfB*pk1PBlyK!5-N0t5&UAV7cs
+z0RjXF5FkK+0D&bIs2tDMEWQ9DGv!aQmA6HJ009C72oNAZfB*pk1PBlyK!5-N0t5&U
+zAV7cs0RjXF5FkK+009C72oNAZfB*pk1PBlyK!5-N0t5&UAV7cs0RjXFEVaPBmZ#Ch
+z7r^<2(bi%ic3A`n5FkK+009C72oNAZfB*pk1PBlyK!5-N0t5&UAV7cs0RqcIU{7bo
+MMBB_zP1khfFNQ`0mjD0&
+
+literal 0
+HcmV?d00001
+
+diff --git a/test/sql/sjis_boundary.test b/test/sql/sjis_boundary.test
+new file mode 100644
+index 0000000..0cb8b48
+--- /dev/null
++++ b/test/sql/sjis_boundary.test
+@@ -0,0 +1,23 @@
++# name: test/sql/sjis_boundary.test
++# description: Test Shift-JIS with various configurations
++# group: [encodings]
++
++require encodings
++
++query I
++SELECT count(*)
++FROM read_csv(
++    'data/shift_jis/boundary_line160_cp932.csv.gz',
++    encoding='glibc-CP932-2.3.3',
++    buffer_size=10000,
++    columns={
++        'a': 'VARCHAR', 'b': 'VARCHAR', 'c': 'VARCHAR',
++        'd': 'VARCHAR', 'e': 'VARCHAR', 'f': 'VARCHAR',
++        'g': 'VARCHAR', 'h': 'VARCHAR', 'i': 'VARCHAR',
++        'j': 'VARCHAR', 'k': 'VARCHAR', 'l': 'VARCHAR'
++    },
++    auto_detect=false,
++    parallel=false
++)
++----
++100000
