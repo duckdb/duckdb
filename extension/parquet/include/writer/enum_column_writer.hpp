@@ -33,13 +33,6 @@ public:
 	EnumColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<string> schema_path_p);
 	~EnumColumnWriter() override = default;
 
-	uint32_t bit_width;
-	// Maps enum index to rank in lexicographic order over the enum's string values.
-	// Precomputed once so the on enum value write hot-path, we could compare integer instead of string comparison when
-	// finding the chunk's lex min/max.
-	vector<uint32_t> lex_rank;
-
-public:
 	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override;
 
 	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
@@ -63,6 +56,12 @@ private:
 	template <class T>
 	void WriteEnumInternal(WriteStream &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end,
 	                       EnumWriterPageState &page_state, StringStatisticsState &stats);
+
+	uint32_t bit_width;
+	// Maps enum index to rank in lexicographic order over the enum's string values.
+	// Precomputed once so the on enum value write hot-path, so we could compare integer instead of string when
+	// finding the chunk's lex min/max.
+	vector<uint32_t> lex_rank;
 };
 
 } // namespace duckdb

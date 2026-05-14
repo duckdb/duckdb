@@ -137,7 +137,7 @@ NULL
 NULL
 NULL
 
-# regression test for https://github.com/duckdb/duckdb/issues/22548
+# Regression test for https://github.com/duckdb/duckdb/issues/22548
 statement ok
 CREATE TYPE myenum AS ENUM ('a', 'b', 'c');
 
@@ -145,9 +145,20 @@ statement ok
 CREATE TABLE t1 AS SELECT 'a'::myenum AS m FROM range(10) t(i);
 
 statement ok
-COPY t1 TO '__TEST_DIR__/enum_stats_single.parquet' (FORMAT PARQUET);
+COPY t1 TO '__TEST_DIR__/enum_stats_single_1.parquet' (FORMAT PARQUET);
 
 query II
-SELECT stats_min, stats_max FROM parquet_metadata('__TEST_DIR__/enum_stats_single.parquet')
+SELECT stats_min, stats_max FROM parquet_metadata('__TEST_DIR__/enum_stats_single_1.parquet')
 ----
 a	a
+
+statement ok
+CREATE TABLE t2 AS SELECT 'c'::myenum AS m FROM range(10) t(i);
+
+statement ok
+COPY t2 TO '__TEST_DIR__/enum_stats_single_2.parquet' (FORMAT PARQUET);
+
+query II
+SELECT stats_min, stats_max FROM parquet_metadata('__TEST_DIR__/enum_stats_single_2.parquet')
+----
+c	c

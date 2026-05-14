@@ -49,7 +49,7 @@ EnumColumnWriter::EnumColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&
 	std::sort(order.begin(), order.end(),
 	          [&](uint32_t a, uint32_t b) { return LessThan::Operation(string_values[a], string_values[b]); });
 	lex_rank.resize(enum_count);
-	for (uint32_t rank = 0; rank < enum_count; rank++) {
+	for (uint32_t rank = 0; rank < enum_count; ++rank) {
 		lex_rank[order[rank]] = rank;
 	}
 }
@@ -80,16 +80,16 @@ void EnumColumnWriter::WriteEnumInternal(WriteStream &temp_writer, Vector &input
 				page_state.encoder.BeginWrite();
 				page_state.written_value = true;
 			}
-			auto idx = ptr[r];
-			page_state.encoder.WriteValue(temp_writer, idx);
-			auto rank = lex_rank[idx];
+			const auto enum_idx = ptr[r];
+			page_state.encoder.WriteValue(temp_writer, enum_idx);
+			auto rank = lex_rank[enum_idx];
 			if (!any_seen || rank < best_min_rank) {
 				best_min_rank = rank;
-				best_min_idx = idx;
+				best_min_idx = enum_idx;
 			}
 			if (!any_seen || rank > best_max_rank) {
 				best_max_rank = rank;
-				best_max_idx = idx;
+				best_max_idx = enum_idx;
 			}
 			any_seen = true;
 		}
