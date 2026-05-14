@@ -68,7 +68,23 @@ void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_group
 	row_groups.unflushed_row_groups.insert(row_groups.complete_row_groups);
 	row_groups.complete_row_groups++;
 	auto unflushed_row_groups = row_groups.unflushed_row_groups.size();
-	if (unflushed_row_groups >= Settings::Get<WriteBufferRowGroupCountSetting>(context)) {
+	// check if we should flush the row groups
+	// first check the amount of row groups
+	bool need_to_flush = unflushed_row_groups >= Settings::Get<WriteBufferRowGroupCountSetting>(context);
+	if (!need_to_flush) {
+		// we don't need to flush based on the amount of row groups - but we still might need to flush based on the
+		// amount of
+		auto &config = DBConfig::GetConfig(context);
+		auto memory_limit = config.options.write_buffer_row_group_memory_limit;
+		if (!memory_limit.IsValid()) {
+			memory_limit = config.options.maximum_memory / 5 / (config.options.maximum_threads + 1);
+		}
+		if (row_groups.collection->GetAllocationSize() >= memory_limit.GetIndex()) {
+			// we exhausted our memory available for buffering - flush
+			need_to_flush = true;
+		}
+	}
+	if (need_to_flush) {
 		// we have crossed our flush threshold - flush any unwritten row groups to disk
 		vector<const_reference<RowGroup>> to_flush;
 		vector<int64_t> segment_indexes;

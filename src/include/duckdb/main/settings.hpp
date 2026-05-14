@@ -1628,6 +1628,20 @@ struct WriteBufferRowGroupCountSetting {
 	static constexpr idx_t SettingIndex = 94;
 };
 
+struct WriteBufferRowGroupMemoryLimitSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "write_buffer_row_group_memory_limit";
+	static constexpr const char *Description =
+	    "The maximum data to buffer in row groups (in bytes) to buffer prior to flushing them together. When either "
+	    "this limit is reached, or write_buffer_row_group_count is reached, we flush the data to disk. Defaults to 20% "
+	    "of "
+	    "memory limit divided by thread count.";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ZstdMinStringLengthSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "zstd_min_string_length";

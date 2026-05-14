@@ -206,6 +206,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(WalAutocheckpointEntriesSetting),
     DUCKDB_SETTING_CALLBACK(WarningsAsErrorsSetting),
     DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
+    DUCKDB_GLOBAL(WriteBufferRowGroupMemoryLimitSetting),
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
