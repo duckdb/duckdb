@@ -10,6 +10,9 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
@@ -20,6 +23,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/storage_index.hpp"
@@ -212,6 +216,8 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 
 	vector<LogicalType> types;
 	vector<unique_ptr<Expression>> agg_results;
+	bool need_to_scan = false;
+	vector<idx_t> scan_partition_indices;
 	// we can keep execute eager aggregate if all partitions could be either filtered entirely or remained entirely
 	if (get.table_filters.HasFilters()) {
 		map<StorageIndex, reference<TableFilter>> filter_storage_index_map;
@@ -225,8 +231,9 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			}
 			filter_storage_index_map.emplace(storage_index, filter);
 		}
-		vector<PartitionStatistics> remaining_partition_stats;
-		for (auto &stats : partition_stats) {
+		vector<PartitionStatistics> precomputed_partition_stats;
+		for (idx_t partition_idx = 0; partition_idx < partition_stats.size(); partition_idx++) {
+			auto &stats = partition_stats[partition_idx];
 			if (!stats.partition_row_group) {
 				return;
 			}
@@ -256,17 +263,21 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			}
 			switch (filter_result) {
 			case FilterPropagateResult::FILTER_ALWAYS_TRUE:
-				// all filters passed - this partition should keep execute eager aggregate
-				remaining_partition_stats.push_back(std::move(stats));
+				precomputed_partition_stats.push_back(std::move(stats));
 				break;
 			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
 				break;
 			default:
-				// any filter that is not always true/false - bail
-				return;
+				need_to_scan = true;
+				scan_partition_indices.push_back(partition_idx);
+				break;
 			}
 		}
-		partition_stats = std::move(remaining_partition_stats);
+		if (precomputed_partition_stats.empty()) {
+			// no partitions can be pre-computed
+			return;
+		}
+		partition_stats = std::move(precomputed_partition_stats);
 	}
 
 	if (!min_max_bindings.empty()) {
@@ -308,6 +319,66 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			agg_results.emplace(agg_results.begin() + NumericCast<int64_t>(count_star_idx), std::move(count_result));
 			types.insert(types.begin() + NumericCast<int64_t>(count_star_idx), LogicalType::BIGINT);
 		}
+	}
+
+	if (need_to_scan) {
+		// Partial precomputation: some partitions need scanning
+		// Insert a LogicalProjection above the aggregate that combines pre-computed constants with scan results
+		if (!get.function.set_partitions_to_scan) {
+			// scan does not support partition filtering - bail out
+			return;
+		}
+
+		// Build projection expressions that merge pre-computed values with aggregate results
+		auto proj_index = optimizer.binder.GenerateTableIndex();
+		vector<unique_ptr<Expression>> proj_expressions;
+		for (idx_t i = 0; i < aggr.expressions.size(); i++) {
+			auto &aggr_expr = aggr.expressions[i]->Cast<BoundAggregateExpression>();
+			const string &fun_name = aggr_expr.function.GetName();
+
+			// Reference to the aggregate output column
+			auto agg_col_ref = make_uniq<BoundColumnRefExpression>(
+			    aggr_expr.GetReturnType(), ColumnBinding(aggr.aggregate_index, ProjectionIndex(i)));
+
+			if (fun_name == "count_star") {
+				// pre_count + count_star_from_scan
+				auto &pre_count_expr = agg_results[i];
+				auto add_expr = optimizer.BindScalarFunction("+", pre_count_expr->Copy(), std::move(agg_col_ref));
+				add_expr->SetAlias(aggr.expressions[i]->GetAlias());
+				proj_expressions.push_back(std::move(add_expr));
+			} else if (fun_name == "min" || fun_name == "max") {
+				// For min: COALESCE(least(pre_min, agg_min), pre_min)
+				// For max: COALESCE(greatest(pre_max, agg_max), pre_max)
+				auto &pre_val_expr = agg_results[i];
+				string merge_func = (fun_name == "min") ? "least" : "greatest";
+				auto merged = optimizer.BindScalarFunction(merge_func, pre_val_expr->Copy(), std::move(agg_col_ref));
+				auto coalesce =
+				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, aggr_expr.GetReturnType());
+				coalesce->children.push_back(std::move(merged));
+				coalesce->children.push_back(pre_val_expr->Copy());
+				coalesce->SetAlias(aggr.expressions[i]->GetAlias());
+				proj_expressions.push_back(std::move(coalesce));
+			}
+		}
+
+		// Tell the scan to only scan partitions whose aggregates were NOT pre-computed
+		get.SetPartitionsToScan(std::move(scan_partition_indices));
+
+		// Create LogicalProjection above the aggregate
+		auto projection = make_uniq<LogicalProjection>(proj_index, std::move(proj_expressions));
+		projection->children.push_back(std::move(node_ptr));
+
+		ColumnBindingReplacer replacer;
+		for (idx_t i = 0; i < aggr.expressions.size(); i++) {
+			auto old_binding = ColumnBinding(aggr.aggregate_index, ProjectionIndex(i));
+			auto new_binding = ColumnBinding(proj_index, ProjectionIndex(i));
+			replacer.replacement_bindings.emplace_back(old_binding, new_binding);
+		}
+
+		replacer.stop_operator = projection.get();
+		node_ptr = std::move(projection);
+		replacer.VisitOperator(*root);
+		return;
 	}
 
 	// Set column names

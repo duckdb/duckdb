@@ -362,6 +362,9 @@ typedef vector<column_t> (*table_function_get_row_id_columns)(ClientContext &con
 typedef void (*table_function_set_scan_order)(unique_ptr<RowGroupOrderOptions> order_options,
                                               optional_ptr<FunctionData> bind_data);
 
+typedef void (*table_function_set_partitions_to_scan_t)(vector<idx_t> partition_indices,
+                                                        optional_ptr<FunctionData> bind_data);
+
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
 
@@ -482,6 +485,8 @@ public:
 	table_function_get_row_id_columns get_row_id_columns;
 	//! (Optional) sets the order to scan the row groups in
 	table_function_set_scan_order set_scan_order;
+	//! (Optional) restricts the scan to a specific subset of partitions (by index in get_partition_stats order)
+	table_function_set_partitions_to_scan_t set_partitions_to_scan = nullptr;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;
