@@ -64,13 +64,16 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 	case LogicalOperatorType::LOGICAL_TOP_N:
-	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		// does not affect probe side - recurse into left child
 		// FIXME: we can probably recurse into more operators here (e.g. window, unnest)
 		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
 		break;
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+		// DISTINCT can be generated from complex subtrees (e.g. joins), and pushing
+		// dynamic join filters below it can lead to incorrect results.
+		return;
 	case LogicalOperatorType::LOGICAL_UNNEST: {
 		auto &unnest = probe_child.Cast<LogicalUnnest>();
 		// check if the filters apply to the unnest index
