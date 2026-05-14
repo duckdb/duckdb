@@ -504,6 +504,20 @@ public:
 		       clustered.group_runs[0].sel == nullptr;
 	}
 
+	template <bool SIMPLE_DICT, class STATE_TYPE, class INPUT_TYPE, class OP>
+	static void ExecuteUnaryClusteredDictOpt(Vector &input, const ClusteredAggr &clustered, idx_t count,
+	                                         const sel_t *cluster_iter = nullptr) {
+		UnifiedVectorFormat idata;
+		input.ToUnifiedFormat(idata);
+		auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
+		if constexpr (SIMPLE_DICT) {
+			ExecuteUnaryClusteredDispatch<STATE_TYPE, INPUT_TYPE, OP>(vals, clustered, idata.validity, nullptr,
+			                                                          cluster_iter);
+		} else {
+			ExecuteUnaryClusteredDispatch<STATE_TYPE, INPUT_TYPE, OP>(vals, clustered, idata.validity, idata.sel);
+		}
+	}
+
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void ExecuteUnaryClusteredOpt(Vector &input, const ClusteredAggr &clustered, idx_t count) {
 		auto vals = FlatVector::GetData<INPUT_TYPE>(input);
@@ -704,11 +718,12 @@ public:
 					}
 				}
 				auto *cluster_iter = clustered.ClusterIter(input, count);
-				UnifiedVectorFormat idata;
-				input.ToUnifiedFormat(idata);
-				auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
-				ExecuteUnaryClusteredDispatch<STATE_TYPE, INPUT_TYPE, OP>(
-				    vals, clustered, idata.validity, cluster_iter ? nullptr : idata.sel, cluster_iter);
+				if (cluster_iter) {
+					ExecuteUnaryClusteredDictOpt<true, STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count,
+					                                                               cluster_iter);
+				} else {
+					ExecuteUnaryClusteredDictOpt<false, STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count);
+				}
 				return;
 			}
 			default:
