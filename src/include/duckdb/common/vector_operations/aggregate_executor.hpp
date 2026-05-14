@@ -591,9 +591,6 @@ public:
 			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
 			const auto *run_sel = clustered.group_runs[r].sel;
 			const idx_t run_count = clustered.group_runs[r].count;
-			if (run_count == 0) {
-				continue;
-			}
 			int64_t local64 = 0;
 			if (run_sel) {
 				for (idx_t k = 0; k < run_count; k++) {
@@ -606,8 +603,6 @@ public:
 			}
 			if (local64 != 0) {
 				state.value = Hugeint::Add(state.value, local64);
-				state.isset = true;
-			} else if (!validity.CanHaveNull()) {
 				state.isset = true;
 			} else if (!state.isset) { // rare: we added 0 -- were all values NULL?
 				for (idx_t k = 0; k < run_count; k++) {
