@@ -170,6 +170,15 @@ void StringStats::SetContainsUnicode(BaseStatistics &stats) {
 	GetDataUnsafe(stats).has_unicode = true;
 }
 
+static void LegacyConstructValue(const_data_ptr_t data, idx_t size, data_t target[]) {
+	constexpr auto max_length = StringStatsData::LEGACY_MAX_STRING_MINMAX_SIZE;
+	idx_t value_size = size > max_length ? max_length : size;
+	memcpy(target, data, value_size);
+	for (idx_t i = value_size; i < max_length; i++) {
+		target[i] = '\0';
+	}
+}
+
 void LegacyConstructMinMax(string_t input, StringStatsType type, data_t result[], bool is_min) {
 	auto input_data = const_data_ptr_cast(input.GetData());
 	if (type == StringStatsType::EMPTY_STATS) {
@@ -181,7 +190,7 @@ void LegacyConstructMinMax(string_t input, StringStatsType type, data_t result[]
 		data_t no_stats_byte = is_min ? 0x00 : 0xFF;
 		memset(result, no_stats_byte, StringStatsData::LEGACY_MAX_STRING_MINMAX_SIZE);
 	} else {
-		StringStatsWriter::ConstructLegacyValue(input_data, input.GetSize(), result);
+		LegacyConstructValue(input_data, input.GetSize(), result);
 	}
 }
 
@@ -242,12 +251,11 @@ public:
 	static constexpr uint32_t MIN_LENGTH_MASK = LENGTH_MASK << MIN_LENGTH_POSITION;
 	static constexpr uint32_t MAX_LENGTH_MASK = LENGTH_MASK << MAX_LENGTH_POSITION;
 
-
 	void SetHasUnicode(bool has_unicode) {
 		// default is has_unicode = true
 		if (!has_unicode) {
 			data |= NO_UNICODE_FLAG;
-		}else {
+		} else {
 			data &= ~NO_UNICODE_FLAG;
 		}
 	}
@@ -292,7 +300,8 @@ public:
 		if (min_length > 12) {
 			throw InternalException("StringStatsField::SetMinLength should be at most 12");
 		}
-		data = (data & ~MIN_LENGTH_MASK) | ((static_cast<uint32_t>(min_length) << MIN_LENGTH_POSITION) & MIN_LENGTH_MASK);
+		data =
+		    (data & ~MIN_LENGTH_MASK) | ((static_cast<uint32_t>(min_length) << MIN_LENGTH_POSITION) & MIN_LENGTH_MASK);
 	}
 	uint32_t GetMinLength() const {
 		auto result = (data >> MIN_LENGTH_POSITION) & LENGTH_MASK;
@@ -305,7 +314,8 @@ public:
 		if (max_length > 12) {
 			throw InternalException("StringStatsField::SetMaxLength should be at most 12");
 		}
-		data = (data & ~MAX_LENGTH_MASK) | ((static_cast<uint32_t>(max_length) << MAX_LENGTH_POSITION) & MAX_LENGTH_MASK);
+		data =
+		    (data & ~MAX_LENGTH_MASK) | ((static_cast<uint32_t>(max_length) << MAX_LENGTH_POSITION) & MAX_LENGTH_MASK);
 	}
 	uint32_t GetMaxLength() const {
 		auto result = (data >> MAX_LENGTH_POSITION) & LENGTH_MASK;
@@ -373,7 +383,9 @@ void StringStats::Serialize(const BaseStatistics &stats, Serializer &serializer)
 		field.SetMaxType(max_type);
 		// write the stats as a single packed field
 		serializer.WriteProperty(206, "packed_field", field.GetData());
-		serializer.WritePropertyWithDefault(207, "total_string_length", string_data.has_total_string_length ? string_data.total_string_length : optional_idx());
+		serializer.WritePropertyWithDefault(207, "total_string_length",
+		                                    string_data.has_total_string_length ? string_data.total_string_length
+		                                                                        : optional_idx());
 	}
 }
 
@@ -382,8 +394,10 @@ void StringStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) 
 	// try to deserialize legacy stats first
 	data_t legacy_min_data[StringStatsData::LEGACY_MAX_STRING_MINMAX_SIZE];
 	data_t legacy_max_data[StringStatsData::LEGACY_MAX_STRING_MINMAX_SIZE];
-	auto has_min = deserializer.ReadOptionalProperty(200, "min", legacy_min_data, StringStatsData::LEGACY_MAX_STRING_MINMAX_SIZE);
-	auto has_max = deserializer.ReadOptionalProperty(201, "max", legacy_max_data, StringStatsData::LEGACY_MAX_STRING_MINMAX_SIZE);
+	auto has_min =
+	    deserializer.ReadOptionalProperty(200, "min", legacy_min_data, StringStatsData::LEGACY_MAX_STRING_MINMAX_SIZE);
+	auto has_max =
+	    deserializer.ReadOptionalProperty(201, "max", legacy_max_data, StringStatsData::LEGACY_MAX_STRING_MINMAX_SIZE);
 	if (has_min && has_max) {
 		// legacy stats
 		deserializer.ReadProperty(202, "has_unicode", string_data.has_unicode);
@@ -391,11 +405,12 @@ void StringStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) 
 		deserializer.ReadProperty(204, "max_string_length", string_data.max_string_length);
 		string_data.min = AssignString(base, LegacyReadMinMax(legacy_min_data), true);
 		string_data.max = AssignString(base, LegacyReadMinMax(legacy_max_data), false);
-		string_data.min_type =
-			LegacyGetMinMaxType(legacy_min_data, legacy_max_data, string_data.has_max_string_length, string_data.max_string_length);
+		string_data.min_type = LegacyGetMinMaxType(legacy_min_data, legacy_max_data, string_data.has_max_string_length,
+		                                           string_data.max_string_length);
 		string_data.max_type = string_data.min_type;
 	} else {
-		auto max_string_length = deserializer.ReadPropertyWithExplicitDefault(204, "max_string_length", NumericLimits<uint32_t>::Maximum());
+		auto max_string_length =
+		    deserializer.ReadPropertyWithExplicitDefault(204, "max_string_length", NumericLimits<uint32_t>::Maximum());
 		if (max_string_length == NumericLimits<uint32_t>::Maximum()) {
 			string_data.has_max_string_length = false;
 		} else {
@@ -411,7 +426,8 @@ void StringStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) 
 		string_data.max_type = field.GetMaxType(has_min_max);
 		if (has_min_max) {
 			auto min = string_t(const_char_ptr_cast(min_max_data), field.GetMinLength());
-			auto max = string_t(const_char_ptr_cast(min_max_data + StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE), field.GetMaxLength());
+			auto max = string_t(const_char_ptr_cast(min_max_data + StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE),
+			                    field.GetMaxLength());
 			string_data.min = AssignString(base, min, true);
 			string_data.max = AssignString(base, max, false);
 		}
@@ -577,16 +593,30 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	Merge(stats, other_data);
 }
 
+string_t ReadWriterStats(const data_t data[], idx_t size, StringStatsType &type) {
+	if (size <= StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE) {
+		// exact length
+		type = StringStatsType::EXACT_STATS;
+		return string_t(const_char_ptr_cast(data), static_cast<uint32_t>(size));
+	}
+	// truncated
+	type = StringStatsType::TRUNCATED_STATS;
+	return string_t(const_char_ptr_cast(data), StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
+}
+
 void StringStats::Merge(BaseStatistics &stats, const StringStatsWriter &stats_writer) {
 	if (!stats_writer.HasStats()) {
 		return;
 	}
 	// construct string stats data from the writer
 	StringStatsData other_data;
-	other_data.min = LegacyReadMinMax(stats_writer.min);
-	other_data.max = LegacyReadMinMax(stats_writer.max);
-	other_data.min_type = LegacyGetMinMaxType(stats_writer.min, stats_writer.max, true, stats_writer.max_string_length);
-	other_data.max_type = other_data.min_type;
+	if (!stats_writer.is_set) {
+		other_data.min_type = StringStatsType::EMPTY_STATS;
+		other_data.max_type = StringStatsType::EMPTY_STATS;
+	} else {
+		other_data.min = ReadWriterStats(stats_writer.min, stats_writer.min_size, other_data.min_type);
+		other_data.max = ReadWriterStats(stats_writer.max, stats_writer.max_size, other_data.max_type);
+	}
 	other_data.has_unicode = stats_writer.has_unicode;
 	other_data.has_max_string_length = true;
 	other_data.max_string_length = stats_writer.max_string_length;
@@ -732,8 +762,8 @@ void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 	// this is not exhaustive but it's better than nothing
 	if (string_data.has_total_string_length && str_len_in_vector > string_data.total_string_length) {
 		throw InternalException(
-			"Statistics mismatch: string length in vector exceeds total string length reported in stats",
-			stats.ToString(), vector.ToString());
+		    "Statistics mismatch: string length in vector exceeds total string length reported in stats",
+		    stats.ToString(), vector.ToString());
 	}
 }
 

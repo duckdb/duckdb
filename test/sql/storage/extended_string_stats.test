@@ -1,0 +1,26 @@
+# name: test/sql/storage/extended_string_stats.test
+# description: Test storage of approx unique statistic
+# group: [storage]
+
+load {TEST_DIR}/extended_string_stats.db readwrite v2.0.0
+
+statement ok
+create table test as from (values
+		('hello world'),
+		(NULL),
+		('this is a long string')
+	) t(s)
+	;
+
+query IIII
+select s.min, s.max, s.max_string_length, s.total_string_length from (select stats(s) s from test limit 1)
+----
+hello world	this is a lo	21	35
+
+statement ok
+insert into test values ('how about this one')
+
+query I
+select s.total_string_length from (select stats(s) s from test limit 1)
+----
+53
