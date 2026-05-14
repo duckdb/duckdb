@@ -486,9 +486,7 @@ public:
 	static inline void
 	ExecuteUnaryClusteredDispatch(const INPUT_TYPE *vals, const ClusteredAggr &clustered, const ValidityMask &validity,
 	                              const SelectionVector *isel = nullptr, const sel_t *cluster_iter = nullptr) {
-		// All-valid int → hugeint sum: int64 local accumulator with a cheap per-row overflow probe.
-		// Covers both FLAT and filter-slice DICT paths, which both funnel through this dispatcher.
-		if constexpr (HasI64HugeintSumFastPath<STATE_TYPE, INPUT_TYPE, OP>::value) {
+		if constexpr (HasI64HugeintSumFastPath<INPUT_TYPE, OP>::value) {
 			if (!validity.CanHaveNull()) {
 				ExecuteUnaryClusteredFlatI64HugeintSum<STATE_TYPE, INPUT_TYPE>(vals, clustered, isel, cluster_iter);
 				return;
@@ -574,29 +572,21 @@ public:
 	struct HasClusteredOperation<OP, void_t_helper<decltype(&OP::template ClusteredOp<int32_t, int32_t, OP>)>>
 	    : std::true_type {};
 
-	// True if OP exposes the kClusteredI64HugeintSum tag (int input -> hugeint state via AddToHugeint).
-	template <class OP, class = void>
-	struct HasI64HugeintSumTag : std::false_type {};
-	template <class OP>
-	struct HasI64HugeintSumTag<OP, void_t_helper<decltype(OP::kClusteredI64HugeintSum)>>
-	    : std::integral_constant<bool, OP::kClusteredI64HugeintSum> {};
+	template <class INPUT_TYPE, class OP, class = void>
+	struct HasI64HugeintSumFastPath : std::false_type {};
+	template <class INPUT_TYPE, class OP>
+	struct HasI64HugeintSumFastPath<INPUT_TYPE, OP, void_t_helper<decltype(OP::kClusteredI64HugeintSum)>>
+	    : std::integral_constant<bool,
+	                             (std::is_integral<INPUT_TYPE>::value || std::is_same<INPUT_TYPE, hugeint_t>::value) &&
+	                                 OP::kClusteredI64HugeintSum> {};
 
-	// Eligible for the int64-local-accumulator fast path on dictionary inputs.
-	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	struct HasI64HugeintSumFastPath
-	    : std::integral_constant<bool, std::is_integral<INPUT_TYPE>::value && HasI64HugeintSumTag<OP>::value> {};
-
-	// Fast path: dictionary input that has been deemed eligible by ClusteredAggrState::GetDictProps
-	// (small int32-safe dict with nulls only in the trailing slots). The cached `safe_vals` array
-	// has the trailing null slots zeroed, so an indexed read at a null slot adds 0 instead of garbage
-	// — no per-row branch needed. We use the cached `eff_size` only for the rare local==0 case to
-	// distinguish "the run had a real non-null contribution" from "the run was entirely null".
 	template <class STATE_TYPE, class OP>
 	static void ExecuteUnaryClusteredDictI64SafeSum(Vector &input, const ClusteredAggr &clustered,
-	                                                const int32_t *safe_vals, idx_t eff_size) {
+	                                                const int64_t *safe_vals) {
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(idata);
 		const auto *dict_sel = idata.sel->data();
+		auto &validity = idata.validity;
 		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
 			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
 			const auto *run_sel = clustered.group_runs[r].sel;
@@ -604,49 +594,36 @@ public:
 			if (run_count == 0) {
 				continue;
 			}
-			int64_t local = 0;
+			int64_t local64 = 0;
 			if (run_sel) {
 				for (idx_t k = 0; k < run_count; k++) {
-					local += safe_vals[dict_sel[run_sel[k]]];
+					local64 += safe_vals[dict_sel[run_sel[k]]];
 				}
 			} else {
 				for (idx_t k = 0; k < run_count; k++) {
-					local += safe_vals[dict_sel[k]];
+					local64 += safe_vals[dict_sel[k]];
 				}
 			}
-			if (local != 0) {
-				state.value = Hugeint::Add(state.value, local);
+			if (local64 != 0) {
+				state.value = Hugeint::Add(state.value, local64);
 				state.isset = true;
-			} else if (!state.isset) {
-				// Rare: local sums exactly to zero. Determine whether at least one row was in the
-				// non-null range so we can keep "all-null run" semantics (isset stays false).
-				bool saw_non_null = false;
-				if (run_sel) {
-					for (idx_t k = 0; k < run_count && !saw_non_null; k++) {
-						saw_non_null = dict_sel[run_sel[k]] < eff_size;
+			} else if (!validity.CanHaveNull()) {
+				state.isset = true;
+			} else if (!state.isset) { // rare: we added 0 -- were all values NULL?
+				for (idx_t k = 0; k < run_count; k++) {
+					const idx_t i = dict_sel[run_sel ? run_sel[k] : k];
+					if (validity.RowIsValidUnsafe(i)) { // we added non-NULL
+						state.isset = true;
+						break;
 					}
-				} else {
-					for (idx_t k = 0; k < run_count && !saw_non_null; k++) {
-						saw_non_null = dict_sel[k] < eff_size;
-					}
-				}
-				if (saw_non_null) {
-					state.isset = true;
 				}
 			}
 		}
 	}
 
-	// All-valid fast path for FLAT and filter-slice DICT inputs feeding int → hugeint sum.
-	// Per row: cheap overflow probe (bits 53..63 vs sign). Hot branch accumulates into an int64
-	// local; rare branch routes the addend straight into a hugeint local. At end-of-run both
-	// locals are folded and the hugeint is added to the global state.
 	template <class STATE_TYPE, class INPUT_TYPE>
 	static void ExecuteUnaryClusteredFlatI64HugeintSum(const INPUT_TYPE *vals, const ClusteredAggr &clustered,
 	                                                   const SelectionVector *isel, const sel_t *cluster_iter) {
-		// For STANDARD_VECTOR_SIZE = 2^11, accumulating 2048 int64 values without overflow requires
-		// each addend to fit in 53 bits. XOR-fold sign-extension so the same mask works for negatives.
-		constexpr uint64_t OVERFLOW_MASK = ~((uint64_t(1) << 53) - 1);
 		idx_t pos = 0;
 		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
 			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
@@ -656,35 +633,41 @@ public:
 				continue;
 			}
 			int64_t local64 = 0;
-			hugeint_t local_hi {0, 0};
 			auto add_row = [&](idx_t idx) {
-				const int64_t v = static_cast<int64_t>(vals[idx]);
-				const uint64_t risk = (static_cast<uint64_t>(v) ^ static_cast<uint64_t>(v >> 63)) & OVERFLOW_MASK;
-				if (DUCKDB_UNLIKELY(risk)) {
-					local_hi = Hugeint::Add(local_hi, hugeint_t(v));
+				int64_t v;
+				if (DUCKDB_UNLIKELY(!TryToSafeI64(vals[idx], v))) {
+					if constexpr (std::is_same<INPUT_TYPE, hugeint_t>::value) {
+						state.value = Hugeint::Add(state.value, vals[idx]);
+					} else {
+						state.value = Hugeint::Add(state.value, static_cast<int64_t>(vals[idx]));
+					}
 				} else {
 					local64 += v;
 				}
 			};
 			if (cluster_iter) {
-				for (idx_t k = 0; k < run_count; k++)
+				for (idx_t k = 0; k < run_count; k++) {
 					add_row(cluster_iter[pos + k]);
+				}
 			} else if (isel && run_sel) {
-				for (idx_t k = 0; k < run_count; k++)
+				for (idx_t k = 0; k < run_count; k++) {
 					add_row(isel->get_index(run_sel[k]));
+				}
 			} else if (isel) {
-				for (idx_t k = 0; k < run_count; k++)
+				for (idx_t k = 0; k < run_count; k++) {
 					add_row(isel->get_index(k));
+				}
 			} else if (run_sel) {
-				for (idx_t k = 0; k < run_count; k++)
+				for (idx_t k = 0; k < run_count; k++) {
 					add_row(run_sel[k]);
+				}
 			} else {
-				for (idx_t k = 0; k < run_count; k++)
+				for (idx_t k = 0; k < run_count; k++) {
 					add_row(k);
+				}
 			}
 			pos += run_count;
-			local_hi = Hugeint::Add(local_hi, hugeint_t(local64));
-			state.value = Hugeint::Add(state.value, local_hi);
+			state.value = Hugeint::Add(state.value, local64);
 			state.isset = true;
 		}
 	}
@@ -736,12 +719,11 @@ public:
 				ExecuteUnaryClusteredConstantOpt<STATE_TYPE, INPUT_TYPE, OP>(input, clustered);
 				return;
 			case VectorType::DICTIONARY_VECTOR: {
-				if constexpr (HasI64HugeintSumFastPath<STATE_TYPE, INPUT_TYPE, OP>::value) {
+				if constexpr (HasI64HugeintSumFastPath<INPUT_TYPE, OP>::value) {
 					if (clustered.state) {
 						const auto *props = clustered.state->GetDictProps(input);
-						if (props && props->safe_vals) {
-							ExecuteUnaryClusteredDictI64SafeSum<STATE_TYPE, OP>(
-							    input, clustered, props->safe_vals.get(), props->eff_size);
+						if (props && *props) {
+							ExecuteUnaryClusteredDictI64SafeSum<STATE_TYPE, OP>(input, clustered, props->get());
 							return;
 						}
 					}

@@ -610,9 +610,9 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 		Verify();
 		return;
 	}
-	// Clustered path didn't consume the chunk -> slow scatter path. Calculate addresses now if it was skipped before.
 	if (ht_offsets_valid && clustered_state.all_clustered) {
-		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout_ptr->GetAggrOffset()), payload.size());
+		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout_ptr->GetAggrOffset()),
+		                             payload.size());
 	}
 
 	auto &aggregates = layout_ptr->GetAggregates();
@@ -659,8 +659,6 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 
 	const auto new_group_count = FindOrCreateGroups(groups, group_hashes, state.addresses, state.new_groups);
 
-	// state.addresses currently points at row starts. When every aggregate is clusterable the entire chunk goes 
-	// through the clustered kernels (which derive state pointers from ht_offsets, not from state.addresses)
 	if (!clustered_state.all_clustered) {
 		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout_ptr->GetAggrOffset()),
 		                             payload.size());
