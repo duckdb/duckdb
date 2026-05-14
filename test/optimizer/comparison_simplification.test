@@ -50,3 +50,38 @@ EXPLAIN SELECT X='1' FROM test
 query I nosort constantshift
 EXPLAIN SELECT X::BIGINT='1' FROM test
 ----
+
+# value-level round-trip: midnight timestamp constants are rewritten to DATE
+statement ok
+CREATE TABLE date_test(d DATE);
+
+statement ok
+INSERT INTO date_test VALUES ('2024-01-01'), ('2024-06-15'), ('2025-01-01');
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+# midnight timestamp: cast is eliminated
+query II
+EXPLAIN SELECT * FROM date_test WHERE d <= timestamp '2024-06-15 00:00:00';
+----
+physical_plan	<REGEX>:.*d <= '2024-06-15'::DATE.*
+
+# non-midnight timestamp: cast is preserved
+query II
+EXPLAIN SELECT * FROM date_test WHERE d <= timestamp '2024-06-15 12:00:00';
+----
+physical_plan	<REGEX>:.*CAST.*TIMESTAMP.*
+
+# correctness: both queries return the same rows for midnight
+query I
+SELECT d FROM date_test WHERE d <= timestamp '2024-06-15 00:00:00' ORDER BY d;
+----
+2024-01-01
+2024-06-15
+
+query I
+SELECT d FROM date_test WHERE CAST(d AS TIMESTAMP) <= timestamp '2024-06-15 00:00:00' ORDER BY d;
+----
+2024-01-01
+2024-06-15

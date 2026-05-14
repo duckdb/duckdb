@@ -58,8 +58,18 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		// Is the constant cast invertible?
 		if (!cast_constant.IsNull() &&
 		    !BoundCastExpression::CastIsInvertible(cast_expression.GetReturnType(), target_type)) {
-			// Cast is not invertible, so we do not rewrite this expression to ensure that the cast is executed
-			return nullptr;
+			// DATE→TIMESTAMP is lossless (every date is a valid midnight timestamp),
+			// so we can check if this specific timestamp value round-trips through DATE.
+			if (target_type.id() != LogicalTypeId::DATE ||
+			    cast_expression.GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
+				return nullptr;
+			}
+			Value round_trip;
+			string rt_error;
+			if (!cast_constant.TryCastAs(rewriter.context, cast_expression.GetReturnType(), round_trip, &rt_error, true) ||
+			    round_trip != constant_value) {
+				return nullptr;
+			}
 		}
 
 		//! We can cast, now we change our column_ref_expression from an operator cast to a column reference
