@@ -408,6 +408,7 @@ void StringStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) 
 		string_data.min_type = LegacyGetMinMaxType(legacy_min_data, legacy_max_data, string_data.has_max_string_length,
 		                                           string_data.max_string_length);
 		string_data.max_type = string_data.min_type;
+		string_data.has_total_string_length = false;
 	} else {
 		auto max_string_length =
 		    deserializer.ReadPropertyWithExplicitDefault(204, "max_string_length", NumericLimits<uint32_t>::Maximum());
