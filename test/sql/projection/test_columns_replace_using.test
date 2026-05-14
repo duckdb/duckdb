@@ -7,7 +7,7 @@
 # Expected: Should produce the same result as SELECT *
 
 query I
-SELECT COLUMNS(* REPLACE a AS a) FROM range(1) t1(a) NATURAL JOIN range(1) t2(a)
+SELECT COLUMNS(* REPLACE (a AS a)) FROM range(1) t1(a) NATURAL JOIN range(1) t2(a)
 ----
 0
 
@@ -18,7 +18,7 @@ SELECT * FROM range(1) t1(a) NATURAL JOIN range(1) t2(a)
 
 # Test with JOIN USING
 query I
-SELECT COLUMNS(* REPLACE a AS a) FROM range(1) t1(a) JOIN range(1) t2(a) USING (a)
+SELECT COLUMNS(* REPLACE (a AS a)) FROM range(1) t1(a) JOIN range(1) t2(a) USING (a)
 ----
 0
 
@@ -63,7 +63,7 @@ SELECT COLUMNS(* REPLACE (a + 1 AS a)) FROM range(2) t1(a) NATURAL JOIN range(2)
 
 # Test COLUMNS(* RENAME) still works correctly with NATURAL JOIN
 query I
-SELECT COLUMNS(* RENAME a AS b) FROM range(1) t1(a) NATURAL JOIN range(1) t2(a)
+SELECT COLUMNS(* RENAME (a AS b)) FROM range(1) t1(a) NATURAL JOIN range(1) t2(a)
 ----
 0
 
