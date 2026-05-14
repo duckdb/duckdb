@@ -504,20 +504,6 @@ public:
 		       clustered.group_runs[0].sel == nullptr;
 	}
 
-	template <bool SIMPLE_DICT, class STATE_TYPE, class INPUT_TYPE, class OP>
-	static void ExecuteUnaryClusteredDictOpt(Vector &input, const ClusteredAggr &clustered, idx_t count,
-	                                         const sel_t *cluster_iter = nullptr) {
-		UnifiedVectorFormat idata;
-		input.ToUnifiedFormat(idata);
-		auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
-		if constexpr (SIMPLE_DICT) {
-			ExecuteUnaryClusteredDispatch<STATE_TYPE, INPUT_TYPE, OP>(vals, clustered, idata.validity, nullptr,
-			                                                          cluster_iter);
-		} else {
-			ExecuteUnaryClusteredDispatch<STATE_TYPE, INPUT_TYPE, OP>(vals, clustered, idata.validity, idata.sel);
-		}
-	}
-
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void ExecuteUnaryClusteredOpt(Vector &input, const ClusteredAggr &clustered, idx_t count) {
 		auto vals = FlatVector::GetData<INPUT_TYPE>(input);
@@ -602,10 +588,10 @@ public:
 			if (local64 != 0) {
 				state.value = Hugeint::Add(state.value, local64);
 				state.isset = true;
-			} else if (!state.isset) { // rare: we added 0 -- were all values NULL?
+			} else if (!state.isset) {
 				for (idx_t k = 0; k < run_count; k++) {
 					const idx_t i = dict_sel[run_sel ? run_sel[k] : k];
-					if (validity.RowIsValidUnsafe(i)) { // we added non-NULL
+					if (validity.RowIsValidUnsafe(i)) {
 						state.isset = true;
 						break;
 					}
@@ -718,12 +704,11 @@ public:
 					}
 				}
 				auto *cluster_iter = clustered.ClusterIter(input, count);
-				if (cluster_iter) {
-					ExecuteUnaryClusteredDictOpt<true, STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count,
-					                                                               cluster_iter);
-				} else {
-					ExecuteUnaryClusteredDictOpt<false, STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count);
-				}
+				UnifiedVectorFormat idata;
+				input.ToUnifiedFormat(idata);
+				auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
+				ExecuteUnaryClusteredDispatch<STATE_TYPE, INPUT_TYPE, OP>(
+				    vals, clustered, idata.validity, cluster_iter ? nullptr : idata.sel, cluster_iter);
 				return;
 			}
 			default:

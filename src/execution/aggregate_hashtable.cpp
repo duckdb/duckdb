@@ -610,10 +610,6 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 		Verify();
 		return;
 	}
-	if (ht_offsets_valid && clustered_state.all_clustered) {
-		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout_ptr->GetAggrOffset()),
-		                             payload.size());
-	}
 
 	auto &aggregates = layout_ptr->GetAggregates();
 	idx_t filter_idx = 0;
@@ -658,11 +654,8 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 #endif
 
 	const auto new_group_count = FindOrCreateGroups(groups, group_hashes, state.addresses, state.new_groups);
+	VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout_ptr->GetAggrOffset()), payload.size());
 
-	if (!clustered_state.all_clustered) {
-		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout_ptr->GetAggrOffset()),
-		                             payload.size());
-	}
 	UpdateAggregates(payload, filter);
 
 	return new_group_count;

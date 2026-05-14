@@ -268,9 +268,6 @@ const sel_t *ClusteredAggr::ClusterIter(const Vector &input, idx_t count) const 
 	if (dict_data == nullptr) {
 		return nullptr;
 	}
-	if (!DictionaryVector::DictionaryId(input).empty()) {
-		return nullptr;
-	}
 	if (cached_dict_sel == dict_data) {
 		return composed_sel_data;
 	}
@@ -332,7 +329,6 @@ const DictProps *ClusteredAggrState::GetDictProps(const Vector &input) const {
 	}
 
 	auto &slot = dict_props[dict_id];
-
 	const auto dict_size_opt = DictionaryVector::DictionarySize(input);
 	if (!dict_size_opt.IsValid()) {
 		return &slot;
@@ -359,39 +355,22 @@ const DictProps *ClusteredAggrState::GetDictProps(const Vector &input) const {
 		}
 		return true;
 	};
-	bool ok = false;
 	switch (child.GetType().InternalType()) {
-	case PhysicalType::INT8:
-		ok = try_copy(FlatVector::GetData<int8_t>(child));
-		break;
-	case PhysicalType::INT16:
-		ok = try_copy(FlatVector::GetData<int16_t>(child));
-		break;
-	case PhysicalType::INT32:
-		ok = try_copy(FlatVector::GetData<int32_t>(child));
-		break;
-	case PhysicalType::INT64:
-		ok = try_copy(FlatVector::GetData<int64_t>(child));
-		break;
-	case PhysicalType::UINT8:
-		ok = try_copy(FlatVector::GetData<uint8_t>(child));
-		break;
-	case PhysicalType::UINT16:
-		ok = try_copy(FlatVector::GetData<uint16_t>(child));
-		break;
 	case PhysicalType::UINT32:
-		ok = try_copy(FlatVector::GetData<uint32_t>(child));
+	case PhysicalType::INT32:
+		if (try_copy(FlatVector::GetData<int32_t>(child))) {
+			slot = std::move(buf);
+		}
 		break;
 	case PhysicalType::UINT64:
-		ok = try_copy(FlatVector::GetData<uint64_t>(child));
+	case PhysicalType::INT64:
+		if (try_copy(FlatVector::GetData<int64_t>(child))) {
+			slot = std::move(buf);
+		}
 		break;
 	default:
 		break;
 	}
-	if (!ok) {
-		return &slot;
-	}
-	slot = std::move(buf);
 	return &slot;
 }
 
