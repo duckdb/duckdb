@@ -59,6 +59,35 @@ struct RowOperations {
 	//! finalize - unaligned addresses, updated
 	static void FinalizeStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses, DataChunk &result,
 	                           idx_t aggr_idx);
+
+	//===--------------------------------------------------------------------===//
+	// Deprecated overloads (count parameter removed - use count-free versions)
+	//===--------------------------------------------------------------------===//
+	[[deprecated("count parameter is deprecated; call DestroyStates without count instead")]] static void
+	DestroyStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses, idx_t count) {
+		if (count != addresses.size()) {
+			throw InternalException("DestroyStates: count (%llu) does not match vector size (%llu)", count,
+			                        addresses.size());
+		}
+		DestroyStates(state, layout, addresses);
+	}
+	[[deprecated("count parameter is deprecated; call UpdateStates without count instead")]] static void
+	UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx,
+	             idx_t count) {
+		if (count != addresses.size()) {
+			throw InternalException("UpdateStates: count (%llu) does not match vector size (%llu)", count,
+			                        addresses.size());
+		}
+		UpdateStates(state, aggr, addresses, payload, arg_idx);
+	}
+	[[deprecated("count parameter is deprecated; call CombineStates without count instead")]] static void
+	CombineStates(RowOperationsState &state, TupleDataLayout &layout, Vector &sources, Vector &targets, idx_t count) {
+		if (count != sources.size()) {
+			throw InternalException("CombineStates: count (%llu) does not match vector size (%llu)", count,
+			                        sources.size());
+		}
+		CombineStates(state, layout, sources, targets);
+	}
 };
 
 } // namespace duckdb

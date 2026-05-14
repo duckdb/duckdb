@@ -216,5 +216,163 @@ struct VectorOperations {
 	// Reads the data of <source> to the target vector, setting the nullmask
 	// for any NullValue<T> of source. Used to go back from storage to a proper vector
 	static void ReadFromStorage(data_ptr_t source, idx_t count, Vector &result);
+
+	//===--------------------------------------------------------------------===//
+	// Deprecated overloads (count parameter removed - use count-free versions)
+	//===--------------------------------------------------------------------===//
+	[[deprecated("count parameter is deprecated; call AddInPlace without count instead")]] static void
+	AddInPlace(Vector &left, int64_t delta, idx_t count) {
+		if (count != left.size()) {
+			throw InternalException("AddInPlace: count (%llu) does not match vector size (%llu)", count, left.size());
+		}
+		AddInPlace(left, delta);
+	}
+	[[deprecated("count parameter is deprecated; call IsNotNull without count instead")]] static void
+	IsNotNull(const Vector &arg, Vector &result, idx_t count) {
+		if (count != arg.size()) {
+			throw InternalException("IsNotNull: count (%llu) does not match vector size (%llu)", count, arg.size());
+		}
+		IsNotNull(arg, result);
+	}
+	[[deprecated("count parameter is deprecated; call IsNull without count instead")]] static void
+	IsNull(const Vector &input, Vector &result, idx_t count) {
+		if (count != input.size()) {
+			throw InternalException("IsNull: count (%llu) does not match vector size (%llu)", count, input.size());
+		}
+		IsNull(input, result);
+	}
+	[[deprecated("count parameter is deprecated; call HasNull without count instead")]] static bool
+	HasNull(const Vector &input, idx_t count) {
+		if (count != input.size()) {
+			throw InternalException("HasNull: count (%llu) does not match vector size (%llu)", count, input.size());
+		}
+		return HasNull(input);
+	}
+	[[deprecated("count parameter is deprecated; call HasNotNull without count instead")]] static bool
+	HasNotNull(const Vector &input, idx_t count) {
+		if (count != input.size()) {
+			throw InternalException("HasNotNull: count (%llu) does not match vector size (%llu)", count, input.size());
+		}
+		return HasNotNull(input);
+	}
+	[[deprecated("count parameter is deprecated; call CountNotNull without count instead")]] static idx_t
+	CountNotNull(const Vector &input, const idx_t count) {
+		if (count != input.size()) {
+			throw InternalException("CountNotNull: count (%llu) does not match vector size (%llu)", count,
+			                        input.size());
+		}
+		return CountNotNull(input);
+	}
+	[[deprecated("count parameter is deprecated; call And without count instead")]] static void
+	And(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+		if (count != left.size()) {
+			throw InternalException("And: count (%llu) does not match vector size (%llu)", count, left.size());
+		}
+		And(left, right, result);
+	}
+	[[deprecated("count parameter is deprecated; call Or without count instead")]] static void
+	Or(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+		if (count != left.size()) {
+			throw InternalException("Or: count (%llu) does not match vector size (%llu)", count, left.size());
+		}
+		Or(left, right, result);
+	}
+	[[deprecated("count parameter is deprecated; call Not without count instead")]] static void
+	Not(const Vector &input, Vector &result, idx_t count) {
+		if (count != input.size()) {
+			throw InternalException("Not: count (%llu) does not match vector size (%llu)", count, input.size());
+		}
+		Not(input, result);
+	}
+	[[deprecated("count parameter is deprecated; call Equals without count instead")]] static void
+	Equals(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+		if (count != left.size()) {
+			throw InternalException("Equals: count (%llu) does not match vector size (%llu)", count, left.size());
+		}
+		Equals(left, right, result);
+	}
+	[[deprecated("count parameter is deprecated; call NotEquals without count instead")]] static void
+	NotEquals(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+		if (count != left.size()) {
+			throw InternalException("NotEquals: count (%llu) does not match vector size (%llu)", count, left.size());
+		}
+		NotEquals(left, right, result);
+	}
+	[[deprecated("count parameter is deprecated; call GreaterThan without count instead")]] static void
+	GreaterThan(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+		if (count != left.size()) {
+			throw InternalException("GreaterThan: count (%llu) does not match vector size (%llu)", count, left.size());
+		}
+		GreaterThan(left, right, result);
+	}
+	[[deprecated("count parameter is deprecated; call GreaterThanEquals without count instead")]] static void
+	GreaterThanEquals(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+		if (count != left.size()) {
+			throw InternalException("GreaterThanEquals: count (%llu) does not match vector size (%llu)", count,
+			                        left.size());
+		}
+		GreaterThanEquals(left, right, result);
+	}
+	[[deprecated("count parameter is deprecated; call LessThan without count instead")]] static void
+	LessThan(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+		if (count != left.size()) {
+			throw InternalException("LessThan: count (%llu) does not match vector size (%llu)", count, left.size());
+		}
+		LessThan(left, right, result);
+	}
+	[[deprecated("count parameter is deprecated; call LessThanEquals without count instead")]] static void
+	LessThanEquals(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+		if (count != left.size()) {
+			throw InternalException("LessThanEquals: count (%llu) does not match vector size (%llu)", count,
+			                        left.size());
+		}
+		LessThanEquals(left, right, result);
+	}
+	[[deprecated("count parameter is deprecated; call Comparator without count instead")]] static void
+	Comparator(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+		if (count != left.size()) {
+			throw InternalException("Comparator: count (%llu) does not match vector size (%llu)", count, left.size());
+		}
+		Comparator(left, right, result);
+	}
+	[[deprecated("count parameter is deprecated; call DistinctFrom without count instead")]] static void
+	DistinctFrom(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+		if (count != left.size()) {
+			throw InternalException("DistinctFrom: count (%llu) does not match vector size (%llu)", count, left.size());
+		}
+		DistinctFrom(left, right, result);
+	}
+	[[deprecated("count parameter is deprecated; call NotDistinctFrom without count instead")]] static void
+	NotDistinctFrom(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+		if (count != left.size()) {
+			throw InternalException("NotDistinctFrom: count (%llu) does not match vector size (%llu)", count,
+			                        left.size());
+		}
+		NotDistinctFrom(left, right, result);
+	}
+	[[deprecated("count parameter is deprecated; call DistinctComparator without count instead")]] static void
+	DistinctComparator(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+		if (count != left.size()) {
+			throw InternalException("DistinctComparator: count (%llu) does not match vector size (%llu)", count,
+			                        left.size());
+		}
+		DistinctComparator(left, right, result);
+	}
+	[[deprecated("count parameter is deprecated; call DistinctComparatorNullsFirst without count instead")]] static void
+	DistinctComparatorNullsFirst(const Vector &left, const Vector &right, Vector &result, idx_t count) {
+		if (count != left.size()) {
+			throw InternalException("DistinctComparatorNullsFirst: count (%llu) does not match vector size (%llu)",
+			                        count, left.size());
+		}
+		DistinctComparatorNullsFirst(left, right, result);
+	}
+	[[deprecated("count parameter is deprecated; call WriteToStorage without count instead")]] static void
+	WriteToStorage(const Vector &source, idx_t count, data_ptr_t target) {
+		if (count != source.size()) {
+			throw InternalException("WriteToStorage: count (%llu) does not match vector size (%llu)", count,
+			                        source.size());
+		}
+		WriteToStorage(source, target);
+	}
 };
 } // namespace duckdb
