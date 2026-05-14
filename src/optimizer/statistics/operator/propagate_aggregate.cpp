@@ -99,6 +99,11 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 		if (!StringStats::HasMinMax(*column_stats)) {
 			return false;
 		}
+		if (StringStats::GetMinType(*column_stats) != StringStatsType::EXACT_STATS ||
+		    StringStats::GetMaxType(*column_stats) != StringStatsType::EXACT_STATS) {
+			// string stats are not exact - we cannot use the value from the stats
+			return false;
+		}
 	}
 	result = comparator.GetVal(*column_stats);
 	return true;
