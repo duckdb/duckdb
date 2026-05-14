@@ -1,4 +1,5 @@
 #include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -132,6 +133,30 @@ string StringStats::Max(const BaseStatistics &stats) {
 	return string_data.max.GetString();
 }
 
+Value StringStats::TryGetValidMin(const BaseStatistics &stats) {
+	auto min = Min(stats);
+	if (GetMinType(stats) == StringStatsType::EXACT_STATS) {
+		return Value(std::move(min));
+	}
+	string result;
+	if (!Utf8Proc::ValidLowerBound(min, result)) {
+		return Value();
+	}
+	return Value(std::move(result));
+}
+
+Value StringStats::TryGetValidMax(const BaseStatistics &stats) {
+	auto max = Max(stats);
+	if (GetMaxType(stats) == StringStatsType::EXACT_STATS) {
+		return Value(std::move(max));
+	}
+	string result;
+	if (!Utf8Proc::ValidUpperBound(max, result)) {
+		return Value();
+	}
+	return Value(std::move(result));
+}
+
 void StringStats::ResetMaxStringLength(BaseStatistics &stats) {
 	GetDataUnsafe(stats).has_max_string_length = false;
 }
@@ -224,12 +249,30 @@ void StringStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) 
 	string_data.max_type = string_data.min_type;
 }
 
-void StringStats::Update(BaseStatistics &stats, const string_t &value) {
-	//! we can only fit 8 bytes, so we might need to trim our string
-	// FIXME: allow larger strings instead of falling back to the
+void StringStats::FromConstant(BaseStatistics &stats, string_t value) {
+	static constexpr const idx_t CONSTANT_STATS_BOUND = 100000;
+
+	// use the string stats writer for setting stats
 	StringStatsWriter writer(stats.GetType());
 	writer.Update(value);
 	writer.Merge(stats);
+
+	// just directly assign the min/max, since the stats writer truncates
+	// ... except if it is REALLY long
+	if (value.GetSize() <= CONSTANT_STATS_BOUND) {
+		SetMin(stats, value, StringStatsType::EXACT_STATS);
+		SetMax(stats, value, StringStatsType::EXACT_STATS);
+	}
+}
+
+void StringStats::MergeInConstant(BaseStatistics &stats, string_t input) {
+	auto constant_stats = CreateEmpty(stats.GetType());
+	FromConstant(constant_stats, input);
+	Merge(stats, constant_stats);
+}
+
+void StringStats::Update(BaseStatistics &stats, const string_t &value) {
+	MergeInConstant(stats, value);
 }
 
 struct StringData {

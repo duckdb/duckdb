@@ -545,7 +545,7 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 		auto result = StringStats::CreateEmpty(input.type());
 		if (!input.IsNull()) {
 			auto &string_value = StringValue::Get(input);
-			StringStats::Update(result, string_t(string_value));
+			StringStats::FromConstant(result, string_t(string_value));
 		}
 		return result;
 	}

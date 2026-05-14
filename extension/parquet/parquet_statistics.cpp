@@ -440,6 +440,17 @@ static bool ConvertShreddedStats(BaseStatistics &result, optional_ptr<BaseStatis
 	return true;
 }
 
+bool StringStatsAreValid(const string &stats, bool is_varchar, StringStatsType stats_type) {
+	if (stats_type == StringStatsType::TRUNCATED_STATS) {
+		// truncated stats can contain invalid UTF8 due to truncation - this is fine
+		return true;
+	}
+	// for exact stats we need the stats to be valid because we might emit them
+	// we could optionally convert these into truncated stats...
+	// but if a file has corrupt exact string stats it's likely these are bogus, so just ignore them
+	return StringColumnReader::IsValid(stats, is_varchar);
+}
+
 unique_ptr<BaseStatistics>
 ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, const ParquetColumnSchema &schema,
                                                    const duckdb_parquet::Statistics &parquet_stats, bool can_have_nan,
@@ -483,36 +494,22 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 	case LogicalTypeId::VARCHAR: {
 		auto string_stats = StringStats::CreateUnknown(type);
 		const bool is_varchar = type.id() == LogicalTypeId::VARCHAR;
-		StringStatsType min_stats_type;
-		StringStatsType max_stats_type;
-		if (!parquet_stats.__isset.is_min_value_exact || !parquet_stats.__isset.is_max_value_exact) {
-			// if is_min_value_exact and is_max_value_exact are not set
-			// Pre-PARQUET-2352 (Oct 2023) the spec required min/max, when present, to be the exact
-			// min/max; in practice some writers truncated long binary values, and PARQUET-2352 added
-			// is_*_value_exact so readers could detect that. Fixed-width physical types are not
-			// subject to such truncation, so when the flag is missing we mirror arrow-rs
-			// (parquet/src/file/statistics.rs ValueStatistics::new) and treat them as exact.
-			if (schema.parquet_type == Type::BYTE_ARRAY || schema.parquet_type == Type::FIXED_LEN_BYTE_ARRAY) {
-				min_stats_type = StringStatsType::TRUNCATED_STATS;
-				max_stats_type = StringStatsType::TRUNCATED_STATS;
-			} else {
-				min_stats_type = StringStatsType::EXACT_STATS;
-				max_stats_type = StringStatsType::EXACT_STATS;
-			}
-		} else {
-			min_stats_type =
-			    parquet_stats.is_min_value_exact ? StringStatsType::EXACT_STATS : StringStatsType::TRUNCATED_STATS;
-			max_stats_type =
-			    parquet_stats.is_max_value_exact ? StringStatsType::EXACT_STATS : StringStatsType::TRUNCATED_STATS;
-		}
-		if (parquet_stats.__isset.min_value && StringColumnReader::IsValid(parquet_stats.min_value, is_varchar)) {
+		auto min_stats_type = parquet_stats.__isset.is_min_value_exact && parquet_stats.is_min_value_exact
+		                          ? StringStatsType::EXACT_STATS
+		                          : StringStatsType::TRUNCATED_STATS;
+		auto max_stats_type = parquet_stats.__isset.is_max_value_exact && parquet_stats.is_max_value_exact
+		                          ? StringStatsType::EXACT_STATS
+		                          : StringStatsType::TRUNCATED_STATS;
+		if (parquet_stats.__isset.min_value &&
+		    StringStatsAreValid(parquet_stats.min_value, is_varchar, min_stats_type)) {
 			StringStats::SetMin(string_stats, parquet_stats.min_value, min_stats_type);
-		} else if (parquet_stats.__isset.min && StringColumnReader::IsValid(parquet_stats.min, is_varchar)) {
+		} else if (parquet_stats.__isset.min && StringStatsAreValid(parquet_stats.min, is_varchar, min_stats_type)) {
 			StringStats::SetMin(string_stats, parquet_stats.min, min_stats_type);
 		}
-		if (parquet_stats.__isset.max_value && StringColumnReader::IsValid(parquet_stats.max_value, is_varchar)) {
+		if (parquet_stats.__isset.max_value &&
+		    StringStatsAreValid(parquet_stats.max_value, is_varchar, max_stats_type)) {
 			StringStats::SetMax(string_stats, parquet_stats.max_value, max_stats_type);
-		} else if (parquet_stats.__isset.max && StringColumnReader::IsValid(parquet_stats.max, is_varchar)) {
+		} else if (parquet_stats.__isset.max && StringStatsAreValid(parquet_stats.max, is_varchar, max_stats_type)) {
 			StringStats::SetMax(string_stats, parquet_stats.max, max_stats_type);
 		}
 		return string_stats.ToUnique();

@@ -66,6 +66,19 @@ struct StringStats {
 	DUCKDB_API static string Min(const BaseStatistics &stats);
 	//! Returns the max value
 	DUCKDB_API static string Max(const BaseStatistics &stats);
+	//! Returns a valid UTF-8 lower bound for the min value, or NULL if stats have no min
+	DUCKDB_API static Value TryGetValidMin(const BaseStatistics &stats);
+	//! Returns a valid UTF-8 upper bound for the max value, or NULL if no finite bound exists
+	DUCKDB_API static Value TryGetValidMax(const BaseStatistics &stats);
+
+	//! Construct string stats from a constant
+	DUCKDB_API static void FromConstant(BaseStatistics &stats, string_t input);
+
+	DUCKDB_API static void MergeInConstant(BaseStatistics &stats, string_t input);
+
+	[[deprecated("StringStats::Update is deprecated. Use StringStats::MergeInConstant for non-performance-sensitive "
+	             "code, or StringStatsWriter instead")]] DUCKDB_API static void
+	Update(BaseStatistics &stats, const string_t &value);
 
 	DUCKDB_API static StringStatsType GetMinType(const BaseStatistics &stats);
 	DUCKDB_API static StringStatsType GetMaxType(const BaseStatistics &stats);
@@ -88,7 +101,6 @@ struct StringStats {
 	                                                     StringStatsType max_type, ExpressionType comparison_type,
 	                                                     string_t constant);
 
-	DUCKDB_API static void Update(BaseStatistics &stats, const string_t &value);
 	[[deprecated("StringStats::SetMin without specifying StringStatsType is deprecated - specify either "
 	             "StringStatsType::TRUNCATED_STATS or StringStatsType::EXACT_STATS")]] DUCKDB_API static void
 	SetMin(BaseStatistics &stats, const string_t &value);

@@ -20,7 +20,7 @@ hello	hello	false	true	false	5
 query IIIIII
 SELECT s.min, s.max, s.has_null, s.has_no_null, s.has_unicode, s.max_string_length FROM (SELECT STATS('1234567ü') s);
 ----
-1234567\xC3	1234567\xC3	false	true	true	9
+1234567\xC3\xBC	1234567\xC3\xBC	false	true	true	9
 
 # arithmetic
 query IIII
