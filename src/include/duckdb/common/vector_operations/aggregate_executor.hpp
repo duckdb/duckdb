@@ -588,10 +588,10 @@ public:
 			if (local64 != 0) {
 				state.value = Hugeint::Add(state.value, local64);
 				state.isset = true;
-			} else if (!state.isset) {
+			} else if (!state.isset) { // rare: we added 0 -- were all values NULL?
 				for (idx_t k = 0; k < run_count; k++) {
 					const idx_t i = dict_sel[run_sel ? run_sel[k] : k];
-					if (validity.RowIsValidUnsafe(i)) {
+					if (validity.RowIsValidUnsafe(i)) { // we added non-NULL
 						state.isset = true;
 						break;
 					}

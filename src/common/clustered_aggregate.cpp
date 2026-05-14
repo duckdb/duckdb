@@ -355,21 +355,15 @@ const DictProps *ClusteredAggrState::GetDictProps(const Vector &input) const {
 		}
 		return true;
 	};
-	switch (child.GetType().InternalType()) {
-	case PhysicalType::UINT32:
-	case PhysicalType::INT32:
+	auto type = child.GetType().InternalType();
+	if (type == PhysicalType::UINT32 || type == PhysicalType::INT32) {
 		if (try_copy(FlatVector::GetData<int32_t>(child))) {
 			slot = std::move(buf);
 		}
-		break;
-	case PhysicalType::UINT64:
-	case PhysicalType::INT64:
+	} else if (type == PhysicalType::UINT64 || type == PhysicalType::INT64) {
 		if (try_copy(FlatVector::GetData<int64_t>(child))) {
 			slot = std::move(buf);
 		}
-		break;
-	default:
-		break;
 	}
 	return &slot;
 }

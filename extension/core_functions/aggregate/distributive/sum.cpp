@@ -102,8 +102,16 @@ struct KahanSumOperation : public BaseSumOperation<SumSetOperation, KahanAdd> {
 	}
 };
 
-using HugeintSumOperation =
-    ClusteredSumOperation<BaseSumOperation<SumSetOperation, HugeintAdd>, ClusteredAddOp<HugeintAdd>>;
+struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, HugeintAdd> {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
+		} else {
+			target = state.value;
+		}
+	}
+};
 
 template <class T>
 static LogicalType GetValueLogicalType();
