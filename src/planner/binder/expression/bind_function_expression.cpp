@@ -204,8 +204,7 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 	}
 
 	auto setting = Settings::Get<LambdaSyntaxSetting>(context);
-	bool invalid_syntax =
-	    setting == LambdaSyntax::DISABLE_SINGLE_ARROW && syntax_type == LambdaSyntaxType::SINGLE_ARROW;
+	bool invalid_syntax = setting != LambdaSyntax::ENABLE_SINGLE_ARROW && syntax_type == LambdaSyntaxType::SINGLE_ARROW;
 	bool warn_deprecated_syntax = setting == LambdaSyntax::DEFAULT && syntax_type == LambdaSyntaxType::SINGLE_ARROW;
 	const string msg = "Deprecated lambda arrow (->) detected. Please transition to the new lambda syntax, "
 	                   "i.e.., lambda x, i: x + i, before DuckDB's next release.\n"
