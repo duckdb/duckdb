@@ -226,7 +226,7 @@ COMMIT
 statement ok
 INSERT INTO t VALUES(NULL)
 
-mode skip
+mode skip instable
 # Scenario #5, Insert null, delete null locally, then alter
 statement ok
 DROP TABLE IF EXISTS t

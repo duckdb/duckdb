@@ -13,12 +13,12 @@
 namespace duckdb {
 
 //! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
-class StructFilter : public TableFilter {
+class LegacyStructFilter : public TableFilter {
 public:
-	static constexpr const TableFilterType TYPE = TableFilterType::STRUCT_EXTRACT;
+	static constexpr const TableFilterType TYPE = TableFilterType::LEGACY_STRUCT_EXTRACT;
 
 public:
-	StructFilter(idx_t child_idx, string child_name, unique_ptr<TableFilter> child_filter);
+	LegacyStructFilter(idx_t child_idx, string child_name, unique_ptr<TableFilter> child_filter);
 
 	//! The field index to filter on
 	idx_t child_idx;
@@ -30,10 +30,6 @@ public:
 	unique_ptr<TableFilter> child_filter;
 
 public:
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
-	string ToString(const string &column_name) const override;
-	bool Equals(const TableFilter &other) const override;
-	unique_ptr<TableFilter> Copy() const override;
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);

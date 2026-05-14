@@ -851,11 +851,19 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_HALT) {
 			break;
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_MODE) {
-			if (token.parameters.size() != 1) {
-				parser.Fail("mode requires one parameter");
+			if (token.parameters.empty()) {
+				parser.Fail("mode requires at least one parameter");
 			}
 			string parameter = token.parameters[0];
 			if (parameter == "skip") {
+				string reason = "unspecified";
+				if (token.parameters.size() > 1) {
+					reason = token.parameters[1];
+					for (idx_t i = 2; i < token.parameters.size(); i++) {
+						reason += " " + token.parameters[i];
+					}
+				}
+				Printer::PrintF("mode skip %s", reason);
 				skip_level++;
 			} else if (parameter == "unskip") {
 				skip_level--;

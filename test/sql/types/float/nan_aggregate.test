@@ -39,7 +39,7 @@ DROP TABLE floats
 endloop
 
 # still need to catch overflows during sum operation
-mode skip
+mode skip instable
 
 statement ok
 create table floats_doubles (f FLOAT, d DOUBLE);

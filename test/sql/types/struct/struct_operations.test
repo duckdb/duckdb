@@ -38,7 +38,7 @@ NULL	NULL	1	hello
 
 # unsupported operations
 # TODO
-mode skip
+mode skip instable
 
 # subquery
 query I

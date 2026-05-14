@@ -58,12 +58,11 @@ CREATE TYPE test_result AS UNION (
     )
 );
 
-# Differs from alp_uncompressed_mode_v1_5_0.test, as here the compression factor is equal to 1, and not
-# greater.
+# Differs from alp_uncompressed_mode_v1_5_0.test, as here the compression factor is equal to 1, and not greater.
 query I
 SELECT
     CASE
-        WHEN (uncompressed::FLOAT / compressed::FLOAT) < 1
+        WHEN (uncompressed::FLOAT / compressed::FLOAT) <= 1
             THEN True::test_result
         ELSE {
             'uncompressed': uncompressed,

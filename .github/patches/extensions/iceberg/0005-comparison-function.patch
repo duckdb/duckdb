@@ -14,7 +14,7 @@ index 09fe97dc..a0e0c788 100644
  				//! Construct an OPERATOR_IS_NOT_NULL expression instead
  				auto is_not_null =
 diff --git a/src/iceberg_predicate.cpp b/src/iceberg_predicate.cpp
-index 880bfa46..e34bcace 100644
+index c6fa6b3c..e34bcace 100644
 --- a/src/iceberg_predicate.cpp
 +++ b/src/iceberg_predicate.cpp
 @@ -209,12 +209,12 @@ bool MatchBoundsTemplated(ClientContext &context, const TableFilter &filter, con
@@ -31,6 +31,6 @@ index 880bfa46..e34bcace 100644
 -				auto &right = *compare_expr.right;
 +				auto &left = BoundComparisonExpression::Left(compare_expr);
 +				auto &right = BoundComparisonExpression::Right(compare_expr);
-
+ 
  				bool left_foldable = left.IsFoldable();
  				bool right_foldable = right.IsFoldable();

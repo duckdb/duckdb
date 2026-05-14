@@ -3,7 +3,7 @@
 # group: [interquery]
 
 # # FIXME: this test triggers an internal exception
-mode skip
+mode skip flaky
 
 concurrentloop threadid 0 11
 

@@ -37,7 +37,7 @@ FROM person
 1	{'name': Mark, 'current_mood': happy}
 
 # FIXME: dependencies between enums and tables are currently disabled
-mode skip
+mode skip unsupported
 
 statement error
 DROP TYPE mood
@@ -70,7 +70,7 @@ ALTER TABLE person ADD COLUMN c STRUCT(
     )
 
 # FIXME: dependencies between enums and tables are currently disabled
-mode skip
+mode skip unsupported
 
 # we cannot drop the type after adding it back
 statement error
@@ -104,7 +104,7 @@ FROM person
 1	NULL
 
 # FIXME: dependencies between enums and tables are currently disabled
-mode skip
+mode skip unsupported
 
 # we cannot drop the type after adding it using an alter type
 statement error

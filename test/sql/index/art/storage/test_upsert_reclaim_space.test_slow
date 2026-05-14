@@ -2,7 +2,7 @@
 # description: Test that the block manager reclaims index memory after UPSERT.
 # group: [storage]
 
-mode skip
+mode skip instable
 
 load {TEST_DIR}/test_reclaim_upsert_space.db
 
