@@ -105,78 +105,6 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 	output.SetCardinality(index);
 }
 
-//	Wrap the multiply-named and non-type-safe cast utilities.
-struct ICUCast {
-	template <class SRC, class DST>
-	static inline DST Operation(SRC input) {
-		throw NotImplementedException("Naive timezone cast could not be performed!");
-	}
-};
-
-//	From naive types to TIMESTAMP_TZ
-template <>
-timestamp_tz_t ICUCast::Operation(timestamp_t src) {
-	return timestamp_tz_t(src);
-}
-
-template <>
-timestamp_tz_t ICUCast::Operation(timestamp_ms_t src) {
-	return Cast::Operation<timestamp_ms_t, timestamp_tz_t>(src);
-}
-
-template <>
-timestamp_tz_t ICUCast::Operation(timestamp_ns_t src) {
-	return Cast::Operation<timestamp_ns_t, timestamp_tz_t>(src);
-}
-
-template <>
-timestamp_tz_t ICUCast::Operation(timestamp_sec_t src) {
-	return Cast::Operation<timestamp_sec_t, timestamp_tz_t>(src);
-}
-
-template <>
-timestamp_tz_t ICUCast::Operation(date_t src) {
-	return Cast::Operation<date_t, timestamp_tz_t>(src);
-}
-
-template <>
-timestamp_tz_ns_t ICUCast::Operation(date_t src) {
-	return Cast::Operation<date_t, timestamp_tz_ns_t>(src);
-}
-
-//	From TIMESTAMP_TZ to naive types
-template <>
-timestamp_sec_t ICUCast::Operation(timestamp_tz_t src) {
-	return Cast::Operation<timestamp_tz_t, timestamp_sec_t>(src);
-}
-
-template <>
-timestamp_ms_t ICUCast::Operation(timestamp_tz_t src) {
-	return Cast::Operation<timestamp_tz_t, timestamp_ms_t>(src);
-}
-
-template <>
-timestamp_t ICUCast::Operation(timestamp_tz_t src) {
-	return timestamp_t(src);
-}
-
-template <>
-timestamp_ns_t ICUCast::Operation(timestamp_tz_t src) {
-	return Cast::Operation<timestamp_tz_t, timestamp_ns_t>(src);
-}
-
-//	From TIMESTAMP_TZ_NS
-template <>
-timestamp_ns_t ICUCast::Operation(timestamp_tz_ns_t src) {
-	return timestamp_ns_t(src);
-}
-
-//	From TIME_TZ
-template <>
-dtime_tz_t ICUCast::Operation(dtime_tz_t src) {
-	return src;
-}
-
 struct ICUFromNaiveTimestamp : public ICUDateFunc {
 	static inline timestamp_tz_t Operation(icu::Calendar *calendar, timestamp_t naive) {
 		if (!naive.IsFinite()) {
@@ -611,7 +539,7 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 					                                            SetTimeZone(calendar, tz_id);
 					                                            return OP::Operation(calendar, ts);
 				                                            } else {
-					                                            return ICUCast::Operation<SRC, DST>(ts);
+					                                            return Cast::Operation<SRC, DST>(ts);
 				                                            }
 			                                            });
 		}

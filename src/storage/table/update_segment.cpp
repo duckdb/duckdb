@@ -5,6 +5,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/storage/statistics/string_stats_writer.hpp"
 
 #include <algorithm>
 
@@ -1050,17 +1051,19 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
                              SelectionVector &sel) {
 	auto update_data = update.GetData<string_t>(update);
 	auto &mask = update.validity;
+
+	StringStatsWriter stats_writer(stats.statistics.GetType());
+	idx_t not_null_count = 0;
 	if (mask.CannotHaveNull()) {
 		stats.statistics.SetHasNoNullFast();
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
 			auto &str = update_data[idx];
-			StringStats::Update(stats.statistics, str);
+			stats_writer.Update(str);
 		}
 		sel.Initialize(nullptr);
-		return count;
+		not_null_count = count;
 	} else {
-		idx_t not_null_count = 0;
 		sel.Initialize(STANDARD_VECTOR_SIZE);
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
@@ -1068,7 +1071,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
 				stats.statistics.SetHasNoNullFast();
 				sel.set_index(not_null_count++, i);
 				auto &str = update_data[idx];
-				StringStats::Update(stats.statistics, str);
+				stats_writer.Update(str);
 			} else {
 				stats.statistics.SetHasNullFast();
 			}
@@ -1076,8 +1079,9 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
 		if (not_null_count == count) {
 			sel.Initialize(nullptr);
 		}
-		return not_null_count;
 	}
+	stats_writer.Merge(stats.statistics);
+	return not_null_count;
 }
 
 UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(PhysicalType type) {

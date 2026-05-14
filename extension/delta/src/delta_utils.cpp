@@ -2,7 +2,12 @@
 
 #include "duckdb.hpp"
 #include "duckdb/main/extension_util.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
 namespace duckdb {
@@ -197,21 +202,31 @@ ffi::EngineIterator EngineIteratorFromCallable(Callable &callable) {
 // Helper function to prevent pushing down filters kernel cant handle
 // TODO: remove once kernel handles this properly?
 static bool CanHandleFilter(TableFilter *filter) {
-	switch (filter->filter_type) {
-	case TableFilterType::CONSTANT_COMPARISON:
-		return true;
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction = static_cast<const ConjunctionAndFilter &>(*filter);
-		bool can_handle = true;
-		for (const auto &child : conjunction.child_filters) {
-			can_handle = can_handle && CanHandleFilter(child.get());
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(*filter, "DeltaUtils::CanHandleFilter");
+	auto &expr = *expr_filter.expr;
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+		auto &comparison = expr.Cast<BoundComparisonExpression>();
+		auto left_class = comparison.left->GetExpressionClass();
+		auto right_class = comparison.right->GetExpressionClass();
+		auto left_is_ref = left_class == ExpressionClass::BOUND_REF || left_class == ExpressionClass::BOUND_COLUMN_REF;
+		auto right_is_ref =
+		    right_class == ExpressionClass::BOUND_REF || right_class == ExpressionClass::BOUND_COLUMN_REF;
+		auto left_is_constant = comparison.left->type == ExpressionType::VALUE_CONSTANT;
+		auto right_is_constant = comparison.right->type == ExpressionType::VALUE_CONSTANT;
+		return (left_is_ref && right_is_constant) || (left_is_constant && right_is_ref);
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
+	    expr.type == ExpressionType::CONJUNCTION_AND) {
+		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
+		for (const auto &child : conjunction.children) {
+			auto child_filter = ExpressionFilter(child->Copy());
+			if (!CanHandleFilter(&child_filter)) {
+				return false;
+			}
 		}
-		return can_handle;
+		return true;
 	}
-
-	default:
-		return false;
-	}
+	return false;
 }
 
 // Prunes the list of predicates to ones that we can handle
@@ -247,14 +262,24 @@ uintptr_t PredicateVisitor::VisitPredicate(PredicateVisitor *predicate, ffi::Ker
 	}
 }
 
-uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const ConstantFilter &filter,
-                                                ffi::KernelExpressionVisitorState *state) {
+uintptr_t PredicateVisitor::VisitComparisonExpression(const string &col_name, const BoundComparisonExpression &expr,
+                                                      ffi::KernelExpressionVisitorState *state) {
 	auto maybe_left =
 	    ffi::visit_expression_column(state, KernelUtils::ToDeltaString(col_name), DuckDBEngineError::AllocateError);
 	uintptr_t left = KernelUtils::UnpackResult(maybe_left, "VisitConstantFilter failed to visit_expression_column");
 
 	uintptr_t right = ~0;
-	auto &value = filter.constant;
+	auto comparison_type = expr.type;
+	optional_ptr<Expression> constant_expr;
+	if (expr.right->type == ExpressionType::VALUE_CONSTANT) {
+		constant_expr = expr.right.get();
+	} else if (expr.left->type == ExpressionType::VALUE_CONSTANT) {
+		constant_expr = expr.left.get();
+		comparison_type = FlipComparisonExpression(comparison_type);
+	} else {
+		return ~0;
+	}
+	auto &value = constant_expr->Cast<BoundConstantExpression>().value;
 	switch (value.type().id()) {
 	case LogicalType::BIGINT:
 		right = visit_expression_literal_long(state, BigIntValue::Get(value));
@@ -263,7 +288,7 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
 	case LogicalType::VARCHAR: {
 		// WARNING: C++ lifetime extension rules don't protect calls of the form foo(std::string(...).c_str())
 		auto str = StringValue::Get(value);
-		auto maybe_right = ffi::visit_expression_literal_string(state, KernelUtils::ToDeltaString(col_name),
+		auto maybe_right = ffi::visit_expression_literal_string(state, KernelUtils::ToDeltaString(str),
 		                                                        DuckDBEngineError::AllocateError);
 		right = KernelUtils::UnpackResult(maybe_right, "VisitConstantFilter failed to visit_expression_literal_string");
 		break;
@@ -274,7 +299,7 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
 	}
 
 	// TODO support other comparison types?
-	switch (filter.comparison_type) {
+	switch (comparison_type) {
 	case ExpressionType::COMPARE_LESSTHAN:
 		return visit_expression_lt(state, left, right);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
@@ -287,37 +312,48 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
 		return visit_expression_eq(state, left, right);
 
 	default:
-		std::cout << " Unsupported operation: " << (int)filter.comparison_type << std::endl;
+		std::cout << " Unsupported operation: " << (int)comparison_type << std::endl;
 		return ~0; // Unsupported operation
 	}
 }
 
-uintptr_t PredicateVisitor::VisitAndFilter(const string &col_name, const ConjunctionAndFilter &filter,
-                                           ffi::KernelExpressionVisitorState *state) {
-	auto it = filter.child_filters.begin();
-	auto end = filter.child_filters.end();
+uintptr_t PredicateVisitor::VisitAndExpression(const string &col_name, const BoundConjunctionExpression &expr,
+                                               ffi::KernelExpressionVisitorState *state) {
+	auto it = expr.children.begin();
+	auto end = expr.children.end();
 	auto get_next = [this, col_name, state, &it, &end]() -> uintptr_t {
 		if (it == end) {
 			return 0;
 		}
-		auto &child_filter = *it++;
-		return VisitFilter(col_name, *child_filter, state);
+		auto &child_expr = **it++;
+		return VisitExpression(col_name, child_expr, state);
 	};
 	auto eit = EngineIteratorFromCallable(get_next);
 	return visit_expression_and(state, &eit);
 }
 
+uintptr_t PredicateVisitor::VisitExpression(const string &col_name, const Expression &expr,
+                                            ffi::KernelExpressionVisitorState *state) {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_COMPARISON:
+		return VisitComparisonExpression(col_name, expr.Cast<BoundComparisonExpression>(), state);
+	case ExpressionClass::BOUND_CONJUNCTION: {
+		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
+		if (expr.type == ExpressionType::CONJUNCTION_AND) {
+			return VisitAndExpression(col_name, conjunction, state);
+		}
+		break;
+	}
+	default:
+		break;
+	}
+	throw NotImplementedException("Attempted to push down unimplemented filter expression: '%s'", expr.ToString());
+}
+
 uintptr_t PredicateVisitor::VisitFilter(const string &col_name, const TableFilter &filter,
                                         ffi::KernelExpressionVisitorState *state) {
-	switch (filter.filter_type) {
-	case TableFilterType::CONSTANT_COMPARISON:
-		return VisitConstantFilter(col_name, static_cast<const ConstantFilter &>(filter), state);
-	case TableFilterType::CONJUNCTION_AND:
-		return VisitAndFilter(col_name, static_cast<const ConjunctionAndFilter &>(filter), state);
-	default:
-		throw NotImplementedException("Attempted to push down unimplemented filter type: '%s'",
-		                              EnumUtil::ToString(filter.filter_type));
-	}
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "PredicateVisitor::VisitFilter");
+	return VisitExpression(col_name, *expr_filter.expr, state);
 }
 
 }; // namespace duckdb

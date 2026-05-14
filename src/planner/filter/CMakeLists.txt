@@ -12,7 +12,14 @@ add_library_unity(
   optional_filter.cpp
   perfect_hash_join_filter.cpp
   prefix_range_filter.cpp
-  selectivity_optional_filter.cpp)
+  selectivity_optional_filter.cpp
+  table_filter_bloom_function.cpp
+  table_filter_dynamic_function.cpp
+  table_filter_functions.cpp
+  table_filter_optional_function.cpp
+  table_filter_perfect_hash_join_function.cpp
+  table_filter_prefix_range_function.cpp
+  table_filter_selectivity_optional_function.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_planner_filter>
     PARENT_SCOPE)
