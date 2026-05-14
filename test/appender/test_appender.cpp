@@ -697,6 +697,34 @@ TEST_CASE("Test changing the active column configuration", "[appender]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {50, 30, 50, 50}));
 }
 
+TEST_CASE("Test repeated flushes with changing active column configuration", "[appender]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30)"));
+	Appender appender(con, "main", "tbl");
+
+	appender.AppendRow(1, 2, 3);
+	appender.Flush();
+
+	appender.AppendRow(4, 5, 6);
+	appender.Flush();
+
+	appender.AddColumn("j");
+	appender.AppendRow(20);
+	appender.Flush();
+
+	appender.ClearColumns();
+	appender.AppendRow(7, 8, 9);
+	appender.Close();
+
+	result = con.Query("SELECT i, j, k FROM tbl ORDER BY rowid");
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 4, 4, 7}));
+	REQUIRE(CHECK_COLUMN(result, 1, {2, 5, 20, 8}));
+	REQUIRE(CHECK_COLUMN(result, 2, {3, 6, 30, 9}));
+}
+
 TEST_CASE("Test edge cases for the active column configuration", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
