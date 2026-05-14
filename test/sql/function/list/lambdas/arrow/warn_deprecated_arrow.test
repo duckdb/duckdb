@@ -1,0 +1,52 @@
+# name: test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test
+# description: Test warnings are outputted correctly
+# group: [arrow]
+
+require json
+
+# Enable single arrow, should not log.
+statement ok
+SET lambda_syntax='ENABLE_SINGLE_ARROW'
+
+query I
+SELECT list_reduce([1, 2, 3], (x, y) -> x + y);
+----
+6
+
+query II
+SELECT log_level, message[0:37] FROM duckdb_logs
+----
+
+# Normal lambda, should not log
+statement ok
+RESET lambda_syntax;
+
+query I
+SELECT list_reduce([1, 2, 3], lambda x, y: x + y);
+----
+6
+
+query II
+SELECT log_level, message[0:37] FROM duckdb_logs
+----
+
+# Bind Error, should not log
+statement error
+SELECT [split('01:08:22', ':'), x -> CAST (x AS INTEGER)];
+----
+<REGEX>:Binder Error.*failed to bind function, either.*This scalar function does not support lambdas!.*Referenced column.*was not found because the FROM clause is missing.*
+
+query II
+SELECT log_level, message[0:37] FROM duckdb_logs
+----
+
+# Should not log if JSON bind
+query I
+SELECT (SELECT (JSON '{ "key" : "value" }')->k AS v FROM (SELECT 'key' AS k) keys);
+----
+"value"
+
+query II
+SELECT log_level, message[0:37] FROM duckdb_logs
+----
+
