@@ -1634,8 +1634,7 @@ struct WriteBufferRowGroupMemoryLimitSetting {
 	static constexpr const char *Description =
 	    "The maximum data to buffer in row groups (in bytes) to buffer prior to flushing them together. When either "
 	    "this limit is reached, or write_buffer_row_group_count is reached, we flush the data to disk. Defaults to 20% "
-	    "of "
-	    "memory limit divided by thread count.";
+	    "of memory limit divided by thread count.";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
