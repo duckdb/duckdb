@@ -138,7 +138,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		ComputeGroupLocation(groups.data[i], group_minima[i], address_data, current_shift);
 	}
 
-	if (AddChunkClustered(address_data, payload, groups.size())) {
+	if (AddChunkClustered(address_data, payload)) {
 		return;
 	}
 
@@ -171,11 +171,12 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	}
 }
 
-bool PerfectAggregateHashTable::AddChunkClustered(uintptr_t *address_data, DataChunk &payload, idx_t count) {
+bool PerfectAggregateHashTable::AddChunkClustered(uintptr_t *address_data, DataChunk &payload) {
 	// Build the clustered permutation from raw group ids.
 	ClusteredAggr clustered;
 	uint64_t group_ids_buf[STANDARD_VECTOR_SIZE];
 	const uint64_t *group_ids_ptr;
+	auto count = payload.size();
 	if constexpr (sizeof(uintptr_t) == sizeof(uint64_t)) {
 		group_ids_ptr = reinterpret_cast<const uint64_t *>(address_data);
 	} else {
@@ -206,8 +207,8 @@ bool PerfectAggregateHashTable::AddChunkClustered(uintptr_t *address_data, DataC
 
 	auto &aggregates = layout_ptr->GetAggregates();
 	RowOperationsState row_state(*aggregate_allocator);
-	RowOperations::UpdateStatesClustered(row_state, aggregates, &filter_set, nullptr, addresses, payload, count,
-	                                     clustered, skip_addresses);
+	RowOperations::UpdateStatesClustered(row_state, aggregates, &filter_set, nullptr, addresses, payload, clustered,
+	                                     skip_addresses);
 	return true;
 }
 

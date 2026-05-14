@@ -529,12 +529,10 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	for (idx_t i = 0; i < payload.size(); i++) {
 		result_addresses.WriteValue(aggregate_address);
 	}
+	FlatVector::SetSize(state.addresses, payload.size());
 	state.addresses.SetVectorType(VectorType::CONSTANT_VECTOR);
 	UpdateAggregates(payload, filter);
 	state.addresses.SetVectorType(VectorType::FLAT_VECTOR);
-
-	// Process the aggregates: ht_offsets are only valid for the single constant group, not the full payload.
-	UpdateAggregates(payload, filter, false);
 
 	return new_group_count;
 }
@@ -606,7 +604,7 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 	const bool skip_addresses = clustered_state.all_clustered;
 	auto &aggregates = layout_ptr->GetAggregates();
 	RowOperations::UpdateStatesClustered(state.row_state, aggregates, &filter_set, &filter, state.addresses, payload,
-	                                     payload.size(), clustered, skip_addresses);
+	                                     clustered, skip_addresses);
 	return true;
 }
 

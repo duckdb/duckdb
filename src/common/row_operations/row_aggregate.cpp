@@ -30,25 +30,26 @@ void RowOperations::InitializeStates(TupleDataLayout &layout, Vector &addresses,
 	}
 }
 
-void RowOperations::DestroyStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses, idx_t count) {
+void RowOperations::DestroyStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses) {
+	auto count = addresses.size();
 	if (count == 0) {
 		return;
 	}
 	//	Move to the first aggregate state
-	VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(layout.GetAggrOffset()), count);
+	VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(layout.GetAggrOffset()));
 	for (const auto &aggr : layout.GetAggregates()) {
 		if (aggr.function.HasStateDestructorCallback()) {
 			AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
 			aggr.function.GetStateDestructorCallback()(addresses, aggr_input_data, count);
 		}
 		// Move to the next aggregate state
-		VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggr.payload_size), count);
+		VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggr.payload_size));
 	}
 }
 
 void RowOperations::UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses,
-                                 DataChunk &payload, idx_t arg_idx, idx_t count,
-                                 optional_ptr<const ClusteredAggr> clustered) {
+                                 DataChunk &payload, idx_t arg_idx, optional_ptr<const ClusteredAggr> clustered) {
+	auto count = addresses.size();
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
 	auto cluster_update = aggr.function.GetStateClusterUpdateCallback();
 	aggr_input_data.clustered = cluster_update ? clustered : nullptr;
@@ -70,12 +71,12 @@ void RowOperations::UpdateFilteredStates(RowOperationsState &state, AggregateFil
 	Vector filtered_addresses(addresses, filter_data.true_sel, count);
 	filtered_addresses.Flatten();
 
-	UpdateStates(state, aggr, filtered_addresses, filter_data.filtered_payload, arg_idx, count);
+	UpdateStates(state, aggr, filtered_addresses, filter_data.filtered_payload, arg_idx);
 }
 
 void RowOperations::UpdateStatesClustered(RowOperationsState &state, vector<AggregateObject> &aggregates,
                                           AggregateFilterDataSet *filter_set, const unsafe_vector<idx_t> *filter,
-                                          Vector &addresses, DataChunk &payload, idx_t count, ClusteredAggr &clustered,
+                                          Vector &addresses, DataChunk &payload, ClusteredAggr &clustered,
                                           bool skip_addresses) {
 	idx_t filter_idx = 0;
 	idx_t payload_idx = 0;
@@ -85,7 +86,7 @@ void RowOperations::UpdateStatesClustered(RowOperationsState &state, vector<Aggr
 			// Skip all the aggregates that are not in the filter
 			payload_idx += aggr.child_count;
 			if (!skip_addresses) {
-				VectorOperations::AddInPlace(addresses, NumericCast<int64_t>(aggr.payload_size), count);
+				VectorOperations::AddInPlace(addresses, NumericCast<int64_t>(aggr.payload_size));
 			}
 			clustered.AdvanceStates(aggr.payload_size);
 			continue;
@@ -99,13 +100,13 @@ void RowOperations::UpdateStatesClustered(RowOperationsState &state, vector<Aggr
 			RowOperations::UpdateFilteredStates(state, filter_set->GetFilterData(aggr_idx), aggr, addresses, payload,
 			                                    payload_idx);
 		} else {
-			RowOperations::UpdateStates(state, aggr, addresses, payload, payload_idx, count, &clustered);
+			UpdateStates(state, aggr, addresses, payload, payload_idx, clustered);
 		}
 
 		// Move to the next aggregate
 		payload_idx += aggr.child_count;
 		if (!skip_addresses) {
-			VectorOperations::AddInPlace(addresses, NumericCast<int64_t>(aggr.payload_size), count);
+			VectorOperations::AddInPlace(addresses, NumericCast<int64_t>(aggr.payload_size));
 		}
 		clustered.AdvanceStates(aggr.payload_size);
 		if (filter) {
@@ -114,15 +115,16 @@ void RowOperations::UpdateStatesClustered(RowOperationsState &state, vector<Aggr
 	}
 }
 
-void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &layout, Vector &sources, Vector &targets,
-                                  idx_t count) {
+void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &layout, Vector &sources,
+                                  Vector &targets) {
+	auto count = sources.size();
 	if (count == 0) {
 		return;
 	}
 
 	//	Move to the first aggregate states
-	VectorOperations::AddInPlace(sources, UnsafeNumericCast<int64_t>(layout.GetAggrOffset()), count);
-	VectorOperations::AddInPlace(targets, UnsafeNumericCast<int64_t>(layout.GetAggrOffset()), count);
+	VectorOperations::AddInPlace(sources, UnsafeNumericCast<int64_t>(layout.GetAggrOffset()));
+	VectorOperations::AddInPlace(targets, UnsafeNumericCast<int64_t>(layout.GetAggrOffset()));
 
 	// Keep track of the offset
 	idx_t offset = layout.GetAggrOffset();
@@ -134,16 +136,16 @@ void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &la
 		aggr.function.GetStateCombineCallback()(sources, targets, aggr_input_data, count);
 
 		// Move to the next aggregate states
-		VectorOperations::AddInPlace(sources, UnsafeNumericCast<int64_t>(aggr.payload_size), count);
-		VectorOperations::AddInPlace(targets, UnsafeNumericCast<int64_t>(aggr.payload_size), count);
+		VectorOperations::AddInPlace(sources, UnsafeNumericCast<int64_t>(aggr.payload_size));
+		VectorOperations::AddInPlace(targets, UnsafeNumericCast<int64_t>(aggr.payload_size));
 
 		// Increment the offset
 		offset += aggr.payload_size;
 	}
 
 	// Now subtract the offset to get back to the original position
-	VectorOperations::AddInPlace(sources, -UnsafeNumericCast<int64_t>(offset), count);
-	VectorOperations::AddInPlace(targets, -UnsafeNumericCast<int64_t>(offset), count);
+	VectorOperations::AddInPlace(sources, -UnsafeNumericCast<int64_t>(offset));
+	VectorOperations::AddInPlace(targets, -UnsafeNumericCast<int64_t>(offset));
 }
 
 void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses,
@@ -156,7 +158,7 @@ void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &l
 	VectorOperations::Copy(addresses, addresses_copy, result.size(), 0, 0);
 
 	//	Move to the first aggregate state
-	VectorOperations::AddInPlace(addresses_copy, UnsafeNumericCast<int64_t>(layout.GetAggrOffset()), result.size());
+	VectorOperations::AddInPlace(addresses_copy, UnsafeNumericCast<int64_t>(layout.GetAggrOffset()));
 
 	auto &aggregates = layout.GetAggregates();
 	for (idx_t i = 0; i < aggregates.size(); i++) {
@@ -167,7 +169,7 @@ void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &l
 		FlatVector::SetSize(target, count_t(result.size()));
 
 		// Move to the next aggregate state
-		VectorOperations::AddInPlace(addresses_copy, UnsafeNumericCast<int64_t>(aggr.payload_size), result.size());
+		VectorOperations::AddInPlace(addresses_copy, UnsafeNumericCast<int64_t>(aggr.payload_size));
 	}
 }
 

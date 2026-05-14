@@ -56,10 +56,9 @@ inline uint64_t GetMask(const hash_t hash) {
 	return mask;
 }
 
-void BloomFilter::InsertHashes(const Vector &hashes_v, idx_t count) const {
-	auto hashes = FlatVector::GetData<uint64_t>(hashes_v);
-	for (idx_t i = 0; i < count; i++) {
-		InsertOne(hashes[i]);
+void BloomFilter::InsertHashes(const Vector &hashes_v) const {
+	for (auto hash : hashes_v.Values<uint64_t>()) {
+		InsertOne(hash.GetValue());
 	}
 }
 

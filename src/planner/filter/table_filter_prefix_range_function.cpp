@@ -87,7 +87,7 @@ public:
 	}
 
 	template <typename T, typename CONVERTER>
-	void InsertKeys(Vector &keys, idx_t count, uint64_t *state_bitmap) const {
+	void InsertKeys(Vector &keys, uint64_t *state_bitmap) const {
 		for (const auto &entry : keys.template ValidValues<T>()) {
 			const U y = CONVERTER::Convert(entry.GetValue()) - min;
 			// All keys are in-range by construction, so the range check can be omitted here.
@@ -256,9 +256,9 @@ public:
 		return bitmap.InitializeBuildState(context);
 	}
 
-	void InsertKeys(Vector &keys, idx_t count, BuildState &state) const override {
+	void InsertKeys(Vector &keys, BuildState &state) const override {
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
-		bitmap.template InsertKeys<T, NumericConverter<T>>(keys, count, bitmap_state.bitmap);
+		bitmap.template InsertKeys<T, NumericConverter<T>>(keys, bitmap_state.bitmap);
 	}
 
 	void MergeBuildState(BuildState &state) override {
@@ -310,9 +310,9 @@ public:
 		return bitmap.InitializeBuildState(context);
 	}
 
-	void InsertKeys(Vector &keys, idx_t count, BuildState &state) const override {
+	void InsertKeys(Vector &keys, BuildState &state) const override {
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
-		bitmap.template InsertKeys<string_t, StringPrefixConverter>(keys, count, bitmap_state.bitmap);
+		bitmap.template InsertKeys<string_t, StringPrefixConverter>(keys, bitmap_state.bitmap);
 	}
 
 	void MergeBuildState(BuildState &state) override {

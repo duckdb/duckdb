@@ -88,7 +88,7 @@ public:
 	BloomFilter() = default;
 	void Initialize(ClientContext &context_p, idx_t number_of_rows);
 
-	void InsertHashes(const Vector &hashes_v, idx_t count) const;
+	void InsertHashes(const Vector &hashes_v) const;
 	idx_t LookupHashes(const Vector &hashes_v, SelectionVector &result_sel, idx_t count) const;
 
 	void InsertOne(hash_t hash) const;
@@ -159,7 +159,7 @@ public:
 	virtual ~PrefixRangeFilter() = default;
 	virtual void Initialize(ClientContext &context, idx_t number_of_rows, Value min, Value max) = 0;
 	virtual unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const = 0;
-	virtual void InsertKeys(Vector &keys, idx_t count, BuildState &state) const = 0;
+	virtual void InsertKeys(Vector &keys, BuildState &state) const = 0;
 	virtual void MergeBuildState(BuildState &state) = 0;
 	virtual idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const = 0;
 	virtual FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const = 0;
