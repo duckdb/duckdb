@@ -353,9 +353,6 @@ static char *gen_terminator(char *dest, seed_t *seed) {
 }
 
 static char *gen_sentence(char *dest, seed_t *seed) {
-	const char *cptr;
-	int i;
-
 	DSS_HUGE j;
 	RANDOM(j, 1, grammar.list[grammar.count - 1].weight, seed);
 	int index = 0;
@@ -363,7 +360,6 @@ static char *gen_sentence(char *dest, seed_t *seed) {
 	index += grammar.list[1].weight < j;
 	index += grammar.list[2].weight < j;
 	index += grammar.list[3].weight < j;
-	cptr = grammar.list[index].text;
 
 	if (index == 0) {
 		dest = gen_np(dest, seed);
@@ -409,8 +405,8 @@ void init_text_pool(long bSize, DBGenContext *ctx) {
 	gen_index(verbs_index, &verbs);
 	gen_index(prepositions_index, &prepositions);
 
-  txtBufferSize = bSize;
-  szTextPool = (char*)malloc(bSize + 1 + 100);
+    txtBufferSize = bSize;
+    szTextPool = (char*)malloc(bSize + 1 + 100);
 
 	char *ptr = szTextPool;
 	char *endptr = szTextPool + bSize + 1;
