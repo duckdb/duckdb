@@ -62,6 +62,8 @@ struct CreateTypeInfo : public CreateInfo {
 	unique_ptr<SQLStatement> query;
 	//! Bind type modifiers to the type
 	bind_logical_type_function_t bind_function;
+	//! Comments on fields of the type (for STRUCT types)
+	unordered_map<string, Value> field_comments_map;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;
