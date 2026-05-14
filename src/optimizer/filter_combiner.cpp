@@ -992,9 +992,9 @@ FilterPushdownResult FilterCombiner::TryPushdownArithmeticFilter(TableFilterSet 
 		if (!TryGetArithmeticFilterBound(op_name, col_is_left, arith_const, comp_const, cmp, col_type, threshold_val)) {
 			return false;
 		}
-		auto expr_filter = make_uniq<ExpressionFilter>(
-		    CreateComparisonExpression(*arith_expr.children[col_idx], cmp, std::move(threshold_val)));
-		table_filters.PushFilter(proj_index, make_uniq<OptionalFilter>(std::move(expr_filter)));
+		auto filter_expr = CreateComparisonExpression(*arith_expr.children[col_idx], cmp, std::move(threshold_val));
+		auto optional_filter_expr = CreateOptionalFilterExpression(std::move(filter_expr), col_type);
+		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(optional_filter_expr)));
 		return true;
 	};
 
