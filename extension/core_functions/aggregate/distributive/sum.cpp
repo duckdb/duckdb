@@ -52,8 +52,7 @@ struct ClusteredAddOp {
 
 template <class BASE, class LOCAL_OP>
 struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
-	static constexpr bool kClusteredI64HugeintSum = std::is_same<LOCAL_OP, ClusteredAddOp<AddToHugeint>>::value ||
-	                                                std::is_same<LOCAL_OP, ClusteredAddOp<HugeintAdd>>::value;
+	static constexpr bool kClusteredI64HugeintSum = std::is_same<LOCAL_OP, ClusteredAddOp<AddToHugeint>>::value;
 
 	template <class INPUT_TYPE, class STATE>
 	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
@@ -103,8 +102,16 @@ struct KahanSumOperation : public BaseSumOperation<SumSetOperation, KahanAdd> {
 	}
 };
 
-using HugeintSumOperation =
-    ClusteredSumOperation<BaseSumOperation<SumSetOperation, HugeintAdd>, ClusteredAddOp<HugeintAdd>>;
+struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, HugeintAdd> {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
+		} else {
+			target = state.value;
+		}
+	}
+};
 
 template <class T>
 static LogicalType GetValueLogicalType();

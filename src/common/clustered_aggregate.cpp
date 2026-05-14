@@ -351,8 +351,8 @@ const DictProps *ClusteredAggrState::GetDictProps(const Vector &input) const {
 				buf[i] = 0;
 				continue;
 			}
-			int64_t v;
-			if (!TryToSafeI64(src[i], v)) {
+			const int64_t v = static_cast<int64_t>(src[i]);
+			if (!I64VectorSumSafe(v)) {
 				return false;
 			}
 			buf[i] = v;
@@ -384,9 +384,6 @@ const DictProps *ClusteredAggrState::GetDictProps(const Vector &input) const {
 		break;
 	case PhysicalType::UINT64:
 		ok = try_copy(FlatVector::GetData<uint64_t>(child));
-		break;
-	case PhysicalType::INT128:
-		ok = try_copy(FlatVector::GetData<hugeint_t>(child));
 		break;
 	default:
 		break;

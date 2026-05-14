@@ -8,13 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector_size.hpp"
-
-#include <type_traits>
 
 namespace duckdb {
 
@@ -26,19 +23,6 @@ using DictProps = unsafe_unique_array<int64_t>;
 static constexpr uint64_t SUM_OVERFLOW_MASK = ~((uint64_t(1) << 53) - 1);
 static inline bool I64VectorSumSafe(int64_t v) {
 	return ((static_cast<uint64_t>(v) ^ static_cast<uint64_t>(v >> 63)) & SUM_OVERFLOW_MASK) == 0;
-}
-
-template <class T>
-static inline bool TryToSafeI64(const T &v, int64_t &out) {
-	if constexpr (std::is_same<T, hugeint_t>::value) {
-		if (v.upper != 0) {
-			return false;
-		}
-		out = static_cast<int64_t>(v.lower);
-	} else {
-		out = static_cast<int64_t>(v);
-	}
-	return I64VectorSumSafe(out);
 }
 
 //! Per-chunk tuple clustering by group. Built once and passed to aggregate kernels.

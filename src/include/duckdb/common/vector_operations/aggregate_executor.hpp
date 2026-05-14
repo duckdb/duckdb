@@ -576,9 +576,7 @@ public:
 	struct HasI64HugeintSumFastPath : std::false_type {};
 	template <class INPUT_TYPE, class OP>
 	struct HasI64HugeintSumFastPath<INPUT_TYPE, OP, void_t_helper<decltype(OP::kClusteredI64HugeintSum)>>
-	    : std::integral_constant<bool,
-	                             (std::is_integral<INPUT_TYPE>::value || std::is_same<INPUT_TYPE, hugeint_t>::value) &&
-	                                 OP::kClusteredI64HugeintSum> {};
+	    : std::integral_constant<bool, std::is_integral<INPUT_TYPE>::value && OP::kClusteredI64HugeintSum> {};
 
 	template <class STATE_TYPE, class OP>
 	static void ExecuteUnaryClusteredDictI64SafeSum(Vector &input, const ClusteredAggr &clustered,
@@ -629,13 +627,9 @@ public:
 			}
 			int64_t local64 = 0;
 			auto add_row = [&](idx_t idx) {
-				int64_t v;
-				if (DUCKDB_UNLIKELY(!TryToSafeI64(vals[idx], v))) {
-					if constexpr (std::is_same<INPUT_TYPE, hugeint_t>::value) {
-						state.value = Hugeint::Add(state.value, vals[idx]);
-					} else {
-						state.value = Hugeint::Add(state.value, static_cast<int64_t>(vals[idx]));
-					}
+				const int64_t v = static_cast<int64_t>(vals[idx]);
+				if (DUCKDB_UNLIKELY(!I64VectorSumSafe(v))) {
+					state.value = Hugeint::Add(state.value, v);
 				} else {
 					local64 += v;
 				}
