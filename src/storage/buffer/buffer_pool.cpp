@@ -293,6 +293,7 @@ bool BufferPool::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	// The block handle is locked during this operation (Unpin),
 	// or the block handle is still a local variable (ConvertToPersistent)
 	D_ASSERT(memory.GetReaders() == 0);
+	memory.MarkAddedToEvictionQueue();
 	auto ts = memory.NextEvictionSequenceNumber();
 	if (track_eviction_timestamps) {
 		memory.SetLRUTimestamp(std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now())

@@ -16,7 +16,7 @@ BlockMemory::BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, M
       buffer_type(FileBufferType::BLOCK), buffer(nullptr), eviction_seq_num(0), lru_timestamp_msec(),
       destroy_buffer_upon(DestroyBufferUpon::BLOCK), memory_usage(block_alloc_size_p),
       memory_charge(tag, buffer_manager.GetBufferPool()), unswizzled(nullptr),
-      eviction_queue_idx(DConstants::INVALID_INDEX) {
+      eviction_queue_idx(DConstants::INVALID_INDEX), ever_in_eviction_queue(false) {
 }
 
 BlockMemory::BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, MemoryTag tag_p,
@@ -26,7 +26,7 @@ BlockMemory::BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, M
       buffer_type(buffer_p->GetBufferType()), buffer(std::move(buffer_p)), eviction_seq_num(0), lru_timestamp_msec(),
       destroy_buffer_upon(destroy_buffer_upon_p), memory_usage(size_p),
       memory_charge(tag, buffer_manager.GetBufferPool()), unswizzled(nullptr),
-      eviction_queue_idx(DConstants::INVALID_INDEX) {
+      eviction_queue_idx(DConstants::INVALID_INDEX), ever_in_eviction_queue(false) {
 	memory_charge = std::move(reservation); // Moved to constructor body due to tidy check.
 }
 
@@ -34,8 +34,13 @@ BlockMemory::~BlockMemory() { // NOLINT: allow internal exceptions
 	// The block memory is being destroyed, meaning that any unswizzled pointers are now binary junk.
 	SetSwizzling(nullptr);
 	D_ASSERT(!GetBuffer() || GetBuffer()->GetBufferType() == GetBufferType());
-	if (GetBufferType() != FileBufferType::TINY_BUFFER) {
-		// Kill the latest version in the eviction queue.
+	if (EverInEvictionQueue() && GetBufferType() != FileBufferType::TINY_BUFFER) {
+		// This BlockMemory was inserted into the eviction queue at least once, so the latest
+		// queue entry referring to it is now dead. Account for it.
+		// We deliberately do NOT predicate this on GetBuffer() being non-null: the queue
+		// entry's lifetime is independent of whether the buffer is currently loaded - only
+		// the dequeue side ever removes it. If the block was evicted (buffer destroyed) and
+		// then this BlockMemory is destroyed, the stale queue entry still needs accounting.
 		GetBufferManager().GetBufferPool().IncrementDeadNodes(*this);
 	}
 

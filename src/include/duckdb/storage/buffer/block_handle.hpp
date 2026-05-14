@@ -226,6 +226,22 @@ private:
 	const char *unswizzled;
 	//! The eviction queue index, currently only FileBufferType::MANAGED_BUFFER.
 	atomic<idx_t> eviction_queue_idx;
+	//! True iff this block has ever been inserted into an eviction queue.
+	//! Used by ~BlockMemory to decide whether the latest queue entry needs to be marked dead.
+	//! This stays true even after Unload (which resets eviction_seq_num), because the stale
+	//! queue entry from before the unload is still in the queue and must be accounted for
+	//! when this BlockMemory is destroyed.
+	atomic<bool> ever_in_eviction_queue;
+
+public:
+	//! Returns whether this block has ever been added to an eviction queue.
+	bool EverInEvictionQueue() const {
+		return ever_in_eviction_queue.load(std::memory_order_relaxed);
+	}
+	//! Marks this block as having been added to an eviction queue at least once.
+	void MarkAddedToEvictionQueue() {
+		ever_in_eviction_queue.store(true, std::memory_order_relaxed);
+	}
 };
 
 class BlockHandle : public enable_shared_from_this<BlockHandle> {

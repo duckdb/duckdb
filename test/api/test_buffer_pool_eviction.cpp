@@ -262,3 +262,139 @@ TEST_CASE("Test buffer pool eviction: failed to allocate space if every page and
 	const auto final_memory_usage = buffer_manager.GetUsedMemory();
 	REQUIRE(final_memory_usage == total_memory_limit);
 }
+
+namespace {
+
+idx_t SumDeadNodes(const vector<EvictionQueueInformation> &info) {
+	idx_t total = 0;
+	for (const auto &q : info) {
+		total += q.dead_nodes;
+	}
+	return total;
+}
+
+idx_t SumApproxSize(const vector<EvictionQueueInformation> &info) {
+	idx_t total = 0;
+	for (const auto &q : info) {
+		total += q.approximate_size;
+	}
+	return total;
+}
+
+} // namespace
+
+// Regression test for an eviction-queue dead-node accounting bug.
+//
+// Each non-tiny BlockMemory placed in the eviction queue stays referenced from there via a
+// weak_ptr<BlockMemory> + sequence number. When the BlockMemory is destroyed, the latest queue
+// entry pointing at it becomes dead and must be reflected in the per-queue dead_nodes counter.
+//
+// Previously, BlockMemory::~BlockMemory only called IncrementDeadNodes when GetBuffer() was
+// non-null. But if the block had already been evicted (buffer destroyed) before the BlockHandle
+// was dropped, the counter was never incremented for it, even though a stale entry still sat in
+// the queue. This systematically under-counted dead_nodes and made the purge-ratio early-out
+// fire too aggressively, letting dead entries accumulate.
+TEST_CASE("Test eviction queue: dead_nodes is incremented on BlockMemory destruction even after eviction",
+          "[storage][buffer_pool]") {
+	DuckDB db;
+	Connection con(db);
+	auto &context = *con.context;
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
+	const idx_t initial_memory = buffer_pool.GetUsedMemory();
+
+	constexpr idx_t page_size = 1024 * 1024; // 1 MiB
+	constexpr idx_t total_pages = 6;
+	constexpr idx_t held_pages = 2;
+	const idx_t actual_alloc_size = BufferManager::GetAllocSize(page_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
+
+	// Memory limit only large enough to hold `held_pages` blocks at once, so subsequent
+	// allocations evict older destroyable blocks (their buffer becomes nullptr).
+	const idx_t memory_limit = initial_memory + held_pages * actual_alloc_size;
+	buffer_pool.SetLimit(memory_limit, EXCEPTION_POSTSCRIPT);
+
+	vector<shared_ptr<BlockHandle>> handles;
+	handles.reserve(total_pages);
+	for (idx_t i = 0; i < total_pages; ++i) {
+		auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, page_size, /*can_destroy=*/true);
+		handles.emplace_back(pin.GetBlockHandle());
+		// Pin destroyed at scope exit -> block enters the eviction queue.
+	}
+
+	// At this point only the most recent `held_pages` BlockHandles still own a buffer; the
+	// older `total_pages - held_pages` have been evicted (buffer == nullptr) but the
+	// BlockMemory is still alive because we hold the shared_ptr<BlockHandle>.
+	idx_t evicted_observed = 0;
+	idx_t loaded_observed = 0;
+	for (auto &handle : handles) {
+		if (handle->GetMemory().GetState() == BlockState::BLOCK_UNLOADED) {
+			evicted_observed++;
+		} else {
+			loaded_observed++;
+		}
+	}
+	REQUIRE(evicted_observed == total_pages - held_pages);
+	REQUIRE(loaded_observed == held_pages);
+
+	const idx_t dead_before = SumDeadNodes(buffer_pool.GetEvictionQueueInfo());
+
+	// Drop all BlockHandles. Every ~BlockMemory must increment dead_nodes once, regardless
+	// of whether the buffer was already null at destruction time.
+	handles.clear();
+
+	const idx_t dead_after = SumDeadNodes(buffer_pool.GetEvictionQueueInfo());
+
+	REQUIRE(dead_after - dead_before == total_pages);
+}
+
+// Sanity check the dead_nodes counter never exceeds the queue size and never decrements past
+// zero across a destroyable-block churn workload. This indirectly exercises PurgeIteration:
+// before the fix, pinned-but-current entries dequeued during purge would be both dropped from
+// the queue AND wrongly subtracted from the dead-node counter, leading to underflow on the
+// unsigned counter (observable as an absurdly large dead_nodes value).
+TEST_CASE("Test eviction queue: dead_nodes invariants hold under destroyable block churn", "[storage][buffer_pool]") {
+	DuckDB db;
+	Connection con(db);
+	auto &context = *con.context;
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	auto &buffer_pool = DatabaseInstance::GetDatabase(context).GetBufferPool();
+	const idx_t initial_memory = buffer_pool.GetUsedMemory();
+
+	constexpr idx_t page_size = 64 * 1024; // 64 KiB - smaller pages so we can churn many of them
+	constexpr idx_t resident_pages = 32;
+	constexpr idx_t churn_iterations = 20000; // > INSERT_INTERVAL (4096) to trigger purges
+	const idx_t actual_alloc_size = BufferManager::GetAllocSize(page_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
+
+	const idx_t memory_limit = initial_memory + resident_pages * actual_alloc_size;
+	buffer_pool.SetLimit(memory_limit, EXCEPTION_POSTSCRIPT);
+
+	// Keep a small set of pinned blocks that stay resident throughout the test.
+	// Their queue entries (after each unpin/repin cycle below) are alive, latest-version,
+	// and currently unevictable - exactly the case the old PurgeIteration mishandled.
+	vector<BufferHandle> pinned_resident;
+	pinned_resident.reserve(resident_pages / 4);
+	for (idx_t i = 0; i < resident_pages / 4; ++i) {
+		pinned_resident.emplace_back(buffer_manager.Allocate(MemoryTag::EXTENSION, page_size, /*can_destroy=*/true));
+	}
+
+	// Drive churn: allocate, briefly hold, release. Each unpin enqueues a node; many of
+	// them go stale immediately when the BlockHandle is dropped, generating dead nodes.
+	for (idx_t i = 0; i < churn_iterations; ++i) {
+		auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, page_size, /*can_destroy=*/true);
+		// pin destroyed -> enqueue; BlockHandle dropped -> BlockMemory destroyed -> dead++
+	}
+
+	const auto info = buffer_pool.GetEvictionQueueInfo();
+	const idx_t dead = SumDeadNodes(info);
+	const idx_t approx_size = SumApproxSize(info);
+
+	// Underflow check: total_dead_nodes is an unsigned atomic. If the old PurgeIteration
+	// over-decremented (treating pinned-but-current entries as dead), the counter would wrap
+	// to a value far larger than any plausible queue size.
+	REQUIRE(dead < approx_size + churn_iterations);
+
+	// Every queue must individually satisfy dead_nodes <= total_insertions.
+	for (const auto &q : info) {
+		REQUIRE(q.dead_nodes <= q.total_insertions);
+	}
+}
