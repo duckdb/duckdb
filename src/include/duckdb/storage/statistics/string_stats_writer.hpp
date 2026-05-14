@@ -39,24 +39,22 @@ struct StringStatsWriter {
 		auto data = const_data_ptr_cast(value.GetData());
 		auto size = value.GetSize();
 
+		auto copy_count = MinValue<idx_t>(size, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
 		if (is_set) {
 			// compare to current min/max
-			auto min_cmp_count = MinValue<idx_t>(size, min_size);
+			auto min_cmp_count = MinValue<idx_t>(copy_count, min_size);
 			auto min_cmp = memcmp(data, min, min_cmp_count);
 			if (min_cmp < 0 || (min_cmp == 0 && size < min_size)) {
-				auto copy_count = MinValue<idx_t>(size, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
 				memcpy(min, data, copy_count);
 				min_size = size;
 			}
-			auto max_cmp_count = MinValue<idx_t>(size, max_size);
+			auto max_cmp_count = MinValue<idx_t>(copy_count, max_size);
 			int max_cmp = memcmp(data, max, max_cmp_count);
 			if (max_cmp > 0 || (max_cmp == 0 && size > max_size)) {
-				auto copy_count = MinValue<idx_t>(size, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
 				memcpy(max, data, copy_count);
 				max_size = size;
 			}
 		} else {
-			auto copy_count = MinValue<idx_t>(size, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
 			memcpy(min, data, copy_count);
 			memcpy(max, data, copy_count);
 			min_size = size;
