@@ -1,0 +1,37 @@
+name: Mirror Stale PR Submitted Issues
+
+on:
+  schedule:
+    - cron: "0 5 * * 1"  # run every Monday day at 5AM
+  workflow_dispatch: {}  # allow running manually from the github ui
+
+env:
+  GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
+  DAYS_BEFORE_MIRROR: 14
+
+jobs:
+  create_or_label_mirror_issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process stale PR submitted issues
+        run: |
+          CUTOFF=$((DAYS_BEFORE_MIRROR * 24 * 60 * 60))
+          
+          gh issue list --repo duckdb/duckdb --label "PR submitted" --state open --limit 100 --json number,title,createdAt \
+            | jq -c --argjson cutoff "$CUTOFF" '.[] | select(.createdAt < (now - $cutoff | todate))' \
+            | while read -r issue; do
+              ISSUE_NUMBER=$(echo "$issue" | jq -r '.number')
+              PUBLIC_ISSUE_TITLE=$(echo "$issue" | jq -r '.title')
+              TITLE_PREFIX="[duckdb/#$ISSUE_NUMBER]"
+
+              echo "Processing stale issue #$ISSUE_NUMBER"
+
+              MIRROR_ISSUE_NUMBER=$(gh issue list --repo duckdblabs/duckdb-internal --search "$TITLE_PREFIX" --json title,number --state all --jq ".[] | select(.title | startswith(\"$TITLE_PREFIX\")).number")
+
+              if [ "$MIRROR_ISSUE_NUMBER" == "" ]; then
+                echo "Mirror issue with title prefix '$TITLE_PREFIX' does not exist yet"
+                gh issue create --repo duckdblabs/duckdb-internal --title "$TITLE_PREFIX - $PUBLIC_ISSUE_TITLE" --body "An external contributor has opened a PR, but it has not been merged after $DAYS_BEFORE_MIRROR days."$'\n\n'"See https://github.com/duckdb/duckdb/issues/$ISSUE_NUMBER"
+              else
+                echo "Mirror issue with title prefix '$TITLE_PREFIX' exists with number $MIRROR_ISSUE_NUMBER"
+              fi
+            done
