@@ -863,7 +863,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 						reason += " " + token.parameters[i];
 					}
 				}
-				Printer::PrintF("mode skip %s", reason);
 				skip_level++;
 			} else if (parameter == "unskip") {
 				skip_level--;
