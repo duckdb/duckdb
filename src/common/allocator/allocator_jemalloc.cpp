@@ -73,7 +73,7 @@ bool Allocator::SupportsFlush() {
 void Allocator::ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) {
 	if (!allocator_background_threads) {
 		// We flush after exceeding the threshold
-		if (GetJemallocCTL<uint64_t>("thread.peak.read") > threshold) {
+		if (GetJemallocCTL<uint64_t>("thread.peak.read") <= threshold) {
 			return;
 		}
 
