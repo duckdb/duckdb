@@ -265,6 +265,16 @@ void StringStats::FromConstant(BaseStatistics &stats, string_t value) {
 	}
 }
 
+void StringStats::MergeInConstant(BaseStatistics &stats, string_t input) {
+	auto constant_stats = CreateEmpty(stats.GetType());
+	FromConstant(constant_stats, input);
+	Merge(stats, constant_stats);
+}
+
+void StringStats::Update(BaseStatistics &stats, const string_t &value) {
+	MergeInConstant(stats, value);
+}
+
 struct StringData {
 	unique_ptr<data_t[]> data;
 	idx_t capacity = 0;

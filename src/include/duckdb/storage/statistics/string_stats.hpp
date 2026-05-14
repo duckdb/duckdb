@@ -74,6 +74,12 @@ struct StringStats {
 	//! Construct string stats from a constant
 	DUCKDB_API static void FromConstant(BaseStatistics &stats, string_t input);
 
+	DUCKDB_API static void MergeInConstant(BaseStatistics &stats, string_t input);
+
+	[[deprecated("StringStats::Update is deprecated. Use StringStats::MergeInConstant for non-performance-sensitive "
+	             "code, or StringStatsWriter instead")]] DUCKDB_API static void
+	Update(BaseStatistics &stats, const string_t &value);
+
 	DUCKDB_API static StringStatsType GetMinType(const BaseStatistics &stats);
 	DUCKDB_API static StringStatsType GetMaxType(const BaseStatistics &stats);
 
