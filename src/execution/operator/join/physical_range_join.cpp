@@ -467,17 +467,17 @@ static void TemplatedSliceSortedPayload(DataChunk &chunk, const SortedRun &sorte
 	using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 	BLOCK_ITERATOR itr(state, chunk_idx, 0);
 
-	const auto sort_keys = FlatVector::GetDataMutable<SORT_KEY *>(sort_key_pointers);
 	const auto result_size = NumericCast<idx_t>(result.size());
-
-	for (idx_t i = 0; i < result_size; ++i) {
-		const auto idx = state.GetIndex(chunk_idx, result[i]);
-		sort_keys[i] = &itr[idx];
+	{
+		auto writer = FlatVector::Writer<SORT_KEY *>(sort_key_pointers, result_size);
+		for (idx_t i = 0; i < result_size; ++i) {
+			const auto idx = state.GetIndex(chunk_idx, result[i]);
+			writer.WriteValue(&itr[idx]);
+		}
 	}
 
 	// Scan
 	chunk.Reset();
-	FlatVector::SetSize(sort_key_pointers, result_size);
 	scan_state.Scan(sorted_run, sort_key_pointers, chunk);
 }
 

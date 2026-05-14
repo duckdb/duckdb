@@ -214,53 +214,41 @@ static idx_t GetComparisonCount(const Vector &left, const Vector &right, const c
 }
 
 void VectorOperations::Equals(const Vector &left, const Vector &right, Vector &result) {
-	const auto count = GetComparisonCount(left, right, "Equals");
 	if (!TryPrimitiveComparisonExecute<duckdb::Equals>(left, right, result)) {
 		ComparatorToBoolean(left, right, result, [](int8_t v) { return v == 0; });
 	}
-	FlatVector::SetSize(result, count);
 }
 
 void VectorOperations::NotEquals(const Vector &left, const Vector &right, Vector &result) {
-	const auto count = GetComparisonCount(left, right, "NotEquals");
 	if (!TryPrimitiveComparisonExecute<duckdb::NotEquals>(left, right, result)) {
 		ComparatorToBoolean(left, right, result, [](int8_t v) { return v != 0; });
 	}
-	FlatVector::SetSize(result, count);
 }
 
 void VectorOperations::GreaterThan(const Vector &left, const Vector &right, Vector &result) {
-	const auto count = GetComparisonCount(left, right, "GreaterThan");
 	if (!TryPrimitiveComparisonExecute<duckdb::GreaterThan>(left, right, result)) {
 		ComparatorToBoolean(left, right, result, [](int8_t v) { return v > 0; });
 	}
-	FlatVector::SetSize(result, count);
 }
 
 void VectorOperations::GreaterThanEquals(const Vector &left, const Vector &right, Vector &result) {
-	const auto count = GetComparisonCount(left, right, "GreaterThanEquals");
 	if (!TryPrimitiveComparisonExecute<duckdb::GreaterThanEquals>(left, right, result)) {
 		ComparatorToBoolean(left, right, result, [](int8_t v) { return v >= 0; });
 	}
-	FlatVector::SetSize(result, count);
 }
 
 void VectorOperations::LessThan(const Vector &left, const Vector &right, Vector &result) {
-	const auto count = GetComparisonCount(left, right, "LessThan");
 	// NOLINTNEXTLINE: flip right / left (left < right is equal to right > left)
 	if (!TryPrimitiveComparisonExecute<duckdb::GreaterThan>(right, left, result)) {
 		ComparatorToBoolean(left, right, result, [](int8_t v) { return v < 0; });
 	}
-	FlatVector::SetSize(result, count);
 }
 
 void VectorOperations::LessThanEquals(const Vector &left, const Vector &right, Vector &result) {
-	const auto count = GetComparisonCount(left, right, "LessThanEquals");
 	// NOLINTNEXTLINE: flip right / left (left <= right is equal to right >= left)
 	if (!TryPrimitiveComparisonExecute<duckdb::GreaterThanEquals>(right, left, result)) {
 		ComparatorToBoolean(left, right, result, [](int8_t v) { return v <= 0; });
 	}
-	FlatVector::SetSize(result, count);
 }
 
 struct StandardComparatorExecute {
@@ -875,7 +863,6 @@ void VectorOperations::DistinctComparatorNullsFirstFill(const Vector &left, cons
 	// i.e. within structs we still use NULLS LAST semantics
 	DistinctComparatorFill(left, right, result, count);
 	result.Flatten();
-	FlatVector::SetSize(result, count);
 	auto result_data = FlatVector::GetDataMutable<int8_t>(result);
 	auto left_validity = left.Validity();
 	auto right_validity = right.Validity();

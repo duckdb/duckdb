@@ -118,6 +118,7 @@ static void ComputeGroupLocation(const Vector &group, Value &min, uintptr_t *add
 
 void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	// first we need to find the location in the HT of each of the groups
+	FlatVector::SetSize(addresses, groups.size());
 	auto address_data = FlatVector::GetDataMutable<uintptr_t>(addresses);
 	// zero-initialize the address data
 	memset(address_data, 0, groups.size() * sizeof(uintptr_t));
@@ -142,7 +143,6 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		group_is_set[group] = true;
 		address_data[i] = uintptr_t(data) + group * tuple_size;
 	}
-	FlatVector::SetSize(addresses, groups.size());
 
 	// after finding the group location we update the aggregates
 	idx_t payload_idx = 0;

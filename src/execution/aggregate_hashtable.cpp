@@ -588,7 +588,6 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 #endif
 
 	const auto new_group_count = FindOrCreateGroups(groups, group_hashes, state.addresses, state.new_groups);
-	FlatVector::SetSize(state.addresses, payload.size());
 	VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout_ptr->GetAggrOffset()));
 
 	UpdateAggregates(payload, filter);
@@ -822,6 +821,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		throw InternalException("Maximum outer iteration count reached in GroupedAggregateHashTable");
 	}
 
+	FlatVector::SetSize(addresses_v, chunk_size);
 	count += new_group_count;
 	return new_group_count;
 }
@@ -910,7 +910,6 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 		// Check for interrupts with each chunk
 		context.InterruptCheck();
 		FindOrCreateGroups(fm_state.groups, fm_state.hashes, fm_state.group_addresses, fm_state.new_groups_sel);
-		FlatVector::SetSize(fm_state.group_addresses, fm_state.groups.size());
 		RowOperations::CombineStates(state.row_state, *layout_ptr, fm_state.scan_state.chunk_state.row_locations,
 		                             fm_state.group_addresses);
 		if (layout_ptr->HasDestructor()) {

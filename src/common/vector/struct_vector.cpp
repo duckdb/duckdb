@@ -51,10 +51,7 @@ VectorStructBuffer::~VectorStructBuffer() {
 void VectorStructBuffer::SetVectorSize(idx_t new_size) {
 	VectorBuffer::SetVectorSize(new_size);
 	for (auto &child : children) {
-		auto vtype = child.GetVectorType();
-		if (vtype == VectorType::FLAT_VECTOR || vtype == VectorType::CONSTANT_VECTOR) {
-			FlatVector::SetSize(child, new_size);
-		}
+		FlatVector::SetSize(child, new_size);
 	}
 }
 

@@ -40,23 +40,23 @@ void TemplatedBooleanNullmask(const Vector &left, const Vector &right, Vector &r
 	auto right_data = right.Values<uint8_t>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::SetSize(result, count);
-	auto result_data = FlatVector::ScatterWriter<bool>(result);
+	auto result_data = FlatVector::Writer<bool>(result, count);
 	if (left_data.CanHaveNull() || right_data.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto left_entry = left_data[i];
 			auto right_entry = right_data[i];
+			bool result_value;
 			bool is_null = OP::Operation(left_entry.GetValueUnsafe() > 0, right_entry.GetValueUnsafe() > 0,
-			                             !left_entry.IsValid(), !right_entry.IsValid(), result_data[i]);
+			                             !left_entry.IsValid(), !right_entry.IsValid(), result_value);
 			if (is_null) {
-				result_data.SetInvalid(i);
+				result_data.WriteNull(result_value);
+			} else {
+				result_data.WriteValue(result_value);
 			}
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
-			auto left_val = left_data.GetValueUnsafe(i);
-			auto right_val = right_data.GetValueUnsafe(i);
-			result_data[i] = OP::SimpleOperation(left_val, right_val);
+			result_data.WriteValue(OP::SimpleOperation(left_data.GetValueUnsafe(i), right_data.GetValueUnsafe(i)));
 		}
 	}
 }
