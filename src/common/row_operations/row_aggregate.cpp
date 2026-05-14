@@ -156,6 +156,7 @@ void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &l
 	}
 	auto &addresses_copy = *state.addresses;
 	VectorOperations::Copy(addresses, addresses_copy, result.size(), 0, 0);
+	FlatVector::SetSize(addresses_copy, count_t(result.size()));
 
 	//	Move to the first aggregate state
 	VectorOperations::AddInPlace(addresses_copy, UnsafeNumericCast<int64_t>(layout.GetAggrOffset()));
