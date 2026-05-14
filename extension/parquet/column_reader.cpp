@@ -359,8 +359,8 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 
 	if (rows_to_skip > 0 && (page_hdr.type == PageType::DATA_PAGE || page_hdr.type == PageType::DATA_PAGE_V2)) {
 		bool is_v1 = page_hdr.type == PageType::DATA_PAGE;
-		idx_t page_num_values = NumericCast<idx_t>(is_v1 ? page_hdr.data_page_header.num_values
-		                                                  : page_hdr.data_page_header_v2.num_values);
+		idx_t page_num_values =
+		    NumericCast<idx_t>(is_v1 ? page_hdr.data_page_header.num_values : page_hdr.data_page_header_v2.num_values);
 		if (rows_to_skip >= page_num_values) {
 			trans.Skip(page_hdr.compressed_page_size);
 			page_is_filtered_out = true;
