@@ -41,8 +41,13 @@ public:
 	//! Set the description of the extension
 	DUCKDB_API void SetDescription(const string &description);
 	//! Explicitly set the schema in the catalog for this extension
-	DUCKDB_API void SetExtensionSchema(const string &name);
-	DUCKDB_API void CreateExtensionSchema() const;
+	DUCKDB_API void RegisterExtensionSchema(const string &name);
+	//! Creates a schema in the catalog with the extension name
+	DUCKDB_API void CreateExtensionSchema(const string &name) const;
+	//! Adds the created extension schema to the search path
+	DUCKDB_API void AddExtensionSchemaToSearchPath(const string &name);
+	// Gets the original extension name or alias, depending on how its registered
+	DUCKDB_API string GetRegisteredExtensionName();
 
 public:
 	//! Register a new scalar function - merge overloads if the function already exists
