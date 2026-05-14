@@ -66,7 +66,8 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 			}
 			Value round_trip;
 			string rt_error;
-			if (!cast_constant.TryCastAs(rewriter.context, cast_expression.GetReturnType(), round_trip, &rt_error, true) ||
+			if (!cast_constant.TryCastAs(rewriter.context, cast_expression.GetReturnType(), round_trip, &rt_error,
+			                             true) ||
 			    round_trip != constant_value) {
 				return nullptr;
 			}
