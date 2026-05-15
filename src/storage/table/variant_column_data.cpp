@@ -396,6 +396,11 @@ void VariantColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_s
 		ColumnDataFinalizeAppendState child_finalize_state(finalize_state, LogicalTypeId::VARIANT);
 		sub_columns[i]->FinalizeAppend(child_finalize_state, state.child_appends[i + 1]);
 	}
+	if (!IsShredded()) {
+		for (auto &stats_ref : finalize_state.global_stats) {
+			VariantStats::MarkAsNotShredded(stats_ref.get());
+		}
+	}
 }
 
 void VariantColumnData::RevertAppend(row_t new_count) {
