@@ -10,7 +10,9 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
@@ -603,6 +605,32 @@ FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_
 	return expr_filter.CheckStatistics(dummy_stats);
 }
 
+static bool IsRootStatisticsOnlyOptionalFilter(const TableFilter &filter) {
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RowGroup::IsRootStatisticsOnlyOptionalFilter");
+	if (expr_filter.expr->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &func = expr_filter.expr->Cast<BoundFunctionExpression>();
+	auto &function_name = func.function.GetName();
+	if (function_name == OptionalFilterScalarFun::NAME) {
+		return true;
+	}
+	if (function_name != SelectivityOptionalFilterScalarFun::NAME) {
+		return false;
+	}
+	if (!func.bind_info) {
+		return true;
+	}
+	auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+	if (!data.child_filter_expr) {
+		return true;
+	}
+	return ExpressionFilter::ContainsInternalFunction(*data.child_filter_expr, BloomFilterScalarFun::NAME) ||
+	       ExpressionFilter::ContainsInternalFunction(*data.child_filter_expr, PerfectHashJoinScalarFun::NAME) ||
+	       ExpressionFilter::ContainsInternalFunction(*data.child_filter_expr, PrefixRangeScalarFun::NAME) ||
+	       ExpressionFilter::ContainsInternalFunction(*data.child_filter_expr, DynamicFilterScalarFun::NAME);
+}
+
 bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 	auto &filter_list = filters.GetFilterList();
 	// new row group - label all filters as up for grabs again
@@ -616,7 +644,7 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}
-		if (ExpressionFilter::IsRootOptionalFilter(filter)) {
+		if (IsRootStatisticsOnlyOptionalFilter(filter)) {
 			// these are only for row group checking, set as always true so we don't check it
 			filters.SetFilterAlwaysTrue(i);
 		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
