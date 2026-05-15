@@ -88,6 +88,7 @@ struct HistogramGenericFunctor : HistogramStringFunctorBase {
 
 	static void PrepareData(const Vector &input, Vector &extra_state, UnifiedVectorFormat &result) {
 		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
+		extra_state.Reserve(input.size());
 		CreateSortKeyHelpers::CreateSortKey(input, modifiers, extra_state);
 		input.Flatten();
 		extra_state.Flatten();
