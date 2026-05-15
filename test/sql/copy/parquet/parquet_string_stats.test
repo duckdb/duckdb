@@ -1,0 +1,11 @@
+# name: test/sql/copy/parquet/parquet_string_stats.test
+# description: Test stats reading of large string stats in parquet reader
+# group: [parquet]
+
+require parquet
+
+query II
+select s.min, s.max from (select stats(l_comment) s from 'data/parquet-testing/lineitem-top10000.gzip.parquet') LIMIT 1
+----
+ Tiresias 	zle carefully sauternes. quickly
+

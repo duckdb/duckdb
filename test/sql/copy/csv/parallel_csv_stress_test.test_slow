@@ -1,0 +1,96 @@
+# name: test/sql/copy/csv/parallel_csv_stress_test.test_slow
+# description: Parallel CSV stress test with low buffer sizes
+# group: [csv]
+
+statement ok
+create table skipped_tests(file varchar);
+
+statement ok
+insert into skipped_tests values
+	-- not auto-detectable
+	('data/csv/auto/titlebasicsdebug.tsv'),
+	('data/csv/auto/multi_column_string_mix.csv'),
+	('data/csv/auto/multi_column_string_mix_r_n.csv'),
+	('data/csv/test/test_comp.csv.gzz'),
+	('data/csv/test/mixed_line_endings.csv'),
+	('data/csv/test/windows_newline_empty.csv'),
+	-- requires header=true
+	('data/csv/auto/multiple_skip_row.csv'),
+	('data/csv/auto/skip_row.csv'),
+	-- borked files
+	('data/csv/test/invalid_utf.csv'),
+	('data/csv/test/invalid_utf_big.csv'),
+	('data/csv/test/invalid_utf_complex.csv'),
+	('data/csv/test/invalid_utf_header.csv'),
+	('data/csv/test/invalid_utf_list.csv'),
+	('data/csv/test/invalid_utf_quoted.csv'),
+	('data/csv/test/invalid_utf_quoted_nl.csv')
+
+statement ok
+set variable csv_files = (
+select list(file) from (
+	select file from
+ 		(
+		from glob('data/csv/real/**')
+ 		union all
+ 		from glob ('data/csv/auto/**')
+ 		union all
+		from glob ('data/csv/test/**')
+		)
+	where file not in (select file from skipped_tests)
+)
+)
+
+foreach file <variable:csv_files>
+
+# get the maximum line length of the file
+# this is a bit of an adventure
+# first drop the reject tables
+statement ok
+DROP TABLE IF EXISTS reject_scans
+
+statement ok
+DROP TABLE IF EXISTS reject_errors
+
+# first we run the sniffer to get the column names / count
+statement ok
+SET VARIABLE csv_columns=(select columns from sniff_csv('{file}', header=false))
+
+# now we extract the names / types, but we create a type that doesn't exist in any CSV file (hopefully)
+statement ok
+set variable csv_names=(select [x.name for x in getvariable('csv_columns')])
+
+statement ok
+set variable csv_types=(select ['STRUCT(zxcvb INT)' for x in getvariable('csv_columns')])
+
+# now we run the read_csv with these types, with store_rejects turned on and the types set to the aforementioned impossible types
+# this will lead to every single line failing at the type cast stage - but we will get the correctly parsed line (including quoted newlines) in the rejects table
+statement ok
+FROM read_csv_auto('{file}', header=false, auto_detect=true, names=getvariable('csv_names'), types=getvariable('csv_types'), ignore_errors=true, store_rejects=true, rejects_line_size_limit=0)
+
+statement ok
+set variable max_line_size=(SELECT COALESCE(MAX(strlen(csv_line)), 0) FROM reject_errors)
+
+statement ok
+set variable potential_buffer_sizes=(SELECT range(getvariable('max_line_size') + 3, getvariable('max_line_size') + 8))
+
+statement ok
+create or replace table ground_truth as SELECT * FROM read_csv_auto('{file}') ORDER BY ALL;
+
+foreach buffer_size <variable:potential_buffer_sizes>
+
+statement ok
+create or replace table "buffer_size_result_{file}" as
+SELECT * FROM read_csv_auto('{file}', buffer_size={buffer_size}) ORDER BY ALL;
+
+query I
+SELECT COUNT(*) FROM (FROM ground_truth EXCEPT ALL FROM "buffer_size_result_{file}")
+----
+0
+
+statement ok
+DROP TABLE "buffer_size_result_{file}"
+
+endloop
+
+endloop
