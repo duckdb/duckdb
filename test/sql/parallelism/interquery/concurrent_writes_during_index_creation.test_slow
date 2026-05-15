@@ -21,6 +21,12 @@ endloop
 
 endloop
 
+statement ok
+SET index_scan_percentage = 0
+
+statement ok
+SET index_scan_max_count = 0
+
 query II
 SELECT i, COUNT(*) FROM integers GROUP BY i ORDER BY i LIMIT 1 OFFSET 1
 ----

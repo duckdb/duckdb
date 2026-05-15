@@ -779,10 +779,19 @@ jobs:
             version="${summary#tests_summary_}"
             version="${version%.txt}"
             failures=$(grep '# FAILED' "$summary" || true)
+            fatal=$(grep -E 'RuntimeError|Exception while parsing test file|Traceback \(most recent call last\)|Error while parsing test file|Install script failed' "$summary" || true)
             if [ -n "$failures" ]; then
               echo ""
               echo "Failed tests for DuckDB version '$version':"
               echo "$failures" | while read -r line; do
+                echo "  $line"
+              done
+              failed=1
+            fi
+            if [ -n "$fatal" ]; then
+              echo ""
+              echo "Fatal BWC runner errors for DuckDB version '$version':"
+              echo "$fatal" | while read -r line; do
                 echo "  $line"
               done
               failed=1

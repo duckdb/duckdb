@@ -6,6 +6,18 @@ namespace duckdb {
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperatorExpression &expr,
                                                                      unique_ptr<Expression> &expr_ptr) {
+	auto safe_for_is_null_fold = [](const Expression &child) {
+		switch (child.GetExpressionClass()) {
+		case ExpressionClass::BOUND_COLUMN_REF:
+		case ExpressionClass::BOUND_REF:
+		case ExpressionClass::BOUND_CONSTANT:
+		case ExpressionClass::BOUND_PARAMETER:
+			return !child.CanThrow();
+		default:
+			return false;
+		}
+	};
+
 	bool all_have_stats = true;
 	vector<unique_ptr<BaseStatistics>> child_stats;
 	child_stats.reserve(expr.children.size());
@@ -57,6 +69,10 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 		}
 		return std::move(child_stats[0]);
 	case ExpressionType::OPERATOR_IS_NULL:
+		if (!safe_for_is_null_fold(*expr.children[0])) {
+			// Keep the original expression for complex children to preserve runtime behavior.
+			return nullptr;
+		}
 		if (!child_stats[0]->CanHaveNull()) {
 			// child has no null values: x IS NULL will always be false
 			expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
@@ -69,6 +85,10 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 		}
 		return nullptr;
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
+		if (!safe_for_is_null_fold(*expr.children[0])) {
+			// Keep the original expression for complex children to preserve runtime behavior.
+			return nullptr;
+		}
 		if (!child_stats[0]->CanHaveNull()) {
 			// child has no null values: x IS NOT NULL will always be true
 			expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));

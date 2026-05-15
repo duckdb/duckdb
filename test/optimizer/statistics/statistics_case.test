@@ -8,11 +8,11 @@ PRAGMA explain_output = OPTIMIZED_ONLY;
 statement ok
 CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (3)) tbl(i);
 
-# "i" does not contain null values, so we can statically determine this will not be null
+# "i" does not contain null values, but we keep this complex expression intact to preserve runtime semantics
 query II
 EXPLAIN SELECT * FROM integers WHERE (CASE WHEN i=2 THEN i+1 ELSE i+2 END) IS NULL;
 ----
-logical_opt	<REGEX>:.*EMPTY_RESULT.*
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
 
 # we can't here, because one of the children of the case has null
 query II

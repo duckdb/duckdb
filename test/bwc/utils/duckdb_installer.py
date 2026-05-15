@@ -86,6 +86,7 @@ def install_extensions(cli_path, extensions):
     with DuckDBCLI(cli_path, unsigned=True) as cli:
         installed = []
         failed = []
+        failure_reasons = {}
 
         # Happy path - all extensions installed
         ext_list = ", ".join(f"'{ext}'" for ext in extensions)
@@ -117,6 +118,7 @@ def install_extensions(cli_path, extensions):
                 installed.append(ext)
             else:
                 failed.append(ext)
+                failure_reasons[ext] = result.get('exception_message') or result.get('error') or 'Unknown error'
 
         logger.info(f"[{cli.version}] Installed {len(installed)} extensions.")
 
@@ -153,7 +155,10 @@ def install_extensions(cli_path, extensions):
                 logger.info(
                     f"[{cli.version}] Failed to install {len(failed)} extensions. If you need to compile them:\n{install_cmd}"
                 )
-            raise RuntimeError(f"[{cli.version}] Failed to install {len(failed)} extensions: {', '.join(failed)}")
+            details = "; ".join(f"{ext}: {failure_reasons.get(ext, 'Unknown error')}" for ext in failed)
+            raise RuntimeError(
+                f"[{cli.version}] Failed to install {len(failed)} extensions: {', '.join(failed)}. Details: {details}"
+            )
 
 
 def install_assets(version, bwc_tests_base_dir):

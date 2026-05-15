@@ -1,6 +1,7 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -184,7 +185,8 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 				auto child_type = ExpressionBinder::GetExpressionReturnType(*child);
 				auto &subquery_type = bound_node.types[child_idx];
 				LogicalType compare_type;
-				if (!LogicalType::TryGetMaxLogicalType(context, child_type, subquery_type, compare_type)) {
+				if (!BoundComparisonExpression::TryBindComparison(context, child_type, subquery_type, compare_type,
+				                                                  expr.comparison_type)) {
 					throw BinderException(
 					    expr,
 					    "Cannot compare values of type %s and %s in IN/ANY/ALL clause - an explicit cast is required",

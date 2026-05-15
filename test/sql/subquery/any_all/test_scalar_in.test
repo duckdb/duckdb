@@ -74,3 +74,11 @@ SELECT * FROM integers WHERE (i IN (SELECT * FROM integers)) IS NULL ORDER BY 1
 ----
 NULL
 
+# mixed BLOB/INTEGER should bind and follow IN semantics
+statement ok
+CREATE TABLE ints_for_blob_in(i INTEGER)
+
+query T
+SELECT x'303132' IN (SELECT i FROM ints_for_blob_in)
+----
+0
