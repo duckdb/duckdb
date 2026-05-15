@@ -17,7 +17,7 @@
 # ref2.write.csv("p2strings.csv")
 
 # for now
-mode skip
+mode skip instable
 
 require parquet
 

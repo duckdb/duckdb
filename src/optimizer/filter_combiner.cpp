@@ -15,8 +15,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/optional_filter.hpp"
-#include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
@@ -229,6 +228,11 @@ static unique_ptr<Expression> CreateComparisonExpression(const Expression &expr,
 	return BoundComparisonExpression::Create(comparison_type, std::move(left), std::move(right));
 }
 
+static unique_ptr<ExpressionFilter> CreateOptionalExpressionFilter(unique_ptr<Expression> child_expr,
+                                                                   const LogicalType &col_type) {
+	return make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(child_expr), col_type));
+}
+
 bool FilterCombiner::ContainsNull(vector<Value> &in_list) {
 	for (idx_t i = 0; i < in_list.size(); i++) {
 		if (in_list[i].IsNull()) {
@@ -279,35 +283,6 @@ static bool SupportedFilterComparison(ExpressionType expression_type) {
 	default:
 		return false;
 	}
-}
-
-bool FilterCombiner::FindNextLegalUTF8(string &prefix_string) {
-	// find the start of the last codepoint
-	idx_t last_codepoint_start;
-	for (last_codepoint_start = prefix_string.size(); last_codepoint_start > 0; last_codepoint_start--) {
-		if (IsCharacter(prefix_string[last_codepoint_start - 1])) {
-			break;
-		}
-	}
-	if (last_codepoint_start == 0) {
-		throw InvalidInputException("Invalid UTF8 found in string \"%s\"", prefix_string);
-	}
-	last_codepoint_start--;
-	int codepoint_size;
-	auto codepoint = Utf8Proc::UTF8ToCodepoint(prefix_string.c_str() + last_codepoint_start, codepoint_size) + 1;
-	if (codepoint >= 0xD800 && codepoint <= 0xDFFF) {
-		// next codepoint falls within surrogate range increment to next valid character
-		codepoint = 0xE000;
-	}
-	char next_codepoint_text[4];
-	int next_codepoint_size;
-	if (!Utf8Proc::CodepointToUtf8(codepoint, next_codepoint_size, next_codepoint_text)) {
-		// invalid codepoint
-		return false;
-	}
-	auto s = static_cast<idx_t>(next_codepoint_size);
-	prefix_string = prefix_string.substr(0, last_codepoint_start) + string(next_codepoint_text, s);
-	return true;
 }
 
 static bool TypeSupportsConstantFilter(const LogicalType &type) {
@@ -426,7 +401,7 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 	auto lower_bound = CreateComparisonExpression(*func.children[0], ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 	                                              Value(prefix_string));
 	table_filters.PushFilter(filter_idx, make_uniq<ExpressionFilter>(std::move(lower_bound)));
-	if (FilterCombiner::FindNextLegalUTF8(prefix_string)) {
+	if (Utf8Proc::FindNextLegalUTF8(prefix_string)) {
 		auto upper_bound =
 		    CreateComparisonExpression(*func.children[0], ExpressionType::COMPARE_LESSTHAN, Value(prefix_string));
 		table_filters.PushFilter(filter_idx, make_uniq<ExpressionFilter>(std::move(upper_bound)));
@@ -561,8 +536,7 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 	// if this is not a dense range we can push an optional filter for zone-map pruning
 	auto in_expr =
 	    ExpressionFilter::CreateInExpression(CreateFilterTargetExpression(*func.children[0]), std::move(in_list));
-	auto optional_filter = make_uniq<OptionalFilter>(make_uniq<ExpressionFilter>(std::move(in_expr)));
-	table_filters.PushFilter(proj_index, std::move(optional_filter));
+	table_filters.PushFilter(proj_index, CreateOptionalExpressionFilter(std::move(in_expr), type));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
@@ -575,11 +549,12 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 	if (conj.GetExpressionType() != ExpressionType::CONJUNCTION_OR) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	auto conj_filter = make_uniq<ConjunctionOrFilter>();
+	auto conj_filter = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
 	if (conj.children.empty()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	ProjectionIndex proj_id;
+	LogicalType col_type = LogicalType::INVALID;
 	for (idx_t i = 0; i < conj.children.size(); i++) {
 		auto &child = conj.children[i];
 		if (!BoundComparisonExpression::IsComparison(*child)) {
@@ -606,6 +581,7 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 		}
 		if (!proj_id.IsValid()) {
 			proj_id = column_ref->binding.column_index;
+			col_type = column_ref->GetReturnType();
 		} else if (proj_id != column_ref->binding.column_index) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
@@ -616,13 +592,13 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 			case ExpressionType::COMPARE_DISTINCT_FROM: {
 				auto null_expr = ExpressionFilter::CreateNullCheckExpression(CreateFilterTargetExpression(*column_ref),
 				                                                             ExpressionType::OPERATOR_IS_NOT_NULL);
-				conj_filter->child_filters.push_back(make_uniq<ExpressionFilter>(std::move(null_expr)));
+				conj_filter->children.push_back(std::move(null_expr));
 				break;
 			}
 			case ExpressionType::COMPARE_NOT_DISTINCT_FROM: {
 				auto null_expr = ExpressionFilter::CreateNullCheckExpression(CreateFilterTargetExpression(*column_ref),
 				                                                             ExpressionType::OPERATOR_IS_NULL);
-				conj_filter->child_filters.push_back(make_uniq<ExpressionFilter>(std::move(null_expr)));
+				conj_filter->children.push_back(std::move(null_expr));
 				break;
 			}
 			default:
@@ -631,14 +607,10 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 				break;
 			}
 		} else {
-			auto expr_filter =
-			    make_uniq<ExpressionFilter>(CreateComparisonExpression(*column_ref, comparison_type, const_val->value));
-			conj_filter->child_filters.push_back(std::move(expr_filter));
+			conj_filter->children.push_back(CreateComparisonExpression(*column_ref, comparison_type, const_val->value));
 		}
 	}
-	auto optional_filter = make_uniq<OptionalFilter>();
-	optional_filter->child_filter = std::move(conj_filter);
-	table_filters.PushFilter(proj_id, std::move(optional_filter));
+	table_filters.PushFilter(proj_id, CreateOptionalExpressionFilter(std::move(conj_filter), col_type));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
@@ -841,11 +813,8 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	}
 
 	auto push_optional = [&](ExpressionType filter_type, Value filter_val) {
-		auto opt_filter = make_uniq<OptionalFilter>();
-		auto expr_filter = make_uniq<ExpressionFilter>(
-		    CreateComparisonExpression(*cast_expr.child, filter_type, std::move(filter_val)));
-		opt_filter->child_filter = std::move(expr_filter);
-		table_filters.PushFilter(proj_index, std::move(opt_filter));
+		auto filter_expr = CreateComparisonExpression(*cast_expr.child, filter_type, std::move(filter_val));
+		table_filters.PushFilter(proj_index, CreateOptionalExpressionFilter(std::move(filter_expr), source_type));
 	};
 
 	// push relaxed filter(s) as OptionalFilter

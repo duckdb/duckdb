@@ -110,6 +110,13 @@ public:
 		return get<SAFE>(original::size() - 1);
 	}
 
+	void pop_back() { // NOLINT: hiding on purpose
+		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
+			throw InternalException("'pop_back' called on an empty vector!");
+		}
+		original::pop_back();
+	}
+
 	void unsafe_erase_at(idx_t idx) { // NOLINT: not using camelcase on purpose here
 		original::erase(original::begin() + static_cast<typename original::iterator::difference_type>(idx));
 	}

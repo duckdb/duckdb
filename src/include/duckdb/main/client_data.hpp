@@ -52,11 +52,6 @@ public:
 	//! The clients' buffer manager wrapper.
 	unique_ptr<BufferManager> client_buffer_manager;
 
-	//! The Max Line Length Size of Last Query Executed on a CSV File. (Only used for testing)
-	//! FIXME: this should not be done like this
-	bool debug_set_max_line_length = false;
-	idx_t debug_max_line_length = 0;
-
 	//! The writer used to log queries, if logging is enabled.
 	//! DEPRECATED: Now, queries are written to the generic log.
 	unique_ptr<BufferedFileWriter> log_query_writer;

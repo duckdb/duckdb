@@ -25,84 +25,40 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 	auto filter_type = deserializer.ReadProperty<TableFilterType>(100, "filter_type");
 	unique_ptr<TableFilter> result;
 	switch (filter_type) {
-	case TableFilterType::CONJUNCTION_AND:
-		result = ConjunctionAndFilter::Deserialize(deserializer);
-		break;
-	case TableFilterType::CONJUNCTION_OR:
-		result = ConjunctionOrFilter::Deserialize(deserializer);
-		break;
-	case TableFilterType::CONSTANT_COMPARISON:
-		result = ConstantFilter::Deserialize(deserializer);
-		break;
-	case TableFilterType::DYNAMIC_FILTER:
-		result = DynamicFilter::Deserialize(deserializer);
-		break;
 	case TableFilterType::EXPRESSION_FILTER:
 		result = ExpressionFilter::Deserialize(deserializer);
 		break;
-	case TableFilterType::IN_FILTER:
-		result = InFilter::Deserialize(deserializer);
+	case TableFilterType::LEGACY_CONJUNCTION_AND:
+		result = LegacyConjunctionAndFilter::Deserialize(deserializer);
 		break;
-	case TableFilterType::IS_NOT_NULL:
-		result = IsNotNullFilter::Deserialize(deserializer);
+	case TableFilterType::LEGACY_CONJUNCTION_OR:
+		result = LegacyConjunctionOrFilter::Deserialize(deserializer);
 		break;
-	case TableFilterType::IS_NULL:
-		result = IsNullFilter::Deserialize(deserializer);
+	case TableFilterType::LEGACY_CONSTANT_COMPARISON:
+		result = LegacyConstantFilter::Deserialize(deserializer);
 		break;
-	case TableFilterType::OPTIONAL_FILTER:
-		result = OptionalFilter::Deserialize(deserializer);
+	case TableFilterType::LEGACY_DYNAMIC_FILTER:
+		result = LegacyDynamicFilter::Deserialize(deserializer);
 		break;
-	case TableFilterType::STRUCT_EXTRACT:
-		result = StructFilter::Deserialize(deserializer);
+	case TableFilterType::LEGACY_IN_FILTER:
+		result = LegacyInFilter::Deserialize(deserializer);
+		break;
+	case TableFilterType::LEGACY_IS_NOT_NULL:
+		result = LegacyIsNotNullFilter::Deserialize(deserializer);
+		break;
+	case TableFilterType::LEGACY_IS_NULL:
+		result = LegacyIsNullFilter::Deserialize(deserializer);
+		break;
+	case TableFilterType::LEGACY_OPTIONAL_FILTER:
+		result = LegacyOptionalFilter::Deserialize(deserializer);
+		break;
+	case TableFilterType::LEGACY_STRUCT_EXTRACT:
+		result = LegacyStructFilter::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of TableFilter!");
 	}
 	return result;
-}
-
-void ConjunctionAndFilter::Serialize(Serializer &serializer) const {
-	TableFilter::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<TableFilter>>>(200, "child_filters", child_filters);
-}
-
-unique_ptr<TableFilter> ConjunctionAndFilter::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<ConjunctionAndFilter>(new ConjunctionAndFilter());
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<TableFilter>>>(200, "child_filters", result->child_filters);
-	return std::move(result);
-}
-
-void ConjunctionOrFilter::Serialize(Serializer &serializer) const {
-	TableFilter::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<TableFilter>>>(200, "child_filters", child_filters);
-}
-
-unique_ptr<TableFilter> ConjunctionOrFilter::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<ConjunctionOrFilter>(new ConjunctionOrFilter());
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<TableFilter>>>(200, "child_filters", result->child_filters);
-	return std::move(result);
-}
-
-void ConstantFilter::Serialize(Serializer &serializer) const {
-	TableFilter::Serialize(serializer);
-	serializer.WriteProperty<ExpressionType>(200, "comparison_type", comparison_type);
-	serializer.WriteProperty<Value>(201, "constant", constant);
-}
-
-unique_ptr<TableFilter> ConstantFilter::Deserialize(Deserializer &deserializer) {
-	auto comparison_type = deserializer.ReadProperty<ExpressionType>(200, "comparison_type");
-	auto constant = deserializer.ReadProperty<Value>(201, "constant");
-	auto result = duckdb::unique_ptr<ConstantFilter>(new ConstantFilter(comparison_type, constant));
-	return std::move(result);
-}
-
-void DynamicFilter::Serialize(Serializer &serializer) const {
-	TableFilter::Serialize(serializer);
-}
-
-unique_ptr<TableFilter> DynamicFilter::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<DynamicFilter>(new DynamicFilter());
-	return std::move(result);
 }
 
 void ExpressionFilter::Serialize(Serializer &serializer) const {
@@ -116,58 +72,102 @@ unique_ptr<TableFilter> ExpressionFilter::Deserialize(Deserializer &deserializer
 	return std::move(result);
 }
 
-void InFilter::Serialize(Serializer &serializer) const {
+void LegacyConjunctionAndFilter::Serialize(Serializer &serializer) const {
+	TableFilter::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<TableFilter>>>(200, "child_filters", child_filters);
+}
+
+unique_ptr<TableFilter> LegacyConjunctionAndFilter::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LegacyConjunctionAndFilter>(new LegacyConjunctionAndFilter());
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<TableFilter>>>(200, "child_filters", result->child_filters);
+	return std::move(result);
+}
+
+void LegacyConjunctionOrFilter::Serialize(Serializer &serializer) const {
+	TableFilter::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<TableFilter>>>(200, "child_filters", child_filters);
+}
+
+unique_ptr<TableFilter> LegacyConjunctionOrFilter::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LegacyConjunctionOrFilter>(new LegacyConjunctionOrFilter());
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<TableFilter>>>(200, "child_filters", result->child_filters);
+	return std::move(result);
+}
+
+void LegacyConstantFilter::Serialize(Serializer &serializer) const {
+	TableFilter::Serialize(serializer);
+	serializer.WriteProperty<ExpressionType>(200, "comparison_type", comparison_type);
+	serializer.WriteProperty<Value>(201, "constant", constant);
+}
+
+unique_ptr<TableFilter> LegacyConstantFilter::Deserialize(Deserializer &deserializer) {
+	auto comparison_type = deserializer.ReadProperty<ExpressionType>(200, "comparison_type");
+	auto constant = deserializer.ReadProperty<Value>(201, "constant");
+	auto result = duckdb::unique_ptr<LegacyConstantFilter>(new LegacyConstantFilter(comparison_type, constant));
+	return std::move(result);
+}
+
+void LegacyDynamicFilter::Serialize(Serializer &serializer) const {
+	TableFilter::Serialize(serializer);
+}
+
+unique_ptr<TableFilter> LegacyDynamicFilter::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LegacyDynamicFilter>(new LegacyDynamicFilter());
+	return std::move(result);
+}
+
+void LegacyInFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
 	serializer.WritePropertyWithDefault<vector<Value>>(200, "values", values);
 }
 
-unique_ptr<TableFilter> InFilter::Deserialize(Deserializer &deserializer) {
+unique_ptr<TableFilter> LegacyInFilter::Deserialize(Deserializer &deserializer) {
 	auto values = deserializer.ReadPropertyWithDefault<vector<Value>>(200, "values");
-	auto result = duckdb::unique_ptr<InFilter>(new InFilter(std::move(values)));
+	auto result = duckdb::unique_ptr<LegacyInFilter>(new LegacyInFilter(std::move(values)));
 	return std::move(result);
 }
 
-void IsNotNullFilter::Serialize(Serializer &serializer) const {
+void LegacyIsNotNullFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
 }
 
-unique_ptr<TableFilter> IsNotNullFilter::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<IsNotNullFilter>(new IsNotNullFilter());
+unique_ptr<TableFilter> LegacyIsNotNullFilter::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LegacyIsNotNullFilter>(new LegacyIsNotNullFilter());
 	return std::move(result);
 }
 
-void IsNullFilter::Serialize(Serializer &serializer) const {
+void LegacyIsNullFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
 }
 
-unique_ptr<TableFilter> IsNullFilter::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<IsNullFilter>(new IsNullFilter());
+unique_ptr<TableFilter> LegacyIsNullFilter::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LegacyIsNullFilter>(new LegacyIsNullFilter());
 	return std::move(result);
 }
 
-void OptionalFilter::Serialize(Serializer &serializer) const {
+void LegacyOptionalFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<TableFilter>>(200, "child_filter", child_filter);
 }
 
-unique_ptr<TableFilter> OptionalFilter::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<OptionalFilter>(new OptionalFilter());
+unique_ptr<TableFilter> LegacyOptionalFilter::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LegacyOptionalFilter>(new LegacyOptionalFilter());
 	deserializer.ReadPropertyWithDefault<unique_ptr<TableFilter>>(200, "child_filter", result->child_filter);
 	return std::move(result);
 }
 
-void StructFilter::Serialize(Serializer &serializer) const {
+void LegacyStructFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
 	serializer.WritePropertyWithDefault<idx_t>(200, "child_idx", child_idx);
 	serializer.WritePropertyWithDefault<string>(201, "child_name", child_name);
 	serializer.WritePropertyWithDefault<unique_ptr<TableFilter>>(202, "child_filter", child_filter);
 }
 
-unique_ptr<TableFilter> StructFilter::Deserialize(Deserializer &deserializer) {
+unique_ptr<TableFilter> LegacyStructFilter::Deserialize(Deserializer &deserializer) {
 	auto child_idx = deserializer.ReadPropertyWithDefault<idx_t>(200, "child_idx");
 	auto child_name = deserializer.ReadPropertyWithDefault<string>(201, "child_name");
 	auto child_filter = deserializer.ReadPropertyWithDefault<unique_ptr<TableFilter>>(202, "child_filter");
-	auto result = duckdb::unique_ptr<StructFilter>(new StructFilter(child_idx, std::move(child_name), std::move(child_filter)));
+	auto result = duckdb::unique_ptr<LegacyStructFilter>(new LegacyStructFilter(child_idx, std::move(child_name), std::move(child_filter)));
 	return std::move(result);
 }
 

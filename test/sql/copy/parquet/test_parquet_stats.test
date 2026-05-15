@@ -83,7 +83,7 @@ statement ok
 SET parquet_metadata_cache=true;
 
 # we no longer gather stats with parquet_metadata_cache=true (for now?)
-mode skip
+mode skip instable
 
 # no stats since there are two files and the cache is on but we have not read all files yet
 query I nosort nostats

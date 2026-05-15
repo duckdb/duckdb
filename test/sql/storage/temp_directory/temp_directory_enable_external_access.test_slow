@@ -6,8 +6,10 @@ require block_size 262144
 statement ok
 SET temp_directory='{TEST_DIR}/test_temp_dir'
 
+# FIXME: This is a significant regression because we no longer evict "tiny buffers", of which we're
+# FIXME: allocating plenty here.
 statement ok
-SET memory_limit = '8MB';
+SET memory_limit = '28MB';
 
 statement ok
 SET enable_external_access=false

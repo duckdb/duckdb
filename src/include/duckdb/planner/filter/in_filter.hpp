@@ -14,20 +14,16 @@
 namespace duckdb {
 
 //! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
-class InFilter : public TableFilter {
+class LegacyInFilter : public TableFilter {
 public:
-	static constexpr const TableFilterType TYPE = TableFilterType::IN_FILTER;
+	static constexpr const TableFilterType TYPE = TableFilterType::LEGACY_IN_FILTER;
 
 public:
-	explicit InFilter(vector<Value> values);
+	explicit LegacyInFilter(vector<Value> values);
 
 	vector<Value> values;
 
 public:
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
-	string ToString(const string &column_name) const override;
-	bool Equals(const TableFilter &other) const override;
-	unique_ptr<TableFilter> Copy() const override;
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);

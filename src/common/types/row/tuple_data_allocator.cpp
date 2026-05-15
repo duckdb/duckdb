@@ -52,6 +52,14 @@ void TupleDataAllocator::SetDestroyBufferUponUnpin() {
 	}
 }
 
+void TupleDataAllocator::Reset() {
+	// Mark existing blocks for cleanup when they are unpinned, then drop our references.
+	// Avoids copy-constructing a fresh TupleDataAllocator object just to clear the block lists.
+	SetDestroyBufferUponUnpin();
+	row_blocks.clear();
+	heap_blocks.clear();
+}
+
 void TupleDataAllocator::DestroyRowBlocks(const idx_t row_block_begin, const idx_t row_block_end) {
 	if (row_block_begin == row_block_end) {
 		return;

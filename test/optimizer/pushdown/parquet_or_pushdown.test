@@ -5,7 +5,7 @@
 require parquet
 
 # FIXME: re-enable when or pushdown is fixed
-mode skip
+mode skip instable
 
 # Multiple column in the root OR node, don't push down
 query II

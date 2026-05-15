@@ -22,6 +22,13 @@ class Value;
 class Vector;
 struct string_t;
 
+typedef struct {
+	uint32_t dict_size;
+	uint32_t dict_end;
+	uint32_t bitpacking_width;
+	uint32_t fsst_symbol_table_offset;
+} fsst_compression_header_t;
+
 class FSSTPrimitives {
 private:
 	// This allows us to decode FSST strings efficiently directly into a string_t (if inlined)
