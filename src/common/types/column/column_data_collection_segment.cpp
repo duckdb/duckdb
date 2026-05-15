@@ -15,6 +15,16 @@ ColumnDataCollectionSegment::ColumnDataCollectionSegment(shared_ptr<ColumnDataAl
       count(0), heap(make_shared_ptr<StringHeap>(allocator->GetAllocator())) {
 }
 
+void ColumnDataCollectionSegment::Reset() {
+	count = 0;
+	total_allocated = 0;
+	last_chunk_total_allocated = 0;
+	chunk_data.clear();
+	vector_data.clear();
+	child_indices.clear();
+	heap->GetAllocator().Reset();
+}
+
 idx_t ColumnDataCollectionSegment::GetDataSize(idx_t type_size) {
 	return AlignValue(type_size * STANDARD_VECTOR_SIZE);
 }

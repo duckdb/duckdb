@@ -8,6 +8,9 @@ statement ok
 pragma storage_compatibility_version='v1.1.0'
 
 statement ok
+SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
+
+statement ok
 BEGIN TRANSACTION
 
 # Create a macro that the generated column uses

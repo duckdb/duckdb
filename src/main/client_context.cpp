@@ -676,6 +676,7 @@ void ClientContext::WaitForTask(ClientContextLock &lock, BaseQueryResult &result
 
 bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
 	switch (transaction.GetInvalidationPolicy()) {
+	case TransactionInvalidationPolicy::STANDARD_POLICY:
 	case TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION:
 		return true;
 	default:
