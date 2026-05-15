@@ -98,7 +98,7 @@ void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
 	event->SetTasks(std::move(tasks));
 }
 
-bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
+bool Pipeline::TryGetMaxThreads(idx_t &max_threads) {
 	// check if the sink, source and all intermediate operators support parallelism
 	if (!sink->ParallelSink()) {
 		return false;
@@ -106,21 +106,15 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	if (!source->ParallelSource()) {
 		return false;
 	}
-	auto max_threads = source_state->MaxThreads();
+	max_threads = source_state->MaxThreads();
 
 	for (auto &op_ref : operators) {
 		auto &op = op_ref.get();
 		if (!op.ParallelOperator()) {
 			return false;
 		}
-		max_threads = MinValue<idx_t>(max_threads, op.op_state->MaxThreads(max_threads));
-	}
-
-	auto partition_info = sink->RequiredPartitionInfo();
-	if (partition_info.batch_index) {
-		if (!source->SupportsPartitioning(OperatorPartitionInfo::BatchIndex())) {
-			throw InternalException(
-			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
+		if (op.op_state) {
+			max_threads = MinValue<idx_t>(max_threads, op.op_state->MaxThreads(max_threads));
 		}
 	}
 
@@ -135,7 +129,37 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	if (max_threads > active_threads) {
 		max_threads = active_threads;
 	}
+
+	return true;
+}
+
+bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
+	idx_t max_threads;
+
+	if (!TryGetMaxThreads(max_threads)) {
+		return false;
+	}
+
+	// Handle partition requirements specific to scheduling
+	auto partition_info = sink->RequiredPartitionInfo();
+	if (partition_info.batch_index) {
+		if (!source->SupportsPartitioning(OperatorPartitionInfo::BatchIndex())) {
+			throw InternalException(
+			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
+		}
+	}
+
 	return LaunchScanTasks(event, max_threads);
+}
+
+idx_t Pipeline::GetMaxThreads() {
+	idx_t max_threads;
+
+	if (!TryGetMaxThreads(max_threads)) {
+		return 1; // Fallback for unsupported parallelism
+	}
+
+	return max_threads;
 }
 
 bool Pipeline::IsOrderDependent() const {
@@ -204,6 +228,23 @@ void Pipeline::ResetSink() {
 	}
 }
 
+void Pipeline::ResetSinkForReschedule() {
+	if (!sink) {
+		return;
+	}
+	if (!sink->IsSink()) {
+		throw InternalException("Sink of pipeline does not have IsSink set");
+	}
+	lock_guard<mutex> guard(sink->lock);
+	auto &client = GetClientContext();
+	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(client);
+	if (allow_reuse && sink->sink_state && sink->sink_state->SupportsReuse()) {
+		sink->sink_state->Reset(client);
+		return;
+	}
+	sink->sink_state = sink->GetGlobalSinkState(client);
+}
+
 void Pipeline::PrepareFinalize() {
 	if (sink) {
 		if (!sink->IsSink()) {
@@ -229,6 +270,31 @@ void Pipeline::Reset() {
 	ResetSource(false);
 	// we no longer reset source here because this function is no longer guaranteed to be called by the main thread
 	// source reset needs to be called by the main thread because resetting a source may call into clients like R
+	initialized = true;
+}
+
+void Pipeline::ResetForReschedule(bool reset_sink) {
+	if (reset_sink) {
+		ResetSinkForReschedule();
+	}
+	auto &client = GetClientContext();
+	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(client);
+	for (auto &op_ref : operators) {
+		auto &op = op_ref.get();
+		lock_guard<mutex> guard(op.lock);
+		if (allow_reuse && op.op_state && op.ResetGlobalOperatorState(client, *op.op_state)) {
+			continue;
+		}
+		op.op_state = op.GetGlobalOperatorState(client);
+	}
+	if (source && !source->IsSource()) {
+		throw InternalException("Source of pipeline does not have IsSource set");
+	}
+	if (!allow_reuse || !source_state || !source_state->SupportsReuse()) {
+		source_state = source->GetGlobalSourceState(client);
+	} else {
+		source_state->Reset(client);
+	}
 	initialized = true;
 }
 

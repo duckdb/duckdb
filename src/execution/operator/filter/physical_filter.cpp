@@ -34,6 +34,14 @@ public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		context.thread.profiler.Flush(op);
 	}
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset() override {
+		ResetCachingState();
+	}
 };
 
 unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ExecutionContext &context) const {

@@ -216,6 +216,10 @@ optional_ptr<Pipeline> MetaPipeline::GetFinishGroup(Pipeline &pipeline) const {
 	return it == finish_map.end() ? nullptr : &it->second;
 }
 
+const vector<shared_ptr<MetaPipeline>> &MetaPipeline::GetChildren() const {
+	return children;
+}
+
 Pipeline &MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matters) {
 	// create the union pipeline (batch index 0, should be set correctly afterwards)
 	auto &union_pipeline = CreatePipeline();

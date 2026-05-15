@@ -110,6 +110,8 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	void SetPreserveBuildForRecursiveReuse(bool preserve) const;
+	bool CanPreserveBuildForRecursiveReuse() const;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	void PrepareFinalize(ClientContext &context, GlobalSinkState &global_state) const override;

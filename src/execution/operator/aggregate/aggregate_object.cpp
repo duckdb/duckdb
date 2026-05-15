@@ -14,10 +14,13 @@ AggregateObject::AggregateObject(BoundAggregateFunction function, FunctionData *
       filter(filter) {
 }
 
-AggregateObject::AggregateObject(BoundAggregateExpression *aggr)
-    : AggregateObject(aggr->function, aggr->bind_info.get(), aggr->children.size(),
-                      AlignValue(aggr->function.GetStateSizeCallback()(aggr->function)), aggr->aggr_type,
-                      aggr->GetReturnType().InternalType(), aggr->filter.get()) {
+AggregateObject::AggregateObject(BoundAggregateExpression &aggr)
+    : AggregateObject(aggr.function, aggr.bind_info.get(), aggr.children.size(),
+                      AlignValue(aggr.function.GetStateSizeCallback()(aggr.function)), aggr.aggr_type,
+                      aggr.GetReturnType().InternalType(), aggr.filter.get()) {
+}
+
+AggregateObject::AggregateObject(BoundAggregateExpression *aggr) : AggregateObject(*aggr) {
 }
 
 AggregateObject::AggregateObject(const BoundWindowExpression &window)

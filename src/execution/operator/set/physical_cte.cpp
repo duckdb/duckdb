@@ -22,11 +22,30 @@ PhysicalCTE::~PhysicalCTE() {
 //===--------------------------------------------------------------------===//
 class CTEGlobalState : public GlobalSinkState {
 public:
-	explicit CTEGlobalState(ClientContext &context, const PhysicalCTE &op) : working_table_ref(op.working_table.get()) {
+	explicit CTEGlobalState(ClientContext &context, const PhysicalCTE &op)
+	    : op(op), working_table_ref(op.working_table.get()) {
+		ResetState(context);
 	}
+	const PhysicalCTE &op;
 	optional_ptr<ColumnDataCollection> working_table_ref;
 
 	mutex lhs_lock;
+
+private:
+	void ResetState(ClientContext &context) {
+		op.working_table->Reset();
+		working_table_ref = op.working_table.get();
+		GlobalSinkState::Reset(context);
+	}
+
+public:
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ClientContext &context) override {
+		ResetState(context);
+	}
 
 	void MergeIT(ColumnDataCollection &input) {
 		lock_guard<mutex> guard(lhs_lock);
@@ -46,12 +65,11 @@ public:
 	ColumnDataAppendState append_state;
 
 	void Append(DataChunk &input) {
-		lhs_data.Append(input);
+		lhs_data.Append(append_state, input);
 	}
 };
 
 unique_ptr<GlobalSinkState> PhysicalCTE::GetGlobalSinkState(ClientContext &context) const {
-	working_table->Reset();
 	return make_uniq<CTEGlobalState>(context, *this);
 }
 

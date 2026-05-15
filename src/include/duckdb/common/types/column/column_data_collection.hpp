@@ -111,6 +111,8 @@ public:
 
 	//! Appends the other ColumnDataCollection to this, destroying the other data collection
 	DUCKDB_API void Combine(ColumnDataCollection &other);
+	//! Swaps the contents of two compatible ColumnDataCollections
+	DUCKDB_API void Swap(ColumnDataCollection &other);
 
 	DUCKDB_API void Verify();
 
@@ -118,6 +120,7 @@ public:
 	DUCKDB_API void Print() const;
 
 	DUCKDB_API void Reset();
+	DUCKDB_API void ResetForReuse();
 
 	//! Returns the number of data chunks present in the ColumnDataCollection
 	DUCKDB_API idx_t ChunkCount() const;
