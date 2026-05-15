@@ -62,7 +62,7 @@ void ExtensionLoader::CreateExtensionSchema(const string &name) const {
 }
 
 void ExtensionLoader::SetExtensionSchema(const string &name) {
-	if (loader_info.add_schema_to_search_path == true && name != loader_info.extension_schema) {
+	if (name != loader_info.extension_schema && loader_info.extension_schema != DEFAULT_SCHEMA) {
 		throw InvalidInputException("Cannot set extension schema to '%s', schema is already set to '%s'", name,
 		                            loader_info.extension_schema);
 	}
@@ -83,6 +83,17 @@ void ExtensionLoader::AddExtensionSchemaToSearchPath(const string &schema_name) 
 		                            "with SetExtensionSchema()",
 		                            schema_name);
 	}
+
+	// check if schema already exists in the system catalog
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+	auto schema = system_catalog.GetSchema(data, schema_name, OnEntryNotFound::RETURN_NULL);
+	if (!schema) {
+		throw InvalidInputException("Cannot add schema '%s' to search path: schema does not exist. "
+		                            "Call CreateExtensionSchema() first.",
+		                            schema_name);
+	}
+
 	// TODO: remove extension schema from search path if loading extension failed
 	ExtensionCallbackManager::Get(db).AddExtensionSchema(loader_info.extension_schema);
 }
@@ -93,7 +104,6 @@ void ExtensionLoader::RefreshSearchPath(ClientContext &context) {
 
 void ExtensionLoader::ResetExtensionSchemaToDefault() {
 	loader_info.extension_schema = DEFAULT_SCHEMA;
-	loader_info.add_schema_to_search_path = false;
 }
 
 void ExtensionLoader::FinalizeLoad() {

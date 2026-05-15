@@ -94,9 +94,13 @@ TEST_CASE("Test ExtensionLoader schema API", "[api]") {
 		REQUIRE_THROWS(loader.SetExtensionSchema(""));
 	}
 
-	SECTION("AddExtensionSchemaToSearchPath requires SetExtensionSchema first") {
+	SECTION("AddExtensionSchemaToSearchPath requires SetExtensionSchema and CreateExtensionSchema first") {
 		auto loader = CreateExtensionLoader(db, "test_ext");
+		// schema does not exist
+		REQUIRE_THROWS(loader.AddExtensionSchemaToSearchPath("orphan_schema"));
+		// create schema
 		loader.CreateExtensionSchema("orphan_schema");
+		// still throws because schema is not set
 		REQUIRE_THROWS(loader.AddExtensionSchemaToSearchPath("orphan_schema"));
 	}
 

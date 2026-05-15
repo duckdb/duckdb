@@ -31,7 +31,6 @@ struct ExtensionLoaderInfo {
 	string extension_alias;
 	string extension_description;
 	string extension_schema = DEFAULT_SCHEMA;
-	bool add_schema_to_search_path = false;
 };
 
 class ExtensionLoader {
