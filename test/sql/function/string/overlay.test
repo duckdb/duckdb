@@ -84,6 +84,86 @@ SELECT overlay('33333rce' placing 'resou' from 1 FOR -100);
 ----
 resource
 
+# UTF-8 multi-byte characters
+query I
+SELECT overlay('café' placing 'X' from 4)
+----
+cafX
+
+query I
+SELECT overlay('café' placing 'X' from 4 for 1)
+----
+cafX
+
+query I
+SELECT overlay('hello🌍world' placing 'X' from 6)
+----
+helloXworld
+
+query I
+SELECT overlay('hello🌍world' placing 'X' from 6 for 1)
+----
+helloXworld
+
+query I
+SELECT overlay('日本語テスト' placing 'XX' from 3)
+----
+日本XXスト
+
+query I
+SELECT overlay('日本語テスト' placing 'XX' from 3 for 2)
+----
+日本XXスト
+
+# Empty strings
+query I
+SELECT overlay('' placing 'abc' from 1)
+----
+abc
+
+query I
+SELECT overlay('hello' placing '' from 3)
+----
+hello
+
+query I
+SELECT overlay('' placing '' from 1)
+----
+(empty)
+
+# Start past end of string
+query I
+SELECT overlay('abc' placing 'X' from 10)
+----
+abcX
+
+query I
+SELECT overlay('abc' placing 'XY' from 5)
+----
+abcXY
+
+query I
+SELECT overlay('abc' placing 'X' from 4)
+----
+abcX
+
+# NULL in 4th argument
+query I
+SELECT overlay('abc' placing 'X' from 2 for cast(null as bigint))
+----
+NULL
+
+# Negative/zero start with explicit FOR
+query I
+SELECT overlay('abcdef' placing 'XY' from 0 for 2)
+----
+XYbcdef
+
+query I
+SELECT overlay('abcdef' placing 'XY' from -1 for 2)
+----
+XYabcdef
+
 # From a table
 statement ok
 CREATE TABLE t(s STRING);
