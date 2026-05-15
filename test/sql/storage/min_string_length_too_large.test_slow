@@ -34,9 +34,17 @@ restart
 query IIIII
 select s.min, s.max, s.min_string_length, s.max_string_length, s.total_string_length from (select stats(s) s from test limit 1)
 ----
-aaaaaaaaaaaa	aaaaaaaaaaaa	NULL	2097150	2097150
+aaaaaaaaaaaa	aaaaaaaaaaaa	NULL	2097151	2097151
 
-# also not if we insert new stuff
+query I
+select s.min_string_length from (select stats(s) s from test limit 1)
+----
+NULL
+
+statement ok
+set checkpoint_threshold='1TB';
+
+# if we insert new stuff the stats are still unknown
 statement ok
 insert into test values ('hello world');
 
@@ -45,9 +53,18 @@ select s.min_string_length from (select stats(s) s from test limit 1)
 ----
 NULL
 
+# but a checkpoint can recompute them
+statement ok
+CHECKPOINT
+
+query I
+select s.min_string_length from (select stats(s) s from test limit 1)
+----
+11
+
 restart
 
 query I
 select s.min_string_length from (select stats(s) s from test limit 1)
 ----
-NULL
+11

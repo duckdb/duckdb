@@ -65,7 +65,7 @@ struct StringStatsWriter {
 			max_string_length = UnsafeNumericCast<uint32_t>(size);
 		}
 		if (size < min_string_length) {
-			min_string_length = size;
+			min_string_length = UnsafeNumericCast<uint32_t>(size);
 		}
 		total_string_length += size;
 		if (is_varchar && !has_unicode) {
