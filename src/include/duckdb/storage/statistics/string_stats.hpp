@@ -31,7 +31,7 @@ enum class StringStatsType {
 struct StringStatsData {
 	constexpr static uint32_t CURRENT_MAX_STRING_MINMAX_SIZE = 12;
 	constexpr static uint32_t LEGACY_MAX_STRING_MINMAX_SIZE = 8;
-	static constexpr uint32_t MAXIMUM_MIN_STRING_LENGTH = (1 << 21U) - 1;
+	constexpr static uint32_t MAXIMUM_MIN_STRING_LENGTH = (1 << 21U) - 1;
 
 	//! The minimum value of the segment, potentially truncated
 	string_t min;
