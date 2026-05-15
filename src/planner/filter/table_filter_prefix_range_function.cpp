@@ -564,7 +564,10 @@ FilterPropagateResult PrefixRangeScalarFun::FilterPrune(const FunctionStatistics
 		if (!StringStats::HasMinMax(input.stats)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		return data.filter->LookupRange(Value(StringStats::Min(input.stats)), Value(StringStats::Max(input.stats)));
+		// String stats may contain raw parquet bytes that are not valid UTF-8. Reconstruct them as BLOBs so the
+		// prefix-range comparable logic can inspect the raw bytes without value-construction validation.
+		return data.filter->LookupRange(Value::BLOB_RAW(StringStats::Min(input.stats)),
+		                                Value::BLOB_RAW(StringStats::Max(input.stats)));
 	}
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
