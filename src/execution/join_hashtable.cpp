@@ -770,7 +770,7 @@ void JoinHashTable::AllocatePointerTable() {
 		throw InternalException("Hashtable capacity exceeds 48-bit limit (2^48 - 1)");
 	}
 
-	if (should_build_bloom_filter) {
+	if (should_build_bloom_filter && !bloom_filter.IsInitialized()) {
 		bloom_filter.Initialize(context, Count());
 	}
 
