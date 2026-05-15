@@ -32,6 +32,15 @@ static string PurgeArenaString(idx_t arena_idx) {
 	return StringUtil::Format("arena.%llu.purge", arena_idx);
 }
 
+static void JemallocCTL(const char *name, void *old_ptr, size_t *old_len, void *new_ptr, size_t new_len) {
+	if (duckdb_je_mallctl(name, old_ptr, old_len, new_ptr, new_len) != 0) {
+#ifdef DEBUG
+		// We only want to throw an exception here when debugging
+		throw InternalException("je_mallctl failed for setting \"%s\"", name);
+#endif
+	}
+}
+
 template <class T>
 static void SetJemallocCTL(const char *name, T &val) {
 	JemallocCTL(name, nullptr, nullptr, &val, sizeof(T));
