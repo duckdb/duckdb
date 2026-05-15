@@ -531,7 +531,8 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	}
 	FlatVector::SetSize(state.addresses, payload.size());
 	state.addresses.SetVectorType(VectorType::CONSTANT_VECTOR);
-	UpdateAggregates(payload, filter);
+	// ht_offsets are only valid for the single constant group, not the full payload
+	UpdateAggregates(payload, filter, false);
 	state.addresses.SetVectorType(VectorType::FLAT_VECTOR);
 
 	return new_group_count;

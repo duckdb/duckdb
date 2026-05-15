@@ -668,7 +668,6 @@ void Vector::Serialize(Serializer &serializer, bool compressed_serialization) {
 
 			auto &child = ArrayVector::GetChildMutable(serialized_vector);
 			auto array_size = ArrayType::GetSize(serialized_vector.GetType());
-			auto child_size = array_size * count;
 			serializer.WriteProperty<uint64_t>(103, "array_size", array_size);
 			serializer.WriteObject(104, "child",
 			                       [&](Serializer &object) { child.Serialize(object, compressed_serialization); });
