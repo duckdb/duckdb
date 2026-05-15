@@ -73,6 +73,32 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 		lhs_output_columns.col_types.push_back(lhs_input_types[lhs_col]);
 	}
 
+	// MARK join output types must be lhs_payload + BOOLEAN (ConstructMarkJoinResult). Refresh only when the logical
+	// plan disagrees with the materialized LHS layout (#22274) — usually they already match after optimizer fixes.
+	if (join_type == JoinType::MARK) {
+		const idx_t n = lhs_output_columns.col_types.size();
+		const idx_t expected_cols = n + 1;
+		bool mismatch = types.size() != expected_cols;
+		if (!mismatch) {
+			for (idx_t i = 0; i < n; i++) {
+				if (types[i] != lhs_output_columns.col_types[i]) {
+					mismatch = true;
+					break;
+				}
+			}
+			if (!mismatch && types[n].id() != LogicalTypeId::BOOLEAN) {
+				mismatch = true;
+			}
+		}
+		if (mismatch) {
+			types.resize(expected_cols);
+			for (idx_t i = 0; i < n; i++) {
+				types[i] = lhs_output_columns.col_types[i];
+			}
+			types[n] = LogicalType::BOOLEAN;
+		}
+	}
+
 	// initialize residual predicate structures if present
 	if (residual_info) {
 		InitializeResidualPredicate(lhs_input_types, probe_cols);
@@ -129,20 +155,29 @@ void PhysicalHashJoin::ExtractResidualPredicateColumns(unique_ptr<Expression> &p
 void PhysicalHashJoin::InitializeResidualPredicate(const vector<LogicalType> &lhs_input_types,
                                                    const vector<idx_t> &probe_cols) {
 	D_ASSERT(residual_info);
-	// build lhs_probe_columns (output + predicate columns)
-	unordered_set<idx_t> required_probe_cols;
+	// Build lhs_probe layout with lhs OUTPUT indices first — they must remain prefix-aligned with
+	// PhysicalHashJoin::lhs_output_columns so ConstructMarkJoinResult can pair result vector types with probe vectors.
+	// Sorting merged {output ∪ predicate} indices lexicographically scrambled that order (#22274).
+	unordered_set<idx_t> seen;
+	lhs_probe_columns.col_idxs.reserve(lhs_output_columns.col_idxs.size() + probe_cols.size());
+	lhs_probe_columns.col_types.reserve(lhs_probe_columns.col_idxs.capacity());
 	for (auto col : lhs_output_columns.col_idxs) {
-		required_probe_cols.insert(col);
+		if (!seen.insert(col).second) {
+			continue;
+		}
+		lhs_probe_columns.col_idxs.push_back(col);
+		lhs_probe_columns.col_types.push_back(lhs_input_types[col]);
 	}
+	vector<idx_t> predicate_only_extra;
 	for (auto col : probe_cols) {
-		required_probe_cols.insert(col);
+		if (seen.insert(col).second) {
+			predicate_only_extra.push_back(col);
+		}
 	}
-
-	lhs_probe_columns.col_idxs.assign(required_probe_cols.begin(), required_probe_cols.end());
-	std::sort(lhs_probe_columns.col_idxs.begin(), lhs_probe_columns.col_idxs.end());
-
-	for (auto col_idx : lhs_probe_columns.col_idxs) {
-		lhs_probe_columns.col_types.push_back(lhs_input_types[col_idx]);
+	std::sort(predicate_only_extra.begin(), predicate_only_extra.end());
+	for (auto col : predicate_only_extra) {
+		lhs_probe_columns.col_idxs.push_back(col);
+		lhs_probe_columns.col_types.push_back(lhs_input_types[col]);
 	}
 
 	// build mapping for predicate probe columns
@@ -155,15 +190,11 @@ void PhysicalHashJoin::InitializeResidualPredicate(const vector<LogicalType> &lh
 		}
 	}
 
-	// build lhs_output_in_probe mapping
+	lhs_output_in_probe.clear();
 	lhs_output_in_probe.reserve(lhs_output_columns.col_idxs.size());
-	for (auto output_col_idx : lhs_output_columns.col_idxs) {
-		for (idx_t i = 0; i < lhs_probe_columns.col_idxs.size(); i++) {
-			if (lhs_probe_columns.col_idxs[i] == output_col_idx) {
-				lhs_output_in_probe.push_back(i);
-				break;
-			}
-		}
+	for (idx_t i = 0; i < lhs_output_columns.col_idxs.size(); i++) {
+		lhs_output_in_probe.push_back(i);
+		D_ASSERT(lhs_probe_columns.col_idxs[i] == lhs_output_columns.col_idxs[i]);
 	}
 }
 
