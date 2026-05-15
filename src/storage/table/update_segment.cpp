@@ -103,6 +103,33 @@ idx_t UpdateInfo::GetAllocSize(idx_t type_size) {
 	return AlignValue<idx_t>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 }
 
+idx_t UpdateInfo::GetAllocSize(idx_t type_size, idx_t capacity) {
+	return AlignValue<idx_t>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * capacity);
+}
+
+idx_t UpdateInfo::GetCompactCapacity(idx_t count) {
+	// Round up to next power of two, with a minimum of 8, capped at STANDARD_VECTOR_SIZE
+	if (count <= 8) {
+		return 8;
+	}
+	idx_t capacity = NextPowerOfTwo(count);
+	return MinValue<idx_t>(capacity, STANDARD_VECTOR_SIZE);
+}
+
+void UpdateInfo::Initialize(UpdateInfo &info, DuckTableEntry &table_entry, transaction_t transaction_id,
+                            idx_t row_group_start, idx_t capacity) {
+	info.max = UnsafeNumericCast<sel_t>(capacity);
+	info.row_group_start = row_group_start;
+	info.table = &table_entry;
+	info.column_index = COLUMN_IDENTIFIER_ROW_ID;
+	info.segment = nullptr;
+	info.vector_index = 0;
+	info.prev = UndoBufferPointer();
+	info.next = UndoBufferPointer();
+	info.N = 0;
+	info.version_number = transaction_id;
+}
+
 void UpdateInfo::Initialize(UpdateInfo &info, DuckTableEntry &table_entry, transaction_t transaction_id,
                             idx_t row_group_start) {
 	info.max = STANDARD_VECTOR_SIZE;
@@ -1345,11 +1372,53 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		// this transaction in the version chain
 		auto root_pointer = root->info[vector_index];
 		auto root_pin = root_pointer.Pin();
-		auto &base_info = UpdateInfo::Get(root_pin);
+		auto *base_info_ptr = &UpdateInfo::Get(root_pin);
 
 		UndoBufferReference node_ref;
-		CheckForConflicts(base_info.next, transaction, ids, sel, count, UnsafeNumericCast<row_t>(vector_offset),
+		CheckForConflicts(base_info_ptr->next, transaction, ids, sel, count, UnsafeNumericCast<row_t>(vector_offset),
 		                  node_ref);
+
+		// Check if the root UpdateInfo has enough capacity for the merge result
+		// The merge can produce at most base_info.N + count entries (capped at STANDARD_VECTOR_SIZE)
+		idx_t max_result = MinValue<idx_t>(idx_t(base_info_ptr->N) + count, STANDARD_VECTOR_SIZE);
+		UndoBufferReference new_root_pin;
+		if (max_result > idx_t(base_info_ptr->max)) {
+			// Need to re-allocate the root UpdateInfo with larger capacity
+			idx_t new_capacity = UpdateInfo::GetCompactCapacity(max_result);
+			idx_t new_alloc_size = UpdateInfo::GetAllocSize(type_size, new_capacity);
+			auto new_handle = root->allocator.Allocate(new_alloc_size);
+			auto &new_info = UpdateInfo::Get(new_handle);
+
+			// Copy the header and existing data from old to new
+			new_info.segment = base_info_ptr->segment;
+			new_info.table = base_info_ptr->table;
+			new_info.column_index = base_info_ptr->column_index;
+			new_info.row_group_start = base_info_ptr->row_group_start;
+			new_info.version_number.store(base_info_ptr->version_number.load());
+			new_info.vector_index = base_info_ptr->vector_index;
+			new_info.N = base_info_ptr->N;
+			new_info.max = UnsafeNumericCast<sel_t>(new_capacity);
+			new_info.prev = base_info_ptr->prev;
+			new_info.next = base_info_ptr->next;
+
+			// Copy tuple ids and data
+			memcpy(new_info.GetTuples(), base_info_ptr->GetTuples(), sizeof(sel_t) * base_info_ptr->N);
+			memcpy(new_info.GetValues(), base_info_ptr->GetValues(), type_size * base_info_ptr->N);
+
+			// Update the next node's prev pointer to point to the new allocation
+			if (new_info.next.IsSet()) {
+				auto next_pin = new_info.next.Pin();
+				auto &next_info = UpdateInfo::Get(next_pin);
+				next_info.prev = new_handle.GetBufferPointer();
+			}
+
+			// Update root pointer
+			root->info[vector_index] = new_handle.GetBufferPointer();
+			root_pointer = root->info[vector_index];
+			new_root_pin = std::move(new_handle);
+			base_info_ptr = &UpdateInfo::Get(new_root_pin);
+		}
+		auto &base_info = *base_info_ptr;
 
 		// there are no conflicts - continue with the update
 		unsafe_unique_array<char> update_info_data;
@@ -1392,11 +1461,12 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		node->Verify();
 	} else {
 		// there is no version info yet: create the top level update info and fill it with the updates
-		// allocate space for the UpdateInfo in the allocator
-		idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
+		// allocate space for the UpdateInfo in the allocator (compact: sized to actual count)
+		idx_t compact_capacity = UpdateInfo::GetCompactCapacity(count);
+		idx_t alloc_size = UpdateInfo::GetAllocSize(type_size, compact_capacity);
 		auto handle = root->allocator.Allocate(alloc_size);
 		auto &update_info = UpdateInfo::Get(handle);
-		UpdateInfo::Initialize(update_info, table_entry, TRANSACTION_ID_START - 1, row_group_start);
+		UpdateInfo::Initialize(update_info, table_entry, TRANSACTION_ID_START - 1, row_group_start, compact_capacity);
 		update_info.column_index = column_index;
 
 		InitializeUpdateInfo(update_info, ids, sel, count, vector_index, vector_offset);
