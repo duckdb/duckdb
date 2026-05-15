@@ -50,6 +50,142 @@ select * from cte2;
 ----
 logical_opt	<REGEX>:.*CTE.*
 
+statement ok
+create table web_sales(ws_order_number integer, ws_warehouse_sk integer, ws_ext_ship_cost integer, ws_net_profit integer);
+
+statement ok
+insert into web_sales values
+	(1, 10, 5, 5), (1, 10, 7, 7), (1, 20, 11, 11),
+	(2, 30, 13, 13), (2, 30, 17, 17),
+	(3, NULL, 19, 19), (3, 40, 23, 23),
+	(4, NULL, 29, 29), (4, NULL, 31, 31),
+	(5, 50, 37, 37), (5, 60, 41, 41);
+
+statement ok
+create table web_returns(wr_order_number integer);
+
+statement ok
+insert into web_returns values (1), (2), (3), (4), (5), (5);
+
+query III
+with ws_wh as (
+	select ws1.ws_order_number, ws1.ws_warehouse_sk wh1, ws2.ws_warehouse_sk wh2
+	from web_sales ws1, web_sales ws2
+	where ws1.ws_order_number = ws2.ws_order_number
+	  and ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk
+)
+select count(distinct ws1.ws_order_number), sum(ws1.ws_ext_ship_cost), sum(ws1.ws_net_profit)
+from web_sales ws1
+where ws1.ws_order_number in (select ws_order_number from ws_wh)
+  and ws1.ws_order_number in (
+	select wr_order_number
+	from web_returns, ws_wh
+	where wr_order_number = ws_wh.ws_order_number
+);
+----
+2	101	101
+
+query I
+with ws_wh as (
+	select ws1.ws_order_number, ws1.ws_warehouse_sk wh1, ws2.ws_warehouse_sk wh2
+	from web_sales ws1, web_sales ws2
+	where ws1.ws_order_number = ws2.ws_order_number
+	  and ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk
+)
+select count(*) from ws_wh;
+----
+6
+
+query II
+explain
+with ws_wh as (
+	select ws1.ws_order_number, ws1.ws_warehouse_sk wh1, ws2.ws_warehouse_sk wh2
+	from web_sales ws1, web_sales ws2
+	where ws1.ws_order_number = ws2.ws_order_number
+	  and ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk
+)
+select count(distinct ws1.ws_order_number)
+from web_sales ws1
+where ws1.ws_order_number in (select ws_order_number from ws_wh)
+  and ws1.ws_order_number in (
+	select wr_order_number
+	from web_returns, ws_wh
+	where wr_order_number = ws_wh.ws_order_number
+);
+----
+logical_opt	<REGEX>:.*CTE.*min.*max.*
+
+statement ok
+create table shipments(order_id integer, line_id integer, warehouse_id integer);
+
+statement ok
+insert into shipments values
+	(1, 1, 10), (1, 1, 20),
+	(1, 2, 30), (1, 2, 30),
+	(2, 1, 40), (2, 1, 50), (2, 1, 60),
+	(3, 1, NULL), (3, 1, 70),
+	(NULL, 1, 80), (NULL, 1, 90);
+
+statement ok
+create table shipment_lines(order_id integer, line_id integer);
+
+statement ok
+insert into shipment_lines values (1, 1), (1, 2), (2, 1), (3, 1), (NULL, 1);
+
+query I
+with moved_lines as (
+	select s2.order_id, s1.line_id, s1.warehouse_id wh1, s2.warehouse_id wh2
+	from shipments s1
+	join shipments s2
+	  on s1.order_id = s2.order_id
+	 and s1.line_id = s2.line_id
+	 and s1.warehouse_id <> s2.warehouse_id
+)
+select count(*)
+from shipment_lines l
+where exists (
+	select 1
+	from moved_lines m
+	where m.order_id = l.order_id
+	  and m.line_id = l.line_id
+);
+----
+2
+
+query II
+explain
+with moved_lines as (
+	select s2.order_id, s1.line_id, s1.warehouse_id wh1, s2.warehouse_id wh2
+	from shipments s1
+	join shipments s2
+	  on s1.order_id = s2.order_id
+	 and s1.line_id = s2.line_id
+	 and s1.warehouse_id <> s2.warehouse_id
+)
+select count(*)
+from shipment_lines l
+where exists (
+	select 1
+	from moved_lines m
+	where m.order_id = l.order_id
+	  and m.line_id = l.line_id
+);
+----
+logical_opt	<REGEX>:.*min.*max.*
+
+query I
+with moved_lines as (
+	select s2.order_id, s1.line_id, s1.warehouse_id wh1, s2.warehouse_id wh2
+	from shipments s1
+	join shipments s2
+	  on s1.order_id = s2.order_id
+	 and s1.line_id = s2.line_id
+	 and s1.warehouse_id <> s2.warehouse_id
+)
+select count(*) from moved_lines;
+----
+8
+
 # Test non-referenced CTE
 query II
 explain
