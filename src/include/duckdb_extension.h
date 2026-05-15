@@ -793,6 +793,9 @@ typedef struct {
 //===--------------------------------------------------------------------===//
 // Typedefs mapping functions to struct entries
 //===--------------------------------------------------------------------===//
+// When building as a static extension, DuckDB symbols are resolved directly at link time.
+// The vtable (duckdb_ext_api) is not used - skip these macro redirections.
+#ifndef DUCKDB_BUILD_STATIC_EXTENSION
 // Version v1.2.0
 #define duckdb_open                                    duckdb_ext_api.duckdb_open
 #define duckdb_open_ext                                duckdb_ext_api.duckdb_open_ext
@@ -1393,9 +1396,16 @@ typedef struct {
 #define duckdb_destroy_selection_vector                duckdb_ext_api.duckdb_destroy_selection_vector
 #define duckdb_selection_vector_get_data_ptr           duckdb_ext_api.duckdb_selection_vector_get_data_ptr
 
+#endif // DUCKDB_BUILD_STATIC_EXTENSION
+
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
 //===--------------------------------------------------------------------===//
+#ifdef DUCKDB_BUILD_STATIC_EXTENSION
+// No vtable global needed for static builds - DuckDB symbols are resolved directly at link time
+#define DUCKDB_EXTENSION_GLOBAL
+#define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version)
+#else
 // This goes in the c/c++ file containing the entrypoint (handle
 #define DUCKDB_EXTENSION_GLOBAL duckdb_ext_api_v1 duckdb_ext_api = {0};
 // Initializes the C Extension API: First thing to call in the extension entrypoint
@@ -1405,6 +1415,7 @@ typedef struct {
 		return false;                                                                                                  \
 	};                                                                                                                 \
 	duckdb_ext_api = *res;
+#endif // DUCKDB_BUILD_STATIC_EXTENSION
 
 // Place in global scope of any C/C++ file that needs to access the extension API
 #define DUCKDB_EXTENSION_EXTERN extern duckdb_ext_api_v1 duckdb_ext_api;

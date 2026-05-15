@@ -236,12 +236,15 @@ def include_package(pkg_name, pkg_dir, include_files, include_list, source_list)
 
     ext_include_dirs = ext_pkg.include_directories
     ext_source_files = ext_pkg.source_files
+    ext_kind = getattr(ext_pkg, 'extension_kind', 'CPP').upper()
 
     include_files += amalgamation.list_includes_files(ext_include_dirs)
     include_list += ext_include_dirs
     source_list += ext_source_files
 
     sys.path = original_path
+
+    return ext_kind
 
 
 def build_package(target_dir, extensions, linenumbers=False, unity_count=32, folder_name='duckdb', short_paths=False):
@@ -277,30 +280,45 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
     # include the separate extensions
     ext_loader_body = ''
     ext_headers = ''
+    ext_capi_declarations = ''
     for ext in extensions:
         ext_path = os.path.join(scripts_dir, '..', 'extension', ext)
-        include_package(ext, ext_path, include_files, include_list, source_list)
-
-        ext_headers += f'#include "{ext}_extension.hpp"\n'
+        ext_kind = include_package(ext, ext_path, include_files, include_list, source_list)
 
         # handle generated_extension_loader
         # this - beautifully - approximates code in extension/CMakeLists.txt
-        ext_name_camelcase = ext.replace('_', ' ').title().replace(' ', '')
-
-        ext_loader_body += """
+        if ext_kind == 'CAPI':
+            ext_capi_declarations += (
+                'extern "C" bool ${EXT_NAME}_init_c_api(duckdb_extension_info, duckdb_extension_access *);\n'.replace(
+                    '${EXT_NAME}', ext
+                )
+            )
+            ext_loader_body += """
+    if (extension=="${EXT_NAME}") {
+        db.LoadStaticCAPIExtension("${EXT_NAME}", ${EXT_NAME}_init_c_api);
+        return ExtensionLoadResult::LOADED_EXTENSION;
+    }
+""".replace(
+                '${EXT_NAME}', ext
+            )
+        else:
+            ext_headers += '#include "${EXT_NAME}_extension.hpp"\n'.replace('${EXT_NAME}', ext)
+            ext_name_camelcase = ext.replace('_', ' ').title().replace(' ', '')
+            ext_loader_body += """
     if (extension=="${EXT_NAME}") {
         db.LoadStaticExtension<${EXT_NAME_CAMELCASE}Extension>();
         return ExtensionLoadResult::LOADED_EXTENSION;
     }
-        """.replace(
-            '${EXT_NAME}', ext
-        ).replace(
-            '${EXT_NAME_CAMELCASE}', ext_name_camelcase
-        )
+""".replace(
+                '${EXT_NAME}', ext
+            ).replace(
+                '${EXT_NAME_CAMELCASE}', ext_name_camelcase
+            )
 
     loader_code = open(os.path.join('extension', 'generated_extension_loader.cpp.in'), 'rb').read().decode('utf8')
     loader_code = (
         loader_code.replace('${EXT_LOADER_BODY}', ext_loader_body)
+        .replace('${EXT_CAPI_DECLARATIONS}', ext_capi_declarations)
         .replace('${EXT_NAME_VECTOR_INITIALIZER}', ', '.join([f'"{x}"' for x in extensions]))
         .replace('${EXT_TEST_PATH_INITIALIZER}', '')
         .replace('CMake', 'package_build.py')

@@ -29,11 +29,17 @@ get_statically_linked_extensions("${DUCKDB_EXTENSION_NAMES}"
 foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
   string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
   if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
-    set(DUCKDB_EXTENSION_HEADER "${EXT_NAME}_extension.hpp")
-    file(
-      APPEND
-      "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp.cand"
-      "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
+    get_property(
+      EXT_KIND
+      TARGET ${EXT_NAME}_extension
+      PROPERTY DUCKDB_EXTENSION_KIND)
+    if(NOT "${EXT_KIND}" STREQUAL "CAPI")
+      set(DUCKDB_EXTENSION_HEADER "${EXT_NAME}_extension.hpp")
+      file(
+        APPEND
+        "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp.cand"
+        "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
+    endif()
   endif()
 endforeach()
 
@@ -44,6 +50,7 @@ configure_file(
 # generated_extension_loader.hpp
 set(EXT_LOADER_NAME_LIST "")
 set(EXT_LOADER_BODY "")
+set(EXT_CAPI_DECLARATIONS "")
 foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
   string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
   if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
@@ -58,14 +65,31 @@ foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
       set(EXT_NAME_CAMELCASE "${EXT_NAME_CAMELCASE}${FIRST_LETTER}${REMAINDER}")
     endforeach()
 
+    get_property(
+      EXT_KIND
+      TARGET ${EXT_NAME}_extension
+      PROPERTY DUCKDB_EXTENSION_KIND)
     set(EXT_LOADER_NAME_LIST "${EXT_LOADER_NAME_LIST},\n\t\"${EXT_NAME}\"")
-    set(EXT_LOADER_BODY
-        "${EXT_LOADER_BODY}\
+    if("${EXT_KIND}" STREQUAL "CAPI")
+      set(EXT_CAPI_DECLARATIONS
+          "${EXT_CAPI_DECLARATIONS}extern \"C\" bool ${EXT_NAME}_init_c_api(duckdb_extension_info, duckdb_extension_access *);\n"
+      )
+      set(EXT_LOADER_BODY
+          "${EXT_LOADER_BODY}\
+    if (extension==\"${EXT_NAME}\") {
+        db.LoadStaticCAPIExtension(\"${EXT_NAME}\", ${EXT_NAME}_init_c_api);
+        return ExtensionLoadResult::LOADED_EXTENSION;
+    }
+")
+    else()
+      set(EXT_LOADER_BODY
+          "${EXT_LOADER_BODY}\
     if (extension==\"${EXT_NAME}\") {
         db.LoadStaticExtension<${EXT_NAME_CAMELCASE}Extension>();
         return ExtensionLoadResult::LOADED_EXTENSION;
     }
 ")
+    endif()
   endif()
 endforeach()
 
