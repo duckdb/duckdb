@@ -138,6 +138,10 @@ public:
 	}
 
 private:
+	//! Rewrites the main header
+	//! Usage should be avoided
+	//! Except for phasing-out the storage version
+	// void RewriteMainHeader(QueryContext &context, uint64_t version_number = MainHeader::DEPRECATED_VERSION_NUMBER);
 	//! Loads the free list of the file.
 	void LoadFreeList(QueryContext context);
 

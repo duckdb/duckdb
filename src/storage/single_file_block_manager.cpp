@@ -475,6 +475,10 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	handle = fs.OpenFile(path, flags);
 	header_buffer.Clear();
 
+	if (options.storage_version == StorageVersion::INVALID) {
+		options.storage_version = StorageCompatibility::Latest().storage_version;
+	}
+
 	options.version_number = GetVersionNumber();
 	db.GetStorageManager().SetStorageVersion(options.storage_version);
 	AddStorageVersionTag();
