@@ -178,17 +178,20 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 
 void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op,
                          optional_ptr<bound_parameter_map_t> map) {
-	auto &config = DBConfig::GetConfig(context);
-	if (!op || !Settings::Get<DebugVerifySerializerSetting>(context)) {
+	if (!op) {
+		return;
+	}
+	// verify the column bindings of the plan
+	ColumnBindingResolver::Verify(context, *op);
+	if (!Settings::Get<DebugVerifySerializerSetting>(context)) {
 		return;
 	}
 	//! SELECT only for now
 	if (!OperatorSupportsSerialization(*op)) {
 		return;
 	}
-	// verify the column bindings of the plan
-	ColumnBindingResolver::Verify(*op);
 
+	auto &config = DBConfig::GetConfig(context);
 	// format (de)serialization of this operator
 	try {
 		MemoryStream stream(Allocator::Get(context));

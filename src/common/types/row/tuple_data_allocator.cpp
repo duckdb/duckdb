@@ -52,6 +52,14 @@ void TupleDataAllocator::SetDestroyBufferUponUnpin() {
 	}
 }
 
+void TupleDataAllocator::Reset() {
+	// Mark existing blocks for cleanup when they are unpinned, then drop our references.
+	// Avoids copy-constructing a fresh TupleDataAllocator object just to clear the block lists.
+	SetDestroyBufferUponUnpin();
+	row_blocks.clear();
+	heap_blocks.clear();
+}
+
 void TupleDataAllocator::DestroyRowBlocks(const idx_t row_block_begin, const idx_t row_block_end) {
 	if (row_block_begin == row_block_end) {
 		return;
@@ -502,7 +510,7 @@ void SortKeyRecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &
 	const auto old_heap_locations = FlatVector::GetData<data_ptr_t>(old_heap_ptrs);
 
 	UnifiedVectorFormat new_heap_data;
-	new_heap_ptrs.ToUnifiedFormat(offset + count, new_heap_data);
+	new_heap_ptrs.ToUnifiedFormat(new_heap_data);
 	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
 	const auto &new_heap_sel = *new_heap_data.sel;
 
@@ -554,7 +562,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 	const auto old_heap_locations = FlatVector::GetData<data_ptr_t>(old_heap_ptrs);
 
 	UnifiedVectorFormat new_heap_data;
-	new_heap_ptrs.ToUnifiedFormat(offset + count, new_heap_data);
+	new_heap_ptrs.ToUnifiedFormat(new_heap_data);
 	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
 	const auto new_heap_sel = *new_heap_data.sel;
 

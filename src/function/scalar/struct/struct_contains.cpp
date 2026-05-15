@@ -18,10 +18,10 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 	const auto &target_type = target.GetType();
 
 	UnifiedVectorFormat vector_format;
-	input_vector.ToUnifiedFormat(count, vector_format);
+	input_vector.ToUnifiedFormat(vector_format);
 
 	UnifiedVectorFormat target_format;
-	target.ToUnifiedFormat(count, target_format);
+	target.ToUnifiedFormat(target_format);
 	const auto target_data = UnifiedVectorFormat::GetData<T>(target_format);
 
 	vector<const T *> member_data_ptrs;
@@ -30,7 +30,7 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 	for (auto &member : members) {
 		if (member.GetType().InternalType() == target_type.InternalType()) {
 			UnifiedVectorFormat member_format;
-			member.ToUnifiedFormat(count, member_format);
+			member.ToUnifiedFormat(member_format);
 			member_data_ptrs.push_back(UnifiedVectorFormat::GetData<T>(member_format));
 			member_vectors.push_back(std::move(member_format));
 			total_matches++;

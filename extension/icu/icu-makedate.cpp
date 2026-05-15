@@ -15,9 +15,9 @@
 
 namespace duckdb {
 
-date_t ICUMakeDate::Operation(icu::Calendar *calendar, timestamp_t instant) {
-	if (!Timestamp::IsFinite(instant)) {
-		return Timestamp::GetDate(instant);
+date_t ICUMakeDate::Operation(icu::Calendar *calendar, timestamp_tz_t instant) {
+	if (!instant.IsFinite()) {
+		return Timestamp::GetDate(timestamp_t(instant));
 	}
 
 	// Extract the time zone parts
@@ -36,7 +36,7 @@ date_t ICUMakeDate::Operation(icu::Calendar *calendar, timestamp_t instant) {
 	return result;
 }
 
-date_t ICUMakeDate::ToDate(ClientContext &context, timestamp_t instant) {
+date_t ICUMakeDate::ToDate(ClientContext &context, timestamp_tz_t instant) {
 	ICUDateFunc::BindData data(context);
 	return Operation(data.calendar.get(), instant);
 }
@@ -46,8 +46,8 @@ bool ICUMakeDate::CastToDate(Vector &source, Vector &result, idx_t count, CastPa
 	auto &info = cast_data.info->Cast<BindData>();
 	CalendarPtr calendar(info.calendar->clone());
 
-	UnaryExecutor::Execute<timestamp_t, date_t>(source, result, count,
-	                                            [&](timestamp_t input) { return Operation(calendar.get(), input); });
+	UnaryExecutor::Execute<timestamp_tz_t, date_t>(
+	    source, result, count, [&](timestamp_tz_t input) { return Operation(calendar.get(), input); });
 	return true;
 }
 
@@ -71,7 +71,7 @@ void ICUMakeDate::AddCasts(ExtensionLoader &loader) {
 
 struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	template <typename T>
-	static inline timestamp_t Operation(icu::Calendar *calendar, T yyyy, T mm, T dd, T hr, T mn, double ss) {
+	static inline timestamp_tz_t Operation(icu::Calendar *calendar, T yyyy, T mm, T dd, T hr, T mn, double ss) {
 		const auto year = Cast::Operation<T, int32_t>(AddOperator::Operation<T, T, T>(yyyy, (yyyy < 0)));
 		const auto month = Cast::Operation<T, int32_t>(SubtractOperatorOverflowCheck::Operation<T, T, T>(mm, 1));
 		const auto day = Cast::Operation<T, int32_t>(dd);
@@ -99,7 +99,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	static void FromMicros(DataChunk &input, ExpressionState &state, Vector &result) {
 		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, input.size(), [&](T micros) {
 			const auto result = timestamp_t(micros);
-			if (!Timestamp::IsFinite(result)) {
+			if (!result.IsFinite()) {
 				throw ConversionException("Timestamp microseconds out of range: %ld", micros);
 			}
 			return result;
@@ -115,7 +115,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 
 		// Three cases: no TZ, constant TZ, variable TZ
 		if (input.ColumnCount() == 6) {
-			VariadicExecutor::Execute<timestamp_t, T, T, T, T, T, double>(
+			VariadicExecutor::Execute<timestamp_tz_t, T, T, T, T, T, double>(
 			    input, result, [&](T yyyy, T mm, T dd, T hr, T mn, double ss) {
 				    return Operation<T>(calendar, yyyy, mm, dd, hr, mn, ss);
 			    });
@@ -127,12 +127,12 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 					throw InternalException("ICUMakeTimestamp called with constant NULL tz");
 				}
 				SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
-				VariadicExecutor::Execute<timestamp_t, T, T, T, T, T, double>(
+				VariadicExecutor::Execute<timestamp_tz_t, T, T, T, T, T, double>(
 				    input, result, [&](T yyyy, T mm, T dd, T hr, T mn, double ss) {
 					    return Operation<T>(calendar, yyyy, mm, dd, hr, mn, ss);
 				    });
 			} else {
-				VariadicExecutor::Execute<timestamp_t, T, T, T, T, T, double, string_t>(
+				VariadicExecutor::Execute<timestamp_tz_t, T, T, T, T, T, double, string_t>(
 				    input, result, [&](T yyyy, T mm, T dd, T hr, T mn, double ss, string_t tz_id) {
 					    SetTimeZone(calendar, tz_id);
 					    return Operation<T>(calendar, yyyy, mm, dd, hr, mn, ss);

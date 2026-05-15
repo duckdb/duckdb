@@ -3,6 +3,7 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -109,14 +110,14 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 			    expr->GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
 				const auto &is_not_null = expr->Cast<BoundOperatorExpression>();
 				HandleExpression(*is_not_null.children[0]);
-			} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+			} else if (BoundComparisonExpression::IsComparison(*expr)) {
 				if (expr->GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
 				    expr->GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 					continue;
 				}
-				const auto &comparison = expr->Cast<BoundComparisonExpression>();
-				HandleExpression(*comparison.left);
-				HandleExpression(*comparison.right);
+				const auto &comparison = expr->Cast<BoundFunctionExpression>();
+				HandleExpression(BoundComparisonExpression::Left(comparison));
+				HandleExpression(BoundComparisonExpression::Right(comparison));
 			}
 		}
 		VisitOperatorChildren(op);

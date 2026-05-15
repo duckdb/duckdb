@@ -493,7 +493,7 @@ void RoaringCompressState::Compress<PhysicalType::BIT>(Vector &input, idx_t coun
 template <>
 void RoaringCompressState::Compress<PhysicalType::BOOL>(Vector &input, idx_t count) {
 	auto &self = *this;
-	input.Flatten(count);
+	input.Flatten();
 	const bool *src = FlatVector::GetData<bool>(input);
 
 	Vector bitpacked_vector(LogicalType::UBIGINT, count);

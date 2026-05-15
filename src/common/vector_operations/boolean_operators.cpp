@@ -36,8 +36,8 @@ void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t
 	}
 	// perform generic loop
 	// we use uint8 to avoid load of gunk bools
-	auto left_data = left.Values<uint8_t>(count);
-	auto right_data = right.Values<uint8_t>(count);
+	auto left_data = left.Values<uint8_t>();
+	auto right_data = right.Values<uint8_t>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::ScatterWriter<bool>(result);

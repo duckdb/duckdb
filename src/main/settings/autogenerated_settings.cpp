@@ -106,6 +106,13 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 }
 
 //===----------------------------------------------------------------------===//
+// Default Transaction Invalidation Policy
+//===----------------------------------------------------------------------===//
+void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<TransactionInvalidationPolicy>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Deprecated Using Key Syntax
 //===----------------------------------------------------------------------===//
 void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

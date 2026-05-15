@@ -89,8 +89,8 @@ struct StringSplitter {
 
 template <class OP>
 void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result, void *data = nullptr) {
-	auto input_entries = args.data[0].Values<string_t>(args.size());
-	auto delim_entries = args.data[1].Values<string_t>(args.size());
+	auto input_entries = args.data[0].Values<string_t>();
+	auto delim_entries = args.data[1].Values<string_t>();
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	result.SetVectorType(VectorType::FLAT_VECTOR);

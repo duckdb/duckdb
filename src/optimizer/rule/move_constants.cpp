@@ -34,7 +34,7 @@ MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewrit
 
 unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                 bool &changes_made, bool is_root) {
-	auto &comparison = bindings[0].get().Cast<BoundComparisonExpression>();
+	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
 	auto &outer_constant = bindings[1].get().Cast<BoundConstantExpression>();
 	auto &arithmetic = bindings[2].get().Cast<BoundFunctionExpression>();
 	auto &inner_constant = bindings[3].get().Cast<BoundConstantExpression>();
@@ -109,7 +109,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 			outer_constant.value = std::move(result_value);
 			// in this case, we should also flip the comparison
 			// e.g. if we have [4 - x < 2] then we should have [x > 2]
-			comparison.SetExpressionTypeUnsafe(FlipComparisonExpression(comparison.GetExpressionType()));
+			BoundComparisonExpression::FlipType(comparison);
 		}
 	} else {
 		D_ASSERT(op_type == "*");
@@ -141,7 +141,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		}
 		if (inner_value < 0) {
 			// multiply by negative value, need to flip expression
-			comparison.SetExpressionTypeUnsafe(FlipComparisonExpression(comparison.GetExpressionType()));
+			BoundComparisonExpression::FlipType(comparison);
 		}
 		// else divide the RHS by the LHS
 		// we need to do a range check on the cast even though we do a division
@@ -157,10 +157,10 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 	// first extract x from the arithmetic expression
 	auto arithmetic_child = std::move(arithmetic.children[arithmetic_child_index]);
 	// then place in the comparison
-	if (comparison.left.get() == &outer_constant) {
-		comparison.right = std::move(arithmetic_child);
+	if (RefersToSameObject(BoundComparisonExpression::Left(comparison), outer_constant)) {
+		BoundComparisonExpression::RightMutable(comparison) = std::move(arithmetic_child);
 	} else {
-		comparison.left = std::move(arithmetic_child);
+		BoundComparisonExpression::LeftMutable(comparison) = std::move(arithmetic_child);
 	}
 	changes_made = true;
 	return nullptr;

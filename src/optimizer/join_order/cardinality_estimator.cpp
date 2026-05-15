@@ -7,6 +7,7 @@
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 #include <math.h>
@@ -229,7 +230,7 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 		// Collect comparison types
 		ExpressionType comparison_type = ExpressionType::INVALID;
 		ExpressionIterator::EnumerateExpression(filter.filter_info->filter, [&](Expression &expr) {
-			if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+			if (BoundComparisonExpression::IsComparison(expr)) {
 				comparison_type = expr.GetExpressionType();
 			}
 		});

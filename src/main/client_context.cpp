@@ -676,6 +676,7 @@ void ClientContext::WaitForTask(ClientContextLock &lock, BaseQueryResult &result
 
 bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
 	switch (transaction.GetInvalidationPolicy()) {
+	case TransactionInvalidationPolicy::STANDARD_POLICY:
 	case TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION:
 		return true;
 	default:
@@ -789,7 +790,7 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 		}
 
 		ColumnBindingResolver resolver;
-		resolver.Verify(*plan);
+		resolver.Verify(*this, *plan);
 		resolver.VisitOperator(*plan);
 
 		plan->ResolveOperatorTypes();

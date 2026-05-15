@@ -1,0 +1,123 @@
+# name: test/sql/types/interval/frac_interval.test
+# description: Test fractional interval try cast
+# group: [interval]
+
+query I
+select interval '0.00005 MILLENNIUM';
+----
+1 month
+
+query I
+select interval '0.00004 MILLENNIUM';
+----
+00:00:00
+
+query I
+select interval '0.0005 CENTURY';
+----
+1 month
+
+query I
+select interval '0.0004 CENTURY';
+----
+00:00:00
+
+query I
+select interval '0.005 DECADE';
+----
+1 month
+
+query I
+select interval '0.004 DECADE';
+----
+00:00:00
+
+query I
+select interval '0.05 YEAR';
+----
+1 month
+
+query I
+select interval '0.04 YEAR';
+----
+00:00:00
+
+query I
+select interval '0.05 MONTH';
+----
+1 day 12:00:00
+
+query I
+select interval '0.04 MONTH';
+----
+1 day 04:48:00
+
+query I
+select interval '0.05 WEEK';
+----
+08:24:00
+
+query I
+select interval '0.04 WEEK';
+----
+06:43:12
+
+query I
+select interval '0.0000000005 DAY';
+----
+00:00:00.000043
+
+query I
+select interval '0.0000000004 DAY';
+----
+00:00:00.000035
+
+query I
+select interval '0.0000000005 HOUR';
+----
+00:00:00.000002
+
+query I
+select interval '0.0000000004 HOUR';
+----
+00:00:00.000001
+
+query I
+select interval '0.00000005 MINUTE';
+----
+00:00:00.000003
+
+query I
+select interval '0.00000004 MINUTE';
+----
+00:00:00.000002
+
+query I
+select interval '0.000005 SECOND';
+----
+00:00:00.000005
+
+query I
+select interval '0.000004 SECOND';
+----
+00:00:00.000004
+
+query I
+select interval '0.005 MILLISECONDS';
+----
+00:00:00.000005
+
+query I
+select interval '0.004 MILLISECONDS';
+----
+00:00:00.000004
+
+query I
+select interval '0.5 MICROSECONDS';
+----
+00:00:00
+
+query I
+select interval '0.4 MICROSECONDS';
+----
+00:00:00

@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -49,7 +50,7 @@ UngroupedAggregateState::UngroupedAggregateState(const vector<unique_ptr<Express
 		auto state = make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.GetStateSizeCallback()(aggr.function));
 		aggr.function.GetStateInitCallback()(aggr.function, state.get());
 		aggregate_data.push_back(std::move(state));
-		bind_data.push_back(aggr.bind_info.get());
+		bind_data.push_back(aggr.bind_info ? aggr.bind_info->Copy() : nullptr);
 		destructors.push_back(aggr.function.GetStateDestructorCallback());
 #ifdef DEBUG
 		counts[i] = 0;
@@ -66,13 +67,14 @@ UngroupedAggregateState::~UngroupedAggregateState() {
 		state_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
 		ArenaAllocator allocator(Allocator::DefaultAllocator());
-		AggregateInputData aggr_input_data(bind_data[i], allocator);
+		AggregateInputData aggr_input_data(bind_data[i].get(), allocator);
 		destructors[i](state_vector, aggr_input_data, 1);
 	}
 }
 
 void UngroupedAggregateState::Move(UngroupedAggregateState &other) {
 	other.aggregate_data = std::move(aggregate_data);
+	other.bind_data = std::move(bind_data);
 	other.destructors = std::move(destructors);
 }
 
@@ -225,7 +227,8 @@ void UngroupedAggregateExecuteState::Sink(LocalUngroupedAggregateState &state, D
 // Local State
 //===--------------------------------------------------------------------===//
 LocalUngroupedAggregateState::LocalUngroupedAggregateState(GlobalUngroupedAggregateState &gstate)
-    : allocator(gstate.CreateAllocator()), state(gstate.state.aggregate_expressions) {
+    : allocator(gstate.CreateAllocator()), state(gstate.state.aggregate_expressions),
+      repeated_state_vector(LogicalType::POINTER) {
 }
 
 class UngroupedAggregateLocalSinkState : public LocalSinkState {
@@ -360,9 +363,23 @@ void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_
 	idx_t payload_cnt = aggregate.children.size();
 	D_ASSERT(payload_idx + payload_cnt <= payload_chunk.data.size());
 	auto start_of_input = payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx];
-	AggregateInputData aggr_input_data(state.bind_data[aggr_idx], allocator);
-	aggregate.function.GetStateSimpleUpdateCallback()(start_of_input, aggr_input_data, payload_cnt,
-	                                                  state.aggregate_data[aggr_idx].get(), payload_chunk.size());
+	AggregateInputData aggr_input_data(state.bind_data[aggr_idx].get(), allocator);
+	auto cluster_update = aggregate.function.GetStateClusterUpdateCallback();
+	if (cluster_update) {
+		ClusteredAggr clustered;
+		clustered.SetSingleRun(state.aggregate_data[aggr_idx].get(), payload_chunk.size());
+		aggr_input_data.clustered = &clustered;
+		cluster_update(start_of_input, aggr_input_data, payload_cnt, clustered, payload_chunk.size());
+	} else {
+		auto count = payload_chunk.size();
+		auto state_ptr = CastPointerToValue(state.aggregate_data[aggr_idx].get());
+		auto state_data = FlatVector::Writer<uintptr_t>(repeated_state_vector, count);
+		for (idx_t i = 0; i < count; i++) {
+			state_data.WriteValue(state_ptr);
+		}
+		aggregate.function.GetStateUpdateCallback()(start_of_input, aggr_input_data, payload_cnt, repeated_state_vector,
+		                                            count);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -639,7 +656,7 @@ void VerifyNullHandling(DataChunk &chunk, UngroupedAggregateState &state,
 		    aggr.function.GetProperties().GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 			// Default is when 0 values go in, NULL comes out
 			UnifiedVectorFormat vdata;
-			chunk.data[aggr_idx].ToUnifiedFormat(1, vdata);
+			chunk.data[aggr_idx].ToUnifiedFormat(vdata);
 			D_ASSERT(!vdata.validity.RowIsValid(vdata.sel->get_index(0)));
 		}
 	}

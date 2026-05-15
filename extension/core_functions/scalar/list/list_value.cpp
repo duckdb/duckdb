@@ -185,7 +185,7 @@ bool StructFunction(DataChunk &args, Vector &result) {
 		for (idx_t col = 0; col < column_count; col++) {
 			auto &struct_vector = args.data[col];
 			if (struct_vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-				struct_vector.Flatten(args.size());
+				struct_vector.Flatten();
 			}
 			auto &struct_vector_members = StructVector::GetEntries(struct_vector);
 			chunk.data[col].Reference(struct_vector_members[member_idx]);

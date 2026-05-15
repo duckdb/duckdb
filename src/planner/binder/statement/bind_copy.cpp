@@ -22,6 +22,7 @@
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/common/algorithm.hpp"
 
 #include "duckdb/main/extension_entries.hpp"
@@ -80,6 +81,7 @@ case_insensitive_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunc
 		copy_options["row_groups_per_file"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
 		copy_options["file_size_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 		copy_options["partition_by"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+		copy_options["order_by"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 		copy_options["return_files"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 		copy_options["preserve_order"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 		copy_options["return_stats"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
@@ -133,6 +135,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	optional_idx file_size_bytes;
 	optional_idx batches_per_file;
 	vector<idx_t> partition_cols;
+	vector<BoundOrderByNode> order_columns;
 	bool seen_overwrite_mode = false;
 	bool seen_filepattern = false;
 	bool write_partition_columns = false;
@@ -211,6 +214,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 		} else if (loption == "partition_by") {
 			auto converted = ConvertVectorToValue(std::move(option.second));
 			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
+		} else if (loption == "order_by") {
+			order_columns = ParseOrderByColumns(*this, option.second, select_node, loption);
 		} else if (loption == "return_files") {
 			if (GetBooleanArg(context, option.second)) {
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
@@ -341,6 +346,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 		throw NotImplementedException("RETURN_STATS is not supported for the \"%s\" copy format", stmt.info->format);
 	}
 
+	if (!order_columns.empty() && partition_cols.empty()) {
+		throw NotImplementedException("ORDER_BY is not supported without PARTITION_BY");
+	}
+
 	// now create the copy information
 	auto copy = make_uniq<LogicalCopyToFile>(function, std::move(function_data), std::move(stmt.info));
 	copy->file_path = file_path;
@@ -361,6 +370,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	copy->return_type = return_type;
 	copy->preserve_order = preserve_order;
 	copy->hive_file_pattern = hive_file_pattern;
+	copy->order_columns = std::move(order_columns);
 
 	copy->names = unique_column_names;
 	copy->expected_types = select_node.types;

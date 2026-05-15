@@ -99,15 +99,16 @@ private:
 	unique_ptr<BaseStatistics> PropagateExpression(Expression &expr, unique_ptr<Expression> &expr_ptr);
 	//! Run a comparison between the statistics and the table filter; returns the prune result
 	unique_ptr<BaseStatistics> PropagateExpression(BoundAggregateExpression &expr, unique_ptr<Expression> &expr_ptr);
-	unique_ptr<BaseStatistics> PropagateExpression(BoundBetweenExpression &expr, unique_ptr<Expression> &expr_ptr);
+	unique_ptr<BaseStatistics> PropagateBetween(BoundFunctionExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundCaseExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundCastExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundConjunctionExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundFunctionExpression &expr, unique_ptr<Expression> &expr_ptr);
-	unique_ptr<BaseStatistics> PropagateExpression(BoundComparisonExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundConstantExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundColumnRefExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundOperatorExpression &expr, unique_ptr<Expression> &expr_ptr);
+
+	unique_ptr<BaseStatistics> PropagateComparison(BoundFunctionExpression &expr, unique_ptr<Expression> &expr_ptr);
 
 	//! Try to execute aggregates using only the statistics if possible
 	void TryExecuteAggregates(LogicalAggregate &op, unique_ptr<LogicalOperator> &node_ptr);

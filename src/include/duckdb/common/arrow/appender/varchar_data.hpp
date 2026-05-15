@@ -53,7 +53,7 @@ struct ArrowVarcharData {
 	static void AppendTemplated(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		idx_t size = to - from;
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(input_size, format);
+		input.ToUnifiedFormat(format);
 		auto &main_buffer = append_data.GetMainBuffer();
 		auto &validity_buffer = append_data.GetValidityBuffer();
 		auto &aux_buffer = append_data.GetAuxBuffer();
@@ -136,7 +136,7 @@ struct ArrowVarcharToStringViewData {
 	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		idx_t size = to - from;
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(input_size, format);
+		input.ToUnifiedFormat(format);
 		auto &main_buffer = append_data.GetMainBuffer();
 		auto &validity_buffer = append_data.GetValidityBuffer();
 		auto &aux_buffer = append_data.GetAuxBuffer();

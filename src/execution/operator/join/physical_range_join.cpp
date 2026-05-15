@@ -39,6 +39,14 @@ PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(ExecutionContext &context,
 	sort_chunk.InitializeEmpty(types);
 }
 
+void PhysicalRangeJoin::LocalSortedTable::ResetForReuse(ExecutionContext &context) {
+	local_sink = global_table.sort->GetLocalSinkState(context);
+	has_null = 0;
+	count = 0;
+	keys.Reset();
+	sort_chunk.Reset();
+}
+
 void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataChunk &input) {
 	// Obtain sorting columns
 	keys.Reset();
@@ -103,6 +111,16 @@ void PhysicalRangeJoin::GlobalSortedTable::Combine(ExecutionContext &context, Lo
 	sort->Combine(context, combine);
 	has_null += ltable.has_null;
 	count += ltable.count;
+}
+
+void PhysicalRangeJoin::GlobalSortedTable::ResetForReuse(ClientContext &client) {
+	global_sink = sort->GetGlobalSinkState(client);
+	has_null = 0;
+	count = 0;
+	tasks_completed = 0;
+	global_source.reset();
+	sorted.reset();
+	found_match.reset();
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::Finalize(ClientContext &client, InterruptState &interrupt) {
@@ -394,7 +412,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		return 0;
 	} else if (keys.ColumnCount() > 1) {
 		//	Flatten the primary, as it will need to merge arbitrary validity masks
-		primary.Flatten(count);
+		primary.Flatten();
 		auto &pvalidity = FlatVector::ValidityMutable(primary);
 
 		D_ASSERT(keys.ColumnCount() == conditions.size());
@@ -406,7 +424,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 			//	ToUnifiedFormat the rest, as the sort code will do this anyway.
 			auto &v = keys.data[c];
 			UnifiedVectorFormat vdata;
-			v.ToUnifiedFormat(count, vdata);
+			v.ToUnifiedFormat(vdata);
 			auto &vvalidity = vdata.validity;
 			if (vvalidity.CannotHaveNull()) {
 				continue;

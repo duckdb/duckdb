@@ -47,10 +47,17 @@ void RowOperations::DestroyStates(RowOperationsState &state, TupleDataLayout &la
 }
 
 void RowOperations::UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses,
-                                 DataChunk &payload, idx_t arg_idx, idx_t count) {
+                                 DataChunk &payload, idx_t arg_idx, idx_t count,
+                                 optional_ptr<const ClusteredAggr> clustered) {
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
-	aggr.function.GetStateUpdateCallback()(aggr.child_count == 0 ? nullptr : &payload.data[arg_idx], aggr_input_data,
-	                                       aggr.child_count, addresses, count);
+	auto cluster_update = aggr.function.GetStateClusterUpdateCallback();
+	aggr_input_data.clustered = cluster_update ? clustered : nullptr;
+	auto inputs = aggr.child_count ? payload.data.data() + arg_idx : nullptr;
+	if (clustered && cluster_update) {
+		cluster_update(inputs, aggr_input_data, aggr.child_count, *clustered, count);
+		return;
+	}
+	aggr.function.GetStateUpdateCallback()(inputs, aggr_input_data, aggr.child_count, addresses, count);
 }
 
 void RowOperations::UpdateFilteredStates(RowOperationsState &state, AggregateFilterData &filter_data,
@@ -61,9 +68,50 @@ void RowOperations::UpdateFilteredStates(RowOperationsState &state, AggregateFil
 	}
 
 	Vector filtered_addresses(addresses, filter_data.true_sel, count);
-	filtered_addresses.Flatten(count);
+	filtered_addresses.Flatten();
 
 	UpdateStates(state, aggr, filtered_addresses, filter_data.filtered_payload, arg_idx, count);
+}
+
+void RowOperations::UpdateStatesClustered(RowOperationsState &state, vector<AggregateObject> &aggregates,
+                                          AggregateFilterDataSet *filter_set, const unsafe_vector<idx_t> *filter,
+                                          Vector &addresses, DataChunk &payload, idx_t count, ClusteredAggr &clustered,
+                                          bool skip_addresses) {
+	idx_t filter_idx = 0;
+	idx_t payload_idx = 0;
+	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+		auto &aggr = aggregates[aggr_idx];
+		if (filter && (filter_idx >= filter->size() || aggr_idx < (*filter)[filter_idx])) {
+			// Skip all the aggregates that are not in the filter
+			payload_idx += aggr.child_count;
+			if (!skip_addresses) {
+				VectorOperations::AddInPlace(addresses, NumericCast<int64_t>(aggr.payload_size), count);
+			}
+			clustered.AdvanceStates(aggr.payload_size);
+			continue;
+		}
+		if (filter) {
+			D_ASSERT(aggr_idx == (*filter)[filter_idx]);
+		}
+
+		if (aggr.aggr_type != AggregateType::DISTINCT && aggr.filter) {
+			D_ASSERT(filter_set);
+			RowOperations::UpdateFilteredStates(state, filter_set->GetFilterData(aggr_idx), aggr, addresses, payload,
+			                                    payload_idx);
+		} else {
+			RowOperations::UpdateStates(state, aggr, addresses, payload, payload_idx, count, &clustered);
+		}
+
+		// Move to the next aggregate
+		payload_idx += aggr.child_count;
+		if (!skip_addresses) {
+			VectorOperations::AddInPlace(addresses, NumericCast<int64_t>(aggr.payload_size), count);
+		}
+		clustered.AdvanceStates(aggr.payload_size);
+		if (filter) {
+			filter_idx++;
+		}
+	}
 }
 
 void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &layout, Vector &sources, Vector &targets,

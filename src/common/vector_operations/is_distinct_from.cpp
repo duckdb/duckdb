@@ -8,7 +8,7 @@ void VectorOperations::DistinctFrom(Vector &left, Vector &right, Vector &result,
 	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
 	Vector comparator_result(LogicalType::TINYINT, count);
 	VectorOperations::DistinctComparator(left, right, comparator_result, count);
-	auto cmp_data = comparator_result.Values<int8_t>(count);
+	auto cmp_data = comparator_result.Values<int8_t>();
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<bool>(result, count);
 	for (idx_t i = 0; i < count; i++) {
@@ -20,7 +20,7 @@ void VectorOperations::NotDistinctFrom(Vector &left, Vector &right, Vector &resu
 	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
 	Vector comparator_result(LogicalType::TINYINT, count);
 	VectorOperations::DistinctComparator(left, right, comparator_result, count);
-	auto cmp_data = comparator_result.Values<int8_t>(count);
+	auto cmp_data = comparator_result.Values<int8_t>();
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<bool>(result, count);
 	for (idx_t i = 0; i < count; i++) {
@@ -34,7 +34,7 @@ static idx_t DistinctComparatorSelect(Vector &left, Vector &right, optional_ptr<
                                       COMPARATOR_FN comparator_fn, PREDICATE predicate) {
 	Vector comparator_result(LogicalType::TINYINT, count);
 	comparator_fn(left, right, comparator_result, count);
-	auto cmp_data = comparator_result.Values<int8_t>(count);
+	auto cmp_data = comparator_result.Values<int8_t>();
 
 	idx_t true_count = 0;
 	idx_t false_count = 0;

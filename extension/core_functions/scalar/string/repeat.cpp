@@ -39,8 +39,8 @@ static void RepeatListFunction(DataChunk &args, ExpressionState &, Vector &resul
 	auto &source_child = ListVector::GetChildMutable(list_vector);
 	auto count = args.size();
 
-	auto list_entries = list_vector.Values<list_entry_t>(count);
-	auto cnt_entries = cnt_vector.Values<int64_t>(count);
+	auto list_entries = list_vector.Values<list_entry_t>();
+	auto cnt_entries = cnt_vector.Values<int64_t>();
 
 	auto result_writer = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
@@ -67,7 +67,7 @@ static void RepeatListFunction(DataChunk &args, ExpressionState &, Vector &resul
 			            list_input.offset, list_input.length);
 		}
 	}
-	result.Verify(count);
+	result.Verify();
 }
 
 ScalarFunctionSet RepeatFun::GetFunctions() {

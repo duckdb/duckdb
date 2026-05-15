@@ -148,7 +148,7 @@ public:
 		initialized = true;
 	}
 
-	static inline void Reset(DataChunk &chunk) {
+	static inline void ResetChunk(DataChunk &chunk) {
 		chunk.Reset();
 	}
 
@@ -359,10 +359,10 @@ void PhysicalStreamingWindow::ExecuteShifted(ExecutionContext &context, DataChun
 	idx_t delay = delayed.size();
 	D_ASSERT(out <= delay);
 
-	state.Reset(shifted);
+	state.ResetChunk(shifted);
 	// shifted = delayed
 	delayed.Copy(shifted);
-	state.Reset(delayed);
+	state.ResetChunk(delayed);
 	const idx_t new_delayed_count = delay - out + in;
 	for (idx_t col_idx = 0; col_idx < delayed.data.size(); ++col_idx) {
 		// output[0:out] = delayed[0:out]
@@ -403,7 +403,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	auto &delayed = state.delayed;
 	// We can Reset delayed now that no one can be referencing it.
 	if (!delayed.size()) {
-		state.Reset(delayed);
+		state.ResetChunk(delayed);
 	}
 	if (delayed.size() < state.lead_count) {
 		//	If we don't have enough to produce a single row,
@@ -442,7 +442,7 @@ OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContex
 		auto &delayed = state.delayed;
 		//	There are no more input rows
 		auto &input = state.shifted;
-		state.Reset(input);
+		state.ResetChunk(input);
 
 		if (delayed.size() > STANDARD_VECTOR_SIZE) {
 			//	More than one output buffer was delayed, so shift in what we can

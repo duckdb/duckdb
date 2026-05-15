@@ -1,0 +1,13 @@
+diff --git a/test/sql/add_files/add_files_type_check_timestamp.test b/test/sql/add_files/add_files_type_check_timestamp.test
+index 1770c12e..1d6c8f23 100644
+--- a/test/sql/add_files/add_files_type_check_timestamp.test
++++ b/test/sql/add_files/add_files_type_check_timestamp.test
+@@ -174,7 +174,7 @@ FROM ducklake.test
+ 2020-02-03 12:23:34
+ 2020-02-03 12:23:34.123
+ 2020-02-03 12:23:34.123456
+-2020-02-03 12:23:34.123456
++2020-02-03 12:23:34.123457
+ 
+ ################
+ # timestamp_ns #

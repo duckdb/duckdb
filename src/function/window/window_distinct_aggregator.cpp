@@ -448,7 +448,7 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 		                   const auto count = MinValue<idx_t>(prev.size(), curr.size());
 
 		                   // The input index has probably been sliced.
-		                   auto input_idx = curr.data.back().Values<idx_t>(count);
+		                   auto input_idx = curr.data.back().Values<idx_t>();
 
 		                   const auto nmatch = count - ndistinct;
 		                   //	9:	if sorted[i].first == sorted[i-1].first then

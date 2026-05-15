@@ -41,8 +41,8 @@ static optional_idx TryGetChildOffset(const list_entry_t &list_entry, const int6
 static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
 	D_ASSERT(list.GetType().id() == LogicalTypeId::LIST);
 
-	auto list_entries = list.Values<list_entry_t>(count);
-	auto offsets_entries = offsets.Values<int64_t>(count);
+	auto list_entries = list.Values<list_entry_t>();
+	auto offsets_entries = offsets.Values<int64_t>();
 	auto &child_vector = ListVector::GetChild(list);
 
 	SelectionVector sel(count);

@@ -100,8 +100,8 @@ static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &r
 	UnifiedVectorFormat lhs_format;
 	UnifiedVectorFormat rhs_format;
 
-	args.data[0].ToUnifiedFormat(count, lhs_format);
-	args.data[1].ToUnifiedFormat(count, rhs_format);
+	args.data[0].ToUnifiedFormat(lhs_format);
+	args.data[1].ToUnifiedFormat(rhs_format);
 
 	auto lhs_data = FlatVector::GetData<TYPE>(lhs_child);
 	auto rhs_data = FlatVector::GetData<TYPE>(rhs_child);
@@ -161,8 +161,8 @@ static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &re
 	UnifiedVectorFormat lhs_format;
 	UnifiedVectorFormat rhs_format;
 
-	args.data[0].ToUnifiedFormat(count, lhs_format);
-	args.data[1].ToUnifiedFormat(count, rhs_format);
+	args.data[0].ToUnifiedFormat(lhs_format);
+	args.data[1].ToUnifiedFormat(rhs_format);
 
 	auto lhs_data = FlatVector::GetData<TYPE>(lhs_child);
 	auto rhs_data = FlatVector::GetData<TYPE>(rhs_child);

@@ -956,7 +956,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &result, yyjson_alc *alc,
                                       JSONTransformOptions &options) {
 	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
+	input.ToUnifiedFormat(input_data);
 	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	// Read documents

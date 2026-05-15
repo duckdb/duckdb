@@ -49,6 +49,7 @@ BaseStatistics::BaseStatistics(BaseStatistics &&other) noexcept {
 	has_no_null = other.has_no_null;
 	distinct_count = other.distinct_count;
 	stats_union = other.stats_union;
+	std::swap(extra_data, other.extra_data);
 	std::swap(child_stats, other.child_stats);
 }
 
@@ -58,6 +59,7 @@ BaseStatistics &BaseStatistics::operator=(BaseStatistics &&other) noexcept {
 	has_no_null = other.has_no_null;
 	distinct_count = other.distinct_count;
 	stats_union = other.stats_union;
+	std::swap(extra_data, other.extra_data);
 	std::swap(child_stats, other.child_stats);
 	return *this;
 }
@@ -258,6 +260,9 @@ void BaseStatistics::Copy(const BaseStatistics &other) {
 		break;
 	case StatisticsType::VARIANT_STATS:
 		VariantStats::Copy(*this, other);
+		break;
+	case StatisticsType::STRING_STATS:
+		StringStats::Copy(*this, other);
 		break;
 	default:
 		break;
@@ -506,19 +511,19 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 		// nothing to verify
 		return;
 	}
-	auto validity_entries = vector.Validity(count);
+	auto validity_entries = vector.Validity();
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		bool row_is_valid = validity_entries.IsValid(idx);
 		if (row_is_valid && !has_no_null) {
 			throw InternalException(
 			    "Statistics mismatch: vector labeled as having only NULL values, but vector contains valid values: %s",
-			    vector.ToString(count));
+			    vector.ToString());
 		}
 		if (!row_is_valid && !has_null && !ignore_has_null) {
 			throw InternalException(
 			    "Statistics mismatch: vector labeled as not having NULL values, but vector contains null values: %s",
-			    vector.ToString(count));
+			    vector.ToString());
 		}
 	}
 }
@@ -540,7 +545,7 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 		auto result = StringStats::CreateEmpty(input.type());
 		if (!input.IsNull()) {
 			auto &string_value = StringValue::Get(input);
-			StringStats::Update(result, string_t(string_value));
+			StringStats::FromConstant(result, string_t(string_value));
 		}
 		return result;
 	}

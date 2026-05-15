@@ -97,6 +97,7 @@ public:
 	// Operator interface
 	virtual unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const;
+	virtual bool ResetGlobalOperatorState(ClientContext &context, GlobalOperatorState &state) const;
 	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const;
 	virtual OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk,
@@ -257,6 +258,14 @@ public:
 	}
 
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
+	}
+
+	void ResetCachingState() {
+		cached_chunk.reset();
+		initialized = false;
+		can_cache_chunk = OperatorCachingMode::NONE;
+		must_return_continuation_chunk = false;
+		cached_result = OperatorResultType::NEED_MORE_INPUT;
 	}
 
 	unique_ptr<DataChunk> cached_chunk;

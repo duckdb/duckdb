@@ -217,7 +217,7 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, DuckT
 			chunk.Slice(sel, count);
 			chunk.SetCardinality(count);
 			row_ids.Slice(sel, count);
-			row_ids.Flatten(count);
+			row_ids.Flatten();
 		}
 	}
 

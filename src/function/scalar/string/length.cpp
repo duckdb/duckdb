@@ -81,7 +81,7 @@ void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &result)
 void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 	auto array_size = static_cast<int64_t>(ArrayType::GetSize(input.GetType()));
-	auto validity_entries = input.Validity(args.size());
+	auto validity_entries = input.Validity();
 
 	if (!validity_entries.CanHaveNull()) {
 		// for arrays the length is constant

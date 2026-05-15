@@ -169,7 +169,7 @@ WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const Ag
 	data_ptr_t state_ptr = state.data();
 	D_ASSERT(statef.GetVectorType() == VectorType::FLAT_VECTOR);
 	statef.SetVectorType(VectorType::CONSTANT_VECTOR);
-	statef.Flatten(STANDARD_VECTOR_SIZE);
+	statef.Flatten();
 	auto fdata = FlatVector::GetDataMutable<data_ptr_t>(statef);
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; ++i) {
 		fdata[i] = state_ptr;

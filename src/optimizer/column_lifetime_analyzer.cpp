@@ -196,7 +196,9 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 }
 
 void ColumnLifetimeAnalyzer::Verify(LogicalOperator &op) {
-#ifdef DEBUG
+	if (!Settings::Get<DebugVerificationProjectionSetting>(optimizer.context)) {
+		return;
+	}
 	if (everything_referenced) {
 		return;
 	}
@@ -216,7 +218,6 @@ void ColumnLifetimeAnalyzer::Verify(LogicalOperator &op) {
 	default:
 		break;
 	}
-#endif
 }
 
 void ColumnLifetimeAnalyzer::AddVerificationProjection(unique_ptr<LogicalOperator> &child) {

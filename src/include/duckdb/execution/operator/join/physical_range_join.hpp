@@ -26,6 +26,7 @@ public:
 		LocalSortedTable(ExecutionContext &context, GlobalSortedTable &global_table, const idx_t child);
 
 		void Sink(ExecutionContext &context, DataChunk &input);
+		void ResetForReuse(ExecutionContext &context);
 
 		//! The global table we are connected to
 		GlobalSortedTable &global_table;
@@ -80,6 +81,7 @@ public:
 
 		//! Combine local states
 		void Combine(ExecutionContext &context, LocalSortedTable &ltable);
+		void ResetForReuse(ClientContext &client);
 		//! Prepare for sorting.
 		void Finalize(ClientContext &client, InterruptState &interrupt);
 		//! Schedules the materialisation process.
