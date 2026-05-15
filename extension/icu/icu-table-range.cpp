@@ -247,6 +247,7 @@ struct ICUTableRange {
 		    RangeDateTimeLocalInit);
 		generate_series_function.in_out_function = ICUTableRangeFunction<true>;
 		generate_series_function.cardinality = Cardinality;
+		generate_series_function.postgres_setof_compat = true;
 		generate_series.AddFunction(generate_series_function);
 
 		loader.RegisterFunction(generate_series);

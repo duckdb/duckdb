@@ -506,6 +506,8 @@ public:
 	bool sampling_pushdown;
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
+	//! Whether a single-column result should inherit an explicit table alias for PostgreSQL SETOF compatibility
+	bool postgres_setof_compat;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 	//! The order preservation type of the table function
