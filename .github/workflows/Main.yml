@@ -1148,7 +1148,7 @@ jobs:
       EXPORT_DYNAMIC_SYMBOLS: 1
       REDUCE_SYMBOLS: 1
       EXTENSION_STATIC_BUILD: 0
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
       ALTERNATIVE_VERIFY: 1
@@ -1266,7 +1266,7 @@ jobs:
       CXX: clang++-20
       GEN: ninja
       BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
       TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer-20
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
