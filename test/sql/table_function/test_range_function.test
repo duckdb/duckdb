@@ -258,3 +258,9 @@ select r from range(1, 3) r;
 ----
 {'range': 1}
 {'range': 2}
+
+query I
+select u from unnest([1, 2]) u;
+----
+1
+2
