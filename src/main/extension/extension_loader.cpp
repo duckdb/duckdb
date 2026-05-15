@@ -38,23 +38,26 @@ void ExtensionLoader::SetDescription(const string &description) {
 	extension_description = description;
 }
 
-void ExtensionLoader::CreateExtensionSchema() const {
+void ExtensionLoader::CreateExtensionSchema(const string &name) const {
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 
 	CreateSchemaInfo info;
-	info.schema = extension_schema;
+	info.schema = name;
 	info.internal = true;
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	system_catalog.CreateSchema(data, info);
 }
 
-void ExtensionLoader::SetExtensionSchema(const string &name) {
-	if (name == DEFAULT_SCHEMA || name == "pg_catalog" || name.empty()) {
+void ExtensionLoader::SetDefaultExtensionSchema(const string &name) {
+	if (name == DEFAULT_SCHEMA) {
 		return;
 	}
+	if (name == "pg_catalog" || name.empty()) {
+		throw InvalidInputException("Cannot set default extension schema to '%s'", name);
+	}
+
 	extension_schema = name;
-	CreateExtensionSchema();
 }
 
 void ExtensionLoader::FinalizeLoad() {
