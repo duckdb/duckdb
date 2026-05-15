@@ -112,6 +112,15 @@ timestamp_t AddOperator::Operation(interval_t left, timestamp_t right) {
 	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(right, left);
 }
 
+template <>
+timestamp_t AddOperator::Operation(timestamp_t left, double right) {
+	timestamp_t result;
+	if (!TryAddOperator::Operation(left.value, int64_t(right), result.value)) {
+		throw OutOfRangeException("Overflow in timestamp addition");
+	}
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // + [add] with overflow check
 //===--------------------------------------------------------------------===//

@@ -24,7 +24,7 @@ struct PrimitiveTypeState {
 	UnifiedVectorFormat main_data;
 
 	void PrepareVector(Vector &input, idx_t count) {
-		input.ToUnifiedFormat(count, main_data);
+		input.ToUnifiedFormat(main_data);
 	}
 };
 
@@ -60,10 +60,10 @@ struct StructTypeState {
 	void PrepareVector(Vector &input, idx_t count) {
 		auto &entries = StructVector::GetEntries(input);
 
-		input.ToUnifiedFormat(count, main_data);
+		input.ToUnifiedFormat(main_data);
 
 		for (idx_t i = 0; i < CHILD_COUNT; i++) {
-			entries[i].ToUnifiedFormat(count, child_data[i]);
+			entries[i].ToUnifiedFormat(child_data[i]);
 		}
 	}
 };

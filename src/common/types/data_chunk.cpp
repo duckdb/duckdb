@@ -77,7 +77,7 @@ void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &type
 idx_t DataChunk::GetDataSize() const {
 	idx_t total_size = 0;
 	for (auto &vec : data) {
-		total_size += vec.GetDataSize(count);
+		total_size += vec.GetDataSize();
 	}
 	return total_size;
 }
@@ -244,7 +244,7 @@ void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t
 
 void DataChunk::Flatten() {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		data[i].Flatten(size());
+		data[i].Flatten();
 	}
 }
 
@@ -259,7 +259,7 @@ vector<LogicalType> DataChunk::GetTypes() const {
 string DataChunk::ToString() const {
 	string retval = "Chunk - [" + to_string(ColumnCount()) + " Columns]\n";
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		retval += "- " + data[i].ToString(size()) + "\n";
+		retval += "- " + data[i].ToString() + "\n";
 	}
 	return retval;
 }
@@ -358,7 +358,7 @@ void DataChunk::Slice(idx_t offset, idx_t slice_count) {
 unsafe_unique_array<UnifiedVectorFormat> DataChunk::ToUnifiedFormat() {
 	auto unified_data = make_unsafe_uniq_array<UnifiedVectorFormat>(ColumnCount());
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		data[col_idx].ToUnifiedFormat(size(), unified_data[col_idx]);
+		data[col_idx].ToUnifiedFormat(unified_data[col_idx]);
 	}
 	return unified_data;
 }

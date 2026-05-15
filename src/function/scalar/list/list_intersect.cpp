@@ -26,8 +26,8 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &l_child = ListVector::GetChildMutable(l_vec);
 	auto &r_child = ListVector::GetChildMutable(r_vec);
 
-	auto l_entries = l_vec.Values<list_entry_t>(row_count);
-	auto r_entries = r_vec.Values<list_entry_t>(row_count);
+	auto l_entries = l_vec.Values<list_entry_t>();
+	auto r_entries = r_vec.Values<list_entry_t>();
 
 	Vector l_sortkey_vec(LogicalType::BLOB, l_size);
 	Vector r_sortkey_vec(LogicalType::BLOB, r_size);
@@ -37,10 +37,10 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 	CreateSortKeyHelpers::CreateSortKey(l_child, l_size, order_modifiers, l_sortkey_vec);
 	CreateSortKeyHelpers::CreateSortKey(r_child, r_size, order_modifiers, r_sortkey_vec);
 
-	const auto l_sortkey_ptr = l_sortkey_vec.Values<string_t>(l_size);
-	const auto r_sortkey_ptr = r_sortkey_vec.Values<string_t>(r_size);
-	auto l_validity = l_child.Validity(l_size);
-	auto r_validity = r_child.Validity(r_size);
+	const auto l_sortkey_ptr = l_sortkey_vec.Values<string_t>();
+	const auto r_sortkey_ptr = r_sortkey_vec.Values<string_t>();
+	auto l_validity = l_child.Validity();
+	auto r_validity = r_child.Validity();
 
 	auto result_data = FlatVector::Writer<list_entry_t>(result, row_count);
 	for (idx_t i = 0; i < row_count; i++) {

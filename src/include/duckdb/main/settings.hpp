@@ -558,10 +558,31 @@ struct DebugVerificationModeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DebugVerificationProjectionSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verification_projection";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: add internal verification projections to stress optimizers";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugVerifyBlocksSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_verify_blocks";
 	static constexpr const char *Description = "DEBUG SETTING: verify block metadata during checkpointing";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugVerifyColumnBindingsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_column_bindings";
+	static constexpr const char *Description = "DEBUG SETTING: run extra internal verification of column bindings";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
@@ -1180,6 +1201,20 @@ struct IndexScanPercentageSetting {
 	    "index_scan_percentage * total_row_count) rows match, we perform an index scan instead of a table scan.";
 	static constexpr const char *InputType = "DOUBLE";
 	static constexpr const char *DefaultValue = "0.001";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct InitialColumnSegmentSizeSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "initial_column_segment_size";
+	static constexpr const char *Description =
+	    "The initial memory (in bytes) reserved for the first transient column segment. Must be a power of two. "
+	    "Internally, we subtract the block header size (typically 8 bytes) for segments with or exceeding 1024 bytes. "
+	    "Subsequent segments double in size until reaching the block size.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "2048";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);

@@ -62,7 +62,7 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 		// ensure the result type is constant
 		if (result.GetVectorType() != VectorType::FLAT_VECTOR &&
 		    result.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.Flatten(1);
+			result.Flatten();
 		}
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}

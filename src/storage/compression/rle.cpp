@@ -99,7 +99,7 @@ template <class T>
 bool RLEAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto &rle_state = state.template Cast<RLEAnalyzeState<T>>();
 	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
+	input.ToUnifiedFormat(vdata);
 
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 	for (idx_t i = 0; i < count; i++) {
@@ -242,7 +242,7 @@ template <class T, bool WRITE_STATISTICS>
 void RLECompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = state_p.Cast<RLECompressState<T, WRITE_STATISTICS>>();
 	UnifiedVectorFormat vdata;
-	scan_vector.ToUnifiedFormat(count, vdata);
+	scan_vector.ToUnifiedFormat(vdata);
 
 	state.Append(vdata, count);
 }
@@ -462,7 +462,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		Vector run_vector(result.GetType(), data_ptr_cast(data_pointer), total_run_count);
 
 		UnifiedVectorFormat run_format;
-		run_vector.ToUnifiedFormat(total_run_count, run_format);
+		run_vector.ToUnifiedFormat(run_format);
 
 		SelectionVector run_matches;
 		scan_state.matching_run_count = total_run_count;

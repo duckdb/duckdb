@@ -42,7 +42,7 @@ void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		}
 	}
 
-	result.Verify(args.size());
+	result.Verify();
 }
 
 unique_ptr<FunctionData> ArrayValueBind(BindScalarFunctionInput &input) {

@@ -240,7 +240,7 @@ static inline Value GetHiveKeyNullValue(const LogicalType &type) {
 template <class T>
 static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionKey> &keys, const idx_t col_idx,
                                             const idx_t count) {
-	auto entries = input.Values<T>(count);
+	auto entries = input.Values<T>();
 	const auto &type = input.GetType();
 
 	for (idx_t i = 0; i < count; i++) {
@@ -324,7 +324,7 @@ void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataApp
 	const auto count = input.size();
 
 	input.Hash(group_by_columns, hashes_v);
-	hashes_v.Flatten(count);
+	hashes_v.Flatten();
 
 	for (idx_t col_idx = 0; col_idx < group_by_columns.size(); col_idx++) {
 		auto &group_by_col = input.data[group_by_columns[col_idx]];

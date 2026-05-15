@@ -339,8 +339,22 @@
         "custom_implementation": true
     },
     {
+        "name": "debug_verification_projection",
+        "description": "DEBUG SETTING: add internal verification projections to stress optimizers",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_verify_blocks",
         "description": "DEBUG SETTING: verify block metadata during checkpointing",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_column_bindings",
+        "description": "DEBUG SETTING: run extra internal verification of column bindings",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
@@ -808,6 +822,16 @@
         "type": "DOUBLE",
         "default_scope": "global",
         "default_value": "0.001",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "initial_column_segment_size",
+        "description": "The initial memory (in bytes) reserved for the first transient column segment. Must be a power of two. Internally, we subtract the block header size (typically 8 bytes) for segments with or exceeding 1024 bytes. Subsequent segments double in size until reaching the block size.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "2048",
         "on_callbacks": [
             "set"
         ]

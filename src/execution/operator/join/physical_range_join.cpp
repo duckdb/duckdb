@@ -394,7 +394,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 		return 0;
 	} else if (keys.ColumnCount() > 1) {
 		//	Flatten the primary, as it will need to merge arbitrary validity masks
-		primary.Flatten(count);
+		primary.Flatten();
 		auto &pvalidity = FlatVector::ValidityMutable(primary);
 
 		D_ASSERT(keys.ColumnCount() == conditions.size());
@@ -406,7 +406,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 			//	ToUnifiedFormat the rest, as the sort code will do this anyway.
 			auto &v = keys.data[c];
 			UnifiedVectorFormat vdata;
-			v.ToUnifiedFormat(count, vdata);
+			v.ToUnifiedFormat(vdata);
 			auto &vvalidity = vdata.validity;
 			if (vvalidity.CannotHaveNull()) {
 				continue;

@@ -222,7 +222,7 @@ void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<u
 
 bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t count) {
 	RecursiveUnifiedVectorFormat format;
-	Vector::RecursiveToUnifiedFormat(variant, count, format);
+	Vector::RecursiveToUnifiedFormat(variant, format);
 
 	//! keys
 	auto &keys = UnifiedVariantVector::GetKeys(format);

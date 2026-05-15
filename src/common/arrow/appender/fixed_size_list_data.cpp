@@ -17,10 +17,10 @@ void ArrowFixedSizeListData::Initialize(ArrowAppendData &result, const LogicalTy
 void ArrowFixedSizeListData::Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to,
                                     idx_t input_size) {
 	UnifiedVectorFormat format;
-	input.ToUnifiedFormat(input_size, format);
+	input.ToUnifiedFormat(format);
 	idx_t size = to - from;
 	append_data.AppendValidity(format, from, to);
-	input.Flatten(input_size);
+	input.Flatten();
 	auto array_size = ArrayType::GetSize(input.GetType());
 	auto &child_vector = ArrayVector::GetChildMutable(input);
 	auto &child_data = *append_data.child_data[0];

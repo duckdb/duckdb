@@ -46,6 +46,7 @@ public:
 	BufferHandle current_handle;
 	StringDictionaryContainer current_dictionary;
 	data_ptr_t current_end_ptr;
+	StringStatsWriter stats_writer;
 
 	// Buffers and map for current segment
 	PrimitiveDictionary<string_t> current_string_map;

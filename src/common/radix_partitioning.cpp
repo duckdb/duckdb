@@ -94,7 +94,7 @@ struct ComputePartitionIndicesFunctor {
 			// We could just slice the "hashes" vector and use the UnaryExecutor
 			// But slicing a dictionary vector causes SelectionData to be allocated
 			// Instead, we just directly compute the partition indices using the selection vectors
-			const auto source_data = hashes.Values<hash_t>(original_count);
+			const auto source_data = hashes.Values<hash_t>();
 			partition_indices.SetVectorType(VectorType::FLAT_VECTOR);
 			auto target = FlatVector::Writer<hash_t>(partition_indices, append_count);
 			for (idx_t i = 0; i < append_count; i++) {

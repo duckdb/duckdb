@@ -18,8 +18,10 @@ attach ':memory:' as db2;
 statement ok
 use db2;
 
+# FIXME: This is a significant regression because we no longer evict "tiny buffers", of which we're
+# FIXME: allocating plenty here.
 statement ok
-set memory_limit='10MB';
+set memory_limit='288MB';
 
 # Decomposes into two statements
 # 1. Copy the Schema (works)

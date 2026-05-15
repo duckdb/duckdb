@@ -8,7 +8,6 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/planner/expression_binder/try_operator_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
@@ -103,14 +102,9 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	ErrorData error;
 	if (operator_type == ExpressionType::OPERATOR_TRY) {
 		D_ASSERT(op.children.size() == 1);
-		//! This binder is used to throw when the child expression is of a type that is not allowed.
-		TryOperatorBinder try_operator_binder(binder, context);
-		try_operator_binder.BindChild(op.children[0], depth, error);
-		// Propagate bound columns from TryOperatorBinder back to parent binder
-		// This ensures that column references inside TRY() are properly tracked for GROUP BY validation
-		for (const auto &bound_col : try_operator_binder.GetBoundColumns()) {
-			bound_columns.push_back(bound_col);
-		}
+		inside_try = true;
+		BindChild(op.children[0], depth, error);
+		inside_try = false;
 	} else {
 		for (idx_t i = 0; i < op.children.size(); i++) {
 			BindChild(op.children[i], depth, error);

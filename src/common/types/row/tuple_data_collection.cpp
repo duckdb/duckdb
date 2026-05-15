@@ -325,7 +325,7 @@ void TupleDataCollection::AppendUnified(TupleDataPinState &pin_state, TupleDataC
 }
 
 static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector &vector, const idx_t count) {
-	vector.ToUnifiedFormat(count, format.unified);
+	vector.ToUnifiedFormat(format.unified);
 	format.original_sel = format.unified.sel;
 	format.original_owned_sel.Initialize(format.unified.owned_sel);
 	switch (vector.GetType().InternalType()) {

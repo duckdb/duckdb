@@ -1,0 +1,32 @@
+diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
+index 21a907f..39bb0e8 100644
+--- a/src/hnsw/hnsw_optimize_join.cpp
++++ b/src/hnsw/hnsw_optimize_join.cpp
+@@ -448,11 +448,11 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 	if (filter.expressions.back()->GetExpressionType() != ExpressionType::COMPARE_LESSTHANOREQUALTO) {
+ 		return false;
+ 	}
+-	const auto &compare_expr = filter.expressions.back()->Cast<BoundComparisonExpression>();
+-	if (compare_expr.right->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
++	const auto &compare_expr = filter.expressions.back()->Cast<BoundFunctionExpression>();
++	if (BoundComparisonExpression::Right(compare_expr).GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+ 		return false;
+ 	}
+-	const auto &constant_expr = compare_expr.right->Cast<BoundConstantExpression>();
++	const auto &constant_expr = BoundComparisonExpression::Right(compare_expr).Cast<BoundConstantExpression>();
+ 	if (constant_expr.GetReturnType() != LogicalType::BIGINT) {
+ 		return false;
+ 	}
+@@ -461,10 +461,10 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 		// Can only optimize up to SVS
+ 		return false;
+ 	}
+-	if (compare_expr.left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
++	if (BoundComparisonExpression::Left(compare_expr).GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+ 		return false;
+ 	}
+-	auto &filter_ref_expr = compare_expr.left->Cast<BoundColumnRefExpression>();
++	auto &filter_ref_expr = BoundComparisonExpression::Left(compare_expr).Cast<BoundColumnRefExpression>();
+ 	if (filter_ref_expr.binding.table_index != window.window_index) {
+ 		return false;
+ 	}

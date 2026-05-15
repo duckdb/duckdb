@@ -94,7 +94,7 @@ void VariantColumnWriter::AnalyzeSchema(ParquetAnalyzeSchemaState &state_p, Vect
 	auto &state = state_p.Cast<VariantAnalyzeSchemaState>();
 
 	RecursiveUnifiedVectorFormat recursive_format;
-	Vector::RecursiveToUnifiedFormat(input, count, recursive_format);
+	Vector::RecursiveToUnifiedFormat(input, recursive_format);
 	UnifiedVariantVectorData variant(recursive_format);
 
 	for (idx_t i = 0; i < count; i++) {

@@ -99,7 +99,7 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	FlatVector::SetSize(varchar_list, count);
 	ArrayToArrayCast(source, varchar_list, count, parameters);
 
-	varchar_list.Flatten(count);
+	varchar_list.Flatten();
 	auto &validity = FlatVector::Validity(varchar_list);
 	auto &child = ArrayVector::GetChild(varchar_list);
 	auto &child_validity = FlatVector::Validity(child);
@@ -167,7 +167,7 @@ static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastPar
 	auto &cast_data = parameters.cast_data->Cast<ArrayBoundCastData>();
 
 	// FIXME: dont flatten
-	source.Flatten(count);
+	source.Flatten();
 
 	auto array_size = ArrayType::GetSize(source.GetType());
 	auto child_count = count * array_size;

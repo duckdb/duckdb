@@ -150,10 +150,10 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	bool is_unnamed = StructType::IsUnnamed(source.GetType());
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	auto &children = StructVector::GetEntries(varchar_struct);
-	auto source_validity = varchar_struct.Validity(count);
+	auto source_validity = varchar_struct.Validity();
 	vector<VectorIterator<string_t>> child_iterators;
 	for (auto &child : children) {
-		child_iterators.emplace_back(child.Values<string_t>(count));
+		child_iterators.emplace_back(child.Values<string_t>());
 	}
 	static constexpr idx_t SEP_LENGTH = 2;
 	static constexpr idx_t NAME_SEP_LENGTH = 2;
@@ -326,7 +326,7 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 	}
 
 	// Check for nulls in the source rows, and set the list data
-	auto validity_entries = source.Validity(count);
+	auto validity_entries = source.Validity();
 	auto list_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity_entries.IsValid(i)) { // is row null?

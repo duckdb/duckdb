@@ -64,7 +64,7 @@ static void NormalizeFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 	const auto count = args.size();
 	UnifiedVectorFormat input_data;
-	args.data[0].ToUnifiedFormat(count, input_data);
+	args.data[0].ToUnifiedFormat(input_data);
 	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);

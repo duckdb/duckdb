@@ -49,7 +49,7 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	vector<UnifiedVectorFormat> map_formats(map_count);
 	for (idx_t i = 0; i < map_count; i++) {
 		auto &map = args.data[i];
-		map.ToUnifiedFormat(count, map_formats[i]);
+		map.ToUnifiedFormat(map_formats[i]);
 	}
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {

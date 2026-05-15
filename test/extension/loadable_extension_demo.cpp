@@ -55,8 +55,8 @@ static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vec
 
 	UnifiedVectorFormat lhs_data;
 	UnifiedVectorFormat rhs_data;
-	left_vector.ToUnifiedFormat(count, lhs_data);
-	right_vector.ToUnifiedFormat(count, rhs_data);
+	left_vector.ToUnifiedFormat(lhs_data);
+	right_vector.ToUnifiedFormat(rhs_data);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &child_entries = StructVector::GetEntries(result);
@@ -82,7 +82,7 @@ static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vec
 	if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-	result.Verify(count);
+	result.Verify();
 }
 
 static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -95,8 +95,8 @@ static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vec
 	args.Flatten();
 	UnifiedVectorFormat lhs_data;
 	UnifiedVectorFormat rhs_data;
-	left_vector.ToUnifiedFormat(count, lhs_data);
-	right_vector.ToUnifiedFormat(count, rhs_data);
+	left_vector.ToUnifiedFormat(lhs_data);
+	right_vector.ToUnifiedFormat(rhs_data);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &child_entries = StructVector::GetEntries(result);
@@ -122,7 +122,7 @@ static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vec
 	if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-	result.Verify(count);
+	result.Verify();
 }
 
 //===--------------------------------------------------------------------===//
@@ -320,7 +320,7 @@ public:
 		//	Evaluate the argument
 		sstate.executor.ExecuteExpression(input, arg);
 		UnifiedVectorFormat unified;
-		arg.ToUnifiedFormat(count, unified);
+		arg.ToUnifiedFormat(unified);
 		const auto &validity = unified.validity;
 		for (idx_t i = 0; i < count; ++i) {
 			const auto idx = unified.sel->get_index(i);
@@ -818,7 +818,7 @@ static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector 
 	idx_t count = args.size();
 
 	UnifiedVectorFormat vdata;
-	input_vec.ToUnifiedFormat(count, vdata);
+	input_vec.ToUnifiedFormat(vdata);
 	auto row_ids = UnifiedVectorFormat::GetData<int64_t>(vdata);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);

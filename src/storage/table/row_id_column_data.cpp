@@ -96,7 +96,7 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 
 	// Now apply the filter
 	UnifiedVectorFormat vdata;
-	result.ToUnifiedFormat(count, vdata);
+	result.ToUnifiedFormat(vdata);
 	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, count, count);
 }
 

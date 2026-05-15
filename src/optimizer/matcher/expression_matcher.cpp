@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 
 #include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
 
@@ -37,11 +38,11 @@ bool ComparisonExpressionMatcher::Match(Expression &expr_p, vector<reference<Exp
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
-	auto &expr = expr_p.Cast<BoundComparisonExpression>();
-	vector<reference<Expression>> expressions;
-	expressions.push_back(*expr.left);
-	expressions.push_back(*expr.right);
-	return SetMatcher::Match(matchers, expressions, bindings, policy);
+	auto &expr = expr_p.Cast<BoundFunctionExpression>();
+	if (!BoundComparisonExpression::IsComparison(expr.GetExpressionType())) {
+		return false;
+	}
+	return SetMatcher::Match(matchers, expr.children, bindings, policy);
 }
 
 bool CastExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {

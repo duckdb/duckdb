@@ -331,7 +331,7 @@ idx_t VariantColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t
 	    state, result, count, [&](ColumnData &col, ColumnScanState &child_state, Vector &target_vector, idx_t count) {
 		    return col.ScanCount(child_state, target_vector, count, result_offset);
 	    });
-	result.Flatten(result_count);
+	result.Flatten();
 	return result_count;
 }
 
@@ -396,7 +396,7 @@ static void AppendShredded(Vector &input, Vector &append_vector, idx_t count, Va
 void VariantColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		Vector append_vector(Vector::Ref(vector));
-		append_vector.Flatten(count);
+		append_vector.Flatten();
 		Append(stats, state, append_vector, count);
 		return;
 	}

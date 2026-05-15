@@ -173,7 +173,7 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	auto &allocator = Allocator::DefaultAllocator();
 
 	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, count, source_format);
+	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
 
 	UnifiedVariantVectorData variant(source_format);
 

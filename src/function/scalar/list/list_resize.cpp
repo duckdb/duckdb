@@ -21,8 +21,8 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	D_ASSERT(new_sizes.GetType().id() == LogicalTypeId::UBIGINT);
 
-	auto list_entries = lists.Values<list_entry_t>(row_count);
-	auto new_size_entries = new_sizes.Values<ubigint_t>(row_count);
+	auto list_entries = lists.Values<list_entry_t>();
+	auto new_size_entries = new_sizes.Values<ubigint_t>();
 	auto &child_vector = ListVector::GetChild(lists);
 
 	// Sum up the total child capacity

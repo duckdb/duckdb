@@ -98,6 +98,11 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::ConstantSliceInternal(const Logic
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
                                                              idx_t count) {
+	if (!sel.IsSet()) {
+		// Incremental selection (rows 0..count-1): produce a flat offset-based sub-view
+		// to avoid creating a DictionaryBuffer with a null selection vector.
+		return SliceInternal(type, idx_t(0), count);
+	}
 	Vector child_vector(type, shared_from_this());
 	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
 	return make_buffer<DictionaryBuffer>(sel, count, std::move(entry));
@@ -107,9 +112,9 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_
 	return make_buffer<StandardVectorBuffer>(std::move(new_data), count, type_size);
 }
 
-void StandardVectorBuffer::Resize(idx_t current_size, idx_t new_size) {
-	D_ASSERT(current_size <= capacity);
-	auto old_byte_count = current_size * type_size;
+void StandardVectorBuffer::ReserveInternal(idx_t new_size) {
+	D_ASSERT(v_size < new_size);
+	auto old_byte_count = Capacity() * type_size;
 	auto target_byte_count = new_size * type_size;
 
 	// We have an upper limit of 128GB for a single vector.
@@ -516,7 +521,7 @@ void FlatVector::CopyValidity(Vector &target, const Vector &source, idx_t count)
 		}
 		return;
 	}
-	auto validity = source.Validity(count);
+	auto validity = source.Validity();
 	if (!validity.CanHaveNull()) {
 		result_validity.Reset(count);
 		return;
