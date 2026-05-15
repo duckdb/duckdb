@@ -10,6 +10,8 @@ on:
         type: string
       git_ref:
         type: string
+      git_sha:
+        type: string
       extra_exclude_archs:
         type: string
         required: false
@@ -41,6 +43,11 @@ on:
         type: string
       git_ref:
         description: 'Set to override the DuckDB version, leave empty for current commit'
+        type: string
+        required: false
+        default: ''
+      git_sha:
+        description: 'Set to override the exact DuckDB commit SHA for checkout'
         type: string
         required: false
         default: ''
@@ -151,7 +158,8 @@ jobs:
         name: Configure External extensions
         env:
           CONFIG_FILE: .github/config/external_extensions.cmake
-          DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;windows_amd64;linux_amd64_musl'
+          # Temporarily allow linux_amd64_musl so the External Extensions matrix leg can run on alpine.
+          DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;windows_amd64'
         run: |
           echo "exclude_archs=$DEFAULT_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> "$GITHUB_OUTPUT"
           external_extensions="$(<"$CONFIG_FILE")"
@@ -177,41 +185,139 @@ jobs:
             opt_in_archs: ${{ needs.load-extension-configs.outputs.main_extensions_opt_in_archs }}
             extension_config: ${{ needs.load-extension-configs.outputs.main_extensions_config }}
             extra_toolchains: unixodbc
-          - name: Rust-based Extensions
+            # TODO Remove
+            runner: namespace-profile-linux-x64
+            container_name: manylinux_2_28_amd64_main
+            container: ghcr.io/duckdb/duckdb-ci/manylinux_2_28_amd64_main:20260515-f18ad4ef
+            vcpkg_target_triplet: "x64-linux-release"
+            vcpkg_host_triplet: "x64-linux-release"
+            duckdb_arch: linux_amd64
+
+          - name: Rust Extensions
             artifact_prefix: rust-based-extensions
             exclude_archs: ${{ needs.load-extension-configs.outputs.rust_based_extensions_exclude_archs }}
             opt_in_archs: ''
             extension_config: ${{ needs.load-extension-configs.outputs.rust_based_extensions_config }}
             extra_toolchains: rust
+            # TODO Remove
+            runner: namespace-profile-linux-arm64
+            container_name: manylinux_2_28_aarch64_rust
+            container: ghcr.io/duckdb/duckdb-ci/manylinux_2_28_aarch64_rust:20260515-f18ad4ef
+            vcpkg_target_triplet: "arm64-linux-release"
+            vcpkg_host_triplet: "arm64-linux-release"
+            duckdb_arch: linux_arm64
+
           - name: External Extensions
             artifact_prefix: external-extensions
             exclude_archs: ${{ needs.load-extension-configs.outputs.external_extensions_exclude_archs }}
             opt_in_archs: ''
             extension_config: ${{ needs.load-extension-configs.outputs.external_extensions_config }}
             extra_toolchains: rust
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
-    with:
-      # We piggy-back extension-template to build the extensions in extension_config
-      override_repository: duckdb/extension-template
-      override_ref: main
-      upload_all_extensions: true
-      extension_name: ${{ matrix.artifact_prefix }}
-      # NOTE: on PRs we exclude some archs to speed things up
-      reduced_ci_mode: ${{ needs.load-extension-configs.outputs.reduced_ci_mode }}
-      set_caller_as_duckdb: true
-      duckdb_version: ${{ inputs.git_ref }}
-      override_ci_tools_repository: duckdb/extension-ci-tools
-      ci_tools_version: main
-      exclude_archs: ${{ matrix.exclude_archs }}
-      opt_in_archs: ${{ matrix.opt_in_archs }}
-      extra_toolchains: ${{ matrix.extra_toolchains }}
-      use_merged_vcpkg_manifest: '1'
-      duckdb_tag: ${{ inputs.override_git_describe }}
-      skip_tests: ${{ inputs.skip_tests }}
-      save_cache: ${{ (github.event_name == 'workflow_call' && inputs.save_cache) || (github.event_name != 'workflow_call' && (github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name))) }}
-      extensions_test_selection: 'complete'
-      extra_extension_config: ${{ matrix.extension_config }}
-      runners: ${{ inputs.runners }}
+            # TODO Remove
+            runner: namespace-profile-linux-x64
+            container_name: alpine_3_22_amd64_rust
+            container: ghcr.io/duckdb/duckdb-ci/alpine_3_22_amd64_rust:20260515-f18ad4ef
+            vcpkg_target_triplet: "x64-linux-release"
+            vcpkg_host_triplet: "x64-linux-release"
+            duckdb_arch: linux_amd64_musl
+
+    # uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
+    # with:
+    #   # We piggy-back extension-template to build the extensions in extension_config
+    #   override_repository: duckdb/extension-template
+    #   override_ref: main
+    #   upload_all_extensions: true
+    #   extension_name: ${{ matrix.artifact_prefix }}
+    #   # NOTE: on PRs we exclude some archs to speed things up
+    #   reduced_ci_mode: ${{ needs.load-extension-configs.outputs.reduced_ci_mode }}
+    #   set_caller_as_duckdb: true
+    #   duckdb_version: ${{ inputs.git_ref }}
+    #   override_ci_tools_repository: duckdb/extension-ci-tools
+    #   ci_tools_version: main
+    #   exclude_archs: ${{ matrix.exclude_archs }}
+    #   opt_in_archs: ${{ matrix.opt_in_archs }}
+    #   extra_toolchains: ${{ matrix.extra_toolchains }}
+    #   use_merged_vcpkg_manifest: '1'
+    #   duckdb_tag: ${{ inputs.override_git_describe }}
+    #   skip_tests: ${{ inputs.skip_tests }}
+    #   save_cache: ${{ (github.event_name == 'workflow_call' && inputs.save_cache) || (github.event_name != 'workflow_call' && (github.repository != 'duckdb/duckdb' || contains('["main", "v1.5-variegata"]', github.ref_name))) }}
+    #   extensions_test_selection: 'complete'
+    #   extra_extension_config: ${{ matrix.extension_config }}
+    #   runners: ${{ inputs.runners }}
+
+    # TODO select correct container (based on toolchain) and runner.
+    # runs-on: ${{ fromJSON(inputs.runners).runner_linux_arm64 }}
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+
+    env:
+      # VCPKG config
+      VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_target_triplet }}
+      VCPKG_HOST_TRIPLET: ${{ matrix.vcpkg_host_triplet }}
+
+      USE_MERGED_VCPKG_MANIFEST: 1
+
+      # Misc
+      BUILD_SHELL: 1
+      # BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
+      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
+
+
+    steps:
+      - name: Prepare
+        uses: duckdb/duckdb-ci/prepare-extension@main
+        with:
+          extension-repository: duckdb/extension-template
+          extension-ref: main
+          duckdb-ref: ${{ inputs.git_ref }}
+          duckdb-sha: ${{ inputs.git_sha }}
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        with:
+          max-size: 5GB
+          evict-old-files: 'job'
+          # TODO
+          key: ccache-${{ matrix.artifact_prefix }}-${{ matrix.container_name }}
+          # key: ccache-${{ matrix.distro }}_${{ matrix.arch }}
+
+      - name: Inject extra extension config
+        if: ${{ matrix.extension_config }}
+        env:
+          EXTENSION_CONFIGS: ${{ matrix.extension_config }}
+        run: |
+          echo -e "\n# Injected Extension Config\n${EXTENSION_CONFIGS}" >> ./extension_config.cmake
+          cat ./extension_config.cmake
+
+      - name: Build
+        uses: duckdb/duckdb-ci/build-duckdb@main
+        env:
+          EXTENSION_CONFIGS: ./extension_config.cmake
+          SUBSET_EXTENSIONS_TESTS: complete
+          ENABLE_EXTENSION_AUTOLOADING: 1
+          ENABLE_EXTENSION_AUTOINSTALL: 1
+        with:
+          # TODO use inputs.build-type in build and test command
+          build: make release
+          test: |
+            pwd
+            ls -lh build build/release || true
+            ls -lh duckdb duckdb/scripts/ci || true
+            ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+            make test_release
+          # TODO
+          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          # vcpkg-commit: ${{ needs.prepare.outputs.vcpkg_commit }}
+          cache-suffix: ${{ matrix.artifact_prefix }}-${{ matrix.container_name }}
+          # cache-suffix: ${{ matrix.distro }}_${{ matrix.arch }}${{ needs.prepare.outputs.image_suffix }}
+          # TODO
+          save-cache: true
+          # save-cache: ${{ inputs.save_cache }}
+          upload-name: ${{ matrix.artifact_prefix }}-${{ inputs.git_sha }}-extension-${{ matrix.duckdb_arch }}
+          # TODO
+          # ${{ inputs.extension_name }}-${{ inputs.duckdb_version }}-extension-${{matrix.duckdb_arch}}${{inputs.artifact_postfix}}
+          # upload-path: build/${{ input.build_type }}/repository/**/*.duckdb_extension
+          upload-path: build/release/repository/**/*.duckdb_extension
 
   deploy-repository:
     name: Deploy extensions

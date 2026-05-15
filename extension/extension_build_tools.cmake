@@ -68,6 +68,25 @@ function(link_threads LIBRARY LINKAGE)
     target_link_libraries(${LIBRARY} ${LINKAGE} Threads::Threads)
 endfunction()
 
+function(DUCKDB_REQUIRE_VCPKG_PKGCONFIG)
+    if("${VCPKG_TARGET_TRIPLET}" STREQUAL "")
+        return()
+    endif()
+
+    if(DEFINED PKG_CONFIG_PATH AND NOT "${PKG_CONFIG_PATH}" STREQUAL "")
+        set(PKG_CONFIG_PATH "${PKG_CONFIG_PATH}" PARENT_SCOPE)
+        return()
+    endif()
+
+    set(_vcpkg_pkgconfig_base "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}")
+    set(PKG_CONFIG_PATH
+        "${_vcpkg_pkgconfig_base}/lib/pkgconfig:${_vcpkg_pkgconfig_base}/share/pkgconfig")
+    if(DEFINED ENV{PKG_CONFIG_PATH} AND NOT "$ENV{PKG_CONFIG_PATH}" STREQUAL "")
+        set(PKG_CONFIG_PATH "$ENV{PKG_CONFIG_PATH}:${PKG_CONFIG_PATH}")
+    endif()
+    set(PKG_CONFIG_PATH "${PKG_CONFIG_PATH}" PARENT_SCOPE)
+endfunction()
+
 # Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
 if ("${LOCAL_EXTENSION_REPO}" STREQUAL "")
     set(LOCAL_EXTENSION_REPO_DIR ${CMAKE_BINARY_DIR}/repository)
