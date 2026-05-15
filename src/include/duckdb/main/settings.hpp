@@ -1563,7 +1563,8 @@ struct VacuumRebuildIndexesSetting {
 	static constexpr const char *Name = "vacuum_rebuild_indexes";
 	static constexpr const char *Description =
 	    "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes "
-	    "afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled.";
+	    "afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled. Can also be set "
+	    "per-database via the 'vacuum_rebuild_indexes' ATTACH option, which overrides this default.";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "0";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
