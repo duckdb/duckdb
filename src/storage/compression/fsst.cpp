@@ -252,7 +252,7 @@ public:
 			};
 		}
 
-		UncompressedStringStorage::UpdateStringStats(current_segment->stats, stats_writer, uncompressed_string);
+		UncompressedStringStorage::UpdateStringStats(current_segment->GetStatsMutable(), stats_writer, uncompressed_string);
 
 		// Write string into dictionary
 		current_dictionary.size += compressed_string_len;
@@ -282,12 +282,12 @@ public:
 
 	void AddNull() {
 		AddEmptyStringInternal();
-		current_segment->stats.statistics.SetHasNullFast();
+		current_segment->GetStatsMutable().SetHasNullFast();
 	}
 
 	void AddEmptyString() {
 		AddEmptyStringInternal();
-		UncompressedStringStorage::UpdateStringStats(current_segment->stats, stats_writer, "");
+		UncompressedStringStorage::UpdateStringStats(current_segment->GetStatsMutable(), stats_writer, "");
 	}
 
 	size_t GetRequiredSize(size_t string_len) {
@@ -323,7 +323,7 @@ public:
 	void Flush(bool final = false) {
 		auto segment_size = Finalize();
 		auto &state = checkpoint_data.GetCheckpointState();
-		stats_writer.Merge(current_segment->stats.statistics);
+		stats_writer.Merge(current_segment->GetStatsMutable());
 		state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
 		if (!final) {
@@ -584,7 +584,7 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &con
 	}
 	state->duckdb_fsst_decoder_ptr = state->duckdb_fsst_decoder.get();
 
-	const auto &stats = segment.stats.statistics;
+	const auto &stats = segment.GetStats();
 	if (stats.GetStatsType() == StatisticsType::STRING_STATS && StringStats::HasMaxStringLength(stats)) {
 		state->all_values_inlined = StringStats::MaxStringLength(stats) <= string_t::INLINE_LENGTH;
 	}

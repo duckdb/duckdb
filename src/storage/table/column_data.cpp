@@ -419,8 +419,8 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 		lock_guard<mutex> l(stats_lock);
 		auto &segment_stats =
 		    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
-		        ? state.child_states[0].current->GetNode().stats.statistics
-		        : state.current->GetNode().stats.statistics;
+		        ? state.child_states[0].current->GetNode().GetStatsMutable()
+		        : state.current->GetNode().GetStatsMutable();
 		prune_result = expr_filter.CheckStatistics(segment_stats);
 		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -524,7 +524,7 @@ void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &sta
 		auto &append_segment = state.current->GetNode();
 		idx_t copied_elements = append_segment.Append(state, vdata, offset, append_count);
 		this->count += copied_elements;
-		append_stats.Merge(append_segment.stats.statistics);
+		append_stats.Merge(append_segment.GetStats());
 		if (copied_elements == append_count) {
 			// finished copying everything
 			break;
@@ -1178,7 +1178,7 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 		column_info.compression_type = CompressionTypeToString(segment.GetCompressionFunction().type);
 		{
 			lock_guard<mutex> l(stats_lock);
-			column_info.segment_stats = segment.stats.statistics.ToStruct();
+			column_info.segment_stats = segment.GetStats().ToStruct();
 		}
 		column_info.has_updates = ColumnData::HasUpdates();
 		// persistent

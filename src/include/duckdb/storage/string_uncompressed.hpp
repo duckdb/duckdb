@@ -150,7 +150,7 @@ public:
 			}
 
 			// we have space: write the string
-			UpdateStringStats(stats, stats_writer, source_data[source_idx]);
+			UpdateStringStats(stats.statistics, stats_writer, source_data[source_idx]);
 
 			if (DUCKDB_UNLIKELY(use_overflow_block)) {
 				// write to overflow blocks
@@ -223,9 +223,9 @@ public:
 	static idx_t FinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats);
 
 public:
-	static inline void UpdateStringStats(SegmentStatistics &stats, StringStatsWriter &writer,
+	static inline void UpdateStringStats(BaseStatistics &stats, StringStatsWriter &writer,
 	                                     const string_t &new_value) {
-		stats.statistics.SetHasNoNullFast();
+		stats.SetHasNoNullFast();
 		writer.Update(new_value);
 	}
 

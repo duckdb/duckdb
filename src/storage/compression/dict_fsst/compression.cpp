@@ -861,13 +861,13 @@ void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 			}
 		} while (false);
 		if (!is_null) {
-			UncompressedStringStorage::UpdateStringStats(current_segment->stats, stats_writer, str);
+			UncompressedStringStorage::UpdateStringStats(current_segment->GetStatsMutable(), stats_writer, str);
 		} else {
-			current_segment->stats.statistics.SetHasNullFast();
+			current_segment->GetStatsMutable().SetHasNullFast();
 		}
 		tuple_count++;
 	}
-	stats_writer.Merge(current_segment->stats.statistics);
+	stats_writer.Merge(current_segment->GetStatsMutable());
 }
 
 void DictFSSTCompressionState::FinalizeCompress() {

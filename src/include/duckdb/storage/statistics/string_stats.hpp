@@ -33,9 +33,9 @@ struct StringStatsData {
 	constexpr static uint32_t LEGACY_MAX_STRING_MINMAX_SIZE = 8;
 	constexpr static uint32_t MAXIMUM_MIN_STRING_LENGTH = (1 << 21U) - 1;
 
-	//! The minimum value of the segment, potentially truncated
+	//! The minimum value of the segment, potentially truncated depending on min_type
 	string_t min;
-	//! The maximum value of the segment, potentially truncated
+	//! The maximum value of the segment, potentially truncated depending on max_type
 	string_t max;
 	//! Whether or not the column can contain unicode characters
 	bool has_unicode;

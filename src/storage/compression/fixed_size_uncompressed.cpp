@@ -204,7 +204,7 @@ static unique_ptr<CompressionAppendState> FixedSizeInitAppend(ColumnSegment &seg
 
 struct StandardFixedSizeAppend {
 	template <class T>
-	static void Append(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, UnifiedVectorFormat &adata,
+	static void Append(BaseStatistics &stats, data_ptr_t target, idx_t target_offset, UnifiedVectorFormat &adata,
 	                   idx_t offset, idx_t count) {
 		auto sdata = UnifiedVectorFormat::GetData<T>(adata);
 		auto tdata = reinterpret_cast<T *>(target);
@@ -214,22 +214,22 @@ struct StandardFixedSizeAppend {
 				auto target_idx = target_offset + i;
 				bool is_null = !adata.validity.RowIsValid(source_idx);
 				if (!is_null) {
-					stats.statistics.SetHasNoNullFast();
-					stats.statistics.UpdateNumericStats<T>(sdata[source_idx]);
+					stats.SetHasNoNullFast();
+					stats.UpdateNumericStats<T>(sdata[source_idx]);
 					tdata[target_idx] = sdata[source_idx];
 				} else {
-					stats.statistics.SetHasNullFast();
+					stats.SetHasNullFast();
 					// we insert a NullValue<T> in the null gap for debuggability
 					// this value should never be used or read anywhere
 					tdata[target_idx] = NullValue<T>();
 				}
 			}
 		} else {
-			stats.statistics.SetHasNoNullFast();
+			stats.SetHasNoNullFast();
 			for (idx_t i = 0; i < count; i++) {
 				auto source_idx = adata.sel->get_index(offset + i);
 				auto target_idx = target_offset + i;
-				stats.statistics.UpdateNumericStats<T>(sdata[source_idx]);
+				stats.UpdateNumericStats<T>(sdata[source_idx]);
 				tdata[target_idx] = sdata[source_idx];
 			}
 		}
@@ -238,7 +238,7 @@ struct StandardFixedSizeAppend {
 
 struct ListFixedSizeAppend {
 	template <class T>
-	static void Append(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, UnifiedVectorFormat &adata,
+	static void Append(BaseStatistics &stats, data_ptr_t target, idx_t target_offset, UnifiedVectorFormat &adata,
 	                   idx_t offset, idx_t count) {
 		auto sdata = UnifiedVectorFormat::GetData<uint64_t>(adata);
 		auto tdata = reinterpret_cast<uint64_t *>(target);
@@ -259,7 +259,7 @@ idx_t FixedSizeAppend(CompressionAppendState &append_state, ColumnSegment &segme
 	idx_t max_tuple_count = segment.SegmentSize() / sizeof(T);
 	idx_t copy_count = MinValue<idx_t>(count, max_tuple_count - segment.count);
 
-	OP::template Append<T>(stats, target_ptr, segment.count, data, offset, copy_count);
+	OP::template Append<T>(stats.statistics, target_ptr, segment.count, data, offset, copy_count);
 	segment.count += copy_count;
 	return copy_count;
 }
