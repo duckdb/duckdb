@@ -5,6 +5,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "sqlite/sqllogic_test_logger.hpp"
+#include "sqlite/sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
 #include "test_config.hpp"
 
@@ -85,6 +86,12 @@ int main(int argc_in, char *argv[]) {
 		std::cerr << "================  FAILURES SUMMARY  ================" << std::endl;
 		std::cerr << "====================================================\n" << std::endl;
 		std::cerr << failures_summary;
+	}
+	std::string skip_reason_summary = SQLLogicTestRunner::GetSkipReasonSummary();
+	if (!skip_reason_summary.empty()) {
+		std::cerr << "\n"
+		          << "Skipped tests for the following reasons:" << std::endl;
+		std::cerr << skip_reason_summary;
 	}
 
 	if (DeleteTestPath()) {
