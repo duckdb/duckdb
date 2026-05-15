@@ -129,6 +129,18 @@ EXPLAIN SELECT * FROM date_test WHERE d != timestamp '2024-06-15 12:00:00';
 ----
 physical_plan	<!REGEX>:.*CAST.*
 
+# non-midnight, IS DISTINCT FROM : always true
+query II
+EXPLAIN SELECT * FROM date_test WHERE d IS DISTINCT FROM timestamp '2024-06-15 12:00:00';
+----
+physical_plan	<!REGEX>:.*CAST.*
+
+# non-midnight, IS NOT DISTINCT FROM : always false
+query II
+EXPLAIN SELECT * FROM date_test WHERE d IS NOT DISTINCT FROM timestamp '2024-06-15 12:00:00';
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
 # correctness: =/!= against non-midnight preserve NULL semantics
 statement ok
 INSERT INTO date_test VALUES (NULL);
@@ -148,6 +160,22 @@ SELECT d, d != timestamp '2024-06-15 12:00:00' AS r FROM date_test ORDER BY d;
 2024-06-15	true
 2025-01-01	true
 NULL	NULL
+
+query II
+SELECT d, d IS DISTINCT FROM timestamp '2024-06-15 12:00:00' AS r FROM date_test ORDER BY d;
+----
+2024-01-01	true
+2024-06-15	true
+2025-01-01	true
+NULL	true
+
+query II
+SELECT d, d IS NOT DISTINCT FROM timestamp '2024-06-15 12:00:00' AS r FROM date_test ORDER BY d;
+----
+2024-01-01	false
+2024-06-15	false
+2025-01-01	false
+NULL	false
 
 # correctness: non-midnight rewrites preserve semantics across all 4 ordering ops
 query I
@@ -251,6 +279,18 @@ SELECT d FROM date_test WHERE d != timestamp '2024-06-15 00:00:00' ORDER BY d;
 ----
 2024-01-01
 2025-01-01
+
+query I
+SELECT d FROM date_test WHERE d IS NOT DISTINCT FROM timestamp '2024-06-15 00:00:00' ORDER BY d;
+----
+2024-06-15
+
+query I
+SELECT d FROM date_test WHERE d IS DISTINCT FROM timestamp '2024-06-15 00:00:00' ORDER BY d;
+----
+2024-01-01
+2025-01-01
+NULL
 
 query I
 SELECT d FROM date_test WHERE timestamp '2024-06-15 00:00:00' < d ORDER BY d;
