@@ -36,6 +36,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/common/types/row/tuple_data_iterator.hpp"
 
 namespace duckdb {
 
@@ -1101,8 +1102,12 @@ bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, con
 	// building the bloom filter is costly on the build to make probing faster,
 	// so only use it if there are less build tuples than probing tuples
 	static constexpr double BUILD_TO_PROBE_RATIO_THRESHOLD = 1.0;
+	auto build_count = ht->Count();
+	if (build_count == 0) {
+		build_count = ht->GetSinkCollection().Count();
+	}
 	const double build_to_probe_ratio =
-	    static_cast<double>(ht->Count()) / static_cast<double>(op.children[0].get().estimated_cardinality);
+	    static_cast<double>(build_count) / static_cast<double>(op.children[0].get().estimated_cardinality);
 	if (build_to_probe_ratio > BUILD_TO_PROBE_RATIO_THRESHOLD) {
 		return false;
 	}
@@ -1111,7 +1116,7 @@ bool JoinFilterPushdownInfo::CanUseBloomFilter(const ClientContext &context, con
 	static constexpr double NON_FILTERING_RATIO_THRESHOLD = 0.1;
 	static constexpr idx_t NON_FILTERING_BUILD_SIDE_THRESHOLD = 4194304;
 	if (!build_side_has_filter && build_to_probe_ratio > NON_FILTERING_RATIO_THRESHOLD &&
-	    ht->Count() > NON_FILTERING_BUILD_SIDE_THRESHOLD) {
+	    build_count > NON_FILTERING_BUILD_SIDE_THRESHOLD) {
 		return false;
 	}
 
@@ -1122,6 +1127,9 @@ bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, opt
                                                      const PhysicalComparisonJoin &op, const ExpressionType &cmp,
                                                      const Value &min, const Value &max) const {
 	if (!CanUseBloomFilter(context, op, cmp, ht)) {
+		return false;
+	}
+	if (ht->Count() == 0) {
 		return false;
 	}
 
@@ -1174,6 +1182,34 @@ static unique_ptr<Expression> CreateRuntimeFilterInputExpression(ClientContext &
 	return input;
 }
 
+static void BuildBloomFilterFromPartitionedData(JoinHashTable &ht) {
+	auto &bloom_filter = ht.GetBloomFilter();
+	if (bloom_filter.IsInitialized()) {
+		return;
+	}
+	auto &sink_collection = ht.GetSinkCollection();
+	if (sink_collection.Count() == 0) {
+		return;
+	}
+	bloom_filter.Initialize(ht.context, sink_collection.Count());
+	Vector hashes(LogicalType::HASH);
+	auto hash_data = FlatVector::GetDataMutable<hash_t>(hashes);
+	for (auto &partition : sink_collection.GetPartitions()) {
+		if (!partition || partition->Count() == 0) {
+			continue;
+		}
+		TupleDataChunkIterator iterator(*partition, TupleDataPinProperties::KEEP_EVERYTHING_PINNED, false);
+		do {
+			auto count = iterator.GetCurrentChunkCount();
+			auto row_locations = iterator.GetRowLocations();
+			for (idx_t i = 0; i < count; i++) {
+				hash_data[i] = Load<hash_t>(row_locations[i] + ht.pointer_offset);
+			}
+			bloom_filter.InsertHashes(hashes, count);
+		} while (iterator.Next());
+	}
+}
+
 void JoinFilterPushdownInfo::PushBloomFilter(ClientContext &context, const PhysicalOperator &op, JoinHashTable &ht,
                                              const JoinFilterPushdownFilter &info, idx_t filter_idx,
                                              ProjectionIndex filter_col_idx) const {
@@ -1183,6 +1219,9 @@ void JoinFilterPushdownInfo::PushBloomFilter(ClientContext &context, const Physi
 	const auto key_type = ht.conditions[0].GetLHS().GetReturnType();
 	auto filter_input_type = GetRuntimeFilterInputType(info.columns[filter_idx], key_type);
 	ht.SetBuildBloomFilter(true);
+	if (ht.Count() == 0) {
+		BuildBloomFilterFromPartitionedData(ht);
+	}
 	float selectivity_threshold;
 	idx_t n_vectors_to_check;
 	GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType::BF, selectivity_threshold, n_vectors_to_check);
@@ -1468,6 +1507,10 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 			}
 			sink.local_hash_tables.clear();
 			sink.owned_local_hash_tables.clear();
+			if (filter_pushdown && !sink.skip_filter_pushdown && ht.GetSinkCollection().Count() > 0) {
+				auto filter_min_max = filter_pushdown->FinalizeMinMax(*sink.global_filter_state);
+				filter_pushdown->FinalizeFilters(context, *this, std::move(filter_min_max), &ht, nullptr);
+			}
 			D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
 			sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
 			                                         sink.probe_side_requirement);
