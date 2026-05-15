@@ -136,12 +136,10 @@ const StorageVersionInfo *GetStorageVersionInfo() {
 
 string GetStorageVersionNameInternal(const StorageVersion storage_version) {
 	if (StorageManager::IsPriorToVersion(StorageVersion::V0_10_3, storage_version)) {
-		// TODO, what if we read duckdb 1.0 and 1.1?
-		// serialization version 1 is used for everything below 0.10.3
 		return "v0.10.2";
 	}
 
-	StorageVersion min_version;
+	StorageVersion min_version = StorageVersion::INVALID;
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
 		if (strcmp(storage_version_info[i].version_name, "latest") == 0) {
 			continue;
@@ -149,7 +147,7 @@ string GetStorageVersionNameInternal(const StorageVersion storage_version) {
 		if (storage_version_info[i].storage_version != storage_version) {
 			continue;
 		}
-		if (min_version != StorageVersion::INVALID) {
+		if (min_version == StorageVersion::INVALID) {
 			min_version = storage_version_info[i].storage_version;
 		}
 	}

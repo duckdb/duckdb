@@ -463,6 +463,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			// No encryption; use the default option.
 			options.block_header_size = config.options.default_block_header_size;
 		}
+
 		if (options.storage_version == StorageVersion::INVALID) {
 			// when creating a new database we default to the serialization version specified in the config
 			options.storage_version = config.options.storage_compatibility.storage_version;

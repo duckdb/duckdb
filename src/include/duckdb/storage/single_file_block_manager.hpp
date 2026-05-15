@@ -47,8 +47,8 @@ struct StorageManagerOptions {
 	bool use_direct_io = false;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	optional_idx block_alloc_size;
-	StorageVersion storage_version;
-	StorageVersion version_number;
+	StorageVersion storage_version = StorageVersion::INVALID;
+	StorageVersion version_number = StorageVersion::INVALID;
 	optional_idx block_header_size;
 	//! Unique database identifier and optional encryption salt.
 	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
