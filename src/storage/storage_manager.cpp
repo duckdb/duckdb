@@ -516,7 +516,8 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		// Replay the WAL.
 		wal_path = GetWALPath();
 		wal = WriteAheadLog::Replay(context, *this, wal_path);
-		timer->EndTimer();
+
+		// Timer will go out of scope here, if set.
 	}
 
 	if (row_group_size > 122880ULL && GetStorageVersion() < 4) {
