@@ -64,6 +64,9 @@ static bool RequiresCatalogAndSchemaNamePrefix(const string &catalog_name, const
 }
 
 string FunctionParameter::ToString() const {
+	if (default_value) {
+		return StringUtil::Format("%s %s := %s", name, type.ToString(), default_value->ToString());
+	}
 	return StringUtil::Format("%s %s", name, type.ToString());
 }
 
@@ -139,7 +142,8 @@ hash_t SimpleFunction::Hash() const {
 }
 
 string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
-                              const vector<LogicalType> &arguments, const LogicalType &varargs) {
+                              const vector<LogicalType> &arguments,
+                              const vector<pair<string, LogicalType>> &named_arguments, const LogicalType &varargs) {
 	string result;
 	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
 		result += catalog_name + "." + schema_name + ".";
@@ -149,6 +153,11 @@ string Function::CallToString(const string &catalog_name, const string &schema_n
 	for (auto &arg : arguments) {
 		string_arguments.push_back(arg.ToString());
 	}
+
+	for (const auto &[arg_name, arg_type] : named_arguments) {
+		string_arguments.push_back(StringUtil::Format("%s := %s", arg_name, arg_type.ToString()));
+	}
+
 	if (varargs.IsValid()) {
 		string_arguments.push_back("[" + varargs.ToString() + "...]");
 	}
@@ -159,7 +168,8 @@ string Function::CallToString(const string &catalog_name, const string &schema_n
 string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
                               const vector<LogicalType> &arguments, const LogicalType &varargs,
                               const LogicalType &return_type) {
-	string result = CallToString(catalog_name, schema_name, name, arguments, varargs);
+	string result =
+	    CallToString(catalog_name, schema_name, name, arguments, vector<pair<string, LogicalType>> {}, varargs);
 	result += " -> " + return_type.ToString();
 	return result;
 }

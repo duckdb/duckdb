@@ -24,20 +24,17 @@ FunctionBinder::FunctionBinder(Binder &binder_p) : binder(&binder_p), context(bi
 
 optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments,
                                               const vector<pair<string, LogicalType>> &named_arguments) {
-	auto &sig = func.GetSignature();
+	const auto &sig = func.GetSignature();
 
 	// Compute total number of arguments passed
-	idx_t total_arg_count = arguments.size() + named_arguments.size();
+	const auto received_arg_count = static_cast<idx_t>(arguments.size() + named_arguments.size());
 
-	if (sig.GetParameterCount() != total_arg_count) {
-		if (!sig.HasVarArgs()) {
-			// invalid argument count: check the next function
-			return optional_idx();
-		}
-		if (arguments.size() < sig.GetParameterCount()) {
-			// not enough arguments to fulfill the non-vararg part of the function
-			return optional_idx();
-		}
+	// And the total number of arguments we need to fulfil the function signature
+	const auto required_arg_count = sig.GetRequiredParameterCount();
+
+	if (received_arg_count < required_arg_count) {
+		// We have fewer arguments than the function requires, so this function cannot be a match.
+		return optional_idx();
 	}
 
 	idx_t cost = 0;
@@ -78,7 +75,7 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 			int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, named_arg.second, vararg_type);
 			if (cast_cost >= 0) {
 				// we can implicitly cast, add the cost to the total cost
-				cost += idx_t(cast_cost);
+				cost += static_cast<idx_t>(cast_cost);
 			} else {
 				// we can't implicitly cast: throw an error
 				return optional_idx();
@@ -213,7 +210,8 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, con
 			}
 			candidates.push_back(f.ToString());
 		}
-		error = ErrorData(BinderException::NoMatchingFunction(catalog_name, schema_name, name, arguments, candidates));
+		error = ErrorData(BinderException::NoMatchingFunction(catalog_name, schema_name, name, arguments,
+		                                                      named_arguments, candidates));
 		return candidate_functions;
 	}
 	candidate_functions.push_back(best_function.GetIndex());
@@ -221,14 +219,15 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, con
 }
 
 template <class T>
-optional_idx FunctionBinder::MultipleCandidateException(const string &catalog_name, const string &schema_name,
-                                                        const string &name, const FunctionSet<T> &functions,
-                                                        const vector<idx_t> &candidate_functions,
-                                                        const vector<LogicalType> &arguments, ErrorData &error) {
+static optional_idx
+MultipleCandidateException(const string &catalog_name, const string &schema_name, const string &name,
+                           const FunctionSet<T> &functions, const vector<idx_t> &candidate_functions,
+                           const vector<LogicalType> &arguments,
+                           const vector<pair<string, LogicalType>> &named_arguments, ErrorData &error) {
 	D_ASSERT(functions.functions.size() > 1);
 	// there are multiple possible function definitions
 	// throw an exception explaining which overloads are there
-	string call_str = Function::CallToString(catalog_name, schema_name, name, arguments);
+	string call_str = Function::CallToString(catalog_name, schema_name, name, arguments, named_arguments);
 	string candidate_str;
 	for (auto &conf : candidate_functions) {
 		const auto &f = functions.GetFunctionByOffset(conf);
@@ -263,7 +262,7 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const string &name, const
 		auto catalog_name = functions.functions.size() > 0 ? functions.functions[0].catalog_name : "";
 		auto schema_name = functions.functions.size() > 0 ? functions.functions[0].schema_name : "";
 		return MultipleCandidateException(catalog_name, schema_name, name, functions, candidate_functions, arguments,
-		                                  error);
+		                                  named_arguments, error);
 	}
 	return candidate_functions[0];
 }
@@ -783,7 +782,8 @@ static void InsertNamedArguments(const SimpleFunction &function, vector<unique_p
 	const auto kwargs_offset = arguments.size();
 
 	// Reserve space for the named arguments
-	arguments.resize(arguments.size() + keyword_arguments.size());
+	arguments.resize(
+	    MaxValue(sig.GetParameterCount(), static_cast<idx_t>(arguments.size() + keyword_arguments.size())));
 
 	case_insensitive_set_t seen_names;
 
@@ -831,7 +831,24 @@ static void InsertNamedArguments(const SimpleFunction &function, vector<unique_p
 		}
 
 		// Move it into the correct reserved position
-		arguments[kwargs_offset + param_idx] = std::move(arg);
+		arguments[param_idx] = std::move(arg);
+	}
+
+	// Fill out missing arguments with default values if they exist, otherwise throw an error.
+	for (idx_t i = 0; i < sig.GetParameterCount(); i++) {
+		if (arguments[i]) {
+			continue;
+		}
+
+		const auto &param = sig.GetParameter(i);
+		if (param.HasDefaultValue()) {
+			arguments[i] = make_uniq<BoundConstantExpression>(*param.GetDefaultValue());
+			arguments[i]->SetAlias(param.GetName());
+
+		} else {
+			throw BinderException("Missing value for parameter '%s' in function call to '%s'", param.GetName(),
+			                      function.GetName());
+		}
 	}
 
 	// Now spread out any trailing named vararg arguments into the remaining argument slots, wherever they may be

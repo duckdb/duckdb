@@ -15,6 +15,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "fmt/core.h"
 
 namespace duckdb {
 class CatalogEntry;
@@ -101,7 +102,12 @@ struct FunctionParameters {
 
 class FunctionParameter {
 public:
-	FunctionParameter(string name, LogicalType type) : name(std::move(name)), type(std::move(type)) {
+	FunctionParameter(string name, LogicalType type)
+	    : name(std::move(name)), type(std::move(type)), default_value(nullptr) {
+	}
+
+	FunctionParameter(string name, LogicalType type, Value value)
+	    : name(std::move(name)), type(std::move(type)), default_value(make_shared_ptr<Value>(std::move(value))) {
 	}
 
 	string ToString() const;
@@ -123,9 +129,20 @@ public:
 		type = std::move(type_p);
 	}
 
+	auto GetDefaultValue() const -> optional_ptr<Value> {
+		return default_value.get();
+	}
+	auto SetDefaultValue(Value value) -> void {
+		default_value = make_shared_ptr<Value>(std::move(value));
+	}
+	auto HasDefaultValue() const -> bool {
+		return default_value != nullptr;
+	}
+
 private:
 	string name;
 	LogicalType type;
+	shared_ptr<Value> default_value;
 };
 
 class FunctionSignature {
@@ -178,14 +195,20 @@ public:
 		varargs = std::move(varargs_p);
 	}
 
-	auto AddParameter(string name, LogicalType type) -> void {
-		parameters.emplace_back(std::move(name), std::move(type));
+	auto AddParameter(string name, LogicalType type, Value default_value) -> FunctionSignature & {
+		parameters.emplace_back(std::move(name), std::move(type), std::move(default_value));
+		return *this;
 	}
 
-	auto AddParameter(LogicalType type) -> void {
-		auto name = parameters.empty() ? string("col") : string("col") + to_string(parameters.size());
+	auto AddParameter(string name, LogicalType type) -> FunctionSignature & {
+		parameters.emplace_back(std::move(name), std::move(type));
+		return *this;
+	}
 
+	auto AddParameter(LogicalType type) -> FunctionSignature & {
+		auto name = parameters.empty() ? string("col") : string("col") + to_string(parameters.size());
 		parameters.emplace_back(name, std::move(type));
+		return *this;
 	}
 
 	auto GetParameterIndexByName(const string &name) const -> optional_idx {
@@ -197,13 +220,37 @@ public:
 		return optional_idx();
 	}
 
+	auto GetRequiredParameterCount() const -> idx_t {
+		idx_t result = 0;
+		for (const auto &param : parameters) {
+			if (!param.HasDefaultValue()) {
+				result++;
+			}
+		}
+		return result;
+	}
+
 	void Verify() const {
+		// Check for duplicate parameter names
 		case_insensitive_set_t seen_names;
 		for (const auto &param : parameters) {
 			if (seen_names.find(param.GetName()) != seen_names.end()) {
 				throw InvalidInputException("Duplicate parameter name: %s", param.GetName());
 			}
 			seen_names.insert(param.GetName());
+		}
+
+		// Also check for default values that are not at the end of the parameter list
+		bool found_default_value = false;
+		for (const auto &param : parameters) {
+			if (param.HasDefaultValue()) {
+				found_default_value = true;
+			} else if (found_default_value) {
+				throw InvalidInputException(
+				    "Parameters with default values must be at the end of the parameter list. Parameter '%s' does not "
+				    "have a default value but follows a parameter with a default value.",
+				    param.GetName());
+			}
 		}
 	}
 
@@ -256,6 +303,7 @@ public:
 	//! Returns the formatted string name(arg1, arg2, ...)
 	DUCKDB_API static string CallToString(const string &catalog_name, const string &schema_name, const string &name,
 	                                      const vector<LogicalType> &arguments,
+	                                      const vector<pair<string, LogicalType>> &named_arguments,
 	                                      const LogicalType &varargs = LogicalType::INVALID);
 	//! Returns the formatted string name(arg1, arg2..) -> return_type
 	DUCKDB_API static string CallToString(const string &catalog_name, const string &schema_name, const string &name,

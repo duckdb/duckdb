@@ -17,29 +17,39 @@ ColumnQualifier::ColumnQualifier(Binder &binder_p, optional_ptr<vector<DummyBind
       having_binder(having_binder_p) {
 }
 
-string GetSQLValueFunctionName(const string &column_name) {
-	auto lcase = StringUtil::Lower(column_name);
+static string GetSQLValueFunctionName(const string &column_name) {
+	const auto lcase = StringUtil::Lower(column_name);
 	if (lcase == "current_catalog") {
 		return "current_catalog";
-	} else if (lcase == "current_date") {
+	}
+	if (lcase == "current_date") {
 		return "current_date";
-	} else if (lcase == "current_schema") {
+	}
+	if (lcase == "current_schema") {
 		return "current_schema";
-	} else if (lcase == "current_role") {
+	}
+	if (lcase == "current_role") {
 		return "current_role";
-	} else if (lcase == "current_time") {
+	}
+	if (lcase == "current_time") {
 		return "get_current_time";
-	} else if (lcase == "current_timestamp") {
+	}
+	if (lcase == "current_timestamp") {
 		return "get_current_timestamp";
-	} else if (lcase == "current_user") {
+	}
+	if (lcase == "current_user") {
 		return "current_user";
-	} else if (lcase == "localtime") {
+	}
+	if (lcase == "localtime") {
 		return "current_localtime";
-	} else if (lcase == "localtimestamp") {
+	}
+	if (lcase == "localtimestamp") {
 		return "current_localtimestamp";
-	} else if (lcase == "session_user") {
+	}
+	if (lcase == "session_user") {
 		return "session_user";
-	} else if (lcase == "user") {
+	}
+	if (lcase == "user") {
 		return "user";
 	}
 	return string();
@@ -283,15 +293,15 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 void ColumnQualifier::QualifyColumnNamesInLambda(FunctionExpression &function,
                                                  vector<unordered_set<string>> &lambda_params) {
 	for (auto &child : function.children) {
-		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
+		if (child.GetExpression()->GetExpressionClass() != ExpressionClass::LAMBDA) {
 			// not a lambda expression
-			QualifyColumnNames(child, lambda_params, true);
+			QualifyColumnNames(child.GetExpression(), lambda_params, true);
 			continue;
 		}
 
 		// special-handling for LHS lambda parameters
 		// we do not qualify them, and we add them to the lambda_params vector
-		auto &lambda_expr = child->Cast<LambdaExpression>();
+		auto &lambda_expr = child.GetExpression()->Cast<LambdaExpression>();
 		string error_message;
 		auto column_ref_expressions = lambda_expr.ExtractColumnRefExpressions(error_message);
 

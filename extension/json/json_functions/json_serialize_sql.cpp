@@ -154,23 +154,18 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 
 ScalarFunctionSet JSONFunctions::GetSerializeSqlFunction() {
 	ScalarFunctionSet set("json_serialize_sql");
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::JSON(), JsonSerializeFunction,
-	                               JsonSerializeBind, nullptr, JSONFunctionLocalState::Init));
 
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, LogicalType::JSON(),
-	                               JsonSerializeFunction, JsonSerializeBind, nullptr, JSONFunctionLocalState::Init));
+	ScalarFunction func({}, LogicalType::JSON(), JsonSerializeFunction, JsonSerializeBind, nullptr,
+	                    JSONFunctionLocalState::Init);
 
-	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	                               LogicalType::JSON(), JsonSerializeFunction, JsonSerializeBind, nullptr,
-	                               JSONFunctionLocalState::Init));
+	func.GetSignature()
+	    .AddParameter("sql", LogicalType::VARCHAR)
+	    .AddParameter("skip_null", LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddParameter("skip_empty", LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddParameter("skip_default", LogicalType::BOOLEAN, Value::BOOLEAN(false))
+	    .AddParameter("format", LogicalType::BOOLEAN, Value::BOOLEAN(false));
 
-	set.AddFunction(ScalarFunction(
-	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN}, LogicalType::JSON(),
-	    JsonSerializeFunction, JsonSerializeBind, nullptr, JSONFunctionLocalState::Init));
-
-	set.AddFunction(ScalarFunction(
-	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	    LogicalType::JSON(), JsonSerializeFunction, JsonSerializeBind, nullptr, JSONFunctionLocalState::Init));
+	set.AddFunction(func);
 
 	return set;
 }
