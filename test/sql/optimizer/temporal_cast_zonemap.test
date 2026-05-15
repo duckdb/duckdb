@@ -58,10 +58,16 @@ EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) = '2022-06-15'::TI
 physical_plan	<REGEX>:.*col.*DATE.*
 
 # ---------------------------------------------------------------------------
-# DATE -> TIMESTAMP: non-midnight timestamps keep the cast and use zone map
+# DATE -> TIMESTAMP: non-midnight ordering ops rewrite to direct DATE filter
+# (cast eliminated, no zone map needed). Equality keeps the cast.
 # ---------------------------------------------------------------------------
 query II
 EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) > '2024-01-01 12:00:00'::TIMESTAMP;
+----
+physical_plan	<REGEX>:.*col.*DATE.*
+
+query II
+EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) = '2024-01-01 12:00:00'::TIMESTAMP;
 ----
 physical_plan	<REGEX>:.*optional.*col.*
 

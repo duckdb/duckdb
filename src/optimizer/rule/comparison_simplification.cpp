@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/optimizer/rule/comparison_simplification.hpp"
 
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
@@ -58,18 +59,33 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		// Is the constant cast invertible?
 		if (!cast_constant.IsNull() &&
 		    !BoundCastExpression::CastIsInvertible(cast_expression.GetReturnType(), target_type)) {
-			// DATE→TIMESTAMP is lossless (every date is a valid midnight timestamp),
-			// so we can check if this specific timestamp value round-trips through DATE.
+			// DATE→TIMESTAMP is lossless: every DATE maps to a unique midnight TIMESTAMP.
+			// For comparisons with a TIMESTAMP constant, we can rewrite using the floor (cast to DATE),
+			// adjusting by +1 day for operators where the column-as-midnight value is strictly excluded
+			// by a non-midnight constant.
 			if (target_type.id() != LogicalTypeId::DATE ||
 			    cast_expression.GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
 				return nullptr;
 			}
-			Value round_trip;
-			string rt_error;
-			if (!cast_constant.TryCastAs(rewriter.context, cast_expression.GetReturnType(), round_trip, &rt_error,
-			                             true) ||
-			    round_trip != constant_value) {
-				return nullptr;
+			if (Timestamp::GetTime(constant_value.GetValue<timestamp_t>()) != dtime_t(0)) {
+				auto op = expr.GetExpressionType();
+				// =/!= against a non-midnight TIMESTAMP can never match a DATE column (which is always
+				// midnight when cast to TIMESTAMP) — replace with constant_or_null(col, false/true).
+				if (op == ExpressionType::COMPARE_EQUAL || op == ExpressionType::COMPARE_NOTEQUAL) {
+					return ExpressionRewriter::ConstantOrNull(std::move(cast_expression.child),
+					                                          Value::BOOLEAN(op == ExpressionType::COMPARE_NOTEQUAL));
+				}
+				bool needs_plus_one_day = column_ref_left ? (op == ExpressionType::COMPARE_LESSTHAN ||
+				                                             op == ExpressionType::COMPARE_GREATERTHANOREQUALTO)
+				                                          : (op == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+				                                             op == ExpressionType::COMPARE_GREATERTHAN);
+				if (op != ExpressionType::COMPARE_LESSTHAN && op != ExpressionType::COMPARE_LESSTHANOREQUALTO &&
+				    op != ExpressionType::COMPARE_GREATERTHAN && op != ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+					return nullptr;
+				}
+				if (needs_plus_one_day) {
+					cast_constant = Value::DATE(date_t(cast_constant.GetValue<date_t>().days + 1));
+				}
 			}
 		}
 

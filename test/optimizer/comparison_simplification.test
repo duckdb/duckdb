@@ -51,7 +51,7 @@ query I nosort constantshift
 EXPLAIN SELECT X::BIGINT='1' FROM test
 ----
 
-# value-level round-trip: midnight timestamp constants are rewritten to DATE
+# DATE column compared to TIMESTAMP constant: cast is eliminated for ordering ops
 statement ok
 CREATE TABLE date_test(d DATE);
 
@@ -61,27 +61,203 @@ INSERT INTO date_test VALUES ('2024-01-01'), ('2024-06-15'), ('2025-01-01');
 statement ok
 PRAGMA explain_output = PHYSICAL_ONLY;
 
-# midnight timestamp: cast is eliminated
+# --- midnight, column LEFT: all 6 ops rewrite to direct DATE comparison ---
+query II
+EXPLAIN SELECT * FROM date_test WHERE d < timestamp '2024-06-15 00:00:00';
+----
+physical_plan	<REGEX>:.*d < '2024-06-15'::DATE.*
+
 query II
 EXPLAIN SELECT * FROM date_test WHERE d <= timestamp '2024-06-15 00:00:00';
 ----
 physical_plan	<REGEX>:.*d <= '2024-06-15'::DATE.*
 
-# non-midnight timestamp: cast is preserved
+query II
+EXPLAIN SELECT * FROM date_test WHERE d > timestamp '2024-06-15 00:00:00';
+----
+physical_plan	<REGEX>:.*d > '2024-06-15'::DATE.*
+
+query II
+EXPLAIN SELECT * FROM date_test WHERE d >= timestamp '2024-06-15 00:00:00';
+----
+physical_plan	<REGEX>:.*d >= '2024-06-15'::DATE.*
+
+query II
+EXPLAIN SELECT * FROM date_test WHERE d = timestamp '2024-06-15 00:00:00';
+----
+physical_plan	<REGEX>:.*d = '2024-06-15'::DATE.*
+
+query II
+EXPLAIN SELECT * FROM date_test WHERE d != timestamp '2024-06-15 00:00:00';
+----
+physical_plan	<REGEX>:.*d != '2024-06-15'::DATE.*
+
+# --- non-midnight, column LEFT ---
+# non-midnight, < : floor + 1 day
+query II
+EXPLAIN SELECT * FROM date_test WHERE d < timestamp '2024-06-15 12:00:00';
+----
+physical_plan	<REGEX>:.*d < '2024-06-16'::DATE.*
+
+# non-midnight, <= : floor
 query II
 EXPLAIN SELECT * FROM date_test WHERE d <= timestamp '2024-06-15 12:00:00';
 ----
-physical_plan	<REGEX>:.*CAST.*TIMESTAMP.*
+physical_plan	<REGEX>:.*d <= '2024-06-15'::DATE.*
 
-# correctness: both queries return the same rows for midnight
+# non-midnight, > : floor
+query II
+EXPLAIN SELECT * FROM date_test WHERE d > timestamp '2024-06-15 12:00:00';
+----
+physical_plan	<REGEX>:.*d > '2024-06-15'::DATE.*
+
+# non-midnight, >= : floor + 1 day
+query II
+EXPLAIN SELECT * FROM date_test WHERE d >= timestamp '2024-06-15 12:00:00';
+----
+physical_plan	<REGEX>:.*d >= '2024-06-16'::DATE.*
+
+# non-midnight, = : never matches — rewritten to constant_or_null(d, false)
+query II
+EXPLAIN SELECT * FROM date_test WHERE d = timestamp '2024-06-15 12:00:00';
+----
+physical_plan	<!REGEX>:.*CAST.*
+
+# non-midnight, != : always true (modulo NULL) — rewritten to constant_or_null(d, true)
+query II
+EXPLAIN SELECT * FROM date_test WHERE d != timestamp '2024-06-15 12:00:00';
+----
+physical_plan	<!REGEX>:.*CAST.*
+
+# correctness: =/!= against non-midnight preserve NULL semantics
+statement ok
+INSERT INTO date_test VALUES (NULL);
+
+query II
+SELECT d, d = timestamp '2024-06-15 12:00:00' AS r FROM date_test ORDER BY d;
+----
+2024-01-01	false
+2024-06-15	false
+2025-01-01	false
+NULL	NULL
+
+query II
+SELECT d, d != timestamp '2024-06-15 12:00:00' AS r FROM date_test ORDER BY d;
+----
+2024-01-01	true
+2024-06-15	true
+2025-01-01	true
+NULL	NULL
+
+# correctness: non-midnight rewrites preserve semantics across all 4 ordering ops
 query I
-SELECT d FROM date_test WHERE d <= timestamp '2024-06-15 00:00:00' ORDER BY d;
+SELECT d FROM date_test WHERE d < timestamp '2024-06-15 12:00:00' ORDER BY d;
 ----
 2024-01-01
 2024-06-15
 
 query I
-SELECT d FROM date_test WHERE CAST(d AS TIMESTAMP) <= timestamp '2024-06-15 00:00:00' ORDER BY d;
+SELECT d FROM date_test WHERE d <= timestamp '2024-06-15 12:00:00' ORDER BY d;
 ----
 2024-01-01
+2024-06-15
+
+query I
+SELECT d FROM date_test WHERE d > timestamp '2024-06-15 12:00:00' ORDER BY d;
+----
+2025-01-01
+
+query I
+SELECT d FROM date_test WHERE d >= timestamp '2024-06-15 12:00:00' ORDER BY d;
+----
+2025-01-01
+
+# --- column RIGHT: plan tests (normalized by other rules to column-left form) ---
+# midnight, T < col  ↔  col > D
+query II
+EXPLAIN SELECT * FROM date_test WHERE timestamp '2024-06-15 00:00:00' < d;
+----
+physical_plan	<REGEX>:.*d > '2024-06-15'::DATE.*
+
+# non-midnight, T < col  ↔  col > floor (no adjust)
+query II
+EXPLAIN SELECT * FROM date_test WHERE timestamp '2024-06-15 12:00:00' < d;
+----
+physical_plan	<REGEX>:.*d > '2024-06-15'::DATE.*
+
+# non-midnight, T <= col  ↔  col >= floor+1
+query II
+EXPLAIN SELECT * FROM date_test WHERE timestamp '2024-06-15 12:00:00' <= d;
+----
+physical_plan	<REGEX>:.*d >= '2024-06-16'::DATE.*
+
+# non-midnight, T > col  ↔  col < floor+1
+query II
+EXPLAIN SELECT * FROM date_test WHERE timestamp '2024-06-15 12:00:00' > d;
+----
+physical_plan	<REGEX>:.*d < '2024-06-16'::DATE.*
+
+# non-midnight, T >= col  ↔  col <= floor (no adjust)
+query II
+EXPLAIN SELECT * FROM date_test WHERE timestamp '2024-06-15 12:00:00' >= d;
+----
+physical_plan	<REGEX>:.*d <= '2024-06-15'::DATE.*
+
+# non-midnight, T = col → constant_or_null
+query II
+EXPLAIN SELECT * FROM date_test WHERE timestamp '2024-06-15 12:00:00' = d;
+----
+physical_plan	<!REGEX>:.*CAST.*
+
+# --- correctness: column on the right, all 4 ordering ops + =/!= ---
+query I
+SELECT d FROM date_test WHERE timestamp '2024-06-15 12:00:00' < d ORDER BY d;
+----
+2025-01-01
+
+query I
+SELECT d FROM date_test WHERE timestamp '2024-06-15 12:00:00' <= d ORDER BY d;
+----
+2025-01-01
+
+query I
+SELECT d FROM date_test WHERE timestamp '2024-06-15 12:00:00' > d ORDER BY d;
+----
+2024-01-01
+2024-06-15
+
+query I
+SELECT d FROM date_test WHERE timestamp '2024-06-15 12:00:00' >= d ORDER BY d;
+----
+2024-01-01
+2024-06-15
+
+query II
+SELECT d, timestamp '2024-06-15 12:00:00' = d AS r FROM date_test ORDER BY d;
+----
+2024-01-01	false
+2024-06-15	false
+2025-01-01	false
+NULL	NULL
+
+# --- correctness: midnight column LEFT and RIGHT ---
+query I
+SELECT d FROM date_test WHERE d = timestamp '2024-06-15 00:00:00' ORDER BY d;
+----
+2024-06-15
+
+query I
+SELECT d FROM date_test WHERE d != timestamp '2024-06-15 00:00:00' ORDER BY d;
+----
+2024-01-01
+2025-01-01
+
+query I
+SELECT d FROM date_test WHERE timestamp '2024-06-15 00:00:00' < d ORDER BY d;
+----
+2025-01-01
+
+query I
+SELECT d FROM date_test WHERE timestamp '2024-06-15 00:00:00' = d ORDER BY d;
+----
 2024-06-15
