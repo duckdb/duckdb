@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "parquet_types.h"
 #include "column_reader.hpp"
@@ -66,6 +67,124 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
+
+const char *ParquetPrefetchStrategyToString(ParquetPrefetchStrategy strategy) {
+	switch (strategy) {
+	case ParquetPrefetchStrategy::WHOLE_GROUP:
+		return "whole_group";
+	case ParquetPrefetchStrategy::PREFETCH_FILTERS:
+		return "prefetch_filters";
+	case ParquetPrefetchStrategy::COLUMN_WISE_EAGER:
+		return "column_wise_eager";
+	case ParquetPrefetchStrategy::NONE:
+		return "none";
+	default:
+		throw InternalException("Invalid ParquetPrefetchStrategy for ParquetPrefetchStrategyToString()");
+	}
+}
+
+ParquetPrefetchStrategyOption ParquetPrefetchStrategyOptionFromString(const string &value) {
+	auto lower = StringUtil::Lower(value);
+	if (lower == "auto") {
+		return ParquetPrefetchStrategyOption::AUTO;
+	}
+	if (lower == "whole_group") {
+		return ParquetPrefetchStrategyOption::WHOLE_GROUP;
+	}
+	throw BinderException("Unrecognized prefetch_strategy '%s' (supported: 'auto', 'whole_group')", value);
+}
+
+static idx_t ParquetColumnChunkFileOffset(const duckdb_parquet::ColumnChunk &chunk) {
+	idx_t offset = NumericCast<idx_t>(chunk.meta_data.data_page_offset);
+	if (chunk.meta_data.__isset.dictionary_page_offset) {
+		offset = MinValue<idx_t>(offset, NumericCast<idx_t>(chunk.meta_data.dictionary_page_offset));
+	}
+	if (chunk.meta_data.__isset.index_page_offset) {
+		offset = MinValue<idx_t>(offset, NumericCast<idx_t>(chunk.meta_data.index_page_offset));
+	}
+	return offset;
+}
+
+void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(ThriftFileTransport &trans,
+                                                         vector<ParquetPrefetchColumn> &requested_columns,
+                                                         const vector<duckdb_parquet::ColumnChunk> &all_chunks) {
+	if (requested_columns.empty()) {
+		return;
+	}
+
+	// Let's use ReadHead to bucket registrations so we are use we are getting whatever the ThriftFileTransport does
+	vector<reference<ReadHead>> bucket_order;
+	reference_map_t<ReadHead, vector<ParquetPrefetchColumn>> buckets;
+	set<idx_t> registered_offsets;
+	for (auto &requested_column : requested_columns) {
+		registered_offsets.insert(requested_column.offset);
+		auto rh_ptr = trans.GetReadHead(requested_column.offset);
+		if (!rh_ptr) {
+			continue;
+		}
+		auto &rh = *rh_ptr;
+		auto inserted = buckets.emplace(rh, vector<ParquetPrefetchColumn> {});
+		if (inserted.second) {
+			bucket_order.emplace_back(rh);
+		}
+		inserted.first->second.push_back(requested_column);
+	}
+
+	for (auto &chunk : all_chunks) {
+		// We gotta figure out if we had any hitchhiker
+		idx_t chunk_start = ParquetColumnChunkFileOffset(chunk);
+		if (registered_offsets.count(chunk_start) > 0) {
+			continue;
+		}
+		idx_t chunk_end = chunk_start + NumericCast<idx_t>(chunk.meta_data.total_compressed_size);
+		// Figure out what physical I/O this file offset lives in
+		auto rh_ptr = trans.GetReadHead(chunk_start);
+		if (!rh_ptr || chunk_end > rh_ptr->GetEnd()) {
+			continue;
+		}
+		auto &rh = *rh_ptr;
+		// Hitchhiker only counts if the ReadHead was created for one of our registrations.
+		auto bucket_it = buckets.find(rh);
+		if (bucket_it == buckets.end()) {
+			continue;
+		}
+		auto &path = chunk.meta_data.path_in_schema;
+		string name = path.empty() ? string() : StringUtil::Join(path, ".");
+		// we tag hitchhikers with *column_name*
+		bucket_it->second.emplace_back("*" + std::move(name) + "*", chunk_start);
+	}
+
+	// Issue one log group per ReadHead, on the order they were registered
+	for (auto &rh_ref : bucket_order) {
+		auto &bucket = buckets[rh_ref];
+		std::sort(bucket.begin(), bucket.end());
+		vector<string> names;
+		names.reserve(bucket.size());
+		for (auto &col : bucket) {
+			names.push_back(std::move(col.name));
+		}
+		prefetch_groups.push_back(std::move(names));
+	}
+	requested_columns.clear();
+}
+
+static void LogRowGroupPrefetch(ClientContext &context, const string &file_path, idx_t row_group_id,
+                                ParquetReaderScanState &state) {
+	const bool fully_filtered = !state.prefetch_metrics.had_match;
+	auto &filters_used = state.prefetch_metrics.logger.filters_used;
+	vector<string> minimal_filters;
+	minimal_filters.reserve(filters_used.size());
+	for (idx_t i = 0; i < state.scan_filters.size(); i++) {
+		if (i < filters_used.size() && filters_used[i]) {
+			auto &scan_filter = state.scan_filters[i];
+			MultiFileLocalIndex local_idx(scan_filter.filter_idx);
+			minimal_filters.push_back(state.GetColumnReader(local_idx).Schema().name);
+		}
+	}
+	DUCKDB_LOG(context, ParquetPrefetchLogType, file_path, row_group_id, fully_filtered,
+	           ParquetPrefetchStrategyToString(state.prefetch_metrics.logger.strategy),
+	           state.prefetch_metrics.logger.prefetch_groups, minimal_filters);
+}
 
 using duckdb_parquet::ColumnChunk;
 using duckdb_parquet::ConvertedType;
@@ -1327,6 +1446,9 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 			state.scan_filters.emplace_back(context, entry.GetIndex(), entry.Filter());
 		}
 	}
+	if (state.filter_eliminated_all_rows.size() != state.scan_filters.size()) {
+		state.filter_eliminated_all_rows.assign(state.scan_filters.size(), false);
+	}
 
 	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode);
 
@@ -1408,11 +1530,104 @@ void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metada
 	}
 }
 
+void ParquetReader::WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
+                                       const duckdb_parquet::RowGroup &group, uint64_t total_row_group_span,
+                                       bool log_prefetch) {
+	if (!state.current_group_prefetched) {
+		auto total_compressed_size = GetGroupCompressedSize(state);
+		if (total_compressed_size > 0) {
+			trans.Prefetch(GetGroupOffset(state), total_row_group_span);
+		}
+		state.current_group_prefetched = true;
+	}
+	if (log_prefetch) {
+		state.prefetch_metrics.logger.strategy = ParquetPrefetchStrategy::WHOLE_GROUP;
+		vector<ParquetPrefetchColumn> pending_registrations;
+		for (auto &column_chunk : group.columns) {
+			auto &path = column_chunk.meta_data.path_in_schema;
+			string name = path.empty() ? string() : StringUtil::Join(path, ".");
+			pending_registrations.push_back({name, ParquetColumnChunkFileOffset(column_chunk)});
+		}
+		state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
+	}
+}
+
+void ParquetReader::ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
+                                       const duckdb_parquet::RowGroup &group, bool filters_look_unselective,
+                                       bool log_prefetch) {
+	bool has_non_optional_filter = false;
+	if (filters) {
+		for (auto &entry : *filters) {
+			if (!ExpressionFilter::IsRootOptionalFilter(entry.Filter())) {
+				has_non_optional_filter = true;
+			}
+		}
+	}
+	const bool lazy_fetch = has_non_optional_filter && !filters_look_unselective;
+
+	vector<bool> already_registered(column_ids.size(), false);
+	vector<ParquetPrefetchColumn> pending_registrations;
+
+	if (lazy_fetch && !state.scan_filters.empty()) {
+		auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
+		const auto &permutation = adaptive_filter.GetPermutation();
+		for (idx_t i = 0; i < state.scan_filters.size(); i++) {
+			// We must do the filter grouping based on the set that excludes all rows
+			if (i > 0 && state.filter_eliminated_all_rows[permutation[i - 1]]) {
+				trans.FinalizeRegistration();
+				if (log_prefetch) {
+					state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
+				}
+			}
+			auto &scan_filter = state.scan_filters[permutation[i]];
+			MultiFileLocalIndex local_idx(scan_filter.filter_idx);
+			auto &child = state.GetColumnReader(local_idx);
+			child.RegisterPrefetch(trans, true);
+			if (log_prefetch) {
+				pending_registrations.emplace_back(child.Schema().name, child.FileOffset());
+			}
+			already_registered[local_idx.GetIndex()] = true;
+		}
+		// Done with the filter columns, time to merge the non-filter columns
+		trans.FinalizeRegistration();
+		if (log_prefetch) {
+			state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
+		}
+	}
+
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		// We do the remaining columns that have not yet been prefetched by the previous steps
+		// These can be the remaining projections, or all columns if the filters were not selective
+		if (already_registered[i]) {
+			continue;
+		}
+		auto col_idx = MultiFileLocalIndex(i);
+		auto &child = state.GetColumnReader(col_idx);
+		child.RegisterPrefetch(trans, true);
+		if (log_prefetch) {
+			pending_registrations.emplace_back(child.Schema().name, child.FileOffset());
+		}
+	}
+	trans.FinalizeRegistration();
+	if (log_prefetch) {
+		state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
+		state.prefetch_metrics.logger.strategy =
+		    lazy_fetch ? ParquetPrefetchStrategy::PREFETCH_FILTERS : ParquetPrefetchStrategy::COLUMN_WISE_EAGER;
+	}
+
+	if (!lazy_fetch) {
+		trans.PrefetchRegistered();
+	}
+}
+
 AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
 	result.Reset();
 	if (state.finished) {
 		return SourceResultType::FINISHED;
 	}
+
+	const bool log_prefetch =
+	    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
 
 	// see if we have to switch to the next row group in the parquet file
 	if (state.current_group < 0 || (int64_t)state.offset_in_group >= GetGroup(state).num_rows) {
@@ -1422,6 +1637,11 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
 		trans.ClearPrefetch();
 		state.current_group_prefetched = false;
+
+		if (log_prefetch && state.prefetch_metrics.filter_ran && state.current_group > 0) {
+			LogRowGroupPrefetch(context, file.path, state.group_idx_list[state.current_group - 1], state);
+		}
+		state.prefetch_metrics.FinalizeRowGroupSelectivity();
 
 		if ((idx_t)state.current_group == state.group_idx_list.size()) {
 			state.finished = true;
@@ -1458,49 +1678,25 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				    GetFileName());
 			}
 
-			if (!filters && scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
-				// Prefetch the whole row group
-				if (!state.current_group_prefetched) {
-					auto total_compressed_size = GetGroupCompressedSize(state);
-					if (total_compressed_size > 0) {
-						trans.Prefetch(GetGroupOffset(state), total_row_group_span);
-					}
-					state.current_group_prefetched = true;
-				}
+			if (parquet_options.prefetch_strategy == ParquetPrefetchStrategyOption::WHOLE_GROUP) {
+				WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
 			} else {
-				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
-				// fetched on the first read to that buffer.
-				bool lazy_fetch = false;
+				bool filters_look_unselective = false;
 				if (filters) {
-					// check if any filter is non-optional
-					bool has_non_optional_filter = false;
-					for (auto &entry : *filters) {
-						if (!ExpressionFilter::IsRootOptionalFilter(entry.Filter())) {
-							has_non_optional_filter = true;
-						}
-					}
-					if (has_non_optional_filter) {
-						lazy_fetch = true;
+					if (state.prefetch_metrics.row_groups_executed == 0) {
+						filters_look_unselective = true;
+					} else if (static_cast<double>(state.prefetch_metrics.row_groups_with_matches) /
+					               static_cast<double>(state.prefetch_metrics.row_groups_executed) >
+					           ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO) {
+						filters_look_unselective = true;
 					}
 				}
 
-				// Prefetch column-wise
-				for (idx_t i = 0; i < column_ids.size(); i++) {
-					auto col_idx = MultiFileLocalIndex(i);
-					bool has_filter = false;
-					if (filters) {
-						auto filter = filters->TryGetFilterByColumnIndex(col_idx);
-						if (filter && !ExpressionFilter::IsRootOptionalFilter(*filter)) {
-							has_filter = true;
-						}
-					}
-					state.GetColumnReader(col_idx).RegisterPrefetch(trans, !has_filter);
-				}
-
-				trans.FinalizeRegistration();
-
-				if (!lazy_fetch) {
-					trans.PrefetchRegistered();
+				if ((!filters || filters_look_unselective) &&
+				    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+					WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
+				} else {
+					ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
 				}
 			}
 		}
@@ -1560,10 +1756,24 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
 				child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state,
 				                    state.sel, filter_count, is_first_filter);
+				if (log_prefetch) {
+					auto &filters_used = state.prefetch_metrics.logger.filters_used;
+					if (filters_used.size() != state.scan_filters.size()) {
+						filters_used.assign(state.scan_filters.size(), false);
+					}
+					filters_used[permutation[i]] = true;
+				}
 				need_to_read[local_idx.GetIndex()] = false;
 				is_first_filter = false;
+				if (filter_count == 0) {
+					state.filter_eliminated_all_rows[permutation[i]] = true;
+				}
 			}
 			adaptive_filter.EndFilter(filter_state);
+			state.prefetch_metrics.filter_ran = true;
+			if (filter_count > 0) {
+				state.prefetch_metrics.had_match = true;
+			}
 		}
 
 		// we still may have to read some cols

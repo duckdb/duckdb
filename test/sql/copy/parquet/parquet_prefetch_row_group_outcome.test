@@ -1,0 +1,257 @@
+# name: test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test
+# description: ParquetPrefetch logs whether each row group was fully filtered out
+# group: [parquet]
+
+require parquet
+
+require vector_size 2048
+
+statement ok
+SET threads=1
+
+statement ok
+SET prefetch_all_parquet_files=true
+
+statement ok
+COPY (
+    SELECT i AS a,
+        i + 10 AS b,
+        CASE
+            WHEN i % 100 = 50 THEN 51
+            ELSE i % 100
+        END AS c,
+        CASE
+            WHEN i < 6144 AND i % 1000 = 500 THEN 501
+            ELSE i % 1000
+        END AS g
+    FROM RANGE(12288) t(i)
+) TO '{TEST_DIR}/rgo.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+CALL enable_logging('ParquetPrefetch')
+
+statement ok
+SELECT sum(a + b + c + g)
+FROM read_parquet('{TEST_DIR}/rgo.parquet')
+WHERE a > 5 AND b > 15
+
+# If we read all columns they all get together in one request of whole_group
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo.parquet'
+ORDER BY row_group_id
+----
+0	false	whole_group	[[a, b, c, g]]
+1	false	whole_group	[[a, b, c, g]]
+2	false	whole_group	[[a, b, c, g]]
+3	false	whole_group	[[a, b, c, g]]
+4	false	whole_group	[[a, b, c, g]]
+5	false	whole_group	[[a, b, c, g]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+SELECT sum(a + b + c + g)
+FROM read_parquet('{TEST_DIR}/rgo.parquet')
+WHERE c = 50
+
+# If our filter is fully selective we prefetch it
+# *c* is small enough that is still carried on the next request
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo.parquet'
+ORDER BY row_group_id
+----
+0	true	whole_group	[[a, b, c, g]]
+1	true	prefetch_filters	[[c], [a, b, *c*, g]]
+2	true	prefetch_filters	[[c], [a, b, *c*, g]]
+3	true	prefetch_filters	[[c], [a, b, *c*, g]]
+4	true	prefetch_filters	[[c], [a, b, *c*, g]]
+5	true	prefetch_filters	[[c], [a, b, *c*, g]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+SELECT sum(a + b + c + g)
+FROM read_parquet('{TEST_DIR}/rgo.parquet')
+WHERE g = 500
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo.parquet'
+ORDER BY row_group_id
+----
+0	true	whole_group	[[a, b, c, g]]
+1	true	prefetch_filters	[[g], [a, b, c]]
+2	true	prefetch_filters	[[g], [a, b, c]]
+3	false	prefetch_filters	[[g], [a, b, c]]
+4	false	prefetch_filters	[[g], [a, b, c]]
+5	false	prefetch_filters	[[g], [a, b, c]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+SELECT sum(a + b + c + g)
+FROM read_parquet('{TEST_DIR}/rgo.parquet')
+WHERE a > 100 AND b > 100 AND c = 50
+
+query ITTTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups, minimal_filters
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo.parquet'
+ORDER BY row_group_id
+----
+0	true	whole_group	[[a, b, c, g]]	[a, b, c]
+1	true	prefetch_filters	[[a, b, c], [g]]	[a, b, c]
+2	true	prefetch_filters	[[a, b, c], [g]]	[a, b, c]
+3	true	prefetch_filters	[[a, b, c], [g]]	[a, b, c]
+4	true	prefetch_filters	[[a, b, c], [g]]	[a, b, c]
+5	true	prefetch_filters	[[a, b, c], [g]]	[a, b, c]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+COPY (
+    SELECT i AS a,
+        i + 10 AS b,
+        CASE
+            WHEN i % 100 = 50 THEN 51
+            ELSE i % 100
+        END AS c,
+        CASE
+            WHEN i >= 6144 AND i % 1000 = 500 THEN 501
+            ELSE i % 1000
+        END AS g
+    FROM RANGE(12288) t(i)
+) TO '{TEST_DIR}/rgo2.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+SELECT sum(a + b + c + g)
+FROM read_parquet('{TEST_DIR}/rgo2.parquet')
+WHERE g = 500
+
+# Initial groups are not fully selective, but then it becomes, so strategy changes for prefetch_filters
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo2.parquet'
+ORDER BY row_group_id
+----
+0	false	whole_group	[[a, b, c, g]]
+1	false	whole_group	[[a, b, c, g]]
+2	false	whole_group	[[a, b, c, g]]
+3	true	whole_group	[[a, b, c, g]]
+4	true	prefetch_filters	[[g], [a, b, c]]
+5	true	prefetch_filters	[[g], [a, b, c]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+COPY (
+    SELECT i AS a,
+        i + 10 AS b,
+        CASE
+            WHEN i % 100 = 50 THEN 51
+            ELSE i % 100
+        END AS c,
+        CASE
+            WHEN i < 2048 AND i % 1000 = 500 THEN 501
+            ELSE i % 1000
+        END AS g
+    FROM RANGE(24576) t(i)
+) TO '{TEST_DIR}/rgo3.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+SELECT sum(a + b + c + g)
+FROM read_parquet('{TEST_DIR}/rgo3.parquet')
+WHERE g = 500
+
+
+# prefetch_filters can also go back to whole_group if it crossed the 90% filtering
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo3.parquet'
+ORDER BY row_group_id
+----
+0	true	whole_group	[[a, b, c, g]]
+1	false	prefetch_filters	[[g], [a, b, c]]
+2	false	prefetch_filters	[[g], [a, b, c]]
+3	false	prefetch_filters	[[g], [a, b, c]]
+4	false	prefetch_filters	[[g], [a, b, c]]
+5	false	prefetch_filters	[[g], [a, b, c]]
+6	false	prefetch_filters	[[g], [a, b, c]]
+7	false	prefetch_filters	[[g], [a, b, c]]
+8	false	prefetch_filters	[[g], [a, b, c]]
+9	false	prefetch_filters	[[g], [a, b, c]]
+10	false	prefetch_filters	[[g], [a, b, c]]
+11	false	whole_group	[[a, b, c, g]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+COPY (
+    SELECT i % 100 AS a,
+        99 - (i % 100) AS b,
+        i % 50 AS c,
+        i AS d
+    FROM RANGE(8192) t(i)
+) TO '{TEST_DIR}/rgo_ab.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+SELECT sum(a + b + c + d)
+FROM read_parquet('{TEST_DIR}/rgo_ab.parquet')
+WHERE a > 50 AND b > 50 AND c = 0
+
+# We have 3 filters, but a subset of 2 is enough to fully eliminate the rowgroups, so we request them first.
+query ITTTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups, minimal_filters
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo_ab.parquet'
+ORDER BY row_group_id
+----
+0	true	whole_group	[[a, b, c, d]]	[a, b]
+1	true	prefetch_filters	[[a, b], [c], [d]]	[a, b]
+2	true	prefetch_filters	[[a, b], [c], [d]]	[a, b]
+3	true	prefetch_filters	[[a, b], [c], [d]]	[a, b]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+COPY (
+    SELECT i AS a,
+        hash(i)::VARCHAR AS pad1,
+        hash(i + 1)::VARCHAR AS pad2,
+        CASE WHEN i % 100 = 50 THEN 51 ELSE i % 100 END AS c,
+        hash(i + 2)::VARCHAR AS pad3,
+        hash(i + 3)::VARCHAR AS pad4,
+        i AS d
+    FROM RANGE(8192) t(i)
+) TO '{TEST_DIR}/rgo_lazy_gap.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+SELECT sum(a + d)
+FROM read_parquet('{TEST_DIR}/rgo_lazy_gap.parquet')
+WHERE c = 50
+
+# due to the order and gaps, we should have 3 separete requests
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo_lazy_gap.parquet'
+ORDER BY row_group_id
+----
+0	true	column_wise_eager	[[c], [a], [d]]
+1	true	prefetch_filters	[[c], [a], [d]]
+2	true	prefetch_filters	[[c], [a], [d]]
+3	true	prefetch_filters	[[c], [a], [d]]

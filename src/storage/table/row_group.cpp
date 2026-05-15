@@ -798,6 +798,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 					auto &col_data = GetColumn(col_idx);
 					col_data.Skip(state.column_scans[i]);
 				}
+				filter_info.EndFilter(filter_state);
 				state.vector_index++;
 				continue;
 			}

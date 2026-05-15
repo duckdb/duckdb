@@ -20,4 +20,12 @@ void MultiFileAdaptiveFilterCache::InitializeAdaptiveFilter(const TableFilterSet
 	filter->SetLogger(std::move(logger), file_path, source, identities);
 }
 
+AdaptiveFilter &MultiFileAdaptiveFilterCache::GetAdaptiveFilter() const {
+	if (!filter) {
+		throw InternalException(
+		    "Filter from MultiFileAdaptiveFilterCache must be initialized by 'InitializeAdaptiveFilter' first.");
+	}
+	return *filter;
+}
+
 } // namespace duckdb

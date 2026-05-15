@@ -20,6 +20,7 @@ constexpr LogLevel PhysicalOperatorLogType::LEVEL;
 constexpr LogLevel MetricsLogType::LEVEL;
 constexpr LogLevel CheckpointLogType::LEVEL;
 constexpr LogLevel AdaptiveFilterLogType::LEVEL;
+constexpr LogLevel ParquetPrefetchLogType::LEVEL;
 
 //===--------------------------------------------------------------------===//
 // QueryLogType
@@ -280,6 +281,53 @@ string AdaptiveFilterLogType::ConstructLogMessage(const char *event, const strin
 	    {"file_path", Value(file_path)},
 	    {"permutation", Value(std::move(permutation_str))},
 	    {"info", StringPairIterableToMap(info)},
+	};
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+//===--------------------------------------------------------------------===//
+// ParquetPrefetchLogType
+//===--------------------------------------------------------------------===//
+ParquetPrefetchLogType::ParquetPrefetchLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType ParquetPrefetchLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"file_path", LogicalType::VARCHAR},
+	    {"row_group_id", LogicalType::BIGINT},
+	    {"fully_filtered", LogicalType::BOOLEAN},
+	    {"strategy", LogicalType::VARCHAR},
+	    {"prefetch_groups", LogicalType::LIST(LogicalType::LIST(LogicalType::VARCHAR))},
+	    {"minimal_filters", LogicalType::LIST(LogicalType::VARCHAR)},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string ParquetPrefetchLogType::ConstructLogMessage(const string &file_path, idx_t row_group_id, bool fully_filtered,
+                                                   const char *strategy, const vector<vector<string>> &prefetch_groups,
+                                                   const vector<string> &minimal_filters) {
+	vector<Value> outer;
+	outer.reserve(prefetch_groups.size());
+	for (auto &group : prefetch_groups) {
+		vector<Value> inner;
+		inner.reserve(group.size());
+		for (auto &name : group) {
+			inner.emplace_back(name);
+		}
+		outer.push_back(Value::LIST(LogicalType::VARCHAR, std::move(inner)));
+	}
+	vector<Value> minimal;
+	minimal.reserve(minimal_filters.size());
+	for (auto &name : minimal_filters) {
+		minimal.emplace_back(name);
+	}
+	child_list_t<Value> child_list = {
+	    {"file_path", Value(file_path)},
+	    {"row_group_id", Value::BIGINT(static_cast<int64_t>(row_group_id))},
+	    {"fully_filtered", Value::BOOLEAN(fully_filtered)},
+	    {"strategy", strategy ? Value(strategy) : Value(LogicalType::VARCHAR)},
+	    {"prefetch_groups", Value::LIST(LogicalType::LIST(LogicalType::VARCHAR), std::move(outer))},
+	    {"minimal_filters", Value::LIST(LogicalType::VARCHAR, std::move(minimal))},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }
