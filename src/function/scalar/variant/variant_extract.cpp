@@ -43,17 +43,6 @@ bool VariantExtractBindData::Equals(const FunctionData &other) const {
 	return true;
 }
 
-static bool GetConstantArgument(ClientContext &context, Expression &expr, Value &constant_arg) {
-	if (!expr.IsFoldable()) {
-		return false;
-	}
-	constant_arg = ExpressionExecutor::EvaluateScalar(context, expr);
-	if (!constant_arg.IsNull()) {
-		return true;
-	}
-	return false;
-}
-
 static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &bind_data = input.bind_data;
@@ -83,14 +72,14 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 	if (arguments.size() != 2) {
 		throw BinderException("'variant_extract' expects two arguments, VARIANT column and VARCHAR path");
 	}
-	auto &path = *arguments[1];
+	const auto &path = *arguments[1];
 	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && path.GetReturnType().id() != LogicalTypeId::UINTEGER) {
 		throw BinderException("'variant_extract' expects the second argument to be of type VARCHAR or UINTEGER, not %s",
 		                      path.GetReturnType().ToString());
 	}
 
 	Value constant_arg;
-	if (!GetConstantArgument(context, path, constant_arg)) {
+	if (!VariantBindUtils::GetConstantArgument(context, path, constant_arg)) {
 		throw BinderException("'variant_extract' expects the second argument to be a constant expression");
 	}
 

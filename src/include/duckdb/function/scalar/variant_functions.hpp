@@ -47,10 +47,10 @@ struct VariantTypeofFun {
 
 struct VariantKeysFun {
 	static constexpr const char *Name = "variant_keys";
-	static constexpr const char *Parameters = "input_variant::VARIANT\001input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]";
-	static constexpr const char *Description = "Returns the keys present at the root level of the object.\001Returns the keys present at the level of the specified path.\001Returns a list of keys present at the level of each specified path.";
-	static constexpr const char *Example = "variant_keys({'a': { 'a': 1, 'b': 2}}::VARIANT)\001variant_keys({'a': { 'a': 1, 'b': 2}}::VARIANT, '$.a')\001variant_keys({'a': { 'a': 1, 'b': 2}, 'b': {'c': 3}}::VARIANT, ['$.a', '$.b'])";
-	static constexpr const char *Categories = "variant\001variant\001variant";
+	static constexpr const char *Parameters = "input_variant::VARIANT\001input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]\001input_variant::VARCHAR\001input_variant::VARCHAR,path::VARCHAR\001input_variant::VARCHAR,path::VARCHAR[]";
+	static constexpr const char *Description = "Returns the keys present at the root level of the object.\001Returns the keys present at the level of the specified path.\001Returns a list of keys present at the level of each specified path.\001Returns the keys present at the root level of the object.\001Returns the keys present at the level of the specified path.\001Returns a list of keys present at the level of each specified path.";
+	static constexpr const char *Example = "variant_keys({'a': { 'a': 1, 'b': 2}}::VARIANT)\001variant_keys({'a': { 'a': 1, 'b': 2}}::VARIANT, '$.a')\001variant_keys({'a': { 'a': 1, 'b': 2}, 'b': {'c': 3}}::VARIANT, ['$.a', '$.b'])\001variant_keys('{\"a\": { \"a\": 1, \"b\": 2}}')\001variant_keys('{\"a\": { \"a\": 1, \"b\": 2}}', '$.a')\001variant_keys('{\"a\": { \"a\": 1, \"b\": 2}, \"b\": {\"c\": 3}}', ['$.a', '$.b'])";
+	static constexpr const char *Categories = "variant\001variant\001variant\001variant\001variant\001variant";
 
 	static ScalarFunctionSet GetFunctions();
 };

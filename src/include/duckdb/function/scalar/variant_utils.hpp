@@ -30,23 +30,6 @@ public:
 	VariantPathComponent component;
 };
 
-struct VariantKeysBindData : public FunctionData {
-public:
-	explicit VariantKeysBindData();
-	explicit VariantKeysBindData(const string &input_path);
-	explicit VariantKeysBindData(const vector<string> &input_paths);
-	// TODO: remove?
-	explicit VariantKeysBindData(uint32_t index);
-	VariantKeysBindData(const VariantKeysBindData &other) = default;
-
-public:
-	unique_ptr<FunctionData> Copy() const override;
-	bool Equals(const FunctionData &other) const override;
-
-public:
-	vector<vector<VariantPathComponent>> paths;
-};
-
 struct VariantNestedDataCollectionResult {
 public:
 	VariantNestedDataCollectionResult() : success(true) {
@@ -125,6 +108,10 @@ struct VariantUtils {
 
 	//! Whether or not a type is natively supported in variant
 	DUCKDB_API static bool VariantSupportsType(const LogicalType &type);
+};
+
+struct VariantBindUtils {
+	DUCKDB_API static bool GetConstantArgument(ClientContext &context, const Expression &expr, Value &constant_arg);
 };
 
 } // namespace duckdb
