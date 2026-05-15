@@ -808,6 +808,24 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, set<row_t> &row_ids
 	return SearchCloseRange(key, upper_bound, left_equal, right_equal, max_count, row_ids);
 }
 
+void ART::Scan(DataChunk &input, vector<row_t> &row_ids) {
+	ArenaAllocator arena(Allocator::Get(db));
+	unsafe_vector<ARTKey> keys(input.size());
+	GenerateKeys(arena, input, keys);
+
+	lock_guard<mutex> l(lock);
+	for (idx_t i = 0; i < input.size(); i++) {
+		if (keys[i].Empty()) {
+			continue;
+		}
+		set<row_t> result;
+		SearchEqual(keys[i], NumericLimits<idx_t>::Maximum(), result);
+		for (auto &rid : result) {
+			row_ids.push_back(rid);
+		}
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // More Constraint Checking
 //===--------------------------------------------------------------------===//
