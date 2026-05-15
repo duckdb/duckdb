@@ -12,16 +12,16 @@ namespace duckdb {
 BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
 	ErrorData error;
-	BindChild(expr.input, depth, error);
-	BindChild(expr.lower, depth, error);
-	BindChild(expr.upper, depth, error);
+	BindChild(expr.InputMutable(), depth, error);
+	BindChild(expr.LowerBoundMutable(), depth, error);
+	BindChild(expr.UpperBoundMutable(), depth, error);
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}
 	// the children have been successfully resolved
-	auto &input = BoundExpression::GetExpression(*expr.input);
-	auto &lower = BoundExpression::GetExpression(*expr.lower);
-	auto &upper = BoundExpression::GetExpression(*expr.upper);
+	auto &input = BoundExpression::GetExpression(*expr.InputMutable());
+	auto &lower = BoundExpression::GetExpression(*expr.LowerBoundMutable());
+	auto &upper = BoundExpression::GetExpression(*expr.UpperBoundMutable());
 
 	auto input_sql_type = ExpressionBinder::GetExpressionReturnType(*input);
 	auto lower_sql_type = ExpressionBinder::GetExpressionReturnType(*lower);

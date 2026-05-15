@@ -34,9 +34,9 @@ void ParsedExpressionIterator::EnumerateChildren(
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BETWEEN: {
 		auto &cast_expr = expr.Cast<BetweenExpression>();
-		callback(cast_expr.input);
-		callback(cast_expr.lower);
-		callback(cast_expr.upper);
+		callback(cast_expr.InputMutable());
+		callback(cast_expr.LowerBoundMutable());
+		callback(cast_expr.UpperBoundMutable());
 		break;
 	}
 	case ExpressionClass::CASE: {
