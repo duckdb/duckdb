@@ -454,6 +454,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 		executor.ExecuteExpression(scan_chunk, append_vector);
 		column_data->Append(append_state, append_vector, scan_chunk.size());
 	}
+	column_data->FinalizeAppend(nullptr, append_state);
 
 	// set up the row_group based on this row_group
 	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
@@ -493,6 +494,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 			executor.ExecuteExpression(dummy_chunk, result);
 			added_column->Append(state, result, rows_in_this_vector);
 		}
+		added_column->FinalizeAppend(nullptr, state);
 	}
 
 	// set up the row_group based on this row_group
@@ -1004,18 +1006,11 @@ RowGroupAppendState::RowGroupAppendState(TableAppendState &parent_p)
 }
 
 RowGroupAppendState::~RowGroupAppendState() {
-	if (!row_group) {
-		// never started appending
-		return;
-	}
-	if (!is_finalized && !Exception::UncaughtException()) {
-		throw InternalException("RowGroupAppendState not finalized!");
-	}
 }
+
 void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
 	append_state.row_group = this;
 	append_state.offset_in_row_group = this->count;
-	append_state.is_finalized = false;
 	// for each column, initialize the append state
 	append_state.states = make_unsafe_uniq_array<ColumnAppendState>(GetColumnCount());
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
@@ -1050,7 +1045,6 @@ void RowGroup::FinalizeAppend(RowGroupAppendState &state) {
 			col_data.FinalizeAppend(parent_stats.GetStats(*stats_lock, c).Statistics(), state.states[c]);
 		}
 	}
-	state.is_finalized = true;
 }
 
 void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {

@@ -75,7 +75,6 @@ struct RowGroupAppendState {
 	unsafe_unique_array<ColumnAppendState> states;
 	//! Offset within the row_group
 	idx_t offset_in_row_group;
-	bool is_finalized = false;
 };
 
 struct IndexLock {
