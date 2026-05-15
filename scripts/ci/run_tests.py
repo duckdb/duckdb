@@ -698,6 +698,7 @@ def main_impl(argv: list[str] | None = None):
 
     test_list_files = [path for path in [args.test_list, args.changed_tests] if path is not None]
     config_invocations = build_config_invocations(args.test_config, args.test_flags)
+    is_github_ci = bool(os.environ.get("CI"))
     max_failures = args.max_failures
     if args.fail_fast:
         max_failures = 1
@@ -716,12 +717,17 @@ def main_impl(argv: list[str] | None = None):
     else:
         batch_size = args.batch_size
     failed_configs = []
+    keep_groups_open = False
     if len(config_invocations) > 1:
         print(f"running {len(config_invocations)} configs")
     for invocation in config_invocations:
         if stop_requested():
             print("interrupted")
             return 130
+        group_open = False
+        if is_github_ci:
+            print(f"::group::test config: {invocation.label}")
+            group_open = True
         try:
             returncode = run_single_config(
                 args,
@@ -737,6 +743,11 @@ def main_impl(argv: list[str] | None = None):
         except Exception as exc:
             print(f"[{invocation.label}] error: {exc}")
             returncode = 1
+        failed = returncode not in (0, 130)
+        if failed:
+            keep_groups_open = True
+        if group_open and not keep_groups_open:
+            print("::endgroup::")
         if returncode == 130:
             print("interrupted")
             return 130
