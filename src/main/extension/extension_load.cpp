@@ -608,6 +608,26 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options) {
+	// If this is a logical extension name (not an explicit path), prefer the
+	// statically linked implementation for built-in linked extensions only.
+	// This avoids loading a second copy from disk (ASan ODR violation) while
+	// keeping externally installed/autoloaded extensions on the normal path.
+	auto logical_name = ExtensionHelper::GetExtensionName(options.extension_name);
+	if (!ExtensionHelper::IsFullPath(options.extension_name)) {
+		for (idx_t i = 0; i < ExtensionHelper::DefaultExtensionCount(); i++) {
+			auto default_extension = ExtensionHelper::GetDefaultExtension(i);
+			if (!default_extension.statically_loaded || logical_name != default_extension.name) {
+				continue;
+			}
+			DuckDB db_wrapper(db);
+			auto load_result = ExtensionHelper::LoadExtension(db_wrapper, logical_name);
+			if (load_result == ExtensionLoadResult::LOADED_EXTENSION) {
+				return;
+			}
+			break;
+		}
+	}
+
 	auto &manager = ExtensionManager::Get(db);
 	auto info = manager.BeginLoad(options);
 	if (!info) {
