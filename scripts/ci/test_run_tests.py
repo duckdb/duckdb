@@ -490,6 +490,98 @@ require windows: 2
         self.assertIn("retrying failed test", proc.stdout)
         self.assertIn("all tests passed in ", proc.stdout)
 
+    def test_multiple_test_configs_run_independently(self):
+        listed_tests_path = create_temp_file(
+            """
+            name\tgroup
+            test/sql/fast.test\t[fast]
+            """
+        )
+
+        list_helper_path = create_temp_file(
+            """
+            #!/bin/sh
+            if [ "$1" = "--test-config" ] && [ "$2" = "test/configs/a.json" ] && [ "$3" = "--list-tests" ]; then
+              echo "name\tgroup"
+              echo "test/sql/a.test\t[fast]"
+              exit 0
+            fi
+            if [ "$1" = "--test-config" ] && [ "$2" = "test/configs/b.json" ] && [ "$3" = "--list-tests" ]; then
+              echo "name\tgroup"
+              echo "test/sql/b.test\t[fast]"
+              exit 0
+            fi
+            exit 2
+            """
+        )
+        os.chmod(list_helper_path, 0o755)
+
+        try:
+            proc = start_runner(
+                [
+                    "--workers",
+                    "1",
+                    "--batch-size",
+                    "1",
+                    "--test-command",
+                    "echo fake-run {test_list}",
+                    "--test-config",
+                    "test/configs/a.json",
+                    "--test-config",
+                    "test/configs/b.json",
+                    str(list_helper_path),
+                    str(listed_tests_path),
+                ]
+            )
+        finally:
+            list_helper_path.unlink(missing_ok=True)
+            listed_tests_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("running 2 configs", proc.stdout)
+        self.assertIn("[test/configs/a.json] found 1 tests", proc.stdout)
+        self.assertIn("[test/configs/b.json] found 1 tests", proc.stdout)
+        self.assertIn("all 2 config runs passed", proc.stdout)
+
+    def test_multiple_test_configs_aggregate_failure(self):
+        failing_helper = create_temp_file(
+            """
+            #!/bin/sh
+            if [ "$1" = "--test-config" ] && [ "$2" = "test/configs/fail.json" ] && [ "$3" = "--list-tests" ]; then
+              exit 1
+            fi
+            if [ "$1" = "--test-config" ] && [ "$3" = "--list-tests" ]; then
+              echo "name\tgroup"
+              echo "test/sql/a.test\t[fast]"
+              exit 0
+            fi
+            exit 2
+            """
+        )
+        os.chmod(failing_helper, 0o755)
+        try:
+            proc = start_runner(
+                [
+                    "--workers",
+                    "1",
+                    "--batch-size",
+                    "1",
+                    "--test-command",
+                    "echo fake-run {test_list}",
+                    "--test-config",
+                    "test/configs/pass.json",
+                    "--test-config",
+                    "test/configs/fail.json",
+                    str(failing_helper),
+                    "ignored-pattern",
+                ]
+            )
+        finally:
+            failing_helper.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("error: 1 config runs failed: test/configs/fail.json", proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
