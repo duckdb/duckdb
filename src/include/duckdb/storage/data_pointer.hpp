@@ -17,6 +17,7 @@
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 
 namespace duckdb {
 
@@ -78,7 +79,13 @@ struct RowGroupPointer {
 	bool has_metadata_blocks = false;
 	//! Metadata blocks of the columns that are not mentioned in "data_pointers"
 	//! This is often empty - but can be set for wide columns with a lot of metadata
+	//! When targeting 2.0 storage format, per_column_metadata_blocks is used instead
 	vector<idx_t> extra_metadata_blocks;
+	//! Whether or not we have per-column metadata blocks
+	bool has_per_column_metadata_blocks = false;
+	//! Per-column metadata blocks beyond the start block
+	//! Each column entry contains the additional block IDs that the column's metadata spans (excluding the start block)
+	PerColumnMetadataBlocks per_column_metadata_blocks;
 };
 
 } // namespace duckdb

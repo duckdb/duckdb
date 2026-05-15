@@ -11,7 +11,9 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/enums/column_segment_info_scan_type.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
@@ -75,13 +77,18 @@ private:
 	optional_ptr<vector<unique_ptr<PartialBlockManager>>> column_partial_block_managers;
 };
 
+enum class RowGroupWriteAction {
+	REUSE_EXISTING_ROW_GROUP_METADATA,
+	PARTIALLY_REUSE_COLUMN_METADATA,
+	FULLY_CHECKPOINT_ROW_GROUP
+};
+
 struct RowGroupWriteData {
 	shared_ptr<RowGroup> result_row_group;
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
 	vector<bool> keep_column_loaded;
-	bool reuse_existing_metadata_blocks = false;
-	vector<idx_t> existing_extra_metadata_blocks;
+	RowGroupWriteAction write_action = RowGroupWriteAction::FULLY_CHECKPOINT_ROW_GROUP;
 	optional_idx write_count;
 };
 
@@ -110,10 +117,12 @@ public:
 	RowGroupCollection &GetCollection() const {
 		return collection.get();
 	}
-	//! Returns the list of meta block pointers used by the columns
-	vector<idx_t> GetOrComputeExtraMetadataBlocks(bool force_compute = false);
+	//! Compute per-column metadata blocks by reading column metadata from disk
+	PerColumnMetadataBlocks ComputePerColumnMetadataBlocks() const;
 
 	const vector<MetaBlockPointer> &GetColumnStartPointers() const;
+
+	vector<MetaBlockPointer> GetExtraMetadataBlockPointers() const;
 
 	BlockManager &GetBlockManager() const;
 	DataTableInfo &GetTableInfo() const;
@@ -200,7 +209,8 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx) const;
 	unique_ptr<BaseStatistics> GetStatistics(const StorageIndex &column_idx) const;
 
-	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result);
+	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result,
+	                          ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL);
 	static PartitionStatistics GetPartitionStats(SegmentNode<RowGroup> &row_group);
 
 	idx_t GetAllocationSize() const {
@@ -215,7 +225,7 @@ public:
 	RowVersionManager &GetOrCreateVersionInfo();
 
 	// Serialization
-	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
+	static void Serialize(RowGroupPointer &pointer, Serializer &serializer, bool supports_per_column_writes);
 	static RowGroupPointer Deserialize(Deserializer &deserializer);
 
 	idx_t GetRowGroupSize() const;
@@ -241,8 +251,12 @@ private:
 	void SetCount(idx_t count);
 	bool ColumnIsLoaded(storage_t c) const;
 	void UnloadColumn(storage_t c);
+	bool HasUnchangedColumns() const;
+	static shared_ptr<ColumnData> CheckpointColumn(const RowGroup &row_group, idx_t column_idx, RowGroupWriteInfo &info,
+	                                               RowGroupWriteData &write_data);
 
 	bool HasUnloadedDeletes() const;
+	unique_ptr<RowGroup> CreateNewRowGroupCopy(RowGroupCollection &new_collection, idx_t new_column_count);
 
 private:
 	mutable mutex row_group_lock;
@@ -252,6 +266,8 @@ private:
 	vector<MetaBlockPointer> deletes_pointers;
 	bool has_metadata_blocks = false;
 	vector<idx_t> extra_metadata_blocks;
+	bool has_per_column_metadata_blocks = false;
+	PerColumnMetadataBlocks per_column_metadata_blocks;
 	atomic<bool> deletes_is_loaded;
 	atomic<idx_t> allocation_size;
 	//! The row id column data (mutable because `const` can lazy load)

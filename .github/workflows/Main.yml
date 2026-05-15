@@ -1388,6 +1388,12 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/block_verification.json ./build/release/test/unittest
 
+    - name: test/configs/block_verification_latest.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/block_verification_latest.json ./build/release/test/unittest
+
     - name: test/configs/disable_optimizer.json
       if: success() || failure()
       shell: bash

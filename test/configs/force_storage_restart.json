@@ -70,6 +70,14 @@
       "paths": [
         "test/sql/storage/adaptive_segment_allocation.test"
       ]
+    },
+    {
+      "reason": "Test checks which columns are loaded",
+      "paths": [
+        "test/sql/storage/metadata/partial_column_metadata_reuse.test",
+        "test/sql/storage/metadata/partial_column_metadata_reuse_v7.test",
+        "test/sql/storage/metadata/full_table_metadata_reuse_v7.test"
+      ]
     }
   ]
 }

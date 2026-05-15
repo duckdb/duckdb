@@ -17,6 +17,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
+#include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 
 namespace duckdb {
 
@@ -550,6 +551,12 @@ private:
 	inline typename std::enable_if<std::is_same<T, optional_idx>::value, T>::type Read() {
 		auto idx = ReadUnsignedInt64();
 		return idx == DConstants::INVALID_INDEX ? optional_idx() : optional_idx(idx);
+	}
+
+	// Deserialize a ProjectionIndex
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, PerColumnMetadataBlock>::value, T>::type Read() {
+		return PerColumnMetadataBlock::Unpack(ReadUnsignedInt64());
 	}
 
 protected:
