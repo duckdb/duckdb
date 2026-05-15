@@ -1,0 +1,129 @@
+# name: test/optimizer/partial_aggregate_precomputation.test
+# description: Test partial precomputation of aggregates (count_star, min, max)
+# group: [optimizer]
+
+require no_alternative_verify
+
+statement ok
+ATTACH '{TEST_DIR}/partial_agg.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+# 4 row groups: [0-2047], [2048-4095], [4096-6143], [6144-8191], j = i * 2
+statement ok
+CREATE TABLE t AS (SELECT * FROM range(8192) _(i), LATERAL (SELECT (i * 2) AS j));
+
+# Reopen to clear version info
+statement ok
+ATTACH '{TEST_DIR}/tmp_partial.duckdb' AS tmp
+
+statement ok
+USE tmp
+
+statement ok
+DETACH db
+
+statement ok
+ATTACH '{TEST_DIR}/partial_agg.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+statement ok
+DETACH tmp
+
+# Full precompute: all row groups determined
+query II
+EXPLAIN SELECT count(*), min(i), max(i) FROM t WHERE i >= 2048
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query III
+SELECT count(*), min(i), max(i) FROM t WHERE i >= 2048
+----
+6144	2048	8191
+
+# Partial precompute: PROJECTION merges precomputed constants with aggregate results
+query II
+EXPLAIN SELECT count(*), min(i), max(i) FROM t WHERE i >= 2048 AND j > 5000
+----
+physical_plan	<REGEX>:.*COALESCE.*least.*UNGROUPED_AGGREGATE.*
+
+query III
+SELECT count(*), min(i), max(i) FROM t WHERE i >= 2048 AND j > 5000
+----
+5691	2501	8191
+
+# Individual aggregates with partial precompute
+query I
+SELECT min(i) FROM t WHERE i >= 2048 AND j > 5000
+----
+2501
+
+query I
+SELECT max(i) FROM t WHERE i >= 2048 AND j > 5000
+----
+8191
+
+query I
+SELECT count(*) FROM t WHERE i >= 2048 AND j > 5000
+----
+5691
+
+# Different filter boundary
+query III
+SELECT count(*), min(i), max(i) FROM t WHERE i >= 4096 AND j > 9000
+----
+3691	4501	8191
+
+# Filter without row-group-aligned boundary
+query III
+SELECT count(*), min(i), max(i) FROM t WHERE j > 5000
+----
+5691	2501	8191
+
+# Filter that excludes all data
+query III
+SELECT count(*), min(i), max(i) FROM t WHERE i > 99999
+----
+0	NULL	NULL
+
+# Index scan disabled during partial precompute
+statement ok
+SET index_scan_percentage = 1.0
+
+statement ok
+CREATE INDEX idx_j ON t(j)
+
+# Without statistics propagation, aggregate query uses index scan (single filter on indexed column)
+statement ok
+SET disabled_optimizers='statistics_propagation'
+
+query II
+EXPLAIN ANALYZE SELECT count(*), min(i), max(i) FROM t WHERE j > 5000
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# With statistics propagation, partial precompute disables index scan
+statement ok
+RESET disabled_optimizers
+
+query II
+EXPLAIN ANALYZE SELECT count(*), min(i), max(i) FROM t WHERE j > 5000
+----
+analyzed_plan	<REGEX>:.*Type: Sequential Scan.*
+
+query III
+SELECT count(*), min(i), max(i) FROM t WHERE j > 5000
+----
+5691	2501	8191
+
+statement ok
+SET index_scan_percentage = 0.001
+
+# Grouped aggregate should not trigger precompute
+query II
+EXPLAIN SELECT count(*), min(i), max(i) FROM t WHERE i >= 2048 AND j > 5000 GROUP BY i % 10
+----
+physical_plan	<REGEX>:.*HASH_GROUP_BY.*

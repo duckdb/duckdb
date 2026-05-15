@@ -53,12 +53,12 @@ public:
 
 public:
 	//! Reset the fields of the unnest operator state
-	void Reset();
+	void ResetState();
 	//! Prepare the input for the next unnest
 	void PrepareInput(DataChunk &input, const vector<unique_ptr<Expression>> &select_list);
 };
 
-void UnnestOperatorState::Reset() {
+void UnnestOperatorState::ResetState() {
 	current_row = 0;
 	list_position = 0;
 	first_fetch = true;
@@ -151,7 +151,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 
 		// finished with all rows of this input chunk, reset
 		if (state.current_row >= input.size()) {
-			state.Reset();
+			state.ResetState();
 			return OperatorResultType::NEED_MORE_INPUT;
 		}
 

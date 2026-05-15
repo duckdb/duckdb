@@ -1,6 +1,6 @@
 {
   "description": "Run with debug_verify_statement set to prepared_statement - forcing statements through PREPARE and EXECUTE with parameters",
-  "on_init": "SET debug_verify_statement='prepared_statement';",
+  "on_init": "SET debug_verify_statement='prepared_statement'; SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';",
   "skip_compiled": "true",
   "skip_error_messages": [
     "Parameter Not Allowed Error:",

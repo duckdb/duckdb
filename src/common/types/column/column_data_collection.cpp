@@ -1234,6 +1234,19 @@ void ColumnDataCollection::Combine(ColumnDataCollection &other) {
 	Verify();
 }
 
+void ColumnDataCollection::Swap(ColumnDataCollection &other) {
+	if (types != other.types) {
+		throw InternalException("Attempting to swap ColumnDataCollections with mismatching types");
+	}
+	std::swap(allocator, other.allocator);
+	std::swap(types, other.types);
+	std::swap(count, other.count);
+	std::swap(segments, other.segments);
+	std::swap(copy_functions, other.copy_functions);
+	std::swap(finished_append, other.finished_append);
+	std::swap(partition_index, other.partition_index);
+}
+
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
@@ -1307,6 +1320,24 @@ void ColumnDataCollection::Reset() {
 
 	// Refreshes the ColumnDataAllocator to prevent holding on to allocated data unnecessarily
 	allocator = make_shared_ptr<ColumnDataAllocator>(*allocator);
+}
+
+void ColumnDataCollection::ResetForReuse() {
+	count = 0;
+	finished_append = false;
+	if (segments.empty()) {
+		allocator->Reset();
+		return;
+	}
+
+	for (auto &segment : segments) {
+		segment->Reset();
+	}
+
+	if (segments.size() > 1) {
+		segments.resize(1);
+	}
+	allocator->ResetPreserveLastBlock();
 }
 
 struct ValueResultEquals {

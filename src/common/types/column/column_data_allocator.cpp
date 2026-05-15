@@ -194,6 +194,40 @@ void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t 
 	}
 }
 
+void ColumnDataAllocator::Reset() {
+	for (auto &block : blocks) {
+		block.size = 0;
+	}
+}
+
+void ColumnDataAllocator::ResetPreserveLastBlock() {
+	if (blocks.empty()) {
+		return;
+	}
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		D_ASSERT(blocks.size() == allocated_data.size());
+		if (blocks.size() > 1) {
+			auto last_block = std::move(blocks.back());
+			auto last_allocated = std::move(allocated_data.back());
+			blocks.clear();
+			allocated_data.clear();
+			blocks.push_back(std::move(last_block));
+			allocated_data.push_back(std::move(last_allocated));
+		}
+	} else if (blocks.size() > 1) {
+		auto last_block = std::move(blocks.back());
+		blocks.clear();
+		blocks.push_back(std::move(last_block));
+	}
+	for (auto &block : blocks) {
+		block.size = 0;
+	}
+	allocated_size = 0;
+	for (auto &block : blocks) {
+		allocated_size += block.capacity;
+	}
+}
+
 void ColumnDataAllocator::Initialize(ColumnDataAllocator &other) {
 	D_ASSERT(other.HasBlocks());
 	blocks.push_back(other.blocks.back());

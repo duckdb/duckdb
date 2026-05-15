@@ -284,35 +284,6 @@ static bool SupportedFilterComparison(ExpressionType expression_type) {
 	}
 }
 
-bool FilterCombiner::FindNextLegalUTF8(string &prefix_string) {
-	// find the start of the last codepoint
-	idx_t last_codepoint_start;
-	for (last_codepoint_start = prefix_string.size(); last_codepoint_start > 0; last_codepoint_start--) {
-		if (IsCharacter(prefix_string[last_codepoint_start - 1])) {
-			break;
-		}
-	}
-	if (last_codepoint_start == 0) {
-		throw InvalidInputException("Invalid UTF8 found in string \"%s\"", prefix_string);
-	}
-	last_codepoint_start--;
-	int codepoint_size;
-	auto codepoint = Utf8Proc::UTF8ToCodepoint(prefix_string.c_str() + last_codepoint_start, codepoint_size) + 1;
-	if (codepoint >= 0xD800 && codepoint <= 0xDFFF) {
-		// next codepoint falls within surrogate range increment to next valid character
-		codepoint = 0xE000;
-	}
-	char next_codepoint_text[4];
-	int next_codepoint_size;
-	if (!Utf8Proc::CodepointToUtf8(codepoint, next_codepoint_size, next_codepoint_text)) {
-		// invalid codepoint
-		return false;
-	}
-	auto s = static_cast<idx_t>(next_codepoint_size);
-	prefix_string = prefix_string.substr(0, last_codepoint_start) + string(next_codepoint_text, s);
-	return true;
-}
-
 static bool TypeSupportsConstantFilter(const LogicalType &type) {
 	if (TypeIsNumeric(type.InternalType())) {
 		return true;
@@ -429,7 +400,7 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 	auto lower_bound = CreateComparisonExpression(*func.children[0], ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 	                                              Value(prefix_string));
 	table_filters.PushFilter(filter_idx, make_uniq<ExpressionFilter>(std::move(lower_bound)));
-	if (FilterCombiner::FindNextLegalUTF8(prefix_string)) {
+	if (Utf8Proc::FindNextLegalUTF8(prefix_string)) {
 		auto upper_bound =
 		    CreateComparisonExpression(*func.children[0], ExpressionType::COMPARE_LESSTHAN, Value(prefix_string));
 		table_filters.PushFilter(filter_idx, make_uniq<ExpressionFilter>(std::move(upper_bound)));

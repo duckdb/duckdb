@@ -435,6 +435,7 @@ class SerializerSQLLogicContext(SQLLogicContext):
             "no_alternative_verify",
             "noalternativeverify",
             "noforcestorage",
+            "no_force_storage",
             "nothreadsan",
             "notmingw",
             "notwindows",

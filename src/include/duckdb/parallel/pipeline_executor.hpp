@@ -78,6 +78,15 @@ public:
 
 	//! Registers the task in the interrupt_state to allow Source/Sink operators to block the task
 	void SetTaskForInterrupts(weak_ptr<Task> current_task);
+	//! Replaces the interrupt state used by source/sink/finalize calls
+	void SetInterruptState(InterruptState interrupt_state_p);
+
+	//! Resets the executor for re-execution while reusing allocated intermediate buffers.
+	//! Reuses local source/sink/operator states where operators provide explicit reset hooks,
+	//! and falls back to recreation otherwise.
+	void Reset();
+	//! Prepare the executor for another execution, skipping Reset() on the very first run.
+	void PrepareForExecution();
 
 private:
 	//! The pipeline to process
@@ -130,6 +139,8 @@ private:
 	idx_t flushing_idx;
 	//! Whether the current flushing_idx should be flushed: this needs to be stored to make flushing code re-entrant
 	bool should_flush_current_idx = true;
+	//! Whether this executor has already run at least once
+	bool has_executed = false;
 
 private:
 	void StartOperator(PhysicalOperator &op);

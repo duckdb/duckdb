@@ -318,6 +318,7 @@ def normalize_output(output):
 
 SKIPPED_TESTS_PATTERN = re.compile(r"All tests passed \((\d+) skipped tests,")
 SKIP_REASON_PATTERN = re.compile(r"(.+):\s+(\d+)$")
+MODE_SKIP_REASON_PATTERN = re.compile(r"^mode skip(?:\s+(.*\S))?\s*$")
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 
 
@@ -332,23 +333,41 @@ def parse_skipped_tests_count(output: str):
     return int(match.group(1))
 
 
-def parse_skipped_test_reasons(output: str):
+def parse_skipped_test_summary(output: str):
+    skipped_count = 0
     reasons = {}
-    lines = strip_ansi(output).splitlines()
-    for idx, line in enumerate(lines):
-        if line.strip() != "Skipped tests for the following reasons:":
+    in_skip_summary = False
+    for line in strip_ansi(output).splitlines():
+        stripped = line.strip()
+        if skipped_count == 0:
+            count_match = SKIPPED_TESTS_PATTERN.search(stripped)
+            if count_match:
+                skipped_count = int(count_match.group(1))
+        if stripped == "Skipped tests for the following reasons:":
+            in_skip_summary = True
             continue
+        if in_skip_summary:
+            if not stripped:
+                in_skip_summary = False
+                continue
+            reason_match = SKIP_REASON_PATTERN.match(stripped)
+            if not reason_match:
+                in_skip_summary = False
+                continue
+            reasons[reason_match.group(1)] = reasons.get(reason_match.group(1), 0) + int(reason_match.group(2))
+    return skipped_count, reasons
 
-        for reason_line in lines[idx + 1 :]:
-            reason_line = reason_line.strip()
-            if not reason_line:
-                break
-            match = SKIP_REASON_PATTERN.match(reason_line)
-            if not match:
-                break
-            reasons[match.group(1)] = reasons.get(match.group(1), 0) + int(match.group(2))
-        break
-    return reasons
+
+def extract_skipped_test_output(stdout: str, stderr: str):
+    stdout_summary = parse_skipped_test_summary(stdout)
+    if stdout_summary[0] > 0 or stdout_summary[1]:
+        return stdout_summary
+
+    stderr_summary = parse_skipped_test_summary(stderr)
+    if stderr_summary[0] > 0 or stderr_summary[1]:
+        return stderr_summary
+
+    return 0, {}
 
 
 def run_batch(config: TestRunnerConfig, batch):
@@ -662,9 +681,9 @@ def run_tests(config: TestRunnerConfig, batches):
                     if handle_failed_batch(ctx, batch_info, result):
                         continue
                 else:
-                    combined_output = "\n".join([result["stdout"], result["stderr"]])
-                    total_skipped_tests += parse_skipped_tests_count(combined_output)
-                    for reason, count in parse_skipped_test_reasons(combined_output).items():
+                    skipped_count, skipped_reasons = extract_skipped_test_output(result["stdout"], result["stderr"])
+                    total_skipped_tests += skipped_count
+                    for reason, count in skipped_reasons.items():
                         skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
                 progress.advance(next_batch_idx - len(future_to_batch))
 

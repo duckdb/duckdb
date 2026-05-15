@@ -180,6 +180,13 @@ ParallelCollectionScanState::ParallelCollectionScanState()
     : collection(nullptr), current_row_group(nullptr), processed_rows(0) {
 }
 
+void ParallelCollectionScanState::AssignRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group) {
+	current_row_group = row_group;
+	while (current_row_group && !ShouldScanPartition(*current_row_group)) {
+		current_row_group = GetNextRowGroup(*row_groups, *current_row_group).get();
+	}
+}
+
 optional_ptr<SegmentNode<RowGroup>> ParallelCollectionScanState::GetRootSegment(RowGroupSegmentTree &row_groups) const {
 	if (reorderer) {
 		return reorderer->GetRootSegment(row_groups);

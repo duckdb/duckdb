@@ -1,0 +1,120 @@
+diff --git a/src/storage/ducklake_transaction.cpp b/src/storage/ducklake_transaction.cpp
+index 1187022e..04bbae66 100644
+--- a/src/storage/ducklake_transaction.cpp
++++ b/src/storage/ducklake_transaction.cpp
+@@ -730,6 +730,7 @@ Connection &DuckLakeTransaction::GetConnection() {
+ 			connection->Query("SET pg_experimental_filter_pushdown=false");
+ 		}
+ 		connection->BeginTransaction();
++		connection->Query("SET current_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE'");
+ 	}
+ 	return *connection;
+ }
+diff --git a/test/sql/alter/rename_table_dbt_workload.test b/test/sql/alter/rename_table_dbt_workload.test
+index e67b3503..6e29065c 100644
+--- a/test/sql/alter/rename_table_dbt_workload.test
++++ b/test/sql/alter/rename_table_dbt_workload.test
+@@ -10,6 +10,9 @@ test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db
+ 
+ test-env DATA_PATH {TEST_DIR}
+ 
++statement ok
++SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
++
+ statement ok
+ ATTACH 'ducklake:{DUCKLAKE_CONNECTION}' AS my_ducklake (DATA_PATH '{DATA_PATH}/ducklake_rename_files', METADATA_CATALOG 'ducklake_meta')
+ 
+diff --git a/test/sql/alter/rename_table_within_transaction.test b/test/sql/alter/rename_table_within_transaction.test
+index 2a1c33a3..5f971206 100644
+--- a/test/sql/alter/rename_table_within_transaction.test
++++ b/test/sql/alter/rename_table_within_transaction.test
+@@ -10,6 +10,9 @@ test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db
+ 
+ test-env DATA_PATH {TEST_DIR}
+ 
++statement ok
++SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
++
+ statement ok
+ ATTACH 'ducklake:{DUCKLAKE_CONNECTION}' AS ducklake (DATA_PATH '{DATA_PATH}/ducklake_rename_files', METADATA_CATALOG 'ducklake_meta')
+ 
+diff --git a/test/sql/catalog/drop_entry_same_schema.test b/test/sql/catalog/drop_entry_same_schema.test
+index 2f14b6f6..ab8817fb 100644
+--- a/test/sql/catalog/drop_entry_same_schema.test
++++ b/test/sql/catalog/drop_entry_same_schema.test
+@@ -10,6 +10,8 @@ test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db
+ 
+ test-env DATA_PATH {TEST_DIR}
+ 
++statement ok
++SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
+ 
+ statement ok
+ ATTACH 'ducklake:{DUCKLAKE_CONNECTION}' AS ducklake (DATA_PATH '{DATA_PATH}/ducklake_drop_same_schema')
+diff --git a/test/sql/catalog/drop_schema_transaction_local_entries.test b/test/sql/catalog/drop_schema_transaction_local_entries.test
+index 1e906650..7b02251d 100644
+--- a/test/sql/catalog/drop_schema_transaction_local_entries.test
++++ b/test/sql/catalog/drop_schema_transaction_local_entries.test
+@@ -13,6 +13,9 @@ test-env DATA_PATH {TEST_DIR}
+ statement ok
+ ATTACH 'ducklake:{DUCKLAKE_CONNECTION}' AS ducklake (DATA_PATH '{DATA_PATH}/ducklake_drop_schema_txn_local')
+ 
++statement ok
++SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
++
+ # Test when there's transaction-local table in the schema, it cannot be dropped.
+ statement ok
+ BEGIN
+diff --git a/test/sql/catalog/drop_table.test b/test/sql/catalog/drop_table.test
+index 4df4c847..401bcab6 100644
+--- a/test/sql/catalog/drop_table.test
++++ b/test/sql/catalog/drop_table.test
+@@ -10,6 +10,8 @@ test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db
+ 
+ test-env DATA_PATH {TEST_DIR}
+ 
++statement ok
++SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
+ 
+ statement ok
+ ATTACH 'ducklake:{DUCKLAKE_CONNECTION}' AS ducklake (DATA_PATH '{DATA_PATH}/ducklake_drop_files')
+diff --git a/test/sql/macros/test_macro_transactions.test b/test/sql/macros/test_macro_transactions.test
+index 8370ec14..a993f04e 100644
+--- a/test/sql/macros/test_macro_transactions.test
++++ b/test/sql/macros/test_macro_transactions.test
+@@ -10,6 +10,9 @@ test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db
+ 
+ test-env DATA_PATH {TEST_DIR}
+ 
++statement ok
++SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
++
+ statement ok
+ ATTACH 'ducklake:{DUCKLAKE_CONNECTION}' AS ducklake (DATA_PATH '{DATA_PATH}/test_macro_transactions');
+ 
+diff --git a/test/sql/view/ducklake_rename_view.test b/test/sql/view/ducklake_rename_view.test
+index 91cc2f87..77fb9fd0 100644
+--- a/test/sql/view/ducklake_rename_view.test
++++ b/test/sql/view/ducklake_rename_view.test
+@@ -10,6 +10,8 @@ test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db
+ 
+ test-env DATA_PATH {TEST_DIR}
+ 
++statement ok
++SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
+ 
+ statement ok
+ ATTACH 'ducklake:{DUCKLAKE_CONNECTION}' AS ducklake (DATA_PATH '{DATA_PATH}/ducklake_rename_view_files')
+diff --git a/test/sql/view/ducklake_view.test b/test/sql/view/ducklake_view.test
+index 5b7d6bbc..a224edad 100644
+--- a/test/sql/view/ducklake_view.test
++++ b/test/sql/view/ducklake_view.test
+@@ -10,6 +10,8 @@ test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db
+ 
+ test-env DATA_PATH {TEST_DIR}
+ 
++statement ok
++SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
+ 
+ statement ok
+ ATTACH 'ducklake:{DUCKLAKE_CONNECTION}' AS ducklake (DATA_PATH '{DATA_PATH}/ducklake_view_files')

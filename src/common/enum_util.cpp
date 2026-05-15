@@ -118,6 +118,7 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
+#include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
@@ -152,6 +153,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
+#include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
@@ -4417,6 +4419,44 @@ RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value) {
 	return static_cast<RecoveryMode>(StringUtil::StringToEnum(GetRecoveryModeValues(), 2, "RecoveryMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetRecursiveCTEInlineStageTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RecursiveCTEInlineStageType::EXECUTE), "EXECUTE" },
+		{ static_cast<uint32_t>(RecursiveCTEInlineStageType::PREPARE_FINISH), "PREPARE_FINISH" },
+		{ static_cast<uint32_t>(RecursiveCTEInlineStageType::FINISH), "FINISH" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RecursiveCTEInlineStageType>(RecursiveCTEInlineStageType value) {
+	return StringUtil::EnumToString(GetRecursiveCTEInlineStageTypeValues(), 3, "RecursiveCTEInlineStageType", static_cast<uint32_t>(value));
+}
+
+template<>
+RecursiveCTEInlineStageType EnumUtil::FromString<RecursiveCTEInlineStageType>(const char *value) {
+	return static_cast<RecursiveCTEInlineStageType>(StringUtil::StringToEnum(GetRecursiveCTEInlineStageTypeValues(), 3, "RecursiveCTEInlineStageType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetRecursiveProbeSidePreferenceValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RecursiveProbeSidePreference::NONE), "NONE" },
+		{ static_cast<uint32_t>(RecursiveProbeSidePreference::KEEP), "KEEP" },
+		{ static_cast<uint32_t>(RecursiveProbeSidePreference::SWAP), "SWAP" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RecursiveProbeSidePreference>(RecursiveProbeSidePreference value) {
+	return StringUtil::EnumToString(GetRecursiveProbeSidePreferenceValues(), 3, "RecursiveProbeSidePreference", static_cast<uint32_t>(value));
+}
+
+template<>
+RecursiveProbeSidePreference EnumUtil::FromString<RecursiveProbeSidePreference>(const char *value) {
+	return static_cast<RecursiveProbeSidePreference>(StringUtil::StringToEnum(GetRecursiveProbeSidePreferenceValues(), 3, "RecursiveProbeSidePreference", value));
+}
+
 const StringUtil::EnumStringLiteral *GetRelationTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(RelationType::INVALID_RELATION), "INVALID_RELATION" },
@@ -5497,6 +5537,7 @@ TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value)
 const StringUtil::EnumStringLiteral *GetTransactionInvalidationPolicyValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TransactionInvalidationPolicy::STANDARD_POLICY), "STANDARD_POLICY" },
+		{ static_cast<uint32_t>(TransactionInvalidationPolicy::SYNTACTIC_ERRORS_DO_NOT_INVALIDATE), "SYNTACTIC_ERRORS_DO_NOT_INVALIDATE" },
 		{ static_cast<uint32_t>(TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION), "ALL_ERRORS_INVALIDATE_TRANSACTION" }
 	};
 	return values;
@@ -5504,12 +5545,12 @@ const StringUtil::EnumStringLiteral *GetTransactionInvalidationPolicyValues() {
 
 template<>
 const char* EnumUtil::ToChars<TransactionInvalidationPolicy>(TransactionInvalidationPolicy value) {
-	return StringUtil::EnumToString(GetTransactionInvalidationPolicyValues(), 2, "TransactionInvalidationPolicy", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTransactionInvalidationPolicyValues(), 3, "TransactionInvalidationPolicy", static_cast<uint32_t>(value));
 }
 
 template<>
 TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value) {
-	return static_cast<TransactionInvalidationPolicy>(StringUtil::StringToEnum(GetTransactionInvalidationPolicyValues(), 2, "TransactionInvalidationPolicy", value));
+	return static_cast<TransactionInvalidationPolicy>(StringUtil::StringToEnum(GetTransactionInvalidationPolicyValues(), 3, "TransactionInvalidationPolicy", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTransactionModifierTypeValues() {

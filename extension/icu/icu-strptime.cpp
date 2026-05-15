@@ -601,7 +601,7 @@ struct ICUStrftime : public ICUDateFunc {
 				if (input.IsFinite()) {
 					return Operation(calendar.get(), input, tz_name, format, result);
 				} else {
-					return StringVector::AddString(result, Timestamp::ToString(timestamp_t(input.value)));
+					return StringVector::AddString(result, Date::ToInfinity(input));
 				}
 			});
 		} else {
@@ -613,7 +613,7 @@ struct ICUStrftime : public ICUDateFunc {
 
 					    return Operation(calendar.get(), input, tz_name, format, result);
 				    } else {
-					    return StringVector::AddString(result, Timestamp::ToString(timestamp_t(input.value)));
+					    return StringVector::AddString(result, Date::ToInfinity(input));
 				    }
 			    });
 		}
@@ -632,7 +632,7 @@ struct ICUStrftime : public ICUDateFunc {
 	static string_t CastOperation(icu::Calendar *calendar, T input, Vector &result) {
 		// Infinity is always formatted the same way
 		if (!input.IsFinite()) {
-			return StringVector::AddString(result, Timestamp::ToString(timestamp_t(input.value)));
+			return StringVector::AddString(result, Date::ToInfinity(input));
 		}
 
 		// decompose the timestamp

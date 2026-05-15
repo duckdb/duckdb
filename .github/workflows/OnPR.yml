@@ -1,0 +1,50 @@
+# Handles PR metadata signaling for trusted apply workflow
+name: OnPR
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+concurrency:
+  group: onpr-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Prepare PR actions
+    runs-on: namespace-profile-linux-slim
+    steps:
+      - name: Build action payload
+        env:
+          EVENT_ACTION: ${{ github.event.action }}
+          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          PR_NODE_ID: ${{ github.event.pull_request.node_id }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          mkdir -p ./onpr
+
+          DRAFT_PR_NODE_ID=""
+          MEMBER_PR_NUMBER=""
+
+          if [ "$PR_DRAFT" = "false" ] && [ "$AUTHOR_ASSOCIATION" != "OWNER" ] && [ "$AUTHOR_ASSOCIATION" != "MEMBER" ] && [ "$AUTHOR_ASSOCIATION" != "COLLABORATOR" ]; then
+            DRAFT_PR_NODE_ID="$PR_NODE_ID"
+          fi
+
+          if [ "$EVENT_ACTION" = "opened" ] && { [ "$AUTHOR_ASSOCIATION" = "OWNER" ] || [ "$AUTHOR_ASSOCIATION" = "MEMBER" ] || [ "$AUTHOR_ASSOCIATION" = "COLLABORATOR" ]; }; then
+            MEMBER_PR_NUMBER="$PR_NUMBER"
+          fi
+
+          cat > ./onpr/pr_actions.json <<EOF
+          {
+            "draft_pr_node_id": "$DRAFT_PR_NODE_ID",
+            "member_pr_number": "$MEMBER_PR_NUMBER"
+          }
+          EOF
+
+          echo "Prepared payload:"
+          cat ./onpr/pr_actions.json
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pr_actions
+          path: onpr/pr_actions.json
