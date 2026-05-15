@@ -48,7 +48,7 @@ select variant_keys('{"a": 1, "b": {"c": 12, "d": 10}}'::JSON);
 # No path supplied
 
 query I
-select variant_keys(a, '') from struct_cast_data();
+select variant_keys(a) from struct_cast_data();
 ----
 [a]
 [a, b, c]
@@ -61,26 +61,56 @@ select variant_keys(a, '') from struct_cast_data();
 [a]
 [a, b, c]
 
+query I
+select variant_keys(a, []) from struct_cast_data();
+----
+[]
+[]
+
+query I
+select variant_keys(a, ['']) from struct_cast_data();
+----
+[[a]]
+[[a, b, c]]
+
 # Single path supplied
 
 query I
 select variant_keys(a, 'c') from struct_cast_data();
 ----
-[]
+NULL
 [d]
+
+query I
+select variant_keys(a, ['c']) from struct_cast_data();
+----
+[NULL]
+[[d]]
 
 # Multiple paths supplied
 
 query I
 select variant_keys(a, ['', 'c']) from struct_cast_data();
 ----
-[[a], []]
+[[a], NULL]
 [[a, b, c], [d]]
+
+# Empty objects do not have keys
+
+query I
+select variant_keys('{}');
+----
+[]
 
 # Arrays do not have keys
 
 query I
 select variant_keys(['duck', 'goose']::VARIANT);
+----
+[]
+
+query I
+select variant_keys('{"a": 1, "b": ["duck", "goose"]}', 'b');
 ----
 []
 
@@ -92,9 +122,55 @@ select variant_keys(''::VARIANT);
 []
 
 query I
+select variant_keys({'a': 'goose'}::VARIANT, 'a');
+----
+[]
+
+query I
 select variant_keys(42::VARIANT);
 ----
 []
+
+query I
+select variant_keys({'a': 42}::VARIANT, 'a');
+----
+[]
+
+# NULL returns NULL
+
+query I
+select variant_keys(NULL);
+----
+NULL
+
+query I
+select variant_keys(NULL::VARIANT);
+----
+NULL
+
+query I
+select variant_keys(NULL::VARIANT, 'a');
+----
+NULL
+
+# VARIANT_NULL
+
+query I
+select variant_keys('{"a": 1, "b": null}', 'b');
+----
+[]
+
+# Supplied path does not exist in variant
+
+query I
+select variant_keys('{}', 'a');
+----
+NULL
+
+query I
+select variant_keys('{"a": 1, "b": {"c": 12, "d": 10}}', 'q');
+----
+NULL
 
 statement ok
 create table t1 as
@@ -120,5 +196,3 @@ select sum(list_sum([length(l) for l in variant_keys(j, ['duck', 'goose'])])) s
 from t2
 ----
 30000
-
-# --- shredded variant --- #
