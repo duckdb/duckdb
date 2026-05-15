@@ -23,7 +23,7 @@ static ExtensionLoader CreateExtensionLoader(DuckDB &db, const string &name) {
 	return ExtensionLoader {load_info};
 }
 
-TEST_CASE("Test ExtensionLoader schema API", "[extension_loader]") {
+TEST_CASE("Test ExtensionLoader schema API", "[api]") {
 	DuckDB db(nullptr);
 	Connection conn(db);
 
