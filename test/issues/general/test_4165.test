@@ -1,16 +1,14 @@
-# name: test/issues/general/test_4165.test
+/ name: test/issues/general/test_4165.test
 # description: Issue 4165: SIGSEGV on Debian Buster amd64
 # group: [general]
-
-set seed 0.42
 
 statement ok
 CREATE TABLE df_a AS
 SELECT
-    (100000 + (899999 * RANDOM()))::BIGINT AS ID,
-    (4000 * RANDOM())::BIGINT AS C,
-    (4000 * RANDOM())::BIGINT AS P,
-    substring('abc', 1+(RANDOM() * 2)::BIGINT, 1) AS S
+    (100000 + (899999 * hash_to_unit([range, 0])))::BIGINT AS ID,
+    (4000 * hash_to_unit([range, 1]))::BIGINT AS C,
+    (4000 * hash_to_unit([range, 2]))::BIGINT AS P,
+    substring('abc', 1+(hash_to_unit([range, 3]) * 2)::BIGINT, 1) AS S
 FROM range(20000)
 
 statement ok

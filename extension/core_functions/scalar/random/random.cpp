@@ -1,5 +1,6 @@
 #include "core_functions/scalar/random_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -85,6 +86,25 @@ unique_ptr<FunctionLocalState> RandomInitLocalState(ExpressionState &state, cons
 	return make_uniq<RandomLocalState>(random_engine.NextRandomInteger64());
 }
 
+// Deterministic pseudo-random in [0, 1) derived from hash(x). Hashes the input via
+// VectorOperations::Hash, XORs with the golden-ratio constant to mask hash() fixed
+// points (notably hash(0) = 0 and hash([0, 0]) = 0), and uses the top 53 bits of the
+// result to land cleanly in the double mantissa for strict [0, 1) output.
+// NULL propagates.
+void HashToUnitFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 1);
+	auto &input = args.data[0];
+	const idx_t count = args.size();
+
+	Vector hashes(LogicalType::HASH, count);
+	VectorOperations::Hash(input, hashes, count);
+
+	UnaryExecutor::Execute<hash_t, double>(hashes, result, count, [](hash_t h) {
+		h ^= 11400714819323198485ULL;
+		return static_cast<double>(h >> 11) * (1.0 / static_cast<double>(1ULL << 53));
+	});
+}
+
 void GenerateUUIDv4Function(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 0);
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RandomLocalState>();
@@ -113,6 +133,12 @@ ScalarFunction RandomFun::GetFunction() {
 	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, nullptr, nullptr, RandomInitLocalState);
 	random.SetStability(FunctionStability::VOLATILE);
 	return random;
+}
+
+ScalarFunction HashToUnitFun::GetFunction() {
+	ScalarFunction fn({LogicalType::ANY}, LogicalType::DOUBLE, HashToUnitFunction);
+	fn.SetStability(FunctionStability::CONSISTENT);
+	return fn;
 }
 
 ScalarFunction UUIDFun::GetFunction() {

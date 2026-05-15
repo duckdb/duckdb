@@ -6,6 +6,13 @@
         "type": "scalar_function"
     },
     {
+        "name": "hash_to_unit",
+        "parameters": "x",
+        "description": "Returns a deterministic pseudo-random number in [0, 1) derived from hash(x). Same input always produces the same output. Useful for reproducible sampling: WHERE hash_to_unit(id) < 0.01.",
+        "example": "hash_to_unit(7)",
+        "type": "scalar_function"
+    },
+    {
         "name": "setseed",
         "description": "Sets the seed to be used for the random function",
         "example": "setseed(0.42)",
