@@ -723,8 +723,8 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	// row groups while we hold row IDs from the ART, ensuring we always see a consistent
 	// <ART index, SegmentTree<RowGroup> pairing.
 	unique_ptr<StorageLockKey> vacuum_lock;
-	auto &db = DatabaseInstance::GetDatabase(context);
-	if (Settings::Get<VacuumRebuildIndexesSetting>(db) > 0) {
+	const auto &attached = storage.GetAttached();
+	if (attached.GetVacuumRebuildIndexThreshold() > 0) {
 		auto &transaction_manager = DuckTransactionManager::Get(storage.GetAttached());
 		vacuum_lock = transaction_manager.SharedVacuumLock();
 	}

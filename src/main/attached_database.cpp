@@ -12,6 +12,7 @@
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/storage/block_allocator.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -31,8 +32,12 @@ void StoredDatabasePath::OnDetach() {
 //===--------------------------------------------------------------------===//
 // Attach Options
 //===--------------------------------------------------------------------===//
-AttachOptions::AttachOptions(const DBConfigOptions &options)
-    : access_mode(options.access_mode), db_type(options.database_type) {
+AttachOptions::AttachOptions(const DBConfig &config)
+    : access_mode(config.options.access_mode), db_type(config.options.database_type) {
+	auto threshold = Settings::Get<VacuumRebuildIndexesSetting>(config);
+	if (threshold > 0) {
+		vacuum_rebuild_indexes_threshold = threshold;
+	}
 }
 
 AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options, const AccessMode default_access_mode)
@@ -85,6 +90,11 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 			}
 			continue;
 		}
+
+		if (entry.first == "vacuum_rebuild_indexes") {
+			vacuum_rebuild_indexes_threshold = UBigIntValue::Get(entry.second.DefaultCastAs(LogicalType::UBIGINT));
+			continue;
+		}
 		options.emplace(entry.first, entry.second);
 	}
 }
@@ -121,6 +131,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	}
 	recovery_mode = options.recovery_mode;
 	visibility = options.visibility;
+	vacuum_rebuild_threshold = options.vacuum_rebuild_indexes_threshold;
 
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
@@ -142,6 +153,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, Sto
 	}
 	recovery_mode = options.recovery_mode;
 	visibility = options.visibility;
+	vacuum_rebuild_threshold = options.vacuum_rebuild_indexes_threshold;
 
 	optional_ptr<StorageExtensionInfo> storage_info = storage_extension->storage_info.get();
 	catalog = storage_extension->attach(storage_info, context, *this, name, info, options);

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/main/settings.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 
@@ -57,7 +58,7 @@ struct StoredDatabasePath {
 //! they have to apply to any database file type (duckdb, sqlite, etc.).
 struct AttachOptions {
 	//! Constructor for databases we attach outside of the ATTACH DATABASE statement.
-	explicit AttachOptions(const DBConfigOptions &options);
+	explicit AttachOptions(const DBConfig &config);
 	//! Constructor for databases we attach when using ATTACH DATABASE.
 	AttachOptions(const unordered_map<string, Value> &options, const AccessMode default_access_mode);
 
@@ -77,6 +78,8 @@ struct AttachOptions {
 	AttachVisibility visibility = AttachVisibility::SHOWN;
 	//! The stored database path (in the path manager)
 	unique_ptr<StoredDatabasePath> stored_database_path;
+	//! Per-database override of vacuum_rebuild_indexes. If not set, the global setting value is used.
+	optional_idx vacuum_rebuild_indexes_threshold;
 };
 
 //! The AttachedDatabase represents an attached database instance.
@@ -131,6 +134,14 @@ public:
 	AttachVisibility GetVisibility() const {
 		return visibility;
 	}
+	//! vacuum_rebuild_indexes threshold for this attached database.
+	//! Falls back to the global VacuumRebuildIndexesSetting if not overridden.
+	idx_t GetVacuumRebuildIndexThreshold() const {
+		if (vacuum_rebuild_threshold.IsValid()) {
+			return vacuum_rebuild_threshold.GetIndex();
+		}
+		return Settings::Get<VacuumRebuildIndexesSetting>(db);
+	}
 	const unordered_map<string, Value> &GetAttachOptions() const {
 		return attach_options;
 	}
@@ -156,6 +167,7 @@ private:
 	bool is_initial_database = false;
 	bool is_closed = false;
 	shared_ptr<mutex> close_lock;
+	optional_idx vacuum_rebuild_threshold;
 	unordered_map<string, Value> attach_options;
 
 private:

@@ -1,0 +1,64 @@
+# name: test/sql/storage/vacuum/vacuum_rebuild_indexes_attach.test_slow
+# description: Test that setting the ATTACH option vacuum_rebuild_indexes correctly rebuilds indexes when empty row groups are dropped
+# group: [vacuum]
+
+# set threshold at 5 X rowgroup size
+statement ok
+ATTACH '__TEST_DIR__/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 614400)
+
+statement ok
+CREATE TABLE db1.t(i INTEGER);
+
+statement ok
+CREATE INDEX idx ON db1.t(i);
+
+# insert enough rows for 2 row groups (122880 rows each)
+statement ok
+INSERT INTO db1.t SELECT i FROM range(245760) t(i);
+
+statement ok
+CHECKPOINT db1
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('db1.t')
+----
+2
+
+# delete all rows in the first row group
+statement ok
+DELETE FROM db1.t WHERE i < 122880
+
+statement ok
+CHECKPOINT db1
+
+# the empty first row group is dropped, shifting row IDs of the second group
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('db1.t')
+----
+1
+
+# verify index scan is used after rebuild
+query II
+EXPLAIN ANALYZE SELECT i, rowid FROM db1.t WHERE i = 122880
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# verify index lookups return correct row IDs after shift
+# RG0 dropped, RG1 shifts to rowid 0
+query II
+SELECT i, rowid FROM db1.t WHERE i = 122880
+----
+122880	0
+
+query II
+SELECT i, rowid FROM db1.t WHERE i = 245759
+----
+245759	122879
+
+query I
+SELECT COUNT(*) FROM db1.t
+----
+122880
+
+statement ok
+DETACH db1
