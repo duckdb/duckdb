@@ -60,6 +60,14 @@ elseif("${OS_NAME}" STREQUAL "osx")
 endif()
 
 # Add rust_example as a CMake target
+duckdb_require_vcpkg_pkgconfig()
+
+set(DELTA_CARGO_ENV_PREFIX "")
+if(DEFINED PKG_CONFIG_PATH AND NOT "${PKG_CONFIG_PATH}" STREQUAL "")
+  set(DELTA_CARGO_ENV_PREFIX ${CMAKE_COMMAND} -E env
+                             PKG_CONFIG_PATH=${PKG_CONFIG_PATH})
+endif()
+
 ExternalProject_Add(
   ${KERNEL_NAME}
   GIT_REPOSITORY "https://github.com/delta-incubator/delta-kernel-rs"
@@ -68,14 +76,14 @@ ExternalProject_Add(
   UPDATE_COMMAND ""
   BUILD_IN_SOURCE 1
   # Build debug build
-  BUILD_COMMAND cargo build --package delta_kernel_ffi --workspace
-                --all-features --target=${RUST_PLATFORM_TARGET}
+  BUILD_COMMAND ${DELTA_CARGO_ENV_PREFIX} cargo build --package delta_kernel_ffi
+                --workspace --all-features --target=${RUST_PLATFORM_TARGET}
   # Build release build
-  COMMAND cargo build --package delta_kernel_ffi --workspace --all-features
-          --release --target=${RUST_PLATFORM_TARGET}
+  COMMAND ${DELTA_CARGO_ENV_PREFIX} cargo build --package delta_kernel_ffi
+          --workspace --all-features --release --target=${RUST_PLATFORM_TARGET}
   # Build DATs
   COMMAND
-    cargo build
+    ${DELTA_CARGO_ENV_PREFIX} cargo build
     --manifest-path=${CMAKE_BINARY_DIR}/rust/src/delta_kernel/acceptance/Cargo.toml
   BUILD_BYPRODUCTS
     "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/${RUST_PLATFORM_TARGET}/debug/libdelta_kernel_ffi.a"
