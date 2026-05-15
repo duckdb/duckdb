@@ -27,7 +27,7 @@ extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(explicit_extension_schema, loader) {
 	DBConfig::GetConfig(loader.GetDatabaseInstance()).GetCallbackManager();
 	// set the schema for the extension
-	loader.RegisterExtensionInSeparateSchema("explicit_schema");
+	loader.UseDedicatedSchemaForExtension("explicit_schema");
 	LoadableExtensionExplicitSchemaFunInit(loader);
 }
 }

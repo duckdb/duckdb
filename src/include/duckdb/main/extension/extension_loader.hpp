@@ -48,15 +48,13 @@ public:
 	//! Set the description of the extension
 	DUCKDB_API void SetDescription(const string &description);
 	//! Explicitly sets, creates and registers all functions in this dedicated extension schema
-	DUCKDB_API void RegisterExtensionInSeparateSchema(const string &extension_schema_name);
+	DUCKDB_API void UseDedicatedSchemaForExtension(const string &extension_schema_name);
 	//! Creates a schema in the catalog with the extension name
-	DUCKDB_API void CreateExtensionSchema(const string &extension_schema_name) const;
+	DUCKDB_API void CreateSchema(const string &extension_schema_name) const;
 	//! Adds the created extension schema to the search path
-	DUCKDB_API void AddExtensionSchemaToSearchPath(const string &schema_name) const;
+	DUCKDB_API void AddSchemaToSearchPath(const string &schema_name) const;
 	//! Sets the default extension schema for this extension
-	DUCKDB_API void SetExtensionSchema(const string &name);
-	// Set the extension schema explicitly to DEFAULT_SCHEMA
-	DUCKDB_API void ResetExtensionSchemaToDefault();
+	DUCKDB_API void UseDefaultSchema(const string &name = DEFAULT_SCHEMA);
 	DUCKDB_API static void RefreshSearchPath(ClientContext &context);
 
 public:

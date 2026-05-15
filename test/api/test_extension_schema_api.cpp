@@ -29,7 +29,7 @@ TEST_CASE("Test ExtensionLoader schema API", "[api]") {
 
 	SECTION("CreateExtensionSchema creates a schema visible in the catalog") {
 		auto loader = CreateExtensionLoader(db, "test_ext");
-		loader.CreateExtensionSchema("test_schema");
+		loader.CreateSchema("test_schema");
 
 		auto result =
 		    conn.Query("SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'test_schema'");
@@ -37,10 +37,10 @@ TEST_CASE("Test ExtensionLoader schema API", "[api]") {
 		REQUIRE(result->RowCount() == 1);
 	}
 
-	SECTION("SetExtensionSchema routes RegisterFunction into the custom schema") {
+	SECTION("UseDefaultSchema routes RegisterFunction into the custom schema") {
 		auto loader = CreateExtensionLoader(db, "test_ext");
-		loader.CreateExtensionSchema("custom_schema");
-		loader.SetExtensionSchema("custom_schema");
+		loader.CreateSchema("custom_schema");
+		loader.UseDefaultSchema("custom_schema");
 		loader.RegisterFunction(ScalarFunction("fn_in_custom", {}, LogicalType::VARCHAR, ReturnCustomSchema));
 
 		// Both qualified and unqualified call fail because schema is not on the search path yet
@@ -50,9 +50,9 @@ TEST_CASE("Test ExtensionLoader schema API", "[api]") {
 
 	SECTION("Test AddExtensionSchemaToSearchPath") {
 		auto loader = CreateExtensionLoader(db, "test_ext");
-		loader.CreateExtensionSchema("search_schema");
-		loader.SetExtensionSchema("search_schema");
-		loader.AddExtensionSchemaToSearchPath("search_schema");
+		loader.CreateSchema("search_schema");
+		loader.UseDefaultSchema("search_schema");
+		loader.AddSchemaToSearchPath("search_schema");
 		loader.RegisterFunction(ScalarFunction("fn_in_search", {}, LogicalType::VARCHAR, ReturnCustomSchema));
 
 		// we need to manually call this to refresh the catalog search path for this connection
@@ -63,18 +63,19 @@ TEST_CASE("Test ExtensionLoader schema API", "[api]") {
 		REQUIRE_NO_FAIL(conn.Query("SELECT fn_in_search()"));
 	}
 
-	SECTION("ResetExtensionSchemaToDefault routes subsequent functions back to main") {
+	SECTION("UseDefaultSchema() registers subsequent functions in the DEFAULT_SCHEMA") {
 		auto loader = CreateExtensionLoader(db, "test_ext");
-		loader.CreateExtensionSchema("reset_schema");
-		loader.SetExtensionSchema("reset_schema");
+		loader.CreateSchema("reset_schema");
+
+		loader.UseDefaultSchema("reset_schema");
 		loader.RegisterFunction(ScalarFunction("fn_before_reset", {}, LogicalType::VARCHAR, ReturnCustomSchema));
 
 		// reset_schema has not been added to the search path yet
 		REQUIRE_FAIL(conn.Query("SELECT reset_schema.fn_before_reset()"));
-		loader.AddExtensionSchemaToSearchPath("reset_schema");
+		loader.AddSchemaToSearchPath("reset_schema");
 		loader.RefreshSearchPath(*conn.context);
 
-		loader.ResetExtensionSchemaToDefault();
+		loader.UseDefaultSchema();
 		// register another function in the main schema
 		loader.RegisterFunction(ScalarFunction("fn_after_reset", {}, LogicalType::VARCHAR, ReturnMainSchema));
 
@@ -88,25 +89,24 @@ TEST_CASE("Test ExtensionLoader schema API", "[api]") {
 		REQUIRE_FAIL(conn.Query("SELECT reset_schema.fn_after_reset()"));
 	}
 
-	SECTION("SetExtensionSchema rejects invalid schema names") {
+	SECTION("UseDefaultSchema rejects invalid schema names") {
 		auto loader = CreateExtensionLoader(db, "test_ext");
-		REQUIRE_THROWS(loader.SetExtensionSchema("pg_catalog"));
-		REQUIRE_THROWS(loader.SetExtensionSchema(""));
+		REQUIRE_THROWS(loader.UseDefaultSchema("pg_catalog"));
 	}
 
-	SECTION("AddExtensionSchemaToSearchPath requires SetExtensionSchema and CreateExtensionSchema first") {
+	SECTION("AddExtensionSchemaToSearchPath requires UseDefaultSchema and CreateExtensionSchema first") {
 		auto loader = CreateExtensionLoader(db, "test_ext");
 		// schema does not exist
-		REQUIRE_THROWS(loader.AddExtensionSchemaToSearchPath("orphan_schema"));
+		REQUIRE_THROWS(loader.AddSchemaToSearchPath("orphan_schema"));
 		// create schema
-		loader.CreateExtensionSchema("orphan_schema");
+		loader.CreateSchema("orphan_schema");
 		// still throws because schema is not set
-		REQUIRE_THROWS(loader.AddExtensionSchemaToSearchPath("orphan_schema"));
+		REQUIRE_THROWS(loader.AddSchemaToSearchPath("orphan_schema"));
 	}
 
 	SECTION("RegisterExtensionInSeparateSchema combines create, set, and add-to-path") {
 		auto loader = CreateExtensionLoader(db, "test_ext");
-		loader.RegisterExtensionInSeparateSchema("combined_schema");
+		loader.UseDedicatedSchemaForExtension("combined_schema");
 		loader.RegisterFunction(ScalarFunction("fn_combined", {}, LogicalType::VARCHAR, ReturnCustomSchema));
 		loader.RefreshSearchPath(*conn.context);
 

@@ -43,13 +43,13 @@ void ExtensionLoader::SetDescription(const string &description) {
 	loader_info.extension_description = description;
 }
 
-void ExtensionLoader::RegisterExtensionInSeparateSchema(const string &extension_schema_name) {
-	CreateExtensionSchema(extension_schema_name);
-	SetExtensionSchema(extension_schema_name);
-	AddExtensionSchemaToSearchPath(extension_schema_name);
+void ExtensionLoader::UseDedicatedSchemaForExtension(const string &extension_schema_name) {
+	CreateSchema(extension_schema_name);
+	UseDefaultSchema(extension_schema_name);
+	AddSchemaToSearchPath(extension_schema_name);
 };
 
-void ExtensionLoader::CreateExtensionSchema(const string &name) const {
+void ExtensionLoader::CreateSchema(const string &name) const {
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 
@@ -61,26 +61,28 @@ void ExtensionLoader::CreateExtensionSchema(const string &name) const {
 	system_catalog.CreateSchema(data, info);
 }
 
-void ExtensionLoader::SetExtensionSchema(const string &name) {
-	if (name != loader_info.extension_schema && loader_info.extension_schema != DEFAULT_SCHEMA) {
+void ExtensionLoader::UseDefaultSchema(const string &name) {
+	if (loader_info.extension_schema != DEFAULT_SCHEMA && name != DEFAULT_SCHEMA &&
+	    loader_info.extension_schema != name) {
 		throw InvalidInputException("Cannot set extension schema to '%s', schema is already set to '%s'", name,
 		                            loader_info.extension_schema);
 	}
-	if (name == DEFAULT_SCHEMA) {
-		return;
-	}
-	if (name == "pg_catalog" || name.empty()) {
+	if (name == "pg_catalog") {
 		throw InvalidInputException("Cannot set default extension schema to '%s'", name);
+	}
+	if (name == DEFAULT_SCHEMA) {
+		loader_info.extension_schema = DEFAULT_SCHEMA;
+		return;
 	}
 	loader_info.extension_schema = name;
 }
 
-void ExtensionLoader::AddExtensionSchemaToSearchPath(const string &schema_name) const {
+void ExtensionLoader::AddSchemaToSearchPath(const string &schema_name) const {
 	// adds an explicitly set extension schema to the search path
 	if (loader_info.extension_schema != schema_name || schema_name == DEFAULT_SCHEMA ||
 	    loader_info.extension_schema == DEFAULT_SCHEMA) {
 		throw InvalidInputException("Cannot add schema '%s' to search path, first set the extension schema explicitly "
-		                            "with SetExtensionSchema()",
+		                            "with UseDefaultSchema()",
 		                            schema_name);
 	}
 
@@ -100,10 +102,6 @@ void ExtensionLoader::AddExtensionSchemaToSearchPath(const string &schema_name) 
 
 void ExtensionLoader::RefreshSearchPath(ClientContext &context) {
 	ClientData::Get(context).catalog_search_path->RefreshSetPaths();
-}
-
-void ExtensionLoader::ResetExtensionSchemaToDefault() {
-	loader_info.extension_schema = DEFAULT_SCHEMA;
 }
 
 void ExtensionLoader::FinalizeLoad() {
