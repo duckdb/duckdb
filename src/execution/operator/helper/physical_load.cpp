@@ -47,7 +47,7 @@ SourceResultType PhysicalLoad::GetDataInternal(ExecutionContext &context, DataCh
 		options.alias = info->alias;
 		ExtensionHelper::LoadExternalExtension(context.client, options);
 		// adds an explicitly set extension schema to the search path
-		ClientData::Get(context.client).catalog_search_path->RefreshSetPaths();
+		ExtensionLoader::RefreshSearchPath(context.client);
 	}
 
 	return SourceResultType::FINISHED;

@@ -26,31 +26,39 @@ struct CreateScalarFunctionInfo;
 struct CreateTableFunctionInfo;
 struct CreateWindowFunctionInfo;
 
+struct ExtensionLoaderInfo {
+	string extension_name;
+	string extension_alias;
+	string extension_description;
+	string extension_schema = DEFAULT_SCHEMA;
+	bool add_schema_to_search_path = false;
+};
+
 class ExtensionLoader {
 	friend class DuckDB;
 	friend class ExtensionHelper;
 
 public:
-	explicit ExtensionLoader(ExtensionActiveLoad &load_info);
+	explicit ExtensionLoader(const ExtensionActiveLoad &load_info);
 	ExtensionLoader(DatabaseInstance &db, const string &extension_name);
 
 	//! Returns the DatabaseInstance associated with this extension loader
-	DUCKDB_API DatabaseInstance &GetDatabaseInstance();
+	DUCKDB_API DatabaseInstance &GetDatabaseInstance() const;
 
 public:
 	//! Set the description of the extension
 	DUCKDB_API void SetDescription(const string &description);
-	//! Explicitly set the schema in the catalog for this extension
-	DUCKDB_API void RegisterExtensionSchema(const string &name);
+	//! Explicitly sets, creates and registers all functions in this dedicated extension schema
+	DUCKDB_API void RegisterExtensionInSeparateSchema(const string &extension_schema_name);
 	//! Creates a schema in the catalog with the extension name
-	DUCKDB_API void CreateExtensionSchema(const string &name) const;
+	DUCKDB_API void CreateExtensionSchema(const string &extension_schema_name) const;
 	//! Adds the created extension schema to the search path
-	DUCKDB_API void AddExtensionSchemaToSearchPath(const string &name);
-	// Gets the original extension name or alias, depending on how it's registered
-	DUCKDB_API string GetRegisteredExtensionName();
-	//! Sets the default extension schema
-	// i.e. makes sure that functions are registered in the default schema
-	DUCKDB_API void SetDefaultExtensionSchema(const string &name);
+	DUCKDB_API void AddExtensionSchemaToSearchPath(const string &schema_name) const;
+	//! Sets the default extension schema for this extension
+	DUCKDB_API void SetExtensionSchema(const string &name);
+	// Set the extension schema explicitly to DEFAULT_SCHEMA
+	DUCKDB_API void ResetExtensionSchemaToDefault();
+	DUCKDB_API static void RefreshSearchPath(ClientContext &context);
 
 public:
 	//! Register a new scalar function - merge overloads if the function already exists
@@ -119,16 +127,13 @@ public:
 
 private:
 	void FinalizeLoad();
-	const string &GetRegisteredName() const {
-		return extension_alias.empty() ? extension_name : extension_alias;
+	const string &GetRegisteredExtensionName() const {
+		return loader_info.extension_alias.empty() ? loader_info.extension_name : loader_info.extension_alias;
 	}
 
 private:
 	DatabaseInstance &db;
-	string extension_name;
-	string extension_alias;
-	string extension_description;
-	string extension_schema = DEFAULT_SCHEMA;
+	ExtensionLoaderInfo loader_info;
 	optional_ptr<ExtensionInfo> extension_info;
 };
 
