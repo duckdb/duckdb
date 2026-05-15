@@ -1646,7 +1646,7 @@ string Value::ToString() const {
 
 string Value::ToSQLString() const {
 	if (IsNull()) {
-		return ToString();
+		return ToString() + "::" + type_.ToString();
 	}
 	switch (type_.id()) {
 	case LogicalTypeId::UUID:
