@@ -333,54 +333,41 @@ def parse_skipped_tests_count(output: str):
     return int(match.group(1))
 
 
-def parse_skipped_test_reasons(output: str):
+def parse_skipped_test_summary(output: str):
+    skipped_count = 0
     reasons = {}
-    lines = strip_ansi(output).splitlines()
-    for idx, line in enumerate(lines):
-        if line.strip() != "Skipped tests for the following reasons:":
-            continue
-
-        for reason_line in lines[idx + 1 :]:
-            reason_line = reason_line.strip()
-            if not reason_line:
-                break
-            match = SKIP_REASON_PATTERN.match(reason_line)
-            if not match:
-                break
-            reasons[match.group(1)] = reasons.get(match.group(1), 0) + int(match.group(2))
-        break
-    return reasons
-
-
-def parse_mode_skip_reasons(output: str):
-    reasons = {}
+    in_skip_summary = False
     for line in strip_ansi(output).splitlines():
         stripped = line.strip()
-        if SKIP_REASON_PATTERN.match(stripped):
+        if skipped_count == 0:
+            count_match = SKIPPED_TESTS_PATTERN.search(stripped)
+            if count_match:
+                skipped_count = int(count_match.group(1))
+        if stripped == "Skipped tests for the following reasons:":
+            in_skip_summary = True
             continue
-        match = MODE_SKIP_REASON_PATTERN.match(stripped)
-        if not match:
-            continue
-        reason = match.group(1) or "unspecified"
-        reason_key = f"mode skip {reason}"
-        reasons[reason_key] = reasons.get(reason_key, 0) + 1
-    return reasons
+        if in_skip_summary:
+            if not stripped:
+                in_skip_summary = False
+                continue
+            reason_match = SKIP_REASON_PATTERN.match(stripped)
+            if not reason_match:
+                in_skip_summary = False
+                continue
+            reasons[reason_match.group(1)] = reasons.get(reason_match.group(1), 0) + int(reason_match.group(2))
+    return skipped_count, reasons
 
 
 def extract_skipped_test_output(stdout: str, stderr: str):
-    stdout_count = parse_skipped_tests_count(stdout)
-    stdout_reasons = parse_skipped_test_reasons(stdout)
-    stdout_mode_skip_reasons = parse_mode_skip_reasons(stdout)
-    if stdout_count > 0 or stdout_reasons or stdout_mode_skip_reasons:
-        return stdout
+    stdout_summary = parse_skipped_test_summary(stdout)
+    if stdout_summary[0] > 0 or stdout_summary[1]:
+        return stdout_summary
 
-    stderr_count = parse_skipped_tests_count(stderr)
-    stderr_reasons = parse_skipped_test_reasons(stderr)
-    stderr_mode_skip_reasons = parse_mode_skip_reasons(stderr)
-    if stderr_count > 0 or stderr_reasons or stderr_mode_skip_reasons:
-        return stderr
+    stderr_summary = parse_skipped_test_summary(stderr)
+    if stderr_summary[0] > 0 or stderr_summary[1]:
+        return stderr_summary
 
-    return ""
+    return 0, {}
 
 
 def run_batch(config: TestRunnerConfig, batch):
@@ -694,11 +681,9 @@ def run_tests(config: TestRunnerConfig, batches):
                     if handle_failed_batch(ctx, batch_info, result):
                         continue
                 else:
-                    skipped_output = extract_skipped_test_output(result["stdout"], result["stderr"])
-                    total_skipped_tests += parse_skipped_tests_count(skipped_output)
-                    for reason, count in parse_skipped_test_reasons(skipped_output).items():
-                        skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
-                    for reason, count in parse_mode_skip_reasons(skipped_output).items():
+                    skipped_count, skipped_reasons = extract_skipped_test_output(result["stdout"], result["stderr"])
+                    total_skipped_tests += skipped_count
+                    for reason, count in skipped_reasons.items():
                         skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
                 progress.advance(next_batch_idx - len(future_to_batch))
 

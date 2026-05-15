@@ -1171,43 +1171,6 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 	return min_offset;
 }
 
-static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, const Statistics &pq_col_stats,
-                                                      const TableFilter &filter) {
-	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "CheckParquetStringFilter");
-	auto &expr = *expr_filter.expr;
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
-	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
-		auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		for (auto &child : conjunction.children) {
-			auto child_filter = ExpressionFilter(child->Copy());
-			auto child_prune_result = CheckParquetStringFilter(stats, pq_col_stats, child_filter);
-			if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-				return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			}
-			if (child_prune_result != and_result) {
-				and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-			}
-		}
-		return and_result;
-	}
-	if (BoundComparisonExpression::IsComparison(expr)) {
-		auto &comp = expr.Cast<BoundFunctionExpression>();
-		auto &right = BoundComparisonExpression::Right(comp);
-		if (right.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-			auto &constant = right.Cast<BoundConstantExpression>();
-			if (constant.value.type().id() == LogicalTypeId::VARCHAR) {
-				auto &min_value = pq_col_stats.min_value;
-				auto &max_value = pq_col_stats.max_value;
-				return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
-				                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
-				                                 comp.GetExpressionType(), StringValue::Get(constant.value));
-			}
-		}
-	}
-	return expr_filter.CheckStatistics(stats);
-}
-
 static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const Statistics &pq_col_stats,
                                                      const TableFilter &filter) {
 	// floating point values can have values in the [min, max] domain AND nan values
@@ -1272,12 +1235,6 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 			if (is_expression) {
 				// no pruning possible for expressions
 				prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-			} else if (!is_generated_column && has_min_max && column_reader.Type().id() == LogicalTypeId::VARCHAR) {
-				// our StringStats only store the first 8 bytes of strings (even if Parquet has longer string stats)
-				// however, when reading remote Parquet files, skipping row groups is really important
-				// here, we implement a special case to check the full length for string filters
-				prune_result =
-				    CheckParquetStringFilter(*stats, group.columns[schema_column_index].meta_data.statistics, filter);
 			} else if (!is_generated_column && has_min_max &&
 			           (column_reader.Type().id() == LogicalTypeId::FLOAT ||
 			            column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
@@ -1428,32 +1385,7 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 	}
 
 	bool MinMaxIsExact(const BaseStatistics &, const StorageIndex &storage_index) override {
-		const idx_t primary_index = storage_index.GetPrimaryIndex();
-		D_ASSERT(metadata.row_groups.size() > row_group_idx);
-		D_ASSERT(root_schema->children.size() > primary_index);
-
-		const auto &column_schema = root_schema->children[primary_index];
-		if (column_schema.schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
-			return true;
-		}
-
-		const auto &row_group = metadata.row_groups[row_group_idx];
-		const auto &column_chunk = row_group.columns[primary_index];
-
-		if (!column_chunk.__isset.meta_data || !column_chunk.meta_data.__isset.statistics) {
-			return false;
-		}
-		const auto &col_stats = column_chunk.meta_data.statistics;
-		if (col_stats.__isset.is_min_value_exact && col_stats.__isset.is_max_value_exact) {
-			return col_stats.is_min_value_exact && col_stats.is_max_value_exact;
-		}
-		// Pre-PARQUET-2352 (Oct 2023) the spec required min/max, when present, to be the exact
-		// min/max; in practice some writers truncated long binary values, and PARQUET-2352 added
-		// is_*_value_exact so readers could detect that. Fixed-width physical types are not
-		// subject to such truncation, so when the flag is missing we mirror arrow-rs
-		// (parquet/src/file/statistics.rs ValueStatistics::new) and treat them as exact.
-		const auto t = column_chunk.meta_data.type;
-		return t != Type::BYTE_ARRAY && t != Type::FIXED_LEN_BYTE_ARRAY;
+		return true;
 	}
 };
 

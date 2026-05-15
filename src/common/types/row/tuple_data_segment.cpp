@@ -104,12 +104,28 @@ TupleDataSegment::TupleDataSegment(shared_ptr<TupleDataAllocator> allocator_p)
 }
 
 TupleDataSegment::~TupleDataSegment() {
-	lock_guard<mutex> guard(pinned_handles_lock);
 	if (allocator) {
 		allocator->SetDestroyBufferUponUnpin(); // Prevent blocks from being added to eviction queue
 	}
-	pinned_row_handles.clear();
-	pinned_heap_handles.clear();
+	// Avoid triggering the mutex init slow-path (on macOS, first lock on a fresh mutex is expensive).
+	// In the destructor we are the sole owner, so checking without the lock is safe.
+	if (!pinned_row_handles.empty() || !pinned_heap_handles.empty()) {
+		lock_guard<mutex> guard(pinned_handles_lock);
+		pinned_row_handles.clear();
+		pinned_heap_handles.clear();
+	}
+}
+
+void TupleDataSegment::Reset() {
+	count = 0;
+	data_size = 0;
+	// Release any remaining pin handles before clearing. For UNPIN_AFTER_DONE, pinned_row_handles /
+	// pinned_heap_handles may be non-empty due to resize-only calls in CreateRowBlock / CreateHeapBlock
+	// (actual BufferHandles are in the TupleDataPinState, not here).  Unpin() safely clears them.
+	Unpin();
+	// chunk/chunk_part destructors are trivial (only POD fields), so clear is cheap.
+	chunks.clear();
+	chunk_parts.clear();
 }
 
 idx_t TupleDataSegment::ChunkCount() const {

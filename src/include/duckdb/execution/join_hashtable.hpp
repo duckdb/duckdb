@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
@@ -116,6 +117,7 @@ public:
 		SelectionVector last_sel_vector;
 
 		explicit ScanStructure(JoinHashTable &ht, TupleDataChunkState &key_state);
+		void Reset();
 		//! Get the next batch of data from the scan structure
 		void Next(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
 		//! Are pointer chains all pointing to NULL?
@@ -147,7 +149,7 @@ public:
 
 		//! Apply residual predicate filtering
 		idx_t ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
-		                             SelectionVector *no_match_sel, idx_t no_match_offset = 0);
+		                             optional_ptr<SelectionVector> no_match_sel, idx_t no_match_offset = 0);
 
 	private:
 		unique_ptr<ExpressionExecutor> residual_executor;
@@ -161,7 +163,7 @@ public:
 		void GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const idx_t count, const idx_t col_idx);
 		idx_t ResolvePredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
-		                        SelectionVector *no_match_sel);
+		                        optional_ptr<SelectionVector> no_match_sel);
 	};
 
 public:
@@ -375,7 +377,7 @@ public:
 
 private:
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
-	                             const SelectionVector *&current_sel);
+	                             optional_ptr<const SelectionVector> &current_sel);
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 
 	bool UseSalt() const;
@@ -383,15 +385,24 @@ private:
 	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the
 	//! key_match_sel vector and the count argument to the number and position of the matches
 	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
-	                    const SelectionVector *sel, idx_t &count, Vector &pointers_result_v, SelectionVector &match_sel,
-	                    bool has_sel);
+	                    optional_ptr<const SelectionVector> sel, idx_t &count, Vector &pointers_result_v,
+	                    SelectionVector &match_sel, bool has_sel);
 
 private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
 	void InsertHashes(Vector &hashes_v, TupleDataChunkState &chunk_state, InsertState &insert_state, bool parallel);
 	//! Prepares keys by filtering NULLs
-	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data, const SelectionVector *&current_sel,
-	                  SelectionVector &sel, bool build_side);
+	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data,
+	                  optional_ptr<const SelectionVector> &current_sel, SelectionVector &sel, bool build_side);
+
+	unsafe_optional_ptr<ht_entry_t> GetEntries() {
+		D_ASSERT(hash_map.get());
+		return reinterpret_cast<ht_entry_t *>(hash_map.get());
+	}
+	unsafe_optional_ptr<atomic<ht_entry_t>> GetAtomicEntries() {
+		D_ASSERT(hash_map.get());
+		return reinterpret_cast<atomic<ht_entry_t> *>(hash_map.get());
+	}
 
 	//! Lock for combining data_collection when merging HTs
 	mutex data_lock;
@@ -402,7 +413,6 @@ private:
 
 	//! The hash map of the HT, created after finalization
 	AllocatedData hash_map;
-	ht_entry_t *entries = nullptr;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
 	//! An empty tuple that's a "dead end", can be used to stop chains early
@@ -521,7 +531,7 @@ public:
 	void MergePrefixRangeBuildState(PrefixRangeFilter::BuildState &state);
 
 	//! Get total size of HT if all partitions would be built
-	idx_t GetTotalSize(const vector<unique_ptr<JoinHashTable>> &local_hts, idx_t &max_partition_size,
+	idx_t GetTotalSize(const vector<reference<JoinHashTable>> &local_hts, idx_t &max_partition_size,
 	                   idx_t &max_partition_count) const;
 	idx_t GetTotalSize(const vector<idx_t> &partition_sizes, const vector<idx_t> &partition_counts,
 	                   idx_t &max_partition_size, idx_t &max_partition_count) const;
@@ -543,6 +553,10 @@ public:
 
 	//! Delete blocks that belong to the current partitioned HT
 	void Reset();
+	//! Collapses the sink collection to a single partition.
+	//! Used by recursive CTEs to avoid per-iteration overhead of managing many radix partitions
+	//! when only one thread is building the hash table.
+	void ResetForNewIterationSinglePartition();
 	//! Build HT for the next partitioned probe round
 	bool PrepareExternalFinalize(const idx_t max_ht_size);
 	//! Probe whatever we can, sink the rest into a thread-local HT

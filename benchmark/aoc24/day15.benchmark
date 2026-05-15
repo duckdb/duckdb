@@ -1,0 +1,8 @@
+# name: benchmark/aoc24/day15.benchmark
+# description: Run Advent of Code 2024 day15 SQL workload
+# group: [aoc24]
+
+template benchmark/aoc24/aoc24.benchmark.in
+DAY=day15
+BENCHMARK_NAME=AoC 2024 day15
+DESCRIPTION=Run Advent of Code 2024 day15 SQL workload

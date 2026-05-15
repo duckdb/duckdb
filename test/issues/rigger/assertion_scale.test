@@ -6,6 +6,9 @@ statement ok
 BEGIN TRANSACTION;
 
 statement ok
+SET current_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
+
+statement ok
 CREATE TABLE t0(c0 DOUBLE, c1 DOUBLE);;
 
 statement ok

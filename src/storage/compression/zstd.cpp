@@ -236,8 +236,9 @@ public:
 	      checkpoint_data(checkpoint_data),
 	      partial_block_manager(checkpoint_data.GetCheckpointState().GetPartialBlockManager()),
 	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)),
-	      total_tuple_count(analyze_state->count), total_vector_count(GetVectorCount(total_tuple_count)),
-	      total_segment_count(analyze_state->segment_count), vectors_per_segment(analyze_state->vectors_per_segment) {
+	      stats_writer(checkpoint_data.GetType()), total_tuple_count(analyze_state->count),
+	      total_vector_count(GetVectorCount(total_tuple_count)), total_segment_count(analyze_state->segment_count),
+	      vectors_per_segment(analyze_state->vectors_per_segment) {
 		segment_count = 0;
 		vector_count = 0;
 		vector_state.tuple_count = 0;
@@ -436,7 +437,7 @@ public:
 
 	void AddString(const string_t &string) {
 		AddStringInternal(string);
-		UncompressedStringStorage::UpdateStringStats(buffer_collection.segment->stats, string);
+		UncompressedStringStorage::UpdateStringStats(buffer_collection.segment->stats, stats_writer, string);
 	}
 
 	void NewPage(bool additional_data_page = false) {
@@ -540,6 +541,7 @@ public:
 		auto compressed_segment =
 		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
 		buffer_collection.segment = std::move(compressed_segment);
+		stats_writer.Clear();
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 		buffer_collection.segment_handle = buffer_manager.Pin(buffer_collection.segment->block);
@@ -582,6 +584,7 @@ public:
 		}
 
 		auto &state = checkpoint_data.GetCheckpointState();
+		stats_writer.Merge(buffer_collection.segment->stats.statistics);
 		state.FlushSegment(std::move(buffer_collection.segment), std::move(buffer_collection.segment_handle),
 		                   segment_block_size);
 		segment_buffer_state.flags.Clear();
@@ -607,6 +610,7 @@ public:
 	ColumnDataCheckpointData &checkpoint_data;
 	PartialBlockManager &partial_block_manager;
 	const CompressionFunction &function;
+	StringStatsWriter stats_writer;
 
 	//! --- Analyzed Data ---
 	//! The amount of tuples we're writing

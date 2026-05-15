@@ -20,6 +20,9 @@
 
 namespace duckdb {
 
+mutex SQLLogicTestRunner::skip_reason_lock;
+map<string, idx_t> SQLLogicTestRunner::skip_reason_counts;
+
 SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
 	config->SetOptionByName("allow_unredacted_secrets", true);
@@ -80,6 +83,28 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 		}
 		DeleteDatabase(loaded_path);
 	}
+}
+
+void SQLLogicTestRunner::AddSkipReason(const string &reason) {
+	lock_guard<mutex> guard(skip_reason_lock);
+	skip_reason_counts[reason]++;
+}
+
+void SQLLogicTestRunner::SkipTest(const string &reason) {
+	AddSkipReason(reason);
+	SKIP_TEST(reason);
+}
+
+string SQLLogicTestRunner::GetSkipReasonSummary() {
+	lock_guard<mutex> guard(skip_reason_lock);
+	if (skip_reason_counts.empty()) {
+		return string();
+	}
+	std::ostringstream oss;
+	for (auto &entry : skip_reason_counts) {
+		oss << entry.first << ": " << entry.second << "\n";
+	}
+	return oss.str();
 }
 
 void SQLLogicTestRunner::ExecuteCommand(duckdb::unique_ptr<Command> command) {
@@ -625,7 +650,7 @@ void add_env_tag(vector<string> &tags, const string &name, const string *value =
 void SQLLogicTestRunner::ExecuteFile(string script) {
 	auto &test_config = TestConfiguration::Get();
 	if (test_config.ShouldSkipTest(script)) {
-		SKIP_TEST("config skip_tests");
+		SkipTest("config skip_tests");
 		return;
 	}
 
@@ -684,7 +709,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		// Check tags first time we hit test statements, since all explicit & implicit tags now present
 		if (parser.IsTestCommand(token.type) && !test_expr_executed) {
 			if (test_config.GetPolicyForTagSet(file_tags) == TestConfiguration::SelectPolicy::SKIP) {
-				SKIP_TEST("select tag-set");
+				SkipTest("select tag-set");
 				return;
 			}
 			test_expr_executed = true;
@@ -863,7 +888,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 						reason += " " + token.parameters[i];
 					}
 				}
-				Printer::PrintF("mode skip %s", reason);
+				AddSkipReason("mode skip " + reason);
 				skip_level++;
 			} else if (parameter == "unskip") {
 				skip_level--;
@@ -982,7 +1007,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					// This extension / setting was explicitly required
 					parser.Fail(StringUtil::Format("require %s: FAILED", param));
 				}
-				SKIP_TEST("require " + token.parameters[0]);
+				SkipTest("require " + token.parameters[0]);
 				return;
 			}
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_TEST_ENV) {
@@ -1026,7 +1051,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			if (env_actual == nullptr) {
 				// Environment variable was not found, this test should not be run
-				SKIP_TEST("require-env " + token.parameters[0]);
+				SkipTest("require-env " + token.parameters[0]);
 				return;
 			}
 
@@ -1035,7 +1060,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				auto env_value = token.parameters[1];
 				if (std::strcmp(env_actual, env_value.c_str()) != 0) {
 					// It's not, check the test
-					SKIP_TEST("require-env " + token.parameters[0] + " " + token.parameters[1]);
+					SkipTest("require-env " + token.parameters[0] + " " + token.parameters[1]);
 					return;
 				}
 
@@ -1051,7 +1076,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
 			auto &test_config = TestConfiguration::Get();
 			if (test_config.OnLoadCommand() == "skip") {
-				SKIP_TEST("config on_load skip");
+				SkipTest("config on_load skip");
 				return;
 			}
 			bool is_read_only = false;
