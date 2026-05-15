@@ -169,6 +169,9 @@ struct DBConfigOptions {
 	LogConfig log_config = LogConfig();
 	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
 	idx_t block_allocator_size = 0;
+	//! The maximum data to buffer in row groups (in bytes) to buffer prior to flushing.
+	//! When inserting large chunks of data we
+	optional_idx write_buffer_row_group_memory_limit;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

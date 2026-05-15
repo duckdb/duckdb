@@ -1699,6 +1699,32 @@ void WarningsAsErrorsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	}
 }
 
+//===----------------------------------------------------------------------===//
+// Streaming Buffer Size
+//===----------------------------------------------------------------------===//
+void WriteBufferRowGroupMemoryLimitSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull() || input.ToString().empty()) {
+		config.options.write_buffer_row_group_memory_limit = optional_idx();
+	} else {
+		config.options.write_buffer_row_group_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
+	}
+}
+
+void WriteBufferRowGroupMemoryLimitSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.write_buffer_row_group_memory_limit = optional_idx();
+}
+
+Value WriteBufferRowGroupMemoryLimitSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	idx_t bytes = 0;
+	if (config.options.write_buffer_row_group_memory_limit.IsValid()) {
+		bytes = config.options.write_buffer_row_group_memory_limit.GetIndex();
+	} else {
+		bytes = config.options.maximum_memory / 5 / (config.options.maximum_threads + 1);
+	}
+	return Value(StringUtil::BytesToHumanReadableString(bytes));
+}
+
 void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (!info.context) {
 		throw InvalidInputException(
