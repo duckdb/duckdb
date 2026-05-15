@@ -8,6 +8,11 @@ PRAGMA enable_verification
 
 require parquet
 
+query I
+select min(file_row_number) from parquet_scan('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet', file_row_number=1);
+----
+0
+
 query IIII
 select min(file_row_number), max(file_row_number), avg(file_row_number),  count(*) from parquet_scan('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet', file_row_number=1);
 ----
