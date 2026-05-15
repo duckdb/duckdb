@@ -136,6 +136,7 @@ static void ScanChild(ColumnScanState &state, Vector &result, const std::functio
 		target.Reset();
 		input.Reset();
 		auto scan_count = callback(input.data[0]);
+		FlatVector::SetSize(input.data[0], scan_count);
 		input.SetCardinality(scan_count);
 		executor.Execute(input, target);
 		result.Reference(target.data[0]);
