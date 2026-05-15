@@ -179,8 +179,8 @@ static string GetAlias(const TableFunctionRef &ref) {
 
 static void ApplyPostgresSetofAliasCompatibility(const TableFunction &table_function, const TableFunctionRef &ref,
                                                  vector<string> &return_names) {
-	if (!table_function.postgres_setof_compat || ref.alias.empty() || !ref.column_name_alias.empty() ||
-	    return_names.size() != 1) {
+	if (table_function.return_type != TableFunctionReturnType::SET_RETURNING_FUNCTION || ref.alias.empty() ||
+	    !ref.column_name_alias.empty() || return_names.size() != 1) {
 		return;
 	}
 	return_names[0] = ref.alias;

@@ -368,6 +368,8 @@ typedef void (*table_function_set_partitions_to_scan_t)(vector<idx_t> partition_
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
 
+enum class TableFunctionReturnType { TABLE_RETURNING_FUNCTION, SET_RETURNING_FUNCTION };
+
 class TableFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	DUCKDB_API TableFunction();
@@ -506,8 +508,7 @@ public:
 	bool sampling_pushdown;
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
-	//! Whether a single-column result should inherit an explicit table alias for PostgreSQL SETOF compatibility
-	bool postgres_setof_compat;
+	TableFunctionReturnType return_type;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 	//! The order preservation type of the table function
