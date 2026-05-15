@@ -101,9 +101,11 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(const FileMetaData &file_m
 			row_group_offset_min += row_groups[i].num_rows;
 		}
 
-		NumericStats::SetMin(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_offset_min)));
-		NumericStats::SetMax(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_offset_min +
-		                                                                     row_groups[row_group_idx_p].num_rows)));
+		if (row_groups[row_group_idx_p].num_rows > 0) {
+			NumericStats::SetMin(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_offset_min)));
+			NumericStats::SetMax(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(
+			                                row_group_offset_min + row_groups[row_group_idx_p].num_rows - 1)));
+		}
 		stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		return stats.ToUnique();
 	}
