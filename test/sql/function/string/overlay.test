@@ -1,0 +1,180 @@
+# name: test/sql/function/string/overlay.test
+# group: [string]
+
+query I
+SELECT OVERLAY('abcdef' PLACING 'XX' FROM 3)
+----
+abXXef
+
+# comma syntax
+query I
+SELECT OVERLAY('abcdef', 'XX', 3)
+----
+abXXef
+
+query I
+SELECT overlay('abcdef' PLACING 'XXX' FROM 2)
+----
+aXXXef
+
+# Explicit length: replace 2 chars at position 3 with 'XX'
+query I
+SELECT overlay('abcdef' PLACING 'XX' FROM 3 FOR 2)
+----
+abXXef
+
+# Length 0 inserts without removal
+query I
+SELECT overlay('abcdef' PLACING 'XX' FROM 3 FOR 0)
+----
+abXXcdef
+
+# comma syntax
+query I
+SELECT overlay('abcdef', 'XX', 3, 0)
+----
+abXXcdef
+
+# Length larger than the tail truncates the tail
+query I
+SELECT overlay('abcdef' PLACING 'Z' FROM 3 FOR 10)
+----
+abZ
+
+# NULL propagation
+query I
+SELECT overlay(NULL PLACING 'XX' FROM 2)
+----
+NULL
+
+query I
+SELECT overlay('abcdef' PLACING NULL FROM 2)
+----
+NULL
+
+# Test negative FROM (should leave more characters)
+query I
+SELECT overlay('33333rce' placing 'resou' from 1);
+----
+resource
+
+query I
+SELECT overlay('33333rce' placing 'resou' from 0);
+----
+resou3rce
+
+query I
+SELECT overlay('33333rce' placing 'resou' from -1);
+----
+resou33rce
+
+query I
+SELECT overlay('33333rce' placing 'resou' from -100);
+----
+resou33333rce
+
+# Test negative FOR (should be the same as noarg)
+query I
+SELECT overlay('33333rce' placing 'resou' from 1 FOR -1);
+----
+resource
+
+query I
+SELECT overlay('33333rce' placing 'resou' from 1 FOR -100);
+----
+resource
+
+# UTF-8 multi-byte characters
+query I
+SELECT overlay('café' placing 'X' from 4)
+----
+cafX
+
+query I
+SELECT overlay('café' placing 'X' from 4 for 1)
+----
+cafX
+
+query I
+SELECT overlay('hello🌍world' placing 'X' from 6)
+----
+helloXworld
+
+query I
+SELECT overlay('hello🌍world' placing 'X' from 6 for 1)
+----
+helloXworld
+
+query I
+SELECT overlay('日本語テスト' placing 'XX' from 3)
+----
+日本XXスト
+
+query I
+SELECT overlay('日本語テスト' placing 'XX' from 3 for 2)
+----
+日本XXスト
+
+# Empty strings
+query I
+SELECT overlay('' placing 'abc' from 1)
+----
+abc
+
+query I
+SELECT overlay('hello' placing '' from 3)
+----
+hello
+
+query I
+SELECT overlay('' placing '' from 1)
+----
+(empty)
+
+# Start past end of string
+query I
+SELECT overlay('abc' placing 'X' from 10)
+----
+abcX
+
+query I
+SELECT overlay('abc' placing 'XY' from 5)
+----
+abcXY
+
+query I
+SELECT overlay('abc' placing 'X' from 4)
+----
+abcX
+
+# NULL in 4th argument
+query I
+SELECT overlay('abc' placing 'X' from 2 for cast(null as bigint))
+----
+NULL
+
+# Negative/zero start with explicit FOR
+query I
+SELECT overlay('abcdef' placing 'XY' from 0 for 2)
+----
+XYbcdef
+
+query I
+SELECT overlay('abcdef' placing 'XY' from -1 for 2)
+----
+XYabcdef
+
+# From a table
+statement ok
+CREATE TABLE t(s STRING);
+
+statement ok
+INSERT INTO t VALUES ('abcdef'), ('hello'), ('xy'), (NULL);
+
+query I rowsort
+SELECT overlay(s PLACING '__' FROM 2 FOR 2) FROM t
+----
+NULL
+a__def
+h__lo
+x__
