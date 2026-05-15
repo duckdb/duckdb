@@ -239,6 +239,14 @@ void TestConfiguration::ParseOption(const string &name, const Value &value) {
 	}
 }
 
+void TestConfiguration::SetLocalExtensionRepository(const string &repo) {
+	local_extension_repo = repo;
+}
+
+string TestConfiguration::GetLocalExtensionRepository() const {
+	return local_extension_repo;
+}
+
 TestConfiguration::ExtensionAutoLoadingMode TestConfiguration::GetExtensionAutoLoadingMode() {
 	string res = StringUtil::Lower(GetOptionOrDefault("autoloading", string("default")));
 	if (res == "none" || res == "default") {

@@ -422,7 +422,8 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 
 		if (sort_key_payload_state) {
 			D_ASSERT(!layout.IsSortKeyLayout()); // This must be the payload collection
-			lock_guard<mutex> guard(part.lock);
+			// SortKeySetPayload() guards sort-key payload mutations with the sort-key chunk lock.
+			// Avoid nesting part.lock with that lock, which can introduce lock-order inversions.
 			SortKeySetPayload(row_locations, offset, next, *sort_key_payload_state);
 		}
 

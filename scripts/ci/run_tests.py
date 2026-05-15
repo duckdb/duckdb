@@ -46,6 +46,7 @@ class TestRunnerConfig:
     rss_memory_threshold_mib: int | None
     runtime_threshold_seconds: int | None
     max_failures: int | None
+    fail_require_skip: bool
 
 
 @dataclass(frozen=True)
@@ -388,6 +389,7 @@ def run_batch(config: TestRunnerConfig, batch):
     stdout = ""
     stderr = ""
     message = None
+    allow_retry = True
     peak_rss_bytes = 0
 
     # On Windows the child process cannot reopen a NamedTemporaryFile while it
@@ -433,6 +435,12 @@ def run_batch(config: TestRunnerConfig, batch):
             if rss_bytes is not None:
                 peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
             failed = proc.returncode != 0
+            if not failed and config.fail_require_skip:
+                require_skip_lines = find_require_skip_lines(stdout)
+                if require_skip_lines:
+                    failed = True
+                    message = "error: detected require-based skipped tests: " + require_skip_lines[0]
+                    allow_retry = False
     except OSError as exc:
         failed = True
         stderr = str(exc)
@@ -446,7 +454,14 @@ def run_batch(config: TestRunnerConfig, batch):
         "stderr": stderr,
         "message": message,
         "peak_rss_bytes": peak_rss_bytes,
+        "allow_retry": allow_retry,
     }
+
+
+def find_require_skip_lines(output: str):
+    ansi = r"(?:\x1b\[[0-9;]*m)*"
+    pattern = rf"^{ansi}(require\s+\S+:\s+\d+){ansi}\s*$"
+    return re.findall(pattern, output, flags=re.MULTILINE)
 
 
 def submit_batch(executor, config: TestRunnerConfig, batch, future_to_batch, batch_idx: int, attempt: int):
@@ -479,7 +494,7 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
         ),
     )
     ctx.progress.print_message("========================")
-    if ctx.state.can_retry(batch_info, ctx.config):
+    if result.get("allow_retry", True) and ctx.state.can_retry(batch_info, ctx.config):
         ctx.state.record_retry()
         next_attempt = batch_info["attempt"] + 1
         ctx.progress.print_message(
@@ -496,7 +511,7 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
         )
         return True
 
-    if batch_info["attempt"] < ctx.config.retry:
+    if result.get("allow_retry", True) and batch_info["attempt"] < ctx.config.retry:
         ctx.progress.print_message(
             f"not retrying failed test batch {batch_info['batch_idx']} after reaching {ctx.config.max_retries} retries"
         )
@@ -565,6 +580,11 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--max-retries", type=int, default=DEFAULT_MAX_RETRIES)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--batch-timeout", type=float, default=DEFAULT_BATCH_TIMEOUT_SECONDS)
+    parser.add_argument(
+        "--fail-require-skip",
+        action="store_true",
+        help="fail a batch if unittest output reports skipped tests for `require ...` reasons",
+    )
     # Accept options interleaved with positional patterns, e.g.:
     #   run_tests.py bin "[tag]" --fail-fast test/sql/foo.test
     return parser.parse_intermixed_args(argv)
@@ -622,6 +642,7 @@ def main(argv: list[str] | None = None):
             rss_memory_threshold_mib=args.track_rss_memory,
             runtime_threshold_seconds=args.track_runtime,
             max_failures=max_failures,
+            fail_require_skip=args.fail_require_skip,
         )
 
         tests = load_tests(config.test_list)
@@ -707,20 +728,23 @@ def run_tests(config: TestRunnerConfig, batches):
 
     progress.flush_line()
     elapsed = time.monotonic() - start
+    exit_code = 0
+
     if state.failed_count:
         print(f"error: found {state.failed_count} test batch failures in {elapsed:.0f}s")
-        return 1
-
-    if total_skipped_tests > 0:
+        exit_code = 1
+    elif total_skipped_tests:
         print(f"all tests passed in {elapsed:.0f}s ({total_skipped_tests} skipped tests)")
     else:
         print(f"all tests passed in {elapsed:.0f}s")
+
     if skipped_reason_counts:
         print()
         print("Skipped tests for the following reasons:")
         for reason in sorted(skipped_reason_counts):
             print(f"{reason}: {skipped_reason_counts[reason]}")
-    return 0
+
+    return exit_code
 
 
 if __name__ == "__main__":

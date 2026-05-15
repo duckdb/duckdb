@@ -51,14 +51,16 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	}
 	}
 
+	auto repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
 	if (env_var) {
 		local_extension_repo = env_var;
 		autoload_known_extensions = true;
 		autoinstall_known_extensions = true;
 	} else if (autoload_known_extensions) {
-		local_extension_repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
+		local_extension_repo = repo;
 	}
+	test_config.SetLocalExtensionRepository(repo);
 	config->SetOptionByName("autoinstall_known_extensions", autoinstall_known_extensions);
 	config->SetOptionByName("autoload_known_extensions", autoload_known_extensions);
 	for (auto &entry : test_config.GetConfigSettings()) {
@@ -120,16 +122,32 @@ void SQLLogicTestRunner::EndLoop() {
 }
 
 ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::string &extension) {
-	auto &test_config = TestConfiguration::Get();
-	if (test_config.GetExtensionAutoLoadingMode() != TestConfiguration::ExtensionAutoLoadingMode::NONE) {
-		// try LOAD extension
-		Connection con(db);
-		auto result = con.Query("LOAD " + extension);
-		if (!result->HasError()) {
-			return ExtensionLoadResult::LOADED_EXTENSION;
-		}
+	if (db.ExtensionIsLoaded(extension)) {
+		return ExtensionLoadResult::LOADED_EXTENSION;
 	}
-	return ExtensionHelper::LoadExtension(db, extension);
+
+	// Prefer built-in/static extension loading first. Otherwise we can end up loading the same extension
+	// from the local extension repo as well, which causes duplicate symbols in sanitizer builds.
+	auto linked_result = ExtensionHelper::LoadExtension(db, extension);
+	if (linked_result == ExtensionLoadResult::LOADED_EXTENSION) {
+		return linked_result;
+	}
+
+	auto &test_config = TestConfiguration::Get();
+	Connection con(db);
+	if (test_config.GetExtensionAutoLoadingMode() == TestConfiguration::ExtensionAutoLoadingMode::NONE) {
+		// try INSTALL extension
+		auto repo = test_config.GetLocalExtensionRepository();
+		con.Query("INSTALL " + extension + " FROM '" + repo + "'");
+	}
+
+	// try LOAD extension
+	auto result = con.Query("LOAD " + extension);
+	if (!result->HasError()) {
+		return ExtensionLoadResult::LOADED_EXTENSION;
+	}
+
+	return linked_result;
 }
 
 void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
