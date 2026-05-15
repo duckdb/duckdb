@@ -529,10 +529,10 @@ static void DeserializeNumericStatsValue(const LogicalType &type, NumericValueUn
 void NumericStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
 	auto &numeric_stats = NumericStats::GetDataUnsafe(stats);
 	serializer.WriteObject(200, "max", [&](Serializer &object) {
-		SerializeNumericStatsValue(stats.GetType(), numeric_stats.min, numeric_stats.has_min, object);
+		SerializeNumericStatsValue(stats.GetType(), numeric_stats.max, numeric_stats.has_max, object);
 	});
 	serializer.WriteObject(201, "min", [&](Serializer &object) {
-		SerializeNumericStatsValue(stats.GetType(), numeric_stats.max, numeric_stats.has_max, object);
+		SerializeNumericStatsValue(stats.GetType(), numeric_stats.min, numeric_stats.has_min, object);
 	});
 }
 
@@ -540,10 +540,10 @@ void NumericStats::Deserialize(Deserializer &deserializer, BaseStatistics &resul
 	auto &numeric_stats = NumericStats::GetDataUnsafe(result);
 
 	deserializer.ReadObject(200, "max", [&](Deserializer &object) {
-		DeserializeNumericStatsValue(result.GetType(), numeric_stats.min, numeric_stats.has_min, object);
+		DeserializeNumericStatsValue(result.GetType(), numeric_stats.max, numeric_stats.has_max, object);
 	});
 	deserializer.ReadObject(201, "min", [&](Deserializer &object) {
-		DeserializeNumericStatsValue(result.GetType(), numeric_stats.max, numeric_stats.has_max, object);
+		DeserializeNumericStatsValue(result.GetType(), numeric_stats.min, numeric_stats.has_min, object);
 	});
 }
 
