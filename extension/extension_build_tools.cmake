@@ -166,12 +166,6 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
         endif()
     endif()
 
-    # Some loadable extensions can pull allocator paths that reference
-    # JemallocExtension::* symbols. Link jemalloc_extension when available so
-    # the extension stays self-contained and does not rely on host symbol export.
-    if (EXTENSION_STATIC_BUILD AND TARGET jemalloc_extension)
-        target_link_libraries(${TARGET_NAME} jemalloc_extension)
-    endif()
 
     target_compile_definitions(${TARGET_NAME} PUBLIC -DDUCKDB_BUILD_LOADABLE_EXTENSION)
     set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
