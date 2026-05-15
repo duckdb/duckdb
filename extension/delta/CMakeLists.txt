@@ -86,7 +86,8 @@ ExternalProject_Add(
   BUILD_BYPRODUCTS
     "${CMAKE_BINARY_DIR}/rust/src/delta_kernel/target/ffi-headers/delta_kernel_ffi.hpp"
   INSTALL_COMMAND ""
-  LOG_BUILD ON)
+  LOG_BUILD ON
+  LOG_OUTPUT_ON_FAILURE ON)
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
