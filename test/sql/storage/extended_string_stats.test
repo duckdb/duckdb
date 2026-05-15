@@ -15,7 +15,7 @@ create table test as from (values
 query IIII
 select s.min, s.max, s.max_string_length, s.total_string_length from (select stats(s) s from test limit 1)
 ----
-hello world	this is a lo	21	35
+hello world	this is a lo	21	32
 
 statement ok
 insert into test values ('how about this one')
@@ -23,4 +23,30 @@ insert into test values ('how about this one')
 query I
 select s.total_string_length from (select stats(s) s from test limit 1)
 ----
-53
+50
+
+# update
+statement ok
+update test set s='my new bigger string' where s='hello world'
+
+query I
+select s.total_string_length from (select stats(s) s from test limit 1)
+----
+59
+
+# test deleting and re-inserting
+statement ok
+delete from test;
+
+statement ok
+insert into test from (values
+		('hello world'),
+		(NULL),
+		('this is a long string')
+	) t(s)
+	;
+
+query I
+select s.total_string_length from (select stats(s) s from test limit 1)
+----
+32

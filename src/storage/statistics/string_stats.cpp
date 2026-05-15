@@ -577,7 +577,7 @@ void StringStats::Merge(BaseStatistics &stats, const StringStatsData &other_data
 	string_data.has_unicode = string_data.has_unicode || other_data.has_unicode;
 	string_data.has_max_string_length = string_data.has_max_string_length && other_data.has_max_string_length;
 	string_data.max_string_length = MaxValue<uint32_t>(string_data.max_string_length, other_data.max_string_length);
-	string_data.total_string_length = string_data.has_total_string_length && other_data.has_total_string_length;
+	string_data.has_total_string_length = string_data.has_total_string_length && other_data.has_total_string_length;
 	if (string_data.has_total_string_length) {
 		string_data.total_string_length += other_data.total_string_length;
 	}
