@@ -1307,7 +1307,6 @@ jobs:
 
     - name: Install
       timeout-minutes: 10
-      shell: bash
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
@@ -1317,232 +1316,29 @@ jobs:
         path: build
 
     - name: Extract linux release artifact
-      shell: bash
       run: |
         rm -rf build/release
         tar -xzf build/release-artifact.tar.gz -C build
 
-    - name: test/configs/verify_statement_copy.json
+    - name: Test Configurations
       if: success() || failure()
-      shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_copy.json ./build/release/test/unittest
+        make test_configs
 
-    - name: test/configs/verify_statement_to_string.json
+    - name: Test Vector Verification
       if: success() || failure()
-      shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_to_string.json ./build/release/test/unittest
+        make test_vector
 
-    - name: test/configs/verify_statement_explain.json
+    - name: Test Synchronous Table Scan
       if: success() || failure()
-      shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_explain.json ./build/release/test/unittest
+        make test_table_scan
 
-    - name: test/configs/verify_statement_prepare.json
+    - name: Test Storage Compatibility
       if: success() || failure()
-      shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_prepare.json ./build/release/test/unittest
-
-    - name: test/configs/verify_serializer.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_serializer.json ./build/release/test/unittest
-
-    - name: test/configs/verify_stats.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_stats.json ./build/release/test/unittest
-
-    - name: test/configs/verify_serialization.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_serialization.json ./build/release/test/unittest
-
-    - name: test/configs/force_storage.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/force_storage.json ./build/release/test/unittest
-
-    - name: test/configs/force_storage_restart.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/force_storage_restart.json ./build/release/test/unittest
-
-    - name: test/configs/latest_storage.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/latest_storage.json ./build/release/test/unittest
-
-    - name: test/configs/block_verification.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/block_verification.json ./build/release/test/unittest
-
-    - name: test/configs/disable_optimizer.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/disable_optimizer.json ./build/release/test/unittest
-
-    - name: test/configs/internal_vector_serialization.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/internal_vector_serialization.json ./build/release/test/unittest
-
-    - name: test/configs/internal_vector_verification.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/internal_vector_verification.json ./build/release/test/unittest
-
-    - name: test/configs/force_external.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/force_external.json ./build/release/test/unittest
-
-    - name: test/configs/verify_fetch_row.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_fetch_row.json ./build/release/test/unittest
-
-    - name: test/configs/disable_caching_operators.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/disable_caching_operators.json ./build/release/test/unittest
-
-    - name: test/configs/wal_verification.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/wal_verification.json ./build/release/test/unittest
-
-    - name: test/configs/vacuum_rebuild_indexes_force_storage.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/vacuum_rebuild_indexes_force_storage.json ./build/release/test/unittest
-
-    - name: test/configs/prefetch_all_parquet_files.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/prefetch_all_parquet_files.json ./build/release/test/unittest
-
-    - name: test/configs/verification_projection.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verification_projection.json ./build/release/test/unittest
-
-    - name: test/configs/verify_column_bindings.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_column_bindings.json ./build/release/test/unittest
-
-    - name: test/configs/no_local_filesystem.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/no_local_filesystem.json ./build/release/test/unittest
-
-    - name: test/configs/block_size_16kB.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/block_size_16kB.json ./build/release/test/unittest
-
-    - name: test/configs/latest_storage_block_size_16kB.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/latest_storage_block_size_16kB.json ./build/release/test/unittest
-
-    - name: test/configs/block_allocator_100mib.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/block_allocator_100mib.json ./build/release/test/unittest
-
-    - name: Test dictionary_expression
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector dictionary_expression --skip-compiled" ./build/release/test/unittest
-
-    - name: Test dictionary_operator
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector dictionary_operator --skip-compiled" ./build/release/test/unittest
-
-    - name: Test constant_operator
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector constant_operator --skip-compiled" ./build/release/test/unittest
-
-    - name: Test sequence_operator
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector sequence_operator --skip-compiled" ./build/release/test/unittest
-
-    - name: Test nested_shuffle
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector nested_shuffle --skip-compiled" ./build/release/test/unittest
-
-    - name: Test variant_vector
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/variant_vector.json ./build/release/test/unittest
-
-    - name: Test compressed in memory
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/compressed_in_memory.json ./build/release/test/unittest
-
-    - name: Test sycnronous table scan implementation
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags='--on-init "SET debug_physical_table_scan_execution_strategy=SYNCHRONOUS;"' ./build/release/test/unittest
-
-    - name: Test block prefetching
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/prefetch_all_storage.json ./build/release/test/unittest
-
-    - name: Forwards compatibility tests
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2|1.4.3" --new-unittest build/release/test/unittest
-
-    - name: test/configs/encryption.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/encryption.json ./build/release/test/unittest
+        make test_storage
 
  summary:
     name: Summary
