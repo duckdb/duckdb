@@ -496,7 +496,8 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 		// Append into the new specialized column
 		new_column->Append(append_state, append_chunk.data[0], to_scan);
 	}
-	new_column->FinalizeAppend(dummy_stats, append_state);
+	ColumnDataFinalizeAppendState finalize_append_state(dummy_stats);
+	new_column->FinalizeAppend(finalize_append_state, append_state);
 
 	// Merge the stats into the checkpoint state's global stats
 	InterpretStats(dummy_stats, *checkpoint_state->global_stats, new_geom_type, new_vert_type);

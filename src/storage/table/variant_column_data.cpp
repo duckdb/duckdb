@@ -619,8 +619,10 @@ static void FinalizeShreddedAppend(VariantShreddedAppendInput &append_data) {
 	auto &unshredded_append_state = append_data.unshredded_append_state;
 	auto &shredded_append_state = append_data.shredded_append_state;
 
-	unshredded.FinalizeAppend(unshredded_stats, unshredded_append_state);
-	shredded.FinalizeAppend(shredded_stats, shredded_append_state);
+	ColumnDataFinalizeAppendState unshredded_finalize_state(unshredded_stats);
+	unshredded.FinalizeAppend(unshredded_finalize_state, unshredded_append_state);
+	ColumnDataFinalizeAppendState shredded_finalize_state(shredded_stats);
+	shredded.FinalizeAppend(shredded_finalize_state, shredded_append_state);
 }
 
 vector<shared_ptr<ColumnData>> VariantColumnData::WriteShreddedData(const RowGroup &row_group,
