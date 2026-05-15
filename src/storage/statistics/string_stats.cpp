@@ -14,6 +14,13 @@
 
 namespace duckdb {
 
+bool StringStatsData::HasMinStringLength() const {
+	if (!has_min_string_length) {
+		return false;
+	}
+	return min_string_length != NumericLimits<uint32_t>::Maximum();
+}
+
 BaseStatistics StringStats::CreateUnknown(LogicalType type) {
 	BaseStatistics result(std::move(type));
 	result.InitializeUnknown();
@@ -36,7 +43,7 @@ BaseStatistics StringStats::CreateEmpty(LogicalType type) {
 	auto &string_data = GetDataUnsafe(result);
 	string_data.max_string_length = 0;
 	string_data.has_max_string_length = true;
-	string_data.min_string_length = StringStatsData::MAXIMUM_MIN_STRING_LENGTH;
+	string_data.min_string_length = NumericLimits<uint32_t>::Maximum();
 	string_data.has_min_string_length = true;
 	string_data.total_string_length = 0;
 	string_data.has_total_string_length = true;
@@ -108,7 +115,7 @@ uint32_t StringStats::MaxStringLength(const BaseStatistics &stats) {
 
 optional_idx StringStats::MinStringLength(const BaseStatistics &stats) {
 	auto &data = GetDataUnsafe(stats);
-	if (!data.has_min_string_length) {
+	if (!data.HasMinStringLength()) {
 		return optional_idx();
 	}
 	return data.min_string_length;
@@ -346,9 +353,9 @@ public:
 	}
 
 	void SetMinStringLength(uint32_t min_str_length) {
-		if (min_str_length > StringStatsData::MAXIMUM_MIN_STRING_LENGTH) {
-			// exceeds max length - set to 0 to indicate missing / not set
-			min_str_length = 0;
+		if (min_str_length >= StringStatsData::MAXIMUM_MIN_STRING_LENGTH) {
+			// exceeds max length - set to max value to indicate "we know the min string length, it is >= the max)
+			min_str_length = StringStatsData::MAXIMUM_MIN_STRING_LENGTH;
 		} else {
 			// increment by 1 (0 is reserved for not set)
 			min_str_length++;
@@ -361,6 +368,11 @@ public:
 	}
 	uint32_t GetMinStringLength() const {
 		auto min_str_len = GetMinStringLengthInternal();
+		if (min_str_len == StringStatsData::MAXIMUM_MIN_STRING_LENGTH) {
+			// we know the min string length is >= MAXIMUM_MIN_STRING_LENGTH
+			// return UINT_MAX to indicate this
+			return NumericLimits<uint32_t>::Maximum();
+		}
 		if (min_str_len == 0) {
 			throw InternalException("GetMinStringLength() called but min string length is not set");
 		}
@@ -756,7 +768,7 @@ child_list_t<Value> StringStats::ToStruct(const BaseStatistics &stats) {
 		result.emplace_back("max", Blob::ToString(string_data.max));
 	}
 	result.emplace_back("has_unicode", Value::BOOLEAN(string_data.has_unicode));
-	if (string_data.has_min_string_length) {
+	if (string_data.HasMinStringLength()) {
 		result.emplace_back("min_string_length", Value::UBIGINT(string_data.min_string_length));
 	}
 	if (HasMaxStringLength(stats)) {
@@ -788,7 +800,7 @@ void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 			    "Statistics mismatch: string value exceeds maximum string length.\nStatistics: %s\nVector: %s",
 			    stats.ToString(), vector.ToString());
 		}
-		if (string_data.has_min_string_length && len < string_data.min_string_length) {
+		if (string_data.HasMinStringLength() && len < string_data.min_string_length) {
 			throw InternalException(
 			    "Statistics mismatch: string value exceeds minimum string length.\nStatistics: %s\nVector: %s",
 			    stats.ToString(), vector.ToString());

@@ -55,6 +55,9 @@ struct StringStatsData {
 	StringStatsType min_type;
 	//! Max stats type
 	StringStatsType max_type;
+
+public:
+	bool HasMinStringLength() const;
 };
 
 struct StringStats {
