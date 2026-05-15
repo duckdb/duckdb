@@ -249,7 +249,7 @@ ORDER BY 1;
 123456.0
 
 # disabled due to the lack of CHAR() in DuckDB
-mode skip
+mode skip instable
 
 query I
 SELECT CAST(f1 AS char(4)) AS three FROM VARCHAR_TBL
@@ -440,7 +440,7 @@ query I
 #-- In this syntax, ORDER BY/LIMIT apply to the result of the EXCEPT
 
 # Bug in DuckDB
-mode skip
+mode skip instable
 
 query II
 SELECT q1,q2 FROM int8_tbl EXCEPT SELECT q2,q1 FROM int8_tbl

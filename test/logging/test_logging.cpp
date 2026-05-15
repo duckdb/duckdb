@@ -163,7 +163,7 @@ TEST_CASE("Test thread context logger", "[logging][.]") {
 	duckdb::TableFunction tf("test_thread_logger", {}, TestLoggingFunction, TestLoggingBind, nullptr,
 	                         TestLoggingInitLocal);
 	ExtensionInfo extension_info {};
-	ExtensionActiveLoad load_info {*db.instance, extension_info, "log_test_extension"};
+	ExtensionActiveLoad load_info {*db.instance, extension_info, "log_test_extension", ""};
 	ExtensionLoader loader {load_info};
 	loader.RegisterFunction(tf);
 

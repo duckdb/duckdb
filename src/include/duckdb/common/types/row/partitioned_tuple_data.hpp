@@ -92,6 +92,10 @@ public:
 	//! Initializes a local state for parallel partitioning that can be merged into this PartitionedTupleData
 	void InitializeAppendState(PartitionedTupleDataAppendState &state,
 	                           TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
+	//! Reuses an existing append state for a new iteration - faster than InitializeAppendState when the
+	//! append state already has pre-allocated buffers (selection vectors, partition pin states, chunk state)
+	virtual void ResetAppendState(PartitionedTupleDataAppendState &state,
+	                              TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
 	//! Appends a DataChunk to this PartitionedTupleData
 	void Append(PartitionedTupleDataAppendState &state, DataChunk &input,
 	            const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),

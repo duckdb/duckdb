@@ -1,3 +1,4 @@
+#include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
@@ -10,6 +11,7 @@ namespace {
 
 template <class T>
 struct FirstState {
+	using VALUE_TYPE = T;
 	T value;
 	bool is_set;
 	bool is_null;
@@ -26,6 +28,23 @@ struct FirstFunctionBase {
 		return false;
 	}
 };
+
+template <bool LAST, class FUNC>
+static inline void ScanClusterRange(idx_t pos, idx_t end, FUNC &&func) {
+	if constexpr (LAST) {
+		for (idx_t k = end; k > pos; k--) {
+			if (func(k - 1)) {
+				return;
+			}
+		}
+	} else {
+		for (idx_t k = pos; k < end; k++) {
+			if (func(k)) {
+				return;
+			}
+		}
+	}
+}
 
 template <bool LAST, bool SKIP_NULLS>
 struct FirstFunction : public FirstFunctionBase {
@@ -49,6 +68,41 @@ struct FirstFunction : public FirstFunctionBase {
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
 		Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
+	}
+
+	// Clustered early-exit: first/any_value scan forward and stop at the first valid value;
+	// last scans backward and stops at the first valid value from the end.
+	template <class INPUT_TYPE, class STATE_TYPE, class OP, bool ALL_VALID>
+	static void ClusteredOpInternal(STATE_TYPE &state, const INPUT_TYPE *vals, const sel_t *sel,
+	                                const SelectionVector &isel, const ValidityMask &validity, idx_t pos, idx_t end) {
+		if (!LAST && state.is_set) {
+			return;
+		}
+		ScanClusterRange<LAST>(pos, end, [&](idx_t k) {
+			auto idx = isel.get_index(sel ? sel[k] : k);
+			if (ALL_VALID || validity.RowIsValidUnsafe(idx)) {
+				state.is_set = true;
+				state.is_null = false;
+				state.value = vals[idx];
+				return true;
+			}
+			if (!SKIP_NULLS) {
+				state.is_set = true;
+				state.is_null = true;
+				return true;
+			}
+			return false;
+		});
+	}
+
+	template <class INPUT_TYPE, class STATE_TYPE, class OP>
+	static void ClusteredOp(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &input, const sel_t *sel,
+	                        const SelectionVector &isel, const ValidityMask &validity, idx_t pos, idx_t end) {
+		if (validity.CanHaveNull()) {
+			ClusteredOpInternal<INPUT_TYPE, STATE_TYPE, OP, false>(state, vals, sel, isel, validity, pos, end);
+		} else {
+			ClusteredOpInternal<INPUT_TYPE, STATE_TYPE, OP, true>(state, vals, sel, isel, validity, pos, end);
+		}
 	}
 
 	template <class STATE, class OP>
@@ -127,6 +181,32 @@ struct FirstFunctionString : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
 		Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
+	}
+
+	template <class INPUT_TYPE, class STATE_TYPE, class OP, bool ALL_VALID>
+	static void ClusteredOpInternal(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &input,
+	                                const sel_t *sel, const SelectionVector &isel, const ValidityMask &validity,
+	                                idx_t pos, idx_t end) {
+		if (!LAST && state.is_set) {
+			return;
+		}
+		ScanClusterRange<LAST>(pos, end, [&](idx_t k) {
+			auto idx = isel.get_index(sel ? sel[k] : k);
+			bool is_null = ALL_VALID ? false : !validity.RowIsValidUnsafe(idx);
+			FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue<STATE_TYPE>(state, input.input, vals[idx],
+			                                                                         is_null);
+			return state.is_set;
+		});
+	}
+
+	template <class INPUT_TYPE, class STATE_TYPE, class OP>
+	static void ClusteredOp(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &input, const sel_t *sel,
+	                        const SelectionVector &isel, const ValidityMask &validity, idx_t pos, idx_t end) {
+		if (validity.CanHaveNull()) {
+			ClusteredOpInternal<INPUT_TYPE, STATE_TYPE, OP, false>(state, vals, input, sel, isel, validity, pos, end);
+		} else {
+			ClusteredOpInternal<INPUT_TYPE, STATE_TYPE, OP, true>(state, vals, input, sel, isel, validity, pos, end);
+		}
 	}
 
 	template <class T, class STATE>
@@ -229,43 +309,31 @@ LogicalType GetFirstStateType(const BoundAggregateFunction &function) {
 }
 
 template <class T, bool LAST, bool SKIP_NULLS>
-void FirstFunctionSimpleUpdate(Vector inputs[], AggregateInputData &aggregate_input_data, idx_t input_count,
-                               data_ptr_t state, idx_t count) {
-	auto agg_state = reinterpret_cast<FirstState<T> *>(state);
-	if (LAST) {
-		// For LAST, iterate backward within each batch to find the last value
-		// This saves iterating through all elements when we only need the last one
-		D_ASSERT(input_count == 1);
-		UnifiedVectorFormat idata;
-		inputs[0].ToUnifiedFormat(idata);
-		auto input_data = UnifiedVectorFormat::GetData<T>(idata);
-
-		for (idx_t i = count; i-- > 0;) {
-			const auto idx = idata.sel->get_index(i);
-			const auto row_valid = idata.validity.RowIsValid(idx);
-			if (SKIP_NULLS && !row_valid) {
-				continue;
-			}
-			// Found the last value in this batch - update state and exit
-			agg_state->is_set = true;
-			agg_state->is_null = !row_valid;
-			if (row_valid) {
-				agg_state->value = input_data[idx];
-			}
-			break;
-		}
-		// If we get here with SKIP_NULLS, all values were NULL - keep previous state
-	} else if (!agg_state->is_set) {
-		// For FIRST, this skips looping over the input once the aggregate state has been set
-		AggregateFunction::UnaryUpdate<FirstState<T>, T, FirstFunction<LAST, SKIP_NULLS>>(inputs, aggregate_input_data,
-		                                                                                  input_count, state, count);
+void FirstFunctionClusterUpdate(Vector inputs[], AggregateInputData &aggregate_input_data, idx_t input_count,
+                                const ClusteredAggr &clustered, idx_t count) {
+	D_ASSERT(input_count == 1);
+	UnifiedVectorFormat idata;
+	inputs[0].ToUnifiedFormat(idata);
+	auto input_data = UnifiedVectorFormat::GetData<T>(idata);
+	AggregateUnaryInput unary_input(aggregate_input_data, idata.validity);
+	for (idx_t r = 0; r < clustered.n_group_runs; r++) {
+		auto &state = *reinterpret_cast<FirstState<T> *>(clustered.group_runs[r].state);
+		const auto *run_sel = clustered.group_runs[r].sel;
+		const auto run_count = clustered.group_runs[r].count;
+		FirstFunction<LAST, SKIP_NULLS>::template ClusteredOp<T, FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>(
+		    state, input_data, unary_input, run_sel, *idata.sel, idata.validity, 0, run_count);
 	}
 }
 
 template <class T, bool LAST, bool SKIP_NULLS>
 AggregateFunction GetFirstAggregateTemplated(const LogicalType &type) {
-	auto result = AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction<LAST, SKIP_NULLS>>(type, type);
-	result.SetStateSimpleUpdateCallback(FirstFunctionSimpleUpdate<T, LAST, SKIP_NULLS>);
+	auto result =
+	    AggregateFunction({type}, type, AggregateFunction::StateSize<FirstState<T>>,
+	                      AggregateFunction::StateInitialize<FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>,
+	                      AggregateFunction::UnaryScatterUpdate<FirstState<T>, T, FirstFunction<LAST, SKIP_NULLS>>,
+	                      AggregateFunction::StateCombine<FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>,
+	                      AggregateFunction::StateFinalize<FirstState<T>, T, FirstFunction<LAST, SKIP_NULLS>>,
+	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, FirstFunctionClusterUpdate<T, LAST, SKIP_NULLS>);
 	result.SetStructStateExport(GetFirstStateType);
 	return result;
 }
@@ -342,7 +410,8 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 		auto fun = AggregateFunction(
 		    {type}, type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 		    OP::Update, AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
-		    nullptr, OP::Bind, LAST ? AggregateFunction::StateDestroy<STATE, OP> : nullptr, nullptr, nullptr);
+		    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), OP::Bind,
+		    LAST ? AggregateFunction::StateDestroy<STATE, OP> : nullptr, nullptr, nullptr);
 		fun.SetStructStateExport(GetFirstStateType);
 		return fun;
 	}
@@ -387,9 +456,11 @@ unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
 template <bool LAST, bool SKIP_NULLS>
 void AddFirstOperator(AggregateFunctionSet &set) {
 	set.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, nullptr, BindDecimalFirst<LAST, SKIP_NULLS>));
+	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                                  BindDecimalFirst<LAST, SKIP_NULLS>));
 	set.AddFunction(AggregateFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                  nullptr, BindFirst<LAST, SKIP_NULLS>));
+	                                  FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                                  BindFirst<LAST, SKIP_NULLS>));
 }
 
 } // namespace

@@ -3,6 +3,7 @@ import argparse
 import concurrent.futures
 import contextlib
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -315,6 +316,60 @@ def normalize_output(output):
     return output or ""
 
 
+SKIPPED_TESTS_PATTERN = re.compile(r"All tests passed \((\d+) skipped tests,")
+SKIP_REASON_PATTERN = re.compile(r"(.+):\s+(\d+)$")
+MODE_SKIP_REASON_PATTERN = re.compile(r"^mode skip(?:\s+(.*\S))?\s*$")
+ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+
+
+def strip_ansi(text: str):
+    return ANSI_ESCAPE_PATTERN.sub("", text)
+
+
+def parse_skipped_tests_count(output: str):
+    match = SKIPPED_TESTS_PATTERN.search(strip_ansi(output))
+    if not match:
+        return 0
+    return int(match.group(1))
+
+
+def parse_skipped_test_summary(output: str):
+    skipped_count = 0
+    reasons = {}
+    in_skip_summary = False
+    for line in strip_ansi(output).splitlines():
+        stripped = line.strip()
+        if skipped_count == 0:
+            count_match = SKIPPED_TESTS_PATTERN.search(stripped)
+            if count_match:
+                skipped_count = int(count_match.group(1))
+        if stripped == "Skipped tests for the following reasons:":
+            in_skip_summary = True
+            continue
+        if in_skip_summary:
+            if not stripped:
+                in_skip_summary = False
+                continue
+            reason_match = SKIP_REASON_PATTERN.match(stripped)
+            if not reason_match:
+                in_skip_summary = False
+                continue
+            reasons[reason_match.group(1)] = reasons.get(reason_match.group(1), 0) + int(reason_match.group(2))
+    return skipped_count, reasons
+
+
+def extract_skipped_test_output(stdout: str, stderr: str):
+    stdout_summary = parse_skipped_test_summary(stdout)
+    if stdout_summary[0] > 0 or stdout_summary[1]:
+        return stdout_summary
+
+    stderr_summary = parse_skipped_test_summary(stderr)
+    if stderr_summary[0] > 0 or stderr_summary[1]:
+        return stderr_summary
+
+    return 0, {}
+
+
 def run_batch(config: TestRunnerConfig, batch):
     failed = False
     stdout = ""
@@ -596,6 +651,8 @@ def run_tests(config: TestRunnerConfig, batches):
     start = time.monotonic()
     state = BatchRunState()
     progress = DotProgressBar(len(batches))
+    total_skipped_tests = 0
+    skipped_reason_counts = {}
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.workers) as executor:
         future_to_batch = {}
@@ -623,6 +680,11 @@ def run_tests(config: TestRunnerConfig, batches):
                 if result["failed"]:
                     if handle_failed_batch(ctx, batch_info, result):
                         continue
+                else:
+                    skipped_count, skipped_reasons = extract_skipped_test_output(result["stdout"], result["stderr"])
+                    total_skipped_tests += skipped_count
+                    for reason, count in skipped_reasons.items():
+                        skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
                 progress.advance(next_batch_idx - len(future_to_batch))
 
             if not state.stop_launching:
@@ -634,7 +696,15 @@ def run_tests(config: TestRunnerConfig, batches):
         print(f"error: found {state.failed_count} test batch failures in {elapsed:.0f}s")
         return 1
 
-    print(f"all tests passed in {elapsed:.0f}s")
+    if total_skipped_tests > 0:
+        print(f"all tests passed in {elapsed:.0f}s ({total_skipped_tests} skipped tests)")
+    else:
+        print(f"all tests passed in {elapsed:.0f}s")
+    if skipped_reason_counts:
+        print()
+        print("Skipped tests for the following reasons:")
+        for reason in sorted(skipped_reason_counts):
+            print(f"{reason}: {skipped_reason_counts[reason]}")
     return 0
 
 

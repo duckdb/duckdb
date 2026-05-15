@@ -25,7 +25,6 @@ class Serializer;
 class Deserializer;
 
 class Vector;
-struct UnifiedVectorFormat;
 
 enum class StatsInfo : uint8_t {
 	CAN_HAVE_NULL_VALUES = 0,
@@ -44,6 +43,21 @@ enum class StatisticsType : uint8_t {
 	ARRAY_STATS,
 	GEOMETRY_STATS,
 	VARIANT_STATS
+};
+
+struct ExtraStatsData {
+	virtual ~ExtraStatsData() = default;
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 class BaseStatistics {
@@ -166,6 +180,8 @@ private:
 		//! Variant stats data, for variant stats
 		VariantStatsData variant_data;
 	} stats_union;
+	//! Extra stats data, used for e.g. string data if required
+	unique_ptr<ExtraStatsData> extra_data;
 	//! Child stats (for LIST and STRUCT)
 	unsafe_unique_array<BaseStatistics> child_stats;
 };

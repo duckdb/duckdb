@@ -39,6 +39,14 @@ PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(ExecutionContext &context,
 	sort_chunk.InitializeEmpty(types);
 }
 
+void PhysicalRangeJoin::LocalSortedTable::ResetForReuse(ExecutionContext &context) {
+	local_sink = global_table.sort->GetLocalSinkState(context);
+	has_null = 0;
+	count = 0;
+	keys.Reset();
+	sort_chunk.Reset();
+}
+
 void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataChunk &input) {
 	// Obtain sorting columns
 	keys.Reset();
@@ -103,6 +111,16 @@ void PhysicalRangeJoin::GlobalSortedTable::Combine(ExecutionContext &context, Lo
 	sort->Combine(context, combine);
 	has_null += ltable.has_null;
 	count += ltable.count;
+}
+
+void PhysicalRangeJoin::GlobalSortedTable::ResetForReuse(ClientContext &client) {
+	global_sink = sort->GetGlobalSinkState(client);
+	has_null = 0;
+	count = 0;
+	tasks_completed = 0;
+	global_source.reset();
+	sorted.reset();
+	found_match.reset();
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::Finalize(ClientContext &client, InterruptState &interrupt) {

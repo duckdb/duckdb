@@ -1,0 +1,341 @@
+diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
+index eeaab95..82c7c3c 100644
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -7,6 +7,12 @@
+ #include "duckdb/common/operator/decimal_cast_operators.hpp"
+ 
+ #include "duckdb.hpp"
++#include "duckdb/planner/expression/bound_columnref_expression.hpp"
++#include "duckdb/planner/expression/bound_comparison_expression.hpp"
++#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
++#include "duckdb/planner/expression/bound_constant_expression.hpp"
++#include "duckdb/planner/expression/bound_function_expression.hpp"
++#include "duckdb/planner/expression/bound_operator_expression.hpp"
+ #include "duckdb/common/extension_type_info.hpp"
+ #include "duckdb/common/types/decimal.hpp"
+ #include "duckdb/main/database.hpp"
+@@ -40,7 +46,7 @@ ffi::EngineExpressionVisitor ExpressionVisitor::CreateVisitor(ExpressionVisitor
+ 	ffi::EngineExpressionVisitor visitor;
+ 
+ 	visitor.data = &state;
+-	visitor.make_field_list = (uintptr_t(*)(void *, uintptr_t)) & MakeFieldList;
++	visitor.make_field_list = (uintptr_t (*)(void *, uintptr_t))&MakeFieldList;
+ 
+ 	// Templated primitive functions
+ 	visitor.visit_literal_bool = VisitPrimitiveLiteralBool;
+@@ -532,19 +538,15 @@ ffi::EngineSchemaVisitor SchemaVisitor::CreateSchemaVisitor(SchemaVisitor &state
+ 	ffi::EngineSchemaVisitor visitor;
+ 
+ 	visitor.data = &state;
+-	visitor.make_field_list = (uintptr_t(*)(void *, uintptr_t)) & MakeFieldList;
+-	visitor.visit_struct =
+-	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata, uintptr_t)) &
+-	    VisitStruct;
+-	visitor.visit_array =
+-	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata, uintptr_t)) &
+-	    VisitArray;
+-	visitor.visit_map =
+-	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata, uintptr_t)) &
+-	    VisitMap;
+-	visitor.visit_decimal =
+-	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata, uint8_t, uint8_t)) &
+-	    VisitDecimal;
++	visitor.make_field_list = (uintptr_t (*)(void *, uintptr_t))&MakeFieldList;
++	visitor.visit_struct = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata,
++	                                 uintptr_t))&VisitStruct;
++	visitor.visit_array = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata,
++	                                uintptr_t))&VisitArray;
++	visitor.visit_map = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata,
++	                              uintptr_t))&VisitMap;
++	visitor.visit_decimal = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata,
++	                                  uint8_t, uint8_t))&VisitDecimal;
+ 	visitor.visit_string = VisitSimpleType<LogicalType::VARCHAR>();
+ 	visitor.visit_long = VisitSimpleType<LogicalType::BIGINT>();
+ 	visitor.visit_integer = VisitSimpleType<LogicalType::INTEGER>();
+@@ -559,7 +561,7 @@ ffi::EngineSchemaVisitor SchemaVisitor::CreateSchemaVisitor(SchemaVisitor &state
+ 	visitor.visit_timestamp_ntz = VisitSimpleType<LogicalType::TIMESTAMP>();
+ 
+ 	visitor.visit_variant =
+-	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata)) & VisitVariant;
++	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata))&VisitVariant;
+ 
+ 	return visitor;
+ }
+@@ -840,7 +842,8 @@ KernelUtils::UnpackTransformExpression(const vector<unique_ptr<ParsedExpression>
+ 
+ 	const auto &root_expression = parsed_expression.get(0);
+ 	if (root_expression->GetExpressionType() != ExpressionType::FUNCTION) {
+-		throw IOException("Unexpected type of root expression returned by delta kernel: %d", root_expression->GetExpressionType());
++		throw IOException("Unexpected type of root expression returned by delta kernel: %d",
++		                  root_expression->GetExpressionType());
+ 	}
+ 
+ 	if (root_expression->Cast<FunctionExpression>().function_name != "delta_kernel_transform_expression") {
+@@ -854,7 +857,7 @@ KernelUtils::UnpackTransformExpression(const vector<unique_ptr<ParsedExpression>
+ PredicateVisitor::PredicateVisitor(const vector<DeltaMultiFileColumnDefinition> &columns,
+                                    optional_ptr<const DeltaTableFilters> filters) {
+ 	predicate = this;
+-	visitor = (uintptr_t(*)(void *, ffi::KernelExpressionVisitorState *)) & VisitPredicate;
++	visitor = (uintptr_t (*)(void *, ffi::KernelExpressionVisitorState *))&VisitPredicate;
+ 
+ 	if (filters) {
+ 		for (auto &entry : *filters) {
+@@ -894,8 +897,8 @@ uintptr_t PredicateVisitor::VisitPredicate(PredicateVisitor *predicate, ffi::Ker
+ 	return ffi::visit_predicate_and(state, &eit);
+ }
+ 
+-uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const ConstantFilter &filter,
+-                                                ffi::KernelExpressionVisitorState *state) {
++uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, ExpressionType comparison_type,
++                                                const Value &value, ffi::KernelExpressionVisitorState *state) {
+ 	auto maybe_left =
+ 	    ffi::visit_expression_column(state, KernelUtils::ToDeltaString(col_name), DuckDBEngineError::AllocateError);
+ 
+@@ -907,7 +910,6 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
+ 	}
+ 
+ 	uintptr_t right = ~0;
+-	auto &value = filter.constant;
+ 	switch (value.type().id()) {
+ 	case LogicalType::BIGINT:
+ 		right = visit_expression_literal_long(state, BigIntValue::Get(value));
+@@ -958,7 +960,7 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
+ 	}
+ 
+ 	// TODO support other comparison types?
+-	switch (filter.comparison_type) {
++	switch (comparison_type) {
+ 	case ExpressionType::COMPARE_LESSTHAN:
+ 		return visit_predicate_lt(state, left, right);
+ 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+@@ -984,20 +986,14 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
+ 	}
+ }
+ 
+-uintptr_t PredicateVisitor::VisitAndFilter(const string &col_name, const ConjunctionAndFilter &filter,
+-                                           ffi::KernelExpressionVisitorState *state) {
+-	auto it = filter.child_filters.begin();
+-	auto end = filter.child_filters.end();
+-	auto get_next = [this, col_name, state, &it, &end]() -> uintptr_t {
+-		if (it == end) {
+-			return 0;
+-		}
+-		auto &child_filter = *it++;
+-
+-		return VisitFilter(col_name, *child_filter, state);
+-	};
+-	auto eit = EngineIteratorFromCallable(get_next);
+-	return visit_predicate_and(state, &eit);
++static bool IsSupportedFilterSubject(const Expression &expr) {
++	switch (expr.GetExpressionClass()) {
++	case ExpressionClass::BOUND_REF:
++	case ExpressionClass::BOUND_COLUMN_REF:
++		return true;
++	default:
++		return false;
++	}
+ }
+ 
+ uintptr_t PredicateVisitor::VisitIsNull(const string &col_name, ffi::KernelExpressionVisitorState *state) {
+@@ -1017,33 +1013,79 @@ uintptr_t PredicateVisitor::VisitIsNotNull(const string &col_name, ffi::KernelEx
+ 	return ffi::visit_predicate_not(state, VisitIsNull(col_name, state));
+ }
+ 
+-uintptr_t PredicateVisitor::VisitFilter(const string &col_name, const TableFilter &filter,
+-                                        ffi::KernelExpressionVisitorState *state) {
+-	switch (filter.filter_type) {
+-	case TableFilterType::CONSTANT_COMPARISON:
+-		return VisitConstantFilter(col_name, static_cast<const ConstantFilter &>(filter), state);
+-	case TableFilterType::CONJUNCTION_AND:
+-		return VisitAndFilter(col_name, static_cast<const ConjunctionAndFilter &>(filter), state);
+-	case TableFilterType::IS_NULL:
+-		return VisitIsNull(col_name, state);
+-	case TableFilterType::IS_NOT_NULL:
+-		return VisitIsNotNull(col_name, state);
+-	// TODO: implement once kernel can do arbitrary expressions
+-	case TableFilterType::EXPRESSION_FILTER:
+-	// TODO: implement once kernel adds support for IN filters / arbitrary expressions
+-	case TableFilterType::IN_FILTER:
+-	// TODO: implement once kernel can do struct extract pushdown / arbitrary expressions
+-	case TableFilterType::STRUCT_EXTRACT:
+-	// TODO: figure out if this is ever useful
+-	case TableFilterType::DYNAMIC_FILTER:
+-	// TODO: can we even push these down?
+-	case TableFilterType::CONJUNCTION_OR:
+-	case TableFilterType::OPTIONAL_FILTER:
++uintptr_t PredicateVisitor::VisitFilterExpression(const string &col_name, const Expression &expr,
++                                                  ffi::KernelExpressionVisitorState *state) {
++	if (BoundComparisonExpression::IsComparison(expr)) {
++		auto &comparison = expr.Cast<BoundFunctionExpression>();
++		auto comparison_type = comparison.GetExpressionType();
++		auto &left = BoundComparisonExpression::Left(comparison);
++		auto &right = BoundComparisonExpression::Right(comparison);
++		if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT && IsSupportedFilterSubject(right)) {
++			return VisitConstantFilter(col_name, FlipComparisonExpression(comparison_type),
++			                           left.Cast<BoundConstantExpression>().value, state);
++		}
++		if (right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT && IsSupportedFilterSubject(left)) {
++			return VisitConstantFilter(col_name, comparison_type, right.Cast<BoundConstantExpression>().value, state);
++		}
++		return ~0;
++	}
++
++	switch (expr.GetExpressionClass()) {
++	case ExpressionClass::BOUND_CONJUNCTION: {
++		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
++		if (conjunction.GetExpressionType() != ExpressionType::CONJUNCTION_AND) {
++			return ~0;
++		}
++		auto it = conjunction.children.begin();
++		auto end = conjunction.children.end();
++		auto get_next = [this, col_name, state, &it, &end]() -> uintptr_t {
++			if (it == end) {
++				return 0;
++			}
++			return VisitFilterExpression(col_name, *(*it++), state);
++		};
++		auto eit = EngineIteratorFromCallable(get_next);
++		return visit_predicate_and(state, &eit);
++	}
++	case ExpressionClass::BOUND_OPERATOR: {
++		auto &op = expr.Cast<BoundOperatorExpression>();
++		if (op.children.size() != 1 || !IsSupportedFilterSubject(*op.children[0])) {
++			return ~0;
++		}
++		if (op.GetExpressionType() == ExpressionType::OPERATOR_IS_NULL) {
++			return VisitIsNull(col_name, state);
++		}
++		if (op.GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
++			return VisitIsNotNull(col_name, state);
++		}
++		return ~0;
++	}
++	case ExpressionClass::BOUND_FUNCTION: {
++		auto &func = expr.Cast<BoundFunctionExpression>();
++		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
++			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
++			if (data.child_filter_expr) {
++				return VisitFilterExpression(col_name, *data.child_filter_expr, state);
++			}
++		}
++		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
++			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
++			if (data.child_filter_expr) {
++				return VisitFilterExpression(col_name, *data.child_filter_expr, state);
++			}
++		}
++		return ~0;
++	}
+ 	default:
+ 		return ~0;
+ 	}
+ }
+ 
++uintptr_t PredicateVisitor::VisitFilter(const string &col_name, const ExpressionFilter &filter,
++                                        ffi::KernelExpressionVisitorState *state) {
++	return VisitFilterExpression(col_name, *filter.expr, state);
++}
++
+ void LoggerCallback::Initialize(DatabaseInstance &db_p) {
+ 	auto &instance = GetInstance();
+ 	unique_lock<mutex> lck(instance.lock);
+diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
+index 26fc20c..7a32faf 100644
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -802,7 +802,9 @@ unique_ptr<DeltaMultiFileList> DeltaMultiFileList::PushdownInternal(ClientContex
+ 	for (auto &entry : new_filters) {
+ 		auto &column_id = column_indexes[entry.GetIndex()];
+ 		if (column_id < global_columns.size()) {
+-			result_filter_set.PushFilter(column_id, entry.Filter().Copy());
++			auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(),
++			                                                    "DeltaMultiFileList::PushdownInternal");
++			result_filter_set.PushFilter(column_id, filter.Copy());
+ 		}
+ 	}
+ 
+@@ -979,7 +981,8 @@ DeltaMultiFileList::DynamicFilterPushdown(ClientContext &context, const MultiFil
+ 	TableFilterSet filters_copy;
+ 	for (auto &entry : filters) {
+ 		auto proj_id = entry.GetIndex();
+-		auto &filter = entry.Filter();
++		auto &filter =
++		    ExpressionFilter::GetExpressionFilter(entry.Filter(), "DeltaMultiFileList::DynamicFilterPushdown");
+ 		auto column_id = column_ids[proj_id];
+ 		auto previously_pushed_down_filter = table_filters.TryGetFilterByColumnIndex(column_id);
+ 		if (previously_pushed_down_filter && filter.Equals(*previously_pushed_down_filter)) {
+diff --git a/src/include/delta_utils.hpp b/src/include/delta_utils.hpp
+index 11acc31..09f0be4 100644
+--- a/src/include/delta_utils.hpp
++++ b/src/include/delta_utils.hpp
+@@ -3,8 +3,8 @@
+ #define DEFINE_DEFAULT_ENGINE_BASE 1
+ #include "delta_kernel_ffi.hpp"
+ #include "duckdb/common/enum_util.hpp"
+-#include "duckdb/planner/filter/conjunction_filter.hpp"
+-#include "duckdb/planner/filter/constant_filter.hpp"
++#include "duckdb/planner/filter/expression_filter.hpp"
++#include "duckdb/planner/filter/table_filter_functions.hpp"
+ #include "duckdb/planner/expression.hpp"
+ #include "duckdb/parser/expression/constant_expression.hpp"
+ #include "duckdb/common/multi_file/multi_file_data.hpp"
+@@ -433,19 +433,20 @@ public:
+ 	ErrorData error_data;
+ 
+ private:
+-	unordered_map<string, optional_ptr<const TableFilter>> column_filters;
++	unordered_map<string, optional_ptr<const ExpressionFilter>> column_filters;
+ 
+ 	static uintptr_t VisitPredicate(PredicateVisitor *predicate, ffi::KernelExpressionVisitorState *state);
+ 
+-	uintptr_t VisitConstantFilter(const string &col_name, const ConstantFilter &filter,
++	uintptr_t VisitConstantFilter(const string &col_name, ExpressionType comparison_type, const Value &value,
+ 	                              ffi::KernelExpressionVisitorState *state);
+-	uintptr_t VisitAndFilter(const string &col_name, const ConjunctionAndFilter &filter,
+-	                         ffi::KernelExpressionVisitorState *state);
++	uintptr_t VisitFilterExpression(const string &col_name, const Expression &expr,
++	                                ffi::KernelExpressionVisitorState *state);
+ 
+ 	uintptr_t VisitIsNull(const string &col_name, ffi::KernelExpressionVisitorState *state);
+ 	uintptr_t VisitIsNotNull(const string &col_name, ffi::KernelExpressionVisitorState *state);
+ 
+-	uintptr_t VisitFilter(const string &col_name, const TableFilter &filter, ffi::KernelExpressionVisitorState *state);
++	uintptr_t VisitFilter(const string &col_name, const ExpressionFilter &filter,
++	                      ffi::KernelExpressionVisitorState *state);
+ };
+ 
+ // Singleton class to forward logs to DuckDB
+diff --git a/src/include/functions/delta_scan/delta_multi_file_list.hpp b/src/include/functions/delta_scan/delta_multi_file_list.hpp
+index de2623e..8667be4 100644
+--- a/src/include/functions/delta_scan/delta_multi_file_list.hpp
++++ b/src/include/functions/delta_scan/delta_multi_file_list.hpp
+@@ -15,6 +15,7 @@
+ #include "duckdb/common/multi_file/multi_file_data.hpp"
+ #include "duckdb/common/multi_file/multi_file_list.hpp"
+ #include "duckdb/parser/constraints/not_null_constraint.hpp"
++#include "duckdb/planner/filter/expression_filter.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -42,17 +43,17 @@ struct DeltaFileMetaData {
+ };
+ 
+ struct DeltaTableFilters {
+-	using filter_set_t = unordered_map<idx_t, unique_ptr<TableFilter>>;
++	using filter_set_t = unordered_map<idx_t, unique_ptr<ExpressionFilter>>;
+ 	using iterator = filter_set_t::iterator;
+ 	using const_iterator = filter_set_t::const_iterator;
+ public:
+ 	bool HasFilters() const {
+ 		return !table_filters.empty();
+ 	}
+-	void PushFilter(column_t column_idx, unique_ptr<TableFilter> table_filter) {
++	void PushFilter(column_t column_idx, unique_ptr<ExpressionFilter> table_filter) {
+ 		table_filters[column_idx] = std::move(table_filter);
+ 	}
+-	optional_ptr<const TableFilter> TryGetFilterByColumnIndex(column_t column_idx) const {
++	optional_ptr<const ExpressionFilter> TryGetFilterByColumnIndex(column_t column_idx) const {
+ 		auto entry = table_filters.find(column_idx);
+ 		if (entry == table_filters.end()) {
+ 			return nullptr;

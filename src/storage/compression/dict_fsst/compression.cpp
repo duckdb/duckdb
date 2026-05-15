@@ -836,6 +836,7 @@ void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 	auto strings = UnifiedVectorFormat::GetData<string_t>(vector_format);
 
 	EncodedInput encoded_input;
+	StringStatsWriter stats_writer(scan_vector.GetType());
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vector_format.sel->get_index(i);
 		auto &str = strings[idx];
@@ -860,12 +861,13 @@ void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 			}
 		} while (false);
 		if (!is_null) {
-			UncompressedStringStorage::UpdateStringStats(current_segment->stats, str);
+			UncompressedStringStorage::UpdateStringStats(current_segment->stats, stats_writer, str);
 		} else {
 			current_segment->stats.statistics.SetHasNullFast();
 		}
 		tuple_count++;
 	}
+	stats_writer.Merge(current_segment->stats.statistics);
 }
 
 void DictFSSTCompressionState::FinalizeCompress() {

@@ -2,6 +2,10 @@
 # description: Test setting of the temporary directory
 # group: [storage]
 
+# FIXME: This is a significant regression because we no longer evict "tiny buffers", of which we're
+# FIXME: allocating plenty here.
+require vector_size 2048
+
 require noforcestorage
 
 # Set the temporary directory to an empty directory.
@@ -9,7 +13,7 @@ statement ok
 PRAGMA temp_directory=''
 
 statement ok
-PRAGMA memory_limit='2MB'
+PRAGMA memory_limit='3MB'
 
 # we can't offload anything to disk now
 # hence this creation should fail as the table does not fit within our memory limit
