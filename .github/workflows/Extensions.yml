@@ -188,7 +188,7 @@ jobs:
             # TODO Remove
             runner: namespace-profile-linux-x64
             container_name: manylinux_2_28_amd64_main
-            container: ghcr.io/duckdb/duckdb-ci/manylinux_2_28_amd64_main:20260505-a13d95cf
+            container: ghcr.io/duckdb/duckdb-ci/manylinux_2_28_amd64_main:20260515-f18ad4ef
             vcpkg_target_triplet: "x64-linux-release"
             vcpkg_host_triplet: "x64-linux-release"
             duckdb_arch: linux_amd64
@@ -202,7 +202,7 @@ jobs:
             # TODO Remove
             runner: namespace-profile-linux-arm64
             container_name: manylinux_2_28_aarch64_rust
-            container: ghcr.io/duckdb/duckdb-ci/manylinux_2_28_aarch64_rust:20260505-a13d95cf
+            container: ghcr.io/duckdb/duckdb-ci/manylinux_2_28_aarch64_rust:20260515-f18ad4ef
             vcpkg_target_triplet: "arm64-linux-release"
             vcpkg_host_triplet: "arm64-linux-release"
             duckdb_arch: linux_arm64
@@ -216,7 +216,7 @@ jobs:
             # TODO Remove
             runner: namespace-profile-linux-x64
             container_name: alpine_3_22_amd64_rust
-            container: ghcr.io/duckdb/duckdb-ci/alpine_3_22_amd64_rust:20260505-a13d95cf
+            container: ghcr.io/duckdb/duckdb-ci/alpine_3_22_amd64_rust:20260515-f18ad4ef
             vcpkg_target_triplet: "x64-linux-release"
             vcpkg_host_triplet: "x64-linux-release"
             duckdb_arch: linux_amd64_musl
