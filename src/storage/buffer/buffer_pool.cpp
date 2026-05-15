@@ -66,8 +66,11 @@ shared_ptr<BlockMemory> BufferEvictionNode::TryGetBlockMemory() {
 	return shared_memory_p;
 }
 
-bool BufferEvictionNode::IsDeadNode() {
+bool BufferEvictionNode::IsDeadNode(idx_t debug_sleep_micros) {
 	auto shared_memory_p = memory_p.lock();
+	if (debug_sleep_micros > 0) {
+		ThreadUtil::SleepMicroSeconds(debug_sleep_micros);
+	}
 	if (!shared_memory_p) {
 		return true;
 	}
@@ -255,10 +258,7 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size, vector<BufferEviction
 	auto debug_sleep_micros = debug_eviction_queue_sleep.load(std::memory_order_relaxed);
 	for (idx_t i = 0; i < actually_dequeued; i++) {
 		auto &node = purge_nodes[i];
-		if (debug_sleep_micros > 0) {
-			ThreadUtil::SleepMicroSeconds(debug_sleep_micros);
-		}
-		if (node.IsDeadNode()) {
+		if (node.IsDeadNode(debug_sleep_micros)) {
 			dead_count++;
 		} else {
 			alive_nodes_out.push_back(std::move(node));
