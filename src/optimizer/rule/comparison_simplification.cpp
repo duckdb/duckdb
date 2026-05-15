@@ -18,14 +18,9 @@ static unique_ptr<Expression> DateTimestampComparisonIsInvertible(BoundFunctionE
 		return nullptr; // it's midnight: no replacement needed
 	}
 	auto op = expr.GetExpressionType();
-	bool if_left_plus = false, pred_neq = false;
-	switch (op) {
-	case ExpressionType::COMPARE_NOTEQUAL:
-	case ExpressionType::COMPARE_DISTINCT_FROM:
-		pred_neq = true;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM: {
+	bool pred_neq = op == ExpressionType::COMPARE_NOTEQUAL || op == ExpressionType::COMPARE_DISTINCT_FROM;
+	if (op == ExpressionType::COMPARE_EQUAL || op == ExpressionType::COMPARE_NOTEQUAL ||
+	    op == ExpressionType::COMPARE_DISTINCT_FROM || op == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 		// Non-midnight TIMESTAMPs cannot equal DATE values.
 		if (op == ExpressionType::COMPARE_DISTINCT_FROM || op == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			return make_uniq<BoundConstantExpression>(Value::BOOLEAN(pred_neq));
@@ -33,24 +28,33 @@ static unique_ptr<Expression> DateTimestampComparisonIsInvertible(BoundFunctionE
 		// Equality keeps three-valued NULL semantics; DISTINCT FROM is always two-valued.
 		return ExpressionRewriter::ConstantOrNull(std::move(cast_expression.child), Value::BOOLEAN(pred_neq));
 	}
+
+	bool if_left_plus = op == ExpressionType::COMPARE_LESSTHAN || op == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 	// d <  T   -> d <  DATE '2024-06-16'  -- needs +1
 	// d >= T   -> d >= DATE '2024-06-16'  -- needs +1
-	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		if_left_plus = true;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
 	// d <= T   -> d <= DATE '2024-06-15'  -- no +1
 	// d >  T   -> d >  DATE '2024-06-15'  -- no +1
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-	case ExpressionType::COMPARE_GREATERTHAN:
-		break;
-	default:
+	if (!if_left_plus && op != ExpressionType::COMPARE_LESSTHANOREQUALTO && op != ExpressionType::COMPARE_GREATERTHAN) {
 		return nullptr;
 	}
 	if (column_ref_left == if_left_plus) { // if ref_left & left_plus or "ref_right & if_right_plus"
 		cast_constant = Value::DATE(date_t(cast_constant.GetValue<date_t>().days + 1));
 	}
 	return nullptr;
+}
+
+static bool ConstantCastIsInvertible(BoundFunctionExpression &expr, BoundCastExpression &cast_expression,
+                                     const Value &constant_value, Value &cast_constant, const LogicalType &target_type,
+                                     bool column_ref_left, unique_ptr<Expression> &replacement) {
+	if (cast_constant.IsNull() || BoundCastExpression::CastIsInvertible(cast_expression.GetReturnType(), target_type)) {
+		return true;
+	}
+	if (target_type.id() != LogicalTypeId::DATE || cast_expression.GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
+		return false;
+	}
+	replacement =
+	    DateTimestampComparisonIsInvertible(expr, cast_expression, constant_value, cast_constant, column_ref_left);
+	return true;
 }
 
 ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
@@ -101,17 +105,13 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		}
 
 		// Is the constant cast invertible?
-		if (!cast_constant.IsNull() &&
-		    !BoundCastExpression::CastIsInvertible(cast_expression.GetReturnType(), target_type)) {
-			if (target_type.id() != LogicalTypeId::DATE ||
-			    cast_expression.GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
-				return nullptr;
-			}
-			auto replacement = DateTimestampComparisonIsInvertible(expr, cast_expression, constant_value, cast_constant,
-			                                                       column_ref_left);
-			if (replacement) {
-				return replacement;
-			}
+		unique_ptr<Expression> replacement;
+		if (!ConstantCastIsInvertible(expr, cast_expression, constant_value, cast_constant, target_type,
+		                              column_ref_left, replacement)) {
+			return nullptr;
+		}
+		if (replacement) {
+			return replacement;
 		}
 
 		//! We can cast, now we change our column_ref_expression from an operator cast to a column reference
