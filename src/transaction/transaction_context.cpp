@@ -7,6 +7,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -41,6 +42,14 @@ void TransactionContext::BeginTransaction() {
 	for (auto &state : context.registered_state->States()) {
 		state->TransactionBegin(*current_transaction, context);
 	}
+}
+
+void TransactionContext::SetInvalidationPolicy(TransactionInvalidationPolicy new_invalidation_policy) {
+	if (new_invalidation_policy == TransactionInvalidationPolicy::STANDARD_POLICY) {
+		// if no policy is specified explicitly use the default one from the settings
+		new_invalidation_policy = Settings::Get<DefaultTransactionInvalidationPolicySetting>(context);
+	}
+	invalidation_policy = new_invalidation_policy;
 }
 
 void TransactionContext::Commit() {

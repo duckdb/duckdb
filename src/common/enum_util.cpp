@@ -5537,6 +5537,7 @@ TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value)
 const StringUtil::EnumStringLiteral *GetTransactionInvalidationPolicyValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TransactionInvalidationPolicy::STANDARD_POLICY), "STANDARD_POLICY" },
+		{ static_cast<uint32_t>(TransactionInvalidationPolicy::SYNTACTIC_ERRORS_DO_NOT_INVALIDATE), "SYNTACTIC_ERRORS_DO_NOT_INVALIDATE" },
 		{ static_cast<uint32_t>(TransactionInvalidationPolicy::ALL_ERRORS_INVALIDATE_TRANSACTION), "ALL_ERRORS_INVALIDATE_TRANSACTION" }
 	};
 	return values;
@@ -5544,12 +5545,12 @@ const StringUtil::EnumStringLiteral *GetTransactionInvalidationPolicyValues() {
 
 template<>
 const char* EnumUtil::ToChars<TransactionInvalidationPolicy>(TransactionInvalidationPolicy value) {
-	return StringUtil::EnumToString(GetTransactionInvalidationPolicyValues(), 2, "TransactionInvalidationPolicy", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTransactionInvalidationPolicyValues(), 3, "TransactionInvalidationPolicy", static_cast<uint32_t>(value));
 }
 
 template<>
 TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value) {
-	return static_cast<TransactionInvalidationPolicy>(StringUtil::StringToEnum(GetTransactionInvalidationPolicyValues(), 2, "TransactionInvalidationPolicy", value));
+	return static_cast<TransactionInvalidationPolicy>(StringUtil::StringToEnum(GetTransactionInvalidationPolicyValues(), 3, "TransactionInvalidationPolicy", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTransactionModifierTypeValues() {

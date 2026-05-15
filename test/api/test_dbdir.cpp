@@ -19,8 +19,10 @@ static void test_in_memory_initialization(string dbdir) {
 	REQUIRE_NOTHROW(db = make_uniq<DuckDB>(dbdir));
 	REQUIRE_NOTHROW(con = make_uniq<Connection>(*db));
 
+	REQUIRE_NO_FAIL(con->Query("SET threads=1"));
+
 	// force the in-memory directory to be created by creating a table bigger than the memory limit
-	REQUIRE_NO_FAIL(con->Query("PRAGMA memory_limit='2MB'"));
+	REQUIRE_NO_FAIL(con->Query("PRAGMA memory_limit='4MB'"));
 	REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers AS SELECT * FROM range(1000000)"));
 
 	// the temporary folder .tmp should be created in in-memory mode
