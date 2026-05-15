@@ -29,11 +29,18 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 	// Compute total number of arguments passed
 	const auto received_arg_count = static_cast<idx_t>(arguments.size() + named_arguments.size());
 
-	// And the total number of arguments we need to fulfil the function signature
-	const auto required_arg_count = sig.GetRequiredParameterCount();
+	// And the minimum and maximum number of arguments the function can accept
+	const auto minimum_arg_count = sig.GetRequiredParameterCount();
 
-	if (received_arg_count < required_arg_count) {
+	const auto maximum_arg_count = sig.HasVarArgs() ? NumericLimits<idx_t>::Maximum() : sig.GetParameterCount();
+
+	if (received_arg_count < minimum_arg_count) {
 		// We have fewer arguments than the function requires, so this function cannot be a match.
+		return optional_idx();
+	}
+
+	if (received_arg_count > maximum_arg_count) {
+		// We have more arguments than the function can take, so this function cannot be a match.
 		return optional_idx();
 	}
 
@@ -775,23 +782,25 @@ void FunctionBinder::CheckTemplateTypesResolved(const BoundSimpleFunction &bound
 }
 
 // Drain all named argument and insert them in the correct position according to the function signature.
-static void InsertNamedArguments(const SimpleFunction &function, vector<unique_ptr<Expression>> &arguments,
-                                 vector<pair<string, unique_ptr<Expression>>> &keyword_arguments) {
+// Also insert default arguments where needed.
+static void ResolveArguments(const SimpleFunction &function, vector<unique_ptr<Expression>> &arguments,
+                             vector<pair<string, unique_ptr<Expression>>> &named_arguments) {
 	const auto &sig = function.GetSignature();
 
 	const auto kwargs_offset = arguments.size();
 
 	// Reserve space for the named arguments
-	arguments.resize(
-	    MaxValue(sig.GetParameterCount(), static_cast<idx_t>(arguments.size() + keyword_arguments.size())));
+	if (arguments.size() < sig.GetParameterCount()) {
+		arguments.resize(sig.GetParameterCount());
+	}
 
 	case_insensitive_set_t seen_names;
 
 	vector<unique_ptr<Expression>> trailing_kwargs;
 
 	// We now need to reorder them to match the function signature, before appending them to the argument list.
-	for (idx_t kwarg_idx = 0; kwarg_idx < keyword_arguments.size(); kwarg_idx++) {
-		auto &[name, arg] = keyword_arguments[kwarg_idx];
+	for (idx_t kwarg_idx = 0; kwarg_idx < named_arguments.size(); kwarg_idx++) {
+		auto &[name, arg] = named_arguments[kwarg_idx];
 		const auto location = arg->GetQueryLocation();
 
 		if (name.empty()) {
@@ -841,6 +850,7 @@ static void InsertNamedArguments(const SimpleFunction &function, vector<unique_p
 		}
 
 		const auto &param = sig.GetParameter(i);
+
 		if (param.HasDefaultValue()) {
 			arguments[i] = make_uniq<BoundConstantExpression>(*param.GetDefaultValue());
 			arguments[i]->SetAlias(param.GetName());
@@ -858,13 +868,20 @@ static void InsertNamedArguments(const SimpleFunction &function, vector<unique_p
 			arguments[slot_idx] = std::move(trailing_kwargs[kwarg_idx++]);
 		}
 	}
+
+	// And if there are still some left, just append them to the end
+	idx_t kwargs_remaining = trailing_kwargs.size() - kwarg_idx;
+	while (kwargs_remaining) {
+		arguments.push_back(std::move(trailing_kwargs[kwarg_idx++]));
+		kwargs_remaining--;
+	}
 }
 
 pair<BoundScalarFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(const ScalarFunction &function, vector<unique_ptr<Expression>> &arguments,
-                                vector<pair<string, unique_ptr<Expression>>> &keyword_args) {
+                                vector<pair<string, unique_ptr<Expression>>> &named_arguments) {
 	// Reorder named args
-	InsertNamedArguments(function, arguments, keyword_args);
+	ResolveArguments(function, arguments, named_arguments);
 
 	// Make a BoundScalarFunction out of the ScalarFunction, so we can store bind info and other properties in it.
 	BoundScalarFunction bound_function(function);
@@ -938,7 +955,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &
 pair<BoundAggregateFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> &children) {
 	// Reorder named args
-	// ReorderNamedArguments(function, children);
+	vector<pair<string, unique_ptr<Expression>>> named_arguments;
+	ResolveArguments(function, children, named_arguments);
 
 	// Make a BoundFunction out of the func
 	BoundAggregateFunction bound_function(function);
@@ -986,7 +1004,8 @@ FunctionBinder::ResolveFunction(const WindowFunction &function, vector<unique_pt
                                 optional_ptr<vector<OrderByNode>> orders,
                                 optional_ptr<vector<OrderByNode>> arg_orders) {
 	// Reorder named args
-	// ReorderNamedArguments(function, children);
+	vector<pair<string, unique_ptr<Expression>>> named_arguments;
+	ResolveArguments(function, children, named_arguments);
 
 	BoundWindowFunction bound_function(function);
 

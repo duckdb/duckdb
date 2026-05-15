@@ -165,7 +165,7 @@ ScalarFunctionSet JSONFunctions::GetSerializeSqlFunction() {
 	    .AddParameter("skip_default", LogicalType::BOOLEAN, Value::BOOLEAN(false))
 	    .AddParameter("format", LogicalType::BOOLEAN, Value::BOOLEAN(false));
 
-	set.AddFunction(func);
+	set.AddFunction(std::move(func));
 
 	return set;
 }
