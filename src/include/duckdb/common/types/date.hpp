@@ -128,6 +128,18 @@ public:
 	DUCKDB_API static date_t FromString(const string &str, bool strict = false);
 	//! Convert a string in the format "YYYY-MM-DD" to a date object
 	DUCKDB_API static date_t FromCString(const char *str, idx_t len, bool strict = false);
+	//! Convert an infinite temporal object to a string
+	template <typename T>
+	static inline string ToInfinity(const T &t) {
+		if (t == T::infinity()) {
+			return PINF.str;
+		} else if (t == T::ninfinity()) {
+			return NINF.str;
+		} else {
+			D_ASSERT(!t.IsFinite());
+			return string();
+		}
+	}
 	//! Convert a date object to a string in the format "YYYY-MM-DD"
 	DUCKDB_API static string ToString(date_t date);
 	//! Try to convert the string as a give "special" date (e.g, PINF, ...)

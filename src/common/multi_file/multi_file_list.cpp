@@ -5,6 +5,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
@@ -67,7 +68,8 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, c
 		}
 		auto column_ref =
 		    make_uniq<BoundColumnRefExpression>(types[column_idx], ColumnBinding(table_index, entry.GetIndex()));
-		auto filter_expr = entry.Filter().ToExpression(*column_ref);
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "MultiFilePushdownInfo::Pushdown");
+		auto filter_expr = expr_filter.ToExpression(*column_ref);
 		filter_expressions.push_back(std::move(filter_expr));
 	}
 

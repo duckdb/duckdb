@@ -196,6 +196,7 @@ void PEGTransformerFactory::RegisterAttach() {
 	REGISTER_TRANSFORM(TransformAttachOptions);
 	REGISTER_TRANSFORM(TransformGenericCopyOptionList);
 	REGISTER_TRANSFORM(TransformGenericCopyOption);
+	REGISTER_TRANSFORM(TransformGenericCopyOptionParenthesizedExpressionList);
 	REGISTER_TRANSFORM(TransformDatabasePath);
 }
 

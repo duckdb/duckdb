@@ -7,6 +7,7 @@ DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDat
                                                                        const idx_t max_unique_count_across_all_segments)
     : DictionaryCompressionState(info), checkpoint_data(checkpoint_data_p),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
+      stats_writer(checkpoint_data.GetType()),
       current_string_map(
           info.GetBlockManager().buffer_manager.GetBufferAllocator(),
           max_unique_count_across_all_segments * 2, // * 2 results in less linear probing, improving performance
@@ -25,6 +26,7 @@ void DictionaryCompressionCompressState::CreateEmptySegment() {
 	current_segment = std::move(compressed_segment);
 
 	// Reset the buffers and the string map.
+	stats_writer.Clear();
 	current_string_map.Clear();
 	index_buffer.clear();
 
@@ -61,7 +63,7 @@ bool DictionaryCompressionCompressState::LookupString(string_t str) {
 }
 
 void DictionaryCompressionCompressState::AddNewString(string_t str) {
-	UncompressedStringStorage::UpdateStringStats(current_segment->stats, str);
+	UncompressedStringStorage::UpdateStringStats(current_segment->stats, stats_writer, str);
 
 	// Copy string to dict
 	current_dictionary.size += str.GetSize();
@@ -111,6 +113,7 @@ bool DictionaryCompressionCompressState::CalculateSpaceRequirements(bool new_str
 void DictionaryCompressionCompressState::Flush(bool final) {
 	auto segment_size = Finalize();
 	auto &state = checkpoint_data.GetCheckpointState();
+	stats_writer.Merge(current_segment->stats.statistics);
 	state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
 	if (!final) {

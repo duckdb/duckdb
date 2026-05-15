@@ -108,10 +108,14 @@ public:
 
 private:
 	void FinalizeLoad();
+	const string &GetRegisteredName() const {
+		return extension_alias.empty() ? extension_name : extension_alias;
+	}
 
 private:
 	DatabaseInstance &db;
 	string extension_name;
+	string extension_alias;
 	string extension_description;
 	optional_ptr<ExtensionInfo> extension_info;
 };

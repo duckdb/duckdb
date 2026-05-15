@@ -1,8 +1,6 @@
 #pragma once
 
 #include "delta_kernel_ffi.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include <iostream>
@@ -10,6 +8,10 @@
 // TODO: clean up this file as we go
 
 namespace duckdb {
+
+class BoundComparisonExpression;
+class BoundConjunctionExpression;
+class Expression;
 
 // SchemaVisitor is used to parse the schema of a Delta table from the Kernel
 class SchemaVisitor {
@@ -146,10 +148,11 @@ private:
 
 	static uintptr_t VisitPredicate(PredicateVisitor *predicate, ffi::KernelExpressionVisitorState *state);
 
-	uintptr_t VisitConstantFilter(const string &col_name, const ConstantFilter &filter,
-	                              ffi::KernelExpressionVisitorState *state);
-	uintptr_t VisitAndFilter(const string &col_name, const ConjunctionAndFilter &filter,
-	                         ffi::KernelExpressionVisitorState *state);
+	uintptr_t VisitComparisonExpression(const string &col_name, const BoundComparisonExpression &expr,
+	                                    ffi::KernelExpressionVisitorState *state);
+	uintptr_t VisitAndExpression(const string &col_name, const BoundConjunctionExpression &expr,
+	                             ffi::KernelExpressionVisitorState *state);
+	uintptr_t VisitExpression(const string &col_name, const Expression &expr, ffi::KernelExpressionVisitorState *state);
 	uintptr_t VisitFilter(const string &col_name, const TableFilter &filter, ffi::KernelExpressionVisitorState *state);
 };
 

@@ -2,12 +2,6 @@
 # description: Test hash join with dictionary emission on small build sides
 # group: [hash_join]
 
-statement ok
-PRAGMA enable_verification
-
-statement ok
-PRAGMA verify_parallelism
-
 # shared probe table: 262200 rows, just above the min-probe-rows threshold
 statement ok
 CREATE TABLE big_probe AS

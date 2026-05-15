@@ -19,8 +19,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
-#include "duckdb/planner/filter/bloom_filter.hpp"
-#include "duckdb/planner/filter/prefix_range_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 
 namespace duckdb {
 

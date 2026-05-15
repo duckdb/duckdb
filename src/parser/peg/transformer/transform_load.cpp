@@ -14,6 +14,17 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformLoadStatement(PEGTransf
 	info->load_type = LoadType::LOAD;
 	info->repo_is_alias = false;
 	info->filename = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
+
+	// get the alias if it's there
+	auto &optional_alias = list_pr.Child<OptionalParseResult>(2);
+	if (optional_alias.HasResult()) {
+		auto &alias_list = optional_alias.GetResult().Cast<ListParseResult>();
+		info->alias = alias_list.Child<IdentifierParseResult>(1).identifier;
+		info->load_type = LoadType::LOAD_AS;
+	} else {
+		info->load_type = LoadType::LOAD;
+	}
+
 	result->info = std::move(info);
 	return std::move(result);
 }

@@ -1,0 +1,191 @@
+# name: test/sql/storage/adaptive_segment_allocation.test
+# description: Adaptive transient segment allocation - memory footprint and correctness
+# group: [storage]
+
+require vector_size 2048
+
+statement error
+SET initial_column_segment_size = 7
+----
+be at least 8 bytes
+
+statement error
+SET initial_column_segment_size = 9
+----
+power of two
+
+statement ok
+SET initial_column_segment_size = 8
+
+# disable auto-checkpoint so the transient segment structure is visible in pragma_storage_info
+statement ok
+SET wal_autocheckpoint='1TB'
+
+# with initial_column_segment_size=8 bytes and INT (4 bytes/row), the first segment holds 2 rows
+# the second segment doubles to 16 bytes (4-row capacity) and holds the remaining 3 rows
+statement ok
+CREATE TABLE step_test (i INT NOT NULL)
+
+statement ok
+INSERT INTO step_test VALUES (1), (2), (3), (4), (5)
+
+# segment 0 holds the first 2 rows (8 bytes), segment 1 holds the remaining 3
+query II
+SELECT segment_id, count
+FROM pragma_storage_info('step_test')
+WHERE column_name = 'i' AND segment_type = 'INTEGER'
+ORDER BY segment_id
+----
+0	2
+1	3
+
+statement ok
+DROP TABLE step_test
+
+statement ok
+CHECKPOINT
+
+statement ok
+CREATE TABLE mem_adaptive (a INT NOT NULL, b INT NOT NULL, c INT NOT NULL, d INT NOT NULL, e INT NOT NULL)
+
+statement ok
+INSERT INTO mem_adaptive VALUES (1, 2, 3, 4, 5)
+
+# 5 cols * (8 bytes data + 256 bytes validity) = ~1320 bytes
+query I
+SELECT CASE WHEN memory_usage_bytes < 2000
+            THEN 'ok'
+            ELSE error(concat('expected < 2000 bytes, got ', memory_usage_bytes))
+       END
+FROM duckdb_memory()
+WHERE tag = 'IN_MEMORY_TABLE'
+----
+ok
+
+statement ok
+CHECKPOINT
+
+statement ok
+DROP TABLE mem_adaptive
+
+# correctness: 100 rows split across doubling segments
+statement ok
+CREATE TABLE overflow_test (i BIGINT NOT NULL)
+
+statement ok
+INSERT INTO overflow_test SELECT range FROM range(100)
+
+query I
+SELECT COUNT(*) FROM overflow_test
+----
+100
+
+query I
+SELECT SUM(i) FROM overflow_test
+----
+4950
+
+query I
+SELECT MIN(i) = 0 AND MAX(i) = 99 FROM overflow_test
+----
+true
+
+# data must survive checkpoint (transient segments converted to persistent)
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(*) FROM overflow_test
+----
+100
+
+query I
+SELECT SUM(i) FROM overflow_test
+----
+4950
+
+statement ok
+DROP TABLE overflow_test
+
+statement ok
+CREATE TABLE validity_test (i INTEGER)
+
+# every 7th row is NULL, crossing every segment boundary
+statement ok
+INSERT INTO validity_test
+    SELECT CASE WHEN range % 7 = 6 THEN NULL ELSE range END
+    FROM range(100)
+
+query I
+SELECT COUNT(*) FROM validity_test
+----
+100
+
+# 14 NULLs at positions 6, 13, 20, ..., 97
+query I
+SELECT COUNT(*) FILTER (WHERE i IS NULL) FROM validity_test
+----
+14
+
+query I
+SELECT COUNT(*) FILTER (WHERE i IS NOT NULL) FROM validity_test
+----
+86
+
+# if bit positions were misaligned across segments, this would return non-zero
+query I
+SELECT COUNT(*) FROM (
+    SELECT ROW_NUMBER() OVER () - 1 AS rn, i FROM validity_test
+) WHERE (rn % 7 = 6) != (i IS NULL)
+----
+0
+
+statement ok
+CREATE TABLE string_test (s VARCHAR)
+
+# even rows: short strings (stored inline)
+# odd rows: 50-char prefix + number (stored in overflow pages)
+statement ok
+INSERT INTO string_test
+    SELECT CASE WHEN range % 2 = 0
+                THEN range::VARCHAR
+                ELSE repeat('x', 50) || range::VARCHAR
+           END
+    FROM range(100)
+
+query I
+SELECT COUNT(*) FROM string_test
+----
+100
+
+# 50 short strings (inline) and 50 long strings (overflow)
+query I
+SELECT COUNT(*) FILTER (WHERE len(s) <= 12) FROM string_test
+----
+50
+
+query I
+SELECT COUNT(*) FILTER (WHERE len(s) > 50) FROM string_test
+----
+50
+
+# data must survive checkpoint
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(*) FROM string_test
+----
+100
+
+# verify a specific short string is intact
+query I
+SELECT s FROM string_test WHERE s = '42'
+----
+42
+
+# verify a specific long string is intact and not truncated
+query I
+SELECT len(s) FROM string_test WHERE s = repeat('x', 50) || '1'
+----
+51

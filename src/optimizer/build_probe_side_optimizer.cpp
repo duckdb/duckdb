@@ -4,18 +4,25 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/execution/ht_entry.hpp"
+#include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
+
+struct JoinFilterBuildSideHeuristics {
+	static constexpr idx_t MIN_FILTER_TARGET_CARDINALITY = 1000000;
+	static constexpr idx_t MAX_BUILD_TO_TARGET_RATIO = 64;
+};
 
 static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &bindings) {
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
@@ -98,6 +105,51 @@ static inline idx_t ComputeOverlappingBindings(const vector<ColumnBinding> &hays
 	return result;
 }
 
+static idx_t MaxDynamicFilterTargetCardinality(LogicalOperator &op, const Expression &expr) {
+	JoinFilterPushdownColumn column;
+	if (!JoinFilterPushdownUtil::PushdownJoinFilterExpression(expr, column)) {
+		return 0;
+	}
+
+	vector<JoinFilterPushdownColumn> columns {std::move(column)};
+	vector<PushdownFilterTarget> targets;
+	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(op, std::move(columns), targets);
+
+	// Dynamic filters are applied at the scan target found here. Estimate the work that the
+	// filter can avoid at that point, even if later filters reduce the cardinality at the join.
+	idx_t result = 0;
+	for (auto &target : targets) {
+		auto &get = target.get;
+		result = MaxValue(result, get.has_estimated_cardinality ? get.estimated_cardinality : idx_t(0));
+	}
+	return result;
+}
+
+static double DynamicFilterBuildBonus(LogicalComparisonJoin &join, const idx_t probe_idx, const idx_t build_idx,
+                                      const idx_t build_cardinality) {
+	if (!JoinFilterPushdownOptimizer::IsFiltering(join.children[build_idx])) {
+		return 1;
+	}
+
+	idx_t max_target_cardinality = 0;
+	for (auto &cond : join.conditions) {
+		if (!cond.IsComparison() || cond.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+			continue;
+		}
+		auto &probe_expr = probe_idx == 0 ? cond.GetLHS() : cond.GetRHS();
+		max_target_cardinality =
+		    MaxValue(max_target_cardinality, MaxDynamicFilterTargetCardinality(*join.children[probe_idx], probe_expr));
+	}
+	if (max_target_cardinality < JoinFilterBuildSideHeuristics::MIN_FILTER_TARGET_CARDINALITY) {
+		return 1;
+	}
+	if (build_cardinality > 0 &&
+	    build_cardinality > max_target_cardinality / JoinFilterBuildSideHeuristics::MAX_BUILD_TO_TARGET_RATIO) {
+		return 1;
+	}
+	return static_cast<double>(max_target_cardinality) / static_cast<double>(MaxValue<idx_t>(build_cardinality, 1));
+}
+
 BuildSize BuildProbeSideOptimizer::GetBuildSizes(const LogicalOperator &op, const idx_t lhs_cardinality,
                                                  const idx_t rhs_cardinality) {
 	BuildSize ret;
@@ -177,6 +229,17 @@ bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 
 	bool swap = false;
 
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		if (JoinFilterPushdownUtil::JoinTypeIsSupported(join.join_type)) {
+			right_side_build_cost /= DynamicFilterBuildBonus(join, 0, 1, rhs_cardinality);
+		}
+		if (HasInverseJoinType(join.join_type) &&
+		    JoinFilterPushdownUtil::JoinTypeIsSupported(InverseJoinType(join.join_type))) {
+			left_side_build_cost /= DynamicFilterBuildBonus(join, 1, 0, lhs_cardinality);
+		}
+	}
+
 	idx_t left_child_joins = ChildHasJoins(*op.children[0]);
 	idx_t right_child_joins = ChildHasJoins(*op.children[1]);
 	// if the right child is a table scan, and the left child has joins, we should prefer the left child
@@ -219,7 +282,8 @@ bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 }
 
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
-	// then the currentoperator
+	VisitOperatorChildren(op);
+
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
@@ -273,8 +337,6 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 	default:
 		break;
 	}
-
-	VisitOperatorChildren(op);
 }
 
 } // namespace duckdb
