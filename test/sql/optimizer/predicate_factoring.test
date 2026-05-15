@@ -22,6 +22,19 @@ EXPLAIN SELECT * FROM t WHERE (a=1 AND b>3) OR (a=1 AND c<5)
 ----
 physical_plan	<REGEX>:.*Filters:.*a = 1.*
 
+# Predicate factoring still works when nested conjunctions must be simplified first
+query III rowsort
+SELECT * FROM t WHERE (a=1 AND (b>3 AND TRUE)) OR (a=1 AND (TRUE AND c<5))
+----
+1	2	3
+1	5	11
+1	5	3
+
+query II
+EXPLAIN SELECT * FROM t WHERE (a=1 AND (b>3 AND TRUE)) OR (a=1 AND (TRUE AND c<5))
+----
+physical_plan	<REGEX>:.*Filters:.*a = 1.*
+
 # Predicate factoring on a different common column: b=5
 query III rowsort
 SELECT * FROM t WHERE (a=1 AND b=5) OR (a=2 AND b=5)

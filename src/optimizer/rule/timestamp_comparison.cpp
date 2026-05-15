@@ -17,10 +17,9 @@
 namespace duckdb {
 
 TimeStampComparison::TimeStampComparison(ExpressionRewriter &rewriter) : Rule(rewriter), context(rewriter.context) {
-	// match on a ComparisonExpression that is an Equality and has a VARCHAR and ENUM as its children
+	// match on an equality comparison between a timestamp column cast to DATE and a foldable DATE constant
 	auto op = make_uniq<ComparisonExpressionMatcher>();
 	op->policy = SetMatcher::Policy::UNORDERED;
-	// Enum requires expression to be root
 	op->expr_type = make_uniq<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
 
 	// one side is timestamp cast to date
@@ -31,34 +30,49 @@ TimeStampComparison::TimeStampComparison(ExpressionRewriter &rewriter) : Rule(re
 	left->matcher->type = make_uniq<TypeMatcherId>(LogicalTypeId::TIMESTAMP);
 	op->matchers.push_back(std::move(left));
 
-	// other side is varchar to date?
-	auto right = make_uniq<CastExpressionMatcher>();
+	// other side is any foldable DATE constant expression; bottom-up rewriting can fold CAST(VARCHAR AS DATE)
+	auto right = make_uniq<FoldableConstantMatcher>();
 	right->type = make_uniq<TypeMatcherId>(LogicalTypeId::DATE);
-	right->matcher = make_uniq<FoldableConstantMatcher>();
-	right->matcher->expr_class = ExpressionClass::BOUND_CONSTANT;
-	right->matcher->type = make_uniq<TypeMatcherId>(LogicalTypeId::VARCHAR);
 	op->matchers.push_back(std::move(right));
 
 	root = std::move(op);
 }
 
-static void ExpressionIsConstant(const Expression &root_expr, bool &is_constant) {
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-	    root_expr, [&](const BoundColumnRefExpression &column_ref) { is_constant = false; });
+static BoundCastExpression *GetTimestampCast(Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
+		return nullptr;
+	}
+	auto &cast_expr = expr.Cast<BoundCastExpression>();
+	if (cast_expr.GetReturnType().id() != LogicalTypeId::DATE) {
+		return nullptr;
+	}
+	if (cast_expr.child->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+	    cast_expr.child->GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
+		return nullptr;
+	}
+	return &cast_expr;
 }
 
 unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                   bool &changes_made, bool is_root) {
-	auto cast_constant = bindings[3].get().Copy();
-	auto cast_columnref = bindings[2].get().Copy();
-	auto is_constant = true;
-	ExpressionIsConstant(*cast_constant, is_constant);
-	if (!is_constant) {
-		// means the matchers are flipped, so we need to flip our bindings
-		// for some reason an extra binding is added in this case.
-		cast_constant = bindings[4].get().Copy();
-		cast_columnref = bindings[3].get().Copy();
+	auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
+	D_ASSERT(comparison.children.size() == 2);
+
+	BoundCastExpression *cast_expr = nullptr;
+	Expression *constant_expr = nullptr;
+	for (auto &child : comparison.children) {
+		if (auto timestamp_cast = GetTimestampCast(*child)) {
+			cast_expr = timestamp_cast;
+		} else if (child->IsFoldable() && child->GetReturnType().id() == LogicalTypeId::DATE) {
+			constant_expr = child.get();
+		}
 	}
+	if (!cast_expr || !constant_expr) {
+		return nullptr;
+	}
+
+	auto cast_constant = constant_expr->Copy();
+	auto cast_columnref = cast_expr->child->Copy();
 	auto new_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 
 	Value result;
