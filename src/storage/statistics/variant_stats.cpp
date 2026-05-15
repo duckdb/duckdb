@@ -269,6 +269,37 @@ bool VariantStats::IsShredded(const BaseStatistics &stats) {
 	return data.shredding_state == VariantStatsShreddingState::SHREDDED;
 }
 
+bool VariantStats::IsShredded(const BaseStatistics &stats, const ColumnIndex &index) {
+	if (!IsShredded(stats)) {
+		return false;
+	}
+
+	reference<const BaseStatistics> shredded_stats(VariantStats::GetShreddedStats(stats));
+	reference<const ColumnIndex> path_iter(index);
+	while (path_iter.get().HasChildren()) {
+		auto &current_stats = shredded_stats.get();
+		if (!VariantShreddedStats::IsFullyShredded(current_stats)) {
+			return false;
+		}
+		auto &current = path_iter.get();
+		auto &child = current.GetChildIndexes()[0];
+		VariantPathComponent path_component(child.GetFieldName());
+		auto child_stats = VariantShreddedStats::FindChildStats(shredded_stats.get(), path_component);
+		if (!child_stats) {
+			return false;
+		}
+		path_iter = child;
+		shredded_stats = *child_stats;
+	}
+	if (!VariantShreddedStats::IsFullyShredded(shredded_stats.get())) {
+		return false;
+	}
+	auto &typed_value_stats = StructStats::GetChildStats(shredded_stats.get(), VariantStats::TYPED_VALUE_INDEX);
+	auto &typed_value_type = typed_value_stats.GetType();
+
+	return !typed_value_type.IsNested();
+}
+
 BaseStatistics VariantStats::CreateShredded(const LogicalType &shredded_type) {
 	BaseStatistics result(LogicalType::VARIANT());
 	result.InitializeEmpty();

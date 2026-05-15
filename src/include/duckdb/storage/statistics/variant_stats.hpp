@@ -3,6 +3,7 @@
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/common/column_index.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -73,6 +74,8 @@ public:
 	DUCKDB_API static LogicalType GetShreddedStructuredType(const BaseStatistics &stats);
 	DUCKDB_API static void CreateShreddedStats(BaseStatistics &stats, const LogicalType &shredded_type);
 	DUCKDB_API static bool IsShredded(const BaseStatistics &stats);
+	//! Determine if a given path inside the variant stats is shredded
+	DUCKDB_API static bool IsShredded(const BaseStatistics &stats, const ColumnIndex &column_index);
 	DUCKDB_API static const BaseStatistics &GetShreddedStats(const BaseStatistics &stats);
 	DUCKDB_API static BaseStatistics &GetShreddedStats(BaseStatistics &stats);
 

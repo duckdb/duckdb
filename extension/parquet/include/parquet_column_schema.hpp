@@ -78,6 +78,10 @@ public:
 	                                 idx_t row_group_idx_p, const vector<duckdb_parquet::ColumnChunk> &columns) const;
 
 public:
+	optional_idx GetChildIndexByName(const string &name) const;
+	const ParquetColumnSchema &GetChildByIndex(idx_t index) const;
+
+public:
 	void SetSchemaIndex(idx_t schema_idx);
 
 public:

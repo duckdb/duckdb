@@ -45,6 +45,48 @@ void ExpressionColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<
 	child_reader->InitializeRead(row_group_idx_p, columns, protocol_p);
 }
 
+static void ReverseSelectionVector(const SelectionVector &input, SelectionVector &output, idx_t input_count,
+                                   idx_t result_count) {
+	//! For an input selection vector: [5, 10],
+	//! produce a new selection vector: [-, -, -, -, 0, -, -, -, -, 1]
+	idx_t result_index = 0;
+	idx_t last_index = 0;
+	for (idx_t i = 0; i < input_count; i++) {
+		idx_t value = input[i];
+		last_index = i;
+		if (value >= result_count) {
+			throw InternalException("Not enough room in the resulting selection vector (%d) to reverse the selection "
+			                        "vector, encountered value: %d, at index: %d",
+			                        input_count, value, i);
+		}
+		for (; result_index <= value; result_index++) {
+			output[result_index] = last_index;
+		}
+	}
+	//! Fill the remainder of the selection vector, to remove any uninitialized values
+	for (; result_index < result_count; result_index++) {
+		output[result_index] = last_index;
+	}
+}
+
+void ExpressionColumnReader::Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
+                                    idx_t approved_tuple_count) {
+	intermediate_chunk.Reset();
+	auto &intermediate_vector = intermediate_chunk.data[0];
+
+	child_reader->Select(input, intermediate_vector, sel, approved_tuple_count);
+	intermediate_chunk.SetCardinality(input.num_values);
+	//! This executes the expression *and* applies the selection vector in the process
+	executor.ExecuteExpression(intermediate_chunk, result, sel, approved_tuple_count);
+	if (input.num_values != approved_tuple_count) {
+		//! Since the caller expects the rows to be in the spot they would have been in the input chunk
+		//! We now have to reverse this selection ..
+		SelectionVector inverted_sel(input.num_values);
+		ReverseSelectionVector(sel, inverted_sel, approved_tuple_count, input.num_values);
+		result.Slice(inverted_sel, input.num_values);
+	}
+}
+
 idx_t ExpressionColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	intermediate_chunk.Reset();
 	auto &intermediate_vector = intermediate_chunk.data[0];
