@@ -1918,9 +1918,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types),
 	                                                  row_groups->GetBaseRowId(), total_rows.load(), row_group_size);
 
-	DataChunk dummy_chunk;
-	Vector default_vector(new_column.GetType());
-
 	result->stats.InitializeAddColumn(stats, new_column.GetType());
 	auto lock = result->stats.GetLock();
 	auto &new_column_stats = result->stats.GetStats(*lock, new_column_idx);
@@ -1929,7 +1926,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	auto new_stats = make_uniq<SegmentStatistics>(new_column.GetType());
 	auto result_row_groups = result->GetRowGroups();
 	for (auto &current_row_group : row_groups->Segments()) {
-		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_executor, default_vector);
+		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_executor);
 		// merge in the statistics
 		new_row_group->MergeIntoStatistics(new_column_idx, new_column_stats.Statistics());
 

@@ -474,7 +474,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 }
 
 unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, ColumnDefinition &new_column,
-                                         ExpressionExecutor &executor, Vector &result) {
+                                         ExpressionExecutor &executor) {
 	Verify();
 
 	// construct a new column data for the new column
@@ -484,12 +484,16 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 	idx_t rows_to_write = this->count;
 	if (rows_to_write > 0) {
 		DataChunk dummy_chunk;
+		DataChunk result_chunk;
+		result_chunk.Initialize(Allocator::DefaultAllocator(), {new_column.GetType()});
+		auto &result = result_chunk.data[0];
 
 		ColumnAppendState state;
 		added_column->InitializeAppend(state);
 		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
 			idx_t rows_in_this_vector = MinValue<idx_t>(rows_to_write - i, STANDARD_VECTOR_SIZE);
 			dummy_chunk.SetCardinality(rows_in_this_vector);
+			result_chunk.Reset();
 			executor.ExecuteExpression(dummy_chunk, result);
 			added_column->Append(state, result, rows_in_this_vector);
 		}
