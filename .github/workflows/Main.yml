@@ -1320,22 +1320,22 @@ jobs:
         rm -rf build/release
         tar -xzf build/release-artifact.tar.gz -C build
 
-    - name: test_configs
+    - name: Test Configurations
       if: success() || failure()
       run: |
         make test_configs
 
-    - name: test_vector
+    - name: Test Vector Verification
       if: success() || failure()
       run: |
         make test_vector
 
-    - name: test_table_scan
+    - name: Test Synchronous Table Scan
       if: success() || failure()
       run: |
         make test_table_scan
 
-    - name: test_storage
+    - name: Test Storage Compatibility
       if: success() || failure()
       run: |
         make test_storage
