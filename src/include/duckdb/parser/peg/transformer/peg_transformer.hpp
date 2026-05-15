@@ -1172,6 +1172,8 @@ private:
 
 	// set.gram
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformSetGeneralStatement(PEGTransformer &transformer,
+	                                                             ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformSetAssignment(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static SettingInfo TransformSetSetting(PEGTransformer &transformer, ParseResult &parse_result);
@@ -1186,6 +1188,8 @@ private:
 	static unique_ptr<SetStatement> TransformStandardAssignment(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformVariableList(PEGTransformer &transformer,
 	                                                                  ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformSetVariableStatement(PEGTransformer &transformer,
+	                                                              ParseResult &parse_result);
 
 	static string TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result);
 

@@ -873,12 +873,14 @@ void PEGTransformerFactory::RegisterSet() {
 	// set.gram
 	REGISTER_TRANSFORM(TransformResetStatement);
 	REGISTER_TRANSFORM(TransformSetAssignment);
+	REGISTER_TRANSFORM(TransformSetGeneralStatement);
 	REGISTER_TRANSFORM(TransformSetSetting);
 	REGISTER_TRANSFORM(TransformSetStatement);
 	REGISTER_TRANSFORM(TransformSetTimeZone);
 	REGISTER_TRANSFORM(TransformSetVariable);
 	REGISTER_TRANSFORM(TransformStandardAssignment);
 	REGISTER_TRANSFORM(TransformVariableList);
+	REGISTER_TRANSFORM(TransformSetVariableStatement);
 	REGISTER_TRANSFORM(TransformZoneValue);
 	REGISTER_TRANSFORM(TransformZoneIntervalWithInterval);
 	REGISTER_TRANSFORM(TransformZoneIntervalWithPrecision);

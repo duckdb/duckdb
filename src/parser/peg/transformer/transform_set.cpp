@@ -40,12 +40,11 @@ SettingInfo PEGTransformerFactory::TransformSetSetting(PEGTransformer &transform
 	return result;
 }
 
-// SetStatement <- 'SET' (StandardAssignment / SetTimeZone)
+// SetStatement <- SetGeneralStatement / SetVariableStatement
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetStatement(PEGTransformer &transformer,
                                                                       ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &child_pr = list_pr.Child<ListParseResult>(1);
-	return transformer.Transform<unique_ptr<SetStatement>>(child_pr.Child<ChoiceParseResult>(0).GetResult());
+	return transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
 // ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?
@@ -135,6 +134,14 @@ unique_ptr<SetStatement> PEGTransformerFactory::TransformStandardAssignment(PEGT
 	return make_uniq<SetVariableStatement>(setting_info.name, std::move(value), setting_info.scope);
 }
 
+// SetGeneralStatement <- 'SET' (StandardAssignment / SetTimeZone)
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetGeneralStatement(PEGTransformer &transformer,
+                                                                             ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &child_pr = list_pr.Child<ListParseResult>(1);
+	return transformer.Transform<unique_ptr<SetStatement>>(child_pr.Child<ChoiceParseResult>(0).GetResult());
+}
+
 // VariableList <- List(Expression)
 vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformVariableList(PEGTransformer &transformer,
                                                                                   ParseResult &parse_result) {
@@ -145,5 +152,14 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformVariableLis
 		expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
 	}
 	return expressions;
+}
+
+// SetVariableStatement <- Identifier ':=' Expression
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformSetVariableStatement(PEGTransformer &transformer,
+                                                                              ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto identifier = list_pr.Child<IdentifierParseResult>(0).identifier;
+	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2));
+	return make_uniq<SetVariableStatement>(identifier, std::move(expr), SetScope::VARIABLE);
 }
 } // namespace duckdb

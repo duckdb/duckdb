@@ -1419,7 +1419,9 @@ CreateType <- EnumSelectType / EnumStringLiteralList / Type
 EnumSelectType <- 'ENUM' Parens(SelectStatementInternal)
 EnumStringLiteralList <- 'ENUM' Parens(List(StringLiteral)?)
 
-SetStatement <- 'SET' (StandardAssignment / SetTimeZone)
+SetStatement <- SetGeneralStatement / SetVariableStatement
+SetGeneralStatement <- 'SET' (StandardAssignment / SetTimeZone)
+SetVariableStatement <- Identifier ':=' Expression
 
 StandardAssignment <- (SetVariable / SetSetting) SetAssignment
 SetTimeZone <- 'TIME' 'ZONE' ZoneValue
