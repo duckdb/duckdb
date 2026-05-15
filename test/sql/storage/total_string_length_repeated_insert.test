@@ -13,8 +13,18 @@ set checkpoint_threshold='1TB';
 statement ok
 INSERT INTO test SELECT 'abc' FROM range(10_000);
 
+query I
+select s.total_string_length from (select stats(s) s from test limit 1)
+----
+30000
+
 statement ok
 INSERT INTO test SELECT 'abc' FROM range(10_000);
+
+query I
+select s.total_string_length from (select stats(s) s from test limit 1)
+----
+60000
 
 statement ok
 INSERT INTO test SELECT 'abc' FROM range(10_000);

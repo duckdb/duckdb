@@ -190,22 +190,29 @@ void ArrayColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.child_appends.push_back(std::move(child_append));
 }
 
-void ArrayColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
+void ArrayColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		Vector append_vector(Vector::Ref(vector));
 		append_vector.Flatten();
-		Append(stats, state, append_vector, count);
+		Append(state, append_vector, count);
 		return;
 	}
 
 	// Append validity
-	validity->Append(stats, state.child_appends[0], vector, count);
+	validity->Append(state.child_appends[0], vector, count);
 	// Append child column
 	auto array_size = ArrayType::GetSize(type);
 	auto &child_vec = ArrayVector::GetChildMutable(vector);
-	child_column->Append(ArrayStats::GetChildStats(stats), state.child_appends[1], child_vec, count * array_size);
+	child_column->Append(state.child_appends[1], child_vec, count * array_size);
 
 	this->count += count;
+}
+
+void ArrayColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	validity->FinalizeAppend(finalize_state, state.child_appends[0]);
+
+	ColumnDataFinalizeAppendState child_finalize_state(finalize_state, LogicalTypeId::ARRAY);
+	child_column->FinalizeAppend(child_finalize_state, state.child_appends[1]);
 }
 
 void ArrayColumnData::RevertAppend(row_t new_count) {

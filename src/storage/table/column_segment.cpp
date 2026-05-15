@@ -69,8 +69,8 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
                              const unique_ptr<ColumnSegmentState> segment_state_p)
 
     : SegmentBase<ColumnSegment>(count), db(db), type(type), type_size(GetTypeIdSize(type.InternalType())),
-      segment_type(segment_type), stats(std::move(statistics)), block(std::move(block_p)), function(function_p),
-      block_id(block_id_p), offset(offset), segment_size(segment_size_p) {
+      segment_type(segment_type), block(std::move(block_p)), function(function_p), block_id(block_id_p), offset(offset),
+      segment_size(segment_size_p), stats(std::move(statistics)) {
 	if (function.get().init_segment) {
 		segment_state = function.get().init_segment(*this, block_id, segment_state_p.get());
 	}
@@ -81,9 +81,9 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
 
 ColumnSegment::ColumnSegment(ColumnSegment &other)
     : SegmentBase<ColumnSegment>(other.count.load()), db(other.db), type(std::move(other.type)),
-      type_size(other.type_size), segment_type(other.segment_type), stats(std::move(other.stats)),
-      block(std::move(other.block)), function(other.function), block_id(other.block_id), offset(other.offset),
-      segment_size(other.segment_size), segment_state(std::move(other.segment_state)) {
+      type_size(other.type_size), segment_type(other.segment_type), block(std::move(other.block)),
+      function(other.function), block_id(other.block_id), offset(other.offset), segment_size(other.segment_size),
+      segment_state(std::move(other.segment_state)), stats(std::move(other.stats)) {
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
 	D_ASSERT(!block || segment_size <= GetBlockSize());
 }
@@ -197,7 +197,7 @@ idx_t ColumnSegment::Append(ColumnAppendState &state, UnifiedVectorFormat &appen
 	if (!function.get().append) {
 		throw InternalException("Attempting to append to a segment without append method");
 	}
-	return function.get().append(*state.append_state, *this, stats, append_data, offset, count);
+	return function.get().append(*state.append_state, *this, *state.append_stats, append_data, offset, count);
 }
 
 idx_t ColumnSegment::FinalizeAppend(ColumnAppendState &state) {
@@ -205,7 +205,7 @@ idx_t ColumnSegment::FinalizeAppend(ColumnAppendState &state) {
 	if (!function.get().finalize_append) {
 		throw InternalException("Attempting to call FinalizeAppend on a segment without a finalize_append method");
 	}
-	auto result_count = function.get().finalize_append(*this, stats);
+	auto result_count = function.get().finalize_append(*this, *state.append_stats);
 	state.append_state.reset();
 	return result_count;
 }

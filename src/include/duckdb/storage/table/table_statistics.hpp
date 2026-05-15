@@ -58,7 +58,7 @@ public:
 	void DestroyTableSample(TableStatisticsLock &lock) const;
 	void AppendToTableSample(TableStatisticsLock &lock, unique_ptr<BlockingSample> sample);
 
-	bool Empty();
+	bool Empty() const;
 
 	unique_ptr<TableStatisticsLock> GetLock();
 

@@ -542,21 +542,21 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	idx_t remaining = chunk.size();
 	state.total_append_count += total_append_count;
 	while (true) {
-		auto current_row_group = state.row_group_append_state.row_group;
+		auto &current_row_group = *state.row_group_append_state.row_group;
 		// check how much we can fit into the current row_group
 		idx_t append_count =
 		    MinValue<idx_t>(remaining, row_group_size - state.row_group_append_state.offset_in_row_group);
 		if (append_count > 0) {
-			auto previous_allocation_size = current_row_group->GetAllocationSize();
-			current_row_group->Append(state.row_group_append_state, chunk, append_count);
-			allocation_size += current_row_group->GetAllocationSize() - previous_allocation_size;
-			// merge the stats
-			current_row_group->MergeIntoStatistics(stats);
+			auto previous_allocation_size = current_row_group.GetAllocationSize();
+			current_row_group.Append(state.row_group_append_state, chunk, append_count);
+			allocation_size += current_row_group.GetAllocationSize() - previous_allocation_size;
 		}
 		remaining -= append_count;
 		if (remaining == 0) {
 			break;
 		}
+		// finalize the append state for the current row group
+		current_row_group.FinalizeAppend(state.row_group_append_state);
 		// we expect max 1 iteration of this loop (i.e. a single chunk should never overflow more than one
 		// row_group)
 		D_ASSERT(chunk.size() == remaining + append_count);
@@ -588,6 +588,11 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 }
 
 void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppendState &state) {
+	// first finalize the append of the final row group we appended to
+	auto &last_row_group = *state.row_group_append_state.row_group;
+	last_row_group.FinalizeAppend(state.row_group_append_state);
+
+	// now push version info into all row groups
 	auto remaining = state.total_append_count;
 	auto row_group = state.start_row_group;
 	while (remaining > 0) {
@@ -606,14 +611,8 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 	auto global_stats_lock = stats.GetLock();
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		auto &global_stats = stats.GetStats(*global_stats_lock, col_idx);
-		if (!global_stats.HasDistinctStats()) {
-			continue;
-		}
 		auto &local_stats = state.stats.GetStats(*local_stats_lock, col_idx);
-		if (!local_stats.HasDistinctStats()) {
-			continue;
-		}
-		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
+		global_stats.Merge(local_stats);
 	}
 
 	Verify();
@@ -1282,6 +1281,9 @@ public:
 					const bool row_group_full = append_counts[current_append_idx] == row_group_size;
 					const bool last_row_group = current_append_idx + 1 >= new_row_groups.size();
 					if (remaining > 0 || (row_group_full && !last_row_group)) {
+						// finalize the last append
+						new_row_groups[current_append_idx]->FinalizeAppend(append_state.row_group_append_state);
+
 						// move to the next row group
 						current_append_idx++;
 						new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
@@ -1294,6 +1296,9 @@ public:
 			current_row_group.CommitDrop();
 			checkpoint_state.DropSegment(c_idx);
 		}
+		// finalize the final append
+		new_row_groups[current_append_idx]->FinalizeAppend(append_state.row_group_append_state);
+
 		idx_t total_append_count = 0;
 		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
 			auto &row_group = new_row_groups[target_idx];

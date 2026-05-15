@@ -999,9 +999,23 @@ void RowGroup::RevertAppend(idx_t new_count) {
 	Verify();
 }
 
+RowGroupAppendState::RowGroupAppendState(TableAppendState &parent_p)
+    : parent(parent_p), row_group(nullptr), offset_in_row_group(0) {
+}
+
+RowGroupAppendState::~RowGroupAppendState() {
+	if (!row_group) {
+		// never started appending
+		return;
+	}
+	if (!is_finalized && !Exception::UncaughtException()) {
+		throw InternalException("RowGroupAppendState not finalized!");
+	}
+}
 void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
 	append_state.row_group = this;
 	append_state.offset_in_row_group = this->count;
+	append_state.is_finalized = false;
 	// for each column, initialize the append state
 	append_state.states = make_unsafe_uniq_array<ColumnAppendState>(GetColumnCount());
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
@@ -1020,6 +1034,23 @@ void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append
 		allocation_size += col_data.GetAllocationSize() - prev_allocation_size;
 	}
 	state.offset_in_row_group += append_count;
+}
+
+void RowGroup::FinalizeAppend(RowGroupAppendState &state) {
+	auto &parent_stats = state.parent.stats;
+	if (parent_stats.Empty()) {
+		for (idx_t c = 0; c < GetColumnCount(); c++) {
+			auto &col_data = GetColumn(c);
+			col_data.FinalizeAppend(nullptr, state.states[c]);
+		}
+	} else {
+		auto stats_lock = parent_stats.GetLock();
+		for (idx_t c = 0; c < GetColumnCount(); c++) {
+			auto &col_data = GetColumn(c);
+			col_data.FinalizeAppend(parent_stats.GetStats(*stats_lock, c).Statistics(), state.states[c]);
+		}
+	}
+	state.is_finalized = true;
 }
 
 void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {

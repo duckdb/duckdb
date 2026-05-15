@@ -38,11 +38,34 @@ struct ColumnAppendState {
 	unique_ptr<StorageLockKey> lock;
 	//! The compression append state
 	unique_ptr<CompressionAppendState> append_state;
+	//! Stats for the append to the current segment
+	unique_ptr<BaseStatistics> append_stats;
+	//! Stats for the full append to this column
+	unique_ptr<BaseStatistics> full_append_stats;
+
+public:
+	void InitializeStats(const LogicalType &type);
+	void FlushSegmentStats();
+	void FinalFlush(vector<reference<BaseStatistics>> &global_stats);
+};
+
+struct ColumnDataFinalizeAppendState {
+	explicit ColumnDataFinalizeAppendState(BaseStatistics &table_stats) {
+		global_stats.emplace_back(table_stats);
+	}
+	ColumnDataFinalizeAppendState(BaseStatistics &table_stats, BaseStatistics &column_data_stats) {
+		global_stats.emplace_back(table_stats);
+		global_stats.emplace_back(column_data_stats);
+	}
+	ColumnDataFinalizeAppendState(ColumnDataFinalizeAppendState &parent, LogicalTypeId type_transform,
+	                              optional_idx child_id = optional_idx());
+
+	vector<reference<BaseStatistics>> global_stats;
 };
 
 struct RowGroupAppendState {
-	explicit RowGroupAppendState(TableAppendState &parent_p) : parent(parent_p) {
-	}
+	explicit RowGroupAppendState(TableAppendState &parent_p);
+	~RowGroupAppendState();
 
 	//! The parent append state
 	TableAppendState &parent;
@@ -52,6 +75,7 @@ struct RowGroupAppendState {
 	unsafe_unique_array<ColumnAppendState> states;
 	//! Offset within the row_group
 	idx_t offset_in_row_group;
+	bool is_finalized = false;
 };
 
 struct IndexLock {
@@ -76,7 +100,7 @@ struct TableAppendState {
 	optional_ptr<SegmentNode<RowGroup>> start_row_group;
 	//! The transaction data
 	TransactionData transaction;
-	//! Table statistics
+	//! Table statistics gathered during the Append phase - flushed to the table in FinalizeAppend
 	TableStatistics stats;
 	//! Cached hash vector
 	Vector hashes;

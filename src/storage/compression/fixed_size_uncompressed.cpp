@@ -49,6 +49,7 @@ public:
 	virtual void CreateEmptySegment();
 	void FlushSegment(idx_t segment_size);
 	void Finalize(idx_t segment_size);
+	idx_t FinalizeAppend();
 
 public:
 	ColumnDataCheckpointData &checkpoint_data;
@@ -81,6 +82,7 @@ void UncompressedCompressState::CreateEmptySegment() {
 	}
 	current_segment = std::move(compressed_segment);
 	current_segment->InitializeAppend(append_state);
+	append_state.InitializeStats(type);
 }
 
 void UncompressedCompressState::FlushSegment(idx_t segment_size) {
@@ -103,6 +105,11 @@ void UncompressedCompressState::Finalize(idx_t segment_size) {
 	current_segment.reset();
 }
 
+idx_t UncompressedCompressState::FinalizeAppend() {
+	current_segment->GetStatsMutable().Merge(*append_state.append_stats);
+	return current_segment->FinalizeAppend(append_state);
+}
+
 unique_ptr<CompressionState> UncompressedFunctions::InitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                                     unique_ptr<AnalyzeState> state) {
 	return make_uniq<UncompressedCompressState>(checkpoint_data, state->info);
@@ -121,7 +128,7 @@ void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, id
 			return;
 		}
 		// the segment is full: flush it to disk
-		state.FlushSegment(state.current_segment->FinalizeAppend(state.append_state));
+		state.FlushSegment(state.FinalizeAppend());
 
 		// now create a new segment and continue appending
 		state.CreateEmptySegment();
@@ -132,7 +139,7 @@ void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, id
 
 void UncompressedFunctions::FinalizeCompress(CompressionState &state_p) {
 	auto &state = state_p.Cast<UncompressedCompressState>();
-	state.Finalize(state.current_segment->FinalizeAppend(state.append_state));
+	state.Finalize(state.FinalizeAppend());
 }
 
 //===--------------------------------------------------------------------===//
@@ -251,7 +258,7 @@ struct ListFixedSizeAppend {
 };
 
 template <class T, class OP>
-idx_t FixedSizeAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,
+idx_t FixedSizeAppend(CompressionAppendState &append_state, ColumnSegment &segment, BaseStatistics &stats,
                       UnifiedVectorFormat &data, idx_t offset, idx_t count) {
 	D_ASSERT(segment.GetBlockOffset() == 0);
 
@@ -259,13 +266,13 @@ idx_t FixedSizeAppend(CompressionAppendState &append_state, ColumnSegment &segme
 	idx_t max_tuple_count = segment.SegmentSize() / sizeof(T);
 	idx_t copy_count = MinValue<idx_t>(count, max_tuple_count - segment.count);
 
-	OP::template Append<T>(stats.statistics, target_ptr, segment.count, data, offset, copy_count);
+	OP::template Append<T>(stats, target_ptr, segment.count, data, offset, copy_count);
 	segment.count += copy_count;
 	return copy_count;
 }
 
 template <class T>
-idx_t FixedSizeFinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
+idx_t FixedSizeFinalizeAppend(ColumnSegment &segment, BaseStatistics &stats) {
 	return segment.count * sizeof(T);
 }
 

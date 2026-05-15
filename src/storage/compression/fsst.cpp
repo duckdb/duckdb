@@ -252,7 +252,8 @@ public:
 			};
 		}
 
-		UncompressedStringStorage::UpdateStringStats(current_segment->GetStatsMutable(), stats_writer, uncompressed_string);
+		UncompressedStringStorage::UpdateStringStats(current_segment->GetStatsMutable(), stats_writer,
+		                                             uncompressed_string);
 
 		// Write string into dictionary
 		current_dictionary.size += compressed_string_len;

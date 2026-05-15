@@ -436,7 +436,8 @@ public:
 
 	void AddString(const string_t &string) {
 		AddStringInternal(string);
-		UncompressedStringStorage::UpdateStringStats(buffer_collection.segment->GetStatsMutable(), stats_writer, string);
+		UncompressedStringStorage::UpdateStringStats(buffer_collection.segment->GetStatsMutable(), stats_writer,
+		                                             string);
 	}
 
 	void NewPage(bool additional_data_page = false) {

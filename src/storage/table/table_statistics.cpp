@@ -280,7 +280,7 @@ unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {
 	return make_uniq<TableStatisticsLock>(*stats_lock);
 }
 
-bool TableStatistics::Empty() {
+bool TableStatistics::Empty() const {
 	D_ASSERT(column_stats.empty() == (stats_lock.get() == nullptr));
 	return column_stats.empty();
 }
