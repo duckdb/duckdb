@@ -539,8 +539,7 @@ require windows: 2
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("running 2 configs", proc.stdout)
-        self.assertIn("[test/configs/a.json] found 1 tests", proc.stdout)
-        self.assertIn("[test/configs/b.json] found 1 tests", proc.stdout)
+        self.assertEqual(proc.stdout.count("found 1 tests"), 2)
         self.assertIn("all 2 config runs passed", proc.stdout)
 
     def test_multiple_test_configs_aggregate_failure(self):

@@ -657,12 +657,10 @@ def run_single_config(
             merged_names = {test.name for test in tests}
             base_names = {test.name for test in load_tests(args.test_list)}
             added_test_count = len(merged_names - base_names)
-            print(
-                f"[{invocation.label}] added {added_test_count} tests from --changed-tests file to the smoke test run"
-            )
+            print(f"added {added_test_count} tests from --changed-tests file to the smoke test run")
         computed_batch_size = compute_batch_size(len(tests), config)
 
-        print(f"[{invocation.label}] found {len(tests)} tests")
+        print(f"found {len(tests)} tests")
         config_values = asdict(config)
         config_values["batch_size"] = computed_batch_size
         config_values.pop("test_list", None)
@@ -670,7 +668,7 @@ def run_single_config(
         config_values.pop("test_command", None)
         config_values = {k: v for k, v in config_values.items() if v is not None and v != "" and v != []}
         config_output = ", ".join(f"{key}={value}" for key, value in config_values.items())
-        print(f"[{invocation.label}] config: {config_output}")
+        print(f"config: {config_output}")
 
         batches = list(chunked(tests, computed_batch_size))
         return run_tests(config, batches)
@@ -698,7 +696,8 @@ def main_impl(argv: list[str] | None = None):
 
     test_list_files = [path for path in [args.test_list, args.changed_tests] if path is not None]
     config_invocations = build_config_invocations(args.test_config, args.test_flags)
-    is_github_ci = bool(os.environ.get("CI"))
+    is_ci = bool(os.environ.get("CI"))
+    use_config_groups = is_ci and len(config_invocations) > 1
     max_failures = args.max_failures
     if args.fail_fast:
         max_failures = 1
@@ -725,7 +724,7 @@ def main_impl(argv: list[str] | None = None):
             print("interrupted")
             return 130
         group_open = False
-        if is_github_ci:
+        if use_config_groups:
             print(f"::group::test config: {invocation.label}")
             group_open = True
         try:
@@ -741,7 +740,7 @@ def main_impl(argv: list[str] | None = None):
                 invocation,
             )
         except Exception as exc:
-            print(f"[{invocation.label}] error: {exc}")
+            print(f"error: {exc}")
             returncode = 1
         failed = returncode not in (0, 130)
         if failed:
