@@ -158,7 +158,8 @@ jobs:
         name: Configure External extensions
         env:
           CONFIG_FILE: .github/config/external_extensions.cmake
-          DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;windows_amd64;linux_amd64_musl'
+          # Temporarily allow linux_amd64_musl so the External Extensions matrix leg can run on alpine.
+          DEFAULT_EXCLUDE_ARCHS: 'wasm_mvp;wasm_eh;wasm_threads;windows_amd64_mingw;windows_amd64'
         run: |
           echo "exclude_archs=$DEFAULT_EXCLUDE_ARCHS;$EXTRA_EXCLUDE_ARCHS" >> "$GITHUB_OUTPUT"
           external_extensions="$(<"$CONFIG_FILE")"
