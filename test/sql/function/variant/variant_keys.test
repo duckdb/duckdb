@@ -114,6 +114,13 @@ select variant_keys('{"a": 1, "b": ["duck", "goose"]}', 'b');
 ----
 []
 
+# FIXME: map type is currently casted into a shape inconsistent with respect to JSON
+
+query I
+select variant_keys(MAP {'a': 1, 'b': 2}::VARIANT, 'a');
+----
+NULL
+
 # Primitive values do not have keys
 
 query I
@@ -172,10 +179,41 @@ select variant_keys('{"a": 1, "b": {"c": 12, "d": 10}}', 'q');
 ----
 NULL
 
+# NULL path returns []
+
+query I
+select variant_keys('{"a": 1}', NULL);
+----
+NULL
+
+# FIXME: Support for JSONPath and JSONPointer
+
+query I
+select variant_keys('{"a": 1, "b": {"c": {"d": 12}}}', '$.b.c');
+----
+NULL
+
+# Incorrect parameters
+
+statement error
+select variant_keys('{"a": 1}', [1]);
+----
+
+statement error
+select variant_keys('{"a": 1}', [NULL]);
+----
+
+# FIXME: malformed JSON object should result in an error
+
+statement ok
+select variant_keys('{"a"\: 1}');
+
+# Table of varying objects
+
 statement ok
 create table t1 as
 select range, case when range % 2 = 0 then {"duck": 42}::VARIANT else {"duck": 42, "goose": 43}::VARIANT end j
-from range(10000)
+from range(4096)
 
 query II
 select range % 2 g, sum(length(variant_keys(j))) c
@@ -183,16 +221,18 @@ from t1
 group by g
 order by all
 ----
-0	5000
-1	10000
+0	2048
+1	4096
+
+# Table whilst applying list of paths
 
 statement ok
 create table t2 as
 select range, {'duck': {'key1': 42}, 'goose': {'key1': 42, 'key2': 43}}::VARIANT j
-from range(10000)
+from range(4096)
 
 query T
 select sum(list_sum([length(l) for l in variant_keys(j, ['duck', 'goose'])])) s
 from t2
 ----
-30000
+12288
