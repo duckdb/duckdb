@@ -1164,7 +1164,7 @@ jobs:
           EXPORT_DYNAMIC_SYMBOLS: 1
           REDUCE_SYMBOLS: 1
           EXTENSION_STATIC_BUILD: 0
-          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
+          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
           DISABLE_STRING_INLINE: 1
           DESTROY_UNPINNED_BLOCKS: 1
           ALTERNATIVE_VERIFY: 1
@@ -1289,7 +1289,7 @@ jobs:
       env:
         BUILD_JEMALLOC: 1
         THREADSAN: 1
-        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
       with:
         build-type: reldebug
         build: python3 scripts/ci/retry.py -- make reldebug
