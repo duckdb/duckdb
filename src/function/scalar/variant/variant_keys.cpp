@@ -2,7 +2,6 @@
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
-#include "duckdb/function/cast/variant/to_variant.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
