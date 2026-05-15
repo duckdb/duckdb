@@ -1,5 +1,5 @@
 # name: test/sql/storage/extended_string_stats.test
-# description: Test storage of approx unique statistic
+# description: Test storage of extended (new) string stats
 # group: [storage]
 
 load {TEST_DIR}/extended_string_stats.db readwrite v2.0.0
@@ -12,18 +12,18 @@ create table test as from (values
 	) t(s)
 	;
 
-query IIII
-select s.min, s.max, s.max_string_length, s.total_string_length from (select stats(s) s from test limit 1)
+query IIIII
+select s.min, s.max, s.min_string_length, s.max_string_length, s.total_string_length from (select stats(s) s from test limit 1)
 ----
-hello world	this is a lo	21	32
+hello world	this is a lo	11	21	32
 
 statement ok
-insert into test values ('how about this one')
+insert into test values ('how about this one'), ('')
 
-query I
-select s.total_string_length from (select stats(s) s from test limit 1)
+query II
+select s.min_string_length, s.total_string_length from (select stats(s) s from test limit 1)
 ----
-50
+0	50
 
 # update
 statement ok
@@ -46,7 +46,7 @@ insert into test from (values
 	) t(s)
 	;
 
-query I
-select s.total_string_length from (select stats(s) s from test limit 1)
+query II
+select s.min_string_length, s.total_string_length from (select stats(s) s from test limit 1)
 ----
-32
+11	32

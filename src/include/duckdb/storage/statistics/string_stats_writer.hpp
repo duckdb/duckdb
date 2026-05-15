@@ -64,6 +64,9 @@ struct StringStatsWriter {
 		if (size > max_string_length) {
 			max_string_length = UnsafeNumericCast<uint32_t>(size);
 		}
+		if (size < min_string_length) {
+			min_string_length = size;
+		}
 		total_string_length += size;
 		if (is_varchar && !has_unicode) {
 			auto unicode = Utf8Proc::Analyze(const_char_ptr_cast(data), size);
@@ -96,6 +99,7 @@ private:
 	bool is_set = false;
 	bool has_unicode = false;
 	uint32_t max_string_length = 0;
+	uint32_t min_string_length = StringStatsData::MAXIMUM_MIN_STRING_LENGTH;
 	idx_t total_string_length = 0;
 	bool is_varchar = true;
 	bool is_geometry = false;

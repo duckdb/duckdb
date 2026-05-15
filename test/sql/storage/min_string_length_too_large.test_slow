@@ -1,0 +1,53 @@
+# name: test/sql/storage/min_string_length_too_large.test_slow
+# description: Test storage of approx unique statistic
+# group: [storage]
+
+load {TEST_DIR}/min_string_length_too_large.db readwrite v2.0.0
+
+# min string length is capped at 2**21 - 1
+# this string length barely fits in the min
+statement ok
+create table test as select repeat('a', 2097150) s;
+
+query IIIII
+select s.min, s.max, s.min_string_length, s.max_string_length, s.total_string_length from (select stats(s) s from test limit 1)
+----
+aaaaaaaaaaaa	aaaaaaaaaaaa	2097150	2097150	2097150
+
+restart
+
+query IIIII
+select s.min, s.max, s.min_string_length, s.max_string_length, s.total_string_length from (select stats(s) s from test limit 1)
+----
+aaaaaaaaaaaa	aaaaaaaaaaaa	2097150	2097150	2097150
+
+statement ok
+drop table test
+
+# if the string length is too big it does not fit
+statement ok
+create table test as select repeat('a', 2097151) s;
+
+restart
+
+# no min string length
+query IIIII
+select s.min, s.max, s.min_string_length, s.max_string_length, s.total_string_length from (select stats(s) s from test limit 1)
+----
+aaaaaaaaaaaa	aaaaaaaaaaaa	NULL	2097150	2097150
+
+# also not if we insert new stuff
+statement ok
+insert into test values ('hello world');
+
+query I
+select s.min_string_length from (select stats(s) s from test limit 1)
+----
+NULL
+
+restart
+
+query I
+select s.min_string_length from (select stats(s) s from test limit 1)
+----
+NULL
