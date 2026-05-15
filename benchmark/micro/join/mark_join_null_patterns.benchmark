@@ -7,7 +7,6 @@ group micro
 subgroup join
 
 load
-PRAGMA threads=1;
 CREATE TABLE lhs AS
 SELECT (i % 8192)::INTEGER AS a, ((i / 8192) % 8192)::INTEGER AS b
 FROM range(5000000) tbl(i);
