@@ -69,7 +69,10 @@ jobs:
       CXX: g++-10
       GEN: ninja
       BUILD_BENCHMARK: 1
-      BUILD_JEMALLOC: 1
+      # Regression compares against the base branch binary. Keep this on the
+      # standard allocator so allocator changes do not look like query
+      # performance regressions.
+      BUILD_JEMALLOC: 0
       CORE_EXTENSIONS: "json;tpch;tpcds;httpfs;inet;icu"
 
     steps:
@@ -360,5 +363,4 @@ jobs:
         shell: bash
         run: |
           python scripts/plan_cost_runner.py --old duckdb/build/release/duckdb --new build/release/duckdb --dir=benchmark/tpch_plan_cost
-
 

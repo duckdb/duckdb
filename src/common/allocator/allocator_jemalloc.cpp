@@ -1,5 +1,5 @@
 #include "duckdb/common/allocator.hpp"
-#include "duckdb/common/operator/numeric_cast.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 #include <thread>
 #include <cstdint>
@@ -30,6 +30,14 @@ namespace duckdb {
 
 static string PurgeArenaString(idx_t arena_idx) {
 	return StringUtil::Format("arena.%llu.purge", arena_idx);
+}
+
+static void JemallocCTL(const char *name, void *old_ptr, size_t *old_len, void *new_ptr, size_t new_len) {
+	if (duckdb_je_mallctl(name, old_ptr, old_len, new_ptr, new_len) != 0) {
+#ifdef DEBUG
+		throw InternalException("je_mallctl failed for setting \"%s\"", name);
+#endif
+	}
 }
 
 template <class T>
