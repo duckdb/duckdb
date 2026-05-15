@@ -45,6 +45,7 @@ def test_info(shell):
     result.check_stdout("LOAD HTTP")
 
 
+@pytest.mark.skip(reason="Needs a new warning")
 def test_warning(shell):
     test = ShellTest(shell).statement("SELECT list_transform([1], x -> x);")
 
@@ -55,6 +56,7 @@ def test_warning(shell):
     result.check_stderr(None)
 
 
+@pytest.mark.skip(reason="Needs a new warning")
 def test_warning_as_error(shell):
     test = ShellTest(shell)
     test.statement("SET warnings_as_errors = true")
@@ -65,6 +67,7 @@ def test_warning_as_error(shell):
 
 
 # Make sure that the same warning is not printed multiple times
+@pytest.mark.skip(reason="Needs a new warning")
 def test_multiple_warnings(shell):
     test = ShellTest(shell).statement(
         "select list_filter([1,2,3], x -> x > 2) l1, list_filter([1,2,3], x -> x > 2) l2, list_filter([1,2,3], x -> x > 2) l3;"

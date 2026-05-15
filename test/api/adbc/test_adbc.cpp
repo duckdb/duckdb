@@ -3170,7 +3170,7 @@ TEST_CASE("Test AdbcConnectionGetObjects - empty list not NULL", "[adbc]") {
 		                                         "nonexistent_table", nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		auto res = db.Query(R"(
-			SELECT list_transform(catalog_db_schemas, s -> s.db_schema_tables) AS tables
+			SELECT list_transform(catalog_db_schemas, lambda s: s.db_schema_tables) AS tables
 			FROM result WHERE catalog_name = 'test_empty_list'
 		)");
 		REQUIRE(res->RowCount() == 1);
