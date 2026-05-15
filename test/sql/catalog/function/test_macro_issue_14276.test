@@ -5,6 +5,14 @@
 statement ok
 CREATE OR REPLACE MACRO extract_many(x, y) AS (SELECT struct_pack(*COLUMNS(z -> z in y)) FROM (SELECT unnest(x)));
 
+statement error
+SELECT ['foo', 'baz'] AS k, extract_many(x, k) FROM (SELECT {'foo': 1, 'bar': 2, 'baz': 3} AS x);
+----
+Deprecated lambda arrow
+
+statement ok
+CREATE OR REPLACE MACRO extract_many(x, y) AS (SELECT struct_pack(*COLUMNS(lambda z: z in y)) FROM (SELECT unnest(x)));
+
 query II
 SELECT ['foo', 'baz'] AS k, extract_many(x, k) FROM (SELECT {'foo': 1, 'bar': 2, 'baz': 3} AS x);
 ----

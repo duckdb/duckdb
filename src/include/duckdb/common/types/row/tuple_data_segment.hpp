@@ -161,6 +161,8 @@ public:
 	idx_t SizeInBytes() const;
 	//! Unpins all held pins
 	void Unpin();
+	//! Reset this segment for reuse, clearing chunk metadata while keeping the segment object alive
+	void Reset();
 
 	//! Verify counts of the chunks in this segment
 	void Verify() const;

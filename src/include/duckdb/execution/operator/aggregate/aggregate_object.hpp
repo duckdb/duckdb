@@ -26,6 +26,7 @@ struct FunctionDataWrapper {
 struct AggregateObject { // NOLINT: work-around bug in clang-tidy
 	AggregateObject(BoundAggregateFunction function, FunctionData *bind_data, idx_t child_count, idx_t payload_size,
 	                AggregateType aggr_type, PhysicalType return_type, Expression *filter = nullptr);
+	explicit AggregateObject(BoundAggregateExpression &aggr);
 	explicit AggregateObject(BoundAggregateExpression *aggr);
 	explicit AggregateObject(const BoundWindowExpression &window);
 

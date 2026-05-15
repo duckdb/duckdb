@@ -177,6 +177,15 @@ static string GetAlias(const TableFunctionRef &ref) {
 	return string();
 }
 
+static void ApplyPostgresSetofAliasCompatibility(const TableFunction &table_function, const TableFunctionRef &ref,
+                                                 vector<string> &return_names) {
+	if (table_function.return_type != TableFunctionReturnType::SET_RETURNING_FUNCTION || ref.alias.empty() ||
+	    !ref.column_name_alias.empty() || return_names.size() != 1) {
+		return;
+	}
+	return_names[0] = ref.alias;
+}
+
 BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
                                                  vector<Value> parameters, named_parameter_map_t named_parameters,
                                                  vector<LogicalType> input_table_types,
@@ -210,6 +219,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 						    table_function.name);
 					}
 				}
+				ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
 				BoundStatement result;
 				bind_context.AddGenericBinding(bind_index, function_name, return_names, new_plan->types);
 				result.names = return_names;
@@ -270,6 +280,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
 		                        table_function.name);
 	}
+	ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
 	// overwrite the names with any supplied aliases
 	for (idx_t i = 0; i < column_name_alias.size() && i < return_names.size(); i++) {
 		return_names[i] = column_name_alias[i];

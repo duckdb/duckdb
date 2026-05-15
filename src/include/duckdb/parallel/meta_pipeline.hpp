@@ -76,6 +76,8 @@ public:
 	bool HasFinishEvent(Pipeline &pipeline) const;
 	//! Whether this pipeline is part of a PipelineFinishEvent
 	optional_ptr<Pipeline> GetFinishGroup(Pipeline &pipeline) const;
+	//! Get the child MetaPipelines
+	const vector<shared_ptr<MetaPipeline>> &GetChildren() const;
 
 public:
 	//! Build the MetaPipeline with 'op' as the first operator (excl. the shared sink)
