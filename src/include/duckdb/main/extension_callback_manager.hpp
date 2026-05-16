@@ -33,6 +33,9 @@ public:
 	ExtensionCallbackManager();
 	~ExtensionCallbackManager();
 
+	void AddExtensionSchema(const string &schema);
+	vector<string> GetExtensionSchemas() const;
+
 	static ExtensionCallbackManager &Get(ClientContext &context);
 	static ExtensionCallbackManager &Get(DatabaseInstance &db);
 	static const ExtensionCallbackManager &Get(const ClientContext &context);
@@ -55,6 +58,7 @@ public:
 private:
 	mutex registry_lock;
 	shared_ptr<ExtensionCallbackRegistry> callback_registry;
+	vector<string> extension_schemas;
 };
 
 template <class T>
