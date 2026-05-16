@@ -123,6 +123,10 @@ public:
 		delim_index = 0;
 	}
 
+	void SetDelimIndex(idx_t index) {
+		delim_index = index;
+	}
+
 	idx_t GetDelimIndex() const {
 		return delim_index;
 	}

@@ -14,8 +14,6 @@
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
 #include "duckdb/planner/subquery/rewrite_cte_scan.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
-#include "duckdb/execution/column_binding_resolver.hpp"
-#include "duckdb/optimizer/column_binding_replacer.hpp"
 
 namespace duckdb {
 
@@ -372,6 +370,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// we reached a node without correlated expressions
 		// we can eliminate the dependent join now and create a simple cross product
 		// now create the duplicate eliminated scan for this node
+		bool correlated_payload_in_suffix = false;
 		if (plan->type == LogicalOperatorType::LOGICAL_CTE_REF) {
 			auto &op = plan->Cast<LogicalCTERef>();
 
@@ -379,8 +378,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			if (rec_cte != binder.recursive_ctes.end()) {
 				D_ASSERT(rec_cte->second->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
 				         rec_cte->second->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE);
-
 				auto &rec_cte_op = rec_cte->second->Cast<LogicalCTE>();
+				correlated_payload_in_suffix = rec_cte_op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE;
 				if (op.correlated_columns == 0) {
 					RewriteCTEScan cte_rewriter(op.cte_index, rec_cte_op.correlated_columns,
 					                            CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS);
@@ -409,13 +408,19 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 			auto left_binding =
 			    ColumnBinding(cteref.table_index, cteref.chunk_types.size() - cteref.correlated_columns);
-			// add the correlated columns to the join conditions
+			if (cteref.correlated_columns > correlated_columns.size()) {
+				throw InternalException("Unexpected CTE ref correlation payload layout");
+			}
+			idx_t right_offset =
+			    correlated_payload_in_suffix ? correlated_columns.size() - cteref.correlated_columns : 0;
 			for (idx_t i = 0; i < cteref.correlated_columns; i++) {
+				auto &right_column = correlated_columns[right_offset + i];
 				JoinCondition cond;
 				cond.left = make_uniq<BoundColumnRefExpression>(
-				    correlated_columns[i].type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
+				    right_column.type, ColumnBinding(left_binding.table_index, left_binding.column_index + i));
 				cond.right = make_uniq<BoundColumnRefExpression>(
-				    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+				    right_column.type,
+				    ColumnBinding(base_binding.table_index, base_binding.column_index + right_offset + i));
 				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 				join->conditions.push_back(std::move(cond));
 			}

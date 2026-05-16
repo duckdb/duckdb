@@ -30,6 +30,56 @@ static bool ContainsCTERef(LogicalOperator &op, idx_t table_index) {
 	return false;
 }
 
+static CorrelatedColumns ReorderCorrelatedColumns(const CorrelatedColumns &current_columns,
+                                                  const CorrelatedColumns &target_columns, bool target_first) {
+	vector<CorrelatedColumnInfo> cte_columns;
+	cte_columns.reserve(target_columns.size());
+	vector<bool> used(current_columns.size(), false);
+	for (const auto &target_column : target_columns) {
+		idx_t idx = DConstants::INVALID_INDEX;
+		for (idx_t i = 0; i < current_columns.size(); i++) {
+			if (current_columns[i].binding == target_column.binding) {
+				idx = i;
+				break;
+			}
+		}
+		if (idx != DConstants::INVALID_INDEX) {
+			cte_columns.push_back(current_columns[idx]);
+			used[idx] = true;
+		} else {
+			cte_columns.push_back(target_column);
+		}
+	}
+
+	vector<CorrelatedColumnInfo> other_columns;
+	for (idx_t i = 0; i < current_columns.size(); i++) {
+		if (!used[i]) {
+			other_columns.push_back(current_columns[i]);
+		}
+	}
+
+	CorrelatedColumns reordered;
+	auto &first = target_first ? cte_columns : other_columns;
+	auto &second = target_first ? other_columns : cte_columns;
+	for (auto &column : first) {
+		reordered.AddColumnToBack(std::move(column));
+	}
+	for (auto &column : second) {
+		reordered.AddColumnToBack(std::move(column));
+	}
+
+	if (current_columns.GetDelimIndex() < current_columns.size()) {
+		auto delim_binding = current_columns[current_columns.GetDelimIndex()].binding;
+		for (idx_t i = 0; i < reordered.size(); i++) {
+			if (reordered[i].binding == delim_binding) {
+				reordered.SetDelimIndex(i);
+				break;
+			}
+		}
+	}
+	return reordered;
+}
+
 RewriteCTEScan::RewriteCTEScan(idx_t table_index, const CorrelatedColumns &correlated_columns, CTEScanRewriteMode mode)
     : table_index(table_index), correlated_columns(correlated_columns), mode(mode) {
 }
@@ -66,30 +116,8 @@ void RewriteCTEScan::VisitOperator(LogicalOperator &op) {
 			}
 		}
 
-		for (auto &c : correlated_columns) {
-			bool contains_binding = false;
-			for (auto &col : join.correlated_columns) {
-				if (col.binding == c.binding) {
-					contains_binding = true;
-					break;
-				}
-			}
-			// We only add new columns
-			if (!contains_binding) {
-				CorrelatedColumnInfo corr = c;
-				// NOTE: correlated_map uses positional indices from correlated_columns.
-				// For recursive CTEs we must prepend to preserve the expected ordering
-				// during recursive rewrites. For non-recursive CTEs we append to keep
-				// existing indices stable.
-				if (mode == CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS) {
-					join.correlated_columns.AddColumn(std::move(corr));
-				} else if (mode == CTEScanRewriteMode::WITH_NON_RECURSIVE_DEPENDENT_JOINS) {
-					join.correlated_columns.AddColumnToBack(std::move(corr));
-				} else {
-					throw InternalException("Unsupported CTEScanRewriteMode in RewriteCTEScan");
-				}
-			}
-		}
+		join.correlated_columns = ReorderCorrelatedColumns(join.correlated_columns, correlated_columns,
+		                                                   mode == CTEScanRewriteMode::WITH_RECURSIVE_DEPENDENT_JOINS);
 	} else if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN && mode != CTEScanRewriteMode::CTE_REF_ONLY) {
 		throw InternalException("Unsupported CTEScanRewriteMode in RewriteCTEScan");
 	}
