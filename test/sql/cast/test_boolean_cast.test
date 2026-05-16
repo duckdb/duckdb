@@ -225,3 +225,32 @@ SELECT CAST(CAST('0' AS UHUGEINT) AS BOOLEAN)
 ----
 0
 
+# Issue #22565 — ASCII whitespace must be trimmed before parse, so
+# padded boolean spellings parse identically to their unpadded form.
+# Mirrors the existing behaviour of TryIntegerCast on padded numerics.
+
+query TTTTTTTT
+SELECT
+	TRY_CAST('  true  '  AS BOOLEAN),
+	TRY_CAST(' true'     AS BOOLEAN),
+	TRY_CAST('true '     AS BOOLEAN),
+	TRY_CAST('  false  ' AS BOOLEAN),
+	TRY_CAST('  t  '     AS BOOLEAN),
+	TRY_CAST('  yes  '   AS BOOLEAN),
+	TRY_CAST('  no  '    AS BOOLEAN),
+	TRY_CAST(e'\ttrue\n' AS BOOLEAN);
+----
+true	true	true	false	true	true	false	true
+
+# Strict CAST surrounded by whitespace must succeed too (no error).
+query T
+SELECT CAST('  true  ' AS BOOLEAN)
+----
+true
+
+# Surrounding whitespace must not change rejection of garbage —
+# trimmed empty / unrecognised inputs still fail.
+statement error
+SELECT CAST('  garbage  ' AS BOOLEAN)
+----
+
