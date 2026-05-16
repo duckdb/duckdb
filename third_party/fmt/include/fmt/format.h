@@ -321,24 +321,13 @@ inline typename Container::value_type* get_data(Container& c) {
   return c.data();
 }
 
-#ifdef _SECURE_SCL
-// Make a checked iterator to avoid MSVC warnings.
-template <typename T> using checked_ptr = stdext::checked_array_iterator<T*>;
-template <typename T> checked_ptr<T> make_checked(T* p, std::size_t size) {
-  return {p, size};
-}
-#else
-template <typename T> using checked_ptr = T*;
-template <typename T> inline T* make_checked(T* p, std::size_t) { return p; }
-#endif
-
 template <typename Container, FMT_ENABLE_IF(is_contiguous<Container>::value)>
-inline checked_ptr<typename Container::value_type> reserve(
+inline typename Container::value_type* reserve(
     std::back_insert_iterator<Container>& it, std::size_t n) {
   Container& c = get_container(it);
   std::size_t size = c.size();
   c.resize(size + n);
-  return make_checked(get_data(c) + size, n);
+  return get_data(c) + size;
 }
 
 template <typename Iterator>
@@ -540,7 +529,7 @@ template <typename U>
 void buffer<T>::append(const U* begin, const U* end) {
   std::size_t new_size = size_ + to_unsigned(end - begin);
   reserve(new_size);
-  std::uninitialized_copy(begin, end, make_checked(ptr_, capacity_) + size_);
+  std::uninitialized_copy(begin, end, ptr_ + size_);
   size_ = new_size;
 }
 }  // namespace internal
@@ -642,7 +631,7 @@ class basic_memory_buffer : private Allocator, public internal::buffer<T> {
     if (data == other.store_) {
       this->set(store_, capacity);
       std::uninitialized_copy(other.store_, other.store_ + size,
-                              internal::make_checked(store_, capacity));
+                              store_);
     } else {
       this->set(data, capacity);
       // Set pointer to the inline array so that delete is not called
@@ -689,7 +678,7 @@ void basic_memory_buffer<T, SIZE, Allocator>::grow(std::size_t size) {
   T* new_data = std::allocator_traits<Allocator>::allocate(*this, new_capacity);
   // The following code doesn't throw, so the raw pointer above doesn't leak.
   std::uninitialized_copy(old_data, old_data + this->size(),
-                          internal::make_checked(new_data, new_capacity));
+                          new_data);
   this->set(new_data, new_capacity);
   // deallocate must not throw according to the standard, but even if it does,
   // the buffer already uses the new storage and will deallocate it in
@@ -1565,7 +1554,7 @@ template <typename Range> class basic_writer {
               }
               buffer -= s.size();
               std::uninitialized_copy(s.data(), s.data() + s.size(),
-                                      make_checked(buffer, s.size()));
+                                      buffer);
             });
       }
     };
