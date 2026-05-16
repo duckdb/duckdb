@@ -315,7 +315,7 @@ bool ClusteredAggrState::TryBuild(ClusteredAggr &clustered, const uint64_t *grou
 	return false;
 }
 
-const DictProps *ClusteredAggrState::GetDictProps(const Vector &input) const {
+optional_ptr<const DictProps> ClusteredAggrState::GetDictProps(const Vector &input) const {
 	if (input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
 		return nullptr;
 	}

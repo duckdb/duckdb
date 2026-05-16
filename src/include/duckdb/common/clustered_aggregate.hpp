@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -92,7 +93,7 @@ struct ClusteredAggrState {
 
 	void Initialize();
 	bool TryBuild(ClusteredAggr &clustered, const uint64_t *group_ids, idx_t count);
-	const DictProps *GetDictProps(const Vector &input) const;
+	optional_ptr<const DictProps> GetDictProps(const Vector &input) const;
 };
 
 } // namespace duckdb

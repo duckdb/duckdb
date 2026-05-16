@@ -627,7 +627,7 @@ public:
 			case VectorType::DICTIONARY_VECTOR: {
 				if constexpr (HasI64HugeintSumFastPath<INPUT_TYPE, OP>::value) {
 					if (clustered.state) {
-						const auto *props = clustered.state->GetDictProps(input);
+						auto props = clustered.state->GetDictProps(input);
 						if (props && *props) {
 							OP::template ExecuteDictI64HugeintSum<STATE_TYPE>(input, clustered, props->get());
 							return;
