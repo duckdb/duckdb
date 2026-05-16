@@ -840,7 +840,11 @@ void RowGroupCollection::Update(TransactionData transaction, DuckTableEntry &tab
 		auto l = stats.GetLock();
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto column_id = column_ids[i];
-			stats.MergeStats(*l, column_id.index, *current_row_group.GetStatistics(column_id.index));
+			// Use EXPAND_BOUNDS here: the row group stats include original data already counted in collection stats,
+			// so additive stats (like total_string_length) cannot be maintained correctly here. EXPAND_BOUNDS
+			// correctly expands min/max bounds while invalidating total_string_length until the next checkpoint.
+			stats.MergeStats(*l, column_id.index, *current_row_group.GetStatistics(column_id.index),
+			                 StatsMergeType::EXPAND_BOUNDS);
 		}
 	} while (pos < updates.size());
 }

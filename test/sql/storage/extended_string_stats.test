@@ -29,6 +29,11 @@ select s.min_string_length, s.total_string_length from (select stats(s) s from t
 statement ok
 update test set s='my new bigger string' where s='hello world'
 
+# total_string_length is only exact after a checkpoint when updates have occurred
+# (updates cannot maintain the exact sum without knowing old string lengths)
+statement ok
+CHECKPOINT
+
 query I
 select s.total_string_length from (select stats(s) s from test limit 1)
 ----
