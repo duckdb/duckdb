@@ -3,6 +3,7 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/logging/log_manager.hpp"
@@ -151,6 +152,16 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 	}
 
 	sink_collection->Combine(*other.sink_collection);
+
+	// Combine null-bearing keys captured for non-correlated MARK joins.
+	if (other.mark_join_null_keys) {
+		lock_guard<mutex> guard(mark_join_null_keys_lock);
+		if (!mark_join_null_keys) {
+			mark_join_null_keys = std::move(other.mark_join_null_keys);
+		} else {
+			mark_join_null_keys->Combine(*other.mark_join_null_keys);
+		}
+	}
 }
 
 static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const idx_t &count, const idx_t &bitmask) {
@@ -438,6 +449,36 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	idx_t added_count = PrepareKeys(keys, append_state.chunk_state.vector_data, current_sel, sel, true);
 	if (added_count < keys.size()) {
 		has_null = true;
+		// For non-correlated MARK joins, preserve the keys of the rows that were filtered for
+		// NULL so we can refine "is the probe potentially matched through NULL" decisions in
+		// ConstructMarkJoinResult. The hash table itself can't carry these (NULLs can't hash-
+		// match anything); without them we'd have to fall back to the over-conservative
+		// "any right NULL → all non-matched probes become NULL" rule.
+		if (join_type == JoinType::MARK && correlated_mark_join_info.correlated_types.empty()) {
+			// current_sel is the kept-rows selection (sorted ascending); compute the inverse.
+			SelectionVector dropped_sel(keys.size() - added_count);
+			idx_t kept_idx = 0;
+			idx_t dropped_count = 0;
+			for (idx_t i = 0; i < keys.size(); i++) {
+				if (kept_idx < added_count && current_sel->get_index(kept_idx) == i) {
+					kept_idx++;
+				} else {
+					dropped_sel.set_index(dropped_count++, i);
+				}
+			}
+			D_ASSERT(dropped_count == keys.size() - added_count);
+
+			DataChunk null_keys_chunk;
+			null_keys_chunk.InitializeEmpty(keys.GetTypes());
+			null_keys_chunk.Slice(keys, dropped_sel, dropped_count);
+			null_keys_chunk.Flatten();
+
+			lock_guard<mutex> guard(mark_join_null_keys_lock);
+			if (!mark_join_null_keys) {
+				mark_join_null_keys = make_uniq<ColumnDataCollection>(buffer_manager, keys.GetTypes());
+			}
+			mark_join_null_keys->Append(null_keys_chunk);
+		}
 	}
 	if (added_count == 0) {
 		return;
@@ -1360,6 +1401,95 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_da
 	finished = true;
 }
 
+// Helper: refine the mark vector for non-matched probes by checking against build-side rows
+// whose keys had NULL in some column (and were therefore filtered out of the hash table). A
+// non-matched probe is reported as NULL only if it could plausibly match one of these rows
+// through their NULL columns; otherwise it stays FALSE. Without this check we'd fall back to
+// the over-conservative "any rhs NULL → all non-matched probes are NULL" rule.
+//
+// Preconditions: mark_vector is FLAT BOOLEAN. mask must already reflect probe-side NULL keys
+// (those rows are skipped). bool_result[i] reflects whether probe i found an exact match.
+static void RefineMarkResultWithNullKeys(DataChunk &join_keys, ColumnDataCollection &null_keys, Vector &mark_vector,
+                                         idx_t count) {
+	if (null_keys.Count() == 0) {
+		return;
+	}
+	auto bool_result = FlatVector::GetDataMutable<bool>(mark_vector);
+	auto &mask = FlatVector::ValidityMutable(mark_vector);
+
+	const idx_t key_count = join_keys.ColumnCount();
+	vector<UnifiedVectorFormat> probe_formats(key_count);
+	for (idx_t c = 0; c < key_count; c++) {
+		join_keys.data[c].ToUnifiedFormat(probe_formats[c]);
+	}
+
+	ColumnDataScanState scan_state;
+	DataChunk null_keys_chunk;
+	null_keys.InitializeScan(scan_state);
+	null_keys.InitializeScanChunk(null_keys_chunk);
+
+	while (null_keys.Scan(scan_state, null_keys_chunk)) {
+		const idx_t null_count = null_keys_chunk.size();
+		vector<UnifiedVectorFormat> null_formats(key_count);
+		for (idx_t c = 0; c < key_count; c++) {
+			null_keys_chunk.data[c].ToUnifiedFormat(null_formats[c]);
+		}
+		for (idx_t i = 0; i < count; i++) {
+			if (bool_result[i] || !mask.RowIsValid(i)) {
+				continue;
+			}
+			bool potential_match = false;
+			for (idx_t j = 0; j < null_count; j++) {
+				bool ok = true;
+				for (idx_t c = 0; c < key_count; c++) {
+					auto &nfmt = null_formats[c];
+					auto nidx = nfmt.sel->get_index(j);
+					if (!nfmt.validity.RowIsValid(nidx)) {
+						// Build value is NULL → column unconstrained for matching.
+						continue;
+					}
+					auto &pfmt = probe_formats[c];
+					auto pidx = pfmt.sel->get_index(i);
+					D_ASSERT(pfmt.validity.RowIsValid(pidx));
+					if (!(join_keys.data[c].GetValue(pidx) == null_keys_chunk.data[c].GetValue(nidx))) {
+						ok = false;
+						break;
+					}
+				}
+				if (ok) {
+					potential_match = true;
+					break;
+				}
+			}
+			if (potential_match) {
+				mask.SetInvalid(i);
+			}
+		}
+	}
+}
+
+// Apply probe-side NULL handling: probes with NULL in any join key column produce a NULL
+// mark result regardless of any matches.
+static void ApplyProbeSideNullMask(DataChunk &join_keys, Vector &mark_vector, idx_t count,
+                                   const vector<bool> &null_values_are_equal) {
+	auto &mask = FlatVector::ValidityMutable(mark_vector);
+	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
+		if (null_values_are_equal[col_idx]) {
+			continue;
+		}
+		UnifiedVectorFormat jdata;
+		join_keys.data[col_idx].ToUnifiedFormat(jdata);
+		if (jdata.validity.CanHaveNull()) {
+			for (idx_t i = 0; i < count; i++) {
+				auto jidx = jdata.sel->get_index(i);
+				if (!jdata.validity.RowIsValidUnsafe(jidx)) {
+					mask.SetInvalid(i);
+				}
+			}
+		}
+	}
+}
+
 void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) {
 	// extract OUTPUT columns from probe_data
 	result.SetCardinality(probe_data.size());
@@ -1372,35 +1502,59 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
 	FlatVector::SetSize(mark_vector, count_t(probe_data.size()));
 
-	// first we set the NULL values from the join keys
-	// if there is any NULL in the keys, the result is NULL
 	auto bool_result = FlatVector::GetDataMutable<bool>(mark_vector);
 	auto &mask = FlatVector::ValidityMutable(mark_vector);
-	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
-		if (ht.null_values_are_equal[col_idx]) {
-			continue;
-		}
-		UnifiedVectorFormat jdata;
-		join_keys.data[col_idx].ToUnifiedFormat(jdata);
-		if (jdata.validity.CanHaveNull()) {
-			for (idx_t i = 0; i < join_keys.size(); i++) {
-				auto jidx = jdata.sel->get_index(i);
-				if (!jdata.validity.RowIsValidUnsafe(jidx)) {
-					mask.SetInvalid(i);
-				}
-			}
-		}
-	}
 
-	// now set the remaining entries to either true or false based on whether a match was found
+	// probe-side NULL handling: rows with NULL keys produce NULL regardless of matches
+	ApplyProbeSideNullMask(join_keys, mark_vector, probe_data.size(), ht.null_values_are_equal);
+
+	// initialize bool_result from found_match (set by ScanKeyMatches)
 	D_ASSERT(found_match);
 	for (idx_t i = 0; i < probe_data.size(); i++) {
 		bool_result[i] = found_match[i];
 	}
 
-	// if the right side contains NULL values, the result of any FALSE becomes NULL
-	if (ht.has_null) {
+	// refine non-matched probes against build-side rows that had NULL keys
+	if (ht.mark_join_null_keys) {
+		RefineMarkResultWithNullKeys(join_keys, *ht.mark_join_null_keys, mark_vector, probe_data.size());
+	} else if (ht.has_null) {
+		// fallback for paths that don't populate mark_join_null_keys (e.g. correlated MARK)
 		for (idx_t i = 0; i < probe_data.size(); i++) {
+			if (!bool_result[i]) {
+				mask.SetInvalid(i);
+			}
+		}
+	}
+}
+
+void JoinHashTable::ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk &input, DataChunk &result) {
+	D_ASSERT(join_type == JoinType::MARK);
+	D_ASSERT(result.ColumnCount() == input.ColumnCount() + 1);
+
+	result.SetCardinality(input);
+	for (idx_t i = 0; i < input.ColumnCount(); i++) {
+		result.data[i].Reference(input.data[i]);
+	}
+
+	auto &mark_vector = result.data.back();
+	D_ASSERT(mark_vector.GetType() == LogicalType::BOOLEAN);
+	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::SetSize(mark_vector, count_t(input.size()));
+
+	// HT has no rows → no exact matches; initialize all to false
+	auto bool_result = FlatVector::GetDataMutable<bool>(mark_vector);
+	for (idx_t i = 0; i < input.size(); i++) {
+		bool_result[i] = false;
+	}
+
+	// probe-side NULL handling
+	ApplyProbeSideNullMask(join_keys, mark_vector, input.size(), null_values_are_equal);
+
+	if (mark_join_null_keys) {
+		RefineMarkResultWithNullKeys(join_keys, *mark_join_null_keys, mark_vector, input.size());
+	} else if (has_null) {
+		auto &mask = FlatVector::ValidityMutable(mark_vector);
+		for (idx_t i = 0; i < input.size(); i++) {
 			if (!bool_result[i]) {
 				mask.SetInvalid(i);
 			}

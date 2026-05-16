@@ -329,6 +329,14 @@ public:
 	bool finalized;
 	//! Whether or not any of the key elements contain NULL
 	bool has_null;
+	//! For non-correlated MARK joins: keys of build-side rows that have NULL in any equality
+	//! key column. Such rows are filtered out of the hash table itself (they can never produce a
+	//! hash match), but in mark-join semantics a probe row that finds no exact match must be
+	//! reported as NULL iff some build row could have matched through the NULLs (i.e., for every
+	//! non-NULL key column of that build row, the value equals the probe's). Replaces an
+	//! over-conservative "any right NULL → all non-matched probes become NULL" approximation.
+	unique_ptr<ColumnDataCollection> mark_join_null_keys;
+	mutex mark_join_null_keys_lock;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask = DConstants::INVALID_INDEX;
 	//! Whether or not we error on multiple rows found per match in a SINGLE join
@@ -387,6 +395,13 @@ private:
 	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
 	                    optional_ptr<const SelectionVector> sel, idx_t &count, Vector &pointers_result_v,
 	                    SelectionVector &match_sel, bool has_sel);
+
+public:
+	//! Construct the MARK join result for the case where the hash table is empty (no probe-side
+	//! ScanKeyMatches has run). Mirrors ScanStructure::ConstructMarkJoinResult but with all
+	//! found_match values implicitly false, and refines the rhs-NULL handling using
+	//! mark_join_null_keys when available.
+	void ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk &input, DataChunk &result);
 
 private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v

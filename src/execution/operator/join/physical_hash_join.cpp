@@ -1589,9 +1589,19 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 		if (EmptyResultIfRHSIsEmpty()) {
 			return OperatorResultType::FINISHED;
 		}
-		// for empty result, only need output columns (no predicate evaluation)
 		state.lhs_probe_data.ReferenceColumns(input, lhs_output_columns.col_idxs);
-		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_probe_data, chunk);
+		// MARK joins with build-side NULL keys need the probe-side keys to refine NULL-vs-FALSE
+		// per probe row; the generic empty-result path falls back to the over-conservative
+		// "any rhs NULL → all probes NULL" rule.
+		if (sink.hash_table->join_type == JoinType::MARK && sink.hash_table->mark_join_null_keys &&
+		    sink.hash_table->mark_join_null_keys->Count() > 0) {
+			state.lhs_join_keys.Reset();
+			state.probe_executor.Execute(input, state.lhs_join_keys);
+			sink.hash_table->ConstructEmptyMarkJoinResult(state.lhs_join_keys, state.lhs_probe_data, chunk);
+		} else {
+			ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_probe_data,
+			                         chunk);
+		}
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
@@ -2078,8 +2088,14 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	if (sink.hash_table->Count() == 0 && !gstate.op.EmptyResultIfRHSIsEmpty()) {
 		// for empty result, only need output columns (no predicate evaluation)
 		lhs_probe_data.ReferenceColumns(lhs_probe_chunk, gstate.op.lhs_output_columns.col_idxs);
-		gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, lhs_probe_data,
-		                                   chunk);
+		if (sink.hash_table->join_type == JoinType::MARK && sink.hash_table->mark_join_null_keys &&
+		    sink.hash_table->mark_join_null_keys->Count() > 0) {
+			// lhs_join_keys was populated above by lhs_join_key_executor.Execute
+			sink.hash_table->ConstructEmptyMarkJoinResult(lhs_join_keys, lhs_probe_data, chunk);
+		} else {
+			gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, lhs_probe_data,
+			                                   chunk);
+		}
 		empty_ht_probe_in_progress = true;
 		return;
 	}
