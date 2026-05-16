@@ -52,6 +52,7 @@ enum class OptimizerType : uint32_t {
 	OUTER_JOIN_SIMPLIFICATION = 35,
 	ROW_NUMBER_REWRITER = 36,
 	PARTITIONED_EXECUTION = 37,
+	SCALAR_AGGREGATE_FUSION = 38,
 };
 
 string OptimizerTypeToString(OptimizerType type);
