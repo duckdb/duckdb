@@ -633,7 +633,7 @@ void StringStats::MergeStats(BaseStatistics &stats, string_t &target, StringStat
 	target_type = source_type;
 }
 
-void StringStats::Merge(BaseStatistics &stats, const StringStatsData &other_data) {
+void StringStats::Merge(BaseStatistics &stats, const StringStatsData &other_data, StatsMergeType merge_type) {
 	auto &string_data = GetDataUnsafe(stats);
 
 	// merge min/max
@@ -644,13 +644,18 @@ void StringStats::Merge(BaseStatistics &stats, const StringStatsData &other_data
 	string_data.max_string_length = MaxValue<uint32_t>(string_data.max_string_length, other_data.max_string_length);
 	string_data.has_min_string_length = string_data.has_min_string_length && other_data.has_min_string_length;
 	string_data.min_string_length = MinValue<uint32_t>(string_data.min_string_length, other_data.min_string_length);
-	string_data.has_total_string_length = string_data.has_total_string_length && other_data.has_total_string_length;
-	if (string_data.has_total_string_length) {
-		string_data.total_string_length += other_data.total_string_length;
+	if (merge_type == StatsMergeType::EXPAND_BOUNDS) {
+		// when expanding bounds we cannot sum total_string_length — the other side may overlap with our data
+		string_data.has_total_string_length = false;
+	} else {
+		string_data.has_total_string_length = string_data.has_total_string_length && other_data.has_total_string_length;
+		if (string_data.has_total_string_length) {
+			string_data.total_string_length += other_data.total_string_length;
+		}
 	}
 }
 
-void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
+void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other, StatsMergeType merge_type) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
 	}
@@ -658,7 +663,7 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 		return;
 	}
 	auto &other_data = GetDataUnsafe(other);
-	Merge(stats, other_data);
+	Merge(stats, other_data, merge_type);
 }
 
 string_t ReadWriterStats(const data_t data[], idx_t size, StringStatsType &type) {

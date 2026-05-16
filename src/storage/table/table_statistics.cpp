@@ -165,8 +165,8 @@ void TableStatistics::MergeStats(idx_t i, BaseStatistics &stats) {
 	MergeStats(*l, i, stats);
 }
 
-void TableStatistics::MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatistics &stats) {
-	column_stats[i]->Statistics().Merge(stats);
+void TableStatistics::MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatistics &stats, StatsMergeType merge_type) {
+	column_stats[i]->Statistics().Merge(stats, merge_type);
 }
 
 ColumnStatistics &TableStatistics::GetStats(TableStatisticsLock &lock, idx_t i) {

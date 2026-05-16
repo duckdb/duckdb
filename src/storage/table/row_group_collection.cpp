@@ -1796,12 +1796,14 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	}
 	if (!columns_with_incomplete_stats.empty()) {
 		// for any columns that have incomplete stats we need to merge in the previous global stats to ensure the stats
-		// are correct
+		// are correct — use EXPAND_BOUNDS so additive stats (e.g. total_string_length) are invalidated rather than
+		// double-counted (the collection stats include contributions from all row groups, including those already
+		// merged)
 		auto lock = global_stats.GetLock();
 		for (auto &column_idx : columns_with_incomplete_stats) {
 			auto stats_lock = stats.GetLock();
 			auto &column_stats = stats.GetStats(*stats_lock, column_idx);
-			global_stats.MergeStats(*lock, column_idx, column_stats.Statistics());
+			global_stats.MergeStats(*lock, column_idx, column_stats.Statistics(), StatsMergeType::EXPAND_BOUNDS);
 		}
 	}
 	l.Release();
