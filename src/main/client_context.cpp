@@ -789,11 +789,11 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 			plan = optimizer.Optimize(std::move(plan));
 		}
 
+		plan->ResolveOperatorTypes();
+
 		ColumnBindingResolver resolver;
 		resolver.Verify(*this, *plan);
 		resolver.VisitOperator(*plan);
-
-		plan->ResolveOperatorTypes();
 	});
 	return plan;
 }
