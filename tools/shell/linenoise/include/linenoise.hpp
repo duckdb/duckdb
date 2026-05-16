@@ -94,7 +94,9 @@ public:
 	int Edit();
 
 	static void SetCompletionCallback(linenoiseCompletionCallback *fn);
+	static linenoiseCompletionCallback *GetCompletionCallback();
 	static void SetFormatCallback(linenoiseFormatCallback *fn);
+	static linenoiseFormatCallback *GetFormatCallback();
 
 	static void SetPrompt(const char *continuation, const char *continuationSelected, const char *scrollUpPrompt,
 	                      const char *scrollDownPrompt);

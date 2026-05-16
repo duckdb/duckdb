@@ -3,6 +3,9 @@
 #include "shell_prompt.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_renderer.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
+#include "duckdb/main/shell_extension.hpp"
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
@@ -1063,6 +1066,65 @@ idx_t ShellState::PrintHelp(const char *pattern) {
 			}
 		}
 	}
+	// Also include extension-registered commands
+	if (db && db->instance) {
+		auto &callback_mgr = duckdb::ExtensionCallbackManager::Get(*db->instance);
+		for (auto &ext : callback_mgr.ShellExtensions()) {
+			for (auto &cmd : ext->commands) {
+				// Check glob pattern match (same logic as ShouldPrintCommand)
+				if (cmd.description.empty()) {
+					continue;
+				}
+				if (!glob_pattern.empty() && !StringGlob(glob_pattern.c_str(), cmd.command.c_str())) {
+					continue;
+				}
+				PrintCommandInfo print_info;
+				print_info.command_name = StringUtil::Format(".%s", cmd.command);
+				print_info.first_part = StringUtil::Format(" %s", cmd.usage);
+				print_info.second_part = cmd.description;
+				print_info.first_part_highlight = HighlightElementType::STRING_CONSTANT;
+				print_info_list.push_back(std::move(print_info));
+
+				if (print_extended && !cmd.extra_description.empty()) {
+					// Process extended description with same tab/newline logic
+					PrintCommandInfo current_command;
+					bool first_part = true;
+					bool after_newline = true;
+					for (auto c : cmd.extra_description) {
+						if (c == '\n') {
+							print_info_list.push_back(std::move(current_command));
+							current_command = PrintCommandInfo();
+							first_part = true;
+							after_newline = true;
+						} else if (c == '\t') {
+							if (after_newline) {
+								current_command.first_part += string(SPACING_PER_LAYER, ' ');
+							} else {
+								first_part = false;
+							}
+						} else {
+							if (after_newline) {
+								current_command.first_part += string(SPACING_PER_LAYER, ' ');
+								if (c == '-') {
+									current_command.first_part_highlight = HighlightElementType::STRING_CONSTANT;
+								}
+							}
+							after_newline = false;
+							if (first_part) {
+								current_command.first_part += c;
+							} else {
+								current_command.second_part += c;
+							}
+						}
+					}
+					if (!current_command.first_part.empty()) {
+						print_info_list.push_back(std::move(current_command));
+					}
+				}
+			}
+		}
+	}
+
 	// figure out alignment based on the total first part print size
 	idx_t max_lhs_size = 0;
 	for (auto &print_info : print_info_list) {
@@ -1122,6 +1184,31 @@ vector<string> ShellState::GetMetadataCompletions(const char *zLine, idx_t nLine
 			result.push_back(zBuf);
 		}
 	}
+	// Also include extension-registered commands
+	auto &state = ShellState::Get();
+	if (state.db && state.db->instance) {
+		auto &callback_mgr = duckdb::ExtensionCallbackManager::Get(*state.db->instance);
+		for (auto &ext : callback_mgr.ShellExtensions()) {
+			for (auto &cmd : ext->commands) {
+				auto &line = cmd.command;
+				bool found_match = true;
+				idx_t line_pos;
+				zBuf[0] = '.';
+				for (line_pos = 0; line_pos < line.size() && !IsSpace(line[line_pos]) && line_pos + 2 < sizeof(zBuf);
+				     line_pos++) {
+					zBuf[line_pos + 1] = line[line_pos];
+					if (line_pos + 1 < nLine && line[line_pos] != zLine[line_pos + 1]) {
+						found_match = false;
+						break;
+					}
+				}
+				zBuf[line_pos + 1] = '\0';
+				if (found_match && line_pos + 1 >= nLine) {
+					result.push_back(zBuf);
+				}
+			}
+		}
+	}
 	return result;
 }
 
@@ -1142,6 +1229,15 @@ optional_ptr<const MetadataCommand> ShellState::FindMetadataCommand(const string
 	for (idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
 		auto &command = metadata_commands[command_idx];
 		command_names.push_back(string(".") + command.command);
+	}
+	// Also include extension-registered commands in suggestions
+	if (db && db->instance) {
+		auto &callback_mgr = duckdb::ExtensionCallbackManager::Get(*db->instance);
+		for (auto &ext : callback_mgr.ShellExtensions()) {
+			for (auto &cmd : ext->commands) {
+				command_names.push_back(string(".") + cmd.command);
+			}
+		}
 	}
 	auto candidates_msg = StringUtil::CandidatesErrorMessage(command_names, option, "Did you mean");
 	error_msg += candidates_msg + "\n";
