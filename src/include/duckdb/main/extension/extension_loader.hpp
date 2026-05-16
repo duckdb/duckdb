@@ -49,6 +49,8 @@ public:
 	DUCKDB_API void SetDescription(const string &description);
 	//! Explicitly sets, creates and registers all functions in this dedicated extension schema
 	DUCKDB_API void UseDedicatedSchemaForExtension(const string &extension_schema_name);
+	//! Explicitly sets, creates and registers all functions in the registered extension schema
+	DUCKDB_API void UseDedicatedSchemaForExtension();
 	//! Creates a schema in the catalog with the extension name
 	DUCKDB_API void CreateSchema(const string &extension_schema_name) const;
 	//! Adds the created extension schema to the search path
@@ -56,6 +58,10 @@ public:
 	//! Sets the default extension schema for this extension
 	DUCKDB_API void UseDefaultSchema(const string &name = DEFAULT_SCHEMA);
 	DUCKDB_API static void RefreshSearchPath(ClientContext &context);
+	//! Gets registered extension name (or alias)
+	DUCKDB_API const string &GetRegisteredExtensionName() const {
+		return loader_info.extension_alias.empty() ? loader_info.extension_name : loader_info.extension_alias;
+	}
 
 public:
 	//! Register a new scalar function - merge overloads if the function already exists
@@ -124,9 +130,6 @@ public:
 
 private:
 	void FinalizeLoad();
-	const string &GetRegisteredExtensionName() const {
-		return loader_info.extension_alias.empty() ? loader_info.extension_name : loader_info.extension_alias;
-	}
 
 private:
 	DatabaseInstance &db;

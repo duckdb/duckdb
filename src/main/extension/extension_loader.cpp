@@ -47,7 +47,12 @@ void ExtensionLoader::UseDedicatedSchemaForExtension(const string &extension_sch
 	CreateSchema(extension_schema_name);
 	UseDefaultSchema(extension_schema_name);
 	AddSchemaToSearchPath(extension_schema_name);
-};
+}
+
+void ExtensionLoader::UseDedicatedSchemaForExtension() {
+	auto registered_ext_name = GetRegisteredExtensionName();
+	UseDedicatedSchemaForExtension(registered_ext_name);
+}
 
 void ExtensionLoader::CreateSchema(const string &name) const {
 	auto &system_catalog = Catalog::GetSystemCatalog(db);

@@ -48,7 +48,7 @@ TEST_CASE("Test ExtensionLoader schema API", "[api]") {
 		REQUIRE_FAIL(conn.Query("SELECT fn_in_custom()"));
 	}
 
-	SECTION("Test AddExtensionSchemaToSearchPath") {
+	SECTION("Test AddSchemaToSearchPath") {
 		auto loader = CreateExtensionLoader(db, "test_ext");
 		loader.CreateSchema("search_schema");
 		loader.UseDefaultSchema("search_schema");
@@ -94,7 +94,7 @@ TEST_CASE("Test ExtensionLoader schema API", "[api]") {
 		REQUIRE_THROWS(loader.UseDefaultSchema("pg_catalog"));
 	}
 
-	SECTION("AddExtensionSchemaToSearchPath requires UseDefaultSchema and CreateExtensionSchema first") {
+	SECTION("AddSchemaToSearchPath requires UseDefaultSchema and CreateExtensionSchema first") {
 		auto loader = CreateExtensionLoader(db, "test_ext");
 		// schema does not exist
 		REQUIRE_THROWS(loader.AddSchemaToSearchPath("orphan_schema"));
@@ -104,7 +104,7 @@ TEST_CASE("Test ExtensionLoader schema API", "[api]") {
 		REQUIRE_THROWS(loader.AddSchemaToSearchPath("orphan_schema"));
 	}
 
-	SECTION("RegisterExtensionInSeparateSchema combines create, set, and add-to-path") {
+	SECTION("UseDedicatedSchemaForExtension combines create, set, and add-to-path") {
 		auto loader = CreateExtensionLoader(db, "test_ext");
 		loader.UseDedicatedSchemaForExtension("combined_schema");
 		loader.RegisterFunction(ScalarFunction("fn_combined", {}, LogicalType::VARCHAR, ReturnCustomSchema));
