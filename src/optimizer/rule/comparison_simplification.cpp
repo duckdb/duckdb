@@ -10,37 +10,62 @@
 
 namespace duckdb {
 
-static unique_ptr<Expression> DateTimestampComparisonIsInvertible(BoundFunctionExpression &expr,
-                                                                  BoundCastExpression &cast_expression,
-                                                                  const Value &constant_value, Value &cast_constant,
-                                                                  bool column_ref_left) {
+static bool DateTimestampComparisonIsInvertible(BoundFunctionExpression &expr, BoundCastExpression &cast_expression,
+                                                const Value &constant_value, Value &cast_constant, bool column_ref_left,
+                                                unique_ptr<Expression> &replacement) {
 	if (Timestamp::GetTime(constant_value.GetValue<timestamp_t>()) == dtime_t(0)) {
-		return nullptr; // it's midnight: no replacement needed
+		return true; // it's midnight: no replacement needed
 	}
 	auto op = expr.GetExpressionType();
-	bool pred_neq = op == ExpressionType::COMPARE_NOTEQUAL || op == ExpressionType::COMPARE_DISTINCT_FROM;
-	if (op == ExpressionType::COMPARE_EQUAL || op == ExpressionType::COMPARE_NOTEQUAL ||
-	    op == ExpressionType::COMPARE_DISTINCT_FROM || op == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-		// Non-midnight TIMESTAMPs cannot equal DATE values.
-		if (op == ExpressionType::COMPARE_DISTINCT_FROM || op == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-			return make_uniq<BoundConstantExpression>(Value::BOOLEAN(pred_neq));
-		}
-		// Equality keeps three-valued NULL semantics; DISTINCT FROM is always two-valued.
-		return ExpressionRewriter::ConstantOrNull(std::move(cast_expression.child), Value::BOOLEAN(pred_neq));
+
+	// Non-midnight TIMESTAMPs cannot equal DATE values.
+	switch (op) {
+	case ExpressionType::COMPARE_EQUAL:
+		// d =  T   -> false, preserving NULL
+		replacement = ExpressionRewriter::ConstantOrNull(std::move(cast_expression.child), Value::BOOLEAN(false));
+		return true;
+	case ExpressionType::COMPARE_NOTEQUAL:
+		// d != T   -> true, preserving NULL
+		replacement = ExpressionRewriter::ConstantOrNull(std::move(cast_expression.child), Value::BOOLEAN(true));
+		return true;
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		// d IS DISTINCT FROM T     -> true
+		replacement = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+		return true;
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		// d IS NOT DISTINCT FROM T -> false
+		replacement = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+		return true;
+	default:
+		break;
 	}
 
-	bool if_left_plus = op == ExpressionType::COMPARE_LESSTHAN || op == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-	// d <  T   -> d <  DATE '2024-06-16'  -- needs +1
-	// d >= T   -> d >= DATE '2024-06-16'  -- needs +1
-	// d <= T   -> d <= DATE '2024-06-15'  -- no +1
-	// d >  T   -> d >  DATE '2024-06-15'  -- no +1
-	if (!if_left_plus && op != ExpressionType::COMPARE_LESSTHANOREQUALTO && op != ExpressionType::COMPARE_GREATERTHAN) {
-		return nullptr;
+	// The examples describe the column-left form; column-right comparisons invert the day bump.
+	bool add_one_day;
+	switch (op) {
+	case ExpressionType::COMPARE_LESSTHAN:
+		// d <  T   -> d <  DATE '2024-06-16'  -- needs +1
+		add_one_day = column_ref_left;
+		break;
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		// d >= T   -> d >= DATE '2024-06-16'  -- needs +1
+		add_one_day = column_ref_left;
+		break;
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		// d <= T   -> d <= DATE '2024-06-15'  -- no +1
+		add_one_day = !column_ref_left;
+		break;
+	case ExpressionType::COMPARE_GREATERTHAN:
+		// d >  T   -> d >  DATE '2024-06-15'  -- no +1
+		add_one_day = !column_ref_left;
+		break;
+	default:
+		return false;
 	}
-	if (column_ref_left == if_left_plus) { // if ref_left & left_plus or "ref_right & if_right_plus"
+	if (add_one_day) {
 		cast_constant = Value::DATE(date_t(cast_constant.GetValue<date_t>().days + 1));
 	}
-	return nullptr;
+	return true;
 }
 
 static bool ConstantCastIsInvertible(BoundFunctionExpression &expr, BoundCastExpression &cast_expression,
@@ -52,9 +77,8 @@ static bool ConstantCastIsInvertible(BoundFunctionExpression &expr, BoundCastExp
 	if (target_type.id() != LogicalTypeId::DATE || cast_expression.GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
 		return false;
 	}
-	replacement =
-	    DateTimestampComparisonIsInvertible(expr, cast_expression, constant_value, cast_constant, column_ref_left);
-	return true;
+	return DateTimestampComparisonIsInvertible(expr, cast_expression, constant_value, cast_constant, column_ref_left,
+	                                           replacement);
 }
 
 ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
