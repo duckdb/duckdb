@@ -19,6 +19,10 @@
 
 namespace duckdb {
 
+static unique_ptr<ParsedExpression> TryRewriteSpecialFunctionCall(const string &lowercase_name,
+                                                                  vector<unique_ptr<ParsedExpression>> &children);
+static bool IsParserLevelRewriteName(const string &lowercase_name);
+
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
                                                                              ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -117,7 +121,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 			auto function_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(indirection_expr));
 			function_expr->children.insert(function_expr->children.begin(), std::move(expr));
-			expr = std::move(function_expr);
+			auto lowercase_name = StringUtil::Lower(function_expr->function_name);
+			if (auto rewritten = TryRewriteSpecialFunctionCall(lowercase_name, function_expr->children)) {
+				expr = std::move(rewritten);
+			} else {
+				expr = std::move(function_expr);
+			}
 			prev_indirection_was_cast = false;
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
 			vector<unique_ptr<ParsedExpression>> struct_children;
@@ -184,6 +193,77 @@ string PEGTransformerFactory::TransformReservedTableQualification(PEGTransformer
                                                                   ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return list_pr.Child<IdentifierParseResult>(0).identifier;
+}
+
+// Apply parser-level rewrites for function names that resolve to a non-FunctionExpression AST node
+// (CASE, COALESCE, UNPACK, TRY, ARRAY_CONSTRUCTOR, CAST). Returns the rewritten expression on
+// success, or nullptr if `lowercase_name` is not a special-cased name. On success, elements of
+// `children` are moved out.
+static unique_ptr<ParsedExpression> TryRewriteSpecialFunctionCall(const string &lowercase_name,
+                                                                  vector<unique_ptr<ParsedExpression>> &children) {
+	if (lowercase_name == "if") {
+		if (children.size() != 3) {
+			throw ParserException("Wrong number of arguments to IF.");
+		}
+		auto expr = make_uniq<CaseExpression>();
+		CaseCheck check;
+		check.when_expr = std::move(children[0]);
+		check.then_expr = std::move(children[1]);
+		expr->case_checks.push_back(std::move(check));
+		expr->else_expr = std::move(children[2]);
+		return std::move(expr);
+	}
+	if (lowercase_name == "unpack") {
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments to the UNPACK operator");
+		}
+		auto expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
+		expr->children = std::move(children);
+		return std::move(expr);
+	}
+	if (lowercase_name == "try") {
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments provided to TRY expression");
+		}
+		auto try_expression = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
+		try_expression->children = std::move(children);
+		return std::move(try_expression);
+	}
+	if (lowercase_name == "construct_array") {
+		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
+		construct_array->children = std::move(children);
+		return std::move(construct_array);
+	}
+	if (lowercase_name == "ifnull") {
+		if (children.size() != 2) {
+			throw ParserException("Wrong number of arguments to IFNULL.");
+		}
+		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+		coalesce_op->children.push_back(std::move(children[0]));
+		coalesce_op->children.push_back(std::move(children[1]));
+		return std::move(coalesce_op);
+	}
+	if (lowercase_name == "coalesce") {
+		if (children.empty()) {
+			throw ParserException("Wrong number of arguments to COALESCE.");
+		}
+		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+		coalesce_op->children = std::move(children);
+		return std::move(coalesce_op);
+	}
+	if (lowercase_name == "date") {
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments provided to DATE function");
+		}
+		return make_uniq_base<ParsedExpression, CastExpression>(LogicalType::DATE, std::move(children[0]));
+	}
+	return nullptr;
+}
+
+static bool IsParserLevelRewriteName(const string &lowercase_name) {
+	return lowercase_name == "if" || lowercase_name == "unpack" || lowercase_name == "try" ||
+	       lowercase_name == "construct_array" || lowercase_name == "ifnull" || lowercase_name == "coalesce" ||
+	       lowercase_name == "date";
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
@@ -253,50 +333,18 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		lowercase_name = "count_star";
 	}
 
-	if (lowercase_name == "if") {
-		if (function_children.size() != 3) {
-			throw ParserException("Wrong number of arguments to IF.");
-		}
-		auto expr = make_uniq<CaseExpression>();
-		CaseCheck check;
-		check.when_expr = std::move(function_children[0]);
-		check.then_expr = std::move(function_children[1]);
-		expr->case_checks.push_back(std::move(check));
-		expr->else_expr = std::move(function_children[2]);
-		return std::move(expr);
-	} else if (lowercase_name == "unpack") {
-		if (function_children.size() != 1) {
-			throw ParserException("Wrong number of arguments to the UNPACK operator");
-		}
-		auto expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
-		expr->children = std::move(function_children);
-		return std::move(expr);
-	} else if (lowercase_name == "try") {
-		if (function_children.size() != 1) {
-			throw ParserException("Wrong number of arguments provided to TRY expression");
-		}
-		auto try_expression = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
-		try_expression->children = std::move(function_children);
-		return std::move(try_expression);
-	} else if (lowercase_name == "construct_array") {
-		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
-		construct_array->children = std::move(function_children);
-		return std::move(construct_array);
-	} else if (lowercase_name == "ifnull") {
-		if (function_children.size() != 2) {
-			throw ParserException("Wrong number of arguments to IFNULL.");
-		}
+	// `x.f(args)` parses as a schema-qualified call (schema=x, name=f). For names that map to
+	// parser-level rewrites (and thus have no catalog entry), the binder's `schema.func ->
+	// func(col)` fallback can never fire. Demote here so dot-chained calls like `x.ifnull(y)`
+	// behave like `ifnull(x, y)`.
+	if (!qualified_function.schema.empty() && qualified_function.catalog.empty() &&
+	    IsParserLevelRewriteName(lowercase_name)) {
+		function_children.insert(function_children.begin(), make_uniq<ColumnRefExpression>(qualified_function.schema));
+		qualified_function.schema = "";
+	}
 
-		//  Two-argument COALESCE
-		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
-		coalesce_op->children.push_back(std::move(function_children[0]));
-		coalesce_op->children.push_back(std::move(function_children[1]));
-		return std::move(coalesce_op);
-	} else if (lowercase_name == "date") {
-		if (function_children.size() != 1) {
-			throw ParserException("Wrong number of arguments provided to DATE function");
-		}
-		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0])));
+	if (auto rewritten = TryRewriteSpecialFunctionCall(lowercase_name, function_children)) {
+		return rewritten;
 	}
 	if (has_ignore_nulls_result) {
 		throw ParserException("RESPECT/IGNORE NULLS is not supported for non-window functions");
