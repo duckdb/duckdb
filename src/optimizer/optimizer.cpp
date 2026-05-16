@@ -43,6 +43,7 @@
 #include "duckdb/optimizer/row_number_rewriter.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/optimizer/outer_join_simplification.hpp"
+#include "duckdb/optimizer/partial_aggregate_pushdown.hpp"
 #include "duckdb/optimizer/projection_pullup.hpp"
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -246,6 +247,13 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
 		JoinOrderOptimizer optimizer(context);
 		plan = optimizer.Optimize(std::move(plan));
+	});
+
+	// Pre-aggregate SUM/COUNT below joins when GROUP BY is on dimension columns
+	// and the fact side dominates cardinality — reduces probe-side work.
+	RunOptimizer(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN, [&]() {
+		PartialAggregatePushdown partial_aggregate_pushdown(*this);
+		partial_aggregate_pushdown.VisitOperator(plan);
 	});
 
 	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {

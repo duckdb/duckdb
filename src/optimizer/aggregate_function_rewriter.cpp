@@ -58,7 +58,14 @@ public:
 
 public:
 	bool ShouldSkip(const LogicalAggregate &aggr) const override {
-		return !aggr.grouping_functions.empty() || aggr.grouping_sets.size() > 1;
+		// AVG -> SUM/COUNT is correct under any grouping (both ignore NULLs
+		// identically), so ROLLUP/CUBE/GROUPING SETS are safe to rewrite.
+		// Decomposing here is also the prerequisite for partial-aggregate
+		// pushdown to fire on AVG queries. The remaining guard is for
+		// grouping_functions: their per-row grouping-set bitmasks reference
+		// the original AVG column directly, and the rewrite has no way to
+		// translate those references.
+		return !aggr.grouping_functions.empty();
 	}
 
 	unique_ptr<Expression> Rewrite(unique_ptr<Expression> &expr, vector<reference<Expression>> &bindings,

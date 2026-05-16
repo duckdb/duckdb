@@ -1,0 +1,131 @@
+# name: test/optimizer/partial_aggregate_pushdown.test
+# description: Test partial aggregate pushdown below joins
+# group: [optimizer]
+
+statement ok
+CREATE TABLE fact AS SELECT
+  i % 1000 AS dim_key,
+  (i * 17) % 100 AS measure
+FROM range(100000) _(i);
+
+statement ok
+CREATE TABLE dim AS SELECT
+  i AS dim_key,
+  (i % 7)  AS d_a,
+  (i % 11) AS d_b,
+  (i % 13) AS d_c,
+  (i % 17) AS d_d
+FROM range(1000) _(i);
+
+statement ok
+ANALYZE;
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query I
+SELECT round(sum(s)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+4950000
+
+query I
+SELECT count(*) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+1000
+
+statement ok
+RESET disabled_optimizers
+
+query I
+SELECT round(sum(s)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+4950000
+
+query I
+SELECT count(*) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+1000
+
+# The optimization fires and combines exported aggregate states.
+query II
+EXPLAIN
+SELECT d_a, d_b, d_c, d_d, sum(measure)
+FROM fact JOIN dim USING (dim_key)
+GROUP BY d_a, d_b, d_c, d_d
+----
+physical_plan	<REGEX>:.*combine_aggr.*
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query I
+SELECT round(sum(s)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY ROLLUP(d_a, d_b, d_c, d_d)
+)
+----
+24750000
+
+statement ok
+RESET disabled_optimizers
+
+query I
+SELECT round(sum(s)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY ROLLUP(d_a, d_b, d_c, d_d)
+)
+----
+24750000
+
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query I
+SELECT round(sum(avg_m)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, avg(measure)::DOUBLE AS avg_m
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+49500
+
+statement ok
+RESET disabled_optimizers
+
+query I
+SELECT round(sum(avg_m)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, avg(measure)::DOUBLE AS avg_m
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+49500
+
+# COUNT_STAR is not pushable through this path.
+query I
+SELECT count(*) FROM fact JOIN dim USING (dim_key) WHERE d_a = 3
+----
+14300
+
+query I
+SELECT count(*) FROM duckdb_optimizers() WHERE name = 'partial_aggregate_pushdown'
+----
+1
