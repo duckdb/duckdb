@@ -13,6 +13,7 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include <mutex>
 
@@ -116,13 +117,14 @@ struct MatcherSuggestion {
 
 struct MatchState {
 	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index, bool preserve_identifier_case_p = true)
+	           idx_t &max_token_index, PEGKeywordHelper &keyword_helper_p, bool preserve_identifier_case_p = true)
 	    : tokens(tokens), suggestions(suggestions), token_index(0), allocator(allocator),
-	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p) {
+	      max_token_index(max_token_index), keyword_helper(keyword_helper_p),
+	      preserve_identifier_case(preserve_identifier_case_p) {
 	}
 	MatchState(MatchState &state)
 	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
-	      allocator(state.allocator), max_token_index(state.max_token_index),
+	      allocator(state.allocator), max_token_index(state.max_token_index), keyword_helper(state.keyword_helper),
 	      preserve_identifier_case(state.preserve_identifier_case) {
 	}
 
@@ -132,6 +134,7 @@ struct MatchState {
 	idx_t token_index;
 	ParseResultAllocator &allocator;
 	idx_t &max_token_index;
+	PEGKeywordHelper &keyword_helper;
 	bool preserve_identifier_case = true;
 
 	void UpdateMaxTokenIndex() {
@@ -229,12 +232,14 @@ private:
 struct ParserCache {
 	shared_ptr<PEGMatcher> GetMatcher();
 	shared_ptr<PEGTransformerFactory> GetTransformerFactory();
+	shared_ptr<PEGKeywordHelper> GetKeywordHelper();
 	void Invalidate();
 
 private:
 	std::mutex mutex;
 	shared_ptr<PEGMatcher> matcher;
 	shared_ptr<PEGTransformerFactory> transformer_factory;
+	shared_ptr<PEGKeywordHelper> keyword_helper;
 };
 
 } // namespace duckdb

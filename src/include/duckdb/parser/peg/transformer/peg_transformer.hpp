@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/parser/peg/ast/unpivot_name_values.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/parser/peg/transformer/transform_enum_result.hpp"
@@ -222,7 +223,7 @@ public:
 
 	//! Helper functions
 	vector<unique_ptr<SQLStatement>> Transform(vector<MatcherToken> &tokens, ParserOptions &options,
-	                                           Matcher &root_matcher);
+	                                           Matcher &root_matcher, PEGKeywordHelper &keyword_helper);
 	static ParseResult &ExtractResultFromParens(ParseResult &parse_result);
 	static vector<reference<ParseResult>> ExtractParseResultsFromList(ParseResult &parse_result);
 	static bool ExpressionIsEmptyStar(ParsedExpression &expr);

@@ -56,7 +56,7 @@ void PEGParser::ParseRules(const char *grammar) {
 			if (c == start_pos) {
 				throw InternalException("Failed to parse grammar - expected an alpha-numeric rule name (pos %d)", c);
 			}
-			rule_name = string_t(grammar + start_pos, c - start_pos);
+			rule_name = string_t(grammar + start_pos, NumericCast<uint32_t>(c - start_pos));
 			rule.Clear();
 			parse_state = PEGParseState::RULE_SEPARATOR;
 			break;
@@ -76,7 +76,8 @@ void PEGParser::ParseRules(const char *grammar) {
 					throw InternalException("Failed to parse grammar - expected a parameter at position %d", c);
 				}
 				rule.parameters.insert(
-				    make_pair(string_t(grammar + parameter_start, c - parameter_start), rule.parameters.size()));
+				    make_pair(string_t(grammar + parameter_start, NumericCast<uint32_t>(c - parameter_start)),
+				              rule.parameters.size()));
 				if (grammar[c] != ')') {
 					throw InternalException("Failed to parse grammar - expected closing bracket at position %d", c);
 				}
@@ -111,7 +112,7 @@ void PEGParser::ParseRules(const char *grammar) {
 					throw InternalException("Failed to parse grammar - did not find closing ' (pos %d)", c);
 				}
 				PEGToken token;
-				token.text = string_t(grammar + literal_start, c - literal_start);
+				token.text = string_t(grammar + literal_start, NumericCast<uint32_t>(c - literal_start));
 				token.type = PEGTokenType::LITERAL;
 				rule.tokens.push_back(token);
 				c++;
@@ -126,7 +127,7 @@ void PEGParser::ParseRules(const char *grammar) {
 					c++;
 				}
 				PEGToken token;
-				token.text = string_t(grammar + rule_start, c - rule_start);
+				token.text = string_t(grammar + rule_start, NumericCast<uint32_t>(c - rule_start));
 				if (grammar[c] == '(') {
 					// this is a function call
 					c++;
@@ -151,7 +152,7 @@ void PEGParser::ParseRules(const char *grammar) {
 				}
 				c++;
 				PEGToken token;
-				token.text = string_t(grammar + rule_start, c - rule_start);
+				token.text = string_t(grammar + rule_start, NumericCast<uint32_t>(c - rule_start));
 				token.type = PEGTokenType::REGEX;
 				rule.tokens.push_back(token);
 			} else if (IsPEGOperator(grammar[c])) {
@@ -176,9 +177,7 @@ void PEGParser::ParseRules(const char *grammar) {
 				throw InternalException("Unrecognized rule contents in rule %s (character %s)", rule_name.GetString(),
 				                        string(1, grammar[c]));
 			}
-		}
-		default:
-			break;
+		} break;
 		}
 		if (!grammar[c]) {
 			break;

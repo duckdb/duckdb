@@ -196,7 +196,8 @@ vector<AutoCompleteSuggestion> GenerateAutoCompleteSuggestions(AutoCompleteCatal
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(tokens, suggestions, parse_allocator, max_token_index);
+	auto kh = provider.GetKeywordHelper();
+	MatchState state(tokens, suggestions, parse_allocator, max_token_index, *kh);
 	vector<UnicodeSpace> unicode_spaces;
 	string clean_sql;
 	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
