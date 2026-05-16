@@ -312,6 +312,44 @@ SELECT list_zip([{'a': 1}, {'a': 5}, {'a': 3}])
 ----
 [({'a': 1}), ({'a': 5}), ({'a': 3})]
 
+# nested element types with empty or NULL second arg (previously segfaulted)
+
+query I
+SELECT list_zip([{'a': 1}]::STRUCT(a INT)[], []::STRUCT(a INT)[])
+----
+[({'a': 1}, NULL)]
+
+query I
+SELECT list_zip([{'a': 1}]::STRUCT(a INT)[], NULL::STRUCT(a INT)[])
+----
+[({'a': 1}, NULL)]
+
+query I
+SELECT list_zip(CAST(['123'] AS VARIANT[]), CAST([] AS VARIANT[]))
+----
+[(123, NULL)]
+
+query I
+SELECT list_zip(CAST(['123'] AS VARIANT[]), NULL::VARIANT[])
+----
+[(123, NULL)]
+
+query I
+SELECT MAP_FROM_ENTRIES(LIST_ZIP(CAST(['123'] AS VARIANT[]), CAST([] AS VARIANT[])))
+----
+{123=NULL}
+
+statement ok
+CREATE TABLE variant_zip_test AS SELECT CAST(['123'] AS VARIANT[]) a, CAST([] AS VARIANT[]) b
+
+query I
+SELECT list_zip(a, b) FROM variant_zip_test
+----
+[(123, NULL)]
+
+statement ok
+DROP TABLE variant_zip_test
+
 # Non-list type
 
 statement error
