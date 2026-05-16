@@ -63,11 +63,15 @@ struct AggregateFilterDataSet {
 	AggregateFilterDataSet();
 
 	vector<unique_ptr<AggregateFilterData>> filter_data;
+	vector<optional_idx> filter_map;
+	vector<optional_idx> cached_counts;
 
 public:
 	void Initialize(ClientContext &context, const vector<AggregateObject> &aggregates,
 	                const vector<LogicalType> &payload_types);
 
+	void BeginChunk();
+	idx_t ApplyFilter(idx_t aggr_idx, DataChunk &payload);
 	AggregateFilterData &GetFilterData(idx_t aggr_idx);
 };
 

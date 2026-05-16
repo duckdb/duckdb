@@ -91,6 +91,16 @@ FROM t;
 ----
 45	10
 
+query IIII
+SELECT
+ COUNT(*) FILTER (WHERE i < 10),
+ SUM(i) FILTER (WHERE i < 10),
+ SUM(j) FILTER (WHERE i < 10),
+ COUNT(DISTINCT j) FILTER (WHERE i < 10)
+FROM t;
+----
+10	45	45	10
+
 query II
  SELECT
   sum(i) AS unfiltered,

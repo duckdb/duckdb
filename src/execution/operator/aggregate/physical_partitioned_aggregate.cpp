@@ -112,6 +112,7 @@ SinkResultType PhysicalPartitionedAggregate::Sink(ExecutionContext &context, Dat
 	}
 
 	// perform the aggregation
+	lstate.execute_state.Reset();
 	lstate.execute_state.Sink(*lstate.state, chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
