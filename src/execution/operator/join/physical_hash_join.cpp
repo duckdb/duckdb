@@ -47,6 +47,10 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
                              estimated_cardinality),
       delim_types(std::move(delim_types)) {
 	filter_pushdown = std::move(pushdown_info_p);
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
+	    op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+		mark_nulls_are_false = op.Cast<LogicalComparisonJoin>().mark_nulls_are_false;
+	}
 
 	children.push_back(left);
 	children.push_back(right);
@@ -483,7 +487,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 	auto result =
 	    make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type, initial_radix_bits,
 	                             rhs_output_columns.col_idxs, residual_info ? residual_info->Copy() : nullptr,
-	                             predicate ? predicate.get() : nullptr, lhs_output_in_probe);
+	                             predicate ? predicate.get() : nullptr, lhs_output_in_probe, mark_nulls_are_false);
 
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
@@ -1589,9 +1593,15 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 		if (EmptyResultIfRHSIsEmpty()) {
 			return OperatorResultType::FINISHED;
 		}
-		// for empty result, only need output columns (no predicate evaluation)
 		state.lhs_probe_data.ReferenceColumns(input, lhs_output_columns.col_idxs);
-		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_probe_data, chunk);
+		if (sink.hash_table->join_type == JoinType::MARK && sink.hash_table->has_null) {
+			state.lhs_join_keys.Reset();
+			state.probe_executor.Execute(input, state.lhs_join_keys);
+			sink.hash_table->ConstructEmptyMarkJoinResult(state.lhs_join_keys, state.lhs_probe_data, chunk);
+		} else {
+			ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_probe_data,
+			                         chunk);
+		}
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
@@ -2078,8 +2088,12 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	if (sink.hash_table->Count() == 0 && !gstate.op.EmptyResultIfRHSIsEmpty()) {
 		// for empty result, only need output columns (no predicate evaluation)
 		lhs_probe_data.ReferenceColumns(lhs_probe_chunk, gstate.op.lhs_output_columns.col_idxs);
-		gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, lhs_probe_data,
-		                                   chunk);
+		if (sink.hash_table->join_type == JoinType::MARK && sink.hash_table->has_null) {
+			sink.hash_table->ConstructEmptyMarkJoinResult(lhs_join_keys, lhs_probe_data, chunk);
+		} else {
+			gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, lhs_probe_data,
+			                                   chunk);
+		}
 		empty_ht_probe_in_progress = true;
 		return;
 	}

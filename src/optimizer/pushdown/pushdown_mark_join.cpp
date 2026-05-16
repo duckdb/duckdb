@@ -1,8 +1,37 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 namespace duckdb {
+
+namespace {
+
+bool IsMarkerRef(Expression &expr) {
+	return expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF;
+}
+
+bool IsFalseConstant(Expression &expr) {
+	if (expr.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+		return false;
+	}
+	auto &constant = expr.Cast<BoundConstantExpression>();
+	return !constant.value.IsNull() && constant.value.type() == LogicalTypeId::BOOLEAN &&
+	       !constant.value.GetValue<bool>();
+}
+
+bool IsCoalesceMarkerFalse(Expression &expr) {
+	if (expr.GetExpressionType() != ExpressionType::OPERATOR_COALESCE) {
+		return false;
+	}
+	auto &coalesce = expr.Cast<BoundOperatorExpression>();
+	if (coalesce.children.size() != 2) {
+		return false;
+	}
+	return IsMarkerRef(*coalesce.children[0]) && IsFalseConstant(*coalesce.children[1]);
+}
+
+} // namespace
 
 using Filter = FilterPushdown::Filter;
 
@@ -46,6 +75,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownMarkJoin(unique_ptr<LogicalO
 				filters.erase_at(i);
 				i--;
 				continue;
+			}
+			// COALESCE(marker, FALSE) is a pure truthiness filter: UNKNOWN and FALSE both filter the row out.
+			// If the marker is not referenced elsewhere, execution can collapse NULL to FALSE.
+			if (IsCoalesceMarkerFalse(*filters[i]->filter) && comp_join.convert_mark_to_semi) {
+				comp_join.mark_nulls_are_false = true;
 			}
 			// if the filter is on NOT(marker) AND the join conditions are all set to "null_values_are_equal" we can
 			// turn this into an ANTI join if all join conditions have null_values_are_equal=true, then the result of

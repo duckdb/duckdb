@@ -470,6 +470,12 @@
         "name": "predicate",
         "type": "Expression*",
         "status": "deleted"
+      },
+      {
+        "id": 209,
+        "name": "mark_nulls_are_false",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "constructor": [

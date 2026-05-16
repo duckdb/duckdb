@@ -10,14 +10,17 @@
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/row_operations/row_matcher.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
@@ -63,6 +66,13 @@ private:
 class JoinHashTable {
 public:
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
+
+	struct MarkJoinNullRemainder {
+		vector<LogicalType> key_types;
+		shared_ptr<TupleDataLayout> layout;
+		unique_ptr<TupleDataCollection> data;
+		TupleDataAppendState append_state;
+	};
 
 	struct ResidualPredicateProbeState {
 		//! Evaluation chunk
@@ -201,7 +211,8 @@ public:
 	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
 	              vector<LogicalType> build_types, JoinType type, idx_t initial_radix_bits,
 	              const vector<idx_t> &output_columns, unique_ptr<ResidualPredicateInfo> residual_p,
-	              optional_ptr<Expression> predicate_ptr = nullptr, const vector<idx_t> &output_in_probe = {});
+	              optional_ptr<Expression> predicate_ptr = nullptr, const vector<idx_t> &output_in_probe = {},
+	              bool mark_nulls_are_false = false);
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -222,6 +233,7 @@ public:
 	//! Probe the HT with the given input chunk, resulting in the given result
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
+	void ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;
 
@@ -325,6 +337,8 @@ public:
 	Vector vfound;
 	//! The join type of the HT
 	JoinType join_type;
+	//! Whether this MARK join can collapse UNKNOWN to FALSE
+	bool mark_nulls_are_false;
 	//! Whether or not the HT has been finalized
 	bool finalized;
 	//! Whether or not any of the key elements contain NULL
@@ -375,10 +389,23 @@ public:
 		DataChunk result_chunk;
 	} correlated_mark_join_info;
 
+	struct {
+		mutex lock;
+		bool enabled = false;
+		bool has_null_rows = false;
+		bool has_all_null = false;
+		MarkJoinNullRemainder remainder;
+	} mark_join_null_info;
+
 private:
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                             optional_ptr<const SelectionVector> &current_sel);
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
+	bool UseMarkJoinNullRemainder() const;
+	bool CanTreatMarkNullAsFalse() const;
+	void RegisterMarkJoinNullRows(DataChunk &keys);
+	void MergeMarkJoinNullRows(JoinHashTable &other);
+	void ProbeMarkJoinNullRows(DataChunk &join_keys, ValidityMask &mask, const bool *found_match);
 
 	bool UseSalt() const;
 
