@@ -873,6 +873,9 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) const {
 
 void Vector::DebugTransformToDictionary(Vector &vector) {
 	const auto count = vector.size();
+	if (count == 0) {
+		return;
+	}
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		// only supported for flat vectors currently
 		return;
