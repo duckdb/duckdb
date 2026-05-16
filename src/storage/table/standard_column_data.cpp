@@ -6,6 +6,8 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 
 namespace duckdb {
 
@@ -21,6 +23,42 @@ StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInf
 void StandardColumnData::SetDataType(ColumnDataType data_type) {
 	ColumnData::SetDataType(data_type);
 	validity->SetDataType(data_type);
+}
+
+FilterPropagateResult StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
+	if (state.segment_checked) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (!state.current) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "StandardColumnData::CheckZonemap");
+	bool is_dynamic = ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME);
+	state.segment_checked = !is_dynamic;
+
+	FilterPropagateResult prune_result;
+	{
+		lock_guard<mutex> l(stats_lock);
+		auto segment_stats = state.current->GetNode().stats.statistics.Copy();
+		if (!state.child_states.empty() && state.child_states[0].current) {
+			segment_stats.Merge(state.child_states[0].current->GetNode().stats.statistics);
+		}
+		prune_result = expr_filter.CheckStatistics(segment_stats);
+		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+	}
+
+	lock_guard<mutex> l(update_lock);
+	auto update_stats = GetUpdateStatistics();
+	if (!update_stats) {
+		return prune_result;
+	}
+	auto update_result = expr_filter.CheckStatistics(*update_stats);
+	if (prune_result == update_result) {
+		return prune_result;
+	}
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
 ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {

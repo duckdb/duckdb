@@ -1,0 +1,349 @@
+# name: test/sql/optimizer/table_filters.test
+# description: Temporary reproducers for filter statistics pruning issues
+# group: [optimizer]
+
+statement ok
+PRAGMA threads=1
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side'
+
+statement ok
+SET dynamic_or_filter_threshold=0
+
+# `IS DISTINCT FROM` with a non-null constant must keep NULL rows. The unified
+# expression/table-filter stats pruning currently treats all-null stats as
+# always false for every comparison, which incorrectly removes this table.
+statement ok
+CREATE TABLE distinct_from_nulls AS
+SELECT NULL::INTEGER AS a
+FROM range(10000)
+
+query I
+SELECT count(*)
+FROM distinct_from_nulls
+WHERE a IS DISTINCT FROM 5
+----
+10000
+
+# The same predicate must not prune a segment whose non-null min/max are exactly
+# the constant if the segment can also contain NULL values.
+statement ok
+CREATE TABLE distinct_from_mixed_nulls AS
+SELECT CASE WHEN i % 2 = 0 THEN NULL ELSE 5 END::INTEGER AS a
+FROM range(10000) t(i)
+
+query I
+SELECT count(*)
+FROM distinct_from_mixed_nulls
+WHERE a IS DISTINCT FROM 5
+----
+5000
+
+# Numeric prefix-range filters still use row-group statistics. With two sparse
+# build keys, the probe scan should only produce the two matching keys.
+statement ok
+CREATE TABLE probe_num AS
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(0, 1000000) t(i)
+
+statement ok
+CREATE TABLE build_num AS
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM (VALUES (100000), (900000)) v(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe_num p
+JOIN build_num b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+
+query I
+SELECT count(*)
+FROM probe_num p
+JOIN build_num b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+2
+
+# The varchar equivalent should also use string row-group statistics in the PRF
+# pruning callback. The current PR regresses this: the plan still contains the
+# PRF dynamic filter, but the probe scan produces hundreds of thousands of rows.
+statement ok
+CREATE TABLE probe_str AS
+SELECT lpad(i::VARCHAR, 8, '0') AS k, (i % 7)::INTEGER AS g
+FROM range(0, 1000000) t(i)
+
+statement ok
+CREATE TABLE build_str AS
+SELECT lpad(i::VARCHAR, 8, '0') AS k, (i % 7)::INTEGER AS g
+FROM (VALUES (100000), (900000)) v(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe_str p
+JOIN build_str b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+analyzed_plan	<!REGEX>:.*[1-9][0-9]{2},[0-9]{3} rows.*
+
+query I
+SELECT count(*)
+FROM probe_str p
+JOIN build_str b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+2
+
+require parquet
+
+# Optional runtime filters should still evaluate their child filter when pruning
+# constant columns such as hive partition values. The expression-backed optional
+# scalar returns TRUE for every value, so all partition files are opened here.
+statement ok
+CREATE TABLE partition_src AS
+SELECT i::INTEGER AS id, (i % 100)::INTEGER AS part
+FROM range(0, 100000) t(i)
+
+statement ok
+COPY partition_src
+TO '{TEMP_DIR}/optional_partition_prune_22617'
+(FORMAT parquet, PARTITION_BY part, OVERWRITE true)
+
+statement ok
+CREATE TABLE build_part AS
+SELECT v::INTEGER AS part
+FROM (VALUES (42), (43)) t(v)
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM read_parquet('{TEMP_DIR}/optional_partition_prune_22617/*/*.parquet',
+                  hive_partitioning=1,
+                  hive_types={'part': INTEGER}) p
+JOIN build_part b
+  ON p.part = b.part
+----
+analyzed_plan	<!REGEX>:.*Total Files Read: 100.*
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEMP_DIR}/optional_partition_prune_22617/*/*.parquet',
+                  hive_partitioning=1,
+                  hive_types={'part': INTEGER}) p
+JOIN build_part b
+  ON p.part = b.part
+----
+2000
+
+# PR #21791 made non-min/max runtime join filters work when the probe-side
+# storage type needs to be cast to the hash-table key type. PR #22645 currently
+# keeps the min/max filters but drops the PRF in this shape.
+statement ok
+CREATE TABLE probe_cast_up AS
+SELECT i::INTEGER AS k, (i % 7)::INTEGER AS g
+FROM range(0, 1000000) t(i)
+
+statement ok
+CREATE TABLE build_cast_up AS
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM (VALUES (100000), (900000)) v(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe_cast_up p
+JOIN build_cast_up b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+
+query I
+SELECT count(*)
+FROM probe_cast_up p
+JOIN build_cast_up b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+2
+
+# The reverse cast direction still has the PRF. This keeps the test from being
+# only a generic "PRF disabled" check.
+statement ok
+CREATE TABLE probe_cast_down AS
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(0, 1000000) t(i)
+
+statement ok
+CREATE TABLE build_cast_down AS
+SELECT i::INTEGER AS k, (i % 7)::INTEGER AS g
+FROM (VALUES (100000), (900000)) v(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe_cast_down p
+JOIN build_cast_down b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+analyzed_plan	<REGEX>:.*IN PRF\(CAST\(k AS BIGINT\)\).*
+
+query I
+SELECT count(*)
+FROM probe_cast_down p
+JOIN build_cast_down b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+2
+
+# Perfect hash join filters have the same cast-up gap. This query has only a
+# single equality condition and a small build range so PHJ is preferred over PRF
+# or BF when the filter is allowed through.
+statement ok
+CREATE TABLE phj_probe_cast_up AS
+SELECT i::INTEGER AS k
+FROM range(0, 1000000) t(i)
+
+statement ok
+CREATE TABLE phj_build_cast_up AS
+SELECT i::BIGINT AS k
+FROM range(100000, 100010) t(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM phj_probe_cast_up p
+JOIN phj_build_cast_up b
+  ON p.k = b.k
+----
+analyzed_plan	<REGEX>:.*IN PHJ\(k\).*
+
+query I
+SELECT count(*)
+FROM phj_probe_cast_up p
+JOIN phj_build_cast_up b
+  ON p.k = b.k
+----
+10
+
+statement ok
+CREATE TABLE phj_probe_cast_down AS
+SELECT i::BIGINT AS k
+FROM range(0, 1000000) t(i)
+
+statement ok
+CREATE TABLE phj_build_cast_down AS
+SELECT i::INTEGER AS k
+FROM range(100000, 100010) t(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM phj_probe_cast_down p
+JOIN phj_build_cast_down b
+  ON p.k = b.k
+----
+analyzed_plan	<REGEX>:.*IN PHJ\(CAST\(k AS BIGINT\)\).*
+
+query I
+SELECT count(*)
+FROM phj_probe_cast_down p
+JOIN phj_build_cast_down b
+  ON p.k = b.k
+----
+10
+
+# Bloom filters need a larger sparse build side so PRF is not selected first.
+# The residual inequality also prevents using the perfect hash join path.
+statement ok
+CREATE TABLE bf_probe_cast_up AS
+SELECT i::INTEGER AS k, (i % 7)::INTEGER AS g
+FROM range(0, 2000000) t(i)
+
+statement ok
+CREATE TABLE bf_build_cast_up AS
+SELECT (100000 + i * 3)::BIGINT AS k, ((100000 + i * 3) % 7)::INTEGER AS g
+FROM range(0, 600000) t(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM bf_probe_cast_up p
+JOIN bf_build_cast_up b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+analyzed_plan	<REGEX>:.*IN BF\(k\).*
+
+query I
+SELECT count(*)
+FROM bf_probe_cast_up p
+JOIN bf_build_cast_up b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+600000
+
+statement ok
+CREATE TABLE bf_probe_cast_down AS
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(0, 2000000) t(i)
+
+statement ok
+CREATE TABLE bf_build_cast_down AS
+SELECT (100000 + i * 3)::INTEGER AS k, ((100000 + i * 3) % 7)::INTEGER AS g
+FROM range(0, 600000) t(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM bf_probe_cast_down p
+JOIN bf_build_cast_down b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+analyzed_plan	<REGEX>:.*IN BF\(CAST\(k AS BIGINT\)\).*
+
+query I
+SELECT count(*)
+FROM bf_probe_cast_down p
+JOIN bf_build_cast_down b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+600000

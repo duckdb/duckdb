@@ -1,11 +1,13 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
@@ -19,7 +21,6 @@
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
-
 namespace duckdb {
 
 ExpressionFilter::ExpressionFilter(unique_ptr<Expression> expr_p)
@@ -113,8 +114,29 @@ static bool ContainsInternalTableFilterFunction(const Expression &expr) {
 	return found;
 }
 
+static unique_ptr<Expression> UnwrapOptionalFiltersForConstantEvaluation(const Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
+			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+			return data.child_filter_expr ? UnwrapOptionalFiltersForConstantEvaluation(*data.child_filter_expr)
+			                              : make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+		}
+		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
+			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+			return data.child_filter_expr ? UnwrapOptionalFiltersForConstantEvaluation(*data.child_filter_expr)
+			                              : make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+		}
+	}
+	auto result = expr.Copy();
+	ExpressionIterator::EnumerateChildren(
+	    *result, [&](unique_ptr<Expression> &child) { child = UnwrapOptionalFiltersForConstantEvaluation(*child); });
+	return result;
+}
+
 bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value &val) const {
-	ExpressionExecutor executor(context, *expr);
+	auto constant_eval_expr = UnwrapOptionalFiltersForConstantEvaluation(*expr);
+	ExpressionExecutor executor(context, *constant_eval_expr);
 	return EvaluateWithConstant(executor, val);
 }
 
@@ -164,11 +186,28 @@ static FilterPropagateResult CheckZonemapAgainstConstants(const BaseStatistics &
 	}
 }
 
-static optional_ptr<const BaseStatistics> TryGetFilterStats(const Expression &expr, const BaseStatistics &stats,
-                                                            vector<unique_ptr<BaseStatistics>> &owned_stats) {
+static optional_ptr<BaseStatistics> TryGetFilterStats(const Expression &expr, BaseStatistics &stats,
+                                                      vector<unique_ptr<BaseStatistics>> &owned_stats) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_REF:
 		return &stats;
+	case ExpressionClass::BOUND_CAST: {
+		auto &cast_expr = expr.Cast<BoundCastExpression>();
+		auto child_stats = TryGetFilterStats(*cast_expr.child, stats, owned_stats);
+		if (!child_stats) {
+			return nullptr;
+		}
+		auto cast_stats = StatisticsPropagator::TryPropagateCast(*child_stats, cast_expr.child->GetReturnType(),
+		                                                         cast_expr.GetReturnType());
+		if (!cast_stats) {
+			return nullptr;
+		}
+		if (cast_expr.try_cast) {
+			cast_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+		}
+		owned_stats.push_back(std::move(cast_stats));
+		return owned_stats.back().get();
+	}
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		idx_t child_idx;
@@ -190,7 +229,7 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(const Expression &ex
 static FilterPropagateResult CheckComparisonStatistics(const BoundFunctionExpression &comp_expr,
                                                        BaseStatistics &stats) {
 	vector<unique_ptr<BaseStatistics>> owned_stats;
-	optional_ptr<const BaseStatistics> filter_stats;
+	optional_ptr<BaseStatistics> filter_stats;
 	optional_ptr<const BoundConstantExpression> constant_expr;
 	auto comparison_type = comp_expr.GetExpressionType();
 	auto &left = BoundComparisonExpression::Left(comp_expr);
@@ -213,11 +252,19 @@ static FilterPropagateResult CheckComparisonStatistics(const BoundFunctionExpres
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	if (!filter_stats->CanHaveNoNull()) {
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		return comparison_type == ExpressionType::COMPARE_DISTINCT_FROM ? FilterPropagateResult::FILTER_ALWAYS_TRUE
+		                                                                : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	auto result = CheckZonemapAgainstConstants(*filter_stats, comparison_type, array_ptr<const Value>(&constant, 1));
-	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && filter_stats->CanHaveNull()) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	if (filter_stats->CanHaveNull()) {
+		if (comparison_type == ExpressionType::COMPARE_DISTINCT_FROM &&
+		    result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		if (comparison_type != ExpressionType::COMPARE_DISTINCT_FROM &&
+		    result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
 	}
 	return result;
 }
@@ -229,7 +276,16 @@ static FilterPropagateResult CheckFunctionStatistics(const BoundFunctionExpressi
 	if (!func_expr.function.HasFilterPruneCallback()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	FunctionStatisticsPruneInput input(func_expr.bind_info.get(), stats);
+	vector<unique_ptr<BaseStatistics>> owned_stats;
+	auto filter_stats = &stats;
+	if (!func_expr.children.empty()) {
+		auto child_stats = TryGetFilterStats(*func_expr.children[0], stats, owned_stats);
+		if (!child_stats) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		filter_stats = child_stats.get();
+	}
+	FunctionStatisticsPruneInput input(func_expr.bind_info.get(), *filter_stats);
 	return func_expr.function.GetFilterPruneCallback()(input);
 }
 
