@@ -283,18 +283,12 @@ idx_t SumApproxSize(const vector<EvictionQueueInformation> &info) {
 
 } // namespace
 
-// Regression test for an eviction-queue dead-node accounting bug.
+// Regression test for eviction-queue dead-node accounting.
 //
-// Each non-tiny BlockMemory placed in the eviction queue stays referenced from there via a
-// weak_ptr<BlockMemory> + sequence number. When the BlockMemory is destroyed, the latest queue
-// entry pointing at it becomes dead and must be reflected in the per-queue dead_nodes counter.
-//
-// Previously, BlockMemory::~BlockMemory only called IncrementDeadNodes when GetBuffer() was
-// non-null. But if the block had already been evicted (buffer destroyed) before the BlockHandle
-// was dropped, the counter was never incremented for it, even though a stale entry still sat in
-// the queue. This systematically under-counted dead_nodes and made the purge-ratio early-out
-// fire too aggressively, letting dead entries accumulate.
-TEST_CASE("Test eviction queue: dead_nodes is incremented on BlockMemory destruction even after eviction",
+// Only blocks with a live queue entry (eviction_seq_num > 0) should increment dead_nodes on
+// destruction. Blocks that were evicted via IterateUnloadableBlocks have their seq_num reset
+// to 0 and their queue entry already consumed — they must NOT inflate the counter.
+TEST_CASE("Test eviction queue: dead_nodes is incremented only for blocks with live queue entries",
           "[storage][buffer_pool]") {
 	DuckDB db;
 	Connection con(db);
@@ -338,13 +332,14 @@ TEST_CASE("Test eviction queue: dead_nodes is incremented on BlockMemory destruc
 
 	const idx_t dead_before = SumDeadNodes(buffer_pool.GetEvictionQueueInfo());
 
-	// Drop all BlockHandles. Every ~BlockMemory must increment dead_nodes once, regardless
-	// of whether the buffer was already null at destruction time.
+	// Drop all BlockHandles. Only the still-loaded blocks (which have eviction_seq_num > 0
+	// and a live queue entry) should increment dead_nodes. Evicted blocks had their entries
+	// consumed by IterateUnloadableBlocks and seq_num reset to 0.
 	handles.clear();
 
 	const idx_t dead_after = SumDeadNodes(buffer_pool.GetEvictionQueueInfo());
 
-	REQUIRE(dead_after - dead_before == total_buffers);
+	REQUIRE(dead_after - dead_before == held_buffers);
 }
 
 // Sanity check the dead_nodes counter never exceeds the queue size and never decrements past
