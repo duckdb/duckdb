@@ -480,6 +480,7 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 		auto dict_idx = offsets.get_index(i);
 		result_addresses.WriteValue(dict_addresses[dict_idx]);
 	}
+	FlatVector::SetSize(state.addresses, groups.size());
 
 	// finally process the aggregates (ht_offsets are only valid for unique entries, not the full payload)
 	UpdateAggregates(payload, filter, false);
@@ -781,6 +782,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			addresses[i] = row_location;
 		}
 		count += chunk_size;
+		FlatVector::SetSize(addresses_v, chunk_size);
 		return chunk_size;
 	}
 
