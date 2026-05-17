@@ -25,12 +25,14 @@ class BlockingConcurrentQueue;
 
 struct ProducerToken {
 	//! Constructor
-	template <typename T, typename Traits>
-	explicit ProducerToken(ConcurrentQueue<T> &);
+	template <typename T>
+	explicit ProducerToken(ConcurrentQueue<T> &) {
+	}
 	//! Constructor
-	template <typename T, typename Traits>
-	explicit ProducerToken(BlockingConcurrentQueue<T> &);
-	//! Constructor
+	template <typename T>
+	explicit ProducerToken(BlockingConcurrentQueue<T> &) {
+	}
+	//! Move constructor
 	ProducerToken(ProducerToken &&) {
 	}
 	//! Is valid token?
