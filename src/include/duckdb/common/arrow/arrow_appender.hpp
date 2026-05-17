@@ -20,7 +20,8 @@ class ArrowTypeExtensionData;
 //! The ArrowAppender class can be used to incrementally construct an arrow array by appending data chunks into it
 class ArrowAppender {
 public:
-	DUCKDB_API ArrowAppender(vector<LogicalType> types_p, const idx_t initial_capacity, ClientProperties options,
+	DUCKDB_API ArrowAppender(vector<LogicalType> types_p, const idx_t initial_capacity,
+	                         const shared_ptr<ClientContext> &client_context,
 	                         unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_type_cast);
 	DUCKDB_API ~ArrowAppender();
 
@@ -45,7 +46,7 @@ private:
 	//! The total row count that has been appended
 	idx_t row_count = 0;
 
-	ClientProperties options;
+	shared_ptr<ClientContext> client_context;
 };
 
 } // namespace duckdb

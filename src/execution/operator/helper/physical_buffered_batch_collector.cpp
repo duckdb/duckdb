@@ -100,8 +100,7 @@ unique_ptr<GlobalSinkState> PhysicalBufferedBatchCollector::GetGlobalSinkState(C
 unique_ptr<QueryResult> PhysicalBufferedBatchCollector::GetResult(GlobalSinkState &state) const {
 	auto &gstate = state.Cast<BufferedBatchCollectorGlobalState>();
 	auto cc = gstate.context.lock();
-	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types, names, cc->GetClientProperties(),
-	                                           gstate.buffered_data);
+	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types, names, gstate.buffered_data);
 	return std::move(result);
 }
 

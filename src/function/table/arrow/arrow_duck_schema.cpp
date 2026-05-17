@@ -428,9 +428,9 @@ LogicalType ArrowTypeExtensionData::GetInternalType() const {
 }
 
 unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>>
-ArrowTypeExtensionData::GetExtensionTypes(ClientContext &context, const vector<LogicalType> &duckdb_types) {
+ArrowTypeExtensionData::GetExtensionTypes(ClientContext &client_context, const vector<LogicalType> &duckdb_types) {
 	unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_types;
-	const auto &db_config = DBConfig::GetConfig(context);
+	const auto &db_config = DBConfig::GetConfig(client_context);
 	for (idx_t i = 0; i < duckdb_types.size(); i++) {
 		if (db_config.HasArrowExtension(duckdb_types[i])) {
 			extension_types.insert({i, db_config.GetArrowExtension(duckdb_types[i]).GetTypeExtension()});

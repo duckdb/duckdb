@@ -793,6 +793,7 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 	REQUIRE_NOTHROW(result->ToString());
 
 	// Reset connection AND db
+	result.reset();
 	con.reset();
 	db.reset();
 
@@ -809,6 +810,7 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 	REQUIRE_NOTHROW(result->ToString());
 
 	// Reset connection AND db
+	result.reset();
 	con.reset();
 	db.reset();
 

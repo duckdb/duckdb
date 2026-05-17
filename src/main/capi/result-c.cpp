@@ -1,6 +1,7 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/allocator.hpp"
+#include <cassert>
 
 namespace duckdb {
 
@@ -454,7 +455,7 @@ duckdb_arrow_options duckdb_result_get_arrow_options(duckdb_result *result) {
 	if (!result_data.result) {
 		return nullptr;
 	}
-	auto arrow_options_wrapper = new duckdb::CClientArrowOptionsWrapper(result_data.result->client_properties);
+	auto arrow_options_wrapper = new duckdb::CClientArrowOptionsWrapper(result_data.result->client_context);
 	return reinterpret_cast<duckdb_arrow_options>(arrow_options_wrapper);
 }
 

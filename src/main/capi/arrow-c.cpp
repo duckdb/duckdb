@@ -34,7 +34,7 @@ duckdb_error_data duckdb_to_arrow_schema(duckdb_arrow_options arrow_options, duc
 	}
 	const auto arrow_options_wrapper = reinterpret_cast<CClientArrowOptionsWrapper *>(arrow_options);
 	try {
-		ArrowConverter::ToArrowSchema(out_schema, schema_types, schema_names, arrow_options_wrapper->properties);
+		ArrowConverter::ToArrowSchema(out_schema, schema_types, schema_names, *arrow_options_wrapper->client_context);
 	} catch (const duckdb::Exception &ex) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
 	} catch (const std::exception &ex) {
@@ -53,11 +53,12 @@ duckdb_error_data duckdb_data_chunk_to_arrow(duckdb_arrow_options arrow_options,
 	}
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 	auto arrow_options_wrapper = reinterpret_cast<CClientArrowOptionsWrapper *>(arrow_options);
-	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
-	    *arrow_options_wrapper->properties.client_context, dchunk->GetTypes());
+	auto extension_type_cast =
+	    duckdb::ArrowTypeExtensionData::GetExtensionTypes(*arrow_options_wrapper->client_context, dchunk->GetTypes());
 
 	try {
-		ArrowConverter::ToArrowArray(*dchunk, out_arrow_array, arrow_options_wrapper->properties, extension_type_cast);
+		ArrowConverter::ToArrowArray(*dchunk, out_arrow_array, *arrow_options_wrapper->client_context,
+		                             extension_type_cast);
 	} catch (const duckdb::Exception &ex) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
 	} catch (const std::exception &ex) {
@@ -179,7 +180,7 @@ duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema 
 	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
 	try {
 		ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
-		                              wrapper->result->client_properties);
+		                              *wrapper->result->client_context);
 	} catch (...) {
 		return DuckDBError;
 	}
@@ -194,7 +195,6 @@ duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, du
 	if (!wrapper || !wrapper->statement || !wrapper->statement->data) {
 		return DuckDBError;
 	}
-	auto properties = wrapper->statement->context->GetClientProperties();
 	duckdb::vector<duckdb::LogicalType> prepared_types;
 	duckdb::vector<duckdb::string> prepared_names;
 
@@ -221,7 +221,7 @@ duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, du
 		D_ASSERT(!result_schema->release);
 	}
 
-	ArrowConverter::ToArrowSchema(result_schema, prepared_types, prepared_names, properties);
+	ArrowConverter::ToArrowSchema(result_schema, prepared_types, prepared_names, *wrapper->statement->context);
 	return DuckDBSuccess;
 }
 
@@ -237,10 +237,10 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
 		return DuckDBSuccess;
 	}
-	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
-	    *wrapper->result->client_properties.client_context, wrapper->result->types);
+	auto extension_type_cast =
+	    duckdb::ArrowTypeExtensionData::GetExtensionTypes(*wrapper->result->client_context, wrapper->result->types);
 	ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array),
-	                             wrapper->result->client_properties, extension_type_cast);
+	                             *wrapper->result->client_context, extension_type_cast);
 	return DuckDBSuccess;
 }
 
@@ -250,11 +250,11 @@ void duckdb_result_arrow_array(duckdb_result result, duckdb_data_chunk chunk, du
 	}
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 	auto &result_data = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
-	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(
-	    *result_data.result->client_properties.client_context, result_data.result->types);
+	auto extension_type_cast = duckdb::ArrowTypeExtensionData::GetExtensionTypes(*result_data.result->client_context,
+	                                                                             result_data.result->types);
 
 	ArrowConverter::ToArrowArray(*dchunk, reinterpret_cast<ArrowArray *>(*out_array),
-	                             result_data.result->client_properties, extension_type_cast);
+	                             *result_data.result->client_context, extension_type_cast);
 }
 
 idx_t duckdb_arrow_row_count(duckdb_arrow result) {

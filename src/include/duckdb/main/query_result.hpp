@@ -62,13 +62,14 @@ class QueryResult : public BaseQueryResult {
 public:
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
-	                       vector<LogicalType> types, vector<string> names, ClientProperties client_properties);
+	                       vector<LogicalType> types, vector<string> names,
+	                       const shared_ptr<ClientContext> &client_context);
 	//! Creates an unsuccessful query result with error condition
-	DUCKDB_API QueryResult(QueryResultType type, ErrorData error);
+	DUCKDB_API QueryResult(QueryResultType type, ErrorData error) : BaseQueryResult(type, std::move(error)) {};
 	DUCKDB_API ~QueryResult() override;
 
-	//! Properties from the client context
-	ClientProperties client_properties;
+	//! The client context
+	const shared_ptr<ClientContext> client_context;
 	//! The next result (if any)
 	unique_ptr<QueryResult> next;
 

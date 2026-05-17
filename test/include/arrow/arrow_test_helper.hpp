@@ -16,7 +16,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/main/client_config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
@@ -37,9 +36,9 @@ namespace duckdb {
 class ArrowTestFactory {
 public:
 	ArrowTestFactory(vector<LogicalType> types_p, vector<string> names_p, duckdb::unique_ptr<QueryResult> result_p,
-	                 bool big_result, ClientProperties options, ClientContext &context)
+	                 bool big_result, ClientContext &context)
 	    : types(std::move(types_p)), names(std::move(names_p)), result(std::move(result_p)), big_result(big_result),
-	      options(std::move(options)), context(context) {
+	      context(context) {
 		if (result->type == QueryResultType::ARROW_RESULT) {
 			auto &arrow_result = result->Cast<ArrowQueryResult>();
 			prefetched_chunks = arrow_result.ConsumeArrays();
@@ -53,16 +52,13 @@ public:
 	vector<unique_ptr<ArrowArrayWrapper>> prefetched_chunks;
 	vector<unique_ptr<ArrowArrayWrapper>>::iterator chunk_iterator;
 	bool big_result;
-	ClientProperties options;
 	ClientContext &context;
 
 	struct ArrowArrayStreamData {
-		explicit ArrowArrayStreamData(ArrowTestFactory &factory, ClientProperties options)
-		    : factory(factory), options(options) {
+		explicit ArrowArrayStreamData(ArrowTestFactory &factory) : factory(factory) {
 		}
 
 		ArrowTestFactory &factory;
-		ClientProperties options;
 	};
 
 	static int ArrowArrayStreamGetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out);
@@ -78,7 +74,7 @@ public:
 
 	static void GetSchema(ArrowArrayStream *, ArrowSchema &schema);
 
-	void ToArrowSchema(struct ArrowSchema *out);
+	void ToArrowSchema(struct ArrowSchema *out) const;
 };
 
 class ArrowTestHelper {

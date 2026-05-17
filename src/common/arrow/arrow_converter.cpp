@@ -4,10 +4,6 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/sel_cache.hpp"
-#include "duckdb/common/types/vector_cache.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -17,9 +13,9 @@
 namespace duckdb {
 
 void ArrowConverter::ToArrowArray(
-    DataChunk &input, ArrowArray *out_array, ClientProperties options,
+    DataChunk &input, ArrowArray *out_array, ClientContext &client_context,
     const unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> &extension_type_cast) {
-	ArrowAppender appender(input.GetTypes(), input.size(), std::move(options), extension_type_cast);
+	ArrowAppender appender(input.GetTypes(), input.size(), client_context.shared_from_this(), extension_type_cast);
 	appender.Append(input, 0, input.size(), input.size());
 	*out_array = appender.Finalize();
 }
@@ -61,10 +57,10 @@ void InitializeChild(ArrowSchema &child, DuckDBArrowSchemaHolder &root_holder, c
 }
 
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                    ClientProperties &options, ClientContext &context);
+                    ClientContext &client_context);
 
 void SetArrowStructFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                          ClientProperties &options, ClientContext &context, bool map_is_parent = false) {
+                          ClientContext &client_context, bool map_is_parent = false) {
 	child.format = "+s";
 	auto &child_types = StructType::GetChildTypes(type);
 	child.n_children = NumericCast<int64_t>(child_types.size());
@@ -80,7 +76,7 @@ void SetArrowStructFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &chi
 		InitializeChild(*child.children[type_idx], root_holder);
 		root_holder.owned_type_names.push_back(AddName(child_types[type_idx].first));
 		child.children[type_idx]->name = root_holder.owned_type_names.back().get();
-		SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, options, context);
+		SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, client_context);
 	}
 	if (map_is_parent) {
 		child.children[0]->flags = 0; // Set the 'keys' field to non-nullable
@@ -88,7 +84,7 @@ void SetArrowStructFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &chi
 }
 
 void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                       ClientProperties &options, ClientContext &context) {
+                       ClientContext &client_context) {
 	child.format = "+m";
 	//! Map has one child which is a struct
 	child.n_children = 1;
@@ -100,27 +96,28 @@ void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 	child.children = &root_holder.nested_children_ptr.back()[0];
 	child.children[0]->name = "entries";
 	child.children[0]->flags = 0; // Set the 'entries' field to non-nullable
-	SetArrowStructFormat(root_holder, **child.children, ListType::GetChildType(type), options, context, true);
+	SetArrowStructFormat(root_holder, **child.children, ListType::GetChildType(type), client_context, true);
 }
 
 bool SetArrowExtension(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                       ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
+                       ClientContext &client_context) {
+	auto &config = DBConfig::GetConfig(client_context);
 	if (config.HasArrowExtension(type)) {
 		auto arrow_extension = config.GetArrowExtension(type);
-		arrow_extension.PopulateArrowSchema(root_holder, child, type, context, arrow_extension);
+		arrow_extension.PopulateArrowSchema(root_holder, child, type, client_context, arrow_extension);
 		return true;
 	}
 	return false;
 }
 
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                    ClientProperties &options, ClientContext &context) {
+                    ClientContext &client_context) {
+	auto options = client_context.GetClientProperties();
 	if (type.HasAlias()) {
 		// If it is a json type, we only export it as json if arrow_lossless_conversion = True
 		if (!(type.IsJSONType() && !options.arrow_lossless_conversion)) {
 			// If the type has an alias, we check if it is an Arrow-Type extension
-			if (SetArrowExtension(root_holder, child, type, context)) {
+			if (SetArrowExtension(root_holder, child, type, client_context)) {
 				return;
 			}
 		}
@@ -128,7 +125,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		if (options.arrow_lossless_conversion) {
-			SetArrowExtension(root_holder, child, type, context);
+			SetArrowExtension(root_holder, child, type, client_context);
 		} else {
 			child.format = "b";
 		}
@@ -163,7 +160,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT: {
 		if (options.arrow_lossless_conversion) {
-			SetArrowExtension(root_holder, child, type, context);
+			SetArrowExtension(root_holder, child, type, client_context);
 		} else {
 			child.format = "d:38,0";
 		}
@@ -174,7 +171,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::UUID: {
 		if (options.arrow_lossless_conversion) {
-			SetArrowExtension(root_holder, child, type, context);
+			SetArrowExtension(root_holder, child, type, client_context);
 		} else {
 			if (options.produce_arrow_string_view && options.arrow_output_version >= ArrowFormatVersion::V1_4) {
 				// List views are only introduced in arrow format v1.4
@@ -206,7 +203,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::TIME_TZ: {
 		if (options.arrow_lossless_conversion) {
-			SetArrowExtension(root_holder, child, type, context);
+			SetArrowExtension(root_holder, child, type, client_context);
 		} else {
 			child.format = "ttu";
 		}
@@ -283,7 +280,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::BIT: {
 		if (options.arrow_lossless_conversion) {
-			SetArrowExtension(root_holder, child, type, context);
+			SetArrowExtension(root_holder, child, type, client_context);
 		} else {
 			if (options.arrow_output_version >= ArrowFormatVersion::V1_4) {
 				// Views are only introduced in arrow format v1.4
@@ -320,11 +317,11 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		InitializeChild(root_holder.nested_children.back()[0], root_holder);
 		child.children = &root_holder.nested_children_ptr.back()[0];
 		child.children[0]->name = "l";
-		SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), options, context);
+		SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), client_context);
 		break;
 	}
 	case LogicalTypeId::STRUCT: {
-		SetArrowStructFormat(root_holder, child, type, options, context);
+		SetArrowStructFormat(root_holder, child, type, client_context);
 		break;
 	}
 	case LogicalTypeId::ARRAY: {
@@ -341,11 +338,11 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
 		InitializeChild(root_holder.nested_children.back()[0], root_holder);
 		child.children = &root_holder.nested_children_ptr.back()[0];
-		SetArrowFormat(root_holder, **child.children, child_type, options, context);
+		SetArrowFormat(root_holder, **child.children, child_type, client_context);
 		break;
 	}
 	case LogicalTypeId::MAP: {
-		SetArrowMapFormat(root_holder, child, type, options, context);
+		SetArrowMapFormat(root_holder, child, type, client_context);
 		break;
 	}
 	case LogicalTypeId::UNION: {
@@ -367,7 +364,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			root_holder.owned_type_names.push_back(AddName(child_types[type_idx].first));
 
 			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
-			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, options, context);
+			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, client_context);
 
 			format += to_string(type_idx) + ",";
 		}
@@ -405,7 +402,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	}
 	default: {
 		// It is possible we can export this type as a registered extension
-		auto success = SetArrowExtension(root_holder, child, type, context);
+		auto success = SetArrowExtension(root_holder, child, type, client_context);
 		if (!success) {
 			throw NotImplementedException("Unsupported Arrow type %s", type.ToString());
 		}
@@ -414,7 +411,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 }
 
 void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<LogicalType> &types,
-                                   const vector<string> &names, ClientProperties &options) {
+                                   const vector<string> &names, ClientContext &client_context) {
 	D_ASSERT(out_schema);
 	D_ASSERT(types.size() == names.size());
 	const idx_t column_count = types.size();
@@ -442,7 +439,7 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
 		root_holder->owned_column_names.push_back(AddName(names[col_idx]));
 		auto &child = root_holder->children[col_idx];
 		InitializeChild(child, *root_holder, names[col_idx]);
-		SetArrowFormat(*root_holder, child, types[col_idx], options, *options.client_context);
+		SetArrowFormat(*root_holder, child, types[col_idx], client_context);
 	}
 
 	// Release ownership to caller

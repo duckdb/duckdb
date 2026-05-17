@@ -71,6 +71,7 @@ TEST_CASE("Test using appender after connection is gone", "[api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	// removing the connection invalidates the appender
+	result.reset();
 	conn.reset();
 	appender->BeginRow();
 	appender->Append<int32_t>(2);

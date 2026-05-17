@@ -6,7 +6,6 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Use sequences over different runs without checkpointing", "[storage]") {
-	duckdb::unique_ptr<QueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 
 	// make sure the database does not exist
@@ -15,6 +14,7 @@ TEST_CASE("Use sequences over different runs without checkpointing", "[storage]"
 		// create a database and insert values
 		DuckDB db(storage_database);
 		Connection con(db);
+		duckdb::unique_ptr<QueryResult> result;
 		REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq;"));
 		REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE seq_cycle INCREMENT 1 MAXVALUE 3 START 2 CYCLE;"));
 		result = con.Query("SELECT nextval('seq')");
@@ -34,6 +34,7 @@ TEST_CASE("Use sequences over different runs without checkpointing", "[storage]"
 	{
 		DuckDB db(storage_database);
 		Connection con(db);
+		duckdb::unique_ptr<QueryResult> result;
 		result = con.Query("SELECT nextval('seq')");
 		REQUIRE(CHECK_COLUMN(result, 0, {2}));
 		result = con.Query("SELECT currval('seq')");
@@ -47,6 +48,7 @@ TEST_CASE("Use sequences over different runs without checkpointing", "[storage]"
 	{
 		DuckDB db(storage_database);
 		Connection con(db);
+		duckdb::unique_ptr<QueryResult> result;
 		result = con.Query("SELECT nextval('seq'), nextval('seq');");
 		REQUIRE(CHECK_COLUMN(result, 0, {3}));
 		REQUIRE(CHECK_COLUMN(result, 1, {4}));

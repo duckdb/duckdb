@@ -33,7 +33,7 @@ public:
 	//! Create a successful StreamQueryResult. StreamQueryResults should always be successful initially (it makes no
 	//! sense to stream an error).
 	DUCKDB_API StreamQueryResult(StatementType statement_type, StatementProperties properties,
-	                             vector<LogicalType> types, vector<string> names, ClientProperties client_properties,
+	                             vector<LogicalType> types, vector<string> names,
 	                             shared_ptr<BufferedData> buffered_data);
 	DUCKDB_API explicit StreamQueryResult(ErrorData error);
 	DUCKDB_API ~StreamQueryResult() override;
@@ -53,9 +53,6 @@ public:
 
 	//! Closes the StreamQueryResult
 	DUCKDB_API void Close();
-
-	//! The client context this StreamQueryResult belongs to
-	shared_ptr<ClientContext> context;
 
 protected:
 	DUCKDB_API unique_ptr<DataChunk> FetchInternal() override;

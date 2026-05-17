@@ -17,12 +17,11 @@ ArrowBatchTask::ArrowBatchTask(ArrowQueryResult &result, vector<idx_t> record_ba
 
 void ArrowBatchTask::ProduceRecordBatches() {
 	auto &arrays = result.Arrays();
-	auto arrow_options = executor.context.GetClientProperties();
 	for (auto &index : record_batch_indices) {
 		auto &array = arrays[index];
 		D_ASSERT(array);
 		const idx_t count = ArrowUtil::FetchChunk(
-		    scan_state, arrow_options, batch_size, &array->arrow_array,
+		    scan_state, executor.context, batch_size, &array->arrow_array,
 		    ArrowTypeExtensionData::GetExtensionTypes(event->GetClientContext(), scan_state.Types()));
 		(void)count;
 		D_ASSERT(count != 0);

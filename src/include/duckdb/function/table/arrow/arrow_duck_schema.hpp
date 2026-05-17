@@ -47,7 +47,7 @@ public:
 
 	//! This function returns possible extension types to given DuckDB types
 	static unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>>
-	GetExtensionTypes(ClientContext &context, const vector<LogicalType> &duckdb_types);
+	GetExtensionTypes(ClientContext &client_context, const vector<LogicalType> &duckdb_types);
 	LogicalType GetDuckDBType() const;
 
 private:

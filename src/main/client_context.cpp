@@ -1053,7 +1053,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 		vector<string> names;
 		auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator());
 		return make_uniq<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, std::move(names),
-		                                          std::move(collection), GetClientProperties());
+		                                          std::move(collection), shared_from_this());
 	}
 
 	unique_ptr<QueryResult> result;
@@ -1491,8 +1491,7 @@ ClientProperties ClientContext::GetClientProperties() {
 	        arrow_use_list_view,
 	        arrow_use_string_view,
 	        arrow_lossless_conversion,
-	        arrow_format_version,
-	        this};
+	        arrow_format_version};
 }
 
 bool ClientContext::ExecutionIsFinished() {

@@ -2,18 +2,15 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
-#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
 StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProperties properties,
-                                     vector<LogicalType> types, vector<string> names,
-                                     ClientProperties client_properties, shared_ptr<BufferedData> data)
+                                     vector<LogicalType> types, vector<string> names, shared_ptr<BufferedData> data)
     : QueryResult(QueryResultType::STREAM_RESULT, statement_type, std::move(properties), std::move(types),
-                  std::move(names), std::move(client_properties)),
+                  std::move(names), data->GetContext()),
       buffered_data(std::move(data)) {
-	context = buffered_data->GetContext();
 }
 
 StreamQueryResult::StreamQueryResult(ErrorData error) : QueryResult(QueryResultType::STREAM_RESULT, std::move(error)) {
@@ -34,14 +31,14 @@ string StreamQueryResult::ToString() {
 }
 
 unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
-	if (!context) {
+	if (!client_context) {
 		string error_str = "Attempting to execute an unsuccessful or closed pending query result";
 		if (HasError()) {
 			error_str += StringUtil::Format("\nError: %s", GetError());
 		}
 		throw InvalidInputException(error_str);
 	}
-	return context->LockContext();
+	return client_context->LockContext();
 }
 
 StreamExecutionResult StreamQueryResult::ExecuteTaskInternal(ClientContextLock &lock) {
@@ -56,7 +53,7 @@ StreamExecutionResult StreamQueryResult::ExecuteTask() {
 void StreamQueryResult::WaitForTask() {
 	auto lock = LockContext();
 	buffered_data->UnblockSinks();
-	context->WaitForTask(*lock, *this);
+	client_context->WaitForTask(*lock, *this);
 }
 
 static bool ExecutionErrorOccurred(StreamExecutionResult result) {
@@ -80,7 +77,7 @@ unique_ptr<DataChunk> StreamQueryResult::FetchNextInternal(ClientContextLock &lo
 		}
 		chunk = buffered_data->Scan();
 		if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
-			context->CleanupInternal(lock, this);
+			client_context->CleanupInternal(lock, this);
 			chunk = nullptr;
 		}
 		return chunk;
@@ -91,18 +88,18 @@ unique_ptr<DataChunk> StreamQueryResult::FetchNextInternal(ClientContextLock &lo
 			invalidate_query = false;
 		} else if (Exception::InvalidatesDatabase(error.Type())) {
 			// fatal exceptions invalidate the entire database
-			auto &config = context->config;
+			auto &config = client_context->config;
 			if (!config.query_verification_enabled) {
-				auto &db_instance = DatabaseInstance::GetDatabase(*context);
+				auto &db_instance = DatabaseInstance::GetDatabase(*client_context);
 				ValidChecker::Invalidate(db_instance, error.RawMessage());
 			}
 		}
-		context->ProcessError(error, context->GetCurrentQuery());
+		client_context->ProcessError(error, client_context->GetCurrentQuery());
 		SetError(std::move(error));
 	} catch (...) { // LCOV_EXCL_START
 		SetError(ErrorData("Unhandled exception in FetchInternal"));
 	} // LCOV_EXCL_STOP
-	context->CleanupInternal(lock, this, invalidate_query);
+	client_context->CleanupInternal(lock, this, invalidate_query);
 	return nullptr;
 }
 
@@ -142,7 +139,7 @@ static unique_ptr<DataChunk> AlternativeFetch(StreamQueryResult &stream_result) 
 #endif
 
 unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
-	if (HasError() || !context) {
+	if (HasError() || !client_context) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}
 	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
@@ -161,7 +158,7 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		collection->Append(append_state, *chunk);
 	}
 	auto result =
-	    make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection), client_properties);
+	    make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection), client_context);
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(GetErrorObject());
 	}
@@ -169,9 +166,9 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 }
 
 bool StreamQueryResult::IsOpenInternal(ClientContextLock &lock) {
-	bool invalidated = !success || !context;
+	bool invalidated = !success || !client_context;
 	if (!invalidated) {
-		invalidated = !context->IsActiveResult(lock, *this);
+		invalidated = !client_context->IsActiveResult(lock, *this);
 	}
 	return !invalidated;
 }
@@ -187,7 +184,7 @@ void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 }
 
 bool StreamQueryResult::IsOpen() {
-	if (!success || !context) {
+	if (!success || !client_context) {
 		return false;
 	}
 	auto lock = LockContext();
@@ -196,7 +193,6 @@ bool StreamQueryResult::IsOpen() {
 
 void StreamQueryResult::Close() {
 	buffered_data->Close();
-	context.reset();
 }
 
 bool StreamQueryResult::IsChunkReady(StreamExecutionResult result) {

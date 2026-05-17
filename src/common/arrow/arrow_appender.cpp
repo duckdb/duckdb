@@ -8,6 +8,7 @@
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/list.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -15,9 +16,11 @@ namespace duckdb {
 // ArrowAppender
 //===--------------------------------------------------------------------===//
 
-ArrowAppender::ArrowAppender(vector<LogicalType> types_p, const idx_t initial_capacity, ClientProperties options,
+ArrowAppender::ArrowAppender(vector<LogicalType> types_p, const idx_t initial_capacity,
+                             const shared_ptr<ClientContext> &client_context,
                              unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_type_cast)
-    : types(std::move(types_p)), options(options) {
+    : types(std::move(types_p)), client_context(client_context) {
+	auto options = client_context->GetClientProperties();
 	for (idx_t i = 0; i < types.size(); i++) {
 		unique_ptr<ArrowAppendData> entry;
 		bool bitshift_boolean = types[i].id() == LogicalTypeId::BOOLEAN && !options.arrow_lossless_conversion;
@@ -40,8 +43,7 @@ void ArrowAppender::Append(DataChunk &input, const idx_t from, const idx_t to, c
 	for (idx_t i = 0; i < input.ColumnCount(); i++) {
 		if (root_data[i]->extension_data && root_data[i]->extension_data->duckdb_to_arrow) {
 			Vector input_data(root_data[i]->extension_data->GetInternalType());
-			root_data[i]->extension_data->duckdb_to_arrow(*options.client_context, input.data[i], input_data,
-			                                              input_size);
+			root_data[i]->extension_data->duckdb_to_arrow(*client_context, input.data[i], input_data, input_size);
 			root_data[i]->append_vector(*root_data[i], input_data, from, to, input_size);
 		} else {
 			root_data[i]->append_vector(*root_data[i], input.data[i], from, to, input_size);
@@ -104,6 +106,7 @@ ArrowArray *ArrowAppender::FinalizeChild(const LogicalType &type, unique_ptr<Arr
 //! Returns the underlying arrow array
 ArrowArray ArrowAppender::Finalize() {
 	D_ASSERT(root_data.size() == types.size());
+	auto options = client_context->GetClientProperties();
 	auto root_holder = make_uniq<ArrowAppendData>(options);
 
 	ArrowArray result;

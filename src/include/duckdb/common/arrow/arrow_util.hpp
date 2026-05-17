@@ -9,7 +9,7 @@
 #pragma once
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/main/chunk_scan_state.hpp"
-#include "duckdb/main/client_properties.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/error_data.hpp"
 
@@ -21,10 +21,11 @@ class ArrowTypeExtensionData;
 
 class ArrowUtil {
 public:
-	static bool TryFetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out,
-	                          idx_t &result_count, ErrorData &error,
+	static bool TryFetchChunk(ChunkScanState &scan_state, ClientContext &client_context, idx_t chunk_size,
+	                          ArrowArray *out, idx_t &result_count, ErrorData &error,
 	                          unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_type_cast);
-	static idx_t FetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out,
+	static idx_t FetchChunk(ChunkScanState &scan_state, ClientContext &client_context, idx_t chunk_size,
+	                        ArrowArray *out,
 	                        const unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> &extension_type_cast);
 
 private:

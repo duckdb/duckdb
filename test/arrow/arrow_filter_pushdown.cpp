@@ -20,8 +20,7 @@ static unique_ptr<ArrowTestFactory> MakeArrowFactory(Connection &con, const stri
 	REQUIRE(!result->HasError());
 	auto types = result->types;
 	auto names = result->names;
-	return make_uniq<ArrowTestFactory>(std::move(types), std::move(names), std::move(result), false, client_properties,
-	                                   *con.context);
+	return make_uniq<ArrowTestFactory>(std::move(types), std::move(names), std::move(result), false, *con.context);
 }
 
 // Helper: get the EXPLAIN output for an arrow_scan with a filter
