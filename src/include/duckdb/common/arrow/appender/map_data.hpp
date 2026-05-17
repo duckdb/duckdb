@@ -56,8 +56,13 @@ public:
 		key_vector_copy.Slice(key_vector, child_sel, list_size);
 		Vector value_vector_copy(value_vector.GetType());
 		value_vector_copy.Slice(value_vector, child_sel, list_size);
-		key_data.append_vector(key_data, key_vector_copy, 0, list_size, list_size);
-		value_data.append_vector(value_data, value_vector_copy, 0, list_size, list_size);
+		// AppendChild routes through the key/value Arrow extension (if any)
+		// so e.g. arrow.bool8 BOOLEAN map-keys/values get the
+		// duckdb_to_arrow conversion before being fed into the byte-packed
+		// appender. Without this, BOOLEAN map values silently corrupt and
+		// BOOLEAN map keys can crash ingest with a duplicate-key error.
+		key_data.AppendChild(key_vector_copy, 0, list_size, list_size);
+		value_data.AppendChild(value_vector_copy, 0, list_size, list_size);
 
 		append_data.row_count += size;
 		struct_data.row_count += size;

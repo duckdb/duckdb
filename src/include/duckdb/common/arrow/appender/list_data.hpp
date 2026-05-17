@@ -37,7 +37,10 @@ public:
 		auto child_size = child_indices.size();
 		Vector child_copy(child.GetType());
 		child_copy.Slice(child, child_sel, child_size);
-		append_data.child_data[0]->append_vector(*append_data.child_data[0], child_copy, 0, child_size, child_size);
+		// AppendChild routes through the child's Arrow extension (if any) so
+		// e.g. arrow.bool8 BOOLEAN list-elements get the duckdb_to_arrow
+		// conversion before being fed into the byte-packed appender.
+		append_data.child_data[0]->AppendChild(child_copy, 0, child_size, child_size);
 		append_data.row_count += size;
 	}
 
