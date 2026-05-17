@@ -46,6 +46,10 @@ insert into test from (values
 	) t(s)
 	;
 
+# checkpoint to ensure stats are re-calculated
+statement ok
+checkpoint
+
 query II
 select s.min_string_length, s.total_string_length from (select stats(s) s from test limit 1)
 ----
