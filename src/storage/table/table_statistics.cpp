@@ -165,8 +165,8 @@ void TableStatistics::MergeStats(idx_t i, BaseStatistics &stats) {
 	MergeStats(*l, i, stats);
 }
 
-void TableStatistics::MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatistics &stats) {
-	column_stats[i]->Statistics().Merge(stats);
+void TableStatistics::MergeStats(TableStatisticsLock &lock, idx_t i, BaseStatistics &stats, StatsMergeType merge_type) {
+	column_stats[i]->Statistics().Merge(stats, merge_type);
 }
 
 ColumnStatistics &TableStatistics::GetStats(TableStatisticsLock &lock, idx_t i) {
@@ -280,7 +280,7 @@ unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {
 	return make_uniq<TableStatisticsLock>(*stats_lock);
 }
 
-bool TableStatistics::Empty() {
+bool TableStatistics::Empty() const {
 	D_ASSERT(column_stats.empty() == (stats_lock.get() == nullptr));
 	return column_stats.empty();
 }

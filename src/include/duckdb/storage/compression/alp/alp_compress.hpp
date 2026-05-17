@@ -114,12 +114,12 @@ public:
 		}
 
 		if (nulls_idx) {
-			current_segment->stats.statistics.SetHasNullFast();
+			current_segment->GetStatsMutable().SetHasNullFast();
 		}
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
-			current_segment->stats.statistics.SetHasNoNullFast();
+			current_segment->GetStatsMutable().SetHasNoNullFast();
 			for (idx_t i = 0; i < vector_idx; i++) {
-				current_segment->stats.statistics.UpdateNumericStats<T>(input_vector[i]);
+				current_segment->GetStatsMutable().UpdateNumericStats<T>(input_vector[i]);
 			}
 		}
 		current_segment->count += vector_idx;

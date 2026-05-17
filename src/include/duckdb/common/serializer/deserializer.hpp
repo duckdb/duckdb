@@ -137,6 +137,16 @@ public:
 		OnPropertyEnd();
 	}
 
+	inline bool ReadOptionalProperty(const field_id_t field_id, const char *tag, data_ptr_t ret, idx_t count) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			OnOptionalPropertyEnd(false);
+			return false;
+		}
+		ReadDataPtr(ret, count);
+		OnOptionalPropertyEnd(true);
+		return true;
+	}
+
 	// Try to read a property, if it is not present, continue, otherwise read and discard the value
 	template <typename T>
 	inline void ReadDeletedProperty(const field_id_t field_id, const char *tag) {
