@@ -1,0 +1,339 @@
+# name: test/sql/optimizer/arithmetic_filter_pushdown.test
+# description: Test that arithmetic filters generate OptionalFilter for zonemap pruning
+# group: [optimizer]
+
+# Setup tables
+
+statement ok
+CREATE TABLE t_double(a DOUBLE);
+
+statement ok
+INSERT INTO t_double VALUES (0.0), (5.0), (16.666), (16.667), (17.0), (100.0), (-5.0), (NULL);
+
+statement ok
+CREATE TABLE t_int(a INTEGER);
+
+statement ok
+INSERT INTO t_int VALUES (0), (1), (2), (5), (10), (17), (100), (-5), (NULL);
+
+statement ok
+CREATE TABLE t_float(a FLOAT);
+
+statement ok
+INSERT INTO t_float VALUES (0.0), (5.0), (16.666), (16.667), (17.0), (100.0), (-5.0), (NULL);
+
+# Double column, multiply: a * 0.3 > 5.0
+query II
+EXPLAIN SELECT * FROM t_double WHERE a * 0.3 > 5.0;
+----
+physical_plan	<REGEX>:.*optional.*a.*
+
+query I rowsort
+SELECT a FROM t_double WHERE a * 0.3 > 5.0;
+----
+100.0
+16.667
+17.0
+
+# Double column, multiply: a * 0.3 >= 5.0
+query II
+EXPLAIN SELECT * FROM t_double WHERE a * 0.3 >= 5.0;
+----
+physical_plan	<REGEX>:.*optional.*a.*
+
+query I rowsort
+SELECT a FROM t_double WHERE a * 0.3 >= 5.0;
+----
+100.0
+16.667
+17.0
+
+# Double column, multiply: a * 0.3 < 5.0
+query II
+EXPLAIN SELECT * FROM t_double WHERE a * 0.3 < 5.0;
+----
+physical_plan	<REGEX>:.*optional.*a.*
+
+query I rowsort
+SELECT a FROM t_double WHERE a * 0.3 < 5.0;
+----
+-5.0
+0.0
+16.666
+5.0
+
+# Double column, multiply: a * 0.3 <= 5.0
+query II
+EXPLAIN SELECT * FROM t_double WHERE a * 0.3 <= 5.0;
+----
+physical_plan	<REGEX>:.*optional.*a.*
+
+query I rowsort
+SELECT a FROM t_double WHERE a * 0.3 <= 5.0;
+----
+-5.0
+0.0
+16.666
+5.0
+
+# Double column, negative multiplier: a * (-0.3) > -5.0 (comparison flips)
+query II
+EXPLAIN SELECT * FROM t_double WHERE a * (-0.3) > -5.0;
+----
+physical_plan	<REGEX>:.*optional.*a.*
+
+query I rowsort
+SELECT a FROM t_double WHERE a * (-0.3) > -5.0;
+----
+-5.0
+0.0
+16.666
+5.0
+
+# Double column, divide: a / 3.0 > 2.0
+query II
+EXPLAIN SELECT * FROM t_double WHERE a / 3.0 > 2.0;
+----
+physical_plan	<REGEX>:.*optional.*a.*
+
+query I rowsort
+SELECT a FROM t_double WHERE a / 3.0 > 2.0;
+----
+100.0
+16.666
+16.667
+17.0
+
+# Double column, add: a + 10.0 > 20.0
+query II
+EXPLAIN SELECT * FROM t_double WHERE a + 10.0 > 20.0;
+----
+physical_plan	<REGEX>:.*optional.*a.*
+
+query I rowsort
+SELECT a FROM t_double WHERE a + 10.0 > 20.0;
+----
+100.0
+16.666
+16.667
+17.0
+
+# Double column, subtract (col - const): a - 3.0 > 2.0
+query II
+EXPLAIN SELECT * FROM t_double WHERE a - 3.0 > 2.0;
+----
+physical_plan	<REGEX>:.*optional.*a.*
+
+query I rowsort
+SELECT a FROM t_double WHERE a - 3.0 > 2.0;
+----
+100.0
+16.666
+16.667
+17.0
+
+# Double column, subtract (const - col): 10.0 - a > 3.0 (comparison flips)
+query II
+EXPLAIN SELECT * FROM t_double WHERE 10.0 - a > 3.0;
+----
+physical_plan	<REGEX>:.*optional.*a.*
+
+query I rowsort
+SELECT a FROM t_double WHERE 10.0 - a > 3.0;
+----
+-5.0
+0.0
+5.0
+
+# Double column, equality: a * 2.0 = 10.0 (two optional bounds)
+query II
+EXPLAIN SELECT * FROM t_double WHERE a * 2.0 = 10.0;
+----
+physical_plan	<REGEX>:.*optional.*a.*
+
+query I rowsort
+SELECT a FROM t_double WHERE a * 2.0 = 10.0;
+----
+5.0
+
+# Double column, inequality: a * 2.0 != 10.0 (NO optional filter)
+query II
+EXPLAIN SELECT * FROM t_double WHERE a * 2.0 != 10.0;
+----
+physical_plan	<!REGEX>:.*optional.*
+
+# Integer column, multiply by double: a * 0.3 > 5
+# Note: expression becomes CAST(a AS DECIMAL) * 0.3 > 5.0, the column child
+query II
+EXPLAIN SELECT * FROM t_int WHERE a * 0.3 > 5;
+----
+physical_plan	<!REGEX>:.*optional.*
+
+query I rowsort
+SELECT a FROM t_int WHERE a * 0.3 > 5;
+----
+100
+17
+
+# Integer column, divide: a / 3.0 > 2.0
+# Note: becomes CAST(a AS DOUBLE) / 3.0 > 2.0 — column wrapped in CAST, no OptionalFilter
+query II
+EXPLAIN SELECT * FROM t_int WHERE a / 3.0 > 2.0;
+----
+physical_plan	<!REGEX>:.*optional.*
+
+query I rowsort
+SELECT a FROM t_int WHERE a / 3.0 > 2.0;
+----
+10
+100
+17
+
+# Float column: a * 0.3 > 5.0
+query II
+EXPLAIN SELECT * FROM t_float WHERE a * 0.3 > 5.0;
+----
+physical_plan	<REGEX>:.*optional.*a.*
+
+query I rowsort
+SELECT a FROM t_float WHERE a * 0.3 > 5.0;
+----
+100.0
+16.667
+17.0
+
+# Constant on left side (inverted comparison): 5.0 < a * 0.3
+query II
+EXPLAIN SELECT * FROM t_double WHERE 5.0 < a * 0.3;
+----
+physical_plan	<REGEX>:.*optional.*a.*
+
+query I rowsort
+SELECT a FROM t_double WHERE 5.0 < a * 0.3;
+----
+100.0
+16.667
+17.0
+
+# Edge case: multiply by zero — no OptionalFilter (cannot derive bound)
+query II
+EXPLAIN SELECT * FROM t_double WHERE a * 0 > 5;
+----
+physical_plan	<!REGEX>:.*optional.*
+
+query I rowsort
+SELECT a FROM t_double WHERE a * 0 > 5;
+----
+
+# Edge case: NaN input — no OptionalFilter
+query II
+EXPLAIN SELECT * FROM t_double WHERE a * 'NaN'::DOUBLE > 5.0;
+----
+physical_plan	<!REGEX>:.*optional.*
+
+# Edge case: overflow — threshold overflows to inf
+# b=1e308, a=0.5, raw_threshold = 1e308/0.5 = 2e308 = inf → no OptionalFilter
+query II
+EXPLAIN SELECT * FROM t_double WHERE a * 0.5 > 1e308;
+----
+physical_plan	<!REGEX>:.*optional.*
+
+query I rowsort
+SELECT a FROM t_double WHERE a * 0.5 > 1e308;
+----
+
+# Edge case: a / col form — no OptionalFilter (non-monotone)
+query II
+EXPLAIN SELECT * FROM t_double WHERE 10.0 / a > 2.0;
+----
+physical_plan	<!REGEX>:.*optional.*
+
+# Edge case: overflow in multiplication (b * a overflows for / operator)
+# col / 1e-308 > 1e308 → raw_threshold = 1e308 * 1e-308 = 1.0 → works fine
+# col / 0.5 > 1e308 → raw_threshold = 1e308 * 0.5 = 5e307 → works fine
+# col / 1e-308 > 1e200 → raw_threshold = 1e200 * 1e-308 = 1e-108 → works fine
+query I rowsort
+SELECT a FROM t_double WHERE a * 1e308 > 1e308;
+----
+100.0
+16.666
+16.667
+17.0
+5.0
+
+# Boundary precision test: nextafter correctness
+# a * 1.3 > 1.7: exact threshold = 1.7/1.3 = 1.30769...
+# Verify the filter doesn't falsely exclude/include boundary values
+statement ok
+CREATE TABLE t_boundary(a DOUBLE);
+
+statement ok
+INSERT INTO t_boundary SELECT i * 0.001 FROM range(1300, 1320) t(i);
+
+query I
+SELECT count(*) FROM t_boundary WHERE a * 1.3 > 1.7;
+----
+12
+
+# Boundary precision: integer column multiply
+# a * 3 > 10: both constants are INTEGER (not floating), no OptionalFilter
+# Correctness still ensured by ExpressionFilter
+statement ok
+CREATE TABLE t_int_boundary(a INTEGER);
+
+statement ok
+INSERT INTO t_int_boundary VALUES (1), (2), (3), (4), (5);
+
+query I rowsort
+SELECT a FROM t_int_boundary WHERE a * 3 > 10;
+----
+4
+5
+
+query II
+EXPLAIN SELECT * FROM t_int_boundary WHERE a * 3 > 10;
+----
+physical_plan	<!REGEX>:.*optional.*
+
+# Boundary precision: integer column multiply, exact division
+# a * 5 > 20 → threshold = 20/5 = 4.0 → nextafter(4.0, -inf) → ceil = 4
+# So OptionalFilter is col >= 4, but a=4 gives 4*5=20 NOT > 20
+# The OptionalFilter is conservative, ExpressionFilter handles correctness
+query I rowsort
+SELECT a FROM t_int_boundary WHERE a * 5 > 20;
+----
+5
+
+# Boundary precision: integer column less than
+# a * 3 < 10 → threshold = 10/3 = 3.333... → floor = 3 → col <= 3
+query I rowsort
+SELECT a FROM t_int_boundary WHERE a * 3 < 10;
+----
+1
+2
+3
+
+# Negative integer multiply: a * (-3) > -10: INTEGER constants, no OptionalFilter
+query I rowsort
+SELECT a FROM t_int_boundary WHERE a * (-3) > -10;
+----
+1
+2
+3
+
+query II
+EXPLAIN SELECT * FROM t_int_boundary WHERE a * (-3) > -10;
+----
+physical_plan	<!REGEX>:.*optional.*
+
+# Non-arithmetic function — no OptionalFilter
+statement ok
+CREATE TABLE t_str(a VARCHAR);
+
+statement ok
+INSERT INTO t_str VALUES ('hello'), ('world');
+
+query II
+EXPLAIN SELECT * FROM t_str WHERE a || 'x' > 'mx';
+----
+physical_plan	<!REGEX>:.*optional.*

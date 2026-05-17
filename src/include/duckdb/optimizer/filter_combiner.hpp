@@ -79,6 +79,8 @@ private:
 	                                         Expression &expr);
 	FilterPushdownResult TryPushdownTemporalCastFilter(TableFilterSet &table_filters,
 	                                                   const vector<ColumnIndex> &column_ids, Expression &expr);
+	FilterPushdownResult TryPushdownArithmeticFilter(TableFilterSet &table_filters,
+	                                                 const vector<ColumnIndex> &column_ids, Expression &expr);
 	void TryPushdownRelaxedFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
 	                              vector<FilterPushdownResult> &pushdown_results, column_t expr_id,
 	                              vector<ExpressionValueInformation> &info_list);
