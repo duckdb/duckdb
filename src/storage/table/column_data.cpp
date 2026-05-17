@@ -599,7 +599,10 @@ void ColumnData::AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata
 		}
 		// segment is full and we have more to copy
 		// first flush the stats into the segment and the column data
-		state.FlushSegmentStats();
+		{
+			lock_guard<mutex> guard(stats_lock);
+			state.FlushSegmentStats();
+		}
 		// re-initialize the stats
 		state.InitializeStats(GetType());
 
