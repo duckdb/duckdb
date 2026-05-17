@@ -11,7 +11,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 struct DictionaryAnalyzeState : public AnalyzeState {
 public:
-	explicit DictionaryAnalyzeState(const CompressionInfo &info);
+	explicit DictionaryAnalyzeState(BlockManager &block_manager);
 
 public:
 	bool LookupString(string_t str);

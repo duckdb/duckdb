@@ -54,8 +54,6 @@ public:
 	void Flush(bool final);
 
 public:
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle current_handle;

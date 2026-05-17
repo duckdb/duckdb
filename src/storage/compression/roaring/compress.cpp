@@ -193,10 +193,9 @@ void ContainerCompressionState::Reset() {
 //===--------------------------------------------------------------------===//
 RoaringCompressState::RoaringCompressState(ColumnDataCheckpointData &checkpoint_data,
                                            unique_ptr<AnalyzeState> analyze_state_p)
-    : CompressionState(analyze_state_p->info), owned_analyze_state(std::move(analyze_state_p)),
-      analyze_state(owned_analyze_state->Cast<RoaringAnalyzeState>()), container_state(),
-      container_metadata(analyze_state.container_metadata), checkpoint_data(checkpoint_data),
-      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ROARING)) {
+    : CompressionState(checkpoint_data, CompressionType::COMPRESSION_ROARING),
+      owned_analyze_state(std::move(analyze_state_p)), analyze_state(owned_analyze_state->Cast<RoaringAnalyzeState>()),
+      container_state(), container_metadata(analyze_state.container_metadata) {
 	CreateEmptySegment();
 	total_count = 0;
 	InitializeContainer();

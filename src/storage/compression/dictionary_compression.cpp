@@ -74,8 +74,7 @@ unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnD
 		return nullptr;
 	}
 
-	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<DictionaryAnalyzeState>(info);
+	return make_uniq<DictionaryAnalyzeState>(col_data.GetBlockManager());
 }
 
 bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
@@ -104,8 +103,7 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                                            unique_ptr<AnalyzeState> state_p) {
 	const auto &state = state_p->Cast<DictionaryAnalyzeState>();
-	return make_uniq<DictionaryCompressionCompressState>(checkpoint_data, state.info,
-	                                                     state.max_unique_count_across_segments);
+	return make_uniq<DictionaryCompressionCompressState>(checkpoint_data, state.max_unique_count_across_segments);
 }
 
 void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {

@@ -28,8 +28,7 @@ public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	AlpRDCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpRDAnalyzeState<T> *analyze_state)
-	    : CompressionState(analyze_state->info), checkpoint_data(checkpoint_data),
-	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ALPRD)) {
+	    : CompressionState(checkpoint_data, CompressionType::COMPRESSION_ALPRD) {
 		//! State variables from the analyze step that are needed for compression
 		compression_data.left_parts_dict_map = std::move(analyze_state->compression_data.left_parts_dict_map);
 		compression_data.left_bit_width = analyze_state->compression_data.left_bit_width;
@@ -43,8 +42,6 @@ public:
 		CreateEmptySegment();
 	}
 
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
 

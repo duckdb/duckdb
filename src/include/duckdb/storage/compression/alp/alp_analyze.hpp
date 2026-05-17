@@ -25,7 +25,7 @@ struct AlpAnalyzeState : public AnalyzeState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	explicit AlpAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), compression_data() {
+	explicit AlpAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager), compression_data() {
 	}
 
 	idx_t total_bytes_used = 0;
@@ -66,8 +66,7 @@ public:
 
 template <class T>
 unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
-	auto state = make_uniq<AlpAnalyzeState<T>>(info);
+	auto state = make_uniq<AlpAnalyzeState<T>>(col_data.GetBlockManager());
 	state->storage_version = col_data.GetStorageManager().GetStorageVersion();
 	return unique_ptr<AnalyzeState>(std::move(state));
 }

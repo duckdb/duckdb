@@ -71,8 +71,8 @@ struct FSSTStorage {
 // Analyze
 //===--------------------------------------------------------------------===//
 struct FSSTAnalyzeState : public AnalyzeState {
-	explicit FSSTAnalyzeState(const CompressionInfo &info)
-	    : AnalyzeState(info), count(0), fsst_string_total_size(0), empty_strings(0) {
+	explicit FSSTAnalyzeState(BlockManager &block_manager)
+	    : AnalyzeState(block_manager), count(0), fsst_string_total_size(0), empty_strings(0) {
 	}
 
 	~FSSTAnalyzeState() override {
@@ -101,8 +101,7 @@ unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, Ph
 		return nullptr;
 	}
 
-	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<FSSTAnalyzeState>(info);
+	return make_uniq<FSSTAnalyzeState>(col_data.GetBlockManager());
 }
 
 bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
@@ -207,9 +206,8 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 class FSSTCompressionState : public CompressionState {
 public:
-	FSSTCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
-	    : CompressionState(info), checkpoint_data(checkpoint_data),
-	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_FSST)),
+	FSSTCompressionState(ColumnDataCheckpointData &checkpoint_data)
+	    : CompressionState(checkpoint_data, CompressionType::COMPRESSION_FSST),
 	      stats_writer(checkpoint_data.GetType()) {
 		CreateEmptySegment();
 	}
@@ -393,9 +391,6 @@ public:
 		return total_size;
 	}
 
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
-
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle current_handle;
@@ -418,7 +413,7 @@ public:
 unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                           unique_ptr<AnalyzeState> analyze_state_p) {
 	auto &analyze_state = analyze_state_p->Cast<FSSTAnalyzeState>();
-	auto compression_state = make_uniq<FSSTCompressionState>(checkpoint_data, analyze_state.info);
+	auto compression_state = make_uniq<FSSTCompressionState>(checkpoint_data);
 
 	if (analyze_state.fsst_encoder == nullptr) {
 		throw InternalException("No encoder found during FSST compression");

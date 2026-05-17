@@ -301,14 +301,13 @@ public:
 //===--------------------------------------------------------------------===//
 template <class T>
 struct BitpackingAnalyzeState : public AnalyzeState {
-	explicit BitpackingAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {};
+	explicit BitpackingAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager) {};
 	BitpackingState<T> state;
 };
 
 template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
-	auto state = make_uniq<BitpackingAnalyzeState<T>>(info);
+	auto state = make_uniq<BitpackingAnalyzeState<T>>(col_data.GetBlockManager());
 	state->state.mode = Settings::Get<ForceBitpackingModeSetting>(col_data.GetDatabase());
 
 	return std::move(state);
@@ -349,17 +348,14 @@ idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 template <class T, bool WRITE_STATISTICS, class T_S = typename MakeSigned<T>::type>
 struct BitpackingCompressionState : public CompressionState {
 public:
-	explicit BitpackingCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
-	    : CompressionState(info), checkpoint_data(checkpoint_data),
-	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_BITPACKING)) {
+	explicit BitpackingCompressionState(ColumnDataCheckpointData &checkpoint_data)
+	    : CompressionState(checkpoint_data, CompressionType::COMPRESSION_BITPACKING) {
 		CreateEmptySegment();
 
 		state.data_ptr = reinterpret_cast<void *>(this);
 		state.mode = Settings::Get<ForceBitpackingModeSetting>(checkpoint_data.GetDatabase());
 	}
 
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
 
@@ -539,7 +535,7 @@ public:
 template <class T, bool WRITE_STATISTICS>
 unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                        unique_ptr<AnalyzeState> state) {
-	return make_uniq<BitpackingCompressionState<T, WRITE_STATISTICS>>(checkpoint_data, state->info);
+	return make_uniq<BitpackingCompressionState<T, WRITE_STATISTICS>>(checkpoint_data);
 }
 
 template <class T, bool WRITE_STATISTICS>

@@ -3,10 +3,8 @@
 namespace duckdb {
 
 DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p,
-                                                                       const CompressionInfo &info,
                                                                        const idx_t max_unique_count_across_all_segments)
-    : CompressionState(info), checkpoint_data(checkpoint_data_p),
-      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
+    : CompressionState(checkpoint_data_p, CompressionType::COMPRESSION_DICTIONARY),
       stats_writer(checkpoint_data.GetType()),
       current_string_map(
           info.GetBlockManager().buffer_manager.GetBufferAllocator(),

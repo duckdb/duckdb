@@ -26,7 +26,7 @@ struct AlpRDAnalyzeState : public AnalyzeState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	explicit AlpRDAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), compression_data() {
+	explicit AlpRDAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager), compression_data() {
 	}
 
 	idx_t vectors_count = 0;
@@ -38,8 +38,7 @@ public:
 
 template <class T>
 unique_ptr<AnalyzeState> AlpRDInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<AlpRDAnalyzeState<T>>(info);
+	return make_uniq<AlpRDAnalyzeState<T>>(col_data.GetBlockManager());
 }
 
 /*

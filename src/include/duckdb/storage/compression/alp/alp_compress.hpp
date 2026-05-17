@@ -28,16 +28,13 @@ public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	AlpCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpAnalyzeState<T> *analyze_state)
-	    : CompressionState(analyze_state->info), checkpoint_data(checkpoint_data),
-	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
+	    : CompressionState(checkpoint_data, CompressionType::COMPRESSION_ALP) {
 		CreateEmptySegment();
 
 		//! Combinations found on the analyze step are needed for compression
 		compression_data.best_k_combinations = analyze_state->compression_data.best_k_combinations;
 	}
 
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
 

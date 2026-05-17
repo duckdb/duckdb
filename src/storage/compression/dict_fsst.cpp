@@ -75,8 +75,7 @@ unique_ptr<AnalyzeState> DictFSSTCompressionStorage::StringInitAnalyze(ColumnDat
 		return nullptr;
 	}
 
-	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<DictFSSTAnalyzeState>(info);
+	return make_uniq<DictFSSTAnalyzeState>(col_data.GetBlockManager());
 }
 
 bool DictFSSTCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {

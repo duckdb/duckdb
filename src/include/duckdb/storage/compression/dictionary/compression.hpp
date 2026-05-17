@@ -23,7 +23,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 struct DictionaryCompressionCompressState : public CompressionState {
 public:
-	DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info,
+	DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p,
 	                                   idx_t max_unique_count_across_all_segments);
 
 public:
@@ -38,9 +38,6 @@ public:
 	idx_t Finalize();
 
 public:
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
-
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle current_handle;

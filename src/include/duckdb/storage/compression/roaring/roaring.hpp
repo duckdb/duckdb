@@ -206,7 +206,7 @@ struct BitmaskTableEntry {
 //===--------------------------------------------------------------------===//
 struct RoaringAnalyzeState : public AnalyzeState {
 public:
-	explicit RoaringAnalyzeState(const CompressionInfo &info);
+	explicit RoaringAnalyzeState(BlockManager &block_manager);
 
 public:
 	// RoaringStateAppender interface:
@@ -366,8 +366,6 @@ public:
 	ContainerMetadataCollection metadata_collection;
 	vector<ContainerMetadata> &container_metadata;
 
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
 

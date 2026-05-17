@@ -83,7 +83,7 @@ public:
 
 template <class T>
 struct RLEAnalyzeState : public AnalyzeState {
-	explicit RLEAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {
+	explicit RLEAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager) {
 	}
 
 	RLEState<T> state;
@@ -91,8 +91,7 @@ struct RLEAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<RLEAnalyzeState<T>>(info);
+	return make_uniq<RLEAnalyzeState<T>>(col_data.GetBlockManager());
 }
 
 template <class T>
@@ -137,9 +136,8 @@ struct RLECompressState : public CompressionState {
 		return AlignValueFloor((info.GetBlockSize() - RLEConstants::RLE_HEADER_SIZE) / entry_size);
 	}
 
-	RLECompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info)
-	    : CompressionState(info), checkpoint_data(checkpoint_data_p),
-	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_RLE)) {
+	RLECompressState(ColumnDataCheckpointData &checkpoint_data_p)
+	    : CompressionState(checkpoint_data_p, CompressionType::COMPRESSION_RLE) {
 		CreateEmptySegment();
 
 		state.dataptr = (void *)this;
@@ -222,8 +220,6 @@ struct RLECompressState : public CompressionState {
 		current_segment.reset();
 	}
 
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
 
@@ -235,7 +231,7 @@ struct RLECompressState : public CompressionState {
 template <class T, bool WRITE_STATISTICS>
 unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                 unique_ptr<AnalyzeState> state) {
-	return make_uniq<RLECompressState<T, WRITE_STATISTICS>>(checkpoint_data, state->info);
+	return make_uniq<RLECompressState<T, WRITE_STATISTICS>>(checkpoint_data);
 }
 
 template <class T, bool WRITE_STATISTICS>

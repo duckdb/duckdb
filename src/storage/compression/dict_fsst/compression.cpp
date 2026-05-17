@@ -12,8 +12,7 @@ namespace dict_fsst {
 
 DictFSSTCompressionState::DictFSSTCompressionState(ColumnDataCheckpointData &checkpoint_data_p,
                                                    unique_ptr<DictFSSTAnalyzeState> &&analyze_p)
-    : CompressionState(analyze_p->info), checkpoint_data(checkpoint_data_p),
-      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICT_FSST)),
+    : CompressionState(checkpoint_data_p, CompressionType::COMPRESSION_DICT_FSST),
       current_string_map(
           info.GetBlockManager().buffer_manager.GetBufferAllocator(),
           MinValue(analyze_p.get()->total_count, info.GetBlockSize()) / 2, // maximum_size_p (amount of elements)
