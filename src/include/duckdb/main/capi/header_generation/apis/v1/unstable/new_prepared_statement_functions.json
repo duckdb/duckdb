@@ -5,6 +5,7 @@
     "duckdb_prepared_statement_column_count",
     "duckdb_prepared_statement_column_name",
     "duckdb_prepared_statement_column_logical_type",
-    "duckdb_prepared_statement_column_type"
+    "duckdb_prepared_statement_column_type",
+    "duckdb_prepared_column_origin_table"
   ]
 }
