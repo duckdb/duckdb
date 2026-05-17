@@ -9,6 +9,7 @@ add_library_unity(
   like.cpp
   md5.cpp
   nfc_normalize.cpp
+  overlay.cpp
   regexp.cpp
   path_join.cpp
   substring.cpp

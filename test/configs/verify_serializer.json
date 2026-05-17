@@ -38,7 +38,10 @@
         "test/sql/copy/parquet/shredded_variant_stats.test",
         "test/sql/copy/parquet/corrupt_stats.test",
         "test/sql/copy/parquet/parquet_row_number.test",
-        "test/sql/copy/parquet/parquet_string_stats.test"
+        "test/sql/copy/parquet/parquet_string_stats.test",
+        "test/sql/storage/extended_string_stats.test",
+        "test/sql/storage/min_string_length_too_large.test_slow",
+        "test/sql/storage/total_string_length_repeated_insert.test"
       ]
     }
   ]

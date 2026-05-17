@@ -146,7 +146,7 @@ bool BaseStatistics::IsConstant() const {
 	return false;
 }
 
-void BaseStatistics::Merge(const BaseStatistics &other) {
+void BaseStatistics::Merge(const BaseStatistics &other, StatsMergeType merge_type) {
 	has_null = has_null || other.has_null;
 	has_no_null = has_no_null || other.has_no_null;
 	switch (GetStatsType()) {
@@ -154,16 +154,16 @@ void BaseStatistics::Merge(const BaseStatistics &other) {
 		NumericStats::Merge(*this, other);
 		break;
 	case StatisticsType::STRING_STATS:
-		StringStats::Merge(*this, other);
+		StringStats::Merge(*this, other, merge_type);
 		break;
 	case StatisticsType::LIST_STATS:
-		ListStats::Merge(*this, other);
+		ListStats::Merge(*this, other, merge_type);
 		break;
 	case StatisticsType::STRUCT_STATS:
-		StructStats::Merge(*this, other);
+		StructStats::Merge(*this, other, merge_type);
 		break;
 	case StatisticsType::ARRAY_STATS:
-		ArrayStats::Merge(*this, other);
+		ArrayStats::Merge(*this, other, merge_type);
 		break;
 	case StatisticsType::GEOMETRY_STATS:
 		GeometryStats::Merge(*this, other);

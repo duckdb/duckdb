@@ -105,9 +105,12 @@ void GeoColumnData::Skip(ColumnScanState &state, idx_t count) {
 void GeoColumnData::InitializeAppend(ColumnAppendState &state) {
 	base_column->InitializeAppend(state);
 }
-void GeoColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, const Vector &vector, idx_t add_count) {
-	base_column->Append(stats, state, vector, add_count);
+void GeoColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t add_count) {
+	base_column->Append(state, vector, add_count);
 	count += add_count;
+}
+void GeoColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	base_column->FinalizeAppend(finalize_state, state);
 }
 void GeoColumnData::RevertAppend(row_t new_count) {
 	base_column->RevertAppend(new_count);
@@ -394,8 +397,10 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 			Specialize(scan_chunk.data[0], append_chunk.data[0], to_scan, GeometryStorageType::SPATIAL);
 
 			// Append into the new specialized column
-			new_column->Append(empty_stats, append_state, append_chunk.data[0], to_scan);
+			new_column->Append(append_state, append_chunk.data[0], to_scan);
 		}
+		ColumnDataFinalizeAppendState finalize_append_state(empty_stats);
+		new_column->FinalizeAppend(finalize_append_state, append_state);
 
 		// Move then new column into our checkpoint state
 		checkpoint_state->inner_column = new_column;
@@ -489,8 +494,10 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 		Specialize(scan_chunk.data[0], append_chunk.data[0], to_scan, new_storage_type);
 
 		// Append into the new specialized column
-		new_column->Append(dummy_stats, append_state, append_chunk.data[0], to_scan);
+		new_column->Append(append_state, append_chunk.data[0], to_scan);
 	}
+	ColumnDataFinalizeAppendState finalize_append_state(dummy_stats);
+	new_column->FinalizeAppend(finalize_append_state, append_state);
 
 	// Merge the stats into the checkpoint state's global stats
 	InterpretStats(dummy_stats, *checkpoint_state->global_stats, new_geom_type, new_vert_type);

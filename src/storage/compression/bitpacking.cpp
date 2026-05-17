@@ -451,15 +451,15 @@ public:
 
 			if (WRITE_STATISTICS) {
 				if (state->state.has_valid) {
-					state->current_segment->stats.statistics.SetHasNoNullFast();
+					state->current_segment->GetStatsMutable().SetHasNoNullFast();
 				}
 				if (state->state.has_invalid) {
-					state->current_segment->stats.statistics.SetHasNullFast();
+					state->current_segment->GetStatsMutable().SetHasNullFast();
 				}
 
 				if (!state->state.all_invalid) {
-					state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.maximum);
-					state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.minimum);
+					state->current_segment->GetStatsMutable().template UpdateNumericStats<T>(state->state.maximum);
+					state->current_segment->GetStatsMutable().template UpdateNumericStats<T>(state->state.minimum);
 				}
 			}
 		}
