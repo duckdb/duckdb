@@ -1,0 +1,26 @@
+# name: test/sql/alter/add_pk/test_add_pk_tx_delete_visibility.test
+# description: ADD PRIMARY KEY validates against transaction-visible rows after DELETE
+# group: [add_pk]
+
+statement ok
+CREATE TABLE tx_delete_add_pk (id INTEGER, x INTEGER)
+
+statement ok
+INSERT INTO tx_delete_add_pk VALUES (1, 10), (2, 10)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DELETE FROM tx_delete_add_pk WHERE id = 1
+
+query I
+SELECT COUNT(*) FROM tx_delete_add_pk
+----
+1
+
+statement ok
+ALTER TABLE tx_delete_add_pk ADD PRIMARY KEY (x)
+
+statement ok
+ROLLBACK
