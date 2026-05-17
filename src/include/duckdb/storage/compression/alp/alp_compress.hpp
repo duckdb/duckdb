@@ -12,6 +12,7 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/compression/alp/algorithm/alp.hpp"
@@ -23,20 +24,17 @@
 namespace duckdb {
 
 template <class T>
-struct AlpCompressionState : public CompressionState {
+struct AlpCompressionState : public StandardCompressionState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	AlpCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpAnalyzeState<T> *analyze_state)
-	    : CompressionState(checkpoint_data, CompressionType::COMPRESSION_ALP) {
+	    : StandardCompressionState(checkpoint_data, CompressionType::COMPRESSION_ALP) {
 		CreateEmptySegment();
 
 		//! Combinations found on the analyze step are needed for compression
 		compression_data.best_k_combinations = analyze_state->compression_data.best_k_combinations;
 	}
-
-	unique_ptr<ColumnSegment> current_segment;
-	BufferHandle handle;
 
 	idx_t vector_idx = 0;
 	idx_t nulls_idx = 0;
@@ -73,15 +71,7 @@ public:
 	}
 
 	void CreateEmptySegment() {
-		auto &db = checkpoint_data.GetDatabase();
-		auto &type = checkpoint_data.GetType();
-
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
-		current_segment = std::move(compressed_segment);
-
-		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
-		handle = buffer_manager.Pin(current_segment->block);
+		CreateAndPinNewSegment();
 
 		// The pointer to the start of the compressed data.
 		data_ptr = handle.GetDataMutable() + current_segment->GetBlockOffset() + AlpConstants::HEADER_SIZE;

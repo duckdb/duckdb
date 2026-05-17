@@ -535,10 +535,7 @@ public:
 	}
 
 	void CreateEmptySegment() {
-		auto &db = checkpoint_data.GetDatabase();
-		auto &type = checkpoint_data.GetType();
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
+		auto compressed_segment = CreateNewSegment();
 		buffer_collection.segment = std::move(compressed_segment);
 		stats_writer.Clear();
 

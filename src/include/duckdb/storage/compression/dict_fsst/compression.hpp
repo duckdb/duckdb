@@ -6,6 +6,7 @@
 #include "duckdb/storage/compression/dict_fsst/analyze.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/common/bitpacking.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 
 namespace duckdb {
@@ -33,7 +34,7 @@ struct EncodedInput {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-struct DictFSSTCompressionState : public CompressionState {
+struct DictFSSTCompressionState : public StandardCompressionState {
 public:
 	DictFSSTCompressionState(ColumnDataCheckpointData &checkpoint_data_p, unique_ptr<DictFSSTAnalyzeState> &&state);
 	~DictFSSTCompressionState() override;
@@ -54,9 +55,6 @@ public:
 	void Flush(bool final);
 
 public:
-	// State regarding current segment
-	unique_ptr<ColumnSegment> current_segment;
-	BufferHandle current_handle;
 	//! Offset at which to write the next dictionary string
 	idx_t dictionary_offset = 0;
 

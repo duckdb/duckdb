@@ -193,7 +193,7 @@ void ContainerCompressionState::Reset() {
 //===--------------------------------------------------------------------===//
 RoaringCompressState::RoaringCompressState(ColumnDataCheckpointData &checkpoint_data,
                                            unique_ptr<AnalyzeState> analyze_state_p)
-    : CompressionState(checkpoint_data, CompressionType::COMPRESSION_ROARING),
+    : StandardCompressionState(checkpoint_data, CompressionType::COMPRESSION_ROARING),
       owned_analyze_state(std::move(analyze_state_p)), analyze_state(owned_analyze_state->Cast<RoaringAnalyzeState>()),
       container_state(), container_metadata(analyze_state.container_metadata) {
 	CreateEmptySegment();
@@ -287,15 +287,7 @@ void RoaringCompressState::InitializeContainer() {
 }
 
 void RoaringCompressState::CreateEmptySegment() {
-	auto &db = checkpoint_data.GetDatabase();
-	auto &type = checkpoint_data.GetType();
-
-	auto compressed_segment =
-	    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
-	current_segment = std::move(compressed_segment);
-
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	handle = buffer_manager.Pin(current_segment->block);
+	CreateAndPinNewSegment();
 	data_ptr = handle.GetDataMutable();
 	data_ptr += sizeof(idx_t);
 	metadata_ptr = handle.GetDataMutable() + info.GetBlockSize();

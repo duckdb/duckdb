@@ -4,7 +4,7 @@ namespace duckdb {
 
 DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p,
                                                                        const idx_t max_unique_count_across_all_segments)
-    : CompressionState(checkpoint_data_p, CompressionType::COMPRESSION_DICTIONARY),
+    : StandardCompressionState(checkpoint_data_p, CompressionType::COMPRESSION_DICTIONARY),
       stats_writer(checkpoint_data.GetType()),
       current_string_map(
           info.GetBlockManager().buffer_manager.GetBufferAllocator(),
@@ -16,12 +16,7 @@ DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDat
 }
 
 void DictionaryCompressionCompressState::CreateEmptySegment() {
-	auto &db = checkpoint_data.GetDatabase();
-	auto &type = checkpoint_data.GetType();
-
-	auto compressed_segment =
-	    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
-	current_segment = std::move(compressed_segment);
+	CreateAndPinNewSegment();
 
 	// Reset the buffers and the string map.
 	stats_writer.Clear();
@@ -36,10 +31,8 @@ void DictionaryCompressionCompressState::CreateEmptySegment() {
 	next_width = 0;
 
 	// Reset the pointers into the current segment.
-	auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
-	current_handle = buffer_manager.Pin(current_segment->block);
-	current_dictionary = DictionaryCompression::GetDictionary(*current_segment, current_handle);
-	current_end_ptr = current_handle.GetDataMutable() + current_dictionary.end;
+	current_dictionary = DictionaryCompression::GetDictionary(*current_segment, handle);
+	current_end_ptr = handle.GetDataMutable() + current_dictionary.end;
 }
 
 void DictionaryCompressionCompressState::Verify() {
@@ -80,7 +73,7 @@ void DictionaryCompressionCompressState::AddNewString(string_t str) {
 		D_ASSERT(!dictionary_string.IsInlined());
 		current_string_map.Insert(dictionary_string);
 	}
-	DictionaryCompression::SetDictionary(*current_segment, current_handle, current_dictionary);
+	DictionaryCompression::SetDictionary(*current_segment, handle, current_dictionary);
 
 	current_width = next_width;
 	current_segment->count++;
@@ -112,7 +105,7 @@ void DictionaryCompressionCompressState::Flush(bool final) {
 	auto segment_size = Finalize();
 	auto &state = checkpoint_data.GetCheckpointState();
 	stats_writer.Merge(current_segment->GetStatsMutable());
-	state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
+	state.FlushSegment(std::move(current_segment), std::move(handle), segment_size);
 
 	if (!final) {
 		CreateEmptySegment();

@@ -52,12 +52,7 @@ public:
 		auto &state = state_p.Cast<EmptyValidityCompressionState>();
 		auto &checkpoint_data = state.checkpoint_data;
 
-		auto &db = checkpoint_data.GetDatabase();
-		auto &type = checkpoint_data.GetType();
-
-		auto &info = state.info;
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, state.function, type, info.GetBlockSize(),
-		                                                                info.GetBlockManager());
+		auto compressed_segment = state.CreateNewSegment();
 		compressed_segment->count = state.count;
 		if (state.non_nulls != state.count) {
 			compressed_segment->GetStatsMutable().SetHasNullFast();

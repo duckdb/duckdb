@@ -2,6 +2,7 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -122,7 +123,15 @@ struct RLEConstants {
 };
 
 template <class T, bool WRITE_STATISTICS>
-struct RLECompressState : public CompressionState {
+struct RLECompressState : public StandardCompressionState {
+	RLECompressState(ColumnDataCheckpointData &checkpoint_data_p)
+	    : StandardCompressionState(checkpoint_data_p, CompressionType::COMPRESSION_RLE) {
+		CreateEmptySegment();
+
+		state.dataptr = (void *)this;
+		max_rle_count = MaxRLECount();
+	}
+
 	struct RLEWriter {
 		template <class VALUE_TYPE>
 		static void Operation(VALUE_TYPE value, rle_count_t count, void *dataptr, bool is_null) {
@@ -136,24 +145,8 @@ struct RLECompressState : public CompressionState {
 		return AlignValueFloor((info.GetBlockSize() - RLEConstants::RLE_HEADER_SIZE) / entry_size);
 	}
 
-	RLECompressState(ColumnDataCheckpointData &checkpoint_data_p)
-	    : CompressionState(checkpoint_data_p, CompressionType::COMPRESSION_RLE) {
-		CreateEmptySegment();
-
-		state.dataptr = (void *)this;
-		max_rle_count = MaxRLECount();
-	}
-
 	void CreateEmptySegment() {
-		auto &db = checkpoint_data.GetDatabase();
-		auto &type = checkpoint_data.GetType();
-
-		auto column_segment =
-		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
-		current_segment = std::move(column_segment);
-
-		auto &buffer_manager = BufferManager::GetBufferManager(db);
-		handle = buffer_manager.Pin(current_segment->block);
+		CreateAndPinNewSegment();
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
@@ -219,9 +212,6 @@ struct RLECompressState : public CompressionState {
 		FlushSegment();
 		current_segment.reset();
 	}
-
-	unique_ptr<ColumnSegment> current_segment;
-	BufferHandle handle;
 
 	RLEState<T> state;
 	idx_t entry_count = 0;

@@ -10,6 +10,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/main/settings.hpp"
 
 #include "fsst.h"
@@ -204,10 +205,10 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 // Compress
 //===--------------------------------------------------------------------===//
 
-class FSSTCompressionState : public CompressionState {
+class FSSTCompressionState : public StandardCompressionState {
 public:
-	FSSTCompressionState(ColumnDataCheckpointData &checkpoint_data)
-	    : CompressionState(checkpoint_data, CompressionType::COMPRESSION_FSST),
+	explicit FSSTCompressionState(ColumnDataCheckpointData &checkpoint_data)
+	    : StandardCompressionState(checkpoint_data, CompressionType::COMPRESSION_FSST),
 	      stats_writer(checkpoint_data.GetType()) {
 		CreateEmptySegment();
 	}
@@ -226,19 +227,12 @@ public:
 		stats_writer.Clear();
 
 		// Reset the pointers into the current segment
-		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
-		current_handle = buffer_manager.Pin(current_segment->block);
-		current_dictionary = FSSTStorage::GetDictionary(*current_segment, current_handle);
-		current_end_ptr = current_handle.GetDataMutable() + current_dictionary.end;
+		current_dictionary = FSSTStorage::GetDictionary(*current_segment, handle);
+		current_end_ptr = handle.GetDataMutable() + current_dictionary.end;
 	}
 
 	void CreateEmptySegment() {
-		auto &db = checkpoint_data.GetDatabase();
-		auto &type = checkpoint_data.GetType();
-
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
-		current_segment = std::move(compressed_segment);
+		CreateAndPinNewSegment();
 		Reset();
 	}
 
@@ -323,7 +317,7 @@ public:
 		auto segment_size = Finalize();
 		auto &state = checkpoint_data.GetCheckpointState();
 		stats_writer.Merge(current_segment->GetStatsMutable());
-		state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
+		state.FlushSegment(std::move(current_segment), std::move(handle), segment_size);
 
 		if (!final) {
 			CreateEmptySegment();
@@ -392,8 +386,6 @@ public:
 	}
 
 	// State regarding current segment
-	unique_ptr<ColumnSegment> current_segment;
-	BufferHandle current_handle;
 	StringDictionaryContainer current_dictionary;
 	data_ptr_t current_end_ptr;
 	StringStatsWriter stats_writer;

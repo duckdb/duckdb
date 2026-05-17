@@ -61,11 +61,9 @@ UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointData &c
 }
 
 void UncompressedCompressState::CreateEmptySegment() {
-	auto &db = checkpoint_data.GetDatabase();
 	auto &type = checkpoint_data.GetType();
 
-	auto compressed_segment =
-	    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
+	auto compressed_segment = CreateNewSegment();
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		auto &storage_manager = checkpoint_data.GetStorageManager();

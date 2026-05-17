@@ -12,6 +12,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -346,18 +347,15 @@ idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 // Compress
 //===--------------------------------------------------------------------===//
 template <class T, bool WRITE_STATISTICS, class T_S = typename MakeSigned<T>::type>
-struct BitpackingCompressionState : public CompressionState {
+struct BitpackingCompressionState : public StandardCompressionState {
 public:
 	explicit BitpackingCompressionState(ColumnDataCheckpointData &checkpoint_data)
-	    : CompressionState(checkpoint_data, CompressionType::COMPRESSION_BITPACKING) {
+	    : StandardCompressionState(checkpoint_data, CompressionType::COMPRESSION_BITPACKING) {
 		CreateEmptySegment();
 
 		state.data_ptr = reinterpret_cast<void *>(this);
 		state.mode = Settings::Get<ForceBitpackingModeSetting>(checkpoint_data.GetDatabase());
 	}
-
-	unique_ptr<ColumnSegment> current_segment;
-	BufferHandle handle;
 
 	// Ptr to next free spot in segment;
 	data_ptr_t data_ptr;
@@ -470,15 +468,7 @@ public:
 	}
 
 	void CreateEmptySegment() {
-		auto &db = checkpoint_data.GetDatabase();
-		auto &type = checkpoint_data.GetType();
-
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
-		current_segment = std::move(compressed_segment);
-
-		auto &buffer_manager = BufferManager::GetBufferManager(db);
-		handle = buffer_manager.Pin(current_segment->block);
+		CreateAndPinNewSegment();
 
 		data_ptr = handle.GetDataMutable() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
 		metadata_ptr = handle.GetDataMutable() + info.GetBlockSize();

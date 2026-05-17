@@ -13,6 +13,7 @@
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
@@ -327,7 +328,7 @@ public:
 	append_func_t append_function;
 };
 
-struct RoaringCompressState : public CompressionState {
+struct RoaringCompressState : public StandardCompressionState {
 public:
 	explicit RoaringCompressState(ColumnDataCheckpointData &checkpoint_data, unique_ptr<AnalyzeState> analyze_state_p);
 
@@ -365,9 +366,6 @@ public:
 	ContainerCompressionState container_state;
 	ContainerMetadataCollection metadata_collection;
 	vector<ContainerMetadata> &container_metadata;
-
-	unique_ptr<ColumnSegment> current_segment;
-	BufferHandle handle;
 
 	// Ptr to next free spot in segment;
 	data_ptr_t data_ptr;

@@ -12,7 +12,7 @@ namespace dict_fsst {
 
 DictFSSTCompressionState::DictFSSTCompressionState(ColumnDataCheckpointData &checkpoint_data_p,
                                                    unique_ptr<DictFSSTAnalyzeState> &&analyze_p)
-    : CompressionState(checkpoint_data_p, CompressionType::COMPRESSION_DICT_FSST),
+    : StandardCompressionState(checkpoint_data_p, CompressionType::COMPRESSION_DICT_FSST),
       current_string_map(
           info.GetBlockManager().buffer_manager.GetBufferAllocator(),
           MinValue(analyze_p.get()->total_count, info.GetBlockSize()) / 2, // maximum_size_p (amount of elements)
@@ -91,7 +91,7 @@ idx_t DictFSSTCompressionState::Finalize() {
 	D_ASSERT(info.GetBlockSize() >= required_space);
 
 	// calculate ptr and offsets
-	auto base_ptr = current_handle.GetDataMutable();
+	auto base_ptr = handle.GetDataMutable();
 	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(base_ptr);
 	auto dictionary_dest = AlignValue<idx_t>(DictFSSTCompression::DICTIONARY_HEADER_SIZE);
 	auto symbol_table_dest = AlignValue<idx_t>(dictionary_dest + dictionary_offset);
@@ -157,7 +157,7 @@ void DictFSSTCompressionState::FlushEncodingBuffer() {
 	vector<unsigned char *> fsst_string_ptrs;
 
 	data_ptr_t dictionary_start =
-	    AlignPointer<sizeof(void *)>(current_handle.GetDataMutable() + sizeof(dict_fsst_compression_header_t));
+	    AlignPointer<sizeof(void *)>(handle.GetDataMutable() + sizeof(dict_fsst_compression_header_t));
 	D_ASSERT(dictionary_encoding_buffer.size() == dict_count - string_lengths.size());
 	auto string_count = dictionary_encoding_buffer.size();
 	idx_t sum = 0;
@@ -236,16 +236,7 @@ void DictFSSTCompressionState::FlushEncodingBuffer() {
 }
 
 void DictFSSTCompressionState::CreateEmptySegment() {
-	auto &db = checkpoint_data.GetDatabase();
-	auto &type = checkpoint_data.GetType();
-
-	auto compressed_segment =
-	    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
-	current_segment = std::move(compressed_segment);
-
-	// Reset the pointers into the current segment.
-	auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
-	current_handle = buffer_manager.Pin(current_segment->block);
+	CreateAndPinNewSegment();
 
 	append_state = DictionaryAppendState::REGULAR;
 	string_lengths_width = 0;
@@ -277,7 +268,7 @@ void DictFSSTCompressionState::Flush(bool final) {
 
 	auto segment_size = Finalize();
 	auto &state = checkpoint_data.GetCheckpointState();
-	state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
+	state.FlushSegment(std::move(current_segment), std::move(handle), segment_size);
 
 	// Reset the state
 	uncompressed_dictionary_copy.Destroy();
@@ -445,8 +436,8 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 		state.current_string_map.Insert(uncompressed_string);
 	} else {
 		state.string_lengths.push_back(str_len);
-		auto baseptr = AlignPointer<sizeof(data_ptr_t)>(state.current_handle.GetDataMutable() +
-		                                                sizeof(dict_fsst_compression_header_t));
+		auto baseptr =
+		    AlignPointer<sizeof(data_ptr_t)>(state.handle.GetDataMutable() + sizeof(dict_fsst_compression_header_t));
 		memcpy(baseptr + state.dictionary_offset, str.GetData(), str_len);
 		string_t dictionary_string((const char *)(baseptr + state.dictionary_offset), str_len); // NOLINT
 		state.dictionary_offset += str_len;
@@ -673,7 +664,7 @@ DictionaryAppendState DictFSSTCompressionState::TryEncode() {
 
 	uint32_t offset = 0;
 	data_ptr_t dictionary_start =
-	    AlignPointer<sizeof(void *)>(current_handle.GetDataMutable() + sizeof(dict_fsst_compression_header_t));
+	    AlignPointer<sizeof(void *)>(handle.GetDataMutable() + sizeof(dict_fsst_compression_header_t));
 	D_ASSERT(dictionary_offset > string_t::INLINE_BYTES && dictionary_offset <= string_t::MAX_STRING_SIZE);
 	auto dict_copy = uncompressed_dictionary_copy.EmptyString(dictionary_offset);
 	memcpy((void *)dict_copy.GetData(), (void *)dictionary_start, dictionary_offset);

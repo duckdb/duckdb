@@ -99,6 +99,8 @@ struct CompressionState {
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
+	unique_ptr<ColumnSegment> CreateNewSegment();
+
 public:
 	ColumnDataCheckpointData &checkpoint_data;
 	const CompressionFunction &function;
