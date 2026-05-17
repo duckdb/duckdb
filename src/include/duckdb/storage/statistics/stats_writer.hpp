@@ -20,26 +20,65 @@ struct BaseStatsWriter {
 	void SetHasNull() {
 		has_null = true;
 	}
-	void SetHasValidValue() {
-		has_valid_values = true;
+	void SetHasValid() {
+		has_valid = true;
+	}
+
+	bool HasStats() const {
+		return has_null || has_valid;
+	}
+
+	bool AnyValid() const {
+		return has_valid;
+	}
+
+	void ClearBase() {
+		has_null = false;
+		has_valid = false;
 	}
 
 	void MergeBase(BaseStatistics &other) const {
 		if (has_null) {
 			other.SetHasNullFast();
 		}
-		if (has_valid_values) {
+		if (has_valid) {
 			other.SetHasNoNullFast();
 		}
 	}
 
 private:
 	bool has_null = false;
-	bool has_valid_values = false;
+	bool has_valid = false;
 };
 
 template <class T>
-struct StatsWriter : public BaseStatsWriter {};
+struct StatsWriter : public BaseStatsWriter {
+	explicit StatsWriter(const LogicalType &type) {
+		Clear();
+	}
+
+	inline void Clear() {
+		min = NumericLimits<T>::Maximum();
+		max = NumericLimits<T>::Minimum();
+	}
+
+	void Update(T new_value) {
+		min = LessThan::Operation(new_value, min) ? new_value : min;
+		max = GreaterThan::Operation(new_value, max) ? new_value : max;
+	}
+
+	void Merge(BaseStatistics &target) const {
+		MergeBase(target);
+		if (AnyValid()) {
+			NumericStats::Update<T>(target, min);
+			NumericStats::Update<T>(target, max);
+		}
+	}
+
+private:
+	T min;
+	T max;
+};
 
 template <>
 struct StatsWriter<string_t> : public BaseStatsWriter {
@@ -51,15 +90,22 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 	}
 
 	inline void Clear() {
-		if (!is_geometry) {
-			is_set = false;
-		} else {
+		ClearBase();
+		if (is_geometry) {
 			geometry_stats.SetEmpty();
+		} else {
+			is_set = false;
+			min_size = 0;
+			max_size = 0;
+			has_unicode = false;
+			max_string_length = 0;
+			min_string_length = StringStatsData::MAXIMUM_MIN_STRING_LENGTH;
+			total_string_length = 0;
 		}
 	}
 
 	inline void Update(const string_t &value) {
-		SetHasValidValue();
+		SetHasValid();
 		if (is_geometry) {
 			geometry_stats.Update(value);
 			return;
@@ -107,10 +153,6 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 		}
 	}
 
-	bool HasStats() const {
-		return is_set;
-	}
-
 	void Merge(BaseStatistics &other) const {
 		MergeBase(other);
 		if (is_geometry) {
@@ -123,15 +165,15 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 private:
 	data_t min[StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE];
 	data_t max[StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE];
-	idx_t min_size = 0;
-	idx_t max_size = 0;
-	bool is_set = false;
-	bool has_unicode = false;
-	uint32_t max_string_length = 0;
-	uint32_t min_string_length = StringStatsData::MAXIMUM_MIN_STRING_LENGTH;
-	idx_t total_string_length = 0;
-	bool is_varchar = true;
-	bool is_geometry = false;
+	idx_t min_size;
+	idx_t max_size;
+	bool is_set;
+	bool has_unicode;
+	uint32_t max_string_length;
+	uint32_t min_string_length;
+	idx_t total_string_length;
+	bool is_varchar;
+	bool is_geometry;
 	GeometryStatsData geometry_stats;
 };
 

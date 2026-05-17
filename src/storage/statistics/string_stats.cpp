@@ -678,7 +678,7 @@ string_t ReadWriterStats(const data_t data[], idx_t size, StringStatsType &type)
 }
 
 void StringStats::Merge(BaseStatistics &stats, const StatsWriter<string_t> &stats_writer) {
-	if (!stats_writer.HasStats()) {
+	if (!stats_writer.AnyValid()) {
 		return;
 	}
 	// construct string stats data from the writer
