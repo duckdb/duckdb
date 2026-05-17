@@ -50,8 +50,9 @@ bool BoundFunctionExpression::CanThrow() const {
 }
 
 string BoundFunctionExpression::ToString() const {
-	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), string(), function.name,
-	                                                                         is_operator);
+	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(
+	    *this, string(), string(), function.name, is_operator, false, static_cast<Expression *>(nullptr),
+	    static_cast<OrderModifier *>(nullptr), false, true);
 }
 bool BoundFunctionExpression::PropagatesNullValues() const {
 	return function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING ? false
