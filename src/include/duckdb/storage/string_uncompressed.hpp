@@ -15,7 +15,7 @@
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/statistics/string_stats_writer.hpp"
+#include "duckdb/storage/statistics/stats_writer.hpp"
 
 namespace duckdb {
 struct StringDictionaryContainer {
@@ -104,7 +104,7 @@ public:
 
 		idx_t remaining_space = RemainingSpace(segment, handle);
 		auto base_count = segment.count.load();
-		StringStatsWriter stats_writer(stats.GetType());
+		StatsWriter<string_t> stats_writer(stats.GetType());
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = data.sel->get_index(offset + i);
 			auto target_idx = base_count + i;
@@ -223,7 +223,7 @@ public:
 	static idx_t FinalizeAppend(ColumnSegment &segment, BaseStatistics &stats);
 
 public:
-	static inline void UpdateStringStats(BaseStatistics &stats, StringStatsWriter &writer, const string_t &new_value) {
+	static inline void UpdateStringStats(BaseStatistics &stats, StatsWriter<string_t> &writer, const string_t &new_value) {
 		stats.SetHasNoNullFast();
 		writer.Update(new_value);
 	}

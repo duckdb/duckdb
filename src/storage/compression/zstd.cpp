@@ -604,7 +604,7 @@ public:
 public:
 	unique_ptr<ZSTDAnalyzeState> analyze_state;
 	PartialBlockManager &partial_block_manager;
-	StringStatsWriter stats_writer;
+	StatsWriter<string_t> stats_writer;
 
 	//! --- Analyzed Data ---
 	//! The amount of tuples we're writing

@@ -825,7 +825,7 @@ void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 	auto strings = UnifiedVectorFormat::GetData<string_t>(vector_format);
 
 	EncodedInput encoded_input;
-	StringStatsWriter stats_writer(scan_vector.GetType());
+	StatsWriter<string_t> stats_writer(scan_vector.GetType());
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vector_format.sel->get_index(i);
 		auto &str = strings[idx];

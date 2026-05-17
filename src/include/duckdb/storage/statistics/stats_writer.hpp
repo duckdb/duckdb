@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/statistics/string_stats_writer.hpp
+// duckdb/storage/statistics/stats_writer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,10 +15,15 @@
 
 namespace duckdb {
 
-struct StringStatsWriter {
+template<class T>
+struct StatsWriter {
+};
+
+template <>
+struct StatsWriter<string_t> {
 	friend struct StringStats;
 
-	explicit StringStatsWriter(const LogicalType &type)
+	explicit StatsWriter(const LogicalType &type)
 	    : is_varchar(type.id() == LogicalTypeId::VARCHAR), is_geometry(type.id() == LogicalTypeId::GEOMETRY) {
 		Clear();
 	}

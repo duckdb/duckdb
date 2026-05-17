@@ -20,7 +20,8 @@ class BaseStatistics;
 struct SelectionVector;
 class Vector;
 class Value;
-struct StringStatsWriter;
+template<class T>
+struct StatsWriter;
 
 enum class StringStatsType {
 	NO_STATS,       // no min/max stats available at all
@@ -95,7 +96,7 @@ struct StringStats {
 	DUCKDB_API static void MergeInConstant(BaseStatistics &stats, string_t input);
 
 	[[deprecated("StringStats::Update is deprecated. Use StringStats::MergeInConstant for non-performance-sensitive "
-	             "code, or StringStatsWriter instead")]] DUCKDB_API static void
+	             "code, or StatsWriter<string_t> instead")]] DUCKDB_API static void
 	Update(BaseStatistics &stats, const string_t &value);
 
 	DUCKDB_API static StringStatsType GetMinType(const BaseStatistics &stats);
@@ -129,7 +130,7 @@ struct StringStats {
 	DUCKDB_API static void SetMax(BaseStatistics &stats, const string_t &value, StringStatsType type);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other,
 	                             StatsMergeType merge_type = StatsMergeType::MERGE_STATS);
-	DUCKDB_API static void Merge(BaseStatistics &stats, const StringStatsWriter &other);
+	DUCKDB_API static void Merge(BaseStatistics &stats, const StatsWriter<string_t> &other);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const StringStatsData &other_data,
 	                             StatsMergeType merge_type = StatsMergeType::MERGE_STATS);
 	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
