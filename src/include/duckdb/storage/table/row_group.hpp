@@ -215,6 +215,10 @@ public:
 
 	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer);
 
+	//! Direct accessors, fall outside of general use but can be useful to some extensions
+	ColumnData &GetRawColumnData(const StorageIndex &c) const;
+	ColumnData &GetRawColumnData(storage_t c) const;
+
 private:
 	optional_ptr<RowVersionManager> GetVersionInfo();
 	optional_ptr<RowVersionManager> GetVersionInfoIfLoaded() const;

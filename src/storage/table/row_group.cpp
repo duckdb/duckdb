@@ -133,6 +133,14 @@ ColumnData &RowGroup::GetColumn(storage_t c) const {
 	return c == COLUMN_IDENTIFIER_ROW_ID ? *row_id_column_data : *columns[c];
 }
 
+ColumnData &RowGroup::GetRawColumnData(const StorageIndex &c) const {
+	return GetColumn(c);
+}
+
+ColumnData &RowGroup::GetRawColumnData(storage_t c) const {
+	return GetColumn(c);
+}
+
 void RowGroup::LoadColumn(storage_t c) const {
 	if (c == COLUMN_IDENTIFIER_ROW_ID) {
 		LoadRowIdColumnData();
