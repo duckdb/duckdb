@@ -1,6 +1,7 @@
 #include "duckdb/common/clustered_aggregate.hpp"
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
@@ -304,6 +305,7 @@ bool ClusteredAggrState::TryBuild(ClusteredAggr &clustered, const uint64_t *grou
 	}
 	if (count >= ClusteredAggr::SAMPLE_SIZE &&
 	    clustered.TryClustered(group_ids, static_cast<sel_t>(count), arena.get(), slots.get())) {
+		clustered.state = this;
 		skipped_opportunities = 0;
 		retry_backoff = 1;
 		return true;
@@ -312,4 +314,58 @@ bool ClusteredAggrState::TryBuild(ClusteredAggr &clustered, const uint64_t *grou
 	retry_backoff = MinValue<idx_t>(NumericLimits<idx_t>::Maximum() / 2, retry_backoff) * 2;
 	return false;
 }
+
+optional_ptr<const DictProps> ClusteredAggrState::GetDictProps(const Vector &input) const {
+	if (input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+		return nullptr;
+	}
+	const auto &dict_id = DictionaryVector::DictionaryId(input);
+	if (dict_id.empty()) {
+		return nullptr;
+	}
+	auto it = dict_props.find(dict_id);
+	if (it != dict_props.end()) {
+		return &it->second;
+	}
+
+	auto &slot = dict_props[dict_id];
+	const auto dict_size_opt = DictionaryVector::DictionarySize(input);
+	if (!dict_size_opt.IsValid()) {
+		return &slot;
+	}
+	const idx_t dict_size = dict_size_opt.GetIndex();
+	auto &child = DictionaryVector::Child(input);
+	if (child.GetVectorType() != VectorType::FLAT_VECTOR) {
+		return &slot;
+	}
+
+	auto &mask = FlatVector::Validity(child);
+	auto buf = make_unsafe_uniq_array_uninitialized<int64_t>(dict_size);
+	auto try_copy = [&](auto src) {
+		for (idx_t i = 0; i < dict_size; i++) {
+			if (!mask.RowIsValid(i)) {
+				buf[i] = 0;
+				continue;
+			}
+			const int64_t v = static_cast<int64_t>(src[i]);
+			if (!I64VectorSumSafe(v)) {
+				return false;
+			}
+			buf[i] = v;
+		}
+		return true;
+	};
+	auto type = child.GetType().InternalType();
+	if (type == PhysicalType::UINT32 || type == PhysicalType::INT32) {
+		if (try_copy(FlatVector::GetData<int32_t>(child))) {
+			slot = std::move(buf);
+		}
+	} else if (type == PhysicalType::UINT64 || type == PhysicalType::INT64) {
+		if (try_copy(FlatVector::GetData<int64_t>(child))) {
+			slot = std::move(buf);
+		}
+	}
+	return &slot;
+}
+
 } // namespace duckdb

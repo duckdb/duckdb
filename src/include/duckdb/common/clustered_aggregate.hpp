@@ -8,12 +8,23 @@
 
 #pragma once
 
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
 
 class Vector;
+struct ClusteredAggrState;
+
+using DictProps = unsafe_unique_array<int64_t>;
+
+static constexpr uint64_t SUM_OVERFLOW_MASK = ~((uint64_t(1) << 53) - 1);
+static inline bool I64VectorSumSafe(int64_t v) {
+	return ((static_cast<uint64_t>(v) ^ static_cast<uint64_t>(v >> 63)) & SUM_OVERFLOW_MASK) == 0;
+}
 
 //! Per-chunk tuple clustering by group. Built once and passed to aggregate kernels.
 //! Clustered-aware kernels can use per-run accumulation; everyone else keeps the
@@ -41,6 +52,8 @@ struct ClusteredAggr {
 
 	idx_t n_group_runs = 0;
 	GroupRun group_runs[MAX_RUNS];
+
+	const ClusteredAggrState *state = nullptr;
 
 	//! Build a clustered permutation of 0..count-1 from raw integer group ids.
 	//! On success fills group_runs[].sel/gid/count.
@@ -76,8 +89,11 @@ struct ClusteredAggrState {
 	idx_t skipped_opportunities = 0;
 	idx_t retry_backoff = 1;
 
+	mutable unordered_map<string, DictProps> dict_props;
+
 	void Initialize();
 	bool TryBuild(ClusteredAggr &clustered, const uint64_t *group_ids, idx_t count);
+	optional_ptr<const DictProps> GetDictProps(const Vector &input) const;
 };
 
 } // namespace duckdb
