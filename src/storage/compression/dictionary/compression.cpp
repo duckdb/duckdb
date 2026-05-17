@@ -54,7 +54,7 @@ bool DictionaryCompressionCompressState::LookupString(string_t str) {
 }
 
 void DictionaryCompressionCompressState::AddNewString(string_t str) {
-	UncompressedStringStorage::UpdateStringStats(current_segment->GetStatsMutable(), stats_writer, str);
+	stats_writer.Update(str);
 
 	// Copy string to dict
 	current_dictionary.size += str.GetSize();

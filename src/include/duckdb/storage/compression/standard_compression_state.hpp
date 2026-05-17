@@ -20,7 +20,7 @@ struct StandardCompressionState : public CompressionState {
 
 	void CreateAndPinNewSegment();
 	void FlushCurrentSegment(idx_t segment_size);
-	template<class T>
+	template <class T>
 	void FlushCurrentSegment(T &stats_writer, idx_t segment_size) {
 		// merge the stats into the segment stats
 		stats_writer.Merge(current_segment->GetStatsMutable());

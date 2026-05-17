@@ -243,8 +243,7 @@ public:
 			};
 		}
 
-		UncompressedStringStorage::UpdateStringStats(current_segment->GetStatsMutable(), stats_writer,
-		                                             uncompressed_string);
+		stats_writer.Update(uncompressed_string);
 
 		// Write string into dictionary
 		current_dictionary.size += compressed_string_len;
@@ -279,7 +278,7 @@ public:
 
 	void AddEmptyString() {
 		AddEmptyStringInternal();
-		UncompressedStringStorage::UpdateStringStats(current_segment->GetStatsMutable(), stats_writer, "");
+		stats_writer.Update(string_t(""));
 	}
 
 	size_t GetRequiredSize(size_t string_len) {

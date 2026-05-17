@@ -850,9 +850,9 @@ void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 			}
 		} while (false);
 		if (!is_null) {
-			UncompressedStringStorage::UpdateStringStats(current_segment->GetStatsMutable(), stats_writer, str);
+			stats_writer.Update(str);
 		} else {
-			current_segment->GetStatsMutable().SetHasNullFast();
+			stats_writer.SetHasNull();
 		}
 		tuple_count++;
 	}

@@ -20,7 +20,7 @@ class BaseStatistics;
 struct SelectionVector;
 class Vector;
 class Value;
-template<class T>
+template <class T>
 struct StatsWriter;
 
 enum class StringStatsType {

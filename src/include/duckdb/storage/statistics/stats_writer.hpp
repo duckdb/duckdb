@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/types/string_type.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "utf8proc_wrapper.hpp"
@@ -15,12 +16,33 @@
 
 namespace duckdb {
 
-template<class T>
-struct StatsWriter {
+struct BaseStatsWriter {
+	void SetHasNull() {
+		has_null = true;
+	}
+	void SetHasValidValue() {
+		has_valid_values = true;
+	}
+
+	void MergeBase(BaseStatistics &other) const {
+		if (has_null) {
+			other.SetHasNullFast();
+		}
+		if (has_valid_values) {
+			other.SetHasNoNullFast();
+		}
+	}
+
+private:
+	bool has_null = false;
+	bool has_valid_values = false;
 };
 
+template <class T>
+struct StatsWriter : public BaseStatsWriter {};
+
 template <>
-struct StatsWriter<string_t> {
+struct StatsWriter<string_t> : public BaseStatsWriter {
 	friend struct StringStats;
 
 	explicit StatsWriter(const LogicalType &type)
@@ -37,6 +59,7 @@ struct StatsWriter<string_t> {
 	}
 
 	inline void Update(const string_t &value) {
+		SetHasValidValue();
 		if (is_geometry) {
 			geometry_stats.Update(value);
 			return;
@@ -89,6 +112,7 @@ struct StatsWriter<string_t> {
 	}
 
 	void Merge(BaseStatistics &other) const {
+		MergeBase(other);
 		if (is_geometry) {
 			GeometryStats::GetDataUnsafe(other).Merge(geometry_stats);
 		} else {

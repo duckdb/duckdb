@@ -116,7 +116,7 @@ public:
 			remaining_space -= sizeof(int32_t);
 			const bool is_null = !data.validity.RowIsValid(source_idx);
 			if (is_null) {
-				stats.SetHasNullFast();
+				stats_writer.SetHasNull();
 				// null value is stored as a copy of the last value, this is done to be able to efficiently do the
 				// string_length calculation
 				if (target_idx > 0) {
@@ -150,7 +150,7 @@ public:
 			}
 
 			// we have space: write the string
-			UpdateStringStats(stats, stats_writer, source_data[source_idx]);
+			stats_writer.Update(source_data[source_idx]);
 
 			if (DUCKDB_UNLIKELY(use_overflow_block)) {
 				// write to overflow blocks
@@ -223,11 +223,6 @@ public:
 	static idx_t FinalizeAppend(ColumnSegment &segment, BaseStatistics &stats);
 
 public:
-	static inline void UpdateStringStats(BaseStatistics &stats, StatsWriter<string_t> &writer, const string_t &new_value) {
-		stats.SetHasNoNullFast();
-		writer.Update(new_value);
-	}
-
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer dict);
 	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
 	static uint32_t GetDictionaryEnd(ColumnSegment &segment, BufferHandle &handle);
