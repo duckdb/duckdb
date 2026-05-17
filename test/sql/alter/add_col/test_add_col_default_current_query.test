@@ -1,0 +1,18 @@
+# name: test/sql/alter/add_col/test_add_col_default_current_query.test
+# description: ADD COLUMN with a non-literal default is rewritten into a MultiStatement (ALTER + UPDATE + ALTER SET DEFAULT). Each synthesized sub-statement must inherit the parent's query text so callbacks reading current_query() see the original SQL instead of "".
+# group: [add_col]
+
+statement ok
+CREATE TABLE t(i INTEGER)
+
+statement ok
+INSERT INTO t VALUES (1), (2)
+
+# Non-literal default triggers the ALTER+UPDATE+ALTER rewrite; UPDATE materializes current_query() per row.
+statement ok
+ALTER TABLE t ADD COLUMN q VARCHAR DEFAULT current_query()
+
+query I
+SELECT DISTINCT q FROM t
+----
+ALTER TABLE t ADD COLUMN q VARCHAR DEFAULT current_query()

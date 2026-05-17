@@ -7,6 +7,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/extension_statement.hpp"
+#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
@@ -366,6 +367,17 @@ void Parser::ParseQuery(const string &query) {
 			if (statement->type == StatementType::CREATE_STATEMENT) {
 				auto &create = statement->Cast<CreateStatement>();
 				create.info->sql = statement->query;
+			}
+			// Synthetic sub-statements inside a MultiStatement (e.g. the ALTER+UPDATE+ALTER
+			// rewrite for ADD COLUMN ... DEFAULT <non-literal>) inherit no source offsets,
+			// so propagate the parent query text to each child for active_query->query.
+			if (statement->type == StatementType::MULTI_STATEMENT) {
+				auto &multi = statement->Cast<MultiStatement>();
+				for (auto &child : multi.statements) {
+					child->query = statement->query;
+					child->stmt_location = 0;
+					child->stmt_length = statement->query.size();
+				}
 			}
 		}
 	}
