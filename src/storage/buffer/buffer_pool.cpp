@@ -85,8 +85,8 @@ typedef duckdb_moodycamel::ConcurrentQueue<BufferEvictionNode> eviction_queue_t;
 struct EvictionQueue {
 public:
 	explicit EvictionQueue(const vector<FileBufferType> &file_buffer_types_p)
-	    : file_buffer_types(file_buffer_types_p), purge_consumer_token(q), purge_producer_token(q),
-	      debug_eviction_queue_sleep(0), evict_queue_insertions(0), total_dead_nodes(0) {
+	    : file_buffer_types(file_buffer_types_p), debug_eviction_queue_sleep(0), evict_queue_insertions(0),
+	      total_dead_nodes(0), purge_consumer_token(q), purge_producer_token(q) {
 	}
 
 public:
