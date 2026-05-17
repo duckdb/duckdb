@@ -206,6 +206,39 @@ TEST_CASE("Test Arrow UNION type roundtrip", "[arrow]") {
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl3", false));
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl3", true));
 }
+
+TEST_CASE("Test Arrow VARIANT export", "[arrow]") {
+	DuckDB db;
+	Connection con(db);
+
+	auto result = con.Query("SELECT * FROM (VALUES (42::VARIANT), ({'name':'Alice'}::VARIANT)) AS t(payload)");
+	REQUIRE(!result->HasError());
+	auto chunk = result->Fetch();
+	REQUIRE(chunk);
+	REQUIRE(chunk->size() == 2);
+
+	auto client_properties = con.context->GetClientProperties();
+	ArrowSchema schema;
+	schema.Init();
+	ArrowConverter::ToArrowSchema(&schema, result->types, result->names, client_properties);
+	REQUIRE(schema.n_children == 1);
+	REQUIRE(string(schema.children[0]->format) == "+s");
+	REQUIRE(schema.children[0]->n_children == 4);
+	REQUIRE(string(schema.children[0]->children[0]->name) == "keys");
+	REQUIRE(string(schema.children[0]->children[1]->name) == "children");
+	REQUIRE(string(schema.children[0]->children[2]->name) == "values");
+	REQUIRE(string(schema.children[0]->children[3]->name) == "data");
+
+	ArrowArray array;
+	unordered_map<idx_t, const duckdb::shared_ptr<ArrowTypeExtensionData>> extension_type_cast;
+	ArrowConverter::ToArrowArray(*chunk, &array, client_properties, extension_type_cast);
+	REQUIRE(array.n_children == 1);
+	REQUIRE(array.children[0]->n_children == 4);
+
+	array.release(&array);
+	schema.release(&schema);
+}
+
 TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	// UUID
 	TestArrowRoundtrip("SELECT '2d89ebe6-1e13-47e5-803a-b81c87660b66'::UUID str FROM range(5) tbl(i)", false, true);
