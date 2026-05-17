@@ -224,7 +224,6 @@ public:
 		current_width = 0;
 		max_compressed_string_length = 0;
 		last_fitting_size = 0;
-		stats_writer.Clear();
 
 		// Reset the pointers into the current segment
 		current_dictionary = FSSTStorage::GetDictionary(*current_segment, handle);
@@ -315,8 +314,7 @@ public:
 
 	void Flush(bool final = false) {
 		auto segment_size = Finalize();
-		stats_writer.Merge(current_segment->GetStatsMutable());
-		FlushCurrentSegment(segment_size);
+		FlushCurrentSegment(stats_writer, segment_size);
 
 		if (!final) {
 			CreateEmptySegment();

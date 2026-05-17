@@ -103,8 +103,7 @@ bool DictionaryCompressionCompressState::CalculateSpaceRequirements(bool new_str
 
 void DictionaryCompressionCompressState::Flush(bool final) {
 	auto segment_size = Finalize();
-	stats_writer.Merge(current_segment->GetStatsMutable());
-	FlushCurrentSegment(segment_size);
+	FlushCurrentSegment(stats_writer, segment_size);
 
 	if (!final) {
 		CreateEmptySegment();
