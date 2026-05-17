@@ -4,6 +4,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/transaction/commit_state.hpp"
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
 
 namespace duckdb {
 
