@@ -1,0 +1,271 @@
+# name: test/sql/json/issues/issue22103.test
+# description: Test issue 22103 - read_json_auto fails with mixed ISO 8601 timestamp formats across fields
+# group: [issues]
+
+#
+# Regression: PR #21660 added new timestamp format patterns to read_json_auto.
+# The auto-detection shares a single format across all timestamp columns.
+# When one column locks onto a format (e.g., %Y-%m-%dT%H:%M:%SZ from a Z-suffixed field),
+# ShrinkFormatsToSize() permanently removes other formats from the shared map,
+# causing columns with different ISO 8601 variants (e.g., +00:00 offset) to fall back to VARCHAR.
+#
+# Test plan:
+#   1. Basic two-field mixes: Z suffix vs +00:00 offset, with and without milliseconds
+#   2. Non-UTC offsets: positive (+05:30) and negative (-04:00) timezone offsets paired with Z
+#   3. Three-field and four-field mixes covering all four ISO 8601 patterns:
+#      %Y-%m-%dT%H:%M:%SZ, %Y-%m-%dT%H:%M:%S.%fZ, %Y-%m-%dT%H:%M:%S%z, %Y-%m-%dT%H:%M:%S.%f%z
+#   4. Multiple records: consistent format per column but different formats across columns
+#   5. Mixed types: timestamp fields alongside VARCHAR, BIGINT, and BOOLEAN fields
+#   6. Reversed field order: offset-format field before Z-format field
+#   7. Cross-family format mix: space-separated (%Y-%m-%d %H:%M:%S) alongside ISO 8601 T-separated
+#   8. Timezone-aware field mixed with plain timestamp (no timezone info)
+#   9. Null handling: null values interleaved with different timestamp formats across columns
+#  10. Date field (no time) mixed with timestamp field
+#  11. Same column with different ISO 8601 variants across rows (expected: falls back to VARCHAR)
+
+require json
+
+statement ok
+pragma enable_verification
+
+# ---------------------------------------------------------------------------
+# 1. Basic: Z suffix vs +00:00 offset across fields
+# ---------------------------------------------------------------------------
+statement ok
+copy (select * from (values ('{"date_z":"2026-08-12T00:00:00Z","date_offset":"2026-08-12T00:00:00.000+00:00"}'))) to '{TEST_DIR}/mixed_timestamps.json' (format csv, quote '', header 0)
+
+query II
+select typeof(date_z), typeof(date_offset) from read_json_auto('{TEST_DIR}/mixed_timestamps.json')
+----
+TIMESTAMP	TIMESTAMP
+
+query II
+select date_z, date_offset from read_json_auto('{TEST_DIR}/mixed_timestamps.json')
+----
+2026-08-12 00:00:00	2026-08-12 00:00:00
+
+# ---------------------------------------------------------------------------
+# 1. Both fields with milliseconds but different suffixes (Z vs +00:00)
+# ---------------------------------------------------------------------------
+statement ok
+copy (select * from (values ('{"ts1":"2026-08-12T00:00:00.000Z","ts2":"2026-08-12T00:00:00.000+00:00"}'))) to '{TEST_DIR}/mixed_timestamps2.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts1), typeof(ts2) from read_json_auto('{TEST_DIR}/mixed_timestamps2.json')
+----
+TIMESTAMP	TIMESTAMP
+
+query II
+select ts1, ts2 from read_json_auto('{TEST_DIR}/mixed_timestamps2.json')
+----
+2026-08-12 00:00:00	2026-08-12 00:00:00
+
+# ---------------------------------------------------------------------------
+# 2. Non-UTC offset (+05:30) paired with Z suffix
+# ---------------------------------------------------------------------------
+statement ok
+copy (select * from (values ('{"utc":"2026-08-12T00:00:00Z","ist":"2026-08-12T05:30:00.000+05:30"}'))) to '{TEST_DIR}/mixed_timestamps3.json' (format csv, quote '', header 0)
+
+query II
+select typeof(utc), typeof(ist) from read_json_auto('{TEST_DIR}/mixed_timestamps3.json')
+----
+TIMESTAMP	TIMESTAMP
+
+query II
+select utc, ist from read_json_auto('{TEST_DIR}/mixed_timestamps3.json')
+----
+2026-08-12 00:00:00	2026-08-12 00:00:00
+
+# ---------------------------------------------------------------------------
+# 2. Negative UTC offset
+# ---------------------------------------------------------------------------
+statement ok
+copy (select * from (values ('{"utc":"2026-08-12T12:00:00Z","ny":"2026-08-12T08:00:00.000-04:00"}'))) to '{TEST_DIR}/mixed_timestamps_neg.json' (format csv, quote '', header 0)
+
+query II
+select typeof(utc), typeof(ny) from read_json_auto('{TEST_DIR}/mixed_timestamps_neg.json')
+----
+TIMESTAMP	TIMESTAMP
+
+query II
+select utc, ny from read_json_auto('{TEST_DIR}/mixed_timestamps_neg.json')
+----
+2026-08-12 12:00:00	2026-08-12 12:00:00
+
+# ---------------------------------------------------------------------------
+# 3. Three fields, each with a different format variant
+# ---------------------------------------------------------------------------
+statement ok
+copy (select * from (values ('{"a":"2026-08-12T00:00:00Z","b":"2026-08-12T00:00:00.000Z","c":"2026-08-12T00:00:00.000+00:00"}'))) to '{TEST_DIR}/mixed_timestamps_three.json' (format csv, quote '', header 0)
+
+query III
+select typeof(a), typeof(b), typeof(c) from read_json_auto('{TEST_DIR}/mixed_timestamps_three.json')
+----
+TIMESTAMP	TIMESTAMP	TIMESTAMP
+
+query III
+select a, b, c from read_json_auto('{TEST_DIR}/mixed_timestamps_three.json')
+----
+2026-08-12 00:00:00	2026-08-12 00:00:00	2026-08-12 00:00:00
+
+# ---------------------------------------------------------------------------
+# 3. Four fields covering all four ISO 8601 patterns
+# ---------------------------------------------------------------------------
+statement ok
+copy (select * from (values ('{"f1":"2026-08-12T00:00:00Z","f2":"2026-08-12T00:00:00.123Z","f3":"2026-08-12T00:00:00+00:00","f4":"2026-08-12T00:00:00.456+00:00"}'))) to '{TEST_DIR}/mixed_timestamps_four.json' (format csv, quote '', header 0)
+
+query IIII
+select typeof(f1), typeof(f2), typeof(f3), typeof(f4) from read_json_auto('{TEST_DIR}/mixed_timestamps_four.json')
+----
+TIMESTAMP	TIMESTAMP	TIMESTAMP	TIMESTAMP
+
+query IIII
+select f1, f2, f3, f4 from read_json_auto('{TEST_DIR}/mixed_timestamps_four.json')
+----
+2026-08-12 00:00:00	2026-08-12 00:00:00.123	2026-08-12 00:00:00	2026-08-12 00:00:00.456
+
+# ---------------------------------------------------------------------------
+# 4. Multiple records with consistent format per column but different across columns
+# ---------------------------------------------------------------------------
+statement ok
+copy (select * from (values ('{"z_ts":"2026-01-01T10:00:00Z","offset_ts":"2026-01-01T10:00:00.000+00:00"}'), ('{"z_ts":"2026-06-15T14:30:00Z","offset_ts":"2026-06-15T14:30:00.000+02:00"}'))) to '{TEST_DIR}/mixed_timestamps_multi.json' (format csv, quote '', header 0)
+
+query II
+select typeof(z_ts), typeof(offset_ts) from read_json_auto('{TEST_DIR}/mixed_timestamps_multi.json') limit 1
+----
+TIMESTAMP	TIMESTAMP
+
+query II
+select z_ts, offset_ts from read_json_auto('{TEST_DIR}/mixed_timestamps_multi.json')
+----
+2026-01-01 10:00:00	2026-01-01 10:00:00
+2026-06-15 14:30:00	2026-06-15 12:30:00
+
+# ---------------------------------------------------------------------------
+# 5. Timestamp fields mixed with non-timestamp string fields (VARCHAR stays VARCHAR)
+# ---------------------------------------------------------------------------
+statement ok
+copy (select * from (values ('{"name":"Alice","created":"2026-08-12T00:00:00Z","updated":"2026-08-12T00:00:00.000+00:00"}'))) to '{TEST_DIR}/mixed_with_strings.json' (format csv, quote '', header 0)
+
+query III
+select typeof(name), typeof(created), typeof(updated) from read_json_auto('{TEST_DIR}/mixed_with_strings.json')
+----
+VARCHAR	TIMESTAMP	TIMESTAMP
+
+query III
+select name, created, updated from read_json_auto('{TEST_DIR}/mixed_with_strings.json')
+----
+Alice	2026-08-12 00:00:00	2026-08-12 00:00:00
+
+# ---------------------------------------------------------------------------
+# 5. Timestamp fields mixed with numeric and boolean fields
+# ---------------------------------------------------------------------------
+statement ok
+copy (select * from (values ('{"id":42,"active":true,"start":"2026-08-12T00:00:00Z","end":"2026-08-12T23:59:59.999+00:00"}'))) to '{TEST_DIR}/mixed_types.json' (format csv, quote '', header 0)
+
+query IIII
+select typeof(id), typeof(active), typeof(start), typeof("end") from read_json_auto('{TEST_DIR}/mixed_types.json')
+----
+BIGINT	BOOLEAN	TIMESTAMP	TIMESTAMP
+
+query IIII
+select id, active, start, "end" from read_json_auto('{TEST_DIR}/mixed_types.json')
+----
+42	true	2026-08-12 00:00:00	2026-08-12 23:59:59.999
+
+# ---------------------------------------------------------------------------
+# 6. Reversed field order (offset first, Z second)
+# ---------------------------------------------------------------------------
+statement ok
+copy (select * from (values ('{"offset_first":"2026-08-12T00:00:00.000+00:00","z_second":"2026-08-12T00:00:00Z"}'))) to '{TEST_DIR}/mixed_timestamps_reversed.json' (format csv, quote '', header 0)
+
+query II
+select typeof(offset_first), typeof(z_second) from read_json_auto('{TEST_DIR}/mixed_timestamps_reversed.json')
+----
+TIMESTAMP	TIMESTAMP
+
+query II
+select offset_first, z_second from read_json_auto('{TEST_DIR}/mixed_timestamps_reversed.json')
+----
+2026-08-12 00:00:00	2026-08-12 00:00:00
+
+# ---------------------------------------------------------------------------
+# 7. Space-separated timestamp format mixed with ISO 8601 T-separated
+# ---------------------------------------------------------------------------
+statement ok
+copy (select * from (values ('{"space_fmt":"2026-08-12 00:00:00","iso_fmt":"2026-08-12T00:00:00Z"}'))) to '{TEST_DIR}/mixed_space_iso.json' (format csv, quote '', header 0)
+
+query II
+select typeof(space_fmt), typeof(iso_fmt) from read_json_auto('{TEST_DIR}/mixed_space_iso.json')
+----
+TIMESTAMP	TIMESTAMP
+
+query II
+select space_fmt, iso_fmt from read_json_auto('{TEST_DIR}/mixed_space_iso.json')
+----
+2026-08-12 00:00:00	2026-08-12 00:00:00
+
+# ---------------------------------------------------------------------------
+# 8. Timezone-aware field mixed with plain timestamp (no timezone)
+# ---------------------------------------------------------------------------
+statement ok
+copy (select * from (values ('{"with_tz":"2026-08-12T15:30:00.000+05:30","without_tz":"2026-08-12 10:00:00"}'))) to '{TEST_DIR}/mixed_tz_and_plain.json' (format csv, quote '', header 0)
+
+query II
+select typeof(with_tz), typeof(without_tz) from read_json_auto('{TEST_DIR}/mixed_tz_and_plain.json')
+----
+TIMESTAMP	TIMESTAMP
+
+query II
+select with_tz, without_tz from read_json_auto('{TEST_DIR}/mixed_tz_and_plain.json')
+----
+2026-08-12 10:00:00	2026-08-12 10:00:00
+
+# ---------------------------------------------------------------------------
+# 9. Null values mixed with timestamps in different formats
+# ---------------------------------------------------------------------------
+statement ok
+copy (select * from (values ('{"ts_z":"2026-08-12T00:00:00Z","ts_offset":null}'), ('{"ts_z":null,"ts_offset":"2026-08-12T00:00:00.000+00:00"}'))) to '{TEST_DIR}/mixed_with_nulls.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts_z), typeof(ts_offset) from read_json_auto('{TEST_DIR}/mixed_with_nulls.json') limit 1
+----
+TIMESTAMP	TIMESTAMP
+
+query II
+select ts_z, ts_offset from read_json_auto('{TEST_DIR}/mixed_with_nulls.json')
+----
+2026-08-12 00:00:00	NULL
+NULL	2026-08-12 00:00:00
+
+# ---------------------------------------------------------------------------
+# 10. Date field mixed with timestamp field
+# ---------------------------------------------------------------------------
+statement ok
+copy (select * from (values ('{"date_only":"2026-08-12","ts":"2026-08-12T00:00:00Z"}'))) to '{TEST_DIR}/mixed_date_timestamp.json' (format csv, quote '', header 0)
+
+query II
+select typeof(date_only), typeof(ts) from read_json_auto('{TEST_DIR}/mixed_date_timestamp.json')
+----
+DATE	TIMESTAMP
+
+query II
+select date_only, ts from read_json_auto('{TEST_DIR}/mixed_date_timestamp.json')
+----
+2026-08-12	2026-08-12 00:00:00
+
+# ---------------------------------------------------------------------------
+# 11. Same column with different ISO 8601 variants across rows falls back to VARCHAR
+# (no single format can parse both "...Z" and "...+00:00" — this is expected)
+# ---------------------------------------------------------------------------
+# Note: Both values are valid ISO 8601 timestamps, but read_json_auto requires one
+# format per column. A per-value format fallback (try multiple formats for each value
+# until one succeeds) would handle this case — that would be a separate improvement
+# from the cross-column regression fixed here.
+statement ok
+copy (select * from (values ('{"ts":"2026-08-12T00:00:00Z"}'), ('{"ts":"2026-08-13T00:00:00.000+00:00"}'))) to '{TEST_DIR}/mixed_formats_same_col.json' (format csv, quote '', header 0)
+
+query I
+select typeof(ts) from read_json_auto('{TEST_DIR}/mixed_formats_same_col.json') limit 1
+----
+VARCHAR

@@ -32,6 +32,23 @@ public:
 		return candidate_formats.find(type)->second.back();
 	}
 
+	idx_t NumberOfFormats(LogicalTypeId type) const {
+		auto it = candidate_formats.find(type);
+		if (it == candidate_formats.end()) {
+			return 0;
+		}
+		return it->second.size();
+	}
+
+	bool GetFormatAtIndex(LogicalTypeId type, idx_t index, StrpTimeFormat &format) const {
+		auto it = candidate_formats.find(type);
+		if (it == candidate_formats.end() || index >= it->second.size()) {
+			return false;
+		}
+		format = it->second[index];
+		return true;
+	}
+
 public:
 	static void AddFormat(type_id_map_t<vector<StrpTimeFormat>> &candidate_formats, LogicalTypeId type,
 	                      const string &format_string) {
