@@ -72,18 +72,48 @@ void AggregateFilterDataSet::Initialize(ClientContext &context, const vector<Agg
 		// no filters: nothing to do
 		return;
 	}
-	filter_data.resize(aggregates.size());
+	filter_map.resize(aggregates.size());
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggr = aggregates[aggr_idx];
 		if (aggr.filter) {
-			filter_data[aggr_idx] = make_uniq<AggregateFilterData>(context, *aggr.filter, payload_types);
+			for (idx_t other_idx = 0; other_idx < aggr_idx; other_idx++) {
+				auto &other = aggregates[other_idx];
+				if (other.filter && Expression::Equals(*aggr.filter, *other.filter)) {
+					filter_map[aggr_idx] = filter_map[other_idx];
+					break;
+				}
+			}
+			if (!filter_map[aggr_idx].IsValid()) {
+				filter_map[aggr_idx] = filter_data.size();
+				filter_data.push_back(make_uniq<AggregateFilterData>(context, *aggr.filter, payload_types));
+			}
 		}
+	}
+	cached_counts.resize(filter_data.size());
+}
+
+void AggregateFilterDataSet::BeginChunk() {
+	for (auto &count : cached_counts) {
+		count.SetInvalid();
 	}
 }
 
+idx_t AggregateFilterDataSet::ApplyFilter(idx_t aggr_idx, DataChunk &payload) {
+	auto filter_idx = filter_map[aggr_idx].GetIndex();
+	if (cached_counts[filter_idx].IsValid()) {
+		return cached_counts[filter_idx].GetIndex();
+	}
+	auto count = filter_data[filter_idx]->ApplyFilter(payload);
+	cached_counts[filter_idx] = count;
+	return count;
+}
+
 AggregateFilterData &AggregateFilterDataSet::GetFilterData(idx_t aggr_idx) {
-	D_ASSERT(aggr_idx < filter_data.size());
-	D_ASSERT(filter_data[aggr_idx]);
-	return *filter_data[aggr_idx];
+	D_ASSERT(aggr_idx < filter_map.size());
+	D_ASSERT(filter_map[aggr_idx].IsValid());
+	auto filter_idx = filter_map[aggr_idx].GetIndex();
+	D_ASSERT(filter_idx < filter_data.size());
+	D_ASSERT(filter_data[filter_idx]);
+	return *filter_data[filter_idx];
 }
 } // namespace duckdb

@@ -50,6 +50,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"outer_join_simplification", OptimizerType::OUTER_JOIN_SIMPLIFICATION},
     {"window_rewriter", OptimizerType::ROW_NUMBER_REWRITER},
     {"partitioned_execution", OptimizerType::PARTITIONED_EXECUTION},
+    {"scalar_aggregate_fusion", OptimizerType::SCALAR_AGGREGATE_FUSION},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {
