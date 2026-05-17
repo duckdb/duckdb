@@ -333,6 +333,10 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		SetArrowStructFormat(root_holder, child, type, options, context);
 		break;
 	}
+	case LogicalTypeId::VARIANT: {
+		SetArrowStructFormat(root_holder, child, type, options, context);
+		break;
+	}
 	case LogicalTypeId::ARRAY: {
 		auto array_size = ArrayType::GetSize(type);
 		auto &child_type = ArrayType::GetChildType(type);
