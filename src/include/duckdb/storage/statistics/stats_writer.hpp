@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "utf8proc_wrapper.hpp"
@@ -53,7 +54,7 @@ private:
 
 template <class T>
 struct StatsWriter : public BaseStatsWriter {
-	explicit StatsWriter(const LogicalType &type) {
+	explicit StatsWriter() {
 		Clear();
 	}
 
@@ -63,6 +64,11 @@ struct StatsWriter : public BaseStatsWriter {
 	}
 
 	void Update(T new_value) {
+		SetHasValid();
+		UpdateMinMax(new_value);
+	}
+
+	void UpdateMinMax(T new_value) {
 		min = LessThan::Operation(new_value, min) ? new_value : min;
 		max = GreaterThan::Operation(new_value, max) ? new_value : max;
 	}
@@ -70,8 +76,8 @@ struct StatsWriter : public BaseStatsWriter {
 	void Merge(BaseStatistics &target) const {
 		MergeBase(target);
 		if (AnyValid()) {
-			NumericStats::Update<T>(target, min);
-			NumericStats::Update<T>(target, max);
+			target.UpdateNumericStats<T>(min);
+			target.UpdateNumericStats<T>(max);
 		}
 	}
 

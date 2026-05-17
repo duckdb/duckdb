@@ -55,6 +55,7 @@ public:
 	void Flush(bool final);
 
 public:
+	StatsWriter<string_t> stats_writer;
 	//! Offset at which to write the next dictionary string
 	idx_t dictionary_offset = 0;
 

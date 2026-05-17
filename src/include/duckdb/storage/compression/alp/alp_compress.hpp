@@ -20,6 +20,7 @@
 #include "duckdb/storage/compression/patas/patas.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/statistics/stats_writer.hpp"
 
 namespace duckdb {
 
@@ -36,6 +37,7 @@ public:
 		compression_data.best_k_combinations = analyze_state->compression_data.best_k_combinations;
 	}
 
+	StatsWriter<T> stats_writer;
 	idx_t vector_idx = 0;
 	idx_t nulls_idx = 0;
 	idx_t vectors_flushed = 0;
@@ -101,12 +103,12 @@ public:
 		}
 
 		if (nulls_idx) {
-			current_segment->GetStatsMutable().SetHasNullFast();
+			stats_writer.SetHasNull();
 		}
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
-			current_segment->GetStatsMutable().SetHasNoNullFast();
+			stats_writer.SetHasValid();
 			for (idx_t i = 0; i < vector_idx; i++) {
-				current_segment->GetStatsMutable().UpdateNumericStats<T>(input_vector[i]);
+				stats_writer.UpdateMinMax(input_vector[i]);
 			}
 		}
 		current_segment->count += vector_idx;
@@ -192,7 +194,6 @@ public:
 	}
 
 	void FlushSegment() {
-		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
 		auto dataptr = handle.GetDataMutable();
 
 		idx_t metadata_offset = AlignValue(UsedSpace());
@@ -225,7 +226,7 @@ public:
 		// Store the offset to the end of metadata (to be used as a backwards pointer in decoding)
 		Store<uint32_t>(NumericCast<uint32_t>(total_segment_size), dataptr);
 
-		FlushCurrentSegment(total_segment_size);
+		FlushCurrentSegment(stats_writer, total_segment_size);
 		data_bytes_used = 0;
 		vectors_flushed = 0;
 	}

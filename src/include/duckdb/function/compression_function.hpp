@@ -98,6 +98,7 @@ struct CompressionState {
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+	const LogicalType &GetType();
 
 	unique_ptr<ColumnSegment> CreateNewSegment();
 

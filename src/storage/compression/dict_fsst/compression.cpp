@@ -12,7 +12,7 @@ namespace dict_fsst {
 
 DictFSSTCompressionState::DictFSSTCompressionState(ColumnDataCheckpointData &checkpoint_data_p,
                                                    unique_ptr<DictFSSTAnalyzeState> &&analyze_p)
-    : StandardCompressionState(checkpoint_data_p, CompressionType::COMPRESSION_DICT_FSST),
+    : StandardCompressionState(checkpoint_data_p, CompressionType::COMPRESSION_DICT_FSST), stats_writer(GetType()),
       current_string_map(
           info.GetBlockManager().buffer_manager.GetBufferAllocator(),
           MinValue(analyze_p.get()->total_count, info.GetBlockSize()) / 2, // maximum_size_p (amount of elements)
@@ -267,7 +267,7 @@ void DictFSSTCompressionState::Flush(bool final) {
 	current_segment->count = tuple_count;
 
 	auto segment_size = Finalize();
-	FlushCurrentSegment(segment_size);
+	FlushCurrentSegment(stats_writer, segment_size);
 
 	// Reset the state
 	uncompressed_dictionary_copy.Destroy();
@@ -825,7 +825,6 @@ void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 	auto strings = UnifiedVectorFormat::GetData<string_t>(vector_format);
 
 	EncodedInput encoded_input;
-	StatsWriter<string_t> stats_writer(scan_vector.GetType());
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vector_format.sel->get_index(i);
 		auto &str = strings[idx];
@@ -856,7 +855,6 @@ void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 		}
 		tuple_count++;
 	}
-	stats_writer.Merge(current_segment->GetStatsMutable());
 }
 
 void DictFSSTCompressionState::FinalizeCompress() {
