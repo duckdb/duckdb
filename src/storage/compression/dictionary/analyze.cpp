@@ -3,8 +3,8 @@
 namespace duckdb {
 
 DictionaryAnalyzeState::DictionaryAnalyzeState(const CompressionInfo &info)
-    : DictionaryCompressionState(info), segment_count(0), current_tuple_count(0), current_unique_count(0),
-      current_dict_size(0), current_width(0), next_width(0) {
+    : AnalyzeState(info), segment_count(0), current_tuple_count(0), current_unique_count(0), current_dict_size(0),
+      current_width(0), next_width(0) {
 }
 
 bool DictionaryAnalyzeState::LookupString(string_t str) {

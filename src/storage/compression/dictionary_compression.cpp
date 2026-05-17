@@ -75,17 +75,16 @@ unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnD
 	}
 
 	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<DictionaryCompressionAnalyzeState>(info);
+	return make_uniq<DictionaryAnalyzeState>(info);
 }
 
 bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
-	auto &state = state_p.Cast<DictionaryCompressionAnalyzeState>();
-	return state.analyze_state->UpdateState(input, count);
+	auto &state = state_p.Cast<DictionaryAnalyzeState>();
+	return DictionaryCompression::UpdateState(state, input, count);
 }
 
 idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
-	auto &analyze_state = state_p.Cast<DictionaryCompressionAnalyzeState>();
-	auto &state = *analyze_state.analyze_state;
+	auto &state = state_p.Cast<DictionaryAnalyzeState>();
 
 	if (state.current_tuple_count != 0) {
 		state.UpdateMaxUniqueCount();
@@ -103,16 +102,15 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 // Compress
 //===--------------------------------------------------------------------===//
 unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(ColumnDataCheckpointData &checkpoint_data,
-                                                                           unique_ptr<AnalyzeState> state) {
-	const auto &analyze_state = state->Cast<DictionaryCompressionAnalyzeState>();
-	auto &actual_state = *analyze_state.analyze_state;
-	return make_uniq<DictionaryCompressionCompressState>(checkpoint_data, state->info,
-	                                                     actual_state.max_unique_count_across_segments);
+                                                                           unique_ptr<AnalyzeState> state_p) {
+	const auto &state = state_p->Cast<DictionaryAnalyzeState>();
+	return make_uniq<DictionaryCompressionCompressState>(checkpoint_data, state.info,
+	                                                     state.max_unique_count_across_segments);
 }
 
 void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = state_p.Cast<DictionaryCompressionCompressState>();
-	state.UpdateState(scan_vector, count);
+	DictionaryCompression::UpdateState(state, scan_vector, count);
 }
 
 void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
