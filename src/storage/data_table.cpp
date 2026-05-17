@@ -1821,12 +1821,13 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	row_groups->Checkpoint(writer, global_stats);
 	row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	if (writer.GetRebuildIndexes()) {
-		ActiveTimer rebuild_indexes_timer;
+		ActiveTimer timer;
 		auto context = writer.TryGetClientContext();
 		if (context) {
-			rebuild_indexes_timer = QueryProfiler::Get(*context).StartTimer(MetricType::CUMULATIVE_VACUUM_TIME);
+			timer = QueryProfiler::Get(*context).StartTimer(MetricType::CUMULATIVE_VACUUM_TIME);
 		}
 		RebuildIndexes();
+		timer.EndTimer();
 	}
 	// The row group payload data has been written. Now write:
 	//   sample
