@@ -1,12 +1,85 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/optimizer/rule/comparison_simplification.hpp"
 
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
+
+static bool DateTimestampComparisonIsInvertible(BoundFunctionExpression &expr, BoundCastExpression &cast_expression,
+                                                const Value &constant_value, Value &cast_constant, bool column_ref_left,
+                                                unique_ptr<Expression> &replacement) {
+	if (Timestamp::GetTime(constant_value.GetValue<timestamp_t>()) == dtime_t(0)) {
+		return true; // it's midnight: no replacement needed
+	}
+	auto op = expr.GetExpressionType();
+
+	// Non-midnight TIMESTAMPs cannot equal DATE values.
+	switch (op) {
+	case ExpressionType::COMPARE_EQUAL:
+		// d =  T   -> false, preserving NULL
+		replacement = ExpressionRewriter::ConstantOrNull(std::move(cast_expression.child), Value::BOOLEAN(false));
+		return true;
+	case ExpressionType::COMPARE_NOTEQUAL:
+		// d != T   -> true, preserving NULL
+		replacement = ExpressionRewriter::ConstantOrNull(std::move(cast_expression.child), Value::BOOLEAN(true));
+		return true;
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		// d IS DISTINCT FROM T     -> true
+		replacement = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+		return true;
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		// d IS NOT DISTINCT FROM T -> false
+		replacement = make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
+		return true;
+	default:
+		break;
+	}
+
+	// The examples describe the column-left form; column-right comparisons invert the day bump.
+	bool add_one_day;
+	switch (op) {
+	case ExpressionType::COMPARE_LESSTHAN:
+		// d <  T   -> d <  DATE '2024-06-16'  -- needs +1
+		add_one_day = column_ref_left;
+		break;
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		// d >= T   -> d >= DATE '2024-06-16'  -- needs +1
+		add_one_day = column_ref_left;
+		break;
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		// d <= T   -> d <= DATE '2024-06-15'  -- no +1
+		add_one_day = !column_ref_left;
+		break;
+	case ExpressionType::COMPARE_GREATERTHAN:
+		// d >  T   -> d >  DATE '2024-06-15'  -- no +1
+		add_one_day = !column_ref_left;
+		break;
+	default:
+		return false;
+	}
+	if (add_one_day) {
+		cast_constant = Value::DATE(date_t(cast_constant.GetValue<date_t>().days + 1));
+	}
+	return true;
+}
+
+static bool ConstantCastIsInvertible(BoundFunctionExpression &expr, BoundCastExpression &cast_expression,
+                                     const Value &constant_value, Value &cast_constant, const LogicalType &target_type,
+                                     bool column_ref_left, unique_ptr<Expression> &replacement) {
+	if (cast_constant.IsNull() || BoundCastExpression::CastIsInvertible(cast_expression.GetReturnType(), target_type)) {
+		return true;
+	}
+	if (target_type.id() != LogicalTypeId::DATE || cast_expression.GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
+		return false;
+	}
+	return DateTimestampComparisonIsInvertible(expr, cast_expression, constant_value, cast_constant, column_ref_left,
+	                                           replacement);
+}
 
 ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a ComparisonExpression that has a ConstantExpression as a check
@@ -56,10 +129,13 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		}
 
 		// Is the constant cast invertible?
-		if (!cast_constant.IsNull() &&
-		    !BoundCastExpression::CastIsInvertible(cast_expression.GetReturnType(), target_type)) {
-			// Cast is not invertible, so we do not rewrite this expression to ensure that the cast is executed
+		unique_ptr<Expression> replacement;
+		if (!ConstantCastIsInvertible(expr, cast_expression, constant_value, cast_constant, target_type,
+		                              column_ref_left, replacement)) {
 			return nullptr;
+		}
+		if (replacement) {
+			return replacement;
 		}
 
 		//! We can cast, now we change our column_ref_expression from an operator cast to a column reference

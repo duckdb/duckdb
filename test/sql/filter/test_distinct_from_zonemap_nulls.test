@@ -1,0 +1,26 @@
+# name: test/sql/filter/test_distinct_from_zonemap_nulls.test
+# description: Test IS DISTINCT FROM zone map pruning with NULL-only and nullable segments
+# group: [filter]
+
+load {TEST_DIR}/distinct_from_zonemap_nulls.db
+
+statement ok
+CREATE TABLE distinct_from_zonemap_dates(d DATE);
+
+statement ok
+INSERT INTO distinct_from_zonemap_dates SELECT NULL::DATE FROM range(65534);
+
+statement ok
+INSERT INTO distinct_from_zonemap_dates SELECT DATE '2024-06-15' FROM range(65534);
+
+query I
+SELECT COUNT(*) FROM distinct_from_zonemap_dates WHERE d IS DISTINCT FROM DATE '2024-06-15';
+----
+65534
+
+restart
+
+query I
+SELECT COUNT(*) FROM distinct_from_zonemap_dates WHERE d IS DISTINCT FROM DATE '2024-06-15';
+----
+65534
