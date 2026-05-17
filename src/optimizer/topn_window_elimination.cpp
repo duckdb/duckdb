@@ -12,19 +12,26 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_cte.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/planner/operator/logical_top_n.hpp"
 #include "duckdb/planner/operator/logical_unnest.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/logical_operator_deep_copy.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/aggregate/minmax_n_helpers.hpp"
 #include "duckdb/main/database.hpp"
@@ -41,6 +48,127 @@ TableIndex GetGroupIdx(const unique_ptr<LogicalOperator> &op) {
 		return op->children[0]->GetTableIndex()[0];
 	}
 	return op->GetTableIndex()[0];
+}
+
+unique_ptr<LogicalOperator> *FindFirstAggregate(unique_ptr<LogicalOperator> &op) {
+	if (op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		return &op;
+	}
+	if (op->children.size() != 1) {
+		return nullptr;
+	}
+	return FindFirstAggregate(op->children[0]);
+}
+
+optional_ptr<LogicalWindow> FindFirstWindow(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_WINDOW) {
+		return op.Cast<LogicalWindow>();
+	}
+	if (op.children.size() != 1) {
+		return nullptr;
+	}
+	return FindFirstWindow(*op.children[0]);
+}
+
+bool RemoveEmptyGroupingSet(LogicalAggregate &aggregate) {
+	bool removed_empty = false;
+	vector<GroupingSet> grouping_sets;
+	grouping_sets.reserve(aggregate.grouping_sets.size());
+	for (auto &grouping_set : aggregate.grouping_sets) {
+		if (grouping_set.empty()) {
+			removed_empty = true;
+			continue;
+		}
+		grouping_sets.push_back(std::move(grouping_set));
+	}
+	aggregate.grouping_sets = std::move(grouping_sets);
+	return removed_empty && !aggregate.grouping_sets.empty();
+}
+
+bool HasOrderedPrefixGroupingSets(const LogicalAggregate &aggregate) {
+	bool has_empty = false;
+	const auto first_group = ProjectionIndex(0);
+	for (const auto &grouping_set : aggregate.grouping_sets) {
+		if (grouping_set.empty()) {
+			has_empty = true;
+			continue;
+		}
+		if (!grouping_set.count(first_group)) {
+			return false;
+		}
+	}
+	return has_empty;
+}
+
+void WrapAggregateChildInFilter(LogicalAggregate &aggregate, unique_ptr<Expression> filter_expr) {
+	auto filter = make_uniq<LogicalFilter>(std::move(filter_expr));
+	filter->children.push_back(std::move(aggregate.children[0]));
+	filter->ResolveOperatorTypes();
+	aggregate.children[0] = std::move(filter);
+}
+
+unique_ptr<Expression> CreateNullCheck(unique_ptr<Expression> child, ExpressionType type) {
+	D_ASSERT(type == ExpressionType::OPERATOR_IS_NULL || type == ExpressionType::OPERATOR_IS_NOT_NULL);
+	auto result = make_uniq<BoundOperatorExpression>(type, LogicalType::BOOLEAN);
+	result->children.push_back(std::move(child));
+	return std::move(result);
+}
+
+vector<string> CreateColumnNames(const idx_t count) {
+	vector<string> names;
+	names.reserve(count);
+	for (idx_t i = 0; i < count; i++) {
+		names.push_back(StringUtil::Format("c%llu", i));
+	}
+	return names;
+}
+
+void AddBindingReplacements(ColumnBindingReplacer &replacer, const vector<ColumnBinding> &old_bindings,
+                            const vector<ColumnBinding> &new_bindings) {
+	D_ASSERT(old_bindings.size() == new_bindings.size());
+	for (idx_t i = 0; i < old_bindings.size(); i++) {
+		replacer.replacement_bindings.emplace_back(old_bindings[i], new_bindings[i]);
+	}
+}
+
+bool IsLeadingAggregateGroup(LogicalOperator &op, ColumnBinding binding) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		auto &aggregate = op.Cast<LogicalAggregate>();
+		return binding == ColumnBinding(aggregate.group_index, ProjectionIndex(0));
+	}
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto &projection = op.Cast<LogicalProjection>();
+		if (binding.table_index != projection.table_index ||
+		    binding.column_index.GetIndex() >= projection.expressions.size()) {
+			return false;
+		}
+		auto &expr = projection.expressions[binding.column_index.GetIndex()];
+		if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			return false;
+		}
+		auto &column_ref = expr->Cast<BoundColumnRefExpression>();
+		return IsLeadingAggregateGroup(*op.children[0], column_ref.binding);
+	}
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_ORDER_BY: {
+		if (op.children.size() != 1) {
+			return false;
+		}
+		return IsLeadingAggregateGroup(*op.children[0], binding);
+	}
+	case LogicalOperatorType::LOGICAL_WINDOW: {
+		const auto child_bindings = op.children[0]->GetColumnBindings();
+		for (const auto &child_binding : child_bindings) {
+			if (child_binding == binding) {
+				return IsLeadingAggregateGroup(*op.children[0], binding);
+			}
+		}
+		return false;
+	}
+	default:
+		return false;
+	}
 }
 
 TableIndex GetAggregateIdx(const unique_ptr<LogicalOperator> &op) {
@@ -191,8 +319,180 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 	return op;
 }
 
+unique_ptr<LogicalOperator> TopNWindowElimination::TryOptimizeOrderedRankPrefix(unique_ptr<LogicalOperator> op) {
+	if (op->type != LogicalOperatorType::LOGICAL_TOP_N) {
+		return op;
+	}
+	auto &topn = op->Cast<LogicalTopN>();
+	if (topn.offset != 0 || topn.limit == 0 || topn.orders.empty() || topn.children.size() != 1) {
+		return op;
+	}
+	if (topn.orders[0].type != OrderType::ASCENDING || topn.orders[0].null_order != OrderByNullType::NULLS_FIRST) {
+		return op;
+	}
+	if (topn.orders[0].expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		return op;
+	}
+
+	auto child_bindings = topn.children[0]->GetColumnBindings();
+	if (child_bindings.empty()) {
+		return op;
+	}
+	auto &first_order = topn.orders[0].expression->Cast<BoundColumnRefExpression>();
+	if (first_order.binding != child_bindings[0]) {
+		return op;
+	}
+	if (!IsLeadingAggregateGroup(*topn.children[0], first_order.binding)) {
+		return op;
+	}
+
+	auto window = FindFirstWindow(*topn.children[0]);
+	if (!window || window->expressions.empty()) {
+		return op;
+	}
+	auto &window_expr = window->expressions[0]->Cast<BoundWindowExpression>();
+	if (window_expr.GetExpressionType() != ExpressionType::WINDOW_RANK || window_expr.partitions.size() != 1 ||
+	    window_expr.orders.size() != 1) {
+		return op;
+	}
+	if (window_expr.partitions[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		return op;
+	}
+
+	auto *aggregate_ptr = FindFirstAggregate(topn.children[0]);
+	if (!aggregate_ptr) {
+		return op;
+	}
+	auto &aggregate = (*aggregate_ptr)->Cast<LogicalAggregate>();
+	if (aggregate.groups.empty() || aggregate.grouping_sets.size() <= 1 || !aggregate.grouping_functions.empty()) {
+		return op;
+	}
+	if (!HasOrderedPrefixGroupingSets(aggregate)) {
+		return op;
+	}
+
+	// If the first ORDER BY key is the leading rollup key with NULLS FIRST, all rows with a NULL prefix sort
+	// before the rest. Materialize those rows first and only run the fallback branch when they do not fill the LIMIT.
+	LogicalOperatorDeepCopy first_rows_copier(optimizer.binder, nullptr);
+	auto first_rows = first_rows_copier.DeepCopy(topn.children[0]);
+	auto *first_aggregate_ptr = FindFirstAggregate(first_rows);
+	if (!first_aggregate_ptr) {
+		return op;
+	}
+	const auto first_aggregate_bindings = (*first_aggregate_ptr)->GetColumnBindings();
+
+	LogicalOperatorDeepCopy null_prefix_copier(optimizer.binder, nullptr);
+	auto null_prefix = null_prefix_copier.DeepCopy(*first_aggregate_ptr);
+	LogicalOperatorDeepCopy grand_total_copier(optimizer.binder, nullptr);
+	auto grand_total = grand_total_copier.DeepCopy(*first_aggregate_ptr);
+
+	auto &null_aggregate = null_prefix->Cast<LogicalAggregate>();
+	if (!RemoveEmptyGroupingSet(null_aggregate)) {
+		return op;
+	}
+	WrapAggregateChildInFilter(null_aggregate,
+	                           CreateNullCheck(null_aggregate.groups[0]->Copy(), ExpressionType::OPERATOR_IS_NULL));
+	null_prefix->ResolveOperatorTypes();
+
+	auto &grand_aggregate = grand_total->Cast<LogicalAggregate>();
+	grand_aggregate.grouping_sets.clear();
+	grand_aggregate.grouping_sets.emplace_back();
+	grand_total->ResolveOperatorTypes();
+
+	vector<unique_ptr<LogicalOperator>> prefix_children;
+	prefix_children.push_back(std::move(null_prefix));
+	prefix_children.push_back(std::move(grand_total));
+	auto prefix_union = make_uniq<LogicalSetOperation>(optimizer.binder.GenerateTableIndex(),
+	                                                   first_aggregate_bindings.size(), std::move(prefix_children),
+	                                                   LogicalOperatorType::LOGICAL_UNION, true, true);
+	prefix_union->ResolveOperatorTypes();
+	const auto prefix_union_bindings = prefix_union->GetColumnBindings();
+	ColumnBindingReplacer prefix_replacer;
+	AddBindingReplacements(prefix_replacer, first_aggregate_bindings, prefix_union_bindings);
+	*first_aggregate_ptr = std::move(prefix_union);
+	prefix_replacer.VisitOperator(*first_rows);
+	first_rows->ResolveOperatorTypes();
+
+	const auto cte_index = optimizer.binder.GenerateTableIndex();
+	const auto cte_types = first_rows->types;
+	const auto cte_names = CreateColumnNames(cte_types.size());
+
+	auto make_cte_ref = [&]() {
+		return make_uniq<LogicalCTERef>(optimizer.binder.GenerateTableIndex(), cte_index, cte_types, cte_names);
+	};
+
+	auto first_rows_ref = make_cte_ref();
+
+	auto count_star_fun = CountStarFun::GetFunction();
+	FunctionBinder function_binder(context);
+	vector<unique_ptr<Expression>> count_expressions;
+	count_expressions.push_back(
+	    function_binder.BindAggregateFunction(count_star_fun, {}, nullptr, AggregateType::NON_DISTINCT));
+	auto count_aggregate = make_uniq<LogicalAggregate>(optimizer.binder.GenerateTableIndex(),
+	                                                   optimizer.binder.GenerateTableIndex(),
+	                                                   std::move(count_expressions));
+	count_aggregate->children.push_back(make_cte_ref());
+	count_aggregate->ResolveOperatorTypes();
+	const auto count_binding = count_aggregate->GetColumnBindings()[0];
+	auto count_ref = make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, count_binding);
+	auto count_limit = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(topn.limit)));
+	auto count_filter = make_uniq<LogicalFilter>(
+	    BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHAN, std::move(count_ref),
+	                                      std::move(count_limit)));
+	count_filter->children.push_back(std::move(count_aggregate));
+	count_filter->ResolveOperatorTypes();
+
+	vector<unique_ptr<Expression>> guard_expressions;
+	guard_expressions.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(1)));
+	auto guard_projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(),
+	                                                    std::move(guard_expressions));
+	guard_projection->children.push_back(std::move(count_filter));
+	guard_projection->ResolveOperatorTypes();
+
+	LogicalOperatorDeepCopy fallback_copier(optimizer.binder, nullptr);
+	auto fallback = fallback_copier.DeepCopy(topn.children[0]);
+	auto *fallback_aggregate_ptr = FindFirstAggregate(fallback);
+	if (!fallback_aggregate_ptr) {
+		return op;
+	}
+	auto &fallback_aggregate = (*fallback_aggregate_ptr)->Cast<LogicalAggregate>();
+	if (!RemoveEmptyGroupingSet(fallback_aggregate)) {
+		return op;
+	}
+	WrapAggregateChildInFilter(fallback_aggregate,
+	                           CreateNullCheck(fallback_aggregate.groups[0]->Copy(),
+	                                           ExpressionType::OPERATOR_IS_NOT_NULL));
+	fallback_aggregate.children[0] =
+	    LogicalCrossProduct::Create(std::move(fallback_aggregate.children[0]), std::move(guard_projection));
+	fallback_aggregate.children[0]->ResolveOperatorTypes();
+	fallback->ResolveOperatorTypes();
+
+	vector<unique_ptr<LogicalOperator>> union_children;
+	union_children.push_back(std::move(first_rows_ref));
+	union_children.push_back(std::move(fallback));
+	auto result_union = make_uniq<LogicalSetOperation>(optimizer.binder.GenerateTableIndex(), cte_types.size(),
+	                                                   std::move(union_children),
+	                                                   LogicalOperatorType::LOGICAL_UNION, true, false);
+	result_union->ResolveOperatorTypes();
+
+	ColumnBindingReplacer topn_replacer;
+	AddBindingReplacements(topn_replacer, child_bindings, result_union->GetColumnBindings());
+	topn.children[0] = std::move(result_union);
+	topn_replacer.VisitOperator(topn);
+	topn.ResolveOperatorTypes();
+
+	auto result = make_uniq<LogicalMaterializedCTE>("ordered_rank_prefix", cte_index, cte_types.size(),
+	                                               std::move(first_rows), std::move(op),
+	                                               CTEMaterialize::CTE_MATERIALIZE_ALWAYS);
+	result->ResolveOperatorTypes();
+	return std::move(result);
+}
+
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                     ColumnBindingReplacer &replacer) {
+	if (op->type == LogicalOperatorType::LOGICAL_TOP_N) {
+		op = TryOptimizeOrderedRankPrefix(std::move(op));
+	}
 	if (!CanOptimize(*op)) {
 		// Traverse through query plan to find grouped top-n pattern
 		if (op->children.size() > 1) {

@@ -467,6 +467,110 @@ ORDER BY ALL
 1	95	4	2
 1	100	1	1
 
+statement ok
+CREATE TABLE rank_rollup_prefix(k VARCHAR, c VARCHAR, v INT)
+
+statement ok
+INSERT INTO rank_rollup_prefix VALUES (NULL, 'a', 10), (NULL, 'b', 5), ('A', 'x', 7), ('B', 'y', 6)
+
+query IIII
+SELECT *
+FROM (
+	SELECT k, c, sum(v) s, rank() OVER (PARTITION BY k ORDER BY sum(v) DESC) rk
+	FROM rank_rollup_prefix
+	GROUP BY rollup(k, c)
+) ranked
+WHERE rk <= 2
+ORDER BY k NULLS FIRST, c NULLS FIRST, s NULLS FIRST, rk NULLS FIRST
+LIMIT 2
+----
+NULL	NULL	15	2
+NULL	NULL	28	1
+
+statement ok
+CREATE TABLE rank_rollup_prefix_with_optimizer AS
+SELECT *
+FROM (
+	SELECT k, c, sum(v) s, rank() OVER (PARTITION BY k ORDER BY sum(v) DESC) rk
+	FROM rank_rollup_prefix
+	GROUP BY rollup(k, c)
+) ranked
+WHERE rk <= 2
+ORDER BY k NULLS FIRST, c NULLS FIRST, s NULLS FIRST, rk NULLS FIRST
+LIMIT 5
+
+statement ok
+SET disabled_optimizers = 'top_n_window_elimination'
+
+statement ok
+CREATE TABLE rank_rollup_prefix_without_optimizer AS
+SELECT *
+FROM (
+	SELECT k, c, sum(v) s, rank() OVER (PARTITION BY k ORDER BY sum(v) DESC) rk
+	FROM rank_rollup_prefix
+	GROUP BY rollup(k, c)
+) ranked
+WHERE rk <= 2
+ORDER BY k NULLS FIRST, c NULLS FIRST, s NULLS FIRST, rk NULLS FIRST
+LIMIT 5
+
+query IIII
+SELECT * FROM rank_rollup_prefix_with_optimizer
+EXCEPT ALL
+SELECT * FROM rank_rollup_prefix_without_optimizer
+----
+
+query IIII
+SELECT * FROM rank_rollup_prefix_without_optimizer
+EXCEPT ALL
+SELECT * FROM rank_rollup_prefix_with_optimizer
+----
+
+statement ok
+SET disabled_optimizers = ''
+
+statement ok
+CREATE TABLE rank_grouping_sets_prefix(k VARCHAR, c VARCHAR, v INT)
+
+statement ok
+INSERT INTO rank_grouping_sets_prefix VALUES (NULL, 'z', 10), ('A', 'a', 100)
+
+query IIII
+SELECT *
+FROM (
+	SELECT k, c, sum(v) s, rank() OVER (PARTITION BY k ORDER BY sum(v) DESC) rk
+	FROM rank_grouping_sets_prefix
+	GROUP BY GROUPING SETS ((k), (c), ())
+) ranked
+WHERE rk <= 10
+ORDER BY k NULLS FIRST, c NULLS FIRST, s DESC, rk NULLS FIRST
+LIMIT 3
+----
+NULL	NULL	110	1
+NULL	NULL	10	3
+NULL	a	100	2
+
+statement ok
+CREATE TABLE rank_rollup_prefix_reordered(k VARCHAR, c VARCHAR, v INT)
+
+statement ok
+INSERT INTO rank_rollup_prefix_reordered VALUES (NULL, 'z', 10), ('A', 'a', 100)
+
+query IIII
+SELECT *
+FROM (
+	SELECT c, k, sum(v) s, rank() OVER (PARTITION BY k ORDER BY sum(v) DESC) rk
+	FROM rank_rollup_prefix_reordered
+	GROUP BY rollup(k, c)
+) ranked
+WHERE rk <= 10
+ORDER BY c NULLS FIRST, k NULLS FIRST, s DESC, rk NULLS FIRST
+LIMIT 3
+----
+NULL	NULL	110	1
+NULL	NULL	10	2
+NULL	A	100	1
+
 # Left projection map corruption issue #21650
 statement ok
 CREATE TABLE s (s1 VARCHAR)

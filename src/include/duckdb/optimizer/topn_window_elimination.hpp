@@ -43,6 +43,7 @@ public:
 private:
 	bool CanOptimize(LogicalOperator &op);
 	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op, ColumnBindingReplacer &replacer);
+	unique_ptr<LogicalOperator> TryOptimizeOrderedRankPrefix(unique_ptr<LogicalOperator> op);
 
 	unique_ptr<LogicalOperator> CreateAggregateOperator(LogicalWindow &window, vector<unique_ptr<Expression>> args,
 	                                                    const TopNWindowEliminationParameters &params) const;
