@@ -31,7 +31,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		}
 		filters.clear();
 
+		const size_t expressions_size = expressions.size();
 		get.function.pushdown_complex_filter(optimizer.context, get, get.bind_data.get(), expressions);
+		if (expressions_size != expressions.size()) {
+			get.pushed_any_filter_to_table_function = true;
+		};
 
 		if (expressions.empty()) {
 			return op;
