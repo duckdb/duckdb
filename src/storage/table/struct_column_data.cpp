@@ -136,6 +136,7 @@ static void ScanChild(ColumnScanState &state, Vector &result, const std::functio
 		target.Reset();
 		input.Reset();
 		auto scan_count = callback(input.data[0]);
+		FlatVector::SetSize(input.data[0], scan_count);
 		input.SetCardinality(scan_count);
 		executor.Execute(input, target);
 		result.Reference(target.data[0]);
@@ -224,7 +225,7 @@ void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 	}
 }
 
-void StructColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
+void StructColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		Vector append_vector(Vector::Ref(vector));
 		append_vector.Flatten();

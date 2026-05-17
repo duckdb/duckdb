@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-void BoxRendererContext::CastToVarchar(Vector &source, Vector &result, idx_t count) {
+void BoxRendererContext::CastToVarchar(const Vector &source, Vector &result, idx_t count) {
 	DataChunk source_chunk;
 	source_chunk.InitializeEmpty({source.GetType()});
 	source_chunk.data[0].Reference(source);

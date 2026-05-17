@@ -6,15 +6,15 @@
 
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
 template <bool INVERSE>
-static void IsNullLoop(Vector &input, Vector &result, idx_t count) {
+static void IsNullLoop(const Vector &input, Vector &result) {
 	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
 
+	auto count = input.size();
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		auto result_data = ConstantVector::GetData<bool>(result);
@@ -29,15 +29,16 @@ static void IsNullLoop(Vector &input, Vector &result, idx_t count) {
 	}
 }
 
-void VectorOperations::IsNotNull(Vector &input, Vector &result, idx_t count) {
-	IsNullLoop<true>(input, result, count);
+void VectorOperations::IsNotNull(const Vector &input, Vector &result) {
+	IsNullLoop<true>(input, result);
 }
 
-void VectorOperations::IsNull(Vector &input, Vector &result, idx_t count) {
-	IsNullLoop<false>(input, result, count);
+void VectorOperations::IsNull(const Vector &input, Vector &result) {
+	IsNullLoop<false>(input, result);
 }
 
-bool VectorOperations::HasNotNull(Vector &input, idx_t count) {
+bool VectorOperations::HasNotNull(const Vector &input) {
+	auto count = input.size();
 	if (count == 0) {
 		return false;
 	}
@@ -57,7 +58,8 @@ bool VectorOperations::HasNotNull(Vector &input, idx_t count) {
 	}
 }
 
-bool VectorOperations::HasNull(Vector &input, idx_t count) {
+bool VectorOperations::HasNull(const Vector &input) {
+	auto count = input.size();
 	if (count == 0) {
 		return false;
 	}
@@ -77,30 +79,31 @@ bool VectorOperations::HasNull(Vector &input, idx_t count) {
 	}
 }
 
-idx_t VectorOperations::CountNotNull(Vector &input, const idx_t count) {
-	idx_t valid = 0;
+idx_t VectorOperations::CountNotNull(const Vector &input) {
+	auto count = input.size();
 
-	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(vdata);
-	if (vdata.validity.CannotHaveNull()) {
-		return count;
-	}
 	switch (input.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
-		valid += vdata.validity.CountValid(count);
-		break;
+		return FlatVector::Validity(input).CountValid(count);
 	case VectorType::CONSTANT_VECTOR:
-		valid += vdata.validity.CountValid(1) * count;
-		break;
-	default:
-		for (idx_t i = 0; i < count; ++i) {
-			const auto row_idx = vdata.sel->get_index(i);
-			valid += idx_t(vdata.validity.RowIsValid(row_idx));
+		if (!ConstantVector::IsNull(input)) {
+			return count;
 		}
-		break;
+		return 0;
+	default: {
+		auto validity = input.Validity();
+		if (validity.CannotHaveNull()) {
+			return count;
+		}
+		idx_t valid = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			if (validity.IsValid(i)) {
+				valid++;
+			}
+		}
+		return valid;
 	}
-
-	return valid;
+	}
 }
 
 } // namespace duckdb

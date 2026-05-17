@@ -708,14 +708,16 @@ void SortedRunMergerLocalState::TemplatedScanPartition(SortedRunMergerGlobalStat
 
 	// Grab pointers to sort keys
 	const auto merged_partition_keys = reinterpret_cast<SORT_KEY *>(merged_partition.get()) + merged_partition_index;
-	const auto sort_keys = FlatVector::GetDataMutable<SORT_KEY *>(sort_key_pointers);
-	for (idx_t i = 0; i < count; i++) {
-		sort_keys[i] = &merged_partition_keys[i];
+	{
+		auto writer = FlatVector::Writer<SORT_KEY *>(sort_key_pointers, count);
+		for (idx_t i = 0; i < count; i++) {
+			writer.WriteValue(&merged_partition_keys[i]);
+		}
 	}
 	merged_partition_index += count;
 
 	// Scan
-	sorted_run_scan_state.Scan(*gstate.merger.sorted_runs[0], sort_key_pointers, count, chunk);
+	sorted_run_scan_state.Scan(*gstate.merger.sorted_runs[0], sort_key_pointers, chunk);
 }
 
 void SortedRunMergerLocalState::MaterializePartition(SortedRunMergerGlobalState &gstate) {

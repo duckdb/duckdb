@@ -138,7 +138,6 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	state.last_offset = last_entry;
 
 	ListVector::SetListSize(result, child_scan_count);
-	FlatVector::SetSize(result, count_t(scan_count));
 	return scan_count;
 }
 
@@ -182,7 +181,7 @@ void ListColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.child_appends.push_back(std::move(child_append_state));
 }
 
-void ListColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
+void ListColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
 	D_ASSERT(count > 0);
 
 	// construct the list_entry_t entries to append to the column data

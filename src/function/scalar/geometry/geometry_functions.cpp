@@ -17,7 +17,7 @@ ScalarFunction StGeomfromwkbFun::GetFunction() {
 }
 
 static void ToWKBFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	UnaryExecutor::Execute<string_t, string_t>(input.data[0], result, input.size(), [&](const string_t &geom) {
+	UnaryExecutor::Execute<string_t, string_t>(input.data[0], result, [&](const string_t &geom) {
 		// TODO: convert to internal representation
 		return geom;
 	});
@@ -32,7 +32,7 @@ ScalarFunction StAswkbFun::GetFunction() {
 
 static void ToWKTFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<string_t, string_t>(input.data[0], result, input.size(),
+	UnaryExecutor::Execute<string_t, string_t>(input.data[0], result,
 	                                           [&](const string_t &geom) { return Geometry::ToString(heap, geom); });
 }
 
@@ -43,7 +43,7 @@ ScalarFunction StAstextFun::GetFunction() {
 
 static void IntersectsExtentFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, string_t, bool>(
-	    input.data[0], input.data[1], result, input.size(), [](const string_t &lhs_geom, const string_t &rhs_geom) {
+	    input.data[0], input.data[1], result, [](const string_t &lhs_geom, const string_t &rhs_geom) {
 		    auto lhs_extent = GeometryExtent::Empty();
 		    auto rhs_extent = GeometryExtent::Empty();
 

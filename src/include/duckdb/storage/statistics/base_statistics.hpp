@@ -133,8 +133,8 @@ public:
 	static BaseStatistics Deserialize(Deserializer &deserializer);
 
 	//! Verify that a vector does not violate the statistics
-	void Verify(Vector &vector, const SelectionVector &sel, idx_t count, bool ignore_has_null = false) const;
-	void Verify(Vector &vector, idx_t count) const;
+	void Verify(const Vector &vector, const SelectionVector &sel, idx_t count, bool ignore_has_null = false) const;
+	void Verify(const Vector &vector, idx_t count) const;
 
 	Value ToStruct() const;
 	string ToString() const;

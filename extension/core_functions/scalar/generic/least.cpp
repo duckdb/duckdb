@@ -82,8 +82,7 @@ struct SortKeyLeastGreatest {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<LeastGreatestSortKeyState>();
 		lstate.sort_keys.Reset();
 		for (idx_t c_idx = 0; c_idx < args.ColumnCount(); c_idx++) {
-			CreateSortKeyHelpers::CreateSortKey(args.data[c_idx], args.size(), lstate.modifiers,
-			                                    lstate.sort_keys.data[c_idx]);
+			CreateSortKeyHelpers::CreateSortKey(args.data[c_idx], lstate.modifiers, lstate.sort_keys.data[c_idx]);
 		}
 		lstate.sort_keys.SetCardinality(args.size());
 		return lstate.sort_keys;

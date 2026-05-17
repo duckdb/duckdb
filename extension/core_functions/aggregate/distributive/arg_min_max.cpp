@@ -201,25 +201,25 @@ struct ArgMinMaxBase {
 };
 
 struct SpecializedGenericArgMinMaxState {
-	static bool CreateExtraState(idx_t count) {
+	static bool CreateExtraState() {
 		// nop extra state
 		return false;
 	}
 
-	static void PrepareData(Vector &by, idx_t count, bool &, UnifiedVectorFormat &result) {
+	static void PrepareData(const Vector &by, bool &, UnifiedVectorFormat &result) {
 		by.ToUnifiedFormat(result);
 	}
 };
 
 template <OrderType ORDER_TYPE>
 struct GenericArgMinMaxState {
-	static Vector CreateExtraState(idx_t count) {
-		return Vector(LogicalType::BLOB, count);
+	static Vector CreateExtraState() {
+		return Vector(LogicalType::BLOB);
 	}
 
-	static void PrepareData(Vector &by, idx_t count, Vector &extra_state, UnifiedVectorFormat &result) {
+	static void PrepareData(const Vector &by, Vector &extra_state, UnifiedVectorFormat &result) {
 		OrderModifiers modifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
-		CreateSortKeyHelpers::CreateSortKeyWithValidity(by, extra_state, modifiers, count);
+		CreateSortKeyHelpers::CreateSortKeyWithValidity(by, extra_state, modifiers);
 		extra_state.ToUnifiedFormat(result);
 	}
 };
@@ -240,8 +240,8 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		using BY_TYPE = typename STATE::BY_TYPE;
 		auto &by = inputs[1];
 		UnifiedVectorFormat bdata;
-		auto extra_state = UPDATE_TYPE::CreateExtraState(count);
-		UPDATE_TYPE::PrepareData(by, count, extra_state, bdata);
+		auto extra_state = UPDATE_TYPE::CreateExtraState();
+		UPDATE_TYPE::PrepareData(by, extra_state, bdata);
 		const auto bys = UnifiedVectorFormat::GetData<BY_TYPE>(bdata);
 
 		UnifiedVectorFormat sdata;
@@ -309,7 +309,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		// slice with a selection vector and generate sort keys
 		SelectionVector sel(assign_sel, assign_count);
 		Vector sliced_input(arg, sel, assign_count);
-		CreateSortKeyHelpers::CreateSortKey(sliced_input, assign_count, modifiers, sort_key);
+		CreateSortKeyHelpers::CreateSortKey(sliced_input, modifiers, sort_key);
 		auto sort_key_data = FlatVector::GetData<string_t>(sort_key);
 
 		// now assign sort keys
@@ -665,11 +665,11 @@ void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 	UnifiedVectorFormat n_format;
 	UnifiedVectorFormat state_format;
 
-	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState(val_vector, count);
-	auto arg_extra_state = STATE::ARG_TYPE::CreateExtraState(arg_vector, count);
+	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState();
+	auto arg_extra_state = STATE::ARG_TYPE::CreateExtraState();
 
-	STATE::VAL_TYPE::PrepareData(val_vector, count, val_extra_state, val_format, bind_data.nulls_last);
-	STATE::ARG_TYPE::PrepareData(arg_vector, count, arg_extra_state, arg_format, bind_data.nulls_last);
+	STATE::VAL_TYPE::PrepareData(val_vector, val_extra_state, val_format, bind_data.nulls_last);
+	STATE::ARG_TYPE::PrepareData(arg_vector, arg_extra_state, arg_format, bind_data.nulls_last);
 
 	n_vector.ToUnifiedFormat(n_format);
 	state_vector.ToUnifiedFormat(state_format);

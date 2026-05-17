@@ -228,7 +228,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		//	Subtract argument from current_date (at midnight)
 		const auto end_date = CurrentMidnight(calendar.GetICUCalendar(), state);
 
-		UnaryExecutor::Execute<TA, TR>(args.data[0], result, args.size(), [&](TA start_date) {
+		UnaryExecutor::Execute<TA, TR>(args.data[0], result, [&](TA start_date) {
 			return OP::template Operation<timestamp_tz_t, TA, TR>(end_date, start_date, calendar);
 		});
 	}
@@ -247,7 +247,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		auto &info = func_expr.bind_info->Cast<BindData>();
 		TZCalendar calendar(*info.calendar, info.cal_setting);
 
-		BinaryExecutor::Execute<TA, TB, TR>(args.data[0], args.data[1], result, args.size(), [&](TA left, TB right) {
+		BinaryExecutor::Execute<TA, TB, TR>(args.data[0], args.data[1], result, [&](TA left, TB right) {
 			return OP::template Operation<TA, TB, TR>(left, right, calendar);
 		});
 	}

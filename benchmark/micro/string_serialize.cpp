@@ -29,7 +29,7 @@ static void RunStringSerializationBenchmark(idx_t serialization_version) {
 		options.serialization_compatibility = SerializationCompatibility::FromIndex(serialization_version);
 		BinarySerializer serializer(stream, options);
 		serializer.Begin();
-		string_vector.Serialize(serializer, STANDARD_VECTOR_SIZE, true);
+		string_vector.Serialize(serializer, true);
 		serializer.End();
 
 		stream.SetPosition(0);

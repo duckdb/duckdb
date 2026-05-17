@@ -177,9 +177,9 @@ unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType t
 	return std::move(state);
 }
 template <PhysicalType TYPE>
-bool RoaringAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
+bool RoaringAnalyze(AnalyzeState &state, const Vector &input) {
 	auto &analyze_state = state.Cast<RoaringAnalyzeState>();
-	analyze_state.Analyze<TYPE>(input, count);
+	analyze_state.Analyze<TYPE>(input);
 	return true;
 }
 
@@ -198,9 +198,9 @@ unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointData &ch
 }
 
 template <PhysicalType TYPE>
-void RoaringCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void RoaringCompress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = state_p.Cast<RoaringCompressState>();
-	state.Compress<TYPE>(scan_vector, count);
+	state.Compress<TYPE>(scan_vector);
 }
 
 void RoaringFinalizeCompress(CompressionState &state_p) {

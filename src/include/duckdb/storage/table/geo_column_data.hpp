@@ -42,7 +42,7 @@ public:
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
-	void Append(ColumnAppendState &state, Vector &vector, idx_t count) override;
+	void Append(ColumnAppendState &state, const Vector &vector, idx_t count) override;
 	void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) override;
 	void RevertAppend(row_t new_count) override;
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
@@ -73,8 +73,9 @@ public:
 	void VisitBlockIds(BlockIdVisitor &visitor) const override;
 
 private:
-	static void Specialize(Vector &source, Vector &target, idx_t count, GeometryStorageType storage_type);
-	static void Reassemble(Vector &source, Vector &target, idx_t count, GeometryStorageType storage_type, idx_t offset);
+	static void Specialize(const Vector &source, Vector &target, idx_t count, GeometryStorageType storage_type);
+	static void Reassemble(const Vector &source, Vector &target, idx_t count, GeometryStorageType storage_type,
+	                       idx_t offset);
 	static void InterpretStats(BaseStatistics &source, BaseStatistics &target, GeometryType geom_type,
 	                           VertexType vert_type);
 };

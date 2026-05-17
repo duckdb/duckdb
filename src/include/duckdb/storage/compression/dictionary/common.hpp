@@ -38,7 +38,7 @@ public:
 	~DictionaryCompressionState() override;
 
 public:
-	bool UpdateState(Vector &scan_vector, idx_t count);
+	bool UpdateState(const Vector &scan_vector);
 
 protected:
 	// Should verify the State

@@ -36,8 +36,8 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 
-	CreateSortKeyHelpers::CreateSortKey(l_child, l_size, order_modifiers, l_sortkey_vec);
-	CreateSortKeyHelpers::CreateSortKey(r_child, r_size, order_modifiers, r_sortkey_vec);
+	CreateSortKeyHelpers::CreateSortKey(l_child, order_modifiers, l_sortkey_vec);
+	CreateSortKeyHelpers::CreateSortKey(r_child, order_modifiers, r_sortkey_vec);
 
 	const auto l_sortkey_ptr = FlatVector::GetData<string_t>(l_sortkey_vec);
 	const auto r_sortkey_ptr = FlatVector::GetData<string_t>(r_sortkey_vec);
@@ -45,7 +45,7 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 	string_set_t set;
 
 	BinaryExecutor::Execute<list_entry_t, list_entry_t, bool>(
-	    l_vec, r_vec, result, args.size(), [&](const list_entry_t &l_list, const list_entry_t &r_list) {
+	    l_vec, r_vec, result, [&](const list_entry_t &l_list, const list_entry_t &r_list) {
 		    // Short circuit if either list is empty
 		    if (l_list.length == 0 || r_list.length == 0) {
 			    return false;
@@ -126,8 +126,8 @@ static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 
-	CreateSortKeyHelpers::CreateSortKey(l_child, l_size, order_modifiers, l_sortkey_vec);
-	CreateSortKeyHelpers::CreateSortKey(r_child, r_size, order_modifiers, r_sortkey_vec);
+	CreateSortKeyHelpers::CreateSortKey(l_child, order_modifiers, l_sortkey_vec);
+	CreateSortKeyHelpers::CreateSortKey(r_child, order_modifiers, r_sortkey_vec);
 
 	const auto build_data = FlatVector::GetData<string_t>(l_sortkey_vec);
 	const auto probe_data = FlatVector::GetData<string_t>(r_sortkey_vec);
@@ -135,7 +135,7 @@ static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &
 	string_set_t set;
 
 	BinaryExecutor::Execute<list_entry_t, list_entry_t, bool>(
-	    l_vec, r_vec, result, args.size(), [&](const list_entry_t &build_list, const list_entry_t &probe_list) {
+	    l_vec, r_vec, result, [&](const list_entry_t &build_list, const list_entry_t &probe_list) {
 		    // Short circuit if the probe list is empty
 		    if (probe_list.length == 0) {
 			    return true;

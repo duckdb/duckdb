@@ -1156,6 +1156,11 @@ public:
 		if (!partitioned_copy.flushing_state) {
 			partitioned_copy.InitializeFlush();
 		}
+		if (!partitioned_copy.flushing_state) {
+			// All work was already completed synchronously (e.g. via FinalizePartitionedSync)
+			SetTasks({});
+			return;
+		}
 		auto &flushing_state = *partitioned_copy.flushing_state;
 
 		annotated_lock_guard<annotated_mutex> state_guard(flushing_state.lock);
@@ -1847,6 +1852,26 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 	gstate.TryFinalizeOwnedFileState();
 
 	return SinkFinalizeType::READY;
+}
+
+void PhysicalCopyToFile::FinalizePartitionedSync(ExecutionContext &execution_context,
+                                                 InterruptState &interrupt_state) const {
+	if (!partition_output || !sink_state) {
+		return;
+	}
+	auto &gstate = sink_state->Cast<CopyToFileGlobalState>();
+	if (!gstate.partitioned_copy) {
+		return;
+	}
+	auto &pc = *gstate.partitioned_copy;
+	{
+		annotated_lock_guard<annotated_mutex> guard(pc.lock);
+		pc.InitializeFlush();
+	}
+	while (pc.flushing.load(std::memory_order_relaxed)) {
+		pc.Flush(execution_context, interrupt_state);
+	}
+	gstate.TryFinalizeOwnedFileState();
 }
 
 void PhysicalCopyToFile::PrepareAndFlushBatch(ClientContext &context, GlobalSinkState &gstate_p,

@@ -323,7 +323,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 
 static void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
-	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(args.data[0], args.data[1], result, args.size(),
+	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(args.data[0], args.data[1], result,
 	                                                      [&](bignum_t a, bignum_t b) {
 		                                                      const BignumIntermediate lhs(a);
 		                                                      const BignumIntermediate rhs(b);
@@ -334,7 +334,7 @@ static void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 static void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
 	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
-	    args.data[0], args.data[1], result, args.size(), [&](bignum_t a, bignum_t b) {
+	    args.data[0], args.data[1], result, [&](bignum_t a, bignum_t b) {
 		    const BignumIntermediate lhs(a);
 		    BignumIntermediate rhs(b);
 		    rhs.NegateInPlace();
@@ -346,7 +346,7 @@ static void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &resu
 
 static void BignumNegate(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<bignum_t, string_t>(args.data[0], result, args.size(), [&](bignum_t a) {
+	UnaryExecutor::Execute<bignum_t, string_t>(args.data[0], result, [&](bignum_t a) {
 		const BignumIntermediate lhs(a);
 		return lhs.Negate(heap);
 	});
@@ -1060,7 +1060,7 @@ struct BinaryNumericDivideHugeintWrapper {
 
 template <class TA, class TB, class TC, class OP, class ZWRAPPER = BinaryZeroIsNullWrapper>
 void BinaryScalarFunctionIgnoreZero(DataChunk &input, ExpressionState &state, Vector &result) {
-	BinaryExecutor::Execute<TA, TB, TC, OP, ZWRAPPER>(input.data[0], input.data[1], result, input.size());
+	BinaryExecutor::Execute<TA, TB, TC, OP, ZWRAPPER>(input.data[0], input.data[1], result);
 }
 
 template <class OP>

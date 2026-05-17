@@ -335,6 +335,7 @@ void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDa
 
 	InitializeChunkStateInternal(pin_state, chunk_state, 0, true, init_heap, init_heap, chunk_state.chunk_parts,
 	                             sort_key_payload_state);
+	FlatVector::SetSize(chunk_state.row_locations, chunk.count);
 
 	chunk_state.chunk_lock = &chunk.lock.get();
 }

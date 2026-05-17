@@ -162,7 +162,7 @@ public:
 	                               TupleDataChunkState &chunk_state, const idx_t chunk_idx,
 	                               const unsafe_vector<idx_t> &result, SortedRunScanState &scan_state);
 	// Apply a tail condition to the current selection
-	static idx_t SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
+	static idx_t SelectJoinTail(const ExpressionType &condition, const Vector &left, const Vector &right,
 	                            const SelectionVector *sel, idx_t count, SelectionVector *true_sel);
 
 	//!	Utility to project full width internal chunks to projected results

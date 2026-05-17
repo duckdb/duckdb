@@ -63,14 +63,14 @@ static string_t ReplaceScalarFunction(const string_t &haystack, const string_t &
 }
 
 static void ReplaceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &haystack_vector = args.data[0];
-	auto &needle_vector = args.data[1];
-	auto &thread_vector = args.data[2];
+	const auto &haystack_vector = args.data[0];
+	const auto &needle_vector = args.data[1];
+	const auto &thread_vector = args.data[2];
 
 	vector<char> buffer;
 	auto &heap = StringVector::GetStringHeap(result);
 	TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
-	    haystack_vector, needle_vector, thread_vector, result, args.size(),
+	    haystack_vector, needle_vector, thread_vector, result,
 	    [&](string_t input_string, string_t needle_string, string_t thread_string) {
 		    return heap.AddString(ReplaceScalarFunction(input_string, needle_string, thread_string, buffer));
 	    });

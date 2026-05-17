@@ -122,7 +122,7 @@ public:
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
 	                               SegmentNode<RowGroup> &node, DataChunk &scan_chunk);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
-	                               ExpressionExecutor &executor, Vector &intermediate);
+	                               ExpressionExecutor &executor);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
 	//! Accumulates this row group's on-disk blocks into the drop state.

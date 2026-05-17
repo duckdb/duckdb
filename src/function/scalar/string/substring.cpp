@@ -265,38 +265,38 @@ struct SubstringGraphemeOp {
 
 template <class OP>
 void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input_vector = args.data[0];
-	auto &offset_vector = args.data[1];
+	const auto &input_vector = args.data[0];
+	const auto &offset_vector = args.data[1];
 	if (args.ColumnCount() == 3) {
-		auto &length_vector = args.data[2];
+		const auto &length_vector = args.data[2];
 
 		TernaryExecutor::Execute<string_t, int64_t, int64_t, string_t>(
-		    input_vector, offset_vector, length_vector, result, args.size(),
+		    input_vector, offset_vector, length_vector, result,
 		    [&](string_t input_string, int64_t offset, int64_t length) {
 			    return OP::Substring(result, input_string, offset, length);
 		    });
 	} else {
 		BinaryExecutor::Execute<string_t, int64_t, string_t>(
-		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int64_t offset) {
+		    input_vector, offset_vector, result, [&](string_t input_string, int64_t offset) {
 			    return OP::Substring(result, input_string, offset, NumericLimits<uint32_t>::Maximum());
 		    });
 	}
 }
 
 void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input_vector = args.data[0];
-	auto &offset_vector = args.data[1];
+	const auto &input_vector = args.data[0];
+	const auto &offset_vector = args.data[1];
 	if (args.ColumnCount() == 3) {
-		auto &length_vector = args.data[2];
+		const auto &length_vector = args.data[2];
 
 		TernaryExecutor::Execute<string_t, int64_t, int64_t, string_t>(
-		    input_vector, offset_vector, length_vector, result, args.size(),
+		    input_vector, offset_vector, length_vector, result,
 		    [&](string_t input_string, int64_t offset, int64_t length) {
 			    return SubstringASCII(result, input_string, offset, length);
 		    });
 	} else {
 		BinaryExecutor::Execute<string_t, int64_t, string_t>(
-		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int64_t offset) {
+		    input_vector, offset_vector, result, [&](string_t input_string, int64_t offset) {
 			    return SubstringASCII(result, input_string, offset, NumericLimits<uint32_t>::Maximum());
 		    });
 	}

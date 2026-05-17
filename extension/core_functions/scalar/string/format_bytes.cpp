@@ -7,7 +7,7 @@ namespace duckdb {
 template <int64_t MULTIPLIER>
 static void FormatBytesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<int64_t, string_t>(args.data[0], result, args.size(), [&](int64_t bytes) {
+	UnaryExecutor::Execute<int64_t, string_t>(args.data[0], result, [&](int64_t bytes) {
 		bool is_negative = bytes < 0;
 		idx_t unsigned_bytes;
 		if (bytes < 0) {

@@ -672,7 +672,7 @@ void VariantStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
 	}
 }
 
-void VariantStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void VariantStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
 	// TODO: Verify stats
 }
 

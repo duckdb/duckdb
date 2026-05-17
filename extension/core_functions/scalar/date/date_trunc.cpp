@@ -23,8 +23,8 @@ struct DateTrunc {
 	}
 
 	template <class TA, class TR, class OP>
-	static inline void UnaryExecute(Vector &left, Vector &result, idx_t count) {
-		UnaryExecutor::Execute<TA, TR>(left, result, count, UnaryFunction<TA, TR, OP>);
+	static inline void UnaryExecute(const Vector &left, Vector &result) {
+		UnaryExecutor::Execute<TA, TR>(left, result, UnaryFunction<TA, TR, OP>);
 	}
 
 	struct MillenniumOperator {
@@ -408,55 +408,55 @@ struct DateTruncBinaryOperator {
 };
 
 template <typename TA, typename TR>
-void DateTruncUnaryExecutor(DatePartSpecifier type, Vector &left, Vector &result, idx_t count) {
+void DateTruncUnaryExecutor(DatePartSpecifier type, const Vector &left, Vector &result) {
 	switch (type) {
 	case DatePartSpecifier::MILLENNIUM:
-		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MillenniumOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MillenniumOperator>(left, result);
 		break;
 	case DatePartSpecifier::CENTURY:
-		DateTrunc::UnaryExecute<TA, TR, DateTrunc::CenturyOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::CenturyOperator>(left, result);
 		break;
 	case DatePartSpecifier::DECADE:
-		DateTrunc::UnaryExecute<TA, TR, DateTrunc::DecadeOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::DecadeOperator>(left, result);
 		break;
 	case DatePartSpecifier::YEAR:
-		DateTrunc::UnaryExecute<TA, TR, DateTrunc::YearOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::YearOperator>(left, result);
 		break;
 	case DatePartSpecifier::QUARTER:
-		DateTrunc::UnaryExecute<TA, TR, DateTrunc::QuarterOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::QuarterOperator>(left, result);
 		break;
 	case DatePartSpecifier::MONTH:
-		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MonthOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MonthOperator>(left, result);
 		break;
 	case DatePartSpecifier::WEEK:
 	case DatePartSpecifier::YEARWEEK:
-		DateTrunc::UnaryExecute<TA, TR, DateTrunc::WeekOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::WeekOperator>(left, result);
 		break;
 	case DatePartSpecifier::ISOYEAR:
-		DateTrunc::UnaryExecute<TA, TR, DateTrunc::ISOYearOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::ISOYearOperator>(left, result);
 		break;
 	case DatePartSpecifier::DAY:
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
 	case DatePartSpecifier::JULIAN_DAY:
-		DateTrunc::UnaryExecute<TA, TR, DateTrunc::DayOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::DayOperator>(left, result);
 		break;
 	case DatePartSpecifier::HOUR:
-		DateTrunc::UnaryExecute<TA, TR, DateTrunc::HourOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::HourOperator>(left, result);
 		break;
 	case DatePartSpecifier::MINUTE:
-		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MinuteOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MinuteOperator>(left, result);
 		break;
 	case DatePartSpecifier::SECOND:
 	case DatePartSpecifier::EPOCH:
-		DateTrunc::UnaryExecute<TA, TR, DateTrunc::SecondOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::SecondOperator>(left, result);
 		break;
 	case DatePartSpecifier::MILLISECONDS:
-		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MillisecondOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MillisecondOperator>(left, result);
 		break;
 	case DatePartSpecifier::MICROSECONDS:
-		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MicrosecondOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MicrosecondOperator>(left, result);
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented for DATETRUNC");
@@ -466,8 +466,8 @@ void DateTruncUnaryExecutor(DatePartSpecifier type, Vector &left, Vector &result
 template <typename TA, typename TR>
 void DateTruncFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
-	auto &part_arg = args.data[0];
-	auto &date_arg = args.data[1];
+	const auto &part_arg = args.data[0];
+	const auto &date_arg = args.data[1];
 
 	if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// Common case of constant part.
@@ -475,10 +475,9 @@ void DateTruncFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 			throw InternalException("DateTrunc called with constant NULL part");
 		}
 		const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
-		DateTruncUnaryExecutor<TA, TR>(type, date_arg, result, args.size());
+		DateTruncUnaryExecutor<TA, TR>(type, date_arg, result);
 	} else {
-		BinaryExecutor::ExecuteStandard<string_t, TA, TR, DateTruncBinaryOperator>(part_arg, date_arg, result,
-		                                                                           args.size());
+		BinaryExecutor::ExecuteStandard<string_t, TA, TR, DateTruncBinaryOperator>(part_arg, date_arg, result);
 	}
 }
 

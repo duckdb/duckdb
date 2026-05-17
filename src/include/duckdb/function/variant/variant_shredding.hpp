@@ -47,7 +47,7 @@ public:
 	const VariantColumnStatsData &GetColumnStats(idx_t index) const;
 
 public:
-	void Update(Vector &input, idx_t count);
+	void Update(const Vector &input, idx_t count);
 	LogicalType GetShreddedType() const;
 
 private:

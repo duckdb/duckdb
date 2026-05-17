@@ -37,12 +37,12 @@ struct FSSTStorage {
 	static constexpr double ANALYSIS_SAMPLE_SIZE = 0.25;
 
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
-	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
+	static bool StringAnalyze(AnalyzeState &state_p, const Vector &input);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> analyze_state_p);
-	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
+	static void Compress(CompressionState &state_p, const Vector &scan_vector);
 	static void FinalizeCompress(CompressionState &state_p);
 
 	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
@@ -105,11 +105,12 @@ unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, Ph
 	return make_uniq<FSSTAnalyzeState>(info);
 }
 
-bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
+bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {
 	auto &state = state_p.Cast<FSSTAnalyzeState>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(vdata);
 
+	const auto count = input.size();
 	state.count += count;
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 
@@ -432,7 +433,7 @@ unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointDa
 	return std::move(compression_state);
 }
 
-void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void FSSTStorage::Compress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = state_p.Cast<FSSTCompressionState>();
 
 	// Get vector data
@@ -445,6 +446,7 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 	vector<unsigned char *> strings_in;
 	size_t total_size = 0;
 	idx_t total_count = 0;
+	const auto count = scan_vector.size();
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 

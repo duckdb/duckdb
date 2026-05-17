@@ -30,7 +30,7 @@ unique_ptr<CompressionState> ChimpInitCompression(ColumnDataCheckpointData &chec
 }
 
 template <class T>
-void ChimpCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void ChimpCompress(CompressionState &state_p, const Vector &scan_vector) {
 	throw InternalException("Chimp has been deprecated, can no longer be used to compress data");
 }
 

@@ -43,12 +43,11 @@ static string_t LeftScalarFunction(Vector &result, const string_t str, int64_t p
 
 template <class OP>
 static void LeftFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &str_vec = args.data[0];
-	auto &pos_vec = args.data[1];
+	const auto &str_vec = args.data[0];
+	const auto &pos_vec = args.data[1];
 
 	BinaryExecutor::Execute<string_t, int64_t, string_t>(
-	    str_vec, pos_vec, result, args.size(),
-	    [&](string_t str, int64_t pos) { return LeftScalarFunction<OP>(result, str, pos); });
+	    str_vec, pos_vec, result, [&](string_t str, int64_t pos) { return LeftScalarFunction<OP>(result, str, pos); });
 }
 
 ScalarFunction LeftFun::GetFunction() {
@@ -80,11 +79,10 @@ static string_t RightScalarFunction(Vector &result, const string_t str, int64_t 
 
 template <class OP>
 static void RightFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &str_vec = args.data[0];
-	auto &pos_vec = args.data[1];
+	const auto &str_vec = args.data[0];
+	const auto &pos_vec = args.data[1];
 	BinaryExecutor::Execute<string_t, int64_t, string_t>(
-	    str_vec, pos_vec, result, args.size(),
-	    [&](string_t str, int64_t pos) { return RightScalarFunction<OP>(result, str, pos); });
+	    str_vec, pos_vec, result, [&](string_t str, int64_t pos) { return RightScalarFunction<OP>(result, str, pos); });
 }
 
 ScalarFunction RightFun::GetFunction() {

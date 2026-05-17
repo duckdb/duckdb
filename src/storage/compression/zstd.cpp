@@ -69,12 +69,12 @@ static idx_t GetVectorMetadataSize(idx_t vector_count) {
 
 struct ZSTDStorage {
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
-	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
+	static bool StringAnalyze(AnalyzeState &state_p, const Vector &input);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> analyze_state_p);
-	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
+	static void Compress(CompressionState &state_p, const Vector &scan_vector);
 	static void FinalizeCompress(CompressionState &state_p);
 
 	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
@@ -155,11 +155,12 @@ unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, Ph
 	return make_uniq<ZSTDAnalyzeState>(info, config);
 }
 
-bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
+bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {
 	auto &state = state_p.Cast<ZSTDAnalyzeState>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(vdata);
 
+	const auto count = input.size();
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
@@ -644,7 +645,7 @@ unique_ptr<CompressionState> ZSTDStorage::InitCompression(ColumnDataCheckpointDa
 	                                       unique_ptr_cast<AnalyzeState, ZSTDAnalyzeState>(std::move(analyze_state_p)));
 }
 
-void ZSTDStorage::Compress(CompressionState &state_p, Vector &input, idx_t count) {
+void ZSTDStorage::Compress(CompressionState &state_p, const Vector &input) {
 	auto &state = state_p.Cast<ZSTDCompressionState>();
 
 	// Get vector data
@@ -652,7 +653,7 @@ void ZSTDStorage::Compress(CompressionState &state_p, Vector &input, idx_t count
 	input.ToUnifiedFormat(vdata);
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < input.size(); i++) {
 		auto idx = vdata.sel->get_index(i);
 		// Note: we treat nulls and empty strings the same
 		if (!vdata.validity.RowIsValid(idx)) {

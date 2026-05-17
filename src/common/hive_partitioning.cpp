@@ -238,12 +238,11 @@ static inline Value GetHiveKeyNullValue(const LogicalType &type) {
 }
 
 template <class T>
-static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionKey> &keys, const idx_t col_idx,
-                                            const idx_t count) {
+static void TemplatedGetHivePartitionValues(const Vector &input, vector<HivePartitionKey> &keys, const idx_t col_idx) {
 	auto entries = input.Values<T>();
 	const auto &type = input.GetType();
 
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < input.size(); i++) {
 		auto &key = keys[i];
 		auto entry = entries[i];
 		if (entry.IsValid()) {
@@ -254,66 +253,64 @@ static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionK
 	}
 }
 
-static void GetNestedHivePartitionValues(Vector &input, vector<HivePartitionKey> &keys, const idx_t col_idx,
-                                         const idx_t count) {
-	for (idx_t i = 0; i < count; i++) {
+static void GetNestedHivePartitionValues(const Vector &input, vector<HivePartitionKey> &keys, const idx_t col_idx) {
+	for (idx_t i = 0; i < input.size(); i++) {
 		auto &key = keys[i];
 		key.values[col_idx] = input.GetValue(i);
 	}
 }
 
-static void GetHivePartitionValuesTypeSwitch(Vector &input, vector<HivePartitionKey> &keys, const idx_t col_idx,
-                                             const idx_t count) {
+static void GetHivePartitionValuesTypeSwitch(const Vector &input, vector<HivePartitionKey> &keys, const idx_t col_idx) {
 	const auto &type = input.GetType();
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		TemplatedGetHivePartitionValues<bool>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<bool>(input, keys, col_idx);
 		break;
 	case PhysicalType::INT8:
-		TemplatedGetHivePartitionValues<int8_t>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<int8_t>(input, keys, col_idx);
 		break;
 	case PhysicalType::INT16:
-		TemplatedGetHivePartitionValues<int16_t>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<int16_t>(input, keys, col_idx);
 		break;
 	case PhysicalType::INT32:
-		TemplatedGetHivePartitionValues<int32_t>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<int32_t>(input, keys, col_idx);
 		break;
 	case PhysicalType::INT64:
-		TemplatedGetHivePartitionValues<int64_t>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<int64_t>(input, keys, col_idx);
 		break;
 	case PhysicalType::INT128:
-		TemplatedGetHivePartitionValues<hugeint_t>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<hugeint_t>(input, keys, col_idx);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedGetHivePartitionValues<uint8_t>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<uint8_t>(input, keys, col_idx);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedGetHivePartitionValues<uint16_t>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<uint16_t>(input, keys, col_idx);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedGetHivePartitionValues<uint32_t>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<uint32_t>(input, keys, col_idx);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedGetHivePartitionValues<uint64_t>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<uint64_t>(input, keys, col_idx);
 		break;
 	case PhysicalType::UINT128:
-		TemplatedGetHivePartitionValues<uhugeint_t>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<uhugeint_t>(input, keys, col_idx);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedGetHivePartitionValues<float>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<float>(input, keys, col_idx);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedGetHivePartitionValues<double>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<double>(input, keys, col_idx);
 		break;
 	case PhysicalType::INTERVAL:
-		TemplatedGetHivePartitionValues<interval_t>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<interval_t>(input, keys, col_idx);
 		break;
 	case PhysicalType::VARCHAR:
-		TemplatedGetHivePartitionValues<string_t>(input, keys, col_idx, count);
+		TemplatedGetHivePartitionValues<string_t>(input, keys, col_idx);
 		break;
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
-		GetNestedHivePartitionValues(input, keys, col_idx, count);
+		GetNestedHivePartitionValues(input, keys, col_idx);
 		break;
 	default:
 		throw InternalException("Unsupported type for HivePartitionedColumnData::ComputePartitionIndices");
@@ -327,8 +324,8 @@ void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataApp
 	hashes_v.Flatten();
 
 	for (idx_t col_idx = 0; col_idx < group_by_columns.size(); col_idx++) {
-		auto &group_by_col = input.data[group_by_columns[col_idx]];
-		GetHivePartitionValuesTypeSwitch(group_by_col, keys, col_idx, count);
+		const auto &group_by_col = input.data[group_by_columns[col_idx]];
+		GetHivePartitionValuesTypeSwitch(group_by_col, keys, col_idx);
 	}
 
 	const auto hashes = FlatVector::GetData<hash_t>(hashes_v);

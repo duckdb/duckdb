@@ -167,17 +167,17 @@ buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const Log
 	return entry;
 }
 
-const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
+const Vector &DictionaryVector::GetCachedHashes(const Vector &input) {
 	D_ASSERT(CanCacheHashes(input));
 
-	auto &entry = input.BufferMutable().Cast<DictionaryBuffer>().GetEntry();
+	const auto &entry = input.Buffer().Cast<DictionaryBuffer>().GetEntry();
 	lock_guard<mutex> guard(entry.cached_hashes_lock);
 
 	if (!entry.cached_hashes) {
 		// Uninitialized: hash the dictionary
 		const auto dictionary_size = DictionarySize(input).GetIndex();
 		entry.cached_hashes = make_uniq<Vector>(LogicalType::HASH, dictionary_size);
-		VectorOperations::Hash(entry.data, *entry.cached_hashes, dictionary_size);
+		VectorOperations::Hash(entry.data, *entry.cached_hashes);
 	}
 	return *entry.cached_hashes;
 }

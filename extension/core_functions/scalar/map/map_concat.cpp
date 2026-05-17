@@ -48,7 +48,7 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	auto map_count = args.ColumnCount();
 	vector<UnifiedVectorFormat> map_formats(map_count);
 	for (idx_t i = 0; i < map_count; i++) {
-		auto &map = args.data[i];
+		const auto &map = args.data[i];
 		map.ToUnifiedFormat(map_formats[i]);
 	}
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
@@ -71,7 +71,7 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 			}
 
 			all_null = false;
-			auto &keys = MapVector::GetKeys(args.data[map_idx]);
+			const auto &keys = MapVector::GetKeys(args.data[map_idx]);
 			auto entry = UnifiedVectorFormat::GetData<list_entry_t>(map_format)[index];
 
 			// Update the list for this row
@@ -104,8 +104,8 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 		D_ASSERT(keys_list.size() == index_to_map.size());
 		// Get the values from the mapping
 		for (auto &mapping : index_to_map) {
-			auto &map = args.data[mapping.map_index];
-			auto &values = MapVector::GetValues(map);
+			const auto &map = args.data[mapping.map_index];
+			const auto &values = MapVector::GetValues(map);
 			values_list.push_back(values.GetValue(mapping.key_index));
 		}
 		D_ASSERT(values_list.size() == keys_list.size());

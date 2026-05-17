@@ -667,11 +667,11 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 	return string();
 }
 
-void StrfTimeFormat::ConvertDateVector(Vector &input, Vector &result, idx_t count) {
+void StrfTimeFormat::ConvertDateVector(const Vector &input, Vector &result) {
 	D_ASSERT(input.GetType().id() == LogicalTypeId::DATE);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<date_t, string_t>(input, result, count, [&](date_t input) {
+	UnaryExecutor::Execute<date_t, string_t>(input, result, [&](date_t input) {
 		if (input.IsFinite()) {
 			dtime_t time(0);
 			idx_t len = GetLength(input, time, 0, nullptr);
@@ -733,21 +733,21 @@ string_t StrfTimeFormat::ConvertTimestampValue(const timestamp_ns_t &input, Stri
 	}
 }
 
-void StrfTimeFormat::ConvertTimestampVector(Vector &input, Vector &result, idx_t count) {
+void StrfTimeFormat::ConvertTimestampVector(const Vector &input, Vector &result) {
 	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP || input.GetType().id() == LogicalTypeId::TIMESTAMP_TZ);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<timestamp_t, string_t>(input, result, count,
+	UnaryExecutor::Execute<timestamp_t, string_t>(input, result,
 	                                              [&](timestamp_t ts) { return ConvertTimestampValue(ts, heap); });
 }
 
-void StrfTimeFormat::ConvertTimestampNSVector(Vector &input, Vector &result, idx_t count) {
+void StrfTimeFormat::ConvertTimestampNSVector(const Vector &input, Vector &result) {
 	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP_NS ||
 	         input.GetType().id() == LogicalTypeId::TIMESTAMP_TZ_NS);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<timestamp_ns_t, string_t>(
-	    input, result, count, [&](timestamp_ns_t ts) { return ConvertTimestampValue(ts, heap); });
+	    input, result, [&](timestamp_ns_t ts) { return ConvertTimestampValue(ts, heap); });
 }
 
 void StrpTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) {

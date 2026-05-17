@@ -126,8 +126,8 @@ struct ICUDateTrunc : public ICUDateFunc {
 	template <typename T>
 	static void ICUDateTruncFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
-		auto &part_arg = args.data[0];
-		auto &date_arg = args.data[1];
+		const auto &part_arg = args.data[0];
+		const auto &date_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<BindData>();
@@ -140,7 +140,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 			}
 			const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
 			auto truncator = TruncationFactory(GetDatePartSpecifier(specifier));
-			UnaryExecutor::Execute<T, T>(date_arg, result, args.size(), [&](T input) {
+			UnaryExecutor::Execute<T, T>(date_arg, result, [&](T input) {
 				if (input.IsFinite()) {
 					auto micros = SetTime(calendar.get(), input);
 					truncator(calendar.get(), micros);
@@ -150,17 +150,16 @@ struct ICUDateTrunc : public ICUDateFunc {
 				}
 			});
 		} else {
-			BinaryExecutor::Execute<string_t, T, T>(
-			    part_arg, date_arg, result, args.size(), [&](string_t specifier, T input) {
-				    if (input.IsFinite()) {
-					    auto truncator = TruncationFactory(GetDatePartSpecifier(specifier.GetString()));
-					    auto micros = SetTime(calendar.get(), input);
-					    truncator(calendar.get(), micros);
-					    return GetTimeUnsafe(calendar.get(), micros);
-				    } else {
-					    return input;
-				    }
-			    });
+			BinaryExecutor::Execute<string_t, T, T>(part_arg, date_arg, result, [&](string_t specifier, T input) {
+				if (input.IsFinite()) {
+					auto truncator = TruncationFactory(GetDatePartSpecifier(specifier.GetString()));
+					auto micros = SetTime(calendar.get(), input);
+					truncator(calendar.get(), micros);
+					return GetTimeUnsafe(calendar.get(), micros);
+				} else {
+					return input;
+				}
+			});
 		}
 	}
 

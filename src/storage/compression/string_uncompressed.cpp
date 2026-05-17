@@ -37,11 +37,12 @@ unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(ColumnData
 	return make_uniq<StringAnalyzeState>(info);
 }
 
-bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
+bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {
 	auto &state = state_p.Cast<StringAnalyzeState>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(vdata);
 
+	const auto count = input.size();
 	state.count += count;
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 	for (idx_t i = 0; i < count; i++) {

@@ -15,10 +15,10 @@ namespace duckdb {
 // Select comparisons
 //===--------------------------------------------------------------------===//
 template <class OP>
-static bool TryPrimitiveSelectOperation(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
-                                        idx_t count, optional_ptr<SelectionVector> true_sel,
-                                        optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask,
-                                        idx_t &result) {
+static bool TryPrimitiveSelectOperation(const Vector &left, const Vector &right,
+                                        optional_ptr<const SelectionVector> sel, idx_t count,
+                                        optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
+                                        optional_ptr<ValidityMask> null_mask, idx_t &result) {
 #ifdef DUCKDB_SMALLER_BINARY
 	return false;
 #else
@@ -101,12 +101,12 @@ static bool TryPrimitiveSelectOperation(Vector &left, Vector &right, optional_pt
 }
 
 template <class PREDICATE>
-static idx_t ComparatorSelectOperation(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+static idx_t ComparatorSelectOperation(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
                                        idx_t count, optional_ptr<SelectionVector> true_sel,
                                        optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask,
                                        PREDICATE predicate) {
 	Vector comparator_result(LogicalType::TINYINT, count);
-	VectorOperations::Comparator(left, right, comparator_result, count);
+	VectorOperations::ComparatorFill(left, right, comparator_result, count);
 	auto cmp_data = comparator_result.Values<int8_t>();
 
 	if (!sel) {
@@ -141,9 +141,9 @@ static idx_t ComparatorSelectOperation(Vector &left, Vector &right, optional_ptr
 	return true_count;
 }
 
-idx_t VectorOperations::Equals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
-                               optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
-                               optional_ptr<ValidityMask> null_mask) {
+idx_t VectorOperations::Equals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
+                               idx_t count, optional_ptr<SelectionVector> true_sel,
+                               optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 	idx_t result;
 	if (TryPrimitiveSelectOperation<duckdb::Equals>(left, right, sel, count, true_sel, false_sel, null_mask, result)) {
 		return result;
@@ -152,9 +152,9 @@ idx_t VectorOperations::Equals(Vector &left, Vector &right, optional_ptr<const S
 	                                 [](int8_t v) { return v == Comparator::VALUES_ARE_EQUAL; });
 }
 
-idx_t VectorOperations::NotEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
-                                  optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
-                                  optional_ptr<ValidityMask> null_mask) {
+idx_t VectorOperations::NotEquals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
+                                  idx_t count, optional_ptr<SelectionVector> true_sel,
+                                  optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 	idx_t result;
 	if (TryPrimitiveSelectOperation<duckdb::NotEquals>(left, right, sel, count, true_sel, false_sel, null_mask,
 	                                                   result)) {
@@ -164,9 +164,9 @@ idx_t VectorOperations::NotEquals(Vector &left, Vector &right, optional_ptr<cons
 	                                 [](int8_t v) { return v != Comparator::VALUES_ARE_EQUAL; });
 }
 
-idx_t VectorOperations::GreaterThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
-                                    optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
-                                    optional_ptr<ValidityMask> null_mask) {
+idx_t VectorOperations::GreaterThan(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
+                                    idx_t count, optional_ptr<SelectionVector> true_sel,
+                                    optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 	idx_t result;
 	if (TryPrimitiveSelectOperation<duckdb::GreaterThan>(left, right, sel, count, true_sel, false_sel, null_mask,
 	                                                     result)) {
@@ -176,8 +176,9 @@ idx_t VectorOperations::GreaterThan(Vector &left, Vector &right, optional_ptr<co
 	                                 [](int8_t v) { return v > 0; });
 }
 
-idx_t VectorOperations::GreaterThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
-                                          idx_t count, optional_ptr<SelectionVector> true_sel,
+idx_t VectorOperations::GreaterThanEquals(const Vector &left, const Vector &right,
+                                          optional_ptr<const SelectionVector> sel, idx_t count,
+                                          optional_ptr<SelectionVector> true_sel,
                                           optional_ptr<SelectionVector> false_sel,
                                           optional_ptr<ValidityMask> null_mask) {
 	idx_t result;
@@ -189,9 +190,9 @@ idx_t VectorOperations::GreaterThanEquals(Vector &left, Vector &right, optional_
 	                                 [](int8_t v) { return v >= 0; });
 }
 
-idx_t VectorOperations::LessThan(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel, idx_t count,
-                                 optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel,
-                                 optional_ptr<ValidityMask> null_mask) {
+idx_t VectorOperations::LessThan(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
+                                 idx_t count, optional_ptr<SelectionVector> true_sel,
+                                 optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 	idx_t result;
 	if (TryPrimitiveSelectOperation<duckdb::GreaterThan>(right, left, sel, count, true_sel, false_sel, null_mask,
 	                                                     result)) {
@@ -201,7 +202,7 @@ idx_t VectorOperations::LessThan(Vector &left, Vector &right, optional_ptr<const
 	                                 [](int8_t v) { return v < 0; });
 }
 
-idx_t VectorOperations::LessThanEquals(Vector &left, Vector &right, optional_ptr<const SelectionVector> sel,
+idx_t VectorOperations::LessThanEquals(const Vector &left, const Vector &right, optional_ptr<const SelectionVector> sel,
                                        idx_t count, optional_ptr<SelectionVector> true_sel,
                                        optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
 	idx_t result;

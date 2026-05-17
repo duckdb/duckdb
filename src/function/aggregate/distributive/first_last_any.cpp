@@ -256,11 +256,11 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 		OrderModifiers modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 		// slice with a selection vector and generate sort keys
 		if (assign_count == count) {
-			CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, sort_key);
+			CreateSortKeyHelpers::CreateSortKey(input, modifiers, sort_key);
 		} else {
 			SelectionVector sel(assign_sel, STANDARD_VECTOR_SIZE);
 			Vector sliced_input(input, sel, assign_count);
-			CreateSortKeyHelpers::CreateSortKey(sliced_input, assign_count, modifiers, sort_key);
+			CreateSortKeyHelpers::CreateSortKey(sliced_input, modifiers, sort_key);
 		}
 		auto sort_key_data = FlatVector::GetData<string_t>(sort_key);
 

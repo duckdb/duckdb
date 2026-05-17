@@ -1068,7 +1068,7 @@ bool Geometry::FromBinary(const string_t &wkb, string_t &result, StringHeap &hea
 	return true;
 }
 
-bool Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool strict) {
+bool Geometry::FromBinary(const Vector &source, Vector &result, idx_t count, bool strict) {
 	auto &heap = StringVector::GetStringHeap(result);
 	if (strict) {
 		UnaryExecutor::Execute<string_t, string_t>(source, result, count, [&](const string_t &wkb) {
@@ -1091,7 +1091,7 @@ bool Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool stri
 	return all_ok;
 }
 
-void Geometry::ToBinary(Vector &source, Vector &result, idx_t count) {
+void Geometry::ToBinary(const Vector &source, Vector &result) {
 	// We are currently using WKB internally, so just copy as-is!
 	result.Reinterpret(source);
 }
@@ -1276,7 +1276,7 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &
 //----------------------------------------------------------------------------------------------------------------------
 
 template <class V = VertexXY>
-static void ToPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
+static void ToPoints(const Vector &source_vec, Vector &target_vec, idx_t row_count) {
 	const auto geom_data = source_vec.Values<string_t>();
 	auto vert_writer = FlatVector::Writer<typename V::STRUCT_TYPE>(target_vec, row_count);
 
@@ -1301,7 +1301,7 @@ static void ToPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
 }
 
 template <class V = VertexXY>
-static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
+static void FromPoints(const Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	auto vert_iter = source_vec.Values<typename V::STRUCT_TYPE>();
 	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -1331,7 +1331,7 @@ static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, 
 }
 
 template <class V = VertexXY>
-static void ToLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count) {
+static void ToLineStrings(const Vector &source_vec, Vector &target_vec, idx_t row_count) {
 	auto geom_data = source_vec.Values<string_t>();
 	auto list_writer = FlatVector::Writer<VectorListType<typename V::STRUCT_TYPE>>(target_vec, row_count);
 
@@ -1356,7 +1356,7 @@ static void ToLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_coun
 }
 
 template <class V = VertexXY>
-static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
+static void FromLineStrings(const Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	auto line_iter = source_vec.Values<VectorListType<typename V::STRUCT_TYPE>>();
 	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
@@ -1390,7 +1390,7 @@ static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_co
 }
 
 template <class V = VertexXY>
-static void ToPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) {
+static void ToPolygons(const Vector &source_vec, Vector &target_vec, idx_t row_count) {
 	auto geom_data = source_vec.Values<string_t>();
 	auto poly_writer =
 	    FlatVector::Writer<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>(target_vec, row_count);
@@ -1414,7 +1414,7 @@ static void ToPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) 
 }
 
 template <class V = VertexXY>
-static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
+static void FromPolygons(const Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	auto poly_iter = source_vec.Values<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>();
 	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
@@ -1453,7 +1453,7 @@ static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count
 }
 
 template <class V = VertexXY>
-static void ToMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
+static void ToMultiPoints(const Vector &source_vec, Vector &target_vec, idx_t row_count) {
 	auto geom_data = source_vec.Values<string_t>();
 	auto mult_writer = FlatVector::Writer<VectorListType<typename V::STRUCT_TYPE>>(target_vec, row_count);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -1474,7 +1474,7 @@ static void ToMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_coun
 }
 
 template <class V = VertexXY>
-static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
+static void FromMultiPoints(const Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	auto mult_iter = source_vec.Values<VectorListType<typename V::STRUCT_TYPE>>();
 	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
@@ -1514,7 +1514,7 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 }
 
 template <class V = VertexXY>
-static void ToMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count) {
+static void ToMultiLineStrings(const Vector &source_vec, Vector &target_vec, idx_t row_count) {
 	source_vec.Flatten();
 	const auto geom_data = FlatVector::GetData<string_t>(source_vec);
 	auto mult_writer =
@@ -1539,7 +1539,7 @@ static void ToMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row
 }
 
 template <class V = VertexXY>
-static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
+static void FromMultiLineStrings(const Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	auto mult_iter = source_vec.Values<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>();
 	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
@@ -1585,7 +1585,7 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 }
 
 template <class V = VertexXY>
-static void ToMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) {
+static void ToMultiPolygons(const Vector &source_vec, Vector &target_vec, idx_t row_count) {
 	source_vec.Flatten();
 	const auto geom_data = FlatVector::GetData<string_t>(source_vec);
 	auto mult_writer = FlatVector::Writer<VectorListType<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>>(
@@ -1613,7 +1613,7 @@ static void ToMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_co
 }
 
 template <class V = VertexXY>
-static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
+static void FromMultiPolygons(const Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	auto mult_iter = source_vec.Values<VectorListType<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>>();
 	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
@@ -1665,7 +1665,7 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 }
 
 template <class V = VertexXY>
-static void ToVectorizedFormatInternal(Vector &source, Vector &target, idx_t count, GeometryType geom_type) {
+static void ToVectorizedFormatInternal(const Vector &source, Vector &target, idx_t count, GeometryType geom_type) {
 	switch (geom_type) {
 	case GeometryType::POINT:
 		ToPoints<V>(source, target, count);
@@ -1690,7 +1690,7 @@ static void ToVectorizedFormatInternal(Vector &source, Vector &target, idx_t cou
 	}
 }
 
-void Geometry::ToVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
+void Geometry::ToVectorizedFormat(const Vector &source, Vector &target, idx_t count, GeometryType geom_type,
                                   VertexType vert_type) {
 	switch (vert_type) {
 	case VertexType::XY:
@@ -1711,7 +1711,7 @@ void Geometry::ToVectorizedFormat(Vector &source, Vector &target, idx_t count, G
 }
 
 template <class V = VertexXY>
-static void FromVectorizedFormatInternal(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
+static void FromVectorizedFormatInternal(const Vector &source, Vector &target, idx_t count, GeometryType geom_type,
                                          idx_t result_offset) {
 	switch (geom_type) {
 	case GeometryType::POINT:
@@ -1737,7 +1737,7 @@ static void FromVectorizedFormatInternal(Vector &source, Vector &target, idx_t c
 	}
 }
 
-void Geometry::FromVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
+void Geometry::FromVectorizedFormat(const Vector &source, Vector &target, idx_t count, GeometryType geom_type,
                                     VertexType vert_type, idx_t result_offset) {
 	switch (vert_type) {
 	case VertexType::XY:
@@ -2044,7 +2044,7 @@ void Geometry::FromSpatialGeometry(const string_t &source, string_t &target, Vec
 	target = blob;
 }
 
-void Geometry::FromSpatialGeometry(Vector &source_vec, Vector &target_vec, idx_t count, idx_t result_offset) {
+void Geometry::FromSpatialGeometry(const Vector &source_vec, Vector &target_vec, idx_t count, idx_t result_offset) {
 	auto entries = source_vec.Values<string_t>();
 	auto target_data = FlatVector::GetDataMutable<string_t>(target_vec);
 
@@ -2370,7 +2370,7 @@ void Geometry::ToSpatialGeometry(const string_t &source, string_t &target, Vecto
 	target = blob;
 }
 
-void Geometry::ToSpatialGeometry(Vector &source, Vector &target, idx_t count) {
+void Geometry::ToSpatialGeometry(const Vector &source, Vector &target, idx_t count) {
 	UnaryExecutor::Execute<string_t, string_t>(source, target, count, [&](const string_t &source) {
 		string_t result;
 		ToSpatialGeometry(source, result, target);
@@ -2392,7 +2392,7 @@ void Geometry::ToSpatialGeometry(const string_t &source, string &target) {
 	ToSpatialGeometryConvert(state, writer);
 }
 
-void Geometry::ToVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryStorageType type) {
+void Geometry::ToVectorizedFormat(const Vector &source, Vector &target, idx_t count, GeometryStorageType type) {
 	if (type == GeometryStorageType::SPATIAL) {
 		ToSpatialGeometry(source, target, count);
 		return;
@@ -2402,7 +2402,7 @@ void Geometry::ToVectorizedFormat(Vector &source, Vector &target, idx_t count, G
 	ToVectorizedFormat(source, target, count, types.first, types.second);
 }
 
-void Geometry::FromVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryStorageType type,
+void Geometry::FromVectorizedFormat(const Vector &source, Vector &target, idx_t count, GeometryStorageType type,
                                     idx_t result_offset) {
 	if (type == GeometryStorageType::SPATIAL) {
 		FromSpatialGeometry(source, target, count, result_offset);

@@ -66,7 +66,7 @@ protected:
 
 private:
 	//! Try adding a chunk using the clustered aggregation path. Returns false if not applicable.
-	bool AddChunkClustered(uintptr_t *address_data, DataChunk &payload, idx_t count);
+	bool AddChunkClustered(uintptr_t *address_data, DataChunk &payload);
 	//! Destroy the perfect aggregate HT (called automatically by the destructor)
 	void Destroy();
 };

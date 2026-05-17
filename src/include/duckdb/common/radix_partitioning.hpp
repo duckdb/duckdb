@@ -52,7 +52,7 @@ public:
 	}
 
 	//! Select using a cutoff on the radix bits of the hash
-	static idx_t Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits,
+	static idx_t Select(const Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits,
 	                    const ValidityMask &partition_mask, SelectionVector *true_sel, SelectionVector *false_sel);
 };
 

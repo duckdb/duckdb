@@ -76,13 +76,14 @@ unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType type)
  * ALP Analyze step only pushes the needed samples to estimate the compression size in the finalize step
  */
 template <class T>
-bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
+bool AlpAnalyze(AnalyzeState &state, const Vector &input) {
 	if (state.info.GetBlockSize() + state.info.GetBlockHeaderSize() < DEFAULT_BLOCK_ALLOC_SIZE) {
 		return false;
 	}
 
 	auto &analyze_state = state.Cast<AlpAnalyzeState<T>>();
 
+	const auto count = input.size();
 	bool must_skip_current_vector = alp::AlpUtils::MustSkipSamplingFromCurrentVector(
 	    analyze_state.vectors_count, analyze_state.vectors_sampled_count, count);
 	analyze_state.vectors_count += 1;

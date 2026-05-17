@@ -22,9 +22,9 @@ struct SHA256Operator {
 };
 
 void SHA256Function(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input = args.data[0];
+	const auto &input = args.data[0];
 
-	UnaryExecutor::ExecuteString<string_t, string_t, SHA256Operator>(input, result, args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, SHA256Operator>(input, result);
 }
 
 } // namespace

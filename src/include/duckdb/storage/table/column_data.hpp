@@ -155,7 +155,7 @@ public:
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
-	virtual void Append(ColumnAppendState &state, Vector &vector, idx_t count);
+	virtual void Append(ColumnAppendState &state, const Vector &vector, idx_t count);
 	virtual void AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count);
 	//! Finalize appending
 	virtual void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state);

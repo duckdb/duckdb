@@ -28,8 +28,8 @@ public:
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator->GetYYAlc();
 
-		auto &inputs = args.data[0];
-		UnaryExecutor::Execute<string_t, T>(inputs, result, args.size(), [&](string_t input) -> optional<T> {
+		const auto &inputs = args.data[0];
+		UnaryExecutor::Execute<string_t, T>(inputs, result, [&](string_t input) -> optional<T> {
 			auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
 			return fun(doc->root, alc, result);
 		});
@@ -45,12 +45,12 @@ public:
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator->GetYYAlc();
 
-		auto &inputs = args.data[0];
+		const auto &inputs = args.data[0];
 		if (info.constant) { // Constant path
 			const char *ptr = info.ptr;
 			const idx_t &len = info.len;
 			if (info.path_type == JSONCommon::JSONPathType::REGULAR) {
-				UnaryExecutor::Execute<string_t, T>(inputs, result, args.size(), [&](string_t input) -> optional<T> {
+				UnaryExecutor::Execute<string_t, T>(inputs, result, [&](string_t input) -> optional<T> {
 					auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
 					auto val = JSONCommon::GetUnsafe(doc->root, ptr, len);
 					if (SET_NULL_IF_NOT_FOUND && !val) {
@@ -62,7 +62,7 @@ public:
 			} else {
 				D_ASSERT(info.path_type == JSONCommon::JSONPathType::WILDCARD);
 				vector<yyjson_val *> vals;
-				UnaryExecutor::Execute<string_t, list_entry_t>(inputs, result, args.size(), [&](string_t input) {
+				UnaryExecutor::Execute<string_t, list_entry_t>(inputs, result, [&](string_t input) {
 					vals.clear();
 
 					auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);

@@ -97,11 +97,11 @@ struct VariantUtils {
 	                                               idx_t count, optional_idx row);
 	DUCKDB_API static Value ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row,
 	                                              uint32_t values_idx);
-	DUCKDB_API static bool Verify(Vector &variant, const SelectionVector &sel_p, idx_t count);
+	DUCKDB_API static bool Verify(const Vector &variant, const SelectionVector &sel_p, idx_t count);
 	DUCKDB_API static void FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary,
 	                                           SelectionVector &sel, idx_t sel_size);
-	DUCKDB_API static void VariantExtract(Vector &input, const vector<VariantPathComponent> &components, Vector &result,
-	                                      idx_t count);
+	DUCKDB_API static void VariantExtract(const Vector &input, const vector<VariantPathComponent> &components,
+	                                      Vector &result, idx_t count);
 	DUCKDB_API static void UnshredVariantData(Vector &input, Vector &output, idx_t count);
 	//! Returns the type of a shredded vector that is shredded on "type"
 	DUCKDB_API static LogicalType ShreddedType(const LogicalType &type);

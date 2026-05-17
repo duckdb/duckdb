@@ -72,14 +72,14 @@ unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, Function
 // ARRAY / LIST LENGTH
 //------------------------------------------------------------------
 void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input = args.data[0];
+	const auto &input = args.data[0];
 	D_ASSERT(input.GetType().id() == LogicalTypeId::LIST);
 	UnaryExecutor::Execute<list_entry_t, int64_t>(
-	    input, result, args.size(), [](list_entry_t input) { return UnsafeNumericCast<int64_t>(input.length); });
+	    input, result, [](list_entry_t input) { return UnsafeNumericCast<int64_t>(input.length); });
 }
 
 void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input = args.data[0];
+	const auto &input = args.data[0];
 	auto array_size = static_cast<int64_t>(ArrayType::GetSize(input.GetType()));
 	auto validity_entries = input.Validity();
 
@@ -126,10 +126,10 @@ unique_ptr<FunctionData> ArrayOrListLengthBind(BindScalarFunctionInput &input) {
 //------------------------------------------------------------------
 void ListLengthBinaryFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	auto type = args.data[0].GetType();
-	auto &input = args.data[0];
-	auto &dimension = args.data[1];
+	const auto &input = args.data[0];
+	const auto &dimension = args.data[1];
 	BinaryExecutor::Execute<list_entry_t, int64_t, int64_t>(
-	    input, dimension, result, args.size(), [](list_entry_t input, int64_t dimension) {
+	    input, dimension, result, [](list_entry_t input, int64_t dimension) {
 		    if (dimension != 1) {
 			    throw NotImplementedException("array_length for lists with dimensions other than 1 not implemented");
 		    }
@@ -154,14 +154,14 @@ struct ArrayLengthBinaryFunctionData : public FunctionData {
 
 void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto type = args.data[0].GetType();
-	auto &dimension = args.data[1];
+	const auto &dimension = args.data[1];
 
 	auto &expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &data = expr.bind_info->Cast<ArrayLengthBinaryFunctionData>();
 	auto &dimensions = data.dimensions;
 	auto max_dimension = static_cast<int64_t>(dimensions.size());
 
-	UnaryExecutor::Execute<int64_t, int64_t>(dimension, result, args.size(), [&](int64_t dimension) {
+	UnaryExecutor::Execute<int64_t, int64_t>(dimension, result, [&](int64_t dimension) {
 		if (dimension < 1 || dimension > max_dimension) {
 			throw OutOfRangeException(StringUtil::Format(
 			    "array_length dimension '%lld' out of range (min: '1', max: '%lld')", dimension, max_dimension));

@@ -391,7 +391,7 @@ struct CeilDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input <= 0) {
 				// below 0 we floor the number (e.g. -10.5 -> -10)
 				return UnsafeNumericCast<T>(input / power_of_ten);
@@ -447,7 +447,7 @@ struct FloorDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input < 0) {
 				// below 0 we ceil the number (e.g. -10.5 -> -11)
 				return UnsafeNumericCast<T>(((input + 1) / power_of_ten) - 1);
@@ -617,7 +617,7 @@ struct TruncDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			//	Always floor
 			return UnsafeNumericCast<T>((input / power_of_ten));
 		});
@@ -641,7 +641,7 @@ struct TruncDecimalNegativePrecisionOperator {
 		    UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale]);
 		T multiply_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale]);
 
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			return UnsafeNumericCast<T>(input / divide_power_of_ten * multiply_power_of_ten);
 		});
 	}
@@ -654,7 +654,7 @@ struct TruncDecimalPositivePrecisionOperator {
 		auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
 		auto source_scale = DecimalType::GetScale(func_expr.children[0]->GetReturnType());
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale]);
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(),
+		UnaryExecutor::Execute<T, T>(input.data[0], result,
 		                             [&](T input) { return UnsafeNumericCast<T>(input / power_of_ten); });
 	}
 };
@@ -805,7 +805,7 @@ struct RoundDecimalOperator {
 		// and then flooring the number
 		// e.g. 10.5 + 0.5 = 11, floor(11) = 11
 		//      10.4 + 0.5 = 10.9, floor(10.9) = 10
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input < 0) {
 				input -= addition;
 			} else {
@@ -864,7 +864,7 @@ struct DecimalRoundNegativePrecisionOperator {
 		T multiply_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale]);
 		T addition = divide_power_of_ten / 2;
 
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input < 0) {
 				input -= addition;
 			} else {
@@ -883,7 +883,7 @@ struct DecimalRoundPositivePrecisionOperator {
 		auto source_scale = DecimalType::GetScale(func_expr.children[0]->GetReturnType());
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale]);
 		T addition = power_of_ten / 2;
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input < 0) {
 				input -= addition;
 			} else {

@@ -88,7 +88,7 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpoint
 	CreateIntermediateVector(checkpoint_states, intermediate);
 }
 
-void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
+void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &)> &callback) {
 	auto &first_state = checkpoint_states[0];
 	auto &col_data = first_state.get().original_column;
 
@@ -108,7 +108,7 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 
 			col_data.CheckpointScan(segment, scan_state, count, scan_vector);
 			scan_vector.BufferMutable().SetVectorSize(count);
-			callback(scan_vector, count);
+			callback(scan_vector);
 		}
 	}
 }
@@ -191,7 +191,7 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 	InitAnalyze();
 
 	// scan over all the segments and run the analyze step
-	ScanSegments([&](Vector &scan_vector, idx_t count) {
+	ScanSegments([&](Vector &scan_vector) {
 		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 			auto &functions = compression_functions[i];
 			auto &states = analyze_states[i];
@@ -202,7 +202,7 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 				if (!state) {
 					continue;
 				}
-				if (!func->analyze(*state, scan_vector, count)) {
+				if (!func->analyze(*state, scan_vector)) {
 					state = nullptr;
 					func = nullptr;
 				}
@@ -337,11 +337,11 @@ void ColumnDataCheckpointer::WriteToDisk() { // Analyze the candidate functions 
 	}
 
 	// Scan over the existing segment + changes and compress the data
-	ScanSegments([&](Vector &scan_vector, idx_t count) {
+	ScanSegments([&](Vector &scan_vector) {
 		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 			auto &function = analyze_result[i].function;
 			auto &compression_state = compression_states[i];
-			function->compress(*compression_state, scan_vector, count);
+			function->compress(*compression_state, scan_vector);
 		}
 	});
 

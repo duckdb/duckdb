@@ -79,7 +79,7 @@ public:
 
 public:
 	//! Add data to this HLL
-	void Update(Vector &input, Vector &hash_vec, const idx_t count) {
+	void Update(const Vector &input, const Vector &hash_vec) {
 		auto idata = input.Validity();
 		const auto hashes = hash_vec.Values<hash_t>();
 
@@ -89,6 +89,7 @@ public:
 			}
 		} else {
 			D_ASSERT(hash_vec.GetVectorType() == VectorType::FLAT_VECTOR);
+			const idx_t count = hash_vec.size();
 			if (idata.CannotHaveNull()) {
 				for (idx_t i = 0; i < count; ++i) {
 					const auto hash = hashes[i].GetValue();

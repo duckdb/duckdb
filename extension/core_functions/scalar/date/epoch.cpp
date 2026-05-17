@@ -22,7 +22,7 @@ struct EpochSecOperator {
 void EpochSecFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
 
-	UnaryExecutor::Execute<double, timestamp_t, EpochSecOperator>(input.data[0], result, input.size());
+	UnaryExecutor::Execute<double, timestamp_t, EpochSecOperator>(input.data[0], result);
 }
 
 struct NormalizedIntervalOperator {
@@ -35,7 +35,7 @@ struct NormalizedIntervalOperator {
 void NormalizedIntervalFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
 
-	UnaryExecutor::Execute<interval_t, interval_t, NormalizedIntervalOperator>(input.data[0], result, input.size());
+	UnaryExecutor::Execute<interval_t, interval_t, NormalizedIntervalOperator>(input.data[0], result);
 }
 
 struct TimeTZSortKeyOperator {
@@ -48,7 +48,7 @@ struct TimeTZSortKeyOperator {
 void TimeTZSortKeyFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
 
-	UnaryExecutor::Execute<dtime_tz_t, uint64_t, TimeTZSortKeyOperator>(input.data[0], result, input.size());
+	UnaryExecutor::Execute<dtime_tz_t, uint64_t, TimeTZSortKeyOperator>(input.data[0], result);
 }
 
 } // namespace

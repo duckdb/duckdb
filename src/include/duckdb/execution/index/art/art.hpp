@@ -146,8 +146,8 @@ public:
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
 	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
-	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
-	                        unsafe_vector<ARTKey> &row_id_keys);
+	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
+	                        unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys);
 
 	//! Verifies the nodes.
 	void Verify(IndexLock &l) override;

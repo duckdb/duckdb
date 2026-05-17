@@ -92,7 +92,7 @@ static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorS
 static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() >= 1 && args.ColumnCount() <= 3);
 	auto count = args.size();
-	Vector &input_lists = args.data[0];
+	const Vector &input_lists = args.data[0];
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &result_validity = FlatVector::ValidityMutable(result);

@@ -89,8 +89,8 @@ struct SetSelectionVectorWhere {
 template <class OP>
 void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.data.size() == 2);
-	auto &list = args.data[0];
-	auto &selection_list = args.data[1];
+	const auto &list = args.data[0];
+	const auto &selection_list = args.data[1];
 	idx_t count = args.size();
 
 	auto selection_list_data = selection_list.Values<list_entry_t>();
