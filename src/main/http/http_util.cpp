@@ -498,6 +498,21 @@ void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
 		http_proxy_password = Settings::Get<HTTPProxyPasswordSetting>(*db);
 	}
 
+	if(http_proxy.empty()){
+		const char *env_var = getenv("http_proxy")			//fetching the env var for proxy setting from OS
+		if(!env_var){										//checking for uppercase as well
+			env_var = getenv("HTTP_PROXY")
+		}
+		if(env_var){
+			string host;
+			idx_t port;
+			HTTPUtil::ParseHTTPProxyHost(string(env_var), host, port); 		//assigning the host and port to the fetched env var string
+			http_proxy = host;												//assigning proxy settings
+			http_proxy_port = port;
+		}
+
+	}
+
 	auto client_context = FileOpener::TryGetClientContext(opener);
 	if (client_context) {
 		auto &client_config = ClientConfig::GetConfig(*client_context);
