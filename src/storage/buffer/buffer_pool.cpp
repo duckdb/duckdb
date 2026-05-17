@@ -66,10 +66,10 @@ shared_ptr<BlockMemory> BufferEvictionNode::TryGetBlockMemory() {
 	return shared_memory_p;
 }
 
-bool BufferEvictionNode::IsDeadNode(idx_t debug_sleep_micros) {
+bool BufferEvictionNode::IsDeadNode(optional_idx debug_sleep_micros) {
 	auto shared_memory_p = memory_p.lock();
-	if (debug_sleep_micros > 0) {
-		ThreadUtil::SleepMicroSeconds(debug_sleep_micros);
+	if (debug_sleep_micros.IsValid()) {
+		ThreadUtil::SleepMicroSeconds(debug_sleep_micros.GetIndex());
 	}
 	if (!shared_memory_p) {
 		return true;
@@ -213,6 +213,7 @@ void EvictionQueue::Purge() {
 	while (max_purges != 0) {
 		PurgeIteration(purge_size);
 
+		// update relevant sizes and potentially early-out
 		approx_q_size = q.size_approx();
 
 		// early-out according to (2.1)
@@ -250,7 +251,8 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 
 	idx_t dead_count = 0;
 	idx_t alive_count = 0;
-	auto debug_sleep_micros = debug_eviction_queue_sleep.load(std::memory_order_relaxed);
+	auto raw_sleep_micros = debug_eviction_queue_sleep.load(std::memory_order_relaxed);
+	optional_idx debug_sleep_micros = raw_sleep_micros > 0 ? optional_idx(raw_sleep_micros) : optional_idx();
 	for (idx_t i = 0; i < actually_dequeued; i++) {
 		auto &node = purge_nodes[i];
 		if (node.IsDeadNode(debug_sleep_micros)) {
