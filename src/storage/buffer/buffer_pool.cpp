@@ -234,6 +234,9 @@ void EvictionQueue::Purge() {
 }
 
 void EvictionQueue::PurgeIteration(const idx_t purge_size) {
+	// if this purge is significantly smaller or bigger than the previous purge, then
+	// we need to resize the purge_nodes vector. Note that this barely happens, as we
+	// purge queue_insertions * PURGE_SIZE_MULTIPLIER nodes
 	idx_t previous_purge_size = purge_nodes.size();
 	if (purge_size < previous_purge_size / 2 || purge_size > previous_purge_size) {
 		purge_nodes.resize(purge_size);
