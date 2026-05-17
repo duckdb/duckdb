@@ -1,0 +1,16 @@
+# name: test/sql/pivot/pivot_query_text.test
+# description: PIVOT is rewritten into a MultiStatement; child statements must inherit the parent query text.
+# group: [pivot]
+
+statement ok
+CREATE TABLE t(c VARCHAR, v INTEGER);
+
+statement ok
+INSERT INTO t VALUES ('a', 1), ('b', 2);
+
+# current_query() inside the PIVOT's SELECT child returns the parent PIVOT SQL.
+query III
+PIVOT (SELECT c, v, current_query() AS q FROM t) ON c USING ANY_VALUE(q) ORDER BY v;
+----
+1	PIVOT (SELECT c, v, current_query() AS q FROM t) ON c USING ANY_VALUE(q) ORDER BY v;	NULL
+2	NULL	PIVOT (SELECT c, v, current_query() AS q FROM t) ON c USING ANY_VALUE(q) ORDER BY v;
