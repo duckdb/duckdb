@@ -332,7 +332,7 @@ void RoaringCompressState::FlushSegment() {
 
 	Store<idx_t>(metadata_start, handle.GetDataMutable());
 	auto total_segment_size = sizeof(idx_t) + data_size + metadata_size;
-	state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
+	FlushCurrentSegment(total_segment_size);
 }
 
 void RoaringCompressState::Finalize() {

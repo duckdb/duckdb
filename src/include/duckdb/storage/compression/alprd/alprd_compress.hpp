@@ -239,7 +239,7 @@ public:
 		// Store the Dictionary
 		memcpy((void *)dataptr, (void *)compression_data.left_parts_dict, actual_dictionary_size_bytes);
 
-		checkpoint_state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
+		FlushCurrentSegment(total_segment_size);
 		data_bytes_used = 0;
 		vectors_flushed = 0;
 	}

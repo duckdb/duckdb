@@ -488,7 +488,6 @@ public:
 	}
 
 	void FlushSegment() {
-		auto &state = checkpoint_data.GetCheckpointState();
 		auto base_ptr = handle.GetDataMutable();
 
 		// Compact the segment by moving the metadata next to the data.
@@ -511,8 +510,7 @@ public:
 
 		// Store the offset of the metadata of the first group (which is at the highest address).
 		Store<idx_t>(metadata_offset + metadata_size, base_ptr);
-
-		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
+		FlushCurrentSegment(total_segment_size);
 	}
 
 	void Finalize() {

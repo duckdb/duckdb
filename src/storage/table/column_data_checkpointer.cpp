@@ -13,27 +13,6 @@
 
 namespace duckdb {
 
-CompressionState::CompressionState(ColumnDataCheckpointData &checkpoint_data_p, CompressionType compression_type)
-    : checkpoint_data(checkpoint_data_p), function(checkpoint_data.GetCompressionFunction(compression_type)),
-      block_manager(checkpoint_data.GetStorageManager().GetBlockManager()), info(block_manager) {
-}
-
-unique_ptr<ColumnSegment> CompressionState::CreateNewSegment() {
-	return ColumnSegment::CreateTransientSegment(checkpoint_data.GetDatabase(), function, checkpoint_data.GetType(),
-	                                             info.GetBlockSize(), info.GetBlockManager());
-}
-
-StandardCompressionState::~StandardCompressionState() {
-}
-
-void StandardCompressionState::CreateAndPinNewSegment() {
-	auto compressed_segment = CreateNewSegment();
-	current_segment = std::move(compressed_segment);
-
-	auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
-	handle = buffer_manager.Pin(current_segment->block);
-}
-
 //! ColumnDataCheckpointData
 
 const CompressionFunction &ColumnDataCheckpointData::GetCompressionFunction(CompressionType compression_type) {

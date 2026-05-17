@@ -315,9 +315,8 @@ public:
 
 	void Flush(bool final = false) {
 		auto segment_size = Finalize();
-		auto &state = checkpoint_data.GetCheckpointState();
 		stats_writer.Merge(current_segment->GetStatsMutable());
-		state.FlushSegment(std::move(current_segment), std::move(handle), segment_size);
+		FlushCurrentSegment(segment_size);
 
 		if (!final) {
 			CreateEmptySegment();

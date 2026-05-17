@@ -267,8 +267,7 @@ void DictFSSTCompressionState::Flush(bool final) {
 	current_segment->count = tuple_count;
 
 	auto segment_size = Finalize();
-	auto &state = checkpoint_data.GetCheckpointState();
-	state.FlushSegment(std::move(current_segment), std::move(handle), segment_size);
+	FlushCurrentSegment(segment_size);
 
 	// Reset the state
 	uncompressed_dictionary_copy.Destroy();

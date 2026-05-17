@@ -200,10 +200,8 @@ struct RLECompressState : public StandardCompressionState {
 		memmove(data_ptr + aligned_rle_offset, data_ptr + original_rle_offset, counts_size);
 		// store the final RLE offset within the segment
 		Store<uint64_t>(aligned_rle_offset, data_ptr);
-		handle.Destroy();
 
-		auto &state = checkpoint_data.GetCheckpointState();
-		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
+		FlushCurrentSegment(total_segment_size);
 	}
 
 	void Finalize() {
