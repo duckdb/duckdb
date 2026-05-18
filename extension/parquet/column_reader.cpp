@@ -328,8 +328,7 @@ void ColumnReader::ReadData(const data_ptr_t buffer, const uint32_t buffer_size,
 }
 
 void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state,
-                               idx_t rows_to_skip,
-                               optional_ptr<const SelectionVector> sel, idx_t approved_tuple_count,
+                               idx_t rows_to_skip, optional_ptr<const SelectionVector> sel, idx_t approved_tuple_count,
                                idx_t result_offset) {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
@@ -359,23 +358,13 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 		return;
 	}
 
-	if (rows_to_skip > 0 && (page_hdr.type == PageType::DATA_PAGE || page_hdr.type == PageType::DATA_PAGE_V2)) {
+	if (page_hdr.type == PageType::DATA_PAGE || page_hdr.type == PageType::DATA_PAGE_V2) {
 		bool is_v1 = page_hdr.type == PageType::DATA_PAGE;
 		idx_t page_num_values =
 		    NumericCast<idx_t>(is_v1 ? page_hdr.data_page_header.num_values : page_hdr.data_page_header_v2.num_values);
-		if (rows_to_skip >= page_num_values) {
-			trans.Skip(page_hdr.compressed_page_size);
-			page_is_filtered_out = true;
-			page_rows_available = page_num_values;
-			return;
-		}
-	}
-
-	if (sel && (page_hdr.type == PageType::DATA_PAGE || page_hdr.type == PageType::DATA_PAGE_V2)) {
-		bool is_v1 = page_hdr.type == PageType::DATA_PAGE;
-		idx_t page_num_values =
-		    is_v1 ? idx_t(page_hdr.data_page_header.num_values) : idx_t(page_hdr.data_page_header_v2.num_values);
-		if (!PageRangeHasSelectedRows(*sel, approved_tuple_count, result_offset, page_num_values)) {
+		bool can_skip = (rows_to_skip > 0 && rows_to_skip >= page_num_values) ||
+		                (sel && !PageRangeHasSelectedRows(*sel, approved_tuple_count, result_offset, page_num_values));
+		if (can_skip) {
 			trans.Skip(page_hdr.compressed_page_size);
 			page_is_filtered_out = true;
 			page_rows_available = page_num_values;

@@ -358,9 +358,8 @@ protected:
 private:
 	void AllocateBlock(idx_t size);
 	void PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state,
-	                 idx_t rows_to_skip = 0,
-	                 optional_ptr<const SelectionVector> sel = nullptr, idx_t approved_tuple_count = 0,
-	                 idx_t result_offset = 0);
+	                 idx_t rows_to_skip = 0, optional_ptr<const SelectionVector> sel = nullptr,
+	                 idx_t approved_tuple_count = 0, idx_t result_offset = 0);
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
