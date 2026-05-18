@@ -368,7 +368,7 @@
       },
       {
         "name": "OPERATOR_ROW_GROUPS_SCANNED",
-        "enum_value": 99,
+        "enum_value": 104,
         "description": "Number of row groups scanned by this table scan operator. Non-table-scan operators report 0 for this metric.",
         "type": "uint64",
         "unit": "absolute",

@@ -302,6 +302,9 @@ public:
 	//! Create a LocalFileSystem.
 	DUCKDB_API static unique_ptr<FileSystem> CreateLocal();
 
+	//! Whether this is a LocalFileSystem instance.
+	DUCKDB_API virtual bool IsLocalFileSystem() const;
+
 	//! Return the name of the filesystem. Used for forming diagnosis messages.
 	DUCKDB_API virtual std::string GetName() const = 0;
 

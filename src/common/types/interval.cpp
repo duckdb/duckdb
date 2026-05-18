@@ -113,12 +113,15 @@ interval_parse_number:
 		number = Cast::Operation<string_t, int64_t>(nr_string);
 		fraction = 0;
 		if (pos < len && str[pos] == '.') {
-			// we expect some microseconds
-			int32_t mult = 100000;
-			for (++pos; pos < len && StringUtil::CharacterIsDigit(str[pos]); ++pos, mult /= 10) {
-				if (mult > 0) {
-					fraction += int64_t(str[pos] - '0') * mult;
+			idx_t frac_start = 0;
+			for (++pos; pos < len && StringUtil::CharacterIsDigit(str[pos]); ++pos) {
+				if (frac_start == 0) {
+					frac_start = pos;
 				}
+			}
+			if (frac_start != 0) {
+				string_t frac_string(str + frac_start - 1, UnsafeNumericCast<uint32_t>(pos - frac_start + 1));
+				fraction = Cast::Operation<string_t, double>(frac_string);
 			}
 		}
 		if (negative) {

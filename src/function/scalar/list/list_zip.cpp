@@ -74,6 +74,13 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 		masks.push_back(ValidityMask(result_size));
 	}
 
+	// Ensure list children are flat so FlatVector::Validity can be used below
+	for (idx_t i = 0; i < args_size; i++) {
+		if (input_lists[i].has_value() && ListVector::GetListSize(args.data[i]) > 0) {
+			ListVector::GetChildMutable(args.data[i]).Flatten();
+		}
+	}
+
 	idx_t offset = 0;
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
