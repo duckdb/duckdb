@@ -716,7 +716,7 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row, optiona
 	auto &config = DBConfig::GetConfig(db);
 
 	idx_t segment_size;
-	if (!prev_segment) {
+	if (!prev_segment || prev_segment->segment_type == ColumnSegmentType::PERSISTENT) {
 		// We start with the `initial_bytes` setting, but we ensure that we have enough space for at least one row.
 		const auto initial_bytes = Settings::Get<InitialColumnSegmentSizeSetting>(config);
 		segment_size = MaxValue<idx_t>(GetTypeIdSize(type.InternalType()), initial_bytes);
