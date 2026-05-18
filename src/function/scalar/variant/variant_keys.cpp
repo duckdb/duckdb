@@ -172,21 +172,21 @@ static void UnaryVariantKeys(const Vector &variant_vec, const vector<VariantPath
 	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
 	const UnifiedVariantVectorData variant(source_format);
 
-	const auto &[key_ids_by_row, path_exists] = CollectVariantKeys(variant, components, count);
+	const auto &[key_ids_by_row, path_exists_by_row] = CollectVariantKeys(variant, components, count);
 
 	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 	auto result_writer = FlatVector::Writer<VectorListType<string_t>>(result, count);
 
 	for (idx_t row_idx = 0; row_idx < key_ids_by_row.size(); row_idx++) {
-		if (!path_exists[row_idx]) {
+		if (!path_exists_by_row[row_idx]) {
 			result_writer.WriteNull();
 			continue;
 		}
 
 		auto row_writer = result_writer.WriteList(key_ids_by_row[row_idx].size());
-		idx_t child_idx = 0;
+		idx_t key_idx = 0;
 		for (auto &key_writer : row_writer) {
-			const auto key_id = key_ids_by_row[row_idx][child_idx++];
+			const auto key_id = key_ids_by_row[row_idx][key_idx++];
 			key_writer.WriteValue(variant.GetKey(row_idx, key_id));
 		}
 	}
@@ -194,15 +194,15 @@ static void UnaryVariantKeys(const Vector &variant_vec, const vector<VariantPath
 
 static void ManyVariantKeys(const Vector &variant_vec, const vector<vector<VariantPathComponent>> &paths,
                             Vector &result, const idx_t count) {
-	vector<VariantKeysResult> keys_results;
-	keys_results.reserve(paths.size());
+	vector<VariantKeysResult> keys_by_path;
+	keys_by_path.reserve(paths.size());
 
 	RecursiveUnifiedVectorFormat source_format;
 	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
 	const UnifiedVariantVectorData variant(source_format);
 
 	for (const auto &path : paths) {
-		keys_results.push_back(CollectVariantKeys(variant, path, count));
+		keys_by_path.push_back(CollectVariantKeys(variant, path, count));
 	}
 
 	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
@@ -211,19 +211,19 @@ static void ManyVariantKeys(const Vector &variant_vec, const vector<vector<Varia
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto row_writer = result_writer.WriteList(paths.size());
 		idx_t path_idx = 0;
-		for (auto &list_writer : row_writer) {
-			const auto &[key_ids_by_row, path_exists] = keys_results[path_idx];
-			if (!path_exists[row_idx]) {
-				list_writer.WriteNull();
+		for (auto &path_keys_writer : row_writer) {
+			const auto &[key_ids_by_row, path_exists_by_row] = keys_by_path[path_idx];
+			if (!path_exists_by_row[row_idx]) {
+				path_keys_writer.WriteNull();
 				path_idx++;
 				continue;
 			}
 
 			const auto &n_keys = key_ids_by_row[row_idx].size();
-			auto path_writer = list_writer.WriteList(n_keys);
+			auto keys_writer = path_keys_writer.WriteList(n_keys);
 
 			idx_t key_idx = 0;
-			for (auto &key_writer : path_writer) {
+			for (auto &key_writer : keys_writer) {
 				const auto key_id = key_ids_by_row[row_idx][key_idx++];
 				key_writer.WriteValue(variant.GetKey(row_idx, key_id));
 			}
@@ -259,8 +259,8 @@ static unique_ptr<FunctionData> VariantKeysBind(BindScalarFunctionInput &input) 
 		return make_uniq<VariantKeysBindData>();
 	}
 
-	const auto &path = *arguments[1];
-	const auto &return_type = path.GetReturnType();
+	const auto &path_expr = *arguments[1];
+	const auto &return_type = path_expr.GetReturnType();
 	if (return_type.id() != LogicalTypeId::VARCHAR && return_type.id() != LogicalTypeId::LIST) {
 		throw BinderException("'variant_keys' expects the second argument to be of type VARCHAR or VARCHAR[], not %s",
 		                      return_type.ToString());
@@ -275,7 +275,7 @@ static unique_ptr<FunctionData> VariantKeysBind(BindScalarFunctionInput &input) 
 	}
 
 	Value constant_arg;
-	if (!VariantBindUtils::GetConstantArgument(context, path, constant_arg)) {
+	if (!VariantBindUtils::GetConstantArgument(context, path_expr, constant_arg)) {
 		throw BinderException("'variant_keys' expects the second argument to be a constant expression");
 	}
 
@@ -330,7 +330,7 @@ static void VariantKeysFunction(DataChunk &input, ExpressionState &state, Vector
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<VariantKeysBindData>();
-	const auto &n_columns = input.ColumnCount();
+	auto n_columns = input.ColumnCount();
 
 	if (n_columns == 1) {
 		UnaryVariantKeys(variant_vec, {}, result, count);
