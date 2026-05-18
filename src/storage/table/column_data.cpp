@@ -505,7 +505,9 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	    !last_segment.GetCompressionFunction().init_append) {
 		// we cannot append to this segment - append a new segment
 		auto total_rows = segment->GetRowStart() + last_segment.count;
-		AppendTransientSegment(l, total_rows, last_segment);
+		// Persistent segments are resized to block_size during checkpoint, wo we pass nullptr to start fresh
+		const bool is_persistent = last_segment.segment_type == ColumnSegmentType::PERSISTENT;
+		AppendTransientSegment(l, total_rows, is_persistent ? nullptr : &last_segment);
 		state.current = data.GetLastSegment(l);
 	} else {
 		state.current = segment;
