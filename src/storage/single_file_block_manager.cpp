@@ -175,6 +175,10 @@ bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 
 void MainHeader::Write(WriteStream &ser) {
 	ser.WriteData(const_data_ptr_cast(MAGIC_BYTES), MAGIC_BYTE_SIZE);
+	if (static_cast<StorageVersion>(version_number) >= StorageVersion::V2_0_0) {
+		// from v2.0.0 we write 999, to indicate that the version number is deprecated
+		version_number = static_cast<idx_t>(StorageVersion::DEPRECATED);
+	}
 	ser.Write<idx_t>(version_number);
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		ser.Write<uint64_t>(flags[i]);
@@ -214,8 +218,11 @@ MainHeader MainHeader::Read(ReadStream &source) {
 
 	header.version_number = source.Read<idx_t>();
 
-	// Check the version number to determine if we can read this file.
-	if (header.version_number < VERSION_NUMBER_LOWER || header.version_number > VERSION_NUMBER_UPPER) {
+	if (static_cast<StorageVersion>(header.version_number) == DEPRECATED_VERSION_NUMBER) {
+		// if the version number in the main header is deprecated, then we just ignore the main header version number
+		// TODO: if we are confident, we can remove the check below
+	} else if (header.version_number < VERSION_NUMBER_LOWER || header.version_number > VERSION_NUMBER_UPPER) {
+		// Check the version number to determine if we can read this file.
 		auto version = GetDuckDBVersions(static_cast<StorageVersion>(header.version_number));
 		string version_text;
 		if (!version.empty()) {
@@ -283,7 +290,7 @@ void DatabaseHeader::SetStorageVersionInDatabaseHeader(DatabaseHeader &header, S
 			throw InvalidInputException("Storage Version is not found!");
 		}
 	} else {
-		// before V1.2.0
+		// before V2.0.0
 		// The Storage Version in the main header could be written in two different ways
 		// 1) When the DB is created from scratch -- with e.g. ATTACH (STORAGE_VERSION "v1.4.0")
 		// 2) if the db file got bumped to a higher version
@@ -292,7 +299,7 @@ void DatabaseHeader::SetStorageVersionInDatabaseHeader(DatabaseHeader &header, S
 		// in case 2, the main_header version number is bumped at maximum to 65 (v1.2.0)
 		// thus, in case 2, the main header storage version is often lower then the actual storage version
 		// that's also why we need the logic below for backwards compatibility
-		// if the main header version and db header version are < v1.6.0
+		// if the main header version and db header version are < v2.0.0
 		// then we fall back to the serialization version
 		switch (static_cast<idx_t>(read_version)) {
 		case static_cast<idx_t>(SerializationVersionDeprecated::V0_10_2):
