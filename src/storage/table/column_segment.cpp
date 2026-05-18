@@ -68,7 +68,7 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
                              const block_id_t block_id_p, const idx_t offset, const idx_t segment_size_p,
                              const unique_ptr<ColumnSegmentState> segment_state_p)
 
-    : SegmentBase<ColumnSegment>(count), db(db), type(type), type_size(GetTypeIdSize(type.InternalType())),
+    : SegmentBase<ColumnSegment>(count), db(db), type(type),
       segment_type(segment_type), block(std::move(block_p)), function(function_p), block_id(block_id_p), offset(offset),
       segment_size(segment_size_p), stats(std::move(statistics)) {
 	if (function.get().init_segment) {
@@ -81,7 +81,7 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
 
 ColumnSegment::ColumnSegment(ColumnSegment &other)
     : SegmentBase<ColumnSegment>(other.count.load()), db(other.db), type(std::move(other.type)),
-      type_size(other.type_size), segment_type(other.segment_type), block(std::move(other.block)),
+      segment_type(other.segment_type), block(std::move(other.block)),
       function(other.function), block_id(other.block_id), offset(other.offset), segment_size(other.segment_size),
       segment_state(std::move(other.segment_state)), stats(std::move(other.stats)) {
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.

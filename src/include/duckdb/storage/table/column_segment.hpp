@@ -143,8 +143,6 @@ public:
 	DatabaseInstance &db;
 	//! The type stored in the column
 	LogicalType type;
-	//! The size of the type
-	idx_t type_size;
 	//! The column segment type (transient or persistent)
 	ColumnSegmentType segment_type;
 	//! The block that this segment relates to
