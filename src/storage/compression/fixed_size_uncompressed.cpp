@@ -80,7 +80,7 @@ void UncompressedCompressState::CreateEmptySegment() {
 
 void UncompressedCompressState::FlushSegment(idx_t segment_size) {
 	auto &state = checkpoint_data.GetCheckpointState();
-	if (current_segment->type.InternalType() == PhysicalType::VARCHAR) {
+	if (current_segment->GetType().InternalType() == PhysicalType::VARCHAR) {
 		auto &segment_state = current_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		if (segment_state.overflow_writer) {
 			segment_state.overflow_writer->Flush();

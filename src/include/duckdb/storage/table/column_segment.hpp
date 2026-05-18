@@ -39,10 +39,10 @@ enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 class ColumnSegment : public SegmentBase<ColumnSegment> {
 public:
 	//! Construct a column segment.
-	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
-	              const ColumnSegmentType segment_type, const idx_t count, const CompressionFunction &function_p,
-	              BaseStatistics statistics, const block_id_t block_id_p, const idx_t offset,
-	              const idx_t segment_size_p, unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
+	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const ColumnSegmentType segment_type,
+	              const idx_t count, const CompressionFunction &function_p, BaseStatistics statistics,
+	              const block_id_t block_id_p, const idx_t offset, const idx_t segment_size_p,
+	              unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
 	//! Construct a column segment from another column segment.
 	//! The other column segment becomes invalid (std::move).
 	ColumnSegment(ColumnSegment &other);
@@ -50,8 +50,8 @@ public:
 
 public:
 	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
-	                                                         block_id_t id, idx_t offset, const LogicalType &type_p,
-	                                                         idx_t count, CompressionType compression_type,
+	                                                         block_id_t id, idx_t offset, idx_t count,
+	                                                         CompressionType compression_type,
 	                                                         BaseStatistics statistics,
 	                                                         unique_ptr<ColumnSegmentState> segment_state);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const CompressionFunction &function,
@@ -105,9 +105,13 @@ public:
 	//! Gets a data pointer from a persistent column segment
 	DataPointer GetDataPointer(idx_t row_start);
 
-	block_id_t GetBlockId() {
+	block_id_t GetBlockId() const {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);
 		return block_id;
+	}
+
+	const LogicalType &GetType() const {
+		return stats.statistics.GetType();
 	}
 
 	//! Returns the size of the underlying block of the segment. It is size is the size available for usage on a block.
@@ -115,7 +119,7 @@ public:
 		return block->GetBlockSize();
 	}
 
-	idx_t GetBlockOffset() {
+	idx_t GetBlockOffset() const {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT || offset == 0);
 		return offset;
 	}
@@ -141,8 +145,6 @@ private:
 public:
 	//! The database instance
 	DatabaseInstance &db;
-	//! The type stored in the column
-	LogicalType type;
 	//! The column segment type (transient or persistent)
 	ColumnSegmentType segment_type;
 	//! The block that this segment relates to
