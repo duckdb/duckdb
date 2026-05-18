@@ -551,6 +551,46 @@
     ]
   },
   {
+    "class": "ConnectInfo",
+    "base": "ParseInfo",
+    "enum": "CONNECT_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/connect_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "name_is_string_literal",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "DisconnectInfo",
+    "base": "ParseInfo",
+    "enum": "DISCONNECT_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/disconnect_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "name_is_string_literal",
+        "type": "bool"
+      }
+    ]
+  },
+  {
     "class": "DropInfo",
     "base": "ParseInfo",
     "enum": "DROP_INFO",

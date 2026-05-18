@@ -32,6 +32,8 @@ Statement <-
 	UpdateExtensionsStatement /
 	AnalyzeStatement /
 	MergeIntoStatement /
+	ConnectStatement /
+	DisconnectStatement /
 	ExpressionStatement
 
 ExpressionStatement <- List(ExpressionAlias)
@@ -201,6 +203,7 @@ UnreservedKeyword <- 'ABORT' /
 'COMPRESSION' /
 'CONFIGURATION' /
 'CONFLICT' /
+'CONNECT' /
 'CONNECTION' /
 'CONSTRAINTS' /
 'CONTENT' /
@@ -232,6 +235,7 @@ UnreservedKeyword <- 'ABORT' /
 'DICTIONARY' /
 'DISABLE' /
 'DISCARD' /
+'DISCONNECT' /
 'DOCUMENT' /
 'DOMAIN' /
 'DOUBLE' /
@@ -1420,6 +1424,10 @@ TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName
 TargetOptAlias <- BaseTableName 'AS'? ColId?
 DeleteUsingClause <- 'USING' List(TableRef)
 
+ConnectStatement <- 'CONNECT' SessionTarget?
+DisconnectStatement <- 'DISCONNECT' SessionTarget?
+SessionTarget <- 'LOCAL' / StringLiteral / CatalogName
+
 CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType
 CreateType <- EnumSelectType / EnumStringLiteralList / Type
 EnumSelectType <- 'ENUM' Parens(SelectStatementInternal)
@@ -1663,3 +1671,4 @@ UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
 DotIdentifier <- '.' Identifier
 
 CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments
+

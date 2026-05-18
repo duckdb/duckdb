@@ -1,0 +1,51 @@
+# name: test/sql/connect/connect_not_implemented.test
+# description: All 8 grammar forms of CONNECT / DISCONNECT parse but are not yet implemented.
+# group: [connect]
+
+# The grammar accepts each form (they bind to LogicalSimple with the appropriate ConnectInfo /
+# DisconnectInfo state) and the physical operators throw a per-form NotImplementedException.
+# Each form is a distinct slot — implementations swap in one at a time as follow-up PRs land
+# (and some forms, like DISCONNECT LOCAL, will eventually replace the NotImplemented with a
+# different error such as "forbidden").
+
+# ---------- CONNECT ----------
+statement error
+CONNECT;
+----
+Not implemented Error: CONNECT with no target is not yet implemented
+
+statement error
+CONNECT LOCAL;
+----
+Not implemented Error: CONNECT LOCAL is not yet implemented
+
+statement error
+CONNECT my_database;
+----
+Not implemented Error: CONNECT <name> is not yet implemented
+
+statement error
+CONNECT 'connection_string_form';
+----
+Not implemented Error: CONNECT '<connection_string>' is not yet implemented
+
+# ---------- DISCONNECT ----------
+statement error
+DISCONNECT;
+----
+Not implemented Error: DISCONNECT with no target is not yet implemented
+
+statement error
+DISCONNECT LOCAL;
+----
+Not implemented Error: DISCONNECT LOCAL is not yet implemented
+
+statement error
+DISCONNECT my_database;
+----
+Not implemented Error: DISCONNECT <name> is not yet implemented
+
+statement error
+DISCONNECT 'connection_string_form';
+----
+Not implemented Error: DISCONNECT '<connection_string>' is not yet implemented
