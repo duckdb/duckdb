@@ -1,4 +1,4 @@
-# name: test/sql/connect/connect_not_implemented.test
+# name: test/sql/connect/connect_syntax.test
 # description: Current expected behavior for all 4 CONNECT + 1 DISCONNECT grammar forms.
 # group: [connect]
 
