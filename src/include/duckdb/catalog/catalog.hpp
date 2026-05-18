@@ -48,6 +48,7 @@ struct MetadataBlockInfo;
 class AttachedDatabase;
 class ClientContext;
 class QueryContext;
+class TableFunction;
 class Transaction;
 
 class AggregateFunctionCatalogEntry;
@@ -414,6 +415,13 @@ public:
 
 	//! Called when the catalog is detached
 	DUCKDB_API virtual void OnDetach(ClientContext &context);
+
+	//! Returns a TableFunction that takes (catalog_name, sql_string) and produces the backend's result rows.
+	//! When this returns non-null, the CONNECT dispatch rewrites bound SQL as `SELECT * FROM <fn>('cat', '<sql>')`
+	//! and runs it through the normal binder/planner/executor pipeline — unlocking streaming, parallelism via
+	//! BatchIndex, and embedding pass-through reads inside larger DuckDB plans. Default returns nullptr; the
+	//! StorageExtension::SupportsPassthrough() flag should be true on backends that return non-null here.
+	DUCKDB_API virtual optional_ptr<TableFunction> GetConnectFunction();
 
 protected:
 	//! Reference to the database

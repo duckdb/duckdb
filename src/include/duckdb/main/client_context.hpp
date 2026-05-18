@@ -35,6 +35,7 @@
 namespace duckdb {
 
 class Appender;
+class AttachedDatabase;
 class Catalog;
 class CatalogSearchPath;
 class ColumnDataCollection;
@@ -97,7 +98,24 @@ public:
 	//! Data for the currently running transaction
 	TransactionContext transaction;
 
+	//! Routing target for pass-through SQL execution (CONNECT/DISCONNECT).
+	//! When is_bound is true and bound_database can be locked, non-control SQL is rewritten at
+	//! the chokepoint as `SELECT * FROM <fn>('cat', '<sql>')` and runs through the normal pipeline.
+	weak_ptr<AttachedDatabase> bound_database;
+	bool is_bound = false;
+
 public:
+	//! Bind this client to a remote-style AttachedDatabase. Subsequent non-control SQL routes via
+	//! Catalog::ExecuteSQL. Use UnbindCatalog() to revert to LOCAL.
+	DUCKDB_API void BindToCatalog(const shared_ptr<AttachedDatabase> &target);
+	//! Clear any active CONNECT binding; subsequent SQL goes through the normal DuckDB pipeline.
+	DUCKDB_API void UnbindCatalog();
+	//! True if there is a live CONNECT binding. False if never bound or bound target was detached.
+	DUCKDB_API bool IsBoundToCatalog() const;
+	//! Resolve the currently-bound AttachedDatabase. Returns nullptr if unbound or if the target
+	//! has been detached. Caller should check before dispatching.
+	DUCKDB_API shared_ptr<AttachedDatabase> TryGetBoundCatalog() const;
+
 	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
 	}

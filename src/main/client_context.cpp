@@ -27,6 +27,9 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -216,6 +219,49 @@ ClientContext::~ClientContext() {
 
 unique_ptr<ClientContextLock> ClientContext::LockContext() {
 	return make_uniq<ClientContextLock>(context_lock);
+}
+
+void ClientContext::BindToCatalog(const shared_ptr<AttachedDatabase> &target) {
+	D_ASSERT(target);
+	bound_database = target;
+	is_bound = true;
+}
+
+void ClientContext::UnbindCatalog() {
+	bound_database.reset();
+	is_bound = false;
+}
+
+bool ClientContext::IsBoundToCatalog() const {
+	return is_bound && !bound_database.expired();
+}
+
+shared_ptr<AttachedDatabase> ClientContext::TryGetBoundCatalog() const {
+	if (!is_bound) {
+		return nullptr;
+	}
+	return bound_database.lock();
+}
+
+//! Rewrite a bound-mode SQL string as `SELECT * FROM <fn>(<catalog>, <sql>)` so the normal
+//! binder/planner/executor pipeline can take it from there — unlocking streaming, parallelism
+//! via BatchIndex, and embedding inside larger DuckDB plans.
+static unique_ptr<SQLStatement> BuildPassthroughSelect(const string &function_name, const string &catalog_name,
+                                                       const string &sql) {
+	vector<unique_ptr<ParsedExpression>> args;
+	args.push_back(make_uniq<ConstantExpression>(Value(catalog_name)));
+	args.push_back(make_uniq<ConstantExpression>(Value(sql)));
+
+	auto func_ref = make_uniq<TableFunctionRef>();
+	func_ref->function = make_uniq<FunctionExpression>(function_name, std::move(args));
+
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(func_ref);
+
+	auto select_stmt = make_uniq<SelectStatement>();
+	select_stmt->node = std::move(select_node);
+	return std::move(select_stmt);
 }
 
 void ClientContext::Destroy() {
@@ -942,6 +988,32 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatement(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
+	// Single chokepoint for the CONNECT binding: every execution path funnels through here.
+	// When bound, anything other than CONNECT/DISCONNECT itself gets rewritten in place to
+	// `SELECT * FROM <fn>('cat', '<sql>')` and then falls through to the normal pipeline.
+	// No recursion (so no re-entry flag needed): the rewritten statement flows through
+	// PendingStatementInternal which doesn't loop back to this chokepoint.
+	if (is_bound && statement) {
+		bool is_control = statement->type == StatementType::CONNECT_STATEMENT ||
+		                  statement->type == StatementType::DISCONNECT_STATEMENT;
+		if (!is_control) {
+			auto live = bound_database.lock();
+			if (!live) {
+				return ErrorResult<PendingQueryResult>(
+				    ErrorData(InvalidInputException("The bound database has been detached")), query);
+			}
+			auto fn = live->GetCatalog().GetConnectFunction();
+			if (!fn) {
+				return ErrorResult<PendingQueryResult>(
+				    ErrorData(InvalidInputException(
+				        "Catalog \"%s\" reports CONNECT support but does not implement GetConnectFunction()",
+				        live->GetName())),
+				    query);
+			}
+			statement = BuildPassthroughSelect(fn->name, live->GetName(), query);
+			// statement is now SELECT * FROM <fn>('cat', '<sql>'); fall through.
+		}
+	}
 	unique_ptr<PendingQueryResult> pending;
 	try {
 		BeginQueryInternal(lock, query);
