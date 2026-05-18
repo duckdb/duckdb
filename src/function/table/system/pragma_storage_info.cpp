@@ -11,6 +11,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/execution/partition_info.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
@@ -33,11 +34,15 @@ struct PragmaStorageFunctionData : public TableFunctionData {
 };
 
 struct PragmaStorageGlobalState : public GlobalTableFunctionState {
+	explicit PragmaStorageGlobalState(idx_t max_threads_p) : max_threads(max_threads_p) {
+	}
+
 	//! Protects access to the shared scan state in bind data while local threads pull row groups.
 	mutex lock;
+	idx_t max_threads;
 
 	idx_t MaxThreads() const override {
-		return MAX_THREADS;
+		return max_threads;
 	}
 };
 
@@ -111,7 +116,8 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 
 unique_ptr<GlobalTableFunctionState> PragmaStorageInfoInitGlobal(ClientContext &context,
                                                                  TableFunctionInitInput &input) {
-	return make_uniq<PragmaStorageGlobalState>();
+	auto max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	return make_uniq<PragmaStorageGlobalState>(max_threads);
 }
 
 unique_ptr<LocalTableFunctionState> PragmaStorageInfoInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
