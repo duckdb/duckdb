@@ -876,6 +876,16 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	SetBlockAllocSize(header.block_alloc_size);
 }
 
+void SingleFileBlockManager::RewriteMainHeader(QueryContext &context, StorageVersion version_number) {
+	MainHeader main_header = ConstructMainHeader(version_number);
+	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.GetDataMutable());
+	// now write the header to the file
+	ChecksumAndWrite(context, header_buffer, 0);
+	header_buffer.Clear();
+	// avoid having the Sync at the end write two blocks
+	handle->Sync();
+}
+
 void SingleFileBlockManager::LoadFreeList(QueryContext context) {
 	MetaBlockPointer free_pointer(free_list_id, 0);
 	if (!free_pointer.IsValid()) {
@@ -1397,13 +1407,14 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	header_buffer.Clear();
 	// if we are upgrading the database from version 64 -> version 65, we need to re-write the main header
 	if (options.version_number == StorageVersion::V0_10_2 && options.storage_version >= StorageVersion::V1_2_0) {
-		// rewrite the main header
-		options.version_number = StorageVersion::V1_2_0;
-		MainHeader main_header = ConstructMainHeader(options.version_number);
-		SerializeHeaderStructure<MainHeader>(main_header, header_buffer.GetDataMutable());
-		// now write the header to the file
-		ChecksumAndWrite(context, header_buffer, 0);
-		header_buffer.Clear();
+		RewriteMainHeader(context, StorageVersion::V1_2_0);
+	}
+
+	// if we are downgrading the database from v2.0.0 to an earlier version
+	// we also need to re-write the main header
+	if (options.version_number == MainHeader::DEPRECATED_VERSION_NUMBER &&
+	    options.storage_version < StorageVersion::V2_0_0) {
+		RewriteMainHeader(context, options.storage_version);
 	}
 
 	// set the header inside the buffer

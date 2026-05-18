@@ -27,3 +27,19 @@ SELECT tags FROM duckdb_databases() WHERE database_name LIKE 'empty%' ORDER BY d
 {storage_version=v1.0.0+}
 {storage_version=v1.2.0+}
 {storage_version=v1.3.0+}
+
+statement ok
+ATTACH 'my1.duckdb' as v1_0_0 (storage_version 'v1.0.0');
+
+statement ok
+ATTACH 'my2.duckdb' as v1_2_0 (storage_version 'v1.2.0');
+
+statement ok
+ATTACH 'my3.duckdb' as v2_0_0 (storage_version 'v2.0.0');
+
+query I
+SELECT tags.storage_version FROM duckdb_databases() WHERE database_name LIKE 'v%';
+----
+v2.0.0+
+v1.2.0+
+v1.0.0+
