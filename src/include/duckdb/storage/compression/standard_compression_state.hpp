@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/statistics/stats_writer.hpp"
 
 namespace duckdb {
 

@@ -43,6 +43,7 @@ public:
 		CreateEmptySegment();
 	}
 
+	StatsWriter<T> stats_writer;
 	idx_t vector_idx = 0;
 	idx_t nulls_idx = 0;
 	idx_t vectors_flushed = 0;
@@ -111,13 +112,13 @@ public:
 			CreateEmptySegment();
 		}
 		if (nulls_idx) {
-			current_segment->GetStatsMutable().SetHasNullFast();
+			stats_writer.SetHasNull();
 		}
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
-			current_segment->GetStatsMutable().SetHasNoNullFast();
+			stats_writer.SetHasValid();
 			for (idx_t i = 0; i < vector_idx; i++) {
 				T floating_point_value = Load<T>(const_data_ptr_cast(&input_vector[i]));
-				current_segment->GetStatsMutable().UpdateNumericStats<T>(floating_point_value);
+				stats_writer.UpdateMinMax(floating_point_value);
 			}
 		}
 		current_segment->count += vector_idx;
@@ -239,7 +240,7 @@ public:
 		// Store the Dictionary
 		memcpy((void *)dataptr, (void *)compression_data.left_parts_dict, actual_dictionary_size_bytes);
 
-		FlushCurrentSegment(total_segment_size);
+		FlushCurrentSegment(stats_writer, total_segment_size);
 		data_bytes_used = 0;
 		vectors_flushed = 0;
 	}

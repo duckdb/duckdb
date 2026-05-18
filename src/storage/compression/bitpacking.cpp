@@ -357,6 +357,7 @@ public:
 		state.mode = Settings::Get<ForceBitpackingModeSetting>(checkpoint_data.GetDatabase());
 	}
 
+	StatsWriter<T> stats_writer;
 	// Ptr to next free spot in segment;
 	data_ptr_t data_ptr;
 	// Ptr to next free spot for storing bitwidths and frame-of-references (growing downwards).
@@ -444,16 +445,14 @@ public:
 			state->current_segment->count += count;
 
 			if (WRITE_STATISTICS) {
+				auto &stats_writer = state->stats_writer;
 				if (state->state.has_valid) {
-					state->current_segment->GetStatsMutable().SetHasNoNullFast();
+					stats_writer.SetHasValid();
+					stats_writer.UpdateMinMax(state->state.minimum);
+					stats_writer.UpdateMinMax(state->state.maximum);
 				}
 				if (state->state.has_invalid) {
-					state->current_segment->GetStatsMutable().SetHasNullFast();
-				}
-
-				if (!state->state.all_invalid) {
-					state->current_segment->GetStatsMutable().template UpdateNumericStats<T>(state->state.maximum);
-					state->current_segment->GetStatsMutable().template UpdateNumericStats<T>(state->state.minimum);
+					stats_writer.SetHasNull();
 				}
 			}
 		}
@@ -510,7 +509,7 @@ public:
 
 		// Store the offset of the metadata of the first group (which is at the highest address).
 		Store<idx_t>(metadata_offset + metadata_size, base_ptr);
-		FlushCurrentSegment(total_segment_size);
+		FlushCurrentSegment(stats_writer, total_segment_size);
 	}
 
 	void Finalize() {
