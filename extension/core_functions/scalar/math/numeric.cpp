@@ -944,6 +944,9 @@ namespace {
 struct PowOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA base, TB exponent) {
+		if (base == 0.0 && exponent < 0.0) {
+			throw OutOfRangeException("zero raised to a negative power is undefined");
+		}
 		return std::pow(base, exponent);
 	}
 };

@@ -33,3 +33,12 @@ select power(b, a) from powerme
 ----
 10.045109
 
+statement error
+SELECT power(0.0::float8, -2.0::float8);
+----
+zero raised to a negative power is undefined
+
+statement error
+SELECT 0.0::float8 ^ -1.0::float8;
+----
+zero raised to a negative power is undefined
