@@ -5236,6 +5236,7 @@ const StringUtil::EnumStringLiteral *GetStorageVersionValues() {
 		{ static_cast<uint32_t>(StorageVersion::V1_5_2), "V1_5_2" },
 		{ static_cast<uint32_t>(StorageVersion::V2_0_0), "V2_0_0" },
 		{ static_cast<uint32_t>(StorageVersion::LATEST), "LATEST" },
+		{ static_cast<uint32_t>(StorageVersion::DEPRECATED), "DEPRECATED" },
 		{ static_cast<uint32_t>(StorageVersion::INVALID), "INVALID" }
 	};
 	return values;
@@ -5243,12 +5244,12 @@ const StringUtil::EnumStringLiteral *GetStorageVersionValues() {
 
 template<>
 const char* EnumUtil::ToChars<StorageVersion>(StorageVersion value) {
-	return StringUtil::EnumToString(GetStorageVersionValues(), 65, "StorageVersion", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetStorageVersionValues(), 66, "StorageVersion", static_cast<uint32_t>(value));
 }
 
 template<>
 StorageVersion EnumUtil::FromString<StorageVersion>(const char *value) {
-	return static_cast<StorageVersion>(StringUtil::StringToEnum(GetStorageVersionValues(), 65, "StorageVersion", value));
+	return static_cast<StorageVersion>(StringUtil::StringToEnum(GetStorageVersionValues(), 66, "StorageVersion", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStrTimeSpecifierValues() {
