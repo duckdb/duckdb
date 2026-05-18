@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/statistics/stats_writer.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
@@ -55,12 +56,14 @@ public:
 		auto compressed_segment = state.CreateNewSegment();
 		compressed_segment->count = state.count;
 
+		StatsWriter<void> stats_writer;
 		if (state.non_nulls != state.count) {
-			compressed_segment->GetStatsMutable().SetHasNullFast();
+			stats_writer.SetHasNull();
 		}
 		if (state.non_nulls != 0) {
-			compressed_segment->GetStatsMutable().SetHasNoNullFast();
+			stats_writer.SetHasValid();
 		}
+		stats_writer.Merge(compressed_segment->GetStatsMutable());
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 		auto handle = buffer_manager.Pin(compressed_segment->block);
