@@ -255,6 +255,12 @@ public:
 
 	shared_ptr<DataTableInfo> &GetDataTableInfo();
 
+	//! Direct access to the row group collection. Intended for extensions that need to walk storage internals;
+	//! prefer the higher-level DataTable API for normal use.
+	const shared_ptr<RowGroupCollection> &GetRowGroupCollection() const {
+		return row_groups;
+	}
+
 	void BindIndexes(ClientContext &context);
 	bool HasIndexes() const;
 	bool HasUniqueIndexes() const;
