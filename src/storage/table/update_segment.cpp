@@ -1309,6 +1309,39 @@ void UpdateSegment::InitializeUpdateInfo(idx_t vector_idx) {
 	}
 }
 
+void UpdateSegment::ReallocateRootInfoIfNeeded(UpdateInfo &current_info, idx_t update_count, idx_t vector_index) {
+	idx_t required_capacity = MinValue<idx_t>(idx_t(current_info.N) + update_count, STANDARD_VECTOR_SIZE);
+	if (required_capacity <= idx_t(current_info.max)) {
+		return;
+	}
+	idx_t new_capacity = UpdateInfo::GetCompactCapacity(required_capacity);
+	idx_t new_alloc_size = UpdateInfo::GetAllocSize(type_size, new_capacity);
+	auto new_handle = root->allocator.Allocate(new_alloc_size);
+	auto &new_info = UpdateInfo::Get(new_handle);
+
+	new_info.segment = current_info.segment;
+	new_info.table = current_info.table;
+	new_info.column_index = current_info.column_index;
+	new_info.row_group_start = current_info.row_group_start;
+	new_info.version_number.store(current_info.version_number.load());
+	new_info.vector_index = current_info.vector_index;
+	new_info.N = current_info.N;
+	new_info.max = UnsafeNumericCast<sel_t>(new_capacity);
+	new_info.prev = current_info.prev;
+	new_info.next = current_info.next;
+
+	memcpy(new_info.GetTuples(), current_info.GetTuples(), sizeof(sel_t) * current_info.N);
+	memcpy(new_info.GetValues(), current_info.GetValues(), type_size * current_info.N);
+
+	if (new_info.next.IsSet()) {
+		auto next_pin = new_info.next.Pin();
+		auto &next_info = UpdateInfo::Get(next_pin);
+		next_info.prev = new_handle.GetBufferPointer();
+	}
+
+	root->info[vector_index] = new_handle.GetBufferPointer();
+}
+
 void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                            Vector &update_p, row_t *ids, idx_t count, Vector &base_data, idx_t row_group_start) {
 	// obtain an exclusive lock
@@ -1372,53 +1405,15 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		// this transaction in the version chain
 		auto root_pointer = root->info[vector_index];
 		auto root_pin = root_pointer.Pin();
-		auto *base_info_ptr = &UpdateInfo::Get(root_pin);
 
 		UndoBufferReference node_ref;
-		CheckForConflicts(base_info_ptr->next, transaction, ids, sel, count, UnsafeNumericCast<row_t>(vector_offset),
-		                  node_ref);
+		CheckForConflicts(UpdateInfo::Get(root_pin).next, transaction, ids, sel, count,
+		                  UnsafeNumericCast<row_t>(vector_offset), node_ref);
 
-		// Check if the root UpdateInfo has enough capacity for the merge result
-		// The merge can produce at most base_info.N + count entries (capped at STANDARD_VECTOR_SIZE)
-		idx_t max_result = MinValue<idx_t>(idx_t(base_info_ptr->N) + count, STANDARD_VECTOR_SIZE);
-		UndoBufferReference new_root_pin;
-		if (max_result > idx_t(base_info_ptr->max)) {
-			// Need to re-allocate the root UpdateInfo with larger capacity
-			idx_t new_capacity = UpdateInfo::GetCompactCapacity(max_result);
-			idx_t new_alloc_size = UpdateInfo::GetAllocSize(type_size, new_capacity);
-			auto new_handle = root->allocator.Allocate(new_alloc_size);
-			auto &new_info = UpdateInfo::Get(new_handle);
-
-			// Copy the header and existing data from old to new
-			new_info.segment = base_info_ptr->segment;
-			new_info.table = base_info_ptr->table;
-			new_info.column_index = base_info_ptr->column_index;
-			new_info.row_group_start = base_info_ptr->row_group_start;
-			new_info.version_number.store(base_info_ptr->version_number.load());
-			new_info.vector_index = base_info_ptr->vector_index;
-			new_info.N = base_info_ptr->N;
-			new_info.max = UnsafeNumericCast<sel_t>(new_capacity);
-			new_info.prev = base_info_ptr->prev;
-			new_info.next = base_info_ptr->next;
-
-			// Copy tuple ids and data
-			memcpy(new_info.GetTuples(), base_info_ptr->GetTuples(), sizeof(sel_t) * base_info_ptr->N);
-			memcpy(new_info.GetValues(), base_info_ptr->GetValues(), type_size * base_info_ptr->N);
-
-			// Update the next node's prev pointer to point to the new allocation
-			if (new_info.next.IsSet()) {
-				auto next_pin = new_info.next.Pin();
-				auto &next_info = UpdateInfo::Get(next_pin);
-				next_info.prev = new_handle.GetBufferPointer();
-			}
-
-			// Update root pointer
-			root->info[vector_index] = new_handle.GetBufferPointer();
-			root_pointer = root->info[vector_index];
-			new_root_pin = std::move(new_handle);
-			base_info_ptr = &UpdateInfo::Get(new_root_pin);
-		}
-		auto &base_info = *base_info_ptr;
+		ReallocateRootInfoIfNeeded(UpdateInfo::Get(root_pin), count, vector_index);
+		root_pointer = root->info[vector_index];
+		root_pin = root_pointer.Pin();
+		auto &base_info = UpdateInfo::Get(root_pin);
 
 		// there are no conflicts - continue with the update
 		unsafe_unique_array<char> update_info_data;
