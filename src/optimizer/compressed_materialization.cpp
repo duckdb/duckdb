@@ -269,7 +269,9 @@ unique_ptr<BaseStatistics> CMHelper::CreateIntegralCastStats(const LogicalType &
 		Value cast_max;
 		const auto min_success = NumericStats::Min(stats).DefaultTryCastAs(target_type, cast_min, nullptr, true);
 		const auto max_success = NumericStats::Max(stats).DefaultTryCastAs(target_type, cast_max, nullptr, true);
-		D_ASSERT(min_success && max_success);
+		if (!min_success || !max_success) {
+			throw InternalException("Casting failure in CMHelper::CreateIntegralCastStats");
+		}
 		NumericStats::SetMin(compress_stats, cast_min);
 		NumericStats::SetMax(compress_stats, cast_max);
 	}
@@ -700,11 +702,11 @@ unique_ptr<Expression> CompressedMaterialization::GetDecompressExpression(unique
 	const auto &type = result_type;
 	if (TypeIsIntegral(type.InternalType())) {
 		return GetIntegralDecompress(std::move(input), result_type, stats);
-	} else if (type.id() == LogicalTypeId::VARCHAR) {
-		return GetStringDecompress(std::move(input), result_type, stats);
-	} else {
-		throw InternalException("Type other than integral/string marked for decompression!");
 	}
+	if (type.id() == LogicalTypeId::VARCHAR) {
+		return GetStringDecompress(std::move(input), result_type, stats);
+	}
+	throw InternalException("Type other than integral/string marked for decompression!");
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetIntegralDecompress(unique_ptr<Expression> input,
