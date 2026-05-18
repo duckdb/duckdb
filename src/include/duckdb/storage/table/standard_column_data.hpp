@@ -21,7 +21,6 @@ public:
 
 public:
 	void SetDataType(ColumnDataType data_type) override;
-	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 
 	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) override;
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
@@ -73,6 +72,7 @@ public:
 	void SetValidityData(shared_ptr<ValidityColumnData> validity);
 
 protected:
+	ZonemapCheckStats GetSegmentStatsForZonemap(ColumnScanState &state, TableFilter &filter) override;
 	//! The validity column data
 	shared_ptr<ValidityColumnData> validity;
 };

@@ -32,7 +32,7 @@
 
 namespace duckdb {
 
-static bool IsDirectNullCheckFilter(const TableFilter &filter) {
+bool ColumnData::IsDirectNullCheckFilter(const TableFilter &filter) {
 	auto &expr = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::IsDirectNullCheckFilter").expr;
 	if (expr->GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
 		return false;
@@ -44,6 +44,14 @@ static bool IsDirectNullCheckFilter(const TableFilter &filter) {
 		return false;
 	}
 	return op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
+}
+
+ColumnData::ZonemapCheckStats ColumnData::GetSegmentStatsForZonemap(ColumnScanState &state, TableFilter &filter) {
+	auto &segment_stats =
+	    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
+	        ? state.child_states[0].current->GetNode().GetStatsMutable()
+	        : state.current->GetNode().GetStatsMutable();
+	return ZonemapCheckStats(segment_stats);
 }
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
@@ -434,11 +442,8 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
-		auto &segment_stats =
-		    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
-		        ? state.child_states[0].current->GetNode().GetStats()
-		        : state.current->GetNode().GetStats();
-		prune_result = expr_filter.CheckStatistics(segment_stats);
+		auto segment_stats = GetSegmentStatsForZonemap(state, filter);
+		prune_result = expr_filter.CheckStatistics(segment_stats.stats);
 		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}

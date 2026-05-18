@@ -216,6 +216,20 @@ public:
 	const BaseStatistics &GetStatisticsRef() const;
 
 protected:
+	struct ZonemapCheckStats {
+		explicit ZonemapCheckStats(BaseStatistics &stats_p) : stats(stats_p) {
+		}
+		explicit ZonemapCheckStats(unique_ptr<BaseStatistics> owned_stats_p)
+		    : owned_stats(std::move(owned_stats_p)), stats(*owned_stats) {
+		}
+
+		unique_ptr<BaseStatistics> owned_stats;
+		reference<BaseStatistics> stats;
+	};
+
+	static bool IsDirectNullCheckFilter(const TableFilter &filter);
+	virtual ZonemapCheckStats GetSegmentStatsForZonemap(ColumnScanState &state, TableFilter &filter);
+
 	//! Append a transient segment
 	void AppendTransientSegment(SegmentLock &l, idx_t start_row, optional_ptr<ColumnSegment> prev_segment);
 	void AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment);
