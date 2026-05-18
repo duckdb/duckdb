@@ -15,15 +15,14 @@ namespace duckdb {
 // Analyze
 //===--------------------------------------------------------------------===//
 struct FixedSizeAnalyzeState : public AnalyzeState {
-	explicit FixedSizeAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), count(0) {
+	explicit FixedSizeAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager), count(0) {
 	}
 
 	idx_t count;
 };
 
 unique_ptr<AnalyzeState> FixedSizeInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<FixedSizeAnalyzeState>(info);
+	return make_uniq<FixedSizeAnalyzeState>(col_data.GetBlockManager());
 }
 
 bool FixedSizeAnalyze(AnalyzeState &state_p, const Vector &input) {
@@ -43,7 +42,7 @@ idx_t FixedSizeFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 struct UncompressedCompressState : public CompressionState {
 public:
-	UncompressedCompressState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info);
+	explicit UncompressedCompressState(ColumnDataCheckpointData &checkpoint_data);
 
 public:
 	virtual void CreateEmptySegment();
@@ -52,25 +51,19 @@ public:
 	idx_t FinalizeAppend();
 
 public:
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	ColumnAppendState append_state;
 };
 
-UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointData &checkpoint_data,
-                                                     const CompressionInfo &info)
-    : CompressionState(info), checkpoint_data(checkpoint_data),
-      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED)) {
+UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointData &checkpoint_data)
+    : CompressionState(checkpoint_data, CompressionType::COMPRESSION_UNCOMPRESSED) {
 	UncompressedCompressState::CreateEmptySegment();
 }
 
 void UncompressedCompressState::CreateEmptySegment() {
-	auto &db = checkpoint_data.GetDatabase();
 	auto &type = checkpoint_data.GetType();
 
-	auto compressed_segment =
-	    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
+	auto compressed_segment = CreateNewSegment();
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		auto &storage_manager = checkpoint_data.GetStorageManager();
@@ -112,7 +105,7 @@ idx_t UncompressedCompressState::FinalizeAppend() {
 
 unique_ptr<CompressionState> UncompressedFunctions::InitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                                     unique_ptr<AnalyzeState> state) {
-	return make_uniq<UncompressedCompressState>(checkpoint_data, state->info);
+	return make_uniq<UncompressedCompressState>(checkpoint_data);
 }
 
 void UncompressedFunctions::Compress(CompressionState &state_p, const Vector &data) {

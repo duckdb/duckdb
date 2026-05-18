@@ -10,7 +10,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/blob.hpp"
-#include "duckdb/storage/statistics/string_stats_writer.hpp"
+#include "duckdb/storage/statistics/stats_writer.hpp"
 
 namespace duckdb {
 
@@ -512,7 +512,7 @@ void StringStats::FromConstant(BaseStatistics &stats, string_t value) {
 	static constexpr const idx_t CONSTANT_STATS_BOUND = 100000;
 
 	// use the string stats writer for setting stats
-	StringStatsWriter writer(stats.GetType());
+	StatsWriter<string_t> writer(stats.GetType());
 	writer.Update(value);
 	writer.Merge(stats);
 
@@ -677,8 +677,8 @@ string_t ReadWriterStats(const data_t data[], idx_t size, StringStatsType &type)
 	return string_t(const_char_ptr_cast(data), StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
 }
 
-void StringStats::Merge(BaseStatistics &stats, const StringStatsWriter &stats_writer) {
-	if (!stats_writer.HasStats()) {
+void StringStats::Merge(BaseStatistics &stats, const StatsWriter<string_t> &stats_writer) {
+	if (!stats_writer.AnyValid()) {
 		return;
 	}
 	// construct string stats data from the writer

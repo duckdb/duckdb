@@ -74,12 +74,12 @@ class ScalarFunctionCatalogEntry;
 struct StatementProperties;
 
 struct FunctionStatisticsPruneInput {
-	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, BaseStatistics &stats_p)
+	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, const BaseStatistics &stats_p)
 	    : bind_data(bind_data_p), stats(stats_p) {
 	}
 
 	optional_ptr<FunctionData> bind_data;
-	BaseStatistics &stats;
+	const BaseStatistics &stats;
 };
 
 struct FunctionStatisticsInput {

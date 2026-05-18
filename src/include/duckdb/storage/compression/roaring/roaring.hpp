@@ -13,6 +13,7 @@
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
@@ -206,7 +207,7 @@ struct BitmaskTableEntry {
 //===--------------------------------------------------------------------===//
 struct RoaringAnalyzeState : public AnalyzeState {
 public:
-	explicit RoaringAnalyzeState(const CompressionInfo &info);
+	explicit RoaringAnalyzeState(BlockManager &block_manager);
 
 public:
 	// RoaringStateAppender interface:
@@ -327,7 +328,7 @@ public:
 	append_func_t append_function;
 };
 
-struct RoaringCompressState : public CompressionState {
+struct RoaringCompressState : public StandardCompressionState {
 public:
 	explicit RoaringCompressState(ColumnDataCheckpointData &checkpoint_data, unique_ptr<AnalyzeState> analyze_state_p);
 
@@ -366,17 +367,16 @@ public:
 	ContainerMetadataCollection metadata_collection;
 	vector<ContainerMetadata> &container_metadata;
 
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
-	unique_ptr<ColumnSegment> current_segment;
-	BufferHandle handle;
-
 	// Ptr to next free spot in segment;
 	data_ptr_t data_ptr;
 	// Ptr to next free spot for storing
 	data_ptr_t metadata_ptr;
 	//! The amount of values already compressed
 	idx_t total_count = 0;
+	//! Stats writer that only tracks NULL/NOT NULL
+	StatsWriter<void> stats_writer;
+	//! Stats writer (only used for boolean)
+	StatsWriter<bool> bool_stats_writer;
 };
 
 template <>
@@ -634,20 +634,20 @@ public:
 
 template <bool UPDATE_STATS, bool ALL_VALID>
 static void BitPackBooleans(data_ptr_t dst, const bool *src, const idx_t count,
-                            const ValidityMask *validity_mask = nullptr, BaseStatistics *statistics = nullptr) {
+                            const ValidityMask *validity_mask = nullptr, StatsWriter<bool> *statistics = nullptr) {
 	uint8_t byte = 0;
 	int bit_pos = 0;
 	uint8_t src_bit = false;
 
 	if (ALL_VALID) {
 		if (UPDATE_STATS) {
-			statistics->SetHasNoNullFast();
+			statistics->SetHasValid();
 		}
 		for (idx_t i = 0; i < count; i++) {
 			src_bit = src[i];
 
 			if (UPDATE_STATS) {
-				statistics->UpdateNumericStats<bool>(src_bit);
+				statistics->Update(src_bit);
 			}
 			byte |= src_bit << bit_pos;
 			bit_pos++;
@@ -673,10 +673,10 @@ static void BitPackBooleans(data_ptr_t dst, const bool *src, const idx_t count,
 
 			if (UPDATE_STATS) {
 				if (valid) {
-					statistics->UpdateNumericStats<bool>(src_bit);
-					statistics->SetHasNoNullFast();
+					statistics->Update(src_bit);
+					statistics->SetHasValid();
 				} else {
-					statistics->SetHasNullFast();
+					statistics->SetHasNull();
 				}
 			}
 

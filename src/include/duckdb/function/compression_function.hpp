@@ -63,7 +63,8 @@ private:
 };
 
 struct AnalyzeState {
-	explicit AnalyzeState(const CompressionInfo &info) : info(info) {};
+	explicit AnalyzeState(BlockManager &block_manager_p) : block_manager(block_manager_p), info(block_manager) {
+	}
 	virtual ~AnalyzeState() {
 	}
 
@@ -78,11 +79,12 @@ struct AnalyzeState {
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
+	BlockManager &block_manager;
 	CompressionInfo info;
 };
 
 struct CompressionState {
-	explicit CompressionState(const CompressionInfo &info) : info(info) {};
+	explicit CompressionState(ColumnDataCheckpointData &checkpoint_data, CompressionType compression_type);
 	virtual ~CompressionState() {
 	}
 
@@ -96,7 +98,14 @@ struct CompressionState {
 		DynamicCastCheck<TARGET>(this);
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+	const LogicalType &GetType();
 
+	unique_ptr<ColumnSegment> CreateNewSegment();
+
+public:
+	ColumnDataCheckpointData &checkpoint_data;
+	const CompressionFunction &function;
+	BlockManager &block_manager;
 	CompressionInfo info;
 };
 

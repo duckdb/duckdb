@@ -199,7 +199,7 @@ public:
 	void SetValue(Value val);
 	void Reset();
 	static bool CompareValue(ExpressionType comparison_type, const Value &constant, const Value &value);
-	static FilterPropagateResult CheckStatistics(BaseStatistics &stats, ExpressionType comparison_type,
+	static FilterPropagateResult CheckStatistics(const BaseStatistics &stats, ExpressionType comparison_type,
 	                                             const Value &constant);
 };
 
