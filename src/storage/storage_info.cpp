@@ -179,7 +179,7 @@ string GetStorageVersionName(const StorageVersion storage_version, const bool ad
 
 idx_t GetSerializationVersionDeprecated(const char *version_string) {
 	for (idx_t i = 0; serialization_version_info[i].version_name; i++) {
-		if (strcmp(serialization_version_info[i].version_name, version_string)) {
+		if (!strcmp(serialization_version_info[i].version_name, version_string)) {
 			return SerializationVersionInfo::GetSerializationVersionValue(
 			    serialization_version_info[i].storage_version);
 		}
