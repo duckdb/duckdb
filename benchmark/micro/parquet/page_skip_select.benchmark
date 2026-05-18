@@ -1,0 +1,18 @@
+# name: benchmark/micro/parquet/page_skip_select.benchmark
+# description: Cross-column page skip in Select path: skip col_b pages with no selected rows
+# group: [parquet]
+
+name Cross-Column Page Skip Select
+group micro
+subgroup parquet
+
+require parquet
+
+load
+CREATE VIEW page_skip_select AS SELECT * FROM 'data/parquet-testing/page_skip_select.parquet';
+
+run
+SELECT COUNT(*), SUM(LENGTH(col_b)) FROM page_skip_select WHERE col_a = 1
+
+result II
+24	4320
