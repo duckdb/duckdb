@@ -133,7 +133,8 @@ struct StringStats {
 	DUCKDB_API static void Merge(BaseStatistics &stats, const StatsWriter<string_t> &other);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const StringStatsData &other_data,
 	                             StatsMergeType merge_type = StatsMergeType::MERGE_STATS);
-	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
+	DUCKDB_API static void Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel,
+	                              idx_t count);
 	DUCKDB_API static void Copy(BaseStatistics &stats, const BaseStatistics &other);
 
 private:

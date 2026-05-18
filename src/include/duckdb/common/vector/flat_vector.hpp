@@ -182,6 +182,7 @@ struct FlatVector {
 
 	template <class T>
 	static VectorWriter<T> Writer(Vector &vector, idx_t count, idx_t offset) {
+		SetSize(vector, offset + count);
 		return VectorWriter<T>(vector, count, offset);
 	}
 	template <class T>

@@ -34,8 +34,8 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 
 	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 
-	CreateSortKeyHelpers::CreateSortKey(l_child, l_size, order_modifiers, l_sortkey_vec);
-	CreateSortKeyHelpers::CreateSortKey(r_child, r_size, order_modifiers, r_sortkey_vec);
+	CreateSortKeyHelpers::CreateSortKey(l_child, order_modifiers, l_sortkey_vec);
+	CreateSortKeyHelpers::CreateSortKey(r_child, order_modifiers, r_sortkey_vec);
 
 	const auto l_sortkey_ptr = l_sortkey_vec.Values<string_t>();
 	const auto r_sortkey_ptr = r_sortkey_vec.Values<string_t>();

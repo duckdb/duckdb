@@ -494,7 +494,7 @@ DataChunk &StringValueResult::ToChunk() {
 		throw InternalException("CSVScanner: ToChunk() function. Has a negative number of rows, this indicates an "
 		                        "issue with the error handler.");
 	}
-	parse_chunk.SetCardinality(static_cast<idx_t>(number_of_rows));
+	parse_chunk.SetChildCardinality(static_cast<idx_t>(number_of_rows));
 	return parse_chunk;
 }
 

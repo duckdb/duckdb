@@ -184,7 +184,7 @@ private:
 enum EnumDictType : uint8_t { INVALID = 0, VECTOR_DICT = 1 };
 
 struct EnumTypeInfo : public ExtraTypeInfo {
-	explicit EnumTypeInfo(Vector &values_insert_order_p, idx_t dict_size_p);
+	explicit EnumTypeInfo(const Vector &values_insert_order_p, idx_t dict_size_p);
 	EnumTypeInfo(const EnumTypeInfo &) = delete;
 	EnumTypeInfo &operator=(const EnumTypeInfo &) = delete;
 
@@ -194,7 +194,7 @@ public:
 	const idx_t &GetDictSize() const;
 	static PhysicalType DictType(idx_t size);
 
-	static LogicalType CreateType(Vector &ordered_data, idx_t size);
+	static LogicalType CreateType(const Vector &ordered_data, idx_t size);
 
 	void Serialize(Serializer &serializer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);

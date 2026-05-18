@@ -7,11 +7,11 @@
 namespace duckdb {
 
 static void RepeatFunction(DataChunk &args, ExpressionState &, Vector &result) {
-	auto &str_vector = args.data[0];
-	auto &cnt_vector = args.data[1];
+	const auto &str_vector = args.data[0];
+	const auto &cnt_vector = args.data[1];
 
 	BinaryExecutor::Execute<string_t, int64_t, string_t>(
-	    str_vector, cnt_vector, result, args.size(), [&](string_t str, int64_t cnt) {
+	    str_vector, cnt_vector, result, [&](string_t str, int64_t cnt) {
 		    auto input_str = str.GetData();
 		    auto size_str = str.GetSize();
 		    idx_t copy_count = cnt <= 0 || size_str == 0 ? 0 : UnsafeNumericCast<idx_t>(cnt);

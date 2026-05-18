@@ -184,8 +184,9 @@ void VariantNormalizer::VisitDefault(VariantLogicalType type_id, const_data_ptr_
 	throw InternalException("VariantLogicalType(%s) not handled", EnumUtil::ToString(type_id));
 }
 
-void VariantNormalizer::Normalize(Vector &variant_vec, Vector &result, idx_t count) {
+void VariantNormalizer::Normalize(const Vector &variant_vec, Vector &result) {
 	D_ASSERT(variant_vec.GetType() == LogicalType::VARIANT());
+	const idx_t count = variant_vec.size();
 
 	//! Set up the access helper for the source VARIANT
 	RecursiveUnifiedVectorFormat source_format;
@@ -193,9 +194,9 @@ void VariantNormalizer::Normalize(Vector &variant_vec, Vector &result, idx_t cou
 	UnifiedVariantVectorData variant(source_format);
 
 	//! Take the original sizes of the lists, the result will be similar size, never bigger
-	auto original_keys_size = ListVector::GetTotalEntryCount(VariantVector::GetKeys(variant_vec), count);
-	auto original_children_size = ListVector::GetTotalEntryCount(VariantVector::GetChildren(variant_vec), count);
-	auto original_values_size = ListVector::GetTotalEntryCount(VariantVector::GetValues(variant_vec), count);
+	auto original_keys_size = ListVector::GetTotalEntryCount(VariantVector::GetKeys(variant_vec));
+	auto original_children_size = ListVector::GetTotalEntryCount(VariantVector::GetChildren(variant_vec));
+	auto original_values_size = ListVector::GetTotalEntryCount(VariantVector::GetValues(variant_vec));
 
 	auto &keys = VariantVector::GetKeys(result);
 	auto &children = VariantVector::GetChildren(result);
@@ -254,11 +255,9 @@ void VariantNormalizer::Normalize(Vector &variant_vec, Vector &result, idx_t cou
 }
 
 static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto count = input.size();
-
 	D_ASSERT(input.ColumnCount() == 1);
-	auto &variant_vec = input.data[0];
-	VariantNormalizer::Normalize(variant_vec, result, count);
+	const auto &variant_vec = input.data[0];
+	VariantNormalizer::Normalize(variant_vec, result);
 }
 
 ScalarFunction VariantNormalizeFun::GetFunction() {
