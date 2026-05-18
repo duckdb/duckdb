@@ -10,6 +10,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/execution/partition_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
@@ -34,12 +35,18 @@ struct PragmaStorageFunctionData : public TableFunctionData {
 struct PragmaStorageGlobalState : public GlobalTableFunctionState {
 	//! Protects access to the shared scan state in bind data while local threads pull row groups.
 	mutex lock;
+
+	idx_t MaxThreads() const override {
+		return MAX_THREADS;
+	}
 };
 
 struct PragmaStorageLocalState : public LocalTableFunctionState {
 	//! Buffered column segment info for the row group this thread is currently emitting.
 	vector<ColumnSegmentInfo> buffer;
 	idx_t buffer_offset = 0;
+	//! Index of the row group currently being emitted; used as the batch index for partitioning.
+	idx_t batch_index = 0;
 };
 
 static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, TableFunctionBindInput &input,
@@ -163,6 +170,8 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 			if (lstate.buffer.empty()) {
 				continue;
 			}
+			// every entry in buffer comes from the same row group; use its index as the batch index
+			lstate.batch_index = lstate.buffer.front().row_group_index;
 		}
 
 		auto &entry = lstate.buffer[lstate.buffer_offset++];
@@ -199,9 +208,16 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 	output.SetCardinality(count);
 }
 
+static OperatorPartitionData PragmaStorageInfoGetPartitionData(ClientContext &context,
+                                                                TableFunctionGetPartitionInput &input) {
+	auto &lstate = input.local_state->Cast<PragmaStorageLocalState>();
+	return OperatorPartitionData(lstate.batch_index);
+}
+
 void PragmaStorageInfo::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction storage_info("pragma_storage_info", {LogicalType::VARCHAR}, PragmaStorageInfoFunction,
 	                            PragmaStorageInfoBind, PragmaStorageInfoInitGlobal, PragmaStorageInfoInitLocal);
+	storage_info.get_partition_data = PragmaStorageInfoGetPartitionData;
 	set.AddFunction(std::move(storage_info));
 }
 
