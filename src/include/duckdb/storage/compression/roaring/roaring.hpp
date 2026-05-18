@@ -373,6 +373,8 @@ public:
 	data_ptr_t metadata_ptr;
 	//! The amount of values already compressed
 	idx_t total_count = 0;
+	//! Stats writer that only tracks NULL/NOT NULL
+	StatsWriter<void> stats_writer;
 };
 
 template <>

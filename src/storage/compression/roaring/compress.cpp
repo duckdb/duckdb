@@ -332,7 +332,7 @@ void RoaringCompressState::FlushSegment() {
 
 	Store<idx_t>(metadata_start, handle.GetDataMutable());
 	auto total_segment_size = sizeof(idx_t) + data_size + metadata_size;
-	FlushCurrentSegment(total_segment_size);
+	FlushCurrentSegment(stats_writer, total_segment_size);
 }
 
 void RoaringCompressState::Finalize() {
@@ -405,10 +405,10 @@ void RoaringCompressState::FlushContainer() {
 	bool has_nulls = container_state.null_count != 0;
 	bool has_non_nulls = container_state.null_count != container_state.appended_count;
 	if (has_nulls || container_state.uncompressed) {
-		current_segment->GetStatsMutable().SetHasNullFast();
+		stats_writer.SetHasNull();
 	}
 	if (has_non_nulls || container_state.uncompressed) {
-		current_segment->GetStatsMutable().SetHasNoNullFast();
+		stats_writer.SetHasValid();
 	}
 	current_segment->count += container_state.appended_count;
 	container_state.Reset();

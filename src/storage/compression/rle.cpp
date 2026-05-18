@@ -169,10 +169,9 @@ struct RLECompressState : public StandardCompressionState {
 		// update meta data
 		if (WRITE_STATISTICS) {
 			if (!is_null) {
-				current_segment->GetStatsMutable().SetHasNoNullFast();
-				current_segment->GetStatsMutable().UpdateNumericStats<T>(value);
+				stats_writer.Update(value);
 			} else {
-				current_segment->GetStatsMutable().SetHasNullFast();
+				stats_writer.SetHasNull();
 			}
 		}
 		current_segment->count += count;
@@ -201,7 +200,7 @@ struct RLECompressState : public StandardCompressionState {
 		// store the final RLE offset within the segment
 		Store<uint64_t>(aligned_rle_offset, data_ptr);
 
-		FlushCurrentSegment(total_segment_size);
+		FlushCurrentSegment(stats_writer, total_segment_size);
 	}
 
 	void Finalize() {
@@ -212,6 +211,7 @@ struct RLECompressState : public StandardCompressionState {
 	}
 
 	RLEState<T> state;
+	StatsWriter<T> stats_writer;
 	idx_t entry_count = 0;
 	idx_t max_rle_count;
 };

@@ -59,6 +59,7 @@ struct StatsWriter : public BaseStatsWriter {
 	}
 
 	inline void Clear() {
+		ClearBase();
 		min = NumericLimits<T>::Maximum();
 		max = NumericLimits<T>::Minimum();
 	}
@@ -84,6 +85,22 @@ struct StatsWriter : public BaseStatsWriter {
 private:
 	T min;
 	T max;
+};
+
+
+template <>
+struct StatsWriter<void> : public BaseStatsWriter {
+	explicit StatsWriter() {
+		Clear();
+	}
+
+	inline void Clear() {
+		ClearBase();
+	}
+
+	void Merge(BaseStatistics &target) const {
+		MergeBase(target);
+	}
 };
 
 template <>
