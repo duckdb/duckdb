@@ -415,6 +415,11 @@ void ColumnData::FinalizeAppend(optional_ptr<BaseStatistics> table_stats, Column
 	FinalizeAppend(finalize_state, state);
 }
 
+void ColumnData::FinalizeAppendLocked(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	lock_guard<mutex> l(stats_lock);
+	FinalizeAppend(finalize_state, state);
+}
+
 FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
 	if (state.segment_checked) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;

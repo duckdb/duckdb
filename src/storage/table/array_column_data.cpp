@@ -209,10 +209,10 @@ void ArrayColumnData::Append(ColumnAppendState &state, const Vector &vector, idx
 }
 
 void ArrayColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
-	validity->FinalizeAppend(finalize_state, state.child_appends[0]);
+	validity->FinalizeAppendLocked(finalize_state, state.child_appends[0]);
 
 	ColumnDataFinalizeAppendState child_finalize_state(finalize_state, LogicalTypeId::ARRAY);
-	child_column->FinalizeAppend(child_finalize_state, state.child_appends[1]);
+	child_column->FinalizeAppendLocked(child_finalize_state, state.child_appends[1]);
 }
 
 void ArrayColumnData::RevertAppend(row_t new_count) {

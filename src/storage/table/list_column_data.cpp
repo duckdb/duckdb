@@ -245,10 +245,10 @@ void ListColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_
 
 void ListColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
 	ColumnData::FinalizeAppend(finalize_state, state);
-	validity->FinalizeAppend(finalize_state, state.child_appends[0]);
+	validity->FinalizeAppendLocked(finalize_state, state.child_appends[0]);
 
 	ColumnDataFinalizeAppendState child_finalize_state(finalize_state, LogicalTypeId::LIST);
-	child_column->FinalizeAppend(child_finalize_state, state.child_appends[1]);
+	child_column->FinalizeAppendLocked(child_finalize_state, state.child_appends[1]);
 }
 
 void ListColumnData::RevertAppend(row_t new_count) {

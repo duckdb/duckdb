@@ -160,6 +160,8 @@ public:
 	//! Finalize appending
 	virtual void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state);
 	void FinalizeAppend(optional_ptr<BaseStatistics> table_stats, ColumnAppendState &state);
+	//! Finalize appending while holding stats_lock (for use by child column calls)
+	void FinalizeAppendLocked(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state);
 	//! Revert a set of appends to the ColumnData
 	virtual void RevertAppend(row_t new_count);
 
