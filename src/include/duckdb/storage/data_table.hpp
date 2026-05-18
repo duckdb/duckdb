@@ -246,6 +246,7 @@ public:
 
 	idx_t ColumnCount() const;
 	idx_t GetTotalRows() const;
+	idx_t GetNextRowId() const;
 
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
 

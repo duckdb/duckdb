@@ -235,7 +235,7 @@ void RowGroupCollection::InitializeScan(const QueryContext &context, CollectionS
 	state.row_groups = GetRowGroups();
 	auto row_group = state.GetRootSegment();
 	D_ASSERT(row_group);
-	state.max_row = state.row_groups->GetBaseRowId() + total_rows;
+	state.max_row = state.row_groups->GetBaseRowId() + next_row_id.load();
 	state.Initialize(context, GetTypes());
 	while (row_group && !row_group->GetNode().InitializeScan(state, *row_group)) {
 		row_group = state.GetNextRowGroup(*row_group);
@@ -278,7 +278,7 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 	state.row_groups = GetRowGroups();
 	state.AssignRowGroup(state.GetRootSegment(*state.row_groups));
 	state.vector_index = 0;
-	state.max_row = state.row_groups->GetBaseRowId() + total_rows;
+	state.max_row = state.row_groups->GetBaseRowId() + next_row_id.load();
 	state.batch_index = 0;
 	state.processed_rows = 0;
 }
@@ -502,7 +502,9 @@ bool RowGroupCollection::IsEmpty() const {
 }
 
 void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppendState &state) {
-	state.row_start = UnsafeNumericCast<row_t>(total_rows.load());
+	auto append_row_id = next_row_id.load();
+	D_ASSERT(append_row_id == total_rows.load());
+	state.row_start = UnsafeNumericCast<row_t>(append_row_id);
 	state.current_row = state.row_start;
 	state.total_append_count = 0;
 
@@ -523,10 +525,10 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 		}
 	}
 	if (needs_new_row_group) {
-		AppendRowGroup(l, state.row_groups->GetBaseRowId() + total_rows);
+		AppendRowGroup(l, state.row_groups->GetBaseRowId() + append_row_id);
 	}
 	state.start_row_group = state.row_groups->GetLastSegment(l);
-	D_ASSERT(state.row_groups->GetBaseRowId() + total_rows ==
+	D_ASSERT(state.row_groups->GetBaseRowId() + append_row_id ==
 	         state.start_row_group->GetRowStart() + state.start_row_group->GetNode().count);
 	state.start_row_group->GetNode().InitializeAppend(state.row_group_append_state);
 	state.transaction = transaction;
@@ -722,7 +724,8 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 	D_ASSERT(data.types == types);
 	auto segments = data.GetRowGroups()->MoveSegments();
 	auto row_groups = GetRowGroups();
-	auto start_index = row_groups->GetBaseRowId() + total_rows.load();
+	D_ASSERT(next_row_id.load() == total_rows.load());
+	auto start_index = row_groups->GetBaseRowId() + next_row_id.load();
 	auto index = start_index;
 
 	// check if the row groups we are merging are optimistically written
@@ -2013,7 +2016,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 	TableScanState scan_state;
 	scan_state.Initialize(bound_columns);
 	scan_state.table_state.Initialize(context, GetTypes());
-	scan_state.table_state.max_row = row_groups->GetBaseRowId() + total_rows;
+	scan_state.table_state.max_row = row_groups->GetBaseRowId() + next_row_id.load();
 
 	// now alter the type of the column within all of the row_groups individually
 	auto lock = result->stats.GetLock();

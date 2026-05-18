@@ -480,7 +480,7 @@ void LocalStorage::Append(LocalAppendState &state, DuckTableEntry &table_entry, 
                           DataTableInfo &data_table_info) {
 	auto storage = state.storage;
 	storage->table_entry = &table_entry;
-	auto offset = NumericCast<idx_t>(MAX_ROW_ID) + storage->GetCollection().GetTotalRows();
+	auto offset = NumericCast<idx_t>(MAX_ROW_ID) + storage->GetCollection().GetNextRowId();
 	idx_t base_id = offset + state.append_state.total_append_count;
 
 	if (!storage->append_indexes.Empty()) {
@@ -520,7 +520,7 @@ void LocalStorage::LocalMerge(DataTable &table, DuckTableEntry &table_entry, Opt
 	storage.table_entry = &table_entry;
 	if (!storage.append_indexes.Empty()) {
 		// append data to indexes if required
-		row_t base_id = MAX_ROW_ID + NumericCast<row_t>(storage.GetCollection().GetTotalRows());
+		row_t base_id = MAX_ROW_ID + NumericCast<row_t>(storage.GetCollection().GetNextRowId());
 		auto error = storage.AppendToIndexes(transaction, *collection.collection, storage.append_indexes,
 		                                     table.GetTypes(), base_id);
 		if (error.HasError()) {
