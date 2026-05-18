@@ -354,12 +354,14 @@ void ConnectInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "name", name);
 	serializer.WritePropertyWithDefault<bool>(201, "name_is_string_literal", name_is_string_literal);
+	serializer.WritePropertyWithDefault<bool>(202, "target_is_local", target_is_local);
 }
 
 unique_ptr<ParseInfo> ConnectInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ConnectInfo>(new ConnectInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
 	deserializer.ReadPropertyWithDefault<bool>(201, "name_is_string_literal", result->name_is_string_literal);
+	deserializer.ReadPropertyWithDefault<bool>(202, "target_is_local", result->target_is_local);
 	return std::move(result);
 }
 
@@ -422,12 +424,14 @@ void DisconnectInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "name", name);
 	serializer.WritePropertyWithDefault<bool>(201, "name_is_string_literal", name_is_string_literal);
+	serializer.WritePropertyWithDefault<bool>(202, "target_is_local", target_is_local);
 }
 
 unique_ptr<ParseInfo> DisconnectInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<DisconnectInfo>(new DisconnectInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
 	deserializer.ReadPropertyWithDefault<bool>(201, "name_is_string_literal", result->name_is_string_literal);
+	deserializer.ReadPropertyWithDefault<bool>(202, "target_is_local", result->target_is_local);
 	return std::move(result);
 }
 

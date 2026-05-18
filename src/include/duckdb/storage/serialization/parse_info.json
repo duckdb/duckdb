@@ -567,6 +567,11 @@
         "id": 201,
         "name": "name_is_string_literal",
         "type": "bool"
+      },
+      {
+        "id": 202,
+        "name": "target_is_local",
+        "type": "bool"
       }
     ]
   },
@@ -586,6 +591,11 @@
       {
         "id": 201,
         "name": "name_is_string_literal",
+        "type": "bool"
+      },
+      {
+        "id": 202,
+        "name": "target_is_local",
         "type": "bool"
       }
     ]
