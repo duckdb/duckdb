@@ -139,6 +139,7 @@ enum class StorageVersion : uint64_t {
     V1_5_2 = 68,
     V2_0_0 = 69,
     LATEST = 69,
+	DEPRECATED = 999,
     INVALID = 0
 };
 // END OF ENUM VERSION INFO
@@ -243,8 +244,10 @@ public:
 	//! The canary should be "DUCKKEY".
 	static const char CANARY[];
 
-	//! The (storage) version of the database.
-	StorageVersion version_number;
+	//! The main header storage version is now deprecated
+	static constexpr StorageVersion DEPRECATED_VERSION_NUMBER = StorageVersion::DEPRECATED;
+
+	idx_t version_number;
 	//! The set of flags used by the database.
 	uint64_t flags[FLAG_COUNT];
 	//! Encryption version
@@ -377,6 +380,8 @@ struct DatabaseHeader {
 
 	void Write(WriteStream &ser);
 	static DatabaseHeader Read(const MainHeader &header, ReadStream &source);
+	static void SetStorageVersionInDatabaseHeader(DatabaseHeader &header, StorageVersion main_version,
+	                                              StorageVersion read_version);
 };
 
 //! Detect mismatching constant values when compiling

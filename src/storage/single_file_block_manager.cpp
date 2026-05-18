@@ -175,7 +175,7 @@ bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 
 void MainHeader::Write(WriteStream &ser) {
 	ser.WriteData(const_data_ptr_cast(MAGIC_BYTES), MAGIC_BYTE_SIZE);
-	ser.Write<StorageVersion>(version_number);
+	ser.Write<idx_t>(version_number);
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		ser.Write<uint64_t>(flags[i]);
 	}
@@ -212,22 +212,19 @@ MainHeader MainHeader::Read(ReadStream &source) {
 		throw IOException("The file is not a valid DuckDB database file!");
 	}
 
-	header.version_number = source.Read<StorageVersion>();
+	header.version_number = source.Read<idx_t>();
 
 	// Check the version number to determine if we can read this file.
-	if (header.version_number < static_cast<StorageVersion>(VERSION_NUMBER_LOWER) ||
-	    header.version_number > static_cast<StorageVersion>(VERSION_NUMBER_UPPER)) {
-		auto version = GetDuckDBVersions(header.version_number);
+	if (header.version_number < VERSION_NUMBER_LOWER || header.version_number > VERSION_NUMBER_UPPER) {
+		auto version = GetDuckDBVersions(static_cast<StorageVersion>(header.version_number));
 		string version_text;
 		if (!version.empty()) {
 			// Known version.
 			version_text = "DuckDB version " + string(version);
 		} else {
-			version_text =
-			    string("an ") +
-			    (static_cast<StorageVersion>(VERSION_NUMBER_UPPER) > header.version_number ? "older development"
-			                                                                               : "newer") +
-			    string(" version of DuckDB");
+			version_text = string("an ") +
+			               (VERSION_NUMBER_UPPER > header.version_number ? "older development" : "newer") +
+			               string(" version of DuckDB");
 		}
 		throw IOException(
 		    "Trying to read a database file with version number %lld, but we can only read versions between %lld and "
@@ -263,7 +260,70 @@ void DatabaseHeader::Write(WriteStream &ser) {
 	ser.Write<uint64_t>(block_count);
 	ser.Write<idx_t>(block_alloc_size);
 	ser.Write<idx_t>(vector_size);
-	ser.Write<idx_t>(static_cast<idx_t>(storage_compatibility));
+
+	if (storage_compatibility < StorageVersion::V2_0_0) {
+		auto storage_version_string = StorageVersionInfo::GetStorageVersionString(storage_compatibility);
+		ser.Write<idx_t>(GetSerializationVersionDeprecated(storage_version_string.c_str()));
+	} else {
+		ser.Write<idx_t>(static_cast<idx_t>(storage_compatibility));
+	}
+}
+
+void DatabaseHeader::SetStorageVersionInDatabaseHeader(DatabaseHeader &header, StorageVersion main_version,
+                                                       StorageVersion read_version) {
+	if (main_version == MainHeader::DEPRECATED_VERSION_NUMBER) {
+		// From v2.0.0 onwards, we use and store only the storage version number
+		switch (read_version) {
+		case StorageVersion::V2_0_0:
+			header.storage_compatibility = StorageVersion::V2_0_0;
+			break;
+			// new versions should be added here
+		default:
+			throw InvalidInputException("Storage Version is not found!");
+		}
+	} else {
+		// before V1.6.0
+		// The Storage Version in the main header could be written in two different ways
+		// 1) When the DB is created from scratch -- with e.g. ATTACH (STORAGE_VERSION "v1.4.0")
+		// 2) if the db file got bumped to a higher version
+		// (e.g. "ATTACH 'bump.dp' (STORAGE_VERSION 'v.1.4.0'), when bump.db already exists")
+		// in case 1, the main header serialized the explicit storage version (e.g. 1.4.0 = 67, in the example)
+		// in case 2, the main_header version number is bumped at maximum to 65 (v1.2.0)
+		// thus, in case 2, the main header storage version is often lower then the actual storage version
+		// that's also why we need the logic below for backwards compatibility
+		// if the main header version and db header version are < v1.6.0
+		// then we fall back to the serialization version
+		switch (static_cast<idx_t>(read_version)) {
+		case static_cast<idx_t>(SerializationVersionDeprecated::V0_10_2):
+			// If read version is 0
+		case static_cast<idx_t>(StorageVersion::INVALID):
+			// In some old duckdb versions, storage version (64)
+			// is (by mistake) serialized instead of serialization version
+		case static_cast<idx_t>(StorageVersion::V0_10_2):
+			header.storage_compatibility = StorageVersion::V0_10_2;
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_0_0):
+			header.storage_compatibility = StorageVersion::V1_0_0;
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_1_0):
+			header.storage_compatibility = StorageVersion::V1_1_0;
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_2_0):
+			header.storage_compatibility = StorageVersion::V1_2_0;
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_3_0):
+			header.storage_compatibility = StorageVersion::V1_3_0;
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_4_0):
+			header.storage_compatibility = StorageVersion::V1_4_0;
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_5_0):
+			header.storage_compatibility = StorageVersion::V1_5_0;
+			break;
+		default:
+			throw InvalidInputException("Deprecated Serialization Version is not found!");
+		}
+	}
 }
 
 DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &source) {
@@ -290,10 +350,10 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 		                  STANDARD_VECTOR_SIZE, header.vector_size);
 	}
 
-	// Default to 1 for version < DuckDB V1.0.0, else read from file.
-	header.storage_compatibility = main_header.version_number == StorageVersion::V0_10_2
-	                                   ? StorageVersion::V0_10_2
-	                                   : static_cast<StorageVersion>(source.Read<idx_t>());
+	// storage version from the database header
+	auto database_header_storage_version = source.Read<StorageVersion>();
+	SetStorageVersionInDatabaseHeader(header, static_cast<StorageVersion>(main_header.version_number),
+	                                  database_header_storage_version);
 
 	return header;
 }
@@ -364,7 +424,7 @@ StorageVersion SingleFileBlockManager::GetVersionNumber() const {
 
 MainHeader ConstructMainHeader(StorageVersion version_number) {
 	MainHeader header;
-	header.version_number = version_number;
+	header.version_number = static_cast<idx_t>(version_number);
 	memset(header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
 	return header;
 }
@@ -652,7 +712,7 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 		    static_cast<EncryptionTypes::EncryptionVersion>(main_header.GetEncryptionVersion()));
 	}
 
-	options.version_number = main_header.version_number;
+	options.version_number = static_cast<StorageVersion>(main_header.version_number);
 
 	// read the database headers from disk
 	DatabaseHeader h1;

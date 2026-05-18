@@ -26,6 +26,7 @@ def generate_storage_enum(storage_versions):
 
     latest = "LATEST"
     result.append(f"    {to_enum_name(latest)} = {current},")
+    result.append("    DEPRECATED = 999,")
     result.append("    INVALID = 0")
     result.append("};")
     return "\n".join(result)
