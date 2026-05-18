@@ -273,7 +273,7 @@ public:
 
 	void AddNull() {
 		AddEmptyStringInternal();
-		current_segment->GetStatsMutable().SetHasNullFast();
+		stats_writer.SetHasNull();
 	}
 
 	void AddEmptyString() {

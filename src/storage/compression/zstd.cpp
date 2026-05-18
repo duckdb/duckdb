@@ -595,7 +595,7 @@ public:
 	}
 
 	void AddNull() {
-		buffer_collection.segment->GetStatsMutable().SetHasNullFast();
+		stats_writer.SetHasNull();
 		string_t empty(static_cast<uint32_t>(0));
 		AddStringInternal(empty);
 	}

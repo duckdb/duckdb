@@ -54,6 +54,7 @@ public:
 
 		auto compressed_segment = state.CreateNewSegment();
 		compressed_segment->count = state.count;
+
 		if (state.non_nulls != state.count) {
 			compressed_segment->GetStatsMutable().SetHasNullFast();
 		}

@@ -87,7 +87,6 @@ private:
 	T max;
 };
 
-
 template <>
 struct StatsWriter<void> : public BaseStatsWriter {
 	explicit StatsWriter() {

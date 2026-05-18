@@ -332,7 +332,11 @@ void RoaringCompressState::FlushSegment() {
 
 	Store<idx_t>(metadata_start, handle.GetDataMutable());
 	auto total_segment_size = sizeof(idx_t) + data_size + metadata_size;
-	FlushCurrentSegment(stats_writer, total_segment_size);
+	if (GetType().id() == LogicalTypeId::BOOLEAN) {
+		FlushCurrentSegment(bool_stats_writer, total_segment_size);
+	} else {
+		FlushCurrentSegment(stats_writer, total_segment_size);
+	}
 }
 
 void RoaringCompressState::Finalize() {
@@ -496,9 +500,9 @@ void RoaringCompressState::Compress<PhysicalType::BOOL>(Vector &input, idx_t cou
 	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity
 	// mask.
 	if (validity.CannotHaveNull()) {
-		BitPackBooleans<true, true>(dst, src, count, &validity, &this->current_segment->GetStatsMutable());
+		BitPackBooleans<true, true>(dst, src, count, &validity, &bool_stats_writer);
 	} else {
-		BitPackBooleans<true, false>(dst, src, count, &validity, &this->current_segment->GetStatsMutable());
+		BitPackBooleans<true, false>(dst, src, count, &validity, &bool_stats_writer);
 	}
 	RoaringStateAppender<RoaringCompressState>::AppendVector(self, bitpacked_vector, count);
 }
