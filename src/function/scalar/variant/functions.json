@@ -87,7 +87,7 @@
 					}
 				],
 				"description": "Returns the keys present at the level of the specified path.",
-				"example": "variant_keys({'a': { 'a': 1, 'b': 2}}::VARIANT, '$.a')",
+				"example": "variant_keys({'a': { 'a': 1, 'b': 2}}::VARIANT, 'a')",
 				"categories": [
 					"variant"
 				]
@@ -104,7 +104,7 @@
 					}
 				],
 				"description": "Returns a list of keys present at the level of each specified path.",
-				"example": "variant_keys({'a': { 'a': 1, 'b': 2}, 'b': {'c': 3}}::VARIANT, ['$.a', '$.b'])",
+				"example": "variant_keys({'a': { 'a': 1, 'b': 2}, 'b': {'c': 3}}::VARIANT, ['a', 'b'])",
 				"categories": [
 					"variant"
 				]
@@ -134,7 +134,7 @@
 					}
 				],
 				"description": "Returns the keys present at the level of the specified path.",
-				"example": "variant_keys('{\"a\": { \"a\": 1, \"b\": 2}}', '$.a')",
+				"example": "variant_keys('{\"a\": { \"a\": 1, \"b\": 2}}', 'a')",
 				"categories": [
 					"variant"
 				]
@@ -151,7 +151,7 @@
 					}
 				],
 				"description": "Returns a list of keys present at the level of each specified path.",
-				"example": "variant_keys('{\"a\": { \"a\": 1, \"b\": 2}, \"b\": {\"c\": 3}}', ['$.a', '$.b'])",
+				"example": "variant_keys('{\"a\": { \"a\": 1, \"b\": 2}, \"b\": {\"c\": 3}}', ['a', 'b'])",
 				"categories": [
 					"variant"
 				]
