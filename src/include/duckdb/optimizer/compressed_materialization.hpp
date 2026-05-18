@@ -124,6 +124,8 @@ private:
 	                              vector<unique_ptr<CompressExpression>> compress_exprs,
 	                              CompressedMaterializationInfo &info, CMChildInfo &child_info);
 	void CreateDecompressProjection(unique_ptr<LogicalOperator> &op, CompressedMaterializationInfo &info);
+	unique_ptr<Expression> CreateRestoreExpression(unique_ptr<Expression> input, const CMBindingInfo &binding_info,
+	                                               const BaseStatistics &stats);
 
 	//! Create expressions that apply a scalar compression function
 	unique_ptr<CompressExpression> GetCompressExpression(const ColumnBinding &binding, const LogicalType &type,
