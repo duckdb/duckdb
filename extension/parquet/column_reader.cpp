@@ -328,6 +328,7 @@ void ColumnReader::ReadData(const data_ptr_t buffer, const uint32_t buffer_size,
 }
 
 void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state,
+                               idx_t rows_to_skip,
                                optional_ptr<const SelectionVector> sel, idx_t approved_tuple_count,
                                idx_t result_offset) {
 	encoding = ColumnEncoding::INVALID;
@@ -355,8 +356,19 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	}
 
 	if (PageIsFilteredOut(page_hdr, filter)) {
-		// this page has been filtered out so we don't need to read it
 		return;
+	}
+
+	if (rows_to_skip > 0 && (page_hdr.type == PageType::DATA_PAGE || page_hdr.type == PageType::DATA_PAGE_V2)) {
+		bool is_v1 = page_hdr.type == PageType::DATA_PAGE;
+		idx_t page_num_values =
+		    NumericCast<idx_t>(is_v1 ? page_hdr.data_page_header.num_values : page_hdr.data_page_header_v2.num_values);
+		if (rows_to_skip >= page_num_values) {
+			trans.Skip(page_hdr.compressed_page_size);
+			page_is_filtered_out = true;
+			page_rows_available = page_num_values;
+			return;
+		}
 	}
 
 	if (sel && (page_hdr.type == PageType::DATA_PAGE || page_hdr.type == PageType::DATA_PAGE_V2)) {
@@ -649,13 +661,13 @@ void ColumnReader::BeginRead(data_ptr_t define_out, data_ptr_t repeat_out) {
 }
 
 idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter,
-                                    optional_ptr<TableFilterState> filter_state,
+                                    optional_ptr<TableFilterState> filter_state, idx_t rows_to_skip,
                                     optional_ptr<const SelectionVector> sel, idx_t approved_tuple_count,
                                     idx_t result_offset) {
 	int8_t page_ordinal = 0;
 	while (page_rows_available == 0) {
 		aad_crypto_metadata.page_ordinal = page_ordinal;
-		PrepareRead(filter, filter_state, sel, approved_tuple_count, result_offset);
+		PrepareRead(filter, filter_state, rows_to_skip, sel, approved_tuple_count, result_offset);
 		page_ordinal++;
 	}
 	return MinValue<idx_t>(MinValue<idx_t>(max_read, page_rows_available), STANDARD_VECTOR_SIZE);
@@ -807,7 +819,7 @@ void ColumnReader::Select(ColumnReaderInput &input, Vector &result, const Select
 	D_ASSERT(to_read <= STANDARD_VECTOR_SIZE);
 
 	while (to_read > 0) {
-		auto read_now = ReadPageHeaders(to_read, nullptr, nullptr, &sel, approved_tuple_count, result_offset);
+		auto read_now = ReadPageHeaders(to_read, nullptr, nullptr, 0, &sel, approved_tuple_count, result_offset);
 
 		ReadData(read_now, define_out, repeat_out, result, result_offset);
 
@@ -839,8 +851,16 @@ void ColumnReader::DirectSelect(ColumnReaderInput &input, Vector &result, const 
 		FinishRead(to_read);
 		return;
 	}
-	// fallback to regular read + filter
-	ReadInternal(input, result);
+	idx_t result_offset = read_now;
+	ReadData(read_now, define_out, repeat_out, result, 0);
+	to_read -= read_now;
+	while (to_read > 0) {
+		read_now = ReadPageHeaders(to_read, nullptr, nullptr, 0, &sel, approved_tuple_count, result_offset);
+		ReadData(read_now, define_out, repeat_out, result, result_offset);
+		result_offset += read_now;
+		to_read -= read_now;
+	}
+	FinishRead(num_values);
 }
 
 void ColumnReader::Filter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
@@ -916,7 +936,7 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 	BeginRead(nullptr, nullptr);
 
 	while (to_skip > 0) {
-		auto skip_now = ReadPageHeaders(to_skip);
+		auto skip_now = ReadPageHeaders(to_skip, nullptr, nullptr, to_skip);
 		if (page_is_filtered_out) {
 			// the page has been filtered out entirely - skip
 			page_rows_available -= skip_now;

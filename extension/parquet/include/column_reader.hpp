@@ -246,7 +246,7 @@ private:
 	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);
 	void FinishRead(idx_t read_count);
 	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr,
-	                      optional_ptr<TableFilterState> filter_state = nullptr,
+	                      optional_ptr<TableFilterState> filter_state = nullptr, idx_t rows_to_skip = 0,
 	                      optional_ptr<const SelectionVector> sel = nullptr, idx_t approved_tuple_count = 0,
 	                      idx_t result_offset = 0);
 	idx_t ReadInternal(ColumnReaderInput &input, Vector &result);
@@ -358,6 +358,7 @@ protected:
 private:
 	void AllocateBlock(idx_t size);
 	void PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state,
+	                 idx_t rows_to_skip = 0,
 	                 optional_ptr<const SelectionVector> sel = nullptr, idx_t approved_tuple_count = 0,
 	                 idx_t result_offset = 0);
 	void PreparePage(PageHeader &page_hdr);
