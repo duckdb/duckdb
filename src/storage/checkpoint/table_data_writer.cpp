@@ -91,6 +91,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
                                               RowGroupCollection &collection, Serializer &serializer) {
 	MetaBlockPointer pointer;
 	idx_t total_rows;
+	idx_t next_row_id = collection.GetNextRowId();
 	auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetDatabase());
 	if (!existing_pointer.IsValid()) {
 		// write the metadata
@@ -169,6 +170,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 			}
 		}
 	}
+	D_ASSERT(next_row_id == total_rows);
 
 	// Now begin the metadata as a unit
 	// Pointer to the table itself goes to the metadata stream.
@@ -200,6 +202,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteList(
 	    104, "index_storage_infos", index_storage_infos.ordered_infos.size(),
 	    [&](Serializer::List &list, idx_t i) { list.WriteElement(index_storage_infos.ordered_infos[i].get()); });
+	serializer.WriteProperty(105, "next_row_id", next_row_id);
 }
 
 } // namespace duckdb

@@ -53,6 +53,7 @@ public:
 
 public:
 	idx_t GetTotalRows() const;
+	idx_t GetNextRowId() const;
 	idx_t GetRowGroupCount() const;
 	Allocator &GetAllocator() const;
 
@@ -189,6 +190,8 @@ private:
 	const idx_t row_group_size;
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
+	//! The next rowid to assign. Kept equivalent to total_rows until rowid gaps are supported.
+	atomic<idx_t> next_row_id;
 	//! The data table info
 	shared_ptr<DataTableInfo> info;
 	//! The column types of the row group collection

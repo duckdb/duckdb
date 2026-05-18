@@ -70,9 +70,10 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, TableIO
 RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockManager &block_manager,
                                        vector<LogicalType> types_p, idx_t row_start, idx_t total_rows_p,
                                        idx_t row_group_size_p)
-    : block_manager(block_manager), row_group_size(row_group_size_p), total_rows(total_rows_p), info(std::move(info_p)),
-      types(std::move(types_p)), owned_row_groups(make_shared_ptr<RowGroupSegmentTree>(*this, row_start)),
-      allocation_size(0), row_group_append_mode(RowGroupAppendMode::APPEND_TO_EXISTING) {
+    : block_manager(block_manager), row_group_size(row_group_size_p), total_rows(total_rows_p),
+      next_row_id(total_rows_p), info(std::move(info_p)), types(std::move(types_p)),
+      owned_row_groups(make_shared_ptr<RowGroupSegmentTree>(*this, row_start)), allocation_size(0),
+      row_group_append_mode(RowGroupAppendMode::APPEND_TO_EXISTING) {
 	// If the table contains shredded types (variant / geometry) then we can't append to an existing row group
 	for (auto &type : types) {
 		if (TypeVisitor::Contains(type, LogicalTypeId::VARIANT) ||
@@ -85,6 +86,10 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockMa
 
 idx_t RowGroupCollection::GetTotalRows() const {
 	return total_rows.load();
+}
+
+idx_t RowGroupCollection::GetNextRowId() const {
+	return next_row_id.load();
 }
 
 idx_t RowGroupCollection::GetRowGroupCount() const {
@@ -129,6 +134,8 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	D_ASSERT(owned_row_groups->GetBaseRowId() == 0);
 	auto l = owned_row_groups->Lock();
 	this->total_rows = data.total_rows;
+	this->next_row_id = data.next_row_id;
+	D_ASSERT(this->next_row_id == this->total_rows);
 	metadata_pointer = data.base_table_pointer;
 	metadata_pointers = data.read_metadata_pointers;
 	owned_row_groups->Initialize(data, metadata_pointers);
@@ -150,6 +157,7 @@ void RowGroupCollection::Initialize(PersistentCollectionData &data) {
 		total_rows += row_group->count;
 		owned_row_groups->AppendSegment(l, std::move(row_group), row_group_data.start);
 	}
+	next_row_id = total_rows.load();
 }
 
 void RowGroupCollection::SetRowGroupAppendMode(RowGroupAppendMode mode) {
@@ -214,6 +222,7 @@ void RowGroupCollection::Verify() {
 		current_total_rows += row_group.count;
 	}
 	D_ASSERT(current_total_rows == total_rows.load());
+	D_ASSERT(next_row_id.load() == total_rows.load());
 #endif
 }
 
@@ -603,6 +612,8 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 		row_group = state.row_groups->GetNextSegment(*row_group);
 	}
 	total_rows += state.total_append_count;
+	next_row_id += state.total_append_count;
+	D_ASSERT(next_row_id.load() == total_rows.load());
 
 	state.total_append_count = 0;
 	state.start_row_group = nullptr;
@@ -671,6 +682,7 @@ void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
 	}
 	SetRowGroups(std::move(reverted_row_groups));
 	total_rows = new_end_idx;
+	next_row_id = total_rows.load();
 }
 
 void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
@@ -754,7 +766,9 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 		commit_state->AddRowGroupData(*table, start_index, optimistically_written_count, std::move(row_group_data));
 	}
 	stats.MergeStats(data.stats);
+	D_ASSERT(data.next_row_id.load() == data.total_rows.load());
 	total_rows += data.total_rows.load();
+	next_row_id = total_rows.load();
 	if (is_persistent) {
 		SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	}
@@ -1819,6 +1833,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	writer.FlushPartialBlocks();
 	// override the row group segment tree
 	total_rows = new_total_rows;
+	next_row_id = total_rows.load();
 	SetRowGroups(std::move(new_row_groups));
 	Verify();
 	// Rebuild indexes if:
