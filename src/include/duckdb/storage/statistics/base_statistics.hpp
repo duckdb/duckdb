@@ -17,6 +17,7 @@
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
+#include "duckdb/storage/statistics/stats_merge_type.hpp"
 
 namespace duckdb {
 struct SelectionVector;
@@ -119,7 +120,7 @@ public:
 	void SetHasNull();
 	void SetHasNoNull();
 
-	void Merge(const BaseStatistics &other);
+	void Merge(const BaseStatistics &other, StatsMergeType merge_type = StatsMergeType::MERGE_STATS);
 
 	void Copy(const BaseStatistics &other);
 

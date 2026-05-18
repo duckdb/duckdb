@@ -414,10 +414,10 @@ void RoaringCompressState::FlushContainer() {
 	bool has_nulls = container_state.null_count != 0;
 	bool has_non_nulls = container_state.null_count != container_state.appended_count;
 	if (has_nulls || container_state.uncompressed) {
-		current_segment->stats.statistics.SetHasNullFast();
+		current_segment->GetStatsMutable().SetHasNullFast();
 	}
 	if (has_non_nulls || container_state.uncompressed) {
-		current_segment->stats.statistics.SetHasNoNullFast();
+		current_segment->GetStatsMutable().SetHasNoNullFast();
 	}
 	current_segment->count += container_state.appended_count;
 	container_state.Reset();
@@ -507,9 +507,9 @@ void RoaringCompressState::Compress<PhysicalType::BOOL>(const Vector &input) {
 	// Bitpack the booleans, so they can be fed through the current compression code, with the same format as a validity
 	// mask.
 	if (validity.CannotHaveNull()) {
-		BitPackBooleans<true, true>(dst, src, count, &validity, &this->current_segment->stats.statistics);
+		BitPackBooleans<true, true>(dst, src, count, &validity, &this->current_segment->GetStatsMutable());
 	} else {
-		BitPackBooleans<true, false>(dst, src, count, &validity, &this->current_segment->stats.statistics);
+		BitPackBooleans<true, false>(dst, src, count, &validity, &this->current_segment->GetStatsMutable());
 	}
 	RoaringStateAppender<RoaringCompressState>::AppendVector(self, bitpacked_vector);
 }

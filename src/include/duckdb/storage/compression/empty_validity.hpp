@@ -65,10 +65,10 @@ public:
 		                                                                info.GetBlockManager());
 		compressed_segment->count = state.count;
 		if (state.non_nulls != state.count) {
-			compressed_segment->stats.statistics.SetHasNullFast();
+			compressed_segment->GetStatsMutable().SetHasNullFast();
 		}
 		if (state.non_nulls != 0) {
-			compressed_segment->stats.statistics.SetHasNoNullFast();
+			compressed_segment->GetStatsMutable().SetHasNoNullFast();
 		}
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());

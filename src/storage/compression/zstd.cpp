@@ -437,7 +437,8 @@ public:
 
 	void AddString(const string_t &string) {
 		AddStringInternal(string);
-		UncompressedStringStorage::UpdateStringStats(buffer_collection.segment->stats, stats_writer, string);
+		UncompressedStringStorage::UpdateStringStats(buffer_collection.segment->GetStatsMutable(), stats_writer,
+		                                             string);
 	}
 
 	void NewPage(bool additional_data_page = false) {
@@ -584,7 +585,7 @@ public:
 		}
 
 		auto &state = checkpoint_data.GetCheckpointState();
-		stats_writer.Merge(buffer_collection.segment->stats.statistics);
+		stats_writer.Merge(buffer_collection.segment->GetStatsMutable());
 		state.FlushSegment(std::move(buffer_collection.segment), std::move(buffer_collection.segment_handle),
 		                   segment_block_size);
 		segment_buffer_state.flags.Clear();
@@ -600,7 +601,7 @@ public:
 	}
 
 	void AddNull() {
-		buffer_collection.segment->stats.statistics.SetHasNullFast();
+		buffer_collection.segment->GetStatsMutable().SetHasNullFast();
 		string_t empty(static_cast<uint32_t>(0));
 		AddStringInternal(empty);
 	}

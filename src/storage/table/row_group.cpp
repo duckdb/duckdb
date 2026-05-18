@@ -454,6 +454,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 		executor.ExecuteExpression(scan_chunk, append_vector);
 		column_data->Append(append_state, append_vector, scan_chunk.size());
 	}
+	column_data->FinalizeAppend(nullptr, append_state);
 
 	// set up the row_group based on this row_group
 	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
@@ -497,6 +498,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 			executor.ExecuteExpression(dummy_chunk, result);
 			added_column->Append(state, result, rows_in_this_vector);
 		}
+		added_column->FinalizeAppend(nullptr, state);
 	}
 
 	// set up the row_group based on this row_group
@@ -1003,6 +1005,13 @@ void RowGroup::RevertAppend(idx_t new_count) {
 	Verify();
 }
 
+RowGroupAppendState::RowGroupAppendState(TableAppendState &parent_p)
+    : parent(parent_p), row_group(nullptr), offset_in_row_group(0) {
+}
+
+RowGroupAppendState::~RowGroupAppendState() {
+}
+
 void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
 	append_state.row_group = this;
 	append_state.offset_in_row_group = this->count;
@@ -1024,6 +1033,22 @@ void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append
 		allocation_size += col_data.GetAllocationSize() - prev_allocation_size;
 	}
 	state.offset_in_row_group += append_count;
+}
+
+void RowGroup::FinalizeAppend(RowGroupAppendState &state) {
+	auto &parent_stats = state.parent.stats;
+	if (parent_stats.Empty()) {
+		for (idx_t c = 0; c < GetColumnCount(); c++) {
+			auto &col_data = GetColumn(c);
+			col_data.FinalizeAppend(nullptr, state.states[c]);
+		}
+	} else {
+		auto stats_lock = parent_stats.GetLock();
+		for (idx_t c = 0; c < GetColumnCount(); c++) {
+			auto &col_data = GetColumn(c);
+			col_data.FinalizeAppend(parent_stats.GetStats(*stats_lock, c).Statistics(), state.states[c]);
+		}
+	}
 }
 
 void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {

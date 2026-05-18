@@ -13,6 +13,7 @@
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/array_ptr.hpp"
+#include "duckdb/storage/statistics/stats_merge_type.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -29,11 +30,13 @@ enum class StringStatsType {
 };
 
 struct StringStatsData {
-	constexpr static uint32_t MAX_STRING_MINMAX_SIZE = 8;
+	constexpr static uint32_t CURRENT_MAX_STRING_MINMAX_SIZE = 12;
+	constexpr static uint32_t LEGACY_MAX_STRING_MINMAX_SIZE = 8;
+	constexpr static uint32_t MAXIMUM_MIN_STRING_LENGTH = (1 << 21U) - 1;
 
-	//! The minimum value of the segment, potentially truncated
+	//! The minimum value of the segment, potentially truncated depending on min_type
 	string_t min;
-	//! The maximum value of the segment, potentially truncated
+	//! The maximum value of the segment, potentially truncated depending on max_type
 	string_t max;
 	//! Whether or not the column can contain unicode characters
 	bool has_unicode;
@@ -41,10 +44,21 @@ struct StringStatsData {
 	bool has_max_string_length;
 	//! The maximum string length in bytes
 	uint32_t max_string_length;
+	//! Whether or not the maximum string length is known
+	bool has_min_string_length;
+	//! The minimum string length in bytes
+	uint32_t min_string_length;
+	//! WHether or not the total string length is known
+	bool has_total_string_length;
+	//! The total (summed) length of all strings
+	uint64_t total_string_length;
 	//! Min stats type
 	StringStatsType min_type;
 	//! Max stats type
 	StringStatsType max_type;
+
+public:
+	bool HasMinStringLength() const;
 };
 
 struct StringStats {
@@ -60,6 +74,10 @@ struct StringStats {
 	DUCKDB_API static bool HasMaxStringLength(const BaseStatistics &stats);
 	//! Returns the maximum string length, or throws an exception if !HasMaxStringLength()
 	DUCKDB_API static uint32_t MaxStringLength(const BaseStatistics &stats);
+	//! Returns the minimum string length if it is known
+	DUCKDB_API static optional_idx MinStringLength(const BaseStatistics &stats);
+	//! Returns the total string length if known
+	DUCKDB_API static optional_idx TotalStringLength(const BaseStatistics &stats);
 	//! Whether or not the strings can contain unicode
 	DUCKDB_API static bool CanContainUnicode(const BaseStatistics &stats);
 	//! Returns the min value
@@ -109,9 +127,11 @@ struct StringStats {
 	SetMax(BaseStatistics &stats, const string_t &value);
 	DUCKDB_API static void SetMin(BaseStatistics &stats, const string_t &value, StringStatsType type);
 	DUCKDB_API static void SetMax(BaseStatistics &stats, const string_t &value, StringStatsType type);
-	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
+	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other,
+	                             StatsMergeType merge_type = StatsMergeType::MERGE_STATS);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const StringStatsWriter &other);
-	DUCKDB_API static void Merge(BaseStatistics &stats, const StringStatsData &other_data);
+	DUCKDB_API static void Merge(BaseStatistics &stats, const StringStatsData &other_data,
+	                             StatsMergeType merge_type = StatsMergeType::MERGE_STATS);
 	DUCKDB_API static void Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel,
 	                              idx_t count);
 	DUCKDB_API static void Copy(BaseStatistics &stats, const BaseStatistics &other);
