@@ -115,7 +115,7 @@ unique_ptr<GlobalTableFunctionState> PragmaStorageInfoInitGlobal(ClientContext &
 }
 
 unique_ptr<LocalTableFunctionState> PragmaStorageInfoInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
-                                                                GlobalTableFunctionState *global_state) {
+                                                               GlobalTableFunctionState *global_state) {
 	return make_uniq<PragmaStorageLocalState>();
 }
 
@@ -161,8 +161,8 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 			bool has_more;
 			{
 				lock_guard<mutex> guard(gstate.lock);
-				has_more = bind_data.table_entry.ScanColumnSegmentInfo(query_context, bind_data.scan_state,
-				                                                       lstate.buffer);
+				has_more =
+				    bind_data.table_entry.ScanColumnSegmentInfo(query_context, bind_data.scan_state, lstate.buffer);
 			}
 			if (!has_more) {
 				break;
@@ -209,14 +209,14 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 }
 
 static OperatorPartitionData PragmaStorageInfoGetPartitionData(ClientContext &context,
-                                                                TableFunctionGetPartitionInput &input) {
+                                                               TableFunctionGetPartitionInput &input) {
 	auto &lstate = input.local_state->Cast<PragmaStorageLocalState>();
 	return OperatorPartitionData(lstate.batch_index);
 }
 
 void PragmaStorageInfo::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction storage_info("pragma_storage_info", {LogicalType::VARCHAR}, PragmaStorageInfoFunction,
-	                            PragmaStorageInfoBind, PragmaStorageInfoInitGlobal, PragmaStorageInfoInitLocal);
+	                           PragmaStorageInfoBind, PragmaStorageInfoInitGlobal, PragmaStorageInfoInitLocal);
 	storage_info.get_partition_data = PragmaStorageInfoGetPartitionData;
 	set.AddFunction(std::move(storage_info));
 }
