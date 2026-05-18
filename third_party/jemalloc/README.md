@@ -215,6 +215,7 @@ The `exported_symbols_check.py` script still found a few, so these lines need to
 #define opt_malloc_conf_symlink JEMALLOC_N(opt_malloc_conf_symlink)
 #define opt_prof_bt_max JEMALLOC_N(opt_prof_bt_max)
 #define opt_prof_pid_namespace JEMALLOC_N(opt_prof_pid_namespace)
+#define prof_get_pid_namespace JEMALLOC_N(prof_get_pid_namespace)
 #define os_page JEMALLOC_N(os_page)
 #define pa_shard_nactive JEMALLOC_N(pa_shard_nactive)
 #define pa_shard_ndirty JEMALLOC_N(pa_shard_ndirty)

@@ -69,6 +69,8 @@ public:
 	void Verify(RowGroup &parent) override;
 
 	void SetValidityData(shared_ptr<ValidityColumnData> validity);
+	//! Direct access to the validity column data. Intended for extensions that need to walk storage internals.
+	ValidityColumnData &GetValidityData();
 
 protected:
 	//! The validity column data

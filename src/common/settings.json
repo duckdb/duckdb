@@ -1122,6 +1122,13 @@
         "default_value": "5"
     },
     {
+        "name": "write_buffer_row_group_memory_limit",
+        "description": "The maximum data to buffer in row groups (in bytes) to buffer prior to flushing them together. When either this limit is reached, or write_buffer_row_group_count is reached, we flush the data to disk. Defaults to 20% of memory limit divided by thread count.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "zstd_min_string_length",
         "description": "The (average) length at which to enable ZSTD compression, defaults to 4096",
         "type": "UBIGINT",

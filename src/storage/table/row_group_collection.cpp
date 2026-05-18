@@ -1200,14 +1200,16 @@ public:
 	}
 
 	void ExecuteTask() override {
-		ActiveTimer vacuum_task_timer;
+		ActiveTimer timer;
 		auto context = checkpoint_state.writer.TryGetClientContext();
 		if (context) {
-			vacuum_task_timer = QueryProfiler::Get(*context).StartTimer(MetricType::CUMULATIVE_VACUUM_TIME);
+			timer = QueryProfiler::Get(*context).StartTimer(MetricType::CUMULATIVE_VACUUM_TIME);
 		}
+
 		auto &collection = checkpoint_state.collection;
 		const idx_t row_group_size = collection.GetRowGroupSize();
 		auto &types = collection.GetTypes();
+
 		// create the new set of target row groups (initially empty)
 		vector<unique_ptr<RowGroup>> new_row_groups;
 		vector<idx_t> append_counts;
@@ -1218,7 +1220,6 @@ public:
 			new_row_group->InitializeEmpty(types, ColumnDataType::MAIN_TABLE);
 			new_row_groups.push_back(std::move(new_row_group));
 			append_counts.push_back(0);
-
 			row_group_rows -= current_row_group_rows;
 		}
 
@@ -1301,7 +1302,10 @@ public:
 			    "Mismatch in row group count %d vs verify count %d in RowGroupCollection::Checkpoint", merge_rows,
 			    total_append_count);
 		}
-		vacuum_task_timer.EndTimer();
+
+		// Explicitly end the timer for the vacuum tasks here.
+		timer.EndTimer();
+
 		// merging is complete - execute checkpoint tasks of the target row groups
 		for (idx_t i = 0; i < target_count; i++) {
 			auto checkpoint_task = collection.GetCheckpointTask(checkpoint_state, segment_idx + i);

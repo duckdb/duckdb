@@ -833,6 +833,13 @@ endfunction()
 # this depends on disable_target_warnings so the order matters
 include(${PROJECT_SOURCE_DIR}/extension/extension_build_tools.cmake)
 
+if(ENABLE_JEMALLOC AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT FORCE_32_BIT AND OS_NAME STREQUAL "linux" AND NOT EMSCRIPTEN AND NOT CLANG_TIDY AND NOT ANDROID AND NOT ZOS AND NOT BSD AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
+  set(JEMALLOC_ENABLED TRUE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ENABLE_JEMALLOC")
+  include_directories(third_party/jemalloc/include)
+  add_third_party(jemalloc)
+endif()
+
 if(PREBUILT_BINARY)
   message("Using pre-built static library from file ${PREBUILT_BINARY}")
   add_library(duckdb_static STATIC IMPORTED GLOBAL)
@@ -862,13 +869,6 @@ add_third_party(skiplist)
 add_third_party(utf8proc)
 add_third_party(yyjson)
 add_third_party(zstd)
-
-if(ENABLE_JEMALLOC AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT FORCE_32_BIT AND OS_NAME STREQUAL "linux" AND NOT EMSCRIPTEN AND NOT CLANG_TIDY AND NOT ANDROID AND NOT ZOS AND NOT BSD AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
-  set(JEMALLOC_ENABLED TRUE)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ENABLE_JEMALLOC")
-  include_directories(third_party/jemalloc/include)
-  add_third_party(jemalloc)
-endif()
 
 if(NOT DUCKDB_EXPLICIT_PLATFORM)
   set(VERSION_SOURCES tools/utils/test_platform.cpp)
