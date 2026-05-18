@@ -123,6 +123,11 @@ SELECT try(avg(x)) FROM cte;
 ----
 aggregates are not allowed inside the TRY expression
 
+statement error
+SELECT try(row_number() over ());
+----
+window functions are not allowed in try
+
 # column reference can be used just fine
 query I
 with cte(x) as (

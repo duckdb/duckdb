@@ -116,6 +116,9 @@ public:
 		return radix_bits;
 	}
 
+	void ResetAppendState(PartitionedTupleDataAppendState &state,
+	                      TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const override;
+
 private:
 	void Initialize();
 

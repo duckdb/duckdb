@@ -10,6 +10,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
@@ -453,6 +454,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 		executor.ExecuteExpression(scan_chunk, append_vector);
 		column_data->Append(append_state, append_vector, scan_chunk.size());
 	}
+	column_data->FinalizeAppend(nullptr, append_state);
 
 	// set up the row_group based on this row_group
 	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
@@ -492,6 +494,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 			executor.ExecuteExpression(dummy_chunk, result);
 			added_column->Append(state, result, rows_in_this_vector);
 		}
+		added_column->FinalizeAppend(nullptr, state);
 	}
 
 	// set up the row_group based on this row_group
@@ -598,7 +601,8 @@ FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_
 	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
 	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row));
 
-	return filter.CheckStatistics(dummy_stats);
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RowGroup::CheckRowIdFilter");
+	return expr_filter.CheckStatistics(dummy_stats);
 }
 
 bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
@@ -614,7 +618,7 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}
-		if (filter.IsOnlyForZoneMapFiltering()) {
+		if (ExpressionFilter::IsRootOptionalFilter(filter)) {
 			// these are only for row group checking, set as always true so we don't check it
 			filters.SetFilterAlwaysTrue(i);
 		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
@@ -657,7 +661,9 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		}
 		D_ASSERT(target_row >= row_start);
 		D_ASSERT(target_row <= row_start + this->count);
-		idx_t target_vector_index = (target_row - row_start) / STANDARD_VECTOR_SIZE;
+		// current_segment->GetRowStart() is already row-group-relative, and state.vector_index uses the same
+		// coordinate space. Subtracting row_start here incorrectly makes the target segment-local.
+		idx_t target_vector_index = target_row / STANDARD_VECTOR_SIZE;
 
 		if (!target_vector_index_max.IsValid() || target_vector_index_max.GetIndex() < target_vector_index) {
 			target_vector_index_max = target_vector_index;
@@ -995,6 +1001,13 @@ void RowGroup::RevertAppend(idx_t new_count) {
 	Verify();
 }
 
+RowGroupAppendState::RowGroupAppendState(TableAppendState &parent_p)
+    : parent(parent_p), row_group(nullptr), offset_in_row_group(0) {
+}
+
+RowGroupAppendState::~RowGroupAppendState() {
+}
+
 void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
 	append_state.row_group = this;
 	append_state.offset_in_row_group = this->count;
@@ -1016,6 +1029,22 @@ void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append
 		allocation_size += col_data.GetAllocationSize() - prev_allocation_size;
 	}
 	state.offset_in_row_group += append_count;
+}
+
+void RowGroup::FinalizeAppend(RowGroupAppendState &state) {
+	auto &parent_stats = state.parent.stats;
+	if (parent_stats.Empty()) {
+		for (idx_t c = 0; c < GetColumnCount(); c++) {
+			auto &col_data = GetColumn(c);
+			col_data.FinalizeAppend(nullptr, state.states[c]);
+		}
+	} else {
+		auto stats_lock = parent_stats.GetLock();
+		for (idx_t c = 0; c < GetColumnCount(); c++) {
+			auto &col_data = GetColumn(c);
+			col_data.FinalizeAppend(parent_stats.GetStats(*stats_lock, c).Statistics(), state.states[c]);
+		}
+	}
 }
 
 void RowGroup::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
@@ -1538,14 +1567,7 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 		if (!is_exact || row_group->HasChanges()) {
 			return false;
 		}
-		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
-			if (!StringStats::HasMinMax(stats) || !StringStats::HasMaxStringLength(stats)) {
-				return false;
-			}
-			const idx_t max_length = StringStats::MaxStringLength(stats);
-			return max_length == StringStats::Max(stats).length() && max_length == StringStats::Min(stats).length();
-		}
-		return stats.GetStatsType() == StatisticsType::NUMERIC_STATS;
+		return true;
 	}
 };
 

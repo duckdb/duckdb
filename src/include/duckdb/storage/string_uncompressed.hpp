@@ -15,6 +15,7 @@
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/statistics/string_stats_writer.hpp"
 
 namespace duckdb {
 struct StringDictionaryContainer {
@@ -80,19 +81,19 @@ public:
 		return make_uniq<CompressionAppendState>(std::move(handle));
 	}
 
-	static idx_t StringAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,
+	static idx_t StringAppend(CompressionAppendState &append_state, ColumnSegment &segment, BaseStatistics &stats,
 	                          UnifiedVectorFormat &data, idx_t offset, idx_t count) {
 		return StringAppendBase(append_state.handle, segment, stats, data, offset, count);
 	}
 
-	static idx_t StringAppendBase(ColumnSegment &segment, SegmentStatistics &stats, UnifiedVectorFormat &data,
+	static idx_t StringAppendBase(ColumnSegment &segment, BaseStatistics &stats, UnifiedVectorFormat &data,
 	                              idx_t offset, idx_t count) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		auto handle = buffer_manager.Pin(segment.block);
 		return StringAppendBase(handle, segment, stats, data, offset, count);
 	}
 
-	static idx_t StringAppendBase(BufferHandle &handle, ColumnSegment &segment, SegmentStatistics &stats,
+	static idx_t StringAppendBase(BufferHandle &handle, ColumnSegment &segment, BaseStatistics &stats,
 	                              UnifiedVectorFormat &data, idx_t offset, idx_t count) {
 		D_ASSERT(segment.GetBlockOffset() == 0);
 		auto handle_ptr = handle.GetDataMutable();
@@ -103,18 +104,19 @@ public:
 
 		idx_t remaining_space = RemainingSpace(segment, handle);
 		auto base_count = segment.count.load();
+		StringStatsWriter stats_writer(stats.GetType());
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = data.sel->get_index(offset + i);
 			auto target_idx = base_count + i;
 			if (remaining_space < sizeof(int32_t)) {
 				// string index does not fit in the block at all
-				segment.count += i;
-				return i;
+				count = i;
+				break;
 			}
 			remaining_space -= sizeof(int32_t);
 			const bool is_null = !data.validity.RowIsValid(source_idx);
 			if (is_null) {
-				stats.statistics.SetHasNullFast();
+				stats.SetHasNullFast();
 				// null value is stored as a copy of the last value, this is done to be able to efficiently do the
 				// string_length calculation
 				if (target_idx > 0) {
@@ -143,12 +145,12 @@ public:
 			}
 			if (DUCKDB_UNLIKELY(required_space > remaining_space)) {
 				// no space remaining: return how many tuples we ended up writing
-				segment.count += i;
-				return i;
+				count = i;
+				break;
 			}
 
 			// we have space: write the string
-			UpdateStringStats(stats, source_data[source_idx]);
+			UpdateStringStats(stats, stats_writer, source_data[source_idx]);
 
 			if (DUCKDB_UNLIKELY(use_overflow_block)) {
 				// write to overflow blocks
@@ -188,6 +190,7 @@ public:
 			GetDictionary(segment, handle).Verify(segment.GetBlockSize());
 #endif
 		}
+		stats_writer.Merge(stats);
 		segment.count += count;
 		return count;
 	}
@@ -217,16 +220,12 @@ public:
 		*dictionary_size = new_dictionary_size;
 	}
 
-	static idx_t FinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats);
+	static idx_t FinalizeAppend(ColumnSegment &segment, BaseStatistics &stats);
 
 public:
-	static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &new_value) {
-		stats.statistics.SetHasNoNullFast();
-		if (stats.statistics.GetStatsType() == StatisticsType::GEOMETRY_STATS) {
-			GeometryStats::Update(stats.statistics, new_value);
-		} else {
-			StringStats::Update(stats.statistics, new_value);
-		}
+	static inline void UpdateStringStats(BaseStatistics &stats, StringStatsWriter &writer, const string_t &new_value) {
+		stats.SetHasNoNullFast();
+		writer.Update(new_value);
 	}
 
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer dict);

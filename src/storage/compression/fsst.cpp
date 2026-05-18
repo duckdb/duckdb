@@ -19,13 +19,6 @@
 namespace duckdb {
 struct FSSTScanState;
 
-typedef struct {
-	uint32_t dict_size;
-	uint32_t dict_end;
-	uint32_t bitpacking_width;
-	uint32_t fsst_symbol_table_offset;
-} fsst_compression_header_t;
-
 // Counts and offsets used during scanning/fetching
 //                                         |               ColumnSegment to be scanned / fetched from				 |
 //                                         | untouched | bp align | unused d-values | to scan | bp align | untouched |
@@ -216,7 +209,8 @@ class FSSTCompressionState : public CompressionState {
 public:
 	FSSTCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
 	    : CompressionState(info), checkpoint_data(checkpoint_data),
-	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_FSST)) {
+	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_FSST)),
+	      stats_writer(checkpoint_data.GetType()) {
 		CreateEmptySegment();
 	}
 
@@ -231,6 +225,7 @@ public:
 		current_width = 0;
 		max_compressed_string_length = 0;
 		last_fitting_size = 0;
+		stats_writer.Clear();
 
 		// Reset the pointers into the current segment
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
@@ -257,7 +252,8 @@ public:
 			};
 		}
 
-		UncompressedStringStorage::UpdateStringStats(current_segment->stats, uncompressed_string);
+		UncompressedStringStorage::UpdateStringStats(current_segment->GetStatsMutable(), stats_writer,
+		                                             uncompressed_string);
 
 		// Write string into dictionary
 		current_dictionary.size += compressed_string_len;
@@ -287,12 +283,12 @@ public:
 
 	void AddNull() {
 		AddEmptyStringInternal();
-		current_segment->stats.statistics.SetHasNullFast();
+		current_segment->GetStatsMutable().SetHasNullFast();
 	}
 
 	void AddEmptyString() {
 		AddEmptyStringInternal();
-		UncompressedStringStorage::UpdateStringStats(current_segment->stats, "");
+		UncompressedStringStorage::UpdateStringStats(current_segment->GetStatsMutable(), stats_writer, "");
 	}
 
 	size_t GetRequiredSize(size_t string_len) {
@@ -328,6 +324,7 @@ public:
 	void Flush(bool final = false) {
 		auto segment_size = Finalize();
 		auto &state = checkpoint_data.GetCheckpointState();
+		stats_writer.Merge(current_segment->GetStatsMutable());
 		state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
 		if (!final) {
@@ -404,6 +401,7 @@ public:
 	BufferHandle current_handle;
 	StringDictionaryContainer current_dictionary;
 	data_ptr_t current_end_ptr;
+	StringStatsWriter stats_writer;
 
 	// Buffers and map for current segment
 	vector<uint32_t> index_buffer;
@@ -587,7 +585,7 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &con
 	}
 	state->duckdb_fsst_decoder_ptr = state->duckdb_fsst_decoder.get();
 
-	const auto &stats = segment.stats.statistics;
+	const auto &stats = segment.GetStats();
 	if (stats.GetStatsType() == StatisticsType::STRING_STATS && StringStats::HasMaxStringLength(stats)) {
 		state->all_values_inlined = StringStats::MaxStringLength(stats) <= string_t::INLINE_LENGTH;
 	}

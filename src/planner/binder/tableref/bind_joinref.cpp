@@ -141,7 +141,9 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	result->delim_flipped = ref.delim_flipped;
 
 	{
-		LateralBinder binder(left_binder, context);
+		LateralBinder lateral_binder(left_binder, context);
+
+		right_binder.BeginSubqueryBind(left_binder, lateral_binder);
 		result->right = right_binder.BindJoin(*this, *ref.right);
 		if (!ref.duplicate_eliminated_columns.empty()) {
 			if (ref.delim_flipped) {
@@ -158,6 +160,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 				}
 			}
 		}
+		right_binder.FinishSubqueryBind();
 		bool is_lateral = false;
 		// Store the correlated columns in the right binder in bound ref for planning of LATERALs
 		// Ignore the correlated columns in the left binder, flattening handles those correlations

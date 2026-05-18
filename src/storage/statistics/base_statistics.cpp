@@ -49,6 +49,7 @@ BaseStatistics::BaseStatistics(BaseStatistics &&other) noexcept {
 	has_no_null = other.has_no_null;
 	distinct_count = other.distinct_count;
 	stats_union = other.stats_union;
+	std::swap(extra_data, other.extra_data);
 	std::swap(child_stats, other.child_stats);
 }
 
@@ -58,6 +59,7 @@ BaseStatistics &BaseStatistics::operator=(BaseStatistics &&other) noexcept {
 	has_no_null = other.has_no_null;
 	distinct_count = other.distinct_count;
 	stats_union = other.stats_union;
+	std::swap(extra_data, other.extra_data);
 	std::swap(child_stats, other.child_stats);
 	return *this;
 }
@@ -144,7 +146,7 @@ bool BaseStatistics::IsConstant() const {
 	return false;
 }
 
-void BaseStatistics::Merge(const BaseStatistics &other) {
+void BaseStatistics::Merge(const BaseStatistics &other, StatsMergeType merge_type) {
 	has_null = has_null || other.has_null;
 	has_no_null = has_no_null || other.has_no_null;
 	switch (GetStatsType()) {
@@ -152,16 +154,16 @@ void BaseStatistics::Merge(const BaseStatistics &other) {
 		NumericStats::Merge(*this, other);
 		break;
 	case StatisticsType::STRING_STATS:
-		StringStats::Merge(*this, other);
+		StringStats::Merge(*this, other, merge_type);
 		break;
 	case StatisticsType::LIST_STATS:
-		ListStats::Merge(*this, other);
+		ListStats::Merge(*this, other, merge_type);
 		break;
 	case StatisticsType::STRUCT_STATS:
-		StructStats::Merge(*this, other);
+		StructStats::Merge(*this, other, merge_type);
 		break;
 	case StatisticsType::ARRAY_STATS:
-		ArrayStats::Merge(*this, other);
+		ArrayStats::Merge(*this, other, merge_type);
 		break;
 	case StatisticsType::GEOMETRY_STATS:
 		GeometryStats::Merge(*this, other);
@@ -258,6 +260,9 @@ void BaseStatistics::Copy(const BaseStatistics &other) {
 		break;
 	case StatisticsType::VARIANT_STATS:
 		VariantStats::Copy(*this, other);
+		break;
+	case StatisticsType::STRING_STATS:
+		StringStats::Copy(*this, other);
 		break;
 	default:
 		break;
@@ -540,7 +545,7 @@ BaseStatistics BaseStatistics::FromConstantType(const Value &input) {
 		auto result = StringStats::CreateEmpty(input.type());
 		if (!input.IsNull()) {
 			auto &string_value = StringValue::Get(input);
-			StringStats::Update(result, string_t(string_value));
+			StringStats::FromConstant(result, string_t(string_value));
 		}
 		return result;
 	}

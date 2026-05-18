@@ -224,23 +224,31 @@ void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 	}
 }
 
-void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
+void StructColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		Vector append_vector(Vector::Ref(vector));
 		append_vector.Flatten();
-		Append(stats, state, append_vector, count);
+		Append(state, append_vector, count);
 		return;
 	}
 
 	// append the null values
-	validity->Append(stats, state.child_appends[0], vector, count);
+	validity->Append(state.child_appends[0], vector, count);
 
 	auto &child_entries = StructVector::GetEntries(vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Append(StructStats::GetChildStats(stats, i), state.child_appends[i + 1], child_entries[i],
-		                       count);
+		sub_columns[i]->Append(state.child_appends[i + 1], child_entries[i], count);
 	}
 	this->count += count;
+}
+
+void StructColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	validity->FinalizeAppend(finalize_state, state.child_appends[0]);
+
+	for (idx_t i = 0; i < sub_columns.size(); i++) {
+		ColumnDataFinalizeAppendState child_finalize_state(finalize_state, LogicalTypeId::STRUCT, i);
+		sub_columns[i]->FinalizeAppend(child_finalize_state, state.child_appends[i + 1]);
+	}
 }
 
 void StructColumnData::RevertAppend(row_t new_count) {

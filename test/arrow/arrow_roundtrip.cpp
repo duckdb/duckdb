@@ -283,11 +283,6 @@ TEST_CASE("Test TPCH arrow roundtrip", "[arrow][.]") {
 	DBConfig config;
 	DuckDB db(nullptr, &config);
 	Connection con(db);
-
-#if defined(D_ASSERT_IS_ENABLED) && !defined(DEBUG)
-	return; // Skip in relassert, takes too long
-#endif
-
 	if (!db.ExtensionIsLoaded("tpch")) {
 		return;
 	}

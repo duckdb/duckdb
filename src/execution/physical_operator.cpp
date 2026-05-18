@@ -96,6 +96,10 @@ unique_ptr<GlobalOperatorState> PhysicalOperator::GetGlobalOperatorState(ClientC
 	return make_uniq<GlobalOperatorState>();
 }
 
+bool PhysicalOperator::ResetGlobalOperatorState(ClientContext &context, GlobalOperatorState &state) const {
+	return false;
+}
+
 OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                              GlobalOperatorState &gstate, OperatorState &state) const {
 	throw InternalException("Calling Execute on a node that is not an operator!");

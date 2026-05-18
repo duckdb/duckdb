@@ -452,17 +452,20 @@ void Executor::CancelTasks() {
 	events.clear();
 }
 
-void Executor::WorkOnTasks() {
+bool Executor::WorkOnTasks() {
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 
+	bool did_work = false;
 	shared_ptr<Task> task_from_producer;
 	while (scheduler.GetTaskFromProducer(*producer, task_from_producer)) {
+		did_work = true;
 		auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
 		if (res == TaskExecutionResult::TASK_BLOCKED) {
 			task_from_producer->Deschedule();
 		}
 		task_from_producer.reset();
 	}
+	return did_work;
 }
 
 void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {

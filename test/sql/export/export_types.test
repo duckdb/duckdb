@@ -3,7 +3,7 @@
 # group: [export]
 
 # Because of ordering issues in EXPORT DATABASE we can't IMPORT this database
-mode skip
+mode skip instable
 
 statement ok
 BEGIN TRANSACTION
