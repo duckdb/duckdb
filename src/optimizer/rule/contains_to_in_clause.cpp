@@ -30,7 +30,7 @@ unique_ptr<Expression> ContainsToInClauseRule::Apply(LogicalOperator &op, vector
 	if (!ExpressionExecutor::TryEvaluateScalar(GetContext(), *list_arg, list_val)) {
 		return nullptr;
 	}
-	if (list_val.IsNull() || list_val.type().id() != LogicalTypeId::LIST) {
+	if (list_val.IsNull() || list_val.type().id() != LogicalTypeId::LIST || ListValue::GetChildren(list_val).empty()) {
 		return nullptr;
 	}
 
