@@ -38,5 +38,4 @@ void DictionaryCompression::SetDictionary(ColumnSegment &segment, BufferHandle &
 	Store<uint32_t>(container.end, data_ptr_cast(&header_ptr->dict_end));
 }
 
-
 } // namespace duckdb
