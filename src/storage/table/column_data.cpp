@@ -505,9 +505,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	    !last_segment.GetCompressionFunction().init_append) {
 		// we cannot append to this segment - append a new segment
 		auto total_rows = segment->GetRowStart() + last_segment.count;
-		// Persistent segments are resized to block_size during checkpoint, wo we pass nullptr to start fresh
-		const bool is_persistent = last_segment.segment_type == ColumnSegmentType::PERSISTENT;
-		AppendTransientSegment(l, total_rows, is_persistent ? nullptr : &last_segment);
+		AppendTransientSegment(l, total_rows, last_segment);
 		state.current = data.GetLastSegment(l);
 	} else {
 		state.current = segment;
@@ -642,7 +640,7 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row, optiona
 	auto &config = DBConfig::GetConfig(db);
 
 	idx_t segment_size;
-	if (!prev_segment) {
+	if (!prev_segment || prev_segment->segment_type == ColumnSegmentType::PERSISTENT) {
 		// We start with the `initial_bytes` setting, but we ensure that we have enough space for at least one row.
 		const auto initial_bytes = Settings::Get<InitialColumnSegmentSizeSetting>(config);
 		segment_size = MaxValue<idx_t>(GetTypeIdSize(type.InternalType()), initial_bytes);
