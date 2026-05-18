@@ -9,7 +9,9 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/storage/table/column_data.hpp"
@@ -19,18 +21,25 @@
 namespace duckdb {
 
 struct PragmaStorageFunctionData : public TableFunctionData {
-	explicit PragmaStorageFunctionData(TableCatalogEntry &table_entry) : table_entry(table_entry) {
+	PragmaStorageFunctionData(TableCatalogEntry &table_entry, ColumnSegmentInfoScanState scan_state_p)
+	    : table_entry(table_entry), scan_state(std::move(scan_state_p)) {
 	}
 
 	TableCatalogEntry &table_entry;
-	vector<ColumnSegmentInfo> column_segments_info;
+	//! Pinned row-group snapshot taken at bind time. Mutable because the cursor advances during
+	//! execution; concurrent access is serialized via PragmaStorageGlobalState::lock.
+	mutable ColumnSegmentInfoScanState scan_state;
 };
 
-struct PragmaStorageOperatorData : public GlobalTableFunctionState {
-	PragmaStorageOperatorData() : offset(0) {
-	}
+struct PragmaStorageGlobalState : public GlobalTableFunctionState {
+	//! Protects access to the shared scan state in bind data while local threads pull row groups.
+	mutex lock;
+};
 
-	idx_t offset;
+struct PragmaStorageLocalState : public LocalTableFunctionState {
+	//! Buffered column segment info for the row group this thread is currently emitting.
+	vector<ColumnSegmentInfo> buffer;
+	idx_t buffer_offset = 0;
 };
 
 static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, TableFunctionBindInput &input,
@@ -88,13 +97,19 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	// look up the table name in the catalog
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
-	auto result = make_uniq<PragmaStorageFunctionData>(table_entry);
-	result->column_segments_info = table_entry.GetColumnSegmentInfo(context);
-	return std::move(result);
+	ColumnSegmentInfoScanState scan_state;
+	table_entry.InitializeColumnSegmentInfoScan(scan_state);
+	return make_uniq<PragmaStorageFunctionData>(table_entry, std::move(scan_state));
 }
 
-unique_ptr<GlobalTableFunctionState> PragmaStorageInfoInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_uniq<PragmaStorageOperatorData>();
+unique_ptr<GlobalTableFunctionState> PragmaStorageInfoInitGlobal(ClientContext &context,
+                                                                 TableFunctionInitInput &input) {
+	return make_uniq<PragmaStorageGlobalState>();
+}
+
+unique_ptr<LocalTableFunctionState> PragmaStorageInfoInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
+                                                                GlobalTableFunctionState *global_state) {
+	return make_uniq<PragmaStorageLocalState>();
 }
 
 static Value ValueFromBlockIdList(const vector<block_id_t> &block_ids) {
@@ -107,45 +122,50 @@ static Value ValueFromBlockIdList(const vector<block_id_t> &block_ids) {
 
 static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = data_p.bind_data->Cast<PragmaStorageFunctionData>();
-	auto &data = data_p.global_state->Cast<PragmaStorageOperatorData>();
-	idx_t count = 0;
+	auto &gstate = data_p.global_state->Cast<PragmaStorageGlobalState>();
+	auto &lstate = data_p.local_state->Cast<PragmaStorageLocalState>();
 	auto &columns = bind_data.table_entry.GetColumns();
+	QueryContext query_context(context);
 
-	// row_group_id
+	idx_t count = 0;
+
 	auto &row_group_id = output.data[0];
-	// column_name
 	auto &column_name = output.data[1];
-	// column_id
 	auto &column_id = output.data[2];
-	// column_path
 	auto &column_path = output.data[3];
-	// segment_id
 	auto &segment_id = output.data[4];
-	// segment_type
 	auto &segment_type = output.data[5];
-	// start
 	auto &start = output.data[6];
-	// count
 	auto &count_col = output.data[7];
-	// compression
 	auto &compression = output.data[8];
-	// stats
 	auto &stats = output.data[9];
-	// has_updates
 	auto &has_updates = output.data[10];
-	// persistent
 	auto &persistent = output.data[11];
-	// block_id
 	auto &block_id = output.data[12];
-	// block_offset
 	auto &block_offset = output.data[13];
-	// segment_info
 	auto &segment_info = output.data[14];
-	// additional_block_ids
 	auto &additional_block_ids = output.data[15];
 
-	while (data.offset < bind_data.column_segments_info.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = bind_data.column_segments_info[data.offset++];
+	while (count < STANDARD_VECTOR_SIZE) {
+		if (lstate.buffer_offset >= lstate.buffer.size()) {
+			// drained the current row group's buffer; pull the next row group under the global lock
+			lstate.buffer.clear();
+			lstate.buffer_offset = 0;
+			bool has_more;
+			{
+				lock_guard<mutex> guard(gstate.lock);
+				has_more = bind_data.table_entry.ScanColumnSegmentInfo(query_context, bind_data.scan_state,
+				                                                       lstate.buffer);
+			}
+			if (!has_more) {
+				break;
+			}
+			if (lstate.buffer.empty()) {
+				continue;
+			}
+		}
+
+		auto &entry = lstate.buffer[lstate.buffer_offset++];
 
 		row_group_id.Append(Value::BIGINT(NumericCast<int64_t>(entry.row_group_index)));
 		auto &col = columns.GetColumn(PhysicalIndex(entry.column_id));
@@ -180,8 +200,9 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 }
 
 void PragmaStorageInfo::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_storage_info", {LogicalType::VARCHAR}, PragmaStorageInfoFunction,
-	                              PragmaStorageInfoBind, PragmaStorageInfoInit));
+	TableFunction storage_info("pragma_storage_info", {LogicalType::VARCHAR}, PragmaStorageInfoFunction,
+	                            PragmaStorageInfoBind, PragmaStorageInfoInitGlobal, PragmaStorageInfoInitLocal);
+	set.AddFunction(std::move(storage_info));
 }
 
 } // namespace duckdb

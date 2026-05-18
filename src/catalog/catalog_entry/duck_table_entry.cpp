@@ -1362,6 +1362,15 @@ vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo(const QueryContex
 	return storage->GetColumnSegmentInfo(context);
 }
 
+void DuckTableEntry::InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) {
+	storage->InitializeColumnSegmentInfoScan(state);
+}
+
+bool DuckTableEntry::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+                                           vector<ColumnSegmentInfo> &result) {
+	return storage->ScanColumnSegmentInfo(context, state, result);
+}
+
 TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {
 	return storage->GetStorageInfo();
 }

@@ -45,6 +45,8 @@ struct ConstraintState;
 struct TableUpdateState;
 struct OptimisticWriteCollection;
 struct ColumnFetchState;
+struct ColumnSegmentInfo;
+struct ColumnSegmentInfoScanState;
 struct DataTableInfo;
 struct LocalAppendState;
 struct ParallelTableScanState;
@@ -248,6 +250,9 @@ public:
 	idx_t GetTotalRows() const;
 
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
+	void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state);
+	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+	                           vector<ColumnSegmentInfo> &result);
 
 	//! Scans the next chunk for the CREATE INDEX operator
 	bool CreateIndexScan(TableScanState &state, DataChunk &result);

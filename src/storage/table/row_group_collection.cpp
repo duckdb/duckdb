@@ -1908,13 +1908,33 @@ vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(const QueryContext &context) {
 	vector<ColumnSegmentInfo> result;
-	auto row_groups = GetRowGroups();
-	auto lock = row_groups->Lock();
-	for (auto &node : row_groups->SegmentNodes(lock)) {
-		auto &row_group = node.GetNode();
-		row_group.GetColumnSegmentInfo(context, node.GetIndex(), result);
+	ColumnSegmentInfoScanState state;
+	InitializeColumnSegmentInfoScan(state);
+	while (ScanColumnSegmentInfo(context, state, result)) {
 	}
 	return result;
+}
+
+void RowGroupCollection::InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) {
+	// Pin a consistent snapshot of the row groups. Holding the shared_ptr keeps the
+	// segment tree alive even if a concurrent operation (alter, vacuum) installs a
+	// new collection. The segment-tree node lock is acquired only briefly here to
+	// fetch the first node (and may lazily load it from disk).
+	state.row_groups = GetRowGroups();
+	state.current_row_group = state.row_groups->GetRootSegment();
+}
+
+bool RowGroupCollection::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+                                               vector<ColumnSegmentInfo> &result) {
+	if (!state.current_row_group) {
+		return false;
+	}
+	auto &node = *state.current_row_group;
+	node.GetNode().GetColumnSegmentInfo(context, node.GetIndex(), result);
+	// Advance to the next row group. For lazy-loading segment trees this acquires
+	// the node lock briefly only while more segments still need to be loaded.
+	state.current_row_group = state.row_groups->GetNextSegment(node);
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
