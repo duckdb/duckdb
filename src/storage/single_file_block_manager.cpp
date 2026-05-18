@@ -262,8 +262,9 @@ void DatabaseHeader::Write(WriteStream &ser) {
 	ser.Write<idx_t>(vector_size);
 
 	if (storage_compatibility < StorageVersion::V2_0_0) {
-		auto storage_version_string = StorageVersionInfo::GetStorageVersionString(storage_compatibility);
-		ser.Write<idx_t>(GetSerializationVersionDeprecated(storage_version_string.c_str()));
+		string storage_version_string = StorageVersionInfo::GetStorageVersionString(storage_compatibility);
+		auto ser_version = GetSerializationVersionDeprecated(storage_version_string.c_str());
+		ser.Write<idx_t>(ser_version);
 	} else {
 		ser.Write<idx_t>(static_cast<idx_t>(storage_compatibility));
 	}
@@ -282,7 +283,7 @@ void DatabaseHeader::SetStorageVersionInDatabaseHeader(DatabaseHeader &header, S
 			throw InvalidInputException("Storage Version is not found!");
 		}
 	} else {
-		// before V1.6.0
+		// before V1.2.0
 		// The Storage Version in the main header could be written in two different ways
 		// 1) When the DB is created from scratch -- with e.g. ATTACH (STORAGE_VERSION "v1.4.0")
 		// 2) if the db file got bumped to a higher version
@@ -351,7 +352,8 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 	}
 
 	// storage version from the database header
-	auto database_header_storage_version = source.Read<StorageVersion>();
+	auto h_storage_version = source.Read<idx_t>();
+	auto database_header_storage_version = static_cast<StorageVersion>(h_storage_version);
 	SetStorageVersionInDatabaseHeader(header, static_cast<StorageVersion>(main_header.version_number),
 	                                  database_header_storage_version);
 

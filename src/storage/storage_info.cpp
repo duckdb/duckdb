@@ -184,6 +184,10 @@ idx_t GetSerializationVersionDeprecated(const char *version_string) {
 			    serialization_version_info[i].storage_version);
 		}
 	}
+	if (GetStorageVersion(version_string) != StorageVersion::INVALID) {
+		return SerializationVersionInfo::GetSerializationVersionValue(SerializationVersionDeprecated::V0_10_2);
+	}
+	// Unknown/future version
 	return SerializationVersionInfo::Invalid();
 }
 
