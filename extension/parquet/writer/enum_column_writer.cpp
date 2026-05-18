@@ -35,6 +35,7 @@ EnumColumnWriter::EnumColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&
                                    vector<string> schema_path_p)
     : PrimitiveColumnWriter(writer, std::move(column_schema), std::move(schema_path_p)) {
 	bit_width = RleBpDecoder::ComputeBitWidthFromValueCount(EnumType::GetSize(Type()));
+	seen_enum.resize(EnumType::GetSize(Type()), false);
 }
 
 unique_ptr<ColumnWriterStatistics> EnumColumnWriter::InitializeStatsState() {
@@ -55,6 +56,7 @@ void EnumColumnWriter::WriteEnumInternal(WriteStream &temp_writer, Vector &input
 				page_state.written_value = true;
 			}
 			page_state.encoder.WriteValue(temp_writer, ptr[r]);
+			seen_enum[ptr[r]] = true;
 		}
 	}
 }
@@ -108,7 +110,6 @@ idx_t EnumColumnWriter::DictionarySize(PrimitiveColumnWriterState &state_p) {
 
 void EnumColumnWriter::FlushDictionary(PrimitiveColumnWriterState &state, ColumnWriterStatistics *stats_p) {
 	auto &stats = stats_p->Cast<StringStatisticsState>();
-	// write the enum values to a dictionary page
 	auto &enum_values = EnumType::GetValuesInsertOrder(Type());
 	auto enum_count = EnumType::GetSize(Type());
 	auto string_values = FlatVector::GetData<string_t>(enum_values);
@@ -116,11 +117,13 @@ void EnumColumnWriter::FlushDictionary(PrimitiveColumnWriterState &state, Column
 	auto temp_writer = make_uniq<MemoryStream>(BufferAllocator::Get(writer.GetContext()));
 	for (idx_t r = 0; r < enum_count; r++) {
 		D_ASSERT(!FlatVector::IsNull(enum_values, r));
-		// update the statistics
-		stats.Update(string_values[r]);
-		// write this string value to the dictionary
-		temp_writer->Write<uint32_t>(string_values[r].GetSize());
-		temp_writer->WriteData(const_data_ptr_cast(string_values[r].GetData()), string_values[r].GetSize());
+		if (seen_enum[r]) {
+			stats.Update(string_values[r]);
+			temp_writer->Write<uint32_t>(string_values[r].GetSize());
+			temp_writer->WriteData(const_data_ptr_cast(string_values[r].GetData()), string_values[r].GetSize());
+		} else {
+			temp_writer->Write<uint32_t>(0);
+		}
 	}
 	// flush the dictionary page and add it to the to-be-written pages
 	WriteDictionary(state, std::move(temp_writer), enum_count);

@@ -618,6 +618,12 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformTrimExpression);
 	REGISTER_TRANSFORM(TransformTrimDirection);
 	REGISTER_TRANSFORM(TransformTrimSource);
+	REGISTER_TRANSFORM(TransformOverlayExpression);
+	REGISTER_TRANSFORM(TransformOverlayArguments);
+	REGISTER_TRANSFORM(TransformOverlayParameters);
+	REGISTER_TRANSFORM(TransformFromExpression);
+	REGISTER_TRANSFORM(TransformForExpression);
+	REGISTER_TRANSFORM(TransformOverlayExpressionList);
 	REGISTER_TRANSFORM(TransformPositionExpression);
 	REGISTER_TRANSFORM(TransformCastExpression);
 	REGISTER_TRANSFORM(TransformCastOrTryCast);

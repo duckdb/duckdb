@@ -504,6 +504,54 @@ endif
 unittest_release:
 	$(PYTHON) scripts/ci/run_tests.py build/release/$(UNITTEST_BINARY) $(T)
 
+TEST_CONFIGS := \
+	test/configs/verify_statement_copy.json \
+	test/configs/verify_statement_to_string.json \
+	test/configs/verify_statement_explain.json \
+	test/configs/verify_statement_prepare.json \
+	test/configs/verify_serializer.json \
+	test/configs/verify_stats.json \
+	test/configs/verify_statement_serialization.json \
+	test/configs/force_storage.json \
+	test/configs/force_storage_restart.json \
+	test/configs/latest_storage.json \
+	test/configs/block_verification.json \
+	test/configs/disable_optimizer.json \
+	test/configs/internal_vector_serialization.json \
+	test/configs/internal_vector_verification.json \
+	test/configs/force_external.json \
+	test/configs/verify_fetch_row.json \
+	test/configs/disable_caching_operators.json \
+	test/configs/wal_verification.json \
+	test/configs/vacuum_rebuild_indexes_force_storage.json \
+	test/configs/prefetch_all_parquet_files.json \
+	test/configs/verification_projection.json \
+	test/configs/verify_column_bindings.json \
+	test/configs/no_local_filesystem.json \
+	test/configs/block_size_16kB.json \
+	test/configs/latest_storage_block_size_16kB.json \
+	test/configs/block_allocator_100mib.json \
+	test/configs/variant_vector.json \
+	test/configs/compressed_in_memory.json \
+	test/configs/prefetch_all_storage.json \
+	test/configs/encryption.json
+
+test_configs:
+	$(PYTHON) scripts/ci/run_tests.py $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg)) ./build/release/$(UNITTEST_BINARY)
+
+test_vector:
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector dictionary_expression --skip-compiled" ./build/release/$(UNITTEST_BINARY)
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector dictionary_operator --skip-compiled" ./build/release/$(UNITTEST_BINARY)
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector constant_operator --skip-compiled" ./build/release/$(UNITTEST_BINARY)
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector sequence_operator --skip-compiled" ./build/release/$(UNITTEST_BINARY)
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector nested_shuffle --skip-compiled" ./build/release/$(UNITTEST_BINARY)
+
+test_table_scan:
+	$(PYTHON) scripts/ci/run_tests.py --test-flags='--on-init "SET debug_physical_table_scan_execution_strategy=SYNCHRONOUS;"' ./build/release/$(UNITTEST_BINARY)
+
+test_storage:
+	$(PYTHON) scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2|1.4.3" --new-unittest build/release/$(UNITTEST_BINARY)
+
 .PHONY: alltest_release_tag test_release_tag
 alltest_release_tag:
 	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/$(UNITTEST_BINARY) '*' $(T)

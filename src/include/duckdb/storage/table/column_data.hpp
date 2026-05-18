@@ -35,6 +35,7 @@ struct TableScanOptions;
 struct TransactionData;
 struct PersistentColumnData;
 class ValidityColumnData;
+struct ColumnDataFinalizeAppendState;
 
 using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
 
@@ -154,10 +155,11 @@ public:
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
-	virtual void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count);
-	//! Append a vector of type [type] to the end of the column
-	void Append(ColumnAppendState &state, Vector &vector, idx_t count);
-	virtual void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count);
+	virtual void Append(ColumnAppendState &state, Vector &vector, idx_t count);
+	virtual void AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count);
+	//! Finalize appending
+	virtual void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state);
+	void FinalizeAppend(optional_ptr<BaseStatistics> table_stats, ColumnAppendState &state);
 	//! Revert a set of appends to the ColumnData
 	virtual void RevertAppend(row_t new_count);
 

@@ -122,10 +122,14 @@ void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.child_appends.push_back(std::move(child_append));
 }
 
-void StandardColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
-                                    idx_t count) {
-	ColumnData::AppendData(stats, state, vdata, count);
-	validity->AppendData(stats, state.child_appends[0], vdata, count);
+void StandardColumnData::AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
+	ColumnData::AppendData(state, vdata, count);
+	validity->AppendData(state.child_appends[0], vdata, count);
+}
+
+void StandardColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	ColumnData::FinalizeAppend(finalize_state, state);
+	validity->FinalizeAppend(finalize_state, state.child_appends[0]);
 }
 
 void StandardColumnData::RevertAppend(row_t new_count) {

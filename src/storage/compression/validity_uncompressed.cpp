@@ -540,10 +540,9 @@ unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, b
 	return nullptr;
 }
 
-idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,
+idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segment, BaseStatistics &validity_stats,
                      UnifiedVectorFormat &data, idx_t offset, idx_t vcount) {
 	D_ASSERT(segment.GetBlockOffset() == 0);
-	auto &validity_stats = stats.statistics;
 
 	auto max_tuples = segment.SegmentSize() / ValidityMask::STANDARD_MASK_SIZE * STANDARD_VECTOR_SIZE;
 	idx_t append_count = MinValue<idx_t>(vcount, max_tuples - segment.count);
@@ -568,7 +567,7 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 	return append_count;
 }
 
-idx_t ValidityFinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
+idx_t ValidityFinalizeAppend(ColumnSegment &segment, BaseStatistics &stats) {
 	return ((segment.count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE) * ValidityMask::STANDARD_MASK_SIZE;
 }
 
