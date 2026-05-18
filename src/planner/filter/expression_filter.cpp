@@ -129,7 +129,7 @@ bool ExpressionFilter::EvaluateWithConstant(ExpressionExecutor &executor, const 
 	return count > 0;
 }
 
-FilterPropagateResult ExpressionFilter::CheckStatistics(BaseStatistics &stats) const {
+FilterPropagateResult ExpressionFilter::CheckStatistics(const BaseStatistics &stats) const {
 	if (stats.GetStatsType() == StatisticsType::GEOMETRY_STATS) {
 		// Delegate to GeometryStats for geometry types
 		return GeometryStats::CheckZonemap(stats, expr);
@@ -188,7 +188,7 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(const Expression &ex
 }
 
 static FilterPropagateResult CheckComparisonStatistics(const BoundFunctionExpression &comp_expr,
-                                                       BaseStatistics &stats) {
+                                                       const BaseStatistics &stats) {
 	vector<unique_ptr<BaseStatistics>> owned_stats;
 	optional_ptr<const BaseStatistics> filter_stats;
 	optional_ptr<const BoundConstantExpression> constant_expr;
@@ -222,7 +222,8 @@ static FilterPropagateResult CheckComparisonStatistics(const BoundFunctionExpres
 	return result;
 }
 
-static FilterPropagateResult CheckFunctionStatistics(const BoundFunctionExpression &func_expr, BaseStatistics &stats) {
+static FilterPropagateResult CheckFunctionStatistics(const BoundFunctionExpression &func_expr,
+                                                     const BaseStatistics &stats) {
 	if (BoundComparisonExpression::IsComparison(func_expr.GetExpressionType())) {
 		return CheckComparisonStatistics(func_expr, stats);
 	}
@@ -233,8 +234,8 @@ static FilterPropagateResult CheckFunctionStatistics(const BoundFunctionExpressi
 	return func_expr.function.GetFilterPruneCallback()(input);
 }
 
-static FilterPropagateResult CheckNullOperatorStatistics(const BoundOperatorExpression &op_expr, BaseStatistics &stats,
-                                                         ExpressionType operator_type) {
+static FilterPropagateResult CheckNullOperatorStatistics(const BoundOperatorExpression &op_expr,
+                                                         const BaseStatistics &stats, ExpressionType operator_type) {
 	if (op_expr.children.empty()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -261,7 +262,8 @@ static FilterPropagateResult CheckNullOperatorStatistics(const BoundOperatorExpr
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-static FilterPropagateResult CheckInOperatorStatistics(const BoundOperatorExpression &op_expr, BaseStatistics &stats) {
+static FilterPropagateResult CheckInOperatorStatistics(const BoundOperatorExpression &op_expr,
+                                                       const BaseStatistics &stats) {
 	if (op_expr.children.size() <= 1) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -295,7 +297,8 @@ static FilterPropagateResult CheckInOperatorStatistics(const BoundOperatorExpres
 	return result;
 }
 
-static FilterPropagateResult CheckOperatorStatistics(const BoundOperatorExpression &op_expr, BaseStatistics &stats) {
+static FilterPropagateResult CheckOperatorStatistics(const BoundOperatorExpression &op_expr,
+                                                     const BaseStatistics &stats) {
 	switch (op_expr.GetExpressionType()) {
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
@@ -307,7 +310,8 @@ static FilterPropagateResult CheckOperatorStatistics(const BoundOperatorExpressi
 	}
 }
 
-static FilterPropagateResult CheckConjunctionStatistics(const BoundConjunctionExpression &conj, BaseStatistics &stats) {
+static FilterPropagateResult CheckConjunctionStatistics(const BoundConjunctionExpression &conj,
+                                                        const BaseStatistics &stats) {
 	switch (conj.GetExpressionType()) {
 	case ExpressionType::CONJUNCTION_AND: {
 		auto result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
@@ -339,7 +343,7 @@ static FilterPropagateResult CheckConjunctionStatistics(const BoundConjunctionEx
 	}
 }
 
-FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(const Expression &expr, BaseStatistics &stats) {
+FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(const Expression &expr, const BaseStatistics &stats) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION:
 		return CheckFunctionStatistics(expr.Cast<BoundFunctionExpression>(), stats);
