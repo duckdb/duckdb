@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
+
 namespace duckdb {
 
 StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
@@ -20,15 +21,6 @@ StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInf
 void StandardColumnData::SetDataType(ColumnDataType data_type) {
 	ColumnData::SetDataType(data_type);
 	validity->SetDataType(data_type);
-}
-
-auto StandardColumnData::GetSegmentStatsForZonemap(ColumnScanState &state, TableFilter &filter) -> ZonemapCheckStats {
-	if (IsDirectNullCheckFilter(filter) || state.child_states.empty() || !state.child_states[0].current) {
-		return ColumnData::GetSegmentStatsForZonemap(state, filter);
-	}
-	auto merged_stats = state.current->GetNode().GetStats().ToUnique();
-	merged_stats->Merge(state.child_states[0].current->GetNode().GetStats());
-	return ZonemapCheckStats(std::move(merged_stats));
 }
 
 ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {

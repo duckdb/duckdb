@@ -72,7 +72,6 @@ public:
 	void SetValidityData(shared_ptr<ValidityColumnData> validity);
 
 protected:
-	ZonemapCheckStats GetSegmentStatsForZonemap(ColumnScanState &state, TableFilter &filter) override;
 	//! The validity column data
 	shared_ptr<ValidityColumnData> validity;
 };
