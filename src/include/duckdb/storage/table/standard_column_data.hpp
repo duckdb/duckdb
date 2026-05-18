@@ -37,7 +37,8 @@ public:
 	            SelectionVector &sel, idx_t sel_count) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
-	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
+	void AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
+	void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) override;
 	void RevertAppend(row_t new_count) override;
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index, row_t row_id,

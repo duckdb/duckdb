@@ -63,7 +63,7 @@ bool DictionaryCompressionCompressState::LookupString(string_t str) {
 }
 
 void DictionaryCompressionCompressState::AddNewString(string_t str) {
-	UncompressedStringStorage::UpdateStringStats(current_segment->stats, stats_writer, str);
+	UncompressedStringStorage::UpdateStringStats(current_segment->GetStatsMutable(), stats_writer, str);
 
 	// Copy string to dict
 	current_dictionary.size += str.GetSize();
@@ -89,7 +89,7 @@ void DictionaryCompressionCompressState::AddNewString(string_t str) {
 }
 
 void DictionaryCompressionCompressState::AddNull() {
-	current_segment->stats.statistics.SetHasNullFast();
+	current_segment->GetStatsMutable().SetHasNullFast();
 	selection_buffer.push_back(0);
 	current_segment->count++;
 }
@@ -113,7 +113,7 @@ bool DictionaryCompressionCompressState::CalculateSpaceRequirements(bool new_str
 void DictionaryCompressionCompressState::Flush(bool final) {
 	auto segment_size = Finalize();
 	auto &state = checkpoint_data.GetCheckpointState();
-	stats_writer.Merge(current_segment->stats.statistics);
+	stats_writer.Merge(current_segment->GetStatsMutable());
 	state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
 	if (!final) {

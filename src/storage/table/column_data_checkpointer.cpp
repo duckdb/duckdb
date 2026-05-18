@@ -379,7 +379,7 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 		current_row += segment.count;
 
 		// merge the persistent stats into the global column stats
-		state.global_stats->Merge(segment.stats.statistics);
+		state.global_stats->Merge(segment.GetStats());
 		state.data_pointers.push_back(std::move(pointer));
 	}
 	if (error_segment_start.IsValid()) {

@@ -25,10 +25,7 @@ struct StringStatsWriter {
 
 	inline void Clear() {
 		if (!is_geometry) {
-			for (idx_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
-				min[i] = 0xFF;
-				max[i] = 0;
-			}
+			is_set = false;
 		} else {
 			geometry_stats.SetEmpty();
 		}
@@ -42,21 +39,35 @@ struct StringStatsWriter {
 		auto data = const_data_ptr_cast(value.GetData());
 		auto size = value.GetSize();
 
-		//! we can only fit 8 bytes, so we might need to trim our string
-		// construct the value
-		data_t target[StringStatsData::MAX_STRING_MINMAX_SIZE];
-		ConstructValue(data, size, target);
-
-		// update the min and max
-		if (StringValueComparison(target, StringStatsData::MAX_STRING_MINMAX_SIZE, min) < 0) {
-			memcpy(min, target, StringStatsData::MAX_STRING_MINMAX_SIZE);
-		}
-		if (StringValueComparison(target, StringStatsData::MAX_STRING_MINMAX_SIZE, max) > 0) {
-			memcpy(max, target, StringStatsData::MAX_STRING_MINMAX_SIZE);
+		auto copy_count = MinValue<idx_t>(size, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
+		if (is_set) {
+			// compare to current min/max
+			auto min_cmp_count = MinValue<idx_t>(copy_count, min_size);
+			auto min_cmp = memcmp(data, min, min_cmp_count);
+			if (min_cmp < 0 || (min_cmp == 0 && size < min_size)) {
+				memcpy(min, data, copy_count);
+				min_size = size;
+			}
+			auto max_cmp_count = MinValue<idx_t>(copy_count, max_size);
+			int max_cmp = memcmp(data, max, max_cmp_count);
+			if (max_cmp > 0 || (max_cmp == 0 && size > max_size)) {
+				memcpy(max, data, copy_count);
+				max_size = size;
+			}
+		} else {
+			memcpy(min, data, copy_count);
+			memcpy(max, data, copy_count);
+			min_size = size;
+			max_size = size;
+			is_set = true;
 		}
 		if (size > max_string_length) {
 			max_string_length = UnsafeNumericCast<uint32_t>(size);
 		}
+		if (size < min_string_length) {
+			min_string_length = UnsafeNumericCast<uint32_t>(size);
+		}
+		total_string_length += size;
 		if (is_varchar && !has_unicode) {
 			auto unicode = Utf8Proc::Analyze(const_char_ptr_cast(data), size);
 			if (unicode == UnicodeType::UTF8) {
@@ -68,37 +79,8 @@ struct StringStatsWriter {
 		}
 	}
 
-	static bool AllCharsEqualTo(const data_t data[], data_t comp) {
-		for (idx_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
-			if (data[i] != comp) {
-				return false;
-			}
-		}
-		return true;
-	}
-
-	static int StringValueComparison(const_data_ptr_t data, idx_t len, const_data_ptr_t comparison) {
-		for (idx_t i = 0; i < len; i++) {
-			if (data[i] < comparison[i]) {
-				return -1;
-			} else if (data[i] > comparison[i]) {
-				return 1;
-			}
-		}
-		return 0;
-	}
-
-	static void ConstructValue(const_data_ptr_t data, idx_t size, data_t target[],
-	                           idx_t max_length = StringStatsData::MAX_STRING_MINMAX_SIZE) {
-		idx_t value_size = size > max_length ? max_length : size;
-		memcpy(target, data, value_size);
-		for (idx_t i = value_size; i < max_length; i++) {
-			target[i] = '\0';
-		}
-	}
-
 	bool HasStats() const {
-		return min[0] <= max[0];
+		return is_set;
 	}
 
 	void Merge(BaseStatistics &other) const {
@@ -110,10 +92,15 @@ struct StringStatsWriter {
 	}
 
 private:
-	data_t min[StringStatsData::MAX_STRING_MINMAX_SIZE];
-	data_t max[StringStatsData::MAX_STRING_MINMAX_SIZE];
+	data_t min[StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE];
+	data_t max[StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE];
+	idx_t min_size = 0;
+	idx_t max_size = 0;
+	bool is_set = false;
 	bool has_unicode = false;
 	uint32_t max_string_length = 0;
+	uint32_t min_string_length = StringStatsData::MAXIMUM_MIN_STRING_LENGTH;
+	idx_t total_string_length = 0;
 	bool is_varchar = true;
 	bool is_geometry = false;
 	GeometryStatsData geometry_stats;

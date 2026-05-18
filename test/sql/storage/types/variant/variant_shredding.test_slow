@@ -175,7 +175,7 @@ checkpoint
 query III
 select s.min, s.max, s.max_string_length from (select s.fully_shredded.child_stats.stats s from (select stats(col) s from fully_shredded_array limit 1));
 ----
-a	this is 	21
+a	this is a lo	21
 
 # ------------------------------ Partially shredded ARRAY ------------------------------
 
