@@ -468,6 +468,71 @@ ORDER BY ALL
 1	100	1	1
 
 statement ok
+CREATE TABLE ordered_rollup_prefix(k VARCHAR, c VARCHAR, v INT)
+
+statement ok
+INSERT INTO ordered_rollup_prefix VALUES (NULL, 'a', 10), (NULL, 'b', 5), ('A', 'x', 7), ('B', 'y', 6)
+
+query III
+SELECT k, c, sum(v) s
+FROM ordered_rollup_prefix
+GROUP BY rollup(k, c)
+ORDER BY k NULLS FIRST, c NULLS FIRST, s DESC
+LIMIT 3
+----
+NULL	NULL	28
+NULL	NULL	15
+NULL	a	10
+
+statement ok
+CREATE TABLE ordered_rollup_prefix_with_optimizer AS
+SELECT k, c, sum(v) s
+FROM ordered_rollup_prefix
+GROUP BY rollup(k, c)
+ORDER BY k NULLS FIRST, c NULLS FIRST, s DESC
+LIMIT 8
+
+statement ok
+SET disabled_optimizers = 'top_n_window_elimination'
+
+statement ok
+CREATE TABLE ordered_rollup_prefix_without_optimizer AS
+SELECT k, c, sum(v) s
+FROM ordered_rollup_prefix
+GROUP BY rollup(k, c)
+ORDER BY k NULLS FIRST, c NULLS FIRST, s DESC
+LIMIT 8
+
+query III
+SELECT * FROM ordered_rollup_prefix_with_optimizer
+EXCEPT ALL
+SELECT * FROM ordered_rollup_prefix_without_optimizer
+----
+
+query III
+SELECT * FROM ordered_rollup_prefix_without_optimizer
+EXCEPT ALL
+SELECT * FROM ordered_rollup_prefix_with_optimizer
+----
+
+query IIII
+SELECT k, c, s, sum(s) OVER (PARTITION BY k) ws
+FROM (
+	SELECT k, c, sum(v) s
+	FROM ordered_rollup_prefix
+	GROUP BY rollup(k, c)
+) rollup_rows
+ORDER BY k NULLS FIRST, c NULLS FIRST, s DESC, ws DESC
+LIMIT 3
+----
+NULL	NULL	28	58
+NULL	NULL	15	58
+NULL	a	10	58
+
+statement ok
+SET disabled_optimizers = ''
+
+statement ok
 CREATE TABLE rank_rollup_prefix(k VARCHAR, c VARCHAR, v INT)
 
 statement ok

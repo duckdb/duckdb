@@ -28,6 +28,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -58,16 +59,6 @@ unique_ptr<LogicalOperator> *FindFirstAggregate(unique_ptr<LogicalOperator> &op)
 		return nullptr;
 	}
 	return FindFirstAggregate(op->children[0]);
-}
-
-optional_ptr<LogicalWindow> FindFirstWindow(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_WINDOW) {
-		return op.Cast<LogicalWindow>();
-	}
-	if (op.children.size() != 1) {
-		return nullptr;
-	}
-	return FindFirstWindow(*op.children[0]);
 }
 
 bool RemoveEmptyGroupingSet(LogicalAggregate &aggregate) {
@@ -131,6 +122,30 @@ void AddBindingReplacements(ColumnBindingReplacer &replacer, const vector<Column
 	}
 }
 
+bool ExtractPassthroughBinding(const Expression &expr, ColumnBinding &binding) {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_COLUMN_REF:
+		binding = expr.Cast<BoundColumnRefExpression>().binding;
+		return true;
+	case ExpressionClass::BOUND_CAST:
+		return ExtractPassthroughBinding(*expr.Cast<BoundCastExpression>().child, binding);
+	case ExpressionClass::BOUND_FUNCTION: {
+		auto &function_expr = expr.Cast<BoundFunctionExpression>();
+		if (function_expr.children.size() != 1) {
+			return false;
+		}
+		const auto &name = function_expr.function.GetName();
+		if (!StringUtil::StartsWith(name, "__internal_compress_") &&
+		    !StringUtil::StartsWith(name, "__internal_decompress_")) {
+			return false;
+		}
+		return ExtractPassthroughBinding(*function_expr.children[0], binding);
+	}
+	default:
+		return false;
+	}
+}
+
 bool IsLeadingAggregateGroup(LogicalOperator &op, ColumnBinding binding) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
@@ -144,11 +159,11 @@ bool IsLeadingAggregateGroup(LogicalOperator &op, ColumnBinding binding) {
 			return false;
 		}
 		auto &expr = projection.expressions[binding.column_index.GetIndex()];
-		if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		ColumnBinding child_binding;
+		if (!ExtractPassthroughBinding(*expr, child_binding)) {
 			return false;
 		}
-		auto &column_ref = expr->Cast<BoundColumnRefExpression>();
-		return IsLeadingAggregateGroup(*op.children[0], column_ref.binding);
+		return IsLeadingAggregateGroup(*op.children[0], child_binding);
 	}
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_ORDER_BY: {
@@ -169,6 +184,49 @@ bool IsLeadingAggregateGroup(LogicalOperator &op, ColumnBinding binding) {
 	default:
 		return false;
 	}
+}
+
+bool WindowPartitionsOnLeadingAggregateGroup(LogicalWindow &window) {
+	for (const auto &expr : window.expressions) {
+		auto &window_expr = expr->Cast<BoundWindowExpression>();
+		bool found_leading_group = false;
+		for (const auto &partition : window_expr.partitions) {
+			if (partition->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+				continue;
+			}
+			auto &column_ref = partition->Cast<BoundColumnRefExpression>();
+			if (IsLeadingAggregateGroup(*window.children[0], column_ref.binding)) {
+				found_leading_group = true;
+				break;
+			}
+		}
+		if (!found_leading_group) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool CanSplitOrderedPrefixAtAggregate(LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+		return true;
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+		break;
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		if (!WindowPartitionsOnLeadingAggregateGroup(op.Cast<LogicalWindow>())) {
+			return false;
+		}
+		break;
+	default:
+		return false;
+	}
+	if (op.children.size() != 1) {
+		return false;
+	}
+	return CanSplitOrderedPrefixAtAggregate(*op.children[0]);
 }
 
 TableIndex GetAggregateIdx(const unique_ptr<LogicalOperator> &op) {
@@ -319,7 +377,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::Optimize(unique_ptr<LogicalOp
 	return op;
 }
 
-unique_ptr<LogicalOperator> TopNWindowElimination::TryOptimizeOrderedRankPrefix(unique_ptr<LogicalOperator> op) {
+unique_ptr<LogicalOperator> TopNWindowElimination::TryOptimizeOrderedRollupPrefix(unique_ptr<LogicalOperator> op) {
 	if (op->type != LogicalOperatorType::LOGICAL_TOP_N) {
 		return op;
 	}
@@ -345,17 +403,10 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryOptimizeOrderedRankPrefix(
 	if (!IsLeadingAggregateGroup(*topn.children[0], first_order.binding)) {
 		return op;
 	}
-
-	auto window = FindFirstWindow(*topn.children[0]);
-	if (!window || window->expressions.empty()) {
+	if (!CanSplitOrderedPrefixAtAggregate(*topn.children[0])) {
 		return op;
 	}
-	auto &window_expr = window->expressions[0]->Cast<BoundWindowExpression>();
-	if (window_expr.GetExpressionType() != ExpressionType::WINDOW_RANK || window_expr.partitions.size() != 1 ||
-	    window_expr.orders.size() != 1) {
-		return op;
-	}
-	if (window_expr.partitions[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+	if (HasExternalCTEReferences(*topn.children[0])) {
 		return op;
 	}
 
@@ -371,7 +422,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryOptimizeOrderedRankPrefix(
 		return op;
 	}
 
-	// If the first ORDER BY key is the leading rollup key with NULLS FIRST, all rows with a NULL prefix sort
+	// If the first ORDER BY key is the leading rollup key with NULLS FIRST, the NULL-prefix rollup rows sort
 	// before the rest. Materialize those rows first and only run the fallback branch when they do not fill the LIMIT.
 	LogicalOperatorDeepCopy first_rows_copier(optimizer.binder, nullptr);
 	auto first_rows = first_rows_copier.DeepCopy(topn.children[0]);
@@ -481,7 +532,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryOptimizeOrderedRankPrefix(
 	topn_replacer.VisitOperator(topn);
 	topn.ResolveOperatorTypes();
 
-	auto result = make_uniq<LogicalMaterializedCTE>("ordered_rank_prefix", cte_index, cte_types.size(),
+	auto result = make_uniq<LogicalMaterializedCTE>("ordered_rollup_prefix", cte_index, cte_types.size(),
 	                                               std::move(first_rows), std::move(op),
 	                                               CTEMaterialize::CTE_MATERIALIZE_ALWAYS);
 	result->ResolveOperatorTypes();
@@ -491,7 +542,7 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryOptimizeOrderedRankPrefix(
 unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                     ColumnBindingReplacer &replacer) {
 	if (op->type == LogicalOperatorType::LOGICAL_TOP_N) {
-		op = TryOptimizeOrderedRankPrefix(std::move(op));
+		op = TryOptimizeOrderedRollupPrefix(std::move(op));
 	}
 	if (!CanOptimize(*op)) {
 		// Traverse through query plan to find grouped top-n pattern
