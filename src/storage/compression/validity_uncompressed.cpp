@@ -206,9 +206,9 @@ struct ValidityScanState : public SegmentScanState {
 
 unique_ptr<SegmentScanState> ValidityInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq<ValidityScanState>();
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	result->handle = buffer_manager.Pin(segment.block);
-	result->block_id = segment.block->BlockId();
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	result->handle = buffer_manager.Pin(segment.GetBlockHandle());
+	result->block_id = segment.GetBlockHandle()->BlockId();
 	return std::move(result);
 }
 
@@ -510,8 +510,8 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vecto
 //===--------------------------------------------------------------------===//
 void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	D_ASSERT(row_id >= 0 && row_id < row_t(segment.count));
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto handle = buffer_manager.Pin(segment.block);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
 	auto dataptr = handle.GetDataMutable() + segment.GetBlockOffset();
 	ValidityMask mask(reinterpret_cast<validity_t *>(dataptr), segment.count);
 	auto &result_mask = FlatVector::ValidityMutable(result);
@@ -524,16 +524,16 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 // Append
 //===--------------------------------------------------------------------===//
 static unique_ptr<CompressionAppendState> ValidityInitAppend(ColumnSegment &segment) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto handle = buffer_manager.Pin(segment.block);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
 	return make_uniq<CompressionAppendState>(std::move(handle));
 }
 
 unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, block_id_t block_id,
                                                        optional_ptr<ColumnSegmentState> segment_state) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	if (block_id == INVALID_BLOCK) {
-		auto handle = buffer_manager.Pin(segment.block);
+		auto handle = buffer_manager.Pin(segment.GetBlockHandle());
 		memset(handle.GetDataMutable(), 0xFF, segment.SegmentSize());
 	}
 	return nullptr;
@@ -573,8 +573,8 @@ idx_t ValidityFinalizeAppend(ColumnSegment &segment, BaseStatistics &stats) {
 void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
 	idx_t start_bit = new_count;
 
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto handle = buffer_manager.Pin(segment.block);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
 	idx_t revert_start;
 	if (start_bit % 8 != 0) {
 		// handle sub-bit stuff (yay)

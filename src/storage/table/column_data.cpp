@@ -94,7 +94,7 @@ bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
 bool ColumnData::HasChanges() const {
 	for (auto &segment_node : data.SegmentNodes()) {
 		auto &segment = segment_node.GetNode();
-		if (segment.segment_type == ColumnSegmentType::TRANSIENT) {
+		if (segment.GetSegmentType() == ColumnSegmentType::TRANSIENT) {
 			// transient segment: always need to write to disk
 			return true;
 		}
@@ -570,7 +570,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	}
 	auto segment = data.GetLastSegment(l);
 	auto &last_segment = segment->GetNode();
-	if (last_segment.segment_type == ColumnSegmentType::PERSISTENT ||
+	if (last_segment.GetSegmentType() == ColumnSegmentType::PERSISTENT ||
 	    !last_segment.GetCompressionFunction().init_append) {
 		// we cannot append to this segment - append a new segment
 		auto total_rows = segment->GetRowStart() + last_segment.count;
@@ -858,7 +858,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 
 bool ColumnData::IsPersistent() {
 	for (auto &segment : data.Segments()) {
-		if (segment.segment_type != ColumnSegmentType::PERSISTENT) {
+		if (segment.GetSegmentType() != ColumnSegmentType::PERSISTENT) {
 			return false;
 		}
 	}
@@ -1260,7 +1260,7 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 		// persistent
 		// block_id
 		// block_offset
-		if (segment.segment_type == ColumnSegmentType::PERSISTENT) {
+		if (segment.GetSegmentType() == ColumnSegmentType::PERSISTENT) {
 			column_info.persistent = true;
 			column_info.block_id = segment.GetBlockId();
 			column_info.block_offset = segment.GetBlockOffset();

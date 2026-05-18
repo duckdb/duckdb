@@ -112,8 +112,8 @@ void DictFSSTCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 unique_ptr<SegmentScanState> DictFSSTCompressionStorage::StringInitScan(const QueryContext &context,
                                                                         ColumnSegment &segment) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto state = make_uniq<CompressedStringScanState>(segment, buffer_manager.Pin(segment.block));
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto state = make_uniq<CompressedStringScanState>(segment, buffer_manager.Pin(segment.GetBlockHandle()));
 	state->Initialize(true);
 
 	const auto &stats = segment.GetStats();

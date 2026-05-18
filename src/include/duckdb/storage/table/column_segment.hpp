@@ -128,6 +128,22 @@ public:
 		return segment_state.get();
 	}
 
+	DatabaseInstance &GetDatabase() const {
+		return db;
+	}
+
+	ColumnSegmentType GetSegmentType() const {
+		return segment_type;
+	}
+
+	void SetSegmentType(ColumnSegmentType type) {
+		segment_type = type;
+	}
+
+	shared_ptr<BlockHandle> &GetBlockHandle() {
+		return block;
+	}
+
 	void VisitBlockIds(BlockIdVisitor &visitor) const;
 
 	const BaseStatistics &GetStats() const {
@@ -142,15 +158,13 @@ private:
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result);
 	void ScanPartial(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset);
 
-public:
+private:
 	//! The database instance
 	DatabaseInstance &db;
 	//! The column segment type (transient or persistent)
 	ColumnSegmentType segment_type;
 	//! The block that this segment relates to
 	shared_ptr<BlockHandle> block;
-
-private:
 	//! The compression function
 	reference<const CompressionFunction> function;
 	//! The block id that this segment relates to (persistent segment only)
