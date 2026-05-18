@@ -66,3 +66,90 @@ hello
 
 statement ok
 DISCONNECT;
+
+# ============================================================================
+# DOCUMENTATION: backend-state persistence across DISCONNECT / re-CONNECT
+# ============================================================================
+#
+# Current implementation: DISCONNECT only flips ClientContext::bound_database;
+# it does NOT close any underlying backend session. The QuackClientConnection
+# lives on the AttachedDatabase from ATTACH until DETACH. So any state the
+# backend was holding (open transactions, session variables, prepared
+# statements, temp tables) persists across DISCONNECT / re-CONNECT cycles.
+#
+# In-process quack note: because quack_serve runs the server in-process and
+# shares this DuckDB's catalog, table state created via pass-through is also
+# visible from LOCAL — that's a quack-in-process artifact rather than CONNECT
+# semantics. The assertions below avoid relying on shared-catalog behavior
+# and focus on the round-trip itself.
+#
+# Open design question: should DISCONNECT close the backend session, leaving
+# re-CONNECT to open a fresh one? See memory/project_connect_roadmap.md.
+# ============================================================================
+
+# Scenario: state survives DISCONNECT / re-CONNECT.
+# Set a session variable on the backend, DISCONNECT, re-CONNECT, read it back.
+# Today the variable IS still there (we did not close the backend session).
+
+statement ok
+CONNECT qk;
+
+statement ok
+SET VARIABLE my_var = 42;
+
+statement ok
+DISCONNECT;
+
+statement ok
+CONNECT qk;
+
+query I
+SELECT getvariable('my_var');
+----
+42
+
+statement ok
+DISCONNECT;
+
+# Scenario: local transaction state and backend state are independent.
+#
+#   BEGIN;                  -- LOCAL tx starts
+#   CONNECT qk;             -- bind to qk
+#   BEGIN;                  -- shipped to qk; backend tx starts on qk's session
+#   SET VARIABLE v = 7;     -- shipped to qk; backend session var
+#   DISCONNECT;             -- unbind; backend session unaffected
+#   ROLLBACK;               -- LOCAL rollback (only the LOCAL tx is rolled back)
+#   CONNECT qk;             -- re-bind; same backend session
+#   getvariable('v')        -- shipped to qk; still 7 (backend tx still open!)
+#
+# This documents that LOCAL and backend transaction state do not coordinate.
+# Whether that's the desired contract is the open semantics question.
+
+statement ok
+BEGIN;
+
+statement ok
+CONNECT qk;
+
+statement ok
+BEGIN;
+
+statement ok
+SET VARIABLE v = 7;
+
+statement ok
+DISCONNECT;
+
+statement ok
+ROLLBACK;
+
+statement ok
+CONNECT qk;
+
+query I
+SELECT getvariable('v');
+----
+7
+
+statement ok
+DISCONNECT;
