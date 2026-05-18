@@ -150,6 +150,10 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 		}
 	}
 
+	if (bloom_filter.IsInitialized() && other.bloom_filter.IsInitialized()) {
+		bloom_filter.Merge(other.bloom_filter);
+	}
+
 	sink_collection->Combine(*other.sink_collection);
 }
 
@@ -447,6 +451,9 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
 	Hash(keys, *current_sel, added_count, hash_values);
+	if (bloom_filter.IsInitialized()) {
+		bloom_filter.InsertHashes(hash_values, added_count);
+	}
 
 	// Re-reference and ToUnifiedFormat the hash column after computing it
 	source_chunk.data[col_offset].Reference(hash_values);
@@ -797,6 +804,13 @@ void JoinHashTable::AllocatePointerTable() {
 	DUCKDB_LOG(context, PhysicalOperatorLogType, op, "JoinHashTable", "Build",
 	           {{"rows", to_string(data_collection->Count())},
 	            {"size", to_string(data_collection->SizeInBytes() + hash_map.GetSize())}});
+}
+
+void JoinHashTable::PrepareBuildBloomFilter(idx_t estimated_row_count) {
+	should_build_bloom_filter = true;
+	if (!bloom_filter.IsInitialized()) {
+		bloom_filter.Initialize(context, MaxValue<idx_t>(estimated_row_count, idx_t(1)));
+	}
 }
 
 void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx_to) {
@@ -1906,6 +1920,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	total_probe_matches = 0;
 	load_factor = DEFAULT_LOAD_FACTOR;
 	should_build_bloom_filter = false;
+	bloom_filter.Reset();
 	prefix_range_filter.reset();
 	should_build_prefix_range_filter = false;
 	ResetCorrelatedMarkJoinInfo(*this);

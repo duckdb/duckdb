@@ -36,7 +36,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/common/types/row/tuple_data_iterator.hpp"
 
 namespace duckdb {
 
@@ -480,12 +479,49 @@ public:
 	}
 };
 
+static bool ShouldPrepareBloomFilterBuild(const PhysicalHashJoin &op) {
+	if (!op.filter_pushdown || op.filter_pushdown->probe_info.empty()) {
+		return false;
+	}
+	idx_t equality_column_count = 0;
+	for (auto &cond : op.conditions) {
+		auto cmp = cond.GetComparisonType();
+		if (cmp == ExpressionType::COMPARE_EQUAL || cmp == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			equality_column_count++;
+		}
+	}
+	if (equality_column_count != 1) {
+		return false;
+	}
+	auto probe_estimated_cardinality = op.children[0].get().estimated_cardinality;
+	auto build_estimated_cardinality = op.children[1].get().estimated_cardinality;
+	if (probe_estimated_cardinality == 0 || build_estimated_cardinality == 0) {
+		return false;
+	}
+	static constexpr double BUILD_TO_PROBE_RATIO_THRESHOLD = 1.0;
+	const double build_to_probe_ratio =
+	    static_cast<double>(build_estimated_cardinality) / static_cast<double>(probe_estimated_cardinality);
+	if (build_to_probe_ratio > BUILD_TO_PROBE_RATIO_THRESHOLD) {
+		return false;
+	}
+	static constexpr double NON_FILTERING_RATIO_THRESHOLD = 0.1;
+	static constexpr idx_t NON_FILTERING_BUILD_SIDE_THRESHOLD = 4194304;
+	if (!op.filter_pushdown->build_side_has_filter && build_to_probe_ratio > NON_FILTERING_RATIO_THRESHOLD &&
+	    build_estimated_cardinality > NON_FILTERING_BUILD_SIDE_THRESHOLD) {
+		return false;
+	}
+	return true;
+}
+
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context,
                                                                 const idx_t initial_radix_bits) const {
 	auto result =
 	    make_uniq<JoinHashTable>(context, *this, conditions, payload_columns.col_types, join_type, initial_radix_bits,
 	                             rhs_output_columns.col_idxs, residual_info ? residual_info->Copy() : nullptr,
 	                             predicate ? predicate.get() : nullptr, lhs_output_in_probe);
+	if (ShouldPrepareBloomFilterBuild(*this)) {
+		result->PrepareBuildBloomFilter(children[1].get().estimated_cardinality);
+	}
 
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
@@ -1182,34 +1218,6 @@ static unique_ptr<Expression> CreateRuntimeFilterInputExpression(ClientContext &
 	return input;
 }
 
-static void BuildBloomFilterFromPartitionedData(JoinHashTable &ht) {
-	auto &bloom_filter = ht.GetBloomFilter();
-	if (bloom_filter.IsInitialized()) {
-		return;
-	}
-	auto &sink_collection = ht.GetSinkCollection();
-	if (sink_collection.Count() == 0) {
-		return;
-	}
-	bloom_filter.Initialize(ht.context, sink_collection.Count());
-	Vector hashes(LogicalType::HASH);
-	auto hash_data = FlatVector::GetDataMutable<hash_t>(hashes);
-	for (auto &partition : sink_collection.GetPartitions()) {
-		if (!partition || partition->Count() == 0) {
-			continue;
-		}
-		TupleDataChunkIterator iterator(*partition, TupleDataPinProperties::KEEP_EVERYTHING_PINNED, false);
-		do {
-			auto count = iterator.GetCurrentChunkCount();
-			auto row_locations = iterator.GetRowLocations();
-			for (idx_t i = 0; i < count; i++) {
-				hash_data[i] = Load<hash_t>(row_locations[i] + ht.pointer_offset);
-			}
-			bloom_filter.InsertHashes(hashes, count);
-		} while (iterator.Next());
-	}
-}
-
 void JoinFilterPushdownInfo::PushBloomFilter(ClientContext &context, const PhysicalOperator &op, JoinHashTable &ht,
                                              const JoinFilterPushdownFilter &info, idx_t filter_idx,
                                              ProjectionIndex filter_col_idx) const {
@@ -1219,9 +1227,6 @@ void JoinFilterPushdownInfo::PushBloomFilter(ClientContext &context, const Physi
 	const auto key_type = ht.conditions[0].GetLHS().GetReturnType();
 	auto filter_input_type = GetRuntimeFilterInputType(info.columns[filter_idx], key_type);
 	ht.SetBuildBloomFilter(true);
-	if (ht.Count() == 0) {
-		BuildBloomFilterFromPartitionedData(ht);
-	}
 	float selectivity_threshold;
 	idx_t n_vectors_to_check;
 	GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType::BF, selectivity_threshold, n_vectors_to_check);
