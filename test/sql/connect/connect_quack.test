@@ -1,0 +1,68 @@
+# name: test/sql/connect/connect_quack.test
+# description: End-to-end CONNECT pass-through against an in-process quack backend.
+# group: [connect]
+
+require quack
+
+require httpfs
+
+# Spin up an in-process quack server we can connect to.
+statement ok
+CALL quack_serve(token='test_token');
+
+statement ok
+ATTACH 'quack:localhost' AS qk (TOKEN 'test_token');
+
+# CONNECT to the quack-attached database.
+statement ok
+CONNECT qk;
+
+# Trivial SELECT — chokepoint rewrites as `SELECT * FROM <fn>('qk', 'SELECT 42')` and the
+# normal pipeline runs it; the table function ships to the quack server.
+query I
+SELECT 42;
+----
+42
+
+# A query that returns multiple rows / columns. Stream comes back through the GetConnectFunction
+# TableFunction dispatch (quack's quack_query_by_name).
+query II
+SELECT range AS x, range * 2 AS y FROM range(3);
+----
+0	0
+1	2
+2	4
+
+# CONNECT while already bound — single-binding rule errors with DISCONNECT hint.
+statement error
+CONNECT qk;
+----
+<REGEX>:Invalid Input Error:.*Already connected.*DISCONNECT first.*
+
+# DISCONNECT drops the routing.
+statement ok
+DISCONNECT;
+
+# After DISCONNECT, the next SELECT goes through the normal LOCAL pipeline.
+query I
+SELECT 1 + 1;
+----
+2
+
+# DISCONNECT on LOCAL — error.
+statement error
+DISCONNECT;
+----
+<REGEX>:Invalid Input Error:.*no active CONNECT binding.*
+
+# We can CONNECT again after DISCONNECT.
+statement ok
+CONNECT qk;
+
+query I
+SELECT 'hello'::VARCHAR;
+----
+hello
+
+statement ok
+DISCONNECT;
