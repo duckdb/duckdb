@@ -582,23 +582,7 @@
     "includes": [
       "duckdb/parser/parsed_data/disconnect_info.hpp"
     ],
-    "members": [
-      {
-        "id": 200,
-        "name": "name",
-        "type": "string"
-      },
-      {
-        "id": 201,
-        "name": "name_is_string_literal",
-        "type": "bool"
-      },
-      {
-        "id": 202,
-        "name": "target_is_local",
-        "type": "bool"
-      }
-    ]
+    "members": []
   },
   {
     "class": "DropInfo",

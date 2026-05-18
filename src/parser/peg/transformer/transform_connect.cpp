@@ -51,20 +51,11 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformConnectStatement(PEGTra
 	return std::move(result);
 }
 
-// DisconnectStatement <- 'DISCONNECT' SessionTarget?
+// DisconnectStatement <- 'DISCONNECT'
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformDisconnectStatement(PEGTransformer &transformer,
                                                                              ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto info = make_uniq<DisconnectInfo>();
-	auto &target_opt = list_pr.Child<OptionalParseResult>(1);
-	if (target_opt.HasResult()) {
-		auto captured = TransformSessionTarget(transformer, target_opt.GetResult());
-		info->name = std::move(captured.name);
-		info->target_is_local = captured.target_is_local;
-		info->name_is_string_literal = captured.name_is_string_literal;
-	}
 	auto result = make_uniq<DisconnectStatement>();
-	result->info = std::move(info);
+	result->info = make_uniq<DisconnectInfo>();
 	return std::move(result);
 }
 

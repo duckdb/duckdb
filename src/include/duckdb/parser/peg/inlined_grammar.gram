@@ -1425,7 +1425,7 @@ TargetOptAlias <- BaseTableName 'AS'? ColId?
 DeleteUsingClause <- 'USING' List(TableRef)
 
 ConnectStatement <- 'CONNECT' SessionTarget?
-DisconnectStatement <- 'DISCONNECT' SessionTarget?
+DisconnectStatement <- 'DISCONNECT'
 SessionTarget <- 'LOCAL' / StringLiteral / CatalogName
 
 CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType

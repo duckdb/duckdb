@@ -1306,7 +1306,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"TargetOptAlias <- BaseTableName 'AS'? ColId?\n"
 	"DeleteUsingClause <- 'USING' List(TableRef)\n"
 	"ConnectStatement <- 'CONNECT' SessionTarget?\n"
-	"DisconnectStatement <- 'DISCONNECT' SessionTarget?\n"
+	"DisconnectStatement <- 'DISCONNECT'\n"
 	"SessionTarget <- 'LOCAL' / StringLiteral / CatalogName\n"
 	"CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType\n"
 	"CreateType <- EnumSelectType / EnumStringLiteralList / Type\n"
