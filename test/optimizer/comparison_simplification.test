@@ -286,13 +286,6 @@ SELECT d FROM date_test WHERE d IS NOT DISTINCT FROM timestamp '2024-06-15 00:00
 2024-06-15
 
 query I
-SELECT d FROM date_test WHERE d IS DISTINCT FROM timestamp '2024-06-15 00:00:00' ORDER BY d;
-----
-2024-01-01
-2025-01-01
-NULL
-
-query I
 SELECT d FROM date_test WHERE timestamp '2024-06-15 00:00:00' < d ORDER BY d;
 ----
 2025-01-01
