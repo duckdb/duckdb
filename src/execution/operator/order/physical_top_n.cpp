@@ -2,6 +2,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/create_sort_key.hpp"
@@ -12,9 +13,12 @@ namespace duckdb {
 
 PhysicalTopN::PhysicalTopN(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<BoundOrderByNode> orders,
                            idx_t limit, idx_t offset, shared_ptr<DynamicFilterData> dynamic_filter_p,
-                           idx_t estimated_cardinality)
+                           shared_ptr<DynamicFilterData> secondary_dynamic_filter_p,
+                           Value secondary_dynamic_filter_prefix_p, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::TOP_N, std::move(types), estimated_cardinality),
-      orders(std::move(orders)), limit(limit), offset(offset), dynamic_filter(std::move(dynamic_filter_p)) {
+      orders(std::move(orders)), limit(limit), offset(offset), dynamic_filter(std::move(dynamic_filter_p)),
+      secondary_dynamic_filter(std::move(secondary_dynamic_filter_p)),
+      secondary_dynamic_filter_prefix(std::move(secondary_dynamic_filter_prefix_p)) {
 }
 
 PhysicalTopN::~PhysicalTopN() {
@@ -44,9 +48,17 @@ struct TopNScanState {
 };
 
 struct TopNBoundaryValue {
-	explicit TopNBoundaryValue(const PhysicalTopN &op)
+	TopNBoundaryValue(ClientContext &context, const PhysicalTopN &op)
 	    : op(op), boundary_vector(op.orders[0].expression->GetReturnType()),
 	      boundary_modifiers(op.orders[0].type, op.orders[0].null_order) {
+		if (op.secondary_dynamic_filter) {
+			vector<LogicalType> boundary_types;
+			boundary_types.push_back(op.orders[0].expression->GetReturnType());
+			boundary_types.push_back(op.orders[1].expression->GetReturnType());
+			secondary_boundary_values.Initialize(BufferAllocator::Get(context), boundary_types);
+			secondary_boundary_modifiers.emplace_back(op.orders[0].type, op.orders[0].null_order);
+			secondary_boundary_modifiers.emplace_back(op.orders[1].type, op.orders[1].null_order);
+		}
 	}
 
 	const PhysicalTopN &op;
@@ -55,6 +67,8 @@ struct TopNBoundaryValue {
 	bool is_set = false;
 	Vector boundary_vector;
 	OrderModifiers boundary_modifiers;
+	DataChunk secondary_boundary_values;
+	vector<OrderModifiers> secondary_boundary_modifiers;
 
 	string GetBoundaryValue() {
 		lock_guard<mutex> l(lock);
@@ -66,7 +80,24 @@ struct TopNBoundaryValue {
 		if (!is_set || boundary_val < string_t(boundary_value)) {
 			boundary_value = boundary_val.GetString();
 			is_set = true;
-			if (op.dynamic_filter) {
+			if (op.secondary_dynamic_filter) {
+				secondary_boundary_values.Reset();
+				CreateSortKeyHelpers::DecodeSortKey(boundary_val, secondary_boundary_values, 0,
+				                                    secondary_boundary_modifiers);
+				auto new_dynamic_value = secondary_boundary_values.data[0].GetValue(0);
+				auto new_secondary_dynamic_value = secondary_boundary_values.data[1].GetValue(0);
+				const auto set_secondary_filter =
+				    ValueOperations::NotDistinctFrom(new_dynamic_value, op.secondary_dynamic_filter_prefix);
+				l.unlock();
+				if (op.dynamic_filter) {
+					op.dynamic_filter->SetValue(std::move(new_dynamic_value));
+				}
+				if (set_secondary_filter) {
+					op.secondary_dynamic_filter->SetValue(std::move(new_secondary_dynamic_value));
+				} else {
+					op.secondary_dynamic_filter->Reset();
+				}
+			} else if (op.dynamic_filter) {
 				CreateSortKeyHelpers::DecodeSortKey(boundary_val, boundary_vector, 0, boundary_modifiers);
 				auto new_dynamic_value = boundary_vector.GetValue(0);
 				l.unlock();
@@ -470,7 +501,7 @@ void TopNHeap::Scan(TopNScanState &state, DataChunk &chunk, idx_t &pos) {
 class TopNGlobalSinkState : public GlobalSinkState {
 public:
 	TopNGlobalSinkState(ClientContext &context, const PhysicalTopN &op)
-	    : heap(context, op.types, op.orders, op.limit, op.offset), boundary_value(op) {
+	    : heap(context, op.types, op.orders, op.limit, op.offset), boundary_value(context, op) {
 	}
 
 	mutex lock;
@@ -495,6 +526,9 @@ unique_ptr<LocalSinkState> PhysicalTopN::GetLocalSinkState(ExecutionContext &con
 unique_ptr<GlobalSinkState> PhysicalTopN::GetGlobalSinkState(ClientContext &context) const {
 	if (dynamic_filter) {
 		dynamic_filter->Reset();
+	}
+	if (secondary_dynamic_filter) {
+		secondary_dynamic_filter->Reset();
 	}
 	return make_uniq<TopNGlobalSinkState>(context, *this);
 }

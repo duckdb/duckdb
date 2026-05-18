@@ -177,3 +177,56 @@ SELECT i FROM t ORDER BY i DESC LIMIT 3
 10
 9
 8
+
+statement ok
+CREATE TABLE multi_key_t(a INT, b INT)
+
+statement ok
+INSERT INTO multi_key_t SELECT 0, range::INT FROM range(0, 2048)
+
+statement ok
+INSERT INTO multi_key_t SELECT 0, (100000 + range)::INT FROM range(0, 2048)
+
+statement ok
+INSERT INTO multi_key_t SELECT 0, (200000 + range)::INT FROM range(0, 2048)
+
+statement ok
+INSERT INTO multi_key_t SELECT 0, (300000 + range)::INT FROM range(0, 2048)
+
+statement ok
+INSERT INTO multi_key_t SELECT 0, (400000 + range)::INT FROM range(0, 2048)
+
+statement ok
+CHECKPOINT
+
+statement ok
+ATTACH '{TEST_DIR}/tmp2.duckdb' AS tmp2
+
+statement ok
+USE tmp2
+
+statement ok
+DETACH db
+
+statement ok
+ATTACH '{TEST_DIR}/top_n_hard_limit.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+statement ok
+DETACH tmp2
+
+query II
+EXPLAIN ANALYZE SELECT a, b FROM multi_key_t ORDER BY a NULLS LAST, b NULLS LAST LIMIT 5
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*2,048 rows.*
+
+query II
+SELECT a, b FROM multi_key_t ORDER BY a NULLS LAST, b NULLS LAST LIMIT 5
+----
+0	0
+0	1
+0	2
+0	3
+0	4

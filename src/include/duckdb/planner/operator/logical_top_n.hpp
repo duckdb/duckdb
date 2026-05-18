@@ -30,6 +30,9 @@ public:
 	idx_t offset;
 	//! Dynamic table filter (if any)
 	shared_ptr<DynamicFilterData> dynamic_filter;
+	//! Secondary dynamic table filter, gated by the first order key reaching the global boundary
+	shared_ptr<DynamicFilterData> secondary_dynamic_filter;
+	Value secondary_dynamic_filter_prefix;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {

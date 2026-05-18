@@ -146,6 +146,19 @@ bool ExtractPassthroughBinding(const Expression &expr, ColumnBinding &binding) {
 	}
 }
 
+bool ExpressionCanHaveNull(const Expression &expr, const column_binding_map_t<unique_ptr<BaseStatistics>> &stats) {
+	if (expr.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		return expr.Cast<BoundConstantExpression>().value.IsNull();
+	}
+
+	ColumnBinding binding;
+	if (!ExtractPassthroughBinding(expr, binding)) {
+		return true;
+	}
+	auto column_stats = stats.find(binding);
+	return column_stats == stats.end() || !column_stats->second || column_stats->second->CanHaveNull();
+}
+
 bool IsLeadingAggregateGroup(LogicalOperator &op, ColumnBinding binding) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
@@ -421,6 +434,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryOptimizeOrderedRollupPrefi
 	if (!HasOrderedPrefixGroupingSets(aggregate)) {
 		return op;
 	}
+	if (!ExpressionCanHaveNull(*aggregate.groups[0], *stats)) {
+		return op;
+	}
 
 	// If the first ORDER BY key is the leading rollup key with NULLS FIRST, the NULL-prefix rollup rows sort
 	// before the rest. Materialize those rows first and only run the fallback branch when they do not fill the LIMIT.
@@ -453,9 +469,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryOptimizeOrderedRollupPrefi
 	vector<unique_ptr<LogicalOperator>> prefix_children;
 	prefix_children.push_back(std::move(null_prefix));
 	prefix_children.push_back(std::move(grand_total));
-	auto prefix_union = make_uniq<LogicalSetOperation>(optimizer.binder.GenerateTableIndex(),
-	                                                   first_aggregate_bindings.size(), std::move(prefix_children),
-	                                                   LogicalOperatorType::LOGICAL_UNION, true, true);
+	auto prefix_union =
+	    make_uniq<LogicalSetOperation>(optimizer.binder.GenerateTableIndex(), first_aggregate_bindings.size(),
+	                                   std::move(prefix_children), LogicalOperatorType::LOGICAL_UNION, true, true);
 	prefix_union->ResolveOperatorTypes();
 	const auto prefix_union_bindings = prefix_union->GetColumnBindings();
 	ColumnBindingReplacer prefix_replacer;
@@ -479,24 +495,22 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryOptimizeOrderedRollupPrefi
 	vector<unique_ptr<Expression>> count_expressions;
 	count_expressions.push_back(
 	    function_binder.BindAggregateFunction(count_star_fun, {}, nullptr, AggregateType::NON_DISTINCT));
-	auto count_aggregate = make_uniq<LogicalAggregate>(optimizer.binder.GenerateTableIndex(),
-	                                                   optimizer.binder.GenerateTableIndex(),
-	                                                   std::move(count_expressions));
+	auto count_aggregate = make_uniq<LogicalAggregate>(
+	    optimizer.binder.GenerateTableIndex(), optimizer.binder.GenerateTableIndex(), std::move(count_expressions));
 	count_aggregate->children.push_back(make_cte_ref());
 	count_aggregate->ResolveOperatorTypes();
 	const auto count_binding = count_aggregate->GetColumnBindings()[0];
 	auto count_ref = make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, count_binding);
 	auto count_limit = make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(topn.limit)));
-	auto count_filter = make_uniq<LogicalFilter>(
-	    BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHAN, std::move(count_ref),
-	                                      std::move(count_limit)));
+	auto count_filter = make_uniq<LogicalFilter>(BoundComparisonExpression::Create(
+	    ExpressionType::COMPARE_LESSTHAN, std::move(count_ref), std::move(count_limit)));
 	count_filter->children.push_back(std::move(count_aggregate));
 	count_filter->ResolveOperatorTypes();
 
 	vector<unique_ptr<Expression>> guard_expressions;
 	guard_expressions.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(1)));
-	auto guard_projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(),
-	                                                    std::move(guard_expressions));
+	auto guard_projection =
+	    make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(), std::move(guard_expressions));
 	guard_projection->children.push_back(std::move(count_filter));
 	guard_projection->ResolveOperatorTypes();
 
@@ -510,9 +524,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryOptimizeOrderedRollupPrefi
 	if (!RemoveEmptyGroupingSet(fallback_aggregate)) {
 		return op;
 	}
-	WrapAggregateChildInFilter(fallback_aggregate,
-	                           CreateNullCheck(fallback_aggregate.groups[0]->Copy(),
-	                                           ExpressionType::OPERATOR_IS_NOT_NULL));
+	WrapAggregateChildInFilter(fallback_aggregate, CreateNullCheck(fallback_aggregate.groups[0]->Copy(),
+	                                                               ExpressionType::OPERATOR_IS_NOT_NULL));
 	fallback_aggregate.children[0] =
 	    LogicalCrossProduct::Create(std::move(fallback_aggregate.children[0]), std::move(guard_projection));
 	fallback_aggregate.children[0]->ResolveOperatorTypes();
@@ -521,9 +534,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryOptimizeOrderedRollupPrefi
 	vector<unique_ptr<LogicalOperator>> union_children;
 	union_children.push_back(std::move(first_rows_ref));
 	union_children.push_back(std::move(fallback));
-	auto result_union = make_uniq<LogicalSetOperation>(optimizer.binder.GenerateTableIndex(), cte_types.size(),
-	                                                   std::move(union_children),
-	                                                   LogicalOperatorType::LOGICAL_UNION, true, false);
+	auto result_union =
+	    make_uniq<LogicalSetOperation>(optimizer.binder.GenerateTableIndex(), cte_types.size(),
+	                                   std::move(union_children), LogicalOperatorType::LOGICAL_UNION, true, false);
 	result_union->ResolveOperatorTypes();
 
 	ColumnBindingReplacer topn_replacer;
@@ -532,9 +545,9 @@ unique_ptr<LogicalOperator> TopNWindowElimination::TryOptimizeOrderedRollupPrefi
 	topn_replacer.VisitOperator(topn);
 	topn.ResolveOperatorTypes();
 
-	auto result = make_uniq<LogicalMaterializedCTE>("ordered_rollup_prefix", cte_index, cte_types.size(),
-	                                               std::move(first_rows), std::move(op),
-	                                               CTEMaterialize::CTE_MATERIALIZE_ALWAYS);
+	auto result =
+	    make_uniq<LogicalMaterializedCTE>("ordered_rollup_prefix", cte_index, cte_types.size(), std::move(first_rows),
+	                                      std::move(op), CTEMaterialize::CTE_MATERIALIZE_ALWAYS);
 	result->ResolveOperatorTypes();
 	return std::move(result);
 }
@@ -587,8 +600,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	// We use an ordered map here because we need to iterate over them in order later
 	map<idx_t, idx_t> group_projection_idxs;
 	const auto window_type = window.expressions[0]->GetExpressionType();
-	auto aggregate_payload =
-	    GenerateAggregatePayload(new_bindings, window, group_projection_idxs, window_type == ExpressionType::WINDOW_RANK);
+	auto aggregate_payload = GenerateAggregatePayload(new_bindings, window, group_projection_idxs,
+	                                                  window_type == ExpressionType::WINDOW_RANK);
 	if (window_type == ExpressionType::WINDOW_RANK && aggregate_payload.empty()) {
 		return op;
 	}
@@ -619,7 +632,8 @@ unique_ptr<LogicalOperator> TopNWindowElimination::OptimizeInternal(unique_ptr<L
 	auto params = ExtractOptimizerParameters(window, filter, new_bindings, aggregate_payload);
 
 	unique_ptr<LogicalOperator> late_mat_lhs = nullptr;
-	if (params.window_type == ExpressionType::WINDOW_ROW_NUMBER && params.payload_type == TopNPayloadType::STRUCT_PACK) {
+	if (params.window_type == ExpressionType::WINDOW_ROW_NUMBER &&
+	    params.payload_type == TopNPayloadType::STRUCT_PACK) {
 		// Try circumventing struct-packing with late materialization
 		late_mat_lhs = TryPrepareLateMaterialization(window, aggregate_payload);
 		if (late_mat_lhs && aggregate_payload.size() == 1) {
@@ -687,7 +701,7 @@ TopNWindowElimination::CreateAggregateExpression(vector<unique_ptr<Expression>> 
 		D_ASSERT(bound_aggregate.bind_info);
 		bound_aggregate.bind_info->Cast<ArgMinMaxFunctionData>().with_ties = true;
 	}
-	return aggregate;
+	return unique_ptr_cast<BoundAggregateExpression, Expression>(std::move(aggregate));
 }
 
 unique_ptr<LogicalOperator>
@@ -1143,13 +1157,11 @@ public:
 };
 
 unique_ptr<LogicalOperator>
-TopNWindowElimination::CreateRankWindowOperator(unique_ptr<LogicalOperator> op,
-                                                unique_ptr<Expression> rank_expression, const TableIndex window_idx,
-                                                const vector<LogicalType> &types,
+TopNWindowElimination::CreateRankWindowOperator(unique_ptr<LogicalOperator> op, unique_ptr<Expression> rank_expression,
+                                                const TableIndex window_idx, const vector<LogicalType> &types,
                                                 const map<idx_t, idx_t> &group_idxs,
                                                 const vector<ColumnBinding> &topmost_bindings,
-                                                vector<ColumnBinding> &new_bindings,
-                                                ColumnBindingReplacer &replacer) {
+                                                vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer) {
 	D_ASSERT(rank_expression);
 
 	const auto reduced_bindings = op->GetColumnBindings();

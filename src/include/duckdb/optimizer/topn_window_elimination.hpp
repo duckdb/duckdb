@@ -52,14 +52,11 @@ private:
 	unique_ptr<LogicalOperator> CreateProjectionOperator(unique_ptr<LogicalOperator> op,
 	                                                     const TopNWindowEliminationParameters &params,
 	                                                     const map<idx_t, idx_t> &group_idxs) const;
-	unique_ptr<LogicalOperator> CreateRankWindowOperator(unique_ptr<LogicalOperator> op,
-	                                                     unique_ptr<Expression> rank_expression,
-	                                                     TableIndex window_idx,
-	                                                     const vector<LogicalType> &types,
-	                                                     const map<idx_t, idx_t> &group_idxs,
-	                                                     const vector<ColumnBinding> &topmost_bindings,
-	                                                     vector<ColumnBinding> &new_bindings,
-	                                                     ColumnBindingReplacer &replacer);
+	unique_ptr<LogicalOperator>
+	CreateRankWindowOperator(unique_ptr<LogicalOperator> op, unique_ptr<Expression> rank_expression,
+	                         TableIndex window_idx, const vector<LogicalType> &types,
+	                         const map<idx_t, idx_t> &group_idxs, const vector<ColumnBinding> &topmost_bindings,
+	                         vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer);
 
 	vector<unique_ptr<Expression>> GenerateAggregatePayload(const vector<ColumnBinding> &bindings,
 	                                                        const LogicalWindow &window, map<idx_t, idx_t> &group_idxs,
