@@ -139,7 +139,7 @@ enum class StorageVersion : uint64_t {
     V1_5_2 = 68,
     V2_0_0 = 69,
     LATEST = 69,
-	DEPRECATED = 999,
+    DEPRECATED = 999,
     INVALID = 0
 };
 // END OF ENUM VERSION INFO
