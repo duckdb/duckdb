@@ -12,6 +12,7 @@
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/statistics/geometry_stats.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/main/error_manager.hpp"
 
