@@ -392,7 +392,7 @@ void ColumnData::Skip(ColumnScanState &state, idx_t s_count) {
 	state.Next(s_count);
 }
 
-void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t append_count) {
+void ColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t append_count) {
 	UnifiedVectorFormat vdata;
 	vector.ToUnifiedFormat(vdata);
 	AppendData(state, vdata, append_count);
@@ -412,6 +412,11 @@ void ColumnData::FinalizeAppend(optional_ptr<BaseStatistics> table_stats, Column
 	if (table_stats) {
 		finalize_state.global_stats.emplace_back(*table_stats);
 	}
+	FinalizeAppend(finalize_state, state);
+}
+
+void ColumnData::FinalizeAppendLocked(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	lock_guard<mutex> l(stats_lock);
 	FinalizeAppend(finalize_state, state);
 }
 

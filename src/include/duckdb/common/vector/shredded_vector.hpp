@@ -64,7 +64,7 @@ struct ShreddedVector {
 	DUCKDB_API static void Unshred(const Vector &vec, const SelectionVector &sel, idx_t count);
 
 	//! Returns whether or not the vector is fully shredded
-	DUCKDB_API static bool IsFullyShredded(Vector &vec);
+	DUCKDB_API static bool IsFullyShredded(const Vector &vec);
 };
 
 } // namespace duckdb

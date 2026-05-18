@@ -31,7 +31,7 @@ public:
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);
 
 	template <class T>
-	static bool UpdateState(T &state, Vector &scan_vector, idx_t count) {
+	static bool UpdateState(T &state, const Vector &scan_vector) {
 		state.Verify();
 
 		for (auto entry : scan_vector.Values<string_t>()) {

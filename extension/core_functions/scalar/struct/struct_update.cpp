@@ -12,7 +12,7 @@
 namespace duckdb {
 
 static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &starting_vec = args.data[0];
+	const auto &starting_vec = args.data[0];
 	starting_vec.Verify();
 
 	auto &starting_child_entries = StructVector::GetEntries(starting_vec);

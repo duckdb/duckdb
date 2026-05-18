@@ -320,6 +320,30 @@ static bool TryOneFormat(const StrpTimeFormat &fmt, LogicalTypeId type_id, const
 	return true;
 }
 
+template <class OP, class T>
+static bool TransformStringWithFormat(const Vector &string_vector, const StrpTimeFormat &format, const idx_t count,
+                                      Vector &result, JSONTransformOptions &options) {
+	const auto source_strings = FlatVector::GetData<string_t>(string_vector);
+	const auto &source_validity = FlatVector::Validity(string_vector);
+
+	auto target_vals = FlatVector::GetDataMutable<T>(result);
+	auto &target_validity = FlatVector::ValidityMutable(result);
+
+	bool success = true;
+	for (idx_t i = 0; i < count; i++) {
+		if (!source_validity.RowIsValid(i)) {
+			target_validity.SetInvalid(i);
+		} else if (!OP::template Operation<T>(format, source_strings[i], target_vals[i], options.error_message)) {
+			target_validity.SetInvalid(i);
+			if (success && options.strict_cast) {
+				options.object_index = i;
+				success = false;
+			}
+		}
+	}
+	return success;
+}
+
 static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, const idx_t count,
                                           JSONTransformOptions &options) {
 	Vector string_vector(LogicalTypeId::VARCHAR, count);
@@ -972,7 +996,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	}
 }
 
-static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &result, yyjson_alc *alc,
+static bool TransformFunctionInternal(const Vector &input, const idx_t count, Vector &result, yyjson_alc *alc,
                                       JSONTransformOptions &options) {
 	UnifiedVectorFormat input_data;
 	input.ToUnifiedFormat(input_data);
