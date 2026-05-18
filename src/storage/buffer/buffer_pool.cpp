@@ -259,10 +259,7 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 			dead_count++;
 		} else {
 			// Move alive nodes to the front for bulk re-enqueue
-			if (alive_count != i) {
-				purge_nodes[alive_count] = std::move(node);
-			}
-			alive_count++;
+			purge_nodes[alive_count++] = std::move(node);
 		}
 	}
 
