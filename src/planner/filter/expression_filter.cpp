@@ -212,19 +212,12 @@ static FilterPropagateResult CheckComparisonStatistics(const BoundFunctionExpres
 	if (constant.IsNull()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	const bool distinct_from = comparison_type == ExpressionType::COMPARE_DISTINCT_FROM;
 	if (!filter_stats->CanHaveNoNull()) {
-		return distinct_from ? FilterPropagateResult::FILTER_ALWAYS_TRUE : FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	auto result = CheckZonemapAgainstConstants(*filter_stats, comparison_type, array_ptr<const Value>(&constant, 1));
-	if (filter_stats->CanHaveNull()) {
-		if (distinct_from) {
-			return result == FilterPropagateResult::FILTER_ALWAYS_FALSE ? FilterPropagateResult::NO_PRUNING_POSSIBLE
-			                                                            : result;
-		}
-		if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
+	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && filter_stats->CanHaveNull()) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	return result;
 }
