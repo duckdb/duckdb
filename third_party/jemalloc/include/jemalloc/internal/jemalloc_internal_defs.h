@@ -201,13 +201,17 @@
 /* #undef JEMALLOC_EXPERIMENTAL_SMALLOCX_API */
 
 /* JEMALLOC_PROF enables allocation profiling. */
+#if defined(__GLIBC__) && !defined(__MUSL__)
 #define JEMALLOC_PROF
+#endif
 
 /* Use libunwind for profile backtracing if defined. */
 /* #undef JEMALLOC_PROF_LIBUNWIND */
 
 /* Use libgcc for profile backtracing if defined. */
+#if defined(__GLIBC__) && !defined(__MUSL__)
 #define JEMALLOC_PROF_LIBGCC
+#endif
 
 /* Use gcc intrinsics for profile backtracing if defined. */
 /* #undef JEMALLOC_PROF_GCC */
