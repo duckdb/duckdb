@@ -103,7 +103,8 @@ struct ZSTDStorage {
 
 struct ZSTDAnalyzeState : public AnalyzeState {
 public:
-	ZSTDAnalyzeState(CompressionInfo &info, DBConfig &config) : AnalyzeState(info), config(config), context(nullptr) {
+	ZSTDAnalyzeState(BlockManager &block_manager, DBConfig &config)
+	    : AnalyzeState(block_manager), config(config), context(nullptr) {
 		context = duckdb_zstd::ZSTD_createCCtx();
 	}
 	~ZSTDAnalyzeState() override {
@@ -147,12 +148,11 @@ unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, Ph
 		// compatibility mode with old versions - disable zstd
 		return nullptr;
 	}
-	CompressionInfo info(col_data.GetBlockManager());
 	auto &data_table_info = col_data.info;
 	auto &attached_db = data_table_info.GetDB();
 	auto &config = DBConfig::Get(attached_db);
 
-	return make_uniq<ZSTDAnalyzeState>(info, config);
+	return make_uniq<ZSTDAnalyzeState>(col_data.GetBlockManager(), config);
 }
 
 bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
@@ -231,10 +231,9 @@ class ZSTDCompressionState : public CompressionState {
 public:
 	explicit ZSTDCompressionState(ColumnDataCheckpointData &checkpoint_data,
 	                              unique_ptr<ZSTDAnalyzeState> &&analyze_state_p)
-	    : CompressionState(analyze_state_p->info), analyze_state(std::move(analyze_state_p)),
-	      checkpoint_data(checkpoint_data),
+	    : CompressionState(checkpoint_data, CompressionType::COMPRESSION_ZSTD),
+	      analyze_state(std::move(analyze_state_p)),
 	      partial_block_manager(checkpoint_data.GetCheckpointState().GetPartialBlockManager()),
-	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)),
 	      stats_writer(checkpoint_data.GetType()), total_tuple_count(analyze_state->count),
 	      total_vector_count(GetVectorCount(total_tuple_count)), total_segment_count(analyze_state->segment_count),
 	      vectors_per_segment(analyze_state->vectors_per_segment) {
@@ -436,8 +435,7 @@ public:
 
 	void AddString(const string_t &string) {
 		AddStringInternal(string);
-		UncompressedStringStorage::UpdateStringStats(buffer_collection.segment->GetStatsMutable(), stats_writer,
-		                                             string);
+		stats_writer.Update(string);
 	}
 
 	void NewPage(bool additional_data_page = false) {
@@ -536,10 +534,7 @@ public:
 	}
 
 	void CreateEmptySegment() {
-		auto &db = checkpoint_data.GetDatabase();
-		auto &type = checkpoint_data.GetType();
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
+		auto compressed_segment = CreateNewSegment();
 		buffer_collection.segment = std::move(compressed_segment);
 		stats_writer.Clear();
 
@@ -600,17 +595,15 @@ public:
 	}
 
 	void AddNull() {
-		buffer_collection.segment->GetStatsMutable().SetHasNullFast();
+		stats_writer.SetHasNull();
 		string_t empty(static_cast<uint32_t>(0));
 		AddStringInternal(empty);
 	}
 
 public:
 	unique_ptr<ZSTDAnalyzeState> analyze_state;
-	ColumnDataCheckpointData &checkpoint_data;
 	PartialBlockManager &partial_block_manager;
-	const CompressionFunction &function;
-	StringStatsWriter stats_writer;
+	StatsWriter<string_t> stats_writer;
 
 	//! --- Analyzed Data ---
 	//! The amount of tuples we're writing

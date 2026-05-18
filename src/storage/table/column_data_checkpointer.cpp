@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"

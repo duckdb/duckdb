@@ -3,7 +3,7 @@
 namespace duckdb {
 namespace dict_fsst {
 
-DictFSSTAnalyzeState::DictFSSTAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {
+DictFSSTAnalyzeState::DictFSSTAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager) {
 }
 
 bool DictFSSTAnalyzeState::Analyze(Vector &input, idx_t count) {

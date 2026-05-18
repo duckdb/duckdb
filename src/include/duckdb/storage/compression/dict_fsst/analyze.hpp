@@ -12,7 +12,7 @@ namespace dict_fsst {
 //===--------------------------------------------------------------------===//
 struct DictFSSTAnalyzeState : public AnalyzeState {
 public:
-	explicit DictFSSTAnalyzeState(const CompressionInfo &info);
+	explicit DictFSSTAnalyzeState(BlockManager &block_manager);
 
 public:
 	bool Analyze(Vector &input, idx_t count);

@@ -5,7 +5,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
-#include "duckdb/storage/statistics/string_stats_writer.hpp"
+#include "duckdb/storage/statistics/stats_writer.hpp"
 
 #include <algorithm>
 
@@ -1079,7 +1079,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
 	auto update_data = update.GetData<string_t>(update);
 	auto &mask = update.validity;
 
-	StringStatsWriter stats_writer(stats.statistics.GetType());
+	StatsWriter<string_t> stats_writer(stats.statistics.GetType());
 	idx_t not_null_count = 0;
 	if (mask.CannotHaveNull()) {
 		stats.statistics.SetHasNoNullFast();
