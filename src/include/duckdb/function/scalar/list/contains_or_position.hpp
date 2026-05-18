@@ -94,8 +94,11 @@ idx_t ListSearchNestedOp(const Vector &list_vec, const Vector &source_vec, const
 	Vector target_sort_key_vec(LogicalType::BLOB, target_count);
 
 	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
-	CreateSortKeyHelpers::CreateSortKeyWithValidity(source_vec, source_sort_key_vec, order_modifiers);
-	CreateSortKeyHelpers::CreateSortKeyWithValidity(target_vec, target_sort_key_vec, order_modifiers);
+	// Pass explicit counts: source_vec and target_vec may have different sizes than source_count/target_count
+	// when called via dictionary expression optimization (TryExecuteDictionaryExpression uses the dictionary
+	// size as the chunk count, while the non-key arguments retain their original size).
+	CreateSortKeyHelpers::CreateSortKeyWithValidity(source_vec, source_sort_key_vec, order_modifiers, source_count);
+	CreateSortKeyHelpers::CreateSortKeyWithValidity(target_vec, target_sort_key_vec, order_modifiers, target_count);
 
 	return ListSearchSimpleOp<string_t, RETURN_TYPE, FIND_NULLS>(list_vec, source_sort_key_vec, target_sort_key_vec,
 	                                                             result_vec, target_count);

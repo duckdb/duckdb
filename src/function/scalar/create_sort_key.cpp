@@ -908,6 +908,14 @@ void CreateSortKeyHelpers::CreateSortKey(DataChunk &input, const vector<OrderMod
 	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input.size());
 }
 
+void CreateSortKeyHelpers::CreateSortKey(const Vector &input, idx_t input_count, OrderModifiers order_modifier,
+                                         Vector &result) {
+	vector<OrderModifiers> modifiers {order_modifier};
+	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
+	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier));
+	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input_count);
+}
+
 void CreateSortKeyHelpers::CreateSortKeyWithValidity(const Vector &input, Vector &result,
                                                      const OrderModifiers &modifiers) {
 	CreateSortKey(input, modifiers, result);
@@ -916,6 +924,21 @@ void CreateSortKeyHelpers::CreateSortKeyWithValidity(const Vector &input, Vector
 	auto &validity = FlatVector::ValidityMutable(result);
 
 	const auto count = input.size();
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = format.sel->get_index(i);
+		if (!format.validity.RowIsValid(idx)) {
+			validity.SetInvalid(i);
+		}
+	}
+}
+
+void CreateSortKeyHelpers::CreateSortKeyWithValidity(const Vector &input, Vector &result,
+                                                     const OrderModifiers &modifiers, idx_t count) {
+	CreateSortKey(input, count, modifiers, result);
+	UnifiedVectorFormat format;
+	input.ToUnifiedFormat(format);
+	auto &validity = FlatVector::ValidityMutable(result);
+
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = format.sel->get_index(i);
 		if (!format.validity.RowIsValid(idx)) {
