@@ -396,7 +396,15 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		// OSX requires fcntl for Direct IO
 		rc = fcntl(fd, F_NOCACHE, 1);
 		if (rc == -1) {
-			throw IOException("Could not enable direct IO for file \"%s\": %s", path, strerror(errno));
+			int retained_errno = errno;
+			rc = close(fd);
+			string extended_error = strerror(retained_errno);
+			if (rc == -1) {
+				extended_error += ". Also, failed closing file: ";
+				extended_error += strerror(errno);
+			}
+			throw IOException({{"errno", std::to_string(retained_errno)}},
+			                  "Could not enable direct IO for file \"%s\": %s", path, extended_error);
 		}
 	}
 #endif
