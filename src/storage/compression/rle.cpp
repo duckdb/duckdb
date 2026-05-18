@@ -124,7 +124,7 @@ struct RLEConstants {
 
 template <class T, bool WRITE_STATISTICS>
 struct RLECompressState : public StandardCompressionState {
-	RLECompressState(ColumnDataCheckpointData &checkpoint_data_p)
+	explicit RLECompressState(ColumnDataCheckpointData &checkpoint_data_p)
 	    : StandardCompressionState(checkpoint_data_p, CompressionType::COMPRESSION_RLE) {
 		CreateEmptySegment();
 

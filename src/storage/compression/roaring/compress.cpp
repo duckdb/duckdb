@@ -294,7 +294,6 @@ void RoaringCompressState::CreateEmptySegment() {
 }
 
 void RoaringCompressState::FlushSegment() {
-	auto &state = checkpoint_data.GetCheckpointState();
 	auto base_ptr = handle.GetDataMutable();
 	// +======================================+
 	// |x|ddddddddddddddd||mmm|               |
