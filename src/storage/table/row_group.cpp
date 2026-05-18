@@ -165,6 +165,14 @@ ColumnData &RowGroup::GetColumn(storage_t c) const {
 	return *columns[c];
 }
 
+ColumnData &RowGroup::GetRawColumnData(const StorageIndex &c) const {
+	return GetColumn(c);
+}
+
+ColumnData &RowGroup::GetRawColumnData(storage_t c) const {
+	return GetColumn(c);
+}
+
 void RowGroup::LoadColumn(storage_t c) const {
 	if (c == COLUMN_IDENTIFIER_ROW_ID) {
 		LoadRowIdColumnData();
@@ -720,6 +728,8 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			NextVector(state);
 			continue;
 		}
+		state.rows_scanned += count;
+
 		auto &block_manager = GetBlockManager();
 		if (block_manager.Prefetch()) {
 			PrefetchState prefetch_state;

@@ -733,6 +733,10 @@ unique_ptr<FileHandle> FileSystem::OpenCompressedFile(QueryContext context, uniq
 	throw NotImplementedException("%s: OpenCompressedFile is not implemented!", GetName());
 }
 
+bool FileSystem::IsLocalFileSystem() const {
+	return false;
+}
+
 bool FileSystem::OnDiskFile(FileHandle &handle) {
 	throw NotImplementedException("%s: OnDiskFile is not implemented!", GetName());
 }

@@ -60,6 +60,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
+	case MetricType::CUMULATIVE_VACUUM_TIME:
 	case MetricType::LATENCY:
 	case MetricType::OPERATOR_TIMING:
 	case MetricType::OPTIMIZER_AGGREGATE_FUNCTION_REWRITER:
@@ -113,8 +114,12 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 		break;
 	case MetricType::CUMULATIVE_CARDINALITY:
 	case MetricType::CUMULATIVE_ROWS_SCANNED:
+	case MetricType::CUMULATIVE_ROW_GROUPS_SCANNED:
+	case MetricType::CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN:
 	case MetricType::OPERATOR_CARDINALITY:
 	case MetricType::OPERATOR_ROWS_SCANNED:
+	case MetricType::OPERATOR_ROW_GROUPS_SCANNED:
+	case MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN:
 	case MetricType::RESULT_SET_SIZE:
 	case MetricType::ROWS_RETURNED:
 	case MetricType::SYSTEM_PEAK_BUFFER_MEMORY:
@@ -150,6 +155,7 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
+	case MetricType::CUMULATIVE_VACUUM_TIME:
 	case MetricType::LATENCY:
 	case MetricType::OPERATOR_TIMING:
 	case MetricType::OPTIMIZER_AGGREGATE_FUNCTION_REWRITER:
@@ -203,8 +209,12 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 		break;
 	case MetricType::CUMULATIVE_CARDINALITY:
 	case MetricType::CUMULATIVE_ROWS_SCANNED:
+	case MetricType::CUMULATIVE_ROW_GROUPS_SCANNED:
+	case MetricType::CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN:
 	case MetricType::OPERATOR_CARDINALITY:
 	case MetricType::OPERATOR_ROWS_SCANNED:
+	case MetricType::OPERATOR_ROW_GROUPS_SCANNED:
+	case MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN:
 	case MetricType::RESULT_SET_SIZE:
 	case MetricType::ROWS_RETURNED:
 	case MetricType::SYSTEM_PEAK_BUFFER_MEMORY:
@@ -240,6 +250,12 @@ void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_
 	case MetricType::CUMULATIVE_ROWS_SCANNED:
 		GetCumulativeMetric<uint64_t>(node, MetricType::CUMULATIVE_ROWS_SCANNED, MetricType::OPERATOR_ROWS_SCANNED);
 		break;
+	case MetricType::CUMULATIVE_ROW_GROUPS_SCANNED:
+		GetCumulativeMetric<uint64_t>(node, MetricType::CUMULATIVE_ROW_GROUPS_SCANNED, MetricType::OPERATOR_ROW_GROUPS_SCANNED);
+		break;
+	case MetricType::CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN:
+		GetCumulativeMetric<uint64_t>(node, MetricType::CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN, MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN);
+		break;
 	case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
 		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::ATTACH_LOAD_STORAGE_LATENCY));
 		break;
@@ -251,6 +267,9 @@ void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_
 		break;
 	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::COMMIT_LOCAL_STORAGE_LATENCY));
+		break;
+	case MetricType::CUMULATIVE_VACUUM_TIME:
+		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::CUMULATIVE_VACUUM_TIME));
 		break;
 	case MetricType::LATENCY:
 		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::LATENCY));

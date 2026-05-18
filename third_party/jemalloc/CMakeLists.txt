@@ -74,12 +74,16 @@ if(OVERRIDE_NEW_DELETE)
     set(JEMALLOC_C_FILES ${JEMALLOC_C_FILES} src/jemalloc_cpp.cpp)
 endif()
 
-add_library(jemalloc OBJECT ${JEMALLOC_C_FILES})
+add_library(duckdb_jemalloc STATIC ${JEMALLOC_C_FILES})
 
-set_property(TARGET jemalloc PROPERTY C_STANDARD 99)
+set_property(TARGET duckdb_jemalloc PROPERTY C_STANDARD 99)
 
-set(JEMALLOC_OBJECT_FILES
-    ${JEMALLOC_OBJECT_FILES} $<TARGET_OBJECTS:jemalloc>
-    PARENT_SCOPE)
+target_include_directories(duckdb_jemalloc PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+set_target_properties(duckdb_jemalloc PROPERTIES EXPORT_NAME duckdb_jemalloc)
 
-disable_target_warnings(jemalloc)
+install(TARGETS duckdb_jemalloc
+        EXPORT "${DUCKDB_EXPORT_SET}"
+        LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+        ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+
+disable_target_warnings(duckdb_jemalloc)

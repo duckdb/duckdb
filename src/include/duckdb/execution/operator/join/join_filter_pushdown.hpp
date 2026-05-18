@@ -104,6 +104,7 @@ private:
 	                               const PhysicalOperator &op, ProjectionIndex filter_col_idx, const Value &min_val,
 	                               const Value &max_val) const;
 
+
 	bool CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
 	bool CanUseBloomFilter(const ClientContext &context, const PhysicalComparisonJoin &op, const ExpressionType &cmp,
 	                       optional_ptr<JoinHashTable> ht = nullptr) const;

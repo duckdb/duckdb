@@ -159,7 +159,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(GeometryMinimumShreddingSize),
     DUCKDB_SETTING_CALLBACK(HomeDirectorySetting),
     DUCKDB_LOCAL(HTTPLoggingOutputSetting),
-    DUCKDB_SETTING(HTTPProxySetting),
+    DUCKDB_GLOBAL(HTTPProxySetting),
     DUCKDB_SETTING(HTTPProxyPasswordSetting),
     DUCKDB_SETTING(HTTPProxyUsernameSetting),
     DUCKDB_SETTING(IeeeFloatingPointOpsSetting),
@@ -221,6 +221,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(WalAutocheckpointEntriesSetting),
     DUCKDB_SETTING_CALLBACK(WarningsAsErrorsSetting),
     DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
+    DUCKDB_GLOBAL(WriteBufferRowGroupMemoryLimitSetting),
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
