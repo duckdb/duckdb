@@ -1,0 +1,124 @@
+# name: test/sql/export/export_views_dependency_order.test
+# description: EXPORT DATABASE must emit CREATE VIEW statements in dependency order so IMPORT succeeds
+# group: [export]
+
+# Issue #22512: a view that references another view whose name sorts later
+# alphabetically would be written first, making IMPORT fail with a catalog error.
+
+statement ok
+CREATE TABLE t (x INTEGER);
+
+statement ok
+INSERT INTO t VALUES (1), (2), (3);
+
+# a depends on b, but a sorts before b alphabetically.
+statement ok
+CREATE VIEW b AS SELECT * FROM t;
+
+statement ok
+CREATE VIEW a AS SELECT * FROM b;
+
+# Longer chain: z -> y -> x. Alphabetical order is the exact reverse of dependency order.
+statement ok
+CREATE VIEW z AS SELECT * FROM t;
+
+statement ok
+CREATE VIEW y AS SELECT * FROM z;
+
+statement ok
+CREATE VIEW x AS SELECT * FROM y;
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/cross_dep_views';
+
+statement ok
+DROP VIEW a;
+
+statement ok
+DROP VIEW b;
+
+statement ok
+DROP VIEW x;
+
+statement ok
+DROP VIEW y;
+
+statement ok
+DROP VIEW z;
+
+statement ok
+DROP TABLE t;
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/cross_dep_views';
+
+query I
+SELECT * FROM a ORDER BY x;
+----
+1
+2
+3
+
+query I
+SELECT * FROM x ORDER BY x;
+----
+1
+2
+3
+
+# Repeat with enable_view_dependencies on — the existing DependencyManager
+# topo sort should still produce a correct order, and ours should be a no-op.
+statement ok
+DROP VIEW a;
+
+statement ok
+DROP VIEW b;
+
+statement ok
+DROP VIEW x;
+
+statement ok
+DROP VIEW y;
+
+statement ok
+DROP VIEW z;
+
+statement ok
+DROP TABLE t;
+
+statement ok
+SET enable_view_dependencies = true;
+
+statement ok
+CREATE TABLE t (x INTEGER);
+
+statement ok
+INSERT INTO t VALUES (1), (2), (3);
+
+statement ok
+CREATE VIEW b AS SELECT * FROM t;
+
+statement ok
+CREATE VIEW a AS SELECT * FROM b;
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/cross_dep_views_setting_on';
+
+statement ok
+DROP VIEW a;
+
+statement ok
+DROP VIEW b;
+
+statement ok
+DROP TABLE t;
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/cross_dep_views_setting_on';
+
+query I
+SELECT * FROM a ORDER BY x;
+----
+1
+2
+3

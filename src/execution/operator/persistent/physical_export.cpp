@@ -3,11 +3,17 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
@@ -171,6 +177,90 @@ static void AddEntries(catalog_entry_vector_t &all_entries, catalog_entry_vector
 	to_add.clear();
 }
 
+// Reorder views so that a view is written after every other view it references.
+// View-to-view dependencies are not tracked by the DependencyManager unless the
+// enable_view_dependencies setting is on (default off). Without this reorder,
+// EXPORT DATABASE writes views in catalog scan order, which can produce a schema.sql
+// that fails on IMPORT when a referring view appears before the view it depends on.
+static void ReorderViewEntries(catalog_entry_vector_t &views) {
+	if (views.size() <= 1) {
+		return;
+	}
+
+	// (schema, name) -> index in views. Compared case-insensitively to match SQL identifier rules.
+	// '\x1F' (ASCII Unit Separator) joins the two parts so identifiers containing '.' don't collide.
+	auto make_key = [](const string &schema, const string &name) {
+		return schema + '\x1F' + name;
+	};
+	case_insensitive_map_t<idx_t> view_index;
+	for (idx_t i = 0; i < views.size(); ++i) {
+		auto &entry = views[i].get();
+		view_index[make_key(entry.ParentSchema().name, entry.name)] = i;
+	}
+
+	// deps[i] = indices of views that view i references (and must be written before view i).
+	vector<vector<idx_t>> deps(views.size());
+	for (idx_t i = 0; i < views.size(); ++i) {
+		auto &entry = views[i].get();
+		if (entry.type != CatalogType::VIEW_ENTRY) {
+			continue;
+		}
+		auto &view_entry = entry.Cast<ViewCatalogEntry>();
+		if (!view_entry.query || !view_entry.query->node) {
+			continue;
+		}
+		const auto &default_schema = view_entry.ParentSchema().name;
+		ParsedExpressionIterator::EnumerateQueryNodeChildren(
+		    *view_entry.query->node, [](unique_ptr<ParsedExpression> &) {},
+		    [&](TableRef &ref) {
+			    if (ref.type != TableReferenceType::BASE_TABLE) {
+				    return;
+			    }
+			    auto &base_ref = ref.Cast<BaseTableRef>();
+			    const auto &ref_schema = base_ref.schema_name.empty() ? default_schema : base_ref.schema_name;
+			    auto it = view_index.find(make_key(ref_schema, base_ref.table_name));
+			    if (it == view_index.end() || it->second == i) {
+				    return;
+			    }
+			    deps[i].push_back(it->second);
+		    });
+	}
+
+	// Iterative DFS topo sort. On a cycle (shouldn't happen for views), break it
+	// by treating the back-edge as absent so we still emit every view exactly once.
+	catalog_entry_vector_t reordered;
+	reordered.reserve(views.size());
+	enum class VisitState : uint8_t { UNVISITED, ON_STACK, DONE };
+	vector<VisitState> state(views.size(), VisitState::UNVISITED);
+	vector<pair<idx_t, idx_t>> stack; // (view index, next dep cursor)
+	for (idx_t root = 0; root < views.size(); ++root) {
+		if (state[root] != VisitState::UNVISITED) {
+			continue;
+		}
+		stack.emplace_back(root, 0);
+		state[root] = VisitState::ON_STACK;
+		while (!stack.empty()) {
+			auto &frame = stack.back();
+			auto i = frame.first;
+			if (frame.second < deps[i].size()) {
+				idx_t next = deps[i][frame.second++];
+				if (state[next] == VisitState::UNVISITED) {
+					stack.emplace_back(next, 0);
+					state[next] = VisitState::ON_STACK;
+				}
+				// If ON_STACK, we found a cycle; skip the back-edge.
+				// If DONE, already emitted.
+				continue;
+			}
+			state[i] = VisitState::DONE;
+			reordered.push_back(views[i]);
+			stack.pop_back();
+		}
+	}
+
+	views = std::move(reordered);
+}
+
 catalog_entry_vector_t PhysicalExport::GetNaiveExportOrder(ClientContext &context, Catalog &catalog) {
 	// gather all catalog types to export
 	ExportEntries entries;
@@ -178,6 +268,7 @@ catalog_entry_vector_t PhysicalExport::GetNaiveExportOrder(ClientContext &contex
 	PhysicalExport::ExtractEntries(context, schema_list, entries);
 
 	ReorderTableEntries(entries.tables);
+	ReorderViewEntries(entries.views);
 
 	// order macro's by timestamp so nested macro's are imported nicely
 	sort(entries.macros.begin(), entries.macros.end(),
