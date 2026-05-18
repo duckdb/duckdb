@@ -6,9 +6,8 @@
 #include <vector>
 
 using namespace duckdb;
-using namespace std;
 
-TEST_CASE("Test upserting through the query appender", "[appender]") {
+TEST_CASE("Test UPSERT through the query appender", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -21,17 +20,8 @@ TEST_CASE("Test upserting through the query appender", "[appender]") {
 	types.push_back(LogicalType::VARCHAR);
 
 	QueryAppender appender(con, "INSERT OR REPLACE INTO tbl FROM appended_data", types);
-	appender.BeginRow();
-	appender.Append<int32_t>(1);
-	appender.Append("world");
-	appender.EndRow();
-
-	appender.BeginRow();
-	appender.Append<int32_t>(2);
-	appender.Append("again");
-	appender.EndRow();
-
-	// this should succeed
+	appender.AppendRow(1, "world");
+	appender.AppendRow(2, "again");
 	appender.Flush();
 
 	result = con.Query("SELECT * FROM tbl ORDER BY i");
@@ -68,7 +58,6 @@ TEST_CASE("Test custom column + table names in the query appender", "[appender]"
 	appender.Append("again");
 	appender.EndRow();
 
-	// this should succeed
 	appender.Flush();
 
 	result = con.Query("SELECT * FROM tbl ORDER BY i");

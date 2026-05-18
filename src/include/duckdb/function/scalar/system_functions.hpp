@@ -22,7 +22,7 @@ struct FinalizeFun {
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct CombineFun {
@@ -32,7 +32,7 @@ struct CombineFun {
 	static constexpr const char *Example = "";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct WriteLogFun {

@@ -30,6 +30,7 @@ add_library_unity(
   string_heap.cpp
   string_type.cpp
   timestamp.cpp
+  type_manager.cpp
   time.cpp
   validity_mask.cpp
   value.cpp

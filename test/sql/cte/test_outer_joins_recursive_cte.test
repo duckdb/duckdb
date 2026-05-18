@@ -3,9 +3,6 @@
 # group: [cte]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE v(x INT);
 
 statement ok

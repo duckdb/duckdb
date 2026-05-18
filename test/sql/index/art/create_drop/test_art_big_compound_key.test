@@ -1,0 +1,14 @@
+# name: test/sql/index/art/create_drop/test_art_big_compound_key.test
+# description: Tests a compound ART key exceeding 255 bytes.
+# group: [create_drop]
+
+statement ok
+CREATE TABLE v0 (v2 VARCHAR, v1 INT);
+
+statement ok
+INSERT INTO v0 (v2 ,v1 ) VALUES ('358677 4 2 1', 7), ('a%', 1);
+
+statement ok
+CREATE UNIQUE INDEX v3 ON v0
+	(v1, v1, v1, v1, v1, v2, v1, v2, v1, v2, v2, v1, v2, v2,
+	v2, v2, v2, v2, v1, v1, v2, v2, v1, v1, v2, v1);

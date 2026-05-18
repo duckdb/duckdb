@@ -6,9 +6,6 @@ statement ok
 SET default_null_order='nulls_first';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE timestamps(ts TIMESTAMP)
 
 statement ok
@@ -187,7 +184,7 @@ NULL	infinity
 foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow dayofyear yearweek isoyear epoch timezone timezone_hour timezone_minute julian
 
 query III
-SELECT ts, DATE_PART('${partcode}', ts) AS p, ${partcode}(ts) AS f
+SELECT ts, DATE_PART('{partcode}', ts) AS p, {partcode}(ts) AS f
 FROM timestamps
 WHERE p <> f
 ----
@@ -198,12 +195,12 @@ endloop
 foreach tstype TIMESTAMP TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS
 
 query I
-SELECT EXTRACT(EPOCH FROM ${tstype} '1992-09-20 11:30:00.0');
+SELECT EXTRACT(EPOCH FROM {tstype} '1992-09-20 11:30:00.0');
 ----
 716988600.0
 
 query I
-SELECT EXTRACT(JULIAN FROM ${tstype} '1992-09-20 00:00:00.0');
+SELECT EXTRACT(JULIAN FROM {tstype} '1992-09-20 00:00:00.0');
 ----
 2448886.0
 
@@ -218,9 +215,9 @@ endloop
 foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek isoyear epoch timezone timezone_hour timezone_minute
 
 query III
-SELECT ts, DATE_PART('${partcode}', ts) AS p, DATE_PART(['${partcode}'], ts) AS s
+SELECT ts, DATE_PART('{partcode}', ts) AS p, DATE_PART(['{partcode}'], ts) AS s
 FROM timestamps
-WHERE p <> s['${partcode}'];
+WHERE p <> s['{partcode}'];
 ----
 
 endloop
@@ -683,8 +680,8 @@ SELECT ts, epoch_ms(ts) FROM timestamps ORDER BY ALL;
 ----
 NULL	NULL
 -infinity	NULL
-1962-07-31 12:20:48.123456	-234185951876
-1969-01-01 01:03:20.45432	-31532199545
+1962-07-31 12:20:48.123456	-234185951877
+1969-01-01 01:03:20.45432	-31532199546
 1992-01-01 01:01:01.4	694227661400
 1992-01-01 01:01:02.2	694227662200
 1992-01-01 01:01:02.4	694227662400
@@ -722,8 +719,8 @@ SELECT ts::TIMESTAMPTZ, epoch_ms(ts::TIMESTAMPTZ) FROM timestamps ORDER BY ALL;
 ----
 NULL	NULL
 -infinity	NULL
-1962-07-31 12:20:48.123456+00	-234185951876
-1969-01-01 01:03:20.45432+00	-31532199545
+1962-07-31 12:20:48.123456+00	-234185951877
+1969-01-01 01:03:20.45432+00	-31532199546
 1992-01-01 01:01:01.4+00	694227661400
 1992-01-01 01:01:02.2+00	694227662200
 1992-01-01 01:01:02.4+00	694227662400

@@ -87,6 +87,8 @@ bool ParsedExpression::Equals(const BaseExpression &other) const {
 		return SubqueryExpression::Equal(Cast<SubqueryExpression>(), other.Cast<SubqueryExpression>());
 	case ExpressionClass::WINDOW:
 		return WindowExpression::Equal(Cast<WindowExpression>(), other.Cast<WindowExpression>());
+	case ExpressionClass::TYPE:
+		return TypeExpression::Equal(Cast<TypeExpression>(), other.Cast<TypeExpression>());
 	default:
 		throw SerializationException("Unsupported type for expression comparison!");
 	}

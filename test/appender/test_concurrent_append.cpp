@@ -7,7 +7,6 @@
 #include <vector>
 
 using namespace duckdb;
-using namespace std;
 
 atomic<int> finished_threads;
 
@@ -41,9 +40,9 @@ TEST_CASE("Test concurrent appends", "[appender][.]") {
 
 	finished_threads = 0;
 
-	thread threads[THREAD_COUNT];
+	std::thread threads[THREAD_COUNT];
 	for (size_t i = 0; i < THREAD_COUNT; i++) {
-		threads[i] = thread(append_to_integers, &db, i);
+		threads[i] = std::thread(append_to_integers, &db, i);
 	}
 
 	for (size_t i = 0; i < THREAD_COUNT; i++) {

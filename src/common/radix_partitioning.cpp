@@ -94,24 +94,12 @@ struct ComputePartitionIndicesFunctor {
 			// We could just slice the "hashes" vector and use the UnaryExecutor
 			// But slicing a dictionary vector causes SelectionData to be allocated
 			// Instead, we just directly compute the partition indices using the selection vectors
-			UnifiedVectorFormat format;
-			hashes.ToUnifiedFormat(original_count, format);
-			const auto source_data = UnifiedVectorFormat::GetData<hash_t>(format);
-			const auto &source_sel = *format.sel;
-
+			const auto source_data = hashes.Values<hash_t>();
 			partition_indices.SetVectorType(VectorType::FLAT_VECTOR);
-			const auto target = FlatVector::GetData<hash_t>(partition_indices);
-
-			if (source_sel.IsSet()) {
-				for (idx_t i = 0; i < append_count; i++) {
-					const auto source_idx = source_sel.get_index(append_sel[i]);
-					target[i] = CONSTANTS::ApplyMask(source_data[source_idx]);
-				}
-			} else {
-				for (idx_t i = 0; i < append_count; i++) {
-					const auto source_idx = append_sel[i];
-					target[i] = CONSTANTS::ApplyMask(source_data[source_idx]);
-				}
+			auto target = FlatVector::Writer<hash_t>(partition_indices, append_count);
+			for (idx_t i = 0; i < append_count; i++) {
+				const auto source_idx = append_sel[i];
+				target.WriteValue(CONSTANTS::ApplyMask(source_data[source_idx].GetValue()));
 			}
 		}
 	}
@@ -193,6 +181,48 @@ void RadixPartitionedTupleData::Initialize() {
 	for (idx_t i = 0; i < num_partitions; i++) {
 		partitions.emplace_back(CreatePartitionCollection());
 		partitions.back()->SetPartitionIndex(i);
+	}
+}
+
+void RadixPartitionedTupleData::ResetAppendState(PartitionedTupleDataAppendState &state,
+                                                 const TupleDataPinProperties properties) const {
+	if (!state.partition_sel.data()) {
+		state.partition_sel.Initialize();
+	}
+	if (!state.reverse_partition_sel.data()) {
+		state.reverse_partition_sel.Initialize();
+	}
+
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	if (state.partition_pin_states.size() != num_partitions) {
+		state.partition_pin_states.clear();
+		state.partition_pin_states.reserve(num_partitions);
+		for (idx_t i = 0; i < num_partitions; i++) {
+			state.partition_pin_states.emplace_back();
+		}
+	}
+	for (idx_t i = 0; i < num_partitions; i++) {
+		auto &pin_state = state.partition_pin_states[i];
+		pin_state.row_handles.clear();
+		pin_state.heap_handles.clear();
+		partitions[i]->InitializeAppend(pin_state, properties);
+	}
+
+	if (state.chunk_state.column_ids.empty()) {
+		auto column_count = layout.ColumnCount();
+		vector<column_t> column_ids;
+		column_ids.reserve(column_count);
+		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+			column_ids.emplace_back(col_idx);
+		}
+		partitions[0]->InitializeChunkState(state.chunk_state, std::move(column_ids));
+	}
+	state.chunk_state.chunk_lock = nullptr;
+	state.chunk_state.chunk_parts.clear();
+	state.chunk_state.chunk_part_indices.clear();
+
+	if (state.fixed_partition_entries.size() != num_partitions) {
+		state.fixed_partition_entries.resize(num_partitions);
 	}
 }
 

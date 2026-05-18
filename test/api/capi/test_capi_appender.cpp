@@ -6,7 +6,6 @@
 #include <random>
 
 using namespace duckdb;
-using namespace std;
 
 namespace {
 
@@ -1206,7 +1205,7 @@ TEST_CASE("Test appending default value to data chunk in the C API") {
 	tester.Cleanup();
 }
 
-TEST_CASE("Test upserting using the C API", "[capi]") {
+TEST_CASE("Test UPSERT using the C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 	REQUIRE(tester.OpenDatabase(nullptr));

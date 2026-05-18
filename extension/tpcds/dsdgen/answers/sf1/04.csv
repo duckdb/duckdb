@@ -1,7 +1,9 @@
 customer_id|customer_first_name|customer_last_name|customer_preferred_cust_flag
-AAAAAAAADIIOAAAA|David|Carroll|N
-AAAAAAAAIJCIBAAA|Thomas|Oneal|N
+AAAAAAAABIJBAAAA|James|White|N
+AAAAAAAADIIOAAAA|David|Carroll|Y
+AAAAAAAAIJCIBAAA|Thomas|Oneal|Y
 AAAAAAAAKJBLAAAA|Kerry|Davis|Y
+AAAAAAAAMFPFBAAA|Jamie|Woods|Y
 AAAAAAAANJAMAAAA|Thaddeus|Griffin|N
 AAAAAAAANJOLAAAA|Debra|Underwood|Y
-AAAAAAAAPFCLAAAA|Felicia|Neville|N
+AAAAAAAAPEHEBAAA|Edith|Molina|Y

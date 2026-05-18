@@ -1,5 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
@@ -15,11 +15,13 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -44,6 +46,8 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 
@@ -159,36 +163,57 @@ void Binder::SetCatalogLookupCallback(catalog_entry_callback_t callback) {
 	entry_retriever.SetCallback(std::move(callback));
 }
 
-void Binder::BindCreateViewInfo(CreateViewInfo &base) {
-	// bind the view as if it were a query so we can catch errors
-	// note that we bind the original, and replace the original with a copy
+void Binder::BindView(ClientContext &context, const SelectStatement &stmt, const string &catalog_name,
+                      const string &schema_name, optional_ptr<LogicalDependencyList> dependencies,
+                      const vector<string> &aliases, vector<LogicalType> &result_types, vector<string> &result_names) {
 	auto view_binder = Binder::CreateBinder(context);
-	auto &dependencies = base.dependencies;
-	auto &catalog = Catalog::GetCatalog(context, base.catalog);
+	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 
-	bool should_create_dependencies = Settings::Get<EnableViewDependenciesSetting>(context);
-	if (should_create_dependencies) {
+	if (dependencies) {
 		view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
 			if (&catalog != &entry.ParentCatalog()) {
 				// Don't register dependencies between catalogs
 				return;
 			}
-			dependencies.AddDependency(entry);
+			dependencies->AddDependency(entry);
 		});
 	}
 	view_binder->can_contain_nulls = true;
 
-	auto view_search_path = GetSearchPath(catalog, base.schema);
+	auto view_search_path = view_binder->GetSearchPath(catalog, schema_name);
 	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 
-	auto copy = base.query->Copy();
-	auto query_node = view_binder->Bind(*base.query);
-	base.query = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(copy));
-	if (base.aliases.size() > query_node.names.size()) {
+	auto copy = stmt.Copy();
+	auto query_node = view_binder->Bind(*copy);
+	if (aliases.size() > query_node.names.size()) {
 		throw BinderException("More VIEW aliases than columns in query result");
 	}
-	base.types = query_node.types;
-	base.names = query_node.names;
+	result_types = query_node.types;
+	result_names = query_node.names;
+}
+
+void Binder::BindCreateViewInfo(CreateViewInfo &base) {
+	if (base.binding_mode == CreateViewBindingMode::SKIP_BINDING) {
+		return;
+	}
+	// DML statements (INSERT/UPDATE/DELETE) are not allowed as CTE bodies inside a view,
+	// because the DML would execute every time the view is queried.
+	for (auto &kv : base.query->node->cte_map.map) {
+		auto &cte = *kv.second;
+		if (!cte.query_node) {
+			continue;
+		}
+		auto t = cte.query_node->type;
+		if (t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
+		    t == QueryNodeType::DELETE_QUERY_NODE) {
+			throw BinderException("DML statements (INSERT/UPDATE/DELETE) are not allowed as CTE bodies inside a VIEW");
+		}
+	}
+	optional_ptr<LogicalDependencyList> dependencies;
+	if (Settings::Get<EnableViewDependenciesSetting>(context)) {
+		dependencies = base.dependencies;
+	}
+	BindView(context, *base.query, base.catalog, base.schema, dependencies, base.aliases, base.types, base.names);
 }
 
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
@@ -264,19 +289,45 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			    });
 		}
 
+		// Constant-fold all default parameter expressions
+		for (auto &it : function->default_parameters) {
+			auto &param_name = it.first;
+			auto &param_expr = it.second;
+
+			if (param_expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+				continue;
+			}
+
+			ConstantBinder binder(*this, context, StringUtil::Format("Default value for parameter '%s'", param_name));
+			auto default_expr = param_expr->Copy();
+			auto bound_default = binder.Bind(default_expr);
+			if (!bound_default->IsFoldable()) {
+				auto msg = StringUtil::Format("Default value '%s' for parameter '%s' is not a constant expression.",
+				                              param_expr->ToString(), param_name);
+				throw BinderException(msg);
+			}
+
+			auto default_val = ExpressionExecutor::EvaluateScalar(context, *bound_default);
+
+			// Save this back as a constant expression
+			auto const_expr = make_uniq<ConstantExpression>(default_val);
+			const_expr->SetAlias(param_name);
+			it.second = std::move(const_expr);
+		}
+
 		// Resolve any user type arguments
 		for (idx_t param_idx = 0; param_idx < function->types.size(); param_idx++) {
 			auto &type = function->types[param_idx];
 			if (type.id() == LogicalTypeId::UNKNOWN) {
 				continue;
 			}
-			if (type.id() == LogicalTypeId::USER) {
-				type = TransformStringToLogicalType(type.ToString(), context);
+			if (type.id() == LogicalTypeId::UNBOUND) {
+				BindLogicalType(type);
 			}
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
 			auto it = function->default_parameters.find(param_name);
 			if (it != function->default_parameters.end()) {
-				const auto &val_type = it->second->Cast<ConstantExpression>().value.type();
+				const auto &val_type = it->second->Cast<ConstantExpression>().GetValue().type();
 				if (CastFunctionSet::ImplicitCastCost(context, val_type, type) < 0) {
 					auto msg =
 					    StringUtil::Format("Default value '%s' for parameter '%s' cannot be implicitly cast to '%s'.",
@@ -318,8 +369,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		ErrorData error;
 		if (info.type == CatalogType::MACRO_ENTRY) {
 			BoundSelectNode sel_node;
-			BoundGroupInformation group_info;
-			SelectBinder binder(*this, context, sel_node, group_info);
+			SelectBinder binder(*this, context, sel_node);
 			if (should_create_dependencies) {
 				binder.SetCatalogLookupCallback(binder_callback);
 			}
@@ -364,132 +414,123 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindCreateSchema(info);
 }
 
-static bool IsValidUserType(optional_ptr<CatalogEntry> entry) {
-	if (!entry) {
-		return false;
+LogicalType Binder::BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr) {
+	ConstantBinder binder(*this, context, "Type binding");
+	auto copy = type_expr->Copy();
+	auto expr = binder.Bind(copy);
+
+	if (!expr->IsFoldable()) {
+		throw BinderException(*type_expr, "Type expression is not constant");
 	}
-	return entry->Cast<TypeCatalogEntry>().user_type.id() != LogicalTypeId::INVALID;
+
+	if (expr->GetReturnType() != LogicalTypeId::TYPE) {
+		throw BinderException(*type_expr, "Expected a type returning expression, but got expression of type '%s'",
+		                      expr->GetReturnType().ToString());
+	}
+
+	// Shortcut for constant expressions
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		auto &const_expr = expr->Cast<BoundConstantExpression>();
+		return TypeValue::GetType(const_expr.value);
+	}
+
+	// Else, evaluate the type expression
+	auto type_value = ExpressionExecutor::EvaluateScalar(context, *expr);
+	D_ASSERT(type_value.type().id() == LogicalTypeId::TYPE);
+	return TypeValue::GetType(type_value);
 }
 
-LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_ptr<Catalog> catalog,
-                                            const string &schema) {
-	if (type.id() != LogicalTypeId::USER) {
-		// Nested type, make sure to bind any nested user types recursively
-		LogicalType result;
-		switch (type.id()) {
-		case LogicalTypeId::LIST: {
-			auto child_type = BindLogicalTypeInternal(ListType::GetChildType(type), catalog, schema);
-			result = LogicalType::LIST(child_type);
-			break;
-		}
-		case LogicalTypeId::MAP: {
-			auto key_type = BindLogicalTypeInternal(MapType::KeyType(type), catalog, schema);
-			auto value_type = BindLogicalTypeInternal(MapType::ValueType(type), catalog, schema);
-			result = LogicalType::MAP(std::move(key_type), std::move(value_type));
-			break;
-		}
-		case LogicalTypeId::ARRAY: {
-			auto child_type = BindLogicalTypeInternal(ArrayType::GetChildType(type), catalog, schema);
-			auto array_size = ArrayType::GetSize(type);
-			result = LogicalType::ARRAY(child_type, array_size);
-			break;
-		}
-		case LogicalTypeId::STRUCT: {
-			auto child_types = StructType::GetChildTypes(type);
-			child_list_t<LogicalType> new_child_types;
-			for (auto &entry : child_types) {
-				new_child_types.emplace_back(entry.first, BindLogicalTypeInternal(entry.second, catalog, schema));
-			}
-			result = LogicalType::STRUCT(std::move(new_child_types));
-			break;
-		}
-		case LogicalTypeId::UNION: {
-			child_list_t<LogicalType> member_types;
-			for (idx_t i = 0; i < UnionType::GetMemberCount(type); i++) {
-				auto child_type = BindLogicalTypeInternal(UnionType::GetMemberType(type, i), catalog, schema);
-				member_types.emplace_back(UnionType::GetMemberName(type, i), std::move(child_type));
-			}
-			result = LogicalType::UNION(std::move(member_types));
-			break;
-		}
-		default:
-			return type;
-		}
-
-		// Set the alias and extension info back
-		result.SetAlias(type.GetAlias());
-		auto ext_info = type.HasExtensionInfo() ? make_uniq<ExtensionTypeInfo>(*type.GetExtensionInfo()) : nullptr;
-		result.SetExtensionInfo(std::move(ext_info));
-		return result;
-	}
-
-	// User type, bind the user type
-	auto user_type_name = UserType::GetTypeName(type);
-	auto user_type_schema = UserType::GetSchema(type);
-	auto user_type_mods = UserType::GetTypeModifiers(type);
-
-	bind_logical_type_function_t user_bind_modifiers_func = nullptr;
-
-	LogicalType result;
-	EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, user_type_name);
-	if (catalog) {
-		// The search order is:
-		// 1) In the explicitly set schema (my_schema.my_type)
-		// 2) In the same schema as the table
-		// 3) In the same catalog
-		// 4) System catalog
-
-		optional_ptr<CatalogEntry> entry = nullptr;
-		if (!user_type_schema.empty()) {
-			entry = entry_retriever.GetEntry(*catalog, user_type_schema, type_lookup, OnEntryNotFound::RETURN_NULL);
-		}
-		if (!IsValidUserType(entry)) {
-			entry = entry_retriever.GetEntry(*catalog, schema, type_lookup, OnEntryNotFound::RETURN_NULL);
-		}
-		if (!IsValidUserType(entry)) {
-			entry = entry_retriever.GetEntry(*catalog, INVALID_SCHEMA, type_lookup, OnEntryNotFound::RETURN_NULL);
-		}
-		if (!IsValidUserType(entry)) {
-			entry = entry_retriever.GetEntry(INVALID_CATALOG, INVALID_SCHEMA, type_lookup,
-			                                 OnEntryNotFound::THROW_EXCEPTION);
-		}
-		auto &type_entry = entry->Cast<TypeCatalogEntry>();
-		result = type_entry.user_type;
-		user_bind_modifiers_func = type_entry.bind_function;
-	} else {
-		string type_catalog = UserType::GetCatalog(type);
-		string type_schema = UserType::GetSchema(type);
-
-		BindSchemaOrCatalog(context, type_catalog, type_schema);
-		auto entry = entry_retriever.GetEntry(type_catalog, type_schema, type_lookup);
-		auto &type_entry = entry->Cast<TypeCatalogEntry>();
-		result = type_entry.user_type;
-		user_bind_modifiers_func = type_entry.bind_function;
-	}
-
-	// Now we bind the inner user type
-	BindLogicalType(result, catalog, schema);
-
-	// Apply the type modifiers (if any)
-	if (user_bind_modifiers_func) {
-		// If an explicit bind_modifiers function was provided, use that to construct the type
-
-		BindLogicalTypeInput input {context, result, user_type_mods};
-		result = user_bind_modifiers_func(input);
-	} else {
-		if (!user_type_mods.empty()) {
-			throw BinderException("Type '%s' does not take any type modifiers", user_type_name);
-		}
-	}
-	return result;
-}
-
-void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, const string &schema) {
-	// check if we need to bind this type at all
-	if (!TypeVisitor::Contains(type, LogicalTypeId::USER)) {
+void Binder::BindLogicalType(LogicalType &type) {
+	// Check if we need to bind this type at all
+	if (!TypeVisitor::Contains(type, LogicalTypeId::UNBOUND)) {
 		return;
 	}
-	type = BindLogicalTypeInternal(type, catalog, schema);
+
+	// Replace all unbound types within the type
+	//   Normally, the unbound type is the root type, but it can also be nested within other types if we e.g.
+	//   alter-table and change a struct field.
+	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &ty) {
+		if (ty.id() == LogicalTypeId::UNBOUND) {
+			auto &type_expr = UnboundType::GetTypeExpression(ty);
+			return BindLogicalTypeInternal(type_expr);
+		}
+
+		return ty;
+	});
+}
+
+SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trigger_info) {
+	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres)
+	TableDescription table_description(create_trigger_info.base_table->catalog_name,
+	                                   create_trigger_info.base_table->schema_name,
+	                                   create_trigger_info.base_table->table_name);
+	auto table_ref = make_uniq<BaseTableRef>(table_description);
+	auto bound_table = Bind(*table_ref);
+	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
+		throw BinderException("CREATE TRIGGER requires a base table, not a view or subquery");
+	}
+	auto &get = bound_table.plan->Cast<LogicalGet>();
+	auto table_ptr = get.GetTable();
+	if (!table_ptr) {
+		throw BinderException("CREATE TRIGGER requires a base table");
+	}
+	auto &table = *table_ptr;
+
+	// Trigger inherits catalog/schema from the base table
+	create_trigger_info.catalog = table.catalog.GetName();
+	create_trigger_info.schema = table.schema.name;
+
+	auto &schema = BindCreateSchema(create_trigger_info);
+
+	// Block trigger creation on databases with an older storage version
+	auto &catalog = Catalog::GetCatalog(context, create_trigger_info.catalog);
+	auto &attached = catalog.GetAttached();
+	if (attached.HasStorageManager()) {
+		auto &storage_manager = attached.GetStorageManager();
+		const auto since = SerializationCompatibility::FromString("v2.0.0").serialization_version;
+		if (!create_trigger_info.temporary && !attached.IsTemporary() && !storage_manager.InMemory() &&
+		    storage_manager.GetStorageVersion() < since) {
+			string msg = "CREATE TRIGGER is only supported for storage versions v2.0.0 and higher.\n";
+			msg += "Use an in-memory database, ATTACH with (STORAGE_VERSION v2.0.0)";
+			throw BinderException(msg);
+		}
+	}
+
+	// Validate UPDATE OF columns exist
+	if (create_trigger_info.event_type == TriggerEventType::UPDATE_EVENT && !create_trigger_info.columns.empty()) {
+		for (const auto &col_name : create_trigger_info.columns) {
+			if (!table.ColumnExists(col_name)) {
+				throw BinderException("Column \"%s\" does not exist in table \"%s\"", col_name, table.name);
+			}
+		}
+	}
+	if (create_trigger_info.for_each == TriggerForEach::ROW) {
+		throw NotImplementedException("FOR EACH ROW triggers are not yet supported");
+	}
+
+	if (create_trigger_info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
+		table.ScanTriggers(table.ParentCatalog().GetCatalogTransaction(context), [&](CatalogEntry &entry) {
+			auto &t = entry.Cast<TriggerCatalogEntry>();
+			if (t.timing == create_trigger_info.timing && t.event_type == create_trigger_info.event_type) {
+				throw NotImplementedException("Multiple triggers per table event are not yet supported");
+			}
+		});
+	}
+
+	// Validate the trigger body using an isolated binder (own GlobalBinderState).
+	// Set up trigger_expanded_tables to match runtime behavior.
+	// Set up and trigger_creation_table to detect recursive triggers during the validation.
+	auto validation_binder = Binder::CreateBinder(context);
+	validation_binder->global_binder_state->trigger_expanded_tables.insert(table);
+	validation_binder->global_binder_state->trigger_creation_table = &table;
+	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.trigger_name;
+	auto body_copy = create_trigger_info.trigger_action->Copy();
+	validation_binder->Bind(*body_copy);
+
+	// Add table dependency
+	create_trigger_info.dependencies.AddDependency(table);
+
+	return schema;
 }
 
 unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
@@ -506,6 +547,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 
 	auto catalog_type = stmt.info->type;
+	auto return_type = StatementReturnType::NOTHING;
+	auto output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	auto &properties = GetStatementProperties();
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY: {
@@ -520,6 +563,14 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &base = stmt.info->Cast<CreateViewInfo>();
 		// bind the schema
 		auto &schema = BindCreateSchema(*stmt.info);
+		if (stmt.info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+			CatalogTransaction transaction(schema.ParentCatalog(), context);
+			auto existing_entry = schema.GetEntry(transaction, CatalogType::VIEW_ENTRY, base.view_name);
+			if (existing_entry && existing_entry->type == CatalogType::VIEW_ENTRY) {
+				// IF EXISTS and the view already exists - avoid binding
+				base.binding_mode = CreateViewBindingMode::SKIP_BINDING;
+			}
+		}
 		BindCreateViewInfo(base);
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, std::move(stmt.info), &schema);
 		break;
@@ -578,7 +629,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto create_table = make_uniq<LogicalCreateTable>(schema, std::move(bound_info));
 		if (root) {
 			// CREATE TABLE AS
-			properties.return_type = StatementReturnType::CHANGED_ROWS;
+			return_type = StatementReturnType::CHANGED_ROWS;
 			create_table->children.push_back(std::move(root));
 		}
 		result.plan = std::move(create_table);
@@ -621,32 +672,16 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			}
 
 			result.plan->AddChild(std::move(query));
-		} else if (create_type_info.type.id() == LogicalTypeId::USER) {
-			SetCatalogLookupCallback(dependency_callback);
-			// two cases:
-			// 1: create a type with a non-existent type as source, Binder::BindLogicalType(...) will throw exception.
-			// 2: create a type alias with a custom type.
-			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
-			// We set b to be an alias for the underlying type of a
-
-			EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, UserType::GetTypeName(create_type_info.type));
-			auto type_entry_p = entry_retriever.GetEntry(schema.catalog.GetName(), schema.name, type_lookup);
-			D_ASSERT(type_entry_p);
-			auto &type_entry = type_entry_p->Cast<TypeCatalogEntry>();
-			create_type_info.type = type_entry.user_type;
 		} else {
 			SetCatalogLookupCallback(dependency_callback);
-			// This is done so that if the type contains a USER type,
-			// we register this dependency
-			auto preserved_type = create_type_info.type;
+			// Bind the underlying type
 			BindLogicalType(create_type_info.type);
-			create_type_info.type = preserved_type;
 		}
 		break;
 	}
 	case CatalogType::SECRET_ENTRY: {
 		CatalogTransaction transaction = CatalogTransaction(Catalog::GetSystemCatalog(context), context);
-		properties.return_type = StatementReturnType::QUERY_RESULT;
+		return_type = StatementReturnType::QUERY_RESULT;
 
 		auto &info = stmt.info->Cast<CreateSecretInfo>();
 
@@ -713,13 +748,23 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		CreateSecretInput create_secret_input {type_string,   provider_string, info.storage_type, info.name,
 		                                       scope_strings, bound_options,   info.on_conflict,  info.persist_type};
 
-		return SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
+		result = SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
+		break;
+	}
+	case CatalogType::TRIGGER_ENTRY: {
+		auto &create_trigger_info = stmt.info->Cast<CreateTriggerInfo>();
+		auto &schema = BindCreateTriggerInfo(create_trigger_info);
+		result.plan =
+		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TRIGGER, std::move(stmt.info), &schema);
+		break;
 	}
 	default:
 		throw InternalException("Unrecognized type!");
 	}
-	properties.return_type = StatementReturnType::NOTHING;
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+
+	properties.return_type = return_type;
+	properties.output_type = output_type;
+
 	return result;
 }
 

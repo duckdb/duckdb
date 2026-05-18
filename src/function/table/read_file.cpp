@@ -6,7 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/table/range.hpp"
 #include "utf8proc_wrapper.hpp"
-#include "duckdb/storage/caching_file_system.hpp"
+#include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 
 namespace duckdb {
 
@@ -170,7 +170,6 @@ FileGlobInput DirectMultiFileInfo<OP>::GetGlobInput() {
 
 struct ReadBlobOperation {
 	static constexpr const char *NAME = "read_blob";
-	static constexpr const char *FILE_TYPE = "blob";
 
 	static inline LogicalType TYPE() {
 		return LogicalType::BLOB;
@@ -179,7 +178,6 @@ struct ReadBlobOperation {
 
 struct ReadTextOperation {
 	static constexpr const char *NAME = "read_text";
-	static constexpr const char *FILE_TYPE = "text";
 
 	static inline LogicalType TYPE() {
 		return LogicalType::VARCHAR;

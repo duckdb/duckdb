@@ -21,8 +21,8 @@ namespace duckdb {
 Connection::Connection(DatabaseInstance &database)
     : context(make_shared_ptr<ClientContext>(database.shared_from_this())) {
 	auto &connection_manager = ConnectionManager::Get(database);
-	connection_manager.AddConnection(*context);
 	connection_manager.AssignConnectionId(*this);
+	connection_manager.AddConnection(*context);
 }
 
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
@@ -79,11 +79,9 @@ void Connection::DisableProfiling() {
 }
 
 void Connection::EnableQueryVerification() {
-	ClientConfig::GetConfig(*context).query_verification_enabled = true;
 }
 
 void Connection::DisableQueryVerification() {
-	ClientConfig::GetConfig(*context).query_verification_enabled = false;
 }
 
 void Connection::ForceParallelism() {
@@ -202,15 +200,6 @@ vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &que
 
 unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
 	return context->ExtractPlan(query);
-}
-
-void Connection::Append(TableDescription &description, DataChunk &chunk) {
-	if (chunk.size() == 0) {
-		return;
-	}
-	ColumnDataCollection collection(Allocator::Get(*context), chunk.GetTypes());
-	collection.Append(chunk);
-	Append(description, collection);
 }
 
 void Connection::Append(TableDescription &description, ColumnDataCollection &collection) {

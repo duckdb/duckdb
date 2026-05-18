@@ -2,7 +2,7 @@
 # group: [wal]
 
 statement ok
-ATTACH '__TEST_DIR__/wal_replay.db';
+ATTACH '{TEST_DIR}/wal_replay.db';
 
 statement ok
 USE wal_replay;
@@ -30,7 +30,7 @@ statement ok
 DETACH wal_replay;
 
 statement ok
-ATTACH '__TEST_DIR__/wal_replay.db';
+ATTACH '{TEST_DIR}/wal_replay.db';
 
 statement ok
 USE wal_replay;

@@ -1,3 +1,8 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 
 #include "duckdb/common/fast_mem.hpp"
@@ -32,11 +37,18 @@ TupleDataCollection::TupleDataCollection(ClientContext &context, shared_ptr<Tupl
 }
 
 TupleDataCollection::~TupleDataCollection() {
-	ParallelDestroyTask<decltype(segments)>::Schedule(scheduler, segments);
+	static constexpr idx_t PARALLEL_DESTROY_THRESHOLD = 1048576;
+	if (count > PARALLEL_DESTROY_THRESHOLD) {
+		ParallelDestroyTask<decltype(segments)>::Schedule(scheduler, segments);
+	}
 }
 
 void TupleDataCollection::Initialize() {
 	D_ASSERT(!layout.GetTypes().empty());
+	if (TuplesPerBlock() == 0) {
+		throw NotImplementedException("Too many columns: tuple width exceeds block size of %llu",
+		                              allocator->GetBufferManager().GetBlockSize());
+	}
 	this->count = 0;
 	this->data_size = 0;
 	if (layout.IsSortKeyLayout()) {
@@ -109,13 +121,26 @@ void TupleDataCollection::SetPartitionIndex(const idx_t index) {
 	allocator->SetPartitionIndex(index);
 }
 
-vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() const {
+vector<pair<idx_t, idx_t>> TupleDataCollection::GetChunkRangesForPartition(const idx_t partition_idx) const {
+	idx_t chunk_idx_start = 0;
+	vector<pair<idx_t, idx_t>> chunk_ranges;
+	for (const auto &segment : segments) {
+		const idx_t segment_partition_idx = segment->allocator->GetPartitionIndex();
+		if (partition_idx == segment_partition_idx) {
+			chunk_ranges.emplace_back(chunk_idx_start, chunk_idx_start + segment->ChunkCount());
+		}
+		chunk_idx_start += segment->ChunkCount();
+	}
+	return chunk_ranges;
+}
+
+vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() {
 	D_ASSERT(segments.size() == 1);
-	const auto &segment = *segments[0];
+	auto &segment = *segments[0];
 	vector<data_ptr_t> result;
 	result.reserve(segment.pinned_row_handles.size());
-	for (const auto &pinned_row_handle : segment.pinned_row_handles) {
-		result.emplace_back(pinned_row_handle.Ptr());
+	for (auto &pinned_row_handle : segment.pinned_row_handles) {
+		result.emplace_back(pinned_row_handle.GetDataMutable());
 	}
 	return result;
 }
@@ -300,7 +325,7 @@ void TupleDataCollection::AppendUnified(TupleDataPinState &pin_state, TupleDataC
 }
 
 static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector &vector, const idx_t count) {
-	vector.ToUnifiedFormat(count, format.unified);
+	vector.ToUnifiedFormat(format.unified);
 	format.original_sel = format.unified.sel;
 	format.original_owned_sel.Initialize(format.unified.owned_sel);
 	switch (vector.GetType().InternalType()) {
@@ -308,13 +333,14 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		auto &entries = StructVector::GetEntries(vector);
 		D_ASSERT(format.children.size() == entries.size());
 		for (idx_t struct_col_idx = 0; struct_col_idx < entries.size(); struct_col_idx++) {
-			ToUnifiedFormatInternal(format.children[struct_col_idx], *entries[struct_col_idx], count);
+			ToUnifiedFormatInternal(format.children[struct_col_idx], entries[struct_col_idx], count);
 		}
 		break;
 	}
 	case PhysicalType::LIST:
 		D_ASSERT(format.children.size() == 1);
-		ToUnifiedFormatInternal(format.children[0], ListVector::GetEntry(vector), ListVector::GetListSize(vector));
+		ToUnifiedFormatInternal(format.children[0], ListVector::GetChildMutable(vector),
+		                        ListVector::GetListSize(vector));
 		break;
 	case PhysicalType::ARRAY: {
 		D_ASSERT(format.children.size() == 1);
@@ -337,7 +363,7 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		}
 		format.unified.data = reinterpret_cast<data_ptr_t>(format.array_list_entries.get());
 
-		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetEntry(vector), child_array_total_size);
+		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetChildMutable(vector), child_array_total_size);
 		break;
 	}
 	default:
@@ -450,7 +476,7 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 void TupleDataCollection::FindHeapPointers(TupleDataChunkState &chunk_state, const idx_t chunk_count) const {
 	D_ASSERT(!layout.AllConstant());
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
-	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
+	const auto heap_sizes = FlatVector::GetDataMutable<idx_t>(chunk_state.heap_sizes);
 
 	auto &not_found = chunk_state.utility;
 	idx_t not_found_count = 0;
@@ -497,10 +523,33 @@ void TupleDataCollection::Combine(unique_ptr<TupleDataCollection> other) {
 void TupleDataCollection::Reset() {
 	count = 0;
 	data_size = 0;
-	segments.clear();
+	// Find the first non-null segment.
+	// Segments may be null if they were moved out by a prior Combine() call.
+	idx_t live_idx = segments.size(); // sentinel: no live segment
+	for (idx_t i = 0; i < segments.size(); i++) {
+		if (segments[i]) {
+			live_idx = i;
+			segments[i]->Reset();
+			break;
+		}
+	}
 
-	// Refreshes the TupleDataAllocator to prevent holding on to allocated data unnecessarily
-	allocator = make_shared_ptr<TupleDataAllocator>(*allocator);
+	if (live_idx < segments.size()) {
+		// At least one live segment found: reset in-place to avoid per-iteration mutex create/destroy.
+		// We own all the blocks, so it is safe to clear the allocator's block list directly.
+		if (live_idx > 0) {
+			segments[0] = std::move(segments[live_idx]);
+		}
+		segments.resize(1);
+		allocator->Reset();
+	} else {
+		// All segments were null (moved out by Combine).  The old allocator is still shared by
+		// those moved-out segments and must keep its row_blocks intact.  Create a fresh allocator.
+		segments.clear();
+
+		// Refreshes the TupleDataAllocator to prevent holding on to allocated data unnecessarily
+		allocator = make_shared_ptr<TupleDataAllocator>(*allocator);
+	}
 }
 
 void TupleDataCollection::InitializeChunk(DataChunk &chunk) const {
@@ -542,8 +591,7 @@ void TupleDataCollection::InitializeScan(TupleDataScanState &state, TupleDataPin
 
 void TupleDataCollection::InitializeScan(TupleDataScanState &state, vector<column_t> column_ids,
                                          TupleDataPinProperties properties) const {
-	state.pin_state.row_handles.clear();
-	state.pin_state.heap_handles.clear();
+	state.Reset();
 	state.pin_state.properties = properties;
 	state.segment_index = 0;
 	state.chunk_index = 0;
@@ -713,7 +761,7 @@ void TupleDataCollection::ScanAtIndex(TupleDataPinState &pin_state, TupleDataChu
 	ResetCachedCastVectors(chunk_state, column_ids);
 	Gather(chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(), chunk.count, column_ids, result,
 	       *FlatVector::IncrementalSelectionVector(), chunk_state.cached_cast_vectors);
-	result.SetCardinality(chunk.count);
+	result.SetChildCardinality(chunk.count);
 }
 
 void TupleDataCollection::ResetCachedCastVectors(TupleDataChunkState &chunk_state, const vector<column_t> &column_ids) {

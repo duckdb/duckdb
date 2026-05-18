@@ -2,7 +2,7 @@
 # description: Ensure crypto cipher can not be downgraded to strip integrity checks
 # group: [attach]
 
-load __TEST_DIR__/tmp.db
+load {TEST_DIR}/tmp.db
 
 require httpfs
 
@@ -10,7 +10,7 @@ require httpfs
 statement error
 ATTACH 'data/attach_test/encrypted_ctr_key=abcde.db' as enc (ENCRYPTION_KEY 'abcde');
 ----
-Catalog Error: Cannot open encrypted database "data/attach_test/encrypted_ctr_key=abcde.db" without explicitly specifying the encryption cipher for security reasons. Please make sure you understand the security implications and re-attach the database specifying the desired cipher.
+explicitly specifying the encryption cipher
 
 # For CTR we need to specify the cipher to ensure we don't accidentally downgrade the cipher 
 statement ok

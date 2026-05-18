@@ -25,10 +25,10 @@ public:
 	//! Return a reference to the client context (from the optimizer)
 	ClientContext &GetContext();
 
-	void CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &table_bindings);
+	void CheckMarkToSemi(LogicalOperator &op, unordered_set<TableIndex> &table_bindings);
 
 	struct Filter {
-		unordered_set<idx_t> bindings;
+		unordered_set<TableIndex> bindings;
 		unique_ptr<Expression> filter;
 
 		Filter() {
@@ -68,22 +68,27 @@ private:
 	//! Push down a LogicalWindow op
 	unique_ptr<LogicalOperator> PushdownWindow(unique_ptr<LogicalOperator> op);
 	// Pushdown an inner join
-	unique_ptr<LogicalOperator> PushdownInnerJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
-	                                              unordered_set<idx_t> &right_bindings);
+	unique_ptr<LogicalOperator> PushdownInnerJoin(unique_ptr<LogicalOperator> op,
+	                                              unordered_set<TableIndex> &left_bindings,
+	                                              unordered_set<TableIndex> &right_bindings);
 	// Pushdown a left join
-	unique_ptr<LogicalOperator> PushdownLeftJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
-	                                             unordered_set<idx_t> &right_bindings);
+	unique_ptr<LogicalOperator> PushdownLeftJoin(unique_ptr<LogicalOperator> op,
+	                                             unordered_set<TableIndex> &left_bindings,
+	                                             unordered_set<TableIndex> &right_bindings);
 
 	// Pushdown an outer join
-	unique_ptr<LogicalOperator> PushdownOuterJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
-	                                              unordered_set<idx_t> &right_bindings);
+	unique_ptr<LogicalOperator> PushdownOuterJoin(unique_ptr<LogicalOperator> op,
+	                                              unordered_set<TableIndex> &left_bindings,
+	                                              unordered_set<TableIndex> &right_bindings);
 	unique_ptr<LogicalOperator> PushdownSemiAntiJoin(unique_ptr<LogicalOperator> op);
 	// Pushdown a mark join
-	unique_ptr<LogicalOperator> PushdownMarkJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
-	                                             unordered_set<idx_t> &right_bindings);
+	unique_ptr<LogicalOperator> PushdownMarkJoin(unique_ptr<LogicalOperator> op,
+	                                             unordered_set<TableIndex> &left_bindings,
+	                                             unordered_set<TableIndex> &right_bindings);
 	// Pushdown a single join
-	unique_ptr<LogicalOperator> PushdownSingleJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
-	                                               unordered_set<idx_t> &right_bindings);
+	unique_ptr<LogicalOperator> PushdownSingleJoin(unique_ptr<LogicalOperator> op,
+	                                               unordered_set<TableIndex> &left_bindings,
+	                                               unordered_set<TableIndex> &right_bindings);
 
 	// AddLogicalFilter used to add an extra LogicalFilter at this level,
 	// because in some cases, some expressions can not be pushed down.

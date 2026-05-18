@@ -1,0 +1,173 @@
+SelectStatement <- SelectStatementInternal
+SelectStatementInternal <- WithClause? SelectSetOpChain ResultModifiers?
+SelectSetOpChain <- IntersectChain (SetopClause IntersectChain)*
+IntersectChain <- SelectAtom (SetIntersectClause SelectAtom)*
+SetIntersectClause <- 'INTERSECT' DistinctOrAll?
+SelectAtom <- SelectParens / SelectStatementType
+
+SelectParens <- Parens(SelectStatementInternal)
+
+SetopClause <- SetopType DistinctOrAll? ByName?
+SetopType <- SetopUnion / SetopExcept
+SetopUnion <- 'UNION'
+SetopExcept <- 'EXCEPT'
+ByName <- 'BY' 'NAME'
+
+SelectStatementType <- OptionalParensSimpleSelect / ValuesClause / DescribeStatement / TableStatement / PivotStatement / UnpivotStatement
+ResultModifiers <- OrderByClause? LimitOffset?
+LimitOffset <- LimitOffsetClause / OffsetLimitClause
+LimitOffsetClause <- LimitClause OffsetClause?
+OffsetLimitClause <- OffsetClause LimitClause?
+TableStatement <- 'TABLE' BaseTableName
+OptionalParensSimpleSelect <- SimpleSelectParens / SimpleSelect
+SimpleSelectParens <- Parens(SimpleSelect)
+SimpleSelect <- SelectFrom WhereClause? GroupByClause? HavingClause? WindowClause? QualifyClause? SampleClause?
+
+SelectFrom <- SelectFromClause / FromSelectClause
+SelectFromClause <- SelectClause FromClause?
+FromSelectClause <- FromClause SelectClause?
+WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? CTEBody
+CTEBody <- Parens(CTEBodyContent)
+CTEBodyContent <- SelectStatementInternal / Statement
+UsingKey <- 'USING' 'KEY' Parens(TargetList)
+Materialized <- 'NOT'? 'MATERIALIZED'
+WithClause <- 'WITH' Recursive? List(WithStatement)
+Recursive <- 'RECURSIVE'
+SelectClause <- 'SELECT' DistinctClause? TargetList?
+TargetList <- List(AliasedExpression)
+ColumnAliases <- Parens(List(ColIdOrString))
+
+DistinctClause <- DistinctOn / DistinctAll
+DistinctAll <- 'ALL'
+DistinctOn <- 'DISTINCT' DistinctOnTargets?
+DistinctOnTargets <- 'ON' Parens(List(Expression))
+
+InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
+
+TableRef <- InnerTableRef JoinOrPivot*
+TableSubquery <- Lateral? SubqueryReference TableAlias?
+BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
+TableAliasColon <- ColIdOrString ':'
+ValuesRef <- ValuesClause TableAlias?
+ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
+
+JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
+
+TablePivotClause <- 'PIVOT' Parens(TargetList 'FOR' PivotValueList+ PivotGroupByList?) TableAlias?
+PivotGroupByList <- 'GROUP' 'BY' List(ColIdOrString)
+TableUnpivotClause <- 'UNPIVOT' IncludeOrExcludeNulls? Parens(UnpivotHeader 'FOR' UnpivotValueList+) TableAlias?
+
+PivotHeader <- BaseExpression
+PivotValueList <- PivotHeader 'IN' (Identifier / PivotTargetList)
+UnpivotValueList <- UnpivotHeader 'IN' UnpivotTargetList
+PivotTargetList <- Parens(TargetList)
+UnpivotTargetList <- Parens(TargetList)
+
+Lateral <- 'LATERAL'
+
+BaseTableName <- CatalogReservedSchemaTable / SchemaReservedTable / TableName
+SchemaReservedTable <- SchemaQualification ReservedTableName
+CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification ReservedTableName
+
+TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
+TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias?
+TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality? SampleClause?
+WithOrdinality <- 'WITH' 'ORDINALITY'
+QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
+TableFunctionArguments <- Parens(List(FunctionArgument)?)
+FunctionArgument <- NamedParameter / Expression
+NamedParameter <- TypeFuncName Type? NamedParameterAssignment Expression
+NamedParameterAssignment <- ':=' / '=>'
+
+TableAlias <- TableAliasAs / TableAliasWithoutAs
+TableAliasAs <- 'AS' IdentifierOrStringLiteral ColumnAliases?
+TableAliasWithoutAs <- Identifier ColumnAliases?
+
+AtClause <- 'AT' Parens(AtSpecifier)
+AtSpecifier <- AtUnit '=>' Expression
+AtUnit <- 'VERSION' / 'TIMESTAMP'
+
+JoinClause <- RegularJoinClause / JoinWithoutOnClause
+RegularJoinClause <- 'ASOF'? JoinType? 'JOIN' TableRef JoinQualifier
+JoinWithoutOnClause <- JoinPrefix 'JOIN' TableRef
+JoinQualifier <- OnClause / UsingClause
+OnClause <- 'ON' Expression
+UsingClause <- 'USING' Parens(List(ColumnName))
+
+JoinType <- FullJoin / LeftJoin / RightJoin / SemiJoin / AntiJoin / InnerJoin
+JoinPrefix <- CrossJoinPrefix / NaturalJoinPrefix / PositionalJoinPrefix
+CrossJoinPrefix <- 'CROSS'
+NaturalJoinPrefix <- 'NATURAL' JoinType?
+PositionalJoinPrefix <- 'POSITIONAL'
+FullJoin <- 'FULL' 'OUTER'?
+LeftJoin <- 'LEFT' 'OUTER'?
+RightJoin <- 'RIGHT' 'OUTER'?
+SemiJoin <- 'SEMI'
+AntiJoin <- 'ANTI'
+InnerJoin <- 'INNER'
+
+FromClause <- 'FROM' List(TableRef)
+WhereClause <- 'WHERE' Expression
+GroupByClause <- 'GROUP' 'BY' GroupByExpressions
+HavingClause <- 'HAVING' Expression
+QualifyClause <- 'QUALIFY' Expression
+SampleClause <- (TableSample / UsingSample) SampleEntry
+UsingSample <- 'USING' 'SAMPLE'
+TableSample <- 'TABLESAMPLE'
+WindowClause <- 'WINDOW' List(WindowDefinition)
+WindowDefinition <- Identifier 'AS' WindowFrameDefinition
+
+SampleEntry <- SampleEntryFunction / SampleEntryCount
+SampleEntryCount <- SampleCount Parens(SampleProperties)?
+SampleEntryFunction <- SampleFunction? Parens(SampleCount) RepeatableSample?
+SampleFunction <- ColId
+SampleProperties <- ColId (',' SampleSeed)?
+RepeatableSample <- 'REPEATABLE' Parens(SampleSeed)
+
+SampleSeed <- NumberLiteral
+
+SampleCount <- SampleValue SampleUnit?
+SampleValue <- NumberLiteral / Parameter
+SampleUnit <- SamplePercentage / SampleRows
+SamplePercentage <- '%' / 'PERCENT'
+SampleRows <- 'ROWS'
+
+GroupByExpressions <- GroupByList / GroupByAll
+GroupByAll <- 'ALL'
+GroupByList <- List(GroupByExpression)
+GroupByExpression <- EmptyGroupingItem / CubeOrRollupClause / GroupingSetsClause / Expression
+EmptyGroupingItem <- '(' ')'
+CubeOrRollupClause <- CubeOrRollup Parens(List(Expression)?)
+CubeOrRollup <- 'CUBE' / 'ROLLUP'
+GroupingSetsClause <- 'GROUPING' 'SETS' Parens(GroupByList)
+
+SubqueryReference <- Parens(SelectStatementInternal)
+
+OrderByExpression <- Expression DescOrAsc? NullsFirstOrLast?
+DescOrAsc <- DescendingOrder / AscendingOrder
+DescendingOrder <- 'DESC' / 'DESCENDING'
+AscendingOrder <- 'ASC' / 'ASCENDING'
+NullsFirstOrLast <- NullsFirst / NullsLast
+NullsFirst <- 'NULLS' 'FIRST'
+NullsLast <- 'NULLS' 'LAST'
+OrderByClause <- 'ORDER' 'BY' OrderByExpressions
+OrderByExpressions <- OrderByAll / OrderByExpressionList
+OrderByExpressionList <- List(OrderByExpression)
+OrderByAll <- 'ALL' DescOrAsc? NullsFirstOrLast?
+
+LimitClause <- 'LIMIT' LimitValue
+OffsetClause <- 'OFFSET' OffsetValue
+OffsetValue <- Expression RowOrRows?
+RowOrRows <- 'ROW' / 'ROWS'
+LimitValue <- LimitAll / LimitLiteralPercent / LimitExpression
+LimitAll <- 'ALL'
+LimitLiteralPercent <- NumberLiteral 'PERCENT'
+LimitExpression <- Expression '%'?
+
+AliasedExpression <- ColIdExpression / ExpressionAsCollabel / ExpressionOptIdentifier
+ColIdExpression <- ColId ':' Expression
+ExpressionAsCollabel <- Expression 'AS' ColLabelOrString
+ExpressionOptIdentifier <- Expression Identifier?
+
+ValuesClause <- 'VALUES' List(ValuesExpressions)
+ValuesExpressions <- Parens(List(Expression))

@@ -19,6 +19,7 @@ class BaseSecret;
 struct SecretEntry;
 struct FileOpenerInfo;
 struct CreateSecretInfo;
+class FileOpener;
 
 //! Whether a secret is persistent or temporary
 enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT };
@@ -252,7 +253,7 @@ public:
 class KeyValueSecretReader {
 public:
 	//! Manually pass in a secret reference
-	KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p) : secret(secret_p) {};
+	KeyValueSecretReader(const KeyValueSecret &secret_p, FileOpener &opener_p);
 
 	//! Initializes the KeyValueSecretReader by fetching the secret automatically
 	KeyValueSecretReader(FileOpener &opener_p, optional_ptr<FileOpenerInfo> info, const char **secret_types,

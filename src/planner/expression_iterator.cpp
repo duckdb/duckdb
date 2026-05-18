@@ -1,9 +1,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 
-#include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/list.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 #include "duckdb/planner/tableref/list.hpp"
 #include "duckdb/common/enum_util.hpp"
 
@@ -36,13 +33,6 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		}
 		break;
 	}
-	case ExpressionClass::BOUND_BETWEEN: {
-		auto &between_expr = expr.Cast<BoundBetweenExpression>();
-		callback(between_expr.input);
-		callback(between_expr.lower);
-		callback(between_expr.upper);
-		break;
-	}
 	case ExpressionClass::BOUND_CASE: {
 		auto &case_expr = expr.Cast<BoundCaseExpression>();
 		for (auto &case_check : case_expr.case_checks) {
@@ -55,12 +45,6 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	case ExpressionClass::BOUND_CAST: {
 		auto &cast_expr = expr.Cast<BoundCastExpression>();
 		callback(cast_expr.child);
-		break;
-	}
-	case ExpressionClass::BOUND_COMPARISON: {
-		auto &comp_expr = expr.Cast<BoundComparisonExpression>();
-		callback(comp_expr.left);
-		callback(comp_expr.right);
 		break;
 	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
@@ -110,12 +94,6 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		}
 		if (window_expr.end_expr) {
 			callback(window_expr.end_expr);
-		}
-		if (window_expr.offset_expr) {
-			callback(window_expr.offset_expr);
-		}
-		if (window_expr.default_expr) {
-			callback(window_expr.default_expr);
 		}
 		for (auto &order : window_expr.arg_orders) {
 			callback(order.expression);

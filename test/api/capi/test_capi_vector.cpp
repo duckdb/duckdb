@@ -1,7 +1,6 @@
 #include "capi_tester.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 string get_string_from_duckdb_string_t(duckdb_string_t *input) {
 	const char *ptr = duckdb_string_is_inlined(*input) ? input->value.inlined.inlined : input->value.pointer.ptr;

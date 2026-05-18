@@ -66,11 +66,12 @@ private:
 	//! cancelling the dynamic programming step.
 	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
 
-	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right, unordered_set<idx_t> &exclusion_set);
+	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right,
+	                           unordered_set<RelationIndex> &exclusion_set);
 	//! Emit a relation set node
 	bool EmitCSG(JoinRelationSet &node);
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
-	bool EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set);
+	bool EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<RelationIndex> &exclusion_set);
 	//! Generate cross product edges inside the side
 	void GenerateCrossProducts();
 

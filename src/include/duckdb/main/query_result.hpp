@@ -15,6 +15,7 @@
 #include "duckdb/main/client_properties.hpp"
 
 namespace duckdb {
+class BoxRendererContext;
 struct BoxRendererConfig;
 
 enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDING_RESULT, ARROW_RESULT };
@@ -105,7 +106,7 @@ public:
 	//! Converts the QueryResult to a string
 	DUCKDB_API virtual string ToString() = 0;
 	//! Converts the QueryResult to a box-rendered string
-	DUCKDB_API virtual string ToBox(ClientContext &context, const BoxRendererConfig &config);
+	DUCKDB_API virtual string ToBox(BoxRendererContext &context, const BoxRendererConfig &config);
 	//! Prints the QueryResult to the console
 	DUCKDB_API void Print();
 	//! Returns true if the two results are identical; false otherwise. Note that this method is destructive; it calls

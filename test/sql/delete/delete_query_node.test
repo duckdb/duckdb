@@ -1,0 +1,93 @@
+# name: test/sql/delete/delete_query_node.test
+# description: Tests for DeleteQueryNode (DeleteStatement as thin wrapper over DeleteQueryNode)
+# group: [delete]
+
+statement ok
+CREATE TABLE t(a INT, b TEXT, c DOUBLE);
+
+statement ok
+INSERT INTO t VALUES (1, 'hello', 1.5), (2, 'world', 2.5), (3, 'foo', 3.5);
+
+# Basic DELETE
+statement ok
+DELETE FROM t WHERE a = 1;
+
+query III
+SELECT * FROM t ORDER BY a;
+----
+2	world	2.5
+3	foo	3.5
+
+# DELETE with RETURNING
+query III
+DELETE FROM t WHERE a = 2 RETURNING a, b, c;
+----
+2	world	2.5
+
+query III
+SELECT * FROM t ORDER BY a;
+----
+3	foo	3.5
+
+# Re-insert for further tests
+statement ok
+INSERT INTO t VALUES (1, 'hello', 1.5), (2, 'world', 2.5);
+
+# DELETE with USING clause
+statement ok
+CREATE TABLE to_delete(id INT);
+
+statement ok
+INSERT INTO to_delete VALUES (1);
+
+statement ok
+DELETE FROM t USING to_delete WHERE t.a = to_delete.id;
+
+query III
+SELECT * FROM t ORDER BY a;
+----
+2	world	2.5
+3	foo	3.5
+
+# DELETE with CTE
+statement ok
+INSERT INTO t VALUES (10, 'ten', 10.5);
+
+query I
+WITH targets AS (SELECT 10 AS target_a)
+DELETE FROM t WHERE a IN (SELECT target_a FROM targets) RETURNING a;
+----
+10
+
+query III
+SELECT * FROM t ORDER BY a;
+----
+2	world	2.5
+3	foo	3.5
+
+# DELETE all rows (no WHERE)
+statement ok
+DELETE FROM t;
+
+query I
+SELECT count(*) FROM t;
+----
+0
+
+# DELETE with schema-qualified table
+statement ok
+CREATE SCHEMA myschema;
+
+statement ok
+CREATE TABLE myschema.t2(x INT);
+
+statement ok
+INSERT INTO myschema.t2 VALUES (1), (2), (3);
+
+statement ok
+DELETE FROM myschema.t2 WHERE x > 1;
+
+query I rowsort
+SELECT * FROM myschema.t2;
+----
+1

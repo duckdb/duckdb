@@ -342,7 +342,7 @@ enum ActionType {
 	LARGE_WRITE = 3,
 	LARGE_WRITE_WITH_FAULT = 4,
 	UPDATE = 5,
-	DELETE = 6,
+	DELETE_ACTION = 6,
 	RESET_TABLE = 7,
 };
 
@@ -371,7 +371,7 @@ TEST_CASE("fuzzed storage test", "[storage][.]") {
 	                                              {0.3, ActionType::LARGE_WRITE},
 	                                              {0.5, ActionType::SMALL_WRITE},
 	                                              {0.7, ActionType::UPDATE},
-	                                              {0.85, ActionType::DELETE},
+	                                              {0.85, ActionType::DELETE_ACTION},
 	                                              {1.0, ActionType::LARGE_WRITE_WITH_FAULT}};
 
 	// Randomly generated sequence of actions
@@ -475,7 +475,7 @@ TEST_CASE("fuzzed storage test", "[storage][.]") {
 			}
 			break;
 		}
-		case ActionType::DELETE: {
+		case ActionType::DELETE_ACTION: {
 			if (offset != 0) {
 				uint64_t begin = rand() % offset;
 				uint64_t length = rand() % (offset - begin);

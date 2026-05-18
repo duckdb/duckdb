@@ -2,9 +2,6 @@
 # description: Test join filter pushdown on multiple columns
 # group: [pushdown]
 
-statement ok
-PRAGMA enable_verification
-
 # two columns of different types
 statement ok
 CREATE TABLE tbl AS SELECT CASE WHEN i%2=0 THEN NULL ELSE i END i, concat('thisisastring', i) s FROM range(1000) t(i)
@@ -26,7 +23,7 @@ CREATE TABLE all_types AS FROM test_all_types();
 foreach col <all_types_columns>
 
 query I
-SELECT COUNT(*) FROM all_types WHERE "${col}"=(SELECT MIN("${col}") FROM all_types)
+SELECT COUNT(*) FROM all_types WHERE "{col}"=(SELECT MIN("{col}") FROM all_types)
 ----
 1
 

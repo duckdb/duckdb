@@ -22,6 +22,8 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_pivot.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 
 namespace duckdb {
 
@@ -87,7 +89,7 @@ struct ReplacePivotAggregateOperator {
 
 	static void HandleAggregate(unique_ptr<ParsedExpression> &expr, FunctionExpression &aggr_function,
 	                            TYPE &replacement_expr) {
-		if (replacement_expr->type != ExpressionType::COLUMN_REF) {
+		if (replacement_expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
 			throw BinderException(*expr, "Pivot expression can only have one aggregate");
 		}
 		auto aggr = std::move(expr);
@@ -373,7 +375,7 @@ static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, Piv
 			auto &pivot_aggr_name = aggregate_names[aggr_name_idx++];
 			// replace column ref with name
 			ReplacePivotColumnRef(*aggr, pivot_aggr_name);
-			aggr->alias = pivot_aggr_name;
+			aggr->SetAlias(pivot_aggr_name);
 
 			final_pivot_operator->select_list.push_back(std::move(aggr));
 		}
@@ -422,6 +424,9 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 	result.bind_index = GenerateTableIndex();
 	result.child_binder = Binder::CreateBinder(context, this);
 	result.child = result.child_binder->Bind(*ref.source);
+	if (!result.child_binder->correlated_columns.empty()) {
+		throw BinderException("PIVOT is not supported in correlated subqueries yet");
+	}
 
 	auto &aggregates = result.bound_pivot.aggregates;
 	ExtractPivotAggregates(result.child, aggregates);
@@ -489,7 +494,7 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 			}
 			result.bound_pivot.pivot_values.push_back(std::move(pivot_str));
 			names.push_back(std::move(name));
-			types.push_back(aggr->return_type);
+			types.push_back(aggr->GetReturnType());
 		}
 	}
 	result.bound_pivot.group_count = ref.bound_group_names.size();
@@ -504,6 +509,37 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 	result_statement.plan =
 	    make_uniq<LogicalPivot>(result.bind_index, std::move(result.child.plan), std::move(result.bound_pivot));
 	return result_statement;
+}
+
+static void BindPivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &values, Binder &binder) {
+	switch (expr->GetExpressionType()) {
+	case ExpressionType::COLUMN_REF: {
+		auto &colref = expr->Cast<ColumnRefExpression>();
+		if (colref.IsQualified()) {
+			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list cannot contain qualified column references");
+		}
+		values.emplace_back(colref.GetColumnName());
+	} break;
+	case ExpressionType::FUNCTION: {
+		auto &function = expr->Cast<FunctionExpression>();
+		if (function.function_name != "row") {
+			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain columns or lists of columns");
+		}
+		for (auto &child : function.children) {
+			BindPivotInList(child, values, binder);
+		}
+	} break;
+	default: {
+		Value val;
+		ConstantBinder const_binder(binder, binder.context, "PIVOT IN list");
+		auto bound_expr = const_binder.Bind(expr);
+		if (!bound_expr->IsFoldable()) {
+			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain constant expressions");
+		}
+		auto folded_value = ExpressionExecutor::EvaluateScalar(binder.context, *bound_expr);
+		values.push_back(folded_value);
+	} break;
+	}
 }
 
 unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<ParsedExpression>> all_columns) {
@@ -531,6 +567,32 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	}
 	for (auto &aggr : pivot_aggregates) {
 		ExtractPivotExpressions(aggr.get(), handled_columns, macro_binding);
+	}
+
+	// process the in-lists
+	for (auto &pivot_column : ref.pivots) {
+		D_ASSERT(pivot_column.unpivot_names.empty());
+
+		for (auto &pivot_entry : pivot_column.entries) {
+			// bind the expressions in the IN list
+			if (!pivot_entry.values.empty()) {
+				continue;
+			}
+
+			BindPivotInList(pivot_entry.expr, pivot_entry.values, *this);
+
+			// check that we have the expected number of values
+			const auto expected_size = pivot_column.pivot_expressions.size();
+			const auto values_size = pivot_entry.values.size();
+
+			if (values_size != expected_size) {
+				throw BinderException("PIVOT IN list - inconsistent amount of rows - expected %d but got %d",
+				                      expected_size, values_size);
+			}
+
+			// clear the expression after binding, we only need the values from now
+			pivot_entry.expr = nullptr;
+		}
 	}
 
 	// first add all pivots to the set of handled columns, and check for duplicates
@@ -640,6 +702,17 @@ struct UnpivotEntry {
 
 void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry,
                                    vector<UnpivotEntry> &unpivot_entries) {
+	// Try to bind the entry expression as values
+	try {
+		auto expr_copy = entry.expr->Copy();
+		BindPivotInList(expr_copy, entry.values, child_binder);
+		// successfully bound as values - clear the expression
+		entry.expr = nullptr;
+	} catch (...) {
+		// ignore binder exceptions here - we fall back to expression mode
+		entry.values.clear();
+	}
+
 	if (!entry.expr) {
 		// pivot entry without an expression - generate one
 		UnpivotEntry unpivot_entry;
@@ -803,7 +876,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	// construct the UNNEST expression for the set of names (constant)
 	auto unpivot_list = Value::LIST(LogicalType::VARCHAR, std::move(unpivot_names));
 	auto unpivot_name_expr = make_uniq<ConstantExpression>(std::move(unpivot_list));
-	unpivot_name_expr->alias = select_names[column_count];
+	unpivot_name_expr->SetAlias(select_names[column_count]);
 	select_node->select_list.push_back(std::move(unpivot_name_expr));
 
 	// construct the unpivot lists for the set of unpivoted columns
@@ -813,7 +886,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	}
 	for (idx_t i = 0; i < unpivot_expressions.size(); i++) {
 		auto list_expr = make_uniq<FunctionExpression>("unpivot_list", std::move(unpivot_expressions[i]));
-		list_expr->alias = select_names[column_count + 1 + i];
+		list_expr->SetAlias(select_names[column_count + 1 + i]);
 		select_node->select_list.push_back(std::move(list_expr));
 	}
 
@@ -876,7 +949,7 @@ BoundStatement Binder::Bind(PivotRef &ref) {
 	// bind the source of the pivot
 	// we need to do this to be able to expand star expressions
 	if (ref.source->type == TableReferenceType::SUBQUERY && ref.source->alias.empty()) {
-		ref.source->alias = "__internal_pivot_alias_" + to_string(GenerateTableIndex());
+		ref.source->alias = "__internal_pivot_alias_" + to_string(GenerateTableIndex().index);
 	}
 	auto copied_source = ref.source->Copy();
 	auto star_binder = Binder::CreateBinder(context, this);

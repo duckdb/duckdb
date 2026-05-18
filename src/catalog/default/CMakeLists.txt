@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_catalog_default_entries
   OBJECT
+  default_coordinate_systems.cpp
   default_functions.cpp
   default_generator.cpp
   default_schemas.cpp

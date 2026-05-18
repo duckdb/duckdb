@@ -7,14 +7,30 @@ namespace duckdb {
 
 class ExpressionScanState : public OperatorState {
 public:
-	explicit ExpressionScanState(Allocator &allocator, const PhysicalExpressionScan &op) : expression_index(0) {
+	explicit ExpressionScanState(Allocator &allocator, const PhysicalExpressionScan &op) {
 		temp_chunk.Initialize(allocator, op.GetTypes());
+		ResetState();
 	}
 
 	//! The current position in the scan
 	idx_t expression_index;
 	//! Temporary chunk for evaluating expressions
 	DataChunk temp_chunk;
+
+private:
+	void ResetState() {
+		expression_index = 0;
+		temp_chunk.Reset();
+	}
+
+public:
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset() override {
+		ResetState();
+	}
 };
 
 unique_ptr<OperatorState> PhysicalExpressionScan::GetOperatorState(ExecutionContext &context) const {
@@ -55,7 +71,7 @@ void PhysicalExpressionScan::EvaluateExpressionInternal(ClientContext &context, 
                                                         DataChunk &temp_chunk) const {
 	ExpressionExecutor executor(context, expressions[expression_idx]);
 	if (child_chunk) {
-		child_chunk->Verify();
+		child_chunk->Verify(context.db);
 		executor.Execute(*child_chunk, temp_chunk);
 	} else {
 		executor.Execute(temp_chunk);

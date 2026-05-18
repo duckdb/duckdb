@@ -3,9 +3,6 @@
 # group: [limit]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PRAGMA threads=8
 
 statement ok
@@ -14,7 +11,7 @@ CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 94824 UNION ALL SELECT
 foreach table_type TABLE VIEW
 
 statement ok
-CREATE ${table_type} integers AS SELECT i, case when i%2=0 then [i, NULL, i + 2] else [NULL, i + 1, NULL] end AS k, {'i': case when i%2=0 then null else i end} AS l FROM range(1000000) tbl(i);
+CREATE {table_type} integers AS SELECT i, case when i%2=0 then [i, NULL, i + 2] else [NULL, i + 1, NULL] end AS k, {'i': case when i%2=0 then null else i end} AS l FROM range(1000000) tbl(i);
 
 query II
 SELECT k, l FROM integers LIMIT 5
@@ -90,6 +87,6 @@ query II
 [NULL, 497838, NULL]	{'i': 497837}
 
 statement ok
-DROP ${table_type} integers
+DROP {table_type} integers
 
 endloop

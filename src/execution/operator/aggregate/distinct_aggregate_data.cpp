@@ -98,7 +98,7 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 		}
 		idx_t group_by_size = group_expressions ? group_expressions->size() : 0;
 		for (idx_t set_idx = 0; set_idx < aggregate.children.size(); set_idx++) {
-			grouping_set.insert(set_idx + group_by_size);
+			grouping_set.insert(ProjectionIndex(set_idx + group_by_size));
 		}
 		// Create the hashtable for the aggregate
 		grouped_aggregate_data[table_idx] = make_uniq<GroupedAggregateData>();
@@ -109,7 +109,7 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 		// Fill the chunk_types (only contains the payload of the distinct aggregates)
 		vector<LogicalType> chunk_types;
 		for (auto &child_p : aggregate.children) {
-			chunk_types.push_back(child_p->return_type);
+			chunk_types.push_back(child_p->GetReturnType());
 		}
 	}
 }

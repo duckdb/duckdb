@@ -10,6 +10,8 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/table_index.hpp"
+#include "duckdb/common/projection_index.hpp"
 
 #include <functional>
 
@@ -18,26 +20,18 @@ class Serializer;
 class Deserializer;
 
 struct ColumnBinding {
-	idx_t table_index;
-	// This index is local to a Binding, and has no meaning outside of the context of the Binding that created it
-	idx_t column_index;
+	ColumnBinding();
+	ColumnBinding(TableIndex table, ProjectionIndex column);
 
-	ColumnBinding() : table_index(DConstants::INVALID_INDEX), column_index(DConstants::INVALID_INDEX) {
-	}
-	ColumnBinding(idx_t table, idx_t column) : table_index(table), column_index(column) {
-	}
+	TableIndex table_index;
+	ProjectionIndex column_index;
 
-	string ToString() const {
-		return "#[" + to_string(table_index) + "." + to_string(column_index) + "]";
-	}
+public:
+	string ToString() const;
 
-	bool operator==(const ColumnBinding &rhs) const {
-		return table_index == rhs.table_index && column_index == rhs.column_index;
-	}
-
-	bool operator!=(const ColumnBinding &rhs) const {
-		return !(*this == rhs);
-	}
+	bool operator==(const ColumnBinding &rhs) const;
+	bool operator!=(const ColumnBinding &rhs) const;
+	static ProjectionIndex PushExpression(vector<unique_ptr<Expression>> &expressions, unique_ptr<Expression> new_expr);
 
 	void Serialize(Serializer &serializer) const;
 	static ColumnBinding Deserialize(Deserializer &deserializer);

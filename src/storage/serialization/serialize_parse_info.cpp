@@ -164,6 +164,9 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &deserializer) {
 	case AlterTableType::RENAME_TABLE:
 		result = RenameTableInfo::Deserialize(deserializer);
 		break;
+	case AlterTableType::RESET_TABLE_OPTIONS:
+		result = ResetTableOptionsInfo::Deserialize(deserializer);
+		break;
 	case AlterTableType::SET_DEFAULT:
 		result = SetDefaultInfo::Deserialize(deserializer);
 		break;
@@ -175,6 +178,9 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case AlterTableType::SET_SORTED_BY:
 		result = SetSortedByInfo::Deserialize(deserializer);
+		break;
+	case AlterTableType::SET_TABLE_OPTIONS:
+		result = SetTableOptionsInfo::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterTableInfo!");
@@ -434,6 +440,7 @@ void LoadInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(202, "repository", repository);
 	serializer.WritePropertyWithDefault<string>(203, "version", version);
 	serializer.WritePropertyWithDefault<bool>(204, "repo_is_alias", repo_is_alias);
+	serializer.WritePropertyWithDefault<string>(205, "alias", alias);
 }
 
 unique_ptr<ParseInfo> LoadInfo::Deserialize(Deserializer &deserializer) {
@@ -443,6 +450,7 @@ unique_ptr<ParseInfo> LoadInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(202, "repository", result->repository);
 	deserializer.ReadPropertyWithDefault<string>(203, "version", result->version);
 	deserializer.ReadPropertyWithDefault<bool>(204, "repo_is_alias", result->repo_is_alias);
+	deserializer.ReadPropertyWithDefault<string>(205, "alias", result->alias);
 	return std::move(result);
 }
 
@@ -550,6 +558,17 @@ unique_ptr<AlterViewInfo> RenameViewInfo::Deserialize(Deserializer &deserializer
 	return std::move(result);
 }
 
+void ResetTableOptionsInfo::Serialize(Serializer &serializer) const {
+	AlterTableInfo::Serialize(serializer);
+	serializer.WriteProperty<case_insensitive_set_t>(400, "table_options", table_options);
+}
+
+unique_ptr<AlterTableInfo> ResetTableOptionsInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<ResetTableOptionsInfo>(new ResetTableOptionsInfo());
+	deserializer.ReadProperty<case_insensitive_set_t>(400, "table_options", result->table_options);
+	return std::move(result);
+}
+
 void SetColumnCommentInfo::Serialize(Serializer &serializer) const {
 	AlterInfo::Serialize(serializer);
 	serializer.WriteProperty<CatalogType>(300, "catalog_entry_type", catalog_entry_type);
@@ -624,16 +643,31 @@ unique_ptr<AlterTableInfo> SetSortedByInfo::Deserialize(Deserializer &deserializ
 	return std::move(result);
 }
 
+void SetTableOptionsInfo::Serialize(Serializer &serializer) const {
+	AlterTableInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(400, "table_options", table_options);
+}
+
+unique_ptr<AlterTableInfo> SetTableOptionsInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<SetTableOptionsInfo>(new SetTableOptionsInfo());
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(400, "table_options", result->table_options);
+	return std::move(result);
+}
+
 void TransactionInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WriteProperty<TransactionType>(200, "type", type);
 	serializer.WriteProperty<TransactionModifierType>(201, "modifier", modifier);
+	serializer.WritePropertyWithDefault<TransactionInvalidationPolicy>(202, "invalidation_policy", invalidation_policy, TransactionInvalidationPolicy::STANDARD_POLICY);
+	serializer.WritePropertyWithDefault<bool>(203, "auto_rollback", auto_rollback);
 }
 
 unique_ptr<ParseInfo> TransactionInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TransactionInfo>(new TransactionInfo());
 	deserializer.ReadProperty<TransactionType>(200, "type", result->type);
 	deserializer.ReadProperty<TransactionModifierType>(201, "modifier", result->modifier);
+	deserializer.ReadPropertyWithExplicitDefault<TransactionInvalidationPolicy>(202, "invalidation_policy", result->invalidation_policy, TransactionInvalidationPolicy::STANDARD_POLICY);
+	deserializer.ReadPropertyWithDefault<bool>(203, "auto_rollback", result->auto_rollback);
 	return std::move(result);
 }
 

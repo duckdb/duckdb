@@ -20,7 +20,7 @@ public:
 		}
 
 	public:
-		optional_ptr<CompressionFunction> function;
+		optional_ptr<const CompressionFunction> function;
 		ColumnDataCheckpointData &checkpoint_data;
 		idx_t count = 0;
 		idx_t non_nulls = 0;
@@ -48,7 +48,7 @@ public:
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 		auto &state = state_p.Cast<EmptyValidityCompressionState>();
 		UnifiedVectorFormat format;
-		scan_vector.ToUnifiedFormat(count, format);
+		scan_vector.ToUnifiedFormat(format);
 		state.non_nulls += format.validity.CountValid(count);
 		state.count += count;
 	}
@@ -64,10 +64,10 @@ public:
 		                                                                info.GetBlockManager());
 		compressed_segment->count = state.count;
 		if (state.non_nulls != state.count) {
-			compressed_segment->stats.statistics.SetHasNullFast();
+			compressed_segment->GetStatsMutable().SetHasNullFast();
 		}
 		if (state.non_nulls != 0) {
-			compressed_segment->stats.statistics.SetHasNoNullFast();
+			compressed_segment->GetStatsMutable().SetHasNoNullFast();
 		}
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());

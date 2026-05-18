@@ -86,7 +86,7 @@ template <>
 class BlockIteratorState<BlockIteratorStateType::IN_MEMORY>
     : public BlockIteratorStateBase<BlockIteratorState<BlockIteratorStateType::IN_MEMORY>> {
 public:
-	explicit BlockIteratorState(const TupleDataCollection &key_data)
+	explicit BlockIteratorState(TupleDataCollection &key_data)
 	    : BlockIteratorStateBase(key_data.Count()), block_ptrs(ConvertBlockPointers(key_data.GetRowBlockPointers())),
 	      fast_mod(key_data.TuplesPerBlock()) {
 	}
@@ -148,7 +148,8 @@ class BlockIteratorState<BlockIteratorStateType::EXTERNAL>
 public:
 	explicit BlockIteratorState(TupleDataCollection &key_data_p, optional_ptr<TupleDataCollection> payload_data_p)
 	    : BlockIteratorStateBase(key_data_p.Count()), current_chunk_idx(DConstants::INVALID_INDEX),
-	      key_data(key_data_p), key_ptrs(FlatVector::GetData<data_ptr_t>(key_scan_state.chunk_state.row_locations)),
+	      key_data(key_data_p),
+	      key_ptrs(FlatVector::GetDataMutable<data_ptr_t>(key_scan_state.chunk_state.row_locations)),
 	      payload_data(payload_data_p), keep_pinned(false), pin_payload(false) {
 		key_data.InitializeScan(key_scan_state);
 		if (payload_data) {

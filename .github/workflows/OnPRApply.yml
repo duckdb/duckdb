@@ -1,0 +1,88 @@
+# Applies privileged PR actions based on artifacts emitted by OnPR
+name: OnPRApply
+on:
+  workflow_run:
+    workflows: [OnPR]
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  apply:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: namespace-profile-linux-slim
+    steps:
+      - name: Download PR info
+        id: download_payload
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               run_id: context.payload.workflow_run.id,
+            });
+            let matchArtifact = allArtifacts.data.artifacts.filter((artifact) => {
+              return artifact.name == "pr_actions"
+            })[0];
+            if (!matchArtifact) {
+              core.setFailed('Artifact pr_actions not found for triggering workflow run');
+              return;
+            }
+            let download = await github.rest.actions.downloadArtifact({
+               owner: context.repo.owner,
+               repo: context.repo.repo,
+               artifact_id: matchArtifact.id,
+               archive_format: 'zip',
+            });
+            let fs = require('fs');
+            fs.writeFileSync(`${process.env.GITHUB_WORKSPACE}/pr_actions.zip`, Buffer.from(download.data));
+
+      - name: Unzip action payload artifact
+        run: unzip pr_actions.zip -d onpr
+
+      - name: Extract action payload
+        shell: bash
+        run: |
+          ACTION_FILE="onpr/pr_actions.json"
+          DRAFT_PR_NODE_ID=$(jq -r '.draft_pr_node_id // ""' "$ACTION_FILE")
+          MEMBER_PR_NUMBER=$(jq -r '.member_pr_number // ""' "$ACTION_FILE")
+
+          echo "DRAFT_PR_NODE_ID=$DRAFT_PR_NODE_ID" >> "$GITHUB_ENV"
+          echo "MEMBER_PR_NUMBER=$MEMBER_PR_NUMBER" >> "$GITHUB_ENV"
+
+      - name: Move PR to draft
+        if: env.DRAFT_PR_NODE_ID != ''
+        shell: bash
+        env:
+          MOVE_PR_TO_DRAFT_TOKEN_ENV: ${{ secrets.MOVE_PR_TO_DRAFT_TOKEN }}
+        run: |
+          if [ "${MOVE_PR_TO_DRAFT_TOKEN_ENV}" = "" ]; then
+            echo "MOVE_PR_TO_DRAFT_TOKEN is not set; skipping draft conversion"
+            exit 0
+          fi
+          echo "${MOVE_PR_TO_DRAFT_TOKEN_ENV}" | gh auth login --with-token
+          query="$(cat <<'EOF'
+          mutation($id: ID!) {
+            convertPullRequestToDraft(input: { pullRequestId: $id }) {
+              pullRequest {
+                id
+                number
+                isDraft
+              }
+            }
+          }
+          EOF
+          )"
+          gh api graphql -F "id=${{ env.DRAFT_PR_NODE_ID }}" -f query="$query"
+
+      - name: Add Member label
+        if: env.MEMBER_PR_NUMBER != ''
+        run: gh issue edit --repo duckdb/duckdb "$MEMBER_PR_NUMBER" --add-label "Member"
+        env:
+          GH_TOKEN: ${{ github.token }}

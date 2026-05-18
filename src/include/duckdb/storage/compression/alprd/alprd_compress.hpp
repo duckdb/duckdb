@@ -44,7 +44,7 @@ public:
 	}
 
 	ColumnDataCheckpointData &checkpoint_data;
-	CompressionFunction &function;
+	const CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
 
@@ -73,7 +73,7 @@ public:
 	bool HasEnoughSpace(idx_t vector_size) {
 		//! If [start of block + used space + required space] is more than whats left (current position
 		//! of metadata pointer - the size of a new metadata pointer)
-		if ((handle.Ptr() + AlignValue(UsedSpace() + vector_size)) >=
+		if ((handle.GetDataMutable() + AlignValue(UsedSpace() + vector_size)) >=
 		    (metadata_ptr - AlpRDConstants::METADATA_POINTER_SIZE)) {
 			return false;
 		}
@@ -96,10 +96,10 @@ public:
 		handle = buffer_manager.Pin(current_segment->block);
 
 		// The pointer to the start of the compressed data.
-		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + AlpRDConstants::HEADER_SIZE +
+		data_ptr = handle.GetDataMutable() + current_segment->GetBlockOffset() + AlpRDConstants::HEADER_SIZE +
 		           actual_dictionary_size_bytes;
 		// The pointer to the start of the metadata.
-		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + info.GetBlockSize();
+		metadata_ptr = handle.GetDataMutable() + current_segment->GetBlockOffset() + info.GetBlockSize();
 		next_vector_byte_index_start = AlpRDConstants::HEADER_SIZE + actual_dictionary_size_bytes;
 	}
 
@@ -124,13 +124,13 @@ public:
 			CreateEmptySegment();
 		}
 		if (nulls_idx) {
-			current_segment->stats.statistics.SetHasNullFast();
+			current_segment->GetStatsMutable().SetHasNullFast();
 		}
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
-			current_segment->stats.statistics.SetHasNoNullFast();
+			current_segment->GetStatsMutable().SetHasNoNullFast();
 			for (idx_t i = 0; i < vector_idx; i++) {
 				T floating_point_value = Load<T>(const_data_ptr_cast(&input_vector[i]));
-				current_segment->stats.statistics.UpdateNumericStats<T>(floating_point_value);
+				current_segment->GetStatsMutable().UpdateNumericStats<T>(floating_point_value);
 			}
 		}
 		current_segment->count += vector_idx;
@@ -204,7 +204,7 @@ public:
 
 	void FlushSegment() {
 		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
-		auto dataptr = handle.Ptr();
+		auto dataptr = handle.GetDataMutable();
 
 		idx_t metadata_offset = AlignValue(UsedSpace());
 
@@ -274,7 +274,7 @@ public:
 			// to avoid checking if input_vector is filled in each iteration
 			auto values_to_fill_alp_input =
 			    MinValue<idx_t>(AlpConstants::ALP_VECTOR_SIZE - vector_idx, values_left_in_data);
-			if (vdata.validity.AllValid()) { //! We optimize a loop when there are no null
+			if (vdata.validity.CannotHaveNull()) { //! We optimize a loop when there are no null
 				for (idx_t i = 0; i < values_to_fill_alp_input; i++) {
 					auto idx = vdata.sel->get_index(offset_in_data + i);
 					EXACT_TYPE value = Load<EXACT_TYPE>(const_data_ptr_cast(&data[idx]));
@@ -313,7 +313,7 @@ template <class T>
 void AlpRDCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = (AlpRDCompressionState<T> &)state_p;
 	UnifiedVectorFormat vdata;
-	scan_vector.ToUnifiedFormat(count, vdata);
+	scan_vector.ToUnifiedFormat(vdata);
 	state.Append(vdata, count);
 }
 

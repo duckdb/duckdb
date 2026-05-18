@@ -23,6 +23,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
 
@@ -55,7 +56,7 @@ static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageMa
 			}
 		}
 		auto logical_type = col.GetType();
-		if (logical_type.id() == LogicalTypeId::USER && logical_type.HasAlias()) {
+		if (logical_type.id() == LogicalTypeId::UNBOUND && logical_type.HasAlias()) {
 			// Resolve user type if possible
 			const auto type_entry = Catalog::GetEntry<TypeCatalogEntry>(
 			    context, INVALID_CATALOG, INVALID_SCHEMA, logical_type.GetAlias(), OnEntryNotFound::RETURN_NULL);
@@ -67,7 +68,7 @@ static void VerifyCompressionType(ClientContext &context, optional_ptr<StorageMa
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
 			continue;
 		}
-		auto compression_method = config.GetCompressionFunction(compression_type, physical_type);
+		auto compression_method = config.TryGetCompressionFunction(compression_type, physical_type);
 		if (!compression_method) {
 			throw BinderException(
 			    "Can't compress column \"%s\" with type '%s' (physical: %s) using compression type '%s'", col.Name(),
@@ -284,6 +285,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 			continue;
 		}
 		D_ASSERT(col.Generated());
+
 		auto expression = col.GeneratedExpression().Copy();
 
 		auto bound_expression = expr_binder.Bind(expression);
@@ -294,14 +296,26 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 		}
 		if (col.Type().id() == LogicalTypeId::ANY) {
 			// Do this before changing the type, so we know it's the first time the type is set
-			col.ChangeGeneratedExpressionType(bound_expression->return_type);
-			col.SetType(bound_expression->return_type);
+			col.ChangeGeneratedExpressionType(bound_expression->GetReturnType());
+			col.SetType(bound_expression->GetReturnType());
 
 			// Update the type in the binding, for future expansions
 			table_binding->SetColumnType(i.index, col.Type());
+		} else if (col.Type().id() == LogicalTypeId::UNBOUND) {
+			// Bind column type
+			BindLogicalType(col.TypeMutable());
+			table_binding->SetColumnType(i.index, col.Type());
 		}
+
 		bound_indices.insert(i);
 	}
+}
+
+void Binder::BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
+                              const string &catalog, const string &schema) {
+	ColumnList col_list;
+	col_list.AddColumn(column.Copy());
+	BindDefaultValues(col_list, bound_defaults, catalog, schema);
 }
 
 void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expression>> &bound_defaults,
@@ -311,14 +325,7 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 		schema_name = DEFAULT_SCHEMA;
 	}
 
-	vector<CatalogSearchEntry> defaults_search_path;
-	defaults_search_path.emplace_back(catalog_name, schema_name);
-	if (schema_name != DEFAULT_SCHEMA) {
-		defaults_search_path.emplace_back(catalog_name, DEFAULT_SCHEMA);
-	}
-
-	auto default_binder = Binder::CreateBinder(context, *this);
-	default_binder->entry_retriever.SetSearchPath(std::move(defaults_search_path));
+	auto default_binder = CreateBinderWithSearchPath(catalog_name, schema_name);
 
 	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;
@@ -340,9 +347,10 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 	}
 }
 
-unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema) {
+unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
+                                                             AlterBindMode bind_mode) {
 	vector<unique_ptr<Expression>> bound_defaults;
-	return BindCreateTableInfo(std::move(info), schema, bound_defaults);
+	return BindCreateTableInfo(std::move(info), schema, bound_defaults, bind_mode);
 }
 
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
@@ -352,8 +360,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableCheckpoint(unique_ptr<Cr
 	return result;
 }
 
-void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const unordered_set<string> &gcols,
-                                       bool &contains_gcol) {
+static void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr, const unordered_set<string> &gcols,
+                                              bool &contains_gcol) {
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(root_expr,
 	                                                               [&](const ColumnRefExpression &column_ref) {
 		                                                               auto &name = column_ref.GetColumnName();
@@ -554,14 +562,18 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 			continue;
 		}
 
-		// Resolve the table reference.
+		// Resolve the table reference in the same catalog/schema as the table being
+		// created, so FK references work for external catalogs (not just the default).
+		string fk_catalog = fk.info.schema.empty() ? schema.ParentCatalog().GetName() : INVALID_CATALOG;
+		string fk_schema = fk.info.schema.empty() ? schema.name : fk.info.schema;
 		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, fk.info.table);
-		auto table_entry = entry_retriever.GetEntry(INVALID_CATALOG, fk.info.schema, table_lookup);
+		auto table_entry = entry_retriever.GetEntry(fk_catalog, fk_schema, table_lookup);
 		if (table_entry->type == CatalogType::VIEW_ENTRY) {
 			throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
 		}
 
 		auto &pk_table_entry_ptr = table_entry->Cast<TableCatalogEntry>();
+		fk.info.schema = pk_table_entry_ptr.schema.name;
 		if (&pk_table_entry_ptr.schema != &schema) {
 			throw BinderException("Creating foreign keys across different schemas or catalogs is not supported");
 		}
@@ -586,7 +598,8 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 }
 
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
-                                                             vector<unique_ptr<Expression>> &bound_defaults) {
+                                                             vector<unique_ptr<Expression>> &bound_defaults,
+                                                             AlterBindMode bind_mode) {
 	auto &base = info->Cast<CreateTableInfo>();
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
 	auto &dependencies = result->dependencies;
@@ -595,6 +608,10 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	if (catalog.IsDuckCatalog() && !catalog.InMemory()) {
 		storage_manager = StorageManager::Get(catalog);
 	}
+
+	// Bind all types by first looking into the same catalog/schema as the table
+	auto type_binder = Binder::CreateBinder(context, *this);
+	type_binder->SetSearchPath(result->schema.catalog, result->schema.name);
 
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	if (base.query) {
@@ -614,39 +631,50 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		base.columns.SetAllowDuplicates(true);
 		if (!target_col_names.empty()) {
 			if (target_col_names.size() > sql_types.size()) {
-				throw BinderException("Target table has more colum names than query result.");
+				throw BinderException("Target table has more column names than query result.");
 			} else if (target_col_names.size() < sql_types.size()) {
 				// filled the target_col_names with the name of query names
 				for (idx_t i = target_col_names.size(); i < sql_types.size(); i++) {
 					target_col_names.push_back(names[i]);
 				}
 			}
-			ColumnList new_colums;
+			ColumnList new_columns;
 			for (idx_t i = 0; i < target_col_names.size(); i++) {
-				new_colums.AddColumn(ColumnDefinition(target_col_names[i], sql_types[i]));
+				new_columns.AddColumn(ColumnDefinition(target_col_names[i], sql_types[i]));
 			}
-			base.columns = std::move(new_colums);
+			base.columns = std::move(new_columns);
 		} else {
 			for (idx_t i = 0; i < names.size(); i++) {
 				base.columns.AddColumn(ColumnDefinition(names[i], sql_types[i]));
 			}
 		}
-		// bind collations to detect any unsupported collation errors
+
+		// Bind all types
 		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
 			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
-			if (column.Type().id() == LogicalTypeId::VARCHAR) {
-				ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
-			}
-			BindLogicalType(column.TypeMutable(), &result->schema.catalog, result->schema.name);
+			type_binder->BindLogicalType(column.TypeMutable());
 		}
+
 	} else {
 		SetCatalogLookupCallback([&dependencies, &schema](CatalogEntry &entry) {
 			if (&schema.ParentCatalog() != &entry.ParentCatalog()) {
 				// Don't register dependencies between catalogs
 				return;
 			}
+
+			if (entry.type == CatalogType::TYPE_ENTRY && entry.internal) {
+				// Don't register dependencies on internal types
+				return;
+			}
+
 			dependencies.AddDependency(entry);
 		});
+
+		// Bind all physical column types
+		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
+			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
+			type_binder->BindLogicalType(column.TypeMutable());
+		}
 
 		auto &config = DBConfig::Get(catalog.GetAttached());
 		VerifyCompressionType(context, storage_manager, config, *result);
@@ -655,24 +683,18 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		BindGeneratedColumns(*result);
 		// bind any constraints
 
-		// bind collations to detect any unsupported collation errors
-		for (idx_t i = 0; i < base.columns.PhysicalColumnCount(); i++) {
-			auto &column = base.columns.GetColumnMutable(PhysicalIndex(i));
-			if (column.Type().id() == LogicalTypeId::VARCHAR) {
-				ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
-			}
-			BindLogicalType(column.TypeMutable(), &result->schema.catalog, result->schema.name);
-		}
 		BindCreateTableConstraints(base, entry_retriever, schema);
 
 		if (AnyConstraintReferencesGeneratedColumn(base)) {
 			throw BinderException("Constraints on generated columns are not supported yet");
 		}
 		bound_constraints = BindNewConstraints(base.constraints, base.table, base.columns);
-		// bind the default values
-		auto &catalog_name = schema.ParentCatalog().GetName();
-		auto &schema_name = schema.name;
-		BindDefaultValues(base.columns, bound_defaults, catalog_name, schema_name);
+		if (bind_mode != AlterBindMode::SKIP_BINDING) {
+			// bind the default values
+			auto &catalog_name = schema.ParentCatalog().GetName();
+			auto &schema_name = schema.name;
+			BindDefaultValues(base.columns, bound_defaults, catalog_name, schema_name);
+		}
 	}
 
 	if (base.columns.PhysicalColumnCount() == 0) {
@@ -680,6 +702,16 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	}
 
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
+
+#ifdef DEBUG
+	// Ensure all types are bound
+	for (idx_t i = 0; i < base.columns.LogicalColumnCount(); i++) {
+		auto &column = base.columns.GetColumn(LogicalIndex(i));
+		if (TypeVisitor::Contains(column.Type(), LogicalTypeId::UNBOUND)) {
+			throw InternalException("Unbound type remaining in column \"%s\" during Create Table bind", column.Name());
+		}
+	}
+#endif
 
 	auto &properties = GetStatementProperties();
 	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;

@@ -1,0 +1,90 @@
+# name: test/sql/parallelism/interquery/concurrent_read_during_vacuum_rebuild.test_slow
+# description: Test concurrent reads during vacuum index rebuild
+# group: [interquery]
+
+require vacuum_rebuild_indexes
+
+load {TEST_DIR}/concurrent_read_during_vacuum_rebuild.db
+
+statement ok
+SET wal_autocheckpoint='100GB'
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+CREATE INDEX idx ON t(i)
+
+# insert enough rows to fill multiple row groups
+statement ok
+INSERT INTO t SELECT i, i FROM range(500000) tbl(i)
+
+statement ok
+CHECKPOINT
+
+# delete all rows in the second row group, creating an empty row group in the middle
+# row groups are 122880 rows each, so this empties the second one
+statement ok
+DELETE FROM t WHERE i >= 122880 AND i < 245760
+
+# thread 0: checkpoint (triggers vacuum + index rebuild)
+# threads 1-5: concurrent index lookups during the rebuild
+concurrentloop threadid 0 6
+
+loop i 0 20
+
+onlyif threadid=0
+statement ok
+CHECKPOINT
+
+# index scan outside of the deleted range, so we expect 1.
+onlyif threadid>=1
+query I
+SELECT COUNT(*) FROM t WHERE i = (245760 + {threadid} * 50000)
+----
+1
+
+endloop
+
+endloop
+
+# verify index scan is used after rebuild
+query II
+EXPLAIN ANALYZE SELECT i, j FROM t WHERE i = 0
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+# verify index is correct after everything completes, including row IDs
+# RG1 (122880-245759) was dropped, so RG2+ shift back by 122880
+query III
+SELECT i, j, rowid FROM t WHERE i = 0
+----
+0	0	0
+
+query III
+SELECT i, j, rowid FROM t WHERE i = 122879
+----
+122879	122879	122879
+
+# i=245760 was in RG2 (originally rowid 245760), now shifted to rowid 122880
+query III
+SELECT i, j, rowid FROM t WHERE i = 245760
+----
+245760	245760	122880
+
+# i=499999 was in RG4 (originally rowid 499999), now shifted to rowid 377119
+query III
+SELECT i, j, rowid FROM t WHERE i = 499999
+----
+499999	499999	377119
+
+query I
+SELECT COUNT(*) FROM t
+----
+377120
+
+# verify that the setting cannot be changed while the database is running
+statement error
+SET vacuum_rebuild_indexes = 100
+----
+Cannot change vacuum_rebuild_indexes setting while database is running

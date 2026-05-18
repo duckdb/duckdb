@@ -23,7 +23,7 @@ static HighlightElement highlight_elements[] = {
     {"string_value", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"temporal_value", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"null_value", PrintColor::GRAY, PrintIntensity::STANDARD},
-    {"footer", PrintColor::STANDARD, PrintIntensity::STANDARD},
+    {"footer", PrintColor::GRAY, PrintIntensity::STANDARD},
     {"layout", PrintColor::GRAY, PrintIntensity::STANDARD},
     {"startup_text", PrintColor::GRAY, PrintIntensity::STANDARD},
     {"startup_version", PrintColor::STANDARD, PrintIntensity::STANDARD},
@@ -48,7 +48,7 @@ static HighlightElement highlight_elements[] = {
     {"log_trace", PrintColor::BLUE, PrintIntensity::BOLD},
     {"log_debug", PrintColor::YELLOW, PrintIntensity::BOLD},
     {"log_info", PrintColor::GREEN, PrintIntensity::BOLD},
-    {"log_warning", PrintColor::ORANGE3, PrintIntensity::BOLD},
+    {"log_warning", PrintColor::GRAY, PrintIntensity::STANDARD},
     {"none", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {nullptr, PrintColor::STANDARD, PrintIntensity::STANDARD},
 };

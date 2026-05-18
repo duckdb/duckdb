@@ -1,23 +1,24 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/logging/log_manager.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/parser/column_definition.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/logging/log_manager.hpp"
-#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
 //! ColumnDataCheckpointData
 
-CompressionFunction &ColumnDataCheckpointData::GetCompressionFunction(CompressionType compression_type) {
+const CompressionFunction &ColumnDataCheckpointData::GetCompressionFunction(CompressionType compression_type) {
 	auto &db = col_data->GetDatabase();
 	auto &column_type = col_data->type;
 	auto &config = DBConfig::GetConfig(db);
-	return *config.GetCompressionFunction(compression_type, column_type.InternalType());
+	return config.GetCompressionFunction(compression_type, column_type.InternalType());
 }
 
 DatabaseInstance &ColumnDataCheckpointData::GetDatabase() {
@@ -46,26 +47,33 @@ StorageManager &ColumnDataCheckpointData::GetStorageManager() {
 
 //! ColumnDataCheckpointer
 
-static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> &states) {
+static void CreateIntermediateVector(vector<reference<ColumnCheckpointState>> &states, DataChunk &chunk) {
 	D_ASSERT(!states.empty());
 
 	auto &first_state = states[0];
 	auto &col_data = first_state.get().original_column;
 	auto &type = col_data.type;
+
+	vector<LogicalType> types;
 	if (type.id() == LogicalTypeId::VALIDITY) {
-		return Vector(LogicalType::BOOLEAN, true, /* initialize_to_zero = */ true);
+		types.emplace_back(LogicalType::BOOLEAN);
+	} else if (type.InternalType() == PhysicalType::LIST) {
+		types.emplace_back(LogicalType::UBIGINT);
+	} else {
+		types.emplace_back(type);
 	}
-	if (type.InternalType() == PhysicalType::LIST) {
-		return Vector(LogicalType::UBIGINT, true, false);
+	chunk.Initialize(Allocator::DefaultAllocator(), types);
+	if (type.id() == LogicalTypeId::VALIDITY) {
+		auto data = FlatVector::GetData<bool>(chunk.data[0]);
+		memset((void *)data, 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 	}
-	return Vector(type, true, false);
 }
 
 ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpointState>> &checkpoint_states,
                                                StorageManager &storage_manager, const RowGroup &row_group,
                                                ColumnCheckpointInfo &checkpoint_info)
     : checkpoint_states(checkpoint_states), storage_manager(storage_manager), row_group(row_group),
-      intermediate(CreateIntermediateVector(checkpoint_states)), checkpoint_info(checkpoint_info) {
+      checkpoint_info(checkpoint_info) {
 	auto &db = storage_manager.GetDatabase();
 	auto &config = DBConfig::GetConfig(db);
 	compression_functions.resize(checkpoint_states.size());
@@ -77,10 +85,10 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpoint
 			functions.push_back(&func.get());
 		}
 	}
+	CreateIntermediateVector(checkpoint_states, intermediate);
 }
 
 void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
-	Vector scan_vector(intermediate.GetType(), nullptr);
 	auto &first_state = checkpoint_states[0];
 	auto &col_data = first_state.get().original_column;
 
@@ -91,20 +99,22 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 		scan_state.current = segment_node;
 		segment.InitializeScan(scan_state);
 
+		auto &scan_vector = intermediate.data[0];
 		for (idx_t base_row_index = 0; base_row_index < segment.count; base_row_index += STANDARD_VECTOR_SIZE) {
-			scan_vector.Reference(intermediate);
+			intermediate.Reset();
 
 			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
 			scan_state.offset_in_column = segment_node.GetRowStart() + base_row_index;
 
 			col_data.CheckpointScan(segment, scan_state, count, scan_vector);
+			scan_vector.BufferMutable().SetVectorSize(count);
 			callback(scan_vector, count);
 		}
 	}
 }
 
 CompressionType ForceCompression(StorageManager &storage_manager,
-                                 vector<optional_ptr<CompressionFunction>> &compression_functions,
+                                 vector<optional_ptr<const CompressionFunction>> &compression_functions,
                                  CompressionType compression_type) {
 	// One of the force_compression flags has been set
 	// check if this compression method is available
@@ -307,7 +317,7 @@ void ColumnDataCheckpointer::WriteToDisk() { // Analyze the candidate functions 
 		auto &config = DBConfig::GetConfig(db);
 		// Override the function to the COMPRESSION_EMPTY
 		// turning the compression+final compress steps into a no-op, saving a single empty segment
-		validity.function = config.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY, PhysicalType::BIT);
+		validity.function = config.GetCompressionFunction(CompressionType::COMPRESSION_EMPTY, PhysicalType::BIT).get();
 	}
 
 	// Initialize the compression for the selected function
@@ -369,7 +379,7 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 		current_row += segment.count;
 
 		// merge the persistent stats into the global column stats
-		state.global_stats->Merge(segment.stats.statistics);
+		state.global_stats->Merge(segment.GetStats());
 		state.data_pointers.push_back(std::move(pointer));
 	}
 	if (error_segment_start.IsValid()) {
@@ -392,7 +402,7 @@ struct CheckpointBlockIdMarker : public BlockIdVisitor {
 	}
 
 	void Visit(block_id_t block_id) override {
-		manager.MarkBlockACheckpointed(block_id);
+		manager.MarkBlockAsCheckpointed(block_id);
 	}
 
 	BlockManager &manager;

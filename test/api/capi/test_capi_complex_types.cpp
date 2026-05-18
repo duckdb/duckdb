@@ -5,7 +5,6 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test decimal types C API", "[capi]") {
 	CAPITester tester;
@@ -676,6 +675,26 @@ TEST_CASE("Test Infinite Dates", "[capi]") {
 		ts = result->Fetch<duckdb_timestamp>(2, 0);
 		REQUIRE(!duckdb_is_finite_timestamp(ts));
 		REQUIRE(ts.micros > 0);
+	}
+
+	{
+		auto result =
+		    tester.Query("SELECT '-infinity'::TIMESTAMPTZ_NS, 'epoch'::TIMESTAMPTZ_NS, 'infinity'::TIMESTAMPTZ_NS");
+		REQUIRE(NO_FAIL(*result));
+		REQUIRE(result->ColumnCount() == 3);
+		REQUIRE(result->ErrorMessage() == nullptr);
+
+		auto ts = result->Fetch<duckdb_timestamp_ns>(0, 0);
+		REQUIRE(!duckdb_is_finite_timestamp_ns(ts));
+		REQUIRE(ts.nanos < 0);
+
+		ts = result->Fetch<duckdb_timestamp_ns>(1, 0);
+		REQUIRE(duckdb_is_finite_timestamp_ns(ts));
+		REQUIRE(ts.nanos == 0);
+
+		ts = result->Fetch<duckdb_timestamp_ns>(2, 0);
+		REQUIRE(!duckdb_is_finite_timestamp_ns(ts));
+		REQUIRE(ts.nanos > 0);
 	}
 
 	{

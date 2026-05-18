@@ -11,6 +11,7 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
@@ -57,9 +58,10 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		auto &table = table_ref.get().Cast<TableCatalogEntry>();
 		// generate the insert statement
 		InsertStatement insert_stmt;
-		insert_stmt.catalog = target_database_name;
-		insert_stmt.schema = table.ParentSchema().name;
-		insert_stmt.table = table.name;
+		auto &insert_node = *insert_stmt.node;
+		insert_node.catalog = target_database_name;
+		insert_node.schema = table.ParentSchema().name;
+		insert_node.table = table.name;
 
 		auto from_tbl = make_uniq<BaseTableRef>();
 		from_tbl->catalog_name = source_catalog.GetName();
@@ -77,7 +79,7 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseData(Catalog &source_catalog
 		auto select_stmt = make_uniq<SelectStatement>();
 		select_stmt->node = std::move(select_node);
 
-		insert_stmt.select_statement = std::move(select_stmt);
+		insert_node.select_statement = std::move(select_stmt);
 		auto bound_insert = Bind(insert_stmt);
 		auto insert_plan = std::move(bound_insert.plan);
 		insert_nodes.push_back(std::move(insert_plan));

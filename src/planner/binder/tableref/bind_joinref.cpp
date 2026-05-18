@@ -141,7 +141,9 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	result->delim_flipped = ref.delim_flipped;
 
 	{
-		LateralBinder binder(left_binder, context);
+		LateralBinder lateral_binder(left_binder, context);
+
+		right_binder.BeginSubqueryBind(left_binder, lateral_binder);
 		result->right = right_binder.BindJoin(*this, *ref.right);
 		if (!ref.duplicate_eliminated_columns.empty()) {
 			if (ref.delim_flipped) {
@@ -158,6 +160,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 				}
 			}
 		}
+		right_binder.FinishSubqueryBind();
 		bool is_lateral = false;
 		// Store the correlated columns in the right binder in bound ref for planning of LATERALs
 		// Ignore the correlated columns in the left binder, flattening handles those correlations
@@ -341,7 +344,7 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 		bind_context.RemoveContext(right_bindings);
 		if (result->type == JoinType::MARK) {
 			auto mark_join_idx = GenerateTableIndex();
-			string mark_join_alias = "__internal_mark_join_ref" + to_string(mark_join_idx);
+			string mark_join_alias = "__internal_mark_join_ref" + to_string(mark_join_idx.index);
 			bind_context.AddGenericBinding(mark_join_idx, mark_join_alias, {"__mark_index_column"},
 			                               {LogicalType::BOOLEAN});
 			result->mark_index = mark_join_idx;

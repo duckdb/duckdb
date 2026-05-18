@@ -38,8 +38,8 @@ public:
 	bool IsRootBlock(MetaBlockPointer root) override {
 		throw InternalException("Cannot perform IO in in-memory database - IsRootBlock!");
 	}
-	void MarkBlockACheckpointed(block_id_t block_id) override {
-		throw InternalException("Cannot perform IO in in-memory database - MarkBlockACheckpointed!");
+	void MarkBlockAsCheckpointed(block_id_t block_id) override {
+		throw InternalException("Cannot perform IO in in-memory database - MarkBlockAsCheckpointed!");
 	}
 	void MarkBlockAsUsed(block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - MarkBlockAsUsed!");

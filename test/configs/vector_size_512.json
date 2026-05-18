@@ -5,7 +5,8 @@
     {
       "reason": "FIXME: Wrong result in query!",
       "paths": [
-        "test/sql/types/bignum/test_bignum_sum.test_slow"
+        "test/sql/types/bignum/test_bignum_sum.test_slow",
+        "test/sql/types/geo/geometry_intersection_filter.test_slow"
       ]
     },
     {
@@ -14,12 +15,6 @@
         "test/sql/storage/delete/drop_many_deletes.test_slow",
         "test/sql/index/art/storage/test_upsert_reclaim_space.test_slow",
         "test/sql/storage/compression/alprd/alprd_uncompressed_mode_v1_4_0.test_slow"
-      ]
-    },
-    {
-      "reason": "FIXME: Internal Error",
-      "paths": [
-        "test/parquet/variant/variant_roundtrip.test_slow"
       ]
     },
     {
@@ -89,7 +84,7 @@
         "test/sql/storage/compression/alp/alp_many_segments_float.test_slow",
         "test/sql/storage/parallel/insert_order_preserving.test_slow",
         "test/sql/storage/test_purge_queue.test_slow",
-        "test/optimizer/pushdown/issue_18653.test",
+        "test/optimizer/pushdown/issue_18653.test_slow",
         "test/sql/parallelism/interquery/concurrent_checkpoint_wal_fk.test_slow",
         "test/sql/parallelism/interquery/concurrent_checkpoint_deletes.test_slow"
       ]

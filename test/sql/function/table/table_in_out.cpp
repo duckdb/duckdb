@@ -3,7 +3,6 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 // Dummy TableInOutFunction that:
 // - sums all INTEGER values in each row
@@ -55,15 +54,16 @@ struct ThrottlingSum {
 			// Caching is allowed
 			if (local_state.current_idx < local_state.row_sums.size()) {
 				output.SetCardinality(1);
-				output.SetValue(0, 0, Value(local_state.row_sums[local_state.current_idx++]));
+				output.data[0].Append(Value(local_state.row_sums[local_state.current_idx++]));
 			} else {
 				output.SetCardinality(0);
 			}
 		} else {
 			// Caching is not allowed, we should emit everything!
 			auto to_emit = local_state.row_sums.size() - local_state.current_idx;
+			auto &sum_col = output.data[0];
 			for (idx_t i = 0; i < to_emit; i++) {
-				output.SetValue(0, i, Value(local_state.row_sums[local_state.current_idx + i]));
+				sum_col.Append(Value(local_state.row_sums[local_state.current_idx + i]));
 			}
 			local_state.current_idx += to_emit;
 			output.SetCardinality(to_emit);
@@ -78,7 +78,7 @@ struct ThrottlingSum {
 
 		if (local_state.current_idx < local_state.row_sums.size()) {
 			output.SetCardinality(1);
-			output.SetValue(0, 0, Value(local_state.row_sums[local_state.current_idx++]));
+			output.data[0].Append(Value(local_state.row_sums[local_state.current_idx++]));
 			return OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
 		} else {
 			return OperatorFinalizeResultType::FINISHED;
@@ -97,6 +97,46 @@ struct ThrottlingSum {
 		caching_table_in_out.in_out_function_final = ThrottlingSum::Finalize;
 		CreateTableFunctionInfo caching_table_in_out_info(caching_table_in_out);
 		catalog.CreateTableFunction(*con.context, caching_table_in_out_info);
+		con.Commit();
+	}
+};
+
+struct LateralStructEcho {
+	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
+	                                             duckdb::vector<LogicalType> &return_types,
+	                                             duckdb::vector<string> &names) {
+		return_types.emplace_back(LogicalType::BIGINT);
+		names.emplace_back("outer_i");
+		return_types.emplace_back(LogicalType::BIGINT);
+		names.emplace_back("limit_value");
+		return_types.emplace_back(LogicalType::VARCHAR);
+		names.emplace_back("label_value");
+		return make_uniq<TableFunctionData>();
+	}
+
+	static OperatorResultType Function(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
+	                                   DataChunk &output) {
+		for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
+			auto struct_value = input.data[0].GetValue(row_idx);
+			auto &children = StructValue::GetChildren(struct_value);
+			output.data[0].Append(children[0]);
+			output.data[1].Append(children[1]);
+			output.data[2].Append(children[2]);
+		}
+		output.SetCardinality(input.size());
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
+
+	static void Register(Connection &con) {
+		con.BeginTransaction();
+		auto &client_context = *con.context;
+		auto &catalog = Catalog::GetSystemCatalog(client_context);
+		auto struct_type = LogicalType::STRUCT(
+		    {{"outer_i", LogicalType::BIGINT}, {"limit", LogicalType::BIGINT}, {"label", LogicalType::VARCHAR}});
+		TableFunction lateral_struct_echo("lateral_struct_echo", {struct_type}, nullptr, LateralStructEcho::Bind);
+		lateral_struct_echo.in_out_function = LateralStructEcho::Function;
+		CreateTableFunctionInfo lateral_struct_echo_info(lateral_struct_echo);
+		catalog.CreateTableFunction(*con.context, lateral_struct_echo_info);
 		con.Commit();
 	}
 };
@@ -134,4 +174,26 @@ TEST_CASE("Parallel execution with caching table in out functions", "[filter][.]
 	REQUIRE(result2->ColumnCount() == 1);
 	REQUIRE(result2->RowCount() == 200000);
 	REQUIRE(CHECK_COLUMN(result2, 0, {0, 1, 2, 3, 4, 5}));
+}
+
+TEST_CASE("Lateral table in out function preserves constant struct fields", "[tablefunction]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	LateralStructEcho::Register(con);
+
+	auto result = con.Query(R"(
+		SELECT echoed.outer_i, echoed.limit_value, echoed.label_value
+		FROM range(3) outer_rows(i)
+		CROSS JOIN LATERAL lateral_struct_echo({'outer_i': i, 'limit': 1, 'label': 'fixed'}) AS echoed
+		ORDER BY echoed.outer_i
+	)");
+	if (result->HasError()) {
+		INFO(result->GetError());
+	}
+	REQUIRE(!result->HasError());
+	REQUIRE(result->ColumnCount() == 3);
+	REQUIRE(CHECK_COLUMN(result, 0, {0, 1, 2}));
+	REQUIRE(CHECK_COLUMN(result, 1, {1, 1, 1}));
+	REQUIRE(CHECK_COLUMN(result, 2, {"fixed", "fixed", "fixed"}));
 }

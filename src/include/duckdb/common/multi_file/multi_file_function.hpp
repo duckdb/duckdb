@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
@@ -53,7 +54,13 @@ struct MultiFileReaderInterface {
 	                                                const MultiFileOptions &file_options);
 	virtual void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
 	                           LocalTableFunctionState &local_state);
-	virtual unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) = 0;
+	virtual unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {
+		return nullptr;
+	}
+	virtual unique_ptr<NodeStatistics> GetCardinality(ClientContext &context, const MultiFileBindData &bind_data,
+	                                                  idx_t file_count) {
+		return GetCardinality(bind_data, file_count);
+	}
 	virtual void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result);
 	virtual unique_ptr<MultiFileReaderInterface> Copy();
 	virtual FileGlobInput GetGlobInput();
@@ -122,7 +129,7 @@ public:
 				if (!result->file_options.union_by_name && bound_on_first_file) {
 					file_string = result->file_list->GetFirstFile().path;
 				} else {
-					for (auto &file : result->file_list->GetPaths()) {
+					for (auto &file : result->file_list->GetAllFiles()) {
 						if (!file_string.empty()) {
 							file_string += ",";
 						}
@@ -278,6 +285,16 @@ public:
 
 			auto &current_reader_data = *global_state.readers[current_file_index];
 			if (current_reader_data.file_state == MultiFileFileState::UNOPENED) {
+				// skip the file if pre-open-knowable filters already rule it out
+				if (!current_reader_data.union_data &&
+				    MultiFileReader::CanSkipFileFromFilters(
+				        context, current_reader_data.file_to_be_opened, current_file_index, bind_data.file_options,
+				        bind_data.reader_bind, global_state.column_indexes, global_state.filters)) {
+					current_reader_data.file_state = MultiFileFileState::SKIPPED;
+					//! Intentionally do not increase 'i'
+					continue;
+				}
+
 				current_reader_data.file_state = MultiFileFileState::OPENING;
 				// Get pointer to file mutex before unlocking
 				auto &current_file_lock = *current_reader_data.file_mutex;
@@ -317,6 +334,9 @@ public:
 				parallel_lock.lock();
 				if (can_skip_file) {
 					current_reader_data.file_state = MultiFileFileState::SKIPPED;
+					// release the reader so its file handle is closed; skipped files are
+					// never scanned, so nothing else needs the reader
+					current_reader_data.reader = nullptr;
 					//! Intentionally do not increase 'i'
 					continue;
 				}
@@ -336,7 +356,7 @@ public:
 			auto &file_mutex = *global_state.readers[file_index]->file_mutex;
 
 			// To get the file lock, we first need to release the parallel_lock to prevent deadlocking. Note that this
-			// requires getting the ref to the file mutex pointer with the lock stil held: readers get be resized
+			// requires getting the ref to the file mutex pointer with the lock still held: readers get be resized
 			parallel_lock.unlock();
 			unique_lock<mutex> current_file_lock(file_mutex);
 			parallel_lock.lock();
@@ -355,25 +375,33 @@ public:
 
 	static void InitializeFileScanState(ClientContext &context, MultiFileReaderData &reader_data,
 	                                    MultiFileLocalState &lstate, vector<idx_t> &projection_ids) {
-		lstate.reader = reader_data.reader;
 		lstate.reader_data = reader_data;
 		auto &reader = *lstate.reader;
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
 		vector<LogicalType> intermediate_chunk_types;
-		auto &local_column_ids = reader.column_ids;
+		auto &local_column_ids = reader.column_indexes;
 		auto &local_columns = lstate.reader->GetColumns();
 		for (idx_t i = 0; i < local_column_ids.size(); i++) {
-			auto local_idx = MultiFileLocalIndex(i);
-			auto local_id = local_column_ids[local_idx];
-			auto cast_entry = reader.cast_map.find(local_id);
-			auto expr_entry = reader.expression_map.find(local_id);
+			auto &local_id = local_column_ids[i];
+
+			auto primary_index = local_id.GetPrimaryIndex();
+			auto cast_entry = reader.cast_map.find(primary_index);
+			auto expr_entry = reader.expression_map.find(primary_index);
 			if (cast_entry != reader.cast_map.end()) {
 				intermediate_chunk_types.push_back(cast_entry->second);
 			} else if (expr_entry != reader.expression_map.end()) {
-				intermediate_chunk_types.push_back(expr_entry->second->return_type);
+				intermediate_chunk_types.push_back(expr_entry->second->GetReturnType());
+			} else if (local_id.IsRowIdColumn()) {
+				//! FIXME: should this generically check for all virtual columns??
+				intermediate_chunk_types.push_back(LogicalType::ROW_TYPE);
 			} else {
-				auto &col = local_columns[local_id];
-				intermediate_chunk_types.push_back(col.type);
+				auto &col = local_columns[primary_index];
+				//! FIXME: do we need to check whether the MultiFileInfo implementation supports pushdown ??
+				if (local_id.HasType()) {
+					intermediate_chunk_types.push_back(local_id.GetScanType());
+				} else {
+					intermediate_chunk_types.push_back(col.type);
+				}
 			}
 		}
 		lstate.scan_chunk.Destroy();
@@ -413,13 +441,16 @@ public:
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
 				if (current_reader_data.reader->TryInitializeScan(context, *gstate.global_state,
 				                                                  *scan_data.local_state)) {
-					if (!current_reader_data.reader) {
+					scan_data.reader = current_reader_data.reader;
+					if (!scan_data.reader) {
 						throw InternalException("MultiFileReader was moved");
 					}
 					// The current reader has data left to be scanned
 					scan_data.batch_index = gstate.batch_index++;
 					auto old_file_index = scan_data.file_index;
 					scan_data.file_index = gstate.file_index;
+					parallel_lock.unlock();
+					scan_data.reader->PrepareScan(context, *gstate.global_state, *scan_data.local_state);
 					if (old_file_index != scan_data.file_index) {
 						InitializeFileScanState(context, current_reader_data, scan_data, gstate.projection_ids);
 					}
@@ -532,6 +563,7 @@ public:
 				if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
 					//! File can be skipped entirely, close it and move on
 					reader_data->file_state = MultiFileFileState::SKIPPED;
+					reader_data->reader = nullptr;
 					result->file_index++;
 				}
 			}
@@ -632,10 +664,11 @@ public:
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data,
 				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
+				output.SetChildCardinality(output.size());
 			}
 			if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
 				// Loop back to the same block
-				if (scan_chunk.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+				if (output.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
 					continue;
 				}
 				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
@@ -648,14 +681,14 @@ public:
 			}
 
 			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
-				if (scan_chunk.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+				if (output.size() > 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
 					gstate.finished = true;
 					data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
 				} else {
 					data_p.async_result = SourceResultType::FINISHED;
 				}
 			} else {
-				if (scan_chunk.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
+				if (output.size() == 0 && data_p.results_execution_mode == AsyncResultsExecutionMode::SYNCHRONOUS) {
 					continue;
 				}
 				data_p.async_result = SourceResultType::HAVE_MORE_OUTPUT;
@@ -664,20 +697,22 @@ public:
 		} while (true);
 	}
 
-	static unique_ptr<BaseStatistics> MultiFileScanStats(ClientContext &context, const FunctionData *bind_data_p,
-	                                                     column_t column_index) {
-		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
+	static unique_ptr<BaseStatistics> MultiFileScanStatsExtended(ClientContext &context,
+	                                                             TableFunctionGetStatisticsInput &input) {
+		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+		auto &column_index = input.column_index;
 
 		if (!bind_data.initial_reader) {
 			// no reader
 			return nullptr;
 		}
 		// scanning single file and we have the metadata read already
-		if (IsVirtualColumn(column_index)) {
+		if (column_index.IsVirtualColumn()) {
 			return nullptr;
 		}
 
-		const auto &col_name = bind_data.names[column_index];
+		auto primary_index = column_index.GetPrimaryIndex();
+		const auto &col_name = bind_data.names[primary_index];
 
 		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
 		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
@@ -701,14 +736,34 @@ public:
 			}
 			return merged_stats;
 		}
-		return bind_data.initial_reader->GetStatistics(context, col_name);
+		auto result = bind_data.initial_reader->GetStatistics(context, col_name);
+		if (!result || !column_index.IsPushdownExtract()) {
+			return result;
+		}
+		auto storage_index = StorageIndex::FromColumnIndex(column_index);
+		return result->PushdownExtract(storage_index.GetChildIndexes()[0]);
 	}
 
 	static double MultiFileProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                                const GlobalTableFunctionState *global_state) {
 		auto &gstate = global_state->Cast<MultiFileGlobalState>();
 
-		auto total_count = gstate.file_list.GetTotalFileCount();
+		// get the file count - for >100 files we allow a lower bound to be given instead
+		auto count_info = gstate.file_list.GetFileCount(100);
+		while (count_info.type != FileExpansionType::ALL_FILES_EXPANDED) {
+			// the entire glob has not yet been expanded - we don't know how many files there are exactly
+			// we try to postpone expanding the glob by only expanding it once we have scanned 1% of the files
+			// check if we have reached AT LEAST 1% of progress
+			idx_t one_percent_min = count_info.count / 100;
+			if (gstate.completed_file_index < one_percent_min) {
+				// we have not - just report 0%
+				return 0.0;
+			}
+			// we have reached 1% given the currently known (incomplete) list of files
+			// retrieve more files to scan
+			count_info = gstate.file_list.GetFileCount(count_info.count + 1);
+		}
+		auto total_count = count_info.count;
 		if (total_count == 0) {
 			return 100.0;
 		}
@@ -754,7 +809,30 @@ public:
 		if (file_list_cardinality_estimate) {
 			return file_list_cardinality_estimate;
 		}
-		return data.interface->GetCardinality(data, data.file_list->GetTotalFileCount());
+		if (data.file_options.union_by_name) {
+			// for UNION BY NAME - check if we can get a cardinality estimate from the (already opened) union readers
+			bool has_exact_cardinality = true;
+			idx_t cardinality = 0;
+			for (auto &union_data : data.union_readers) {
+				auto file_cardinality = union_data->TryGetCardinalityEstimate();
+				if (!file_cardinality.IsValid()) {
+					has_exact_cardinality = false;
+					break;
+				}
+				cardinality += file_cardinality.GetIndex();
+			}
+			if (has_exact_cardinality) {
+				return make_uniq<NodeStatistics>(cardinality);
+			}
+		}
+		// get the file count - for >500 files we allow an estimate
+		auto count_info = data.file_list->GetFileCount(500);
+		idx_t estimated_file_count = count_info.count;
+		if (count_info.type != FileExpansionType::ALL_FILES_EXPANDED) {
+			// not all files have been expanded - it's probably twice as many files
+			estimated_file_count *= 2;
+		}
+		return data.interface->GetCardinality(context, data, estimated_file_count);
 	}
 
 	static void MultiFileComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
@@ -776,7 +854,7 @@ public:
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 
 		vector<Value> file_path;
-		for (const auto &file : bind_data.file_list->Files()) {
+		for (const auto &file : bind_data.file_list->GetDisplayFileList()) {
 			file_path.emplace_back(file.path);
 		}
 
@@ -812,7 +890,7 @@ public:
 		result.insert(make_pair("Total Files Read", std::to_string(files_loaded)));
 
 		constexpr size_t FILE_NAME_LIST_LIMIT = 5;
-		auto file_paths = gstate.file_list.GetPaths();
+		auto file_paths = gstate.file_list.GetDisplayFileList(FILE_NAME_LIST_LIMIT + 1);
 		if (!file_paths.empty()) {
 			vector<std::string> file_path_names;
 			for (idx_t i = 0; i < MinValue<idx_t>(file_paths.size(), FILE_NAME_LIST_LIMIT); i++) {

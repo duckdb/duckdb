@@ -5,12 +5,12 @@
 foreach function has_any_column_privilege has_database_privilege has_foreign_data_wrapper_privilege has_function_privilege has_language_privilege has_schema_privilege has_sequence_privilege has_server_privilege has_table_privilege has_tablespace_privilege
 
 query I
-SELECT ${function}('main', 'test')
+SELECT {function}('main', 'test')
 ----
 true
 
 query I
-SELECT ${function}(current_user, 'main', 'test')
+SELECT {function}(current_user, 'main', 'test')
 ----
 true
 

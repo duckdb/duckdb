@@ -15,6 +15,19 @@
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/tableref/column_data_ref.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/parser/tableref/expressionlistref.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -74,7 +87,7 @@ void BaseAppender::EndRow() {
 
 template <class SRC, class DST>
 void BaseAppender::AppendValueInternal(Vector &col, SRC input) {
-	FlatVector::GetData<DST>(col)[chunk.size()] = Cast::Operation<SRC, DST>(input);
+	FlatVector::GetDataMutable<DST>(col)[chunk.size()] = Cast::Operation<SRC, DST>(input);
 }
 
 template <class SRC, class DST>
@@ -86,7 +99,7 @@ void BaseAppender::AppendDecimalValueInternal(Vector &col, SRC input) {
 		auto width = DecimalType::GetWidth(type);
 		auto scale = DecimalType::GetScale(type);
 		CastParameters parameters;
-		auto &result = FlatVector::GetData<DST>(col)[chunk.size()];
+		auto &result = FlatVector::GetDataMutable<DST>(col)[chunk.size()];
 		TryCastToDecimal::Operation<SRC, DST>(input, result, parameters, width, scale);
 		return;
 	}
@@ -183,7 +196,8 @@ void BaseAppender::AppendValueInternal(T input) {
 		AppendValueInternal<T, interval_t>(col, input);
 		break;
 	case LogicalTypeId::VARCHAR:
-		FlatVector::GetData<string_t>(col)[chunk.size()] = StringCast::Operation<T>(input, col);
+		FlatVector::GetDataMutable<string_t>(col)[chunk.size()] =
+		    StringCast::Operation<T>(input, StringVector::GetStringHeap(col));
 		break;
 	default:
 		AppendValue(Value::CreateValue<T>(input));
@@ -303,17 +317,13 @@ void duckdb::BaseAppender::Append(DataChunk &target, const Value &value, idx_t c
 	if (col >= target.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
-	if (row >= target.GetCapacity()) {
-		throw InvalidInputException("Too many rows for chunk!");
-	}
-
 	if (value.type() == target.GetTypes()[col]) {
-		target.SetValue(col, row, value);
+		target.data[col].SetValue(row, value);
 	} else {
 		Value new_value;
 		string error_msg;
 		if (value.DefaultTryCastAs(target.GetTypes()[col], new_value, &error_msg)) {
-			target.SetValue(col, row, new_value);
+			target.data[col].SetValue(row, new_value);
 		} else {
 			throw InvalidInputException("type mismatch in Append, expected %s, got %s for column %d",
 			                            target.GetTypes()[col], value.type(), col);
@@ -331,7 +341,7 @@ void BaseAppender::Append(std::nullptr_t value) {
 }
 
 void BaseAppender::AppendValue(const Value &value) {
-	chunk.SetValue(column, chunk.size(), value);
+	chunk.data[column].SetValue(chunk.size(), value);
 	column++;
 }
 
@@ -423,6 +433,64 @@ void BaseAppender::ClearColumns() {
 	throw NotImplementedException("ClearColumns is only supported when directly appending to a table");
 }
 
+unique_ptr<TableRef> BaseAppender::GetColumnDataTableRef(ColumnDataCollection &collection, const string &table_name,
+                                                         const vector<string> &expected_names) {
+	auto column_data_ref = make_uniq<ColumnDataRef>(collection);
+	column_data_ref->alias = table_name.empty() ? "appended_data" : table_name;
+	;
+	column_data_ref->expected_names = expected_names;
+	return std::move(column_data_ref);
+}
+
+CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
+	switch (statement.type) {
+	case StatementType::INSERT_STATEMENT:
+		return statement.Cast<InsertStatement>().node->cte_map;
+	case StatementType::DELETE_STATEMENT:
+		return statement.Cast<DeleteStatement>().node->cte_map;
+	case StatementType::UPDATE_STATEMENT:
+		return statement.Cast<UpdateStatement>().node->cte_map;
+	case StatementType::MERGE_INTO_STATEMENT:
+		return statement.Cast<MergeIntoStatement>().cte_map;
+	default:
+		throw InvalidInputException(
+		    "Unsupported statement type for appender: expected INSERT, DELETE, UPDATE or MERGE INTO");
+	}
+}
+
+unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
+                                                      const string &table_name) {
+	// Parse the query.
+	Parser parser;
+	parser.ParseQuery(query);
+
+	// Must be a single statement.
+	if (parser.statements.size() != 1) {
+		throw InvalidInputException("Expected exactly one query for appending data.");
+	}
+
+	// Create the CTE for the appender.
+	auto cte = make_uniq<SelectNode>();
+	cte->select_list.push_back(make_uniq<StarExpression>());
+	cte->from_table = std::move(table_ref);
+
+	// Create the SELECT CTE.
+	auto cte_select = make_uniq<SelectStatement>();
+	cte_select->node = std::move(cte);
+
+	// Create the CTE info.
+	auto cte_info = make_uniq<CommonTableExpressionInfo>();
+	cte_info->query_node = std::move(cte_select->node);
+	cte_info->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
+
+	// Add the appender data as a CTE to the CTE map of the statement.
+	string alias = table_name.empty() ? "appended_data" : table_name;
+	auto &cte_map = GetCTEMap(*parser.statements[0]);
+	cte_map.map.insert(alias, std::move(cte_info));
+
+	return std::move(parser.statements[0]);
+}
+
 //===--------------------------------------------------------------------===//
 // Table Appender
 //===--------------------------------------------------------------------===//
@@ -501,12 +569,53 @@ Appender::~Appender() {
 	Destructor();
 }
 
+vector<string> Appender::GetExpectedNames() {
+	vector<string> expected_names;
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto &col_name = description->columns[column_ids[i].index].Name();
+		expected_names.push_back(col_name);
+	}
+	return expected_names;
+}
+
+string Appender::ConstructQuery(TableDescription &description_p, const string &table_name,
+                                const vector<string> &expected_names) {
+	string query = "INSERT INTO ";
+	if (!description_p.database.empty()) {
+		query += StringUtil::Format("%s.", SQLIdentifier(description_p.database));
+	}
+	if (!description_p.schema.empty()) {
+		query += StringUtil::Format("%s.", SQLIdentifier(description_p.schema));
+	}
+	query += StringUtil::Format("%s", SQLIdentifier(description_p.table));
+	if (!expected_names.empty()) {
+		query += "(";
+		for (idx_t i = 0; i < expected_names.size(); i++) {
+			if (i > 0) {
+				query += ", ";
+			}
+			query += StringUtil::Format("%s", SQLIdentifier(expected_names[i]));
+		}
+		query += ")";
+	}
+	query += " FROM ";
+	query += table_name;
+	return query;
+}
+
 void Appender::FlushInternal(ColumnDataCollection &collection) {
 	auto context_ref = context.lock();
 	if (!context_ref) {
 		throw InvalidInputException("Appender: Attempting to flush data to a closed connection");
 	}
-	context_ref->Append(*description, collection, &column_ids);
+
+	string table_name = "__duckdb_internal_appended_data";
+	auto expected_names = GetExpectedNames();
+	auto query = ConstructQuery(*description, table_name, expected_names);
+
+	auto table_ref = GetColumnDataTableRef(collection, table_name, expected_names);
+	auto stmt = ParseStatement(std::move(table_ref), query, table_name);
+	context_ref->Append(std::move(stmt));
 }
 
 void Appender::AppendDefault() {
@@ -603,9 +712,11 @@ QueryAppender::~QueryAppender() {
 void QueryAppender::FlushInternal(ColumnDataCollection &collection) {
 	auto context_ref = context.lock();
 	if (!context_ref) {
-		throw InvalidInputException("Appender: Attempting to flush data to a closed connection");
+		throw InvalidInputException("Attempting to flush query appender data on a closed connection");
 	}
-	context_ref->Append(collection, query, names, table_name);
+	auto table_ref = GetColumnDataTableRef(collection, table_name, names);
+	auto parsed_statement = ParseStatement(std::move(table_ref), query, table_name);
+	context_ref->Append(std::move(parsed_statement));
 }
 
 //===--------------------------------------------------------------------===//
@@ -627,7 +738,7 @@ InternalAppender::~InternalAppender() {
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
 	auto binder = Binder::CreateBinder(context);
 	auto bound_constraints = binder->BindConstraints(table);
-	table.GetStorage().LocalAppend(table, context, collection, bound_constraints, nullptr);
+	table.GetStorage().LocalAppend(table.Cast<DuckTableEntry>(), context, collection, bound_constraints, nullptr);
 }
 
 void BaseAppender::Close() {

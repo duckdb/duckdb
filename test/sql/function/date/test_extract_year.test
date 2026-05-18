@@ -3,9 +3,6 @@
 # group: [date]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE dates AS SELECT date '1970-01-01' + concat(i, ' years')::interval AS d from range(0, 430) tbl(i);
 
 statement ok

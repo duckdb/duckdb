@@ -243,7 +243,7 @@ public:
 		string error;
 		error = StringUtil::Format("Attempting to find row number \"%lld\" in %lld nodes\n", row_number, nodes.size());
 		for (idx_t i = 0; i < nodes.size(); i++) {
-			error += StringUtil::Format("Node %lld: Start %lld, Count %lld", i, nodes[i]->GetRowStart(),
+			error += StringUtil::Format("* Node %lld: Start %lld, Count %lld\n", i, nodes[i]->GetRowStart(),
 			                            nodes[i]->GetCount());
 		}
 		throw InternalException("Could not find node in column segment tree!\n%s", error);

@@ -46,12 +46,12 @@ select * from data();
 statement ok
 COPY (
 	select a from data()
-) TO '__TEST_DIR__/shredded_list_of_structs.parquet' (
+) TO '{TEST_DIR}/shredded_list_of_structs.parquet' (
 	shredding {
 		a: 'STRUCT(a VARCHAR[], b BOOLEAN, c STRUCT(a VARCHAR))[]'
 	}
 )
 
 query I nosort expected_res
-select * from '__TEST_DIR__/shredded_list_of_structs.parquet';
+select * from '{TEST_DIR}/shredded_list_of_structs.parquet';
 ----

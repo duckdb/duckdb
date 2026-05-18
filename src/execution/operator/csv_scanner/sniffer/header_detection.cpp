@@ -356,7 +356,7 @@ void CSVSniffer::DetectHeader() {
 			detected_types.push_back(LogicalType::SQLNULL);
 		}
 	}
-	for (idx_t i = max_columns_found; i < names.size(); i++) {
+	for (idx_t i = detected_types.size(); i < names.size(); i++) {
 		detected_types.push_back(LogicalType::VARCHAR);
 	}
 	max_columns_found = names.size();

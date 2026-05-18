@@ -57,6 +57,7 @@ struct StorageManagerOptions {
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
 class SingleFileBlockManager : public BlockManager {
+public:
 	//! The location in the file where the block writing starts
 	static constexpr uint64_t BLOCK_START = Storage::FILE_HEADER_SIZE * 3;
 
@@ -83,7 +84,7 @@ public:
 	//! Returns whether or not a specified block is the root block
 	bool IsRootBlock(MetaBlockPointer root) override;
 	//! Mark a block as included in a checkpoint
-	void MarkBlockACheckpointed(block_id_t block_id) override;
+	void MarkBlockAsCheckpointed(block_id_t block_id) override;
 	//! Mark a block as used (no longer re-writeable)
 	void MarkBlockAsUsed(block_id_t block_id) override;
 	//! Mark a block as modified (re-writeable after a checkpoint)
@@ -178,6 +179,8 @@ private:
 	void AddStorageVersionTag();
 
 	block_id_t GetFreeBlockIdInternal(FreeBlockType type);
+	//! Adds a free block to the free_list, returns true if it was added to the regular free_list
+	bool AddFreeBlock(unique_lock<mutex> &lock, block_id_t block_id);
 
 private:
 	AttachedDatabase &db;
@@ -212,6 +215,6 @@ private:
 	//! The storage manager options
 	StorageManagerOptions options;
 	//! Lock for performing various operations in the single file block manager
-	mutex block_lock;
+	mutex single_file_block_lock;
 };
 } // namespace duckdb

@@ -318,11 +318,10 @@ unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, Funct
 ScalarFunctionSet SubstringFun::GetFunctions() {
 	ScalarFunctionSet substr("substring");
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                  LogicalType::VARCHAR, SubstringFunction<SubstringUnicodeOp>, nullptr, nullptr,
+	                                  LogicalType::VARCHAR, SubstringFunction<SubstringUnicodeOp>, nullptr,
 	                                  SubstringPropagateStats));
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                                  SubstringFunction<SubstringUnicodeOp>, nullptr, nullptr,
-	                                  SubstringPropagateStats));
+	                                  SubstringFunction<SubstringUnicodeOp>, nullptr, SubstringPropagateStats));
 	return (substr);
 }
 
@@ -330,9 +329,9 @@ ScalarFunctionSet SubstringGraphemeFun::GetFunctions() {
 	ScalarFunctionSet substr_grapheme("substring_grapheme");
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                           LogicalType::VARCHAR, SubstringFunction<SubstringGraphemeOp>, nullptr,
-	                                           nullptr, SubstringPropagateStats));
+	                                           SubstringPropagateStats));
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                                           SubstringFunction<SubstringGraphemeOp>, nullptr, nullptr,
+	                                           SubstringFunction<SubstringGraphemeOp>, nullptr,
 	                                           SubstringPropagateStats));
 	return (substr_grapheme);
 }

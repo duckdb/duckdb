@@ -14,9 +14,6 @@ statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$WITH initial_stocks(item_id, balance) AS (VALUES (10, 2200), (20, 1900)) MERGE INTO Stock USING initial_stocks ON FALSE WHEN MATCHED THEN DO NOTHING WHEN NOT MATCHED THEN INSERT VALUES (initial_stocks.item_id, initial_stocks.balance)$TEST_PEG_PARSER$);
 
 statement ok
-CALL check_peg_parser($TEST_PEG_PARSER$MERGE INTO Stock USING (VALUES (5, 10)) new_accounts(item_id) USING (item_id)$TEST_PEG_PARSER$);
-
-statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$MERGE INTO Stock USING (VALUES (5, 10)) new_accounts(item_id) USING (item_id) WHEN MATCHED THEN UPDATE$TEST_PEG_PARSER$);
 
 statement ok

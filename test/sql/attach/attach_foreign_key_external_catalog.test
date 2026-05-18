@@ -1,0 +1,69 @@
+# name: test/sql/attach/attach_foreign_key_external_catalog.test
+# description: Test that foreign key constraints resolve correctly in attached external catalogs
+# group: [attach]
+
+# attach an external database file
+statement ok
+ATTACH '{TEST_DIR}/fk_external.duckdb' AS ext;
+
+# create the referenced table in the external catalog
+statement ok
+CREATE TABLE ext.artist(id INTEGER PRIMARY KEY, name TEXT);
+
+# create a table with an unqualified FK reference - should resolve in the same catalog
+statement ok
+CREATE TABLE ext.album(id INTEGER PRIMARY KEY, artist_id INTEGER, title TEXT, FOREIGN KEY(artist_id) REFERENCES artist(id));
+
+# insert valid data
+statement ok
+INSERT INTO ext.artist VALUES (1, 'Alice'), (2, 'Bob');
+
+statement ok
+INSERT INTO ext.album VALUES (100, 1, 'First Album'), (101, 2, 'Second Album');
+
+# FK constraint is enforced: inserting a reference to a non-existent artist should fail
+statement error
+INSERT INTO ext.album VALUES (102, 999, 'Bad Album');
+----
+Constraint Error
+
+# FK constraint is enforced: deleting a referenced artist should fail
+statement error
+DELETE FROM ext.artist WHERE id = 1;
+----
+Constraint Error
+
+# create a second table with a composite FK in the external catalog
+statement ok
+CREATE TABLE ext.track(id INTEGER PRIMARY KEY, album_id INTEGER, artist_id INTEGER, title TEXT, FOREIGN KEY(album_id) REFERENCES album(id), FOREIGN KEY(artist_id) REFERENCES artist(id));
+
+statement ok
+INSERT INTO ext.track VALUES (1000, 100, 1, 'Track One'), (1001, 101, 2, 'Track Two');
+
+# composite FK enforcement works
+statement error
+INSERT INTO ext.track VALUES (1002, 999, 1, 'Bad Track');
+----
+Constraint Error
+
+# cross-catalog FK should still fail: table in ext referencing table in default catalog
+statement ok
+CREATE TABLE main_table(id INTEGER PRIMARY KEY);
+
+statement error
+CREATE TABLE ext.cross_ref(id INTEGER, ref_id INTEGER, FOREIGN KEY(ref_id) REFERENCES main_table(id));
+----
+Table with name main_table does not exist
+
+# clean up
+statement ok
+DROP TABLE ext.track;
+
+statement ok
+DROP TABLE ext.album;
+
+statement ok
+DROP TABLE ext.artist;
+
+statement ok
+DETACH ext;

@@ -51,6 +51,11 @@ public:
 		query_location = location;
 	}
 
+	//! Returns true if the expression has a valid query location
+	bool HasQueryLocation() const {
+		return query_location.IsValid();
+	}
+
 	//! Returns true if the expression has a non-empty alias
 	bool HasAlias() const {
 		return !alias.empty();
@@ -76,9 +81,7 @@ public:
 		alias.clear();
 	}
 
-	// TODO: Make the following protected
-	// protected:
-
+protected:
 	//! Type of the expression
 	ExpressionType type;
 
@@ -90,6 +93,13 @@ public:
 
 	//! The location in the query (if any)
 	optional_idx query_location;
+
+protected:
+	//! Sets the class of the expression unsafely. In general expressions are immutable and should not be changed after
+	//! creation. Only use this if you know what you are doing.
+	void SetExpressionClassUnsafe(ExpressionClass new_class) {
+		expression_class = new_class;
+	}
 
 public:
 	//! Returns true if this expression is an aggregate or not.

@@ -6,7 +6,6 @@
 #include "duckdb/common/types/hyperloglog.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test that hyperloglog works", "[hyperloglog]") {
 	HyperLogLog log;

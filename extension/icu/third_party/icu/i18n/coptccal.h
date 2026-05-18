@@ -145,14 +145,14 @@ public:
      * @return    return a polymorphic copy of this calendar.
      * @internal
      */
-    virtual CopticCalendar* clone() const;
+    virtual CopticCalendar* clone() const override;
 
     /**
      * return the calendar type, "coptic"
      * @return calendar type
      * @internal
      */
-    const char * getType() const;
+    const char * getType() const override;
 
 protected:
     //-------------------------------------------------------------------------
@@ -160,37 +160,40 @@ protected:
     //-------------------------------------------------------------------------
 
     /**
+     * @internal
+     */
+    int32_t getRelatedYearDifference() const override;
+
+    /**
      * Return the extended year defined by the current fields.
      * @internal
      */
-    virtual int32_t handleGetExtendedYear();
+    virtual int32_t handleGetExtendedYear(UErrorCode& status) override;
 
-    /**
-     * Compute fields from the JD
-     * @internal
-     */
-    virtual void handleComputeFields(int32_t julianDay, UErrorCode &status);
-
-    /**
-     * Returns the date of the start of the default century
-     * @return start of century - in milliseconds since epoch, 1970
-     * @internal
-     */
-    virtual UDate defaultCenturyStart() const;
-
-    /**
-     * Returns the year in which the default century begins
-     * @internal
-     */
-    virtual int32_t defaultCenturyStartYear() const;
+    DECLARE_OVERRIDE_SYSTEM_DEFAULT_CENTURY
 
     /**
      * Return the date offset from Julian
      * @internal
      */
-    virtual int32_t getJDEpochOffset() const;
+    int32_t getJDEpochOffset() const override;
 
+    /**
+     * Compute the era from extended year.
+     * @internal
+     */
+    int32_t extendedYearToEra(int32_t extendedYear) const override;
 
+    /**
+     * Compute the year from extended year.
+     * @internal
+     */
+    int32_t extendedYearToYear(int32_t extendedYear) const override;
+
+    /**
+     * @internal
+     */
+    bool isEra0CountingBackward() const override;
 public:
     /**
      * Override Calendar Returns a unique class ID POLYMORPHICALLY. Pure virtual
@@ -202,7 +205,7 @@ public:
      *           same class ID. Objects of other classes have different class IDs.
      * @internal
      */
-    virtual UClassID getDynamicClassID(void) const;
+    virtual UClassID getDynamicClassID() const override;
 
     /**
      * Return the class ID for this class. This is useful only for comparing to a return
@@ -215,26 +218,8 @@ public:
      * @return   The class ID for all objects of this class.
      * @internal
      */
-    U_I18N_API static UClassID U_EXPORT2 getStaticClassID(void);  
+    U_I18N_API static UClassID U_EXPORT2 getStaticClassID();  
 
-#if 0
-    // We do not want to introduce this API in ICU4C.
-    // It was accidentally introduced in ICU4J as a public API.
-public:
-    //-------------------------------------------------------------------------
-    // Calendar system Conversion methods...
-    //-------------------------------------------------------------------------
-    /**
-     * Convert an Coptic year, month, and day to a Julian day.
-     *
-     * @param year the extended year
-     * @param month the month
-     * @param day the day
-     * @return Julian day
-     * @internal
-     */
-    static int32_t copticToJD(int32_t year, int32_t month, int32_t day);
-#endif
 };
 
 U_NAMESPACE_END

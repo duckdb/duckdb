@@ -6,9 +6,6 @@
 # https://learn.microsoft.com/en-us/sql/t-sql/queries/from-using-pivot-and-unpivot?view=sql-server-ver15
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE Product(DaysToManufacture int, StandardCost int);
 
 statement ok
@@ -276,7 +273,7 @@ SELECT *
       AS p
   ORDER BY EMPID;
 ----
-Parser Error: PIVOT IN list must contain columns or lists of columns
+Binder Error: STAR expression is not supported here
 
 query I
 FROM

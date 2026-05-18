@@ -1,10 +1,6 @@
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "core_functions/aggregate/distributive_functions.hpp"
-#include "duckdb/function/function_set.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "hyperloglog.hpp"
 
 namespace duckdb {
 
@@ -14,7 +10,7 @@ namespace duckdb {
 namespace {
 
 struct ApproxDistinctCountState {
-	HyperLogLog hll;
+	HyperLogLogP<10> hll;
 };
 
 struct ApproxCountDistinctFunction {
@@ -38,27 +34,12 @@ struct ApproxCountDistinctFunction {
 	}
 };
 
-void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count, data_ptr_t state,
-                                             idx_t count) {
-	D_ASSERT(input_count == 1);
-	auto &input = inputs[0];
-
-	if (count > STANDARD_VECTOR_SIZE) {
-		throw InternalException("ApproxCountDistinct - count must be at most vector size");
-	}
-	Vector hash_vec(LogicalType::HASH, count);
-	VectorOperations::Hash(input, hash_vec, count);
-
-	auto agg_state = reinterpret_cast<ApproxDistinctCountState *>(state);
-	agg_state->hll.Update(input, hash_vec, count);
-}
-
 void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector,
                                        idx_t count) {
 	D_ASSERT(input_count == 1);
 	auto &input = inputs[0];
-	UnifiedVectorFormat idata;
-	input.ToUnifiedFormat(count, idata);
+
+	auto input_validity = input.Validity();
 
 	if (count > STANDARD_VECTOR_SIZE) {
 		throw InternalException("ApproxCountDistinct - count must be at most vector size");
@@ -66,19 +47,15 @@ void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, id
 	Vector hash_vec(LogicalType::HASH, count);
 	VectorOperations::Hash(input, hash_vec, count);
 
-	UnifiedVectorFormat sdata;
-	state_vector.ToUnifiedFormat(count, sdata);
-	const auto states = UnifiedVectorFormat::GetDataNoConst<ApproxDistinctCountState *>(sdata);
-
-	UnifiedVectorFormat hdata;
-	hash_vec.ToUnifiedFormat(count, hdata);
-	const auto *hashes = UnifiedVectorFormat::GetData<hash_t>(hdata);
+	auto states = state_vector.Values<ApproxDistinctCountState *>();
+	auto hashes = hash_vec.Values<hash_t>();
 	for (idx_t i = 0; i < count; i++) {
-		if (idata.validity.RowIsValid(idata.sel->get_index(i))) {
-			auto agg_state = states[sdata.sel->get_index(i)];
-			const auto hash = hashes[hdata.sel->get_index(i)];
-			agg_state->hll.InsertElement(hash);
+		if (!input_validity.IsValid(i)) {
+			continue;
 		}
+		auto agg_state = states[i].GetValue();
+		const auto hash = hashes[i].GetValue();
+		agg_state->hll.InsertElement(hash);
 	}
 }
 
@@ -88,8 +65,7 @@ AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) 
 	    AggregateFunction::StateInitialize<ApproxDistinctCountState, ApproxCountDistinctFunction>,
 	    ApproxCountDistinctUpdateFunction,
 	    AggregateFunction::StateCombine<ApproxDistinctCountState, ApproxCountDistinctFunction>,
-	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>,
-	    ApproxCountDistinctSimpleUpdateFunction);
+	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>, nullptr);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

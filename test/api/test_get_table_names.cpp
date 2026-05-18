@@ -7,7 +7,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test GetTableNames", "[api]") {
 	DuckDB db(nullptr);

@@ -2,20 +2,20 @@
 # description: Test storage of columns with various types
 # group: [storage]
 
-load __TEST_DIR__/storage_types.db
+load {TEST_DIR}/storage_types.db
 
 foreach type <numeric>
 
 statement ok
-CREATE TABLE a_${type} AS SELECT range::${type} i FROM range(100)
+CREATE TABLE a_{type} AS SELECT range::{type} i FROM range(100)
 
 query IIII
-SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_${type}
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_{type}
 ----
 0	99	100	100
 
 query IIII
-SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_${type} WHERE i = 1
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_{type} WHERE i = 1
 ----
 1	1	1	1
 
@@ -54,12 +54,12 @@ restart
 foreach type <numeric>
 
 query IIII
-SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_${type}
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_{type}
 ----
 0	99	100	100
 
 query IIII
-SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_${type} WHERE i = 1
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_{type} WHERE i = 1
 ----
 1	1	1	1
 

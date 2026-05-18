@@ -14,6 +14,8 @@
 namespace duckdb {
 class SchemaCatalogEntry;
 
+enum class CreateViewBindingMode { BIND_ON_CREATE, SKIP_BINDING };
+
 struct CreateViewInfo : public CreateInfo {
 public:
 	CreateViewInfo();
@@ -30,9 +32,11 @@ public:
 	//! Names of the query
 	vector<string> names;
 	//! Comments on columns of the query. Note: vector can be empty when no comments are set
-	vector<Value> column_comments;
+	unordered_map<string, Value> column_comments_map;
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
+	//! Whether or not to bind the view on create
+	CreateViewBindingMode binding_mode = CreateViewBindingMode::BIND_ON_CREATE;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;
@@ -49,6 +53,11 @@ public:
 	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 
 	string ToString() const override;
+
+private:
+	CreateViewInfo(vector<string> names, vector<Value> comments, unordered_map<string, Value> column_comments);
+
+	vector<Value> GetColumnCommentsList() const;
 };
 
 } // namespace duckdb

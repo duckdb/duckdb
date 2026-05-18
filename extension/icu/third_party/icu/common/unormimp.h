@@ -388,7 +388,7 @@ enum {
  *
  * Strings are either stored as a single code unit or as the length
  * followed by that many units.
- *   const UChar *s=extraData+(index from auxTrie data bits 9..0);
+ *   const char16_t *s=extraData+(index from auxTrie data bits 9..0);
  *   int32_t length;
  *   if(*s<0xff00) {
  *     // s points to the single-unit string
@@ -418,7 +418,7 @@ enum {
  * The same bit is used for NFC and NFKC; (c) differs for them.
  * As usual, we build the "not skippable" flags so that unassigned
  * code points get a 0 bit.
- * This bit is only valid after (a)..(e) test FALSE; test NFD_NO before (f) as well.
+ * This bit is only valid after (a)..(e) test false; test NFD_NO before (f) as well.
  * Test Hangul LV syllables entirely in code.
  *
  *

@@ -1,0 +1,13 @@
+diff --git a/src/spatial/spatial_types.cpp b/src/spatial/spatial_types.cpp
+index e075ca5..e731bf3 100644
+--- a/src/spatial/spatial_types.cpp
++++ b/src/spatial/spatial_types.cpp
+@@ -85,7 +85,7 @@ LogicalType GeoTypes::CreateEnumType(const string &name, const vector<string> &m
+ 	return enum_type;
+ }
+ 
+-static unique_ptr<FunctionData> PropagateTypesInternal(ClientContext &context, BaseScalarFunction &bound_function,
++static unique_ptr<FunctionData> PropagateTypesInternal(ClientContext &context, SimpleFunction &bound_function,
+                                                        vector<unique_ptr<Expression>> &arguments) {
+ 
+ 	CoordinateReferenceSystem crs;

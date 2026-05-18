@@ -28,6 +28,8 @@ public:
 	string name;
 	//! The path to the attached database
 	string path;
+	//! The path expression to the attached database
+	unique_ptr<ParsedExpression> parsed_path;
 	//! Set of (key, value) options
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> parsed_options;
 	//! Set of bound (key, value) options

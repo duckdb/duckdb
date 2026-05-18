@@ -22,42 +22,42 @@ unique_ptr<LogicalOperator> LogicalOperatorDeepCopy::DeepCopy(unique_ptr<duckdb:
 // reduces the amount of code significantly.
 template <typename T>
 struct TableIndexAccessor {
-	static idx_t &Get(T &plan) {
+	static TableIndex &Get(T &plan) {
 		return plan.table_index; // default
 	}
 };
 
 template <>
 struct TableIndexAccessor<LogicalAggregate> {
-	static vector<reference<idx_t>> Get(LogicalAggregate &plan) {
+	static vector<reference<TableIndex>> Get(LogicalAggregate &plan) {
 		return {std::ref(plan.group_index), std::ref(plan.aggregate_index), std::ref(plan.groupings_index)};
 	}
 };
 
 template <>
 struct TableIndexAccessor<LogicalWindow> {
-	static idx_t &Get(LogicalWindow &plan) {
+	static TableIndex &Get(LogicalWindow &plan) {
 		return plan.window_index;
 	}
 };
 
 template <>
 struct TableIndexAccessor<LogicalUnnest> {
-	static idx_t &Get(LogicalUnnest &plan) {
+	static TableIndex &Get(LogicalUnnest &plan) {
 		return plan.unnest_index;
 	}
 };
 
 template <>
 struct TableIndexAccessor<LogicalPivot> {
-	static idx_t &Get(LogicalPivot &plan) {
+	static TableIndex &Get(LogicalPivot &plan) {
 		return plan.pivot_index;
 	}
 };
 
 template <>
 struct TableIndexAccessor<LogicalJoin> {
-	static idx_t &Get(LogicalJoin &plan) {
+	static TableIndex &Get(LogicalJoin &plan) {
 		return plan.mark_index;
 	}
 };
@@ -66,8 +66,8 @@ struct TableIndexAccessor<LogicalJoin> {
 template <typename T>
 void LogicalOperatorDeepCopy::ReplaceTableIndex(LogicalOperator &op) {
 	auto &plan = op.Cast<T>();
-	idx_t &field = TableIndexAccessor<T>::Get(plan);
-	idx_t new_idx = binder.GenerateTableIndex();
+	auto &field = TableIndexAccessor<T>::Get(plan);
+	auto new_idx = binder.GenerateTableIndex();
 	table_idx_replacements[field] = new_idx;
 	field = new_idx;
 }
@@ -77,15 +77,20 @@ template <typename T>
 void LogicalOperatorDeepCopy::ReplaceTableIndexMulti(LogicalOperator &op) {
 	auto &plan = op.Cast<T>();
 	for (auto &field_ref : TableIndexAccessor<T>::Get(plan)) {
-		idx_t &field = field_ref.get();
-		idx_t new_idx = binder.GenerateTableIndex();
+		auto &field = field_ref.get();
+		auto new_idx = binder.GenerateTableIndex();
 		table_idx_replacements[field] = new_idx;
 		field = new_idx;
 	}
 }
 
 void LogicalOperatorDeepCopy::VisitOperator(LogicalOperator &op) {
-	VisitOperatorChildren(op);
+	// Because we are changing table bindings, VisitOperatorChildren will clear projection maps
+	// Therefore, the recursion is implemented here to avoid that
+	for (auto &child : op.children) {
+		VisitOperator(*child);
+	}
+
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		ReplaceTableIndex<LogicalProjection>(op);
@@ -187,7 +192,7 @@ void LogicalOperatorDeepCopy::VisitOperator(LogicalOperator &op) {
 	}
 }
 
-TableBindingReplacer::TableBindingReplacer(std::unordered_map<idx_t, idx_t> &table_idx_replacements,
+TableBindingReplacer::TableBindingReplacer(unordered_map<TableIndex, TableIndex> &table_idx_replacements,
                                            optional_ptr<bound_parameter_map_t> parameter_data)
     : table_idx_replacements(table_idx_replacements), parameter_data(parameter_data) {
 }
@@ -233,7 +238,11 @@ void TableBindingReplacer::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 
-	VisitOperatorChildren(op);
+	// Because we are changing table bindings, VisitOperatorChildren will clear projection maps
+	// Therefore, the recursion is implemented here to avoid that
+	for (auto &child : op.children) {
+		VisitOperator(*child);
+	}
 	VisitOperatorExpressions(op);
 }
 

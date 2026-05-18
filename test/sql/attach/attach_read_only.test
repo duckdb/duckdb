@@ -2,9 +2,6 @@
 # description: Test attaching of a read-only database
 # group: [attach]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 ATTACH ':memory:' AS db1 (READONLY 1)
 ----
@@ -16,13 +13,13 @@ ATTACH ':memory:' AS db1 (BLABLABLA 1)
 Unrecognized option
 
 statement error
-ATTACH '__TEST_DIR__/attach_read_only.db' AS db1 (READONLY 1)
+ATTACH '{TEST_DIR}/attach_read_only.db' AS db1 (READONLY 1)
 ----
 database does not exist
 
 # create a database file and close it again
 statement ok
-ATTACH '__TEST_DIR__/attach_read_only.db' AS db1
+ATTACH '{TEST_DIR}/attach_read_only.db' AS db1
 
 statement ok
 CREATE TABLE db1.integers AS SELECT * FROM range(10) t(i);
@@ -32,7 +29,7 @@ DETACH db1
 
 # now attach in read only mode
 statement ok
-ATTACH '__TEST_DIR__/attach_read_only.db' AS db1 (READONLY 1)
+ATTACH '{TEST_DIR}/attach_read_only.db' AS db1 (READONLY 1)
 
 query I
 SELECT SUM(i) FROM db1.integers
@@ -59,7 +56,7 @@ SELECT SUM(i) FROM db2.integers
 
 # attach main database in read only mode
 # load the DB from disk
-load __TEST_DIR__/attach_read_only.db readonly
+load {TEST_DIR}/attach_read_only.db readonly
 
 query I
 SELECT SUM(i) FROM integers

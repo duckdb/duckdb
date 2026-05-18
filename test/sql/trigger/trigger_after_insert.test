@@ -1,0 +1,405 @@
+# name: test/sql/trigger/trigger_after_insert.test
+# description: Test AFTER INSERT trigger firing via DML CTE expansion
+# group: [trigger]
+
+require noforcestorage
+
+# Basic: FOR EACH STATEMENT trigger fires once after INSERT
+statement ok
+CREATE TABLE target (id INTEGER);
+
+statement ok
+CREATE TABLE audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_basic AFTER INSERT ON target FOR EACH STATEMENT
+    INSERT INTO audit VALUES ('inserted');
+
+statement ok
+INSERT INTO target VALUES (1);
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+1
+
+# Second INSERT fires the trigger again
+statement ok
+INSERT INTO target VALUES (2);
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+2
+
+# Multi-row INSERT fires FOR EACH STATEMENT once
+statement ok
+INSERT INTO target VALUES (10), (11), (12);
+
+query I
+SELECT COUNT(*) FROM audit;
+----
+3
+
+# FOR EACH ROW is not yet supported - blocked at CREATE TRIGGER time
+statement ok
+CREATE TABLE multi_target (id INTEGER);
+
+statement ok
+CREATE TABLE multi_audit (msg VARCHAR);
+
+statement error
+CREATE TRIGGER trg_multi AFTER INSERT ON multi_target FOR EACH ROW
+    INSERT INTO multi_audit VALUES ('row');
+----
+Not implemented Error: FOR EACH ROW triggers are not yet supported
+
+# Trigger body failure rolls back the entire statement
+statement ok
+CREATE TABLE strict_target (id INTEGER);
+
+statement ok
+CREATE TABLE strict_log (id INTEGER UNIQUE);
+
+statement ok
+INSERT INTO strict_log VALUES (999);
+
+statement ok
+CREATE TRIGGER trg_fail AFTER INSERT ON strict_target FOR EACH STATEMENT
+    INSERT INTO strict_log VALUES (999);
+
+statement error
+INSERT INTO strict_target VALUES (1);
+----
+Constraint Error:
+
+query I
+SELECT COUNT(*) FROM strict_target;
+----
+0
+
+query I
+SELECT COUNT(*) FROM strict_log;
+----
+1
+
+# Multiple triggers on the same event are not yet supported
+statement ok
+CREATE TABLE t_multi (id INTEGER);
+
+statement ok
+CREATE TABLE t_multi_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_multi_a AFTER INSERT ON t_multi FOR EACH STATEMENT
+    INSERT INTO t_multi_audit VALUES ('a');
+
+statement error
+CREATE TRIGGER trg_multi_b AFTER INSERT ON t_multi FOR EACH STATEMENT
+    INSERT INTO t_multi_audit VALUES ('b');
+----
+Not implemented Error: Multiple triggers per table event are not yet supported
+
+# INSERT into nonexistent table is caught at CREATE TRIGGER time
+statement ok
+CREATE TABLE t_validate (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_bad_table AFTER INSERT ON t_validate FOR EACH STATEMENT
+    INSERT INTO nonexistent_table VALUES (1);
+----
+Catalog Error:
+
+# INSERT fails - trigger must NOT fire
+statement ok
+CREATE TABLE t_no_fire (id INTEGER UNIQUE);
+
+statement ok
+CREATE TABLE t_no_fire_log (msg VARCHAR);
+
+statement ok
+INSERT INTO t_no_fire VALUES (1);
+
+statement ok
+CREATE TRIGGER trg_no_fire AFTER INSERT ON t_no_fire FOR EACH STATEMENT
+    INSERT INTO t_no_fire_log VALUES ('fired');
+
+statement error
+INSERT INTO t_no_fire VALUES (1);
+----
+Constraint Error:
+
+query I
+SELECT COUNT(*) FROM t_no_fire_log;
+----
+0
+
+# FOR EACH STATEMENT fires even when 0 rows are inserted
+statement ok
+CREATE TABLE t_zero (id INTEGER);
+
+statement ok
+CREATE TABLE t_zero_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_zero AFTER INSERT ON t_zero FOR EACH STATEMENT
+    INSERT INTO t_zero_log VALUES ('fired');
+
+# Insert from an empty table - 0 rows but trigger still fires once (STATEMENT semantics)
+statement ok
+INSERT INTO t_zero SELECT * FROM t_zero;
+
+query I
+SELECT COUNT(*) FROM t_zero_log;
+----
+1
+
+# Trigger body can be an UPDATE statement
+statement ok
+CREATE TABLE t_upd_target (id INTEGER);
+
+statement ok
+CREATE TABLE t_upd_counter (n INTEGER);
+
+statement ok
+INSERT INTO t_upd_counter VALUES (0);
+
+statement ok
+CREATE TRIGGER trg_upd_body AFTER INSERT ON t_upd_target FOR EACH STATEMENT
+    UPDATE t_upd_counter SET n = n + 1;
+
+statement ok
+INSERT INTO t_upd_target VALUES (1);
+
+query I
+SELECT n FROM t_upd_counter;
+----
+1
+
+statement ok
+INSERT INTO t_upd_target VALUES (2);
+
+query I
+SELECT n FROM t_upd_counter;
+----
+2
+
+# Trigger body can be a DELETE statement
+statement ok
+CREATE TABLE t_del_target (id INTEGER);
+
+statement ok
+CREATE TABLE t_del_scratch (id INTEGER);
+
+statement ok
+INSERT INTO t_del_scratch VALUES (1), (2), (3);
+
+statement ok
+CREATE TRIGGER trg_del_body AFTER INSERT ON t_del_target FOR EACH STATEMENT
+    DELETE FROM t_del_scratch;
+
+statement ok
+INSERT INTO t_del_target VALUES (99);
+
+query I
+SELECT COUNT(*) FROM t_del_scratch;
+----
+0
+
+# Cross-schema: trigger body inserts into a table in a different schema
+statement ok
+CREATE SCHEMA other_schema;
+
+statement ok
+CREATE TABLE other_schema.cross_log (msg VARCHAR);
+
+statement ok
+CREATE TABLE t_cross (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_cross AFTER INSERT ON t_cross FOR EACH STATEMENT
+    INSERT INTO other_schema.cross_log VALUES ('cross');
+
+statement ok
+INSERT INTO t_cross VALUES (1);
+
+query I
+SELECT COUNT(*) FROM other_schema.cross_log;
+----
+1
+
+# INSERT with ON CONFLICT (DO NOTHING) works alongside a trigger
+statement ok
+CREATE TABLE t_conflict (id INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE t_conflict_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_conflict AFTER INSERT ON t_conflict FOR EACH STATEMENT
+    INSERT INTO t_conflict_log VALUES ('fired');
+
+statement ok
+INSERT INTO t_conflict VALUES (1);
+
+query I
+SELECT COUNT(*) FROM t_conflict_log;
+----
+1
+
+# Conflicting row - DO NOTHING, trigger still fires (statement level)
+statement ok
+INSERT INTO t_conflict VALUES (1) ON CONFLICT DO NOTHING;
+
+query I
+SELECT COUNT(*) FROM t_conflict_log;
+----
+2
+
+# ON CONFLICT DO UPDATE with trigger
+statement ok
+CREATE TABLE t_upsert (id INTEGER PRIMARY KEY, val INTEGER);
+
+statement ok
+CREATE TABLE t_upsert_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_upsert AFTER INSERT ON t_upsert FOR EACH STATEMENT
+    INSERT INTO t_upsert_log VALUES ('fired');
+
+statement ok
+INSERT INTO t_upsert VALUES (1, 10);
+
+# Conflict - DO UPDATE path
+statement ok
+INSERT INTO t_upsert VALUES (1, 99) ON CONFLICT (id) DO UPDATE SET val = excluded.val;
+
+query I
+SELECT val FROM t_upsert WHERE id = 1;
+----
+99
+
+query I
+SELECT COUNT(*) FROM t_upsert_log;
+----
+2
+
+
+# Chained triggers
+# creating a trigger whose body inserts into a table that already has its own trigger shoud succeed (A->B->C)
+statement ok
+CREATE TABLE t_chain_a (id INTEGER);
+
+statement ok
+CREATE TABLE t_chain_b (msg VARCHAR);
+
+statement ok
+CREATE TABLE t_chain_c (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_chain_b AFTER INSERT ON t_chain_b FOR EACH STATEMENT
+    INSERT INTO t_chain_c VALUES ('fired from b');
+
+statement ok
+CREATE TRIGGER trg_chain_a AFTER INSERT ON t_chain_a FOR EACH STATEMENT
+    INSERT INTO t_chain_b VALUES ('fired from a');
+
+statement ok
+INSERT INTO t_chain_a VALUES (1);
+
+query I
+SELECT COUNT(*) FROM t_chain_b;
+----
+1
+
+query I
+SELECT COUNT(*) FROM t_chain_c;
+----
+1
+
+# Mutual recursion (A->B->A) is blocked when creating the second trigger
+statement ok
+CREATE TABLE t_mutual_a (id INTEGER);
+
+statement ok
+CREATE TABLE t_mutual_b (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_mutual_a AFTER INSERT ON t_mutual_a FOR EACH STATEMENT
+    INSERT INTO t_mutual_b VALUES (1);
+
+statement error
+CREATE TRIGGER trg_mutual_b AFTER INSERT ON t_mutual_b FOR EACH STATEMENT
+    INSERT INTO t_mutual_a VALUES (1);
+----
+Not implemented Error: Recursive trigger chains are not yet supported (trigger cycle detected through trigger "trg_mutual_b" on table "t_mutual_b")
+
+# Recursive trigger (body writes to trigger table) is blocked at CREATE TRIGGER time
+statement ok
+CREATE TABLE t_recursive (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_recursive AFTER INSERT ON t_recursive FOR EACH STATEMENT
+    INSERT INTO t_recursive VALUES (1);
+----
+Not implemented Error: Recursive trigger chains are not yet supported (trigger cycle detected through trigger "trg_recursive" on table "t_recursive")
+
+
+# NOT NULL constraint from base INSERT is caught even with trigger expansion
+statement ok
+CREATE TABLE t_nn (id INTEGER NOT NULL);
+
+statement ok
+CREATE TABLE t_nn_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_nn AFTER INSERT ON t_nn FOR EACH STATEMENT
+    INSERT INTO t_nn_log VALUES ('fired');
+
+statement error
+INSERT INTO t_nn VALUES (NULL);
+----
+
+query I
+SELECT COUNT(*) FROM t_nn_log;
+----
+0
+
+# RETURNING is not yet supported on tables with AFTER triggers
+statement ok
+CREATE TABLE t_returning (id INTEGER);
+
+statement ok
+CREATE TABLE t_returning_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_returning AFTER INSERT ON t_returning FOR EACH STATEMENT
+    INSERT INTO t_returning_log VALUES ('fired');
+
+statement error
+INSERT INTO t_returning VALUES (1) RETURNING id;
+----
+Not implemented Error: RETURNING is not yet supported on tables with AFTER triggers
+
+# MERGE INTO is not supported on tables with triggers
+statement ok
+CREATE TABLE t_merge_target (id INTEGER PRIMARY KEY, val INTEGER);
+
+statement ok
+CREATE TABLE t_merge_source (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO t_merge_source VALUES (1, 100);
+
+statement ok
+CREATE TABLE t_merge_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_merge AFTER INSERT ON t_merge_target FOR EACH STATEMENT
+    INSERT INTO t_merge_log VALUES ('fired');
+
+statement error
+MERGE INTO t_merge_target t USING t_merge_source s ON t.id = s.id
+    WHEN NOT MATCHED THEN INSERT VALUES (s.id, s.val);
+----
+Not implemented Error: MERGE INTO is not supported on tables with triggers

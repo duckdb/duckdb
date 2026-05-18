@@ -79,8 +79,7 @@ duckdb_error_data duckdb_schema_from_arrow(duckdb_connection connection, struct 
 	auto arrow_table = duckdb::make_uniq<duckdb::ArrowTableSchema>();
 	try {
 		duckdb::vector<LogicalType> return_types;
-		duckdb::ArrowTableFunction::PopulateArrowTableSchema(duckdb::DBConfig::GetConfig(*conn->context), *arrow_table,
-		                                                     *schema);
+		duckdb::ArrowTableFunction::PopulateArrowTableSchema(*conn->context, *arrow_table, *schema);
 	} catch (const duckdb::Exception &ex) {
 		return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT, ex.what());
 	} catch (const std::exception &ex) {

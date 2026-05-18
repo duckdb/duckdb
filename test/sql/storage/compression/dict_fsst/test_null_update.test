@@ -1,7 +1,7 @@
 # name: test/sql/storage/compression/dict_fsst/test_null_update.test
 # group: [dict_fsst]
 
-load __TEST_DIR__/missing_null.db readwrite v1.4.2
+load {TEST_DIR}/missing_null.db readwrite v1.4.2
 
 statement ok
 CREATE OR REPLACE TABLE t(

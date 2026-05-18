@@ -19,10 +19,10 @@ foreach storage_version latest v0.10.3
 foreach sleep_time 0 25 50 75 100
 
 statement ok
-SET debug_checkpoint_sleep_ms=${sleep_time}
+SET debug_checkpoint_sleep_ms={sleep_time}
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_checkpoint_wal${sleep_time}_${storage_version}.db' AS concurrent_checkpoint_wal (STORAGE_VERSION '${storage_version}')
+ATTACH '{TEST_DIR}/concurrent_checkpoint_wal{sleep_time}_{storage_version}.db' AS concurrent_checkpoint_wal (STORAGE_VERSION '{storage_version}')
 
 statement ok
 CREATE OR REPLACE TABLE concurrent_checkpoint_wal.integers(i INTEGER PRIMARY KEY)
@@ -41,19 +41,19 @@ loop x 0 500
 
 onlyif threadid=1
 statement ok
-INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range(${x} * 100, (${x} + 1) * 100);
+INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range({x} * 100, ({x} + 1) * 100);
 
 # inserting the same data we just inserted conflicts
 onlyif threadid=1
 statement error
-INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range(${x} * 100, (${x} + 1) * 100);
+INSERT INTO concurrent_checkpoint_wal.integers SELECT * FROM range({x} * 100, ({x} + 1) * 100);
 ----
 key
 
 # we can also find the data we just inserted
 onlyif threadid=1
 query I
-SELECT COUNT(*) FROM concurrent_checkpoint_wal.integers WHERE i >= ${x} * 100 AND i < (${x} + 1) * 100
+SELECT COUNT(*) FROM concurrent_checkpoint_wal.integers WHERE i >= {x} * 100 AND i < ({x} + 1) * 100
 ----
 100
 
@@ -70,7 +70,7 @@ statement ok
 DETACH concurrent_checkpoint_wal
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_checkpoint_wal${sleep_time}_${storage_version}.db' AS concurrent_checkpoint_wal
+ATTACH '{TEST_DIR}/concurrent_checkpoint_wal{sleep_time}_{storage_version}.db' AS concurrent_checkpoint_wal
 
 query II
 SELECT COUNT(*), SUM(i) FROM concurrent_checkpoint_wal.integers

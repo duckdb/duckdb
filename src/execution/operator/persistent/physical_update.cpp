@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_update.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -8,6 +9,7 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_state.hpp"
@@ -15,7 +17,7 @@
 
 namespace duckdb {
 
-PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &tableref,
+PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> types, DuckTableEntry &tableref,
                                DataTable &table, vector<PhysicalIndex> columns,
                                vector<unique_ptr<Expression>> expressions,
                                vector<unique_ptr<Expression>> bound_defaults,
@@ -71,7 +73,7 @@ public:
 		vector<LogicalType> update_types;
 		update_types.reserve(expressions.size());
 		for (auto &expr : expressions) {
-			update_types.push_back(expr->return_type);
+			update_types.push_back(expr->GetReturnType());
 		}
 		update_chunk.Initialize(allocator, update_types);
 
@@ -138,7 +140,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 			}
 		}
 		auto &update_state = l_state.GetUpdateState(table, tableref, context.client);
-		table.Update(update_state, context.client, row_ids, columns, update_chunk);
+		table.Update(update_state, context.client, tableref, row_ids, columns, update_chunk);
 
 		if (return_chunk) {
 			lock_guard<mutex> glock(g_state.lock);
@@ -167,7 +169,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	// The update chunk now contains exactly those rows that we are deleting.
-	Vector del_row_ids(row_ids);
+	Vector del_row_ids(Vector::Ref(row_ids));
 	if (update_count != update_chunk.size()) {
 		update_chunk.Slice(sel, update_count);
 		del_row_ids.Slice(row_ids, sel, update_count);
@@ -189,7 +191,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	auto &delete_state = l_state.GetDeleteState(table, tableref, context.client);
-	table.Delete(delete_state, context.client, del_row_ids, update_count);
+	table.Delete(delete_state, context.client, tableref, del_row_ids, update_count);
 
 	// Arrange the columns in the standard table order.
 	mock_chunk.SetCardinality(update_count);
@@ -248,7 +250,7 @@ SourceResultType PhysicalUpdate::GetDataInternal(ExecutionContext &context, Data
 	auto &g = sink_state->Cast<UpdateGlobalState>();
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
-		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.updated_count.load())));
+		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.updated_count.load())));
 		return SourceResultType::FINISHED;
 	}
 

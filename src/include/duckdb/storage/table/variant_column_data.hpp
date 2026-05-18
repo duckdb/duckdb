@@ -16,6 +16,11 @@ namespace duckdb {
 //! Struct column data represents a struct
 class VariantColumnData : public ColumnData {
 public:
+	//! Indices into the inner shredded struct: STRUCT(typed_value <type>, untyped_value_index UINTEGER)
+	static constexpr idx_t TYPED_VALUE_INDEX = 0;
+	static constexpr idx_t UNTYPED_VALUE_INDEX = 1;
+
+public:
 	VariantColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type,
 	                  ColumnDataType data_type, optional_ptr<ColumnData> parent);
 
@@ -40,14 +45,15 @@ public:
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
-	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
+	void Append(ColumnAppendState &state, Vector &vector, idx_t count) override;
+	void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) override;
 	void RevertAppend(row_t new_count) override;
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index, row_t row_id,
 	              Vector &result, idx_t result_idx) override;
-	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
+	void Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index, Vector &update_vector,
 	            row_t *row_ids, idx_t update_count, idx_t row_group_start) override;
-	void UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
+	void UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, const vector<column_t> &column_path,
 	                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth,
 	                  idx_t row_group_start) override;
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
@@ -70,7 +76,6 @@ public:
 	void Verify(RowGroup &parent) override;
 
 	static void ShredVariantData(Vector &input, Vector &output, idx_t count);
-	static void UnshredVariantData(Vector &input, Vector &output, idx_t count);
 
 	void SetValidityData(shared_ptr<ValidityColumnData> validity_p);
 	void SetChildData(vector<shared_ptr<ColumnData>> child_data);

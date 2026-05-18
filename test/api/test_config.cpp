@@ -6,7 +6,6 @@
 #include <map>
 
 using namespace duckdb;
-using namespace std;
 
 class FileCleaner {
 public:

@@ -21,7 +21,7 @@ SELECT '2005-12-31 23:59:59.9999999-08'::TIMESTAMPTZ AS startdate, '2006-01-01 0
 foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond julian
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, enddate) FROM datetime1
+SELECT DATEDIFF('{datepart}', startdate, enddate) FROM datetime1
 ----
 1
 
@@ -30,7 +30,7 @@ endloop
 foreach datepart decade century millennium week yearweek isoyear
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, enddate) FROM datetime1
+SELECT DATEDIFF('{datepart}', startdate, enddate) FROM datetime1
 ----
 0
 
@@ -52,12 +52,12 @@ foreach lspecial infinity -infinity 2004-01-31T12:00:00.000050-08
 foreach rspecial infinity -infinity
 
 query I
-SELECT DATEDIFF('${specifier}', '${lspecial}'::TIMESTAMPTZ, '${rspecial}'::TIMESTAMPTZ);
+SELECT DATEDIFF('{specifier}', '{lspecial}'::TIMESTAMPTZ, '{rspecial}'::TIMESTAMPTZ);
 ----
 NULL
 
 query I
-SELECT DATEDIFF('${specifier}', '${rspecial}'::TIMESTAMPTZ, '${lspecial}'::TIMESTAMPTZ);
+SELECT DATEDIFF('{specifier}', '{rspecial}'::TIMESTAMPTZ, '{lspecial}'::TIMESTAMPTZ);
 ----
 NULL
 
@@ -71,7 +71,7 @@ endloop
 foreach datepart year quarter month day dayofyear hour minute second millisecond microsecond decade century millennium week yearweek isoyear julian
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, enddate) + DATEDIFF('${datepart}', enddate, startdate) FROM datetime1
+SELECT DATEDIFF('{datepart}', startdate, enddate) + DATEDIFF('{datepart}', enddate, startdate) FROM datetime1
 ----
 0
 
@@ -81,7 +81,7 @@ endloop
 foreach datepart year month day hour minute second millisecond microsecond
 
 query I
-SELECT DATEDIFF('${datepart}', startdate, startdate + INTERVAL 1 ${datepart})
+SELECT DATEDIFF('{datepart}', startdate, startdate + INTERVAL 1 {datepart})
 FROM (SELECT '2021-07-30'::TIMESTAMP + INTERVAL (d) DAY AS startdate FROM range(0, 5) tbl(d)) days
 ----
 1

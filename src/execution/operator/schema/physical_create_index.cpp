@@ -3,13 +3,15 @@
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -31,11 +33,11 @@ PhysicalCreateIndex::PhysicalCreateIndex(PhysicalPlan &physical_plan, LogicalOpe
 
 	for (idx_t i = 0; i < unbound_expressions.size(); ++i) {
 		auto &expr = unbound_expressions[i];
-		indexed_column_types.push_back(expr->return_type);
+		indexed_column_types.push_back(expr->GetReturnType());
 		indexed_columns.push_back(i);
 	}
 
-	// Row id is alway last
+	// Row id is always last
 	rowid_column.push_back(unbound_expressions.size());
 }
 
@@ -61,7 +63,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 
 	vector<LogicalType> data_types;
 	for (auto &expr : unbound_expressions) {
-		data_types.push_back(expr->return_type);
+		data_types.push_back(expr->GetReturnType());
 	}
 
 	IndexBuildInitSinkInput local_state_input {bind_data,  context.client,      table,      *info,
@@ -296,12 +298,11 @@ void PhysicalCreateIndex::FinalizeIndexBuild(ClientContext &context, CreateIndex
 	} else {
 		// Ensure that there are no other indexes with that name on this table.
 		auto &indexes = storage.GetDataTableInfo()->GetIndexes();
-		indexes.Scan([&](Index &index) {
+		for (auto &index : indexes.Indexes()) {
 			if (index.GetIndexName() == info->index_name) {
 				throw CatalogException("an index with that name already exists for this table: %s", info->index_name);
 			}
-			return false;
-		});
+		}
 
 		auto &catalog = Catalog::GetCatalog(context, info->catalog);
 		catalog.Alter(context, *alter_table_info);

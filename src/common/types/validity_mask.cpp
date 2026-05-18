@@ -13,12 +13,38 @@ ValidityData::ValidityData(const ValidityMask &original, idx_t count)
     : TemplatedValidityData(original.GetData(), count) {
 }
 
+void ValidityMask::Combine(const Vector &other, idx_t count) {
+	if (other.GetVectorType() == VectorType::FLAT_VECTOR) {
+		// combine validity masks directly
+		Combine(FlatVector::Validity(other), count);
+		return;
+	}
+	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (ConstantVector::IsNull(other)) {
+			// other is constant NULL - result is constant NULl
+			SetAllInvalid(count);
+		}
+		// other is not NULL - skip
+		return;
+	}
+	auto validity = other.Validity();
+	if (validity.CannotHaveNull()) {
+		// no NULL values - we can skip this
+		return;
+	}
+	for (idx_t r = 0; r < count; r++) {
+		if (!validity.IsValid(r)) {
+			SetInvalid(r);
+		}
+	}
+}
+
 void ValidityMask::Combine(const ValidityMask &other, idx_t count) {
-	if (other.AllValid()) {
+	if (other.CannotHaveNull()) {
 		// X & 1 = X
 		return;
 	}
-	if (AllValid()) {
+	if (CannotHaveNull()) {
 		// 1 & Y = Y
 		Initialize(other);
 		return;
@@ -84,7 +110,7 @@ idx_t ValidityMask::Capacity() const {
 }
 
 void ValidityMask::Slice(const ValidityMask &other, idx_t source_offset, idx_t count) {
-	if (other.AllValid()) {
+	if (other.CannotHaveNull()) {
 		validity_mask = nullptr;
 		validity_data.reset();
 		return;
@@ -100,6 +126,10 @@ void ValidityMask::Slice(const ValidityMask &other, idx_t source_offset, idx_t c
 
 bool ValidityMask::IsAligned(idx_t count) {
 	return count % BITS_PER_VALUE == 0;
+}
+
+void ValidityMask::CopyRange(const ValidityMask &other, idx_t count) {
+	CopySel(other, *FlatVector::IncrementalSelectionVector(), 0, 0, count);
 }
 
 void ValidityMask::CopySel(const ValidityMask &other, const SelectionVector &sel, idx_t source_offset,
@@ -121,7 +151,7 @@ void ValidityMask::CopySel(const ValidityMask &other, const SelectionVector &sel
 }
 
 void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count) {
-	if (AllValid() && other.AllValid()) {
+	if (CannotHaveNull() && other.CannotHaveNull()) {
 		// Both validity masks are uninitialized, nothing to do
 		return;
 	}

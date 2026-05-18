@@ -1,0 +1,20 @@
+# name: test/sql/peg_parser/enable_peg_parser.test
+# description: Test enabling and disabling the PEG Parser
+# group: [peg_parser]
+
+statement error
+select xvariable a = 1;
+----
+Parser Error: syntax error at or near "="
+
+# Here we should get the error from the parser override
+statement error
+select xvariable a = 1;
+----
+Parser Error: syntax error at or near "="
+
+# Just check that it works properly
+query I
+SELECT * FROM values(1);
+----
+1

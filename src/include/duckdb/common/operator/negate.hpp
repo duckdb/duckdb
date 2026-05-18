@@ -1,0 +1,37 @@
+#pragma once
+
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/exception.hpp"
+
+namespace duckdb {
+
+struct NegateOperator {
+	template <class T>
+	static bool CanNegate(T input) {
+		using Limits = NumericLimits<T>;
+		if (!Limits::IsSigned()) {
+			return input == T(0);
+		}
+		return Limits::Minimum() != input;
+	}
+
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		if (!CanNegate<TA>(input)) {
+			throw OutOfRangeException("Overflow in negation of numeric value!");
+		}
+		return static_cast<TR>(-static_cast<TR>(input));
+	}
+};
+
+// Specialization for floating point (always negatable)
+template <>
+inline bool NegateOperator::CanNegate(float input) {
+	return true;
+}
+template <>
+inline bool NegateOperator::CanNegate(double input) {
+	return true;
+}
+
+} // namespace duckdb

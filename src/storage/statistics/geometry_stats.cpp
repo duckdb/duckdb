@@ -77,10 +77,18 @@ BaseStatistics GeometryStats::CreateEmpty(LogicalType type) {
 }
 
 void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
+	// Should we serialize as old extension geometry type for backwards compatibility?
+	// (in that case, write unknown string stats)
+	if (!serializer.ShouldSerialize(7)) {
+		auto string_stats = StringStats::CreateUnknown(LogicalType::VARCHAR);
+		StringStats::Serialize(string_stats, serializer);
+		return;
+	}
+
 	const auto &data = GetDataUnsafe(stats);
 
 	// Write extent
-	serializer.WriteObject(200, "extent", [&](Serializer &extent) {
+	serializer.WriteObject(300, "extent", [&](Serializer &extent) {
 		extent.WriteProperty<double>(101, "x_min", data.extent.x_min);
 		extent.WriteProperty<double>(102, "x_max", data.extent.x_max);
 		extent.WriteProperty<double>(103, "y_min", data.extent.y_min);
@@ -92,7 +100,7 @@ void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serialize
 	});
 
 	// Write types
-	serializer.WriteObject(201, "types", [&](Serializer &types) {
+	serializer.WriteObject(301, "types", [&](Serializer &types) {
 		types.WriteProperty<uint8_t>(101, "types_xy", data.types.sets[0]);
 		types.WriteProperty<uint8_t>(102, "types_xyz", data.types.sets[1]);
 		types.WriteProperty<uint8_t>(103, "types_xym", data.types.sets[2]);
@@ -100,14 +108,26 @@ void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serialize
 	});
 
 	// Write flags
-	serializer.WritePropertyWithDefault(202, "flags", data.flags.flags);
+	serializer.WritePropertyWithDefault(302, "flags", data.flags.flags);
 }
 
 void GeometryStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
 	auto &data = GetDataUnsafe(base);
 
+	// Read old garbage string stats if present, but ignore it since it is not relevant to geometry stats
+	if (deserializer.CanDeserializeProperty(200, "min")) {
+		auto string_stats = StringStats::CreateEmpty(LogicalType::VARCHAR);
+		StringStats::Deserialize(deserializer, string_stats);
+
+		// We don't know how to interpret the old string stats, so we just set the geometry stats to unknown
+		data.extent = GeometryExtent::Unknown();
+		data.types = GeometryTypeSet::Unknown();
+		data.flags = GeometryStatsFlags::Unknown();
+		return;
+	}
+
 	// Read extent
-	deserializer.ReadObject(200, "extent", [&](Deserializer &extent) {
+	deserializer.ReadObject(300, "extent", [&](Deserializer &extent) {
 		extent.ReadProperty<double>(101, "x_min", data.extent.x_min);
 		extent.ReadProperty<double>(102, "x_max", data.extent.x_max);
 		extent.ReadProperty<double>(103, "y_min", data.extent.y_min);
@@ -119,7 +139,7 @@ void GeometryStats::Deserialize(Deserializer &deserializer, BaseStatistics &base
 	});
 
 	// Read types
-	deserializer.ReadObject(201, "types", [&](Deserializer &types) {
+	deserializer.ReadObject(301, "types", [&](Deserializer &types) {
 		types.ReadProperty<uint8_t>(101, "types_xy", data.types.sets[0]);
 		types.ReadProperty<uint8_t>(102, "types_xyz", data.types.sets[1]);
 		types.ReadProperty<uint8_t>(103, "types_xym", data.types.sets[2]);
@@ -127,24 +147,33 @@ void GeometryStats::Deserialize(Deserializer &deserializer, BaseStatistics &base
 	});
 
 	// Read flags
-	deserializer.ReadPropertyWithDefault<uint8_t>(202, "flags", data.flags.flags);
+	deserializer.ReadPropertyWithDefault<uint8_t>(302, "flags", data.flags.flags);
 }
 
-string GeometryStats::ToString(const BaseStatistics &stats) {
+child_list_t<Value> GeometryStats::ToStruct(const BaseStatistics &stats) {
 	const auto &data = GetDataUnsafe(stats);
-	string result;
+	child_list_t<Value> result;
+	child_list_t<Value> extent;
 
-	result += "[";
-	result += StringUtil::Format("Extent: [X: [%f, %f], Y: [%f, %f], Z: [%f, %f], M: [%f, %f]]", data.extent.x_min,
-	                             data.extent.x_max, data.extent.y_min, data.extent.y_max, data.extent.z_min,
-	                             data.extent.z_max, data.extent.m_min, data.extent.m_max);
-	result += StringUtil::Format(", Types: [%s]", StringUtil::Join(data.types.ToString(true), ", "));
-	result += StringUtil::Format(
-	    ", Flags: [Has Empty Geom: %s, Has No Empty Geom: %s, Has Empty Part: %s, Has No Empty Part: %s]",
-	    data.flags.HasEmptyGeometry() ? "true" : "false", data.flags.HasNonEmptyGeometry() ? "true" : "false",
-	    data.flags.HasEmptyPart() ? "true" : "false", data.flags.HasNonEmptyPart() ? "true" : "false");
+	extent.emplace_back("x_min", Value::DOUBLE(data.extent.x_min));
+	extent.emplace_back("x_max", Value::DOUBLE(data.extent.x_max));
+	extent.emplace_back("y_min", Value::DOUBLE(data.extent.y_min));
+	extent.emplace_back("y_max", Value::DOUBLE(data.extent.y_max));
+	if (Value::IsFinite(data.extent.z_min) || Value::IsFinite(data.extent.z_max)) {
+		extent.emplace_back("z_min", Value::DOUBLE(data.extent.z_min));
+		extent.emplace_back("z_max", Value::DOUBLE(data.extent.z_max));
+	}
+	if (Value::IsFinite(data.extent.m_min) || Value::IsFinite(data.extent.m_max)) {
+		extent.emplace_back("m_min", Value::DOUBLE(data.extent.m_min));
+		extent.emplace_back("m_max", Value::DOUBLE(data.extent.m_max));
+	}
 
-	result += "]";
+	result.emplace_back("extent", Value::STRUCT(std::move(extent)));
+
+	result.emplace_back("has_empty_geom", Value::BOOLEAN(data.flags.HasEmptyGeometry()));
+	result.emplace_back("has_non_empty_geom", Value::BOOLEAN(data.flags.HasNonEmptyGeometry()));
+	result.emplace_back("has_empty_part", Value::BOOLEAN(data.flags.HasEmptyPart()));
+	result.emplace_back("has_non_empty_part", Value::BOOLEAN(data.flags.HasNonEmptyPart()));
 	return result;
 }
 
@@ -237,10 +266,10 @@ static FilterPropagateResult CheckIntersectionFilter(const GeometryStatsData &da
 }
 
 FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, const unique_ptr<Expression> &expr) {
-	if (expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
+	if (expr->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	if (expr->return_type != LogicalType::BOOLEAN) {
+	if (expr->GetReturnType() != LogicalType::BOOLEAN) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	const auto &func = expr->Cast<BoundFunctionExpression>();
@@ -248,8 +277,8 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
-	if (func.children[0]->return_type.id() != LogicalTypeId::GEOMETRY ||
-	    func.children[1]->return_type.id() != LogicalTypeId::GEOMETRY) {
+	if (func.children[0]->GetReturnType().id() != LogicalTypeId::GEOMETRY ||
+	    func.children[1]->GetReturnType().id() != LogicalTypeId::GEOMETRY) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
@@ -258,7 +287,7 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 
 	auto found = false;
 	for (const auto &name : geometry_predicates) {
-		if (StringUtil::CIEquals(func.function.name.c_str(), name)) {
+		if (StringUtil::CIEquals(func.function.GetName().c_str(), name)) {
 			found = true;
 			break;
 		}

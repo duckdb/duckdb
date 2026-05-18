@@ -44,7 +44,7 @@ public:
 	}
 
 public:
-	static PhysicalOperator &Create(ClientContext &context, PreparedStatementData &data, idx_t batch_size);
+	static unique_ptr<PhysicalOperator> Create(ClientContext &context, PreparedStatementData &data, idx_t batch_size);
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) const override;

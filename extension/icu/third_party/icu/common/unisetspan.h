@@ -65,8 +65,8 @@ public:
 
     /*
      * Do the strings need to be checked in span() etc.?
-     * @return TRUE if strings need to be checked (call span() here),
-     *         FALSE if not (use a BMPSet for best performance).
+     * @return true if strings need to be checked (call span() here),
+     *         false if not (use a BMPSet for best performance).
      */
     inline UBool needsStringSpanUTF16();
     inline UBool needsStringSpanUTF8();
@@ -74,9 +74,9 @@ public:
     // For fast UnicodeSet::contains(c).
     inline UBool contains(UChar32 c) const;
 
-    int32_t span(const UChar *s, int32_t length, USetSpanCondition spanCondition) const;
+    int32_t span(const char16_t *s, int32_t length, USetSpanCondition spanCondition) const;
 
-    int32_t spanBack(const UChar *s, int32_t length, USetSpanCondition spanCondition) const;
+    int32_t spanBack(const char16_t *s, int32_t length, USetSpanCondition spanCondition) const;
 
     int32_t spanUTF8(const uint8_t *s, int32_t length, USetSpanCondition spanCondition) const;
 
@@ -95,8 +95,8 @@ private:
     // so that a character span ends before any string.
     void addToSpanNotSet(UChar32 c);
 
-    int32_t spanNot(const UChar *s, int32_t length) const;
-    int32_t spanNotBack(const UChar *s, int32_t length) const;
+    int32_t spanNot(const char16_t *s, int32_t length) const;
+    int32_t spanNotBack(const char16_t *s, int32_t length) const;
     int32_t spanNotUTF8(const uint8_t *s, int32_t length) const;
     int32_t spanNotBackUTF8(const uint8_t *s, int32_t length) const;
 
@@ -141,11 +141,11 @@ private:
 };
 
 UBool UnicodeSetStringSpan::needsStringSpanUTF16() {
-    return (UBool)(maxLength16!=0);
+    return maxLength16 != 0;
 }
 
 UBool UnicodeSetStringSpan::needsStringSpanUTF8() {
-    return (UBool)(maxLength8!=0);
+    return maxLength8 != 0;
 }
 
 UBool UnicodeSetStringSpan::contains(UChar32 c) const {

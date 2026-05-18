@@ -632,6 +632,11 @@
         "id": 204,
         "name": "repo_is_alias",
         "type": "bool"
+      },
+      {
+        "id": 205,
+        "name": "alias",
+        "type": "string"
       }
     ]
   },
@@ -692,6 +697,17 @@
         "id": 201,
         "name": "modifier",
         "type": "TransactionModifierType"
+      },
+      {
+        "id": 202,
+        "name": "invalidation_policy",
+        "type": "TransactionInvalidationPolicy",
+        "default" : "TransactionInvalidationPolicy::STANDARD_POLICY"
+      },
+      {
+        "id": 203,
+        "name": "auto_rollback",
+        "type": "bool"
       }
     ]
   },
@@ -774,6 +790,30 @@
         "id": 400,
         "name": "orders",
         "type": "vector<OrderByNode>"
+      }
+    ]
+  },
+  {
+    "class": "SetTableOptionsInfo",
+    "base": "AlterTableInfo",
+    "enum": "SET_TABLE_OPTIONS",
+    "members": [
+      {
+        "id": 400,
+        "name": "table_options",
+        "type": "case_insensitive_map_t<ParsedExpression*>"
+      }
+    ]
+  },
+  {
+    "class": "ResetTableOptionsInfo",
+    "base": "AlterTableInfo",
+    "enum": "RESET_TABLE_OPTIONS",
+    "members": [
+      {
+        "id": 400,
+        "name": "table_options",
+        "type": "case_insensitive_set_t"
       }
     ]
   }

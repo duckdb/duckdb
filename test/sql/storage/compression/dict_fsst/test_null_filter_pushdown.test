@@ -1,7 +1,7 @@
 # name: test/sql/storage/compression/dict_fsst/test_null_filter_pushdown.test
 # group: [dict_fsst]
 
-load __TEST_DIR__/null_filter_dict_fsst.db readwrite v1.4.2
+load {TEST_DIR}/null_filter_dict_fsst.db readwrite v1.4.2
 
 statement ok
 pragma force_compression='DICT_FSST';

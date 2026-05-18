@@ -323,7 +323,7 @@ bool RenderingQueryResult::TryConvertChunk() {
 	if (renderer.HasConvertValue()) {
 		for (idx_t c = 0; c < result.ColumnCount(); c++) {
 			auto &str_vec = varchar_chunk->data[c];
-			auto strings = duckdb::FlatVector::GetData<duckdb::string_t>(str_vec);
+			auto strings = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(str_vec);
 			for (idx_t r = 0; r < varchar_chunk->size(); r++) {
 				if (duckdb::FlatVector::IsNull(str_vec, r)) {
 					continue;
@@ -571,6 +571,11 @@ public:
 	const char *GetRowStart() override {
 		return "| ";
 	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
+	}
 };
 
 /*
@@ -721,6 +726,11 @@ public:
 	}
 	const char *GetRowSeparator() override {
 		return " \\\\\n";
+	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 
@@ -990,6 +1000,11 @@ public:
 		}
 		out.Print(escaped);
 	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
+	}
 };
 
 class ModeTclRenderer : public RowRenderer {
@@ -1093,6 +1108,11 @@ public:
 		auto result = StringUtil::Format("%s", SQLIdentifier(string(str, str_len)));
 		out.Print(result);
 	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
+	}
 };
 
 class ModeAsciiRenderer : public RowRenderer {
@@ -1125,6 +1145,11 @@ public:
 			out.Print(data[i]);
 		}
 		out.Print(row_sep);
+	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 
@@ -1179,10 +1204,13 @@ public:
 			// wrap all JSON objects in an array
 			out.Print("[");
 		}
-		out.Print("{");
 	}
 
 	bool RequiresQuotes(const duckdb::LogicalType &type) {
+		// Booleans are cast to VARCHAR ("true"/"false") in ConvertChunk; emit them as JSON booleans, not strings.
+		if (type.id() == duckdb::LogicalTypeId::BOOLEAN) {
+			return false;
+		}
 		if (!type.IsNumeric()) {
 			return true;
 		}
@@ -1203,8 +1231,9 @@ public:
 				// wrap all JSON objects in an array
 				out.Print(",");
 			}
-			out.Print("\n{");
+			out.Print("\n");
 		}
+		out.Print("{");
 		auto &data = row.data;
 		auto &is_null = row.is_null;
 		auto &types = result.types;
@@ -1310,6 +1339,11 @@ public:
 		return "null";
 	}
 
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
+	}
+
 	bool json_array;
 };
 
@@ -1399,6 +1433,11 @@ public:
 			res += ")";
 		}
 		return res;
+	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		// this mode never uses the pager in automatic mode
+		return global_mode == PagerMode::PAGER_ON;
 	}
 };
 
@@ -1594,7 +1633,9 @@ public:
 
 private:
 	duckdb::BoxRendererConfig config;
+	unique_ptr<duckdb::ClientBoxRendererContext> render_context;
 	unique_ptr<duckdb::BoxRendererState> render_state;
+	unique_ptr<duckdb::ColumnDataCollectionWrapper> wrapper;
 	string error_str;
 };
 
@@ -1631,6 +1672,9 @@ ModeDuckBoxRenderer::ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(stat
 	config.decimal_separator = state.decimal_separator;
 	config.thousand_separator = state.thousand_separator;
 	config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
+	if (state.pager_mode != PagerMode::PAGER_OFF) {
+		config.hidden_rows_hint = "use .last to show entire result";
+	}
 }
 
 void ModeDuckBoxRenderer::RemoveRenderLimits() {
@@ -1644,7 +1688,9 @@ void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
 	auto &materialized = query_result.Cast<duckdb::MaterializedQueryResult>();
 	auto &con = *state.conn;
 	try {
-		render_state = renderer.Prepare(*con.context, result.metadata.column_names, materialized.Collection());
+		wrapper = make_uniq<duckdb::ColumnDataCollectionWrapper>(materialized.Collection());
+		render_context = make_uniq<duckdb::ClientBoxRendererContext>(*con.context);
+		render_state = renderer.Prepare(*render_context, result.metadata.column_names, *wrapper);
 	} catch (std::exception &ex) {
 		// store the error - throw on render
 		error_str = ex.what();
@@ -1814,27 +1860,36 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 
 void ShellLogStorage::WriteLogEntry(duckdb::timestamp_t timestamp, duckdb::LogLevel level, const string &log_type,
                                     const string &log_message, const duckdb::RegisteredLoggingContext &context) {
+	duckdb::lock_guard<duckdb::mutex> l(lock);
+
 	HighlightElementType element_type;
 	switch (level) {
-	case (duckdb::LogLevel::LOG_TRACE):
+	case duckdb::LogLevel::LOG_TRACE:
 		element_type = HighlightElementType::LOG_TRACE;
 		break;
-	case (duckdb::LogLevel::LOG_DEBUG):
+	case duckdb::LogLevel::LOG_DEBUG:
 		element_type = HighlightElementType::LOG_DEBUG;
 		break;
-	case (duckdb::LogLevel::LOG_INFO):
+	case duckdb::LogLevel::LOG_INFO:
 		element_type = HighlightElementType::LOG_INFO;
 		break;
-	case (duckdb::LogLevel::LOG_WARNING):
+	case duckdb::LogLevel::LOG_WARNING:
 		element_type = HighlightElementType::LOG_WARNING;
 		break;
-	case (duckdb::LogLevel::LOG_ERROR):
-	case (duckdb::LogLevel::LOG_FATAL):
+	case duckdb::LogLevel::LOG_ERROR:
+	case duckdb::LogLevel::LOG_FATAL:
 		element_type = HighlightElementType::ERROR_TOKEN;
 		break;
 	default:
 		throw std::runtime_error("Unsupported log level for WriteLogEntry");
 	}
+
+	// check if the log has already been printed
+	auto log_id = duckdb::StringUtil::CIHash(log_message);
+	if (printed_logs.find(log_id) != printed_logs.end()) {
+		return;
+	}
+	printed_logs.emplace(log_id);
 
 	const auto log_level = duckdb::EnumUtil::ToString(level);
 	shell_highlight.PrintText(log_level + ":\n", PrintOutput::STDOUT, element_type);

@@ -8,11 +8,34 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include "duckdb/common/limits.hpp"
 #include "column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+namespace protocol {
+class TProtocol;
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
+namespace duckdb_parquet {
+class ColumnChunk;
+} // namespace duckdb_parquet
 
 namespace duckdb {
+class ParquetReader;
+class TableFilter;
+class ThriftFileTransport;
+class Vector;
+struct ParquetColumnSchema;
+struct SelectionVector;
+struct TableFilterState;
 
 //! Reads a file-absolute row number as a virtual column that's not actually stored in the file
 class RowNumberColumnReader : public ColumnReader {
@@ -20,13 +43,12 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::INT64;
 
 public:
-	RowNumberColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema);
+	RowNumberColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
 
 public:
-	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) override;
-	void Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-	            const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
-	            idx_t &approved_tuple_count, bool is_first_filter) override;
+	idx_t Read(ColumnReaderInput &input, Vector &result) override;
+	void Filter(ColumnReaderInput &input, Vector &result, const TableFilter &filter, TableFilterState &filter_state,
+	            SelectionVector &sel, idx_t &approved_tuple_count, bool is_first_filter) override;
 
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
 

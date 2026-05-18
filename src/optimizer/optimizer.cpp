@@ -32,13 +32,19 @@
 #include "duckdb/optimizer/rule/list.hpp"
 #include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
-#include "duckdb/optimizer/sum_rewriter.hpp"
+#include "duckdb/optimizer/aggregate_function_rewriter.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/topn_window_elimination.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
+#include "duckdb/optimizer/partitioned_execution.hpp"
 #include "duckdb/optimizer/window_self_join.hpp"
+#include "duckdb/optimizer/row_number_rewriter.hpp"
+#include "duckdb/optimizer/optimizer_extension.hpp"
+#include "duckdb/optimizer/outer_join_simplification.hpp"
+#include "duckdb/optimizer/projection_pullup.hpp"
+#include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -62,10 +68,13 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 	rewriter.rules.push_back(make_uniq<DistinctAggregateOptimizer>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistinctWindowedOptimizer>(rewriter));
 	rewriter.rules.push_back(make_uniq<RegexOptimizationRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<RegexpReplaceExtractRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EmptyNeedleRemovalRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<EnumComparisonRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<JoinDependentFilterRule>(rewriter));
-	rewriter.rules.push_back(make_uniq<TimeStampComparison>(context, rewriter));
+	rewriter.rules.push_back(make_uniq<TimeStampComparison>(rewriter));
+	rewriter.rules.push_back(make_uniq<PredicateFactoringRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<ListComprehensionRewriteRule>(rewriter));
 
 #ifdef DEBUG
 	for (auto &rule : rewriter.rules) {
@@ -107,7 +116,30 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 }
 
 void Optimizer::Verify(LogicalOperator &op) {
-	ColumnBindingResolver::Verify(op);
+	ColumnBindingResolver::Verify(context, op);
+}
+
+// Returns true if the plan contains a DML statement (INSERT/UPDATE/DELETE/MERGE INTO)
+// inside a CTE body. When that is the case, several optimizations are unsafe because
+// they use table statistics captured at plan time, which do not reflect the table
+// state after the DML has executed.
+// Note: a top-level INSERT/UPDATE/DELETE (e.g. INSERT ... RETURNING) is NOT flagged —
+// only DML nested under a MATERIALIZED_CTE or RECURSIVE_CTE node.
+static bool CTEContainsDML(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE ||
+	    op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+		for (auto &child : op.children) {
+			if (child->HasSideEffects()) {
+				return true;
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		if (CTEContainsDML(*child)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void Optimizer::RunBuiltInOptimizers() {
@@ -137,10 +169,10 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = cte_inlining.Optimize(std::move(plan));
 	});
 
-	// Rewrites SUM(x + C) into SUM(x) + C * COUNT(x)
-	RunOptimizer(OptimizerType::SUM_REWRITER, [&]() {
-		SumRewriterOptimizer optimizer(*this);
-		optimizer.Optimize(plan);
+	// Rewrites AVG(x) -> SUM(x)/COUNT(x) and SUM(x+C) -> SUM(x) + C*COUNT(x)
+	RunOptimizer(OptimizerType::AGGREGATE_FUNCTION_REWRITER, [&]() {
+		AggregateFunctionRewriter aggregate_function_rewriter(*this);
+		aggregate_function_rewriter.Optimize(plan);
 	});
 
 	// perform filter pullup
@@ -152,7 +184,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	// perform filter pushdown
 	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
 		FilterPushdown filter_pushdown(*this);
-		unordered_set<idx_t> top_bindings;
+		unordered_set<TableIndex> top_bindings;
 		filter_pushdown.CheckMarkToSemi(*plan, top_bindings);
 		plan = filter_pushdown.Rewrite(std::move(plan));
 	});
@@ -197,6 +229,18 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = window_self_join_optimizer.Optimize(std::move(plan));
 	});
 
+	// Pull up projection from joins
+	RunOptimizer(OptimizerType::PROJECTION_PULLUP, [&]() {
+		ProjectionPullup projection_pullup(*this, plan);
+		projection_pullup.Optimize(plan);
+	});
+
+	// Simplifies FULL OUTER -> LEFT/RIGHT OUTER -> INNER if NULLs are filtered anyway
+	RunOptimizer(OptimizerType::OUTER_JOIN_SIMPLIFICATION, [&]() {
+		OuterJoinSimplification outer_join_simplification;
+		outer_join_simplification.VisitOperator(*plan);
+	});
+
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
@@ -217,13 +261,13 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// removes unused columns
 	RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
-		RemoveUnusedColumns unused(binder, context, true);
-		unused.VisitOperator(*plan);
+		RemoveUnusedColumns unused(*this);
+		unused.VisitOperator(plan);
 	});
 
 	// Remove duplicate groups from aggregates
 	RunOptimizer(OptimizerType::DUPLICATE_GROUPS, [&]() {
-		RemoveDuplicateGroups remove;
+		RemoveDuplicateGroups remove(*this);
 		remove.VisitOperator(*plan);
 	});
 
@@ -247,10 +291,14 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// convert common subplans into materialized CTEs
-	RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
-		CommonSubplanOptimizer common_subplan_optimizer(*this);
-		plan = common_subplan_optimizer.Optimize(std::move(plan));
-	});
+	// Skip when the plan contains a DML CTE: table statistics are stale at plan
+	// time and could cause incorrect deduplication of scans across a DML boundary.
+	if (!CTEContainsDML(*plan)) {
+		RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
+			CommonSubplanOptimizer common_subplan_optimizer(*this);
+			plan = common_subplan_optimizer.Optimize(std::move(plan));
+		});
+	}
 
 	// pushes LIMIT below PROJECTION
 	RunOptimizer(OptimizerType::LIMIT_PUSHDOWN, [&]() {
@@ -282,12 +330,18 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// perform statistics propagation
+	// Skip when the plan contains a DML CTE: statistics are captured at plan time
+	// and do not reflect the table state after the DML executes.  Propagating them
+	// can cause filters or scans to be incorrectly eliminated (e.g. replaced with
+	// EMPTY_RESULT because an empty table has no statistics for a given predicate).
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
-	RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
-		StatisticsPropagator propagator(*this, *plan);
-		propagator.PropagateStatistics(plan);
-		statistics_map = propagator.GetStatisticsMap();
-	});
+	if (!CTEContainsDML(*plan)) {
+		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
+			StatisticsPropagator propagator(*this, *plan);
+			propagator.PropagateStatistics(plan);
+			statistics_map = propagator.GetStatisticsMap();
+		});
+	}
 
 	// rewrite row_number window function + filter on row_number to aggregate
 	RunOptimizer(OptimizerType::TOP_N_WINDOW_ELIMINATION, [&]() {
@@ -313,10 +367,22 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = expression_heuristics.Rewrite(std::move(plan));
 	});
 
+	// split pipelines into partitions and union them back together
+	RunOptimizer(OptimizerType::PARTITIONED_EXECUTION, [&]() {
+		PartitionedExecution partitioned_execution(*this, plan);
+		partitioned_execution.Optimize(plan);
+	});
+
 	// perform join filter pushdown after the dust has settled
 	RunOptimizer(OptimizerType::JOIN_FILTER_PUSHDOWN, [&]() {
 		JoinFilterPushdownOptimizer join_filter_pushdown(*this);
 		join_filter_pushdown.VisitOperator(*plan);
+	});
+
+	// Rewrite ROW_NUMBER() OVER() window functions to use the row_number virtual column
+	RunOptimizer(OptimizerType::ROW_NUMBER_REWRITER, [&]() {
+		RowNumberRewriter window_rewriter;
+		plan = window_rewriter.Optimize(std::move(plan));
 	});
 }
 
@@ -325,7 +391,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	this->plan = std::move(plan_p);
 
-	for (auto &pre_optimizer_extension : DBConfig::GetConfig(context).optimizer_extensions) {
+	for (auto &pre_optimizer_extension : OptimizerExtension::Iterate(context)) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
 			OptimizerExtensionInput input {GetContext(), *this, pre_optimizer_extension.optimizer_info.get()};
 			if (pre_optimizer_extension.pre_optimize_function) {
@@ -336,7 +402,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	RunBuiltInOptimizers();
 
-	for (auto &optimizer_extension : DBConfig::GetConfig(context).optimizer_extensions) {
+	for (auto &optimizer_extension : OptimizerExtension::Iterate(context)) {
 		RunOptimizer(OptimizerType::EXTENSION, [&]() {
 			OptimizerExtensionInput input {GetContext(), *this, optimizer_extension.optimizer_info.get()};
 			if (optimizer_extension.optimize_function) {
@@ -361,6 +427,15 @@ unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(c1));
 	children.push_back(std::move(c2));
+	return BindScalarFunction(name, std::move(children));
+}
+
+unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1,
+                                                     unique_ptr<Expression> c2, unique_ptr<Expression> c3) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(c1));
+	children.push_back(std::move(c2));
+	children.push_back(std::move(c3));
 	return BindScalarFunction(name, std::move(children));
 }
 

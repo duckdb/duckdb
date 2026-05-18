@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -17,11 +18,7 @@
 
 namespace duckdb {
 
-struct LambdaFunctionData : public FunctionData {
-	DUCKDB_API virtual const unique_ptr<Expression> &GetLambdaExpression() const = 0;
-};
-
-struct ListLambdaBindData final : public LambdaFunctionData {
+struct ListLambdaBindData final : public FunctionData {
 public:
 	ListLambdaBindData(const LogicalType &return_type, unique_ptr<Expression> lambda_expr, const bool has_index = false,
 	                   const bool has_initial = false)
@@ -50,13 +47,9 @@ public:
 
 	//! Serializes a lambda function's bind data
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const ScalarFunction &function);
+	                      const BoundScalarFunction &function);
 	//! Deserializes a lambda function's bind data
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &);
-
-	const unique_ptr<Expression> &GetLambdaExpression() const override {
-		return lambda_expr;
-	}
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &);
 };
 
 class LambdaFunctions {
@@ -69,10 +62,10 @@ public:
 
 	//! Checks for NULL list parameter and prepared statements and adds bound cast expression
 	static unique_ptr<FunctionData> ListLambdaPrepareBind(vector<unique_ptr<Expression>> &arguments,
-	                                                      ClientContext &context, ScalarFunction &bound_function);
+	                                                      ClientContext &context, BoundScalarFunction &bound_function);
 
 	//! Returns the ListLambdaBindData containing the lambda expression
-	static unique_ptr<FunctionData> ListLambdaBind(ClientContext &, ScalarFunction &bound_function,
+	static unique_ptr<FunctionData> ListLambdaBind(ClientContext &, BoundScalarFunction &bound_function,
 	                                               vector<unique_ptr<Expression>> &arguments,
 	                                               const bool has_index = false);
 
@@ -105,11 +98,10 @@ public:
 			Vector &list_column = args.data[0];
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			result_validity = &FlatVector::Validity(result);
+			result_validity = &FlatVector::ValidityMutable(result);
 
 			if (list_column.GetType().id() == LogicalTypeId::SQLNULL) {
-				result.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result, count_t(row_count));
 				result_is_null = true;
 				return;
 			}
@@ -123,9 +115,9 @@ public:
 			has_initial = bind_info.has_initial;
 
 			// get the list column entries
-			list_column.ToUnifiedFormat(row_count, list_column_format);
+			list_column.ToUnifiedFormat(list_column_format);
 			list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_column_format);
-			child_vector = &ListVector::GetEntry(list_column);
+			child_vector = &ListVector::GetChildMutable(list_column);
 
 			// get the lambda column data for all other input vectors
 			column_infos = LambdaFunctions::GetColumnInfo(args, row_count);

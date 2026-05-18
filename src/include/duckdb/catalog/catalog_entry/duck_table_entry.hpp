@@ -9,19 +9,24 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 
 namespace duckdb {
 
+class CommitDropState;
+
 struct AddConstraintInfo;
+struct CreateTriggerInfo;
 
 //! A table catalog entry
 class DuckTableEntry : public TableCatalogEntry {
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
 	DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
-	               shared_ptr<DataTable> inherited_storage = nullptr);
+	               shared_ptr<DataTable> inherited_storage = nullptr,
+	               shared_ptr<CatalogSet> inherited_triggers = nullptr);
 
 public:
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
@@ -43,8 +48,8 @@ public:
 
 	void SetAsRoot() override;
 
-	void CommitAlter(string &column_name);
-	void CommitDrop();
+	void CommitAlter(string &column_name, CommitDropState &drop_state);
+	void CommitDrop(CommitDropState &drop_state);
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
@@ -55,6 +60,17 @@ public:
 	bool IsDuckTable() const override {
 		return true;
 	}
+
+	//! Returns the virtual columns for this table
+	virtual_column_map_t GetVirtualColumns() const override;
+
+	optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) override;
+	void ScanTriggers(CatalogTransaction transaction,
+	                  const std::function<void(CatalogEntry &)> &callback) const override;
+	//! Scan all triggers without a transaction (used by checkpoint writer)
+	void ScanTriggersNonTransactional(const std::function<void(CatalogEntry &)> &callback);
+	//! Drop a trigger by name
+	bool DropTrigger(CatalogTransaction transaction, const string &name, bool cascade);
 
 private:
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
@@ -79,6 +95,8 @@ private:
 private:
 	//! A reference to the underlying storage unit used for this table
 	shared_ptr<DataTable> storage;
+	//! The catalog set holding triggers for this table
+	shared_ptr<CatalogSet> triggers;
 	//! Manages dependencies of the individual columns of the table
 	ColumnDependencyManager column_dependency_manager;
 };

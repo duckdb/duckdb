@@ -23,8 +23,7 @@ public:
 	shared_ptr<ColumnData> base_column;
 
 	//! Shredding state of the column
-	GeometryType geom_type = GeometryType::INVALID;
-	VertexType vert_type = VertexType::XY;
+	GeometryStorageType storage_type = GeometryStorageType::WKB;
 
 public:
 	idx_t GetMaxEntry() override;
@@ -43,14 +42,15 @@ public:
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
-	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
+	void Append(ColumnAppendState &state, Vector &vector, idx_t count) override;
+	void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) override;
 	void RevertAppend(row_t new_count) override;
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index, row_t row_id,
 	              Vector &result, idx_t result_idx) override;
-	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
+	void Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index, Vector &update_vector,
 	            row_t *row_ids, idx_t update_count, idx_t row_group_start) override;
-	void UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
+	void UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, const vector<column_t> &column_path,
 	                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth,
 	                  idx_t row_group_start) override;
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
@@ -73,9 +73,8 @@ public:
 	void VisitBlockIds(BlockIdVisitor &visitor) const override;
 
 private:
-	static void Specialize(Vector &source, Vector &target, idx_t count, GeometryType geom_type, VertexType vert_type);
-	static void Reassemble(Vector &source, Vector &target, idx_t count, GeometryType geom_type, VertexType vert_type,
-	                       idx_t offset);
+	static void Specialize(Vector &source, Vector &target, idx_t count, GeometryStorageType storage_type);
+	static void Reassemble(Vector &source, Vector &target, idx_t count, GeometryStorageType storage_type, idx_t offset);
 	static void InterpretStats(BaseStatistics &source, BaseStatistics &target, GeometryType geom_type,
 	                           VertexType vert_type);
 };

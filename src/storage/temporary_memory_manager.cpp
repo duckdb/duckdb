@@ -2,6 +2,7 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -20,19 +21,19 @@ TemporaryMemoryState::~TemporaryMemoryState() {
 }
 
 void TemporaryMemoryState::SetRemainingSize(idx_t new_remaining_size) {
-	auto guard = temporary_memory_manager.Lock();
+	const annotated_lock_guard<annotated_mutex> guard(temporary_memory_manager.lock);
 	temporary_memory_manager.SetRemainingSize(*this, new_remaining_size);
 }
 
 void TemporaryMemoryState::SetRemainingSizeAndUpdateReservation(ClientContext &context, idx_t new_remaining_size) {
 	D_ASSERT(new_remaining_size != 0); // Use SetZero instead
-	auto guard = temporary_memory_manager.Lock();
+	const annotated_lock_guard<annotated_mutex> guard(temporary_memory_manager.lock);
 	temporary_memory_manager.SetRemainingSize(*this, new_remaining_size);
 	temporary_memory_manager.UpdateState(context, *this);
 }
 
 void TemporaryMemoryState::SetZero() {
-	auto guard = temporary_memory_manager.Lock();
+	const annotated_lock_guard<annotated_mutex> guard(temporary_memory_manager.lock);
 	temporary_memory_manager.SetRemainingSize(*this, 0);
 	temporary_memory_manager.SetReservation(*this, 0);
 }
@@ -50,7 +51,7 @@ idx_t TemporaryMemoryState::GetMinimumReservation() const {
 }
 
 void TemporaryMemoryState::UpdateReservation(ClientContext &context) {
-	auto guard = temporary_memory_manager.Lock();
+	const annotated_lock_guard<annotated_mutex> guard(temporary_memory_manager.lock);
 	temporary_memory_manager.UpdateState(context, *this);
 }
 
@@ -59,7 +60,7 @@ idx_t TemporaryMemoryState::GetReservation() const {
 }
 
 void TemporaryMemoryState::SetMaterializationPenalty(idx_t new_materialization_penalty) {
-	auto guard = temporary_memory_manager.Lock();
+	const annotated_lock_guard<annotated_mutex> guard(temporary_memory_manager.lock);
 	materialization_penalty = new_materialization_penalty;
 }
 
@@ -70,17 +71,13 @@ idx_t TemporaryMemoryState::GetMaterializationPenalty() const {
 TemporaryMemoryManager::TemporaryMemoryManager() : reservation(0), remaining_size(0) {
 }
 
-unique_lock<mutex> TemporaryMemoryManager::Lock() {
-	return unique_lock<mutex>(lock);
-}
-
 idx_t TemporaryMemoryManager::DefaultMinimumReservation() const {
 	return MinValue(num_threads * MINIMUM_RESERVATION_PER_STATE_PER_THREAD,
 	                memory_limit / MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR);
 }
 
 void TemporaryMemoryManager::Unregister(TemporaryMemoryState &temporary_memory_state) {
-	auto guard = Lock();
+	const annotated_lock_guard<annotated_mutex> guard(lock);
 
 	SetReservation(temporary_memory_state, 0);
 	SetRemainingSize(temporary_memory_state, 0);
@@ -98,7 +95,7 @@ void TemporaryMemoryManager::UpdateConfiguration(ClientContext &context) {
 	has_temporary_directory = buffer_manager.HasTemporaryDirectory();
 	num_threads = NumericCast<idx_t>(task_scheduler.NumberOfThreads());
 	num_connections = ConnectionManager::Get(context).GetConnectionCount();
-	query_max_memory = buffer_manager.GetQueryMaxMemory();
+	query_max_memory = buffer_manager.GetOperatorMemoryLimit();
 }
 
 TemporaryMemoryManager &TemporaryMemoryManager::Get(ClientContext &context) {
@@ -106,7 +103,7 @@ TemporaryMemoryManager &TemporaryMemoryManager::Get(ClientContext &context) {
 }
 
 unique_ptr<TemporaryMemoryState> TemporaryMemoryManager::Register(ClientContext &context) {
-	auto guard = Lock();
+	const annotated_lock_guard<annotated_mutex> guard(lock);
 	UpdateConfiguration(context);
 
 	auto result = unique_ptr<TemporaryMemoryState>(new TemporaryMemoryState(*this, DefaultMinimumReservation()));
@@ -128,7 +125,7 @@ void TemporaryMemoryManager::UpdateState(ClientContext &context, TemporaryMemory
 	if (temporary_memory_state.GetRemainingSize() == 0) {
 		// Sometimes set to 0 to denote end of state (before actually deleting the state)
 		SetReservation(temporary_memory_state, 0);
-	} else if (context.config.force_external) {
+	} else if (Settings::Get<DebugForceExternalSetting>(context)) {
 		// We're forcing external processing. Give it the minimum
 		SetReservation(temporary_memory_state, lower_bound);
 	} else if (!has_temporary_directory) {

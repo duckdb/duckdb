@@ -20,6 +20,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/path.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 
@@ -38,6 +39,7 @@ class FileSystem;
 class Logger;
 class ClientContext;
 class QueryContext;
+class MultiFileList;
 
 enum class FileType {
 	//! Regular file
@@ -62,6 +64,8 @@ struct FileMetadata {
 	int64_t file_size = -1;
 	timestamp_t last_modification_time = timestamp_t::ninfinity();
 	FileType file_type = FileType::FILE_TYPE_INVALID;
+	optional_idx device_id;
+	optional_idx file_id;
 
 	// A key-value pair of the extended file metadata, which could store any attributes.
 	unordered_map<string, Value> extended_file_info;
@@ -204,7 +208,7 @@ public:
 	DUCKDB_API virtual bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remove a file from disk
 	DUCKDB_API virtual void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
-	//! Remvoe a file from disk if it exists - if it does not exist, return false
+	//! Remove a file from disk if it exists - if it does not exist, return false
 	DUCKDB_API virtual bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remove multiple files from disk - does not error if any file does not exist
 	DUCKDB_API virtual void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener = nullptr);
@@ -228,13 +232,15 @@ public:
 	DUCKDB_API static optional_idx GetAvailableDiskSpace(const string &path);
 	//! Path separator for path
 	DUCKDB_API virtual string PathSeparator(const string &path);
-	//! Checks if path is starts with separator (i.e., '/' on UNIX '\\' on Windows)
-	DUCKDB_API bool IsPathAbsolute(const string &path);
-	//! Normalize an absolute path - the goal of normalizing is converting "\test.db" and "C:/test.db" into "C:\test.db"
-	//! so that the database system cache can correctly
-	DUCKDB_API string NormalizeAbsolutePath(const string &path);
+	//! Checks if path is is an absolute path
+	DUCKDB_API virtual bool IsPathAbsolute(const string &path);
 	//! Join two paths together
 	DUCKDB_API string JoinPath(const string &a, const string &path);
+	// Join N paths together
+	template <typename... ARGS>
+	string JoinPath(const string &a, const string &b, ARGS... args) {
+		return JoinPath(JoinPath(a, b), args...);
+	}
 	//! Convert separators in a path to the local separators (e.g. convert "/" into \\ on windows)
 	DUCKDB_API string ConvertSeparators(const string &path);
 	//! Extract the base name of a file (e.g. if the input is lib/example.dll the base name is 'example')
@@ -251,14 +257,21 @@ public:
 	DUCKDB_API static bool HasGlob(const string &str);
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr);
-	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &path, ClientContext &context,
+	DUCKDB_API unique_ptr<MultiFileList> Glob(const string &path, const FileGlobInput &input,
+	                                          optional_ptr<FileOpener> opener);
+	DUCKDB_API unique_ptr<MultiFileList> GlobFileList(const string &path,
+	                                                  const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
+	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &pattern,
 	                                          const FileGlobInput &input = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
 	DUCKDB_API virtual void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs);
 
-	// !Extract a sub-filesystem by name, with ownership transfered, return nullptr if not registered or the subsystem
+	//! Unregister a sub-filesystem by name
+	DUCKDB_API virtual void UnregisterSubSystem(const string &name);
+
+	// !Extract a sub-filesystem by name, with ownership transferred, return nullptr if not registered or the subsystem
 	// has been disabled.
 	DUCKDB_API virtual unique_ptr<FileSystem> ExtractSubSystem(const string &name);
 
@@ -288,7 +301,7 @@ public:
 	//! Create a LocalFileSystem.
 	DUCKDB_API static unique_ptr<FileSystem> CreateLocal();
 
-	//! Return the name of the filesytem. Used for forming diagnosis messages.
+	//! Return the name of the filesystem. Used for forming diagnosis messages.
 	DUCKDB_API virtual std::string GetName() const = 0;
 
 	//! Whether or not a file is remote or local, based only on file path
@@ -302,6 +315,9 @@ public:
 
 	DUCKDB_API static bool IsDirectory(const OpenFileInfo &info);
 
+	//! Canonicalize a path
+	DUCKDB_API virtual string CanonicalizePath(const string &path, optional_ptr<FileOpener> opener = nullptr);
+
 protected:
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
 	                                                           optional_ptr<FileOpener> opener);
@@ -311,6 +327,10 @@ protected:
 	                                          const std::function<void(OpenFileInfo &info)> &callback,
 	                                          optional_ptr<FileOpener> opener);
 	DUCKDB_API virtual bool SupportsListFilesExtended() const;
+
+	DUCKDB_API virtual unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
+	                                                               optional_ptr<FileOpener> opener = nullptr);
+	DUCKDB_API virtual bool SupportsGlobExtended() const;
 
 public:
 	template <class TARGET>

@@ -1,7 +1,7 @@
 # name: test/sql/types/geo/geometry_shred_empty.test
 # group: [geo]
 
-load __TEST_DIR__/test_shred_empty_types.db
+load {TEST_DIR}/test_shred_points_attach.db readwrite v1.5.0
 
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
@@ -52,7 +52,7 @@ foreach has_z FALSE TRUE
 foreach has_m FALSE TRUE
 
 statement ok
-create table t2 as select g from t1 where type='${type}' and has_z=${has_z} and has_m=${has_m};
+create table t2 as select g from t1 where type='{type}' and has_z={has_z} and has_m={has_m};
 
 query I rowsort segment_result
 select segment_type from pragma_storage_info('t2') order by all;

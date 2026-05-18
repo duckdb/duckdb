@@ -1,17 +1,11 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/uhugeint.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/owning_string_map.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/function/aggregate/sort_key_helpers.hpp"
-#include "duckdb/common/algorithm.hpp"
-#include <functional>
 
 // MODE( <expr1> )
 // Returns the most frequent value for the values within expr1.
@@ -44,6 +38,18 @@ struct ModeStandard {
 	static RESULT_TYPE Assign(Vector &result, INPUT_TYPE input) {
 		return RESULT_TYPE(input);
 	}
+
+	static void Destroy(T *mode) {
+	}
+
+	static T *Update(T *mode, const T &key) {
+		if (!mode) {
+			mode = new T(key);
+		}
+		*mode = key;
+
+		return mode;
+	}
 };
 
 struct ModeString {
@@ -59,6 +65,42 @@ struct ModeString {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Assign(Vector &result, INPUT_TYPE input) {
 		return StringVector::AddStringOrBlob(result, input);
+	}
+
+	static void Destroy(string_t *mode) {
+		if (mode && !mode->IsInlined()) {
+			delete[] mode->GetData();
+			mode->SetPointer(nullptr);
+		}
+	}
+
+	static string_t *Update(string_t *mode, const string_t &key) {
+		if (key.IsInlined()) {
+			Destroy(mode);
+			if (!mode) {
+				mode = new string_t(nullptr, 0);
+			}
+			*mode = key;
+			return mode;
+		}
+
+		// non-inlined string, need to allocate space for it somehow
+		const auto len = key.GetSize();
+		char *ptr;
+		if (!mode || mode->GetSize() < len) {
+			// we cannot fit this into the current slot - destroy it and re-allocate
+			Destroy(mode);
+			if (!mode) {
+				mode = new string_t(nullptr, 0);
+			}
+			ptr = new char[len];
+		} else {
+			// this fits into the current slot - take over the pointer
+			ptr = mode->GetDataWriteable();
+		}
+		memcpy(ptr, key.GetData(), len);
+		*mode = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
+		return mode;
 	}
 };
 
@@ -92,6 +134,7 @@ struct ModeState {
 			delete frequency_map;
 		}
 		if (mode) {
+			TYPE_OP::Destroy(mode);
 			delete mode;
 		}
 		if (scan) {
@@ -126,7 +169,7 @@ struct ModeState {
 			D_ASSERT(inputs);
 			inputs->Seek(row_idx, *scan, page);
 			data = FlatVector::GetData<KEY_TYPE>(page.data[0]);
-			validity = &FlatVector::Validity(page.data[0]);
+			validity = &FlatVector::ValidityMutable(page.data[0]);
 		}
 		return RowOffset(row_idx);
 	}
@@ -163,11 +206,7 @@ struct ModeState {
 		if (new_count > count) {
 			valid = true;
 			count = new_count;
-			if (mode) {
-				*mode = key;
-			} else {
-				mode = new KEY_TYPE(key);
-			}
+			Update(key);
 		}
 	}
 
@@ -181,6 +220,10 @@ struct ModeState {
 		if (count == old_count && key == *mode) {
 			valid = false;
 		}
+	}
+
+	void Update(const KEY_TYPE &key) {
+		mode = TYPE_OP::Update(mode, key);
 	}
 
 	typename Counts::const_iterator Scan() const {
@@ -322,15 +365,15 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
-	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &frames, Vector &result,
-	                   idx_t rid) {
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames *subframes_per_row, idx_t count,
+	                   Vector &result, idx_t row_idx) {
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 
 		state.InitializePage(partition);
 		const auto &fmask = partition.filter_mask;
 
-		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
-		auto &rmask = FlatVector::Validity(result);
+		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
+		auto &rmask = FlatVector::ValidityMutable(result);
 		auto &prevs = state.prevs;
 		if (prevs.empty()) {
 			prevs.resize(1);
@@ -338,44 +381,49 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 
 		ModeIncluded<STATE> included(fmask, state);
 
+		using Updater = UpdateWindowState<STATE, INPUT_TYPE>;
+		Updater updater(state, included);
+
 		if (!state.frequency_map) {
 			state.frequency_map = TYPE_OP::CreateEmpty(Allocator::DefaultAllocator());
 		}
 		const size_t tau_inverse = 4; // tau==0.25
-		if (state.nonzero <= (state.frequency_map->size() / tau_inverse) || prevs.back().end <= frames.front().start ||
-		    frames.back().end <= prevs.front().start) {
-			state.Reset();
-			// for f ∈ F do
-			for (const auto &frame : frames) {
-				for (auto i = frame.start; i < frame.end; ++i) {
-					if (included(i)) {
-						state.ModeAdd(i);
+		for (idx_t rid = 0; rid < count; ++rid) {
+			const auto &frames = subframes_per_row[rid];
+
+			if (state.nonzero <= (state.frequency_map->size() / tau_inverse) ||
+			    prevs.back().end <= frames.front().start || frames.back().end <= prevs.front().start) {
+				state.Reset();
+				// for f ∈ F do
+				for (const auto &frame : frames) {
+					for (auto i = frame.start; i < frame.end; ++i) {
+						if (included(i)) {
+							state.ModeAdd(i);
+						}
 					}
 				}
+			} else {
+				AggregateExecutor::IntersectFrames(prevs, frames, updater);
 			}
-		} else {
-			using Updater = UpdateWindowState<STATE, INPUT_TYPE>;
-			Updater updater(state, included);
-			AggregateExecutor::IntersectFrames(prevs, frames, updater);
-		}
 
-		if (!state.valid) {
-			// Rescan
-			auto highest_frequency = state.Scan();
-			if (highest_frequency != state.frequency_map->end()) {
-				*(state.mode) = highest_frequency->first;
-				state.count = highest_frequency->second.count;
-				state.valid = (state.count > 0);
+			if (!state.valid) {
+				// Rescan
+				auto highest_frequency = state.Scan();
+				if (highest_frequency != state.frequency_map->end()) {
+					state.Update(highest_frequency->first);
+					state.count = highest_frequency->second.count;
+					state.valid = (state.count > 0);
+				}
 			}
-		}
 
-		if (state.valid) {
-			rdata[rid] = TYPE_OP::template Assign<INPUT_TYPE, RESULT_TYPE>(result, *state.mode);
-		} else {
-			rmask.Set(rid, false);
-		}
+			if (state.valid) {
+				rdata[rid] = TYPE_OP::template Assign<INPUT_TYPE, RESULT_TYPE>(result, *state.mode);
+			} else {
+				rmask.Set(rid, false);
+			}
 
-		prevs = frames;
+			prevs = frames;
+		}
 	}
 };
 
@@ -404,7 +452,8 @@ AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 	AggregateFunction aggr({type}, type, AggregateFunction::StateSize<STATE>,
 	                       AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-	                       AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
+	                       AggregateFunction::StateVoidFinalize<STATE, OP>, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                       AggregateFunction::NoClusterUpdate());
 	aggr.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 	return aggr;
 }
@@ -416,7 +465,7 @@ AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	auto func =
 	    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP, AggregateDestructorType::LEGACY>(
 	        type, type);
-	func.SetWindowCallback(OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>);
+	func.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>);
 	return func;
 }
 
@@ -457,10 +506,11 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 	}
 }
 
-unique_ptr<FunctionData> BindModeAggregate(ClientContext &context, AggregateFunction &function,
-                                           vector<unique_ptr<Expression>> &arguments) {
-	function = GetModeAggregate(arguments[0]->return_type);
-	function.name = "mode";
+unique_ptr<FunctionData> BindModeAggregate(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	function.ReplaceImplementation(GetModeAggregate(arguments[0]->GetReturnType()));
+	function.SetName("mode");
 	return nullptr;
 }
 
@@ -469,7 +519,8 @@ unique_ptr<FunctionData> BindModeAggregate(ClientContext &context, AggregateFunc
 AggregateFunctionSet ModeFun::GetFunctions() {
 	AggregateFunctionSet mode("mode");
 	mode.AddFunction(AggregateFunction({LogicalTypeId::ANY}, LogicalTypeId::ANY, nullptr, nullptr, nullptr, nullptr,
-	                                   nullptr, nullptr, BindModeAggregate));
+	                                   nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                                   AggregateFunction::NoClusterUpdate(), BindModeAggregate));
 	return mode;
 }
 
@@ -525,7 +576,8 @@ AggregateFunction GetFallbackEntropyFunction(const LogicalType &type) {
 	AggregateFunction func({type}, LogicalType::DOUBLE, AggregateFunction::StateSize<STATE>,
 	                       AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-	                       AggregateFunction::StateFinalize<STATE, double, OP>, nullptr);
+	                       AggregateFunction::StateFinalize<STATE, double, OP>,
+	                       FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate());
 	func.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return func;
@@ -558,10 +610,11 @@ AggregateFunction GetEntropyFunction(const LogicalType &type) {
 	}
 }
 
-unique_ptr<FunctionData> BindEntropyAggregate(ClientContext &context, AggregateFunction &function,
-                                              vector<unique_ptr<Expression>> &arguments) {
-	function = GetEntropyFunction(arguments[0]->return_type);
-	function.name = "entropy";
+unique_ptr<FunctionData> BindEntropyAggregate(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	function.ReplaceImplementation(GetEntropyFunction(arguments[0]->GetReturnType()));
+	function.SetName("entropy");
 	return nullptr;
 }
 
@@ -570,7 +623,8 @@ unique_ptr<FunctionData> BindEntropyAggregate(ClientContext &context, AggregateF
 AggregateFunctionSet EntropyFun::GetFunctions() {
 	AggregateFunctionSet entropy("entropy");
 	entropy.AddFunction(AggregateFunction({LogicalTypeId::ANY}, LogicalType::DOUBLE, nullptr, nullptr, nullptr, nullptr,
-	                                      nullptr, nullptr, BindEntropyAggregate));
+	                                      nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                                      AggregateFunction::NoClusterUpdate(), BindEntropyAggregate));
 	return entropy;
 }
 

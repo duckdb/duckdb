@@ -123,10 +123,11 @@ static void PadFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	auto &pad_vector = args.data[2];
 
 	vector<char> buffer;
+	auto &heap = StringVector::GetStringHeap(result);
 	TernaryExecutor::Execute<string_t, int32_t, string_t, string_t>(
 	    str_vector, len_vector, pad_vector, result, args.size(), [&](string_t str, int32_t len, string_t pad) {
 		    len = MaxValue<int32_t>(len, 0);
-		    return StringVector::AddString(result, OP::Operation(str, len, pad, buffer));
+		    return heap.AddString(OP::Operation(str, len, pad, buffer));
 	    });
 }
 

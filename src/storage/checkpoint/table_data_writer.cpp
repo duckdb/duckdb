@@ -9,15 +9,24 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
-#include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
 TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, QueryContext context)
     : table(table_p.Cast<DuckTableEntry>()), context(context.GetClientContext()) {
 	D_ASSERT(table_p.IsDuckTable());
+
+	auto serialization_version = SerializationCompatibility::FromDatabase(table_p.ParentCatalog().GetAttached());
+	if (serialization_version.serialization_version <
+	    SerializationCompatibility::FromString("v1.4.4").serialization_version) {
+		// older storage versions require legacy start row to be written
+		require_legacy_start_row = true;
+	}
 }
 
 TableDataWriter::~TableDataWriter() {
@@ -30,6 +39,10 @@ void TableDataWriter::WriteTableData(Serializer &metadata_serializer) {
 
 void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer) {
 	row_group_pointers.push_back(std::move(row_group_pointer));
+}
+
+AttachedDatabase &TableDataWriter::GetAttached() {
+	return table.ParentCatalog().GetAttached();
 }
 
 DatabaseInstance &TableDataWriter::GetDatabase() {
@@ -172,8 +185,8 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
 
 	if (debug_verify_blocks) {
-		for (auto &entry : index_storage_infos) {
-			for (auto &allocator : entry.allocator_infos) {
+		for (auto &entry : index_storage_infos.ordered_infos) {
+			for (auto &allocator : entry.get().allocator_infos) {
 				for (auto &block : allocator.block_pointers) {
 					checkpoint_manager.verify_block_usage_count[block.block_id]++;
 				}
@@ -184,7 +197,9 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;
 	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
-	serializer.WritePropertyWithDefault(104, "index_storage_infos", index_storage_infos);
+	serializer.WriteList(
+	    104, "index_storage_infos", index_storage_infos.ordered_infos.size(),
+	    [&](Serializer::List &list, idx_t i) { list.WriteElement(index_storage_infos.ordered_infos[i].get()); });
 }
 
 } // namespace duckdb

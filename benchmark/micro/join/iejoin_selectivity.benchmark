@@ -1,29 +1,32 @@
 # name: benchmark/micro/join/iejoin_selectivity.benchmark
-# description: Mixed predicate where range is faster
+# description: IEJoin Selectivity Testing
 # group: [join]
 
-name IEJoin Selectivity
-group join
+name IEJoinSelectivity
+group micro
+subgroup join
+
+argument n 10_000_000
+argument ksel 1000
+argument rsel 1
+argument iejoin True
 
 load
-SELECT SETSEED(0.8675309);
-PRAGMA prefer_range_joins=False;
-CREATE TABLE df AS
-    SELECT 
-        (random() * 1000)::INTEGER + 1 as id,
-        (random() * 10)::INTEGER + 1 as id2,
-        (random() * 500)::INTEGER + 1 as id3,
-        random() as value,
-    FROM range(5000000);
+create or replace table states as
+	select 
+		i // ${ksel} as k,
+		'2024-01-01'::TIMESTAMP + INTERVAL (i // ${rsel}) seconds as b,
+		b + INTERVAL ${rsel} second as e,
+	from range(${n}) as tbl(i);
+set prefer_range_joins=${iejoin};
 
 run
-SELECT id2, id3, id3_right, corr(value, value_right) as value
-FROM (
-	SELECT df.*, df2.id3 as id3_right, df2.value as value_right
-	FROM df JOIN df as df2
-		ON (df.id = df2.id
-		AND df.id2 = df2.id2
-		AND df.id3 > df2.id3
-		AND df.id3 < df2.id3 + 30)
-	) tbl
-GROUP BY ALL
+with joined as (
+	select lhs.k l, rhs.k r
+	from states lhs 
+	inner join states rhs
+	   on lhs.b < rhs.e
+	  and rhs.b < lhs.e
+	  and lhs.k = rhs.k
+)
+select count(*) from joined;

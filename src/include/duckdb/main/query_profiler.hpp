@@ -52,12 +52,22 @@ struct OperatorInformation {
 	idx_t rows_scanned = 0;
 
 	InsertionOrderPreservingMap<string> extra_info;
+	bool extra_info_dirty = false;
+
+	void ResetMetrics() {
+		time = 0;
+		elements_returned = 0;
+		result_set_size = 0;
+		system_peak_buffer_manager_memory = 0;
+		system_peak_temp_directory_size = 0;
+		rows_scanned = 0;
+	}
 
 	template <typename T>
 	void AddMetric(MetricType type, T metric) {
 		switch (type) {
 		case MetricType::OPERATOR_TIMING:
-			time += metric;
+			time += static_cast<double>(metric);
 			break;
 		case MetricType::OPERATOR_CARDINALITY:
 			elements_returned += LossyNumericCast<idx_t>(metric);
@@ -66,13 +76,13 @@ struct OperatorInformation {
 			result_set_size += LossyNumericCast<idx_t>(metric);
 			break;
 		case MetricType::SYSTEM_PEAK_BUFFER_MEMORY: {
-			if (metric > system_peak_buffer_manager_memory) {
-				system_peak_buffer_manager_memory += LossyNumericCast<idx_t>(metric);
+			if (metric > static_cast<T>(system_peak_buffer_manager_memory)) {
+				system_peak_buffer_manager_memory = LossyNumericCast<idx_t>(metric);
 			}
 			break;
 		}
 		case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE: {
-			if (metric > system_peak_temp_directory_size) {
+			if (metric > static_cast<T>(system_peak_temp_directory_size)) {
 				system_peak_temp_directory_size = LossyNumericCast<idx_t>(metric);
 			}
 			break;
@@ -144,6 +154,8 @@ public:
 	DUCKDB_API void Reset();
 	DUCKDB_API void StartQuery(const string &query, bool is_explain_analyze = false, bool start_at_optimizer = false);
 	DUCKDB_API void EndQuery();
+	//! Finalize query metrics for output; safe to call multiple times.
+	DUCKDB_API void FinalizeMetrics();
 
 	//! Adds amount to a specific metric type.
 	DUCKDB_API void AddToCounter(MetricType type, const idx_t amount);
@@ -227,6 +239,8 @@ private:
 	TreeMap tree_map;
 	//! Whether or not we are running as part of a explain_analyze query
 	bool is_explain_analyze;
+	//! Whether root metrics have been finalized for output
+	bool metrics_finalized;
 
 public:
 	const TreeMap &GetTreeMap() const {
@@ -245,6 +259,7 @@ private:
 
 private:
 	void MoveOptimizerPhasesToRoot();
+	void FinalizeMetricsInternal();
 
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.

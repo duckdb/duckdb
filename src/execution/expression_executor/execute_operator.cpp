@@ -25,20 +25,19 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			throw InvalidInputException("IN needs at least two children");
 		}
 
-		Vector left(expr.children[0]->return_type);
+		Vector left(expr.children[0]->GetReturnType());
 		// eval left side
 		Execute(*expr.children[0], state->child_states[0].get(), sel, count, left);
 
 		// init result to false
 		Vector intermediate(LogicalType::BOOLEAN);
-		Value false_val = Value::BOOLEAN(false);
-		intermediate.Reference(false_val);
+		intermediate.Reference(Value::BOOLEAN(false), count_t(count));
 
 		// in rhs is a list of constants
 		// for every child, OR the result of the comparison with the left
 		// to get the overall result.
 		for (idx_t child = 1; child < expr.children.size(); child++) {
-			Vector vector_to_check(expr.children[child]->return_type);
+			Vector vector_to_check(expr.children[child]->GetReturnType());
 			Vector comp_res(LogicalType::BOOLEAN);
 
 			Execute(*expr.children[child], state->child_states[child].get(), sel, count, vector_to_check);
@@ -49,7 +48,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 				intermediate.Reference(comp_res);
 			} else {
 				// otherwise OR together
-				Vector new_result(LogicalType::BOOLEAN, true, false);
+				Vector new_result(LogicalType::BOOLEAN);
 				VectorOperations::Or(intermediate, comp_res, new_result, count);
 				intermediate.Reference(new_result);
 			}
@@ -71,19 +70,16 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		idx_t remaining_count = count;
 		idx_t next_count;
 		for (idx_t child = 0; child < expr.children.size(); child++) {
-			Vector vector_to_check(expr.children[child]->return_type);
+			Vector vector_to_check(expr.children[child]->GetReturnType());
 			Execute(*expr.children[child], state->child_states[child].get(), current_sel, remaining_count,
 			        vector_to_check);
 
-			UnifiedVectorFormat vdata;
-			vector_to_check.ToUnifiedFormat(remaining_count, vdata);
-
+			auto entries = vector_to_check.Validity();
 			idx_t result_count = 0;
 			next_count = 0;
 			for (idx_t i = 0; i < remaining_count; i++) {
 				auto base_idx = current_sel ? current_sel->get_index(i) : i;
-				auto idx = vdata.sel->get_index(i);
-				if (vdata.validity.RowIsValid(idx)) {
+				if (entries.IsValid(i)) {
 					slice_sel.set_index(result_count, i);
 					result_sel.set_index(result_count++, base_idx);
 				} else {
@@ -120,11 +116,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 				result.Reference(try_result);
 				return;
 			}
-			if (sel) {
-				VectorOperations::Copy(try_result, result, *sel, count, 0, 0, count);
-			} else {
-				VectorOperations::Copy(try_result, result, count, 0, 0);
-			}
+			VectorOperations::Copy(try_result, result, count, 0, 0);
 			return;
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
@@ -133,12 +125,19 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 				throw;
 			}
 		}
+
+		// On error, evaluate per row
 		SelectionVector selvec(1);
 		DataChunk intermediate;
 		intermediate.Initialize(GetAllocator(), {result.GetType()}, 1);
 		for (idx_t i = 0; i < count; i++) {
 			intermediate.Reset();
 			intermediate.SetCardinality(1);
+
+			// Make sure to clear any dictionary states in the child expression, so that it actually
+			// gets executed anew for every row
+			child_state.ResetDictionaryStates();
+
 			selvec.set_index(0, sel ? sel->get_index(i) : i);
 			Value val(result.GetType());
 			try {

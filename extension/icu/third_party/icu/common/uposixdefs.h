@@ -48,7 +48,7 @@
 #endif
 
 /*
- * Make sure things like readlink and such functions work.
+ * Make sure things like realpath and such functions work.
  * Poorly upgraded Solaris machines can't have this defined.
  * Cleanly installed Solaris can use this #define.
  *
@@ -66,6 +66,17 @@
  */
 #if defined(__cplusplus) && (defined(sun) || defined(__sun)) && !defined (_STDC_C99)
 #   define _STDC_C99
+#endif
+
+#if !defined _POSIX_C_SOURCE && \
+    defined(__APPLE__) && defined(__MACH__) && !defined(__clang__)
+// Needed to prevent EOWNERDEAD issues with GCC on Mac
+#define _POSIX_C_SOURCE 200809L
+#endif
+
+/* Prevent _XOPEN_SOURCE from breaking build on macOS when aligned_alloc exists. */
+#if defined(__APPLE__) && !defined(_DARWIN_C_SOURCE)
+#   define _DARWIN_C_SOURCE
 #endif
 
 #endif  /* __UPOSIXDEFS_H__ */

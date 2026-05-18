@@ -48,7 +48,7 @@ class U_I18N_API CurrencyUnit: public MeasureUnit {
      * Construct an object with the given ISO currency code.
      *
      * @param isoCode the 3-letter ISO 4217 currency code; must have
-     * length 3 and need not be NUL-terminated. If NULL, the currency
+     * length 3 and need not be NUL-terminated. If nullptr, the currency
      * is initialized to the unknown currency XXX.
      * @param ec input-output error code. If the isoCode is invalid,
      * then this will be set to a failing value.
@@ -56,7 +56,6 @@ class U_I18N_API CurrencyUnit: public MeasureUnit {
      */
     CurrencyUnit(ConstChar16Ptr isoCode, UErrorCode &ec);
 
-#ifndef U_HIDE_DRAFT_API
     /**
      * Construct an object with the given ISO currency code.
      *
@@ -64,10 +63,9 @@ class U_I18N_API CurrencyUnit: public MeasureUnit {
      * length 3. If invalid, the currency is initialized to XXX.
      * @param ec input-output error code. If the isoCode is invalid,
      * then this will be set to a failing value.
-     * @draft ICU 64
+     * @stable ICU 64
      */
     CurrencyUnit(StringPiece isoCode, UErrorCode &ec);
-#endif  /* U_HIDE_DRAFT_API */
 
     /**
      * Copy constructor
@@ -96,7 +94,7 @@ class U_I18N_API CurrencyUnit: public MeasureUnit {
      * have the same class as returned by getDynamicClassID().
      * @stable ICU 3.0
      */
-    virtual CurrencyUnit* clone() const;
+    virtual CurrencyUnit* clone() const override;
 
     /**
      * Destructor
@@ -112,7 +110,7 @@ class U_I18N_API CurrencyUnit: public MeasureUnit {
      * different class IDs.
      * @stable ICU 3.0
      */
-    virtual UClassID getDynamicClassID() const;
+    virtual UClassID getDynamicClassID() const override;
 
     /**
      * Returns the class ID for this class. This is used to compare to

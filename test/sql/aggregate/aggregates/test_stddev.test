@@ -136,17 +136,47 @@ select stddev(0) from range(10)
 ----
 0
 
-statement error
+# extreme values produce inf variance/stddev (IEEE-754 compliant)
+query R
 select stddev(a) from (values (1e301), (-1e301)) tbl(a)
 ----
-Out of Range Error: STDDEV_SAMP is out of range
+inf
 
-statement error
+query R
 select var_samp(a) from (values (1e301), (-1e301)) tbl(a)
 ----
-Out of Range Error: VARSAMP is out of range
+inf
 
-statement error
+query R
 select var_pop(a) from (values (1e301), (-1e301)) tbl(a)
 ----
-Out of Range Error: VARPOP is out of range
+inf
+
+# infinity values produce nan variance/stddev (IEEE-754 compliant)
+query R
+select stddev(a) from (values (1.0/0.0), (2.0)) tbl(a)
+----
+nan
+
+query R
+select var_samp(a) from (values (1.0/0.0), (2.0)) tbl(a)
+----
+nan
+
+query R
+select var_pop(a) from (values (1.0/0.0), (2.0)) tbl(a)
+----
+nan
+
+query R
+select stddev(a) from (values (-1.0/0.0), (2.0)) tbl(a)
+----
+nan
+
+# summarize should not throw on infinity values
+statement ok
+CREATE TABLE inf_test AS SELECT 1.0/0.0 AS inf_col, 2.0 AS normal_col UNION ALL SELECT 2.0, 3.0;
+
+statement ok
+SUMMARIZE inf_test;
+

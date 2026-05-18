@@ -2,9 +2,6 @@
 # description: Issue 567
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # REVERSE() on special character results in 'Assertion `strcmp(dataptr, normalized) == 0' failed.'
 query T
 SELECT REVERSE('S̈a︍');

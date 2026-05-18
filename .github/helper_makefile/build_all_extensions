@@ -13,4 +13,4 @@ configure_ci:
 	cd duckdb && BUILD_ALL_EXT=1 make extension_configuration && cp build/extension_configuration/vcpkg.json ../.
 
 test_release:
-	python3 duckdb/scripts/run_tests_one_by_one.py ./build/release/test/unittest
+	python3 duckdb/scripts/ci/run_tests.py ./build/release/test/unittest

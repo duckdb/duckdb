@@ -39,7 +39,7 @@ public:
 
 	DUCKDB_API bool RegisterLogStorage(const string &name, shared_ptr<LogStorage> &storage);
 
-	//! The global logger can be used whe
+	//! The global logger can be used when
 	DUCKDB_API Logger &GlobalLogger();
 	DUCKDB_API shared_ptr<Logger> GlobalLoggerReference();
 
@@ -85,12 +85,13 @@ protected:
 
 	void SetConfigInternal(LogConfig config);
 
+protected:
 	mutex lock;
 	LogConfig config;
 
 	shared_ptr<Logger> global_logger;
-
 	shared_ptr<LogStorage> log_storage;
+	DatabaseInstance &db_instance;
 
 	idx_t next_registered_logging_context_index = 0;
 

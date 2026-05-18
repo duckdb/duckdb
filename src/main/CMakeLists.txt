@@ -9,6 +9,11 @@ add_subdirectory(settings)
 add_subdirectory(buffered_data)
 add_subdirectory(chunk_scan_state)
 
+if(${EXIT_TIME_DESTRUCTORS_WARNING})
+  set(CMAKE_CXX_FLAGS_DEBUG
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
+endif()
+
 if(FORCE_QUERY_LOG)
   add_definitions(-DDUCKDB_FORCE_QUERY_LOG="\""${FORCE_QUERY_LOG}"\"")
 endif()
@@ -35,6 +40,7 @@ add_library_unity(
   db_instance_cache.cpp
   error_manager.cpp
   extension.cpp
+  extension_callback_manager.cpp
   extension_install_info.cpp
   extension_manager.cpp
   materialized_query_result.cpp

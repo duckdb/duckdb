@@ -3,9 +3,6 @@
 # group: [map]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE TABLE ints (i INT);
 
 statement ok

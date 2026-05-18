@@ -4,6 +4,8 @@
 // += *= /= -= %=
 //===--------------------------------------------------------------------===//
 
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <algorithm>
@@ -28,7 +30,7 @@ void VectorOperations::AddInPlace(Vector &input, int64_t right, idx_t count) {
 	}
 	default: {
 		D_ASSERT(input.GetVectorType() == VectorType::FLAT_VECTOR);
-		auto data = FlatVector::GetData<uintptr_t>(input);
+		auto data = FlatVector::GetDataMutable<uintptr_t>(input);
 		for (idx_t i = 0; i < count; i++) {
 			data[i] = UnsafeNumericCast<uintptr_t>(UnsafeNumericCast<int64_t>(data[i]) + right);
 		}

@@ -2,13 +2,13 @@
 
 #include "core_functions/aggregate/regression_functions.hpp"
 #include "core_functions/aggregate/regression/regr_slope.hpp"
-#include "duckdb/function/function_set.hpp"
+#include "core_functions/aggregate/algebraic_functions.hpp"
 
 namespace duckdb {
 
 namespace {
 struct RegrInterceptState {
-	size_t count;
+	uint64_t count;
 	double sum_x;
 	double sum_y;
 	RegrSlopeState slope;
@@ -60,11 +60,37 @@ struct RegrInterceptOperation {
 	}
 };
 
+LogicalType GetRegrInterceptStateType(const BoundAggregateFunction &) {
+	child_list_t<LogicalType> covpop_children;
+	covpop_children.emplace_back("count", LogicalType::UBIGINT);
+	covpop_children.emplace_back("meanx", LogicalType::DOUBLE);
+	covpop_children.emplace_back("meany", LogicalType::DOUBLE);
+	covpop_children.emplace_back("co_moment", LogicalType::DOUBLE);
+	auto covpop_type = LogicalType::STRUCT(std::move(covpop_children));
+
+	child_list_t<LogicalType> varpop_children;
+	varpop_children.emplace_back("count", LogicalType::UBIGINT);
+	varpop_children.emplace_back("mean", LogicalType::DOUBLE);
+	varpop_children.emplace_back("dsquared", LogicalType::DOUBLE);
+	auto varpop_type = LogicalType::STRUCT(std::move(varpop_children));
+
+	child_list_t<LogicalType> state_children;
+	state_children.emplace_back("count", LogicalType::UBIGINT);
+	state_children.emplace_back("sum_x", LogicalType::DOUBLE);
+	state_children.emplace_back("sum_y", LogicalType::DOUBLE);
+	child_list_t<LogicalType> slope_children;
+	slope_children.emplace_back("cov_pop", std::move(covpop_type));
+	slope_children.emplace_back("var_pop", std::move(varpop_type));
+	state_children.emplace_back("slope", LogicalType::STRUCT(std::move(slope_children)));
+	return LogicalType::STRUCT(std::move(state_children));
+}
+
 } // namespace
 
 AggregateFunction RegrInterceptFun::GetFunction() {
 	return AggregateFunction::BinaryAggregate<RegrInterceptState, double, double, double, RegrInterceptOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE);
+	           LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE)
+	    .SetStructStateExport(GetRegrInterceptStateType);
 }
 
 } // namespace duckdb

@@ -7,14 +7,11 @@ require notmusl
 statement ok
 SET default_null_order='nulls_first';
 
-statement ok
-PRAGMA enable_verification
-
 foreach storage_type VIEW TABLE
 
 # Key is LIST<INTEGER>
 statement ok
-CREATE ${storage_type} intlists AS SELECT * FROM (VALUES
+CREATE {storage_type} intlists AS SELECT * FROM (VALUES
 	(21, [1]),
 	(22, [NULL]),
 	(23, []),
@@ -46,7 +43,7 @@ SELECT k, LEAST(v, 21) as c, SUM(v) FROM intlists GROUP BY k, c ORDER BY 2, 3
 
 # Key is LIST<VARCHAR>
 statement ok
-CREATE ${storage_type} strlists AS SELECT * FROM (VALUES
+CREATE {storage_type} strlists AS SELECT * FROM (VALUES
 	(21, ['a']),
 	(22, [NULL]),
 	(23, []),
@@ -78,7 +75,7 @@ SELECT k, LEAST(v, 21) as c, SUM(v) FROM strlists GROUP BY k, c ORDER BY 2, 3
 
 # Key is STRUCT<x: INTEGER, y: VARCHAR>
 statement ok
-CREATE ${storage_type} structs AS SELECT * FROM (VALUES
+CREATE {storage_type} structs AS SELECT * FROM (VALUES
 	(21, {'x': 1, 'y': 'a'}),
 	(22, {'x': NULL, 'y': NULL}),
 	(23, {'x': 0, 'y': ''}),
@@ -110,7 +107,7 @@ SELECT k, LEAST(v, 21) as c, SUM(v) FROM structs GROUP BY k, c ORDER BY 2, 3
 
 # Key is STRUCT<x: LIST<INTEGER>, y: LIST<VARCHAR> >
 statement ok
-CREATE ${storage_type} struct_lint_lstr AS SELECT * FROM (VALUES
+CREATE {storage_type} struct_lint_lstr AS SELECT * FROM (VALUES
 	(21, {'x': [1], 'y': ['a']}),
 	(22, {'x': [NULL], 'y': [NULL]}),
 	(23, {'x': [], 'y': []}),
@@ -146,7 +143,7 @@ ORDER BY 2, 3
 
 # Key is STRUCT<x: LIST<STRUCT<l4: LIST<INT>, i4 INT> >, y: LIST<VARCHAR> >.
 statement ok
-CREATE ${storage_type} r2l3r4l5i4i2l3v AS SELECT * FROM (VALUES
+CREATE {storage_type} r2l3r4l5i4i2l3v AS SELECT * FROM (VALUES
 	(21, {'x': [{'l4': [51], 'i4': 41}], 'y': ['a']}),
 	(22, {'x': [NULL], 'y': [NULL]}),
 	(23, {'x': [], 'y': []}),
@@ -182,7 +179,7 @@ ORDER BY 2, 3
 
 # Key is LIST<INTEGER[2000]>
 statement ok
-CREATE ${storage_type} longlists AS
+CREATE {storage_type} longlists AS
 SELECT *
 FROM ((VALUES
 	(21, [1]),
@@ -231,21 +228,21 @@ group by a;
 {'x': 1, 'y': 2, 'z': 3}	5
 
 statement ok
-DROP ${storage_type} intlists;
+DROP {storage_type} intlists;
 
 statement ok
-DROP ${storage_type} strlists;
+DROP {storage_type} strlists;
 
 statement ok
-DROP ${storage_type} structs;
+DROP {storage_type} structs;
 
 statement ok
-DROP ${storage_type} struct_lint_lstr;
+DROP {storage_type} struct_lint_lstr;
 
 statement ok
-DROP ${storage_type} r2l3r4l5i4i2l3v;
+DROP {storage_type} r2l3r4l5i4i2l3v;
 
 statement ok
-DROP ${storage_type} longlists;
+DROP {storage_type} longlists;
 
 endloop

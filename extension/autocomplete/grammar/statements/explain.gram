@@ -1,3 +1,0 @@
-ExplainStatement <- 'EXPLAIN' 'ANALYZE'? ExplainOptions? Statement
-
-ExplainOptions <- Parens(GenericCopyOptionList)

@@ -34,7 +34,7 @@ string MinimumUniqueAlias(const BindingAlias &alias, const BindingAlias &other) 
 	return alias.ToString();
 }
 
-optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name) {
+optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name, QueryErrorContext context) {
 	optional_ptr<Binding> result;
 	for (auto &binding_ptr : bindings_list) {
 		auto &binding = *binding_ptr;
@@ -45,6 +45,7 @@ optional_ptr<Binding> BindContext::GetMatchingBinding(const string &column_name)
 		if (binding.HasMatchingBinding(column_name)) {
 			if (result || is_using_binding) {
 				throw BinderException(
+				    context,
 				    "Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
 				    "or \"%s.%s\")",
 				    column_name, MinimumUniqueAlias(result->GetBindingAlias(), binding.GetBindingAlias()), column_name,
@@ -84,6 +85,10 @@ optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_n
 		return nullptr;
 	}
 	auto &using_bindings = entry->second;
+	if (using_bindings.empty()) {
+		throw InternalException("Using binding found but no entries");
+	}
+
 	if (using_bindings.size() > 1) {
 		string error = "Ambiguous column reference: column \"" + column_name + "\" can refer to either:\n";
 		for (auto &using_set_ref : using_bindings) {
@@ -103,10 +108,7 @@ optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_n
 		}
 		throw BinderException(error);
 	}
-	for (auto &using_set : using_bindings) {
-		return &using_set.get();
-	}
-	throw InternalException("Using binding found but no entries");
+	return &using_bindings.begin()->get();
 }
 
 optional_ptr<UsingColumnSet> BindContext::GetUsingBinding(const string &column_name, const BindingAlias &binding) {
@@ -548,7 +550,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		auto binding = GetBinding(expr.relation_name, error);
 		bool is_struct_ref = false;
 		if (!binding) {
-			binding = GetMatchingBinding(expr.relation_name);
+			binding = GetMatchingBinding(expr.relation_name, expr);
 			if (!binding) {
 				error.Throw();
 			}
@@ -638,14 +640,14 @@ void BindContext::AddBinding(unique_ptr<Binding> binding) {
 	bindings_list.push_back(std::move(binding));
 }
 
-void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
+void BindContext::AddBaseTable(TableIndex index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                TableCatalogEntry &entry, virtual_column_map_t virtual_columns) {
 	AddBinding(
 	    make_uniq<TableBinding>(alias, types, names, bound_column_ids, &entry, index, std::move(virtual_columns)));
 }
 
-void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
+void BindContext::AddBaseTable(TableIndex index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                TableCatalogEntry &entry, bool add_virtual_columns) {
 	virtual_column_map_t virtual_columns;
@@ -655,7 +657,7 @@ void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<st
 	AddBaseTable(index, alias, names, types, bound_column_ids, entry, std::move(virtual_columns));
 }
 
-void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
+void BindContext::AddBaseTable(TableIndex index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                const string &table_name) {
 	virtual_column_map_t virtual_columns;
@@ -663,7 +665,7 @@ void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<st
 	                                   index, std::move(virtual_columns)));
 }
 
-void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
+void BindContext::AddTableFunction(TableIndex index, const string &alias, const vector<string> &names,
                                    const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                    optional_ptr<StandardEntry> entry, virtual_column_map_t virtual_columns) {
 	AddBinding(
@@ -699,28 +701,28 @@ vector<string> BindContext::AliasColumnNames(const string &table_name, const vec
 	return result;
 }
 
-void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundStatement &subquery) {
+void BindContext::AddSubquery(TableIndex index, const string &alias, SubqueryRef &ref, BoundStatement &subquery) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
-void BindContext::AddEntryBinding(idx_t index, const string &alias, const vector<string> &names,
+void BindContext::AddEntryBinding(TableIndex index, const string &alias, const vector<string> &names,
                                   const vector<LogicalType> &types, StandardEntry &entry) {
 	AddBinding(make_uniq<EntryBinding>(alias, types, names, index, entry));
 }
 
-void BindContext::AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundStatement &subquery,
+void BindContext::AddView(TableIndex index, const string &alias, SubqueryRef &ref, BoundStatement &subquery,
                           ViewCatalogEntry &view) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
 	AddEntryBinding(index, alias, names, subquery.types, view.Cast<StandardEntry>());
 }
 
-void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundStatement &subquery) {
+void BindContext::AddSubquery(TableIndex index, const string &alias, TableFunctionRef &ref, BoundStatement &subquery) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
-void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
+void BindContext::AddGenericBinding(TableIndex index, const string &alias, const vector<string> &names,
                                     const vector<LogicalType> &types) {
 	AddBinding(make_uniq<Binding>(BindingType::BASE, BindingAlias(alias), types, names, index));
 }
@@ -734,7 +736,7 @@ void BindContext::AddCTEBinding(unique_ptr<CTEBinding> binding) {
 	cte_bindings.push_back(std::move(binding));
 }
 
-void BindContext::AddCTEBinding(idx_t index, BindingAlias alias_p, const vector<string> &names,
+void BindContext::AddCTEBinding(TableIndex index, BindingAlias alias_p, const vector<string> &names,
                                 const vector<LogicalType> &types, CTEType cte_type) {
 	auto binding = make_uniq<CTEBinding>(std::move(alias_p), types, names, index, cte_type);
 	AddCTEBinding(std::move(binding));

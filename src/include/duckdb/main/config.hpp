@@ -9,12 +9,11 @@
 #pragma once
 
 #include "duckdb/common/arrow/arrow_type_extension.hpp"
-
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/cache_validation_mode.hpp"
 #include "duckdb/common/enums/thread_pin_mode.hpp"
@@ -30,15 +29,15 @@
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
-#include "duckdb/optimizer/optimizer_extension.hpp"
-#include "duckdb/parser/parsed_data/create_info.hpp"
-#include "duckdb/parser/parser_extension.hpp"
-#include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/user_settings.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/common/types/type_manager.hpp"
+#include "duckdb/common/serialization_compatibility.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
 
 namespace duckdb {
 
@@ -59,34 +58,13 @@ class CompressionInfo;
 class EncryptionUtil;
 class HTTPUtil;
 class DatabaseFilePathManager;
+class ExtensionCallbackManager;
+class TypeManager;
 
 struct CompressionFunctionSet;
 struct DatabaseCacheEntry;
 struct DBConfig;
 struct SettingLookupResult;
-
-class SerializationCompatibility {
-public:
-	static SerializationCompatibility FromDatabase(AttachedDatabase &db);
-	static SerializationCompatibility FromIndex(idx_t serialization_version);
-	static SerializationCompatibility FromString(const string &input);
-	static SerializationCompatibility Default();
-	static SerializationCompatibility Latest();
-
-public:
-	bool Compare(idx_t property_version) const;
-
-public:
-	//! The user provided version
-	string duckdb_version;
-	//! The max version that should be serialized
-	idx_t serialization_version;
-	//! Whether this was set by a manual SET/PRAGMA or default
-	bool manually_set;
-
-protected:
-	SerializationCompatibility() = default;
-};
 
 //! NOTE: DBConfigOptions is mostly deprecated.
 //! If you want to add a setting that can be set by the user, add it as a generic setting to `settings.json`.
@@ -98,7 +76,7 @@ struct DBConfigOptions {
 	string database_type;
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
-	//! Checkpoint when WAL reaches this size (default: 16MB)
+	//! Checkpoint when WAL reaches this size (default: 16MiB)
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
 	bool use_direct_io = false;
@@ -128,6 +106,8 @@ struct DBConfigOptions {
 	//! Initialize the database with the standard set of DuckDB functions
 	//! You should probably not touch this unless you know what you are doing
 	bool initialize_default_database = true;
+	//! Enable mbedtls explicitly (overrides OpenSSL if available)
+	bool force_mbedtls = false;
 	//! The set of disabled optimizers (default empty)
 	set<OptimizerType> disabled_optimizers;
 	//! Force a specific schema for VARIANT shredding
@@ -142,26 +122,32 @@ struct DBConfigOptions {
 	case_insensitive_map_t<Value> user_options;
 	//! The set of unrecognized (other) options
 	case_insensitive_map_t<Value> unrecognized_options;
-	//! Whether to print bindings when printing the plan (debug mode only)
-	static bool debug_print_bindings; // NOLINT: debug setting
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
 	idx_t allocator_flush_threshold = 134217728ULL;
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
 	idx_t allocator_bulk_deallocation_flush_threshold = 536870912ULL;
+	//! Delta Only! - Fall back to recognizing Variant columns structurally
+	bool variant_legacy_encoding = false;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
 	//! The default block header size for new duckdb database files.
-	idx_t default_block_header_size = DUCKDB_BLOCK_HEADER_STORAGE_SIZE;
+	idx_t default_block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
 	//! Paths that are explicitly allowed, even if enable_external_access is false
 	unordered_set<string> allowed_paths;
 	//! Directories that are explicitly allowed, even if enable_external_access is false
 	set<string> allowed_directories;
+	//! Additional configuration options that are allowed to be changed even when the configuration is locked
+	case_insensitive_set_t allowed_configs;
 	//! The log configuration
 	LogConfig log_config = LogConfig();
 	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
 	idx_t block_allocator_size = 0;
+	//! Whether to print bindings when printing the plan (debug mode only)
+	static bool debug_print_bindings; // NOLINT: debug setting
+	//! The global verification mode
+	static DebugVerificationMode global_verification_mode; // NOLINT: debug setting
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -190,28 +176,16 @@ public:
 	unique_ptr<BlockAllocator> block_allocator;
 	//! Database configuration options
 	DBConfigOptions options;
-	//! Extensions made to the parser
-	vector<ParserExtension> parser_extensions;
-	//! Extensions made to the optimizer
-	vector<OptimizerExtension> optimizer_extensions;
 	//! Error manager
 	unique_ptr<ErrorManager> error_manager;
 	//! A reference to the (shared) default allocator (Allocator::DefaultAllocator)
 	shared_ptr<Allocator> default_allocator;
-	//! Extensions made to binder
-	vector<unique_ptr<OperatorExtension>> operator_extensions;
-	//! Extensions made to storage
-	case_insensitive_map_t<duckdb::unique_ptr<StorageExtension>> storage_extensions;
 	//! A buffer pool can be shared across multiple databases (if desired).
 	shared_ptr<BufferPool> buffer_pool;
 	//! Provide a custom buffer manager implementation (if desired).
 	shared_ptr<BufferManager> buffer_manager;
-	//! Set of callbacks that can be installed by extensions
-	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
-	//! Encryption Util for OpenSSL
+	//! Encryption Util for OpenSSL and MbedTLS
 	shared_ptr<EncryptionUtil> encryption_util;
-	//! HTTP Request utility functions
-	shared_ptr<HTTPUtil> http_util;
 	//! Reference to the database cache entry (if any)
 	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 	//! Reference to the database file path manager
@@ -262,10 +236,14 @@ public:
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 
 	//! Returns the list of possible compression functions for the physical type.
-	DUCKDB_API vector<reference<CompressionFunction>> GetCompressionFunctions(const PhysicalType physical_type);
+	DUCKDB_API vector<reference<const CompressionFunction>>
+	GetCompressionFunctions(const PhysicalType physical_type) const;
 	//! Returns the compression function matching the compression and physical type.
-	DUCKDB_API optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type,
-	                                                                    const PhysicalType physical_type);
+	//! Throws an error if the function does not exist.
+	DUCKDB_API reference<const CompressionFunction> GetCompressionFunction(CompressionType type,
+	                                                                       const PhysicalType physical_type) const;
+	DUCKDB_API optional_ptr<const CompressionFunction>
+	TryGetCompressionFunction(CompressionType type, const PhysicalType physical_type) const;
 	//! Sets the disabled compression methods
 	DUCKDB_API void SetDisabledCompressionMethods(const vector<CompressionType> &disabled_compression_methods);
 	//! Returns a list of disabled compression methods
@@ -287,6 +265,7 @@ public:
 	bool operator!=(const DBConfig &other);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
+	DUCKDB_API TypeManager &GetTypeManager();
 	DUCKDB_API CollationBinding &GetCollationBinding();
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
 	static idx_t GetSystemMaxThreads(FileSystem &fs);
@@ -307,19 +286,30 @@ public:
 	static SettingLookupResult TryGetDefaultValue(optional_ptr<const ConfigurationOption> option, Value &result);
 
 	bool CanAccessFile(const string &path, FileType type);
+	void AddAllowedConfig(const string &config_name);
 	void AddAllowedDirectory(const string &path);
 	void AddAllowedPath(const string &path);
 	string SanitizeAllowedPath(const string &path) const;
+	ExtensionCallbackManager &GetCallbackManager();
+	const ExtensionCallbackManager &GetCallbackManager() const;
+
+	void SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util);
+	HTTPUtil &GetHTTPUtil() const;
 
 private:
 	mutable mutex config_lock;
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<EncodingFunctionSet> encoding_functions;
 	unique_ptr<ArrowTypeExtensionSet> arrow_extensions;
-	unique_ptr<CastFunctionSet> cast_functions;
+	unique_ptr<TypeManager> type_manager;
 	unique_ptr<CollationBinding> collation_bindings;
 	unique_ptr<IndexTypeSet> index_types;
+	unique_ptr<ExtensionCallbackManager> callback_manager;
 	bool is_user_config = true;
+	//! HTTP Request utility functions
+	shared_ptr<HTTPUtil> http_util;
+	vector<shared_ptr<HTTPUtil>> old_http_utils;
+	mutex http_util_lock;
 };
 
 } // namespace duckdb

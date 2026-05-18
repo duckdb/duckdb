@@ -49,7 +49,7 @@ NULL	16
 
 # aggregate with correlation in GROUPING SET and HAVING
 # FIXME: this is borked, related to #2335
-mode skip
+mode skip instable
 
 query II
 SELECT i, (SELECT MIN(i) FROM integers GROUP BY GROUPING SETS(i1.i, i) HAVING i1.i=i) AS j FROM integers i1 ORDER BY i;

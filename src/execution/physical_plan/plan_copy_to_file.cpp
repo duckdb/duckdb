@@ -25,7 +25,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 		op.file_path = fs.JoinPath(path, "tmp_" + base);
 	}
 	if (op.per_thread_output || op.file_size_bytes.IsValid() || op.rotate || op.partition_output ||
-	    !op.partition_columns.empty()) {
+	    !op.partition_columns.empty() || !op.order_columns.empty()) {
 		if (op.preserve_order == PreserveOrderType::PRESERVE_ORDER) {
 			throw InvalidInputException("PRESERVE_ORDER is not supported with these parameters");
 		}
@@ -51,6 +51,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 		cast_copy.children.push_back(plan);
 		cast_copy.return_type = op.return_type;
 		cast_copy.write_empty_file = op.write_empty_file;
+
+		cast_copy.batch_size = op.batch_size;
+		cast_copy.batch_size_bytes = op.batch_size_bytes;
+
 		return copy;
 	}
 
@@ -65,11 +69,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	cast_copy.file_extension = op.file_extension;
 	cast_copy.per_thread_output = op.per_thread_output;
 
-	if (op.file_size_bytes.IsValid()) {
-		cast_copy.file_size_bytes = op.file_size_bytes;
-	}
+	cast_copy.batch_size = op.batch_size;
+	cast_copy.batch_size_bytes = op.batch_size_bytes;
+	cast_copy.batches_per_file = op.batches_per_file;
+	cast_copy.file_size_bytes = op.file_size_bytes;
 
-	cast_copy.rotate = op.rotate;
 	cast_copy.return_type = op.return_type;
 	cast_copy.partition_output = op.partition_output;
 	cast_copy.partition_columns = op.partition_columns;
@@ -79,6 +83,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	cast_copy.parallel = mode == CopyFunctionExecutionMode::PARALLEL_COPY_TO_FILE;
 	cast_copy.write_empty_file = op.write_empty_file;
 	cast_copy.hive_file_pattern = op.hive_file_pattern;
+	cast_copy.order_columns = std::move(op.order_columns);
 
 	cast_copy.children.push_back(plan);
 	return copy;

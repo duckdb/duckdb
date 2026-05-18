@@ -3,6 +3,9 @@
 
 require json
 
+statement ok
+SET storage_compatibility_version='v1.0.0'
+
 # Example with simple query
 statement ok
 SELECT json_serialize_sql('SELECT 1 + 2 FROM tbl1');
@@ -50,6 +53,12 @@ statement error
 SELECT json_deserialize_sql(json_serialize_sql('SELECT AND LAUNCH ROCKETS WHERE 1 = 1'));
 ----
 Parser Error: Error parsing json: parser: syntax error at or near "AND"
+
+# Deserialize large double constants
+query I
+SELECT json_deserialize_sql(json_serialize_sql('SELECT 1e10000'));
+----
+SELECT 1e1000
 
 # Test Execute JSON Serialized SQL
 query I

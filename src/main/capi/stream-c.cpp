@@ -29,6 +29,9 @@ duckdb_data_chunk duckdb_fetch_chunk(duckdb_result result) {
 		auto chunk = result_instance.Fetch();
 		return reinterpret_cast<duckdb_data_chunk>(chunk.release());
 	} catch (std::exception &e) {
+		// Set the error on the result so duckdb_result_error can retrieve it
+		duckdb::ErrorData error(e);
+		result_instance.SetError(error);
 		return nullptr;
 	}
 }

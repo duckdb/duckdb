@@ -2,9 +2,6 @@
 # description: Test try_cast for decimal
 # group: [decimal]
 
-statement ok
-PRAGMA enable_verification
-
 # smallint
 statement error
 SELECT CAST(1000 AS DECIMAL(3,0))

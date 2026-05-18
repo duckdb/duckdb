@@ -63,7 +63,7 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	}
 
 	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
+	input.ToUnifiedFormat(vdata);
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
 	alp::AlpSamplingParameters sampling_params = alp::AlpUtils::GetSamplingParameters(count);
@@ -75,7 +75,7 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	idx_t sample_idx = 0;
 	idx_t nulls_idx = 0;
 	// We optimize by doing a different loop when there are no nulls
-	if (vdata.validity.AllValid()) {
+	if (vdata.validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < sampling_params.n_lookup_values; i += sampling_params.n_sampled_increments) {
 			auto idx = vdata.sel->get_index(i);
 			EXACT_TYPE value = Load<EXACT_TYPE>(const_data_ptr_cast(&data[idx]));

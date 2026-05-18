@@ -60,17 +60,20 @@ void DuckDBVariablesFunction(ClientContext &context, TableFunctionInput &data_p,
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// name, VARCHAR
+	auto &name = output.data[0];
+	// value, VARCHAR
+	auto &value = output.data[1];
+	// type, VARCHAR
+	auto &type = output.data[2];
+
 	while (data.offset < data.variables.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &variable_entry = data.variables[data.offset++];
 
-		// return values:
-		idx_t col = 0;
-		// name, VARCHAR
-		output.SetValue(col++, count, Value(variable_entry.name));
-		// value, BIGINT
-		output.SetValue(col++, count, Value(variable_entry.value.ToString()));
-		// type, VARCHAR
-		output.SetValue(col, count, Value(variable_entry.value.type().ToString()));
+		name.Append(Value(variable_entry.name));
+		value.Append(Value(variable_entry.value.ToString()));
+		type.Append(Value(variable_entry.value.type().ToString()));
 		count++;
 	}
 	output.SetCardinality(count);

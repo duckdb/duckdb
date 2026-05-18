@@ -2,7 +2,7 @@
 # description: Test interval merging for buffered index replays
 # group: [storage]
 
-load __TEST_DIR__/test_interval_merging_replays.db
+load {TEST_DIR}/test_interval_merging_replays.db
 
 statement ok
 SET wal_autocheckpoint = '1TB';
@@ -19,16 +19,16 @@ CREATE UNIQUE INDEX idx_tbl_i ON tbl(i);
 loop i 0 4
 
 statement ok
-INSERT INTO tbl SELECT r FROM range(${i} * 10000, ${i} * 10000 + 2001) t(r);
+INSERT INTO tbl SELECT r FROM range({i} * 10000, {i} * 10000 + 2001) t(r);
 
 statement ok
-INSERT INTO tbl SELECT r FROM range(${i} * 10000 + 2001, ${i} * 10000 + 4001) t(r);
+INSERT INTO tbl SELECT r FROM range({i} * 10000 + 2001, {i} * 10000 + 4001) t(r);
 
 statement ok
-INSERT INTO tbl SELECT r FROM range(${i} * 10000 + 4001, ${i} * 10000 + 5001) t(r);
+INSERT INTO tbl SELECT r FROM range({i} * 10000 + 4001, {i} * 10000 + 5001) t(r);
 
 statement ok
-DELETE FROM tbl WHERE i >= ${i} * 10000 AND i < ${i} * 10000 + 2500;
+DELETE FROM tbl WHERE i >= {i} * 10000 AND i < {i} * 10000 + 2500;
 
 endloop
 
@@ -63,12 +63,12 @@ SELECT i FROM tbl WHERE i = 60001;
 loop val 0 4
 
 query II
-EXPLAIN ANALYZE SELECT i FROM tbl WHERE i = ${val} * 10000 + 1000;
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i = {val} * 10000 + 1000;
 ----
 analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 query I
-SELECT i FROM tbl WHERE i = ${val} * 10000 + 1000;
+SELECT i FROM tbl WHERE i = {val} * 10000 + 1000;
 ----
 
 endloop

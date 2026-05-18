@@ -1,0 +1,149 @@
+# name: test/sql/pragma/profiling/test_checkpoint_profiling.test
+# group: [profiling]
+
+require notwindows
+
+require json
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+SET wal_autocheckpoint = '1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+ATTACH '{TEST_DIR}/checkpoint_prof.db';
+
+statement ok
+CREATE TABLE checkpoint_prof.tbl(id INTEGER, category INTEGER);
+
+statement ok
+INSERT INTO checkpoint_prof.tbl SELECT range, range % 100 FROM range(10000);
+
+statement ok
+CHECKPOINT checkpoint_prof;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/cp_noop.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CHECKPOINT_LATENCY": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+CHECKPOINT checkpoint_prof;
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT CASE WHEN checkpoint_latency = 0 THEN 'true' ELSE 'false' END FROM '{TEST_DIR}/cp_noop.json';
+----
+true
+
+statement ok
+INSERT INTO checkpoint_prof.tbl SELECT range + 100000, range % 100 FROM range(10000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/cp_first.json';
+
+statement ok
+CHECKPOINT checkpoint_prof;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE TABLE first_cp AS SELECT checkpoint_latency AS latency FROM '{TEST_DIR}/cp_first.json';
+
+query I
+SELECT CASE WHEN latency > 0 THEN 'true' ELSE 'false' END FROM first_cp;
+----
+true
+
+statement ok
+INSERT INTO checkpoint_prof.tbl SELECT range + 200000, range % 100 FROM range(10000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/cp_second.json';
+
+statement ok
+CHECKPOINT checkpoint_prof;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE TABLE second_cp AS SELECT checkpoint_latency AS latency FROM '{TEST_DIR}/cp_second.json';
+
+query I
+SELECT CASE WHEN latency > 0 THEN 'true' ELSE 'false' END FROM second_cp;
+----
+true
+
+query I
+SELECT CASE WHEN (SELECT latency FROM first_cp) + (SELECT latency FROM second_cp) > (SELECT latency FROM first_cp) THEN 'true' ELSE 'false' END;
+----
+true
+
+statement ok
+INSERT INTO checkpoint_prof.tbl SELECT range + 1000000, range % 100 FROM range(10000);
+
+concurrentloop threadid 0 10
+
+loop x 0 10
+
+onlyif threadid<>0
+statement maybe
+INSERT INTO checkpoint_prof.tbl SELECT range + (2000000 + {threadid} * 10000 + {x} * 1000), range % 100 FROM range(1000);
+----
+
+onlyif threadid=0
+statement ok
+PRAGMA enable_profiling = 'json';
+
+onlyif threadid=0
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/cp_concurrent_{x}.json';
+
+onlyif threadid=0
+statement maybe
+CHECKPOINT checkpoint_prof;
+----
+
+onlyif threadid=0
+statement ok
+PRAGMA disable_profiling;
+
+onlyif threadid=0
+query I
+SELECT CASE WHEN checkpoint_latency >= 0 THEN 'true' ELSE 'false' END FROM '{TEST_DIR}/cp_concurrent_{x}.json';
+----
+true
+
+endloop
+
+endloop
+
+statement ok
+CREATE OR REPLACE TABLE metrics AS SELECT * FROM '{TEST_DIR}/cp_concurrent_0.json';
+
+query I
+SELECT CASE WHEN checkpoint_latency > 0 THEN 'true' ELSE 'false' END FROM metrics;
+----
+true

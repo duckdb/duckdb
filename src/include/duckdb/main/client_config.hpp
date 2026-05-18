@@ -10,6 +10,7 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
@@ -25,7 +26,8 @@ class ClientContext;
 class PhysicalResultCollector;
 class PreparedStatementData;
 
-typedef std::function<PhysicalOperator &(ClientContext &context, PreparedStatementData &data)> get_result_collector_t;
+typedef std::function<unique_ptr<PhysicalOperator>(ClientContext &context, PreparedStatementData &data)>
+    get_result_collector_t;
 
 struct ClientConfig {
 	//! If the query profiler is enabled or not.
@@ -56,30 +58,20 @@ struct ClientConfig {
 	//! The wait time before showing the progress bar
 	int wait_time = 2000;
 
-	//! Whether or not aggressive query verification is enabled
-	bool query_verification_enabled = false;
-	//! Whether or not verification of external operators is enabled, used for testing
-	bool verify_external = false;
-	//! Whether or not verification of fetch row code is enabled, used for testing
-	bool verify_fetch_row = false;
-	//! Whether or not we should verify the serializer
-	bool verify_serializer = false;
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
-	//! Enable caching operators
-	bool enable_caching_operators = true;
 	//! Force parallelism of small tables, used for testing
 	bool verify_parallelism = false;
-	//! Force out-of-core computation for operators that support it, used for testing
-	bool force_external = false;
-	//! Force use of fetch row instead of scan, used for testing
-	bool force_fetch_row = false;
 	//! If this context should also try to use the available replacement scans
 	//! True by default
 	bool use_replacement_scans = true;
 
 	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
 	idx_t streaming_buffer_size = 1000000;
+
+	//! The maximum memory for query intermediates (sorts, hash tables) per connection (in bytes). Default: Global
+	//! memory limit.
+	optional_idx operator_memory_limit;
 
 	//! Callback to create a progress bar display
 	progress_bar_display_create_func_t display_create_func = nullptr;
@@ -107,8 +99,6 @@ struct ClientConfig {
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);
-
-	bool AnyVerification() const;
 
 	void SetUserVariable(const String &name, Value value);
 	bool GetUserVariable(const string &name, Value &result);

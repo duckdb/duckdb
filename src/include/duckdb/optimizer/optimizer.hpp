@@ -44,6 +44,8 @@ public:
 	// helper functions
 	unique_ptr<Expression> BindScalarFunction(const string &name, unique_ptr<Expression> c1);
 	unique_ptr<Expression> BindScalarFunction(const string &name, unique_ptr<Expression> c1, unique_ptr<Expression> c2);
+	unique_ptr<Expression> BindScalarFunction(const string &name, unique_ptr<Expression> c1, unique_ptr<Expression> c2,
+	                                          unique_ptr<Expression> c3);
 
 private:
 	unique_ptr<LogicalOperator> plan;

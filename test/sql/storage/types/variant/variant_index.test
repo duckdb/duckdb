@@ -1,7 +1,7 @@
 # name: test/sql/storage/types/variant/variant_index.test
 # group: [variant]
 
-load __TEST_DIR__/variant_index.db
+load {TEST_DIR}/variant_index.db readwrite v1.5.0
 
 statement error
 CREATE TABLE tbl(col VARIANT UNIQUE, b INTEGER)
@@ -9,7 +9,7 @@ CREATE TABLE tbl(col VARIANT UNIQUE, b INTEGER)
 Invalid type Error: Invalid Type [VARIANT]: Invalid type for index key.
 
 # See FIXME in art.cpp:ART::ART to support nested types
-mode skip
+mode skip instable
 
 statement ok
 INSERT into tbl select {'a': i, 'b': i % 5} col, i from range(1000) t(i)

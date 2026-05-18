@@ -1,0 +1,23 @@
+# name: test/sql/index/art/nodes/test_art_prefix_transform_deprecated.test_slow
+# description: Test transforming a prefix to v1.0.0 storage with CHECKPOINT after INSERT
+# group: [nodes]
+
+statement ok
+SET checkpoint_threshold = '10.0 GB';
+
+statement ok
+ATTACH '{TEST_DIR}/prefix_transform.db' AS db (STORAGE_VERSION 'v1.0.0');
+
+statement ok
+CREATE TABLE db.data AS
+SELECT
+    i AS id,
+    md5(i::text) AS col_a,
+    md5((i * 2)::text) AS col_b
+FROM generate_series(1, 50000) AS t(i);
+
+statement ok
+CREATE INDEX idx_data ON db.data (col_a, col_b);
+
+statement ok
+CHECKPOINT db;

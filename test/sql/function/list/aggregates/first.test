@@ -18,7 +18,7 @@ SELECT list_first()
 foreach type <numeric>
 
 statement ok
-CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
+CREATE TABLE five AS SELECT LIST(i::{type}) AS i FROM range(1, 6, 1) t1(i)
 
 statement ok
 INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
@@ -95,7 +95,7 @@ DROP TABLE five_complex
 foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
 
 statement ok
-CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
+CREATE TABLE five AS SELECT LIST(i::{type}) AS i FROM range(1, 6, 1) t1(i)
 
 statement ok
 INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])

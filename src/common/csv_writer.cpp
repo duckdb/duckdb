@@ -55,7 +55,6 @@ CSVWriter::CSVWriter(WriteStream &stream, vector<string> name_list, bool shared)
 	auto size = name_list.size();
 	options.name_list = std::move(name_list);
 	options.force_quote.resize(size, false);
-	options.force_quote.resize(size, false);
 
 	if (!shared) {
 		global_write_state = make_uniq<CSVWriterState>();
@@ -175,9 +174,7 @@ void CSVWriter::FlushInternal(CSVWriterState &local_state) {
 		return;
 	}
 
-	if (!written_anything) {
-		written_anything = true;
-	} else if (writer_options.newline_writing_mode == CSVNewLineMode::WRITE_BEFORE) {
+	if (written_anything && writer_options.newline_writing_mode == CSVNewLineMode::WRITE_BEFORE) {
 		write_stream.WriteData(const_data_ptr_cast(writer_options.newline.c_str()), writer_options.newline.size());
 	}
 
@@ -227,6 +224,9 @@ void CSVWriter::WriteQuoteOrEscape(WriteStream &writer, char quote_or_escape) {
 }
 
 string CSVWriter::AddEscapes(char to_be_escaped, char escape, const string &val) {
+	if (escape == '\0') {
+		return val;
+	}
 	idx_t i = 0;
 	string new_val = "";
 	idx_t found = val.find(to_be_escaped);
@@ -236,10 +236,8 @@ string CSVWriter::AddEscapes(char to_be_escaped, char escape, const string &val)
 			new_val += val[i];
 			i++;
 		}
-		if (escape != '\0') {
-			new_val += escape;
-			found = val.find(to_be_escaped, found + 1);
-		}
+		new_val += escape;
+		found = val.find(to_be_escaped, found + 1);
 	}
 	while (i < val.length()) {
 		new_val += val[i];
@@ -319,6 +317,10 @@ void CSVWriter::WriteQuotedString(WriteStream &writer, const char *str, idx_t le
 // Write a chunk to a csv file
 void CSVWriter::WriteChunk(DataChunk &input, MemoryStream &writer, CSVReaderOptions &options, bool &written_anything,
                            CSVWriterOptions &writer_options) {
+	vector<VectorIterator<string_t>> input_iterators;
+	for (auto &col : input.data) {
+		input_iterators.emplace_back(col.Values<string_t>());
+	}
 	// now loop over the vectors and output the values
 	for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
 		if (row_idx == 0 && !written_anything) {
@@ -333,20 +335,20 @@ void CSVWriter::WriteChunk(DataChunk &input, MemoryStream &writer, CSVReaderOpti
 				CSVWriter::WriteQuoteOrEscape(writer,
 				                              options.dialect_options.state_machine_options.delimiter.GetValue()[0]);
 			}
-			if (FlatVector::IsNull(input.data[col_idx], row_idx)) {
+			auto input_val = input_iterators[col_idx][row_idx];
+			if (!input_val.IsValid()) {
 				// write null value
 				writer.WriteData(const_data_ptr_cast(options.null_str[0].c_str()), options.null_str[0].size());
 				continue;
 			}
 
 			// non-null value, fetch the string value from the cast chunk
-			auto str_data = FlatVector::GetData<string_t>(input.data[col_idx]);
+			auto &str_val = input_val.GetValue();
 			// FIXME: we could gain some performance here by checking for certain types if they ever require quotes
 			// (e.g. integers only require quotes if the delimiter is a number, decimals only require quotes if the
 			// delimiter is a number or "." character)
 
-			WriteQuotedString(writer, str_data[row_idx].GetData(), str_data[row_idx].GetSize(), col_idx, options,
-			                  writer_options);
+			WriteQuotedString(writer, str_val.GetData(), str_val.GetSize(), col_idx, options, writer_options);
 		}
 		if (writer_options.newline_writing_mode == CSVNewLineMode::WRITE_AFTER) {
 			writer.WriteData(const_data_ptr_cast(writer_options.newline.c_str()), writer_options.newline.size());

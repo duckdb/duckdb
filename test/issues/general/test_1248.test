@@ -2,9 +2,6 @@
 # description: Issue 1248: Segmentation fault on subselects with "recursive"
 # group: [general]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 with test(round) as (
     select 0
@@ -72,9 +69,6 @@ order by all;
 19
 20
 21
-
-#FIXME: currently the next query will fail when vector_size = 2 AND optimizers are disabled
-require vector_size 2048
 
 query I
 with recursive test(round) as (

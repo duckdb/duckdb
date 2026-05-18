@@ -1,4 +1,5 @@
-#include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
+
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
@@ -12,6 +13,7 @@ BufferPoolReservation::BufferPoolReservation(BufferPoolReservation &&src) noexce
 }
 
 BufferPoolReservation &BufferPoolReservation::operator=(BufferPoolReservation &&src) noexcept {
+	pool.UpdateUsedMemory(tag, -UnsafeNumericCast<int64_t>(size));
 	tag = src.tag;
 	size = src.size;
 	src.size = 0;

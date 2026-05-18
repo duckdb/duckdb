@@ -117,6 +117,10 @@ public:
 private:
 	double GetNumerator(JoinRelationSet &set);
 	DenomInfo GetDenominator(JoinRelationSet &set);
+	//! Applied outside the cardinality cache so stored values stay pre-OR.
+	double ApplyOrFilterSelectivities(JoinRelationSet &new_set, double cardinality) const;
+
+	vector<optional_ptr<FilterInfo>> or_filters;
 
 	bool SingleColumnFilter(FilterInfo &filter_info);
 	vector<idx_t> DetermineMatchingEquivalentSets(optional_ptr<FilterInfo> filter_info);

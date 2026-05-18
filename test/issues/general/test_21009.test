@@ -1,0 +1,12 @@
+# name: test/issues/general/test_21009.test
+# description: Issue 21009 - duckdb 1.5: Another INTERNAL error with window function
+# group: [general]
+
+require json
+
+statement ok
+SELECT JSON_EXTRACT_STRING(x, '$') AS id
+FROM (
+            SELECT UNNEST(NULL::JSON[]) AS x
+)
+QUALIFY ROW_NUMBER() OVER (PARTITION BY id ORDER BY id) = 1;

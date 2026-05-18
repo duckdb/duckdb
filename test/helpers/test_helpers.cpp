@@ -17,8 +17,6 @@
 #include <cmath>
 #include <fstream>
 
-using namespace std;
-
 #define TESTING_DIRECTORY_NAME "duckdb_unittest_tempdir"
 
 namespace duckdb {
@@ -335,7 +333,7 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 
 	// create the csv on disk
 	auto csv_path = TestCreatePath("__test_csv_path.csv");
-	ofstream f(csv_path);
+	std::ofstream f(csv_path);
 	f << csv;
 	f.close();
 

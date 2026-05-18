@@ -9,15 +9,73 @@
       "reason": "Contains explicit use of the memory catalog.",
       "paths": [
         "test/sql/attach/attach_use_rollback.test",
-        "test/sql/attach/show_schemas.test",
-        "test/sql/storage/read_duckdb/concurrent_duckdb_read.test_slow",
-        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test"
+        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test",
+        "test/sql/cte/warn_deprecated_union_in_using_key.test"
       ]
     },
     {
       "reason": "External file cache cannot persist across database restarts when force_restart is enabled.",
       "paths": [
-        "test/sql/storage/external_file_cache/external_file_cache_validate.test"
+        "test/sql/json/table/read_json.test",
+        "test/sql/storage/external_file_cache/external_file_cache_validate.test",
+        "test/sql/storage/external_file_cache/external_file_cache_parquet.test_slow",
+        "test/sql/storage/external_file_cache/external_file_cache_block_size.test"
+      ]
+    },
+    {
+      "reason": "Doesn't OOM when restarting",
+      "paths": [
+        "test/sql/storage/temp_directory/offloading_block_files.test_slow"
+      ]
+    },
+    {
+      "reason": "Logging setting doesn't survive restarts",
+      "paths": [
+        "test/sql/storage/compression/zstd/zstd_compression_ratio.test_slow",
+        "test/sql/logging/logging_memory_after_truncate.test",
+        "test/sql/logging/physical_operator_logging.test_slow",
+        "test/logging/warnings_as_errors.test",
+        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test"
+      ]
+    },
+    {
+      "reason": "Parquet metadata cache doesn't survive restarts",
+      "paths": [
+        "test/sql/copy/parquet/parquet_glob_cache.test"
+      ]
+    },
+    {
+      "reason": "On version < v2.0.0, calling currval() before nextval() after a WAL replay is expected to error",
+      "paths": [
+        "test/sql/catalog/sequence/sequence_currval_before_nextval_not_supported.test",
+        "test/sql/catalog/sequence/sequence_currval_before_nextval_wal_not_supported.test"
+      ]
+    },
+    {
+      "reason": "Requires latest storage for restarting",
+      "paths": [
+        "test/sql/catalog/dependencies/test_drop_column_sequence_dependency.test",
+        "test/sql/catalog/dependencies/test_set_default_sequence_dependency.test",
+        "test/sql/catalog/function/test_macro_issue_14276.test"
+      ]
+    },
+    {
+      "reason": "In-memory ART assertions incompatible with force_restart.",
+      "paths": [
+        "test/sql/transactions/concurrent_drop_table.test"
+      ]
+    },
+    {
+      "reason": "Tests transient segment structure before checkpoint. force_restart checkpoints after every statement, merging segments.",
+      "paths": [
+        "test/sql/storage/adaptive_segment_allocation.test"
+      ]
+    },
+    {
+      "reason": "total_string_length requires exact per-row-group stats; force_restart causes persistent row groups with unloaded columns where only bound-expansion is possible, making the stat unknown.",
+      "paths": [
+        "test/sql/storage/total_string_length_repeated_insert.test",
+        "test/sql/storage/extended_string_stats.test"
       ]
     }
   ]

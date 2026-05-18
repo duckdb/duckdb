@@ -20,7 +20,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CTE;
 
 public:
-	PhysicalCTE(PhysicalPlan &physical_plan, string ctename, idx_t table_index, vector<LogicalType> types,
+	PhysicalCTE(PhysicalPlan &physical_plan, string ctename, TableIndex table_index, vector<LogicalType> types,
 	            PhysicalOperator &top, PhysicalOperator &bottom, idx_t estimated_cardinality);
 	~PhysicalCTE() override;
 
@@ -28,8 +28,9 @@ public:
 
 	shared_ptr<ColumnDataCollection> working_table;
 
-	idx_t table_index;
+	TableIndex table_index;
 	string ctename;
+	bool cte_body_is_dml = false;
 
 public:
 	// Sink interface

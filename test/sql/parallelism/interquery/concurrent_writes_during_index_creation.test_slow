@@ -1,0 +1,32 @@
+# name: test/sql/parallelism/interquery/concurrent_writes_during_index_creation.test_slow
+# description: Test concurrent writes during index creation
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers AS SELECT range AS i FROM range (1_000_000)
+
+concurrentloop threadid 0 11
+
+onlyif threadid=0
+statement ok
+CREATE INDEX i_index ON integers(i)
+
+loop x 0 2000
+
+onlyif threadid<>0
+statement ok
+INSERT INTO integers VALUES (1)
+
+endloop
+
+endloop
+
+query II
+SELECT i, COUNT(*) FROM integers GROUP BY i ORDER BY i LIMIT 1 OFFSET 1
+----
+1	20001
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
+20001

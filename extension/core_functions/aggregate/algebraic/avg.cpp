@@ -239,39 +239,60 @@ struct TimeTZAverageOperation : public BaseSumOperation<AverageSetOperation, Add
 	}
 };
 
+LogicalType GetAvgStateType(const BoundAggregateFunction &function) {
+	child_list_t<LogicalType> children;
+	children.emplace_back("count", LogicalType::UBIGINT);
+	children.emplace_back("value", function.GetArguments()[0]);
+	return LogicalType::STRUCT(std::move(children));
+}
+
+LogicalType GetKahanAvgStateType(const BoundAggregateFunction &function) {
+	child_list_t<LogicalType> children;
+	children.emplace_back("count", LogicalType::UBIGINT);
+	children.emplace_back("value", LogicalType::DOUBLE);
+	children.emplace_back("err", LogicalType::DOUBLE);
+	return LogicalType::STRUCT(std::move(children));
+}
+
 AggregateFunction GetAverageAggregate(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16: {
 		return AggregateFunction::UnaryAggregate<AvgState<int64_t>, int16_t, double, IntegerAverageOperation>(
-		    LogicalType::SMALLINT, LogicalType::DOUBLE);
+		           LogicalType::SMALLINT, LogicalType::DOUBLE)
+		    .SetStructStateExport(GetAvgStateType);
 	}
 	case PhysicalType::INT32: {
 		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int32_t, double, IntegerAverageOperationHugeint>(
-		    LogicalType::INTEGER, LogicalType::DOUBLE);
+		           LogicalType::INTEGER, LogicalType::DOUBLE)
+		    .SetStructStateExport(GetAvgStateType);
 	}
 	case PhysicalType::INT64: {
 		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, double, IntegerAverageOperationHugeint>(
-		    LogicalType::BIGINT, LogicalType::DOUBLE);
+		           LogicalType::BIGINT, LogicalType::DOUBLE)
+		    .SetStructStateExport(GetAvgStateType);
 	}
 	case PhysicalType::INT128: {
 		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, hugeint_t, double, HugeintAverageOperation>(
-		    LogicalType::HUGEINT, LogicalType::DOUBLE);
+		           LogicalType::HUGEINT, LogicalType::DOUBLE)
+		    .SetStructStateExport(GetAvgStateType);
 	}
 	case PhysicalType::INTERVAL: {
 		return AggregateFunction::UnaryAggregate<IntervalAvgState, interval_t, interval_t, IntervalAverageOperation>(
-		    LogicalType::INTERVAL, LogicalType::INTERVAL);
+		           LogicalType::INTERVAL, LogicalType::INTERVAL)
+		    .SetStructStateExport(GetAvgStateType);
 	}
 	default:
 		throw InternalException("Unimplemented average aggregate");
 	}
 }
 
-unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunction &function,
-                                        vector<unique_ptr<Expression>> &arguments) {
-	auto decimal_type = arguments[0]->return_type;
-	function = GetAverageAggregate(decimal_type.InternalType());
-	function.name = "avg";
-	function.arguments[0] = decimal_type;
+unique_ptr<FunctionData> BindDecimalAvg(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	auto decimal_type = arguments[0]->GetReturnType();
+	function.ReplaceImplementation(GetAverageAggregate(decimal_type.InternalType()));
+	function.SetName("avg");
+	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DOUBLE);
 	return make_uniq<AverageDecimalBindData>(
 	    Hugeint::Cast<double>(Hugeint::POWERS_OF_TEN[DecimalType::GetScale(decimal_type)]));
@@ -282,6 +303,7 @@ unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunctio
 AggregateFunctionSet AvgFun::GetFunctions() {
 	AggregateFunctionSet avg;
 
+	// The first is already opted-in during `BindDecimalAvg`
 	avg.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
 	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
 	                                  BindDecimalAvg));
@@ -291,24 +313,31 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INTERVAL));
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+	                    LogicalType::DOUBLE, LogicalType::DOUBLE)
+	                    .SetStructStateExport(GetAvgStateType));
 
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(
-	    LogicalType::TIMESTAMP, LogicalType::TIMESTAMP));
+	                    LogicalType::TIMESTAMP, LogicalType::TIMESTAMP)
+	                    .SetStructStateExport(GetAvgStateType));
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(
-	    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ));
+	                    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ)
+	                    .SetStructStateExport(GetAvgStateType));
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(
-	    LogicalType::TIME, LogicalType::TIME));
+	                    LogicalType::TIME, LogicalType::TIME)
+	                    .SetStructStateExport(GetAvgStateType));
 	avg.AddFunction(
 	    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, dtime_tz_t, dtime_tz_t, TimeTZAverageOperation>(
-	        LogicalType::TIME_TZ, LogicalType::TIME_TZ));
+	        LogicalType::TIME_TZ, LogicalType::TIME_TZ)
+	        .SetStructStateExport(GetAvgStateType));
 
 	return avg;
 }
 
 AggregateFunction FAvgFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<KahanAvgState, double, double, KahanAverageOperation>(LogicalType::DOUBLE,
-	                                                                                               LogicalType::DOUBLE);
+	auto function = AggregateFunction::UnaryAggregate<KahanAvgState, double, double, KahanAverageOperation>(
+	                    LogicalType::DOUBLE, LogicalType::DOUBLE)
+	                    .SetStructStateExport(GetKahanAvgStateType);
+	return function;
 }
 
 } // namespace duckdb

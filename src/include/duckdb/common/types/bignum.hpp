@@ -13,6 +13,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/bignum.hpp"
 
@@ -47,7 +48,7 @@ public:
 	DUCKDB_API static bignum_t InitializeBignumZero(Vector &result);
 	DUCKDB_API static string InitializeBignumZero();
 
-	//! Switch Case of To Bignum Convertion
+	//! Switch Case of To Bignum Conversion
 	DUCKDB_API static BoundCastInfo NumericToBignumCastSwitch(const LogicalType &source);
 
 	//! ----------------------------------- Varchar Cast ----------------------------------- //
@@ -80,7 +81,7 @@ public:
 		for (idx_t i = 0; i < data_byte_size; ++i) {
 			uint8_t byte = static_cast<uint8_t>(data[Bignum::BIGNUM_HEADER_SIZE + i]);
 			if (is_negative) {
-				byte = ~byte;
+				byte = static_cast<uint8_t>(~byte);
 			}
 			abs_value = (abs_value << 8) | byte;
 		}
@@ -103,15 +104,15 @@ public:
 //! ----------------------------------- (u)Integral Cast ----------------------------------- //
 struct IntCastToBignum {
 	template <class SRC>
-	static inline bignum_t Operation(SRC input, Vector &result) {
-		return IntToBignum(result, input);
+	static inline bignum_t Operation(SRC input, StringHeap &heap) {
+		return IntToBignum(heap, input);
 	}
 };
 
 //! ----------------------------------- (u)HugeInt Cast ----------------------------------- //
 struct HugeintCastToBignum {
 	template <class SRC>
-	static inline bignum_t Operation(SRC input, Vector &result) {
+	static inline bignum_t Operation(SRC input, StringHeap &heap) {
 		throw InternalException("Unsupported type for cast to BIGNUM");
 	}
 };
@@ -137,8 +138,8 @@ DUCKDB_API bool TryCastToBignum::Operation(string_t input_value, bignum_t &resul
 
 struct BignumCastToVarchar {
 	template <class SRC>
-	DUCKDB_API static inline string_t Operation(SRC input, Vector &result) {
-		return StringVector::AddStringOrBlob(result, Bignum::BignumToVarchar(input));
+	DUCKDB_API static inline string_t Operation(SRC input, StringHeap &heap) {
+		return heap.AddBlob(Bignum::BignumToVarchar(input));
 	}
 };
 

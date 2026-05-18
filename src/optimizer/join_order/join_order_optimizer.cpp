@@ -86,14 +86,14 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	return new_logical_plan;
 }
 
-void JoinOrderOptimizer::AddMaterializedCTEStats(idx_t index, RelationStats &&stats) {
+void JoinOrderOptimizer::AddMaterializedCTEStats(TableIndex index, RelationStats &&stats) {
 	materialized_cte_stats.emplace(index, std::move(stats));
 }
 
-RelationStats JoinOrderOptimizer::GetMaterializedCTEStats(idx_t index) {
+RelationStats JoinOrderOptimizer::GetMaterializedCTEStats(TableIndex index) {
 	auto it = materialized_cte_stats.find(index);
 	if (it == materialized_cte_stats.end()) {
-		throw InternalException("Unable to find materialized CTE stats with index %llu", index);
+		throw InternalException("Unable to find materialized CTE stats with index %llu", index.index);
 	}
 	return it->second;
 }

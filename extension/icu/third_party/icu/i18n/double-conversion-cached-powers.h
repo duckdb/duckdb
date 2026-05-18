@@ -44,18 +44,14 @@
 // ICU PATCH: Wrap in ICU namespace
 U_NAMESPACE_BEGIN
 
-namespace double_conversion {
-
-namespace PowersOfTenCache {
+namespace double_conversion::PowersOfTenCache {
 
   // Not all powers of ten are cached. The decimal exponent of two neighboring
   // cached numbers will differ by kDecimalExponentDistance.
   static const int kDecimalExponentDistance = 8;
 
   static const int kMinDecimalExponent = -348;
-#if U_DEBUG
   static const int kMaxDecimalExponent = 340;
-#endif
 
   // Returns a cached power-of-ten with a binary exponent in the range
   // [min_exponent; max_exponent] (boundaries included).
@@ -73,9 +69,7 @@ namespace PowersOfTenCache {
                                         DiyFp* power,
                                         int* found_exponent);
 
-}  // namespace PowersOfTenCache
-
-}  // namespace double_conversion
+} // namespace double_conversion::PowersOfTenCache
 
 // ICU PATCH: Close ICU namespace
 U_NAMESPACE_END

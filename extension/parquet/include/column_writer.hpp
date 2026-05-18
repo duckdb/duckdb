@@ -8,10 +8,30 @@
 
 #pragma once
 
+#include <stddef.h>
+#include <stdint.h>
+#include <string>
+#include <vector>
+
 #include "duckdb.hpp"
 #include "parquet_types.h"
 #include "parquet_column_schema.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+
+namespace duckdb_parquet {
+class RowGroup;
+class SchemaElement;
+} // namespace duckdb_parquet
 
 namespace duckdb {
 class MemoryStream;
@@ -22,6 +42,12 @@ struct ChildFieldIDs;
 struct ShreddingType;
 class ResizeableBuffer;
 class ParquetBloomFilter;
+class AllocatedData;
+class BoundReferenceExpression;
+class ClientContext;
+class Expression;
+class Vector;
+struct ValidityMask;
 
 class ColumnWriterState {
 public:
@@ -122,7 +148,7 @@ public:
 		}
 		return false;
 	}
-	virtual LogicalType TransformedType() {
+	virtual LogicalType TransformedType() const {
 		throw NotImplementedException("Writer does not have a transformed type");
 	}
 	virtual unique_ptr<Expression> TransformExpression(unique_ptr<BoundReferenceExpression> expr) {
@@ -145,7 +171,9 @@ public:
 		throw NotImplementedException("Writer doesn't require an AnalyzeSchemaFinalize pass");
 	}
 
-	virtual void FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) = 0;
+	virtual bool TryExportPreparedShreddingType(ShreddingType &result) const;
+
+	virtual idx_t FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) = 0;
 
 	//! Create the column writer for a specific type recursively
 	static unique_ptr<ColumnWriter> CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,
@@ -179,6 +207,18 @@ public:
 	virtual void Write(ColumnWriterState &state, Vector &vector, idx_t count) = 0;
 	virtual void FinalizeWrite(ColumnWriterState &state) = 0;
 
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
 protected:
 	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, const ValidityMask &validity,
 	                        const idx_t count, const uint16_t define_value, const uint16_t null_value) const;
@@ -189,6 +229,8 @@ protected:
 
 public:
 	ParquetWriter &writer;
+	//! The parent writer (if this is a nested field)
+	optional_ptr<ColumnWriter> parent;
 	ParquetColumnSchema column_schema;
 	vector<string> schema_path;
 	bool can_have_nulls;

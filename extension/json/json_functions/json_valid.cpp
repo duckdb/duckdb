@@ -13,7 +13,7 @@ static void ValidFunction(DataChunk &args, ExpressionState &state, Vector &resul
 
 static void GetValidFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
 	set.AddFunction(ScalarFunction("json_valid", {input_type}, LogicalType::BOOLEAN, ValidFunction, nullptr, nullptr,
-	                               nullptr, JSONFunctionLocalState::Init));
+	                               JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetValidFunction() {

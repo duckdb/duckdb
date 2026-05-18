@@ -227,11 +227,16 @@ public:
 	}
 };
 
+struct ParquetUUIDTargetType {
+	static constexpr const idx_t PARQUET_UUID_SIZE = 16;
+	data_t bytes[PARQUET_UUID_SIZE];
+};
+
 class UUIDStatisticsState : public ColumnWriterStatistics {
 public:
 	bool has_stats = false;
-	data_t min[16] = {0};
-	data_t max[16] = {0};
+	ParquetUUIDTargetType min;
+	ParquetUUIDTargetType max;
 
 public:
 	bool HasStats() override {
@@ -245,10 +250,10 @@ public:
 		return GetMaxValue();
 	}
 	string GetMinValue() override {
-		return HasStats() ? string(char_ptr_cast(min), 16) : string();
+		return HasStats() ? string(char_ptr_cast(min.bytes), ParquetUUIDTargetType::PARQUET_UUID_SIZE) : string();
 	}
 	string GetMaxValue() override {
-		return HasStats() ? string(char_ptr_cast(max), 16) : string();
+		return HasStats() ? string(char_ptr_cast(max.bytes), ParquetUUIDTargetType::PARQUET_UUID_SIZE) : string();
 	}
 };
 

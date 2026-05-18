@@ -1,7 +1,8 @@
 #include "parquet_crypto.hpp"
 
-#include "mbedtls_wrapper.hpp"
-#include "thrift_tools.hpp"
+#include <string.h>
+#include <memory>
+#include <utility>
 
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/helper.hpp"
@@ -9,9 +10,28 @@
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/encryption_state.hpp"
+#include "duckdb/common/encryption_types.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/original/std/memory.hpp"
+#include "thrift/TBase.h"
+#include "thrift/protocol/TCompactProtocol.h"
+#include "thrift/protocol/TProtocol.h"
+#include "thrift/transport/TTransport.h"
+
+namespace duckdb {
+class ClientContext;
+} // namespace duckdb
 
 using duckdb_parquet::ColumnChunk;
-class Allocator;
 
 namespace duckdb {
 
@@ -163,8 +183,11 @@ class EncryptionTransport : public TTransport {
 public:
 	EncryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
 	    : prot(prot_p), trans(*prot.getTransport()),
-	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM, key.size())),
 	      allocator(Allocator::DefaultAllocator(), ParquetCrypto::CRYPTO_BLOCK_SIZE) {
+		auto metadata = make_uniq<EncryptionStateMetadata>(EncryptionTypes::GCM, key.size(),
+		                                                   EncryptionTypes::EncryptionVersion::NONE);
+		aes = encryption_util_p.CreateEncryptionState(std::move(metadata));
+
 		Initialize(key);
 	}
 
@@ -190,8 +213,8 @@ public:
 		const uint32_t total_length = ParquetCrypto::NONCE_BYTES + ciphertext_length + ParquetCrypto::TAG_BYTES;
 
 		trans.write(const_data_ptr_cast(&total_length), ParquetCrypto::LENGTH_BYTES);
-		// Write nonce at beginning of encrypted chunk
-		trans.write(nonce, ParquetCrypto::NONCE_BYTES);
+		// Write nonce at the start of encrypted chunk
+		trans.write(nonce.data(), ParquetCrypto::NONCE_BYTES);
 
 		data_t aes_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE];
 		auto current = allocator.GetTail();
@@ -220,10 +243,9 @@ public:
 private:
 	void Initialize(const string &key) {
 		// Generate Nonce
-		aes->GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
+		aes->GenerateRandomData(nonce.data(), nonce.size());
 		// Initialize Encryption
-		aes->InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
-		                          key.size());
+		aes->InitializeEncryption(nonce, reinterpret_cast<const_data_ptr_t>(key.data()));
 	}
 
 private:
@@ -235,7 +257,7 @@ private:
 	shared_ptr<EncryptionState> aes;
 
 	//! Nonce created by Initialize()
-	data_t nonce[ParquetCrypto::NONCE_BYTES];
+	EncryptionNonce nonce;
 
 	//! Arena Allocator to fully materialize in memory before encrypting
 	ArenaAllocator allocator;
@@ -246,9 +268,10 @@ class DecryptionTransport : public TTransport {
 public:
 	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p,
 	                    const CryptoMetaData &crypto_meta_data)
-	    : prot(prot_p), trans(*prot.getTransport()),
-	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM, key.size())), read_buffer_size(0),
-	      read_buffer_offset(0) {
+	    : prot(prot_p), trans(*prot.getTransport()), read_buffer_size(0), read_buffer_offset(0) {
+		auto metadata = make_uniq<EncryptionStateMetadata>(EncryptionTypes::GCM, key.size(),
+		                                                   EncryptionTypes::EncryptionVersion::NONE);
+		aes = encryption_util_p.CreateEncryptionState(std::move(metadata));
 		Initialize(key, crypto_meta_data);
 	}
 
@@ -306,16 +329,15 @@ private:
 		total_bytes = Load<uint32_t>(length_buf);
 		transport_remaining = total_bytes;
 		// Read nonce and initialize AES
-		transport_remaining -= trans.read(nonce, ParquetCrypto::NONCE_BYTES);
+		transport_remaining -= trans.read(nonce.data(), nonce.total_size());
 		// check whether context is initialized
 		if (!crypto_meta_data.IsEmpty()) {
-			aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
-			                          key.size(), crypto_meta_data.additional_authenticated_data->data(),
+			aes->InitializeDecryption(nonce, reinterpret_cast<const_data_ptr_t>(key.data()),
+			                          crypto_meta_data.additional_authenticated_data->data(),
 			                          crypto_meta_data.additional_authenticated_data->size());
 			crypto_meta_data.additional_authenticated_data->Rewind();
 		} else {
-			aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
-			                          key.size());
+			aes->InitializeDecryption(nonce, reinterpret_cast<const_data_ptr_t>(key.data()));
 		}
 	}
 
@@ -353,7 +375,7 @@ private:
 	uint32_t total_bytes;
 	uint32_t transport_remaining;
 	//! Nonce read by Initialize()
-	data_t nonce[ParquetCrypto::NONCE_BYTES];
+	EncryptionNonce nonce;
 };
 
 class SimpleReadTransport : public TTransport {
@@ -493,9 +515,9 @@ int16_t ParquetCrypto::GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t mod
 		} else if (chunk.meta_data.__isset.bloom_filter_offset) {
 			page_ordinal -= 1;
 		}
-		return page_ordinal;
+		return NumericCast<int16_t>(page_ordinal);
 	case DATA_PAGE:
-		return page_ordinal;
+		return NumericCast<int16_t>(page_ordinal);
 	default:
 		// All modules except DataPage(Header) are -1 (absent)
 		return -1;

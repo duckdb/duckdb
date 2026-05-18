@@ -2,7 +2,7 @@
 # description: Test index delete replays.
 # group: [wal]
 
-load __TEST_DIR__/index_delete_test.db
+load {TEST_DIR}/index_delete_test.db
 
 statement ok
 SET index_scan_max_count = 1;

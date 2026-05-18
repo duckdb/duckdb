@@ -76,6 +76,11 @@ struct JSONConverter {
 		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
 	}
 
+	static yyjson_mut_val *VisitTimestampTZNanos(timestamp_tz_ns_t val, yyjson_mut_doc *doc) {
+		auto val_str = Value::TIMESTAMPTZNS(val).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
 	static yyjson_mut_val *VisitFloat(float val, yyjson_mut_doc *doc) {
 		return yyjson_mut_real(doc, val);
 	}
@@ -219,9 +224,8 @@ yyjson_mut_val *JSONConverter::VisitInteger<uhugeint_t>(uhugeint_t val, yyjson_m
 
 } // namespace
 
-yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, const RecursiveUnifiedVectorFormat &source,
+yyjson_mut_val *VariantCasts::ConvertVariantToJSON(yyjson_mut_doc *doc, const UnifiedVariantVectorData &variant,
                                                    idx_t row, uint32_t values_idx) {
-	UnifiedVariantVectorData variant(source);
 	return VariantVisitor<JSONConverter>::Visit(variant, row, values_idx, doc);
 }
 

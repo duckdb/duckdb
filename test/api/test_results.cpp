@@ -5,7 +5,6 @@
 #include "duckdb/common/types/timestamp.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test results API", "[api]") {
 	DuckDB db(nullptr);

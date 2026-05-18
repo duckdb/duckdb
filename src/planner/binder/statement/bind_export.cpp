@@ -178,6 +178,23 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// reorder tables because of foreign key constraint
 	ReorderTableEntries(tables);
 
+	// check for self-referencing foreign keys, which cannot be exported currently, until ALTER TABLE constraints
+	// is supported, and we can export additional ALTER TABLEs for the self-references.
+	for (auto &t : tables) {
+		auto &table = t.get().Cast<TableCatalogEntry>();
+		for (auto &constraint : table.GetConstraints()) {
+			if (constraint->type != ConstraintType::FOREIGN_KEY) {
+				continue;
+			}
+			auto &fk = constraint->Cast<ForeignKeyConstraint>();
+			if (fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
+				throw BinderException("Failed to export database: table \"%s\" has a self-referencing foreign key "
+				                      "constraint which is currently not supported for exporting",
+				                      table.name);
+			}
+		}
+	}
+
 	// now generate the COPY statements for each of the tables
 	auto &fs = FileSystem::GetFileSystem(context);
 
@@ -216,9 +233,9 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		child_list_t<LogicalType> select_list;
 		// Let's verify if any on these columns have not null constraints
 		vector<string> not_null_columns;
-		for (auto &constaint : table.GetConstraints()) {
-			if (constaint->type == ConstraintType::NOT_NULL) {
-				auto &not_null_constraint = constaint->Cast<NotNullConstraint>();
+		for (auto &constraint : table.GetConstraints()) {
+			if (constraint->type == ConstraintType::NOT_NULL) {
+				auto &not_null_constraint = constraint->Cast<NotNullConstraint>();
 				not_null_columns.push_back(table.GetColumn(not_null_constraint.index).GetName());
 			}
 		}

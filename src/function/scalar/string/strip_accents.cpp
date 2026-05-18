@@ -31,7 +31,7 @@ namespace {
 
 struct StripAccentsOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+	static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap) {
 		if (IsAscii(input.GetData(), input.GetSize())) {
 			return input;
 		}
@@ -39,7 +39,7 @@ struct StripAccentsOperator {
 		// non-ascii, perform collation
 		auto stripped = utf8proc_remove_accents((const utf8proc_uint8_t *)input.GetData(),
 		                                        UnsafeNumericCast<utf8proc_ssize_t>(input.GetSize()));
-		auto result_str = StringVector::AddString(result, const_char_ptr_cast(stripped));
+		auto result_str = heap.AddString(const_char_ptr_cast(stripped));
 		free(stripped);
 		return result_str;
 	}

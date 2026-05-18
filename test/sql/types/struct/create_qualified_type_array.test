@@ -1,0 +1,98 @@
+# name: test/sql/types/struct/create_qualified_type_array.test
+# description: Test create qualified types with array
+# group: [struct]
+
+# Original issue: https://github.com/duckdb/duckdb/issues/20142
+
+statement ok 
+create type u as struct (i int, j int);
+
+statement error
+select cast (null as huh.what.u array);
+----
+Binder Error: Catalog "huh" does not exist!
+
+statement error
+select cast (null as what.u array);
+----
+<REGEX>:Catalog Error.*Type with name u does not exist.*
+
+query I
+select cast (null as u array);
+----
+NULL
+
+query I 
+select cast (null as main.u);
+----
+NULL
+
+query I 
+select cast (null as main.u[]);
+----
+NULL
+
+query I 
+select cast (null as main.u ARRAY);
+----
+NULL
+
+query I 
+select cast (null as SETOF main.u ARRAY);
+----
+NULL
+
+query I 
+select cast (null as main.u ARRAY[1]);
+----
+NULL
+
+statement ok 
+create or replace table i (j struct(i double, j double));
+
+statement ok 
+insert into i values ({'i': 1.0, 'j': 2.0});
+
+query I
+select j::main.u from i;
+----
+{'i': 1, 'j': 2}
+
+statement error
+select j::main.u[] from i;
+----
+<REGEX>:Conversion Error.*Unimplemented type for cast.*
+
+query I
+select cast (null as u array[1]);
+----
+NULL
+
+query I 
+select cast (null as u []);
+----
+NULL
+
+statement ok 
+CREATE SCHEMA schema2; 
+
+statement ok 
+checkpoint; 
+
+statement ok 
+use schema2; 
+
+statement ok 
+create type u2 as struct(i int, j int);
+
+statement ok 
+select cast (null as u2 []);
+
+statement ok 
+use main;
+
+statement error
+select cast (null as u2 []);
+----
+Catalog Error: Type with name u2 does not exist!
+Did you mean "schema2.u2"?

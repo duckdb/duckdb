@@ -17,7 +17,7 @@
 namespace duckdb {
 
 struct ClientConfig;
-typedef unique_ptr<ProgressBarDisplay> (*progress_bar_display_create_func_t)();
+typedef std::function<unique_ptr<ProgressBarDisplay>()> progress_bar_display_create_func_t;
 
 struct QueryProgress {
 	friend class ProgressBar;
@@ -27,7 +27,7 @@ public:
 	void Initialize();
 	void Restart();
 	double GetPercentage();
-	uint64_t GetRowsProcesseed();
+	uint64_t GetRowsProcessed();
 	uint64_t GetTotalRowsToProcess();
 	QueryProgress &operator=(const QueryProgress &other);
 	QueryProgress(const QueryProgress &other);
@@ -45,7 +45,7 @@ public:
 
 	explicit ProgressBar(
 	    Executor &executor, idx_t show_progress_after,
-	    progress_bar_display_create_func_t create_display_func = ProgressBar::DefaultProgressBarDisplay);
+	    const progress_bar_display_create_func_t &create_display_func = ProgressBar::DefaultProgressBarDisplay);
 
 	//! Starts the thread
 	void Start();

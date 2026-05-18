@@ -48,6 +48,18 @@ string UncompressedStringSegmentState::GetSegmentInfo() const {
 	return "Overflow String Block Ids: " + result;
 }
 
+void UncompressedStringSegmentState::InsertOverflowBlock(block_id_t block_id, reference<StringBlock> block) {
+	auto write_lock = overflow_blocks_lock.GetExclusiveLock();
+	overflow_blocks.insert(make_pair(block_id, block));
+}
+
+reference<StringBlock> UncompressedStringSegmentState::FindOverflowBlock(block_id_t block_id) {
+	auto read_lock = overflow_blocks_lock.GetSharedLock();
+	auto entry = overflow_blocks.find(block_id);
+	D_ASSERT(entry != overflow_blocks.end());
+	return entry->second;
+}
+
 void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &state, string_t string,
                                              block_id_t &result_block, int32_t &result_offset) {
 	auto &block_manager = partial_block_manager.GetBlockManager();
@@ -63,7 +75,7 @@ void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &sta
 	result_offset = UnsafeNumericCast<int32_t>(offset);
 
 	// write the length field
-	auto data_ptr = handle.Ptr();
+	auto data_ptr = handle.GetDataMutable();
 	auto string_length = string.GetSize();
 	Store<uint32_t>(UnsafeNumericCast<uint32_t>(string_length), data_ptr + offset);
 	offset += sizeof(uint32_t);
@@ -93,7 +105,7 @@ void WriteOverflowStringsToDisk::Flush() {
 	if (block_id != INVALID_BLOCK && offset > 0) {
 		// zero-initialize the empty part of the overflow string buffer (if any)
 		if (offset < GetStringSpace()) {
-			memset(handle.Ptr() + offset, 0, GetStringSpace() - offset);
+			memset(handle.GetDataMutable() + offset, 0, GetStringSpace() - offset);
 		}
 		// write to disk
 		auto &block_manager = partial_block_manager.GetBlockManager();
@@ -107,7 +119,7 @@ void WriteOverflowStringsToDisk::AllocateNewBlock(UncompressedStringSegmentState
 	if (block_id != INVALID_BLOCK) {
 		// there is an old block, write it first
 		// write the new block id at the end of the previous block
-		Store<block_id_t>(new_block_id, handle.Ptr() + GetStringSpace());
+		Store<block_id_t>(new_block_id, handle.GetDataMutable() + GetStringSpace());
 		Flush();
 	}
 	offset = 0;

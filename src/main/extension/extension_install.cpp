@@ -49,7 +49,7 @@ const vector<string> ExtensionHelper::PathComponents() {
 string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extension_name) {
 	auto components = PathComponents();
 
-	string link = "https://duckdb.org/docs/stable/extensions/troubleshooting";
+	string link = "https://duckdb.org/docs/current/extensions/troubleshooting";
 
 	if (components.size() >= 2) {
 		link += "?version=" + components[0] + "&platform=" + components[1] + "&extension=" + extension_name;
@@ -174,7 +174,7 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 		candidates.emplace_back(ExtensionHelper::GetDefaultExtension(i).name);
 	}
 	for (idx_t ext_count = ExtensionHelper::ExtensionAliasCount(), i = 0; i < ext_count; i++) {
-		candidates.emplace_back(ExtensionHelper::GetExtensionAlias(i).alias);
+		candidates.emplace_back(ExtensionHelper::GetInternalExtensionAlias(i).alias);
 	}
 	auto closest_extensions = StringUtil::TopNJaroWinkler(candidates, lowercase_extension_name);
 	message = StringUtil::CandidatesMessage(closest_extensions, "Candidate extensions");
@@ -220,10 +220,25 @@ static unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, con
 }
 
 static void WriteExtensionFileToDisk(QueryContext &query_context, FileSystem &fs, const string &path, void *data,
-                                     idx_t data_size) {
-	auto target_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND |
-	                                         FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+                                     idx_t data_size, DBConfig &config) {
+	if (!Settings::Get<AllowUnsignedExtensionsSetting>(config)) {
+		const bool signature_valid = ExtensionHelper::CheckExtensionBufferSignature(
+		    static_cast<char *>(data), data_size, Settings::Get<AllowCommunityExtensionsSetting>(config));
+		if (!signature_valid) {
+			throw IOException("Attempting to install an extension file that doesn't have a valid signature, see "
+			                  "https://duckdb.org/docs/current/operations_manual/securing_duckdb/securing_extensions");
+		}
+	}
+
+	// Now signature has been checked (if signature checking is enabled)
+
+	// Open target_file, at this points ending with '.duckdb_extension'
+	auto target_file =
+	    fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_APPEND |
+	                          FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL);
+	// Write content to the file
 	target_file->Write(query_context, data, data_size);
+
 	target_file->Close();
 	target_file.reset();
 }
@@ -242,7 +257,6 @@ string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DatabaseInstance
 	} else {
 		versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension";
 	}
-	string default_endpoint = ExtensionRepository::DEFAULT_REPOSITORY_URL;
 #ifdef WASM_LOADABLE_EXTENSIONS
 	versioned_path = versioned_path + ".wasm";
 #else
@@ -284,9 +298,23 @@ static void CheckExtensionMetadataOnInstall(DatabaseInstance &db, void *in_buffe
 //   3. Crash after extension move: extension is now uninstalled, new metadata file present
 static void WriteExtensionFiles(QueryContext &query_context, FileSystem &fs, const string &temp_path,
                                 const string &local_extension_path, void *in_buffer, idx_t file_size,
-                                ExtensionInstallInfo &info) {
+                                ExtensionInstallInfo &info, DBConfig &config) {
+	// temp_path ends with '.duckdb_extension'
+	if (!StringUtil::EndsWith(temp_path, ".duckdb_extension")) {
+		throw InternalException("Extension install temp_path of '%s' is not valid, should end in '.duckdb_extension'",
+		                        temp_path);
+	}
+	// local_extension_path ends with '.duckdb_extension', and given it will be written only after signature checks,
+	// it's now loadable
+	if (!StringUtil::EndsWith(local_extension_path, ".duckdb_extension")) {
+		throw InternalException("Extension install local_extension_path of '%s' is not valid, should end in "
+		                        "'.duckdb_extension'",
+		                        temp_path);
+	}
+
 	// Write extension to tmp file
-	WriteExtensionFileToDisk(query_context, fs, temp_path, in_buffer, file_size);
+	WriteExtensionFileToDisk(query_context, fs, temp_path, in_buffer, file_size, config);
+	// When this exit, signature has already being checked (if enabled by config)
 
 	// Write metadata to tmp file
 	auto metadata_tmp_path = temp_path + ".info";
@@ -370,7 +398,7 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 
 	QueryContext query_context(context);
 	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, extension_decompressed,
-	                    extension_decompressed_size, info);
+	                    extension_decompressed_size, info, db.config);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
@@ -441,11 +469,21 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		return install_info;
 	}
 
-	auto decompressed_body = GZipFileSystem::UncompressGZIPString(response->body);
+	string decompressed_body;
+	void *extension_data;
+	idx_t extension_size;
+
+	if (GZipFileSystem::CheckIsZip(response->body.data(), response->body.size())) {
+		decompressed_body = GZipFileSystem::UncompressGZIPString(response->body);
+		extension_data = (void *)decompressed_body.data();
+		extension_size = decompressed_body.size();
+	} else {
+		extension_data = (void *)response->body.data();
+		extension_size = response->body.size();
+	}
 
 	ExtensionInstallInfo info;
-	CheckExtensionMetadataOnInstall(db, (void *)decompressed_body.data(), decompressed_body.size(), info,
-	                                extension_name);
+	CheckExtensionMetadataOnInstall(db, extension_data, extension_size, info, extension_name);
 	if (response->HasHeader("ETag")) {
 		info.etag = response->GetHeaderValue("ETag");
 	}
@@ -461,8 +499,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 
 	QueryContext query_context(context);
 	auto fs = FileSystem::CreateLocal();
-	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
-	                    decompressed_body.size(), info);
+	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, extension_data, extension_size, info,
+	                    db.config);
 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
@@ -477,7 +515,10 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
 	string generated_url = ExtensionHelper::ExtensionFinalizeUrlTemplate(url_template, extension_name);
 
 	// Special handling for http repository: avoid using regular filesystem (note: the filesystem is not used here)
-	if (StringUtil::StartsWith(options.repository->path, "http://")) {
+	if (HTTPUtil::IsHTTPProtocol(options.repository->path)) {
+		if (db.ExtensionIsLoaded("httpfs")) {
+			HTTPUtil::BumpToSecureProtocol(generated_url);
+		}
 		return InstallFromHttpUrl(db, generated_url, extension_name, temp_path, local_extension_path, options, context);
 	}
 
@@ -528,7 +569,8 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 
 	auto extension_name = ApplyExtensionAlias(fs.ExtractBaseName(extension));
 	string local_extension_path = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
-	string temp_path = local_extension_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID());
+	string temp_path =
+	    local_extension_path + ".tmp-" + UUID::ToString(UUID::GenerateRandomUUID()) + ".duckdb_extension";
 
 	if (fs.FileExists(local_extension_path) && !options.force_install) {
 		// File exists: throw error if origin mismatches

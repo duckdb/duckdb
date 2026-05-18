@@ -179,7 +179,10 @@ void CSVMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &r
 			names = options.name_list;
 			return_types = options.sql_type_list;
 		}
-		D_ASSERT(return_types.size() == names.size());
+		if (return_types.size() != names.size()) {
+			throw BinderException("read_csv: mismatch between the number of column names (%d) and column types (%d)",
+			                      names.size(), return_types.size());
+		}
 		csv_data.options.dialect_options.num_cols = names.size();
 
 		bind_data.multi_file_reader->BindOptions(bind_data.file_options, multi_file_list, return_types, names,

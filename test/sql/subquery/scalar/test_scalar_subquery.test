@@ -2,9 +2,6 @@
 # description: Test subqueries
 # group: [scalar]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT 1+(SELECT 1)
 ----

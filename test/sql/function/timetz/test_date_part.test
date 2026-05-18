@@ -3,9 +3,6 @@
 # group: [timetz]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE timetzs(d TIMETZ, s VARCHAR);
 
 statement ok
@@ -125,7 +122,7 @@ NULL
 foreach datepart timezone timezone_hour timezone_minute
 
 query I
-select date_part('${datepart}', '10:00:00'::TIMETZ);
+select date_part('{datepart}', '10:00:00'::TIMETZ);
 ----
 0
 
@@ -242,7 +239,7 @@ foreach partcode hour minute second millisecond microsecond epoch
 
 query III
 SELECT * FROM (
-	SELECT d, DATE_PART('${partcode}', d) AS p, ${partcode}(d) AS f
+	SELECT d, DATE_PART('{partcode}', d) AS p, {partcode}(d) AS f
 	FROM timetzs
 ) tbl
 WHERE p <> f;
@@ -258,9 +255,9 @@ endloop
 foreach partcode hour minute second millisecond microsecond epoch timezone timezone_hour timezone_minute
 
 query III
-SELECT d, DATE_PART('${partcode}', d) AS p, DATE_PART(['${partcode}'], d) AS st
+SELECT d, DATE_PART('{partcode}', d) AS p, DATE_PART(['{partcode}'], d) AS st
 FROM timetzs
-WHERE p <> st['${partcode}'];
+WHERE p <> st['{partcode}'];
 ----
 
 endloop
@@ -373,7 +370,7 @@ NULL	NULL
 foreach datepart year month day decade century millennium quarter dow isodow doy week isoyear yearweek era julian
 
 statement error
-SELECT d, DATE_PART(['${datepart}'], d) AS parts
+SELECT d, DATE_PART(['{datepart}'], d) AS parts
 FROM timetzs
 ORDER BY 1;
 ----

@@ -41,6 +41,8 @@
 
 #if U_SHOW_CPLUSPLUS_API
 
+#include <type_traits>
+
 #include "unicode/uobject.h"
 #include "unicode/std_string.h"
 
@@ -70,6 +72,38 @@ public:
    * @stable ICU 4.2
    */
   virtual void Append(const char* bytes, int32_t n) = 0;
+
+  /**
+   * Appends n bytes to this. Same as Append().
+   * Call AppendU8() with u8"string literals" which are const char * in C++11
+   * but const char8_t * in C++20.
+   * If the compiler does support char8_t as a distinct type,
+   * then an AppendU8() overload for that is defined and will be chosen.
+   *
+   * @param bytes the pointer to the bytes
+   * @param n the number of bytes; must be non-negative
+   * @stable ICU 67
+   */
+  inline void AppendU8(const char* bytes, int32_t n) {
+    Append(bytes, n);
+  }
+
+#if defined(__cpp_char8_t) || defined(U_IN_DOXYGEN)
+  /**
+   * Appends n bytes to this. Same as Append() but for a const char8_t * pointer.
+   * Call AppendU8() with u8"string literals" which are const char * in C++11
+   * but const char8_t * in C++20.
+   * If the compiler does support char8_t as a distinct type,
+   * then this AppendU8() overload for that is defined and will be chosen.
+   *
+   * @param bytes the pointer to the bytes
+   * @param n the number of bytes; must be non-negative
+   * @stable ICU 67
+   */
+  inline void AppendU8(const char8_t* bytes, int32_t n) {
+    Append(reinterpret_cast<const char*>(bytes), n);
+  }
+#endif
 
   /**
    * Returns a writable buffer for appending and writes the buffer's capacity to
@@ -163,7 +197,7 @@ public:
    * Returns the sink to its original state, without modifying the buffer.
    * Useful for reusing both the buffer and the sink for multiple streams.
    * Resets the state to NumberOfBytesWritten()=NumberOfBytesAppended()=0
-   * and Overflowed()=FALSE.
+   * and Overflowed()=false.
    * @return *this
    * @stable ICU 4.6
    */
@@ -174,7 +208,7 @@ public:
    * @param n the number of bytes; must be non-negative
    * @stable ICU 4.2
    */
-  virtual void Append(const char* bytes, int32_t n);
+  virtual void Append(const char* bytes, int32_t n) override;
   /**
    * Returns a writable buffer for appending and writes the buffer's capacity to
    * *result_capacity. For details see the base class documentation.
@@ -192,7 +226,7 @@ public:
   virtual char* GetAppendBuffer(int32_t min_capacity,
                                 int32_t desired_capacity_hint,
                                 char* scratch, int32_t scratch_capacity,
-                                int32_t* result_capacity);
+                                int32_t* result_capacity) override;
   /**
    * Returns the number of bytes actually written to the sink.
    * @return number of bytes written to the buffer
@@ -202,7 +236,7 @@ public:
   /**
    * Returns true if any bytes were discarded, i.e., if there was an
    * attempt to write more than 'capacity' bytes.
-   * @return TRUE if more than 'capacity' bytes were Append()ed
+   * @return true if more than 'capacity' bytes were Append()ed
    * @stable ICU 4.2
    */
   UBool Overflowed() const { return overflowed_; }
@@ -226,13 +260,36 @@ private:
   CheckedArrayByteSink &operator=(const CheckedArrayByteSink &) = delete;
 };
 
+namespace prv {
+/** @internal */
+template<typename StringClass, typename = void>
+struct value_type_or_char {
+  /** @internal */
+  using type = char;
+};
+/** @internal */
+template<typename StringClass>
+struct value_type_or_char<StringClass, std::void_t<typename StringClass::value_type>> {
+  /** @internal */
+  using type = typename StringClass::value_type;
+};
+/** @internal */
+template<typename StringClass>
+using value_type_or_char_t = typename value_type_or_char<StringClass>::type;
+}
+
 /** 
  * Implementation of ByteSink that writes to a "string".
- * The StringClass is usually instantiated with a std::string.
+ * The StringClass is usually instantiated with a std::string or a std::u8string.
+ * StringClass must have public member functions reserve(integer type), capacity(), length(), and
+ * append(value type, integer type) with the same semantics as those of std::basic_string, and must
+ * have an 8-bit value type.  If the value type is not char, it must be a public member type
+ * StringClass::value_type.
  * @stable ICU 4.2
  */
 template<typename StringClass>
 class StringByteSink : public ByteSink {
+  using Unit = typename prv::value_type_or_char_t<StringClass>;
  public:
   /**
    * Constructs a ByteSink that will append bytes to the dest string.
@@ -249,7 +306,7 @@ class StringByteSink : public ByteSink {
    */
   StringByteSink(StringClass* dest, int32_t initialAppendCapacity) : dest_(dest) {
     if (initialAppendCapacity > 0 &&
-        (uint32_t)initialAppendCapacity > (dest->capacity() - dest->length())) {
+        static_cast<uint32_t>(initialAppendCapacity) > dest->capacity() - dest->length()) {
       dest->reserve(dest->length() + initialAppendCapacity);
     }
   }
@@ -259,7 +316,13 @@ class StringByteSink : public ByteSink {
    * @param n the number of bytes; must be non-negative
    * @stable ICU 4.2
    */
-  virtual void Append(const char* data, int32_t n) { dest_->append(data, n); }
+  virtual void Append(const char* data, int32_t n) override {
+    if constexpr (std::is_same_v<Unit, char>) {
+      dest_->append(data, n);
+    } else {
+      dest_->append(reinterpret_cast<const Unit*>(data), n);
+    }
+  }
  private:
   StringClass* dest_;
 

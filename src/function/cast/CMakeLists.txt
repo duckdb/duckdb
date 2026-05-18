@@ -19,6 +19,7 @@ add_library_unity(
   string_cast.cpp
   struct_cast.cpp
   time_casts.cpp
+  type_cast.cpp
   union_casts.cpp
   uuid_casts.cpp
   bignum_casts.cpp

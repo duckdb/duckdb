@@ -2,9 +2,6 @@
 # description: Test CREATE OR REPLACE TABLE
 # group: [create]
 
-statement ok
-pragma enable_verification
-
 statement error
 CREATE TABLE integers(i INTEGER) PARTITIONED BY (i);
 ----
@@ -159,6 +156,34 @@ WITH (
   'location'=getvariable('location_var'),
   'table_type'='ICEBERG',
   'format'='parquet'
+)
+----
+<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+
+# single value options are also supported (default to True)
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  'location',
+  'table_type',
+  'format'
+)
+----
+<REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*
+
+# single value options are also supported (not quoted)
+statement error
+CREATE TABLE iceberg_table (
+  id int,
+  data string,
+  category string)
+WITH (
+  location,
+  table_type,
+  format
 )
 ----
 <REGEX>:.*WITH clause is not supported for tables in a duckdb catalog.*

@@ -43,6 +43,7 @@ create_logical_type(::Type{T}) where {T <: Date} = DuckDB.LogicalType(DuckDB.DUC
 create_logical_type(::Type{T}) where {T <: Time} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_TIME)
 create_logical_type(::Type{T}) where {T <: DateTime} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_TIMESTAMP)
 create_logical_type(::Type{T}) where {T <: AbstractString} = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_VARCHAR)
+create_logical_type(::Type{Vector{UInt8}}) = DuckDB.LogicalType(DuckDB.DUCKDB_TYPE_BLOB)
 function create_logical_type(::Type{T}) where {T <: FixedDecimal}
     int_type = T.parameters[1]
     width = 0
@@ -97,6 +98,18 @@ end
 
 function get_list_child_type(type::LogicalType)
     return LogicalType(duckdb_list_type_child_type(type.handle))
+end
+
+##===--------------------------------------------------------------------===##
+## Array methods
+##===--------------------------------------------------------------------===##
+
+function get_array_child_type(type::LogicalType)
+    return LogicalType(duckdb_array_type_child_type(type.handle))
+end
+
+function get_array_size(type::LogicalType)
+    return duckdb_array_type_array_size(type.handle)
 end
 
 ##===--------------------------------------------------------------------===##

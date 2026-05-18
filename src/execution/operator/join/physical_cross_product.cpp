@@ -21,7 +21,23 @@ class CrossProductGlobalState : public GlobalSinkState {
 public:
 	explicit CrossProductGlobalState(ClientContext &context, const PhysicalCrossProduct &op)
 	    : rhs_materialized(context, op.children[1].get().GetTypes()) {
+		ResetState(context);
+	}
+
+private:
+	void ResetState(ClientContext &context) {
+		rhs_materialized.ResetForReuse();
 		rhs_materialized.InitializeAppend(append_state);
+		GlobalSinkState::Reset(context);
+	}
+
+public:
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ClientContext &context) override {
+		ResetState(context);
 	}
 
 	ColumnDataCollection rhs_materialized;
@@ -29,8 +45,19 @@ public:
 	mutex rhs_lock;
 };
 
+class CrossProductLocalSinkState : public LocalSinkState {
+public:
+	bool SupportsReuse() const override {
+		return true;
+	}
+};
+
 unique_ptr<GlobalSinkState> PhysicalCrossProduct::GetGlobalSinkState(ClientContext &context) const {
 	return make_uniq<CrossProductGlobalState>(context, *this);
+}
+
+unique_ptr<LocalSinkState> PhysicalCrossProduct::GetLocalSinkState(ExecutionContext &context) const {
+	return make_uniq<CrossProductLocalSinkState>();
 }
 
 SinkResultType PhysicalCrossProduct::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -43,12 +70,12 @@ SinkResultType PhysicalCrossProduct::Sink(ExecutionContext &context, DataChunk &
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
-CrossProductExecutor::CrossProductExecutor(ColumnDataCollection &rhs)
-    : rhs(rhs), position_in_chunk(0), initialized(false), finished(false) {
+CrossProductExecutor::CrossProductExecutor(ColumnDataCollection &rhs) : rhs(rhs) {
 	rhs.InitializeScanChunk(scan_chunk);
+	Reset();
 }
 
-void CrossProductExecutor::Reset(DataChunk &input, DataChunk &output) {
+void CrossProductExecutor::Reset(const DataChunk &input, DataChunk &output) {
 	initialized = true;
 	finished = false;
 	scan_input_chunk = false;
@@ -57,7 +84,16 @@ void CrossProductExecutor::Reset(DataChunk &input, DataChunk &output) {
 	scan_chunk.Reset();
 }
 
-bool CrossProductExecutor::NextValue(DataChunk &input, DataChunk &output) {
+void CrossProductExecutor::Reset() {
+	initialized = false;
+	finished = false;
+	scan_input_chunk = false;
+	position_in_chunk = 0;
+	scan_state = ColumnDataScanState();
+	scan_chunk.Reset();
+}
+
+bool CrossProductExecutor::NextValue(const DataChunk &input, DataChunk &output) {
 	if (!initialized) {
 		// not initialized yet: initialize the scan
 		Reset(input, output);
@@ -83,7 +119,7 @@ bool CrossProductExecutor::NextValue(DataChunk &input, DataChunk &output) {
 	return true;
 }
 
-OperatorResultType CrossProductExecutor::Execute(DataChunk &input, DataChunk &output) {
+OperatorResultType CrossProductExecutor::Execute(const DataChunk &input, DataChunk &output) {
 	if (rhs.Count() == 0) {
 		// no RHS: empty result
 		return OperatorResultType::FINISHED;
@@ -109,7 +145,8 @@ OperatorResultType CrossProductExecutor::Execute(DataChunk &input, DataChunk &ou
 	col_count = scan.ColumnCount();
 	col_offset = scan_input_chunk ? 0 : input.ColumnCount();
 	for (idx_t i = 0; i < col_count; i++) {
-		ConstantVector::Reference(output.data[col_offset + i], scan.data[i], position_in_chunk, scan.size());
+		ConstantVector::Reference(output.data[col_offset + i], count_t(output.size()), scan.data[i], position_in_chunk,
+		                          scan.size());
 	}
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
@@ -120,6 +157,15 @@ public:
 	}
 
 	CrossProductExecutor executor;
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset() override {
+		ResetCachingState();
+		executor.Reset();
+	}
 };
 
 unique_ptr<OperatorState> PhysicalCrossProduct::GetOperatorState(ExecutionContext &context) const {

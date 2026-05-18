@@ -1,0 +1,165 @@
+# name: test/sql/aggregate/aggregates/test_state_export_opaque.test
+# description: Test the state export functionality, in the legacy opaque AGGREGATE_STATE format (orginally taken from https://github.com/duckdb/duckdb/blob/02ec08120314f0bf6e2f4d0eaa36512c5c275b2d/test/sql/aggregate/aggregates/test_state_export.test
+# group: [aggregates]
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+# ungrouped aggr
+
+query I nosort res0
+SELECT skewness(d) FROM dummy;
+----
+
+query I nosort res0
+SELECT finalize(skewness(d) EXPORT_STATE) FROM dummy;
+----
+
+# grouped aggr
+query II nosort res1
+SELECT g, skewness(d) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res1
+SELECT g, finalize(skewness(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;
+----
+
+# we can persist this
+statement ok
+CREATE TABLE state AS SELECT g, skewness(d) EXPORT_STATE skewness_state FROM dummy GROUP BY g ORDER BY g;
+
+query II nosort res1
+SELECT g, finalize(skewness_state) FROM state ORDER BY g;
+----
+
+# empty groups
+query I nosort res4
+SELECT skewness(d) FROM dummy WHERE FALSE;
+----
+
+query I nosort res4
+SELECT finalize(skewness(d) EXPORT_STATE) FROM dummy WHERE FALSE;
+----
+
+# only null scanned
+query I nosort res5
+SELECT skewness(d) FROM (SELECT NULL::integer d);
+----
+
+query I nosort res5
+SELECT finalize(skewness(d) EXPORT_STATE) FROM (SELECT NULL::integer d);
+----
+
+# only null scanned, but grouped
+query I nosort res6
+SELECT skewness(d) FROM (SELECT NULL::integer d, g FROM dummy);
+----
+
+query I nosort res6
+SELECT finalize(skewness(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);
+----
+
+# you're holding it wrong:
+
+statement error
+SELECT list(d) EXPORT_STATE from dummy;
+----
+
+statement error
+SELECT string_agg(d, ',') EXPORT_STATE from dummy;
+----
+
+statement error
+SELECT string_agg(d) EXPORT_STATE from dummy;
+----
+
+statement error
+SELECT FINALIZE(COMBINE(skewness(d) EXPORT_STATE)) FROM dummy;
+----
+
+statement error
+SELECT combine(NULL, NULL);
+----
+
+statement error
+SELECT combine(42, 42);
+----
+
+statement error
+SELECT finalize(NULL);
+----
+
+statement error
+SELECT finalize(42);
+----
+
+statement error
+SELECT finalize(skewness(d)) from dummy;
+----
+
+statement error
+SELECT finalize(skewness(d)) from dummy group by g;
+----
+
+# can't finalize twice
+statement error
+SELECT finalize(finalize(skewness(d) EXPORT_STATE)) from dummy;
+----
+
+statement error
+select skewness(42) EXPORT_STATE over ();
+----
+
+
+# tests with ze persistence
+# The storage version will be latest, so both opted-in to new AGGREGATE_STATE as struct an non-opted in will work
+load {TEST_DIR}/test_state_export.db readwrite latest
+
+statement ok
+create table dummy as select range % 10 g, range d from range(100);
+
+# we can persist this
+statement ok
+CREATE TABLE state AS SELECT g, skewness(d) EXPORT_STATE skewness_state FROM dummy GROUP BY g ORDER BY g;
+
+statement ok
+CREATE VIEW state_view AS SELECT g, skewness(d) EXPORT_STATE skewness_state FROM dummy GROUP BY g ORDER BY g;
+
+restart
+
+query II nosort res10
+SELECT g, skewness(d) FROM dummy GROUP BY g ORDER BY g;
+----
+
+query II nosort res10
+SELECT g, finalize(skewness_state) FROM state ORDER BY g;
+----
+
+query II nosort res10
+SELECT g, finalize(skewness_state) FROM state_view ORDER BY g;
+----
+
+# BLOB casting back and forth
+statement ok
+SELECT (skewness(42) EXPORT_STATE)::BLOB;
+
+query I
+SELECT FINALIZE(COMBINE(skewness(42) EXPORT_STATE, (skewness(20) EXPORT_STATE)::BLOB));
+----
+NULL
+
+statement error
+SELECT (skewness(42) EXPORT_STATE)::INTEGER;
+----
+
+statement error
+SELECT COMBINE(skewness(42) EXPORT_STATE, 42);
+----
+
+statement error
+SELECT COMBINE(skewness(42) EXPORT_STATE, 'ASDF'::BLOB);
+----
+
+statement error
+SELECT COMBINE((skewness(42) EXPORT_STATE)::BLOB, skewness(42) EXPORT_STATE);
+----

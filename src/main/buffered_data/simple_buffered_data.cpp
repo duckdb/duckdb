@@ -55,6 +55,11 @@ StreamExecutionResult SimpleBufferedData::ExecuteTaskInternal(StreamQueryResult 
 	if (!cc->IsActiveResult(context_lock, result)) {
 		return StreamExecutionResult::EXECUTION_CANCELLED;
 	}
+	// Check for interrupt even if the buffer is full.
+	// Without this check, cancel requests would not be detected until the buffer is drained.
+	if (cc->interrupt_state.load(std::memory_order_relaxed) == ClientInterruptState::INTERRUPTED) {
+		throw InterruptException();
+	}
 	if (BufferIsFull()) {
 		// The buffer isn't empty yet, just return
 		return StreamExecutionResult::CHUNK_READY;
@@ -100,7 +105,7 @@ unique_ptr<DataChunk> SimpleBufferedData::Scan() {
 	buffered_chunks.pop();
 
 	if (chunk) {
-		auto allocation_size = chunk->GetAllocationSize();
+		auto allocation_size = chunk->GetDataSize();
 		buffered_count -= allocation_size;
 	}
 	return chunk;
@@ -110,7 +115,7 @@ void SimpleBufferedData::Append(const DataChunk &to_append) {
 	auto chunk = make_uniq<DataChunk>();
 	chunk->Initialize(Allocator::DefaultAllocator(), to_append.GetTypes());
 	to_append.Copy(*chunk, 0);
-	auto allocation_size = chunk->GetAllocationSize();
+	auto allocation_size = chunk->GetDataSize();
 
 	unique_lock<mutex> lock(glock);
 	buffered_count += allocation_size;

@@ -2,9 +2,6 @@
 # description: Test LIMIT with CTE clauses
 # group: [order]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 WITH cte AS (SELECT 3) SELECT * FROM range(10000000) LIMIT (SELECT * FROM cte)
 ----

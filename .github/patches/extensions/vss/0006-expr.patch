@@ -1,0 +1,223 @@
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index 1eb697a..c22ac10 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -617,7 +617,7 @@ void HNSWIndex::VerifyAllocations(IndexLock &state) {
+ static void TryBindIndexExpressionInternal(Expression &expr, TableIndex table_idx, const vector<column_t> &index_columns,
+                                            const vector<ColumnIndex> &table_columns, bool &success, bool &found) {
+ 
+-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
++	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+ 		found = true;
+ 		auto &ref = expr.Cast<BoundColumnRefExpression>();
+ 
+diff --git a/src/hnsw/hnsw_index_physical_create.cpp b/src/hnsw/hnsw_index_physical_create.cpp
+index ef33ebe..dd3692a 100644
+--- a/src/hnsw/hnsw_index_physical_create.cpp
++++ b/src/hnsw/hnsw_index_physical_create.cpp
+@@ -62,7 +62,7 @@ public:
+ unique_ptr<GlobalSinkState> PhysicalCreateHNSWIndex::GetGlobalSinkState(ClientContext &context) const {
+ 	auto gstate = make_uniq<CreateHNSWIndexGlobalState>(*this);
+ 
+-	vector<LogicalType> data_types = {unbound_expressions[0]->return_type, LogicalType::ROW_TYPE};
++	vector<LogicalType> data_types = {unbound_expressions[0]->GetReturnType(), LogicalType::ROW_TYPE};
+ 	gstate->collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), data_types);
+ 	gstate->context = context.shared_from_this();
+ 
+@@ -90,7 +90,7 @@ public:
+ unique_ptr<LocalSinkState> PhysicalCreateHNSWIndex::GetLocalSinkState(ExecutionContext &context) const {
+ 	auto state = make_uniq<CreateHNSWIndexLocalState>();
+ 
+-	vector<LogicalType> data_types = {unbound_expressions[0]->return_type, LogicalType::ROW_TYPE};
++	vector<LogicalType> data_types = {unbound_expressions[0]->GetReturnType(), LogicalType::ROW_TYPE};
+ 	state->collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context.client), data_types);
+ 	state->collection->InitializeAppend(state->append_state);
+ 	return std::move(state);
+diff --git a/src/hnsw/hnsw_index_plan.cpp b/src/hnsw/hnsw_index_plan.cpp
+index 1ca593a..d96e1cf 100644
+--- a/src/hnsw/hnsw_index_plan.cpp
++++ b/src/hnsw/hnsw_index_plan.cpp
+@@ -83,7 +83,7 @@ PhysicalOperator &HNSWIndex::CreatePlan(PlanIndexInput &input) {
+ 	if (create_index.expressions.size() != 1) {
+ 		throw BinderException("HNSW indexes can only be created over a single column of keys.");
+ 	}
+-	auto &arr_type = create_index.expressions[0]->return_type;
++	auto &arr_type = create_index.expressions[0]->GetReturnType();
+ 	if (arr_type.id() != LogicalTypeId::ARRAY) {
+ 		throw BinderException("HNSW index keys must be of type FLOAT[N]");
+ 	}
+@@ -103,7 +103,7 @@ PhysicalOperator &HNSWIndex::CreatePlan(PlanIndexInput &input) {
+ 	vector<LogicalType> new_column_types;
+ 	vector<unique_ptr<Expression>> select_list;
+ 	for (auto &expression : create_index.expressions) {
+-		new_column_types.push_back(expression->return_type);
++		new_column_types.push_back(expression->GetReturnType());
+ 		select_list.push_back(std::move(expression));
+ 	}
+ 	new_column_types.emplace_back(LogicalType::ROW_TYPE);
+diff --git a/src/hnsw/hnsw_optimize_expr.cpp b/src/hnsw/hnsw_optimize_expr.cpp
+index 7a88816..d470fb0 100644
+--- a/src/hnsw/hnsw_optimize_expr.cpp
++++ b/src/hnsw/hnsw_optimize_expr.cpp
+@@ -50,8 +50,8 @@ unique_ptr<Expression> CosineDistanceRule::Apply(LogicalOperator &op, vector<ref
+ 		// Create the new array_cosine_distance function
+ 		vector<unique_ptr<Expression>> args;
+ 		vector<LogicalType> arg_types;
+-		arg_types.push_back(similarity_expr.children[0]->return_type);
+-		arg_types.push_back(similarity_expr.children[1]->return_type);
++		arg_types.push_back(similarity_expr.children[0]->GetReturnType());
++		arg_types.push_back(similarity_expr.children[1]->GetReturnType());
+ 		args.push_back(std::move(similarity_expr.children[0]));
+ 		args.push_back(std::move(similarity_expr.children[1]));
+ 
+@@ -65,7 +65,7 @@ unique_ptr<Expression> CosineDistanceRule::Apply(LogicalOperator &op, vector<ref
+ 
+ 		changes_made = true;
+ 		auto func = func_entry->functions.GetFunctionByArguments(context, arg_types);
+-		return make_uniq<BoundFunctionExpression>(similarity_expr.return_type, func, std::move(args), nullptr);
++		return make_uniq<BoundFunctionExpression>(similarity_expr.GetReturnType(), func, std::move(args), nullptr);
+ 	}
+ 	return nullptr;
+ }
+diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
+index 9fabcae..36c220f 100644
+--- a/src/hnsw/hnsw_optimize_join.cpp
++++ b/src/hnsw/hnsw_optimize_join.cpp
+@@ -445,15 +445,15 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 	if (filter.expressions.size() != 1) {
+ 		return false;
+ 	}
+-	if (filter.expressions.back()->type != ExpressionType::COMPARE_LESSTHANOREQUALTO) {
++	if (filter.expressions.back()->GetExpressionType() != ExpressionType::COMPARE_LESSTHANOREQUALTO) {
+ 		return false;
+ 	}
+ 	const auto &compare_expr = filter.expressions.back()->Cast<BoundComparisonExpression>();
+-	if (compare_expr.right->type != ExpressionType::VALUE_CONSTANT) {
++	if (compare_expr.right->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+ 		return false;
+ 	}
+ 	const auto &constant_expr = compare_expr.right->Cast<BoundConstantExpression>();
+-	if (constant_expr.return_type != LogicalType::BIGINT) {
++	if (constant_expr.GetReturnType() != LogicalType::BIGINT) {
+ 		return false;
+ 	}
+ 	auto k_value = constant_expr.value.GetValue<int64_t>();
+@@ -461,7 +461,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 		// Can only optimize up to SVS
+ 		return false;
+ 	}
+-	if (compare_expr.left->type != ExpressionType::BOUND_COLUMN_REF) {
++	if (compare_expr.left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+ 		return false;
+ 	}
+ 	auto &filter_ref_expr = compare_expr.left->Cast<BoundColumnRefExpression>();
+@@ -476,7 +476,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 	if (window.expressions.size() != 1) {
+ 		return false;
+ 	}
+-	if (window.expressions.back()->type != ExpressionType::WINDOW_ROW_NUMBER) {
++	if (window.expressions.back()->GetExpressionType() != ExpressionType::WINDOW_ROW_NUMBER) {
+ 		return false;
+ 	}
+ 	auto &window_expr = window.expressions.back()->Cast<BoundWindowExpression>();
+@@ -486,7 +486,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 	if (window_expr.orders.back().type != OrderType::ASCENDING) {
+ 		return false;
+ 	}
+-	if (window_expr.orders.back().expression->type != ExpressionType::BOUND_COLUMN_REF) {
++	if (window_expr.orders.back().expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+ 		return false;
+ 	}
+ 	const auto &distance_ref_expr = window_expr.orders.back().expression->Cast<BoundColumnRefExpression>();
+@@ -532,7 +532,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 
+ 		// We also have to replace the outer table index here with the delim_get table index
+ 		ExpressionIterator::EnumerateExpression(bound_index_expr, [&](Expression &child) {
+-			if (child.type == ExpressionType::BOUND_COLUMN_REF) {
++			if (child.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+ 				auto &bound_colref_expr = child.Cast<BoundColumnRefExpression>();
+ 				if (bound_colref_expr.binding.table_index == outer_get.table_index) {
+ 					bound_colref_expr.binding.table_index = delim_get.table_index;
+@@ -562,10 +562,10 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 	}
+ 
+ 	// Fuck it, for now dont allow expressions on the index
+-	if (bindings[1].get().type != ExpressionType::BOUND_COLUMN_REF) {
++	if (bindings[1].get().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+ 		return false;
+ 	}
+-	if (bindings[2].get().type != ExpressionType::BOUND_COLUMN_REF) {
++	if (bindings[2].get().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+ 		return false;
+ 	}
+ 	const auto &outer_ref_expr = bindings[1].get().Cast<BoundColumnRefExpression>();
+diff --git a/src/hnsw/hnsw_optimize_scan.cpp b/src/hnsw/hnsw_optimize_scan.cpp
+index 5d47cb0..075328e 100644
+--- a/src/hnsw/hnsw_optimize_scan.cpp
++++ b/src/hnsw/hnsw_optimize_scan.cpp
+@@ -49,7 +49,7 @@ public:
+ 			return false;
+ 		}
+ 
+-		if (order.expression->type != ExpressionType::BOUND_COLUMN_REF) {
++		if (order.expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+ 			// The expression has to reference the child operator (a projection with the distance function)
+ 			return false;
+ 		}
+@@ -124,10 +124,10 @@ public:
+ 			auto &const_expr_ref = bindings[1];
+ 			auto &index_expr_ref = bindings[2];
+ 
+-			if (const_expr_ref.get().type != ExpressionType::VALUE_CONSTANT || !index_expr->Equals(index_expr_ref)) {
++			if (const_expr_ref.get().GetExpressionType() != ExpressionType::VALUE_CONSTANT || !index_expr->Equals(index_expr_ref)) {
+ 				// Swap the bindings and try again
+ 				std::swap(const_expr_ref, index_expr_ref);
+-				if (const_expr_ref.get().type != ExpressionType::VALUE_CONSTANT ||
++				if (const_expr_ref.get().GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
+ 				    !index_expr->Equals(index_expr_ref)) {
+ 					// Nope, not a match, we can't optimize.
+ 					continue;
+@@ -211,7 +211,7 @@ public:
+ 					column_binding_set_t referenced_bindings;
+ 					for (auto &expr : parent_projection.expressions) {
+ 						ExpressionIterator::EnumerateExpression(expr, [&](Expression &expr_ref) {
+-							if (expr_ref.type == ExpressionType::BOUND_COLUMN_REF) {
++							if (expr_ref.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+ 								auto &bound_column_ref = expr_ref.Cast<BoundColumnRefExpression>();
+ 								referenced_bindings.insert(bound_column_ref.binding);
+ 							}
+diff --git a/src/hnsw/hnsw_optimize_topk.cpp b/src/hnsw/hnsw_optimize_topk.cpp
+index c48a9f9..afb70c8 100644
+--- a/src/hnsw/hnsw_optimize_topk.cpp
++++ b/src/hnsw/hnsw_optimize_topk.cpp
+@@ -75,7 +75,7 @@ public:
+ 		}
+ 
+ 		auto &agg_expr = agg.expressions[0];
+-		if (agg_expr->type != ExpressionType::BOUND_AGGREGATE) {
++		if (agg_expr->GetExpressionType() != ExpressionType::BOUND_AGGREGATE) {
+ 			return false;
+ 		}
+ 		auto &agg_func_expr = agg_expr->Cast<BoundAggregateExpression>();
+@@ -85,7 +85,7 @@ public:
+ 		if (agg_func_expr.children.size() != 3) {
+ 			return false;
+ 		}
+-		if (agg_func_expr.children[2]->type != ExpressionType::VALUE_CONSTANT) {
++		if (agg_func_expr.children[2]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+ 			return false;
+ 		}
+ 		const auto &col_expr = agg_func_expr.children[0];
+@@ -149,10 +149,10 @@ public:
+ 			auto &const_expr_ref = bindings[1];
+ 			auto &index_expr_ref = bindings[2];
+ 
+-			if (const_expr_ref.get().type != ExpressionType::VALUE_CONSTANT || !index_expr->Equals(index_expr_ref)) {
++			if (const_expr_ref.get().GetExpressionType() != ExpressionType::VALUE_CONSTANT || !index_expr->Equals(index_expr_ref)) {
+ 				// Swap the bindings and try again
+ 				std::swap(const_expr_ref, index_expr_ref);
+-				if (const_expr_ref.get().type != ExpressionType::VALUE_CONSTANT ||
++				if (const_expr_ref.get().GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
+ 				    !index_expr->Equals(index_expr_ref)) {
+ 					// Nope, not a match, we can't optimize.
+ 					continue;

@@ -445,19 +445,19 @@ DUCKDB_API bool TryCastToDecimalCommaSeparated::Operation(string_t input, hugein
 
 struct StringCastFromDecimal {
 	template <class SRC>
-	static inline string_t Operation(SRC input, uint8_t width, uint8_t scale, Vector &result) {
+	static inline string_t Operation(SRC input, uint8_t width, uint8_t scale, StringHeap &heap) {
 		throw NotImplementedException("Unimplemented type for string cast!");
 	}
 };
 
 template <>
-string_t StringCastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale, Vector &result);
+string_t StringCastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale, StringHeap &heap);
 template <>
-string_t StringCastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale, Vector &result);
+string_t StringCastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale, StringHeap &heap);
 template <>
-string_t StringCastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale, Vector &result);
+string_t StringCastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale, StringHeap &heap);
 template <>
-string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale, Vector &result);
+string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale, StringHeap &heap);
 
 //===--------------------------------------------------------------------===//
 // Cast VARCHAR <-> Decimal

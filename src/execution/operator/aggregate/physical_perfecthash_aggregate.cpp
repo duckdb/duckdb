@@ -25,7 +25,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(PhysicalPlan &physica
 		group_minima.push_back(NumericStats::Min(nstats));
 	}
 	for (auto &expr : groups) {
-		group_types.push_back(expr->return_type);
+		group_types.push_back(expr->GetReturnType());
 	}
 
 	vector<BoundAggregateExpression *> bindings;
@@ -39,10 +39,10 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(PhysicalPlan &physica
 		D_ASSERT(!aggr.IsDistinct());
 		D_ASSERT(aggr.function.HasStateCombineCallback());
 		for (auto &child : aggr.children) {
-			payload_types.push_back(child->return_type);
+			payload_types.push_back(child->GetReturnType());
 		}
 		if (aggr.filter) {
-			payload_types_filters.push_back(aggr.filter->return_type);
+			payload_types_filters.push_back(aggr.filter->GetReturnType());
 		}
 	}
 	for (const auto &pay_filters : payload_types_filters) {
@@ -150,8 +150,8 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 
 	aggregate_input_chunk.SetCardinality(chunk.size());
 
-	group_chunk.Verify();
-	aggregate_input_chunk.Verify();
+	group_chunk.Verify(context.client.db);
+	aggregate_input_chunk.Verify(context.client.db);
 	D_ASSERT(aggregate_input_chunk.ColumnCount() == 0 || group_chunk.size() == aggregate_input_chunk.size());
 
 	lstate.ht->AddChunk(group_chunk, aggregate_input_chunk);
@@ -225,6 +225,7 @@ InsertionOrderPreservingMap<string> PhysicalPerfectHashAggregate::ParamsToString
 		}
 	}
 	result["Aggregates"] = aggregate_info;
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

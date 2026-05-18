@@ -9,11 +9,12 @@
 #include "tpcds_constants.hpp"
 #include "dsdgen_schema.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "dsdgen-c/porting.h"
+#include "dsdgen-c/parallel.h"
 
 #include <cassert>
 
 using namespace duckdb;
-using namespace std;
 
 namespace tpcds {
 
@@ -128,7 +129,7 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_
 		assert(builder_func);
 
 		for (ds_key_t i = k_first_row; k_row_count; i++, k_row_count--) {
-			if (k_row_count % 1000 == 0 && context.interrupted) {
+			if (k_row_count % 1000 == 0 && context.IsInterrupted()) {
 				throw InterruptException();
 			}
 			// append happens directly in builders since they dump child tables
@@ -136,6 +137,7 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_
 			if (builder_func((void *)&append_info, i)) {
 				throw InternalException("Table generation failed");
 			}
+			row_stop(table_id);
 		}
 	}
 

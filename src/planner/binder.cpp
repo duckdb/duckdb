@@ -3,6 +3,10 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/enums/cte_materialize.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
@@ -14,16 +18,20 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>
 
@@ -50,8 +58,6 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
     : context(context), bind_context(*this), parent(std::move(parent_p)), binder_type(binder_type),
       global_binder_state(parent ? parent->global_binder_state : make_shared_ptr<GlobalBinderState>()),
-      query_binder_state(parent && binder_type == BinderType::REGULAR_BINDER ? parent->query_binder_state
-                                                                             : make_shared_ptr<QueryBinderState>()),
       entry_retriever(context), depth(parent ? parent->GetBinderDepth() : 1) {
 	IncreaseDepth();
 	if (parent) {
@@ -60,6 +66,10 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
 		lambda_bindings = parent->lambda_bindings;
+		if (binder_type != BinderType::VIEW_BINDER) {
+			// inherit expression binders from parent
+			active_binders = parent->active_binders;
+		}
 	}
 }
 
@@ -79,14 +89,14 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		return Bind(statement.Cast<SelectStatement>());
-	case StatementType::INSERT_STATEMENT:
-		return BindWithCTE(statement.Cast<InsertStatement>());
 	case StatementType::COPY_STATEMENT:
 		return Bind(statement.Cast<CopyStatement>(), CopyToType::COPY_TO_FILE);
+	case StatementType::INSERT_STATEMENT:
+		return Bind(statement.Cast<InsertStatement>());
 	case StatementType::DELETE_STATEMENT:
-		return BindWithCTE(statement.Cast<DeleteStatement>());
+		return Bind(statement.Cast<DeleteStatement>());
 	case StatementType::UPDATE_STATEMENT:
-		return BindWithCTE(statement.Cast<UpdateStatement>());
+		return Bind(statement.Cast<UpdateStatement>());
 	case StatementType::RELATION_STATEMENT:
 		return Bind(statement.Cast<RelationStatement>());
 	case StatementType::CREATE_STATEMENT:
@@ -221,8 +231,8 @@ void Binder::AddBoundView(ViewCatalogEntry &view) {
 	bound_views.insert(view);
 }
 
-idx_t Binder::GenerateTableIndex() {
-	return global_binder_state->bound_tables++;
+TableIndex Binder::GenerateTableIndex() {
+	return TableIndex(global_binder_state->bound_tables++);
 }
 
 StatementProperties &Binder::GetStatementProperties() {
@@ -237,18 +247,18 @@ void Binder::SetParameters(BoundParameterMap &parameters) {
 	global_binder_state->parameters = parameters;
 }
 
-void Binder::PushExpressionBinder(ExpressionBinder &binder) {
-	GetActiveBinders().push_back(binder);
+void Binder::BeginSubqueryBind(Binder &parent, ExpressionBinder &binder) {
+	// push all active expression binders
+	auto &active_binders = GetActiveBinders();
+	for (auto &active_binder : parent.GetActiveBinders()) {
+		active_binders.push_back(active_binder);
+	}
+	// finally push this binder
+	active_binders.push_back(binder);
 }
 
-void Binder::PopExpressionBinder() {
-	D_ASSERT(HasActiveBinder());
-	GetActiveBinders().pop_back();
-}
-
-void Binder::SetActiveBinder(ExpressionBinder &binder) {
-	D_ASSERT(HasActiveBinder());
-	GetActiveBinders().back() = binder;
+void Binder::FinishSubqueryBind() {
+	GetActiveBinders().clear();
 }
 
 ExpressionBinder &Binder::GetActiveBinder() {
@@ -260,7 +270,7 @@ bool Binder::HasActiveBinder() {
 }
 
 vector<reference<ExpressionBinder>> &Binder::GetActiveBinders() {
-	return query_binder_state->active_binders;
+	return active_binders;
 }
 
 void Binder::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
@@ -365,8 +375,145 @@ void VerifyNotExcluded(const ParsedExpression &root_expr) {
 	    });
 }
 
+void Binder::BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns) {
+	// Build a mapping from storage column index to scan chunk index for RETURNING.
+	// This allows PhysicalDelete to pass columns through from the scan instead of
+	// fetching them by row ID. Generated columns will be computed by the RETURNING projection.
+	auto &column_ids = get.GetColumnIds();
+	auto &columns = table.GetColumns();
+	auto physical_count = columns.PhysicalColumnCount();
+
+	// Initialize the mapping with INVALID_INDEX
+	return_columns.resize(physical_count, DConstants::INVALID_INDEX);
+
+	// First, map columns already in the scan to their storage indices
+	for (idx_t chunk_idx = 0; chunk_idx < column_ids.size(); chunk_idx++) {
+		auto &col_id = column_ids[chunk_idx];
+		if (col_id.IsVirtualColumn()) {
+			continue;
+		}
+		// Get the column by logical index, then get its storage index
+		auto logical_idx = col_id.GetPrimaryIndex();
+		auto &col = columns.GetColumn(LogicalIndex(logical_idx));
+		if (!col.Generated()) {
+			auto storage_idx = col.StorageOid();
+			return_columns[storage_idx] = chunk_idx;
+		}
+	}
+
+	// Add any missing physical columns to the scan
+	for (auto &col : columns.Physical()) {
+		auto storage_idx = col.StorageOid();
+		if (return_columns[storage_idx] == DConstants::INVALID_INDEX) {
+			return_columns[storage_idx] = column_ids.size();
+			get.AddColumnId(col.Logical().index);
+		}
+	}
+}
+
+//! Helper: convert scan column mapping to projection expression mapping for MERGE INTO
+static void ConvertScanToProjectionMapping(TableCatalogEntry &table, const vector<idx_t> &scan_return_columns,
+                                           vector<idx_t> &return_columns,
+                                           vector<unique_ptr<Expression>> &projection_expressions,
+                                           LogicalOperator &target_binding) {
+	target_binding.ResolveOperatorTypes();
+	auto target_bindings = target_binding.GetColumnBindings();
+	auto &target_types = target_binding.types;
+
+	auto physical_count = table.GetColumns().PhysicalColumnCount();
+	return_columns.resize(physical_count, DConstants::INVALID_INDEX);
+
+	for (idx_t storage_idx = 0; storage_idx < scan_return_columns.size(); storage_idx++) {
+		auto scan_idx = scan_return_columns[storage_idx];
+		if (scan_idx != DConstants::INVALID_INDEX && scan_idx < target_bindings.size()) {
+			return_columns[storage_idx] = projection_expressions.size();
+			projection_expressions.push_back(
+			    make_uniq<BoundColumnRefExpression>(target_types[scan_idx], target_bindings[scan_idx]));
+		}
+	}
+}
+
+void Binder::BindDeleteReturningColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns,
+                                        vector<unique_ptr<Expression>> &projection_expressions,
+                                        LogicalOperator &target_binding) {
+	vector<idx_t> scan_return_columns;
+	BindDeleteReturningColumns(table, get, scan_return_columns);
+	ConvertScanToProjectionMapping(table, scan_return_columns, return_columns, projection_expressions, target_binding);
+}
+
+void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns) {
+	// Build a mapping from storage column index to scan chunk index for unique index tracking.
+	// This is a sparse mapping - only indexed columns have valid indices.
+	// Used when DELETE has no RETURNING but table has unique indexes.
+	auto &storage = table.GetStorage();
+	auto &info = storage.GetDataTableInfo();
+	auto &indexes = info->GetIndexes();
+
+	// Collect column IDs from unique indexes
+	unordered_set<column_t> indexed_column_ids;
+	for (auto &index : indexes.Indexes()) {
+		if (index.IsUnique()) {
+			auto &col_ids = index.GetColumnIdSet();
+			indexed_column_ids.insert(col_ids.begin(), col_ids.end());
+		}
+	}
+
+	if (indexed_column_ids.empty()) {
+		return;
+	}
+
+	auto &column_ids = get.GetColumnIds();
+	auto &columns = table.GetColumns();
+	auto physical_count = columns.PhysicalColumnCount();
+
+	// Initialize the mapping with INVALID_INDEX
+	return_columns.resize(physical_count, DConstants::INVALID_INDEX);
+
+	// First, map columns already in the scan to their storage indices
+	for (idx_t chunk_idx = 0; chunk_idx < column_ids.size(); chunk_idx++) {
+		auto &col_id = column_ids[chunk_idx];
+		if (col_id.IsVirtualColumn()) {
+			continue;
+		}
+		auto logical_idx = col_id.GetPrimaryIndex();
+		auto &col = columns.GetColumn(LogicalIndex(logical_idx));
+		if (!col.Generated()) {
+			auto storage_idx = col.StorageOid();
+			// Only map if this column is in a unique index
+			if (indexed_column_ids.count(storage_idx)) {
+				return_columns[storage_idx] = chunk_idx;
+			}
+		}
+	}
+
+	// Add any missing indexed columns to the scan
+	for (auto col_idx : indexed_column_ids) {
+		if (return_columns[col_idx] == DConstants::INVALID_INDEX) {
+			return_columns[col_idx] = column_ids.size();
+			// Find the logical index for this storage index
+			for (auto &col : columns.Physical()) {
+				if (col.StorageOid() == col_idx) {
+					get.AddColumnId(col.Logical().index);
+					break;
+				}
+			}
+		}
+	}
+}
+
+void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, vector<idx_t> &return_columns,
+                                    vector<unique_ptr<Expression>> &projection_expressions,
+                                    LogicalOperator &target_binding) {
+	vector<idx_t> scan_return_columns;
+	BindDeleteIndexColumns(table, get, scan_return_columns);
+	if (!scan_return_columns.empty()) {
+		ConvertScanToProjectionMapping(table, scan_return_columns, return_columns, projection_expressions,
+		                               target_binding);
+	}
+}
+
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
-                                     const string &alias, idx_t update_table_index,
+                                     const string &alias, TableIndex update_table_index,
                                      unique_ptr<LogicalOperator> child_operator, virtual_column_map_t virtual_columns) {
 	vector<LogicalType> types;
 	vector<string> names;
@@ -421,6 +568,82 @@ optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const string &catalog, const 
                                                    const EntryLookupInfo &lookup_info,
                                                    OnEntryNotFound on_entry_not_found) {
 	return entry_retriever.GetEntry(catalog, schema, lookup_info, on_entry_not_found);
+}
+
+//! Create a binder whose catalog search path is anchored to the table's catalog+schema
+shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const string &catalog_name, const string &schema_name) {
+	shared_ptr<Binder> new_binder = Binder::CreateBinder(context, this);
+
+	vector<CatalogSearchEntry> search_path;
+
+	search_path.emplace_back(catalog_name, schema_name);
+	if (schema_name != DEFAULT_SCHEMA) {
+		search_path.emplace_back(catalog_name, DEFAULT_SCHEMA);
+	}
+	new_binder->entry_retriever.SetSearchPath(std::move(search_path));
+	return new_binder;
+}
+
+static constexpr const char *TRIGGER_BASE_CTE_NAME = "__duckdb_trigger_base";
+
+unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
+                                                          vector<unique_ptr<ParsedExpression>> &returning_list,
+                                                          TableCatalogEntry &table, TriggerEventType event_type) {
+	auto &expanded_tables = global_binder_state->trigger_expanded_tables;
+	if (expanded_tables.find(table) != expanded_tables.end()) {
+		if (global_binder_state->trigger_creation_table == &table) {
+			throw NotImplementedException("Recursive trigger chains are not yet supported (trigger cycle detected "
+			                              "through trigger \"%s\" on table \"%s\")",
+			                              global_binder_state->trigger_creation_name, table.name);
+		}
+		return nullptr;
+	}
+	auto triggers = table.GetTriggersForEvent(table.ParentCatalog().GetCatalogTransaction(context),
+	                                          TriggerTiming::AFTER, event_type);
+	if (triggers.empty()) {
+		return nullptr;
+	}
+	if (!returning_list.empty()) {
+		throw NotImplementedException("RETURNING is not yet supported on tables with AFTER triggers");
+	}
+	expanded_tables.insert(table);
+	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, triggers));
+}
+
+BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+                                           const vector<const_reference<TriggerCatalogEntry>> &triggers) {
+	// multiple triggers per table are not yet supported
+	D_ASSERT(triggers.size() == 1);
+
+	D_ASSERT(returning_list.empty());
+	returning_list.push_back(make_uniq<StarExpression>());
+
+	auto base_cte = make_uniq<CommonTableExpressionInfo>();
+	base_cte->query_node = node.Copy();
+	base_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+	base_cte->is_trigger_generated = true;
+
+	// Unreferenced DML CTE
+	auto &trigger = triggers[0].get();
+	auto trig_cte = make_uniq<CommonTableExpressionInfo>();
+	trig_cte->query_node = trigger.trigger_action->Copy();
+	trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+	trig_cte->is_trigger_generated = true;
+
+	// count(*) over the base CTE gives CHANGED_ROWS ("N rows affected") to the client
+	auto outer = make_uniq<SelectNode>();
+	outer->select_list.push_back(make_uniq<FunctionExpression>("count_star", vector<unique_ptr<ParsedExpression>>()));
+	auto from_ref = make_uniq<BaseTableRef>();
+	from_ref->table_name = TRIGGER_BASE_CTE_NAME;
+	outer->from_table = std::move(from_ref);
+	outer->cte_map.map[TRIGGER_BASE_CTE_NAME] = std::move(base_cte);
+	outer->cte_map.map["__duckdb_trigger_1"] = std::move(trig_cte);
+
+	auto bound = Bind(*outer);
+	auto &properties = GetStatementProperties();
+	properties.return_type = StatementReturnType::CHANGED_ROWS;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	return bound;
 }
 
 } // namespace duckdb

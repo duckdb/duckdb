@@ -7,9 +7,7 @@
 
 // Allow implicit conversion from char16_t* to UnicodeString for this file:
 // Helpful in toString methods and elsewhere.
-#ifndef UNISTR_FROM_STRING_EXPLICIT
 #define UNISTR_FROM_STRING_EXPLICIT
-#endif
 
 #include "numparse_types.h"
 #include "numparse_validators.h"
@@ -48,8 +46,9 @@ RequireDecimalSeparatorValidator::RequireDecimalSeparatorValidator(bool patternH
 }
 
 void RequireDecimalSeparatorValidator::postProcess(ParsedNumber& result) const {
+    bool parseIsInfNaN = 0 != (result.flags & FLAG_INFINITY) || 0 != (result.flags & FLAG_NAN);
     bool parseHasDecimalSeparator = 0 != (result.flags & FLAG_HAS_DECIMAL_SEPARATOR);
-    if (parseHasDecimalSeparator != fPatternHasDecimalSeparator) {
+    if (!parseIsInfNaN && parseHasDecimalSeparator != fPatternHasDecimalSeparator) {
         result.flags |= FLAG_FAIL;
     }
 }

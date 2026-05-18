@@ -160,6 +160,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::FLOAT:
 		child.format = "f";
 		break;
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT: {
 		if (options.arrow_lossless_conversion) {
 			SetArrowExtension(root_holder, child, type, context);
@@ -222,6 +223,12 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ: {
 		string format = "tsu:" + options.time_zone;
+		root_holder.owned_type_names.push_back(AddName(format));
+		child.format = root_holder.owned_type_names.back().get();
+		break;
+	}
+	case LogicalTypeId::TIMESTAMP_TZ_NS: {
+		string format = "tsn:" + options.time_zone;
 		root_holder.owned_type_names.push_back(AddName(format));
 		child.format = root_holder.owned_type_names.back().get();
 		break;

@@ -24,7 +24,7 @@ static void CachedFunction(Vector &constant, Vector &other, Vector &result, Data
 	auto val = constant.GetValue(0);
 	idx_t count = args.size();
 	if (val.IsNull()) {
-		auto &result_validity = FlatVector::Validity(result);
+		auto &result_validity = FlatVector::ValidityMutable(result);
 		result_validity.SetAllInvalid(count);
 		return;
 	}
@@ -39,7 +39,7 @@ static void CachedFunction(Vector &constant, Vector &other, Vector &result, Data
 			return cached.similarity(other_str_begin, other_str_begin + other_str.GetSize());
 		});
 	} else {
-		auto score_cutoff = args.data[2];
+		auto &score_cutoff = args.data[2];
 		BinaryExecutor::Execute<string_t, double_t, double>(
 		    other, score_cutoff, result, count, [&](const string_t &other_str, const double_t score_cutoff) {
 			    auto other_str_begin = other_str.GetData();

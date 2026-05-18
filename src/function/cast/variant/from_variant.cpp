@@ -1,3 +1,12 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/shredded_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "yyjson_utils.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/common/types/variant.hpp"
@@ -74,7 +83,9 @@ struct VariantBooleanConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, bool &ret,
 	                    const EmptyConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != VariantLogicalType::BOOL_FALSE && type_id != VariantLogicalType::BOOL_TRUE) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		ret = type_id == VariantLogicalType::BOOL_TRUE;
@@ -89,7 +100,9 @@ struct VariantDirectConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const EmptyConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		ret = Load<T>(value + byte_offset);
@@ -99,7 +112,9 @@ struct VariantDirectConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const StringConversionPayload &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		auto ptr = value + byte_offset;
@@ -117,7 +132,9 @@ struct VariantDecimalConversion {
 	static bool Convert(const VariantLogicalType type_id, uint32_t byte_offset, const_data_ptr_t value, T &ret,
 	                    const DecimalConversionPayloadFromVariant &payload, string &error) {
 		if (type_id != TYPE_ID) {
-			error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			if (error.empty()) {
+				error = StringUtil::Format("Can't convert from VARIANT(%s)", EnumUtil::ToString(type_id));
+			}
 			return false;
 		}
 		auto ptr = value + byte_offset;
@@ -140,8 +157,8 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 	auto &variant = conversion_data.variant;
 
 	auto &target_type = result.GetType();
-	auto result_data = FlatVector::GetData<T>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto result_data = FlatVector::GetDataMutable<T>(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 
 	bool all_valid = true;
 	for (idx_t i = 0; i < count; i++) {
@@ -174,7 +191,6 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 				all_valid = false;
 			}
 			result.SetValue(i + offset, value);
-			converted = true;
 		}
 	}
 	return all_valid;
@@ -205,7 +221,7 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 
 	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
 	//! respect that)
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	ValidityMask validity(count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!result_validity.RowIsValid(offset + i)) {
@@ -242,20 +258,21 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 	}
 
 	ListVector::Reserve(result, total_offset + total_children);
-	auto &child = ListVector::GetEntry(result);
-	auto list_data = ListVector::GetData(result);
+	auto &child = ListVector::GetChildMutable(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count, offset);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 		auto &child_data_entry = child_data[i];
 
 		if (!validity.RowIsValid(i)) {
-			FlatVector::SetNull(result, offset + i, true);
+			result_data.WriteNull();
 			continue;
 		}
 
-		auto &entry = list_data[i + offset];
+		list_entry_t entry;
 		entry.offset = total_offset;
 		entry.length = child_data_entry.child_count;
+		result_data.WriteValue(entry);
 		total_offset += entry.length;
 
 		FindValues(conversion_data.variant, row_index, new_sel, child_data_entry);
@@ -280,7 +297,7 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 
 	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
 	//! respect that)
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	ValidityMask validity(count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!result_validity.RowIsValid(offset + i)) {
@@ -314,7 +331,7 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 	SelectionVector new_sel;
 	new_sel.Initialize(array_size);
 
-	auto &child = ArrayVector::GetEntry(result);
+	auto &child = ArrayVector::GetChildMutable(result);
 	idx_t total_offset = offset * array_size;
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
@@ -347,7 +364,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 
 	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
 	//! respect that)
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	ValidityMask validity(count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!result_validity.RowIsValid(offset + i)) {
@@ -376,7 +393,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 	SelectionVector child_values_sel;
 	child_values_sel.Initialize(count);
 
-	SelectionVector row_sel(0, count);
+	auto row_sel = SelectionVector::Incremental(0ULL, count);
 	if (row.IsValid()) {
 		auto row_index = row.GetIndex();
 		for (idx_t i = 0; i < count; i++) {
@@ -395,7 +412,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 		ValidityMask lookup_validity(count);
 		VariantUtils::FindChildValues(conversion_data.variant, component, row_sel, child_values_sel, lookup_validity,
 		                              child_data, validity, count);
-		if (!lookup_validity.AllValid()) {
+		if (lookup_validity.CanHaveNull()) {
 			optional_idx nested_index;
 			for (idx_t i = 0; i < count; i++) {
 				if (!lookup_validity.RowIsValid(i)) {
@@ -412,7 +429,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 			return false;
 		}
 		//! Now cast all the values we found to the target type
-		auto &child = *children[child_idx];
+		auto &child = children[child_idx];
 		if (!CastVariant(conversion_data, child, child_values_sel, offset, count, row)) {
 			return false;
 		}
@@ -426,13 +443,12 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 
 	ConvertedJSONHolder json_holder;
 
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::Writer<string_t>(result, count, offset);
 	json_holder.doc = yyjson_mut_doc_new(nullptr);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 
-		auto json_val =
-		    VariantCasts::ConvertVariantToJSON(json_holder.doc, conversion_data.variant.variant, row_index, sel[i]);
+		auto json_val = VariantCasts::ConvertVariantToJSON(json_holder.doc, conversion_data.variant, row_index, sel[i]);
 		if (!json_val) {
 			error = StringUtil::Format("Failed to convert to JSON object");
 			return false;
@@ -446,7 +462,7 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 			return false;
 		}
 		string_t res(json_holder.stringified_json, NumericCast<uint32_t>(len));
-		result_data[offset + i] = StringVector::AddString(result, res);
+		result_data.WriteValue(res);
 		free(json_holder.stringified_json);
 		json_holder.stringified_json = nullptr;
 	}
@@ -641,6 +657,10 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			return CastVariantToPrimitive<
 			    VariantDirectConversion<timestamp_tz_t, VariantLogicalType::TIMESTAMP_MICROS_TZ>>(
 			    conversion_data, result, sel, offset, count, row, empty_payload);
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
+			return CastVariantToPrimitive<
+			    VariantDirectConversion<timestamp_tz_ns_t, VariantLogicalType::TIMESTAMP_NANOS_TZ>>(
+			    conversion_data, result, sel, offset, count, row, empty_payload);
 		case LogicalTypeId::UUID:
 			return CastVariantToPrimitive<VariantDirectConversion<hugeint_t, VariantLogicalType::UUID>>(
 			    conversion_data, result, sel, offset, count, row, empty_payload);
@@ -660,14 +680,47 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 				FlatVector::SetNull(result, offset + i, true);
 			}
 			return false;
-		};
+		}
 	}
 }
 
+static bool TryFromShreddedCast(Vector &variant_vec, Vector &result) {
+	if (variant_vec.GetVectorType() != VectorType::SHREDDED_VECTOR) {
+		// input vector is not shredded
+		return false;
+	}
+	// check if we are fully shredded on this type
+	if (result.GetType().IsNested()) {
+		// shredded casts for nested types not yet supported
+		return false;
+	}
+	auto &shredded_vec = ShreddedVector::GetShreddedVector(variant_vec);
+	if (shredded_vec.GetType() == result.GetType()) {
+		// direct type match: variant vector is fully shredded on this primitive type
+		result.Reference(shredded_vec);
+		return true;
+	}
+	// check if this is a {typed_value ..., untyped_value ...} struct with an empty (constant NULL) untyped_value
+	if (ShreddedVector::IsFullyShredded(variant_vec) && shredded_vec.GetType().id() == LogicalTypeId::STRUCT) {
+		// it is! check if the type of the typed_value entry matches
+		auto &shredded_entries = StructVector::GetEntries(shredded_vec);
+		if (shredded_entries[1].GetType() == result.GetType()) {
+			// the typed_value matches - directly reference it
+			result.Reference(shredded_entries[1]);
+			return true;
+		}
+	}
+	return false;
+}
+
 static bool CastFromVARIANT(Vector &variant_vec, Vector &result, idx_t count, CastParameters &parameters) {
+	if (TryFromShreddedCast(variant_vec, result)) {
+		return true;
+	}
+	// fallback to conversion
 	D_ASSERT(variant_vec.GetType().id() == LogicalTypeId::VARIANT);
 	RecursiveUnifiedVectorFormat variant_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, count, variant_format);
+	Vector::RecursiveToUnifiedFormat(variant_vec, variant_format);
 	FromVariantConversionData conversion_data(variant_format);
 
 	reference<const SelectionVector> sel(*ConstantVector::ZeroSelectionVector());
@@ -723,6 +776,7 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::UUID:

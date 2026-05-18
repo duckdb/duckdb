@@ -1,5 +1,7 @@
 #include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
 
+#include <numeric>
+
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
@@ -19,13 +21,13 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_pl
     : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, left, right, std::move(cond),
                         join_type, estimated_cardinality, std::move(pushdown_info_p)) {
 	for (auto &join_cond : conditions) {
-		D_ASSERT(join_cond.left->return_type == join_cond.right->return_type);
-		join_key_types.push_back(join_cond.left->return_type);
+		D_ASSERT(join_cond.GetLHS().GetReturnType() == join_cond.GetRHS().GetReturnType());
+		join_key_types.push_back(join_cond.GetLHS().GetReturnType());
 
 		// Convert the conditions to sort orders
-		auto left_expr = join_cond.left->Copy();
-		auto right_expr = join_cond.right->Copy();
-		switch (join_cond.comparison) {
+		auto left_expr = join_cond.GetLHS().Copy();
+		auto right_expr = join_cond.GetRHS().Copy();
+		switch (join_cond.GetComparisonType()) {
 		case ExpressionType::COMPARE_LESSTHAN:
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			lhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(left_expr));
@@ -61,15 +63,12 @@ public:
 	using GlobalSortedTable = PhysicalRangeJoin::GlobalSortedTable;
 
 public:
-	MergeJoinGlobalState(ClientContext &client, const PhysicalPiecewiseMergeJoin &op) {
+	MergeJoinGlobalState(ClientContext &client, const PhysicalPiecewiseMergeJoin &op) : op(op) {
 		const auto &rhs_types = op.children[1].get().GetTypes();
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
 		table = make_uniq<GlobalSortedTable>(client, rhs_order, rhs_types, op);
-		if (op.filter_pushdown) {
-			skip_filter_pushdown = op.filter_pushdown->probe_info.empty();
-			global_filter_state = op.filter_pushdown->GetGlobalState(client, op);
-		}
+		ResetState(client);
 	}
 
 	inline idx_t Count() const {
@@ -78,12 +77,35 @@ public:
 
 	void Sink(ExecutionContext &context, DataChunk &input, MergeJoinLocalState &lstate);
 
+	const PhysicalPiecewiseMergeJoin &op;
 	//! The sorted table
 	unique_ptr<GlobalSortedTable> table;
 	//! Should we not bother pushing down filters?
 	bool skip_filter_pushdown = false;
 	//! The global filter states to push down (if any)
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
+
+private:
+	void ResetState(ClientContext &client) {
+		table->ResetForReuse(client);
+		if (op.filter_pushdown) {
+			skip_filter_pushdown = op.filter_pushdown->probe_info.empty();
+			global_filter_state = op.filter_pushdown->GetGlobalState(client, op);
+		} else {
+			skip_filter_pushdown = false;
+			global_filter_state.reset();
+		}
+		GlobalSinkState::Reset(client);
+	}
+
+public:
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ClientContext &client) override {
+		ResetState(client);
+	}
 };
 
 class MergeJoinLocalState : public LocalSinkState {
@@ -93,16 +115,34 @@ public:
 
 	MergeJoinLocalState(ExecutionContext &context, MergeJoinGlobalState &gstate, const idx_t child)
 	    : table(context, *gstate.table, child) {
-		auto &op = gstate.table->op;
-		if (op.filter_pushdown) {
-			local_filter_state = op.filter_pushdown->GetLocalState(*gstate.global_filter_state);
-		}
+		ResetState(gstate);
 	}
 
 	//! The local sort state
 	LocalSortedTable table;
 	//! Local state for accumulating filter statistics
 	unique_ptr<JoinFilterLocalState> local_filter_state;
+
+private:
+	void ResetState(MergeJoinGlobalState &gstate) {
+		auto &op = gstate.table->op;
+		if (op.filter_pushdown) {
+			local_filter_state = op.filter_pushdown->GetLocalState(*gstate.global_filter_state);
+		} else {
+			local_filter_state.reset();
+		}
+	}
+
+public:
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ExecutionContext &context, GlobalSinkState &gstate_p) override {
+		auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
+		table.ResetForReuse(context);
+		ResetState(gstate);
+	}
 };
 
 unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -157,14 +197,14 @@ SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event 
                                                       OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
 	if (filter_pushdown && !gstate.skip_filter_pushdown) {
-		(void)filter_pushdown->Finalize(client, nullptr, *gstate.global_filter_state, *this);
+		(void)filter_pushdown->Finalize(client, *gstate.global_filter_state, *this);
 	}
 
 	gstate.table->Finalize(client, input.interrupt_state);
 
 	if (PropagatesBuildSide(join_type)) {
 		// for FULL/RIGHT OUTER JOIN, initialize found_match to false for every tuple
-		gstate.table->IntializeMatches();
+		gstate.table->InitializeMatches();
 	}
 
 	if (gstate.table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
@@ -190,31 +230,31 @@ public:
 	PiecewiseMergeJoinState(ClientContext &client, const PhysicalPiecewiseMergeJoin &op)
 	    : client(client), allocator(Allocator::Get(client)), op(op), left_outer(IsLeftOuterJoin(op.join_type)),
 	      left_position(0), first_fetch(true), finished(true), right_position(0), right_chunk_index(0),
-	      rhs_executor(client) {
+	      rhs_executor(client), pred_executor(client) {
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 		lhs_payload.Initialize(client, op.children[0].get().GetTypes());
 
 		//	Sort on the first column
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
+		lhs_global_table = make_uniq<GlobalSortedTable>(client, lhs_order, op.children[0].get().GetTypes(), op);
 
 		// Set up shared data for multiple predicates
 		sel.Initialize(STANDARD_VECTOR_SIZE);
 		vector<LogicalType> condition_types;
 		for (auto &order : op.rhs_orders) {
 			rhs_executor.AddExpression(*order.expression);
-			condition_types.push_back(order.expression->return_type);
+			condition_types.push_back(order.expression->GetReturnType());
 		}
 		rhs_keys.Initialize(client, condition_types);
 		rhs_input.Initialize(client, op.children[1].get().GetTypes());
 
 		auto &gsink = op.sink_state->Cast<MergeJoinGlobalState>();
-		auto &rhs_table = *gsink.table;
-		rhs_iterator = rhs_table.CreateIteratorState();
-		rhs_table.InitializePayloadState(rhs_chunk_state);
-		rhs_scan_state = rhs_table.CreateScanState(client);
+		InitializeRightScanState(gsink);
 
-		//	Since we have now materialized the payload, the keys will not have payloads?
-		sort_key_type = rhs_table.GetSortKeyType();
+		if (op.predicate) {
+			pred_executor.AddExpression(*op.predicate);
+			pred_matches.Initialize();
+		}
 	}
 
 	ClientContext &client;
@@ -251,12 +291,55 @@ public:
 	DataChunk rhs_input;
 	ExpressionExecutor rhs_executor;
 
+	//! Arbitrary expressions
+	ExpressionExecutor pred_executor;
+	SelectionVector pred_matches;
+
 public:
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset() override {
+		ResetCachingState();
+		left_outer.Reset();
+		lhs_payload.Reset();
+		lhs_scan.Reset();
+		left_position = 0;
+		first_fetch = true;
+		finished = true;
+		lhs_iterator.reset();
+		rhs_iterator.reset();
+		right_position = 0;
+		right_chunk_index = 0;
+		right_base = 0;
+		prev_left_index = 0;
+		rhs_chunk_state.ResetForScan();
+		rhs_keys.Reset();
+		rhs_input.Reset();
+		lhs_global_table->ResetForReuse(client);
+	}
+
+	void InitializeRightScanState(MergeJoinGlobalState &gsink) {
+		auto &rhs_table = *gsink.table;
+		rhs_iterator = rhs_table.CreateIteratorState();
+		rhs_chunk_state.ResetForScan();
+		rhs_table.InitializePayloadState(rhs_chunk_state);
+		if (!rhs_scan_state) {
+			rhs_scan_state = rhs_table.CreateScanState(client);
+		}
+		//	Since we have now materialized the payload, the keys will not have payloads?
+		sort_key_type = rhs_table.GetSortKeyType();
+	}
+
 	void ResolveJoinKeys(ExecutionContext &context, DataChunk &input) {
 		// sort by join key
-		const auto &lhs_types = lhs_payload.GetTypes();
-		lhs_global_table = make_uniq<GlobalSortedTable>(context.client, lhs_order, lhs_types, op);
-		lhs_local_table = make_uniq<LocalSortedTable>(context, *lhs_global_table, 0U);
+		lhs_global_table->ResetForReuse(context.client);
+		if (!lhs_local_table) {
+			lhs_local_table = make_uniq<LocalSortedTable>(context, *lhs_global_table, 0U);
+		} else {
+			lhs_local_table->ResetForReuse(context);
+		}
 		lhs_local_table->Sink(context, input);
 		lhs_global_table->Combine(context, *lhs_local_table);
 
@@ -305,7 +388,7 @@ static bool MergeJoinStrictComparison(ExpressionType comparison) {
 
 //	Compare using </<=
 template <typename T>
-bool MergeJoinBefore(const T &lhs, const T &rhs, const bool strict) {
+static bool MergeJoinBefore(const T &lhs, const T &rhs, const bool strict) {
 	const bool less_than = lhs < rhs;
 	if (!less_than && !strict) {
 		return !(rhs < lhs);
@@ -404,7 +487,7 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 	// perform the actual join
 	bool found_match[STANDARD_VECTOR_SIZE];
 	memset(found_match, 0, sizeof(found_match));
-	MergeJoinSimpleBlocks(state, gstate, found_match, conditions[0].comparison);
+	MergeJoinSimpleBlocks(state, gstate, found_match, conditions[0].GetComparisonType());
 
 	// use the sorted payload
 	const auto lhs_not_null = lhs_table.count - lhs_table.has_null;
@@ -416,9 +499,9 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 		// The only part of the join keys that is actually used is the validity mask.
 		// Since the payload is sorted, we can just set the tail end of the validity masks to invalid.
 		for (auto &key : lhs_keys.data) {
-			key.Flatten(lhs_keys.size());
-			auto &mask = FlatVector::Validity(key);
-			if (mask.AllValid()) {
+			key.Flatten();
+			auto &mask = FlatVector::ValidityMutable(key);
+			if (mask.CannotHaveNull()) {
 				continue;
 			}
 			mask.SetAllValid(lhs_not_null);
@@ -453,7 +536,7 @@ struct ChunkMergeInfo {
 	//! The left chunk offsets that match
 	SelectionVector lhs;
 	//! The right table offsets that match
-	vector<idx_t> rhs;
+	unsafe_vector<idx_t> rhs;
 
 	ChunkMergeInfo(ExternalBlockIteratorState &state, idx_t block_idx, idx_t &entry_idx, idx_t not_null)
 	    : state(state), block_idx(block_idx), not_null(not_null), entry_idx(entry_idx), lhs(STANDARD_VECTOR_SIZE) {
@@ -476,49 +559,50 @@ static idx_t TemplatedMergeJoinComplexBlocks(ChunkMergeInfo &l, ChunkMergeInfo &
 		return result_count;
 	}
 
-	BLOCK_ITERATOR l_ptr(l.state);
-	BLOCK_ITERATOR r_ptr(r.state);
+	auto *const lhs_sel = l.lhs.data();
 	while (true) {
+		// Phase 1: bulk-emit known matches (l.entry_idx < prev_left_index already matched current r)
 		if (l.entry_idx < prev_left_index) {
-			// left side smaller: found match
-			l.lhs.set_index(result_count, sel_t(l.entry_idx));
-			r.rhs.emplace_back(r.entry_idx);
-			result_count++;
-			// move left side forward
-			l.entry_idx++;
-			++l_ptr;
+			const idx_t batch = MinValue(prev_left_index - l.entry_idx, STANDARD_VECTOR_SIZE - result_count);
+			std::iota(lhs_sel + result_count, lhs_sel + result_count + batch, NumericCast<sel_t>(l.entry_idx));
+			r.rhs.resize(r.rhs.size() + batch, r.entry_idx);
+			result_count += batch;
+			l.entry_idx += batch;
 			if (result_count == STANDARD_VECTOR_SIZE) {
-				// out of space!
 				break;
 			}
-			continue;
 		}
+
+		// Phase 2: binary search for the new boundary on the left side
 		if (l.entry_idx < l.not_null) {
-			if (MergeJoinBefore(l_ptr[l.GetIndex()], r_ptr[r.GetIndex()], strict)) {
-				// left side smaller: found match
-				l.lhs.set_index(result_count, sel_t(l.entry_idx));
-				r.rhs.emplace_back(r.entry_idx);
-				result_count++;
-				// move left side forward
-				l.entry_idx++;
-				++l_ptr;
+			const BLOCK_ITERATOR search_begin(l.state, l.entry_idx);
+			const BLOCK_ITERATOR search_end(l.state, l.not_null);
+
+			const auto &r_val = r.state.template GetValueAtIndex<SORT_KEY>(r.block_idx, r.entry_idx);
+			const auto new_boundary_itr = std::lower_bound(search_begin, search_end, r_val,
+			                                               [strict](const SORT_KEY &lhs_val, const SORT_KEY &rhs_val) {
+				                                               return MergeJoinBefore(lhs_val, rhs_val, strict);
+			                                               });
+
+			const auto new_boundary = l.entry_idx + NumericCast<idx_t>(new_boundary_itr - search_begin);
+			if (new_boundary > l.entry_idx) {
+				const idx_t batch = MinValue(new_boundary - l.entry_idx, STANDARD_VECTOR_SIZE - result_count);
+				std::iota(lhs_sel + result_count, lhs_sel + result_count + batch, sel_t(l.entry_idx));
+				r.rhs.resize(r.rhs.size() + batch, r.entry_idx);
+				result_count += batch;
+				l.entry_idx += batch;
 				if (result_count == STANDARD_VECTOR_SIZE) {
-					// out of space!
+					prev_left_index = new_boundary;
 					break;
 				}
-				continue;
 			}
 		}
 
 		prev_left_index = l.entry_idx;
-		// right side smaller or equal, or left side exhausted: move
-		// right pointer forward reset left side to start
 		r.entry_idx++;
 		if (r.entry_idx >= r.not_null) {
 			break;
 		}
-		++r_ptr;
-
 		l.entry_idx = 0;
 	}
 
@@ -563,7 +647,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 	do {
 		if (state.first_fetch) {
 			state.ResolveJoinKeys(context, input);
-			state.lhs_payload.Verify();
+			state.InitializeRightScanState(gstate);
+			state.lhs_payload.Verify(context.client.db);
 
 			state.right_chunk_index = 0;
 			state.right_base = 0;
@@ -599,7 +684,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		rhs_table.Repin(rhs_iterator);
 
 		idx_t result_count = MergeJoinComplexBlocks(state.sort_key_type, left_info, right_info,
-		                                            conditions[0].comparison, state.prev_left_index);
+		                                            conditions[0].GetComparisonType(), state.prev_left_index);
 		if (result_count == 0) {
 			// exhausted this chunk on the right side
 			// move to the next right chunk
@@ -635,7 +720,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 
 				auto tail_count = result_count;
 				for (size_t cmp_idx = 1; cmp_idx < conditions.size(); ++cmp_idx) {
-					Vector left(state.lhs_local_table->keys.data[cmp_idx]);
+					Vector left(Vector::Ref(state.lhs_local_table->keys.data[cmp_idx]));
 					left.Slice(left_info.lhs, result_count);
 
 					auto &right = state.rhs_keys.data[cmp_idx];
@@ -645,8 +730,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 						left.Slice(*sel, tail_count);
 						right.Slice(*sel, tail_count);
 					}
-					tail_count =
-					    SelectJoinTail(conditions[cmp_idx].comparison, left, right, sel, tail_count, &state.sel);
+					tail_count = SelectJoinTail(conditions[cmp_idx].GetComparisonType(), left, right, sel, tail_count,
+					                            &state.sel);
 					sel = &state.sel;
 				}
 
@@ -659,6 +744,14 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 						chunk.Slice(*sel, result_count);
 					}
 				}
+			}
+			chunk.SetCardinality(result_count);
+
+			//	Apply any arbitrary predicate
+			if (predicate) {
+				result_count = state.pred_executor.SelectExpression(chunk, state.pred_matches);
+				chunk.Slice(state.pred_matches, result_count);
+				sel = &state.pred_matches;
 			}
 
 			// found matches: mark the found matches if required
@@ -673,8 +766,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 					gstate.table->found_match[state.right_base + right_info.rhs[sel->get_index(i)]] = true;
 				}
 			}
-			chunk.SetCardinality(result_count);
-			chunk.Verify();
+			chunk.Verify(context.client.db);
 		}
 	} while (chunk.size() == 0);
 	return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -695,7 +787,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ExecuteInternal(ExecutionContext 
 		}
 	}
 
-	input.Verify();
+	input.Verify(context.client.db);
 	switch (join_type) {
 	case JoinType::SEMI:
 	case JoinType::ANTI:
@@ -806,8 +898,7 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetDataInternal(ExecutionContext &c
 			// if there were any tuples that didn't find a match, output them
 			const idx_t left_column_count = children[0].get().GetTypes().size();
 			for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
-				result.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result.data[col_idx], true);
+				ConstantVector::SetNull(result.data[col_idx], count_t(result_count));
 			}
 			const idx_t right_column_count = children[1].get().GetTypes().size();
 			for (idx_t col_idx = 0; col_idx < right_column_count; ++col_idx) {

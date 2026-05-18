@@ -146,5 +146,5 @@ logical_opt	<REGEX>:.*FILTER.*WINDOW.*
 query II
 explain select * from (select a, b, c, sum(a) OVER (PARTITION BY b, c), sum(b) OVER (PARTITION BY a, c) from t2) where c = 20;
 ----
-logical_opt	<REGEX>:.*WINDOW.*c=20.*
+logical_opt	<REGEX>:.*WINDOW.*\(c = 20\).*
 

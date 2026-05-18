@@ -8,12 +8,26 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string>
+#include <unordered_map>
+
 #include "column_writer.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "parquet_types.h"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
+
+namespace duckdb_parquet {
+class FileMetaData;
+} // namespace duckdb_parquet
 
 namespace duckdb {
 
@@ -23,7 +37,7 @@ class ColumnReader;
 class ClientContext;
 
 struct GeometryColumnReader {
-	static unique_ptr<ColumnReader> Create(ParquetReader &reader, const ParquetColumnSchema &schema,
+	static unique_ptr<ColumnReader> Create(const ParquetReader &reader, const ParquetColumnSchema &schema,
 	                                       ClientContext &context);
 };
 
@@ -85,14 +99,14 @@ class GeoParquetFileMetadata {
 public:
 	explicit GeoParquetFileMetadata(GeoParquetVersion geo_parquet_version) : version(geo_parquet_version) {
 	}
-	void AddGeoParquetStats(const string &column_name, const LogicalType &type, const GeometryStatsData &stats,
-	                        GeoParquetVersion version);
+	void AddGeoParquetStats(ClientContext &context, const string &column_name, const LogicalType &type,
+	                        const GeometryStatsData &stats, GeoParquetVersion version);
 	void Write(duckdb_parquet::FileMetaData &file_meta_data);
 
 	// Try to read GeoParquet metadata. Returns nullptr if not found, invalid or the required spatial extension is not
 	// available.
 	static unique_ptr<GeoParquetFileMetadata> TryRead(const duckdb_parquet::FileMetaData &file_meta_data,
-	                                                  const ClientContext &context);
+	                                                  ClientContext &context);
 	const unordered_map<string, GeoParquetColumnMetadata> &GetColumnMeta() const;
 	optional_ptr<const GeoParquetColumnMetadata> GetColumnMeta(const string &column_name) const;
 

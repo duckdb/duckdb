@@ -53,6 +53,7 @@ function(get_statically_linked_extensions DUCKDB_EXTENSION_NAMES OUT_VARIABLE)
 endfunction()
 
 function(link_extension_libraries LIBRARY LINKAGE)
+    target_link_libraries(${LIBRARY} ${LINKAGE} duckdb_generated_extension_loader)
     get_statically_linked_extensions("${DUCKDB_EXTENSION_NAMES}" STATICALLY_LINKED_EXTENSIONS)
     # Now link against any registered out-of-tree extensions
     foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
@@ -61,7 +62,6 @@ function(link_extension_libraries LIBRARY LINKAGE)
             target_link_libraries(${LIBRARY} ${LINKAGE} ${EXT_NAME}_extension)
         endif()
     endforeach()
-    target_link_libraries(${LIBRARY} ${LINKAGE} duckdb_generated_extension_loader)
 endfunction()
 
 function(link_threads LIBRARY LINKAGE)
@@ -145,7 +145,7 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
                 set(WHITELIST "-Wl,-exported_symbol,_${NAME}_duckdb_cpp_init")
                 target_link_libraries(${TARGET_NAME} duckdb_static dummy_static_extension_loader ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
             elseif (ZOS)
-                target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
+                target_link_libraries(${TARGET_NAME} duckdb_static dummy_static_extension_loader ${DUCKDB_EXTRA_LINK_FLAGS})
             else()
                 # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
                 set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
@@ -325,8 +325,17 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
     string(TOUPPER "DUCKDB_${NAME}_DIRECTORY" DIRECTORY_OVERRIDE)
     if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
         set("${NAME}_extension_fc_SOURCE_DIR" "$ENV{${DIRECTORY_OVERRIDE}}")
-        message(STATUS "Load extension '${NAME}' from local path \"${${NAME}_extension_fc_SOURCE_DIR}\"")
+    elseif(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
+        # Use the pre-cloned source from extension/external/<name> (populated by
+        # scripts/sync_out_of_tree_extensions.py via `make sync_out_of_tree_extensions`).
+        set("${NAME}_extension_fc_SOURCE_DIR" "${CMAKE_SOURCE_DIR}/extension/external/${NAME}")
+        if(NOT EXISTS "${${NAME}_extension_fc_SOURCE_DIR}/.git")
+            message(FATAL_ERROR
+                "DUCKDB_NEW_EXTENSION_BUILD is set but extension '${NAME}' was not found at "
+                "extension/external/${NAME}. Run 'make sync_out_of_tree_extensions' first.")
+        endif()
     else()
+        unset(PATCH_COMMAND)
         if (${APPLY_PATCHES})
             set(PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
         endif()
@@ -336,9 +345,9 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
                 GIT_TAG ${COMMIT}
                 GIT_SUBMODULES "${SUBMODULES}"
                 PATCH_COMMAND ${PATCH_COMMAND}
+                SOURCE_SUBDIR __duckdb_no_add_subdirectory__
         )
-        FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
-        message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
+        FETCHCONTENT_MAKEAVAILABLE(${NAME}_EXTENSION_FC)
     endif()
 
     # Autogenerate version tag if not provided
@@ -350,6 +359,14 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
 
     string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION "${EXTERNAL_EXTENSION_VERSION}" PARENT_SCOPE)
+
+    if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
+        message(STATUS "Load extension '${NAME}' from local path \"${${NAME}_extension_fc_SOURCE_DIR}\" @ ${EXTERNAL_EXTENSION_VERSION}")
+    elseif(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
+        message(STATUS "Load extension '${NAME}' from extension/external/${NAME} @ ${EXTERNAL_EXTENSION_VERSION}")
+    else()
+        message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
+    endif()
 
     if ("${INCLUDE_PATH}" STREQUAL "")
         set(INCLUDE_FULL_PATH "${${NAME}_extension_fc_SOURCE_DIR}/src/include")
@@ -419,6 +436,12 @@ function(duckdb_extension_load NAME)
 
     string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
     string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+
+    # Aggregate LINKED_LIBS globally
+    if(duckdb_extension_load_LINKED_LIBS)
+        list(APPEND DUCKDB_ALL_LINKED_LIBS ${duckdb_extension_load_LINKED_LIBS})
+        set(DUCKDB_ALL_LINKED_LIBS ${DUCKDB_ALL_LINKED_LIBS} PARENT_SCOPE)
+    endif()
 
     # If extension was set already, we ignore subsequent calls
     list (FIND DUCKDB_EXTENSION_NAMES ${EXTENSION_NAME_LOWERCASE} _index)
@@ -547,6 +570,12 @@ endif()
 
 # Load base extension config
 include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config.cmake)
+
+# Write linked libs to file for bundle-setup
+if(DUCKDB_ALL_LINKED_LIBS)
+    string(REPLACE ";" "\n" LINKED_LIBS_CONTENT "${DUCKDB_ALL_LINKED_LIBS}")
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/linked_libs.txt" "${LINKED_LIBS_CONTENT}")
+endif()
 
 # For extensions whose tests were loaded, but not linked into duckdb, we need to ensure they are registered to have
 # the sqllogictest "require" statement load the loadable extensions instead of the baked in static one

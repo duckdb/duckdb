@@ -120,22 +120,29 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// name, LogicalType::VARCHAR
+	auto &name = output.data[0];
+	// value, LogicalType::VARCHAR
+	auto &value = output.data[1];
+	// description, LogicalType::VARCHAR
+	auto &description = output.data[2];
+	// input_type, LogicalType::VARCHAR
+	auto &input_type = output.data[3];
+	// scope, LogicalType::VARCHAR
+	auto &scope = output.data[4];
+	// aliases, LogicalType::VARCHAR[]
+	auto &aliases = output.data[5];
+
 	while (data.offset < data.settings.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.settings[data.offset++];
 
-		// return values:
-		// name, LogicalType::VARCHAR
-		output.SetValue(0, count, Value(entry.name));
-		// value, LogicalType::VARCHAR
-		output.SetValue(1, count, entry.value.CastAs(context, LogicalType::VARCHAR));
-		// description, LogicalType::VARCHAR
-		output.SetValue(2, count, Value(entry.description));
-		// input_type, LogicalType::VARCHAR
-		output.SetValue(3, count, Value(entry.input_type));
-		// scope, LogicalType::VARCHAR
-		output.SetValue(4, count, Value(entry.scope));
-		// aliases, LogicalType::VARCHAR[]
-		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, std::move(entry.aliases)));
+		name.Append(Value(entry.name));
+		value.Append(entry.value.CastAs(context, LogicalType::VARCHAR));
+		description.Append(Value(entry.description));
+		input_type.Append(Value(entry.input_type));
+		scope.Append(Value(entry.scope));
+		aliases.Append(Value::LIST(LogicalType::VARCHAR, std::move(entry.aliases)));
 		count++;
 	}
 	output.SetCardinality(count);

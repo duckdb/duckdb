@@ -199,8 +199,8 @@ typedef unique_ptr<CompressedSegmentState> (*compression_init_segment_t)(
     ColumnSegment &segment, block_id_t block_id, optional_ptr<ColumnSegmentState> segment_state);
 typedef unique_ptr<CompressionAppendState> (*compression_init_append_t)(ColumnSegment &segment);
 typedef idx_t (*compression_append_t)(CompressionAppendState &append_state, ColumnSegment &segment,
-                                      SegmentStatistics &stats, UnifiedVectorFormat &data, idx_t offset, idx_t count);
-typedef idx_t (*compression_finalize_append_t)(ColumnSegment &segment, SegmentStatistics &stats);
+                                      BaseStatistics &stats, UnifiedVectorFormat &data, idx_t offset, idx_t count);
+typedef idx_t (*compression_finalize_append_t)(ColumnSegment &segment, BaseStatistics &stats);
 typedef void (*compression_revert_append_t)(ColumnSegment &segment, idx_t new_count);
 
 //===--------------------------------------------------------------------===//
@@ -331,28 +331,22 @@ public:
 
 //! The set of compression functions
 struct CompressionFunctionSet {
-	static constexpr idx_t COMPRESSION_TYPE_COUNT = 15;
+	static constexpr idx_t COMPRESSION_TYPE_COUNT = 16;
 	static constexpr idx_t PHYSICAL_TYPE_COUNT = 19;
 
 public:
 	CompressionFunctionSet();
 
-	vector<reference<CompressionFunction>> GetCompressionFunctions(PhysicalType physical_type);
-	optional_ptr<CompressionFunction> GetCompressionFunction(CompressionType type, PhysicalType physical_type);
+	vector<reference<const CompressionFunction>> GetCompressionFunctions(PhysicalType physical_type);
+	optional_ptr<const CompressionFunction> GetCompressionFunction(CompressionType type, PhysicalType physical_type);
 	void SetDisabledCompressionMethods(const vector<CompressionType> &methods);
 	vector<CompressionType> GetDisabledCompressionMethods() const;
 
 private:
-	mutex lock;
 	atomic<bool> is_disabled[COMPRESSION_TYPE_COUNT];
-	atomic<bool> is_loaded[PHYSICAL_TYPE_COUNT];
 	vector<vector<CompressionFunction>> functions;
 
 private:
-	void LoadCompressionFunctions(PhysicalType physical_type);
-
-	static void TryLoadCompression(CompressionType type, PhysicalType physical_type,
-	                               vector<CompressionFunction> &result);
 	static idx_t GetCompressionIndex(PhysicalType physical_type);
 	static idx_t GetCompressionIndex(CompressionType type);
 	void ResetDisabledMethods();

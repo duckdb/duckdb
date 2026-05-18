@@ -32,8 +32,8 @@ public:
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan, optional_ptr<RelationStats> stats = nullptr);
 	//! Adds/gets materialized CTE stats
-	void AddMaterializedCTEStats(idx_t index, RelationStats &&stats);
-	RelationStats GetMaterializedCTEStats(idx_t index);
+	void AddMaterializedCTEStats(TableIndex index, RelationStats &&stats);
+	RelationStats GetMaterializedCTEStats(TableIndex index);
 	//! Adds/gets delim scan stats
 	void AddDelimScanStats(RelationStats &stats);
 	RelationStats GetDelimScanStats();
@@ -57,13 +57,13 @@ private:
 	unordered_set<std::string> join_nodes_in_full_plan;
 
 	//! Mapping from materialized CTE index to stats
-	unordered_map<idx_t, RelationStats> materialized_cte_stats;
+	unordered_map<TableIndex, RelationStats> materialized_cte_stats;
 	//! Stats of Delim Scans of the Delim Join that is currently being optimized
 	optional_ptr<RelationStats> delim_scan_stats;
 	idx_t depth;
 
 public:
-	unordered_set<idx_t> recursive_cte_indexes;
+	unordered_set<TableIndex> recursive_cte_indexes;
 };
 
 } // namespace duckdb

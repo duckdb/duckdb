@@ -1,0 +1,39 @@
+# name: test/sql/types/list/unnest_array.test
+# description: Test unnest recursive with ARRAY types (#21506)
+# group: [list]
+
+query I
+SELECT unnest([[1, 2], [3, 4]]::int[][], recursive:=true)
+----
+1
+2
+3
+4
+
+query I
+SELECT unnest([[1, 2], [3, 4]]::int[2][2], recursive:=true)
+----
+1
+2
+3
+4
+
+query I
+SELECT unnest([[1, 2], [3, 4]]::int[2][], recursive:=true)
+----
+1
+2
+3
+4
+
+query I
+SELECT unnest([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]::int[2][2][2], recursive:=true)
+----
+1
+2
+3
+4
+5
+6
+7
+8

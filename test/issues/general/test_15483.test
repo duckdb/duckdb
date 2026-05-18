@@ -2,9 +2,6 @@
 # description: Issue 15483 - internal error with recursive SQL query
 # group: [general]
 
-statement ok
-pragma enable_verification;
-
 query II
 with recursive aoc6_input(i) as (select E'....#.....\n.........#\n..........\n..#.......\n.......#..\n..........\n.#..^.....\n........#.\n#.........\n......#...\n'),
 lines(y,line) as (

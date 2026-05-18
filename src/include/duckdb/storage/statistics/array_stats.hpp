@@ -10,6 +10,8 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/storage/statistics/stats_merge_type.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -17,6 +19,7 @@ struct SelectionVector;
 class Vector;
 class Serializer;
 class Deserializer;
+class Value;
 
 struct ArrayStats {
 	DUCKDB_API static void Construct(BaseStatistics &stats);
@@ -30,9 +33,10 @@ struct ArrayStats {
 	DUCKDB_API static void Serialize(const BaseStatistics &stats, Serializer &serializer);
 	DUCKDB_API static void Deserialize(Deserializer &deserializer, BaseStatistics &base);
 
-	DUCKDB_API static string ToString(const BaseStatistics &stats);
+	DUCKDB_API static child_list_t<Value> ToStruct(const BaseStatistics &stats);
 
-	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
+	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other,
+	                             StatsMergeType merge_type = StatsMergeType::MERGE_STATS);
 	DUCKDB_API static void Copy(BaseStatistics &stats, const BaseStatistics &other);
 	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
 };

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
@@ -169,9 +170,10 @@ struct ColumnFetchState {
 };
 
 struct ScanFilter {
-	ScanFilter(ClientContext &context, idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter);
+	ScanFilter(ClientContext &context, ProjectionIndex index, const vector<StorageIndex> &column_ids,
+	           TableFilter &filter);
 
-	idx_t scan_column_index;
+	ProjectionIndex scan_column_index;
 	StorageIndex table_column_index;
 	TableFilter &filter;
 	bool always_true;
@@ -241,6 +243,9 @@ public:
 	idx_t max_row;
 	//! The current batch index
 	idx_t batch_index;
+	//! The row_number base for the current batch (number of committed rows before this batch)
+	//! Only set when the row_number virtual column is being scanned
+	optional_idx row_number_base;
 	//! The valid selection
 	SelectionVector valid_sel;
 
@@ -322,6 +327,7 @@ private:
 
 struct ParallelCollectionScanState {
 	ParallelCollectionScanState();
+	void AssignRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group);
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(RowGroupSegmentTree &row_groups) const;
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(RowGroupSegmentTree &row_groups,
 	                                                    SegmentNode<RowGroup> &row_group) const;
@@ -334,10 +340,18 @@ struct ParallelCollectionScanState {
 	idx_t max_row;
 	idx_t batch_index;
 	atomic<idx_t> processed_rows;
+	optional_idx row_number_base;
 	mutex lock;
 
 	//! Optional state for custom row group ordering
 	unique_ptr<RowGroupReorderer> reorderer;
+	//! Subset of partition indices to scan, if null, scan all
+	optional_ptr<const unordered_set<idx_t>> partitions_to_scan;
+
+	//! Whether this row group should be scanned
+	bool ShouldScanPartition(SegmentNode<RowGroup> &row_group) const {
+		return !partitions_to_scan || partitions_to_scan->count(row_group.GetIndex()) > 0;
+	}
 };
 
 struct ParallelTableScanState {

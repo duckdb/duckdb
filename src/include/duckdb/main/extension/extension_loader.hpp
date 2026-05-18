@@ -24,6 +24,7 @@ struct CreateCollationInfo;
 struct CreateAggregateFunctionInfo;
 struct CreateScalarFunctionInfo;
 struct CreateTableFunctionInfo;
+struct CreateWindowFunctionInfo;
 
 class ExtensionLoader {
 	friend class DuckDB;
@@ -51,6 +52,11 @@ public:
 	DUCKDB_API void RegisterFunction(AggregateFunctionSet function);
 	DUCKDB_API void RegisterFunction(CreateAggregateFunctionInfo info);
 
+	//! Register a new aggregate function - merge overloads if the function already exists
+	DUCKDB_API void RegisterFunction(WindowFunction function);
+	DUCKDB_API void RegisterFunction(WindowFunctionSet function);
+	DUCKDB_API void RegisterFunction(CreateWindowFunctionInfo info);
+
 	//! Register a new table function - merge overloads if the function already exists
 	DUCKDB_API void RegisterFunction(TableFunction function);
 	DUCKDB_API void RegisterFunction(TableFunctionSet function);
@@ -72,6 +78,9 @@ public:
 
 	//! Register a new collation
 	DUCKDB_API void RegisterCollation(CreateCollationInfo &info);
+
+	//! Register a new coordinate system
+	DUCKDB_API void RegisterCoordinateSystem(CreateCoordinateSystemInfo &info);
 
 	//! Returns a reference to the function in the catalog - throws an exception if it does not exist
 	DUCKDB_API ScalarFunctionCatalogEntry &GetFunction(const string &name);
@@ -99,10 +108,14 @@ public:
 
 private:
 	void FinalizeLoad();
+	const string &GetRegisteredName() const {
+		return extension_alias.empty() ? extension_name : extension_alias;
+	}
 
 private:
 	DatabaseInstance &db;
 	string extension_name;
+	string extension_alias;
 	string extension_description;
 	optional_ptr<ExtensionInfo> extension_info;
 };

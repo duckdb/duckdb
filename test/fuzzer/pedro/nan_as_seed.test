@@ -10,7 +10,7 @@ foreach type FLOAT DOUBLE REAL
 foreach val nan
 
 statement error
-SELECT setseed('${val}'::${type});
+SELECT setseed('{val}'::{type});
 ----
 SETSEED accepts seed values
 

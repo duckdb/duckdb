@@ -1,3 +1,10 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -94,7 +101,12 @@ void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size) {
 		return;
 	}
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
-	dchunk->SetCardinality(size);
+	try {
+		dchunk->SetChildCardinality(size);
+	} catch (...) {
+		// we cannot return exceptions here...
+		D_ASSERT(false);
+	}
 }
 
 duckdb_logical_type duckdb_vector_get_column_type(duckdb_vector vector) {
@@ -110,7 +122,7 @@ void *duckdb_vector_get_data(duckdb_vector vector) {
 		return nullptr;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	return duckdb::FlatVector::GetData(*v);
+	return duckdb::FlatVector::GetDataMutable(*v);
 }
 
 uint64_t *duckdb_vector_get_validity(duckdb_vector vector) {
@@ -122,7 +134,7 @@ uint64_t *duckdb_vector_get_validity(duckdb_vector vector) {
 	case duckdb::VectorType::CONSTANT_VECTOR:
 		return duckdb::ConstantVector::Validity(*v).GetData();
 	case duckdb::VectorType::FLAT_VECTOR:
-		return duckdb::FlatVector::Validity(*v).GetData();
+		return duckdb::FlatVector::ValidityMutable(*v).GetData();
 	default:
 		return nullptr;
 	}
@@ -133,35 +145,23 @@ void duckdb_vector_ensure_validity_writable(duckdb_vector vector) {
 		return;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	auto &validity = duckdb::FlatVector::Validity(*v);
+	auto &validity = duckdb::FlatVector::ValidityMutable(*v);
 	validity.EnsureWritable();
 }
 
-duckdb_error_data duckdb_vector_safe_assign_string_element(duckdb_vector vector, idx_t index, const char *str) {
-	if (!vector) {
-		return nullptr;
-	}
-
-	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	idx_t str_len = strlen(str);
-
-	// UTF-8 analysis for VARCHAR vectors, which expect valid UTF-8.
-	if (v->GetType().id() == duckdb::LogicalTypeId::VARCHAR) {
-		duckdb::UnicodeInvalidReason reason;
-		size_t pos;
-		auto utf_type = duckdb::Utf8Proc::Analyze(str, str_len, &reason, &pos);
-		if (utf_type == duckdb::UnicodeType::INVALID) {
-			return duckdb_create_error_data(DUCKDB_ERROR_INVALID_INPUT,
-			                                "invalid Unicode detected, str must be valid UTF-8");
-		}
-	}
-	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(*v);
-	data[index] = duckdb::StringVector::AddStringOrBlob(*v, str, str_len);
-	return nullptr;
-}
-
 void duckdb_vector_assign_string_element(duckdb_vector vector, idx_t index, const char *str) {
-	duckdb_vector_assign_string_element_len(vector, index, str, strlen(str));
+	if (!vector) {
+		return;
+	}
+	auto str_len = strlen(str);
+	auto error = duckdb_valid_utf8_check(str, str_len);
+	if (error != nullptr) {
+		duckdb_destroy_error_data(&error);
+		duckdb_vector_ensure_validity_writable(vector);
+		duckdb_validity_set_row_invalid(duckdb_vector_get_validity(vector), index);
+		return;
+	}
+	duckdb_unsafe_vector_assign_string_element_len(vector, index, str, str_len);
 }
 
 void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str, idx_t str_len) {
@@ -169,7 +169,25 @@ void duckdb_vector_assign_string_element_len(duckdb_vector vector, idx_t index, 
 		return;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(*v);
+	// UTF-8 validation for VARCHAR vectors.
+	if (v->GetType().id() == duckdb::LogicalTypeId::VARCHAR) {
+		auto error = duckdb_valid_utf8_check(str, str_len);
+		if (error != nullptr) {
+			duckdb_destroy_error_data(&error);
+			duckdb_vector_ensure_validity_writable(vector);
+			duckdb_validity_set_row_invalid(duckdb_vector_get_validity(vector), index);
+			return;
+		}
+	}
+	duckdb_unsafe_vector_assign_string_element_len(vector, index, str, str_len);
+}
+
+void duckdb_unsafe_vector_assign_string_element_len(duckdb_vector vector, idx_t index, const char *str, idx_t str_len) {
+	if (!vector) {
+		return;
+	}
+	auto v = reinterpret_cast<duckdb::Vector *>(vector);
+	auto data = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(*v);
 	data[index] = duckdb::StringVector::AddStringOrBlob(*v, str, str_len);
 }
 
@@ -178,7 +196,7 @@ duckdb_vector duckdb_list_vector_get_child(duckdb_vector vector) {
 		return nullptr;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	return reinterpret_cast<duckdb_vector>(&duckdb::ListVector::GetEntry(*v));
+	return reinterpret_cast<duckdb_vector>(&duckdb::ListVector::GetChildMutable(*v));
 }
 
 idx_t duckdb_list_vector_get_size(duckdb_vector vector) {
@@ -212,7 +230,7 @@ duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index) 
 		return nullptr;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	return reinterpret_cast<duckdb_vector>(duckdb::StructVector::GetEntries(*v)[index].get());
+	return reinterpret_cast<duckdb_vector>(&duckdb::StructVector::GetEntries(*v)[index]);
 }
 
 duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector) {
@@ -220,7 +238,7 @@ duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector) {
 		return nullptr;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	return reinterpret_cast<duckdb_vector>(&duckdb::ArrayVector::GetEntry(*v));
+	return reinterpret_cast<duckdb_vector>(&duckdb::ArrayVector::GetChildMutable(*v));
 }
 
 bool duckdb_validity_row_is_valid(uint64_t *validity, idx_t row) {
@@ -287,7 +305,7 @@ void duckdb_vector_copy_sel(duckdb_vector src, duckdb_vector dst, duckdb_selecti
 void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value) {
 	auto dvector = reinterpret_cast<duckdb::Vector *>(vector);
 	auto dvalue = reinterpret_cast<duckdb::Value *>(value);
-	dvector->Reference(*dvalue);
+	dvector->Reference(*dvalue, duckdb::count_t(STANDARD_VECTOR_SIZE));
 }
 
 void duckdb_vector_reference_vector(duckdb_vector to_vector, duckdb_vector from_vector) {

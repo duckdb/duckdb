@@ -27,12 +27,5 @@
         "description": "Constructs a binary-comparable sort key based on a set of input parameters and sort qualifiers",
         "example": "create_sort_key('A', 'DESC')",
         "type": "scalar_function"
-    },
-    {
-        "name": "invoke",
-        "parameters": "lambda, arg1, arg2, ...",
-        "description": "Invokes a lambda function with the given arguments",
-        "example": "invoke(x -> x + 1, 5)",
-        "type": "scalar_function"
     }
 ]

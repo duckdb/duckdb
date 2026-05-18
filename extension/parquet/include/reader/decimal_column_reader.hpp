@@ -8,12 +8,18 @@
 
 #pragma once
 
+#include <stdint.h>
+
 #include "column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_decimal_utils.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "parquet_column_schema.hpp"
+#include "resizable_buffer.hpp"
 
 namespace duckdb {
+class ParquetReader;
 
 template <class DUCKDB_PHYSICAL_TYPE, bool FIXED_LENGTH>
 struct DecimalParquetValueConversion {
@@ -56,7 +62,7 @@ class DecimalColumnReader
 	    TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE, DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>;
 
 public:
-	DecimalColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
+	DecimalColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema)
 	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
 	                            DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>(reader, schema) {
 	}

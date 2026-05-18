@@ -52,7 +52,7 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 	}
 
 	if (!bind_data.metrics.IsNull()) {
-		CustomProfilingSettingsSetting::SetLocal(context, bind_data.metrics);
+		ConfigureProfilingSetting::SetLocal(context, bind_data.metrics);
 	}
 }
 
@@ -136,7 +136,7 @@ void EnableProfilingFun::RegisterFunction(BuiltinFunctions &set) {
 	enable_fun.named_parameters.emplace("mode", LogicalType::VARCHAR);
 	enable_fun.named_parameters.emplace("metrics", LogicalType::ANY);
 
-	enable_fun.varargs = LogicalType::LIST(LogicalType::VARCHAR);
+	enable_fun.SetVarArgs(LogicalType::LIST(LogicalType::VARCHAR));
 	set.AddFunction(enable_fun);
 
 	auto disable_fun = TableFunction("disable_profiling", {}, DisableProfiling, BindDisableProfiling, nullptr, nullptr);

@@ -9,7 +9,7 @@
 # include generated includes
 include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
 
-add_library(dummy_static_extension_loader
+add_library(dummy_static_extension_loader STATIC
             loader/dummy_static_extension_loader.cpp)
 
 install(
@@ -85,10 +85,6 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   endif()
 endforeach()
 
-if(${DISABLE_EXTENSION_LOAD})
-  add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
-endif()
-
 if(NOT ${EXT_TEST_PATH_LIST} STREQUAL "")
   string(SUBSTRING ${EXT_TEST_PATH_LIST} 1 -1 EXT_TEST_PATH_INITIALIZER)
 endif()
@@ -101,7 +97,7 @@ add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
 add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
 add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
 
-add_library(duckdb_generated_extension_loader OBJECT ${GENERATED_CPP_FILE})
+add_library(duckdb_generated_extension_loader STATIC ${GENERATED_CPP_FILE})
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_generated_extension_loader>

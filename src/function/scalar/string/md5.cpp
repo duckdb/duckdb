@@ -10,8 +10,8 @@ namespace {
 
 struct MD5Operator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto hash = StringVector::EmptyString(result, MD5Context::MD5_HASH_LENGTH_TEXT);
+	static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap) {
+		auto hash = heap.EmptyString(MD5Context::MD5_HASH_LENGTH_TEXT);
 		MD5Context context;
 		context.Add(input);
 		context.FinishHex(hash.GetDataWriteable());

@@ -1,11 +1,13 @@
 #include "duckdb/function/window/window_aggregate_function.hpp"
 
+#include "duckdb/common/enums/window_aggregation_mode.hpp"
 #include "duckdb/function/window/window_constant_aggregator.hpp"
 #include "duckdb/function/window/window_custom_aggregator.hpp"
 #include "duckdb/function/window/window_distinct_aggregator.hpp"
 #include "duckdb/function/window/window_naive_aggregator.hpp"
 #include "duckdb/function/window/window_segment_tree.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -50,8 +52,9 @@ static BoundWindowExpression &SimplifyWindowedAggregate(BoundWindowExpression &w
 }
 
 WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &client,
-                                                 WindowSharedExpressions &shared, WindowAggregationMode mode)
-    : WindowExecutor(SimplifyWindowedAggregate(wexpr, client), shared), mode(mode) {
+                                                 WindowSharedExpressions &shared)
+    : WindowExecutor(SimplifyWindowedAggregate(wexpr, client), shared),
+      mode(Settings::Get<DebugWindowModeSetting>(client)) {
 	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
 	if (!ClientConfig::GetConfig(client).enable_optimizer || mode == WindowAggregationMode::SEPARATE) {
 		if (!WindowNaiveAggregator::CanAggregate(wexpr)) {
@@ -84,7 +87,7 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
 	// Anyone who needs it can then convert it to the form they need.
 	if (wexpr.filter_expr) {
 		const auto filter_idx = shared.RegisterSink(wexpr.filter_expr);
-		filter_ref = make_uniq<BoundReferenceExpression>(wexpr.filter_expr->return_type, filter_idx);
+		filter_ref = make_uniq<BoundReferenceExpression>(wexpr.filter_expr->GetReturnType(), filter_idx);
 	}
 }
 
@@ -104,11 +107,11 @@ unique_ptr<GlobalSinkState> WindowAggregateExecutor::GetGlobalState(ClientContex
 	return make_uniq<WindowAggregateExecutorGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
 
-class WindowAggregateExecutorLocalState : public WindowExecutorBoundsLocalState {
+class WindowAggregateExecutorLocalState : public WindowExecutorLocalState {
 public:
 	WindowAggregateExecutorLocalState(ExecutionContext &context, const GlobalSinkState &gstate,
 	                                  const WindowAggregator &aggregator)
-	    : WindowExecutorBoundsLocalState(context, gstate.Cast<WindowAggregateExecutorGlobalState>()),
+	    : WindowExecutorLocalState(context, gstate.Cast<WindowAggregateExecutorGlobalState>()),
 	      filter_executor(context.client) {
 		auto &gastate = gstate.Cast<WindowAggregateExecutorGlobalState>();
 		aggregator_state = aggregator.GetLocalState(context, *gastate.gsink);
@@ -247,15 +250,15 @@ void WindowAggregateExecutor::Finalize(ExecutionContext &context, CollectionPtr 
 	aggregator->Finalize(context, collection, stats, asink);
 }
 
-void WindowAggregateExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
-                                               idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowAggregateExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                               Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
 	auto &gastate = sink.global_state.Cast<WindowAggregateExecutorGlobalState>();
 	auto &lastate = sink.local_state.Cast<WindowAggregateExecutorLocalState>();
 	auto &gsink = gastate.gsink;
 	D_ASSERT(aggregator);
 
 	OperatorSinkInput asink {*gsink, *lastate.aggregator_state, sink.interrupt_state};
-	aggregator->Evaluate(context, lastate.bounds, result, count, row_idx, asink);
+	aggregator->Evaluate(context, bounds, result, eval_chunk.size(), row_idx, asink);
 }
 
 } // namespace duckdb

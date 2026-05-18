@@ -161,13 +161,13 @@ UTrie2EnumValue(const void *context, uint32_t value);
  * of code points with the same value as retrieved from the trie and
  * transformed by the UTrie2EnumValue function.
  *
- * The callback function can stop the enumeration by returning FALSE.
+ * The callback function can stop the enumeration by returning false.
  *
  * @param context an opaque pointer, as passed into utrie2_enum()
  * @param start the first code point in a contiguous range with value
  * @param end the last code point in a contiguous range with value (inclusive)
  * @param value the value that is set for all code points in [start..end]
- * @return FALSE to stop the enumeration
+ * @return false to stop the enumeration
  */
 typedef UBool U_CALLCONV
 UTrie2EnumRange(const void *context, UChar32 start, UChar32 end, uint32_t value);
@@ -256,7 +256,7 @@ utrie2_set32(UTrie2 *trie, UChar32 c, uint32_t value, UErrorCode *pErrorCode);
 /**
  * Set a value in a range of code points [start..end].
  * All code points c with start<=c<=end will get the value if
- * overwrite is TRUE or if the old value is the initial value.
+ * overwrite is true or if the old value is the initial value.
  *
  * @param trie the unfrozen trie
  * @param start the first code point to get the value
@@ -298,7 +298,7 @@ utrie2_freeze(UTrie2 *trie, UTrie2ValueBits valueBits, UErrorCode *pErrorCode);
  * Test if the trie is frozen. (See utrie2_freeze().)
  *
  * @param trie the trie
- * @return TRUE if the trie is frozen, that is, immutable, ready for serialization
+ * @return true if the trie is frozen, that is, immutable, ready for serialization
  *         and for use with fast macros
  */
 U_CAPI UBool U_EXPORT2
@@ -591,42 +591,42 @@ U_CDECL_END
 
 #ifdef __cplusplus
 
+#include "unicode/uobject.h"
 #include "unicode/utf.h"
-#include "mutex.h"
 
 U_NAMESPACE_BEGIN
 
 // Use the Forward/Backward subclasses below.
 class UTrie2StringIterator : public UMemory {
 public:
-    UTrie2StringIterator(const UTrie2 *t, const UChar *p) :
+    UTrie2StringIterator(const UTrie2 *t, const char16_t *p) :
         trie(t), codePointStart(p), codePointLimit(p), codePoint(U_SENTINEL) {}
 
     const UTrie2 *trie;
-    const UChar *codePointStart, *codePointLimit;
+    const char16_t *codePointStart, *codePointLimit;
     UChar32 codePoint;
 };
 
 class BackwardUTrie2StringIterator : public UTrie2StringIterator {
 public:
-    BackwardUTrie2StringIterator(const UTrie2 *t, const UChar *s, const UChar *p) :
+    BackwardUTrie2StringIterator(const UTrie2 *t, const char16_t *s, const char16_t *p) :
         UTrie2StringIterator(t, p), start(s) {}
 
     uint16_t previous16();
 
-    const UChar *start;
+    const char16_t *start;
 };
 
 class ForwardUTrie2StringIterator : public UTrie2StringIterator {
 public:
-    // Iteration limit l can be NULL.
+    // Iteration limit l can be nullptr.
     // In that case, the caller must detect c==0 and stop.
-    ForwardUTrie2StringIterator(const UTrie2 *t, const UChar *p, const UChar *l) :
+    ForwardUTrie2StringIterator(const UTrie2 *t, const char16_t *p, const char16_t *l) :
         UTrie2StringIterator(t, p), limit(l) {}
 
     uint16_t next16();
 
-    const UChar *limit;
+    const char16_t *limit;
 };
 
 U_NAMESPACE_END
@@ -670,7 +670,7 @@ struct UTrie2 {
     /* private: used by builder and unserialization functions */
     void *memory;           /* serialized bytes; NULL if not frozen yet */
     int32_t length;         /* number of serialized bytes at memory; 0 if not frozen yet */
-    UBool isMemoryOwned;    /* TRUE if the trie owns the memory */
+    UBool isMemoryOwned;    /* true if the trie owns the memory */
     UBool padding1;
     int16_t padding2;
     UNewTrie2 *newTrie;     /* builder object; NULL when frozen */
@@ -796,7 +796,7 @@ enum {
  * Do not call directly.
  * @internal
  */
-U_INTERNAL int32_t U_EXPORT2
+U_CAPI int32_t U_EXPORT2
 utrie2_internalU8NextIndex(const UTrie2 *trie, UChar32 c,
                            const uint8_t *src, const uint8_t *limit);
 
@@ -805,7 +805,7 @@ utrie2_internalU8NextIndex(const UTrie2 *trie, UChar32 c,
  * Do not call directly.
  * @internal
  */
-U_INTERNAL int32_t U_EXPORT2
+U_CAPI int32_t U_EXPORT2
 utrie2_internalU8PrevIndex(const UTrie2 *trie, UChar32 c,
                            const uint8_t *start, const uint8_t *src);
 

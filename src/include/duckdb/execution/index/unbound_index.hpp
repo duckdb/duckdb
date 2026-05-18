@@ -10,11 +10,13 @@
 
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/storage/index_storage_info.hpp"
 #include "duckdb/storage/storage_index.hpp"
 
 namespace duckdb {
 
 class ColumnDataCollection;
+class DataChunk;
 
 enum class BufferedIndexReplay : uint8_t { INSERT_ENTRY = 0, DEL_ENTRY = 1 };
 
@@ -78,6 +80,8 @@ public:
 	             AttachedDatabase &db);
 
 public:
+	void ResetStorage() override;
+
 	bool IsBound() const override {
 		return false;
 	}
@@ -102,8 +106,6 @@ public:
 	const string &GetTableName() const {
 		return GetCreateInfo().table;
 	}
-
-	void CommitDrop() override;
 
 	//! Buffer Index delete or insert (replay_type) data chunk.
 	//! See note above on mapped_column_ids, this function assumes that index_column_chunk maps into

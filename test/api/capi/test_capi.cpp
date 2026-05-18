@@ -2,7 +2,6 @@
 #include <regex>
 
 using namespace duckdb;
-using namespace std;
 
 static void require_hugeint_eq(duckdb_hugeint left, duckdb_hugeint right) {
 	REQUIRE(left.lower == right.lower);
@@ -746,4 +745,10 @@ TEST_CASE("Test unsupported types in the deprecated C API", "[capi]") {
 	REQUIRE(!string(second_bigint_row).compare("412"));
 	duckdb_free(second_bigint_row);
 	REQUIRE(duckdb_value_string(&result_c, 1, 1).data == nullptr);
+}
+
+TEST_CASE("Test creating DUCKDB_ERROR_INTERNAL error data", "[capi]") {
+	auto error_data = duckdb_create_error_data(DUCKDB_ERROR_INTERNAL, "foo");
+	REQUIRE(error_data);
+	duckdb_destroy_error_data(&error_data);
 }

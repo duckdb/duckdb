@@ -1,39 +1,53 @@
 #include "duckdb.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/window/window_shared_expressions.hpp"
+#include "duckdb/optimizer/optimizer_extension.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/planner/extension_callback.hpp"
+#include "duckdb/planner/planner_extension.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 
-using namespace duckdb;
+using namespace duckdb; // NOLINT
 
 //===--------------------------------------------------------------------===//
 // Scalar function
 //===--------------------------------------------------------------------===//
-static inline int32_t hello_fun(string_t what) {
-	return what.GetSize() + 5;
-}
-
 static inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
-	result.Reference(Value("Hello Alias!"));
+	result.Reference(Value("Hello Alias!"), count_t(args.size()));
 }
 
 static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
-	const int count = args.size();
+	const auto count = args.size();
 	auto left_vector_type = left_vector.GetVectorType();
 	auto right_vector_type = right_vector.GetVectorType();
 
@@ -41,14 +55,14 @@ static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vec
 
 	UnifiedVectorFormat lhs_data;
 	UnifiedVectorFormat rhs_data;
-	left_vector.ToUnifiedFormat(count, lhs_data);
-	right_vector.ToUnifiedFormat(count, rhs_data);
+	left_vector.ToUnifiedFormat(lhs_data);
+	right_vector.ToUnifiedFormat(rhs_data);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &child_entries = StructVector::GetEntries(result);
 	auto &left_child_entries = StructVector::GetEntries(left_vector);
 	auto &right_child_entries = StructVector::GetEntries(right_vector);
-	for (int base_idx = 0; base_idx < count; base_idx++) {
+	for (idx_t base_idx = 0; base_idx < count; base_idx++) {
 		auto lhs_list_index = lhs_data.sel->get_index(base_idx);
 		auto rhs_list_index = rhs_data.sel->get_index(base_idx);
 		if (!lhs_data.validity.RowIsValid(lhs_list_index) || !rhs_data.validity.RowIsValid(rhs_list_index)) {
@@ -59,36 +73,36 @@ static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vec
 			auto &child_entry = child_entries[col];
 			auto &left_child_entry = left_child_entries[col];
 			auto &right_child_entry = right_child_entries[col];
-			auto pdata = ConstantVector::GetData<int32_t>(*child_entry);
-			auto left_pdata = ConstantVector::GetData<int32_t>(*left_child_entry);
-			auto right_pdata = ConstantVector::GetData<int32_t>(*right_child_entry);
+			auto pdata = FlatVector::GetDataMutable<int32_t>(child_entry);
+			auto left_pdata = FlatVector::GetData<int32_t>(left_child_entry);
+			auto right_pdata = FlatVector::GetData<int32_t>(right_child_entry);
 			pdata[base_idx] = left_pdata[lhs_list_index] + right_pdata[rhs_list_index];
 		}
 	}
 	if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-	result.Verify(count);
+	result.Verify();
 }
 
 static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
-	const int count = args.size();
+	const auto count = args.size();
 	auto left_vector_type = left_vector.GetVectorType();
 	auto right_vector_type = right_vector.GetVectorType();
 
 	args.Flatten();
 	UnifiedVectorFormat lhs_data;
 	UnifiedVectorFormat rhs_data;
-	left_vector.ToUnifiedFormat(count, lhs_data);
-	right_vector.ToUnifiedFormat(count, rhs_data);
+	left_vector.ToUnifiedFormat(lhs_data);
+	right_vector.ToUnifiedFormat(rhs_data);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &child_entries = StructVector::GetEntries(result);
 	auto &left_child_entries = StructVector::GetEntries(left_vector);
 	auto &right_child_entries = StructVector::GetEntries(right_vector);
-	for (int base_idx = 0; base_idx < count; base_idx++) {
+	for (idx_t base_idx = 0; base_idx < count; base_idx++) {
 		auto lhs_list_index = lhs_data.sel->get_index(base_idx);
 		auto rhs_list_index = rhs_data.sel->get_index(base_idx);
 		if (!lhs_data.validity.RowIsValid(lhs_list_index) || !rhs_data.validity.RowIsValid(rhs_list_index)) {
@@ -99,16 +113,16 @@ static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vec
 			auto &child_entry = child_entries[col];
 			auto &left_child_entry = left_child_entries[col];
 			auto &right_child_entry = right_child_entries[col];
-			auto pdata = ConstantVector::GetData<int32_t>(*child_entry);
-			auto left_pdata = ConstantVector::GetData<int32_t>(*left_child_entry);
-			auto right_pdata = ConstantVector::GetData<int32_t>(*right_child_entry);
+			auto pdata = FlatVector::GetDataMutable<int32_t>(child_entry);
+			auto left_pdata = FlatVector::GetData<int32_t>(left_child_entry);
+			auto right_pdata = FlatVector::GetData<int32_t>(right_child_entry);
 			pdata[base_idx] = left_pdata[lhs_list_index] - right_pdata[rhs_list_index];
 		}
 	}
 	if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-	result.Verify(count);
+	result.Verify();
 }
 
 //===--------------------------------------------------------------------===//
@@ -125,7 +139,7 @@ public:
 	}
 
 	struct QuackBindData : public TableFunctionData {
-		QuackBindData(idx_t number_of_quacks) : number_of_quacks(number_of_quacks) {
+		explicit QuackBindData(idx_t number_of_quacks) : number_of_quacks(number_of_quacks) {
 		}
 
 		idx_t number_of_quacks;
@@ -152,7 +166,7 @@ public:
 
 	static void QuackFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		auto &bind_data = data_p.bind_data->Cast<QuackBindData>();
-		auto &data = (QuackGlobalData &)*data_p.global_state;
+		auto &data = data_p.global_state->Cast<QuackGlobalData>();
 		if (data.offset >= bind_data.number_of_quacks) {
 			// finished returning values
 			return;
@@ -160,8 +174,9 @@ public:
 		// start returning values
 		// either fill up the chunk or return all the remaining columns
 		idx_t count = 0;
+		auto &quack_col = output.data[0];
 		while (data.offset < bind_data.number_of_quacks && count < STANDARD_VECTOR_SIZE) {
-			output.SetValue(0, count, Value("QUACK"));
+			quack_col.Append(Value("QUACK"));
 			data.offset++;
 			count++;
 		}
@@ -170,10 +185,158 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
+// DuckWeed Window Function
+//===--------------------------------------------------------------------===//
+// Simple "fill down" function.
+class DuckWeedFunction : public WindowFunction {
+public:
+	using CollectionPtr = optional_ptr<WindowCollection>;
+
+	using GlobalState = WindowExecutorGlobalState;
+
+	class LocalState : public WindowExecutorLocalState {
+	public:
+		LocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate)
+		    : WindowExecutorLocalState(context, gstate) {
+		}
+
+		//! The valid values in the collection
+		optional_ptr<ValidityMask> validity;
+		//! The state used for reading the collection
+		unique_ptr<WindowCursor> cursor;
+		//! The current partition
+		idx_t partition_idx = DConstants::INVALID_INDEX;
+		//! The current filler row
+		idx_t filler_row = DConstants::INVALID_INDEX;
+	};
+
+	DuckWeedFunction()
+	    : WindowFunction("duckweed", {LogicalType::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FUNCTION, Bind,
+	                     GetBounds, GetSharing, GetGlobal, GetLocal, nullptr, Finalizer, GetData) {
+		//	Not implemented
+		SetCanOrderBy(false);
+		//	We are filling in NULLs
+		SetCanIgnoreNulls(false);
+
+		SetCanStreamCallback(CanStream);
+		SetStreamingStateCallback(GetStreamingState);
+		SetStreamingDataCallback(StreamData);
+	}
+
+	//! Binding APIs
+	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input) {
+		auto &function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
+		function.SetReturnType(arguments[0]->GetReturnType());
+		return nullptr;
+	}
+
+	//! Blocking APIs
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
+		//	Fill in from the start of the partition
+		required.insert(PARTITION_BEGIN);
+	}
+	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
+		//	Build the argument into a shared collection, including the NULLs (so we can find them quickly.)
+		const auto &wexpr = executor.wexpr;
+		auto &child_idx = executor.child_idx;
+		child_idx.emplace_back(shared.RegisterCollection(wexpr.children[0], true));
+	}
+
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask) {
+		return make_uniq<GlobalState>(client, executor, payload_count, partition_mask, order_mask);
+	}
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate) {
+		return make_uniq<LocalState>(context, gstate.Cast<GlobalState>());
+	}
+	static void Finalizer(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
+		auto &gvstate = sink.global_state.Cast<GlobalState>();
+		auto &executor = gvstate.executor;
+		const auto value_idx = executor.child_idx[0];
+
+		auto &lvstate = sink.local_state.Cast<LocalState>();
+		lvstate.validity = &collection->validities[value_idx];
+		lvstate.cursor = make_uniq<WindowCursor>(*collection, value_idx);
+	}
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink) {
+		auto &lvstate = sink.local_state.Cast<LocalState>();
+		auto &cursor = *lvstate.cursor;
+		const auto count = eval_chunk.size();
+		auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
+		for (idx_t i = 0; i < count; ++i, ++row_idx) {
+			if (partition_begin[i] != lvstate.partition_idx) {
+				lvstate.partition_idx = partition_begin[i];
+				lvstate.filler_row = row_idx;
+				// Jumped to a  different partition, so scan back to realign
+				if (row_idx != lvstate.partition_idx) {
+					idx_t delta = 1;
+					lvstate.filler_row =
+					    WindowBoundariesState::FindPrevStart(*lvstate.validity, lvstate.partition_idx, row_idx, delta);
+				}
+			}
+			if (!cursor.CellIsNull(0, row_idx)) {
+				lvstate.filler_row = row_idx;
+			}
+			cursor.CopyCell(0, lvstate.filler_row, result, i);
+		}
+	}
+
+	//! Streaming APIs
+	class StreamingState : public WindowExecutorStreamingState {
+	public:
+		StreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
+		    : wexpr(wexpr), filler(Value(wexpr.children[0]->GetReturnType()), count_t(STANDARD_VECTOR_SIZE)),
+		      executor(client), arg(wexpr.children[0]->GetReturnType()) {
+			executor.AddExpression(*wexpr.children[0]);
+		}
+		//! The window expression
+		const BoundWindowExpression &wexpr;
+		//! A constant vector holding the repeated value. Starts NULL.
+		Vector filler;
+		//! A reusable executor for evaluating the argument
+		ExpressionExecutor executor;
+		//! A reusable output for the argument
+		Vector arg;
+	};
+
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		//	We use the default framing.
+		return true;
+	}
+	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                      const BoundWindowExpression &wexpr) {
+		return make_uniq<StreamingState>(client, input, wexpr);
+	}
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state) {
+		auto &sstate = state.Cast<StreamingState>();
+		auto &filler = sstate.filler;
+		auto &arg = sstate.arg;
+		const auto count = input.size();
+
+		//	Evaluate the argument
+		sstate.executor.ExecuteExpression(input, arg);
+		UnifiedVectorFormat unified;
+		arg.ToUnifiedFormat(unified);
+		const auto &validity = unified.validity;
+		for (idx_t i = 0; i < count; ++i) {
+			const auto idx = unified.sel->get_index(i);
+			if (validity.RowIsValid(idx)) {
+				filler.Reference(arg.GetValue(i), count_t(count));
+			}
+			result.SetValue(i, filler.GetValue(0));
+		}
+	}
+};
+
+//===--------------------------------------------------------------------===//
 // Parser extension
 //===--------------------------------------------------------------------===//
 struct QuackExtensionData : public ParserExtensionParseData {
-	QuackExtensionData(idx_t number_of_quacks) : number_of_quacks(number_of_quacks) {
+	explicit QuackExtensionData(idx_t number_of_quacks) : number_of_quacks(number_of_quacks) {
 	}
 
 	idx_t number_of_quacks;
@@ -236,17 +399,17 @@ public:
 
 	static ParserExtensionPlanResult QuackPlanFunction(ParserExtensionInfo *info, ClientContext &context,
 	                                                   duckdb::unique_ptr<ParserExtensionParseData> parse_data) {
-		auto &quack_data = (QuackExtensionData &)*parse_data;
+		auto &quack_data = dynamic_cast<QuackExtensionData &>(*parse_data);
 
 		ParserExtensionPlanResult result;
 		result.function = QuackFunction();
-		result.parameters.push_back(Value::BIGINT(quack_data.number_of_quacks));
+		result.parameters.push_back(Value::BIGINT(UnsafeNumericCast<int64_t>(quack_data.number_of_quacks)));
 		result.requires_valid_transaction = false;
 		result.return_type = StatementReturnType::QUERY_RESULT;
 		return result;
 	}
 
-	static ParserOverrideResult QuackParser(ParserExtensionInfo *info, const string &query) {
+	static ParserOverrideResult QuackParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
 		vector<string> queries = StringUtil::Split(query, ";");
 		vector<unique_ptr<SQLStatement>> statements;
 		for (const auto &query_input : queries) {
@@ -265,15 +428,63 @@ public:
 			}
 		}
 		if (statements.empty()) {
-			auto not_implemented_exception =
-			    NotImplementedException("QuackParser has not yet implemented the statements to transform this query");
-			return ParserOverrideResult(not_implemented_exception);
+			// Return DISPLAY_ORIGINAL_ERROR so postgres parser + parse_function extensions can handle the query.
+			return ParserOverrideResult();
 		}
 		return ParserOverrideResult(std::move(statements));
 	}
 };
 
-static set<string> test_loaded_extension_list;
+//===--------------------------------------------------------------------===//
+// Planner extension - adds an extra constant column to every query
+//===--------------------------------------------------------------------===//
+class AddColumnExtension : public PlannerExtension {
+public:
+	AddColumnExtension() {
+		post_bind_function = AddColumnPostBind;
+	}
+
+	static void AddColumnPostBind(PlannerExtensionInput &input, BoundStatement &statement) {
+		// Check if extension is enabled
+		Value enabled;
+		if (!input.context.TryGetCurrentSetting("add_column_enabled", enabled) || !enabled.GetValue<bool>()) {
+			return;
+		}
+
+		// Only modify statements that return query results (SELECT, INSERT/UPDATE/DELETE RETURNING, etc.)
+		auto &properties = input.binder.GetStatementProperties();
+		if (properties.return_type != StatementReturnType::QUERY_RESULT) {
+			return;
+		}
+
+		// Get the column bindings from the existing plan
+		auto column_bindings = statement.plan->GetColumnBindings();
+
+		// Get a new table index for the projection
+		auto table_index = input.binder.GenerateTableIndex();
+
+		// Create references to all existing columns using BoundColumnRefExpression
+		vector<unique_ptr<Expression>> projections;
+		for (idx_t i = 0; i < column_bindings.size(); i++) {
+			projections.push_back(make_uniq<BoundColumnRefExpression>(statement.types[i], column_bindings[i]));
+		}
+
+		// Add a constant column
+		projections.push_back(make_uniq<BoundConstantExpression>(Value("quack")));
+
+		// Create a projection operator wrapping the existing plan
+		auto projection = make_uniq<LogicalProjection>(table_index, std::move(projections));
+		projection->children.push_back(std::move(statement.plan));
+		projection->ResolveOperatorTypes();
+
+		// Update the statement with the new plan, names, and types
+		statement.plan = std::move(projection);
+		statement.names.push_back("extra_column");
+		statement.types.push_back(LogicalType::VARCHAR);
+	}
+};
+
+static set<string> test_loaded_extension_list; // NOLINT
 
 class QuackLoadExtension : public ExtensionCallback {
 	void OnExtensionLoaded(DatabaseInstance &db, const string &name) override {
@@ -289,26 +500,26 @@ static inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &st
 		}
 		result_str += ext;
 	}
-	result.Reference(Value(result_str));
+	result.Reference(Value(result_str), count_t(args.size()));
 }
 //===--------------------------------------------------------------------===//
 // Bounded type
 //===--------------------------------------------------------------------===//
 
 struct BoundedType {
-	static LogicalType Bind(const BindLogicalTypeInput &input) {
+	static LogicalType Bind(BindLogicalTypeInput &input) {
 		auto &modifiers = input.modifiers;
 
 		if (modifiers.size() != 1) {
 			throw BinderException("BOUNDED type must have one modifier");
 		}
-		if (modifiers[0].type() != LogicalType::INTEGER) {
+		if (modifiers[0].GetValue().type() != LogicalType::INTEGER) {
 			throw BinderException("BOUNDED type modifier must be integer");
 		}
-		if (modifiers[0].IsNull()) {
+		if (modifiers[0].GetValue().IsNull()) {
 			throw BinderException("BOUNDED type modifier cannot be NULL");
 		}
-		auto bound_val = modifiers[0].GetValue<int32_t>();
+		auto bound_val = modifiers[0].GetValue().GetValue<int32_t>();
 		return Get(bound_val);
 	}
 
@@ -340,13 +551,14 @@ struct BoundedType {
 };
 
 static void BoundedMaxFunc(DataChunk &args, ExpressionState &state, Vector &result) {
-	result.Reference(BoundedType::GetMaxValue(args.data[0].GetType()));
+	result.Reference(Value::INTEGER(BoundedType::GetMaxValue(args.data[0].GetType())), count_t(args.size()));
 }
 
-static unique_ptr<FunctionData> BoundedMaxBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->return_type == BoundedType::GetDefault()) {
-		bound_function.arguments[0] = arguments[0]->return_type;
+static unique_ptr<FunctionData> BoundedMaxBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	if (arguments[0]->GetReturnType() == BoundedType::GetDefault()) {
+		bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 	} else {
 		throw BinderException("bounded_max expects a BOUNDED type");
 	}
@@ -361,16 +573,17 @@ static void BoundedAddFunc(DataChunk &args, ExpressionState &state, Vector &resu
 	                                                   [&](int32_t left, int32_t right) { return left + right; });
 }
 
-static unique_ptr<FunctionData> BoundedAddBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
-	if (BoundedType::GetDefault() == arguments[0]->return_type &&
-	    BoundedType::GetDefault() == arguments[1]->return_type) {
-		auto left_max_val = BoundedType::GetMaxValue(arguments[0]->return_type);
-		auto right_max_val = BoundedType::GetMaxValue(arguments[1]->return_type);
+static unique_ptr<FunctionData> BoundedAddBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	if (BoundedType::GetDefault() == arguments[0]->GetReturnType() &&
+	    BoundedType::GetDefault() == arguments[1]->GetReturnType()) {
+		auto left_max_val = BoundedType::GetMaxValue(arguments[0]->GetReturnType());
+		auto right_max_val = BoundedType::GetMaxValue(arguments[1]->GetReturnType());
 
 		auto new_max_val = left_max_val + right_max_val;
-		bound_function.arguments[0] = arguments[0]->return_type;
-		bound_function.arguments[1] = arguments[1]->return_type;
+		bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
+		bound_function.GetArguments()[1] = arguments[1]->GetReturnType();
 		bound_function.SetReturnType(BoundedType::Get(new_max_val));
 	} else {
 		throw BinderException("bounded_add expects two BOUNDED types");
@@ -393,11 +606,12 @@ struct BoundedFunctionData : public FunctionData {
 	}
 };
 
-static unique_ptr<FunctionData> BoundedInvertBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->return_type == BoundedType::GetDefault()) {
-		bound_function.arguments[0] = arguments[0]->return_type;
-		bound_function.SetReturnType(arguments[0]->return_type);
+static unique_ptr<FunctionData> BoundedInvertBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	if (arguments[0]->GetReturnType() == BoundedType::GetDefault()) {
+		bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
+		bound_function.SetReturnType(arguments[0]->GetReturnType());
 	} else {
 		throw BinderException("bounded_invert expects a BOUNDED type");
 	}
@@ -427,13 +641,14 @@ static void BoundedToAsciiFunc(DataChunk &args, ExpressionState &state, Vector &
 	auto &source_vector = args.data[0];
 	const auto count = args.size();
 
+	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<int32_t, string_t>(source_vector, result, count, [&](int32_t input) {
 		if (input < 0) {
 			throw NotImplementedException("Negative values not supported");
 		}
 		string s;
 		s.push_back(static_cast<char>(input));
-		return StringVector::AddString(result, s);
+		return heap.AddString(s);
 	});
 }
 
@@ -469,21 +684,22 @@ static bool IntToBoundedCast(Vector &source, Vector &result, idx_t count, CastPa
 // to verify that the range is valid
 
 struct MinMaxType {
-	static LogicalType Bind(const BindLogicalTypeInput &input) {
+	static LogicalType Bind(BindLogicalTypeInput &input) {
 		auto &modifiers = input.modifiers;
 
 		if (modifiers.size() != 2) {
 			throw BinderException("MINMAX type must have two modifiers");
 		}
-		if (modifiers[0].type() != LogicalType::INTEGER || modifiers[1].type() != LogicalType::INTEGER) {
+		if (modifiers[0].GetValue().type() != LogicalType::INTEGER ||
+		    modifiers[1].GetValue().type() != LogicalType::INTEGER) {
 			throw BinderException("MINMAX type modifiers must be integers");
 		}
-		if (modifiers[0].IsNull() || modifiers[1].IsNull()) {
+		if (modifiers[0].GetValue().IsNull() || modifiers[1].GetValue().IsNull()) {
 			throw BinderException("MINMAX type modifiers cannot be NULL");
 		}
 
-		const auto min_val = modifiers[0].GetValue<int32_t>();
-		const auto max_val = modifiers[1].GetValue<int32_t>();
+		const auto min_val = modifiers[0].GetValue().GetValue<int32_t>();
+		const auto max_val = modifiers[1].GetValue().GetValue<int32_t>();
 
 		if (min_val >= max_val) {
 			throw BinderException("MINMAX type min value must be less than max value");
@@ -545,8 +761,144 @@ static void MinMaxRangeFunc(DataChunk &args, ExpressionState &state, Vector &res
 	auto &ty = args.data[0].GetType();
 	auto min_val = MinMaxType::GetMinValue(ty);
 	auto max_val = MinMaxType::GetMaxValue(ty);
-	result.Reference(Value::INTEGER(max_val - min_val));
+	result.Reference(Value::INTEGER(max_val - min_val), count_t(args.size()));
 }
+
+//===--------------------------------------------------------------------===//
+// Row ID Filter — extensible table filter demo
+//
+// This demo shows how an optimizer extension can inject an ExpressionFilter
+// into a table scan's filter set. The filter wraps a ScalarFunction that
+// checks each row's ROW_ID against a sorted allow-list.
+//
+//
+// Three callbacks are involved:
+//   1. RowIdFilterFunction  — execution: stateful linear scan over allow-list
+//   2. RowIdFilterPropagate — row-group pruning via min/max statistics
+//   3. RowIdFilterInit      — per-thread state initialization
+//===--------------------------------------------------------------------===//
+
+// The bind callback is unused for most extensible table filters
+static unique_ptr<FunctionData> RowIdFilterBind(BindScalarFunctionInput &input) {
+	throw InternalException("rowid_filter: bind should never be called");
+}
+
+struct RowIdFilterBindData : public FunctionData {
+	vector<int64_t> allowed_ids;
+	unordered_set<int64_t> allowed_set;
+
+	explicit RowIdFilterBindData(vector<int64_t> ids) : allowed_ids(std::move(ids)) {
+		allowed_set.insert(allowed_ids.begin(), allowed_ids.end());
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<RowIdFilterBindData>(allowed_ids);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		return allowed_ids == other_p.Cast<RowIdFilterBindData>().allowed_ids;
+	}
+};
+
+// Per-thread local state for the filter function.
+// In this demo we use a simple hash-set lookup, so no per-thread state is needed.
+// In practice, if row IDs arrive in non-decreasing order (e.g. sequential scan),
+// a cursor-based linear scan over a sorted allowed list would be more efficient — O(n) total.
+struct RowIdFilterState : public FunctionLocalState {};
+
+static unique_ptr<FunctionLocalState> RowIdFilterInit(ExpressionState &, const BoundFunctionExpression &,
+                                                      FunctionData *) {
+	return make_uniq<RowIdFilterState>();
+}
+
+static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<RowIdFilterBindData>();
+	auto &allowed = bind_data.allowed_set;
+
+	auto &input_vec = args.data[0];
+	idx_t count = args.size();
+
+	UnifiedVectorFormat vdata;
+	input_vec.ToUnifiedFormat(vdata);
+	auto row_ids = UnifiedVectorFormat::GetData<int64_t>(vdata);
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto out = FlatVector::GetDataMutable<bool>(result);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (!vdata.validity.RowIsValid(idx)) {
+			out[i] = false;
+			continue;
+		}
+		out[i] = allowed.count(row_ids[idx]) > 0;
+	}
+}
+
+static FilterPropagateResult RowIdFilterPropagate(const FunctionStatisticsPruneInput &input) {
+	auto &allowed = input.bind_data->Cast<RowIdFilterBindData>().allowed_ids;
+	auto &stats = input.stats;
+
+	if (!NumericStats::HasMinMax(stats)) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto min_val = NumericStats::GetMin<int64_t>(stats);
+	auto max_val = NumericStats::GetMax<int64_t>(stats);
+
+	auto it = std::lower_bound(allowed.begin(), allowed.end(), min_val);
+	if (it != allowed.end() && *it <= max_val) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+}
+
+class RowIdOptimizerExtension : public OptimizerExtension {
+public:
+	RowIdOptimizerExtension() {
+		optimize_function = RowIdOptimizeFunction;
+	}
+
+	static void RowIdOptimizeFunction(OptimizerExtensionInput &input, duckdb::unique_ptr<LogicalOperator> &plan) {
+		for (auto &child : plan->children) {
+			RowIdOptimizeFunction(input, child);
+		}
+		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
+			return;
+		}
+		auto &get = plan->Cast<LogicalGet>();
+		auto table = get.GetTable();
+		if (!table || table->name != "rowid_test_table") {
+			return;
+		}
+
+		// Build the scalar function
+		ScalarFunction func("rowid_filter", {LogicalType::BIGINT}, LogicalType::BOOLEAN, RowIdFilterFunction,
+		                    RowIdFilterBind);
+		func.SetInitStateCallback(RowIdFilterInit);
+		func.SetFilterPruneCallback(RowIdFilterPropagate);
+
+		// Construct the bound expression (column index 0: the filter chunk contains only the filtered column)
+		vector<unique_ptr<Expression>> children;
+		children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, 0));
+
+		BoundScalarFunction bound_func(func);
+		auto expr = make_uniq<BoundFunctionExpression>(std::move(bound_func), std::move(children),
+		                                               make_uniq<RowIdFilterBindData>(vector<int64_t> {3, 4, 5, 7, 9}));
+
+		// Ensure ROW_ID is in the scan's column list
+		auto row_id_index = get.TryGetProjectionIndex(COLUMN_IDENTIFIER_ROW_ID);
+		if (!row_id_index.IsValid()) {
+			if (get.projection_ids.empty()) {
+				for (idx_t i = 0; i < get.GetColumnIds().size(); i++) {
+					get.projection_ids.emplace_back(i);
+				}
+			}
+			row_id_index = get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
+		}
+
+		// Push the filter on the ROW_ID column
+		get.table_filters.PushFilter(row_id_index, make_uniq<ExpressionFilter>(std::move(expr)));
+	}
+};
 
 //===--------------------------------------------------------------------===//
 // Extension load + setup
@@ -562,8 +914,6 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	auto &client_context = *con.context;
 	auto &catalog = Catalog::GetSystemCatalog(client_context);
 	con.BeginTransaction();
-	con.CreateScalarFunction<int32_t, string_t>("hello", {LogicalType(LogicalTypeId::VARCHAR)},
-	                                            LogicalType(LogicalTypeId::INTEGER), &hello_fun);
 	catalog.CreateFunction(client_context, hello_alias_info);
 
 	// Add alias POINT type
@@ -608,10 +958,46 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 
 	con.Commit();
 
+	// Table with tagged columns
+	{
+		auto tagged_table_info = make_uniq<CreateTableInfo>();
+		tagged_table_info->schema = DEFAULT_SCHEMA;
+		tagged_table_info->table = "tagged_table";
+		tagged_table_info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+		tagged_table_info->temporary = false;
+		tagged_table_info->internal = true;
+
+		ColumnDefinition col_a("a", LogicalType::INTEGER);
+		InsertionOrderPreservingMap<string> col_a_tags;
+		col_a_tags["ext:name"] = "loadable_extension_demo";
+		col_a_tags["ext:column_type"] = "primary";
+		col_a.SetTags(std::move(col_a_tags));
+		tagged_table_info->columns.AddColumn(std::move(col_a));
+
+		ColumnDefinition col_b("b", LogicalType::VARCHAR);
+		InsertionOrderPreservingMap<string> col_b_tags;
+		col_b_tags["ext:name"] = "loadable_extension_demo";
+		col_b_tags["ext:column_type"] = "dimension";
+		col_b.SetTags(std::move(col_b_tags));
+		tagged_table_info->columns.AddColumn(std::move(col_b));
+
+		con.BeginTransaction();
+		auto &default_db_name = DatabaseManager::GetDefaultDatabase(client_context);
+		auto &default_catalog = Catalog::GetCatalog(client_context, default_db_name);
+		MetaTransaction::Get(client_context).ModifyDatabase(default_catalog.GetAttached(), DatabaseModificationType());
+		default_catalog.CreateTable(client_context, std::move(tagged_table_info));
+		con.Commit();
+	}
+
 	// add a parser extension
 	auto &config = DBConfig::GetConfig(db);
-	config.parser_extensions.push_back(QuackExtension());
-	config.extension_callbacks.push_back(make_uniq<QuackLoadExtension>());
+	ParserExtension::Register(config, QuackExtension());
+	ExtensionCallback::Register(config, make_shared_ptr<QuackLoadExtension>());
+
+	// add a planner extension that adds an extra column to queries
+	PlannerExtension::Register(config, AddColumnExtension());
+	config.AddExtensionOption("add_column_enabled", "enable adding extra column to queries", LogicalType::BOOLEAN,
+	                          Value::BOOLEAN(false));
 
 	// Bounded type
 	auto bounded_type = BoundedType::GetDefault();
@@ -642,6 +1028,10 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	                                BoundedToAsciiFunc);
 	loader.RegisterFunction(bounded_to_ascii);
 
+	// Example of a window function
+	DuckWeedFunction duckweed;
+	loader.RegisterFunction(duckweed);
+
 	// Enable explicit casting to our specialized type
 	loader.RegisterCastFunction(bounded_type, bounded_specialized_type, BoundCastInfo(BoundedToBoundedCast), 0);
 	// Casts
@@ -652,5 +1042,8 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	loader.RegisterType("MINMAX", minmax_type, MinMaxType::Bind);
 	loader.RegisterCastFunction(LogicalType::INTEGER, minmax_type, BoundCastInfo(IntToMinMaxCast), 0);
 	loader.RegisterFunction(ScalarFunction("minmax_range", {minmax_type}, LogicalType::INTEGER, MinMaxRangeFunc));
+
+	// Register the RowId optimizer extension (extensible table filter demo)
+	config.GetCallbackManager().Register(RowIdOptimizerExtension());
 }
 }

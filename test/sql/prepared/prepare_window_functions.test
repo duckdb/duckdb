@@ -20,3 +20,16 @@ query I
 EXECUTE v1(0.5)
 ----
 0.5
+
+# Unbound value function
+statement ok
+CREATE TABLE v0 ( v2 INTEGER CHECK( v2 BETWEEN 1 AND 1119 ) , v1 INT ) ; 
+
+statement ok
+INSERT INTO v0 ( v2 ) VALUES ( 10 );
+
+statement ok
+PREPARE q1 AS SELECT COALESCE ( LEAD ( $1 ) OVER( ) , ( v1 ) ) > $1 FROM v0;
+
+statement ok
+EXECUTE q1(1);

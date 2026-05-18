@@ -104,7 +104,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET
 # Add the default client
 add_compile_definitions(DEFINE_DEFAULT_ENGINE)
 
-# Link delta-kernal-rs to static lib
+# Link delta-kernel-rs to static lib
 target_link_libraries(
   ${EXTENSION_NAME}
   debug
@@ -114,7 +114,7 @@ target_link_libraries(
   ${PLATFORM_LIBS})
 add_dependencies(${EXTENSION_NAME} delta_kernel)
 
-# Link delta-kernal-rs to dynamic lib
+# Link delta-kernel-rs to dynamic lib
 target_link_libraries(
   ${LOADABLE_EXTENSION_NAME}
   debug

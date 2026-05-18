@@ -88,11 +88,14 @@ vector<SecretEntry> CatalogSetSecretStorage::AllSecrets(optional_ptr<CatalogTran
 void CatalogSetSecretStorage::DropSecretByName(const string &name, OnEntryNotFound on_entry_not_found,
                                                optional_ptr<CatalogTransaction> transaction) {
 	auto entry = secrets->GetEntry(GetTransactionOrDefault(transaction), name);
-	if (!entry && on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-		string persist_string = persistent ? "persistent" : "temporary";
-		string storage_string = persistent ? " in secret storage '" + storage_name + "'" : "";
-		throw InvalidInputException("Failed to remove non-existent %s secret '%s'%s", persist_string, name,
-		                            storage_string);
+	if (!entry) {
+		if (on_entry_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+			string persist_string = persistent ? "persistent" : "temporary";
+			string storage_string = persistent ? " in secret storage '" + storage_name + "'" : "";
+			throw InvalidInputException("Failed to remove non-existent %s secret '%s'%s", persist_string, name,
+			                            storage_string);
+		}
+		return;
 	}
 
 	secrets->DropEntry(GetTransactionOrDefault(transaction), name, true, true);
@@ -191,21 +194,8 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 	// We may need to create the secret dir here if the directory was not present during LocalFileSecretStorage
 	// construction
 	if (!fs.DirectoryExists(secret_path)) {
-		// TODO: recursive directory creation should probably live in filesystem
-		auto sep = fs.PathSeparator(secret_path);
-		auto splits = StringUtil::Split(secret_path, sep);
-		D_ASSERT(!splits.empty());
-		string extension_directory_prefix;
-		if (StringUtil::StartsWith(secret_path, sep)) {
-			extension_directory_prefix = sep; // this is swallowed by Split otherwise
-		}
 		try {
-			for (auto &split : splits) {
-				extension_directory_prefix = extension_directory_prefix + split + sep;
-				if (!fs.DirectoryExists(extension_directory_prefix)) {
-					fs.CreateDirectory(extension_directory_prefix);
-				}
-			}
+			fs.CreateDirectoriesRecursive(secret_path);
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			if (error.Type() == ExceptionType::IO) {

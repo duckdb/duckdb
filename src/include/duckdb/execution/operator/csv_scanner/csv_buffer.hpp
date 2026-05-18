@@ -31,8 +31,8 @@ public:
 	const idx_t requested_size;
 	const bool is_last_buffer;
 	const idx_t buffer_idx;
-	inline char *Ptr() {
-		return char_ptr_cast(handle.Ptr());
+	inline const char *Ptr() const {
+		return const_char_ptr_cast(handle.Ptr());
 	}
 };
 
@@ -68,11 +68,11 @@ public:
 	shared_ptr<CSVBufferHandle> Pin(CSVFileHandle &file_handle, bool &has_seeked);
 	//! Wrapper for unpin
 	void Unpin();
-	char *Ptr() {
-		return char_ptr_cast(handle.Ptr());
+	const char *Ptr() const {
+		return const_char_ptr_cast(handle.Ptr());
 	}
 	bool IsUnloaded() const {
-		return block->IsUnloaded();
+		return block->GetMemory().IsUnloaded();
 	}
 
 	//! By default, we use CSV_BUFFER_SIZE to allocate each buffer

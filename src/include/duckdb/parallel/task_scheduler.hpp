@@ -80,7 +80,7 @@ public:
 	static void YieldThread();
 
 	//! Set the allocator flush threshold
-	void SetAllocatorFlushTreshold(idx_t threshold);
+	void SetAllocatorFlushThreshold(idx_t threshold);
 	//! Sets the allocator background thread
 	void SetAllocatorBackgroundThreads(bool enable);
 
@@ -90,7 +90,7 @@ public:
 	static idx_t GetEstimatedCPUId();
 
 private:
-	void RelaunchThreadsInternal(int32_t n);
+	void RelaunchThreadsInternal(int32_t n, bool destroy);
 
 private:
 	DatabaseInstance &db;

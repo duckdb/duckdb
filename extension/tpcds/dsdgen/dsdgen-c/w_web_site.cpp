@@ -166,37 +166,37 @@ int mk_w_web_site(void *info_arr, ds_key_t index) {
 
 	char szStreetName[128];
 
-	append_key(info, r->web_site_sk);
-	append_varchar(info, &r->web_site_id[0]);
-	append_date(info, (int)r->web_rec_start_date_id);
-	append_date(info, (int)r->web_rec_end_date_id);
-	append_varchar(info, &r->web_name[0]);
-	append_key(info, r->web_open_date);
-	append_key(info, r->web_close_date);
-	append_varchar(info, &r->web_class[0]);
-	append_varchar(info, &r->web_manager[0]);
-	append_integer(info, r->web_market_id);
-	append_varchar(info, &r->web_market_class[0]);
-	append_varchar(info, &r->web_market_desc[0]);
-	append_varchar(info, &r->web_market_manager[0]);
-	append_integer(info, r->web_company_id);
-	append_varchar(info, &r->web_company_name[0]);
-	append_integer(info, r->web_address.street_num);
+	append_key(info, r->web_site_sk, WEB_SITE_SK);
+	append_varchar(info, &r->web_site_id[0], WEB_SITE_ID);
+	append_date(info, (int)r->web_rec_start_date_id, WEB_REC_START_DATE_ID);
+	append_date(info, (int)r->web_rec_end_date_id, WEB_REC_END_DATE_ID);
+	append_varchar(info, &r->web_name[0], WEB_NAME);
+	append_key(info, r->web_open_date, WEB_OPEN_DATE);
+	append_key(info, r->web_close_date, WEB_CLOSE_DATE);
+	append_varchar(info, &r->web_class[0], WEB_CLASS);
+	append_varchar(info, &r->web_manager[0], WEB_MANAGER);
+	append_integer(info, r->web_market_id, WEB_MARKET_ID);
+	append_varchar(info, &r->web_market_class[0], WEB_MARKET_CLASS);
+	append_varchar(info, &r->web_market_desc[0], WEB_MARKET_DESC);
+	append_varchar(info, &r->web_market_manager[0], WEB_MARKET_MANAGER);
+	append_integer(info, r->web_company_id, WEB_COMPANY_ID);
+	append_varchar(info, &r->web_company_name[0], WEB_COMPANY_NAME);
+	append_integer(info, r->web_address.street_num, WEB_ADDRESS_STREET_NUM);
 	if (r->web_address.street_name2) {
 		sprintf(szStreetName, "%s %s", r->web_address.street_name1, r->web_address.street_name2);
-		append_varchar(info, szStreetName);
+		append_varchar(info, szStreetName, WEB_ADDRESS_STREET_NAME1);
 	} else
-		append_varchar(info, r->web_address.street_name1);
-	append_varchar(info, r->web_address.street_type);
-	append_varchar(info, r->web_address.suite_num);
-	append_varchar(info, r->web_address.city);
-	append_varchar(info, r->web_address.county);
-	append_varchar(info, r->web_address.state);
+		append_varchar(info, r->web_address.street_name1, WEB_ADDRESS_STREET_NAME1);
+	append_varchar(info, r->web_address.street_type, WEB_ADDRESS_STREET_TYPE);
+	append_varchar(info, r->web_address.suite_num, WEB_ADDRESS_SUITE_NUM);
+	append_varchar(info, r->web_address.city, WEB_ADDRESS_CITY);
+	append_varchar(info, r->web_address.county, WEB_ADDRESS_COUNTY);
+	append_varchar(info, r->web_address.state, WEB_ADDRESS_STATE);
 	sprintf(szStreetName, "%05d", r->web_address.zip);
-	append_varchar(info, szStreetName);
-	append_varchar(info, r->web_address.country);
-	append_integer_decimal(info, r->web_address.gmt_offset);
-	append_decimal(info, &r->web_tax_percentage);
+	append_varchar(info, szStreetName, WEB_ADDRESS_ZIP);
+	append_varchar(info, r->web_address.country, WEB_ADDRESS_COUNTRY);
+	append_integer_decimal(info, r->web_address.gmt_offset, WEB_ADDRESS_GMT_OFFSET);
+	append_decimal(info, &r->web_tax_percentage, WEB_TAX_PERCENTAGE);
 
 	append_row_end(info);
 

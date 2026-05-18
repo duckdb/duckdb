@@ -1,5 +1,12 @@
 [
     {
+        "name": "__delta_only_variant_encoding_enabled",
+        "description": "Enables the Parquet reader to identify a Variant structurally.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "access_mode",
         "description": "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)",
         "type": "ENUM<AccessMode>",
@@ -84,6 +91,13 @@
         ]
     },
     {
+        "name": "allowed_configs",
+        "description": "List of configuration options that are ALWAYS allowed to be changed - even when lock_configuration is true",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "allowed_directories",
         "description": "List of directories/prefixes that are ALWAYS allowed to be queried - even when enable_external_access is false",
         "type": "VARCHAR[]",
@@ -134,6 +148,13 @@
         "default_value": "64"
     },
     {
+        "name": "auto_checkpoint_skip_wal_threshold",
+        "description": "The estimated WAL write size at which point we will skip writing to the WAL and only checkpoint. Skipping writing to the WAL means concurrent commits are blocked while the checkpoint is happening.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "100000"
+    },
+    {
         "name": "autoinstall_extension_repository",
         "description": "Overrides the custom endpoint for extension installation on autoloading",
         "type": "VARCHAR",
@@ -180,6 +201,13 @@
         "default_value": "100"
     },
     {
+        "name": "checkpoint_on_detach",
+        "description": "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.",
+        "type": "ENUM<CheckpointOnDetach>",
+        "default_scope": "local",
+        "default_value": "DEFAULT"
+    },
+    {
         "name": "checkpoint_threshold",
         "description": "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)",
         "type": "VARCHAR",
@@ -194,19 +222,34 @@
         ]
     },
     {
+        "name": "configure_profiling",
+        "description": "Accepts a JSON enabling custom metrics",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true,
+        "aliases": [
+            "custom_profiling_settings",
+            "configure_metrics"
+        ]
+    },
+    {
+        "name": "current_transaction_invalidation_policy",
+        "description": "Which types of exceptions invalidate the database for the current transaction",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true,
+        "default_value": "STANDARD_POLICY",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "custom_extension_repository",
         "description": "Overrides the custom endpoint for remote extension installation",
         "type": "VARCHAR",
         "internal_setting": "custom_extension_repo",
         "scope": "global",
         "default_value": ""
-    },
-    {
-        "name": "custom_profiling_settings",
-        "description": "Accepts a JSON enabling custom metrics",
-        "type": "VARCHAR",
-        "scope": "local",
-        "custom_implementation": true
     },
     {
         "name": "custom_user_agent",
@@ -240,11 +283,32 @@
         "default_value": "0"
     },
     {
+        "name": "debug_disable_optimizer",
+        "description": "DEBUG SETTING: disable optimizer for most queries",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_eviction_queue_sleep_micro_seconds",
+        "description": "DEBUG SETTING: time for the eviction queue to sleep before acquiring shared ownership of block memory",
+        "type": "UBIGINT",
+        "scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "debug_force_external",
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "BOOLEAN",
-        "scope": "local",
-        "internal_setting": "force_external"
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_force_fetch_row",
+        "description": "DEBUG SETTING: force per-row fetching during scans, used for testing",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "debug_force_no_cross_product",
@@ -268,8 +332,50 @@
         "default_value": "false"
     },
     {
+        "name": "debug_verification_mode",
+        "description": "DEBUG SETTING: toggle the verification mode.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "debug_verification_projection",
+        "description": "DEBUG SETTING: add internal verification projections to stress optimizers",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_verify_blocks",
         "description": "DEBUG SETTING: verify block metadata during checkpointing",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_column_bindings",
+        "description": "DEBUG SETTING: run extra internal verification of column bindings",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_serializer",
+        "description": "DEBUG SETTING: verify logical plan serializer",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_statement",
+        "description": "DEBUG SETTING: the type of statement verification to perform",
+        "type": "ENUM<DebugStatementVerification>",
+        "default_scope": "global",
+        "default_value": "NONE"
+    },
+    {
+        "name": "debug_verify_stats",
+        "description": "DEBUG SETTING: verify statistics are correct during execution, instead of assuming",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
@@ -339,6 +445,20 @@
         "custom_implementation": true
     },
     {
+        "name": "default_transaction_invalidation_policy",
+        "description": "When to invalidate transactions when errors occur (SYNTACTIC_ERRORS_DO_NOT_INVALIDATE, i.e. parser and binder exceptions do not invalidate, or ALL_ERRORS_INVALIDATE_TRANSACTION)",
+        "type": "ENUM<TransactionInvalidationPolicy>",
+        "default_scope": "global",
+        "default_value": "ALL_ERRORS_INVALIDATE_TRANSACTION"
+    },
+    {
+        "name": "deprecated_using_key_syntax",
+        "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
+        "type": "ENUM<DeprecatedUsingKeySyntax>",
+        "default_scope": "local",
+        "default_value": "DEFAULT"
+    },
+    {
         "name": "disable_database_invalidation",
         "description": "Disables invalidating the database instance when encountering a fatal error. Should be used with great care, as DuckDB cannot guarantee correct behavior after a fatal error.",
         "type": "BOOLEAN",
@@ -401,6 +521,13 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "50"
+    },
+    {
+        "name": "enable_caching_operators",
+        "description": "Enables caching operators that cache intermediate results",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true"
     },
     {
         "name": "enable_external_access",
@@ -544,6 +671,32 @@
         "default_value": ""
     },
     {
+        "name": "external_file_cache_local_block_size",
+        "description": "Block size in bytes for the external file cache when reading local (non-remote) files.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "16384",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "external_file_cache_remote_block_size",
+        "description": "Block size in bytes for the external file cache when reading remote files (e.g. HTTP/S3).",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "2097152",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "external_threads",
         "description": "The number of external threads that work on DuckDB tasks.",
         "type": "UBIGINT",
@@ -576,6 +729,13 @@
         "custom_implementation": [
             "set"
         ]
+    },
+    {
+        "name": "force_mbedtls_unsafe",
+        "description": "Enable mbedtls for encryption (WARNING: unsafe to use)",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "force_variant_shredding",
@@ -637,10 +797,17 @@
     },
     {
         "name": "ieee_floating_point_ops",
-        "description": "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).",
+        "description": "Use IEEE 754 behavior for supported floating point operations, returning NAN/INF instead of errors/NULL.",
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "true"
+    },
+    {
+        "name": "ignore_unknown_crs",
+        "description": "Ignore unknown Coordinate Reference Systems (CRS) when creating geometry types or importing geospatial data.",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "immediate_transaction_mode",
@@ -662,6 +829,16 @@
         "type": "DOUBLE",
         "default_scope": "global",
         "default_value": "0.001",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "initial_column_segment_size",
+        "description": "The initial memory (in bytes) reserved for the first transient column segment. Must be a power of two. Internally, we subtract the block header size (typically 8 bytes) for segments with or exceeding 1024 bytes. Subsequent segments double in size until reaching the block size.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "2048",
         "on_callbacks": [
             "set"
         ]
@@ -689,7 +866,7 @@
     },
     {
         "name": "lock_configuration",
-        "description": "Whether or not the configuration can be altered",
+        "description": "Whether or not configurations can be altered",
         "type": "BOOLEAN",
         "scope": "global",
         "default_value": "false"
@@ -727,6 +904,13 @@
         "scope": "global",
         "struct": "LoggingStorage",
         "custom_implementation": true
+    },
+    {
+        "name": "max_execution_time",
+        "description": "The maximum execution time per query in milliseconds (0 = no limit)",
+        "type": "BIGINT",
+        "scope": "local",
+        "default_value": "0"
     },
     {
         "name": "max_expression_depth",
@@ -781,6 +965,13 @@
         "default_value": "false"
     },
     {
+        "name": "operator_memory_limit",
+        "description": "The maximum memory for query intermediates (sorts, hash tables) per connection (e.g. 256MB)",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "order_by_non_integer_literal",
         "description": "Allow ordering by non-integer literals - ordering by such literals has no effect.",
         "type": "BOOLEAN",
@@ -796,6 +987,13 @@
         "on_callbacks": [
             "set"
         ]
+    },
+    {
+        "name": "parallelize_sequential_sources",
+        "description": "Whether to automatically parallelize sequential sources",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true"
     },
     {
         "name": "partitioned_write_flush_threshold",
@@ -1005,6 +1203,16 @@
         ]
     },
     {
+        "name": "vacuum_rebuild_indexes",
+        "description": "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "validate_external_file_cache",
         "description": "Cache validation mode: VALIDATE_ALL (default, validate all cache entries), VALIDATE_REMOTE (validate only remote cache entries), or NO_VALIDATION (disable cache validation).",
         "type": "ENUM<CacheValidationMode>",
@@ -1017,6 +1225,23 @@
         "type": "BIGINT",
         "scope": "global",
         "default_value": "30000"
+    },
+    {
+        "name": "wal_autocheckpoint_entries",
+        "description": "Trigger automatic checkpoint when WAL entry count reaches or exceeds N (0 = disabled)",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0"
+    },
+    {
+        "name": "warnings_as_errors",
+        "description": "Escalate all warnings to errors.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false",
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "write_buffer_row_group_count",

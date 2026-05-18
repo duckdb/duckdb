@@ -1,0 +1,22 @@
+# name: test/sql/catalog/view/deferred_binding.test
+# description: Test support for deferred binding of views
+# group: [view]
+
+statement ok
+CREATE VIEW v1 WITH (DEFER_BINDING) AS SELECT * FROM tbl;
+
+statement error
+FROM v1
+----
+does not exist
+
+statement ok
+CREATE TABLE tbl(i INTEGER)
+
+statement ok
+INSERT INTO tbl VALUES (42);
+
+query I
+FROM v1
+----
+42

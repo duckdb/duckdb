@@ -9,9 +9,8 @@
 #pragma once
 
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 
 namespace duckdb {
 struct BindInfo;

@@ -1,0 +1,43 @@
+# name: test/issues/general/test_21100.test
+# description: Issue 21100 - duckdb 1.5: Issue with struct and write ahead log
+# group: [general]
+
+load {TEST_DIR}/test_struct_null.db
+
+statement ok
+set threads=1;
+
+statement ok
+SET wal_autocheckpoint='1MiB'
+
+statement ok
+CREATE TABLE tl(
+    data INT[]
+)
+
+statement ok
+INSERT INTO tl VALUES (NULL)
+
+statement ok
+UPDATE tl SET data = [42]
+
+query I
+SELECT COUNT(*) FROM tl WHERE data IS NOT NULL
+----
+1
+
+statement ok
+CREATE TABLE t(
+    data STRUCT(a INTEGER)
+)
+
+statement ok
+INSERT INTO t VALUES (NULL)
+
+statement ok
+UPDATE t SET data = {'a': 42}
+
+query I
+SELECT COUNT(*) FROM t WHERE data IS NOT NULL
+----
+1

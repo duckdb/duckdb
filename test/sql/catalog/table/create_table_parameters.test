@@ -11,4 +11,4 @@ CREATE TABLE t0 ( c1 INT DEFAULT ? );
 statement error
 CREATE TABLE t0 ( c1 INT CHECK (?) );
 ----
-<REGEX>:(.*Invalid Input Error: Expected 2 parameters.*|.*Binder Error.*Unexpected prepared parameter.*)
+<REGEX>:(.*Invalid Input Error: Expected 1 parameters.*|.*Binder Error.*Unexpected prepared parameter.*)

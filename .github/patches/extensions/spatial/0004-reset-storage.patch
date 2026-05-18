@@ -1,0 +1,26 @@
+diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
+index 9de9355..f073188 100644
+--- a/src/spatial/index/rtree/rtree_index.cpp
++++ b/src/spatial/index/rtree/rtree_index.cpp
+@@ -159,7 +159,7 @@ idx_t RTreeIndex::Scan(IndexScanState &state, Vector &result) const {
+ 	return output_idx;
+ }
+ 
+-void RTreeIndex::CommitDrop(IndexLock &index_lock) {
++void RTreeIndex::ResetStorage(IndexLock &index_lock) {
+ 	// TODO: Maybe we can drop these much earlier?
+ 	tree->Reset();
+ }
+diff --git a/src/spatial/index/rtree/rtree_index.hpp b/src/spatial/index/rtree/rtree_index.hpp
+index 6315d8d..e69a091 100644
+--- a/src/spatial/index/rtree/rtree_index.hpp
++++ b/src/spatial/index/rtree/rtree_index.hpp
+@@ -47,7 +47,7 @@ public:
+ 	ErrorData Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
+ 
+ 	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
+-	void CommitDrop(IndexLock &index_lock) override;
++	void ResetStorage(IndexLock &index_lock) override;
+ 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
+ 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
+ 	//! Insert a chunk of entries into the index

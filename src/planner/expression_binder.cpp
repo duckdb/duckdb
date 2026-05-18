@@ -16,25 +16,11 @@ void ExpressionBinder::SetCatalogLookupCallback(catalog_entry_callback_t callbac
 	binder.SetCatalogLookupCallback(std::move(callback));
 }
 
-ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder)
-    : binder(binder), context(context) {
+ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context) : binder(binder), context(context) {
 	InitializeStackCheck();
-	if (replace_binder) {
-		stored_binder = &binder.GetActiveBinder();
-		binder.SetActiveBinder(*this);
-	} else {
-		binder.PushExpressionBinder(*this);
-	}
 }
 
 ExpressionBinder::~ExpressionBinder() {
-	if (binder.HasActiveBinder()) {
-		if (stored_binder) {
-			binder.SetActiveBinder(*stored_binder);
-		} else {
-			binder.PopExpressionBinder();
-		}
-	}
 }
 
 void ExpressionBinder::InitializeStackCheck() {
@@ -80,6 +66,8 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<ConjunctionExpression>(), depth);
 	case ExpressionClass::CONSTANT:
 		return BindExpression(expr_ref.Cast<ConstantExpression>(), depth);
+	case ExpressionClass::TYPE:
+		return BindExpression(expr_ref.Cast<TypeExpression>(), depth);
 	case ExpressionClass::FUNCTION: {
 		auto &function = expr_ref.Cast<FunctionExpression>();
 		if (IsUnnestFunction(function.function_name)) {
@@ -91,7 +79,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	}
 	case ExpressionClass::LAMBDA: {
 		const vector<LogicalType> function_child_types;
-		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, function_child_types, nullptr);
+		return BindExpression(expr_ref.Cast<LambdaExpression>(), depth, function_child_types, nullptr, nullptr);
 	}
 	case ExpressionClass::OPERATOR:
 		return BindExpression(expr_ref.Cast<OperatorExpression>(), depth);
@@ -204,8 +192,6 @@ BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> 
 	// make a copy of the set of binders, so we can restore it later
 	auto binders = active_binders;
 	auto bind_error = std::move(error_message);
-	// we already failed with the current binder
-	active_binders.pop_back();
 	idx_t depth = 1;
 	while (!active_binders.empty()) {
 		auto &next_binder = active_binders.back().get();
@@ -342,17 +328,17 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		if (!binder.can_contain_nulls) {
 			// SQL NULL type is only used internally in the binder
 			// cast to INTEGER if we encounter it outside of the binder
-			if (ContainsNullType(result->return_type)) {
-				auto exchanged_type = ExchangeNullType(result->return_type);
+			if (ContainsNullType(result->GetReturnType())) {
+				auto exchanged_type = ExchangeNullType(result->GetReturnType());
 				result = BoundCastExpression::AddCastToType(context, std::move(result), exchanged_type);
 			}
 		}
-		if (result->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (result->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
 	}
 	if (result_type) {
-		*result_type = result->return_type;
+		*result_type = result->GetReturnType();
 	}
 	return result;
 }

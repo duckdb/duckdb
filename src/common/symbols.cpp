@@ -27,6 +27,9 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -60,6 +63,9 @@ template class unique_ptr<VacuumStatement>;
 template class unique_ptr<QueryNode>;
 template class unique_ptr<SelectNode>;
 template class unique_ptr<SetOperationNode>;
+template class unique_ptr<UpdateQueryNode>;
+template class unique_ptr<DeleteQueryNode>;
+template class unique_ptr<InsertQueryNode>;
 template class unique_ptr<ParsedExpression>;
 template class unique_ptr<CaseExpression>;
 template class unique_ptr<CastExpression>;
@@ -98,7 +104,6 @@ template class unique_ptr<BoundAggregateExpression>;
 template class unique_ptr<BoundCaseExpression>;
 template class unique_ptr<BoundCastExpression>;
 template class unique_ptr<BoundColumnRefExpression>;
-template class unique_ptr<BoundComparisonExpression>;
 template class unique_ptr<BoundConjunctionExpression>;
 template class unique_ptr<BoundConstantExpression>;
 template class unique_ptr<BoundDefaultExpression>;

@@ -1,0 +1,8 @@
+# name: test/sql/peg_parser/fuzzer/internal_0206.test
+# description: PEG hits INTERNAL Error (should be clean error): INTERNAL Error: Failed to cast parse result of type IDENTIFIER to type LIST for rule CollationName
+# group: [fuzzer]
+
+statement error
+DROP COLLATION a
+----
+Not implemented Error: Cannot drop collation yet

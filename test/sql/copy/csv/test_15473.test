@@ -2,9 +2,6 @@
 # description: Test for issue 15473
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select columns from sniff_csv('{DATA_DIR}/csv/15473.csv');
 ----

@@ -18,6 +18,10 @@ void Logger::WriteLog(const char *log_type, LogLevel log_level, const string_t &
 	WriteLog(log_type, log_level, copied_string.c_str());
 }
 
+void Logger::WriteLog(const char *log_type, LogLevel log_level, const char *message) {
+	WriteLogInternal(log_type, log_level, message);
+}
+
 Logger &Logger::Get(const DatabaseInstance &db) {
 	return db.GetLogManager().GlobalLogger();
 }
@@ -68,7 +72,7 @@ bool ThreadSafeLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	return true;
 }
 
-void ThreadSafeLogger::WriteLog(const char *log_type, LogLevel log_level, const char *log_message) {
+void ThreadSafeLogger::WriteLogInternal(const char *log_type, LogLevel log_level, const char *log_message) {
 	manager.WriteLogEntry(Timestamp::GetCurrentTimestamp(), log_type, log_level, log_message, context);
 }
 
@@ -91,8 +95,8 @@ bool ThreadLocalLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	throw NotImplementedException("ThreadLocalLogger::ShouldLog");
 }
 
-void ThreadLocalLogger::WriteLog(const char *log_type, LogLevel log_level, const char *log_message) {
-	throw NotImplementedException("ThreadLocalLogger::WriteLog");
+void ThreadLocalLogger::WriteLogInternal(const char *log_type, LogLevel log_level, const char *log_message) {
+	throw NotImplementedException("ThreadLocalLogger::WriteLogInternal");
 }
 
 void ThreadLocalLogger::Flush() {
@@ -120,7 +124,7 @@ void MutableLogger::UpdateConfig(LogConfig &new_config) {
 	mode = config.mode;
 }
 
-void MutableLogger::WriteLog(const char *log_type, LogLevel log_level, const char *log_message) {
+void MutableLogger::WriteLogInternal(const char *log_type, LogLevel log_level, const char *log_message) {
 	manager.WriteLogEntry(Timestamp::GetCurrentTimestamp(), log_type, log_level, log_message, context);
 }
 

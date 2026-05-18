@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 
@@ -6,7 +10,7 @@ namespace duckdb {
 static void WriteShreddedPrimitive(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
                                    const SelectionVector &value_index_sel, const SelectionVector &result_sel,
                                    idx_t count, idx_t type_size) {
-	auto result_data = FlatVector::GetData(result);
+	auto result_data = FlatVector::GetDataMutable(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
 		auto result_row = result_sel[i];
@@ -25,7 +29,7 @@ template <class T>
 static void WriteShreddedDecimal(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
                                  const SelectionVector &value_index_sel, const SelectionVector &result_sel,
                                  idx_t count) {
-	auto result_data = FlatVector::GetData(result);
+	auto result_data = FlatVector::GetDataMutable(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
 		auto result_row = result_sel[i];
@@ -55,7 +59,7 @@ static bool IsVariantStringType(VariantLogicalType type_id) {
 static void WriteShreddedString(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
                                 const SelectionVector &value_index_sel, const SelectionVector &result_sel,
                                 idx_t count) {
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::ScatterWriter<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
 		auto result_row = result_sel[i];
@@ -63,14 +67,14 @@ static void WriteShreddedString(UnifiedVariantVectorData &variant, Vector &resul
 		D_ASSERT(variant.RowIsValid(row) && IsVariantStringType(variant.GetTypeId(row, value_index)));
 
 		auto string_data = VariantUtils::DecodeStringData(variant, row, value_index);
-		result_data[result_row] = StringVector::AddStringOrBlob(result, string_data);
+		result_data[result_row] = string_data;
 	}
 }
 
 static void WriteShreddedBoolean(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
                                  const SelectionVector &value_index_sel, const SelectionVector &result_sel,
                                  idx_t count) {
-	auto result_data = FlatVector::GetData<bool>(result);
+	auto result_data = FlatVector::ScatterWriter<bool>(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
 		auto result_row = result_sel[i];
@@ -106,6 +110,7 @@ void VariantShredding::WriteTypedPrimitiveValues(UnifiedVariantVectorData &varia
 	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -156,13 +161,17 @@ void VariantShredding::WriteTypedPrimitiveValues(UnifiedVariantVectorData &varia
 	}
 }
 
+void VariantShredding::WriteMissingField(Vector &vector, idx_t index) {
+	FlatVector::GetDataMutable<uint32_t>(vector)[index] = 0;
+}
+
 void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant, Vector &result,
                                               const SelectionVector &sel, const SelectionVector &value_index_sel,
                                               const SelectionVector &result_sel, idx_t count) {
 	auto &type = result.GetType();
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
 
-	auto &validity = FlatVector::Validity(result);
+	auto &validity = FlatVector::ValidityMutable(result);
 	(void)validity;
 
 	//! Collect the nested data for the objects
@@ -188,7 +197,7 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 	child_result_sel.Initialize(count);
 
 	for (idx_t child_idx = 0; child_idx < shredded_types.size(); child_idx++) {
-		auto &child_vec = *shredded_fields[child_idx];
+		auto &child_vec = shredded_fields[child_idx];
 		D_ASSERT(child_vec.GetType() == shredded_types[child_idx].second);
 
 		//! Prepare the path component to perform the lookup for
@@ -202,18 +211,35 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 		VariantUtils::FindChildValues(variant, path_component, sel, child_values_indexes, lookup_validity,
 		                              nested_data.get(), all_valid_validity, count);
 
-		if (!lookup_validity.AllValid()) {
-			auto &child_variant_vectors = StructVector::GetEntries(child_vec);
+		if (lookup_validity.CanHaveNull()) {
+			optional_ptr<Vector> typed_value_vector;
+			optional_ptr<Vector> untyped_value_vector;
+			if (child_vec.GetType().id() == LogicalTypeId::STRUCT) {
+				// this is a STRUCT(typed_value .., [untyped_value UINT])
+				auto &child_variant_vectors = StructVector::GetEntries(child_vec);
+				if (typed_value_index < child_variant_vectors.size()) {
+					typed_value_vector = child_variant_vectors[typed_value_index];
+				}
+				if (untyped_value_index < child_variant_vectors.size()) {
+					untyped_value_vector = child_variant_vectors[untyped_value_index];
+				}
+			} else {
+				// this is a primitive type
+				typed_value_vector = child_vec;
+			}
 
 			//! For some of the rows the field is missing, adjust the selection vector to exclude these rows.
 			idx_t child_count = 0;
 			for (idx_t i = 0; i < count; i++) {
 				if (!lookup_validity.RowIsValid(i)) {
-					//! The field is missing, set it to null
-					FlatVector::SetNull(*child_variant_vectors[0], result_sel[i], true);
-					if (child_variant_vectors.size() >= 2) {
-						FlatVector::SetNull(*child_variant_vectors[1], result_sel[i], true);
+					//! The field is missing, set the untyped value index to 0
+					if (typed_value_vector) {
+						FlatVector::SetNull(*typed_value_vector, result_sel[i], true);
 					}
+					if (!untyped_value_vector) {
+						throw InternalException("Field is missing but untyped_value_index is not set");
+					}
+					WriteMissingField(*untyped_value_vector, result_sel[i]);
 					continue;
 				}
 
@@ -237,10 +263,9 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 void VariantShredding::WriteTypedArrayValues(UnifiedVariantVectorData &variant, Vector &result,
                                              const SelectionVector &sel, const SelectionVector &value_index_sel,
                                              const SelectionVector &result_sel, idx_t count) {
-	auto list_data = FlatVector::GetData<list_entry_t>(result);
-
 	auto nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
 
+	auto list_data = FlatVector::ScatterWriter<list_entry_t>(result);
 	idx_t total_offset = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
@@ -283,7 +308,7 @@ void VariantShredding::WriteTypedArrayValues(UnifiedVariantVectorData &variant, 
 		}
 	}
 
-	auto &child_vector = ListVector::GetEntry(result);
+	auto &child_vector = ListVector::GetChildMutable(result);
 	WriteVariantValues(variant, child_vector, child_sel, child_value_index_sel, child_result_sel, total_offset);
 }
 

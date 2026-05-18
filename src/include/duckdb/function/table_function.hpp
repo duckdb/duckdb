@@ -25,6 +25,13 @@
 
 namespace duckdb {
 
+//! Controls how a table function manages parallelism.
+enum class TableFunctionParallelism : uint8_t {
+	SELF_MANAGED_PARALLELISM = 0, //! Source handles its own parallelism (default)
+	SEQUENTIAL = 1,               //! Sequential source, benefits from external parallelization
+	FORCE_SINGLE_THREADED = 2     //! Sequential source, prefers single-threaded execution
+};
+
 class BaseStatistics;
 class LogicalDependencyList;
 class LogicalGet;
@@ -36,9 +43,9 @@ class SampleOptions;
 struct MultiFileReader;
 struct OperatorPartitionData;
 struct OperatorPartitionInfo;
-enum class OrderByColumnType;
-enum class RowGroupOrderType;
-enum class OrderByStatistics;
+enum class OrderByColumnType : uint8_t;
+enum class OrderType : uint8_t;
+enum class OrderByStatistics : uint8_t;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -98,9 +105,11 @@ struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
 	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
 	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder,
-	                       TableFunction &table_function, const TableFunctionRef &ref)
+	                       TableFunction &table_function, const TableFunctionRef &ref,
+	                       optional_ptr<unique_ptr<LogicalOperator>> input_plan = nullptr)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
-	      input_table_names(input_table_names), info(info), binder(binder), table_function(table_function), ref(ref) {
+	      input_table_names(input_table_names), info(info), binder(binder), table_function(table_function), ref(ref),
+	      input_plan(input_plan) {
 	}
 
 	vector<Value> &inputs;
@@ -111,6 +120,7 @@ struct TableFunctionBindInput {
 	optional_ptr<Binder> binder;
 	TableFunction &table_function;
 	const TableFunctionRef &ref;
+	optional_ptr<unique_ptr<LogicalOperator>> input_plan;
 };
 
 struct TableFunctionInitInput {
@@ -288,7 +298,8 @@ typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context
                                                           vector<LogicalType> &return_types, vector<string> &names);
 typedef unique_ptr<TableRef> (*table_function_bind_replace_t)(ClientContext &context, TableFunctionBindInput &input);
 typedef unique_ptr<LogicalOperator> (*table_function_bind_operator_t)(ClientContext &context,
-                                                                      TableFunctionBindInput &input, idx_t bind_index,
+                                                                      TableFunctionBindInput &input,
+                                                                      TableIndex bind_index,
                                                                       vector<string> &return_names);
 typedef unique_ptr<GlobalTableFunctionState> (*table_function_init_global_t)(ClientContext &context,
                                                                              TableFunctionInitInput &input);
@@ -351,8 +362,13 @@ typedef vector<column_t> (*table_function_get_row_id_columns)(ClientContext &con
 typedef void (*table_function_set_scan_order)(unique_ptr<RowGroupOrderOptions> order_options,
                                               optional_ptr<FunctionData> bind_data);
 
+typedef void (*table_function_set_partitions_to_scan_t)(vector<idx_t> partition_indices,
+                                                        optional_ptr<FunctionData> bind_data);
+
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
+
+enum class TableFunctionReturnType { TABLE_RETURNING_FUNCTION, SET_RETURNING_FUNCTION };
 
 class TableFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
@@ -436,7 +452,7 @@ public:
 	//! (Optional) cardinality function
 	//! Returns the expected cardinality of this scan
 	table_function_cardinality_t cardinality;
-	//! (Optional) returns the number of rows that have benn scanned
+	//! (Optional) returns the number of rows that have been scanned
 	table_function_rows_scanned_t rows_scanned;
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
 	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan
@@ -471,6 +487,8 @@ public:
 	table_function_get_row_id_columns get_row_id_columns;
 	//! (Optional) sets the order to scan the row groups in
 	table_function_set_scan_order set_scan_order;
+	//! (Optional) restricts the scan to a specific subset of partitions (by index in get_partition_stats order)
+	table_function_set_partitions_to_scan_t set_partitions_to_scan = nullptr;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;
@@ -490,6 +508,7 @@ public:
 	bool sampling_pushdown;
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
+	TableFunctionReturnType return_type;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 	//! The order preservation type of the table function
@@ -499,6 +518,9 @@ public:
 	//! By default init_global is called when the pipeline is ready for execution
 	//! If this is set to `INITIALIZE_ON_SCHEDULE` the table function is initialized when the query is scheduled
 	TableFunctionInitialization global_initialization = TableFunctionInitialization::INITIALIZE_ON_EXECUTE;
+
+	//! How this table function manages parallelism
+	TableFunctionParallelism parallelism = TableFunctionParallelism::SELF_MANAGED_PARALLELISM;
 
 	DUCKDB_API bool Equal(const TableFunction &rhs) const;
 	DUCKDB_API bool operator==(const TableFunction &rhs) const;

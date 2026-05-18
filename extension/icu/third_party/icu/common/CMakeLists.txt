@@ -1,14 +1,44 @@
-add_library_unity(
+add_library(
   duckdb_icu_common
+  OBJECT
+  bytestriebuilder.cpp
+  loadednormalizer2impl.cpp
+  localebuilder.cpp
+  locdistance.cpp
+  loclikelysubtags.cpp
+  locmap.cpp
+  putil.cpp
+  static_unicode_sets.cpp
+  ubidi_props.cpp
+  ubiditransform.cpp
+  ucase.cpp
+  ucharstriebuilder.cpp
+  ucptrie.cpp
+  uhash.cpp
+  uloc.cpp
+  umapfile.cpp
+  umutablecptrie.cpp
+  unames.cpp
+  unifiedcache.cpp
+  unormcmp.cpp
+  uresbund.cpp
+  uresdata.cpp
+  uscript_props.cpp
+  ustrcase.cpp
+  utrie.cpp
+  utrie2.cpp
+  utrie2_builder.cpp
+  uvector.cpp
+  wintz.cpp
+)
+add_library_unity(
+  duckdb_icu_common_unity
   OBJECT
   appendable.cpp
   bmpset.cpp
-  brkeng.cpp
-  brkiter.cpp
   bytesinkutil.cpp
   bytestream.cpp
   bytestrie.cpp
-  bytestriebuilder.cpp
   bytestrieiterator.cpp
   caniter.cpp
   characterproperties.cpp
@@ -17,30 +47,22 @@ add_library_unity(
   cmemory.cpp
   cstr.cpp
   cstring.cpp
-  cwchar.cpp
-  dictbe.cpp
-  dictionarydata.cpp
   dtintrv.cpp
   edits.cpp
+  emojiprops.cpp
   errorcode.cpp
-  filteredbrk.cpp
   filterednormalizer2.cpp
+  fixedstring.cpp
   icudataver.cpp
-  icuplug.cpp
-  loadednormalizer2impl.cpp
-  localebuilder.cpp
   localematcher.cpp
   localeprioritylist.cpp
   locavailable.cpp
   locbased.cpp
   locdispnames.cpp
-  locdistance.cpp
   locdspnm.cpp
   locid.cpp
   loclikely.cpp
-  loclikelysubtags.cpp
   locresdata.cpp
-  locutil.cpp
   lsr.cpp
   messagepattern.cpp
   normalizer2.cpp
@@ -51,97 +73,42 @@ add_library_unity(
   pluralmap.cpp
   propname.cpp
   propsvec.cpp
-  punycode.cpp
-  rbbi.cpp
-  rbbi_cache.cpp
-  rbbidata.cpp
-  rbbinode.cpp
-  rbbirb.cpp
-  rbbiscan.cpp
-  rbbisetb.cpp
-  rbbistbl.cpp
-  rbbitblb.cpp
   resbund.cpp
   resbund_cnv.cpp
   resource.cpp
-  restrace.cpp
   ruleiter.cpp
   schriter.cpp
-  serv.cpp
-  servlk.cpp
-  servlkf.cpp
-  servls.cpp
-  servnotf.cpp
-  servrbf.cpp
-  servslkf.cpp
   sharedobject.cpp
   simpleformatter.cpp
-  static_unicode_sets.cpp
   stringpiece.cpp
   stringtriebuilder.cpp
   uarrsort.cpp
   ubidi.cpp
-  ubidi_props.cpp
   ubidiln.cpp
-  ubiditransform.cpp
   ubidiwrt.cpp
-  ubrk.cpp
-  ucase.cpp
   ucasemap.cpp
-  ucasemap_titlecase_brkiter.cpp
   ucat.cpp
   uchar.cpp
   ucharstrie.cpp
-  ucharstriebuilder.cpp
   ucharstrieiterator.cpp
   uchriter.cpp
   ucln_cmn.cpp
   ucmndata.cpp
-  ucnv.cpp
-  ucnv2022.cpp
-  ucnv_bld.cpp
-  ucnv_cb.cpp
-  ucnv_cnv.cpp
-  ucnv_ct.cpp
-  ucnv_err.cpp
-  ucnv_ext.cpp
-  ucnv_io.cpp
-  ucnv_lmb.cpp
-  ucnv_set.cpp
-  ucnv_u16.cpp
-  ucnv_u32.cpp
-  ucnv_u7.cpp
-  ucnv_u8.cpp
-  ucnvbocu.cpp
-  ucnvdisp.cpp
-  ucnvhz.cpp
-  ucnvisci.cpp
-  ucnvlat1.cpp
-  ucnvmbcs.cpp
-  ucnvscsu.cpp
-  ucnvsel.cpp
   ucol_swp.cpp
-  ucptrie.cpp
   ucurr.cpp
   udata.cpp
   udatamem.cpp
   udataswp.cpp
   uenum.cpp
-  uhash.cpp
   uhash_us.cpp
-  uidna.cpp
   uinit.cpp
   uinvchar.cpp
   uiter.cpp
   ulist.cpp
-  uloc.cpp
   uloc_keytype.cpp
   uloc_tag.cpp
   umath.cpp
-  umutablecptrie.cpp
   umutex.cpp
-  unames.cpp
-  unifiedcache.cpp
   unifilt.cpp
   unifunct.cpp
   uniset.cpp
@@ -151,29 +118,19 @@ add_library_unity(
   unistr.cpp
   unistr_case.cpp
   unistr_case_locale.cpp
-  unistr_cnv.cpp
   unistr_props.cpp
-  unistr_titlecase_brkiter.cpp
   unorm.cpp
-  unormcmp.cpp
   uobject.cpp
   uprops.cpp
   ures_cnv.cpp
-  uresbund.cpp
-  uresdata.cpp
   usc_impl.cpp
   uscript.cpp
-  uscript_props.cpp
   uset.cpp
   uset_props.cpp
   usetiter.cpp
   ushape.cpp
-  usprep.cpp
   ustack.cpp
-  ustr_cnv.cpp
-  ustr_titlecase_brkiter.cpp
   ustr_wcs.cpp
-  ustrcase.cpp
   ustrcase_locale.cpp
   ustrenum.cpp
   ustrfmt.cpp
@@ -184,20 +141,13 @@ add_library_unity(
   util.cpp
   util_props.cpp
   utrace.cpp
-  utrie.cpp
-  utrie2.cpp
-  utrie2_builder.cpp
   utrie_swap.cpp
-  uts46.cpp
   utypes.cpp
-  uvector.cpp
   uvectr32.cpp
   uvectr64.cpp
-  locmap.cpp
-  putil.cpp
-  umapfile.cpp
-  wintz.cpp)
+)
 disable_target_warnings(duckdb_icu_common)
+disable_target_warnings(duckdb_icu_common_unity)
 set(ICU_LIBRARY_FILES
-    ${ICU_LIBRARY_FILES} $<TARGET_OBJECTS:duckdb_icu_common>
+    ${ICU_LIBRARY_FILES} $<TARGET_OBJECTS:duckdb_icu_common> $<TARGET_OBJECTS:duckdb_icu_common_unity>
     PARENT_SCOPE)

@@ -23,8 +23,6 @@ public:
 	explicit CreateSecretInfo(OnCreateConflict on_conflict, SecretPersistType persist_type);
 	~CreateSecretInfo() override;
 
-	//! How to handle conflict
-	OnCreateConflict on_conflict;
 	//! Whether the secret can be persisted
 	SecretPersistType persist_type;
 	//! The type of secret
@@ -41,5 +39,6 @@ public:
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> options;
 
 	unique_ptr<CreateInfo> Copy() const override;
+	string ToString() const override;
 };
 } // namespace duckdb

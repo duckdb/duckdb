@@ -592,6 +592,9 @@ typedef struct {
 	int64_t (*duckdb_file_handle_tell)(duckdb_file_handle file_handle);
 	duckdb_state (*duckdb_file_handle_sync)(duckdb_file_handle file_handle);
 	int64_t (*duckdb_file_handle_size)(duckdb_file_handle file_handle);
+	// API to operate on GEOMETRY types.
+
+	char *(*duckdb_geometry_type_get_crs)(duckdb_logical_type type);
 	// API to register a custom log storage.
 
 	duckdb_log_storage (*duckdb_create_log_storage)();
@@ -644,6 +647,7 @@ typedef struct {
 	// New string functions that are added
 
 	char *(*duckdb_value_to_string)(duckdb_value value);
+	duckdb_error_data (*duckdb_valid_utf8_check)(const char *str, idx_t len);
 	// New functions around the table description
 
 	idx_t (*duckdb_table_description_get_column_count)(duckdb_table_description table_description);
@@ -659,6 +663,8 @@ typedef struct {
 	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
 	duckdb_value (*duckdb_create_time_ns)(duckdb_time_ns input);
 	duckdb_time_ns (*duckdb_get_time_ns)(duckdb_value val);
+	duckdb_value (*duckdb_create_timestamp_tz_ns)(duckdb_timestamp_ns input);
+	duckdb_timestamp_ns (*duckdb_get_timestamp_tz_ns)(duckdb_value val);
 	// API to create and manipulate vector types
 
 	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
@@ -671,7 +677,8 @@ typedef struct {
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector sel);
 	void (*duckdb_vector_copy_sel)(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
 	                               idx_t src_offset, idx_t dst_offset);
-	duckdb_error_data (*duckdb_vector_safe_assign_string_element)(duckdb_vector vector, idx_t index, const char *str);
+	void (*duckdb_unsafe_vector_assign_string_element_len)(duckdb_vector vector, idx_t index, const char *str,
+	                                                       idx_t str_len);
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -1172,6 +1179,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_file_handle_tell = duckdb_file_handle_tell;
 	result.duckdb_file_handle_sync = duckdb_file_handle_sync;
 	result.duckdb_file_handle_size = duckdb_file_handle_size;
+	result.duckdb_geometry_type_get_crs = duckdb_geometry_type_get_crs;
 	result.duckdb_create_log_storage = duckdb_create_log_storage;
 	result.duckdb_destroy_log_storage = duckdb_destroy_log_storage;
 	result.duckdb_log_storage_set_write_log_entry = duckdb_log_storage_set_write_log_entry;
@@ -1206,6 +1214,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_scalar_function_init_get_bind_data = duckdb_scalar_function_init_get_bind_data;
 	result.duckdb_scalar_function_init_get_extra_info = duckdb_scalar_function_init_get_extra_info;
 	result.duckdb_value_to_string = duckdb_value_to_string;
+	result.duckdb_valid_utf8_check = duckdb_valid_utf8_check;
 	result.duckdb_table_description_get_column_count = duckdb_table_description_get_column_count;
 	result.duckdb_table_description_get_column_type = duckdb_table_description_get_column_type;
 	result.duckdb_table_function_get_client_context = duckdb_table_function_get_client_context;
@@ -1213,6 +1222,8 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_create_union_value = duckdb_create_union_value;
 	result.duckdb_create_time_ns = duckdb_create_time_ns;
 	result.duckdb_get_time_ns = duckdb_get_time_ns;
+	result.duckdb_create_timestamp_tz_ns = duckdb_create_timestamp_tz_ns;
+	result.duckdb_get_timestamp_tz_ns = duckdb_get_timestamp_tz_ns;
 	result.duckdb_create_vector = duckdb_create_vector;
 	result.duckdb_destroy_vector = duckdb_destroy_vector;
 	result.duckdb_slice_vector = duckdb_slice_vector;
@@ -1222,7 +1233,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_destroy_selection_vector = duckdb_destroy_selection_vector;
 	result.duckdb_selection_vector_get_data_ptr = duckdb_selection_vector_get_data_ptr;
 	result.duckdb_vector_copy_sel = duckdb_vector_copy_sel;
-	result.duckdb_vector_safe_assign_string_element = duckdb_vector_safe_assign_string_element;
+	result.duckdb_unsafe_vector_assign_string_element_len = duckdb_unsafe_vector_assign_string_element_len;
 	return result;
 }
 

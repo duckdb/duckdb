@@ -11,6 +11,7 @@
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/list_data.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
 
 namespace duckdb {
 
@@ -37,13 +38,13 @@ public:
 
 	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(input_size, format);
+		input.ToUnifiedFormat(format);
 		idx_t size = to - from;
 		append_data.AppendValidity(format, from, to);
 		vector<sel_t> child_indices;
 		ArrowListData<BUFTYPE>::AppendOffsets(append_data, format, from, to, child_indices);
 
-		SelectionVector child_sel(child_indices.data());
+		SelectionVector child_sel(child_indices.data(), child_indices.size());
 		auto &key_vector = MapVector::GetKeys(input);
 		auto &value_vector = MapVector::GetValues(input);
 		auto list_size = child_indices.size();

@@ -1,9 +1,6 @@
 # name: test/sql/function/variant/variant_extract.test
 # group: [variant]
 
-statement ok
-pragma enable_verification;
-
 require json
 
 query I
@@ -74,3 +71,14 @@ query I
 select ('{"a": 42, "b": [true, "test", true]}'::JSON::VARIANT)['b'][2];
 ----
 test
+
+query I
+SELECT [
+	x.a for x in [
+		{'a': 42, 'b': [1,2,3]}::VARIANT,
+		NULL,
+		84
+	]
+]
+----
+[42, NULL, NULL]

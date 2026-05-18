@@ -2,7 +2,7 @@
 # description: Verify that deleting rows and re-appending does not increase storage size
 # group: [vacuum]
 
-load __TEST_DIR__/vacuum_deletes_cleanup.db
+load {TEST_DIR}/vacuum_deletes_cleanup.db
 
 foreach storage_mode no_index index
 
@@ -29,6 +29,9 @@ SELECT SUM(i) FROM integers;
 statement ok
 DELETE FROM integers;
 
+statement ok
+CHECKPOINT
+
 query I
 SELECT SUM(i) FROM integers;
 ----
@@ -37,7 +40,7 @@ NULL
 # ensure that the expected total storage size is the same as in the first iteration of the loop
 
 query I nosort expected_blocks_delete_table
-SELECT total_blocks FROM pragma_database_size();
+SELECT case when total_blocks < 5 then null else database_size end FROM pragma_database_size() database_size;
 
 endloop
 
@@ -93,6 +96,9 @@ SELECT SUM(i) FROM integers;
 statement ok
 DELETE FROM integers;
 
+statement ok
+CHECKPOINT
+
 query I
 SELECT SUM(i) FROM integers;
 ----
@@ -102,7 +108,7 @@ NULL
 # by more than 1.2
 
 query I
-SELECT CASE WHEN ${i} = 0 THEN True
+SELECT CASE WHEN {i} = 0 THEN True
 	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
 	ELSE False END
 FROM pragma_database_size() AS current, total_blocks_tbl;
@@ -113,7 +119,7 @@ FROM pragma_database_size() AS current, total_blocks_tbl;
 
 statement ok
 UPDATE total_blocks_tbl SET total_blocks = (
-	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+	SELECT CASE WHEN {i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
 		ELSE (total_blocks) END);
 
 endloop

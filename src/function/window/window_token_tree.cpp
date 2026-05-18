@@ -78,7 +78,7 @@ static void BuildTokens(WindowTokenTree &token_tree, vector<T> &tokens) {
 			row_idx = FlatVector::GetDataUnsafe<T>(payload_chunk.data[0]);
 			i = 0;
 		}
-
+		D_ASSERT(row_idx != nullptr);
 		token += d;
 		tokens[row_idx[i++]] = token;
 	}

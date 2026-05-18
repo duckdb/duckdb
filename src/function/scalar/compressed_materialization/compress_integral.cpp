@@ -188,16 +188,16 @@ scalar_function_t GetIntegralDecompressFunctionInputSwitch(const LogicalType &in
 }
 
 void CMIntegralSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                         const ScalarFunction &function) {
-	serializer.WriteProperty(100, "arguments", function.arguments);
+                         const BoundScalarFunction &function) {
+	serializer.WriteProperty(100, "arguments", function.GetArguments());
 	serializer.WriteProperty(101, "return_type", function.GetReturnType());
 }
 
 template <scalar_function_t (*GET_FUNCTION)(const LogicalType &, const LogicalType &)>
-unique_ptr<FunctionData> CMIntegralDeserialize(Deserializer &deserializer, ScalarFunction &function) {
-	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
+unique_ptr<FunctionData> CMIntegralDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
+	function.GetArguments() = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
-	function.SetFunctionCallback(GET_FUNCTION(function.arguments[0], return_type));
+	function.SetFunctionCallback(GET_FUNCTION(function.GetArguments()[0], return_type));
 	return nullptr;
 }
 

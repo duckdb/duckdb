@@ -65,7 +65,7 @@ public:
             // U+0300 is the first character with lccc!=0.
             c >= 0x300 &&
             (i = lcccIndex[c >> 5]) != 0 &&
-            (lcccBits[i] & ((uint32_t)1 << (c & 0x1f))) != 0;
+            (lcccBits[i] & (static_cast<uint32_t>(1) << (c & 0x1f))) != 0;
     }
 
     static inline UBool hasTccc(UChar32 c) {
@@ -77,19 +77,19 @@ public:
             // U+00C0 is the first character with tccc!=0.
             c >= 0xc0 &&
             (i = tcccIndex[c >> 5]) != 0 &&
-            (tcccBits[i] & ((uint32_t)1 << (c & 0x1f))) != 0;
+            (tcccBits[i] & (static_cast<uint32_t>(1) << (c & 0x1f))) != 0;
     }
 
     static inline UBool mayHaveLccc(UChar32 c) {
         // Handles all of Unicode 0..10FFFF.
         // c can be negative, e.g., U_SENTINEL.
         // U+0300 is the first character with lccc!=0.
-        if(c < 0x300) { return FALSE; }
+        if(c < 0x300) { return false; }
         if(c > 0xffff) { c = U16_LEAD(c); }
         int32_t i;
         return
             (i = lcccIndex[c >> 5]) != 0 &&
-            (lcccBits[i] & ((uint32_t)1 << (c & 0x1f))) != 0;
+            (lcccBits[i] & (static_cast<uint32_t>(1) << (c & 0x1f))) != 0;
     }
 
     /**
@@ -101,7 +101,7 @@ public:
      * This is a fast and imprecise test.
      *
      * @param c a code point
-     * @return TRUE if c is U+0F73, U+0F75 or U+0F81 or one of several other Tibetan characters
+     * @return true if c is U+0F73, U+0F75 or U+0F81 or one of several other Tibetan characters
      */
     static inline UBool maybeTibetanCompositeVowel(UChar32 c) {
         return (c & 0x1fff01) == 0xf01;
@@ -116,14 +116,14 @@ public:
      * They have distinct lccc/tccc combinations: 129/130 or 129/132.
      *
      * @param fcd16 the FCD value (lccc/tccc combination) of a code point
-     * @return TRUE if fcd16 is from U+0F73, U+0F75 or U+0F81
+     * @return true if fcd16 is from U+0F73, U+0F75 or U+0F81
      */
     static inline UBool isFCD16OfTibetanCompositeVowel(uint16_t fcd16) {
         return fcd16 == 0x8182 || fcd16 == 0x8184;
     }
 
 private:
-    CollationFCD();  // No instantiation.
+    CollationFCD() = delete;  // No instantiation.
 
     static const uint8_t lcccIndex[2048];
     static const uint8_t tcccIndex[2048];

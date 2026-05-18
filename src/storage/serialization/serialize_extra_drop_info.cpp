@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
+#include "duckdb/parser/tableref.hpp"
 
 namespace duckdb {
 
@@ -19,6 +20,9 @@ unique_ptr<ExtraDropInfo> ExtraDropInfo::Deserialize(Deserializer &deserializer)
 	switch (info_type) {
 	case ExtraDropInfoType::SECRET_INFO:
 		result = ExtraDropSecretInfo::Deserialize(deserializer);
+		break;
+	case ExtraDropInfoType::TRIGGER_INFO:
+		result = ExtraDropTriggerInfo::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of ExtraDropInfo!");
@@ -36,6 +40,17 @@ unique_ptr<ExtraDropInfo> ExtraDropSecretInfo::Deserialize(Deserializer &deseria
 	auto result = duckdb::unique_ptr<ExtraDropSecretInfo>(new ExtraDropSecretInfo());
 	deserializer.ReadProperty<SecretPersistType>(200, "persist_mode", result->persist_mode);
 	deserializer.ReadPropertyWithDefault<string>(201, "secret_storage", result->secret_storage);
+	return std::move(result);
+}
+
+void ExtraDropTriggerInfo::Serialize(Serializer &serializer) const {
+	ExtraDropInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(202, "base_table", base_table);
+}
+
+unique_ptr<ExtraDropInfo> ExtraDropTriggerInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<ExtraDropTriggerInfo>(new ExtraDropTriggerInfo());
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(202, "base_table", result->base_table);
 	return std::move(result);
 }
 

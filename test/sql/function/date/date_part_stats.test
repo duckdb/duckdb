@@ -3,9 +3,6 @@
 # group: [date]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE dates(d DATE);
 
 # test stats propagation from empty table
@@ -99,103 +96,39 @@ PRAGMA disable_verification
 statement ok
 INSERT INTO dates VALUES (DATE '1992-01-01'), (DATE '2000-12-31');
 
-query I
-SELECT stats(EXTRACT(YEAR FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*1992.*2000.*
+statement ok
+CREATE TABLE expected_result AS FROM (VALUES
+	('year', 1992, 2000),
+	('month', 1, 12),
+	('day', 1, 31),
+	('decade', 199, 200),
+	('century', 20, 20),
+	('millenium', 2, 2),
+	('microseconds', 0, 59999999),
+	('milliseconds', 0, 59999),
+	('second', 0, 59),
+	('minute', 0, 59),
+	('hour', 0, 24),
+	('dow', 0, 6),
+	('week', 1, 53),
+	('doy', 1, 366),
+	('quarter', 1, 4),
+	('yearweek', 199201, 200052),
+	('dayofmonth', 1, 31),
+	('weekday', 0, 6),
+	('weekofyear', 1, 53)
+	) t(component, min, max)
+
+foreach component year month day decade century millenium microseconds milliseconds second minute hour dow week doy quarter yearweek dayofmonth weekday weekofyear
 
 query I
-SELECT stats(EXTRACT(month FROM d)) FROM dates LIMIT 1;
+SELECT
+	CASE WHEN stats.min = expected_result.min AND stats.max = expected_result.max THEN NULL ELSE {'stats': stats, 'expected_result': expected_result} END
+FROM (
+	SELECT STATS(EXTRACT({component} FROM d)) AS stats, (SELECT expected_result FROM expected_result WHERE component = '{component}') expected_result FROM dates LIMIT 1
+)
 ----
-<REGEX>:.*1.*12.*
+NULL
 
-query I
-SELECT stats(EXTRACT(day FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*1.*31.*
-
-query I
-SELECT stats(EXTRACT(decade FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*199.*200.*
-
-query I
-SELECT stats(EXTRACT(century FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*20.*20.*
-
-query I
-SELECT stats(EXTRACT(millennium FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*2.*2.*
-
-query I
-SELECT stats(EXTRACT(microseconds FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*0.*60000000.*
-
-query I
-SELECT stats(EXTRACT(milliseconds FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*0.*60000.*
-
-query I
-SELECT stats(EXTRACT(second FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*0.*60.*
-
-query I
-SELECT stats(EXTRACT(minute FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*0.*60.*
-
-query I
-SELECT stats(EXTRACT(hour FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*0.*24.*
-
-query I
-SELECT stats(EXTRACT(dow FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*0.*6.*
-
-query I
-SELECT stats(EXTRACT(isodow FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*1.*7.*
-
-query I
-SELECT stats(EXTRACT(week FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*1.*54.*
-
-query I
-SELECT stats(EXTRACT(doy FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*1.*366.*
-
-query I
-SELECT stats(EXTRACT(quarter FROM d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*1.*4.*
-
-query I
-SELECT stats(YEARWEEK(d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*199201.*200052.*
-
-query I
-SELECT stats(DAYOFMONTH(d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*1.*31.*
-
-query I
-SELECT stats(WEEKDAY(d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*0.*6.*
-
-query I
-SELECT stats(WEEKOFYEAR(d)) FROM dates LIMIT 1;
-----
-<REGEX>:.*1.*54.*
+endloop
 

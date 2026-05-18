@@ -45,19 +45,20 @@ unique_ptr<Expression> CommonAggregateOptimizer::VisitReplace(BoundColumnRefExpr
 }
 
 void CommonAggregateOptimizer::ExtractCommonAggregates(LogicalAggregate &aggr) {
-	expression_map_t<idx_t> aggregate_remap;
+	expression_map_t<ProjectionIndex> aggregate_remap;
 	idx_t total_erased = 0;
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
-		idx_t original_index = i + total_erased;
+		ProjectionIndex original_index(i + total_erased);
+		ProjectionIndex new_index(i);
 		auto entry = aggregate_remap.find(*aggr.expressions[i]);
 		if (entry == aggregate_remap.end()) {
 			// aggregate does not exist yet: add it to the map
-			aggregate_remap[*aggr.expressions[i]] = i;
-			if (i != original_index) {
+			aggregate_remap[*aggr.expressions[i]] = new_index;
+			if (new_index != original_index) {
 				// this aggregate is not erased, however an aggregate BEFORE it has been erased
 				// so we need to remap this aggregate
 				ColumnBinding original_binding(aggr.aggregate_index, original_index);
-				ColumnBinding new_binding(aggr.aggregate_index, i);
+				ColumnBinding new_binding(aggr.aggregate_index, new_index);
 				aggregate_map[original_binding] = new_binding;
 			}
 		} else {

@@ -5,9 +5,6 @@
 statement ok
 SET default_null_order='nulls_first';
 
-statement ok
-PRAGMA enable_verification
-
 # simple single specifier
 query I
 SELECT strftime(DATE '1992-01-01', '%Y');
@@ -117,12 +114,12 @@ foreach datatype DATE TIMESTAMP
 # PG to_char returns NULL here
 # but we can do better.
 query I
-SELECT strftime('infinity'::${datatype}, '%Y-%m-%d');
+SELECT strftime('infinity'::{datatype}, '%Y-%m-%d');
 ----
 infinity
 
 query I
-SELECT strftime('-infinity'::${datatype}, '%Y-%m-%d');
+SELECT strftime('-infinity'::{datatype}, '%Y-%m-%d');
 ----
 -infinity
 

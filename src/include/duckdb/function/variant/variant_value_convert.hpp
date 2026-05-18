@@ -54,6 +54,10 @@ struct ValueConverter {
 		return Value::TIMESTAMPTZ(val);
 	}
 
+	static Value VisitTimestampTZNanos(timestamp_tz_ns_t val) {
+		return Value::TIMESTAMPTZNS(val);
+	}
+
 	static Value VisitFloat(float val) {
 		return Value::FLOAT(val);
 	}
@@ -103,7 +107,16 @@ struct ValueConverter {
 
 	static Value VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data) {
 		auto array_items = VariantVisitor<ValueConverter>::VisitArrayItems(variant, row, nested_data);
-		return Value::LIST(LogicalType::VARIANT(), std::move(array_items));
+		if (array_items.empty()) {
+			return Value::LIST(LogicalType::VARIANT(), std::move(array_items));
+		}
+		auto &child_type = array_items[0].type();
+		for (idx_t i = 1; i < array_items.size(); i++) {
+			if (child_type != array_items[i].type()) {
+				return Value::LIST(LogicalType::VARIANT(), std::move(array_items));
+			}
+		}
+		return Value::LIST(child_type, std::move(array_items));
 	}
 
 	static Value VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data) {

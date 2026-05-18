@@ -6,10 +6,7 @@ statement ok
 SET default_null_order='nulls_first';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
-PRAGMA verify_external
+SET debug_force_external=true;
 
 statement ok
 CREATE TABLE quantile as
@@ -79,7 +76,7 @@ SELECT quantile_disc(r, 0.1), quantile_disc(r, 0.5), quantile_disc(r, 0.9) from 
 foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1) decimal(24,1)
 
 query III
-SELECT quantile_disc(d::${type}, 0.1), quantile_disc(d::${type}, 0.5), quantile_disc(d::${type}, 0.9)
+SELECT quantile_disc(d::{type}, 0.1), quantile_disc(d::{type}, 0.5), quantile_disc(d::{type}, 0.9)
 FROM range(0,100) tbl(d)
 ----
 9.0	49.0	89.0
@@ -276,11 +273,11 @@ loop i 0 10
 
 query I
 with a as (
-	select 'NaN'::${fp} as num 
+	select 'NaN'::{fp} as num 
 	union all 
-	select num::${fp} as num from generate_series(1,99) as tbl(num)
+	select num::{fp} as num from generate_series(1,99) as tbl(num)
 	union all 
-	select 'NaN'::${fp} as num
+	select 'NaN'::{fp} as num
 ) 
 select quantile_disc(num, 0.9) c1 
 from a;

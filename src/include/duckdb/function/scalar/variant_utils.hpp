@@ -102,6 +102,12 @@ struct VariantUtils {
 	                                           SelectionVector &sel, idx_t sel_size);
 	DUCKDB_API static void VariantExtract(Vector &input, const vector<VariantPathComponent> &components, Vector &result,
 	                                      idx_t count);
+	DUCKDB_API static void UnshredVariantData(Vector &input, Vector &output, idx_t count);
+	//! Returns the type of a shredded vector that is shredded on "type"
+	DUCKDB_API static LogicalType ShreddedType(const LogicalType &type);
+
+	//! Whether or not a type is natively supported in variant
+	DUCKDB_API static bool VariantSupportsType(const LogicalType &type);
 };
 
 } // namespace duckdb

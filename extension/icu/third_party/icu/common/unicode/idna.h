@@ -70,6 +70,7 @@ public:
      * The worker functions use transitional processing, including deviation mappings,
      * unless UIDNA_NONTRANSITIONAL_TO_ASCII or UIDNA_NONTRANSITIONAL_TO_UNICODE
      * is used in which case the deviation characters are passed through without change.
+     * <b>Unicode 15.1 UTS #46 deprecated transitional processing.</b>
      *
      * Disallowed characters are mapped to U+FFFD.
      *
@@ -82,6 +83,8 @@ public:
      * letters, digits, hyphen (LDH) and dot/full stop are disallowed and mapped to U+FFFD.
      *
      * @param options Bit set to modify the processing and error checking.
+     *                These should include UIDNA_DEFAULT, or
+     *                UIDNA_NONTRANSITIONAL_TO_ASCII | UIDNA_NONTRANSITIONAL_TO_UNICODE.
      *                See option bit set values in uidna.h.
      * @param errorCode Standard ICU error code. Its input value must
      *                  pass the U_SUCCESS() test, or else the function returns
@@ -95,7 +98,7 @@ public:
 
     /**
      * Converts a single domain name label into its ASCII form for DNS lookup.
-     * If any processing step fails, then info.hasErrors() will be TRUE and
+     * If any processing step fails, then info.hasErrors() will be true and
      * the result might not be an ASCII string.
      * The label might be modified according to the types of errors.
      * Labels with severe errors will be left in (or turned into) their Unicode form.
@@ -119,7 +122,7 @@ public:
 
     /**
      * Converts a single domain name label into its Unicode form for human-readable display.
-     * If any processing step fails, then info.hasErrors() will be TRUE.
+     * If any processing step fails, then info.hasErrors() will be true.
      * The label might be modified according to the types of errors.
      *
      * The UErrorCode indicates an error only in exceptional cases,
@@ -141,7 +144,7 @@ public:
 
     /**
      * Converts a whole domain name into its ASCII form for DNS lookup.
-     * If any processing step fails, then info.hasErrors() will be TRUE and
+     * If any processing step fails, then info.hasErrors() will be true and
      * the result might not be an ASCII string.
      * The domain name might be modified according to the types of errors.
      * Labels with severe errors will be left in (or turned into) their Unicode form.
@@ -165,7 +168,7 @@ public:
 
     /**
      * Converts a whole domain name into its Unicode form for human-readable display.
-     * If any processing step fails, then info.hasErrors() will be TRUE.
+     * If any processing step fails, then info.hasErrors() will be true.
      * The domain name might be modified according to the types of errors.
      *
      * The UErrorCode indicates an error only in exceptional cases,
@@ -273,10 +276,10 @@ public:
      * Constructor for stack allocation.
      * @stable ICU 4.6
      */
-    IDNAInfo() : errors(0), labelErrors(0), isTransDiff(FALSE), isBiDi(FALSE), isOkBiDi(TRUE) {}
+    IDNAInfo() : errors(0), labelErrors(0), isTransDiff(false), isBiDi(false), isOkBiDi(true) {}
     /**
      * Were there IDNA processing errors?
-     * @return TRUE if there were processing errors
+     * @return true if there were processing errors
      * @stable ICU 4.6
      */
     UBool hasErrors() const { return errors!=0; }
@@ -288,7 +291,7 @@ public:
      */
     uint32_t getErrors() const { return errors; }
     /**
-     * Returns TRUE if transitional and nontransitional processing produce different results.
+     * Returns true if transitional and nontransitional processing produce different results.
      * This is the case when the input label or domain name contains
      * one or more deviation characters outside a Punycode label (see UTS #46).
      * <ul>
@@ -297,7 +300,7 @@ public:
      * <li>With transitional processing, such characters are
      * mapped (sharp s/sigma) or removed (joiner/nonjoiner).
      * </ul>
-     * @return TRUE if transitional and nontransitional processing produce different results
+     * @return true if transitional and nontransitional processing produce different results
      * @stable ICU 4.6
      */
     UBool isTransitionalDifferent() const { return isTransDiff; }
@@ -305,14 +308,14 @@ public:
 private:
     friend class UTS46;
 
-    IDNAInfo(const IDNAInfo &other);  // no copying
-    IDNAInfo &operator=(const IDNAInfo &other);  // no copying
+    IDNAInfo(const IDNAInfo &other) = delete;  // no copying
+    IDNAInfo &operator=(const IDNAInfo &other) = delete;  // no copying
 
     void reset() {
         errors=labelErrors=0;
-        isTransDiff=FALSE;
-        isBiDi=FALSE;
-        isOkBiDi=TRUE;
+        isTransDiff=false;
+        isBiDi=false;
+        isOkBiDi=true;
     }
 
     uint32_t errors, labelErrors;

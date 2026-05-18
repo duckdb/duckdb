@@ -2,7 +2,7 @@
 # description: Test WAL replay with large interleaved insert/delete batches on indexed column
 # group: [wal]
 
-load __TEST_DIR__/wal_index_large_batch_interleaved.test.db
+load {TEST_DIR}/wal_index_large_batch_interleaved.test.db
 
 statement ok
 SET index_scan_percentage = 1.0;
@@ -25,10 +25,10 @@ CREATE INDEX idx_a ON tbl(a);
 loop i 0 3
 
 statement ok
-INSERT INTO tbl SELECT r FROM range(${i}*10000, ${i}*10000 + 5120) t(r);
+INSERT INTO tbl SELECT r FROM range({i}*10000, {i}*10000 + 5120) t(r);
 
 statement ok
-DELETE FROM tbl WHERE a >= ${i}*10000 AND a <= ${i}*10000 + 5000;
+DELETE FROM tbl WHERE a >= {i}*10000 AND a <= {i}*10000 + 5000;
 
 endloop
 

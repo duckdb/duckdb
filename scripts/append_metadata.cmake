@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.15...3.29)
 
 # Usage: cmake -DEXTENSION=path/to/extension.duckdb_extension -DPLATFORM_FILE=README.md -DDUCKDB_VERSION=tag1 -DEXTENSION_VERSION=tag2 -P scripts/append_metadata.cmake
 # Currently hardcoded to host up to 8 fields
-# Example: ./scripts/append_metadata.sh file.duckdb_extension git_hash_duckdb_file git_hash_extension_file platfrom_file
+# Example: ./scripts/append_metadata.sh file.duckdb_extension git_hash_duckdb_file git_hash_extension_file platform_file
 
 set(EXTENSION "" CACHE PATH "Path to the extension where to add metadata")
 set(NULL_FILE "" CACHE PATH "Path to file containing a single 0 byte")
@@ -41,7 +41,7 @@ string(APPEND CUSTOM_SECTION "${CUSTOM_SECTION_3}")
 # Second metadata-field is special, since content comes from a file
 file(READ "${PLATFORM_FILE}" META2)
 
-# Build METADATAx variable by appending and then truncating empty strings
+# Build METADATA variables by appending and then truncating empty strings
 string(SUBSTRING "${META1}${EMPTY_32}" 0 32 METADATA1)
 string(SUBSTRING "${META2}${EMPTY_32}" 0 32 METADATA2)
 string(SUBSTRING "${VERSION_FIELD}${EMPTY_32}" 0 32 METADATA3)

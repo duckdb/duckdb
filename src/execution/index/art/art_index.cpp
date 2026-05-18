@@ -1,12 +1,15 @@
-#include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/index_type.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/index_type.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/art_operator.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
@@ -28,10 +31,13 @@ unique_ptr<IndexBuildBindData> ARTBuildBind(IndexBuildBindInput &input) {
 	auto bind_data = make_uniq<ARTBuildBindData>();
 
 	// TODO: Verify that the the ART is applicable for the given columns and types.
+
+	// We used to not sort for VARCHAR and multi-column indexes with the old sort implementation
+	// The new sorting implementation handles these cases much better and sorting improves performance now
 	bind_data->sorted = true;
 	if (input.op.expressions.size() > 1) {
 		bind_data->sorted = false;
-	} else if (input.op.expressions[0]->return_type.InternalType() == PhysicalType::VARCHAR) {
+	} else if (input.op.expressions[0]->GetReturnType().InternalType() == PhysicalType::VARCHAR) {
 		bind_data->sorted = false;
 	}
 

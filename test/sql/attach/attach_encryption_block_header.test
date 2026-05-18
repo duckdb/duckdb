@@ -8,12 +8,12 @@ require no_alternative_verify
 require httpfs
 
 statement error
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY '');
+ATTACH '{TEST_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY '');
 ----
 Binder Error: Not a valid key. A key cannot be empty
 
 statement error
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 42);
+ATTACH '{TEST_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 42);
 ----
 Binder Error: "42" is not a valid key. A key must be of type VARCHAR
 
@@ -21,10 +21,10 @@ Binder Error: "42" is not a valid key. A key must be of type VARCHAR
 require httpfs
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+ATTACH '{TEST_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
 
 statement ok
-ATTACH '__TEST_DIR__/unencrypted.duckdb' (STORAGE_VERSION 'v1.0.0');
+ATTACH '{TEST_DIR}/unencrypted.duckdb' (STORAGE_VERSION 'v1.0.0');
 
 statement  ok
 CREATE OR REPLACE TABLE encrypted.tbl AS SELECT * FROM range(10) t(i);
@@ -49,18 +49,18 @@ statement ok
 DETACH unencrypted
 
 statement error
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted
+ATTACH '{TEST_DIR}/encrypted.duckdb' AS encrypted
 ----
 
 statement error
-ATTACH '__TEST_DIR__/unencrypted.duckdb' AS unencrypted (ENCRYPTION_KEY 'asdf');
+ATTACH '{TEST_DIR}/unencrypted.duckdb' AS unencrypted (ENCRYPTION_KEY 'asdf');
 ----
 
 statement ok
-ATTACH '__TEST_DIR__/unencrypted.duckdb';
+ATTACH '{TEST_DIR}/unencrypted.duckdb';
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+ATTACH '{TEST_DIR}/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
 
 query I
 SELECT SUM(i) FROM encrypted.tbl
@@ -80,9 +80,9 @@ statement ok
 DETACH unencrypted
 
 statement error
-ATTACH '__TEST_DIR__/incompatible_parameters.duckdb' (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.2.0');
+ATTACH '{TEST_DIR}/incompatible_parameters.duckdb' (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.2.0');
 ----
 Invalid Input Error: Explicit provided STORAGE_VERSION ("v1.2.0") and ENCRYPTION_KEY (storage >= v1.4.0) are not compatible
 
 statement ok
-ATTACH '__TEST_DIR__/compatible_parameters.duckdb' (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.4.0');
+ATTACH '{TEST_DIR}/compatible_parameters.duckdb' (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.4.0');

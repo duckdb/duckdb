@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/execution/operator/helper/physical_verify_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/hugeint.hpp"
@@ -32,7 +33,7 @@ OperatorResultType VerifyEmitConstantVectors(const DataChunk &input, DataChunk &
 
 	// emit constant vectors at the current index
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-		ConstantVector::Reference(chunk.data[c], copied_input.data[c], state.const_idx, 1);
+		ConstantVector::Reference(chunk.data[c], count_t(1), copied_input.data[c], state.const_idx, 1);
 	}
 	chunk.SetCardinality(1);
 	state.const_idx++;
@@ -56,9 +57,14 @@ struct ConstantOrSequenceInfo {
 	bool is_constant = true;
 };
 
-OperatorResultType VerifyEmitSequenceVector(const DataChunk &input, DataChunk &chunk, OperatorState &state_p) {
+OperatorResultType VerifyEmitSequenceVector(const DataChunk &input_p, DataChunk &chunk, OperatorState &state_p) {
 	auto &state = state_p.Cast<VerifyVectorState>();
-	D_ASSERT(state.const_idx < input.size());
+	D_ASSERT(state.const_idx < input_p.size());
+
+	// FIXME: work-around for variant bug...
+	DataChunk input;
+	input.Initialize(Allocator::DefaultAllocator(), input_p.GetTypes());
+	input_p.Copy(input);
 
 	// find the longest length sequence or constant vector to emit
 	vector<ConstantOrSequenceInfo> infos;
@@ -188,7 +194,7 @@ OperatorResultType VerifyEmitSequenceVector(const DataChunk &input, DataChunk &c
 			chunk.data[c].Slice(input.data[c], sel, max_length);
 		} else if (info.is_constant) {
 			// constant vector
-			chunk.data[c].Reference(info.values[0]);
+			chunk.data[c].Reference(info.values[0], count_t(max_length));
 		} else {
 			// sequence vector
 			int64_t start = info.values[0].GetValue<int64_t>();

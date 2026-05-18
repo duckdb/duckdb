@@ -1,19 +1,21 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
 VariantVectorData::VariantVectorData(Vector &variant)
-    : variant(variant), keys_index_validity(FlatVector::Validity(VariantVector::GetChildrenKeysIndex(variant))),
+    : variant(variant), keys_index_validity(FlatVector::ValidityMutable(VariantVector::GetChildrenKeysIndex(variant))),
       keys(VariantVector::GetKeys(variant)) {
-	blob_data = FlatVector::GetData<string_t>(VariantVector::GetData(variant));
-	type_ids_data = FlatVector::GetData<uint8_t>(VariantVector::GetValuesTypeId(variant));
-	byte_offset_data = FlatVector::GetData<uint32_t>(VariantVector::GetValuesByteOffset(variant));
-	keys_index_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenKeysIndex(variant));
-	values_index_data = FlatVector::GetData<uint32_t>(VariantVector::GetChildrenValuesIndex(variant));
-	values_data = FlatVector::GetData<list_entry_t>(VariantVector::GetValues(variant));
-	children_data = FlatVector::GetData<list_entry_t>(VariantVector::GetChildren(variant));
-	keys_data = FlatVector::GetData<list_entry_t>(keys);
+	blob_data = FlatVector::GetDataMutable<string_t>(VariantVector::GetData(variant));
+	type_ids_data = FlatVector::GetDataMutable<uint8_t>(VariantVector::GetValuesTypeId(variant));
+	byte_offset_data = FlatVector::GetDataMutable<uint32_t>(VariantVector::GetValuesByteOffset(variant));
+	keys_index_data = FlatVector::GetDataMutable<uint32_t>(VariantVector::GetChildrenKeysIndex(variant));
+	values_index_data = FlatVector::GetDataMutable<uint32_t>(VariantVector::GetChildrenValuesIndex(variant));
+	values_data = FlatVector::GetDataMutable<list_entry_t>(VariantVector::GetValues(variant));
+	children_data = FlatVector::GetDataMutable<list_entry_t>(VariantVector::GetChildren(variant));
+	keys_data = FlatVector::GetDataMutable<list_entry_t>(keys);
 }
 
 UnifiedVariantVectorData::UnifiedVariantVectorData(const RecursiveUnifiedVectorFormat &variant)
@@ -57,6 +59,12 @@ uint32_t UnifiedVariantVectorData::GetKeysIndex(idx_t row, idx_t child_index) co
 	auto list_entry = GetChildrenListEntry(row);
 	return keys_index_data[keys_index.sel->get_index(list_entry.offset + child_index)];
 }
+
+idx_t UnifiedVariantVectorData::GetKeysCount(idx_t row) const {
+	auto list_entry = keys_data[keys.sel->get_index(row)];
+	return list_entry.length;
+}
+
 uint32_t UnifiedVariantVectorData::GetValuesIndex(idx_t row, idx_t child_index) const {
 	auto list_entry = GetChildrenListEntry(row);
 	return values_index_data[values_index.sel->get_index(list_entry.offset + child_index)];

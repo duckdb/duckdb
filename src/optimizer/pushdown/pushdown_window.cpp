@@ -34,7 +34,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 	auto &window = op->Cast<LogicalWindow>();
 	FilterPushdown pushdown(optimizer, convert_mark_joins);
 
-	// 1. Loop throguh the expressions, find the window expressions and investigate the partitions
+	// 1. Loop through the expressions, find the window expressions and investigate the partitions
 	// if a filter applies to a partition in each window expression then you can push the filter
 	// into the children.
 	vector<column_binding_set_t> window_exprs_partition_bindings;

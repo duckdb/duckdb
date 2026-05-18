@@ -7,6 +7,7 @@ DictionaryCompressionCompressState::DictionaryCompressionCompressState(ColumnDat
                                                                        const idx_t max_unique_count_across_all_segments)
     : DictionaryCompressionState(info), checkpoint_data(checkpoint_data_p),
       function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
+      stats_writer(checkpoint_data.GetType()),
       current_string_map(
           info.GetBlockManager().buffer_manager.GetBufferAllocator(),
           max_unique_count_across_all_segments * 2, // * 2 results in less linear probing, improving performance
@@ -25,6 +26,7 @@ void DictionaryCompressionCompressState::CreateEmptySegment() {
 	current_segment = std::move(compressed_segment);
 
 	// Reset the buffers and the string map.
+	stats_writer.Clear();
 	current_string_map.Clear();
 	index_buffer.clear();
 
@@ -39,7 +41,7 @@ void DictionaryCompressionCompressState::CreateEmptySegment() {
 	auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 	current_handle = buffer_manager.Pin(current_segment->block);
 	current_dictionary = DictionaryCompression::GetDictionary(*current_segment, current_handle);
-	current_end_ptr = current_handle.Ptr() + current_dictionary.end;
+	current_end_ptr = current_handle.GetDataMutable() + current_dictionary.end;
 }
 
 void DictionaryCompressionCompressState::Verify() {
@@ -61,7 +63,7 @@ bool DictionaryCompressionCompressState::LookupString(string_t str) {
 }
 
 void DictionaryCompressionCompressState::AddNewString(string_t str) {
-	UncompressedStringStorage::UpdateStringStats(current_segment->stats, str);
+	UncompressedStringStorage::UpdateStringStats(current_segment->GetStatsMutable(), stats_writer, str);
 
 	// Copy string to dict
 	current_dictionary.size += str.GetSize();
@@ -87,7 +89,7 @@ void DictionaryCompressionCompressState::AddNewString(string_t str) {
 }
 
 void DictionaryCompressionCompressState::AddNull() {
-	current_segment->stats.statistics.SetHasNullFast();
+	current_segment->GetStatsMutable().SetHasNullFast();
 	selection_buffer.push_back(0);
 	current_segment->count++;
 }
@@ -111,6 +113,7 @@ bool DictionaryCompressionCompressState::CalculateSpaceRequirements(bool new_str
 void DictionaryCompressionCompressState::Flush(bool final) {
 	auto segment_size = Finalize();
 	auto &state = checkpoint_data.GetCheckpointState();
+	stats_writer.Merge(current_segment->GetStatsMutable());
 	state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
 	if (!final) {
@@ -131,7 +134,7 @@ idx_t DictionaryCompressionCompressState::Finalize() {
 	                  index_buffer_size + current_dictionary.size;
 
 	// calculate ptr and offsets
-	auto base_ptr = handle.Ptr();
+	auto base_ptr = handle.GetDataMutable();
 	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(base_ptr);
 	auto compressed_selection_buffer_offset = DictionaryCompression::DICTIONARY_HEADER_SIZE;
 	auto index_buffer_offset = compressed_selection_buffer_offset + compressed_selection_buffer_size;

@@ -14,7 +14,7 @@ SELECT COUNT(*) FROM test_db.sample
 100
 
 statement ok
-ALTER DATABASE test_db RENAME TO renamed_db;
+ALTER DATABASE test_db SET ALIAS TO renamed_db;
 
 query I
 SELECT COUNT(*) FROM renamed_db.sample
@@ -22,17 +22,17 @@ SELECT COUNT(*) FROM renamed_db.sample
 100
 
 statement error
-ALTER DATABASE non_existent RENAME TO something_else;
+ALTER DATABASE non_existent SET ALIAS TO something_else;
 ----
 
 statement ok
-ALTER DATABASE IF EXISTS non_existent RENAME TO something_else;
+ALTER DATABASE IF EXISTS non_existent SET ALIAS TO something_else;
 
 statement ok
 ATTACH ':memory:' AS another_db;
 
 statement error
-ALTER DATABASE another_db RENAME TO renamed_db;
+ALTER DATABASE another_db SET ALIAS TO renamed_db;
 ----
 
 statement error

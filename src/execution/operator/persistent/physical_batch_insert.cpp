@@ -15,8 +15,7 @@
 namespace duckdb {
 
 PhysicalBatchInsert::PhysicalBatchInsert(PhysicalPlan &physical_plan, vector<LogicalType> types_p,
-                                         TableCatalogEntry &table,
-                                         vector<unique_ptr<BoundConstraint>> bound_constraints_p,
+                                         DuckTableEntry &table, vector<unique_ptr<BoundConstraint>> bound_constraints_p,
                                          idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::BATCH_INSERT, std::move(types_p), estimated_cardinality),
       insert_table(&table), insert_types(table.GetTypes()), bound_constraints(std::move(bound_constraints_p)) {
@@ -106,9 +105,9 @@ public:
 				data_table.ResetOptimisticCollection(context, collection_indexes[i]);
 			}
 			result_collection.FinalizeAppend(TransactionData(0, 0), append_state);
-			writer.WriteLastRowGroup(optimistic_collection);
+			writer.WriteUnflushedRowGroups(optimistic_collection);
 		} else if (batch_type == RowGroupBatchType::NOT_FLUSHED) {
-			writer.WriteLastRowGroup(optimistic_collection);
+			writer.WriteUnflushedRowGroups(optimistic_collection);
 		}
 
 		collection_indexes.clear();
@@ -156,7 +155,7 @@ public:
 
 	BatchMemoryManager memory_manager;
 	BatchTaskManager<BatchInsertTask> task_manager;
-	mutex lock;
+	annotated_mutex lock;
 	DuckTableEntry &table;
 	idx_t row_group_size;
 	idx_t insert_count;
@@ -231,7 +230,7 @@ public:
 		auto result_collection_index = g_state.MergeCollections(context, merge_collections, *l_state.optimistic_writer);
 		merge_collections.clear();
 
-		lock_guard<mutex> l(g_state.lock);
+		annotated_lock_guard<annotated_mutex> l(g_state.lock);
 		auto &result_collection = g_state.table.GetStorage().GetOptimisticCollection(context, result_collection_index);
 		RowGroupBatchEntry new_entry(result_collection, merged_batch_index, result_collection_index,
 		                             RowGroupBatchType::FLUSHED);
@@ -380,9 +379,9 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, const idx_t b
 	auto new_count = collection.GetTotalRows();
 	auto batch_type = new_count < row_group_size ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
 	if (batch_type == RowGroupBatchType::FLUSHED && writer) {
-		writer->WriteLastRowGroup(optimistic_collection);
+		writer->WriteUnflushedRowGroups(optimistic_collection);
 	}
-	lock_guard<mutex> l(lock);
+	annotated_lock_guard<annotated_mutex> l(lock);
 	insert_count += new_count;
 	// add the collection to the batch index
 	RowGroupBatchEntry new_entry(optimistic_collection, batch_index, collection_index, batch_type);
@@ -409,13 +408,13 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, const idx_t b
 // States
 //===--------------------------------------------------------------------===//
 unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContext &context) const {
-	optional_ptr<TableCatalogEntry> table;
+	optional_ptr<DuckTableEntry> table;
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = schema->catalog;
 		auto created_table = catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info);
-		table = &created_table->Cast<TableCatalogEntry>();
+		table = &created_table->Cast<DuckTableEntry>();
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDuckTable());
@@ -424,7 +423,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 	// heuristic - we start off by allocating 4MB of cache space per column
 	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN = 4ULL * 1024ULL * 1024ULL;
 	auto minimum_memory_per_thread = table->GetColumns().PhysicalColumnCount() * MINIMUM_MEMORY_PER_COLUMN;
-	auto result = make_uniq<BatchInsertGlobalState>(context, table->Cast<DuckTableEntry>(), minimum_memory_per_thread);
+	auto result = make_uniq<BatchInsertGlobalState>(context, *table, minimum_memory_per_thread);
 	return std::move(result);
 }
 
@@ -476,8 +475,8 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 
 		bool any_unblocked;
 		{
-			auto guard = memory_manager.Lock();
-			any_unblocked = memory_manager.UnblockTasks(guard);
+			const annotated_lock_guard<annotated_mutex> guard {memory_manager.lock};
+			any_unblocked = memory_manager.UnblockTasks();
 		}
 		if (!any_unblocked) {
 			ExecuteTasks(context.client, gstate, lstate);
@@ -487,8 +486,8 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 	lstate.current_index = batch_index;
 
 	// unblock any blocked tasks
-	auto guard = memory_manager.Lock();
-	memory_manager.UnblockTasks(guard);
+	const annotated_lock_guard<annotated_mutex> guard {memory_manager.lock};
+	memory_manager.UnblockTasks();
 
 	return SinkNextBatchType::READY;
 }
@@ -517,16 +516,16 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &i
 			// execute tasks while we wait (if any are available)
 			ExecuteTasks(context.client, gstate, lstate);
 
-			auto guard = memory_manager.Lock();
+			const annotated_lock_guard<annotated_mutex> guard {memory_manager.lock};
 			if (!memory_manager.IsMinimumBatchIndex(batch_index)) {
 				//  we are not the minimum batch index and we have no memory available to buffer - block the task for
 				//  now
-				return memory_manager.BlockSink(guard, input.interrupt_state);
+				return memory_manager.BlockSink(input.interrupt_state);
 			}
 		}
 	}
 	if (!lstate.collection_index.IsValid()) {
-		lock_guard<mutex> l(gstate.lock);
+		annotated_lock_guard<annotated_mutex> l(gstate.lock);
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(context.client, table, insert_types);
 	}
@@ -581,14 +580,14 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 		}
 	}
 	if (lstate.optimistic_writer) {
-		lock_guard<mutex> l(gstate.lock);
+		annotated_lock_guard<annotated_mutex> l(gstate.lock);
 		auto &optimistic_writer = gstate.table.GetStorage().GetOptimisticWriter(context.client);
 		optimistic_writer.Merge(*lstate.optimistic_writer);
 	}
 
 	// unblock any blocked tasks
-	auto guard = memory_manager.Lock();
-	memory_manager.UnblockTasks(guard);
+	const annotated_lock_guard<annotated_mutex> guard {memory_manager.lock};
+	memory_manager.UnblockTasks();
 
 	return SinkCombineResultType::FINISHED;
 }
@@ -648,7 +647,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		// finally, merge the row groups into the local storage
 		for (const auto collection_index : final_collections) {
 			auto &collection = data_table.GetOptimisticCollection(context, collection_index);
-			data_table.LocalMerge(context, collection);
+			data_table.LocalMerge(context, table, collection);
 			data_table.ResetOptimisticCollection(context, collection_index);
 		}
 
@@ -672,10 +671,9 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		memory_manager.ReduceUnflushedMemory(entry.unflushed_memory);
 		auto &optimistic_collection = data_table.GetOptimisticCollection(context, entry.collection_index);
 		auto &collection = *optimistic_collection.collection;
-		collection.Scan(transaction, [&](DataChunk &insert_chunk) {
-			data_table.LocalAppend(append_state, context, insert_chunk, false);
-			return true;
-		});
+		for (auto &insert_chunk : collection.Chunks(transaction)) {
+			data_table.LocalAppend(append_state, table, context, insert_chunk, false);
+		}
 		data_table.ResetOptimisticCollection(context, entry.collection_index);
 	}
 
@@ -694,7 +692,7 @@ SourceResultType PhysicalBatchInsert::GetDataInternal(ExecutionContext &context,
 	auto &insert_gstate = sink_state->Cast<BatchInsertGlobalState>();
 
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(insert_gstate.insert_count)));
+	chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(insert_gstate.insert_count)));
 
 	return SourceResultType::FINISHED;
 }

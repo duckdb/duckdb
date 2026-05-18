@@ -8,9 +8,9 @@ namespace duckdb {
 
 string BaseTableRef::ToString() const {
 	string result;
-	result += catalog_name.empty() ? "" : (KeywordHelper::WriteOptionallyQuoted(catalog_name) + ".");
-	result += schema_name.empty() ? "" : (KeywordHelper::WriteOptionallyQuoted(schema_name) + ".");
-	result += KeywordHelper::WriteOptionallyQuoted(table_name);
+	result += catalog_name.empty() ? "" : (SQLIdentifier(catalog_name) + ".");
+	result += schema_name.empty() ? "" : (SQLIdentifier(schema_name) + ".");
+	result += SQLIdentifier(table_name);
 	result += AliasToString(column_name_alias);
 	if (at_clause) {
 		result += " " + at_clause->ToString();

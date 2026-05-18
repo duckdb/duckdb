@@ -55,7 +55,7 @@
 #endif
 
 // Load the generated header file containing our list of extension headers
-#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
+#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
 #include "duckdb/main/extension/generated_extension_loader.hpp"
 #else
 // TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
@@ -112,6 +112,7 @@ static const DefaultExtension internal_extensions[] = {
     {"autocomplete", "Adds support for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
     {"motherduck", "Enables motherduck integration with the system", false},
     {"mysql_scanner", "Adds support for connecting to a MySQL database", false},
+    {"odbc_scanner", "Adds support for connecting to remote databases over ODBC", false},
     {"sqlite_scanner", "Adds support for reading and writing SQLite database files", false},
     {"postgres_scanner", "Adds support for connecting to a Postgres database", false},
     {"inet", "Adds support for IP-related data types and functions", false},
@@ -125,6 +126,8 @@ static const DefaultExtension internal_extensions[] = {
     {"fts", "Adds support for Full-Text Search Indexes", false},
     {"ui", "Adds local UI for DuckDB", false},
     {"ducklake", "Adds support for DuckLake, SQL as a Lakehouse Format", false},
+    {"vortex", "Adds support for reading and writing files using the Vortex file format", false},
+    {"lance", "Adds support for querying Lance datasets", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -143,8 +146,9 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 // Allow Auto-Install Extensions
 //===--------------------------------------------------------------------===//
 static const char *const auto_install[] = {
-    "motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner", "delta", "iceberg", "uc_catalog",
-    "ui",         "ducklake",         nullptr};
+    "motherduck", "postgres_scanner", "mysql_scanner", "odbc_scanner", "sqlite_scanner",
+    "delta",      "iceberg",          "unity_catalog", "ui",           "ducklake",
+    nullptr};
 
 // TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {
@@ -215,7 +219,7 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(context, extension_name, options);
 		}
-		ExtensionHelper::LoadExternalExtension(context, extension_name);
+		ExtensionHelper::LoadExternalExtension(context, {extension_name});
 		return true;
 	} catch (...) {
 		return false;
@@ -244,7 +248,23 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(instance, fs, extension_name, options);
 		}
-		ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
+		if (Settings::Get<AutoloadKnownExtensionsSetting>(instance)) {
+			ExtensionHelper::LoadExternalExtension(instance, fs, {extension_name});
+			return true;
+		}
+		return false;
+	} catch (...) {
+		return false;
+	}
+}
+
+bool ExtensionHelper::TryAutoLoadAvailableExtension(DatabaseInstance &instance, const string &extension_name) noexcept {
+	if (instance.ExtensionIsLoaded(extension_name)) {
+		return true;
+	}
+	try {
+		auto &fs = FileSystem::GetFileSystem(instance);
+		ExtensionHelper::LoadExternalExtension(instance, fs, {extension_name});
 		return true;
 	} catch (...) {
 		return false;
@@ -393,7 +413,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 			ExtensionHelper::InstallExtension(db, *fs, extension_name, options);
 		}
 #endif
-		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);
+		ExtensionHelper::LoadExternalExtension(db, *fs, {extension_name});
 		DUCKDB_LOG_INFO(db, "Loaded extension '%s'", extension_name);
 	} catch (std::exception &e) {
 		ErrorData error(e);
@@ -401,6 +421,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 	}
 }
 
+// typos:off
 static const char *const public_keys[] = {
     R"(
 -----BEGIN PUBLIC KEY-----
@@ -834,6 +855,7 @@ k9EbTcRNnxCvab/oqjvgyRuSmIES00v8jZOGQZQUpw02RN6yCBeX2i8GPsGjj/T9
 -----END PUBLIC KEY-----
 )", nullptr};
 
+// typos:on
 const vector<string> ExtensionHelper::GetPublicKeys(bool allow_community_extensions) {
 	vector<string> keys;
 	for (idx_t i = 0; public_keys[i]; i++) {

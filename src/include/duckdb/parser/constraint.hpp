@@ -31,7 +31,7 @@ enum class ConstraintType : uint8_t {
 enum class ForeignKeyType : uint8_t {
 	FK_TYPE_PRIMARY_KEY_TABLE = 0,   // main table
 	FK_TYPE_FOREIGN_KEY_TABLE = 1,   // referencing table
-	FK_TYPE_SELF_REFERENCE_TABLE = 2 // self refrencing table
+	FK_TYPE_SELF_REFERENCE_TABLE = 2 // self referencing table
 };
 
 struct ForeignKeyInfo {

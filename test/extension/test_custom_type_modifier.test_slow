@@ -7,10 +7,7 @@ require skip_reload
 require notmingw
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
-LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 statement ok
 CREATE TABLE t1 (i BOUNDED(200));
@@ -100,12 +97,12 @@ CREATE TYPE user_type AS INTEGER
 statement error
 CREATE TABLE t4 (i user_type(NULL));
 ----
-Binder Error: Type 'user_type' does not take any type modifiers
+Binder Error: Type 'user_type' does not take any type parameters
 
 statement error
 SELECT 1::BOUNDED(NULL)
 ----
-BOUNDED type modifier must be integer
+Binder Error: BOUNDED type modifier cannot be NULL
 
 statement error
 SELECT 1::BOUNDED(900000000000000000)
@@ -147,7 +144,7 @@ SELECT 10::MINMAX('foob', 10);
 Binder Error: MINMAX type modifiers must be integers
 
 statement error
-SELECT 10::MINMAX(10, NULL::INTEGER);
+SELECT 10::MINMAX(10, (NULL::INTEGER));
 ----
 Parser Error: Expected a constant as type modifier
 
@@ -193,3 +190,10 @@ query I
 SELECT parameter_types from duckdb_functions() where function_name = 'bounded_add';
 ----
 [BOUNDED, BOUNDED]
+
+query I
+SELECT can_cast_implicitly(i, i::UNION(a BOUNDED(200))) FROM t1;
+----
+true
+true
+true

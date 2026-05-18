@@ -117,7 +117,7 @@ unique_ptr<SegmentScanState> DictFSSTCompressionStorage::StringInitScan(const Qu
 	auto state = make_uniq<CompressedStringScanState>(segment, buffer_manager.Pin(segment.block));
 	state->Initialize(true);
 
-	const auto &stats = segment.stats.statistics;
+	const auto &stats = segment.GetStats();
 	if (stats.GetStatsType() == StatisticsType::STRING_STATS && StringStats::HasMaxStringLength(stats)) {
 		state->all_values_inlined = StringStats::MaxStringLength(stats) <= string_t::INLINE_LENGTH;
 	}
@@ -192,7 +192,7 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 			// apply the filter
 			auto &dict_data = scan_state.dictionary->data;
 			UnifiedVectorFormat vdata;
-			dict_data.ToUnifiedFormat(scan_state.dict_count, vdata);
+			dict_data.ToUnifiedFormat(vdata);
 			SelectionVector dict_sel;
 			idx_t filter_count = scan_state.dict_count;
 			ColumnSegment::FilterSelection(dict_sel, dict_data, vdata, filter, filter_state, scan_state.dict_count,
@@ -221,14 +221,14 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 		}
 		sel_count = approved_tuple_count;
 
-		result.Dictionary(scan_state.dictionary, dict_sel);
+		result.Dictionary(scan_state.dictionary, dict_sel, vector_count);
 		return;
 	}
 	// fallback: scan + filter
 	DictFSSTCompressionStorage::StringScan(segment, state, vector_count, result);
 
 	UnifiedVectorFormat vdata;
-	result.ToUnifiedFormat(vector_count, vdata);
+	result.ToUnifiedFormat(vdata);
 	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, vector_count, sel_count);
 }
 

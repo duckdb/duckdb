@@ -11,6 +11,7 @@
 #include "duckdb.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/main/extension_load_options.hpp"
 #include "duckdb/main/settings.hpp"
 
 #include <string>
@@ -18,6 +19,7 @@
 namespace duckdb {
 
 class DuckDB;
+class ExtensionActiveLoad;
 
 enum class ExtensionLoadResult : uint8_t { LOADED_EXTENSION = 0, EXTENSION_UNKNOWN = 1, NOT_LOADED = 2 };
 
@@ -103,8 +105,8 @@ public:
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(DatabaseInstance &db, FileSystem &fs,
 	                                                         const string &extension, ExtensionInstallOptions &options);
 	//! Load an extension
-	static void LoadExternalExtension(ClientContext &context, const string &extension);
-	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension);
+	static void LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options);
+	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options);
 
 	//! Autoload an extension (depending on config, potentially a nop. Throws when installation fails)
 	static void AutoLoadExtension(ClientContext &context, const string &extension_name);
@@ -113,6 +115,10 @@ public:
 	//! Autoload an extension (depending on config, potentially a nop. Returns false on failure)
 	DUCKDB_API static bool TryAutoLoadExtension(DatabaseInstance &db, const string &extension_name) noexcept;
 	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept;
+
+	//! Autoload an extension, only if available locally
+	DUCKDB_API static bool TryAutoLoadAvailableExtension(DatabaseInstance &instance,
+	                                                     const string &extension_name) noexcept;
 
 	//! Update all extensions, return a vector of extension names that were updated;
 	static vector<ExtensionUpdateResult> UpdateExtensions(ClientContext &context);
@@ -127,8 +133,15 @@ public:
 	static vector<string> GetExtensionDirectoryPath(ClientContext &context);
 	static vector<string> GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
 
+	// Check signature of an Extension stored as FileHandle
 	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
 	                                    const bool allow_community_extensions);
+	// Check signature of an Extension, represented by a buffer and total_buffer_length, and a signature to be added
+	static bool CheckExtensionBufferSignature(const char *buffer, idx_t buffer_length, const string &signature,
+	                                          const bool allow_community_extensions);
+	// Check signature of an Extension, represented by a buffer and total_buffer_length
+	static bool CheckExtensionBufferSignature(const char *buffer, idx_t total_buffer_length,
+	                                          const bool allow_community_extensions);
 	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata) noexcept;
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 
@@ -145,7 +158,7 @@ public:
 
 	//! Extension can have aliases
 	static idx_t ExtensionAliasCount();
-	static ExtensionAlias GetExtensionAlias(idx_t index);
+	static ExtensionAlias GetInternalExtensionAlias(idx_t index);
 
 	//! Get public signing keys for extension signing
 	static const vector<string> GetPublicKeys(bool allow_community_extension = false);

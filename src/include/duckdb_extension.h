@@ -677,6 +677,11 @@ typedef struct {
 	int64_t (*duckdb_file_handle_size)(duckdb_file_handle file_handle);
 #endif
 
+// API to operate on GEOMETRY types.
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	char *(*duckdb_geometry_type_get_crs)(duckdb_logical_type type);
+#endif
+
 // API to register a custom log storage.
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_log_storage (*duckdb_create_log_storage)();
@@ -741,6 +746,7 @@ typedef struct {
 // New string functions that are added
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	char *(*duckdb_value_to_string)(duckdb_value value);
+	duckdb_error_data (*duckdb_valid_utf8_check)(const char *str, idx_t len);
 #endif
 
 // New functions around the table description
@@ -762,6 +768,8 @@ typedef struct {
 	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
 	duckdb_value (*duckdb_create_time_ns)(duckdb_time_ns input);
 	duckdb_time_ns (*duckdb_get_time_ns)(duckdb_value val);
+	duckdb_value (*duckdb_create_timestamp_tz_ns)(duckdb_timestamp_ns input);
+	duckdb_timestamp_ns (*duckdb_get_timestamp_tz_ns)(duckdb_value val);
 #endif
 
 // API to create and manipulate vector types
@@ -776,7 +784,8 @@ typedef struct {
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector sel);
 	void (*duckdb_vector_copy_sel)(duckdb_vector src, duckdb_vector dst, duckdb_selection_vector sel, idx_t src_count,
 	                               idx_t src_offset, idx_t dst_offset);
-	duckdb_error_data (*duckdb_vector_safe_assign_string_element)(duckdb_vector vector, idx_t index, const char *str);
+	void (*duckdb_unsafe_vector_assign_string_element_len)(duckdb_vector vector, idx_t index, const char *str,
+	                                                       idx_t str_len);
 #endif
 
 } duckdb_ext_api_v1;
@@ -1305,6 +1314,9 @@ typedef struct {
 #define duckdb_file_handle_sync               duckdb_ext_api.duckdb_file_handle_sync
 #define duckdb_file_handle_close              duckdb_ext_api.duckdb_file_handle_close
 
+// Version unstable_new_geo_functions
+#define duckdb_geometry_type_get_crs duckdb_ext_api.duckdb_geometry_type_get_crs
+
 // Version unstable_new_logger_functions
 #define duckdb_create_log_storage              duckdb_ext_api.duckdb_create_log_storage
 #define duckdb_destroy_log_storage             duckdb_ext_api.duckdb_destroy_log_storage
@@ -1351,7 +1363,8 @@ typedef struct {
 #define duckdb_scalar_function_init_get_extra_info     duckdb_ext_api.duckdb_scalar_function_init_get_extra_info
 
 // Version unstable_new_string_functions
-#define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string
+#define duckdb_valid_utf8_check duckdb_ext_api.duckdb_valid_utf8_check
+#define duckdb_value_to_string  duckdb_ext_api.duckdb_value_to_string
 
 // Version unstable_new_table_description_functions
 #define duckdb_table_description_get_column_count duckdb_ext_api.duckdb_table_description_get_column_count
@@ -1361,22 +1374,24 @@ typedef struct {
 #define duckdb_table_function_get_client_context duckdb_ext_api.duckdb_table_function_get_client_context
 
 // Version unstable_new_value_functions
-#define duckdb_create_time_ns     duckdb_ext_api.duckdb_create_time_ns
-#define duckdb_get_time_ns        duckdb_ext_api.duckdb_get_time_ns
-#define duckdb_create_map_value   duckdb_ext_api.duckdb_create_map_value
-#define duckdb_create_union_value duckdb_ext_api.duckdb_create_union_value
+#define duckdb_create_time_ns         duckdb_ext_api.duckdb_create_time_ns
+#define duckdb_create_timestamp_tz_ns duckdb_ext_api.duckdb_create_timestamp_tz_ns
+#define duckdb_get_time_ns            duckdb_ext_api.duckdb_get_time_ns
+#define duckdb_get_timestamp_tz_ns    duckdb_ext_api.duckdb_get_timestamp_tz_ns
+#define duckdb_create_map_value       duckdb_ext_api.duckdb_create_map_value
+#define duckdb_create_union_value     duckdb_ext_api.duckdb_create_union_value
 
 // Version unstable_new_vector_functions
-#define duckdb_create_vector                     duckdb_ext_api.duckdb_create_vector
-#define duckdb_destroy_vector                    duckdb_ext_api.duckdb_destroy_vector
-#define duckdb_vector_safe_assign_string_element duckdb_ext_api.duckdb_vector_safe_assign_string_element
-#define duckdb_slice_vector                      duckdb_ext_api.duckdb_slice_vector
-#define duckdb_vector_copy_sel                   duckdb_ext_api.duckdb_vector_copy_sel
-#define duckdb_vector_reference_value            duckdb_ext_api.duckdb_vector_reference_value
-#define duckdb_vector_reference_vector           duckdb_ext_api.duckdb_vector_reference_vector
-#define duckdb_create_selection_vector           duckdb_ext_api.duckdb_create_selection_vector
-#define duckdb_destroy_selection_vector          duckdb_ext_api.duckdb_destroy_selection_vector
-#define duckdb_selection_vector_get_data_ptr     duckdb_ext_api.duckdb_selection_vector_get_data_ptr
+#define duckdb_create_vector                           duckdb_ext_api.duckdb_create_vector
+#define duckdb_destroy_vector                          duckdb_ext_api.duckdb_destroy_vector
+#define duckdb_unsafe_vector_assign_string_element_len duckdb_ext_api.duckdb_unsafe_vector_assign_string_element_len
+#define duckdb_slice_vector                            duckdb_ext_api.duckdb_slice_vector
+#define duckdb_vector_copy_sel                         duckdb_ext_api.duckdb_vector_copy_sel
+#define duckdb_vector_reference_value                  duckdb_ext_api.duckdb_vector_reference_value
+#define duckdb_vector_reference_vector                 duckdb_ext_api.duckdb_vector_reference_vector
+#define duckdb_create_selection_vector                 duckdb_ext_api.duckdb_create_selection_vector
+#define duckdb_destroy_selection_vector                duckdb_ext_api.duckdb_destroy_selection_vector
+#define duckdb_selection_vector_get_data_ptr           duckdb_ext_api.duckdb_selection_vector_get_data_ptr
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
