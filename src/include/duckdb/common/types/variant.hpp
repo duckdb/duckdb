@@ -41,6 +41,23 @@ public:
 	explicit VariantPathComponent(uint32_t index) : lookup_mode(VariantChildLookupMode::BY_INDEX), index(index) {
 	}
 
+	bool operator==(const VariantPathComponent &other) const {
+		if (lookup_mode != other.lookup_mode) {
+			return false;
+		}
+		switch (lookup_mode) {
+		case VariantChildLookupMode::BY_KEY:
+			return key == other.key;
+		case VariantChildLookupMode::BY_INDEX:
+			return index == other.index;
+		default:
+			return false;
+		}
+	}
+	bool operator!=(const VariantPathComponent &other) const {
+		return !(*this == other);
+	}
+
 public:
 	VariantChildLookupMode lookup_mode;
 	string key;

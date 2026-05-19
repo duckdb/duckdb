@@ -45,16 +45,6 @@ unique_ptr<FunctionData> VariantKeysBindData::Copy() const {
 	return make_uniq<VariantKeysBindData>(*this);
 }
 
-static bool VariantPathComponentEquals(const VariantPathComponent &a, const VariantPathComponent &b) {
-	if (a.lookup_mode != b.lookup_mode) {
-		return false;
-	}
-	if (a.lookup_mode == VariantChildLookupMode::BY_KEY && a.key != b.key) {
-		return false;
-	}
-	return true;
-}
-
 bool VariantKeysBindData::Equals(const FunctionData &other) const {
 	auto &bind_data = other.Cast<VariantKeysBindData>();
 	if (paths.size() != bind_data.paths.size()) {
@@ -66,7 +56,7 @@ bool VariantKeysBindData::Equals(const FunctionData &other) const {
 			return false;
 		}
 		for (idx_t j = 0; j < paths[i].size(); j++) {
-			if (!VariantPathComponentEquals(paths[i][j], bind_data.paths[i][j])) {
+			if (paths[i][j] != bind_data.paths[i][j]) {
 				return false;
 			}
 		}
@@ -82,7 +72,7 @@ struct VariantKeysResult {
 };
 
 static void PrepareKeyList(VariantKeysResult &result, const ValidityMask &object_validity,
-                              const VariantNestedData *nested_data, const idx_t count) {
+                           const VariantNestedData *nested_data, const idx_t count) {
 	idx_t total_key_count = 0;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		if (!result.path_exists_by_row[row_idx] || !object_validity.RowIsValid(row_idx)) {
@@ -327,7 +317,7 @@ static unique_ptr<FunctionData> VariantKeysBind(BindScalarFunctionInput &input) 
 static void VariantKeysFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1 || input.ColumnCount() == 2);
 	const auto count = input.size();
-	const auto& variant_vec = input.data[0];
+	const auto &variant_vec = input.data[0];
 
 	if (input.ColumnCount() == 2) {
 		const auto &path = input.data[1];

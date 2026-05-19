@@ -30,17 +30,7 @@ unique_ptr<FunctionData> VariantExtractBindData::Copy() const {
 
 bool VariantExtractBindData::Equals(const FunctionData &other) const {
 	auto &bind_data = other.Cast<VariantExtractBindData>();
-	if (bind_data.component.lookup_mode != component.lookup_mode) {
-		return false;
-	}
-	if (bind_data.component.lookup_mode == VariantChildLookupMode::BY_INDEX &&
-	    bind_data.component.index != component.index) {
-		return false;
-	}
-	if (bind_data.component.lookup_mode == VariantChildLookupMode::BY_KEY && bind_data.component.key != component.key) {
-		return false;
-	}
-	return true;
+	return component == bind_data.component;
 }
 
 static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
