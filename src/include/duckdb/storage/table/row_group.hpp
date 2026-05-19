@@ -246,7 +246,7 @@ private:
 	void UnloadColumn(storage_t c);
 	bool HasUnchangedColumns() const;
 	static shared_ptr<ColumnData> CheckpointColumn(const RowGroup &row_group, idx_t column_idx, RowGroupWriteInfo &info,
-												   RowGroupWriteData &write_data);
+	                                               RowGroupWriteData &write_data);
 
 	bool HasUnloadedDeletes() const;
 	unique_ptr<RowGroup> CreateNewRowGroupCopy(RowGroupCollection &new_collection, idx_t new_column_count);

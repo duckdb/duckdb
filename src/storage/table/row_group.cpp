@@ -1640,7 +1640,7 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer, bool 
 		serializer.WriteProperty(104, "has_metadata_blocks", pointer.has_per_column_metadata_blocks);
 		vector<idx_t> extra_metadata_block_ids;
 		pointer.per_column_metadata_blocks.ForEachBlock(
-			[&](idx_t, idx_t block_id) { extra_metadata_block_ids.push_back(block_id); });
+		    [&](idx_t, idx_t block_id) { extra_metadata_block_ids.push_back(block_id); });
 		serializer.WritePropertyWithDefault(105, "extra_metadata_blocks", extra_metadata_block_ids);
 		serializer.WriteProperty(106, "has_per_column_metadata_blocks", pointer.has_per_column_metadata_blocks);
 		serializer.WritePropertyWithDefault(107, "per_column_metadata_blocks", pointer.per_column_metadata_blocks.data);
