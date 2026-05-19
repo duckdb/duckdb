@@ -282,7 +282,6 @@ public:
 	void RegisterSelect();
 	void RegisterSet();
 	void RegisterUpdate();
-	void RegisterVacuum();
 	void RegisterKeywordsAndIdentifiers();
 	void RegisterEnums();
 	void RegisterGenerated();
@@ -1302,6 +1301,38 @@ private:
 	static unique_ptr<TransformResultValue> TransformDotIdentifierInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static string TransformDotIdentifier(PEGTransformer &transformer, const string &identifier);
+	static unique_ptr<TransformResultValue> TransformVacuumStatementInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformVacuumStatement(PEGTransformer &transformer,
+	                                                         const VacuumOptions &vacuum_options,
+	                                                         AnalyzeTarget analyze_target);
+	static unique_ptr<TransformResultValue> TransformVacuumOptionsInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformVacuumParensOptionsInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static VacuumOptions TransformVacuumParensOptions(PEGTransformer &transformer, const vector<string> &vacuum_option);
+	static unique_ptr<TransformResultValue> TransformVacuumLegacyOptionsInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static VacuumOptions TransformVacuumLegacyOptions(PEGTransformer &transformer, const string &opt_full,
+	                                                  const string &opt_freeze, const string &opt_verbose,
+	                                                  const string &opt_analyze);
+	static unique_ptr<TransformResultValue> TransformVacuumOptionInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformOptAnalyzeInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static string TransformOptAnalyze(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformOptFullInternal(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
+	static string TransformOptFull(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformOptFreezeInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static string TransformOptFreeze(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformOptVerboseInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static string TransformOptVerbose(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformNameListInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static vector<string> TransformNameList(PEGTransformer &transformer, const vector<string> &col_id);
 	//===--------------------------------------------------------------------===//
 	// END GENERATED RULES
 	//===--------------------------------------------------------------------===//

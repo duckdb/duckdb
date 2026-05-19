@@ -828,6 +828,11 @@ String:
     - ExplainOptionName
     - OperatorLiteral
     - DotIdentifier
+    - VacuumOption
+    - OptAnalyze
+    - OptFull
+    - OptFreeze
+    - OptVerbose
 
 Bool:
   type: "bool"

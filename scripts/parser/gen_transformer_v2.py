@@ -1035,6 +1035,7 @@ def main():
         'export.gram',
         'transaction.gram',
         'use.gram',
+        'vacuum.gram',
     ]
     rule_types, excluded_rules = load_grammar_types(type_dir / 'grammar_types.yml')
     results = [process_gram_file(f, rule_types, excluded_rules) for f in gram_files_to_gen]

@@ -850,15 +850,6 @@ void PEGTransformerFactory::RegisterUpdate() {
 	REGISTER_TRANSFORM(TransformUpdateSetColumnTarget);
 }
 
-void PEGTransformerFactory::RegisterVacuum() {
-	REGISTER_TRANSFORM(TransformVacuumStatement);
-	REGISTER_TRANSFORM(TransformVacuumOptions);
-	REGISTER_TRANSFORM(TransformVacuumLegacyOptions);
-	REGISTER_TRANSFORM(TransformVacuumParensOptions);
-	REGISTER_TRANSFORM(TransformVacuumOption);
-	REGISTER_TRANSFORM(TransformNameList);
-}
-
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("PragmaName", &TransformIdentifierOrKeyword);
 	Register("TypeName", &TransformIdentifierOrKeyword);
@@ -986,11 +977,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("NotLikeOp", "!~~");
 	RegisterEnum<string>("NotSimilarToOp", "!~");
 
-	RegisterEnum<string>("OptAnalyze", "analyze");
-	RegisterEnum<string>("OptFreeze", "freeze");
-	RegisterEnum<string>("OptFull", "full");
-	RegisterEnum<string>("OptVerbose", "verbose");
-
 	RegisterEnum<MergeActionCondition>("BySource", MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE);
 	RegisterEnum<MergeActionCondition>("ByTarget", MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET);
 
@@ -1045,7 +1031,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterSelect();
 	RegisterSet();
 	RegisterUpdate();
-	RegisterVacuum();
 	RegisterKeywordsAndIdentifiers();
 	RegisterEnums();
 }
