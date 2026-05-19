@@ -211,10 +211,11 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 	unique_lock<mutex> files_guard(lock);
 	vector<CachedFileInformation> result;
 	for (const auto &file : cached_files) {
-		annotated_lock_guard<annotated_mutex> map_guard(file.second->map_lock);
-		const idx_t block_size = file.second->cached_block_size.IsValid() ? file.second->cached_block_size.GetIndex()
-		                                                                  : GetCacheBlockSize(file.first);
-		for (const auto &block_entry : file.second->blocks) {
+		auto &cached_file = *file.second.cached_file;
+		const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
+		const idx_t block_size = cached_file.cached_block_size.IsValid() ? cached_file.cached_block_size.GetIndex()
+		                                                                 : GetCacheBlockSize(file.first);
+		for (const auto &block_entry : cached_file.blocks) {
 			const idx_t block_idx = block_entry.first;
 			const auto &block = *block_entry.second;
 
@@ -245,10 +246,35 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFile(const string &path) {
 	lock_guard<mutex> guard(lock);
 	auto &entry = cached_files[path];
-	if (!entry) {
-		entry = make_shared_ptr<CachedFile>(path);
+	if (!entry.cached_file) {
+		entry.cached_file = make_shared_ptr<CachedFile>(path);
 	}
-	return entry;
+	return entry.cached_file;
+}
+
+void ExternalFileCache::TryEraseFile(const shared_ptr<CachedFile> &cached_file) {
+	lock_guard<mutex> guard(lock);
+	TryEraseFileLocked(cached_file);
+}
+
+void ExternalFileCache::TryEraseFileLocked(const shared_ptr<CachedFile> &cached_file) {
+	// TODO(hjiang): why do we need take a shared pointer.
+	D_ASSERT(cached_file);
+	if (!cached_file) {
+		return;
+	}
+	auto entry = cached_files.find(cached_file->path);
+	ALWAYS_ASSERT(entry != cached_files.end());
+	// DuckDB doesn't invalidate external file cache entries on file write and deletion, which means it's possible that
+	// on old block unload, cache files entries store new cache blocks. so we need to validate whether they represent
+	// the same version of the file.
+	if (entry->second.cached_file.get() != cached_file.get()) {
+		return;
+	}
+	if (entry->second.active_handle_count != 0 || entry->second.loaded_block_count != 0) {
+		return;
+	}
+	cached_files.erase(entry);
 }
 
 } // namespace duckdb

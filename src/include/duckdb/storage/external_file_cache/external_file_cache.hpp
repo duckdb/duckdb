@@ -59,6 +59,15 @@ public:
 		bool on_disk_file DUCKDB_GUARDED_BY(meta_lock) = false;
 	};
 
+	// Cached file with its state.
+	struct CachedFileWithRefCount {
+		shared_ptr<CachedFile> cached_file;
+		// Number of active reader accessing the cached file.
+		idx_t active_handle_count = 0;
+		// Number of loaded blocks for the cached file.
+		idx_t loaded_block_count = 0;
+	};
+
 public:
 	ExternalFileCache(DatabaseInstance &db, bool enable);
 
@@ -78,6 +87,8 @@ public:
 	BufferManager &GetBufferManager() const;
 	//! Gets the cached file, or creates it if is not yet present
 	shared_ptr<CachedFile> GetOrCreateCachedFile(const string &path);
+	//! Try to erase the cached file if it is no longer needed.
+	void TryEraseFile(const shared_ptr<CachedFile> &cached_file);
 
 	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
 	                               const string &current_version_tag, timestamp_t current_last_modified);
@@ -87,12 +98,14 @@ private:
 	void ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size, idx_t new_block_size)
 	    DUCKDB_REQUIRES(cached_file.map_lock);
 
+	void TryEraseFileLocked(const shared_ptr<CachedFile> &cached_file);
+
 	//! The BufferManager used to cache files
 	BufferManager &buffer_manager;
 	//! Whether or not file caching is enabled
 	atomic<bool> enable;
 	//! Mapping from file path to cached file with cached blocks
-	unordered_map<string, shared_ptr<CachedFile>> cached_files;
+	unordered_map<string, CachedFileWithRefCount> cached_files;
 	//! Lock for accessing the cached files
 	mutable mutex lock;
 };
