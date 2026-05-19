@@ -77,7 +77,8 @@ void PEGParser::ParseRules(const char *grammar) {
 					throw InternalException("Failed to parse grammar - expected a parameter at position %d", c);
 				}
 				rule.parameters.insert(
-				    make_pair(string_t(grammar + parameter_start, UnsafeNumericCast<uint32_t>(c - parameter_start)), rule.parameters.size()));
+				    make_pair(string_t(grammar + parameter_start, UnsafeNumericCast<uint32_t>(c - parameter_start)),
+				              rule.parameters.size()));
 				if (grammar[c] != ')') {
 					throw InternalException("Failed to parse grammar - expected closing bracket at position %d", c);
 				}
