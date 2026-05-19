@@ -327,10 +327,24 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 		}
 		if (bound_aggr.filter) {
 			auto &filter = bound_aggr.filter;
-			auto ref = make_uniq<BoundReferenceExpression>(filter->GetReturnType(), expressions.size());
-			types.push_back(filter->GetReturnType());
-			expressions.push_back(std::move(filter));
-			bound_aggr.filter = std::move(ref);
+			optional_idx existing_idx;
+			if (!filter->IsVolatile()) {
+				for (idx_t expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
+					if (Expression::Equals(*expressions[expr_idx], *filter)) {
+						existing_idx = expr_idx;
+						break;
+					}
+				}
+			}
+			if (existing_idx.IsValid()) {
+				bound_aggr.filter =
+				    make_uniq<BoundReferenceExpression>(filter->GetReturnType(), existing_idx.GetIndex());
+			} else {
+				auto ref = make_uniq<BoundReferenceExpression>(filter->GetReturnType(), expressions.size());
+				types.push_back(filter->GetReturnType());
+				expressions.push_back(std::move(filter));
+				bound_aggr.filter = std::move(ref);
+			}
 		}
 	}
 	if (expressions.empty()) {

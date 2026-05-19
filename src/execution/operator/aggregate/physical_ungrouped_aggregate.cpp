@@ -182,6 +182,7 @@ UngroupedAggregateExecuteState::UngroupedAggregateExecuteState(ClientContext &co
 
 void UngroupedAggregateExecuteState::Reset() {
 	aggregate_input_chunk.Reset();
+	filter_set.BeginChunk();
 }
 
 void UngroupedAggregateExecuteState::Sink(LocalUngroupedAggregateState &state, DataChunk &input) {
@@ -204,7 +205,7 @@ void UngroupedAggregateExecuteState::Sink(LocalUngroupedAggregateState &state, D
 		// resolve the filter (if any)
 		if (aggregate.filter) {
 			auto &filtered_data = filter_set.GetFilterData(aggr_idx);
-			auto count = filtered_data.ApplyFilter(input);
+			auto count = filter_set.ApplyFilter(aggr_idx, input);
 
 			child_executor.SetChunk(filtered_data.filtered_payload);
 			payload_chunk.SetCardinality(count);
@@ -330,7 +331,7 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, DataChu
 
 			// Apply the filter before inserting into the hashtable
 			auto &filtered_data = sink.execute_state.filter_set.GetFilterData(idx);
-			idx_t count = filtered_data.ApplyFilter(chunk);
+			idx_t count = sink.execute_state.filter_set.ApplyFilter(idx, chunk);
 			filtered_data.filtered_payload.SetCardinality(count);
 
 			radix_table.Sink(context, filtered_data.filtered_payload, sink_input, empty_chunk, distinct_filter);

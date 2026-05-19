@@ -51,6 +51,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"window_rewriter", OptimizerType::ROW_NUMBER_REWRITER},
     {"partitioned_execution", OptimizerType::PARTITIONED_EXECUTION},
     {"partial_aggregate_pushdown", OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN},
+    {"scalar_aggregate_fusion", OptimizerType::SCALAR_AGGREGATE_FUSION},
     {nullptr, OptimizerType::INVALID}};
 
 string OptimizerTypeToString(OptimizerType type) {
