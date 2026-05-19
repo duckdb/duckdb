@@ -7,7 +7,7 @@ from typing import List
 
 sys.path.insert(0, str(Path(__file__).parent))
 from inline_grammar import parse_peg_grammar, PEGTokenType
-from generate_transformer import GrammarTypeInfo, load_grammar_types
+from generate_transformer import load_grammar_types
 
 
 # ---------------------------------------------------------------------------
@@ -262,6 +262,7 @@ def classify_choice_alternatives(alternatives, rule_types):
     identifier_alts = []
     unknown_alts = []
     for ref in alternatives:
+        assert isinstance(ref, ReferenceNode)
         name = ref.name
         if name in rule_types:
             transformer_alts.append(name)
@@ -328,14 +329,14 @@ def generate_choice_body_declaration(rule_name, return_type):
 # Mirrors the per-token-type dispatch inside MatcherFactory::CreateMatcher()
 # in matcher.cpp.  Each helper handles one matcher/parse-result kind:
 #
-#   _classify_literal           LiteralNode       -> KeywordParseResult           (skip)
-#   _classify_reference         ReferenceNode     -> IdentifierParseResult OR Transform<T>
-#   _classify_optional_reference OptionalNode(Ref) -> optional identifier OR TransformOptional<T>
-#   _classify_star_repeat       OptionalNode(Rep) -> OptionalParseResult(RepeatParseResult) vector<T>
-#   _classify_plus_repeat       RepeatNode        -> RepeatParseResult             vector<T>
-#   _classify_parens            ParensNode(Ref)   -> ExtractResultFromParens       T
-#   _classify_list_macro        ListMacroNode(Ref)-> ExtractParseResultsFromList   vector<T>
-#   _classify_parens_list       ParensNode(List)  -> ExtractParseResultsFromList(ExtractResultFromParens) vector<T>
+#   _classify_literal           LiteralNode          -> KeywordParseResult                     (skip)
+#   _classify_reference         ReferenceNode        -> IdentifierParseResult OR Transform<T>
+#   _classify_optional_reference OptionalNode(Ref)   -> optional identifier OR TransformOptional<T>
+#   _classify_repeat            OptionalNode(Rep)/Rep -> OptionalParseResult(Repeat)/Repeat     vector<T>
+#   _classify_macro             ParensNode/ListMacroNode (any depth) -> scalar T or vector<T>
+#     _analyze_macro_node       recursively unwraps to (leaf_name, ['parens'/'list', ...])
+#     _build_wrapped_expr       builds nested ExtractResultFromParens(...) call chains
+#     Examples: D, Parens(D), List(D), Parens(List(D)), List(Parens(D)), ...
 #
 # classify_sequence_element() is the top-level dispatch (= the switch in CreateMatcher).
 # classify_sequence_elements() iterates all children of a SequenceNode (= the token loop).
@@ -435,94 +436,108 @@ def _classify_optional_reference(name, idx, rule_types, excluded_rules):
     return None
 
 
-def _classify_parens(inner_node, idx, rule_types):
+def _analyze_macro_node(node):
     """
-    ParensNode -> Parens(D) <- '(' D ')'.
-    Uses ExtractResultFromParens() to reach child[1].
-    Only supported when inner is a plain ReferenceNode.
+    Recursively unwrap Parens/List nesting to find the leaf ReferenceNode.
+    Returns (leaf_name, ops) where ops is a list of 'parens'/'list' tokens
+    ordered outermost to innermost.  Returns None for unsupported structures.
     """
-    if not isinstance(inner_node, ReferenceNode):
-        return None
-    name = inner_node.name
-    var_name = to_snake_case(name)
-    if name in IDENTIFIER_OVERRIDE_RULES:
-        lines = [
-            f"\tauto {var_name} = ExtractResultFromParens(list_pr.GetChild({idx}))"
-            f".Cast<IdentifierParseResult>().identifier;",
-        ]
-        return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
-    if name in rule_types:
-        cpp_type = rule_types[name].cpp_type
-        lines = [
-            f"\tauto {var_name} = transformer.Transform<{cpp_type}>"
-            f"(ExtractResultFromParens(list_pr.GetChild({idx})));",
-        ]
-        return SeqElement(
-            skip=False,
-            var_name=var_name,
-            cpp_type=cpp_type,
-            by_value=_is_by_value(name, rule_types),
-            extraction_lines=lines,
-        )
+    if isinstance(node, ReferenceNode):
+        return (node.name, [])
+    if isinstance(node, ParensNode):
+        result = _analyze_macro_node(node.inner)
+        if result is None:
+            return None
+        leaf_name, ops = result
+        return (leaf_name, ['parens'] + ops)
+    if isinstance(node, ListMacroNode):
+        result = _analyze_macro_node(node.inner)
+        if result is None:
+            return None
+        leaf_name, ops = result
+        return (leaf_name, ['list'] + ops)
     return None
 
 
-def _classify_list_macro(inner_node, idx, rule_types):
+def _build_wrapped_expr(base_expr, parens_count):
+    """Wrap base_expr in parens_count layers of ExtractResultFromParens."""
+    expr = base_expr
+    for _ in range(parens_count):
+        expr = f"ExtractResultFromParens({expr})"
+    return expr
+
+
+def _classify_macro(node, idx, rule_types):
     """
-    ListMacroNode -> List(D) <- D (',' D)* ','?.
-    Uses ExtractParseResultsFromList() to collect all D results.
-    Only supported when inner is a plain ReferenceNode with a known type.
-    Produces vector<T>.
+    Unified classifier for arbitrary Parens/List nesting around a leaf rule.
+
+    Scalar result (no List in the chain):
+      D, Parens(D), Parens(Parens(D)), ...
+
+    Vector result (exactly one List in the chain):
+      List(D), Parens(List(D)), List(Parens(D)), Parens(List(Parens(D))), ...
+
+    Nested lists (List(List(D))) produce vector<vector<T>> and are not supported.
     """
-    if not isinstance(inner_node, ReferenceNode):
+    result = _analyze_macro_node(node)
+    if result is None:
         return None
-    name = inner_node.name
-    if name not in rule_types:
+    leaf_name, ops = result
+
+    var_name = to_snake_case(leaf_name)
+    is_identifier = leaf_name in IDENTIFIER_OVERRIDE_RULES
+
+    if not is_identifier and leaf_name not in rule_types:
         return None
-    child_type = rule_types[name].cpp_type
-    var_name = to_snake_case(name)
+
+    child_type = "string" if is_identifier else rule_types[leaf_name].cpp_type
+
+    list_positions = [i for i, op in enumerate(ops) if op == 'list']
+    if len(list_positions) > 1:
+        return None  # nested lists not supported
+
+    if not list_positions:
+        # Scalar path: all ops are 'parens'.
+        access_expr = _build_wrapped_expr(f"list_pr.GetChild({idx})", len(ops))
+        if is_identifier:
+            line = f"\tauto {var_name} = {access_expr}.Cast<IdentifierParseResult>().identifier;"
+        else:
+            line = f"\tauto {var_name} = transformer.Transform<{child_type}>({access_expr});"
+        return SeqElement(
+            skip=False,
+            var_name=var_name,
+            cpp_type=child_type,
+            by_value=False if is_identifier else _is_by_value(leaf_name, rule_types),
+            extraction_lines=[line],
+        )
+
+    # Vector path: parens before the list wrap the collection access;
+    # parens after the list unwrap each individual item.
+    list_pos = list_positions[0]
+    pre_parens = ops[:list_pos].count('parens')
+    post_parens = ops[list_pos + 1 :].count('parens')
+
+    outer_expr = _build_wrapped_expr(f"list_pr.GetChild({idx})", pre_parens)
+    item_var = f"{var_name}_item"
+    item_access = _build_wrapped_expr(item_var, post_parens)
+
+    if is_identifier:
+        push_line = f"\t\t{var_name}.push_back({item_access}.Cast<IdentifierParseResult>().identifier);"
+    else:
+        push_line = f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({item_access}));"
+
     lines = [
-        f"\tauto {var_name}_items = ExtractParseResultsFromList(list_pr.GetChild({idx}));",
+        f"\tauto {var_name}_items = ExtractParseResultsFromList({outer_expr});",
         f"\tvector<{child_type}> {var_name};",
-        f"\tfor (auto &{var_name}_item : {var_name}_items) {{",
-        f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
+        f"\tfor (auto &{item_var} : {var_name}_items) {{",
+        push_line,
         f"\t}}",
     ]
     return SeqElement(
         skip=False,
         var_name=var_name,
         cpp_type=f"vector<{child_type}>",
-        by_value=_is_by_value(name, rule_types),
-        extraction_lines=lines,
-    )
-
-
-def _classify_parens_list(inner_list_node, idx, rule_types):
-    """
-    ParensNode(ListMacroNode(D)) -> Parens(List(D)).
-    Uses ExtractParseResultsFromList(ExtractResultFromParens(...)) to collect all D results.
-    Only supported when the ListMacroNode's inner is a plain ReferenceNode with a known type.
-    Produces vector<T>.
-    """
-    if not isinstance(inner_list_node.inner, ReferenceNode):
-        return None
-    name = inner_list_node.inner.name
-    if name not in rule_types:
-        return None
-    child_type = rule_types[name].cpp_type
-    var_name = to_snake_case(name)
-    lines = [
-        f"\tauto {var_name}_items = ExtractParseResultsFromList(" f"ExtractResultFromParens(list_pr.GetChild({idx})));",
-        f"\tvector<{child_type}> {var_name};",
-        f"\tfor (auto &{var_name}_item : {var_name}_items) {{",
-        f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
-        f"\t}}",
-    ]
-    return SeqElement(
-        skip=False,
-        var_name=var_name,
-        cpp_type=f"vector<{child_type}>",
-        by_value=_is_by_value(name, rule_types),
+        by_value=False if is_identifier else _is_by_value(leaf_name, rule_types),
         extraction_lines=lines,
     )
 
@@ -535,9 +550,10 @@ def _classify_repeat(node, idx, rule_types, optional):
     Only supported when the repeated element is a plain reference with a known type.
     Produces vector<T>.
     """
-    if not isinstance(node.child, ReferenceNode):
+    child = node.child
+    if not isinstance(child, ReferenceNode):
         return None
-    ref_name = node.child.name
+    ref_name = child.name
     if ref_name not in rule_types:
         return None
     child_type = rule_types[ref_name].cpp_type
@@ -593,12 +609,8 @@ def classify_sequence_element(child, idx, rule_types, excluded_rules):
         return None  # OptionalNode(ParensNode) etc. - deferred
     if isinstance(child, RepeatNode):
         return _classify_repeat(child, idx, rule_types, optional=False)
-    if isinstance(child, ParensNode):
-        if isinstance(child.inner, ListMacroNode):
-            return _classify_parens_list(child.inner, idx, rule_types)
-        return _classify_parens(child.inner, idx, rule_types)
-    if isinstance(child, ListMacroNode):
-        return _classify_list_macro(child.inner, idx, rule_types)
+    if isinstance(child, (ParensNode, ListMacroNode)):
+        return _classify_macro(child, idx, rule_types)
     return None
 
 
