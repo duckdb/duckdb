@@ -521,7 +521,7 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 
 	auto &info = entry->second;
 	if (info.name.empty()) {
-		info.name = phys_op.GetName();
+		info.name = EnumUtil::ToString(phys_op.type);
 	}
 }
 
@@ -948,7 +948,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	auto &info = node->GetOperatorInfo();
 	node->depth = depth;
 
-	info.name = root_p.GetName();
+	info.name = EnumUtil::ToString(root_p.type);
 	info.operator_type = root_p.type;
 	info.extra_info = root_p.ParamsToString();
 
