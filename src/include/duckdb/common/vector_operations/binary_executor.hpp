@@ -129,7 +129,9 @@ struct BinaryExecutor {
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
 	static void ExecuteConstant(const Vector &left, const Vector &right, Vector &result, idx_t count, FUNC fun) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		FlatVector::SetSize(result, count);
+		if (result.size() != count) {
+			FlatVector::SetSize(result, count);
+		}
 
 		auto ldata = ConstantVector::GetData<LEFT_TYPE>(left);
 		auto rdata = ConstantVector::GetData<RIGHT_TYPE>(right);
@@ -158,7 +160,9 @@ struct BinaryExecutor {
 		}
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		FlatVector::SetSize(result, count);
+		if (result.size() != count) {
+			FlatVector::SetSize(result, count);
+		}
 		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		auto &result_validity = FlatVector::ValidityMutable(result);
 		if (LEFT_CONSTANT) {
@@ -227,7 +231,9 @@ struct BinaryExecutor {
 		right.ToUnifiedFormat(rdata);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		FlatVector::SetSize(result, count);
+		if (result.size() != count) {
+			FlatVector::SetSize(result, count);
+		}
 		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		ExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(
 		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata),
