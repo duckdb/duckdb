@@ -40,7 +40,8 @@ class OperatorProfiler;
 enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
 
 //! A JSON-like recursive profiling value.
-//! FIXME: this should at some point be replaced by a "Value" - but that's not easily possible until our VARIANT Value is extended to be able to easily hold arbitrary values
+//! FIXME: this should at some point be replaced by a "Value" - but that's not easily possible until our VARIANT Value
+//! is extended to be able to easily hold arbitrary values
 enum class QueryProfileResultKind : uint8_t {
 	VALUE,
 	LIST,
@@ -141,8 +142,7 @@ public:
 	bool HasRoot() const;
 
 private:
-	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root,
-	                                     const idx_t depth = 0);
+	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const idx_t depth = 0);
 	void Render(const ProfilingNode &node, std::ostream &str) const;
 	string RenderDisabledMessage(ProfilerPrintFormat format) const;
 

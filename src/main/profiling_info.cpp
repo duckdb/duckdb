@@ -12,7 +12,8 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
-ProfilerSettings::ProfilerSettings(profiler_settings_t settings_p) : settings(std::move(settings_p)) {}
+ProfilerSettings::ProfilerSettings(profiler_settings_t settings_p) : settings(std::move(settings_p)) {
+}
 
 bool ProfilerSettings::MetricIsEnabled(MetricType metric) const {
 	return settings.find(metric) != settings.end();

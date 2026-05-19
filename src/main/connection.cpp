@@ -51,7 +51,6 @@ string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	return profiler.ToString(format);
 }
 
-
 void Connection::Interrupt() {
 	context->Interrupt();
 }

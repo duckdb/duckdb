@@ -421,6 +421,17 @@ void OperatorInformation::Merge(const OperatorInformation &other) {
 	elements_returned += other.elements_returned;
 	result_set_size += other.result_set_size;
 	rows_scanned += other.rows_scanned;
+	if (other.extra_info_dirty) {
+		for (auto &entry : other.extra_info) {
+			auto it = extra_info.find(entry.first);
+			if (it != extra_info.end()) {
+				it->second = entry.second;
+			} else {
+				extra_info.insert(entry.first, entry.second);
+			}
+		}
+		extra_info_dirty = true;
+	}
 	if (other.system_peak_buffer_manager_memory > system_peak_buffer_manager_memory) {
 		system_peak_buffer_manager_memory = other.system_peak_buffer_manager_memory;
 	}
@@ -770,7 +781,8 @@ profiler_metrics_t OperatorInformation::GetMetrics(const ProfilingInfo &info) co
 	if (info.EnabledForCollection(MetricType::RESULT_SET_SIZE)) {
 		result[MetricType::RESULT_SET_SIZE] = Value::UBIGINT(result_set_size);
 	}
-	if (info.EnabledForCollection(MetricType::OPERATOR_ROWS_SCANNED) && operator_type == PhysicalOperatorType::TABLE_SCAN) {
+	if (info.EnabledForCollection(MetricType::OPERATOR_ROWS_SCANNED) &&
+	    operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result[MetricType::OPERATOR_ROWS_SCANNED] = Value::UBIGINT(rows_scanned);
 	}
 	if (info.EnabledForCollection(MetricType::EXTRA_INFO)) {
@@ -909,7 +921,6 @@ bool QueryProfiler::HasRoot() const {
 	return root != nullptr;
 }
 
-
 string QueryProfiler::ToJSON() const {
 	lock_guard<std::mutex> guard(lock);
 	ConvertedJSONHolder json_holder;
@@ -928,8 +939,7 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	file->Close();
 }
 
-unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root_p,
-                                                    const idx_t depth) {
+unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root_p, const idx_t depth) {
 	if (OperatorRequiresProfiling(root_p.type)) {
 		query_requires_profiling = true;
 	}
@@ -1029,12 +1039,11 @@ void QueryProfiler::MoveOptimizerPhasesToRoot() {
 	for (auto &entry : phase_timings) {
 		auto &phase = entry.first;
 		auto &timing = entry.second;
-		if (root_info->EnabledForCollection( phase)) {
+		if (root_info->EnabledForCollection(phase)) {
 			root_info->SetMetricValue(phase, Value::CreateValue(timing));
 		}
 	}
 }
-
 
 static void MergeOperatorMeasurements(ProfilingNode &root, OperatorInformation &result) {
 	// merge in this layer
@@ -1058,10 +1067,12 @@ void QueryProfiler::FinalizeMetricsInternal() {
 	auto &info = *root_info;
 
 	if (info.EnabledForCollection(MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {
-		info.SetMetricValue(MetricType::SYSTEM_PEAK_BUFFER_MEMORY, Value::UBIGINT(query_metrics.system_peak_buffer_memory));
+		info.SetMetricValue(MetricType::SYSTEM_PEAK_BUFFER_MEMORY,
+		                    Value::UBIGINT(query_metrics.system_peak_buffer_memory));
 	}
 	if (info.EnabledForCollection(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE)) {
-		info.SetMetricValue(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE, Value::UBIGINT(query_metrics.system_peak_temp_dir_size));
+		info.SetMetricValue(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE,
+		                    Value::UBIGINT(query_metrics.system_peak_temp_dir_size));
 	}
 	if (info.EnabledForCollection(MetricType::BLOCKED_THREAD_TIME)) {
 		info.SetMetricValue(MetricType::BLOCKED_THREAD_TIME, Value::DOUBLE(query_metrics.blocked_thread_time));
@@ -1075,7 +1086,8 @@ void QueryProfiler::FinalizeMetricsInternal() {
 			info.SetMetricValue(MetricType::CPU_TIME, Value::DOUBLE(cumulative_metrics.time));
 		}
 		if (info.EnabledForCollection(MetricType::CUMULATIVE_CARDINALITY)) {
-			info.SetMetricValue(MetricType::CUMULATIVE_CARDINALITY, Value::UBIGINT(cumulative_metrics.elements_returned));
+			info.SetMetricValue(MetricType::CUMULATIVE_CARDINALITY,
+			                    Value::UBIGINT(cumulative_metrics.elements_returned));
 		}
 		if (info.EnabledForCollection(MetricType::CUMULATIVE_ROWS_SCANNED)) {
 			info.SetMetricValue(MetricType::CUMULATIVE_ROWS_SCANNED, Value::UBIGINT(cumulative_metrics.rows_scanned));
