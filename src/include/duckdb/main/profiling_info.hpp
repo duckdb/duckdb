@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
@@ -74,19 +75,20 @@ public:
 public:
 	template <class METRIC_TYPE>
 	METRIC_TYPE GetMetricValue(const MetricType type) const {
-		auto val = metrics.at(type);
+		auto val = metrics.at(EnumUtil::ToString(type));
 		return val.GetValue<METRIC_TYPE>();
 	}
 
 	template <class METRIC_TYPE>
 	void MetricUpdate(const MetricType type, const Value &value,
 	                  const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
-		if (metrics.find(type) == metrics.end()) {
-			metrics[type] = value;
+		auto key = EnumUtil::ToString(type);
+		if (metrics.find(key) == metrics.end()) {
+			metrics[key] = value;
 			return;
 		}
-		auto new_value = update_fun(metrics[type].GetValue<METRIC_TYPE>(), value.GetValue<METRIC_TYPE>());
-		metrics[type] = Value::CreateValue(new_value);
+		auto new_value = update_fun(metrics[key].GetValue<METRIC_TYPE>(), value.GetValue<METRIC_TYPE>());
+		metrics[key] = Value::CreateValue(new_value);
 	}
 
 	template <class METRIC_TYPE>
@@ -135,7 +137,7 @@ private:
 template <>
 inline InsertionOrderPreservingMap<string>
 ProfilingInfo::GetMetricValue<InsertionOrderPreservingMap<string>>(const MetricType type) const {
-	auto val = metrics.at(type);
+	auto val = metrics.at(EnumUtil::ToString(type));
 	InsertionOrderPreservingMap<string> result;
 	auto children = MapValue::GetChildren(val);
 	for (auto &child : children) {

@@ -355,7 +355,7 @@ static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const s
 
 	auto insert_if_enabled = [&](MetricType m) {
 		if (!MetricsUtils::IsOptimizerMetric(m) || IsEnabledOptimizer(m, disabled_optimizers)) {
-			enabled_metrics.insert(m);
+			enabled_metrics.insert(EnumUtil::ToString(m));
 		}
 	};
 
@@ -366,8 +366,8 @@ static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const s
 		} catch (std::exception &) {
 			try {
 				auto group = EnumUtil::FromString<MetricGroup>(upper);
-				for (auto &converted_metric : MetricsUtils::GetMetricsByGroupType(group)) {
-					insert_if_enabled(converted_metric);
+				for (const auto &converted_metric : MetricsUtils::GetMetricsByGroupType(group)) {
+					insert_if_enabled(EnumUtil::FromString<MetricType>(converted_metric));
 				}
 			} catch (std::exception &) {
 				invalid_settings.push_back(metric);
@@ -378,10 +378,11 @@ static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const s
 }
 
 void AddOptimizerMetrics(profiler_settings_t &settings, const set<OptimizerType> &disabled_optimizers) {
-	if (settings.find(MetricType::ALL_OPTIMIZERS) != settings.end()) {
+	if (settings.find("ALL_OPTIMIZERS") != settings.end()) {
 		auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
-		for (auto &metric : optimizer_metrics) {
-			if (IsEnabledOptimizer(metric, disabled_optimizers)) {
+		for (const auto &metric : optimizer_metrics) {
+			auto metric_type = EnumUtil::FromString<MetricType>(metric);
+			if (IsEnabledOptimizer(metric_type, disabled_optimizers)) {
 				settings.insert(metric);
 			}
 		}
@@ -486,10 +487,7 @@ void ConfigureProfilingSetting::ResetLocal(ClientContext &context) {
 Value ConfigureProfilingSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 
-	set<string> enabled_settings;
-	for (auto &entry : config.profiler_settings) {
-		enabled_settings.insert(EnumUtil::ToString(entry));
-	}
+	set<string> enabled_settings(config.profiler_settings.begin(), config.profiler_settings.end());
 	vector<Value> children;
 	for (auto &entry : enabled_settings) {
 		children.emplace_back(entry);

@@ -21,6 +21,7 @@ static Value GetCumulativeOptimizers(QueryMetrics &query_metrics) {
 }
 
 void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const MetricType &type) {
+	auto key = EnumUtil::ToString(type);
 	switch(type) {
 	case MetricType::ALL_OPTIMIZERS:
 	case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
@@ -79,7 +80,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::PLANNER_BINDING:
 	case MetricType::WAITING_TO_ATTACH_LATENCY:
 	case MetricType::WRITE_TO_WAL_LATENCY:
-		metrics[type] = Value::CreateValue(0.0);
+		metrics[key] = Value::CreateValue(0.0);
 		break;
 	case MetricType::CUMULATIVE_CARDINALITY:
 	case MetricType::CUMULATIVE_ROWS_SCANNED:
@@ -93,17 +94,17 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::TOTAL_BYTES_WRITTEN:
 	case MetricType::TOTAL_MEMORY_ALLOCATED:
 	case MetricType::WAL_REPLAY_ENTRY_COUNT:
-		metrics[type] = Value::CreateValue<uint64_t>(0);
+		metrics[key] = Value::CreateValue<uint64_t>(0);
 		break;
 	case MetricType::EXTRA_INFO:
-		metrics[type] = Value::MAP(InsertionOrderPreservingMap<string>());
+		metrics[key] = Value::MAP(InsertionOrderPreservingMap<string>());
 		break;
 	case MetricType::OPERATOR_NAME:
 	case MetricType::QUERY_NAME:
-		metrics[type] = Value::CreateValue("");
+		metrics[key] = Value::CreateValue("");
 		break;
 	case MetricType::OPERATOR_TYPE:
-		metrics[type] = Value::CreateValue<uint8_t>(0);
+		metrics[key] = Value::CreateValue<uint8_t>(0);
 		break;
 	default:
 		throw InternalException("Unknown metric type %s", EnumUtil::ToString(type));

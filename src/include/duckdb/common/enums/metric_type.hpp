@@ -111,14 +111,8 @@ enum class MetricType : uint8_t {
 	PLANNER_BINDING = 21,
 };
 
-struct MetricTypeHashFunction {
-    uint64_t operator()(const MetricType &index) const {
-        return std::hash<uint8_t>()(static_cast<uint8_t>(index));
-    }
-};
-
-typedef unordered_set<MetricType, MetricTypeHashFunction> profiler_settings_t;
-typedef unordered_map<MetricType, Value, MetricTypeHashFunction> profiler_metrics_t;
+typedef unordered_set<string> profiler_settings_t;
+typedef unordered_map<string, Value> profiler_metrics_t;
 
 class MetricsUtils {
 public:

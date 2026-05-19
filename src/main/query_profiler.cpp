@@ -75,9 +75,9 @@ profiler_settings_t QueryProfiler::GetQueryMetrics(ClientContext &context) {
 
 	// Expand.
 	profiler_settings_t local_settings;
-	for (const auto metric : context_metrics) {
+	for (const auto &metric : context_metrics) {
 		local_settings.insert(metric);
-		ProfilingInfo::Expand(local_settings, metric);
+		ProfilingInfo::Expand(local_settings, EnumUtil::FromString<MetricType>(metric));
 	}
 	return local_settings;
 }
@@ -595,32 +595,29 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 	pair<string, double> physical_planner_head;
 
 	for (const auto &entry : info.GetMetrics()) {
-		if (MetricsUtils::IsOptimizerMetric(entry.first)) {
-			optimizer_timings[EnumUtil::ToString(entry.first).substr(10)] = entry.second.GetValue<double>();
-		} else if (MetricsUtils::IsPhaseTimingMetric(entry.first)) {
-			switch (entry.first) {
-			case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
+		const auto &metric = entry.first;
+		if (StringUtil::StartsWith(metric, "OPTIMIZER_")) {
+			optimizer_timings[metric.substr(10)] = entry.second.GetValue<double>();
+		} else {
+			auto metric_type = EnumUtil::FromString<MetricType>(metric);
+			if (!MetricsUtils::IsPhaseTimingMetric(metric_type)) {
 				continue;
-			case MetricType::ALL_OPTIMIZERS:
+			}
+			if (metric == "CUMULATIVE_OPTIMIZER_TIMING") {
+				continue;
+			} else if (metric == "ALL_OPTIMIZERS") {
 				optimizer_head = {"Optimizer", entry.second.GetValue<double>()};
-				break;
-			case MetricType::PHYSICAL_PLANNER:
+			} else if (metric == "PHYSICAL_PLANNER") {
 				physical_planner_head = {"Physical Planner", entry.second.GetValue<double>()};
-				break;
-			case MetricType::PLANNER:
+			} else if (metric == "PLANNER") {
 				planner_head = {"Planner", entry.second.GetValue<double>()};
-				break;
-			case MetricType::PARSER:
+			} else if (metric == "PARSER") {
 				parser_head = {"Parser", entry.second.GetValue<double>()};
-				break;
-			default:
-				break;
 			}
 
-			auto metric = EnumUtil::ToString(entry.first);
-			if (StringUtil::StartsWith(metric, "PHYSICAL_PLANNER") && entry.first != MetricType::PHYSICAL_PLANNER) {
+			if (StringUtil::StartsWith(metric, "PHYSICAL_PLANNER") && metric != "PHYSICAL_PLANNER") {
 				physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
-			} else if (StringUtil::StartsWith(metric, "PLANNER") && entry.first != MetricType::PLANNER) {
+			} else if (StringUtil::StartsWith(metric, "PLANNER") && metric != "PLANNER") {
 				planner_timings[metric.substr(8)] = entry.second.GetValue<double>();
 			} else if (StringUtil::StartsWith(metric, "PARSER")) {
 				parser_timings[metric] = entry.second.GetValue<double>();
@@ -733,32 +730,32 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 profiler_metrics_t OperatorInformation::GetMetrics(const ProfilingInfo &info) const {
 	profiler_metrics_t result;
 	if (info.EnabledForCollection(MetricType::OPERATOR_NAME)) {
-		result[MetricType::OPERATOR_NAME] = Value(name);
+		result["OPERATOR_NAME"] = Value(name);
 	}
 	if (info.EnabledForCollection(MetricType::OPERATOR_TYPE)) {
-		result[MetricType::OPERATOR_TYPE] = Value(EnumUtil::ToString(operator_type));
+		result["OPERATOR_TYPE"] = Value(EnumUtil::ToString(operator_type));
 	}
 	if (info.EnabledForCollection(MetricType::OPERATOR_TIMING)) {
-		result[MetricType::OPERATOR_TIMING] = Value::DOUBLE(time);
+		result["OPERATOR_TIMING"] = Value::DOUBLE(time);
 	}
 	if (info.EnabledForCollection(MetricType::OPERATOR_CARDINALITY)) {
-		result[MetricType::OPERATOR_CARDINALITY] = Value::UBIGINT(elements_returned);
+		result["OPERATOR_CARDINALITY"] = Value::UBIGINT(elements_returned);
 	}
 	if (info.EnabledForCollection(MetricType::RESULT_SET_SIZE)) {
-		result[MetricType::RESULT_SET_SIZE] = Value::UBIGINT(result_set_size);
+		result["RESULT_SET_SIZE"] = Value::UBIGINT(result_set_size);
 	}
 	if (info.EnabledForCollection(MetricType::OPERATOR_ROWS_SCANNED) &&
 	    operator_type == PhysicalOperatorType::TABLE_SCAN) {
-		result[MetricType::OPERATOR_ROWS_SCANNED] = Value::UBIGINT(rows_scanned);
+		result["OPERATOR_ROWS_SCANNED"] = Value::UBIGINT(rows_scanned);
 	}
 	if (info.EnabledForCollection(MetricType::EXTRA_INFO)) {
-		result[MetricType::EXTRA_INFO] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
+		result["EXTRA_INFO"] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
 	}
 	if (info.EnabledForCollection(MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {
-		result[MetricType::SYSTEM_PEAK_BUFFER_MEMORY] = Value::UBIGINT(system_peak_buffer_manager_memory);
+		result["SYSTEM_PEAK_BUFFER_MEMORY"] = Value::UBIGINT(system_peak_buffer_manager_memory);
 	}
 	if (info.EnabledForCollection(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE)) {
-		result[MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE] = Value::UBIGINT(system_peak_temp_directory_size);
+		result["SYSTEM_PEAK_TEMP_DIR_SIZE"] = Value::UBIGINT(system_peak_temp_directory_size);
 	}
 	return result;
 }
@@ -850,7 +847,7 @@ void QueryProfiler::ToLog() const {
 static void OperatorToResultTree(const ProfilingInfo &settings, ProfilingNode &node, QueryProfileResult &result) {
 	auto operator_metrics = node.GetOperatorInfo().GetMetrics(settings);
 	for (auto &entry : operator_metrics) {
-		auto key = StringUtil::Lower(EnumUtil::ToString(entry.first));
+		auto key = StringUtil::Lower(entry.first);
 		result.AddValue(key, std::move(entry.second));
 	}
 	if (node.GetChildCount() > 0) {
@@ -1050,8 +1047,9 @@ void QueryProfiler::FinalizeMetricsInternal() {
 	}
 
 	for (auto &metric : info.GetMetricsMutable()) {
-		if (info.EnabledForCollection(metric.first)) {
-			ProfilingUtils::CollectMetrics(metric.first, query_metrics, metric.second, info);
+		auto metric_type = EnumUtil::FromString<MetricType>(metric.first);
+		if (info.EnabledForCollection(metric_type)) {
+			ProfilingUtils::CollectMetrics(metric_type, query_metrics, metric.second, info);
 		}
 	}
 	metrics_finalized = true;

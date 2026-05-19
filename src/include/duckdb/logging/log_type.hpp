@@ -120,7 +120,7 @@ public:
 
 	static LogicalType GetLogType();
 
-	static string ConstructLogMessage(const MetricType &type, const Value &value);
+	static string ConstructLogMessage(const string &metric, const Value &value);
 };
 
 class CheckpointLogType : public LogType {
