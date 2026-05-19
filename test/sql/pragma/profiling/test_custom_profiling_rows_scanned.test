@@ -33,11 +33,11 @@ SELECT cumulative_cardinality, cumulative_rows_scanned FROM metrics_output;
 
 query I
 SELECT
-	CASE WHEN cumulative_rows_scanned = 8 THEN 'true'
-	ELSE 'false' END
+	CASE WHEN cumulative_rows_scanned = 8 THEN NULL
+	ELSE metrics_output END
 FROM metrics_output;
 ----
-true
+NULL
 
 # Only output the cumulative metric.
 

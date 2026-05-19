@@ -61,15 +61,6 @@ bool ProfilingInfo::EnabledForCollection(const MetricType metric) const {
 	return expanded_settings.find(metric) != expanded_settings.end();
 }
 
-bool ProfilingInfo::TryGetMetric(MetricType type, Value &result) const {
-	auto entry = metrics.find(type);
-	if (entry == metrics.end()) {
-		return false;
-	}
-	result = entry->second;
-	return true;
-}
-
 void ProfilingInfo::Expand(profiler_settings_t &settings, const MetricType metric) {
 	settings.insert(metric);
 
@@ -110,27 +101,32 @@ string ProfilingInfo::GetMetricAsString(const MetricType metric) const {
 	return metrics.at(metric).ToString();
 }
 
-void ProfilingInfo::WriteMetricsToLog(ClientContext &context) {
+void ProfilingInfo::WriteMetricsToLog(ClientContext &context) const {
 	auto &logger = Logger::Get(context);
 	if (logger.ShouldLog(MetricsLogType::NAME, MetricsLogType::LEVEL)) {
 		for (auto &metric : settings) {
+			auto entry = metrics.find(metric);
+			if (entry == metrics.end()) {
+				throw InternalException("Metric not instantiated correctly");
+			}
 			logger.WriteLog(MetricsLogType::NAME, MetricsLogType::LEVEL,
-			                MetricsLogType::ConstructLogMessage(metric, metrics[metric]));
+			                MetricsLogType::ConstructLogMessage(metric, entry->second));
 		}
 	}
 }
 
-void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest) {
-	for (auto &metric : settings) {
+void ProfilingInfo::MetricsToJSON(const profiler_metrics_t &metrics, yyjson_mut_doc *doc, yyjson_mut_val *dest) {
+	for (auto &entry : metrics) {
+		auto metric = entry.first;
+		auto &metric_value = entry.second;
 		auto metric_str = StringUtil::Lower(EnumUtil::ToString(metric));
 		auto key_val = yyjson_mut_strcpy(doc, metric_str.c_str());
 		auto key_ptr = yyjson_mut_get_str(key_val);
 
+		// FIXME: special casing is not necessary, make MetricToJson deal with nested types
 		if (metric == MetricType::EXTRA_INFO) {
 			auto extra_info_obj = yyjson_mut_obj(doc);
-
-			auto extra_info = metrics.at(metric);
-			auto children = MapValue::GetChildren(extra_info);
+			auto children = MapValue::GetChildren(metric_value);
 			for (auto &child : children) {
 				auto struct_children = StructValue::GetChildren(child);
 				auto key = struct_children[0].GetValue<string>();
@@ -154,16 +150,17 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 			continue;
 		}
 
-		// The metric cannot be NULL, and should have been 0 initialized.
-		D_ASSERT(!metrics[metric].IsNull());
-
 		if (MetricsUtils::IsOptimizerMetric(metric) || MetricsUtils::IsPhaseTimingMetric(metric)) {
-			yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[metric].GetValue<double>());
+			yyjson_mut_obj_add_real(doc, dest, key_ptr, metric_value.GetValue<double>());
 			continue;
 		}
 
-		ProfilingUtils::MetricToJson(doc, dest, key_ptr, metrics, metric);
+		ProfilingUtils::MetricToJson(doc, dest, key_ptr, metric_value);
 	}
+}
+
+void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest) const {
+	MetricsToJSON(metrics, doc, dest);
 }
 
 } // namespace duckdb

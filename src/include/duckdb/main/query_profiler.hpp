@@ -35,74 +35,9 @@ class ProfilingNode;
 class PhysicalOperator;
 class SQLStatement;
 struct ActiveTimer;
+class OperatorProfiler;
 
 enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
-
-struct OperatorInformation {
-	explicit OperatorInformation() {
-		ResetMetrics();
-	}
-
-	string name;
-
-	double time;
-	idx_t elements_returned;
-	idx_t result_set_size;
-	idx_t system_peak_buffer_manager_memory;
-	idx_t system_peak_temp_directory_size;
-	idx_t rows_scanned;
-
-	InsertionOrderPreservingMap<string> extra_info;
-	bool extra_info_dirty = false;
-
-	void ResetMetrics() {
-		time = 0;
-		elements_returned = 0;
-		result_set_size = 0;
-		system_peak_buffer_manager_memory = 0;
-		system_peak_temp_directory_size = 0;
-		rows_scanned = 0;
-	}
-	void GatherMetrics(ClientContext &context, double elapsed_time, optional_ptr<DataChunk> chunk);
-	void Merge(const OperatorInformation &other);
-};
-
-//! The OperatorProfiler measures timings of individual operators
-//! This class exists once for all operators and collects `OperatorInfo` for each operator
-class OperatorProfiler {
-	friend class QueryProfiler;
-
-public:
-	DUCKDB_API explicit OperatorProfiler(ClientContext &context);
-	~OperatorProfiler() {
-	}
-
-public:
-	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
-	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
-	DUCKDB_API void FinishSource(GlobalSourceState &gstate, LocalSourceState &lstate);
-
-	//! Adds the timings in the OperatorProfiler (tree) to the QueryProfiler (tree).
-	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
-	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
-	DUCKDB_API bool OperatorInfoIsInitialized(const PhysicalOperator &phys_op);
-
-public:
-	ClientContext &context;
-
-private:
-	//! Whether or not the profiler is enabled
-	bool enabled;
-	//! Sub-settings for the profiler
-	ProfilerSettings settings;
-
-	//! The timer used to time the execution time of the individual Physical Operators
-	Profiler op;
-	//! The stack of Physical Operators that are currently active
-	optional_ptr<const PhysicalOperator> active_operator;
-	//! A mapping of physical operators to profiled operator information.
-	reference_map_t<const PhysicalOperator, OperatorInformation> operator_infos;
-};
 
 //! QueryProfiler collects the profiling metrics of a query.
 class QueryProfiler {
@@ -165,11 +100,11 @@ public:
 	DUCKDB_API idx_t GetBytesRead() const;
 	DUCKDB_API idx_t GetBytesWritten() const;
 
+	static profiler_settings_t GetQueryMetrics(ClientContext &context);
+
 	idx_t OperatorSize() {
 		return tree_map.size();
 	}
-
-	void Finalize(ProfilingNode &node);
 
 	//! Return the root of the query tree.
 	optional_ptr<ProfilingNode> GetRoot() {
@@ -202,6 +137,8 @@ private:
 
 	//! The root of the query tree
 	unique_ptr<ProfilingNode> root;
+
+	unique_ptr<ProfilingInfo> root_info;
 
 	//! Top level query information.
 	QueryMetrics query_metrics;

@@ -52,8 +52,6 @@ public:
 	bool EnabledForCollection(const MetricType metric) const;
 	//! Returns true, if the user requested this metric
 	bool Enabled(const MetricType metric) const;
-	//! Returns a metric if it has been collected
-	bool TryGetMetric(MetricType type, Value &result) const;
 	//! Expand metrics depending on the collection of other metrics.
 	static void Expand(profiler_settings_t &settings, const MetricType metric);
 	void SetMetricValue(MetricType type, Value new_value);
@@ -67,8 +65,9 @@ public:
 
 public:
 	string GetMetricAsString(const MetricType metric) const;
-	void WriteMetricsToLog(ClientContext &context);
-	void WriteMetricsToJSON(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *destination);
+	void WriteMetricsToLog(ClientContext &context) const;
+	void WriteMetricsToJSON(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *destination) const;
+	static void MetricsToJSON(const profiler_metrics_t &metrics, duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *dest);
 
 public:
 	template <class METRIC_TYPE>

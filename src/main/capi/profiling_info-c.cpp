@@ -26,40 +26,42 @@ duckdb_profiling_info duckdb_get_profiling_info(duckdb_connection connection) {
 }
 
 duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const char *key) {
-	if (!info) {
-		return nullptr;
-	}
-	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
-	auto &profiling_info = node.GetProfilingInfo();
-	auto key_enum = EnumUtil::FromString<MetricType>(duckdb::StringUtil::Upper(key));
-	if (!profiling_info.Enabled(key_enum)) {
-		return nullptr;
-	}
-
-	auto str = profiling_info.GetMetricAsString(key_enum);
-	return duckdb_create_varchar_length(str.c_str(), strlen(str.c_str()));
+	return nullptr;
+	// if (!info) {
+	// 	return nullptr;
+	// }
+	// auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
+	// auto &profiling_info = node.GetProfilingInfo();
+	// auto key_enum = EnumUtil::FromString<MetricType>(duckdb::StringUtil::Upper(key));
+	// if (!profiling_info.Enabled(key_enum)) {
+	// 	return nullptr;
+	// }
+	//
+	// auto str = profiling_info.GetMetricAsString(key_enum);
+	// return duckdb_create_varchar_length(str.c_str(), strlen(str.c_str()));
 }
 
 duckdb_value duckdb_profiling_info_get_metrics(duckdb_profiling_info info) {
-	if (!info) {
-		return nullptr;
-	}
-
-	auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
-	auto &profiling_info = node.GetProfilingInfo();
-
-	duckdb::InsertionOrderPreservingMap<duckdb::string> metrics_map;
-	for (const auto &metric : profiling_info.GetMetrics()) {
-		auto key = EnumUtil::ToString(metric.first);
-		if (!profiling_info.Enabled(metric.first)) {
-			continue;
-		}
-
-		metrics_map[key] = metric.second.ToString();
-	}
-
-	auto map = duckdb::Value::MAP(metrics_map);
-	return reinterpret_cast<duckdb_value>(new duckdb::Value(map));
+	return nullptr;
+	// if (!info) {
+	// 	return nullptr;
+	// }
+	//
+	// auto &node = *reinterpret_cast<duckdb::ProfilingNode *>(info);
+	// auto &profiling_info = node.GetProfilingInfo();
+	//
+	// duckdb::InsertionOrderPreservingMap<duckdb::string> metrics_map;
+	// for (const auto &metric : profiling_info.GetMetrics()) {
+	// 	auto key = EnumUtil::ToString(metric.first);
+	// 	if (!profiling_info.Enabled(metric.first)) {
+	// 		continue;
+	// 	}
+	//
+	// 	metrics_map[key] = metric.second.ToString();
+	// }
+	//
+	// auto map = duckdb::Value::MAP(metrics_map);
+	// return reinterpret_cast<duckdb_value>(new duckdb::Value(map));
 }
 
 idx_t duckdb_profiling_info_get_child_count(duckdb_profiling_info info) {
