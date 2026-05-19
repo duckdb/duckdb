@@ -251,6 +251,7 @@ void PEGTransformerFactory::RegisterCopy() {
 	REGISTER_TRANSFORM(TransformSchemaOrData);
 	REGISTER_TRANSFORM(TransformGenericCopyOptionList);
 	REGISTER_TRANSFORM(TransformGenericCopyOption);
+	REGISTER_TRANSFORM(TransformGenericCopyOptionParenthesizedExpressionList);
 }
 
 void PEGTransformerFactory::RegisterCreateIndex() {
