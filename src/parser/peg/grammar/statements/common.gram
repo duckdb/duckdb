@@ -61,7 +61,6 @@ SequenceName <- Identifier
 TriggerName <- Identifier
 CollationName <- Identifier
 CopyOptionName <- ColLabel
-SecretName <- ColId
 
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
