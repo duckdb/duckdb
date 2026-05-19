@@ -53,7 +53,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		HandleCastError::AssignError(msg, parameters);
 		if (!parameters.strict) {
 			// if this was a TRY_CAST, we know every row will fail, so just return null
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result, count_t(count));
 			return false;
 		}
 	}
