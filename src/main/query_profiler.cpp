@@ -526,12 +526,14 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			node.second.extra_info_dirty = false;
 		}
 		if (settings.MetricIsEnabled(MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {
-			query_metrics.query_global_info.MetricMax(MetricType::SYSTEM_PEAK_BUFFER_MEMORY,
-			                                          node.second.system_peak_buffer_manager_memory);
+			if (node.second.system_peak_buffer_manager_memory > query_metrics.system_peak_buffer_memory) {
+				query_metrics.system_peak_buffer_memory = node.second.system_peak_buffer_manager_memory;
+			}
 		}
 		if (settings.MetricIsEnabled(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE)) {
-			query_metrics.query_global_info.MetricMax(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE,
-			                                          node.second.system_peak_temp_directory_size);
+			if (node.second.system_peak_temp_directory_size > query_metrics.system_peak_temp_dir_size) {
+				query_metrics.system_peak_temp_dir_size = node.second.system_peak_temp_directory_size;
+			}
 		}
 		node.second.ResetMetrics();
 	}
@@ -543,10 +545,7 @@ void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {
 		return;
 	}
 
-	auto &info = root->GetProfilingInfo();
-	if (info.EnabledForCollection(MetricType::BLOCKED_THREAD_TIME)) {
-		query_metrics.query_global_info.SetMetricValue(MetricType::BLOCKED_THREAD_TIME, blocked_thread_time);
-	}
+	query_metrics.blocked_thread_time = blocked_thread_time;
 }
 
 string QueryProfiler::DrawPadded(const string &str, idx_t width) {
@@ -983,9 +982,9 @@ void QueryProfiler::FinalizeMetricsInternal() {
 	}
 
 	auto &child_info = root->children[0]->GetProfilingInfo();
-	for (const auto &global_info_entry : query_metrics.query_global_info.GetMetrics()) {
-		info.SetMetricValue(global_info_entry.first, global_info_entry.second);
-	}
+	info.SetMetricValue(MetricType::SYSTEM_PEAK_BUFFER_MEMORY, Value::UBIGINT(query_metrics.system_peak_buffer_memory));
+	info.SetMetricValue(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE, Value::UBIGINT(query_metrics.system_peak_temp_dir_size));
+	info.SetMetricValue(MetricType::BLOCKED_THREAD_TIME, Value::DOUBLE(query_metrics.blocked_thread_time));
 
 	MoveOptimizerPhasesToRoot();
 	for (auto &metric : info.GetMetricsMutable()) {

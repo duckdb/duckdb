@@ -31,7 +31,9 @@ public:
         Reset();
     }
 
-	ProfilingInfo query_global_info;
+	idx_t system_peak_buffer_memory;
+	idx_t system_peak_temp_dir_size;
+	double blocked_thread_time;
 
 	std::string query_name;
 	unique_ptr<ActiveTimer> latency_timer;
@@ -59,7 +61,10 @@ public:
         }
 
         latency_timer.reset();
-        query_name = "";
+    	query_name = "";
+    	system_peak_buffer_memory = 0;
+    	system_peak_temp_dir_size = 0;
+    	blocked_thread_time = 0;
     }
 
     void Merge(const QueryMetrics &other) {
