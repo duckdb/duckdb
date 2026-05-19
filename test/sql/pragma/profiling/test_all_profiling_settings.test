@@ -23,7 +23,6 @@ query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
 ALL_OPTIMIZERS
-BLOCKED_THREAD_TIME
 CPU_TIME
 CUMULATIVE_CARDINALITY
 CUMULATIVE_OPTIMIZER_TIMING
@@ -36,18 +35,11 @@ OPERATOR_ROWS_SCANNED
 OPERATOR_TIMING
 OPERATOR_TYPE
 PARSER
-PHYSICAL_PLANNER
-PHYSICAL_PLANNER_COLUMN_BINDING
-PHYSICAL_PLANNER_CREATE_PLAN
-PHYSICAL_PLANNER_RESOLVE_TYPES
 PLANNER
 PLANNER_BINDING
 QUERY_NAME
 RESULT_SET_SIZE
 ROWS_RETURNED
-SYSTEM_PEAK_BUFFER_MEMORY
-SYSTEM_PEAK_TEMP_DIR_SIZE
-TOTAL_MEMORY_ALLOCATED
 optimizer.aggregate_function_rewriter
 optimizer.build_side_probe_side
 optimizer.column_lifetime
@@ -86,6 +78,10 @@ optimizer.top_n_window_elimination
 optimizer.unnest_rewriter
 optimizer.unused_columns
 optimizer.window_self_join
+physical_planner.column_binding
+physical_planner.create_plan
+physical_planner.resolve_types
+physical_planner.total_time
 storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
@@ -95,6 +91,10 @@ storage.total_bytes_written
 storage.waiting_to_attach_latency
 storage.wal_replay_entry_count
 storage.write_to_wal_latency
+system.blocked_thread_time
+system.peak_buffer_memory
+system.peak_temp_dir_size
+system.total_memory_allocated
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';

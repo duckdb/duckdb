@@ -31,20 +31,20 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveAndPlan(unique_ptr<LogicalOperat
 
 	// Resolve the types of each operator.
 	{
-		auto timer = profiler.StartTimer(MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES);
+		auto timer = profiler.StartTimer("physical_planner.resolve_types");
 		op->ResolveOperatorTypes();
 	}
 
 	// Resolve the column references.
 	{
-		auto timer = profiler.StartTimer(MetricType::PHYSICAL_PLANNER_COLUMN_BINDING);
+		auto timer = profiler.StartTimer("physical_planner.column_binding");
 		ColumnBindingResolver resolver;
 		resolver.VisitOperator(*op);
 	}
 
 	// Create the main physical plan.
 	{
-		auto timer = profiler.StartTimer(MetricType::PHYSICAL_PLANNER_CREATE_PLAN);
+		auto timer = profiler.StartTimer("physical_planner.create_plan");
 		physical_plan = PlanInternal(*op);
 	}
 

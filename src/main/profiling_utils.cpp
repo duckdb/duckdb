@@ -27,16 +27,11 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	auto key = EnumUtil::ToString(type);
 	switch(type) {
 	case MetricType::ALL_OPTIMIZERS:
-	case MetricType::BLOCKED_THREAD_TIME:
 	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 	case MetricType::LATENCY:
 	case MetricType::OPERATOR_TIMING:
 	case MetricType::PARSER:
-	case MetricType::PHYSICAL_PLANNER:
-	case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
-	case MetricType::PHYSICAL_PLANNER_CREATE_PLAN:
-	case MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES:
 	case MetricType::PLANNER:
 	case MetricType::PLANNER_BINDING:
 		metrics[key] = Value::CreateValue(0.0);
@@ -47,9 +42,6 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::OPERATOR_ROWS_SCANNED:
 	case MetricType::RESULT_SET_SIZE:
 	case MetricType::ROWS_RETURNED:
-	case MetricType::SYSTEM_PEAK_BUFFER_MEMORY:
-	case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE:
-	case MetricType::TOTAL_MEMORY_ALLOCATED:
 		metrics[key] = Value::CreateValue<uint64_t>(0);
 		break;
 	case MetricType::EXTRA_INFO:
@@ -73,19 +65,12 @@ void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_
 	// Phase timing metrics
 	case MetricType::ALL_OPTIMIZERS:
 	case MetricType::PARSER:
-	case MetricType::PHYSICAL_PLANNER:
-	case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
-	case MetricType::PHYSICAL_PLANNER_CREATE_PLAN:
-	case MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES:
 	case MetricType::PLANNER:
 	case MetricType::PLANNER_BINDING:
 		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(type));
 		break;
 	case MetricType::QUERY_NAME:
 		metric = query_metrics.query_name;
-		break;
-	case MetricType::TOTAL_MEMORY_ALLOCATED:
-		metric = Value::UBIGINT(query_metrics.GetMetricValue(MetricType::TOTAL_MEMORY_ALLOCATED));
 		break;
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 		metric = GetCumulativeOptimizers(query_metrics);

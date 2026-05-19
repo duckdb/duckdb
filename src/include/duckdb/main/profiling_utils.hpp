@@ -140,24 +140,19 @@ public:
 	static idx_t GetMetricsIndex(MetricType type) {
 		switch(type) {
 		case MetricType::LATENCY: return 0;
-		case MetricType::TOTAL_MEMORY_ALLOCATED: return 1;
 		// Phase timing metrics
-		case MetricType::ALL_OPTIMIZERS: return 2;
-		case MetricType::PARSER: return 3;
-		case MetricType::PHYSICAL_PLANNER: return 4;
-		case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING: return 5;
-		case MetricType::PHYSICAL_PLANNER_CREATE_PLAN: return 6;
-		case MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES: return 7;
-		case MetricType::PLANNER: return 8;
-		case MetricType::PLANNER_BINDING: return 9;
+		case MetricType::ALL_OPTIMIZERS: return 1;
+		case MetricType::PARSER: return 2;
+		case MetricType::PLANNER: return 3;
+		case MetricType::PLANNER_BINDING: return 4;
 		default:
 			throw InternalException("MetricType %s is not actively tracked.", EnumUtil::ToString(type));
 		}
 	}
 
 private:
-	// LATENCY + TOTAL_MEMORY_ALLOCATED + 8 phase timing metrics
-	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 10;
+	// LATENCY + 4 phase timing metrics
+	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 5;
 
 	atomic<idx_t> active_metrics[ACTIVELY_TRACKED_METRICS];
 	// String-keyed timings for optimizer and storage timer metrics

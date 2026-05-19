@@ -77,8 +77,9 @@ profiler_settings_t QueryProfiler::GetQueryMetrics(ClientContext &context) {
 	profiler_settings_t local_settings;
 	for (const auto &metric : context_metrics) {
 		local_settings.insert(metric);
-		// Optimizer and storage metrics are string-keyed; they don't map to MetricType and need no expansion.
-		if (!MetricsUtils::IsOptimizerMetricKey(metric) && !MetricsUtils::IsStorageMetricKey(metric)) {
+		// String-keyed metrics don't map to MetricType and need no expansion.
+		if (!MetricsUtils::IsOptimizerMetricKey(metric) && !MetricsUtils::IsStorageMetricKey(metric) &&
+		    !MetricsUtils::IsPhysicalPlannerMetricKey(metric) && !MetricsUtils::IsSystemMetricKey(metric)) {
 			ProfilingInfo::Expand(local_settings, EnumUtil::FromString<MetricType>(metric));
 		}
 	}
@@ -618,6 +619,14 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 		} else if (MetricsUtils::IsStorageMetricKey(metric)) {
 			// storage metrics are not phase timings; skip them here
 			continue;
+		} else if (MetricsUtils::IsPhysicalPlannerMetricKey(metric)) {
+			// "physical_planner.total_time" -> head; others -> sub-timings
+			if (metric == "physical_planner.total_time") {
+				physical_planner_head = {"Physical Planner", entry.second.GetValue<double>()};
+			} else {
+				// "physical_planner.column_binding" -> display as "column_binding"
+				physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
+			}
 		} else {
 			auto metric_type = EnumUtil::FromString<MetricType>(metric);
 			if (!MetricsUtils::IsPhaseTimingMetric(metric_type)) {
@@ -627,17 +636,13 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 				continue;
 			} else if (metric == "ALL_OPTIMIZERS") {
 				optimizer_head = {"Optimizer", entry.second.GetValue<double>()};
-			} else if (metric == "PHYSICAL_PLANNER") {
-				physical_planner_head = {"Physical Planner", entry.second.GetValue<double>()};
 			} else if (metric == "PLANNER") {
 				planner_head = {"Planner", entry.second.GetValue<double>()};
 			} else if (metric == "PARSER") {
 				parser_head = {"Parser", entry.second.GetValue<double>()};
 			}
 
-			if (StringUtil::StartsWith(metric, "PHYSICAL_PLANNER") && metric != "PHYSICAL_PLANNER") {
-				physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
-			} else if (StringUtil::StartsWith(metric, "PLANNER") && metric != "PLANNER") {
+			if (StringUtil::StartsWith(metric, "PLANNER") && metric != "PLANNER") {
 				planner_timings[metric.substr(8)] = entry.second.GetValue<double>();
 			} else if (StringUtil::StartsWith(metric, "PARSER")) {
 				parser_timings[metric] = entry.second.GetValue<double>();
@@ -770,12 +775,6 @@ profiler_metrics_t OperatorInformation::GetMetrics(const ProfilingInfo &info) co
 	}
 	if (info.EnabledForCollection(MetricType::EXTRA_INFO)) {
 		result["EXTRA_INFO"] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
-	}
-	if (info.EnabledForCollection(MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {
-		result["SYSTEM_PEAK_BUFFER_MEMORY"] = Value::UBIGINT(system_peak_buffer_manager_memory);
-	}
-	if (info.EnabledForCollection(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE)) {
-		result["SYSTEM_PEAK_TEMP_DIR_SIZE"] = Value::UBIGINT(system_peak_temp_directory_size);
 	}
 	return result;
 }
@@ -1038,16 +1037,14 @@ void QueryProfiler::FinalizeMetricsInternal() {
 
 	auto &info = *root_info;
 
-	if (info.EnabledForCollection(MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {
-		info.SetMetricValue(MetricType::SYSTEM_PEAK_BUFFER_MEMORY,
-		                    Value::UBIGINT(query_metrics.system_peak_buffer_memory));
+	if (info.EnabledForCollection("system.peak_buffer_memory")) {
+		info.SetMetricValue("system.peak_buffer_memory", Value::UBIGINT(query_metrics.system_peak_buffer_memory));
 	}
-	if (info.EnabledForCollection(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE)) {
-		info.SetMetricValue(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE,
-		                    Value::UBIGINT(query_metrics.system_peak_temp_dir_size));
+	if (info.EnabledForCollection("system.peak_temp_dir_size")) {
+		info.SetMetricValue("system.peak_temp_dir_size", Value::UBIGINT(query_metrics.system_peak_temp_dir_size));
 	}
-	if (info.EnabledForCollection(MetricType::BLOCKED_THREAD_TIME)) {
-		info.SetMetricValue(MetricType::BLOCKED_THREAD_TIME, Value::DOUBLE(query_metrics.blocked_thread_time));
+	if (info.EnabledForCollection("system.blocked_thread_time")) {
+		info.SetMetricValue("system.blocked_thread_time", Value::DOUBLE(query_metrics.blocked_thread_time));
 	}
 
 	if (root) {
@@ -1067,8 +1064,20 @@ void QueryProfiler::FinalizeMetricsInternal() {
 	}
 
 	for (auto &metric : info.GetMetricsMutable()) {
-		if (MetricsUtils::IsOptimizerMetricKey(metric.first)) {
+		if (MetricsUtils::IsOptimizerMetricKey(metric.first) || MetricsUtils::IsPhysicalPlannerMetricKey(metric.first)) {
 			metric.second = Value::DOUBLE(query_metrics.GetStringMetricInSeconds(metric.first));
+			continue;
+		}
+		if (MetricsUtils::IsSystemMetricKey(metric.first)) {
+			if (MetricsUtils::IsSystemTimerKey(metric.first)) {
+				metric.second = Value::DOUBLE(query_metrics.blocked_thread_time);
+			} else if (metric.first == "system.total_memory_allocated") {
+				metric.second = Value::UBIGINT(query_metrics.GetStringCounter("system.total_memory_allocated"));
+			} else if (metric.first == "system.peak_buffer_memory") {
+				metric.second = Value::UBIGINT(query_metrics.system_peak_buffer_memory);
+			} else if (metric.first == "system.peak_temp_dir_size") {
+				metric.second = Value::UBIGINT(query_metrics.system_peak_temp_dir_size);
+			}
 			continue;
 		}
 		if (MetricsUtils::IsStorageMetricKey(metric.first)) {

@@ -1,5 +1,5 @@
 # name: test/sql/pragma/profiling/test_custom_profiling_memory_and_temp_dir.test_slow
-# description: Test SYSTEM_PEAK_BUFFER_MEMORY and SYSTEM_PEAK_TEMP_DIR_SIZE metrics.
+# description: Test system.peak_buffer_memory and system.peak_temp_dir_size metrics.
 # group: [profiling]
 
 require json
@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"SYSTEM_PEAK_BUFFER_MEMORY": "true", "SYSTEM_PEAK_TEMP_DIR_SIZE": "true"}';
+PRAGMA custom_profiling_settings='{"system.peak_buffer_memory": "true", "system.peak_temp_dir_size": "true"}';
 
 statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
@@ -28,9 +28,9 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_ou
 # should both be non-zero, and sum up to ~1 GB
 query III
 SELECT
-    system_peak_buffer_memory != 0,
-    system_peak_temp_dir_size != 0,
-    round((system_peak_buffer_memory + system_peak_temp_dir_size) / 1e9),
+    system.peak_buffer_memory != 0,
+    system.peak_temp_dir_size != 0,
+    round((system.peak_buffer_memory + system.peak_temp_dir_size) / 1e9),
 FROM metrics_output;
 ----
 true	true	1.0
@@ -40,7 +40,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"SYSTEM_PEAK_BUFFER_MEMORY": "false", "SYSTEM_PEAK_TEMP_DIR_SIZE": "false"}';
+PRAGMA custom_profiling_settings='{"system.peak_buffer_memory": "false", "system.peak_temp_dir_size": "false"}';
 
 statement ok
 CREATE OR REPLACE TABLE test AS SELECT hash(range) i FROM range(100_000_000);
@@ -52,11 +52,11 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement error
-SELECT system_peak_buffer_memory FROM metrics_output;
+SELECT system.peak_buffer_memory FROM metrics_output;
 ----
 Binder Error
 
 statement error
-SELECT system_peak_temp_dir_size FROM metrics_output;
+SELECT system.peak_temp_dir_size FROM metrics_output;
 ----
 Binder Error

@@ -48,7 +48,7 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_TYPE));
 		} else {
 			REQUIRE(key_str != EnumUtil::ToString(MetricType::QUERY_NAME));
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::BLOCKED_THREAD_TIME));
+			REQUIRE(key_str != "blocked_thread_time");
 			REQUIRE(key_str != EnumUtil::ToString(MetricType::LATENCY));
 			REQUIRE(key_str != EnumUtil::ToString(MetricType::ROWS_RETURNED));
 		}
@@ -135,7 +135,7 @@ TEST_CASE("Test profiling with cumulative metrics", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
 
 	// test all profiling metrics
-	duckdb::vector<string> settings = {"BLOCKED_THREAD_TIME",  "CPU_TIME",       "CUMULATIVE_CARDINALITY", "EXTRA_INFO",
+	duckdb::vector<string> settings = {"system.blocked_thread_time", "CPU_TIME",       "CUMULATIVE_CARDINALITY", "EXTRA_INFO",
 	                                   "OPERATOR_CARDINALITY", "OPERATOR_TIMING"};
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildSettingsString(settings)));
 	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));

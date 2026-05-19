@@ -38,11 +38,7 @@ enum class MetricType : uint8_t {
 	QUERY_NAME = 0,
 	RESULT_SET_SIZE = 10,
 	ROWS_RETURNED = 12,
-	// Execution metrics
-	BLOCKED_THREAD_TIME = 1,
-	SYSTEM_PEAK_BUFFER_MEMORY = 14,
-	SYSTEM_PEAK_TEMP_DIR_SIZE = 15,
-	TOTAL_MEMORY_ALLOCATED = 91,
+	// (Execution metrics moved to "system.*" string keys)
 	// Operator metrics
 	OPERATOR_CARDINALITY = 6,
 	OPERATOR_NAME = 13,
@@ -53,10 +49,6 @@ enum class MetricType : uint8_t {
 	ALL_OPTIMIZERS = 18,
 	CUMULATIVE_OPTIMIZER_TIMING = 19,
 	PARSER = 99,
-	PHYSICAL_PLANNER = 22,
-	PHYSICAL_PLANNER_COLUMN_BINDING = 23,
-	PHYSICAL_PLANNER_CREATE_PLAN = 25,
-	PHYSICAL_PLANNER_RESOLVE_TYPES = 24,
 	PLANNER = 20,
 	PLANNER_BINDING = 21,
 };
@@ -78,9 +70,12 @@ public:
 	static profiler_settings_t GetDefaultMetrics();
 	static bool IsDefaultMetric(MetricType type);
 
-	// Execution metrics
+	// Execution metrics — stored as "system.<lowercase_name>" strings, not as MetricType values
 	static profiler_settings_t GetExecutionMetrics();
 	static bool IsExecutionMetric(MetricType type);
+	static profiler_settings_t GetSystemMetrics();
+	static bool IsSystemMetricKey(const string &key);
+	static bool IsSystemTimerKey(const string &key);
 
 	// Storage metrics — stored as "storage.<lowercase_name>" strings, not as MetricType values
 	static profiler_settings_t GetStorageMetrics();
@@ -98,6 +93,10 @@ public:
 	// PhaseTiming metrics
 	static profiler_settings_t GetPhaseTimingMetrics();
 	static bool IsPhaseTimingMetric(MetricType type);
+
+	// PhysicalPlanner metrics — stored as "physical_planner.<lowercase_name>" strings
+	static profiler_settings_t GetPhysicalPlannerMetrics();
+	static bool IsPhysicalPlannerMetricKey(const string &key);
 
 	// RootScope metrics
 	static profiler_settings_t GetRootScopeMetrics();

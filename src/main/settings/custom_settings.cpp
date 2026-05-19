@@ -366,6 +366,10 @@ static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const s
 			}
 		} else if (MetricsUtils::IsStorageMetricKey(converted_metric)) {
 			enabled_metrics.insert(converted_metric);
+		} else if (MetricsUtils::IsPhysicalPlannerMetricKey(converted_metric)) {
+			enabled_metrics.insert(converted_metric);
+		} else if (MetricsUtils::IsSystemMetricKey(converted_metric)) {
+			enabled_metrics.insert(converted_metric);
 		} else {
 			insert_if_enabled(EnumUtil::FromString<MetricType>(converted_metric));
 		}
@@ -385,6 +389,24 @@ static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const s
 		if (MetricsUtils::IsStorageMetricKey(metric)) {
 			auto storage_metrics = MetricsUtils::GetStorageMetrics();
 			if (storage_metrics.count(metric)) {
+				enabled_metrics.insert(metric);
+			} else {
+				invalid_settings.push_back(metric);
+			}
+			return;
+		}
+		if (MetricsUtils::IsPhysicalPlannerMetricKey(metric)) {
+			auto physical_planner_metrics = MetricsUtils::GetPhysicalPlannerMetrics();
+			if (physical_planner_metrics.count(metric)) {
+				enabled_metrics.insert(metric);
+			} else {
+				invalid_settings.push_back(metric);
+			}
+			return;
+		}
+		if (MetricsUtils::IsSystemMetricKey(metric)) {
+			auto system_metrics = MetricsUtils::GetSystemMetrics();
+			if (system_metrics.count(metric)) {
 				enabled_metrics.insert(metric);
 			} else {
 				invalid_settings.push_back(metric);

@@ -3314,10 +3314,6 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::QUERY_NAME), "QUERY_NAME" },
 		{ static_cast<uint32_t>(MetricType::RESULT_SET_SIZE), "RESULT_SET_SIZE" },
 		{ static_cast<uint32_t>(MetricType::ROWS_RETURNED), "ROWS_RETURNED" },
-		{ static_cast<uint32_t>(MetricType::BLOCKED_THREAD_TIME), "BLOCKED_THREAD_TIME" },
-		{ static_cast<uint32_t>(MetricType::SYSTEM_PEAK_BUFFER_MEMORY), "SYSTEM_PEAK_BUFFER_MEMORY" },
-		{ static_cast<uint32_t>(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE), "SYSTEM_PEAK_TEMP_DIR_SIZE" },
-		{ static_cast<uint32_t>(MetricType::TOTAL_MEMORY_ALLOCATED), "TOTAL_MEMORY_ALLOCATED" },
 		{ static_cast<uint32_t>(MetricType::OPERATOR_CARDINALITY), "OPERATOR_CARDINALITY" },
 		{ static_cast<uint32_t>(MetricType::OPERATOR_NAME), "OPERATOR_NAME" },
 		{ static_cast<uint32_t>(MetricType::OPERATOR_ROWS_SCANNED), "OPERATOR_ROWS_SCANNED" },
@@ -3326,10 +3322,6 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
 		{ static_cast<uint32_t>(MetricType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
 		{ static_cast<uint32_t>(MetricType::PARSER), "PARSER" },
-		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER), "PHYSICAL_PLANNER" },
-		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER_COLUMN_BINDING), "PHYSICAL_PLANNER_COLUMN_BINDING" },
-		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER_CREATE_PLAN), "PHYSICAL_PLANNER_CREATE_PLAN" },
-		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES), "PHYSICAL_PLANNER_RESOLVE_TYPES" },
 		{ static_cast<uint32_t>(MetricType::PLANNER), "PLANNER" },
 		{ static_cast<uint32_t>(MetricType::PLANNER_BINDING), "PLANNER_BINDING" }
 	};
@@ -3338,12 +3330,12 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricType>(MetricType value) {
-	return StringUtil::EnumToString(GetMetricTypeValues(), 26, "MetricType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricTypeValues(), 18, "MetricType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricType EnumUtil::FromString<MetricType>(const char *value) {
-	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 26, "MetricType", value));
+	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 18, "MetricType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMonotonicityValues() {

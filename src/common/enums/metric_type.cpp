@@ -10,7 +10,6 @@ namespace duckdb {
 profiler_settings_t MetricsUtils::GetAllMetrics() {
 	auto result = profiler_settings_t {
 		"ALL_OPTIMIZERS",
-		"BLOCKED_THREAD_TIME",
 		"CPU_TIME",
 		"CUMULATIVE_CARDINALITY",
 		"CUMULATIVE_OPTIMIZER_TIMING",
@@ -23,18 +22,11 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		"OPERATOR_TIMING",
 		"OPERATOR_TYPE",
 		"PARSER",
-		"PHYSICAL_PLANNER",
-		"PHYSICAL_PLANNER_COLUMN_BINDING",
-		"PHYSICAL_PLANNER_CREATE_PLAN",
-		"PHYSICAL_PLANNER_RESOLVE_TYPES",
 		"PLANNER",
 		"PLANNER_BINDING",
 		"QUERY_NAME",
 		"RESULT_SET_SIZE",
 		"ROWS_RETURNED",
-		"SYSTEM_PEAK_BUFFER_MEMORY",
-		"SYSTEM_PEAK_TEMP_DIR_SIZE",
-		"TOTAL_MEMORY_ALLOCATED",
 	};
 	// Add all optimizer metrics
 	auto optimizer_metrics = GetOptimizerMetrics();
@@ -44,6 +36,16 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 	// Add all storage metrics
 	auto storage_metrics = GetStorageMetrics();
 	for (const auto &m : storage_metrics) {
+		result.insert(m);
+	}
+	// Add all physical planner metrics
+	auto physical_planner_metrics = GetPhysicalPlannerMetrics();
+	for (const auto &m : physical_planner_metrics) {
+		result.insert(m);
+	}
+	// Add all system metrics
+	auto system_metrics = GetSystemMetrics();
+	for (const auto &m : system_metrics) {
 		result.insert(m);
 	}
 	return result;
@@ -103,7 +105,6 @@ bool MetricsUtils::IsCoreMetric(MetricType type) {
 
 profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 	profiler_settings_t result {
-		"BLOCKED_THREAD_TIME",
 		"CPU_TIME",
 		"CUMULATIVE_CARDINALITY",
 		"CUMULATIVE_ROWS_SCANNED",
@@ -117,13 +118,15 @@ profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 		"QUERY_NAME",
 		"RESULT_SET_SIZE",
 		"ROWS_RETURNED",
-		"SYSTEM_PEAK_BUFFER_MEMORY",
-		"SYSTEM_PEAK_TEMP_DIR_SIZE",
-		"TOTAL_MEMORY_ALLOCATED",
 	};
 	// Add all storage metrics (they are in the default set)
 	auto storage_metrics = GetStorageMetrics();
 	for (const auto &m : storage_metrics) {
+		result.insert(m);
+	}
+	// Add all system metrics (they are in the default set)
+	auto system_metrics = GetSystemMetrics();
+	for (const auto &m : system_metrics) {
 		result.insert(m);
 	}
 	return result;
@@ -131,7 +134,6 @@ profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 
 bool MetricsUtils::IsDefaultMetric(MetricType type) {
 	switch(type) {
-	case MetricType::BLOCKED_THREAD_TIME:
 	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_CARDINALITY:
 	case MetricType::CUMULATIVE_ROWS_SCANNED:
@@ -145,34 +147,35 @@ bool MetricsUtils::IsDefaultMetric(MetricType type) {
 	case MetricType::QUERY_NAME:
 	case MetricType::RESULT_SET_SIZE:
 	case MetricType::ROWS_RETURNED:
-	case MetricType::SYSTEM_PEAK_BUFFER_MEMORY:
-	case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE:
-	case MetricType::TOTAL_MEMORY_ALLOCATED:
 		return true;
 	default:
 		return false;
 	}
 }
 
-profiler_settings_t MetricsUtils::GetExecutionMetrics() {
+profiler_settings_t MetricsUtils::GetSystemMetrics() {
 	return {
-		"BLOCKED_THREAD_TIME",
-		"SYSTEM_PEAK_BUFFER_MEMORY",
-		"SYSTEM_PEAK_TEMP_DIR_SIZE",
-		"TOTAL_MEMORY_ALLOCATED",
+		"system.blocked_thread_time",
+		"system.peak_buffer_memory",
+		"system.peak_temp_dir_size",
+		"system.total_memory_allocated",
 	};
 }
 
+bool MetricsUtils::IsSystemMetricKey(const string &key) {
+	return StringUtil::StartsWith(key, "system.");
+}
+
+bool MetricsUtils::IsSystemTimerKey(const string &key) {
+	return key == "system.blocked_thread_time";
+}
+
+profiler_settings_t MetricsUtils::GetExecutionMetrics() {
+	return GetSystemMetrics();
+}
+
 bool MetricsUtils::IsExecutionMetric(MetricType type) {
-	switch(type) {
-	case MetricType::BLOCKED_THREAD_TIME:
-	case MetricType::SYSTEM_PEAK_BUFFER_MEMORY:
-	case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE:
-	case MetricType::TOTAL_MEMORY_ALLOCATED:
-		return true;
-	default:
-		return false;
-	}
+	return false;
 }
 
 profiler_settings_t MetricsUtils::GetStorageMetrics() {
@@ -233,18 +236,32 @@ bool MetricsUtils::IsOptimizerMetricKey(const string &key) {
 	return StringUtil::StartsWith(key, "optimizer.");
 }
 
-profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
+profiler_settings_t MetricsUtils::GetPhysicalPlannerMetrics() {
 	return {
+		"physical_planner.total_time",
+		"physical_planner.column_binding",
+		"physical_planner.create_plan",
+		"physical_planner.resolve_types",
+	};
+}
+
+bool MetricsUtils::IsPhysicalPlannerMetricKey(const string &key) {
+	return StringUtil::StartsWith(key, "physical_planner.");
+}
+
+profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
+	profiler_settings_t result {
 		"ALL_OPTIMIZERS",
 		"CUMULATIVE_OPTIMIZER_TIMING",
 		"PARSER",
-		"PHYSICAL_PLANNER",
-		"PHYSICAL_PLANNER_COLUMN_BINDING",
-		"PHYSICAL_PLANNER_CREATE_PLAN",
-		"PHYSICAL_PLANNER_RESOLVE_TYPES",
 		"PLANNER",
 		"PLANNER_BINDING",
 	};
+	auto physical_planner_metrics = GetPhysicalPlannerMetrics();
+	for (const auto &m : physical_planner_metrics) {
+		result.insert(m);
+	}
+	return result;
 }
 
 bool MetricsUtils::IsPhaseTimingMetric(MetricType type) {
@@ -252,10 +269,6 @@ bool MetricsUtils::IsPhaseTimingMetric(MetricType type) {
 	case MetricType::ALL_OPTIMIZERS:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 	case MetricType::PARSER:
-	case MetricType::PHYSICAL_PLANNER:
-	case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
-	case MetricType::PHYSICAL_PLANNER_CREATE_PLAN:
-	case MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES:
 	case MetricType::PLANNER:
 	case MetricType::PLANNER_BINDING:
 		return true;
@@ -267,18 +280,12 @@ bool MetricsUtils::IsPhaseTimingMetric(MetricType type) {
 profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 	auto result = profiler_settings_t {
 		"ALL_OPTIMIZERS",
-		"BLOCKED_THREAD_TIME",
 		"CUMULATIVE_OPTIMIZER_TIMING",
 		"LATENCY",
-		"PHYSICAL_PLANNER",
-		"PHYSICAL_PLANNER_COLUMN_BINDING",
-		"PHYSICAL_PLANNER_CREATE_PLAN",
-		"PHYSICAL_PLANNER_RESOLVE_TYPES",
 		"PLANNER",
 		"PLANNER_BINDING",
 		"QUERY_NAME",
 		"ROWS_RETURNED",
-		"TOTAL_MEMORY_ALLOCATED",
 	};
 	// Add all optimizer metrics (they are root-scope only)
 	auto optimizer_metrics = GetOptimizerMetrics();
@@ -290,24 +297,28 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 	for (const auto &m : storage_metrics) {
 		result.insert(m);
 	}
+	// Add all physical planner metrics (they are root-scope only)
+	auto physical_planner_metrics = GetPhysicalPlannerMetrics();
+	for (const auto &m : physical_planner_metrics) {
+		result.insert(m);
+	}
+	// Add all system metrics (they are root-scope only)
+	auto system_metrics = GetSystemMetrics();
+	for (const auto &m : system_metrics) {
+		result.insert(m);
+	}
 	return result;
 }
 
 bool MetricsUtils::IsRootScopeMetric(MetricType type) {
 	switch(type) {
 	case MetricType::ALL_OPTIMIZERS:
-	case MetricType::BLOCKED_THREAD_TIME:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 	case MetricType::LATENCY:
-	case MetricType::PHYSICAL_PLANNER:
-	case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
-	case MetricType::PHYSICAL_PLANNER_CREATE_PLAN:
-	case MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES:
 	case MetricType::PLANNER:
 	case MetricType::PLANNER_BINDING:
 	case MetricType::QUERY_NAME:
 	case MetricType::ROWS_RETURNED:
-	case MetricType::TOTAL_MEMORY_ALLOCATED:
 		return true;
 	default:
 		return false;

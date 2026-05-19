@@ -48,7 +48,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "BLOCKED_THREAD_TIME": "true"}';
+PRAGMA custom_profiling_settings='{"CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "system.blocked_thread_time": "true"}';
 
 statement ok
 SELECT * FROM integers i1, integers i2 WHERE i1.i = i2.i ORDER BY 1;

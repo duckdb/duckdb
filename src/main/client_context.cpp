@@ -485,7 +485,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 
 	// Convert the logical query plan into a physical query plan.
 	{
-		auto physical_timer = profiler.StartTimer(MetricType::PHYSICAL_PLANNER);
+		auto physical_timer = profiler.StartTimer("physical_planner.total_time");
 		PhysicalPlanGenerator physical_planner(*this);
 		result->physical_plan = physical_planner.Plan(std::move(logical_plan));
 	}

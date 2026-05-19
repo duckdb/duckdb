@@ -134,7 +134,6 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-BLOCKED_THREAD_TIME
 CPU_TIME
 CUMULATIVE_CARDINALITY
 CUMULATIVE_ROWS_SCANNED
@@ -148,9 +147,6 @@ OPERATOR_TYPE
 QUERY_NAME
 RESULT_SET_SIZE
 ROWS_RETURNED
-SYSTEM_PEAK_BUFFER_MEMORY
-SYSTEM_PEAK_TEMP_DIR_SIZE
-TOTAL_MEMORY_ALLOCATED
 storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
@@ -160,6 +156,10 @@ storage.total_bytes_written
 storage.waiting_to_attach_latency
 storage.wal_replay_entry_count
 storage.write_to_wal_latency
+system.blocked_thread_time
+system.peak_buffer_memory
+system.peak_temp_dir_size
+system.total_memory_allocated
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';

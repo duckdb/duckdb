@@ -19,7 +19,8 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 		settings.insert("OPERATOR_TYPE");
 	}
 	for (const auto &metric : settings) {
-		if (MetricsUtils::IsOptimizerMetricKey(metric) || MetricsUtils::IsStorageMetricKey(metric)) {
+		if (MetricsUtils::IsOptimizerMetricKey(metric) || MetricsUtils::IsStorageMetricKey(metric) ||
+		    MetricsUtils::IsPhysicalPlannerMetricKey(metric) || MetricsUtils::IsSystemMetricKey(metric)) {
 			expanded_settings.insert(metric);
 			continue;
 		}
@@ -44,8 +45,16 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 void ProfilingInfo::ResetMetrics() {
 	metrics.clear();
 	for (const auto &metric : expanded_settings) {
-		if (MetricsUtils::IsOptimizerMetricKey(metric)) {
+		if (MetricsUtils::IsOptimizerMetricKey(metric) || MetricsUtils::IsPhysicalPlannerMetricKey(metric)) {
 			metrics[metric] = Value::CreateValue(0.0);
+			continue;
+		}
+		if (MetricsUtils::IsSystemMetricKey(metric)) {
+			if (MetricsUtils::IsSystemTimerKey(metric)) {
+				metrics[metric] = Value::CreateValue(0.0);
+			} else {
+				metrics[metric] = Value::CreateValue<uint64_t>(0);
+			}
 			continue;
 		}
 		if (MetricsUtils::IsStorageMetricKey(metric)) {
@@ -71,6 +80,10 @@ bool ProfilingInfo::Enabled(const MetricType metric) const {
 
 bool ProfilingInfo::EnabledForCollection(const MetricType metric) const {
 	return expanded_settings.find(EnumUtil::ToString(metric)) != expanded_settings.end();
+}
+
+bool ProfilingInfo::EnabledForCollection(const string &key) const {
+	return expanded_settings.find(key) != expanded_settings.end();
 }
 
 void ProfilingInfo::Expand(profiler_settings_t &settings, const MetricType metric) {
@@ -101,6 +114,10 @@ void ProfilingInfo::Expand(profiler_settings_t &settings, const MetricType metri
 
 void ProfilingInfo::SetMetricValue(MetricType type, Value new_value) {
 	metrics[EnumUtil::ToString(type)] = std::move(new_value);
+}
+
+void ProfilingInfo::SetMetricValue(const string &key, Value new_value) {
+	metrics[key] = std::move(new_value);
 }
 
 void ProfilingInfo::WriteMetricsToLog(ClientContext &context) const {
