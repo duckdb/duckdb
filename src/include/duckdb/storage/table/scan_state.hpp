@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
@@ -326,6 +327,7 @@ private:
 
 struct ParallelCollectionScanState {
 	ParallelCollectionScanState();
+	void AssignRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group);
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(RowGroupSegmentTree &row_groups) const;
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(RowGroupSegmentTree &row_groups,
 	                                                    SegmentNode<RowGroup> &row_group) const;
@@ -343,6 +345,13 @@ struct ParallelCollectionScanState {
 
 	//! Optional state for custom row group ordering
 	unique_ptr<RowGroupReorderer> reorderer;
+	//! Subset of partition indices to scan, if null, scan all
+	optional_ptr<const unordered_set<idx_t>> partitions_to_scan;
+
+	//! Whether this row group should be scanned
+	bool ShouldScanPartition(SegmentNode<RowGroup> &row_group) const {
+		return !partitions_to_scan || partitions_to_scan->count(row_group.GetIndex()) > 0;
+	}
 };
 
 struct ParallelTableScanState {

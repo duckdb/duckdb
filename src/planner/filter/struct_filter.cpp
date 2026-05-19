@@ -7,32 +7,12 @@
 
 namespace duckdb {
 
-StructFilter::StructFilter(idx_t child_idx_p, string child_name_p, unique_ptr<TableFilter> child_filter_p)
-    : TableFilter(TableFilterType::STRUCT_EXTRACT), child_idx(child_idx_p), child_name(std::move(child_name_p)),
+LegacyStructFilter::LegacyStructFilter(idx_t child_idx_p, string child_name_p, unique_ptr<TableFilter> child_filter_p)
+    : TableFilter(TableFilterType::LEGACY_STRUCT_EXTRACT), child_idx(child_idx_p), child_name(std::move(child_name_p)),
       child_filter(std::move(child_filter_p)) {
 }
 
-FilterPropagateResult StructFilter::CheckStatistics(BaseStatistics &stats) const {
-	throw InternalException("StructFilter::CheckStatistics should not be called: StructFilters should be converted "
-	                        "to ExpressionFilters before statistics checking");
-}
-
-string StructFilter::ToString(const string &column_name) const {
-	throw InternalException("StructFilter::ToString should not be called: StructFilters should be converted to "
-	                        "ExpressionFilters before rendering");
-}
-
-bool StructFilter::Equals(const TableFilter &other_p) const {
-	throw InternalException("StructFilter::Equals should not be called: StructFilters should be converted to "
-	                        "ExpressionFilters before equality checking");
-}
-
-unique_ptr<TableFilter> StructFilter::Copy() const {
-	throw InternalException("StructFilter::Copy should not be called: StructFilters should be converted to "
-	                        "ExpressionFilters before copying");
-}
-
-unique_ptr<Expression> StructFilter::ToExpression(const Expression &column) const {
+unique_ptr<Expression> LegacyStructFilter::ToExpression(const Expression &column) const {
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(column.Copy());
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_idx + 1))));

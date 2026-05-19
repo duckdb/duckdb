@@ -1061,7 +1061,9 @@
       "LOGICAL_ATTACH",
       "LOGICAL_TRANSACTION",
       "LOGICAL_DROP",
-      "LOGICAL_DETACH"
+      "LOGICAL_DETACH",
+      "LOGICAL_CONNECT",
+      "LOGICAL_DISCONNECT"
     ],
     "members": [
       {

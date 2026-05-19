@@ -4,9 +4,8 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 #include "duckdb/planner/expression/list.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 
 namespace duckdb {
 
@@ -229,33 +228,13 @@ idx_t ExpressionHeuristics::Cost(const Expression &expr) {
 }
 
 idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
-	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
-		auto &expr_filter = filter.Cast<ExpressionFilter>();
-		return Cost(*expr_filter.expr);
-	}
-	switch (filter.filter_type) {
-	case TableFilterType::DYNAMIC_FILTER:
-	case TableFilterType::OPTIONAL_FILTER:
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ExpressionHeuristics::Cost");
+	auto &expr = *expr_filter.expr;
+	if (ExpressionFilter::ContainsInternalFunction(expr, DynamicFilterScalarFun::NAME) ||
+	    ExpressionFilter::IsOptionalExpression(expr)) {
 		return 0;
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction_and = filter.Cast<ConjunctionOrFilter>();
-		idx_t cost = 5;
-		for (auto &child_filter : conjunction_and.child_filters) {
-			cost += Cost(*child_filter);
-		}
-		return cost;
 	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
-		idx_t cost = 5;
-		for (auto &child_filter : conjunction_and.child_filters) {
-			cost += Cost(*child_filter);
-		}
-		return cost;
-	}
-	default:
-		return 1000;
-	}
+	return Cost(expr);
 }
 
 vector<idx_t> ExpressionHeuristics::GetInitialOrder(const TableFilterSet &table_filters) {

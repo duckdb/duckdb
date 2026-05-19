@@ -36,10 +36,8 @@ void ValidityColumnData::UpdateWithBase(TransactionData transaction, DuckTableEn
 	               row_group_start);
 }
 
-void ValidityColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
-                                    idx_t count) {
-	lock_guard<mutex> l(stats_lock);
-	ColumnData::AppendData(stats, state, vdata, count);
+void ValidityColumnData::AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
+	ColumnData::AppendData(state, vdata, count);
 }
 
 struct ValidityColumnCheckpointState : public ColumnCheckpointState {

@@ -29,7 +29,7 @@ public:
 	//! The aggregate values
 	vector<unsafe_unique_array<data_t>> aggregate_data;
 	//! The bind data
-	vector<optional_ptr<FunctionData>> bind_data;
+	vector<unique_ptr<FunctionData>> bind_data;
 	//! The destructors
 	vector<aggregate_destructor_t> destructors;
 	//! Counts (used for verification)
@@ -68,6 +68,8 @@ public:
 	ArenaAllocator &allocator;
 	//! The local aggregate state
 	UngroupedAggregateState state;
+	//! Reusable flat state-pointer vector for generic update callbacks
+	Vector repeated_state_vector;
 
 public:
 	void Sink(DataChunk &payload_chunk, idx_t payload_idx, idx_t aggr_idx);

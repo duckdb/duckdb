@@ -6,6 +6,12 @@ require no_alternative_verify
 
 load {TEST_DIR}/nullif_map_issue.db
 
+# Because we adaptively increment transient buffer sizes, we can fit both appends (default and smaller block size)
+# in the in-memory local storage despite the tight memory constraint of the test.
+# When going to disk, the base table has a size of 32768 bytes (2 blocks).
+
+# First try with the default block size.
+
 statement ok
 SET default_block_size = 262144;
 
@@ -27,10 +33,8 @@ CREATE TABLE tbl(map MAP(VARCHAR, VARCHAR));
 statement ok
 INSERT INTO tbl VALUES(MAP([], []));
 
-statement error
+statement ok
 INSERT INTO tbl VALUES(MAP(['key1', 'key2'], ['🦆🦆🦆🦆🦆🦆', 'goose']));
-----
-TransactionContext Error: Failed to commit: could not allocate block
 
 statement ok
 USE nullif_map_issue;
@@ -39,8 +43,6 @@ statement ok
 DETACH issue5232;
 
 # Now try with 16kB blocks.
-# The base table has a size of 32768 bytes (2 blocks): 32kB < 1234kB,
-# so we expect the test to succeed.
 
 restart
 

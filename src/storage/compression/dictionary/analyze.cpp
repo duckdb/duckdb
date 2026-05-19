@@ -2,8 +2,8 @@
 
 namespace duckdb {
 
-DictionaryAnalyzeState::DictionaryAnalyzeState(const CompressionInfo &info)
-    : DictionaryCompressionState(info), segment_count(0), current_tuple_count(0), current_unique_count(0),
+DictionaryAnalyzeState::DictionaryAnalyzeState(BlockManager &block_manager)
+    : AnalyzeState(block_manager), segment_count(0), current_tuple_count(0), current_unique_count(0),
       current_dict_size(0), current_width(0), next_width(0) {
 }
 

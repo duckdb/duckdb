@@ -136,7 +136,7 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	duckdb::unique_ptr<char[]> buffer;
 	int32_t buffer_size = 0;
-	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
 		// create a sort key from the string
 		const auto string_size = idx_t(ICUGetSortKey(collator, input, buffer, buffer_size));
 		// convert the sort key to hexadecimal

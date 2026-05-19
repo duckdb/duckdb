@@ -64,9 +64,11 @@ void CompressedMaterialization::UpdateBindingInfo(CompressedMaterializationInfo 
 
 	auto &binding_info = binding_it->second;
 	binding_info.needs_decompression = needs_decompression;
-	auto stats_it = statistics_map.find(binding);
-	if (stats_it != statistics_map.end()) {
-		binding_info.stats = statistics_map[binding]->ToUnique();
+	if (!binding_info.stats) {
+		auto stats_it = statistics_map.find(binding);
+		if (stats_it != statistics_map.end() && stats_it->second) {
+			binding_info.stats = stats_it->second->ToUnique();
+		}
 	}
 }
 
@@ -432,10 +434,9 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 		// We don't have enough stats to do anything
 		return nullptr;
 	}
-
 	auto compress_stats = BaseStatistics::CreateEmpty(cast_type);
 	compress_stats.CopyBase(stats);
-	if (cast_type.id() == LogicalTypeId::USMALLINT) {
+	if (cast_type.id() == LogicalTypeId::USMALLINT && StringStats::HasMinMax(stats)) {
 		auto min_string = StringStats::Min(stats);
 		auto max_string = StringStats::Max(stats);
 

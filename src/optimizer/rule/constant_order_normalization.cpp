@@ -6,6 +6,10 @@
 
 namespace duckdb {
 
+static bool MultiplicationConstantBelongsAtEnd(const BoundFunctionExpression &expr) {
+	return expr.function.GetName() == "*";
+}
+
 class RecursiveFunctionExpressionMatcher : public ExpressionMatcher {
 public:
 	explicit RecursiveFunctionExpressionMatcher(vector<unique_ptr<FunctionExpressionMatcher>> func_matchers)
@@ -80,6 +84,7 @@ unique_ptr<Expression> ConstantOrderNormalizationRule::Apply(LogicalOperator &op
                                                              vector<reference<Expression>> &bindings,
                                                              bool &changes_made, bool is_root) {
 	auto &root = bindings.back().get().Cast<BoundFunctionExpression>();
+	const auto expression_count = bindings.size() - 1;
 
 	// Put all constant expressions in front.
 	vector<reference<Expression>> ordered_bindings;
@@ -94,10 +99,25 @@ unique_ptr<Expression> ConstantOrderNormalizationRule::Apply(LogicalOperator &op
 		}
 	}
 
-	if (ordered_bindings.size() <= 1 || last_constant_position == ordered_bindings.size() - 1) {
+	if (ordered_bindings.empty()) {
 		return nullptr;
 	}
-	ordered_bindings.insert(ordered_bindings.end(), remain_bindings.begin(), remain_bindings.end());
+
+	if (ordered_bindings.size() == 1) {
+		// Multiplication trees can lose their folded constant subtree in the bottom-up rewriter
+		// (e.g. 1 * 2 * x -> 2 * x). Normalize that remaining binary form to x * 2 so it
+		// matches the shape produced by the other multiplication variants.
+		if (!MultiplicationConstantBelongsAtEnd(root) || last_constant_position == expression_count - 1) {
+			return nullptr;
+		}
+		remain_bindings.push_back(ordered_bindings[0]);
+		ordered_bindings = std::move(remain_bindings);
+	} else {
+		if (last_constant_position == ordered_bindings.size() - 1) {
+			return nullptr;
+		}
+		ordered_bindings.insert(ordered_bindings.end(), remain_bindings.begin(), remain_bindings.end());
+	}
 
 	// Reconstruct the expression.
 	FunctionBinder binder(rewriter.context);

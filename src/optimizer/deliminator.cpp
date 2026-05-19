@@ -119,11 +119,7 @@ bool Deliminator::HasSelection(const LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
 		for (const auto &entry : get.table_filters) {
-			auto &filter = entry.Filter();
-			if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-				return true;
-			}
-			auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "Deliminator::HasSelection");
+			auto &expr_filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "Deliminator::HasSelection");
 			auto &expr = *expr_filter.expr;
 			if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR ||
 			    expr.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) {

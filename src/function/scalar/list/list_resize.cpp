@@ -15,8 +15,8 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		return;
 	}
 
-	auto &lists = args.data[0];
-	auto &new_sizes = args.data[1];
+	const auto &lists = args.data[0];
+	const auto &new_sizes = args.data[1];
 	auto row_count = args.size();
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	D_ASSERT(new_sizes.GetType().id() == LogicalTypeId::UBIGINT);
@@ -73,7 +73,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 			for (idx_t j = 0; j < remaining_count.GetValue(); j++) {
 				sel.set_index(j, row_idx);
 			}
-			auto &default_vector = args.data[2];
+			const auto &default_vector = args.data[2];
 			list.Append(default_vector, sel, args.size(), 0, remaining_count.GetValue());
 			continue;
 		}
