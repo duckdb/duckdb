@@ -452,7 +452,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	// note that we only hash the keys used in the equality comparison
 	Hash(keys, *current_sel, added_count, hash_values);
 	if (bloom_filter.IsInitialized()) {
-		bloom_filter.InsertHashes(hash_values, added_count);
+		bloom_filter.InsertHashes(hash_values);
 	}
 
 	// Re-reference and ToUnifiedFormat the hash column after computing it

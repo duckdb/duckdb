@@ -187,8 +187,8 @@ static FilterPropagateResult CheckZonemapAgainstConstants(const BaseStatistics &
 	}
 }
 
-static optional_ptr<BaseStatistics> TryGetFilterStats(const Expression &expr, BaseStatistics &stats,
-                                                      vector<unique_ptr<BaseStatistics>> &owned_stats) {
+static optional_ptr<const BaseStatistics> TryGetFilterStats(const Expression &expr, const BaseStatistics &stats,
+                                                            vector<unique_ptr<BaseStatistics>> &owned_stats) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_REF:
 		return &stats;
@@ -230,7 +230,7 @@ static optional_ptr<BaseStatistics> TryGetFilterStats(const Expression &expr, Ba
 static FilterPropagateResult CheckComparisonStatistics(const BoundFunctionExpression &comp_expr,
                                                        const BaseStatistics &stats) {
 	vector<unique_ptr<BaseStatistics>> owned_stats;
-	optional_ptr<BaseStatistics> filter_stats;
+	optional_ptr<const BaseStatistics> filter_stats;
 	optional_ptr<const BoundConstantExpression> constant_expr;
 	auto comparison_type = comp_expr.GetExpressionType();
 	auto &left = BoundComparisonExpression::Left(comp_expr);
