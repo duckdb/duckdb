@@ -52,19 +52,22 @@
 				"id": 200,
 				"name": "input",
 				"type": "ParsedExpression*",
-				"iterate_via": "InputMutable()"
+				"accessor_mut": "InputMutable()",
+				"accessor": "Input()"
 			},
 			{
 				"id": 201,
 				"name": "lower",
 				"type": "ParsedExpression*",
-				"iterate_via": "LowerBoundMutable()"
+				"accessor_mut": "LowerBoundMutable()",
+				"accessor": "LowerBound()"
 			},
 			{
 				"id": 202,
 				"name": "upper",
 				"type": "ParsedExpression*",
-				"iterate_via": "UpperBoundMutable()"
+				"accessor_mut": "UpperBoundMutable()",
+				"accessor": "UpperBound()"
 			}
 		]
 	},
@@ -599,7 +602,7 @@
 				"id": 203,
 				"name": "children",
 				"type": "vector<unique_ptr<ParsedExpression>>",
-				"iterate_via": "GetChildren()"
+				"accessor_mut": "GetChildren()"
 			}
 		]
 	}

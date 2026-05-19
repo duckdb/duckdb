@@ -39,10 +39,294 @@ hash_t ParsedExpression::Hash() const {
 	return hash;
 }
 
-ChildrenView ParsedExpression::Children() {
+ConstChildrenView ParsedExpression::Children() const {
+	ConstChildrenView result;
+	switch (GetExpressionClass()) {
+	case ExpressionClass::BETWEEN: {
+		auto &cast_expr = Cast<BetweenExpression>();
+		result.Append(cast_expr.Input());
+		result.Append(cast_expr.LowerBound());
+		result.Append(cast_expr.UpperBound());
+		break;
+	}
+	case ExpressionClass::CASE: {
+		auto &cast_expr = Cast<CaseExpression>();
+		for (auto &check : cast_expr.case_checks) {
+			result.Append(*check.when_expr);
+			result.Append(*check.then_expr);
+		}
+		if (cast_expr.else_expr) {
+			result.Append(*cast_expr.else_expr);
+		}
+		break;
+	}
+	case ExpressionClass::CAST: {
+		auto &cast_expr = Cast<CastExpression>();
+		if (cast_expr.child) {
+			result.Append(*cast_expr.child);
+		}
+		break;
+	}
+	case ExpressionClass::COLLATE: {
+		auto &cast_expr = Cast<CollateExpression>();
+		if (cast_expr.child) {
+			result.Append(*cast_expr.child);
+		}
+		break;
+	}
+	case ExpressionClass::COMPARISON: {
+		auto &cast_expr = Cast<ComparisonExpression>();
+		if (cast_expr.left) {
+			result.Append(*cast_expr.left);
+		}
+		if (cast_expr.right) {
+			result.Append(*cast_expr.right);
+		}
+		break;
+	}
+	case ExpressionClass::CONJUNCTION: {
+		auto &cast_expr = Cast<ConjunctionExpression>();
+		for (auto &child : cast_expr.children) {
+			result.Append(*child);
+		}
+		break;
+	}
+	case ExpressionClass::FUNCTION: {
+		auto &cast_expr = Cast<FunctionExpression>();
+		for (auto &child : cast_expr.children) {
+			result.Append(*child);
+		}
+		if (cast_expr.filter) {
+			result.Append(*cast_expr.filter);
+		}
+		if (cast_expr.order_bys) {
+			for (auto &order : cast_expr.order_bys->orders) {
+				result.Append(*order.expression);
+			}
+		}
+		break;
+	}
+	case ExpressionClass::LAMBDA: {
+		auto &cast_expr = Cast<LambdaExpression>();
+		if (cast_expr.lhs) {
+			result.Append(*cast_expr.lhs);
+		}
+		if (cast_expr.expr) {
+			result.Append(*cast_expr.expr);
+		}
+		break;
+	}
+	case ExpressionClass::OPERATOR: {
+		auto &cast_expr = Cast<OperatorExpression>();
+		for (auto &child : cast_expr.children) {
+			result.Append(*child);
+		}
+		break;
+	}
+	case ExpressionClass::STAR: {
+		auto &cast_expr = Cast<StarExpression>();
+		for (auto &item : cast_expr.replace_list) {
+			result.Append(*item.second);
+		}
+		if (cast_expr.expr) {
+			result.Append(*cast_expr.expr);
+		}
+		break;
+	}
+	case ExpressionClass::SUBQUERY: {
+		auto &cast_expr = Cast<SubqueryExpression>();
+		if (cast_expr.child) {
+			result.Append(*cast_expr.child);
+		}
+		break;
+	}
+	case ExpressionClass::WINDOW: {
+		auto &cast_expr = Cast<WindowExpression>();
+		for (auto &child : cast_expr.children) {
+			result.Append(*child);
+		}
+		for (auto &child : cast_expr.partitions) {
+			result.Append(*child);
+		}
+		for (auto &order : cast_expr.orders) {
+			result.Append(*order.expression);
+		}
+		if (cast_expr.start_expr) {
+			result.Append(*cast_expr.start_expr);
+		}
+		if (cast_expr.end_expr) {
+			result.Append(*cast_expr.end_expr);
+		}
+		if (cast_expr.filter_expr) {
+			result.Append(*cast_expr.filter_expr);
+		}
+		for (auto &order : cast_expr.arg_orders) {
+			result.Append(*order.expression);
+		}
+		break;
+	}
+	case ExpressionClass::TYPE: {
+		auto &cast_expr = Cast<TypeExpression>();
+		for (auto &child : cast_expr.GetChildren()) {
+			result.Append(*child);
+		}
+		break;
+	}
+	case ExpressionClass::BOUND_EXPRESSION:
+	case ExpressionClass::COLUMN_REF:
+	case ExpressionClass::LAMBDA_REF:
+	case ExpressionClass::CONSTANT:
+	case ExpressionClass::DEFAULT:
+	case ExpressionClass::PARAMETER:
+	case ExpressionClass::POSITIONAL_REFERENCE:
+		// these node types have no children
+		break;
+	default:
+		throw NotImplementedException("Unimplemented expression class");
+	}
+	return result;
+}
+
+ChildrenView ParsedExpression::ChildrenMutable() {
 	ChildrenView result;
 	switch (GetExpressionClass()) {
+	case ExpressionClass::BETWEEN: {
+		auto &cast_expr = Cast<BetweenExpression>();
+		result.Append(cast_expr.InputMutable());
+		result.Append(cast_expr.LowerBoundMutable());
+		result.Append(cast_expr.UpperBoundMutable());
+		break;
+	}
+	case ExpressionClass::CASE: {
+		auto &cast_expr = Cast<CaseExpression>();
+		for (auto &check : cast_expr.case_checks) {
+			result.Append(check.when_expr);
+			result.Append(check.then_expr);
+		}
+		if (cast_expr.else_expr) {
+			result.Append(cast_expr.else_expr);
+		}
+		break;
+	}
+	case ExpressionClass::CAST: {
+		auto &cast_expr = Cast<CastExpression>();
+		if (cast_expr.child) {
+			result.Append(cast_expr.child);
+		}
+		break;
+	}
+	case ExpressionClass::COLLATE: {
+		auto &cast_expr = Cast<CollateExpression>();
+		if (cast_expr.child) {
+			result.Append(cast_expr.child);
+		}
+		break;
+	}
+	case ExpressionClass::COMPARISON: {
+		auto &cast_expr = Cast<ComparisonExpression>();
+		if (cast_expr.left) {
+			result.Append(cast_expr.left);
+		}
+		if (cast_expr.right) {
+			result.Append(cast_expr.right);
+		}
+		break;
+	}
+	case ExpressionClass::CONJUNCTION: {
+		auto &cast_expr = Cast<ConjunctionExpression>();
+		for (auto &child : cast_expr.children) {
+			result.Append(child);
+		}
+		break;
+	}
+	case ExpressionClass::FUNCTION: {
+		auto &cast_expr = Cast<FunctionExpression>();
+		for (auto &child : cast_expr.children) {
+			result.Append(child);
+		}
+		if (cast_expr.filter) {
+			result.Append(cast_expr.filter);
+		}
+		if (cast_expr.order_bys) {
+			for (auto &order : cast_expr.order_bys->orders) {
+				result.Append(order.expression);
+			}
+		}
+		break;
+	}
+	case ExpressionClass::LAMBDA: {
+		auto &cast_expr = Cast<LambdaExpression>();
+		if (cast_expr.lhs) {
+			result.Append(cast_expr.lhs);
+		}
+		if (cast_expr.expr) {
+			result.Append(cast_expr.expr);
+		}
+		break;
+	}
+	case ExpressionClass::OPERATOR: {
+		auto &cast_expr = Cast<OperatorExpression>();
+		for (auto &child : cast_expr.children) {
+			result.Append(child);
+		}
+		break;
+	}
+	case ExpressionClass::STAR: {
+		auto &cast_expr = Cast<StarExpression>();
+		for (auto &item : cast_expr.replace_list) {
+			result.Append(item.second);
+		}
+		if (cast_expr.expr) {
+			result.Append(cast_expr.expr);
+		}
+		break;
+	}
+	case ExpressionClass::SUBQUERY: {
+		auto &cast_expr = Cast<SubqueryExpression>();
+		if (cast_expr.child) {
+			result.Append(cast_expr.child);
+		}
+		break;
+	}
+	case ExpressionClass::WINDOW: {
+		auto &cast_expr = Cast<WindowExpression>();
+		for (auto &child : cast_expr.children) {
+			result.Append(child);
+		}
+		for (auto &child : cast_expr.partitions) {
+			result.Append(child);
+		}
+		for (auto &order : cast_expr.orders) {
+			result.Append(order.expression);
+		}
+		if (cast_expr.start_expr) {
+			result.Append(cast_expr.start_expr);
+		}
+		if (cast_expr.end_expr) {
+			result.Append(cast_expr.end_expr);
+		}
+		if (cast_expr.filter_expr) {
+			result.Append(cast_expr.filter_expr);
+		}
+		for (auto &order : cast_expr.arg_orders) {
+			result.Append(order.expression);
+		}
+		break;
+	}
+	case ExpressionClass::TYPE: {
+		auto &cast_expr = Cast<TypeExpression>();
+		for (auto &child : cast_expr.GetChildren()) {
+			result.Append(child);
+		}
+		break;
+	}
 	case ExpressionClass::BOUND_EXPRESSION:
+	case ExpressionClass::COLUMN_REF:
+	case ExpressionClass::LAMBDA_REF:
+	case ExpressionClass::CONSTANT:
+	case ExpressionClass::DEFAULT:
+	case ExpressionClass::PARAMETER:
+	case ExpressionClass::POSITIONAL_REFERENCE:
 		// these node types have no children
 		break;
 	default:

@@ -15,10 +15,9 @@ namespace duckdb {
 
 void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expression,
                                                   const std::function<void(const ParsedExpression &child)> &callback) {
-	EnumerateChildren((ParsedExpression &)expression, [&](unique_ptr<ParsedExpression> &child) {
-		D_ASSERT(child);
-		callback(*child);
-	});
+	for (const auto &child : expression.Children()) {
+		callback(child);
+	}
 }
 
 void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,
@@ -31,7 +30,7 @@ void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,
 
 void ParsedExpressionIterator::EnumerateChildren(
     ParsedExpression &expr, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
-	for (auto &child : expr.Children()) {
+	for (auto &child : expr.ChildrenMutable()) {
 		callback(child);
 	}
 }

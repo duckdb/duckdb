@@ -308,8 +308,9 @@ supported_member_entries = [
     # equality/hash generation annotations (used by generate_util.py)
     'equals_skip',
     'hash_skip',
-    # iterator generation annotation (used by generate_util.py)
-    'iterate_via',
+    # accessor annotations (used by generate_util.py for Children/ChildrenMutable generation)
+    'accessor_mut',
+    'accessor',
 ]
 
 

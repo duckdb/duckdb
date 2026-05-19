@@ -474,7 +474,7 @@ def generate_member_children_appends(member, expr_var):
     field = get_member_field_name(member)
     type_str = member['type']
 
-    iterate_via = member.get('iterate_via')
+    iterate_via = member.get('accessor_mut')
     if iterate_via:
         access = f'{expr_var}.{iterate_via}'
         if is_parsed_expression_ptr(type_str):
@@ -531,36 +531,90 @@ def generate_member_children_appends(member, expr_var):
     return []
 
 
-def generate_base_children(entries):
-    lines = [
-        'ChildrenView ParsedExpression::Children() {',
-        '\tChildrenView result;',
-        '\tswitch (GetExpressionClass()) {',
-    ]
+def generate_member_const_children_appends(member, expr_var):
+    field = get_member_field_name(member)
+    type_str = member['type']
 
+    const_via = member.get('accessor') or member.get('accessor_mut')
+    if const_via:
+        access = f'{expr_var}.{const_via}'
+        if is_parsed_expression_ptr(type_str):
+            # const accessor returns const ParsedExpression& directly
+            return [f'\t\tresult.Append({access});']
+        if is_parsed_expression_list(type_str):
+            return [
+                f'\t\tfor (auto &child : {access}) {{',
+                f'\t\t\tresult.Append(*child);',
+                f'\t\t}}',
+            ]
+        return []
+
+    access = f'{expr_var}.{field}'
+
+    if is_parsed_expression_ptr(type_str):
+        return [
+            f'\t\tif ({access}) {{',
+            f'\t\t\tresult.Append(*{access});',
+            f'\t\t}}',
+        ]
+    if is_parsed_expression_list(type_str):
+        return [
+            f'\t\tfor (auto &child : {access}) {{',
+            f'\t\t\tresult.Append(*child);',
+            f'\t\t}}',
+        ]
+    if type_str == 'vector<CaseCheck>':
+        return [
+            f'\t\tfor (auto &check : {access}) {{',
+            f'\t\t\tresult.Append(*check.when_expr);',
+            f'\t\t\tresult.Append(*check.then_expr);',
+            f'\t\t}}',
+        ]
+    if type_str == 'vector<OrderByNode>':
+        return [
+            f'\t\tfor (auto &order : {access}) {{',
+            f'\t\t\tresult.Append(*order.expression);',
+            f'\t\t}}',
+        ]
+    if is_expression_map(type_str):
+        return [
+            f'\t\tfor (auto &item : {access}) {{',
+            f'\t\t\tresult.Append(*item.second);',
+            f'\t\t}}',
+        ]
+    if is_order_modifier_ptr(type_str):
+        return [
+            f'\t\tif ({access}) {{',
+            f'\t\t\tfor (auto &order : {access}->orders) {{',
+            f'\t\t\t\tresult.Append(*order.expression);',
+            f'\t\t\t}}',
+            f'\t\t}}',
+        ]
+    return []
+
+
+def _generate_base_children_switch(entries, base_functions, sig, result_type, member_appends_fn):
+    lines = [sig, f'\t{result_type} result;', '\tswitch (GetExpressionClass()) {']
     no_child_enums = []
-
+    base_func_set = set(base_functions)
     for entry in entries:
         if entry.get('class_type') == 'expression_class':
             continue
-        if 'Children' not in entry.get('functions', []):
+        effective = base_func_set | set(entry.get('functions', []))
+        if 'Children' not in effective:
             continue
-
         class_name = entry['class']
         enum_val = entry.get('enum', class_name.upper())
         iterable = [m for m in entry.get('members', []) if member_is_iterable_expression(m)]
-
         if not iterable:
             no_child_enums.append(enum_val)
             continue
-
         lines.append(f'\tcase ExpressionClass::{enum_val}: {{')
         lines.append(f'\t\tauto &cast_expr = Cast<{class_name}>();')
         for member in iterable:
-            lines.extend(generate_member_children_appends(member, 'cast_expr'))
+            lines.extend(member_appends_fn(member, 'cast_expr'))
         lines.append('\t\tbreak;')
         lines.append('\t}')
-
     lines.append('\tcase ExpressionClass::BOUND_EXPRESSION:')
     for enum_val in no_child_enums:
         lines.append(f'\tcase ExpressionClass::{enum_val}:')
@@ -572,6 +626,26 @@ def generate_base_children(entries):
     lines.append('\treturn result;')
     lines.append('}')
     return lines
+
+
+def generate_base_children_const(entries, base_functions):
+    return _generate_base_children_switch(
+        entries,
+        base_functions,
+        'ConstChildrenView ParsedExpression::Children() const {',
+        'ConstChildrenView',
+        generate_member_const_children_appends,
+    )
+
+
+def generate_base_children_mutable(entries, base_functions):
+    return _generate_base_children_switch(
+        entries,
+        base_functions,
+        'ChildrenView ParsedExpression::ChildrenMutable() {',
+        'ChildrenView',
+        generate_member_children_appends,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -624,7 +698,8 @@ def main():
 
         if 'Children' in functions:
             if is_base:
-                emit(output_lines, generate_base_children(entries), first)
+                emit(output_lines, generate_base_children_const(entries, base_functions), first)
+                emit(output_lines, generate_base_children_mutable(entries, base_functions), first)
 
         if 'Copy' in functions:
             if not is_base:
