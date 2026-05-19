@@ -155,6 +155,7 @@
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
+#include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
@@ -1279,6 +1280,25 @@ const char* EnumUtil::ToChars<CompressedMaterializationDirection>(CompressedMate
 template<>
 CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializationDirection>(const char *value) {
 	return static_cast<CompressedMaterializationDirection>(StringUtil::StringToEnum(GetCompressedMaterializationDirectionValues(), 3, "CompressedMaterializationDirection", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCompressedMaterializationTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CompressedMaterializationType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(CompressedMaterializationType::FUNCTION), "FUNCTION" },
+		{ static_cast<uint32_t>(CompressedMaterializationType::CAST), "CAST" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CompressedMaterializationType>(CompressedMaterializationType value) {
+	return StringUtil::EnumToString(GetCompressedMaterializationTypeValues(), 3, "CompressedMaterializationType", static_cast<uint32_t>(value));
+}
+
+template<>
+CompressedMaterializationType EnumUtil::FromString<CompressedMaterializationType>(const char *value) {
+	return static_cast<CompressedMaterializationType>(StringUtil::StringToEnum(GetCompressedMaterializationTypeValues(), 3, "CompressedMaterializationType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
