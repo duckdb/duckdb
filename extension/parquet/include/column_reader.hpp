@@ -367,7 +367,7 @@ private:
 	                        idx_t dst_size);
 	const ColumnChunk *chunk = nullptr;
 
-	TProtocol *protocol;
+	TProtocol *protocol = nullptr;
 	idx_t page_rows_available;
 	idx_t group_rows_available;
 	idx_t chunk_read_offset;
