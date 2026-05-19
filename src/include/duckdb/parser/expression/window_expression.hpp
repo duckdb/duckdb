@@ -83,7 +83,7 @@ public:
 	//! Convert the Expression to a String
 	string ToString() const override;
 
-	static bool Equal(const WindowExpression &a, const WindowExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
 
 	bool HasBoundedParts();
 

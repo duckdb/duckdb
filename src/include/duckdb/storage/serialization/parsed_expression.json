@@ -8,6 +8,7 @@
     "includes": [
       "duckdb/parser/expression/list.hpp"
     ],
+    "functions": ["Equals"],
     "members": [
       {
         "id": 100,
@@ -23,13 +24,15 @@
       {
         "id": 102,
         "name": "alias",
-        "type": "string"
+        "type": "string",
+        "equals_skip": true
       },
       {
         "id": 103,
         "name": "query_location",
         "type": "optional_idx",
-        "default": "optional_idx()"
+        "default": "optional_idx()",
+        "equals_skip": true
       }
     ]
   },
@@ -37,6 +40,7 @@
     "class": "BetweenExpression",
     "base": "ParsedExpression",
     "enum": "BETWEEN",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -59,6 +63,7 @@
     "class": "CaseExpression",
     "base": "ParsedExpression",
     "enum": "CASE",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -76,6 +81,7 @@
     "class": "CastExpression",
     "base": "ParsedExpression",
     "enum": "CAST",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -98,6 +104,7 @@
     "class": "CollateExpression",
     "base": "ParsedExpression",
     "enum": "COLLATE",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -115,6 +122,7 @@
     "class": "ColumnRefExpression",
     "base": "ParsedExpression",
     "enum": "COLUMN_REF",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -127,6 +135,7 @@
     "class": "LambdaRefExpression",
     "base": "ParsedExpression",
     "enum": "LAMBDA_REF",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -145,6 +154,7 @@
     "class": "ComparisonExpression",
     "base": "ParsedExpression",
     "enum": "COMPARISON",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -163,6 +173,7 @@
     "class": "ConjunctionExpression",
     "base": "ParsedExpression",
     "enum": "CONJUNCTION",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -176,6 +187,7 @@
     "class": "ConstantExpression",
     "base": "ParsedExpression",
     "enum": "CONSTANT",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -188,6 +200,7 @@
     "class": "DefaultExpression",
     "base": "ParsedExpression",
     "enum": "DEFAULT",
+    "functions": ["Equals"],
     "members": [
     ]
   },
@@ -195,6 +208,7 @@
     "class": "FunctionExpression",
     "base": "ParsedExpression",
     "enum": "FUNCTION",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -248,6 +262,7 @@
     "class": "LambdaExpression",
     "base": "ParsedExpression",
     "enum": "LAMBDA",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -272,6 +287,7 @@
     "class": "OperatorExpression",
     "base": "ParsedExpression",
     "enum": "OPERATOR",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -285,6 +301,7 @@
     "class": "ParameterExpression",
     "base": "ParsedExpression",
     "enum": "PARAMETER",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -297,6 +314,7 @@
     "class": "PositionalReferenceExpression",
     "base": "ParsedExpression",
     "enum": "POSITIONAL_REFERENCE",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -309,6 +327,7 @@
     "class": "StarExpression",
     "base": "ParsedExpression",
     "enum": "STAR",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -348,7 +367,8 @@
         "name": "qualified_exclude_list",
         "type": "qualified_column_set_t",
         "default": "qualified_column_set_t()",
-        "serialize_property": "SerializedQualifiedExcludeList()"
+        "serialize_property": "SerializedQualifiedExcludeList()",
+        "equals_skip": true
       },
       {
         "id": 207,
@@ -363,6 +383,7 @@
     "class": "SubqueryExpression",
     "base": "ParsedExpression",
     "enum": "SUBQUERY",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -390,6 +411,7 @@
     "class": "WindowExpression",
     "base": "ParsedExpression",
     "enum": "WINDOW",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,
@@ -446,13 +468,15 @@
         "id": 210,
         "name": "offset_expr",
         "type": "ParsedExpression*",
-        "serialize_property": "SerializedOffset(serializer)"
+        "serialize_property": "SerializedOffset(serializer)",
+        "equals_skip": true
       },
       {
         "id": 211,
         "name": "default_expr",
         "type": "ParsedExpression*",
-        "serialize_property": "SerializedDefault(serializer)"
+        "serialize_property": "SerializedDefault(serializer)",
+        "equals_skip": true
       },
       {
         "id": 212,
@@ -493,6 +517,7 @@
     "class": "TypeExpression",
     "base": "ParsedExpression",
     "enum": "TYPE",
+    "functions": ["Equals"],
     "members": [
       {
         "id": 200,

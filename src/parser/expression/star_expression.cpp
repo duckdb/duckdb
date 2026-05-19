@@ -68,31 +68,6 @@ string StarExpression::ToString() const {
 	return result;
 }
 
-bool StarExpression::Equal(const StarExpression &a, const StarExpression &b) {
-	if (a.relation_name != b.relation_name || a.exclude_list != b.exclude_list || a.rename_list != b.rename_list) {
-		return false;
-	}
-	if (a.columns != b.columns) {
-		return false;
-	}
-	if (a.replace_list.size() != b.replace_list.size()) {
-		return false;
-	}
-	for (auto &entry : a.replace_list) {
-		auto other_entry = b.replace_list.find(entry.first);
-		if (other_entry == b.replace_list.end()) {
-			return false;
-		}
-		if (!entry.second->Equals(*other_entry->second)) {
-			return false;
-		}
-	}
-	if (!ParsedExpression::Equals(a.expr, b.expr)) {
-		return false;
-	}
-	return true;
-}
-
 bool StarExpression::IsStar(const ParsedExpression &a) {
 	if (a.GetExpressionClass() != ExpressionClass::STAR) {
 		return false;

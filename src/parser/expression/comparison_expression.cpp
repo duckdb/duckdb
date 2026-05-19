@@ -14,16 +14,6 @@ string ComparisonExpression::ToString() const {
 	return ToString<ParsedExpression>(type, *left, *right);
 }
 
-bool ComparisonExpression::Equal(const ComparisonExpression &a, const ComparisonExpression &b) {
-	if (!a.left->Equals(*b.left)) {
-		return false;
-	}
-	if (!a.right->Equals(*b.right)) {
-		return false;
-	}
-	return true;
-}
-
 unique_ptr<ParsedExpression> ComparisonExpression::Copy() const {
 	auto copy = make_uniq<ComparisonExpression>(type, left->Copy(), right->Copy());
 	copy->CopyProperties(*this);

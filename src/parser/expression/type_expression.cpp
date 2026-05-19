@@ -122,13 +122,6 @@ unique_ptr<ParsedExpression> TypeExpression::Copy() const {
 	return std::move(copy);
 }
 
-bool TypeExpression::Equal(const TypeExpression &a, const TypeExpression &b) {
-	if (a.catalog != b.catalog || a.schema != b.schema || a.type_name != b.type_name) {
-		return false;
-	}
-	return ParsedExpression::ListEquals(a.children, b.children);
-}
-
 void TypeExpression::Verify() const {
 	D_ASSERT(!type_name.empty());
 }

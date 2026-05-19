@@ -38,10 +38,6 @@ string ConjunctionExpression::ToString() const {
 	return ToString<ConjunctionExpression, ParsedExpression>(*this);
 }
 
-bool ConjunctionExpression::Equal(const ConjunctionExpression &a, const ConjunctionExpression &b) {
-	return ExpressionUtil::SetEquals(a.children, b.children);
-}
-
 unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {
 	vector<unique_ptr<ParsedExpression>> copy_children;
 	copy_children.reserve(children.size());

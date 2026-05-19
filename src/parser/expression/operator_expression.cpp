@@ -23,18 +23,6 @@ string OperatorExpression::ToString() const {
 	return ToString<OperatorExpression, ParsedExpression>(*this);
 }
 
-bool OperatorExpression::Equal(const OperatorExpression &a, const OperatorExpression &b) {
-	if (a.children.size() != b.children.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < a.children.size(); i++) {
-		if (!a.children[i]->Equals(*b.children[i])) {
-			return false;
-		}
-	}
-	return true;
-}
-
 unique_ptr<ParsedExpression> OperatorExpression::Copy() const {
 	auto copy = make_uniq<OperatorExpression>(type);
 	copy->CopyProperties(*this);

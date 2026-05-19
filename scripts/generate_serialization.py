@@ -305,6 +305,8 @@ supported_member_entries = [
     'default',
     'status',
     'version',
+    # equality generation annotations (used by generate_equality.py)
+    'equals_skip',
 ]
 
 
@@ -379,6 +381,9 @@ supported_serialize_entries = [
     'includes',
     'finalize_deserialization',
     'ignore_clang_tidy_rules',
+    # equality generation annotations (used by generate_equality.py)
+    'functions',
+    'equals_custom',
 ]
 
 

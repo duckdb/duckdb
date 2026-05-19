@@ -48,7 +48,7 @@ public:
 	static bool IsLambdaParameter(const vector<unordered_set<string>> &lambda_params, const string &column_name);
 
 	string ToString() const override;
-	static bool Equal(const LambdaExpression &a, const LambdaExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
 	hash_t Hash() const override;
 	unique_ptr<ParsedExpression> Copy() const override;
 
