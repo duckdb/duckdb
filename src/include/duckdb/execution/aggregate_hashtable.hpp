@@ -126,6 +126,8 @@ public:
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
 	void Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress = nullptr);
+	//! Reset the HT for a new execution while reusing internal allocations where possible
+	void ResetForNewIteration(idx_t initial_capacity, idx_t radix_bits);
 
 private:
 	ClientContext &context;

@@ -16996,13 +16996,6 @@ void ConsoleReporter::printTotals( Totals const& totals ) {
         printSummaryRow("test cases", columns, 0);
         printSummaryRow("assertions", columns, 1);
     }
-    if (!totals.skippedTestReasons.empty()) {
-        stream << '\n';
-        stream << Colour(Colour::Warning) << "Skipped tests for the following reasons:" << '\n';
-        for(auto &entry : totals.skippedTestReasons) {
-            stream << Colour(Colour::Warning) << entry.first << ": " << entry.second << '\n';
-        }
-    }
 }
 void ConsoleReporter::printSummaryRow(std::string const& label, std::vector<SummaryColumn> const& cols, std::size_t row) {
     for (auto col : cols) {

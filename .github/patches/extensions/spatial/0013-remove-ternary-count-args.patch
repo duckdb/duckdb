@@ -1,0 +1,173 @@
+diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
+index 53edea4..d002045 100644
+--- a/src/spatial/modules/geos/geos_module.cpp
++++ b/src/spatial/modules/geos/geos_module.cpp
+@@ -527,7 +527,7 @@ struct ST_Buffer {
+ 		auto &lstate = LocalState::ResetAndGet(state);
+ 
+ 		TernaryExecutor::Execute<string_t, double, int32_t, string_t>(
+-		    args.data[0], args.data[1], args.data[2], result, args.size(),
++		    args.data[0], args.data[1], args.data[2], result,
+ 		    [&](const string_t &blob, double radius, int32_t segments) {
+ 			    const auto geom = lstate.Deserialize(blob);
+ 			    const auto buffer = geom.get_buffer(radius, segments);
+@@ -784,7 +784,7 @@ struct ST_ConcaveHull {
+ 		auto &lstate = LocalState::ResetAndGet(state);
+ 
+ 		TernaryExecutor::Execute<string_t, double, bool, string_t>(
+-		    args.data[0], args.data[1], args.data[2], result, args.size(),
++		    args.data[0], args.data[1], args.data[2], result,
+ 		    [&](const string_t &geom_blob, const double ratio, const bool allowHoles) {
+ 			    const auto geom = lstate.Deserialize(geom_blob);
+ 			    const auto hull = geom.get_concave_hull(ratio, allowHoles);
+@@ -967,7 +967,7 @@ struct ST_CoverageSimplify {
+ 		GeosCollection collection(lstate.GetContext());
+ 
+ 		TernaryExecutor::Execute<list_entry_t, double, bool, string_t>(
+-		    list_vec, args.data[1], args.data[2], result, args.size(),
++		    list_vec, args.data[1], args.data[2], result,
+ 		    [&](const list_entry_t &list, double tolerance, bool simplify_boundary) {
+ 			    // Reset the collection
+ 			    collection.clear();
+@@ -1329,7 +1329,7 @@ struct ST_DistanceWithin {
+ 		} else {
+ 			// Both are non-const, just execute normally
+ 			TernaryExecutor::Execute<string_t, string_t, double, bool>(
+-			    lhs_vec, rhs_vec, arg_vec, result, args.size(),
++			    lhs_vec, rhs_vec, arg_vec, result,
+ 			    [&](const string_t &lhs_blob, const string_t &rhs_blob, double distance) {
+ 				    const auto lhs = lstate.Deserialize(lhs_blob);
+ 				    const auto rhs = lstate.Deserialize(rhs_blob);
+diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
+index 2f519f7..f400446 100644
+--- a/src/spatial/modules/main/spatial_functions_scalar.cpp
++++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
+@@ -1005,7 +1005,7 @@ struct ST_AsWKB {
+ 	// GEOMETRY
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void Execute(DataChunk &args, ExpressionState &state, Vector &result) {
+-		return Geometry::ToBinary(args.data[0], result, args.size());
++		return Geometry::ToBinary(args.data[0], result);
+ 	}
+ 
+ 	//------------------------------------------------------------------------------------------------------------------
+@@ -1276,7 +1276,7 @@ struct ST_AsSVG {
+ 		vector<char> buffer;
+ 
+ 		TernaryExecutor::Execute<string_t, bool, int32_t, string_t>(
+-		    args.data[0], args.data[1], args.data[2], result, args.size(),
++		    args.data[0], args.data[1], args.data[2], result,
+ 		    [&](const string_t &blob, const bool rel, const int32_t max_digits) {
+ 			    // Clear buffer
+ 			    buffer.clear();
+@@ -2688,7 +2688,7 @@ struct ST_DistanceWithin {
+ 			auto &dst_vec = args.data[2];
+ 
+ 			TernaryExecutor::Execute<string_t, string_t, double, bool>(
+-			    lhs_vec, rhs_vec, dst_vec, result, count,
++			    lhs_vec, rhs_vec, dst_vec, result,
+ 			    [&](const string_t &lhs_blob, const string_t &rhs_blob, double distance) {
+ 				    sgl::prepared_geometry lhs_geom;
+ 				    sgl::prepared_geometry rhs_geom;
+@@ -3004,7 +3004,7 @@ struct ST_Expand {
+ 		auto &lstate = LocalState::ResetAndGet(state);
+ 
+ 		BinaryExecutor::Execute<string_t, double, string_t>(
+-		    args.data[0], args.data[1], result, args.size(), [&](const string_t &blob, double distance) {
++		    args.data[0], args.data[1], result, [&](const string_t &blob, double distance) {
+ 			    sgl::geometry geom;
+ 			    lstate.Deserialize(blob, geom);
+ 			    auto bbox = sgl::extent_xy::smallest();
+@@ -3763,7 +3763,7 @@ struct ST_ForceBase {
+ 			auto &m_values = args.data[2];
+ 
+ 			TernaryExecutor::Execute<string_t, double, double, string_t>(
+-			    input, z_values, m_values, result, count, [&](const string_t &blob, double z, double m) {
++			    input, z_values, m_values, result, [&](const string_t &blob, double z, double m) {
+ 				    sgl::geometry geom;
+ 				    lstate.Deserialize(blob, geom);
+ 				    sgl::ops::force_zm(alloc, geom, true, true, z, m);
+@@ -3927,7 +3927,7 @@ struct ST_GeometryType {
+ 	//------------------------------------------------------------------------------------------------------------------
+ 	static void ExecuteGeometry(DataChunk &args, ExpressionState &state, Vector &result) {
+ 		auto &lstate = LocalState::ResetAndGet(state);
+-		UnaryExecutor::Execute<string_t, uint8_t>(args.data[0], result, args.size(), [&](const string_t &blob) {
++		UnaryExecutor::Execute<string_t, uint8_t>(args.data[0], result, [&](const string_t &blob) {
+ 			// TODO: Peek dont deserialize
+ 
+ 			sgl::geometry geom;
+@@ -5242,7 +5242,7 @@ struct ST_LineInterpolatePoints {
+ 		auto &alloc = lstate.GetAllocator();
+ 
+ 		TernaryExecutor::Execute<string_t, double, bool, string_t>(
+-		    args.data[0], args.data[1], args.data[2], result, args.size(),
++		    args.data[0], args.data[1], args.data[2], result,
+ 		    [&](const string_t &blob, const double fraction, const bool repeat) {
+ 			    sgl::geometry geom;
+ 			    lstate.Deserialize(blob, geom);
+@@ -5394,7 +5394,7 @@ struct ST_LineSubstring {
+ 		auto &alloc = lstate.GetAllocator();
+ 
+ 		TernaryExecutor::Execute<string_t, double, double, string_t>(
+-		    args.data[0], args.data[1], args.data[2], result, args.size(),
++		    args.data[0], args.data[1], args.data[2], result,
+ 		    [&](const string_t &blob, const double start_fraction, const double end_fraction) {
+ 			    sgl::geometry geom;
+ 			    lstate.Deserialize(blob, geom);
+@@ -5471,7 +5471,7 @@ struct ST_LocateAlong {
+ 		auto &alloc = lstate.GetAllocator();
+ 
+ 		TernaryExecutor::Execute<string_t, double, double, string_t>(
+-		    args.data[0], args.data[1], args.data[2], result, args.size(),
++		    args.data[0], args.data[1], args.data[2], result,
+ 		    [&](const string_t &blob, const double measure, const double offset) {
+ 			    // Reset after each execution, because this can be quite memory hungry
+ 			    lstate.GetArena().Reset();
+@@ -8354,7 +8354,7 @@ struct ST_QuadKey {
+ 		auto &lev_in = args.data[2];
+ 
+ 		TernaryExecutor::Execute<double, double, int32_t, string_t>(
+-		    lon_in, lat_in, lev_in, result, args.size(), [&](const double lon, const double lat, const int32_t level) {
++		    lon_in, lat_in, lev_in, result, [&](const double lon, const double lat, const int32_t level) {
+ 			    if (level < 1 || level > 23) {
+ 				    throw InvalidInputException("ST_QuadKey: Level must be between 1 and 23");
+ 			    }
+diff --git a/src/spatial/modules/mvt/mvt_module.cpp b/src/spatial/modules/mvt/mvt_module.cpp
+index 3eb71de..f0c19f8 100644
+--- a/src/spatial/modules/mvt/mvt_module.cpp
++++ b/src/spatial/modules/mvt/mvt_module.cpp
+@@ -75,7 +75,7 @@ struct ST_TileEnvelope {
+ 		auto &lstate = LocalState::ResetAndGet(state);
+ 
+ 		TernaryExecutor::Execute<int32_t, int32_t, int32_t, string_t>(
+-		    args.data[0], args.data[1], args.data[2], result, args.size(),
++		    args.data[0], args.data[1], args.data[2], result,
+ 		    [&](int32_t tile_zoom, int32_t tile_x, int32_t tile_y) {
+ 			    validate_tile_zoom_argument(tile_zoom);
+ 			    uint32_t zoom_extent = 1u << tile_zoom;
+diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
+index e5c259d..6c4e64b 100644
+--- a/src/spatial/modules/proj/proj_module.cpp
++++ b/src/spatial/modules/proj/proj_module.cpp
+@@ -475,7 +475,7 @@ struct ST_Transform {
+ 		const auto &info = func_expr.bind_info->Cast<BindData>();
+ 
+ 		TernaryExecutor::Execute<string_t, string_t, string_t, string_t>(
+-		    args.data[0], args.data[1], args.data[2], result, args.size(),
++		    args.data[0], args.data[1], args.data[2], result,
+ 		    [&](const string_t &blob, const string_t &source, const string_t &target) {
+ 			    const auto source_str = source.GetString();
+ 			    const auto target_str = target.GetString();
+diff --git a/src/spatial/modules/wkb/wkb_module.cpp b/src/spatial/modules/wkb/wkb_module.cpp
+index a1c279d..43e7d1a 100644
+--- a/src/spatial/modules/wkb/wkb_module.cpp
++++ b/src/spatial/modules/wkb/wkb_module.cpp
+@@ -17,7 +17,7 @@ struct WKBTypes {
+ 	}
+ 
+ 	static bool ToWKBCast(Vector &source, Vector &result, idx_t count, CastParameters &) {
+-		Geometry::ToBinary(source, result, count);
++		Geometry::ToBinary(source, result);
+ 		return true;
+ 	}
+ 

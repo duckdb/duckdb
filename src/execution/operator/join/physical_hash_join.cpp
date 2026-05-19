@@ -267,6 +267,18 @@ JoinFilterGlobalState::~JoinFilterGlobalState() {
 JoinFilterLocalState::~JoinFilterLocalState() {
 }
 
+static bool CanUsePerfectHashJoin(const PhysicalHashJoin &op, PerfectHashJoinExecutor &perfect_join_executor) {
+	if (op.conditions.size() != 1 || !op.conditions[0].GetRightStats()) {
+		return false;
+	}
+	const auto &right_stats = *op.conditions[0].GetRightStats();
+	if (!TypeIsIntegral(right_stats.GetType().InternalType()) || !NumericStats::HasMinMax(right_stats)) {
+		return false;
+	}
+	return perfect_join_executor.CanDoPerfectHashJoin(op, NumericStats::Min(right_stats),
+	                                                  NumericStats::Max(right_stats));
+}
+
 unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientContext &context,
                                                                          const PhysicalOperator &op) const {
 	// clear any previously set filters
@@ -292,14 +304,7 @@ public:
 
 		// For perfect hash join
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
-		bool use_perfect_hash = false;
-		if (op.conditions.size() == 1 && op.conditions[0].GetRightStats()) {
-			const auto &right_stats = *op.conditions[0].GetRightStats();
-			if (TypeIsIntegral(right_stats.GetType().InternalType()) && NumericStats::HasMinMax(right_stats)) {
-				use_perfect_hash = perfect_join_executor->CanDoPerfectHashJoin(op, NumericStats::Min(right_stats),
-				                                                               NumericStats::Max(right_stats));
-			}
-		}
+		auto use_perfect_hash = CanUsePerfectHashJoin(op, *perfect_join_executor);
 		// For external hash join
 		external = Settings::Get<DebugForceExternalSetting>(context);
 		// Set probe types
@@ -322,6 +327,40 @@ public:
 
 	void ScheduleFinalize(Pipeline &pipeline, Event &event);
 	void InitializeProbeSpill();
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ClientContext &context) override {
+		// Use single-partition mode on subsequent iterations to avoid 16-partition overhead for small joins.
+		hash_table->ResetForNewIterationSinglePartition();
+		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
+		auto use_perfect_hash = CanUsePerfectHashJoin(op, *perfect_join_executor);
+		finalized = false;
+		active_local_states = 0;
+		external = Settings::Get<DebugForceExternalSetting>(context);
+		total_size = 0;
+		max_partition_size = 0;
+		max_partition_count = 0;
+		probe_side_requirement = 0;
+		local_hash_tables.clear();
+		owned_local_hash_tables.clear();
+		probe_spill.reset();
+		scanned_data = false;
+		preserve_build_for_reuse = false;
+		skip_filter_pushdown = false;
+		global_filter_state.reset();
+		temporary_memory_state->SetZero();
+		keep_local_hash_tables = true;
+		if (op.filter_pushdown) {
+			if (op.filter_pushdown->probe_info.empty() && use_perfect_hash) {
+				skip_filter_pushdown = true;
+			}
+			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
+		}
+		GlobalSinkState::Reset(context);
+	}
 
 public:
 	ClientContext &context;
@@ -349,8 +388,10 @@ public:
 	idx_t max_partition_count;
 	idx_t probe_side_requirement;
 
-	//! Hash tables built by each thread
-	vector<unique_ptr<JoinHashTable>> local_hash_tables;
+	//! Hash tables built by each thread (owned by the corresponding local sink states)
+	vector<reference<JoinHashTable>> local_hash_tables;
+	//! Local hash tables whose ownership has been transferred during the normal one-shot finalize path
+	vector<unique_ptr<JoinHashTable>> owned_local_hash_tables;
 
 	//! Excess probe data gathered during Sink
 	vector<LogicalType> probe_types;
@@ -358,9 +399,12 @@ public:
 
 	//! Whether or not we have started scanning data using GetData
 	atomic<bool> scanned_data;
+	//! Preserve the finalized build-side state across recursive CTE iterations
+	bool preserve_build_for_reuse = false;
 
 	bool skip_filter_pushdown = false;
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
+	bool keep_local_hash_tables = false;
 };
 
 unique_ptr<JoinFilterLocalState> JoinFilterPushdownInfo::GetLocalState(JoinFilterGlobalState &gstate) const {
@@ -372,7 +416,7 @@ unique_ptr<JoinFilterLocalState> JoinFilterPushdownInfo::GetLocalState(JoinFilte
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
 	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context, HashJoinGlobalSinkState &gstate)
-	    : join_key_executor(context) {
+	    : op(op), join_key_executor(context) {
 		auto &allocator = BufferAllocator::Get(context);
 
 		for (auto &cond : op.conditions) {
@@ -384,8 +428,9 @@ public:
 			payload_chunk.Initialize(allocator, op.payload_columns.col_types);
 		}
 
-		hash_table = op.InitializeHashTable(context, gstate.initial_radix_bits);
+		hash_table = op.InitializeHashTable(context, gstate.hash_table->GetRadixBits());
 		hash_table->GetSinkCollection().InitializeAppendState(append_state);
+		keep_hash_table = gstate.keep_local_hash_tables;
 
 		gstate.active_local_states++;
 
@@ -395,6 +440,7 @@ public:
 	}
 
 public:
+	const PhysicalHashJoin &op;
 	PartitionedTupleDataAppendState append_state;
 
 	ExpressionExecutor join_key_executor;
@@ -404,8 +450,32 @@ public:
 
 	//! Thread-local HT
 	unique_ptr<JoinHashTable> hash_table;
+	bool keep_hash_table = false;
 
 	unique_ptr<JoinFilterLocalState> local_filter_state;
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ExecutionContext &context, GlobalSinkState &gstate_p) override {
+		auto &gstate = gstate_p.Cast<HashJoinGlobalSinkState>();
+		join_keys.Reset();
+		payload_chunk.Reset();
+		if (hash_table) {
+			hash_table->ResetForNewIterationSinglePartition();
+		} else {
+			hash_table = op.InitializeHashTable(context.client, gstate.hash_table->GetRadixBits());
+		}
+		hash_table->GetSinkCollection().ResetAppendState(append_state);
+		keep_hash_table = gstate.keep_local_hash_tables;
+		gstate.active_local_states++;
+		if (op.filter_pushdown) {
+			local_filter_state = op.filter_pushdown->GetLocalState(*gstate.global_filter_state);
+		} else {
+			local_filter_state.reset();
+		}
+	}
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context,
@@ -429,7 +499,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			auto &info = result->correlated_mark_join_info;
 
 			vector<LogicalType> delim_payload_types;
-			vector<BoundAggregateExpression *> correlated_aggregates;
+			vector<AggregateObject> correlated_aggregates;
 			unique_ptr<BoundAggregateExpression> aggr;
 
 			// jury-rigging the GroupedAggregateHashTable
@@ -438,7 +508,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			FunctionBinder function_binder(context);
 			aggr = function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr,
 			                                             AggregateType::NON_DISTINCT);
-			correlated_aggregates.push_back(&*aggr);
+			correlated_aggregates.emplace_back(*aggr);
 			delim_payload_types.push_back(aggr->GetReturnType());
 			info.correlated_aggregates.push_back(std::move(aggr));
 
@@ -448,13 +518,13 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun.GetReturnType(), 0U));
 			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr,
 			                                             AggregateType::NON_DISTINCT);
-			correlated_aggregates.push_back(&*aggr);
+			correlated_aggregates.emplace_back(*aggr);
 			delim_payload_types.push_back(aggr->GetReturnType());
 			info.correlated_aggregates.push_back(std::move(aggr));
 
 			auto &allocator = BufferAllocator::Get(context);
-			info.correlated_counts = make_uniq<GroupedAggregateHashTable>(context, allocator, delim_types,
-			                                                              delim_payload_types, correlated_aggregates);
+			info.correlated_counts = make_uniq<GroupedAggregateHashTable>(
+			    context, allocator, delim_types, delim_payload_types, std::move(correlated_aggregates));
 			info.correlated_types = delim_types;
 			info.group_chunk.Initialize(allocator, delim_types);
 			info.result_chunk.Initialize(allocator, delim_payload_types);
@@ -470,6 +540,25 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext &context) const {
 	auto &gstate = sink_state->Cast<HashJoinGlobalSinkState>();
 	return make_uniq<HashJoinLocalSinkState>(*this, context.client, gstate);
+}
+
+void PhysicalHashJoin::SetPreserveBuildForRecursiveReuse(bool preserve) const {
+	if (!sink_state) {
+		return;
+	}
+	auto &state = sink_state->Cast<HashJoinGlobalSinkState>();
+	state.preserve_build_for_reuse = preserve;
+	if (preserve) {
+		state.scanned_data = false;
+	}
+}
+
+bool PhysicalHashJoin::CanPreserveBuildForRecursiveReuse() const {
+	if (!sink_state) {
+		return false;
+	}
+	auto &state = sink_state->Cast<HashJoinGlobalSinkState>();
+	return state.preserve_build_for_reuse && !state.external;
 }
 
 void JoinFilterPushdownInfo::Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const {
@@ -517,7 +606,12 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 
 	lstate.hash_table->GetSinkCollection().FlushAppendState(lstate.append_state);
 	annotated_lock_guard<annotated_mutex> guard(gstate.lock);
-	gstate.local_hash_tables.push_back(std::move(lstate.hash_table));
+	if (lstate.keep_hash_table) {
+		gstate.local_hash_tables.push_back(*lstate.hash_table);
+	} else {
+		gstate.owned_local_hash_tables.push_back(std::move(lstate.hash_table));
+		gstate.local_hash_tables.push_back(*gstate.owned_local_hash_tables.back());
+	}
 	if (gstate.local_hash_tables.size() == gstate.active_local_states) {
 		// Set to 0 until PrepareFinalize
 		gstate.temporary_memory_state->SetZero();
@@ -619,6 +713,26 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 	gstate.temporary_memory_state->SetRemainingSize(gstate.total_size);
 }
 
+static void ExecuteHashJoinTableInitTask(HashJoinGlobalSinkState &sink, idx_t entry_idx_from, idx_t entry_idx_to) {
+	sink.hash_table->InitializePointerTable(entry_idx_from, entry_idx_to);
+}
+
+static void ExecuteHashJoinFinalizeTask(HashJoinGlobalSinkState &sink, optional_idx partition_idx,
+                                        optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state) {
+	const auto &data_collection = sink.hash_table->GetDataCollection();
+	if (!partition_idx.IsValid() || sink.hash_table->GetRadixBits() == 0) {
+		// Unpartitioned builds still finalize over the full chunk range even if the scheduler created a
+		// single "partition 0" task, because tuple-data segments are not tagged with partition ids there.
+		sink.hash_table->Finalize(0U, data_collection.ChunkCount(), false, prefix_range_state);
+	} else {
+		// Parallel finalize - each thread processes one partition
+		const auto chunk_ranges = data_collection.GetChunkRangesForPartition(partition_idx.GetIndex());
+		for (auto &chunk_range : chunk_ranges) {
+			sink.hash_table->Finalize(chunk_range.first, chunk_range.second, true, prefix_range_state);
+		}
+	}
+}
+
 class HashJoinTableInitTask : public ExecutorTask {
 public:
 	HashJoinTableInitTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink_p,
@@ -628,7 +742,7 @@ public:
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		sink.hash_table->InitializePointerTable(entry_idx_from, entry_idx_to);
+		ExecuteHashJoinTableInitTask(sink, entry_idx_from, entry_idx_to);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -652,29 +766,35 @@ public:
 	HashJoinGlobalSinkState &sink;
 
 public:
-	void Schedule() override {
-		auto &context = pipeline->GetClientContext();
-		vector<shared_ptr<Task>> finalize_tasks;
+	vector<shared_ptr<Task>> GetTasks() {
 		auto &ht = *sink.hash_table;
 		const auto entry_count = ht.capacity;
-		auto num_threads = NumericCast<idx_t>(sink.num_threads);
-
-		// we don't have to check whether it is too skewed here, as we only initialize the pointer table
+		auto &context = pipeline->GetClientContext();
+		vector<shared_ptr<Task>> finalize_tasks;
 		if (FinalizeSingleThreaded(sink, false)) {
-			// Single-threaded memset
 			finalize_tasks.push_back(
 			    make_uniq<HashJoinTableInitTask>(shared_from_this(), context, sink, 0U, entry_count, sink.op));
-		} else {
-			// have 4 times more tasks than threads, but bound the to a minimum
-			const idx_t entries_per_task = MaxValue(entry_count / num_threads / 4, MINIMUM_ENTRIES_PER_TASK);
-			// Parallel memset
-			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx += entries_per_task) {
-				auto entry_idx_to = MinValue<idx_t>(entry_idx + entries_per_task, entry_count);
-				finalize_tasks.push_back(make_uniq<HashJoinTableInitTask>(shared_from_this(), context, sink, entry_idx,
-				                                                          entry_idx_to, sink.op));
-			}
+			return finalize_tasks;
 		}
-		SetTasks(std::move(finalize_tasks));
+
+		auto num_threads = NumericCast<idx_t>(sink.num_threads);
+		// have 4 times more tasks than threads, but bound the to a minimum
+		const idx_t entries_per_task = MaxValue(entry_count / num_threads / 4, MINIMUM_ENTRIES_PER_TASK);
+		// Parallel memset
+		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx += entries_per_task) {
+			auto entry_idx_to = MinValue<idx_t>(entry_idx + entries_per_task, entry_count);
+			finalize_tasks.push_back(
+			    make_uniq<HashJoinTableInitTask>(shared_from_this(), context, sink, entry_idx, entry_idx_to, sink.op));
+		}
+		return finalize_tasks;
+	}
+
+	void ExecuteDirectly() {
+		ExecuteHashJoinTableInitTask(sink, 0U, sink.hash_table->capacity);
+	}
+
+	void Schedule() override {
+		SetTasks(GetTasks());
 	}
 	static constexpr const idx_t MINIMUM_ENTRIES_PER_TASK = 131072;
 };
@@ -688,17 +808,7 @@ public:
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		const auto &data_collection = sink.hash_table->GetDataCollection();
-		if (!partition_idx.IsValid()) {
-			// Single-threaded finalize
-			sink.hash_table->Finalize(0U, data_collection.ChunkCount(), false, prefix_range_state);
-		} else {
-			// Parallel finalize - each thread processes one partition
-			const auto chunk_ranges = data_collection.GetChunkRangesForPartition(partition_idx.GetIndex());
-			for (auto &chunk_range : chunk_ranges) {
-				sink.hash_table->Finalize(chunk_range.first, chunk_range.second, true, prefix_range_state);
-			}
-		}
+		ExecuteHashJoinFinalizeTask(sink, partition_idx, prefix_range_state);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -721,51 +831,64 @@ public:
 	HashJoinGlobalSinkState &sink;
 
 public:
-	void Schedule() override {
+	vector<shared_ptr<Task>> GetTasks() {
 		auto &ht = *sink.hash_table;
 		const auto build_prefix_range_filter = ht.ShouldBuildPrefixRangeFilter();
-		const bool finalize_single_threaded = FinalizeSingleThreaded(sink, false);
-
 		vector<shared_ptr<Task>> finalize_tasks;
-		if (finalize_single_threaded) {
-			// Single-threaded finalize
+		if (FinalizeSingleThreaded(sink, false)) {
 			auto prefix_range_state = build_prefix_range_filter ? RegisterPrefixRangeState(ht) : nullptr;
 			finalize_tasks.push_back(
 			    make_uniq<HashJoinFinalizeTask>(sink, shared_from_this(), optional_idx(), prefix_range_state));
-		} else {
-			// Parallel finalize
-			const auto num_partitions = RadixPartitioning::NumberOfPartitions(ht.GetRadixBits());
-			const auto &current_partitions = ht.GetCurrentPartitions();
-			for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
-				if (sink.external && !current_partitions.RowIsValidUnsafe(partition_idx)) {
-					continue; // Partition is not being built on
-				}
-				auto prefix_range_state = build_prefix_range_filter ? RegisterPrefixRangeState(ht) : nullptr;
-				finalize_tasks.push_back(
-				    make_uniq<HashJoinFinalizeTask>(sink, shared_from_this(), partition_idx, prefix_range_state));
-			}
+			return finalize_tasks;
 		}
-		SetTasks(std::move(finalize_tasks));
+
+		// Parallel finalize
+		const auto num_partitions = RadixPartitioning::NumberOfPartitions(ht.GetRadixBits());
+		const auto &current_partitions = ht.GetCurrentPartitions();
+		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
+			if (sink.external && !current_partitions.RowIsValidUnsafe(partition_idx)) {
+				continue; // Partition is not being built on
+			}
+			auto prefix_range_state = build_prefix_range_filter ? RegisterPrefixRangeState(ht) : nullptr;
+			finalize_tasks.push_back(
+			    make_uniq<HashJoinFinalizeTask>(sink, shared_from_this(), partition_idx, prefix_range_state));
+		}
+		return finalize_tasks;
+	}
+
+	void ExecuteDirectly() {
+		auto &ht = *sink.hash_table;
+		auto prefix_range_state = ht.ShouldBuildPrefixRangeFilter() ? RegisterPrefixRangeState(ht) : nullptr;
+		ExecuteHashJoinFinalizeTask(sink, optional_idx(), prefix_range_state);
+		FinishTasks(false);
+	}
+
+	void Schedule() override {
+		SetTasks(GetTasks());
 	}
 
 	void FinishEvent() override {
+		FinishTasks(true);
+	}
+
+	static constexpr idx_t CHUNKS_PER_TASK = 64;
+
+private:
+	void FinishTasks(bool build_dictionary_arrays) {
 		for (auto &prefix_range_state : prefix_range_states) {
 			sink.hash_table->MergePrefixRangeBuildState(*prefix_range_state);
 		}
 		sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 
 		// chains are final; materialize dict_arrays and overwrite NEXT_PTR with the dict index
-		if (sink.hash_table->CanUseDictionaryEmission(sink.op, sink.external,
-		                                              sink.op.children[0].get().estimated_cardinality)) {
+		if (build_dictionary_arrays && sink.hash_table->CanUseDictionaryEmission(
+		                                   sink.op, sink.external, sink.op.children[0].get().estimated_cardinality)) {
 			sink.hash_table->BuildDictionaryArrays(sink.op);
 		}
 
 		sink.hash_table->finalized = true;
 	}
 
-	static constexpr idx_t CHUNKS_PER_TASK = 64;
-
-private:
 	optional_ptr<PrefixRangeFilter::BuildState> RegisterPrefixRangeState(JoinHashTable &ht) {
 		prefix_range_states.push_back(ht.InitializePrefixRangeBuildState());
 		return *prefix_range_states.back();
@@ -782,6 +905,12 @@ void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event)
 	hash_table->AllocatePointerTable();
 
 	auto new_init_event = make_shared_ptr<HashJoinTableInitEvent>(pipeline, *this);
+	if (FinalizeSingleThreaded(*this, false)) {
+		new_init_event->ExecuteDirectly();
+		auto new_finalize_event = make_shared_ptr<HashJoinFinalizeEvent>(pipeline, *this);
+		new_finalize_event->ExecuteDirectly();
+		return;
+	}
 	event.InsertEvent(new_init_event);
 
 	auto new_finalize_event = make_shared_ptr<HashJoinFinalizeEvent>(pipeline, *this);
@@ -820,13 +949,13 @@ private:
 class HashJoinRepartitionEvent : public BasePipelineEvent {
 public:
 	HashJoinRepartitionEvent(Pipeline &pipeline_p, const PhysicalHashJoin &op_p, HashJoinGlobalSinkState &sink,
-	                         vector<unique_ptr<JoinHashTable>> &local_hts)
+	                         vector<reference<JoinHashTable>> &local_hts)
 	    : BasePipelineEvent(pipeline_p), op(op_p), sink(sink), local_hts(local_hts) {
 	}
 
 	const PhysicalHashJoin &op;
 	HashJoinGlobalSinkState &sink;
-	vector<unique_ptr<JoinHashTable>> &local_hts;
+	vector<reference<JoinHashTable>> &local_hts;
 
 public:
 	void Schedule() override {
@@ -836,7 +965,7 @@ public:
 		idx_t total_size = 0;
 		idx_t total_count = 0;
 		for (auto &local_ht : local_hts) {
-			auto &sink_collection = local_ht->GetSinkCollection();
+			auto &sink_collection = local_ht.get().GetSinkCollection();
 			total_size += sink_collection.SizeInBytes();
 			total_count += sink_collection.Count();
 		}
@@ -853,9 +982,11 @@ public:
 		if (repartition_threads < local_hts.size()) {
 			// Limit the number of threads working on repartitioning based on our memory reservation
 			for (idx_t thread_idx = repartition_threads; thread_idx < local_hts.size(); thread_idx++) {
-				local_hts[thread_idx % repartition_threads]->Merge(*local_hts[thread_idx]);
+				local_hts[thread_idx % repartition_threads].get().Merge(local_hts[thread_idx].get());
 			}
-			local_hts.resize(repartition_threads);
+			auto repartition_end =
+			    local_hts.begin() + static_cast<vector<reference<JoinHashTable>>::difference_type>(repartition_threads);
+			local_hts.erase(repartition_end, local_hts.end());
 		}
 
 		auto &context = pipeline->GetClientContext();
@@ -864,13 +995,14 @@ public:
 		partition_tasks.reserve(local_hts.size());
 		for (auto &local_ht : local_hts) {
 			partition_tasks.push_back(
-			    make_uniq<HashJoinRepartitionTask>(shared_from_this(), context, *sink.hash_table, *local_ht, op));
+			    make_uniq<HashJoinRepartitionTask>(shared_from_this(), context, *sink.hash_table, local_ht.get(), op));
 		}
 		SetTasks(std::move(partition_tasks));
 	}
 
 	void FinishEvent() override {
 		local_hts.clear();
+		sink.owned_local_hash_tables.clear();
 
 		// Minimum reservation is now the new smallest partition size
 		const auto num_partitions = RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits());
@@ -1284,6 +1416,10 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	           {{"external", to_string(sink.external)}});
 	if (sink.external) {
 		// External Hash Join
+		// Recursive preserved-build reuse only applies to the in-memory finalized HT. External hash join
+		// runs through repeated build/probe rounds with partition/probe-spill state, so it cannot be
+		// treated as a stable materialized build that later recursive iterations may skip entirely.
+		sink.preserve_build_for_reuse = false;
 		sink.perfect_join_executor.reset();
 
 		const auto max_partition_ht_size = sink.max_partition_size + ht.PointerTableSize(sink.max_partition_count);
@@ -1303,9 +1439,10 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		} else {
 			// No repartitioning!
 			for (auto &local_ht : sink.local_hash_tables) {
-				ht.Merge(*local_ht);
+				ht.Merge(local_ht.get());
 			}
 			sink.local_hash_tables.clear();
+			sink.owned_local_hash_tables.clear();
 			D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
 			sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
 			                                         sink.probe_side_requirement);
@@ -1317,9 +1454,10 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	// In-memory Hash Join
 	for (auto &local_ht : sink.local_hash_tables) {
-		ht.Merge(*local_ht);
+		ht.Merge(local_ht.get());
 	}
 	sink.local_hash_tables.clear();
+	sink.owned_local_hash_tables.clear();
 	ht.Unpartition();
 
 	Value min;
@@ -1367,10 +1505,11 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 class HashJoinOperatorState : public CachingOperatorState {
 public:
-	explicit HashJoinOperatorState(ClientContext &context, HashJoinGlobalSinkState &sink)
-	    : probe_executor(context), scan_structure(*sink.hash_table, join_key_state) {
+	HashJoinOperatorState(ClientContext &context, const PhysicalHashJoin &op_p, HashJoinGlobalSinkState &sink)
+	    : op(op_p), probe_executor(context), scan_structure(*sink.hash_table, join_key_state) {
 	}
 
+	const PhysicalHashJoin &op;
 	DataChunk lhs_join_keys;
 	TupleDataChunkState join_key_state;
 	DataChunk lhs_probe_data;
@@ -1388,12 +1527,33 @@ public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		context.thread.profiler.Flush(op);
 	}
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset() override {
+		auto &sink = op.sink_state->Cast<HashJoinGlobalSinkState>();
+		ResetCachingState();
+		lhs_join_keys.Reset();
+		lhs_probe_data.Reset();
+		scan_structure.Reset();
+		perfect_hash_join_state.reset();
+		spill_state = JoinHashTable::ProbeSpillLocalAppendState();
+		TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
+		if (spill_chunk.ColumnCount() == 0) {
+			spill_chunk.Initialize(BufferAllocator::Get(sink.context), sink.probe_types);
+		} else {
+			spill_chunk.Reset();
+		}
+		// perfect_hash_join_state will be lazily initialized on first Execute when we have a real ExecutionContext
+	}
 };
 
 unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &context) const {
 	auto &allocator = BufferAllocator::Get(context.client);
 	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
-	auto state = make_uniq<HashJoinOperatorState>(context.client, sink);
+	auto state = make_uniq<HashJoinOperatorState>(context.client, *this, sink);
 	state->lhs_join_keys.Initialize(allocator, condition_types);
 
 	// initialize probe data with ALL probe columns (output + predicate)
@@ -1401,13 +1561,13 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 		state->lhs_probe_data.Initialize(allocator, lhs_probe_columns.col_types);
 	}
 
+	for (auto &cond : conditions) {
+		state->probe_executor.AddExpression(cond.GetLHS());
+	}
+	TupleDataCollection::InitializeChunkState(state->join_key_state, condition_types);
+
 	if (sink.perfect_join_executor) {
 		state->perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
-	} else {
-		for (auto &cond : conditions) {
-			state->probe_executor.AddExpression(cond.GetLHS());
-		}
-		TupleDataCollection::InitializeChunkState(state->join_key_state, condition_types);
 	}
 
 	if (sink.external) {
@@ -1437,6 +1597,10 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 
 	if (sink.perfect_join_executor) {
 		D_ASSERT(!sink.external);
+		// Lazily initialize perfect_hash_join_state on first use if needed
+		if (!state.perfect_hash_join_state) {
+			state.perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
+		}
 		// for perfect hash join, when predicate is NULL, only output columns are needed
 		state.lhs_probe_data.ReferenceColumns(input, lhs_output_columns.col_idxs);
 		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, state.lhs_probe_data, chunk,
@@ -1487,7 +1651,7 @@ class HashJoinLocalSourceState;
 
 class HashJoinGlobalSourceState : public GlobalSourceState {
 public:
-	HashJoinGlobalSourceState(const PhysicalHashJoin &op, const ClientContext &context);
+	HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context);
 
 	//! Initialize this source state using the info in the sink
 	void Initialize(HashJoinGlobalSinkState &sink);
@@ -1513,6 +1677,10 @@ public:
 			return 0;
 		}
 		return count / ((idx_t)STANDARD_VECTOR_SIZE * parallel_scan_chunk_count);
+	}
+
+	bool SupportsReuse() const override {
+		return true;
 	}
 
 public:
@@ -1542,11 +1710,36 @@ public:
 	idx_t full_outer_chunks_per_thread = DConstants::INVALID_INDEX;
 
 	vector<InterruptState> blocked_tasks;
+
+private:
+	void ResetState(ClientContext &context) {
+		global_stage = HashJoinSourceStage::INIT;
+		build_chunk_idx = DConstants::INVALID_INDEX;
+		build_chunk_count = 0;
+		build_chunk_done = 0;
+		build_chunks_per_thread = DConstants::INVALID_INDEX;
+		probe_chunk_count = 0;
+		probe_chunk_done = 0;
+		probe_count = op.children[0].get().estimated_cardinality;
+		parallel_scan_chunk_count = context.config.verify_parallelism ? 1 : 120;
+		full_outer_chunk_idx = DConstants::INVALID_INDEX;
+		full_outer_chunk_count = 0;
+		full_outer_chunk_done = 0;
+		full_outer_chunks_per_thread = DConstants::INVALID_INDEX;
+		blocked_tasks.clear();
+		GlobalSourceState::Reset(context);
+	}
+
+public:
+	void Reset(ClientContext &context) override {
+		ResetState(context);
+	}
 };
 
 class HashJoinLocalSourceState : public LocalSourceState {
 public:
-	HashJoinLocalSourceState(const PhysicalHashJoin &op, const HashJoinGlobalSinkState &sink, Allocator &allocator);
+	HashJoinLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate, const PhysicalHashJoin &op,
+	                         const HashJoinGlobalSinkState &sink, Allocator &allocator);
 
 	//! Do the work this thread has been assigned
 	void ExecuteTask(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate, DataChunk &chunk);
@@ -1558,6 +1751,7 @@ public:
 	void ExternalScanHT(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate, DataChunk &chunk);
 
 public:
+	const PhysicalHashJoin &op;
 	//! The stage that this thread was assigned work for
 	HashJoinSourceStage local_stage;
 	//! Vector with pointers here so we don't have to re-initialize
@@ -1585,6 +1779,35 @@ public:
 	idx_t full_outer_chunk_idx_from = DConstants::INVALID_INDEX;
 	idx_t full_outer_chunk_idx_to = DConstants::INVALID_INDEX;
 	unique_ptr<JoinHTScanState> full_outer_scan_state;
+
+private:
+	void ResetState() {
+		local_stage = HashJoinSourceStage::INIT;
+		build_chunk_idx_from = DConstants::INVALID_INDEX;
+		build_chunk_idx_to = DConstants::INVALID_INDEX;
+		probe_local_scan.allocator = nullptr;
+		probe_local_scan.current_chunk_state.handles.clear();
+		probe_local_scan.current_chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
+		probe_local_scan.chunk_index = DConstants::INVALID_INDEX;
+		lhs_probe_chunk.Reset();
+		lhs_join_keys.Reset();
+		lhs_probe_data.Reset();
+		TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
+		scan_structure.Reset();
+		empty_ht_probe_in_progress = false;
+		full_outer_chunk_idx_from = DConstants::INVALID_INDEX;
+		full_outer_chunk_idx_to = DConstants::INVALID_INDEX;
+		full_outer_scan_state.reset();
+	}
+
+public:
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ExecutionContext &context, GlobalSourceState &gstate_p) override {
+		ResetState();
+	}
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientContext &context) const {
@@ -1593,15 +1816,12 @@ unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientConte
 
 unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionContext &context,
                                                                    GlobalSourceState &gstate) const {
-	return make_uniq<HashJoinLocalSourceState>(*this, sink_state->Cast<HashJoinGlobalSinkState>(),
+	return make_uniq<HashJoinLocalSourceState>(context, gstate, *this, sink_state->Cast<HashJoinGlobalSinkState>(),
 	                                           BufferAllocator::Get(context.client));
 }
 
-HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, const ClientContext &context)
-    : op(op), global_stage(HashJoinSourceStage::INIT), build_chunk_count(0), build_chunk_done(0), probe_chunk_count(0),
-      probe_chunk_done(0), probe_count(op.children[0].get().estimated_cardinality),
-      parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120), full_outer_chunk_count(0),
-      full_outer_chunk_done(0) {
+HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context) : op(op) {
+	ResetState(context);
 }
 
 void HashJoinGlobalSourceState::Initialize(HashJoinGlobalSinkState &sink) {
@@ -1764,13 +1984,11 @@ bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJo
 	return false;
 }
 
-HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, const HashJoinGlobalSinkState &sink,
+HashJoinLocalSourceState::HashJoinLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate,
+                                                   const PhysicalHashJoin &op, const HashJoinGlobalSinkState &sink,
                                                    Allocator &allocator)
-    : local_stage(HashJoinSourceStage::INIT), addresses(LogicalType::POINTER), lhs_join_key_executor(sink.context),
+    : op(op), addresses(LogicalType::POINTER), lhs_join_key_executor(sink.context),
       scan_structure(*sink.hash_table, join_key_state) {
-	auto &chunk_state = probe_local_scan.current_chunk_state;
-	chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
-
 	lhs_probe_chunk.Initialize(allocator, sink.probe_types);
 	lhs_join_keys.Initialize(allocator, op.condition_types);
 
@@ -1782,6 +2000,7 @@ HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, c
 	for (auto &cond : op.conditions) {
 		lhs_join_key_executor.AddExpression(cond.GetLHS());
 	}
+	ResetState();
 }
 
 void HashJoinLocalSourceState::ExecuteTask(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
@@ -1899,8 +2118,12 @@ SourceResultType PhysicalHashJoin::GetDataInternal(ExecutionContext &context, Da
 		annotated_lock_guard<annotated_mutex> guard(gstate.lock);
 		if (gstate.global_stage != HashJoinSourceStage::DONE) {
 			gstate.global_stage = HashJoinSourceStage::DONE;
-			sink.hash_table->Reset();
-			sink.temporary_memory_state->SetZero();
+			if (sink.preserve_build_for_reuse) {
+				sink.scanned_data = false;
+			} else {
+				sink.hash_table->Reset();
+				sink.temporary_memory_state->SetZero();
+			}
 		}
 		return SourceResultType::FINISHED;
 	}

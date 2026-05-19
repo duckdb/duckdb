@@ -17,7 +17,7 @@ static void AgeFunctionStandard(DataChunk &input, ExpressionState &state, Vector
 	auto current_date = Timestamp::FromDatetime(
 	    Timestamp::GetDate(MetaTransaction::Get(state.GetContext()).start_timestamp), dtime_t(0));
 
-	UnaryExecutor::Execute<timestamp_t, interval_t>(input.data[0], result, input.size(),
+	UnaryExecutor::Execute<timestamp_t, interval_t>(input.data[0], result,
 	                                                [&](timestamp_t input) -> optional<interval_t> {
 		                                                if (input.IsFinite()) {
 			                                                return Interval::GetAge(current_date, input);
@@ -31,8 +31,7 @@ static void AgeFunction(DataChunk &input, ExpressionState &state, Vector &result
 	D_ASSERT(input.ColumnCount() == 2);
 
 	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t>(
-	    input.data[0], input.data[1], result, input.size(),
-	    [&](timestamp_t input1, timestamp_t input2) -> optional<interval_t> {
+	    input.data[0], input.data[1], result, [&](timestamp_t input1, timestamp_t input2) -> optional<interval_t> {
 		    if (input1.IsFinite() && input2.IsFinite()) {
 			    return Interval::GetAge(input1, input2);
 		    } else {

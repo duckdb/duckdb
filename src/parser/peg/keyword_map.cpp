@@ -125,6 +125,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("compression");
 	unreserved_keyword_map.insert("configuration");
 	unreserved_keyword_map.insert("conflict");
+	unreserved_keyword_map.insert("connect");
 	unreserved_keyword_map.insert("connection");
 	unreserved_keyword_map.insert("constraints");
 	unreserved_keyword_map.insert("content");
@@ -156,6 +157,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("dictionary");
 	unreserved_keyword_map.insert("disable");
 	unreserved_keyword_map.insert("discard");
+	unreserved_keyword_map.insert("disconnect");
 	unreserved_keyword_map.insert("document");
 	unreserved_keyword_map.insert("domain");
 	unreserved_keyword_map.insert("double");

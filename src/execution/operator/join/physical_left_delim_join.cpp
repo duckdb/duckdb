@@ -9,6 +9,29 @@
 
 namespace duckdb {
 
+static void LeftDelimBindScanCollection(const PhysicalLeftDelimJoin &delim_join, ColumnDataCollection &collection) {
+	auto &cast_cached_scan = delim_join.join.children[0].get().Cast<PhysicalColumnDataScan>();
+	cast_cached_scan.collection = &collection;
+}
+
+static void LeftDelimResetSinkState(const PhysicalOperator &op, ClientContext &context,
+                                    unique_ptr<GlobalSinkState> &state) {
+	if (state && state->SupportsReuse()) {
+		state->Reset(context);
+		return;
+	}
+	state = op.GetGlobalSinkState(context);
+}
+
+static void LeftDelimResetLocalSinkState(const PhysicalOperator &op, ExecutionContext &context, GlobalSinkState &gstate,
+                                         unique_ptr<LocalSinkState> &state) {
+	if (state && state->SupportsReuse()) {
+		state->Reset(context, gstate);
+		return;
+	}
+	state = op.GetLocalSinkState(context);
+}
+
 PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(PhysicalPlan &physical_plan, PhysicalPlanGenerator &planner,
                                              vector<LogicalType> types, PhysicalOperator &original_join,
                                              PhysicalOperator &distinct,
@@ -37,19 +60,40 @@ PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(PhysicalPlan &physical_plan, Physic
 //===--------------------------------------------------------------------===//
 class LeftDelimJoinGlobalState : public GlobalSinkState {
 public:
-	explicit LeftDelimJoinGlobalState(ClientContext &context, const PhysicalLeftDelimJoin &delim_join)
-	    : lhs_data(context, delim_join.children[0].get().GetTypes()) {
-		D_ASSERT(!delim_join.delim_scans.empty());
-		// set up the delim join chunk to scan in the original join
-		auto &cast_cached_scan = delim_join.join.children[0].get().Cast<PhysicalColumnDataScan>();
-		cast_cached_scan.collection = &lhs_data;
+	explicit LeftDelimJoinGlobalState(ClientContext &context, const PhysicalLeftDelimJoin &delim_join_p)
+	    : delim_join(delim_join_p), lhs_data(context, delim_join_p.children[0].get().GetTypes()) {
+		D_ASSERT(!delim_join_p.delim_scans.empty());
+		LeftDelimBindScanCollection(delim_join_p, lhs_data);
 	}
 
+	const PhysicalLeftDelimJoin &delim_join;
 	ColumnDataCollection lhs_data;
 	mutex lhs_lock;
 
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ClientContext &context) override {
+		lhs_data.ResetForReuse();
+		LeftDelimBindScanCollection(delim_join, lhs_data);
+		LeftDelimResetSinkState(delim_join.distinct, context, delim_join.distinct.sink_state);
+		if (delim_join.delim_scans.size() > 1) {
+			PhysicalHashAggregate::SetMultiScan(*delim_join.distinct.sink_state);
+		}
+		GlobalSinkState::Reset(context);
+	}
+
 	void Merge(ColumnDataCollection &input) {
+		if (input.Count() == 0) {
+			return;
+		}
 		lock_guard<mutex> guard(lhs_lock);
+		if (lhs_data.Count() == 0) {
+			lhs_data.Swap(input);
+			LeftDelimBindScanCollection(delim_join, lhs_data);
+			return;
+		}
 		lhs_data.Combine(input);
 	}
 };
@@ -57,13 +101,25 @@ public:
 class LeftDelimJoinLocalState : public LocalSinkState {
 public:
 	explicit LeftDelimJoinLocalState(ClientContext &context, const PhysicalLeftDelimJoin &delim_join)
-	    : lhs_data(context, delim_join.children[0].get().GetTypes()) {
+	    : delim_join(delim_join), lhs_data(context, delim_join.children[0].get().GetTypes()) {
 		lhs_data.InitializeAppend(append_state);
 	}
+
+	const PhysicalLeftDelimJoin &delim_join;
 
 	unique_ptr<LocalSinkState> distinct_state;
 	ColumnDataCollection lhs_data;
 	ColumnDataAppendState append_state;
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ExecutionContext &context, GlobalSinkState &gstate) override {
+		lhs_data.ResetForReuse();
+		lhs_data.InitializeAppend(append_state);
+		LeftDelimResetLocalSinkState(delim_join.distinct, context, *delim_join.distinct.sink_state, distinct_state);
+	}
 
 	void Append(DataChunk &input) {
 		lhs_data.Append(input);

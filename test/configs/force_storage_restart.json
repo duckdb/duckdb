@@ -55,7 +55,8 @@
       "reason": "Requires latest storage for restarting",
       "paths": [
         "test/sql/catalog/dependencies/test_drop_column_sequence_dependency.test",
-        "test/sql/catalog/dependencies/test_set_default_sequence_dependency.test"
+        "test/sql/catalog/dependencies/test_set_default_sequence_dependency.test",
+        "test/sql/catalog/function/test_macro_issue_14276.test"
       ]
     },
     {
@@ -68,6 +69,21 @@
       "reason": "Tests transient segment structure before checkpoint. force_restart checkpoints after every statement, merging segments.",
       "paths": [
         "test/sql/storage/adaptive_segment_allocation.test"
+      ]
+    },
+    {
+      "reason": "total_string_length requires exact per-row-group stats; force_restart causes persistent row groups with unloaded columns where only bound-expansion is possible, making the stat unknown.",
+      "paths": [
+        "test/sql/storage/total_string_length_repeated_insert.test",
+        "test/sql/storage/extended_string_stats.test"
+      ]
+    },
+    {
+      "reason": "Test checks which columns are loaded",
+      "paths": [
+        "test/sql/storage/metadata/partial_column_metadata_reuse.test",
+        "test/sql/storage/metadata/partial_column_metadata_reuse_v7.test",
+        "test/sql/storage/metadata/full_table_metadata_reuse_v7.test"
       ]
     }
   ]

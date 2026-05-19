@@ -52,6 +52,16 @@ struct OperatorInformation {
 	idx_t rows_scanned = 0;
 
 	InsertionOrderPreservingMap<string> extra_info;
+	bool extra_info_dirty = false;
+
+	void ResetMetrics() {
+		time = 0;
+		elements_returned = 0;
+		result_set_size = 0;
+		system_peak_buffer_manager_memory = 0;
+		system_peak_temp_directory_size = 0;
+		rows_scanned = 0;
+	}
 
 	template <typename T>
 	void AddMetric(MetricType type, T metric) {

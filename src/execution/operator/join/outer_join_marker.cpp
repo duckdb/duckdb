@@ -18,6 +18,9 @@ void OuterJoinMarker::Reset() {
 	if (!enabled) {
 		return;
 	}
+	if (count == 0) {
+		return;
+	}
 	memset(found_match.get(), 0, sizeof(bool) * count);
 }
 

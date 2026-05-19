@@ -5,9 +5,11 @@ import contextlib
 import os
 import re
 import shlex
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass
@@ -22,6 +24,7 @@ DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.05
 # Leave some CPU headroom so parallel test execution does not fully saturate CI runners.
 DEFAULT_WORKERS = "75%"
 DEFAULT_MAX_RETRIES = 4
+STOP_REQUESTED = threading.Event()
 
 
 def enable_line_buffering():
@@ -29,6 +32,14 @@ def enable_line_buffering():
         sys.stdout.reconfigure(line_buffering=True, write_through=True)
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(line_buffering=True, write_through=True)
+
+
+def signal_stop_requested(signum, frame):
+    STOP_REQUESTED.set()
+
+
+def stop_requested():
+    return STOP_REQUESTED.is_set()
 
 
 @dataclass(frozen=True)
@@ -333,54 +344,41 @@ def parse_skipped_tests_count(output: str):
     return int(match.group(1))
 
 
-def parse_skipped_test_reasons(output: str):
+def parse_skipped_test_summary(output: str):
+    skipped_count = 0
     reasons = {}
-    lines = strip_ansi(output).splitlines()
-    for idx, line in enumerate(lines):
-        if line.strip() != "Skipped tests for the following reasons:":
-            continue
-
-        for reason_line in lines[idx + 1 :]:
-            reason_line = reason_line.strip()
-            if not reason_line:
-                break
-            match = SKIP_REASON_PATTERN.match(reason_line)
-            if not match:
-                break
-            reasons[match.group(1)] = reasons.get(match.group(1), 0) + int(match.group(2))
-        break
-    return reasons
-
-
-def parse_mode_skip_reasons(output: str):
-    reasons = {}
+    in_skip_summary = False
     for line in strip_ansi(output).splitlines():
         stripped = line.strip()
-        if SKIP_REASON_PATTERN.match(stripped):
+        if skipped_count == 0:
+            count_match = SKIPPED_TESTS_PATTERN.search(stripped)
+            if count_match:
+                skipped_count = int(count_match.group(1))
+        if stripped == "Skipped tests for the following reasons:":
+            in_skip_summary = True
             continue
-        match = MODE_SKIP_REASON_PATTERN.match(stripped)
-        if not match:
-            continue
-        reason = match.group(1) or "unspecified"
-        reason_key = f"mode skip {reason}"
-        reasons[reason_key] = reasons.get(reason_key, 0) + 1
-    return reasons
+        if in_skip_summary:
+            if not stripped:
+                in_skip_summary = False
+                continue
+            reason_match = SKIP_REASON_PATTERN.match(stripped)
+            if not reason_match:
+                in_skip_summary = False
+                continue
+            reasons[reason_match.group(1)] = reasons.get(reason_match.group(1), 0) + int(reason_match.group(2))
+    return skipped_count, reasons
 
 
 def extract_skipped_test_output(stdout: str, stderr: str):
-    stdout_count = parse_skipped_tests_count(stdout)
-    stdout_reasons = parse_skipped_test_reasons(stdout)
-    stdout_mode_skip_reasons = parse_mode_skip_reasons(stdout)
-    if stdout_count > 0 or stdout_reasons or stdout_mode_skip_reasons:
-        return stdout
+    stdout_summary = parse_skipped_test_summary(stdout)
+    if stdout_summary[0] > 0 or stdout_summary[1]:
+        return stdout_summary
 
-    stderr_count = parse_skipped_tests_count(stderr)
-    stderr_reasons = parse_skipped_test_reasons(stderr)
-    stderr_mode_skip_reasons = parse_mode_skip_reasons(stderr)
-    if stderr_count > 0 or stderr_reasons or stderr_mode_skip_reasons:
-        return stderr
+    stderr_summary = parse_skipped_test_summary(stderr)
+    if stderr_summary[0] > 0 or stderr_summary[1]:
+        return stderr_summary
 
-    return ""
+    return 0, {}
 
 
 def run_batch(config: TestRunnerConfig, batch):
@@ -530,7 +528,7 @@ def parse_args(argv: list[str] | None = None):
         "--test-config",
         action="append",
         default=[],
-        help="path to test config; may be passed multiple times and is appended to test flags",
+        help="path to test config; may be passed multiple times and runs each config independently",
     )
     parser.add_argument(
         "--test-flags",
@@ -577,19 +575,129 @@ class InvocationResult:
     stderr: str
 
 
+@dataclass(frozen=True)
+class ConfigInvocation:
+    label: str
+    test_flags: str
+    test_config: str | None
+
+
+def build_test_flags(base_flags: str, test_config: str | None):
+    if not test_config:
+        return base_flags
+    config_flag = f"--test-config {shlex.quote(test_config)}"
+    return " ".join(flag for flag in [base_flags, config_flag] if flag)
+
+
+def build_config_invocations(test_configs: list[str], base_flags: str):
+    if not test_configs:
+        return [ConfigInvocation(label="default", test_flags=base_flags, test_config=None)]
+    return [
+        ConfigInvocation(
+            label=test_config, test_flags=build_test_flags(base_flags, test_config), test_config=test_config
+        )
+        for test_config in test_configs
+    ]
+
+
+def create_temp_test_list(
+    unittest_bin: str,
+    test_flags: str,
+    patterns: list[str],
+    test_list_files: list[Path] | None,
+):
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_file:
+        generate_test_list(test_file, unittest_bin, test_flags, patterns, test_list_files)
+        return Path(test_file.name)
+
+
+def run_single_config(
+    args,
+    unittest_bin: str,
+    workers: int,
+    retry: int,
+    max_retries: int,
+    max_failures: int | None,
+    batch_size: int,
+    test_list_files: list[Path],
+    invocation: ConfigInvocation,
+):
+    if stop_requested():
+        return 130
+    print(f"=== config run: {invocation.label} ===")
+    generated_test_list: Path | None = None
+    try:
+        if args.test_list is not None and len(test_list_files) == 1:
+            test_list_path = args.test_list
+        else:
+            generated_test_list = create_temp_test_list(
+                unittest_bin, invocation.test_flags, args.patterns, test_list_files
+            )
+            test_list_path = generated_test_list
+        config = TestRunnerConfig(
+            test_list=test_list_path,
+            unittest_bin=unittest_bin,
+            test_flags=invocation.test_flags,
+            patterns=args.patterns,
+            test_command=args.test_command,
+            workers=workers,
+            retry=retry,
+            max_retries=max_retries,
+            batch_size=batch_size,
+            batch_timeout_seconds=args.batch_timeout,
+            rss_memory_threshold_mib=args.track_rss_memory,
+            runtime_threshold_seconds=args.track_runtime,
+            max_failures=max_failures,
+        )
+
+        tests = load_tests(config.test_list)
+        if stop_requested():
+            return 130
+        if args.changed_tests is not None:
+            merged_names = {test.name for test in tests}
+            base_names = {test.name for test in load_tests(args.test_list)}
+            added_test_count = len(merged_names - base_names)
+            print(f"added {added_test_count} tests from --changed-tests file to the smoke test run")
+        computed_batch_size = compute_batch_size(len(tests), config)
+
+        print(f"found {len(tests)} tests")
+        config_values = asdict(config)
+        config_values["batch_size"] = computed_batch_size
+        config_values.pop("test_list", None)
+        config_values.pop("unittest_bin", None)
+        config_values.pop("test_command", None)
+        config_values = {k: v for k, v in config_values.items() if v is not None and v != "" and v != []}
+        config_output = ", ".join(f"{key}={value}" for key, value in config_values.items())
+        print(f"config: {config_output}")
+
+        batches = list(chunked(tests, computed_batch_size))
+        return run_tests(config, batches)
+    finally:
+        if generated_test_list is not None:
+            generated_test_list.unlink(missing_ok=True)
+
+
 def main(argv: list[str] | None = None):
     enable_line_buffering()
+    STOP_REQUESTED.clear()
+    previous_sigint_handler = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT, signal_stop_requested)
+    try:
+        return main_impl(argv)
+    finally:
+        signal.signal(signal.SIGINT, previous_sigint_handler)
+
+
+def main_impl(argv: list[str] | None = None):
     args = parse_args(argv)
     if args.changed_tests is not None and args.test_list is None:
         print("error: --changed-tests requires --test-list", file=sys.stderr)
         return 1
 
     test_list_files = [path for path in [args.test_list, args.changed_tests] if path is not None]
-    test_flags = args.test_flags
-    for config in args.test_config:
-        # The unittest binary parses "--test-config" as a separate option + value pair.
-        config_flag = f"--test-config {shlex.quote(config)}"
-        test_flags = " ".join(flag for flag in [test_flags, config_flag] if flag)
+    config_invocations = build_config_invocations(args.test_config, args.test_flags)
+    is_ci = bool(os.environ.get("CI"))
+    use_config_groups = is_ci and len(config_invocations) > 1
     max_failures = args.max_failures
     if args.fail_fast:
         max_failures = 1
@@ -607,43 +715,49 @@ def main(argv: list[str] | None = None):
         batch_size = 1
     else:
         batch_size = args.batch_size
-    with open_test_list(args.test_list, unittest_bin, test_flags, args.patterns, test_list_files) as test_file:
-        config = TestRunnerConfig(
-            test_list=test_file,
-            unittest_bin=unittest_bin,
-            test_flags=test_flags,
-            patterns=args.patterns,
-            test_command=args.test_command,
-            workers=workers,
-            retry=retry,
-            max_retries=max_retries,
-            batch_size=batch_size,
-            batch_timeout_seconds=args.batch_timeout,
-            rss_memory_threshold_mib=args.track_rss_memory,
-            runtime_threshold_seconds=args.track_runtime,
-            max_failures=max_failures,
-        )
+    failed_configs = []
+    keep_groups_open = False
+    if len(config_invocations) > 1:
+        print(f"running {len(config_invocations)} configs")
+    for invocation in config_invocations:
+        if stop_requested():
+            print("interrupted")
+            return 130
+        group_open = False
+        if use_config_groups:
+            print(f"::group::test config: {invocation.label}")
+            group_open = True
+        try:
+            returncode = run_single_config(
+                args,
+                unittest_bin,
+                workers,
+                retry,
+                max_retries,
+                max_failures,
+                batch_size,
+                test_list_files,
+                invocation,
+            )
+        except Exception as exc:
+            print(f"error: {exc}")
+            returncode = 1
+        failed = returncode not in (0, 130)
+        if failed:
+            keep_groups_open = True
+        if group_open and not keep_groups_open:
+            print("::endgroup::")
+        if returncode == 130:
+            print("interrupted")
+            return 130
+        if returncode != 0:
+            failed_configs.append(invocation.label)
 
-        tests = load_tests(config.test_list)
-        if args.changed_tests is not None:
-            merged_names = {test.name for test in tests}
-            base_names = {test.name for test in load_tests(args.test_list)}
-            added_test_count = len(merged_names - base_names)
-            print(f"added {added_test_count} tests from --changed-tests file to the smoke test run")
-        batch_size = compute_batch_size(len(tests), config)
-
-        print(f"found {len(tests)} tests")
-        config_values = asdict(config)
-        config_values["batch_size"] = batch_size
-        config_values.pop("test_list", None)
-        config_values.pop("unittest_bin", None)
-        config_values.pop("test_command", None)
-        config_values = {k: v for k, v in config_values.items() if v is not None and v != "" and v != []}
-        config_output = ", ".join(f"{key}={value}" for key, value in config_values.items())
-        print(f"config: {config_output}")
-
-        batches = list(chunked(tests, batch_size))
-        return run_tests(config, batches)
+    if failed_configs:
+        print(f"error: {len(failed_configs)} config runs failed: {', '.join(failed_configs)}")
+        return 1
+    print(f"all {len(config_invocations)} config runs passed")
+    return 0
 
 
 def invoke(argv: list[str], cwd: Path | None = None) -> InvocationResult:
@@ -678,13 +792,26 @@ def run_tests(config: TestRunnerConfig, batches):
             progress=progress,
         )
 
+        if stop_requested():
+            return 130
         next_batch_idx = submit_batches(executor, config, batches, future_to_batch, next_batch_idx)
 
         while future_to_batch:
+            if stop_requested():
+                state.stop_launching = True
+                for future in future_to_batch:
+                    future.cancel()
+                break
             done, _ = concurrent.futures.wait(
                 future_to_batch,
+                timeout=0.2,
                 return_when=concurrent.futures.FIRST_COMPLETED,
             )
+            if not done and stop_requested():
+                state.stop_launching = True
+                for future in future_to_batch:
+                    future.cancel()
+                break
             for future in done:
                 batch_info = future_to_batch.pop(future)
                 result = future.result()
@@ -694,19 +821,19 @@ def run_tests(config: TestRunnerConfig, batches):
                     if handle_failed_batch(ctx, batch_info, result):
                         continue
                 else:
-                    skipped_output = extract_skipped_test_output(result["stdout"], result["stderr"])
-                    total_skipped_tests += parse_skipped_tests_count(skipped_output)
-                    for reason, count in parse_skipped_test_reasons(skipped_output).items():
-                        skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
-                    for reason, count in parse_mode_skip_reasons(skipped_output).items():
+                    skipped_count, skipped_reasons = extract_skipped_test_output(result["stdout"], result["stderr"])
+                    total_skipped_tests += skipped_count
+                    for reason, count in skipped_reasons.items():
                         skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
                 progress.advance(next_batch_idx - len(future_to_batch))
 
-            if not state.stop_launching:
+            if not state.stop_launching and not stop_requested():
                 next_batch_idx = submit_batches(executor, config, batches, future_to_batch, next_batch_idx)
 
     progress.flush_line()
     elapsed = time.monotonic() - start
+    if stop_requested():
+        return 130
     if state.failed_count:
         print(f"error: found {state.failed_count} test batch failures in {elapsed:.0f}s")
         return 1

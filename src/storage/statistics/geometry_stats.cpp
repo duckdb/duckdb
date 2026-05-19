@@ -195,7 +195,7 @@ void GeometryStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	target.Merge(source);
 }
 
-void GeometryStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void GeometryStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
 	// TODO: Verify stats
 }
 

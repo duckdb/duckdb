@@ -618,6 +618,12 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformTrimExpression);
 	REGISTER_TRANSFORM(TransformTrimDirection);
 	REGISTER_TRANSFORM(TransformTrimSource);
+	REGISTER_TRANSFORM(TransformOverlayExpression);
+	REGISTER_TRANSFORM(TransformOverlayArguments);
+	REGISTER_TRANSFORM(TransformOverlayParameters);
+	REGISTER_TRANSFORM(TransformFromExpression);
+	REGISTER_TRANSFORM(TransformForExpression);
+	REGISTER_TRANSFORM(TransformOverlayExpressionList);
 	REGISTER_TRANSFORM(TransformPositionExpression);
 	REGISTER_TRANSFORM(TransformCastExpression);
 	REGISTER_TRANSFORM(TransformCastOrTryCast);
@@ -672,6 +678,13 @@ void PEGTransformerFactory::RegisterLoad() {
 	REGISTER_TRANSFORM(TransformUpdateExtensionsStatement);
 	REGISTER_TRANSFORM(TransformFromSource);
 	REGISTER_TRANSFORM(TransformVersionNumber);
+}
+
+void PEGTransformerFactory::RegisterConnect() {
+	// connect.gram — both rules are hand-written; the generator skips them because of the
+	// optional SessionTarget sub-rule.
+	REGISTER_TRANSFORM(TransformConnectStatement);
+	REGISTER_TRANSFORM(TransformDisconnectStatement);
 }
 
 void PEGTransformerFactory::RegisterMergeInto() {
@@ -1101,6 +1114,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterExplain();
 	RegisterExpression();
 	RegisterInsert();
+	RegisterConnect();
 	RegisterLoad();
 	RegisterMergeInto();
 	RegisterPivot();
