@@ -900,7 +900,7 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	// - metadata = BLOB
 	// - value = BLOB
 
-	auto &variant_vec = input.data[0];
+	const auto &variant_vec = input.data[0];
 	auto count = input.size();
 
 	RecursiveUnifiedVectorFormat recursive_format;

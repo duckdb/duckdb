@@ -86,13 +86,13 @@ static unique_ptr<FunctionData> JsonSerializeBind(BindScalarFunctionInput &input
 static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &local_state = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = local_state.json_allocator->GetYYAlc();
-	auto &inputs = args.data[0];
+	const auto &inputs = args.data[0];
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.bind_info->Cast<JsonSerializeBindData>();
 
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(inputs, result, [&](string_t input) {
 		auto doc = JSONCommon::CreateDocument(alc);
 		auto result_obj = yyjson_mut_obj(doc);
 		yyjson_mut_doc_set_root(doc, result_obj);
@@ -227,10 +227,10 @@ static vector<unique_ptr<SelectStatement>> DeserializeSelectStatement(string_t i
 static void JsonDeserializeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &local_state = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = local_state.json_allocator->GetYYAlc();
-	auto &inputs = args.data[0];
+	const auto &inputs = args.data[0];
 
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(inputs, result, [&](string_t input) {
 		auto stmts = DeserializeSelectStatement(input, alc);
 		// Combine all statements into a single semicolon separated string
 		string str;

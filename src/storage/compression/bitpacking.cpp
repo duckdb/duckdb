@@ -315,7 +315,7 @@ unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalTyp
 }
 
 template <class T>
-bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
+bool BitpackingAnalyze(AnalyzeState &state, const Vector &input) {
 	// We use BITPACKING_METADATA_GROUP_SIZE tuples, which can exceed the block size.
 	// In that case, we disable bitpacking.
 	// we are conservative here by multiplying by 2
@@ -473,7 +473,7 @@ public:
 		metadata_ptr = handle.GetDataMutable() + info.GetBlockSize();
 	}
 
-	void Append(Vector &input, idx_t count) {
+	void Append(const Vector &input) {
 		for (auto entry : input.Values<T>()) {
 			state.template Update<BitpackingWriter>(entry);
 		}
@@ -526,9 +526,9 @@ unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointData 
 }
 
 template <class T, bool WRITE_STATISTICS>
-void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void BitpackingCompress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = state_p.Cast<BitpackingCompressionState<T, WRITE_STATISTICS>>();
-	state.Append(scan_vector, count);
+	state.Append(scan_vector);
 }
 
 template <class T, bool WRITE_STATISTICS>
@@ -582,8 +582,8 @@ template <class T, class T_S = typename MakeSigned<T>::type>
 struct BitpackingScanState : public SegmentScanState {
 public:
 	explicit BitpackingScanState(const QueryContext &context, ColumnSegment &segment) : current_segment(segment) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-		handle = buffer_manager.Pin(context, segment.block);
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+		handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 		auto data_ptr = handle.GetDataMutable();
 
 		// load offset to bitpacking widths pointer
@@ -592,7 +592,7 @@ public:
 		    data_ptr + segment.GetBlockOffset() + bitpacking_metadata_offset - sizeof(bitpacking_metadata_encoded_t);
 		if (bitpacking_metadata_ptr >= handle.GetDataMutable() + current_segment.GetBlockSize()) {
 			throw InternalException("Bitpacking offset is out of range at block \"%llu\" - corrupt database file",
-			                        segment.block->BlockId());
+			                        segment.GetBlockHandle()->BlockId());
 		}
 
 		// load the first group

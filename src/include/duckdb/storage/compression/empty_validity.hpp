@@ -42,10 +42,11 @@ public:
 	                                                    unique_ptr<AnalyzeState> state_p) {
 		return make_uniq<EmptyValidityCompressionState>(checkpoint_data);
 	}
-	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+	static void Compress(CompressionState &state_p, const Vector &scan_vector) {
 		auto &state = state_p.Cast<EmptyValidityCompressionState>();
 		UnifiedVectorFormat format;
 		scan_vector.ToUnifiedFormat(format);
+		const auto count = scan_vector.size();
 		state.non_nulls += format.validity.CountValid(count);
 		state.count += count;
 	}
@@ -66,7 +67,7 @@ public:
 		stats_writer.Merge(compressed_segment->GetStatsMutable());
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
-		auto handle = buffer_manager.Pin(compressed_segment->block);
+		auto handle = buffer_manager.Pin(compressed_segment->GetBlockHandle());
 
 		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
 		checkpoint_state.FlushSegment(std::move(compressed_segment), std::move(handle), 0);

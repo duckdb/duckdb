@@ -34,27 +34,42 @@ EXPLAIN SELECT * FROM ts_table WHERE CAST(col AS TIMESTAMPTZ) <= TIMESTAMPTZ '20
 physical_plan	<REGEX>:.*optional.*col.*
 
 # ---------------------------------------------------------------------------
-# DATE -> TIMESTAMP (margin = 0, lossless)
+# DATE -> TIMESTAMP: midnight timestamps are rewritten to direct DATE filters
+# (comparison simplification removes the cast via value-level round-trip check)
 # ---------------------------------------------------------------------------
 query II
 EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) > '2024-01-01'::TIMESTAMP;
 ----
-physical_plan	<REGEX>:.*optional.*col.*
+physical_plan	<REGEX>:.*col.*DATE.*
 
 query II
 EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) < '2021-01-01'::TIMESTAMP;
 ----
-physical_plan	<REGEX>:.*optional.*col.*
+physical_plan	<REGEX>:.*col.*DATE.*
 
 query II
 EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) >= '2022-06-15'::TIMESTAMP;
 ----
-physical_plan	<REGEX>:.*optional.*col.*
+physical_plan	<REGEX>:.*col.*DATE.*
 
 query II
 EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) = '2022-06-15'::TIMESTAMP;
 ----
-physical_plan	<REGEX>:.*optional.*col.*
+physical_plan	<REGEX>:.*col.*DATE.*
+
+# ---------------------------------------------------------------------------
+# DATE -> TIMESTAMP: non-midnight comparisons no longer need the zone map —
+# ordering ops rewrite to direct DATE filters, = folds to EMPTY_RESULT.
+# ---------------------------------------------------------------------------
+query II
+EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) > '2024-01-01 12:00:00'::TIMESTAMP;
+----
+physical_plan	<REGEX>:.*col.*DATE.*
+
+query II
+EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) = '2024-01-01 12:00:00'::TIMESTAMP;
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
 
 # ---------------------------------------------------------------------------
 # TIMESTAMP -> DATE (margin = 24h)
@@ -126,17 +141,17 @@ physical_plan	<REGEX>:.*optional.*col.*
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Constant on left side (inverted comparison)
+# Constant on left side (inverted comparison) — midnight, rewritten to DATE
 # ---------------------------------------------------------------------------
 query II
 EXPLAIN SELECT * FROM date_table WHERE '2024-01-01'::TIMESTAMP < CAST(col AS TIMESTAMP);
 ----
-physical_plan	<REGEX>:.*optional.*col.*
+physical_plan	<REGEX>:.*col.*DATE.*
 
 query II
 EXPLAIN SELECT * FROM date_table WHERE '2021-01-01'::TIMESTAMP > CAST(col AS TIMESTAMP);
 ----
-physical_plan	<REGEX>:.*optional.*col.*
+physical_plan	<REGEX>:.*col.*DATE.*
 
 # ---------------------------------------------------------------------------
 # Negative: != should NOT produce an optional filter
@@ -158,12 +173,12 @@ EXPLAIN SELECT * FROM int_table WHERE CAST(col AS VARCHAR) > '50000';
 physical_plan	<!REGEX>:.*optional.*
 
 # ---------------------------------------------------------------------------
-# Original filter is preserved (not just the optional)
+# Midnight: cast is eliminated, direct DATE filter remains
 # ---------------------------------------------------------------------------
 query II
 EXPLAIN SELECT * FROM date_table WHERE CAST(col AS TIMESTAMP) > '2024-01-01'::TIMESTAMP;
 ----
-physical_plan	<REGEX>:.*CAST.*col.*TIMESTAMP.*
+physical_plan	<REGEX>:.*col > '2024-01-01'::DATE.*
 
 # ---------------------------------------------------------------------------
 # Correctness: results match expected values

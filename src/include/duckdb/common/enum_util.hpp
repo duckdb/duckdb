@@ -132,9 +132,13 @@ enum class ColumnDataScanProperties : uint8_t;
 
 enum class ColumnIndexType : uint8_t;
 
+enum class ColumnSegmentInfoScanType : uint8_t;
+
 enum class ColumnSegmentType : uint8_t;
 
 enum class CompressedMaterializationDirection : uint8_t;
+
+enum class CompressedMaterializationType : uint8_t;
 
 enum class CompressionType : uint8_t;
 
@@ -692,10 +696,16 @@ template<>
 const char* EnumUtil::ToChars<ColumnIndexType>(ColumnIndexType value);
 
 template<>
+const char* EnumUtil::ToChars<ColumnSegmentInfoScanType>(ColumnSegmentInfoScanType value);
+
+template<>
 const char* EnumUtil::ToChars<ColumnSegmentType>(ColumnSegmentType value);
 
 template<>
 const char* EnumUtil::ToChars<CompressedMaterializationDirection>(CompressedMaterializationDirection value);
+
+template<>
+const char* EnumUtil::ToChars<CompressedMaterializationType>(CompressedMaterializationType value);
 
 template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value);
@@ -1455,10 +1465,16 @@ template<>
 ColumnIndexType EnumUtil::FromString<ColumnIndexType>(const char *value);
 
 template<>
+ColumnSegmentInfoScanType EnumUtil::FromString<ColumnSegmentInfoScanType>(const char *value);
+
+template<>
 ColumnSegmentType EnumUtil::FromString<ColumnSegmentType>(const char *value);
 
 template<>
 CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializationDirection>(const char *value);
+
+template<>
+CompressedMaterializationType EnumUtil::FromString<CompressedMaterializationType>(const char *value);
 
 template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value);

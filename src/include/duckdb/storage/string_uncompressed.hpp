@@ -60,7 +60,7 @@ public:
 
 public:
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
-	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
+	static bool StringAnalyze(AnalyzeState &state_p, const Vector &input);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
@@ -75,9 +75,9 @@ public:
 	                                                            optional_ptr<ColumnSegmentState> segment_state);
 
 	static unique_ptr<CompressionAppendState> StringInitAppend(ColumnSegment &segment) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 		// This block was initialized in StringInitSegment
-		auto handle = buffer_manager.Pin(segment.block);
+		auto handle = buffer_manager.Pin(segment.GetBlockHandle());
 		return make_uniq<CompressionAppendState>(std::move(handle));
 	}
 
@@ -88,8 +88,8 @@ public:
 
 	static idx_t StringAppendBase(ColumnSegment &segment, BaseStatistics &stats, UnifiedVectorFormat &data,
 	                              idx_t offset, idx_t count) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-		auto handle = buffer_manager.Pin(segment.block);
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+		auto handle = buffer_manager.Pin(segment.GetBlockHandle());
 		return StringAppendBase(handle, segment, stats, data, offset, count);
 	}
 
@@ -200,8 +200,8 @@ public:
 			return;
 		}
 		// we need to decrement the dictionary size by all of the strings we are erasing
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-		auto handle = buffer_manager.Pin(segment.block);
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+		auto handle = buffer_manager.Pin(segment.GetBlockHandle());
 		auto handle_ptr = handle.GetDataMutable();
 		auto result_data = reinterpret_cast<int32_t *>(handle_ptr + DICTIONARY_HEADER_SIZE);
 		auto dictionary_size = reinterpret_cast<uint32_t *>(handle_ptr);

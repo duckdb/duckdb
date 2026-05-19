@@ -124,8 +124,8 @@ public:
 	void Scan(TopNScanState &state, DataChunk &chunk, idx_t &pos);
 
 	bool CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, TopNBoundaryValue &boundary_val);
-	void AddSmallHeap(DataChunk &input, Vector &sort_keys_vec);
-	void AddLargeHeap(DataChunk &input, Vector &sort_keys_vec);
+	void AddSmallHeap(DataChunk &input, const Vector &sort_keys_vec);
+	void AddLargeHeap(DataChunk &input, const Vector &sort_keys_vec);
 
 public:
 	idx_t ReduceThreshold() const {
@@ -198,7 +198,7 @@ TopNHeap::TopNHeap(ExecutionContext &context, const vector<LogicalType> &payload
     : TopNHeap(context.client, BufferAllocator::Get(context.client), payload_types, orders, limit, offset) {
 }
 
-void TopNHeap::AddSmallHeap(DataChunk &input, Vector &sort_keys_vec) {
+void TopNHeap::AddSmallHeap(DataChunk &input, const Vector &sort_keys_vec) {
 	// insert the sort keys into the priority queue
 	constexpr idx_t BASE_INDEX = NumericLimits<uint32_t>::Maximum();
 
@@ -240,7 +240,7 @@ void TopNHeap::AddSmallHeap(DataChunk &input, Vector &sort_keys_vec) {
 	heap_data.Append(input, matching_sel, match_count, VectorAppendMode::ALLOW_RESIZE);
 }
 
-void TopNHeap::AddLargeHeap(DataChunk &input, Vector &sort_keys_vec) {
+void TopNHeap::AddLargeHeap(DataChunk &input, const Vector &sort_keys_vec) {
 	auto sort_key_values = FlatVector::GetData<string_t>(sort_keys_vec);
 	idx_t base_index = heap_data.size();
 	idx_t match_count = 0;

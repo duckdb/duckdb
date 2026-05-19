@@ -38,12 +38,12 @@ struct FSSTStorage {
 	static constexpr double ANALYSIS_SAMPLE_SIZE = 0.25;
 
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
-	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
+	static bool StringAnalyze(AnalyzeState &state_p, const Vector &input);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> analyze_state_p);
-	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
+	static void Compress(CompressionState &state_p, const Vector &scan_vector);
 	static void FinalizeCompress(CompressionState &state_p);
 
 	static unique_ptr<SegmentScanState> StringInitScan(const QueryContext &context, ColumnSegment &segment);
@@ -105,11 +105,12 @@ unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, Ph
 	return make_uniq<FSSTAnalyzeState>(col_data.GetBlockManager());
 }
 
-bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
+bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {
 	auto &state = state_p.Cast<FSSTAnalyzeState>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(vdata);
 
+	const auto count = input.size();
 	state.count += count;
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 
@@ -321,8 +322,8 @@ public:
 	}
 
 	idx_t Finalize() {
-		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
-		auto handle = buffer_manager.Pin(current_segment->block);
+		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->GetDatabase());
+		auto handle = buffer_manager.Pin(current_segment->GetBlockHandle());
 		if (current_dictionary.end != info.GetBlockSize()) {
 			throw InternalException("dictionary end does not match the block size in FSSTCompressionState::Finalize");
 		}
@@ -415,7 +416,7 @@ unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointDa
 	return std::move(compression_state);
 }
 
-void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void FSSTStorage::Compress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = state_p.Cast<FSSTCompressionState>();
 
 	// Get vector data
@@ -428,6 +429,7 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 	vector<unsigned char *> strings_in;
 	size_t total_size = 0;
 	idx_t total_count = 0;
+	const auto count = scan_vector.size();
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 
@@ -556,8 +558,8 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &con
 	auto block_size = segment.GetBlockSize();
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(block_size);
 	auto state = make_uniq<FSSTScanState>(string_block_limit);
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	state->handle = buffer_manager.Pin(segment.block);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	state->handle = buffer_manager.Pin(segment.GetBlockHandle());
 	auto base_ptr = state->handle.GetDataMutable() + segment.GetBlockOffset();
 
 	state->duckdb_fsst_decoder = make_buffer<duckdb_fsst_decoder_t>();
@@ -629,7 +631,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 
 	bool enable_fsst_vectors;
 	if (ALLOW_FSST_VECTORS) {
-		enable_fsst_vectors = Settings::Get<EnableFSSTVectorsSetting>(segment.db);
+		enable_fsst_vectors = Settings::Get<EnableFSSTVectorsSetting>(segment.GetDatabase());
 	} else {
 		enable_fsst_vectors = false;
 	}
@@ -716,8 +718,8 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 //===--------------------------------------------------------------------===//
 void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto handle = buffer_manager.Pin(segment.block);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
 	auto base_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
 	auto base_data = data_ptr_cast(base_ptr + sizeof(fsst_compression_header_t));
 	auto dict = GetDictionary(segment, handle);

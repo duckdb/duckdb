@@ -109,13 +109,15 @@ struct ListVector {
 	DUCKDB_API static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size);
 	DUCKDB_API static void PushBack(Vector &target, const Value &insert);
 	//! Returns the child_vector of list starting at offset until offset + count, and its length
-	DUCKDB_API static idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count);
+	DUCKDB_API static idx_t GetConsecutiveChildList(const Vector &list, Vector &result, idx_t offset, idx_t count);
 	//! Returns information to only copy a section of a list child vector
-	DUCKDB_API static ConsecutiveChildListInfo GetConsecutiveChildListInfo(Vector &list, idx_t offset, idx_t count);
+	DUCKDB_API static ConsecutiveChildListInfo GetConsecutiveChildListInfo(const Vector &list, idx_t offset,
+	                                                                       idx_t count);
 	//! Slice and flatten a child vector to only contain a consecutive subsection of the child entries
-	DUCKDB_API static void GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel, idx_t offset, idx_t count);
+	DUCKDB_API static void GetConsecutiveChildSelVector(const Vector &list, SelectionVector &sel, idx_t offset,
+	                                                    idx_t count);
 	//! Returns the total number of entries in the list
-	DUCKDB_API static idx_t GetTotalEntryCount(Vector &list, idx_t count);
+	DUCKDB_API static idx_t GetTotalEntryCount(const Vector &list);
 
 private:
 	template <class T>

@@ -107,7 +107,7 @@ struct CaseConvertOperator {
 
 template <bool IS_UPPER>
 static void CaseConvertFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperator<IS_UPPER>>(args.data[0], result, args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperator<IS_UPPER>>(args.data[0], result);
 }
 
 namespace {
@@ -124,8 +124,7 @@ struct CaseConvertOperatorASCII {
 
 template <bool IS_UPPER>
 static void CaseConvertFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperatorASCII<IS_UPPER>>(args.data[0], result,
-	                                                                                     args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperatorASCII<IS_UPPER>>(args.data[0], result);
 }
 
 template <bool IS_UPPER>
