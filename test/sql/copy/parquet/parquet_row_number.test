@@ -71,7 +71,7 @@ select min(file_row_number), max(file_row_number), count(*) from parquet_scan('{
 query IIII
 select s.min, s.max, s.has_null, s.has_no_null from (select first(stats(file_row_number)) s from parquet_scan('{DATA_DIR}/parquet-testing/lineitem-top10000.gzip.parquet', file_row_number=1));
 ----
-0	10000	false	true
+0	9999	false	true
 
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;

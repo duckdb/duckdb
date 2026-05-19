@@ -523,13 +523,15 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 static void MergeOperatorExtraInfo(const InsertionOrderPreservingMap<string> &local_extra_info,
                                    Value &global_extra_info) {
 	InsertionOrderPreservingMap<string> merged;
-	const auto &children = MapValue::GetChildren(global_extra_info);
-	for (const auto &child : children) {
-		const auto &struct_children = StructValue::GetChildren(child);
-		const auto key = struct_children[0].GetValue<string>();
-		const auto value = struct_children[1].GetValue<string>();
+	if (!global_extra_info.IsNull()) {
+		const auto &children = MapValue::GetChildren(global_extra_info);
+		for (const auto &child : children) {
+			const auto &struct_children = StructValue::GetChildren(child);
+			const auto key = struct_children[0].GetValue<string>();
+			const auto value = struct_children[1].GetValue<string>();
 
-		merged[key] = value;
+			merged[key] = value;
+		}
 	}
 
 	for (const auto &entry : local_extra_info) {
@@ -573,7 +575,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			info.MetricSum<idx_t>(MetricType::RESULT_SET_SIZE, node.second.result_set_size);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricType::EXTRA_INFO) && node.second.extra_info_dirty) {
-			info.metrics[MetricType::EXTRA_INFO] = Value::MAP(node.second.extra_info);
+			MergeOperatorExtraInfo(node.second.extra_info, info.metrics[MetricType::EXTRA_INFO]);
 			node.second.extra_info_dirty = false;
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {
