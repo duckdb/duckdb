@@ -774,7 +774,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 		D_ASSERT(entry->GetRowStart() == source_base_row_id + source_offset);
 		auto row_group = entry->MoveNode();
 		row_group->MoveToCollection(*this);
-		auto row_group_count = row_group->count;
+		idx_t row_group_count = row_group->count;
 
 		if (commit_state && merged_count < optimistically_written_count) {
 			// serialize the block pointers of this row group
