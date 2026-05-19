@@ -161,7 +161,7 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 
 	while (count < STANDARD_VECTOR_SIZE) {
 		if (lstate.buffer_offset >= lstate.buffer.size()) {
-			// drained the current row group's buffer; pull the next row group under the global lock
+			// drained the current buffer; pull the next row group under the global lock
 			lstate.buffer.clear();
 			lstate.buffer_offset = 0;
 			bool has_more;
@@ -178,7 +178,13 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 			}
 		}
 
-		auto &entry = lstate.buffer[lstate.buffer_offset++];
+		auto &entry = lstate.buffer[lstate.buffer_offset];
+		// keep each output chunk to a single row group so batch_index identifies its contents.
+		// merging is allowed when the next entry happens to belong to the same row group.
+		if (count > 0 && entry.row_group_index != lstate.batch_index) {
+			break;
+		}
+		lstate.buffer_offset++;
 		lstate.batch_index = entry.row_group_index;
 
 		row_group_id.Append(Value::BIGINT(NumericCast<int64_t>(entry.row_group_index)));
