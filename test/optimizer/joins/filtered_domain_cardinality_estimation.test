@@ -1,0 +1,131 @@
+# name: test/optimizer/joins/filtered_domain_cardinality_estimation.test
+# description: Join cardinality estimation with filtered domains and non-equality predicate groups
+# group: [joins]
+
+statement ok
+set disabled_optimizers='statistics_propagation';
+
+# A filtered date dimension with an HLL distinct count on the date key should
+# contribute at most its filtered cardinality to the equality domain.
+
+statement ok
+create table fd_date_dim as
+select range::integer d_date_sk, 1900 + (range / 365)::integer d_year
+from range(73000);
+
+statement ok
+create table fd_fact as
+select (35770 + range % 1095)::integer f_date_sk
+from range(1095);
+
+query II
+explain select *
+from fd_fact
+join fd_date_dim on f_date_sk = d_date_sk
+where d_year = 1999;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~[0-9][0-9][0-9] rows.*
+
+query I
+select count(*)
+from fd_fact
+join fd_date_dim on f_date_sk = d_date_sk
+where d_year = 1999;
+----
+365
+
+# Two disconnected join components are merged by a cross product. The final
+# denominator must include the selectivity from both joined pairs.
+
+statement ok
+create table dc_a as select range::integer k from range(1000);
+
+statement ok
+create table dc_b as select range::integer k from range(100);
+
+statement ok
+create table dc_c as select range::integer k from range(500);
+
+statement ok
+create table dc_d as select range::integer k from range(50);
+
+query II
+explain select *
+from dc_a
+join dc_b using (k),
+     dc_c
+join dc_d using (k);
+----
+physical_plan	<REGEX>:.*~[0-9]+.[0-9][0-9][0-9] rows.*CROSS_PRODUCT.*
+
+query I
+select count(*)
+from dc_a
+join dc_b using (k),
+     dc_c
+join dc_d using (k);
+----
+5000
+
+# Equality components can be discovered in an order that merges two existing
+# components. All equality edges must receive the final component id.
+
+statement ok
+create table te_a as select range::integer k from range(1000);
+
+statement ok
+create table te_b as select range::integer k from range(1000);
+
+statement ok
+create table te_c as select range::integer k from range(1000);
+
+statement ok
+create table te_d as select range::integer k from range(1000);
+
+query II
+explain select *
+from te_a, te_b, te_c, te_d
+where te_a.k = te_b.k
+  and te_c.k is not distinct from te_d.k
+  and te_b.k = te_c.k
+  and te_a.k = te_d.k;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~[0-9]+.[0-9][0-9][0-9] rows.*
+
+query I
+select count(*)
+from te_a, te_b, te_c, te_d
+where te_a.k = te_b.k
+  and te_c.k is not distinct from te_d.k
+  and te_b.k = te_c.k
+  and te_a.k = te_d.k;
+----
+1000
+
+# Non-equality predicates get their own domain group. They should still add
+# selectivity, but they must not merge into the equality domain above them.
+
+statement ok
+create table ne_a as select range::integer x from range(1000);
+
+statement ok
+create table ne_b as select range::integer x, (range % 8)::integer y from range(1000);
+
+statement ok
+create table ne_c as select (range % 8)::integer y from range(1000);
+
+query II
+explain select *
+from ne_a
+join ne_b on ne_a.x = ne_b.x
+join ne_c on ne_b.y < ne_c.y;
+----
+physical_plan	<REGEX>:.*PIECEWISE_MERGE_JOIN.*~[0-9]+.[0-9][0-9][0-9] rows.*
+
+query I
+select count(*)
+from ne_a
+join ne_b on ne_a.x = ne_b.x
+join ne_c on ne_b.y < ne_c.y;
+----
+437500

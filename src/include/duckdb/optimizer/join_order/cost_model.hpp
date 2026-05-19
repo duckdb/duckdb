@@ -22,10 +22,12 @@ public:
 private:
 	//! query graph storing relation manager information
 	QueryGraphManager &query_graph_manager;
+	bool has_cardinality_preserving_join;
 
 public:
 	//! Compute cost of a join relation set
-	double ComputeCost(DPJoinNode &left, DPJoinNode &right);
+	double ComputeCost(DPJoinNode &left, DPJoinNode &right,
+	                   const vector<reference<NeighborInfo>> &possible_connections);
 	CardinalityEstimator &GetCardinalityEstimator();
 
 private:

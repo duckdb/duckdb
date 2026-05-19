@@ -57,7 +57,7 @@ public:
 	ColumnBinding left_binding;
 	ColumnBinding right_binding;
 	bool from_residual_predicate = false;
-	//! Index of the equivalence group for INNER equality join filters.
+	//! Index of the equivalence group for INNER equality/IS NOT DISTINCT FROM join filters.
 	//! All filters transitively connected by equality (a=b, b=c → a=c all share the same index).
 	//! Used to skip redundant conditions during plan reconstruction and cardinality estimation.
 	optional_idx edge_equivalence_index;
@@ -116,8 +116,8 @@ private:
 
 	void CreateHyperGraphEdges();
 
-	//! Assign edge_equivalence_index to INNER equality filters using union-find over column bindings.
-	//! All filters in the same transitive equality closure receive the same index.
+	//! Assign edge_equivalence_index to INNER equality/IS NOT DISTINCT FROM filters using union-find over column
+	//! bindings. All filters in the same transitive equality closure receive the same index.
 	void MarkEdgeEquivalences();
 
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set);

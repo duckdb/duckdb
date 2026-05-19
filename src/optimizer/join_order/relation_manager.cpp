@@ -562,6 +562,28 @@ void RelationManager::GetColumnBindingsFromExpression(const Expression &expressi
 	    expression, [&](const Expression &expr) { GetColumnBindingsFromExpression(expr, column_bindings); });
 }
 
+void RelationManager::GetColumnBindingsFromOperator(LogicalOperator &op, column_binding_set_t &column_bindings) {
+	for (auto &binding : op.GetColumnBindings()) {
+		auto entry = relation_mapping.find(binding.table_index);
+		if (entry == relation_mapping.end()) {
+			continue;
+		}
+		column_bindings.insert(ColumnBinding(TableIndex(entry->second.index), binding.column_index));
+	}
+}
+
+static bool BindingsAreSubset(const column_binding_set_t &bindings, const column_binding_set_t &super) {
+	if (bindings.empty()) {
+		return false;
+	}
+	for (auto &binding : bindings) {
+		if (super.find(binding) == super.end()) {
+			return false;
+		}
+	}
+	return true;
+}
+
 optional_ptr<JoinRelationSet> RelationManager::GetJoinRelations(column_binding_set_t &column_bindings,
                                                                 JoinRelationSetManager &set_manager) {
 	optional_ptr<JoinRelationSet> ret = set_manager.GetEmptyJoinRelationSet();
@@ -706,18 +728,38 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			}
 			case JoinType::LEFT: {
 				// For LEFT joins, create one FilterInfo per comparison condition.
-				// Each uses the full left/right relation sets (union of all conditions' bindings)
+				// Each uses the full left/right relation sets from the comparison conditions
 				// to preserve join-ordering constraints, but individual column bindings so that
 				// the cardinality estimator gets an accurate distinct count for each condition.
 				// With all per-condition distinct counts available, GetDenominator can multiply
 				// them together for a correct multi-condition LEFT join cardinality estimate.
 
-				// Compute full left/right relation sets from all comparison conditions.
+				// Predicate expression sides are not reliable here: SQL can write a LEFT join condition as
+				// rhs_col = lhs_col. Normalize comparison sides so left_set is the preserved side and right_set
+				// is the nullable RHS side, without expanding left_set to every relation in the actual left child.
+				column_binding_set_t semantic_right_bindings;
+				GetColumnBindingsFromOperator(*join.children[1], semantic_right_bindings);
+
 				column_binding_set_t full_left_bindings, full_right_bindings;
 				for (auto &cond : join.conditions) {
-					if (cond.IsComparison()) {
-						GetColumnBindingsFromExpression(cond.GetLHS(), full_left_bindings);
-						GetColumnBindingsFromExpression(cond.GetRHS(), full_right_bindings);
+					if (!cond.IsComparison()) {
+						continue;
+					}
+					column_binding_set_t cond_left_bindings, cond_right_bindings;
+					GetColumnBindingsFromExpression(cond.GetLHS(), cond_left_bindings);
+					GetColumnBindingsFromExpression(cond.GetRHS(), cond_right_bindings);
+
+					bool lhs_is_nullable = BindingsAreSubset(cond_left_bindings, semantic_right_bindings);
+					bool rhs_is_nullable = BindingsAreSubset(cond_right_bindings, semantic_right_bindings);
+					auto &preserved_bindings =
+					    lhs_is_nullable && !rhs_is_nullable ? cond_right_bindings : cond_left_bindings;
+					auto &nullable_bindings =
+					    lhs_is_nullable && !rhs_is_nullable ? cond_left_bindings : cond_right_bindings;
+					for (auto &binding : preserved_bindings) {
+						full_left_bindings.insert(binding);
+					}
+					for (auto &binding : nullable_bindings) {
+						full_right_bindings.insert(binding);
 					}
 				}
 
@@ -734,8 +776,22 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						GetColumnBindingsFromExpression(cond.GetLHS(), cond_left_bindings);
 						GetColumnBindingsFromExpression(cond.GetRHS(), cond_right_bindings);
 
-						auto comparison = BoundComparisonExpression::Create(cond.GetComparisonType(),
-						                                                    cond.GetLHS().Copy(), cond.GetRHS().Copy());
+						auto comparison_type = cond.GetComparisonType();
+						bool lhs_is_nullable = BindingsAreSubset(cond_left_bindings, semantic_right_bindings);
+						bool rhs_is_nullable = BindingsAreSubset(cond_right_bindings, semantic_right_bindings);
+						unique_ptr<Expression> left_expr;
+						unique_ptr<Expression> right_expr;
+						if (lhs_is_nullable && !rhs_is_nullable) {
+							left_expr = cond.GetRHS().Copy();
+							right_expr = cond.GetLHS().Copy();
+							comparison_type = FlipComparisonExpression(comparison_type);
+						} else {
+							left_expr = cond.GetLHS().Copy();
+							right_expr = cond.GetRHS().Copy();
+						}
+
+						auto comparison = BoundComparisonExpression::Create(comparison_type, std::move(left_expr),
+						                                                    std::move(right_expr));
 
 						auto filter_info = make_uniq<FilterInfo>(std::move(comparison), full_set,
 						                                         filters_and_bindings.size(), join.join_type);

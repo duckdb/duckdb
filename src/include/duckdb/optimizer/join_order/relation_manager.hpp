@@ -81,6 +81,7 @@ private:
 	optional_ptr<JoinRelationSet> GetJoinRelations(column_binding_set_t &column_bindings,
 	                                               JoinRelationSetManager &set_manager);
 	void GetColumnBindingsFromExpression(const Expression &expression, column_binding_set_t &column_bindings);
+	void GetColumnBindingsFromOperator(LogicalOperator &op, column_binding_set_t &column_bindings);
 };
 
 } // namespace duckdb

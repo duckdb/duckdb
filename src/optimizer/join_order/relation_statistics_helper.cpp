@@ -80,6 +80,14 @@ idx_t RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, ClientContext 
 	return distinct_count;
 }
 
+static bool IsLikelyUniqueColumn(idx_t distinct_count, idx_t cardinality) {
+	if (cardinality == 0) {
+		return false;
+	}
+	auto tolerance = MaxValue<idx_t>(1, cardinality / 10);
+	return distinct_count >= cardinality - MinValue(tolerance, cardinality);
+}
+
 RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientContext &context) {
 	auto return_stats = RelationStats();
 
@@ -119,6 +127,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	if (get.table_filters.HasFilters()) {
 		unique_ptr<BaseStatistics> column_statistics;
 		bool has_non_optional_filters = false;
+		bool has_non_unique_equality_filter = false;
 		for (auto &entry : get.table_filters) {
 			auto &column_index = get.GetColumnIndex(entry.GetIndex());
 			if (get.bind_data && (get.function.statistics || get.function.statistics_extended)) {
@@ -136,6 +145,11 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 				idx_t cardinality_with_filter =
 				    InspectTableFilter(base_table_cardinality, entry.Filter(), *column_statistics);
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
+				auto filter_distinct_count = column_statistics->GetDistinctCount();
+				if (cardinality_with_filter != base_table_cardinality && filter_distinct_count > 0 &&
+				    !IsLikelyUniqueColumn(filter_distinct_count, base_table_cardinality)) {
+					has_non_unique_equality_filter = true;
+				}
 			}
 
 			if (!ExpressionFilter::IsOptionalFilter(entry.Filter())) {
@@ -153,14 +167,13 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		if (base_table_cardinality == 0) {
 			cardinality_after_filters = 0;
 		}
-
-		if (has_equality_filter && base_table_cardinality > 50000) {
-			for (auto &dc : return_stats.column_distinct_count) {
-				const auto abs_diff =
-				    AbsValue(static_cast<double>(dc.distinct_count) - static_cast<double>(base_table_cardinality));
-				if (abs_diff / static_cast<double>(base_table_cardinality) < 0.5) {
-					// Geometric mean
-					dc.distinct_count = LossyNumericCast<idx_t>(sqrt(dc.distinct_count * cardinality_after_filters));
+		if (has_non_unique_equality_filter && cardinality_after_filters < base_table_cardinality / 10) {
+			// A sharply filtered non-key attribute bounds surviving key values, e.g. date_dim.d_year.
+			// Unique/alternate-key filters keep full distinct counts so their selectivity can propagate to joins.
+			for (auto &distinct_count : return_stats.column_distinct_count) {
+				if (distinct_count.from_hll &&
+				    IsLikelyUniqueColumn(distinct_count.distinct_count, base_table_cardinality)) {
+					distinct_count.distinct_count = MinValue(distinct_count.distinct_count, cardinality_after_filters);
 				}
 			}
 		}

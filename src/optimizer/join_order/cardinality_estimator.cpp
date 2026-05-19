@@ -32,6 +32,18 @@ bool FilterInfoWithTotalDomains::IsInnerEquality() {
 	return ctype == ExpressionType::COMPARE_EQUAL || ctype == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 }
 
+static bool IsEquivalenceJoinFilter(const FilterInfo &filter_info) {
+	if (filter_info.join_type != JoinType::INNER || !filter_info.filter) {
+		return false;
+	}
+	if (!BoundComparisonExpression::IsComparison(*filter_info.filter)) {
+		return false;
+	}
+	const auto comparison_type = filter_info.filter->GetExpressionType();
+	return comparison_type == ExpressionType::COMPARE_EQUAL ||
+	       comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+}
+
 // The filter was made on top of a logical sample or other projection,
 // but no specific columns are referenced. See issue 4978 number 4.
 bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
@@ -151,8 +163,36 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 		D_ASSERT(!filter->left_set->Empty());
 		D_ASSERT(!filter->right_set->Empty());
 
+		if (!IsEquivalenceJoinFilter(*filter)) {
+			continue;
+		}
+
 		auto matching_equivalent_sets = DetermineMatchingEquivalentSets(filter.get());
 		AddToEquivalenceSets(filter.get(), matching_equivalent_sets);
+	}
+	for (auto &filter : filter_infos) {
+		if (filter->filter && filter->filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
+		    filter->filter->GetExpressionType() == ExpressionType::CONJUNCTION_OR && filter->set.get().count >= 2) {
+			continue;
+		}
+		if (SingleColumnFilter(*filter) || EmptyFilter(*filter) || IsEquivalenceJoinFilter(*filter)) {
+			continue;
+		}
+		D_ASSERT(!filter->left_set->Empty());
+		D_ASSERT(!filter->right_set->Empty());
+
+		column_binding_set_t domain_group;
+		if (filter->left_binding.table_index.IsValid()) {
+			domain_group.insert(filter->left_binding);
+		}
+		if (filter->right_binding.table_index.IsValid()) {
+			domain_group.insert(filter->right_binding);
+		}
+		if (domain_group.empty()) {
+			continue;
+		}
+		relation_set_stats.emplace_back(domain_group);
+		relation_set_stats.back().filters.push_back(filter.get());
 	}
 	RemoveEmptyTotalDomains();
 }
@@ -174,21 +214,6 @@ double CardinalityEstimator::GetNumerator(JoinRelationSet &set) {
 	return numerator;
 }
 
-bool EdgeConnects(FilterInfoWithTotalDomains &edge, Subgraph2Denominator &subgraph) {
-	if (edge.filter_info->left_set) {
-		if (JoinRelationSet::IsSubset(*subgraph.relations, *edge.filter_info->left_set)) {
-			// cool
-			return true;
-		}
-	}
-	if (edge.filter_info->right_set) {
-		if (JoinRelationSet::IsSubset(*subgraph.relations, *edge.filter_info->right_set)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsSetToStats> &relations_to_tdom,
                                             JoinRelationSet &requested_set) {
 	vector<FilterInfoWithTotalDomains> res;
@@ -203,7 +228,33 @@ vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsSetToStats> &relatio
 	return res;
 }
 
-vector<idx_t> SubgraphsConnectedByEdge(FilterInfoWithTotalDomains &edge, vector<Subgraph2Denominator> &subgraphs) {
+static optional_ptr<JoinRelationSet> GetEdgeEndpoint(FilterInfoWithTotalDomains &edge,
+                                                     JoinRelationSetManager &set_manager, bool left) {
+	auto &filter = *edge.filter_info;
+	if (filter.filter && BoundComparisonExpression::IsComparison(*filter.filter)) {
+		auto &binding = left ? filter.left_binding : filter.right_binding;
+		if (binding.table_index.IsValid()) {
+			return &set_manager.GetJoinRelation(RelationIndex(binding.table_index.index));
+		}
+	}
+	return left ? filter.left_set : filter.right_set;
+}
+
+bool EdgeConnects(FilterInfoWithTotalDomains &edge, Subgraph2Denominator &subgraph,
+                  JoinRelationSetManager &set_manager) {
+	auto left_endpoint = GetEdgeEndpoint(edge, set_manager, true);
+	if (left_endpoint && JoinRelationSet::IsSubset(*subgraph.relations, *left_endpoint)) {
+		return true;
+	}
+	auto right_endpoint = GetEdgeEndpoint(edge, set_manager, false);
+	if (right_endpoint && JoinRelationSet::IsSubset(*subgraph.relations, *right_endpoint)) {
+		return true;
+	}
+	return false;
+}
+
+vector<idx_t> SubgraphsConnectedByEdge(FilterInfoWithTotalDomains &edge, vector<Subgraph2Denominator> &subgraphs,
+                                       JoinRelationSetManager &set_manager) {
 	vector<idx_t> res;
 	if (subgraphs.empty()) {
 		return res;
@@ -213,7 +264,8 @@ vector<idx_t> SubgraphsConnectedByEdge(FilterInfoWithTotalDomains &edge, vector<
 		for (idx_t outer = 0; outer != subgraphs.size(); outer++) {
 			// check if the edge connects two subgraphs.
 			for (idx_t inner = outer + 1; inner != subgraphs.size(); inner++) {
-				if (EdgeConnects(edge, subgraphs.at(outer)) && EdgeConnects(edge, subgraphs.at(inner))) {
+				if (EdgeConnects(edge, subgraphs.at(outer), set_manager) &&
+				    EdgeConnects(edge, subgraphs.at(inner), set_manager)) {
 					// order is important because we will delete the inner subgraph later
 					res.push_back(outer);
 					res.push_back(inner);
@@ -222,7 +274,7 @@ vector<idx_t> SubgraphsConnectedByEdge(FilterInfoWithTotalDomains &edge, vector<
 			}
 			// if the edge does not connect two subgraphs, see if the edge connects with just outer
 			// merge subgraph.at(outer) with the RelationSet(s) that edge connects
-			if (EdgeConnects(edge, subgraphs.at(outer))) {
+			if (EdgeConnects(edge, subgraphs.at(outer), set_manager)) {
 				res.push_back(outer);
 				return res;
 			}
@@ -283,8 +335,12 @@ double CardinalityEstimator::CalculateLeftJoinDenom(double base_denom, FilterInf
 	// ensuring the estimate is always >= |LHS| (every LHS row is preserved in a LEFT join).
 	auto right_card = GetNumerator(*filter.filter_info->right_set);
 	auto raw_d = filter.GetDistinctCount();
-	auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
 	auto comparison_type = filter.GetComparisonType();
+	auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
+	if (comparison_type == ExpressionType::COMPARE_EQUAL ||
+	    comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		effective_d = right_card > 0 ? right_card : raw_d;
+	}
 	if (comparison_type == ExpressionType::INVALID) {
 		return base_denom * effective_d;
 	}
@@ -430,32 +486,38 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			}
 		}
 
-		auto subgraph_connections = SubgraphsConnectedByEdge(edge, subgraphs);
+		auto edge_left_set = GetEdgeEndpoint(edge, set_manager, true);
+		auto edge_right_set = GetEdgeEndpoint(edge, set_manager, false);
+		if (!edge_left_set || !edge_right_set) {
+			continue;
+		}
+
+		auto subgraph_connections = SubgraphsConnectedByEdge(edge, subgraphs, set_manager);
 		if (subgraph_connections.empty()) {
 			// create a subgraph out of left and right, then merge right into left and add left to subgraphs.
 			// this helps cover a case where there are no subgraphs yet, and the only join filter is a SEMI JOIN
 			auto left_subgraph = Subgraph2Denominator();
 			auto right_subgraph = Subgraph2Denominator();
-			left_subgraph.relations = edge.filter_info->left_set;
-			left_subgraph.numerator_relations = edge.filter_info->left_set;
-			right_subgraph.relations = edge.filter_info->right_set;
-			right_subgraph.numerator_relations = edge.filter_info->right_set;
+			left_subgraph.relations = edge_left_set;
+			left_subgraph.numerator_relations = edge_left_set;
+			right_subgraph.relations = edge_right_set;
+			right_subgraph.numerator_relations = edge_right_set;
 			left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
-			left_subgraph.relations = &edge.filter_info->set.get();
+			left_subgraph.relations = &set_manager.Union(*edge_left_set, *edge_right_set);
 			left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
 			subgraphs.push_back(left_subgraph);
 		} else if (subgraph_connections.size() == 1) {
 			auto left_subgraph = &subgraphs.at(subgraph_connections.at(0));
 			auto right_subgraph = Subgraph2Denominator();
-			right_subgraph.relations = edge.filter_info->right_set;
-			right_subgraph.numerator_relations = edge.filter_info->right_set;
+			right_subgraph.relations = edge_right_set;
+			right_subgraph.numerator_relations = edge_right_set;
 			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *right_subgraph.relations)) {
-				right_subgraph.relations = edge.filter_info->left_set;
-				right_subgraph.numerator_relations = edge.filter_info->left_set;
+				right_subgraph.relations = edge_left_set;
+				right_subgraph.numerator_relations = edge_left_set;
 			}
 
-			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->left_set) &&
-			    JoinRelationSet::IsSubset(*left_subgraph->relations, *edge.filter_info->right_set)) {
+			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *edge_left_set) &&
+			    JoinRelationSet::IsSubset(*left_subgraph->relations, *edge_right_set)) {
 				// Edge connects the same subgraph to itself — no new relation is added.
 				// Apply the incremental denominator contribution for LEFT or INNER multi-key joins.
 				ApplyJoinIncrement(left_subgraph->denom, edge, join_pair_accumulated);
@@ -496,6 +558,8 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			    &set_manager.Union(*final_subgraph.numerator_relations, *merge_with->numerator_relations);
 			final_subgraph.denom *= merge_with->denom;
 		}
+		subgraphs.clear();
+		subgraphs.push_back(final_subgraph);
 	}
 	if (!subgraphs.empty()) {
 		// Some relations are connected by cross products and will not end up in a subgraph

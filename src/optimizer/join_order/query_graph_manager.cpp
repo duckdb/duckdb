@@ -21,41 +21,50 @@ static bool Disjoint(const unordered_set<T> &a, const unordered_set<T> &b) {
 	});
 }
 
+static bool IsInnerEqualityFilter(const FilterInfo &filter) {
+	if (filter.join_type != JoinType::INNER || !filter.filter) {
+		return false;
+	}
+	if (!BoundComparisonExpression::IsComparison(*filter.filter)) {
+		return false;
+	}
+	const auto comparison_type = filter.filter->GetExpressionType();
+	return comparison_type == ExpressionType::COMPARE_EQUAL ||
+	       comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+}
+
 void QueryGraphManager::MarkEdgeEquivalences() {
 	// Assign edge_equivalence_index to INNER equality join filters using union-find over column bindings.
 	// All filters in the same transitive equality closure receive the same index, regardless of the
 	// order they appear in filters_and_bindings. This allows skipping redundant edges during
 	// plan reconstruction (GenerateJoins) and cardinality estimation (GetDenominator).
 	column_binding_map_t<idx_t> binding_to_component;
-	idx_t next_component_id = 0;
+	vector<idx_t> parents;
 
-	const auto find_component = [&](const ColumnBinding &binding) -> optional_idx {
-		auto it = binding_to_component.find(binding);
-		if (it == binding_to_component.end()) {
-			return optional_idx();
+	auto get_component = [&](const ColumnBinding &binding) -> idx_t {
+		auto entry = binding_to_component.find(binding);
+		if (entry != binding_to_component.end()) {
+			return entry->second;
 		}
-		return optional_idx(it->second);
+		auto component = parents.size();
+		parents.push_back(component);
+		binding_to_component[binding] = component;
+		return component;
 	};
 
-	const auto merge_components = [&](idx_t comp_a, idx_t comp_b) -> idx_t {
-		idx_t keep = MinValue(comp_a, comp_b);
-		idx_t remove = MaxValue(comp_a, comp_b);
-		if (keep == remove) {
-			return keep;
+	auto find_root = [&](idx_t component) -> idx_t {
+		while (parents[component] != component) {
+			parents[component] = parents[parents[component]];
+			component = parents[component];
 		}
-		for (auto &entry : binding_to_component) {
-			if (entry.second == remove) {
-				entry.second = keep;
-			}
-		}
-		return keep;
+		return component;
 	};
 
+	// First union all INNER equality predicates. Do not assign edge ids in this pass,
+	// because a later predicate can merge two previously separate components.
 	for (auto &filter : filters_and_bindings) {
-		if (filter->join_type != JoinType::INNER) {
-			continue;
-		}
-		if (!filter->filter || filter->filter->GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+		filter->edge_equivalence_index = optional_idx();
+		if (!IsInnerEqualityFilter(*filter)) {
 			continue;
 		}
 		if (!filter->left_binding.table_index.IsValid() || !filter->right_binding.table_index.IsValid()) {
@@ -65,26 +74,31 @@ void QueryGraphManager::MarkEdgeEquivalences() {
 			continue;
 		}
 
-		auto left_comp = find_component(filter->left_binding);
-		auto right_comp = find_component(filter->right_binding);
-
-		idx_t component_id;
-		if (!left_comp.IsValid() && !right_comp.IsValid()) {
-			// Both new: create a fresh component.
-			component_id = next_component_id++;
-			binding_to_component[filter->left_binding] = component_id;
-			binding_to_component[filter->right_binding] = component_id;
-		} else if (!left_comp.IsValid()) {
-			component_id = right_comp.GetIndex();
-			binding_to_component[filter->left_binding] = component_id;
-		} else if (!right_comp.IsValid()) {
-			component_id = left_comp.GetIndex();
-			binding_to_component[filter->right_binding] = component_id;
-		} else {
-			// Both already tracked — merge the two components.
-			component_id = merge_components(left_comp.GetIndex(), right_comp.GetIndex());
+		auto left_root = find_root(get_component(filter->left_binding));
+		auto right_root = find_root(get_component(filter->right_binding));
+		if (left_root != right_root) {
+			parents[MaxValue(left_root, right_root)] = MinValue(left_root, right_root);
 		}
-		filter->edge_equivalence_index = optional_idx(component_id);
+	}
+
+	// Then assign stable final ids to every equality edge using the final roots.
+	unordered_map<idx_t, idx_t> root_to_equivalence_id;
+	for (auto &filter : filters_and_bindings) {
+		if (!IsInnerEqualityFilter(*filter)) {
+			continue;
+		}
+		if (!filter->left_binding.table_index.IsValid() || !filter->right_binding.table_index.IsValid()) {
+			continue;
+		}
+		if (filter->left_set == filter->right_set) {
+			continue;
+		}
+		auto root = find_root(binding_to_component[filter->left_binding]);
+		auto entry = root_to_equivalence_id.find(root);
+		if (entry == root_to_equivalence_id.end()) {
+			entry = root_to_equivalence_id.insert(make_pair(root, root_to_equivalence_id.size())).first;
+		}
+		filter->edge_equivalence_index = optional_idx(entry->second);
 	}
 }
 
@@ -311,6 +325,21 @@ static JoinCondition MaybeInvertConditions(unique_ptr<Expression> condition, boo
 	return JoinCondition(std::move(left), std::move(right), comp_type);
 }
 
+static bool ShouldInvertJoinCondition(JoinRelationSetManager &set_manager, GenerateJoinRelation &left,
+                                      GenerateJoinRelation &right, FilterInfo &filter, bool fallback_invert) {
+	if (!filter.left_binding.table_index.IsValid()) {
+		return fallback_invert;
+	}
+	auto &condition_left_set = set_manager.GetJoinRelation(RelationIndex(filter.left_binding.table_index.index));
+	if (JoinRelationSet::IsSubset(*right.set, condition_left_set)) {
+		return true;
+	}
+	if (JoinRelationSet::IsSubset(*left.set, condition_left_set)) {
+		return false;
+	}
+	return fallback_invert;
+}
+
 GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
                                                       JoinRelationSet &set) {
 	optional_ptr<JoinRelationSet> left_node;
@@ -363,25 +392,26 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				         (JoinRelationSet::IsSubset(*left.set, *f->right_set) &&
 				          JoinRelationSet::IsSubset(*right.set, *f->left_set)));
 
-				bool invert = !JoinRelationSet::IsSubset(*left.set, *f->left_set);
+				bool invert_children = !JoinRelationSet::IsSubset(*left.set, *f->left_set);
 
 				// If the left and right set are inverted for LEFT/SEMI/ANTI joins then swap them back
 				// and set invert = false. This is to preserve left/rightedness of relations
-				if (invert && (f->join_type == JoinType::LEFT || f->join_type == JoinType::SEMI ||
-				               f->join_type == JoinType::ANTI)) {
+				if (invert_children && (f->join_type == JoinType::LEFT || f->join_type == JoinType::SEMI ||
+				                        f->join_type == JoinType::ANTI)) {
 					std::swap(join->children[0], join->children[1]);
 					std::swap(left, right);
-					invert = false;
+					invert_children = false;
 				}
 
 				if (BoundComparisonExpression::IsComparison(*condition)) {
+					auto invert = ShouldInvertJoinCondition(set_manager, left, right, *f, invert_children);
 					auto cond = MaybeInvertConditions(std::move(condition), invert);
 					join->conditions.push_back(std::move(cond));
 				} else if (condition->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 					auto &conjunction = condition->Cast<BoundConjunctionExpression>();
 					for (auto &child : conjunction.children) {
 						D_ASSERT(BoundComparisonExpression::IsComparison(*child));
-						auto cond = MaybeInvertConditions(std::move(child), invert);
+						auto cond = MaybeInvertConditions(std::move(child), invert_children);
 						join->conditions.push_back(std::move(cond));
 					}
 				}
