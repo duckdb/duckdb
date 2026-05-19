@@ -272,17 +272,14 @@ void JSONStructureNode::EliminateCandidateTypes(const idx_t vec_count, Vector &s
 		if (date_format_map.HasFormats(type)) {
 			if (EliminateCandidateFormats(vec_count, string_vector, result_vector, date_format_map)) {
 				return;
-			} else {
-				candidate_types.pop_back();
 			}
 		} else {
 			string error_message;
-			if (!VectorOperations::DefaultTryCast(string_vector, result_vector, vec_count, &error_message, true)) {
-				candidate_types.pop_back();
-			} else {
+			if (VectorOperations::DefaultTryCast(string_vector, result_vector, vec_count, &error_message, true)) {
 				return;
 			}
 		}
+		candidate_types.pop_back();
 	}
 }
 
@@ -324,15 +321,21 @@ bool JSONStructureNode::EliminateCandidateFormats(const idx_t vec_count, Vector 
 		}
 
 		bool success;
-		switch (type) {
-		case LogicalTypeId::DATE:
-			success = TryParse<TryParseDate, date_t>(string_vector, format, vec_count);
-			break;
-		case LogicalTypeId::TIMESTAMP:
-			success = TryParse<TryParseTimeStamp, timestamp_t>(string_vector, format, vec_count);
-			break;
-		default:
-			throw InternalException("No date/timestamp formats for %s", EnumUtil::ToString(type));
+		if (format.format_specifier.empty()) {
+			Vector cast_result(result_vector.GetType(), vec_count);
+			string error_message;
+			success = VectorOperations::DefaultTryCast(string_vector, cast_result, vec_count, &error_message, true);
+		} else {
+			switch (type) {
+			case LogicalTypeId::DATE:
+				success = TryParse<TryParseDate, date_t>(string_vector, format, vec_count);
+				break;
+			case LogicalTypeId::TIMESTAMP:
+				success = TryParse<TryParseTimeStamp, timestamp_t>(string_vector, format, vec_count);
+				break;
+			default:
+				throw InternalException("No date/timestamp formats for %s", EnumUtil::ToString(type));
+			}
 		}
 
 		if (success) {

@@ -1,0 +1,16 @@
+# name: test/sql/json/issues/issue22103.test
+# description: GitHub issue 22103 - read_json_auto with mixed ISO-8601 Z and offset timestamps across columns
+# group: [issues]
+
+require json
+
+statement ok
+COPY (
+  SELECT '{"date_z":"2026-08-12T00:00:00Z","date_offset":"2026-08-12T00:00:00.000+00:00"}'
+) TO '{TEMP_DIR}/mixed_timestamps_22103.json' (FORMAT CSV, QUOTE '', HEADER 0)
+
+query IIII
+SELECT typeof(date_z), date_z, typeof(date_offset), date_offset
+FROM read_json_auto('{TEMP_DIR}/mixed_timestamps_22103.json')
+----
+TIMESTAMP	2026-08-12 00:00:00	TIMESTAMP	2026-08-12 00:00:00
