@@ -150,14 +150,13 @@
 			"Equals",
 			"Hash",
 			"Copy",
-			"EnumerateChildren"
+			"Children"
 		],
 		"members": [
 			{
 				"id": 200,
 				"name": "column_names",
-				"type": "vector<string>",
-				"equals_ci": true
+				"type": "vector<Identifier>"
 			}
 		]
 	},
@@ -180,8 +179,7 @@
 			{
 				"id": 201,
 				"name": "column_name",
-				"type": "string",
-				"equals_ci": true
+				"type": "Identifier"
 			}
 		],
 		"constructor": [
