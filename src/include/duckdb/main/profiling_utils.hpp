@@ -75,6 +75,7 @@ public:
 
 	static idx_t GetMetricsIndex(MetricType type) {
 		switch(type) {
+		// File / IO metrics
 		case MetricType::ATTACH_LOAD_STORAGE_LATENCY: return 0;
 		case MetricType::ATTACH_REPLAY_WAL_LATENCY: return 1;
 		case MetricType::CHECKPOINT_LATENCY: return 2;
@@ -86,13 +87,27 @@ public:
 		case MetricType::TOTAL_BYTES_WRITTEN: return 8;
 		case MetricType::TOTAL_MEMORY_ALLOCATED: return 9;
 		case MetricType::WAL_REPLAY_ENTRY_COUNT: return 10;
+		// Phase timing metrics
+		case MetricType::ALL_OPTIMIZERS: return 11;
+		case MetricType::PARSER: return 12;
+		case MetricType::PHYSICAL_PLANNER: return 13;
+		case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING: return 14;
+		case MetricType::PHYSICAL_PLANNER_CREATE_PLAN: return 15;
+		case MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES: return 16;
+		case MetricType::PLANNER: return 17;
+		case MetricType::PLANNER_BINDING: return 18;
 		default:
+			// Optimizer metrics occupy a contiguous range
+			if (MetricsUtils::IsOptimizerMetric(type)) {
+				return 19 + (static_cast<idx_t>(type) - MetricsUtils::START_OPTIMIZER);
+			}
 			throw InternalException("MetricType %s is not actively tracked.", EnumUtil::ToString(type));
 		}
 	}
 
 private:
-	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 11;
+	// 11 file/IO + 8 phase timing + (END_OPTIMIZER - START_OPTIMIZER + 1) optimizer metrics
+	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 19 + (MetricsUtils::END_OPTIMIZER - MetricsUtils::START_OPTIMIZER + 1);
 
 	atomic<idx_t> active_metrics[ACTIVELY_TRACKED_METRICS];
 };
@@ -100,7 +115,6 @@ private:
 class ProfilingUtils {
 public:
 	static void SetMetricToDefault(profiler_metrics_t &metrics, const MetricType &type);
-	static void MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *dest, const char *key_ptr, const Value &val);
 	static void CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingInfo &result);
 };
 

@@ -163,8 +163,6 @@ void QueryProfiler::Reset() {
 	tree_map.clear();
 	root = nullptr;
 	root_info.reset();
-	phase_timings.clear();
-	phase_stack.clear();
 	running = false;
 	query_metrics.Reset();
 	result_tree.reset();
@@ -341,38 +339,6 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 	}
 }
 
-void QueryProfiler::StartPhase(MetricType phase_metric) {
-	lock_guard<std::mutex> guard(lock);
-	if (!IsEnabled() || !running) {
-		return;
-	}
-
-	// start a new phase
-	phase_stack.push_back(phase_metric);
-	// restart the timer
-	phase_profiler.Start();
-}
-
-void QueryProfiler::EndPhase() {
-	lock_guard<std::mutex> guard(lock);
-	if (!IsEnabled() || !running) {
-		return;
-	}
-	D_ASSERT(!phase_stack.empty());
-
-	// end the timer
-	phase_profiler.End();
-	// add the timing to all currently active phases
-	for (auto &phase : phase_stack) {
-		phase_timings[phase] += phase_profiler.Elapsed();
-	}
-	// now remove the last added phase
-	phase_stack.pop_back();
-
-	if (!phase_stack.empty()) {
-		phase_profiler.Start();
-	}
-}
 
 OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
 	enabled = QueryProfiler::Get(context).IsEnabled();
@@ -1014,8 +980,6 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 		running = false;
 		tree_map.clear();
 		root = nullptr;
-		phase_timings.clear();
-		phase_stack.clear();
 	} else {
 		root_info = make_uniq<ProfilingInfo>(GetQueryMetrics(context));
 	}
@@ -1035,15 +999,6 @@ void QueryProfiler::Print() {
 	Printer::Print(QueryTreeToString());
 }
 
-void QueryProfiler::MoveOptimizerPhasesToRoot() {
-	for (auto &entry : phase_timings) {
-		auto &phase = entry.first;
-		auto &timing = entry.second;
-		if (root_info->EnabledForCollection(phase)) {
-			root_info->SetMetricValue(phase, Value::CreateValue(timing));
-		}
-	}
-}
 
 static void MergeOperatorMeasurements(ProfilingNode &root, OperatorInformation &result) {
 	// merge in this layer
@@ -1094,7 +1049,6 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		}
 	}
 
-	MoveOptimizerPhasesToRoot();
 	for (auto &metric : info.GetMetricsMutable()) {
 		if (info.EnabledForCollection(metric.first)) {
 			ProfilingUtils::CollectMetrics(metric.first, query_metrics, metric.second, info);

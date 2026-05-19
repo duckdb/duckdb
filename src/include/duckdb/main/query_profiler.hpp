@@ -106,9 +106,6 @@ public:
 	//! Adds the top level query information to the global profiler.
 	DUCKDB_API void SetBlockedTime(const double &blocked_thread_time);
 
-	DUCKDB_API void StartPhase(MetricType phase_metric);
-	DUCKDB_API void EndPhase();
-
 	DUCKDB_API void Initialize(const PhysicalOperator &root);
 
 	DUCKDB_API string QueryTreeToString() const;
@@ -180,17 +177,6 @@ public:
 	}
 
 private:
-	//! The timer used to time the individual phases of the planning process
-	Profiler phase_profiler;
-	//! A mapping of the phase names to the timings
-	using PhaseTimingStorage = unordered_map<MetricType, double, MetricTypeHashFunction>;
-	PhaseTimingStorage phase_timings;
-	using PhaseTimingItem = PhaseTimingStorage::value_type;
-	//! The stack of currently active phases
-	vector<MetricType> phase_stack;
-
-private:
-	void MoveOptimizerPhasesToRoot();
 	void FinalizeMetricsInternal();
 
 	unique_ptr<QueryProfileResult> ToResultTree() const;

@@ -12,13 +12,10 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
-static Value GetCumulativeOptimizers(ProfilingInfo &result) {
-	auto &metrics = result.GetMetrics();
+static Value GetCumulativeOptimizers(QueryMetrics &query_metrics) {
 	double count = 0;
-	for (auto &metric : metrics) {
-		if (MetricsUtils::IsOptimizerMetric(metric.first)) {
-			count += metric.second.GetValue<double>();
-		}
+	for (auto i = MetricsUtils::START_OPTIMIZER; i <= MetricsUtils::END_OPTIMIZER; i++) {
+		count += query_metrics.GetMetricInSeconds(static_cast<MetricType>(i));
 	}
 	return Value::CreateValue(count);
 }
@@ -113,41 +110,26 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	}
 }
 
-void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *dest, const char *key_ptr, const Value &val) {
-	auto &val_type = val.type();
-	if (val_type.IsIntegral()) {
-		yyjson_mut_obj_add_uint(doc, dest, key_ptr, val.GetValue<uint64_t>());
-		return;
-	}
-	if (val_type.IsNumeric()) {
-		yyjson_mut_obj_add_real(doc, dest, key_ptr, val.GetValue<double>());
-		return;
-	}
-	yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, val.GetValue<string>().c_str());
-}
-
 void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingInfo &result) {
 	switch(type) {
+	// File / IO metrics
 	case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
-		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::ATTACH_LOAD_STORAGE_LATENCY));
-		break;
 	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
-		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::ATTACH_REPLAY_WAL_LATENCY));
-		break;
 	case MetricType::CHECKPOINT_LATENCY:
-		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::CHECKPOINT_LATENCY));
-		break;
 	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
-		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::COMMIT_LOCAL_STORAGE_LATENCY));
-		break;
 	case MetricType::LATENCY:
-		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::LATENCY));
-		break;
 	case MetricType::WAITING_TO_ATTACH_LATENCY:
-		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::WAITING_TO_ATTACH_LATENCY));
-		break;
 	case MetricType::WRITE_TO_WAL_LATENCY:
-		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::WRITE_TO_WAL_LATENCY));
+	// Phase timing metrics
+	case MetricType::ALL_OPTIMIZERS:
+	case MetricType::PARSER:
+	case MetricType::PHYSICAL_PLANNER:
+	case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
+	case MetricType::PHYSICAL_PLANNER_CREATE_PLAN:
+	case MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES:
+	case MetricType::PLANNER:
+	case MetricType::PLANNER_BINDING:
+		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(type));
 		break;
 	case MetricType::QUERY_NAME:
 		metric = query_metrics.query_name;
@@ -165,9 +147,12 @@ void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_
 		metric = Value::UBIGINT(query_metrics.GetMetricValue(MetricType::WAL_REPLAY_ENTRY_COUNT));
 		break;
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
-		metric = GetCumulativeOptimizers(result);
+		metric = GetCumulativeOptimizers(query_metrics);
 		break;
 	default:
+		if (MetricsUtils::IsOptimizerMetric(type)) {
+			metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(type));
+		}
 		return;
 	}
 }
