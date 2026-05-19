@@ -40,6 +40,16 @@ WHERE a IS DISTINCT FROM 5
 ----
 5000
 
+statement ok
+CHECKPOINT
+
+query I
+SELECT count(*)
+FROM distinct_from_mixed_nulls
+WHERE a IS DISTINCT FROM 5
+----
+5000
+
 # Numeric prefix-range filters still use row-group statistics. With two sparse
 # build keys, the probe scan should only produce the two matching keys.
 statement ok
