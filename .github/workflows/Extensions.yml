@@ -297,6 +297,7 @@ jobs:
           SUBSET_EXTENSIONS_TESTS: complete
           ENABLE_EXTENSION_AUTOLOADING: 1
           ENABLE_EXTENSION_AUTOINSTALL: 1
+          LOCAL_EXTENSION_REPO: build/release/repository
         with:
           # TODO use inputs.build-type in build and test command
           build: make release
