@@ -1,8 +1,8 @@
 diff --git a/src/httpfs_curl_client.cpp b/src/httpfs_curl_client.cpp
-index 8a641ce..83e0d1c 100644
+index efdc87d..8f19c91 100644
 --- a/src/httpfs_curl_client.cpp
 +++ b/src/httpfs_curl_client.cpp
-@@ -398,6 +398,34 @@ public:
+@@ -409,6 +409,34 @@ public:
  		return TransformResponseCurl(res);
  	}
  
@@ -35,13 +35,13 @@ index 8a641ce..83e0d1c 100644
 +	}
 +
  	unique_ptr<HTTPResponse> Post(PostRequestInfo &info) override {
+ 		AddUserAgentIfAvailable(static_cast<HTTPFSParams &>(info.params), info.headers);
  		ResetRequestInfo();
- 		if (state) {
 diff --git a/src/httpfs_httplib_client.cpp b/src/httpfs_httplib_client.cpp
-index 63d7197..8027a37 100644
+index f4e01f7..21becf7 100644
 --- a/src/httpfs_httplib_client.cpp
 +++ b/src/httpfs_httplib_client.cpp
-@@ -87,6 +87,11 @@ public:
+@@ -94,6 +94,11 @@ public:
  		return TransformResult(client->Delete(info.path, headers));
  	}
  
@@ -774,7 +774,7 @@ index 99b9113..a40ae34 100644
  statement error
  SELECT i FROM "s3://test-bucket/test.parquet" LIMIT 3
 diff --git a/test/sql/copy/s3/glob_s3_paging.test_slow b/test/sql/copy/s3/glob_s3_paging.test_slow
-index e147367..71ac210 100644
+index 469d9c8..39ac3c4 100644
 --- a/test/sql/copy/s3/glob_s3_paging.test_slow
 +++ b/test/sql/copy/s3/glob_s3_paging.test_slow
 @@ -37,7 +37,7 @@ SET enable_http_metadata_cache=true;
@@ -822,11 +822,16 @@ index e147367..71ac210 100644
  
  query I
  SELECT count(*) FROM glob('s3://test-bucket/parquet_glob*/some-non-existent-folder/*');
-@@ -120,4 +120,3 @@ FROM (FROM duckdb_logs_parsed('HTTP') SELECT count(*), sum(request.type == 'HEAD
+@@ -118,6 +118,6 @@ FROM (FROM duckdb_logs_parsed('HTTP') SELECT count(*), sum(request.type == 'HEAD
+ ----
+ 3	0	3	0	0
  11	0	11	0	0
- 11	0	11	0	0
- 11	0	11	0	0
+-9	0	9	0	0
+-9	0	9	0	0
 -
++11	0	11	0	0
++11	0	11	0	0
++11	0	11	0	0
 diff --git a/test/sql/copy/s3/glob_s3_recursive.test_slow b/test/sql/copy/s3/glob_s3_recursive.test_slow
 index e10c8e1..7cf9fcc 100644
 --- a/test/sql/copy/s3/glob_s3_recursive.test_slow
@@ -1437,7 +1442,7 @@ index a354a7f..e759862 100644
  ----
  true
 diff --git a/test/sql/logging/file_system_logging.test b/test/sql/logging/file_system_logging.test
-index 6aa2ed0..19f135b 100644
+index a1d8d5f..9b6c188 100644
 --- a/test/sql/logging/file_system_logging.test
 +++ b/test/sql/logging/file_system_logging.test
 @@ -12,10 +12,10 @@ statement ok
