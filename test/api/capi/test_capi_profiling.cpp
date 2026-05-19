@@ -47,14 +47,13 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_NAME));
 			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_TYPE));
 		} else {
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::QUERY_NAME));
-			REQUIRE(key_str != "blocked_thread_time");
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::LATENCY));
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::ROWS_RETURNED));
+			REQUIRE(key_str != "QUERY_NAME");
+			REQUIRE(key_str != "BLOCKED_THREAD_TIME");
+			REQUIRE(key_str != "LATENCY");
+			REQUIRE(key_str != "ROWS_RETURNED");
 		}
 
-		if (key_str == EnumUtil::ToString(MetricType::QUERY_NAME) ||
-		    key_str == EnumUtil::ToString(MetricType::OPERATOR_NAME) ||
+		if (key_str == EnumUtil::ToString(MetricType::OPERATOR_NAME) ||
 		    key_str == EnumUtil::ToString(MetricType::OPERATOR_TYPE) ||
 		    key_str == EnumUtil::ToString(MetricType::EXTRA_INFO)) {
 			REQUIRE(!value_str.empty());
@@ -110,8 +109,8 @@ TEST_CASE("Test profiling with a single metric and get_value", "[capi]") {
 
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
 
-	// test only CPU_TIME profiling
-	duckdb::vector<string> settings = {"CPU_TIME"};
+	// test only query.cpu_time profiling
+	duckdb::vector<string> settings = {"query.cpu_time"};
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildSettingsString(settings)));
 	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
 
@@ -135,8 +134,8 @@ TEST_CASE("Test profiling with cumulative metrics", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
 
 	// test all profiling metrics
-	duckdb::vector<string> settings = {"system.blocked_thread_time", "CPU_TIME",       "CUMULATIVE_CARDINALITY", "EXTRA_INFO",
-	                                   "OPERATOR_CARDINALITY", "OPERATOR_TIMING"};
+	duckdb::vector<string> settings = {"system.blocked_thread_time", "query.cpu_time", "query.cumulative_cardinality",
+	                                   "EXTRA_INFO", "OPERATOR_CARDINALITY", "OPERATOR_TIMING"};
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildSettingsString(settings)));
 	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
 
@@ -144,16 +143,27 @@ TEST_CASE("Test profiling with cumulative metrics", "[capi]") {
 	REQUIRE(info != nullptr);
 
 	duckdb::map<string, double> cumulative_counter = {{"OPERATOR_TIMING", 0}, {"OPERATOR_CARDINALITY", 0}};
-	duckdb::map<string, double> cumulative_result {
-	    {"CPU_TIME", 0},
-	    {"CUMULATIVE_CARDINALITY", 0},
-	};
+	duckdb::map<string, double> cumulative_result;
 
 	TraverseTree(info, cumulative_counter, cumulative_result, 0);
 
-	REQUIRE(ConvertToInt(cumulative_result["CPU_TIME"]) == ConvertToInt(cumulative_counter["OPERATOR_TIMING"]));
-	REQUIRE(ConvertToInt(cumulative_result["CUMULATIVE_CARDINALITY"]) ==
-	        ConvertToInt(cumulative_counter["OPERATOR_CARDINALITY"]));
+	// query.cpu_time and query.cumulative_cardinality are nested in the "query" object, access via get_value
+	auto cpu_time_val = duckdb_profiling_info_get_value(info, "query.cpu_time");
+	REQUIRE(cpu_time_val != nullptr);
+	auto cpu_time_str = duckdb_get_varchar(cpu_time_val);
+	double root_cpu_time = std::stod(cpu_time_str);
+	duckdb_free(cpu_time_str);
+	duckdb_destroy_value(&cpu_time_val);
+
+	auto cumul_card_val = duckdb_profiling_info_get_value(info, "query.cumulative_cardinality");
+	REQUIRE(cumul_card_val != nullptr);
+	auto cumul_card_str = duckdb_get_varchar(cumul_card_val);
+	double root_cumulative_cardinality = std::stod(cumul_card_str);
+	duckdb_free(cumul_card_str);
+	duckdb_destroy_value(&cumul_card_val);
+
+	REQUIRE(ConvertToInt(root_cpu_time) == ConvertToInt(cumulative_counter["OPERATOR_TIMING"]));
+	REQUIRE(ConvertToInt(root_cumulative_cardinality) == ConvertToInt(cumulative_counter["OPERATOR_CARDINALITY"]));
 	tester.Cleanup();
 }
 
@@ -354,7 +364,7 @@ TEST_CASE("Test profiling with the appender", "[capi]") {
 	REQUIRE(info);
 
 	// Check that the query name matches the appender query.
-	auto query_name = duckdb_profiling_info_get_value(info, "QUERY_NAME");
+	auto query_name = duckdb_profiling_info_get_value(info, "query.query_name");
 	REQUIRE(query_name);
 	auto query_name_c_str = duckdb_get_varchar(query_name);
 	auto query_name_str = duckdb::string(query_name_c_str);
@@ -394,7 +404,7 @@ TEST_CASE("Test profiling with the non-query appender", "[capi]") {
 	REQUIRE(info);
 
 	// Check that the query name matches the appender query.
-	auto query_name = duckdb_profiling_info_get_value(info, "QUERY_NAME");
+	auto query_name = duckdb_profiling_info_get_value(info, "query.query_name");
 	REQUIRE(query_name);
 
 	auto query_name_c_str = duckdb_get_varchar(query_name);

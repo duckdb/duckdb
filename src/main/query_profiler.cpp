@@ -79,7 +79,8 @@ profiler_settings_t QueryProfiler::GetQueryMetrics(ClientContext &context) {
 		local_settings.insert(metric);
 		// String-keyed metrics don't map to MetricType and need no expansion.
 		if (!MetricsUtils::IsOptimizerMetricKey(metric) && !MetricsUtils::IsStorageMetricKey(metric) &&
-		    !MetricsUtils::IsPhysicalPlannerMetricKey(metric) && !MetricsUtils::IsSystemMetricKey(metric)) {
+		    !MetricsUtils::IsPhysicalPlannerMetricKey(metric) && !MetricsUtils::IsSystemMetricKey(metric) &&
+		    !MetricsUtils::IsQueryMetricKey(metric)) {
 			ProfilingInfo::Expand(local_settings, EnumUtil::FromString<MetricType>(metric));
 		}
 	}
@@ -160,7 +161,7 @@ void QueryProfiler::Start(const string &query) {
 	Reset();
 	running = true;
 	query_metrics.query_name = query;
-	query_metrics.latency_timer = make_uniq<ActiveTimer>(StartTimer(MetricType::LATENCY));
+	query_metrics.latency_timer = make_uniq<ActiveTimer>(StartTimer("query.latency"));
 }
 
 void QueryProfiler::Reset() {
@@ -662,7 +663,7 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	bool show_query_name = false;
 	if (root) {
 		auto &info = *root_info;
-		show_query_name = info.EnabledForCollection(MetricType::QUERY_NAME);
+		show_query_name = info.EnabledForCollection("query.query_name");
 	}
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
@@ -684,7 +685,7 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	constexpr idx_t TOTAL_BOX_WIDTH = 50;
 	ss << "┌────────────────────────────────────────────────┐\n";
 	ss << "│┌──────────────────────────────────────────────┐│\n";
-	string total_time = "Total Time: " + RenderTiming(query_metrics.GetMetricInSeconds(MetricType::LATENCY));
+	string total_time = "Total Time: " + RenderTiming(query_metrics.GetStringMetricInSeconds("query.latency"));
 	ss << "││" + DrawPadded(total_time, TOTAL_BOX_WIDTH - 4) + "││\n";
 	ss << "│└──────────────────────────────────────────────┘│\n";
 	ss << "└────────────────────────────────────────────────┘\n";
@@ -1037,35 +1038,33 @@ void QueryProfiler::FinalizeMetricsInternal() {
 
 	auto &info = *root_info;
 
-	if (info.EnabledForCollection("system.peak_buffer_memory")) {
-		info.SetMetricValue("system.peak_buffer_memory", Value::UBIGINT(query_metrics.system_peak_buffer_memory));
-	}
-	if (info.EnabledForCollection("system.peak_temp_dir_size")) {
-		info.SetMetricValue("system.peak_temp_dir_size", Value::UBIGINT(query_metrics.system_peak_temp_dir_size));
-	}
-	if (info.EnabledForCollection("system.blocked_thread_time")) {
-		info.SetMetricValue("system.blocked_thread_time", Value::DOUBLE(query_metrics.blocked_thread_time));
-	}
-
+	OperatorInformation cumulative_metrics;
 	if (root) {
-		OperatorInformation cumulative_metrics;
 		MergeOperatorMeasurements(*root, cumulative_metrics);
-
-		if (info.EnabledForCollection(MetricType::CPU_TIME)) {
-			info.SetMetricValue(MetricType::CPU_TIME, Value::DOUBLE(cumulative_metrics.time));
-		}
-		if (info.EnabledForCollection(MetricType::CUMULATIVE_CARDINALITY)) {
-			info.SetMetricValue(MetricType::CUMULATIVE_CARDINALITY,
-			                    Value::UBIGINT(cumulative_metrics.elements_returned));
-		}
-		if (info.EnabledForCollection(MetricType::CUMULATIVE_ROWS_SCANNED)) {
-			info.SetMetricValue(MetricType::CUMULATIVE_ROWS_SCANNED, Value::UBIGINT(cumulative_metrics.rows_scanned));
-		}
 	}
 
 	for (auto &metric : info.GetMetricsMutable()) {
 		if (MetricsUtils::IsOptimizerMetricKey(metric.first) || MetricsUtils::IsPhysicalPlannerMetricKey(metric.first)) {
 			metric.second = Value::DOUBLE(query_metrics.GetStringMetricInSeconds(metric.first));
+			continue;
+		}
+		if (MetricsUtils::IsQueryMetricKey(metric.first)) {
+			if (metric.first == "query.latency") {
+				metric.second = Value::DOUBLE(query_metrics.GetStringMetricInSeconds("query.latency"));
+			} else if (metric.first == "query.query_name") {
+				metric.second = Value(query_metrics.query_name);
+			} else if (root) {
+				if (metric.first == "query.cpu_time") {
+					metric.second = Value::DOUBLE(cumulative_metrics.time);
+				} else if (metric.first == "query.cumulative_cardinality") {
+					metric.second = Value::UBIGINT(cumulative_metrics.elements_returned);
+				} else if (metric.first == "query.cumulative_rows_scanned") {
+					metric.second = Value::UBIGINT(cumulative_metrics.rows_scanned);
+				} else if (metric.first == "query.result_set_size") {
+					metric.second = Value::UBIGINT(cumulative_metrics.result_set_size);
+				}
+				// query.extra_info and query.rows_returned stay at their default values
+			}
 			continue;
 		}
 		if (MetricsUtils::IsSystemMetricKey(metric.first)) {

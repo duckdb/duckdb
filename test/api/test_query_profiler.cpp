@@ -41,7 +41,7 @@ TEST_CASE("Test query profiler, no query in the profiling output.", "[api]") {
 	con.context->config.emit_profiler_output = false;
 
 	// Disable `QUERY_NAME` in profiling output.
-	REQUIRE_NO_FAIL(con.Query(R"(PRAGMA custom_profiling_settings = '{"QUERY_NAME": "false"}')"));
+	REQUIRE_NO_FAIL(con.Query(R"(PRAGMA custom_profiling_settings = '{"query.query_name": "false"}')"));
 	string query = "SELECT * FROM (SELECT 42) tbl1, (SELECT 33) tbl2";
 	REQUIRE_NO_FAIL(con.Query(query));
 

@@ -131,44 +131,44 @@ IO Error: Could not parse the custom profiler settings file due to incorrect JSO
 
 # Set metrics from JSON
 statement ok
-CALL enable_profiling(metrics = {"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"})
+CALL enable_profiling(metrics = {"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "query.cumulative_cardinality": "true", "query.cumulative_rows_scanned": "true"})
 
 query I
 SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings'))
 ----
-CUMULATIVE_CARDINALITY
-CUMULATIVE_ROWS_SCANNED
 OPERATOR_CARDINALITY
 OPERATOR_ROWS_SCANNED
+query.cumulative_cardinality
+query.cumulative_rows_scanned
 
 # Set metrics from STRUCT
 statement ok
-CALL enable_profiling(metrics = {'QUERY_NAME': true, 'EXTRA_INFO': true, 'OPERATOR_ROWS_SCANNED': false})
+CALL enable_profiling(metrics = {'query.query_name': true, 'EXTRA_INFO': true, 'OPERATOR_ROWS_SCANNED': false})
 
 query I
 SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings'))
 ----
 EXTRA_INFO
-QUERY_NAME
+query.query_name
 
 # Set metrics from LIST
 statement ok
-CALL enable_profiling(metrics = ['LATENCY', 'RESULT_SET_SIZE']);
+CALL enable_profiling(metrics = ['query.latency', 'RESULT_SET_SIZE']);
 
 query I
 SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
-LATENCY
 RESULT_SET_SIZE
+query.latency
 
 # Set metrics from JSON STRING
 statement ok
-CALL enable_profiling(metrics = '{"CPU_TIME": "true", "system.blocked_thread_time": "true"}');
+CALL enable_profiling(metrics = '{"query.cpu_time": "true", "system.blocked_thread_time": "true"}');
 
 query I
 SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
-CPU_TIME
+query.cpu_time
 system.blocked_thread_time
 
 # Can't mix types though
@@ -188,19 +188,19 @@ RESET custom_profiling_settings;
 query I
 SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
-CPU_TIME
-CUMULATIVE_CARDINALITY
-CUMULATIVE_ROWS_SCANNED
 EXTRA_INFO
-LATENCY
 OPERATOR_CARDINALITY
 OPERATOR_NAME
 OPERATOR_ROWS_SCANNED
 OPERATOR_TIMING
 OPERATOR_TYPE
-QUERY_NAME
 RESULT_SET_SIZE
-ROWS_RETURNED
+query.cpu_time
+query.cumulative_cardinality
+query.cumulative_rows_scanned
+query.latency
+query.query_name
+query.rows_returned
 storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
@@ -217,13 +217,13 @@ system.total_memory_allocated
 
 # Set metrics straight into function
 statement ok
-CALL enable_profiling(['LATENCY', 'RESULT_SET_SIZE']);
+CALL enable_profiling(['query.latency', 'RESULT_SET_SIZE']);
 
 query I
 SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
-LATENCY
 RESULT_SET_SIZE
+query.latency
 
 # Set metrics straight into function with other settings too
 statement ok
@@ -275,7 +275,7 @@ Invalid Input Error: EnableProfiling: the save_location must be a .txt file or m
 #########################################################################################################################
 
 statement ok
-CALL enable_profiling(format='query_tree', save_location='{TEST_DIR}/test.txt', coverage='select', mode='standard', metrics=['QUERY_NAME', 'LATENCY'])
+CALL enable_profiling(format='query_tree', save_location='{TEST_DIR}/test.txt', coverage='select', mode='standard', metrics=['query.query_name', 'query.latency'])
 
 query I
 SELECT CURRENT_SETTING('enable_profiling');
@@ -300,11 +300,11 @@ standard
 query I
 SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
-LATENCY
-QUERY_NAME
+query.latency
+query.query_name
 
 #########################################################################################################################
-#            Invalid input		
+#            Invalid input
 #########################################################################################################################
 
 # Invalid parameter

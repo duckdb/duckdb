@@ -24,12 +24,12 @@ statement ok
 PRAGMA profiling_mode='DETAILED';
 
 statement ok
-pragma custom_profiling_settings='{"CPU_TIME": "true"}';
+pragma custom_profiling_settings='{"query.cpu_time": "true"}';
 
 query II
 SELECT * EXCLUDE(description) FROM duckdb_profiling_settings();
 ----
-custom_profiling_settings	[CPU_TIME]
+custom_profiling_settings	[query.cpu_time]
 enable_profiling	json
 profiling_coverage	ALL
 profiling_mode	detailed

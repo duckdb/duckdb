@@ -11,6 +11,7 @@
 #pragma once
 
 #include "duckdb/common/enums/metric_type.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/main/profiling_node.hpp"
 #include "duckdb/main/profiling_info.hpp"
 #include "duckdb/common/profiler.hpp"
@@ -30,13 +31,11 @@ public:
     QueryMetrics() : bytes_read(0), bytes_written(0) {
         Reset();
     }
-
 	idx_t system_peak_buffer_memory;
 	idx_t system_peak_temp_dir_size;
 	double blocked_thread_time;
 
 	std::string query_name;
-	unique_ptr<ActiveTimer> latency_timer;
 
 	// Always-tracked byte counters (used by progress bar even when profiling is disabled)
 	atomic<idx_t> bytes_read;
@@ -139,26 +138,29 @@ public:
 
 	static idx_t GetMetricsIndex(MetricType type) {
 		switch(type) {
-		case MetricType::LATENCY: return 0;
 		// Phase timing metrics
-		case MetricType::ALL_OPTIMIZERS: return 1;
-		case MetricType::PARSER: return 2;
-		case MetricType::PLANNER: return 3;
-		case MetricType::PLANNER_BINDING: return 4;
+		case MetricType::ALL_OPTIMIZERS: return 0;
+		case MetricType::PARSER: return 1;
+		case MetricType::PLANNER: return 2;
+		case MetricType::PLANNER_BINDING: return 3;
 		default:
 			throw InternalException("MetricType %s is not actively tracked.", EnumUtil::ToString(type));
 		}
 	}
 
 private:
-	// LATENCY + 4 phase timing metrics
-	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 5;
+	// 4 phase timing metrics
+	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 4;
 
 	atomic<idx_t> active_metrics[ACTIVELY_TRACKED_METRICS];
 	// String-keyed timings for optimizer and storage timer metrics
 	unordered_map<string, idx_t> string_timings;
 	// String-keyed counters for storage counter metrics (e.g. "storage.wal_replay_entry_count")
 	unordered_map<string, idx_t> string_counters;
+
+public:
+	// Declared after string_timings so it is destroyed first; its destructor writes to string_timings.
+	unique_ptr<ActiveTimer> latency_timer;
 };
 
 class ProfilingUtils {
@@ -169,7 +171,7 @@ public:
 
 struct ActiveTimer {
 public:
-	ActiveTimer() : metric(MetricType::EXTRA_INFO), is_string_metric(false), is_active(false) {
+	ActiveTimer() : metric(MetricType::ALL_OPTIMIZERS), is_string_metric(false), is_active(false) {
 	}
 	// MetricType-based constructor (for fixed-array metrics)
 	ActiveTimer(QueryMetrics &query_metrics, const MetricType metric, const bool is_active = true)
@@ -179,9 +181,9 @@ public:
 		}
 		profiler.Start();
 	}
-	// String-key constructor (for optimizer metrics stored in string_timings)
+	// String-key constructor (for string_timings, e.g. "query.latency", "optimizer.*" etc.)
 	ActiveTimer(QueryMetrics &query_metrics, string key, const bool is_active = true)
-	    : query_metrics(query_metrics), metric(MetricType::EXTRA_INFO), string_key(std::move(key)),
+	    : query_metrics(query_metrics), metric(MetricType::ALL_OPTIMIZERS), string_key(std::move(key)),
 	      is_string_metric(true), is_active(is_active) {
 		if (!is_active) {
 			return;
@@ -189,8 +191,7 @@ public:
 		profiler.Start();
 	}
 	~ActiveTimer() {
-		if (is_active) {
-			// automatically end in destructor
+		if (is_active && !Exception::UncaughtException()) {
 			EndTimer();
 		}
 	}

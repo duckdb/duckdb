@@ -27,28 +27,22 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	auto key = EnumUtil::ToString(type);
 	switch(type) {
 	case MetricType::ALL_OPTIMIZERS:
-	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
-	case MetricType::LATENCY:
 	case MetricType::OPERATOR_TIMING:
 	case MetricType::PARSER:
 	case MetricType::PLANNER:
 	case MetricType::PLANNER_BINDING:
 		metrics[key] = Value::CreateValue(0.0);
 		break;
-	case MetricType::CUMULATIVE_CARDINALITY:
-	case MetricType::CUMULATIVE_ROWS_SCANNED:
 	case MetricType::OPERATOR_CARDINALITY:
 	case MetricType::OPERATOR_ROWS_SCANNED:
 	case MetricType::RESULT_SET_SIZE:
-	case MetricType::ROWS_RETURNED:
 		metrics[key] = Value::CreateValue<uint64_t>(0);
 		break;
 	case MetricType::EXTRA_INFO:
 		metrics[key] = Value::MAP(InsertionOrderPreservingMap<string>());
 		break;
 	case MetricType::OPERATOR_NAME:
-	case MetricType::QUERY_NAME:
 		metrics[key] = Value::CreateValue("");
 		break;
 	case MetricType::OPERATOR_TYPE:
@@ -61,16 +55,12 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 
 void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingInfo &result) {
 	switch(type) {
-	case MetricType::LATENCY:
 	// Phase timing metrics
 	case MetricType::ALL_OPTIMIZERS:
 	case MetricType::PARSER:
 	case MetricType::PLANNER:
 	case MetricType::PLANNER_BINDING:
 		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(type));
-		break;
-	case MetricType::QUERY_NAME:
-		metric = query_metrics.query_name;
 		break;
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 		metric = GetCumulativeOptimizers(query_metrics);

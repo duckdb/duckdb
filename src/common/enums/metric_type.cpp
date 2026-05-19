@@ -10,12 +10,8 @@ namespace duckdb {
 profiler_settings_t MetricsUtils::GetAllMetrics() {
 	auto result = profiler_settings_t {
 		"ALL_OPTIMIZERS",
-		"CPU_TIME",
-		"CUMULATIVE_CARDINALITY",
 		"CUMULATIVE_OPTIMIZER_TIMING",
-		"CUMULATIVE_ROWS_SCANNED",
 		"EXTRA_INFO",
-		"LATENCY",
 		"OPERATOR_CARDINALITY",
 		"OPERATOR_NAME",
 		"OPERATOR_ROWS_SCANNED",
@@ -24,10 +20,13 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		"PARSER",
 		"PLANNER",
 		"PLANNER_BINDING",
-		"QUERY_NAME",
 		"RESULT_SET_SIZE",
-		"ROWS_RETURNED",
 	};
+	// Add all query metrics
+	auto query_metrics = GetQueryMetrics();
+	for (const auto &m : query_metrics) {
+		result.insert(m);
+	}
 	// Add all optimizer metrics
 	auto optimizer_metrics = GetOptimizerMetrics();
 	for (const auto &m : optimizer_metrics) {
@@ -75,50 +74,28 @@ profiler_settings_t MetricsUtils::GetMetricsByGroupType(MetricGroup type) {
 }
 
 profiler_settings_t MetricsUtils::GetCoreMetrics() {
-	return {
-		"CPU_TIME",
-		"CUMULATIVE_CARDINALITY",
-		"CUMULATIVE_ROWS_SCANNED",
-		"EXTRA_INFO",
-		"LATENCY",
-		"QUERY_NAME",
-		"RESULT_SET_SIZE",
-		"ROWS_RETURNED",
-	};
+	return GetQueryMetrics();
 }
 
 bool MetricsUtils::IsCoreMetric(MetricType type) {
-	switch(type) {
-	case MetricType::CPU_TIME:
-	case MetricType::CUMULATIVE_CARDINALITY:
-	case MetricType::CUMULATIVE_ROWS_SCANNED:
-	case MetricType::EXTRA_INFO:
-	case MetricType::LATENCY:
-	case MetricType::QUERY_NAME:
-	case MetricType::RESULT_SET_SIZE:
-	case MetricType::ROWS_RETURNED:
-		return true;
-	default:
-		return false;
-	}
+	return false;
 }
 
 profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 	profiler_settings_t result {
-		"CPU_TIME",
-		"CUMULATIVE_CARDINALITY",
-		"CUMULATIVE_ROWS_SCANNED",
 		"EXTRA_INFO",
-		"LATENCY",
 		"OPERATOR_CARDINALITY",
 		"OPERATOR_NAME",
 		"OPERATOR_ROWS_SCANNED",
 		"OPERATOR_TIMING",
 		"OPERATOR_TYPE",
-		"QUERY_NAME",
 		"RESULT_SET_SIZE",
-		"ROWS_RETURNED",
 	};
+	// Add all query metrics (they are in the default set)
+	auto query_metrics = GetQueryMetrics();
+	for (const auto &m : query_metrics) {
+		result.insert(m);
+	}
 	// Add all storage metrics (they are in the default set)
 	auto storage_metrics = GetStorageMetrics();
 	for (const auto &m : storage_metrics) {
@@ -134,23 +111,36 @@ profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 
 bool MetricsUtils::IsDefaultMetric(MetricType type) {
 	switch(type) {
-	case MetricType::CPU_TIME:
-	case MetricType::CUMULATIVE_CARDINALITY:
-	case MetricType::CUMULATIVE_ROWS_SCANNED:
 	case MetricType::EXTRA_INFO:
-	case MetricType::LATENCY:
 	case MetricType::OPERATOR_CARDINALITY:
 	case MetricType::OPERATOR_NAME:
 	case MetricType::OPERATOR_ROWS_SCANNED:
 	case MetricType::OPERATOR_TIMING:
 	case MetricType::OPERATOR_TYPE:
-	case MetricType::QUERY_NAME:
 	case MetricType::RESULT_SET_SIZE:
-	case MetricType::ROWS_RETURNED:
 		return true;
 	default:
 		return false;
 	}
+}
+
+profiler_settings_t MetricsUtils::GetQueryMetrics() {
+	return {
+		"query.cpu_time",
+		"query.cumulative_cardinality",
+		"query.cumulative_rows_scanned",
+		"query.latency",
+		"query.query_name",
+		"query.rows_returned",
+	};
+}
+
+bool MetricsUtils::IsQueryMetricKey(const string &key) {
+	return StringUtil::StartsWith(key, "query.");
+}
+
+bool MetricsUtils::IsQueryTimerMetricKey(const string &key) {
+	return key == "query.latency" || key == "query.cpu_time";
 }
 
 profiler_settings_t MetricsUtils::GetSystemMetrics() {
@@ -281,11 +271,15 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 	auto result = profiler_settings_t {
 		"ALL_OPTIMIZERS",
 		"CUMULATIVE_OPTIMIZER_TIMING",
-		"LATENCY",
 		"PLANNER",
 		"PLANNER_BINDING",
-		"QUERY_NAME",
-		"ROWS_RETURNED",
+		// Root-scope query metrics (not operator-level)
+		"query.cpu_time",
+		"query.cumulative_cardinality",
+		"query.cumulative_rows_scanned",
+		"query.latency",
+		"query.query_name",
+		"query.rows_returned",
 	};
 	// Add all optimizer metrics (they are root-scope only)
 	auto optimizer_metrics = GetOptimizerMetrics();
@@ -314,11 +308,8 @@ bool MetricsUtils::IsRootScopeMetric(MetricType type) {
 	switch(type) {
 	case MetricType::ALL_OPTIMIZERS:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
-	case MetricType::LATENCY:
 	case MetricType::PLANNER:
 	case MetricType::PLANNER_BINDING:
-	case MetricType::QUERY_NAME:
-	case MetricType::ROWS_RETURNED:
 		return true;
 	default:
 		return false;

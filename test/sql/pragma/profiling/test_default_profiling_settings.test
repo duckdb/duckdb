@@ -25,19 +25,19 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-CPU_TIME
-CUMULATIVE_CARDINALITY
-CUMULATIVE_ROWS_SCANNED
 EXTRA_INFO
-LATENCY
 OPERATOR_CARDINALITY
 OPERATOR_NAME
 OPERATOR_ROWS_SCANNED
 OPERATOR_TIMING
 OPERATOR_TYPE
-QUERY_NAME
 RESULT_SET_SIZE
-ROWS_RETURNED
+query.cpu_time
+query.cumulative_cardinality
+query.cumulative_rows_scanned
+query.latency
+query.query_name
+query.rows_returned
 storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
@@ -56,5 +56,5 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT cpu_time, extra_info, rows_returned, latency FROM metrics_output;
+SELECT extra_info, result_set_size, query.cpu_time, query.rows_returned, query.latency FROM metrics_output;
 

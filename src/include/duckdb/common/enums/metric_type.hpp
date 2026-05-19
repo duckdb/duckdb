@@ -29,22 +29,16 @@ enum class MetricGroup : uint8_t {
 };
 
 enum class MetricType : uint8_t {
-	// Core metrics
-	CPU_TIME = 2,
-	CUMULATIVE_CARDINALITY = 4,
-	CUMULATIVE_ROWS_SCANNED = 7,
-	EXTRA_INFO = 3,
-	LATENCY = 11,
-	QUERY_NAME = 0,
-	RESULT_SET_SIZE = 10,
-	ROWS_RETURNED = 12,
+	// (Core metrics moved to "query.*" string keys)
 	// (Execution metrics moved to "system.*" string keys)
 	// Operator metrics
+	EXTRA_INFO = 3,
 	OPERATOR_CARDINALITY = 6,
 	OPERATOR_NAME = 13,
 	OPERATOR_ROWS_SCANNED = 8,
 	OPERATOR_TIMING = 9,
 	OPERATOR_TYPE = 5,
+	RESULT_SET_SIZE = 10,
 	// PhaseTiming metrics
 	ALL_OPTIMIZERS = 18,
 	CUMULATIVE_OPTIMIZER_TIMING = 19,
@@ -69,6 +63,11 @@ public:
 	// Default metrics
 	static profiler_settings_t GetDefaultMetrics();
 	static bool IsDefaultMetric(MetricType type);
+
+	// Core metrics — stored as "query.<lowercase_name>" strings, not as MetricType values
+	static profiler_settings_t GetQueryMetrics();
+	static bool IsQueryMetricKey(const string &key);
+	static bool IsQueryTimerMetricKey(const string &key);
 
 	// Execution metrics — stored as "system.<lowercase_name>" strings, not as MetricType values
 	static profiler_settings_t GetExecutionMetrics();

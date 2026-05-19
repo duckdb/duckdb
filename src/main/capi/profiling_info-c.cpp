@@ -54,6 +54,23 @@ duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const c
 		return nullptr;
 	}
 	auto &node = *reinterpret_cast<QueryProfileResult *>(info);
+	duckdb::string key_str(key);
+	auto dot_pos = key_str.find('.');
+	if (dot_pos != duckdb::string::npos) {
+		// Dotted path: find OBJECT child with the prefix, then recurse with the suffix
+		auto prefix = key_str.substr(0, dot_pos);
+		auto suffix = key_str.substr(dot_pos + 1);
+		for (auto &child : node.children) {
+			if (child->kind != QueryProfileResultKind::OBJECT) {
+				continue;
+			}
+			if (duckdb::StringUtil::CIEquals(child->key, prefix)) {
+				return duckdb_profiling_info_get_value(reinterpret_cast<duckdb_profiling_info>(child.get()),
+				                                      suffix.c_str());
+			}
+		}
+		return nullptr;
+	}
 	for (auto &child : node.children) {
 		if (child->kind != QueryProfileResultKind::VALUE) {
 			continue;

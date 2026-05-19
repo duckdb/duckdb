@@ -24,6 +24,10 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 			expanded_settings.insert(metric);
 			continue;
 		}
+		if (MetricsUtils::IsQueryMetricKey(metric)) {
+			expanded_settings.insert(metric);
+			continue;
+		}
 		Expand(expanded_settings, EnumUtil::FromString<MetricType>(metric));
 	}
 
@@ -47,6 +51,16 @@ void ProfilingInfo::ResetMetrics() {
 	for (const auto &metric : expanded_settings) {
 		if (MetricsUtils::IsOptimizerMetricKey(metric) || MetricsUtils::IsPhysicalPlannerMetricKey(metric)) {
 			metrics[metric] = Value::CreateValue(0.0);
+			continue;
+		}
+		if (MetricsUtils::IsQueryMetricKey(metric)) {
+			if (metric == "query.latency" || metric == "query.cpu_time") {
+				metrics[metric] = Value::CreateValue(0.0);
+			} else if (metric == "query.query_name") {
+				metrics[metric] = Value::CreateValue("");
+			} else {
+				metrics[metric] = Value::CreateValue<uint64_t>(0);
+			}
 			continue;
 		}
 		if (MetricsUtils::IsSystemMetricKey(metric)) {
@@ -90,15 +104,6 @@ void ProfilingInfo::Expand(profiler_settings_t &settings, const MetricType metri
 	settings.insert(EnumUtil::ToString(metric));
 
 	switch (metric) {
-	case MetricType::CPU_TIME:
-		settings.insert(EnumUtil::ToString(MetricType::OPERATOR_TIMING));
-		return;
-	case MetricType::CUMULATIVE_CARDINALITY:
-		settings.insert(EnumUtil::ToString(MetricType::OPERATOR_CARDINALITY));
-		return;
-	case MetricType::CUMULATIVE_ROWS_SCANNED:
-		settings.insert(EnumUtil::ToString(MetricType::OPERATOR_ROWS_SCANNED));
-		return;
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 	case MetricType::ALL_OPTIMIZERS: {
 		auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
