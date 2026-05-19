@@ -12,11 +12,6 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
-static string OperatorToString(const Value &val) {
-    const auto type = static_cast<PhysicalOperatorType>(val.GetValue<uint8_t>());
-    return EnumUtil::ToString(type);
-}
-
 static Value GetCumulativeOptimizers(ProfilingInfo &result) {
 	auto &metrics = result.GetMetrics();
 	double count = 0;
