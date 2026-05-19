@@ -767,6 +767,9 @@ idx_t ColumnReader::ReadInternal(ColumnReaderInput &input, Vector &result) {
 bool ColumnReader::PageRangeHasSelectedRows(const SelectionVector &sel, idx_t approved_tuple_count, idx_t result_offset,
                                             idx_t read_now) {
 	const sel_t *sel_data = sel.data();
+	if (!sel_data) {
+		return result_offset < approved_tuple_count;
+	}
 	auto it = std::lower_bound(sel_data, sel_data + approved_tuple_count, result_offset);
 	auto end = sel_data + approved_tuple_count;
 	return it != end && *it < result_offset + read_now;
