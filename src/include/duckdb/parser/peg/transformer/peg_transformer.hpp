@@ -1196,7 +1196,7 @@ private:
 	                                                         const bool &if_not_exists,
 	                                                         unique_ptr<ParsedExpression> database_path,
 	                                                         const string &attach_alias,
-	                                                         vector<GenericCopyOption> attach_options);
+	                                                         const vector<GenericCopyOption> &attach_options);
 	static unique_ptr<TransformResultValue> TransformDatabasePathInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformDatabasePath(PEGTransformer &transformer,
@@ -1207,7 +1207,7 @@ private:
 	static unique_ptr<TransformResultValue> TransformAttachOptionsInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static vector<GenericCopyOption> TransformAttachOptions(PEGTransformer &transformer,
-	                                                        vector<GenericCopyOption> generic_copy_option_list);
+	                                                        const vector<GenericCopyOption> &generic_copy_option_list);
 	static unique_ptr<TransformResultValue> TransformCallStatementInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<SQLStatement>
@@ -1226,10 +1226,10 @@ private:
 	                                                             const QualifiedName &qualified_name);
 	static unique_ptr<TransformResultValue> TransformCreateSecretStmtInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
-	static unique_ptr<CreateStatement> TransformCreateSecretStmt(PEGTransformer &transformer, const bool &if_not_exists,
-	                                                             const string &secret_name,
-	                                                             const string &secret_storage_specifier,
-	                                                             vector<GenericCopyOption> generic_copy_option_list);
+	static unique_ptr<CreateStatement>
+	TransformCreateSecretStmt(PEGTransformer &transformer, const bool &if_not_exists, const string &secret_name,
+	                          const string &secret_storage_specifier,
+	                          const vector<GenericCopyOption> &generic_copy_option_list);
 	static unique_ptr<TransformResultValue> TransformSecretStorageSpecifierInternal(PEGTransformer &transformer,
 	                                                                                ParseResult &parse_result);
 	static string TransformSecretStorageSpecifier(PEGTransformer &transformer, const string &identifier);
@@ -1266,7 +1266,7 @@ private:
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformExportStatement(PEGTransformer &transformer, const string &export_source,
 	                                                         const string &string_literal,
-	                                                         vector<GenericCopyOption> generic_copy_option_list);
+	                                                         const vector<GenericCopyOption> &generic_copy_option_list);
 	static unique_ptr<TransformResultValue> TransformExportSourceInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
 	static string TransformExportSource(PEGTransformer &transformer, const string &catalog_name);

@@ -16,7 +16,7 @@ Value PEGTransformerFactory::GetConstantExpressionValue(unique_ptr<ParsedExpress
 unique_ptr<CreateStatement>
 PEGTransformerFactory::TransformCreateSecretStmt(PEGTransformer &transformer, const bool &if_not_exists,
                                                  const string &secret_name, const string &secret_storage_specifier,
-                                                 vector<GenericCopyOption> generic_copy_option_list) {
+                                                 const vector<GenericCopyOption> &generic_copy_option_list) {
 	auto result = make_uniq<CreateStatement>();
 	auto on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	auto info = make_uniq<CreateSecretInfo>(on_conflict, SecretPersistType::DEFAULT);
@@ -26,7 +26,7 @@ PEGTransformerFactory::TransformCreateSecretStmt(PEGTransformer &transformer, co
 	if (!secret_storage_specifier.empty()) {
 		info->storage_type = StringUtil::Lower(secret_storage_specifier);
 	}
-	for (auto option : generic_copy_option_list) {
+	for (const auto &option : generic_copy_option_list) {
 		auto lower_name = StringUtil::Lower(option.name);
 		if (lower_name == "scope") {
 			info->scope = option.GetFirstChildOrExpression();

@@ -570,7 +570,7 @@ StringList:
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
-  by_value: true
+  by_value: false
   rules:
     - AttachOptions
     - GenericCopyOptionList

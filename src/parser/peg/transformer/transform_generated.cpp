@@ -43,7 +43,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAttachStatement
 	vector<GenericCopyOption> attach_options {};
 	transformer.TransformOptional(list_pr, 6, attach_options);
 	auto result = TransformAttachStatement(transformer, or_replace, if_not_exists, std::move(database_path),
-	                                       attach_alias, std::move(attach_options));
+	                                       attach_alias, attach_options);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
@@ -67,8 +67,8 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAttachOptionsIn
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto generic_copy_option_list = transformer.Transform<vector<GenericCopyOption>>(list_pr, 0);
-	auto result = TransformAttachOptions(transformer, std::move(generic_copy_option_list));
-	return make_uniq<TypedTransformResult<vector<GenericCopyOption>>>(std::move(result));
+	auto result = TransformAttachOptions(transformer, generic_copy_option_list);
+	return make_uniq<TypedTransformResult<vector<GenericCopyOption>>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCallStatementInternal(PEGTransformer &transformer,
@@ -121,7 +121,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateSecretStm
 	transformer.TransformOptional(list_pr, 3, secret_storage_specifier);
 	auto generic_copy_option_list = transformer.Transform<vector<GenericCopyOption>>(list_pr, 4);
 	auto result = TransformCreateSecretStmt(transformer, if_not_exists, secret_name, secret_storage_specifier,
-	                                        std::move(generic_copy_option_list));
+	                                        generic_copy_option_list);
 	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
 }
 
@@ -209,8 +209,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExportStatement
 	auto string_literal = transformer.Transform<string>(list_pr, 3);
 	vector<GenericCopyOption> generic_copy_option_list {};
 	transformer.TransformOptional(list_pr, 4, generic_copy_option_list);
-	auto result =
-	    TransformExportStatement(transformer, export_source, string_literal, std::move(generic_copy_option_list));
+	auto result = TransformExportStatement(transformer, export_source, string_literal, generic_copy_option_list);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 

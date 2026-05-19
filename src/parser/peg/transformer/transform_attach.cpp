@@ -7,7 +7,8 @@ namespace duckdb {
 unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformAttachStatement(PEGTransformer &transformer, const bool &or_replace,
                                                 const bool &if_not_exists, unique_ptr<ParsedExpression> database_path,
-                                                const string &attach_alias, vector<GenericCopyOption> attach_options) {
+                                                const string &attach_alias,
+                                                const vector<GenericCopyOption> &attach_options) {
 	auto result = make_uniq<AttachStatement>();
 	auto info = make_uniq<AttachInfo>();
 
@@ -25,9 +26,9 @@ PEGTransformerFactory::TransformAttachStatement(PEGTransformer &transformer, con
 
 	info->parsed_path = std::move(database_path);
 	info->name = attach_alias;
-	for (auto &attach_option : attach_options) {
+	for (const auto &attach_option : attach_options) {
 		if (attach_option.expression) {
-			info->parsed_options[attach_option.name] = std::move(attach_option.expression);
+			info->parsed_options[attach_option.name] = attach_option.expression->Copy();
 			continue;
 		}
 		if (attach_option.children.empty()) {
@@ -38,7 +39,7 @@ PEGTransformerFactory::TransformAttachStatement(PEGTransformer &transformer, con
 				throw BinderException("NULL is not supported as a valid option for ATTACH option \"%s\"",
 				                      attach_option.name);
 			}
-			info->options[attach_option.name] = std::move(attach_option.children[0]);
+			info->options[attach_option.name] = attach_option.children[0];
 		} else {
 			throw ParserException("Option %s can only have one argument", attach_option.name);
 		}
@@ -53,13 +54,13 @@ string PEGTransformerFactory::TransformAttachAlias(PEGTransformer &transformer, 
 
 vector<GenericCopyOption>
 PEGTransformerFactory::TransformAttachOptions(PEGTransformer &transformer,
-                                              vector<GenericCopyOption> generic_copy_option_list) {
-	return std::move(generic_copy_option_list);
+                                              const vector<GenericCopyOption> &generic_copy_option_list) {
+	return generic_copy_option_list;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDatabasePath(PEGTransformer &transformer,
                                                                           unique_ptr<ParsedExpression> expression) {
-	return std::move(expression);
+	return expression;
 }
 
 } // namespace duckdb
