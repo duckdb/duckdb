@@ -1,5 +1,6 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/statement/export_statement.hpp"
+#include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 namespace duckdb {
