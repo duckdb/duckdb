@@ -258,14 +258,7 @@ static FilterPropagateResult CheckComparisonStatistics(const BoundFunctionExpres
 	}
 	auto result = CheckZonemapAgainstConstants(*filter_stats, comparison_type, array_ptr<const Value>(&constant, 1));
 	if (filter_stats->CanHaveNull()) {
-		if (comparison_type == ExpressionType::COMPARE_DISTINCT_FROM &&
-		    result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
-		if (comparison_type != ExpressionType::COMPARE_DISTINCT_FROM &&
-		    result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	return result;
 }
