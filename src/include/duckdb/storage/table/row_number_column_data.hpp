@@ -38,7 +38,7 @@ public:
 	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
-	void Append(ColumnAppendState &state, Vector &vector, idx_t count) override;
+	void Append(ColumnAppendState &state, const Vector &vector, idx_t count) override;
 	void AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
 	void RevertAppend(row_t new_count) override;
 

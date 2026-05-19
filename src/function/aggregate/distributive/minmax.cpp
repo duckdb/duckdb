@@ -431,9 +431,9 @@ void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_
 	UnifiedVectorFormat n_format;
 	UnifiedVectorFormat state_format;
 
-	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState(val_vector, count);
+	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState();
 
-	STATE::VAL_TYPE::PrepareData(val_vector, count, val_extra_state, val_format, true);
+	STATE::VAL_TYPE::PrepareData(val_vector, val_extra_state, val_format, true);
 
 	n_vector.ToUnifiedFormat(n_format);
 	state_vector.ToUnifiedFormat(state_format);

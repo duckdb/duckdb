@@ -490,7 +490,7 @@ LogicalType VariantShreddingStats::GetShreddedType() const {
 	return LogicalType::STRUCT(child_types);
 }
 
-void VariantShreddingStats::Update(Vector &input, idx_t count) {
+void VariantShreddingStats::Update(const Vector &input, idx_t count) {
 	RecursiveUnifiedVectorFormat recursive_format;
 	Vector::RecursiveToUnifiedFormat(input, recursive_format);
 	UnifiedVariantVectorData variant(recursive_format);
@@ -694,7 +694,7 @@ void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varian
 	}
 }
 
-void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t count) {
+void VariantColumnData::ShredVariantData(const Vector &input, Vector &output, idx_t count) {
 	RecursiveUnifiedVectorFormat recursive_format;
 	Vector::RecursiveToUnifiedFormat(input, recursive_format);
 	UnifiedVariantVectorData variant(recursive_format);

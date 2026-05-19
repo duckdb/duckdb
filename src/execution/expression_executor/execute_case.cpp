@@ -93,7 +93,7 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 }
 
 template <class T>
-void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
+void TemplatedFillLoop(const Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto res = FlatVector::GetDataMutable<T>(result);
 	auto &result_mask = FlatVector::ValidityMutable(result);
@@ -122,7 +122,7 @@ void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &se
 	}
 }
 
-void ValidityFillLoop(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
+void ValidityFillLoop(const Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &result_mask = FlatVector::ValidityMutable(result);
 	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -144,7 +144,7 @@ void ValidityFillLoop(Vector &vector, Vector &result, const SelectionVector &sel
 	}
 }
 
-void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
+void ExpressionExecutor::FillSwitch(const Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

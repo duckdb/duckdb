@@ -38,7 +38,8 @@ struct ArrayStats {
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other,
 	                             StatsMergeType merge_type = StatsMergeType::MERGE_STATS);
 	DUCKDB_API static void Copy(BaseStatistics &stats, const BaseStatistics &other);
-	DUCKDB_API static void Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count);
+	DUCKDB_API static void Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel,
+	                              idx_t count);
 };
 
 } // namespace duckdb

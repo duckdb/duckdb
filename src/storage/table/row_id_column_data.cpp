@@ -132,7 +132,7 @@ void RowIdColumnData::InitializeAppend(ColumnAppendState &state) {
 	throw InternalException("RowIdColumnData cannot be appended to");
 }
 
-void RowIdColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
+void RowIdColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
 	throw InternalException("RowIdColumnData cannot be appended to");
 }
 

@@ -177,7 +177,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 			}
 		}
 	}
-	output.SetCardinality(1);
+	output.SetChildCardinality(1);
 	done = true;
 	return AsyncResult(SourceResultType::HAVE_MORE_OUTPUT);
 }

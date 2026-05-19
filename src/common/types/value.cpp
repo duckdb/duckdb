@@ -1687,7 +1687,7 @@ hash_t Value::Hash() const {
 	}
 	Vector input(*this, count_t(1));
 	Vector result(LogicalType::HASH, 1);
-	VectorOperations::Hash(input, result, 1);
+	VectorOperations::Hash(input, result);
 
 	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return *ConstantVector::GetData<hash_t>(result);

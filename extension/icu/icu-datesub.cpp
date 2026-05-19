@@ -90,9 +90,9 @@ struct ICUCalendarSub : public ICUDateFunc {
 	template <typename T>
 	static void ICUDateSubFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 3);
-		auto &part_arg = args.data[0];
-		auto &startdate_arg = args.data[1];
-		auto &enddate_arg = args.data[2];
+		const auto &part_arg = args.data[0];
+		const auto &startdate_arg = args.data[1];
+		const auto &enddate_arg = args.data[2];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<BindData>();
@@ -105,7 +105,7 @@ struct ICUCalendarSub : public ICUDateFunc {
 			}
 			const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
 			auto part_func = SubtractFactory(GetDatePartSpecifier(specifier));
-			BinaryExecutor::Execute<T, T, int64_t>(startdate_arg, enddate_arg, result, args.size(),
+			BinaryExecutor::Execute<T, T, int64_t>(startdate_arg, enddate_arg, result,
 			                                       [&](T start_date, T end_date) -> optional<int64_t> {
 				                                       if (start_date.IsFinite() && end_date.IsFinite()) {
 					                                       return part_func(calendar.get(), start_date, end_date);
@@ -115,7 +115,7 @@ struct ICUCalendarSub : public ICUDateFunc {
 			                                       });
 		} else {
 			TernaryExecutor::Execute<string_t, T, T, int64_t>(
-			    part_arg, startdate_arg, enddate_arg, result, args.size(),
+			    part_arg, startdate_arg, enddate_arg, result,
 			    [&](string_t specifier, T start_date, T end_date) -> optional<int64_t> {
 				    if (start_date.IsFinite() && end_date.IsFinite()) {
 					    auto part_func = SubtractFactory(GetDatePartSpecifier(specifier.GetString()));
@@ -217,9 +217,9 @@ struct ICUCalendarDiff : public ICUDateFunc {
 	template <typename T>
 	static void ICUDateDiffFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 3);
-		auto &part_arg = args.data[0];
-		auto &startdate_arg = args.data[1];
-		auto &enddate_arg = args.data[2];
+		const auto &part_arg = args.data[0];
+		const auto &startdate_arg = args.data[1];
+		const auto &enddate_arg = args.data[2];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<BindData>();
@@ -235,19 +235,18 @@ struct ICUCalendarDiff : public ICUDateFunc {
 				const auto part = GetDatePartSpecifier(specifier);
 				auto trunc_func = DiffTruncationFactory(part);
 				auto sub_func = SubtractFactory(part);
-				BinaryExecutor::Execute<T, T, int64_t>(startdate_arg, enddate_arg, result, args.size(),
-				                                       [&](T start_date, T end_date) -> optional<int64_t> {
-					                                       if (start_date.IsFinite() && end_date.IsFinite()) {
-						                                       return DifferenceFunc<T>(calendar, start_date, end_date,
-						                                                                trunc_func, sub_func);
-					                                       } else {
-						                                       return nullopt;
-					                                       }
-				                                       });
+				BinaryExecutor::Execute<T, T, int64_t>(
+				    startdate_arg, enddate_arg, result, [&](T start_date, T end_date) -> optional<int64_t> {
+					    if (start_date.IsFinite() && end_date.IsFinite()) {
+						    return DifferenceFunc<T>(calendar, start_date, end_date, trunc_func, sub_func);
+					    } else {
+						    return nullopt;
+					    }
+				    });
 			}
 		} else {
 			TernaryExecutor::Execute<string_t, T, T, int64_t>(
-			    part_arg, startdate_arg, enddate_arg, result, args.size(),
+			    part_arg, startdate_arg, enddate_arg, result,
 			    [&](string_t specifier, T start_date, T end_date) -> optional<int64_t> {
 				    if (start_date.IsFinite() && end_date.IsFinite()) {
 					    const auto part = GetDatePartSpecifier(specifier.GetString());

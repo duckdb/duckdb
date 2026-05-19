@@ -14,6 +14,8 @@
 #include "duckdb/parser/parsed_data/copy_database_info.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/parsed_data/detach_info.hpp"
+#include "duckdb/parser/parsed_data/connect_info.hpp"
+#include "duckdb/parser/parsed_data/disconnect_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/parser/parsed_data/load_info.hpp"
 #include "duckdb/parser/parsed_data/update_extensions_info.hpp"
@@ -41,6 +43,9 @@ unique_ptr<ParseInfo> ParseInfo::Deserialize(Deserializer &deserializer) {
 	case ParseInfoType::BOUND_EXPORT_DATA:
 		result = BoundExportData::Deserialize(deserializer);
 		break;
+	case ParseInfoType::CONNECT_INFO:
+		result = ConnectInfo::Deserialize(deserializer);
+		break;
 	case ParseInfoType::COPY_DATABASE_INFO:
 		result = CopyDatabaseInfo::Deserialize(deserializer);
 		break;
@@ -49,6 +54,9 @@ unique_ptr<ParseInfo> ParseInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case ParseInfoType::DETACH_INFO:
 		result = DetachInfo::Deserialize(deserializer);
+		break;
+	case ParseInfoType::DISCONNECT_INFO:
+		result = DisconnectInfo::Deserialize(deserializer);
 		break;
 	case ParseInfoType::DROP_INFO:
 		result = DropInfo::Deserialize(deserializer);
@@ -342,6 +350,21 @@ unique_ptr<AlterInfo> ChangeOwnershipInfo::Deserialize(Deserializer &deserialize
 	return std::move(result);
 }
 
+void ConnectInfo::Serialize(Serializer &serializer) const {
+	ParseInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "name", name);
+	serializer.WritePropertyWithDefault<bool>(201, "name_is_string_literal", name_is_string_literal);
+	serializer.WritePropertyWithDefault<bool>(202, "target_is_local", target_is_local);
+}
+
+unique_ptr<ParseInfo> ConnectInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<ConnectInfo>(new ConnectInfo());
+	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
+	deserializer.ReadPropertyWithDefault<bool>(201, "name_is_string_literal", result->name_is_string_literal);
+	deserializer.ReadPropertyWithDefault<bool>(202, "target_is_local", result->target_is_local);
+	return std::move(result);
+}
+
 void CopyDatabaseInfo::Serialize(Serializer &serializer) const {
 	ParseInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "target_database", target_database);
@@ -394,6 +417,15 @@ unique_ptr<ParseInfo> DetachInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<DetachInfo>(new DetachInfo());
 	deserializer.ReadPropertyWithDefault<string>(200, "name", result->name);
 	deserializer.ReadProperty<OnEntryNotFound>(201, "if_not_found", result->if_not_found);
+	return std::move(result);
+}
+
+void DisconnectInfo::Serialize(Serializer &serializer) const {
+	ParseInfo::Serialize(serializer);
+}
+
+unique_ptr<ParseInfo> DisconnectInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<DisconnectInfo>(new DisconnectInfo());
 	return std::move(result);
 }
 
