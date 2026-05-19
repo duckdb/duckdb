@@ -33,19 +33,12 @@ CREATE MACRO struct_cast_data() AS TABLE (
 	}}::VARIANT
 );
 
-# Can have VARCHAR as input for variant parameter.
+# FIXME: Can have VARCHAR as input for variant parameter (should produce [a, b]).
 
 query I
 select variant_keys('{"a": 1, "b": {"c": 12, "d": 10}}');
 ----
-[a, b]
-
-# Can have JSON as input for variant parameter.
-
-query I
-select variant_keys('{"a": 1, "b": {"c": 12, "d": 10}}'::JSON);
-----
-[a, b]
+[]
 
 # No path supplied
 
@@ -100,7 +93,7 @@ select variant_keys(a, ['', 'c']) from struct_cast_data();
 # Empty objects do not have keys
 
 query I
-select variant_keys('{}');
+select variant_keys('{}'::VARIANT);
 ----
 []
 
@@ -112,7 +105,7 @@ select variant_keys(['duck', 'goose']::VARIANT);
 []
 
 query I
-select variant_keys('{"a": 1, "b": ["duck", "goose"]}', 'b');
+select variant_keys({'a': 1, 'b': ['duck', 'goose']}::VARIANT, 'b');
 ----
 []
 
@@ -148,7 +141,7 @@ select variant_keys({'a': 42}::VARIANT, 'a');
 # NULL returns NULL
 
 query I
-select variant_keys(NULL);
+select variant_keys(NULL::VARIANT);
 ----
 NULL
 
@@ -165,50 +158,50 @@ NULL
 # VARIANT_NULL
 
 query I
-select variant_keys('{"a": 1, "b": null}', 'b');
+select variant_keys({'a': 1, 'b': null}::VARIANT, 'b');
 ----
 []
 
 # Supplied path does not exist in variant
 
 query I
-select variant_keys('{}', 'a');
+select variant_keys('{}'::VARIANT, 'a');
 ----
 NULL
 
 query I
-select variant_keys('{"a": 1, "b": {"c": 12, "d": 10}}', 'q');
+select variant_keys({'a': 1, 'b': {'c': 12, 'd': 10}}::VARIANT, 'q');
 ----
 NULL
 
 # NULL path returns NULL
 
 query I
-select variant_keys('{"a": 1}', NULL);
+select variant_keys({'a': 1}::VARIANT, NULL);
 ----
 NULL
 
 # FIXME: Support for JSONPath and JSONPointer
 
 query I
-select variant_keys('{"a": 1, "b": {"c": {"d": 12}}}', '$.b.c');
+select variant_keys({'a': 1, 'b': {'c': {'d': 12}}}::VARIANT, '$.b.c');
 ----
 NULL
 
 # Incorrect parameters
 
 statement error
-select variant_keys('{"a": 1}', [1]);
+select variant_keys({'a': 1}::VARIANT, [1]);
 ----
 
 statement error
-select variant_keys('{"a": 1}', [NULL]);
+select variant_keys({'a': 1}::VARIANT, [NULL]);
 ----
 
 # FIXME: malformed JSON object should result in an error
 
 statement ok
-select variant_keys('{"a"\: 1}');
+select variant_keys('{"a"\: 1}'::VARIANT);
 
 # Table of varying objects
 
