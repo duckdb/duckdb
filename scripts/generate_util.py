@@ -454,6 +454,148 @@ def generate_subclass_hash(entry):
 
 
 # ---------------------------------------------------------------------------
+# EnumerateChildren generation
+# ---------------------------------------------------------------------------
+
+
+def member_is_iterable_expression(member):
+    if member.get('status') in ('read_only', 'deleted'):
+        return False
+    # Synthetic views that alias already-handled fields
+    if member.get('serialize_property') and member.get('equals_skip'):
+        return False
+    type_str = member['type']
+    return (
+        is_parsed_expression_ptr(type_str) or
+        is_parsed_expression_list(type_str) or
+        type_str == 'vector<CaseCheck>' or
+        type_str == 'vector<OrderByNode>' or
+        is_expression_map(type_str) or
+        is_order_modifier_ptr(type_str)
+    )
+
+
+def generate_iterator_member_callbacks(member, expr_var, indent):
+    field = get_member_field_name(member)
+    type_str = member['type']
+    ii = indent + '\t'
+
+    iterate_via = member.get('iterate_via')
+    if iterate_via:
+        access = f'{expr_var}.{iterate_via}'
+        if is_parsed_expression_ptr(type_str):
+            return [f'{indent}callback({access});']
+        if is_parsed_expression_list(type_str):
+            return [
+                f'{indent}for (auto &child : {access}) {{',
+                f'{ii}callback(child);',
+                f'{indent}}}',
+            ]
+        return []
+
+    access = f'{expr_var}.{field}'
+
+    if is_parsed_expression_ptr(type_str):
+        return [
+            f'{indent}if ({access}) {{',
+            f'{ii}callback({access});',
+            f'{indent}}}',
+        ]
+    if is_parsed_expression_list(type_str):
+        return [
+            f'{indent}for (auto &child : {access}) {{',
+            f'{ii}callback(child);',
+            f'{indent}}}',
+        ]
+    if type_str == 'vector<CaseCheck>':
+        return [
+            f'{indent}for (auto &check : {access}) {{',
+            f'{ii}callback(check.when_expr);',
+            f'{ii}callback(check.then_expr);',
+            f'{indent}}}',
+        ]
+    if type_str == 'vector<OrderByNode>':
+        return [
+            f'{indent}for (auto &order : {access}) {{',
+            f'{ii}callback(order.expression);',
+            f'{indent}}}',
+        ]
+    if is_expression_map(type_str):
+        return [
+            f'{indent}for (auto &item : {access}) {{',
+            f'{ii}callback(item.second);',
+            f'{indent}}}',
+        ]
+    if is_order_modifier_ptr(type_str):
+        return [
+            f'{indent}if ({access}) {{',
+            f'{ii}for (auto &order : {access}->orders) {{',
+            f'{ii}\tcallback(order.expression);',
+            f'{ii}}}',
+            f'{indent}}}',
+        ]
+    return []
+
+
+def generate_enumerate_children(entries):
+    lines = [
+        'void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expression,',
+        '                                                  const std::function<void(const ParsedExpression &child)> &callback) {',
+        '\tEnumerateChildren((ParsedExpression &)expression, [&](unique_ptr<ParsedExpression> &child) {',
+        '\t\tD_ASSERT(child);',
+        '\t\tcallback(*child);',
+        '\t});',
+        '}',
+        '',
+        'void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,',
+        '                                                  const std::function<void(ParsedExpression &child)> &callback) {',
+        '\tEnumerateChildren(expr, [&](unique_ptr<ParsedExpression> &child) {',
+        '\t\tD_ASSERT(child);',
+        '\t\tcallback(*child);',
+        '\t});',
+        '}',
+        '',
+        'void ParsedExpressionIterator::EnumerateChildren(',
+        '    ParsedExpression &expr, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {',
+        '\tswitch (expr.GetExpressionClass()) {',
+    ]
+
+    no_child_enums = []
+
+    for entry in entries:
+        if entry.get('class_type') == 'expression_class':
+            continue
+        if 'EnumerateChildren' not in entry.get('functions', []):
+            continue
+
+        class_name = entry['class']
+        enum_val = entry.get('enum', class_name.upper())
+        iterable = [m for m in entry.get('members', []) if member_is_iterable_expression(m)]
+
+        if not iterable:
+            no_child_enums.append(enum_val)
+            continue
+
+        lines.append(f'\tcase ExpressionClass::{enum_val}: {{')
+        lines.append(f'\t\tauto &cast_expr = expr.Cast<{class_name}>();')
+        for member in iterable:
+            lines.extend(generate_iterator_member_callbacks(member, 'cast_expr', '\t\t'))
+        lines.append('\t\tbreak;')
+        lines.append('\t}')
+
+    lines.append('\tcase ExpressionClass::BOUND_EXPRESSION:')
+    for enum_val in no_child_enums:
+        lines.append(f'\tcase ExpressionClass::{enum_val}:')
+    lines.append('\t\t// these node types have no children')
+    lines.append('\t\tbreak;')
+    lines.append('\tdefault:')
+    lines.append('\t\tthrow NotImplementedException("Unimplemented expression class");')
+    lines.append('\t}')
+    lines.append('}')
+    return lines
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -492,6 +634,9 @@ def main():
         if 'Copy' in functions:
             if not is_base:
                 emit(output_lines, generate_subclass_copy(entry), first)
+
+    if any('EnumerateChildren' in e.get('functions', []) for e in entries):
+        emit(output_lines, generate_enumerate_children(entries), first)
 
     output_lines.append(FOOTER)
 

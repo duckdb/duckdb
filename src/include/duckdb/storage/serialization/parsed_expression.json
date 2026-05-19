@@ -45,23 +45,27 @@
 		"enum": "BETWEEN",
 		"functions": [
 			"Equals",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
 				"id": 200,
 				"name": "input",
-				"type": "ParsedExpression*"
+				"type": "ParsedExpression*",
+				"iterate_via": "InputMutable()"
 			},
 			{
 				"id": 201,
 				"name": "lower",
-				"type": "ParsedExpression*"
+				"type": "ParsedExpression*",
+				"iterate_via": "LowerBoundMutable()"
 			},
 			{
 				"id": 202,
 				"name": "upper",
-				"type": "ParsedExpression*"
+				"type": "ParsedExpression*",
+				"iterate_via": "UpperBoundMutable()"
 			}
 		]
 	},
@@ -71,7 +75,8 @@
 		"enum": "CASE",
 		"functions": [
 			"Equals",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -93,7 +98,8 @@
 		"functions": [
 			"Equals",
 			"Hash",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -120,7 +126,8 @@
 		"functions": [
 			"Equals",
 			"Hash",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -142,7 +149,8 @@
 		"functions": [
 			"Equals",
 			"Hash",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -160,7 +168,8 @@
 		"functions": [
 			"Equals",
 			"Hash",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -186,7 +195,8 @@
 		"enum": "COMPARISON",
 		"functions": [
 			"Equals",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -210,7 +220,8 @@
 		"enum": "CONJUNCTION",
 		"functions": [
 			"Equals",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -230,7 +241,8 @@
 		"functions": [
 			"Equals",
 			"Hash",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -246,7 +258,8 @@
 		"enum": "DEFAULT",
 		"functions": [
 			"Equals",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": []
 	},
@@ -257,7 +270,8 @@
 		"functions": [
 			"Equals",
 			"Hash",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -315,7 +329,8 @@
 		"enum": "LAMBDA",
 		"functions": [
 			"Equals",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -344,7 +359,8 @@
 		"enum": "OPERATOR",
 		"functions": [
 			"Equals",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -364,7 +380,8 @@
 		"functions": [
 			"Equals",
 			"Hash",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -382,7 +399,8 @@
 		"functions": [
 			"Equals",
 			"Hash",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -399,7 +417,8 @@
 		"functions": [
 			"Equals",
 			"Hash",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -460,7 +479,8 @@
 		"functions": [
 			"Equals",
 			"Hash",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -492,7 +512,8 @@
 		"functions": [
 			"Equals",
 			"Hash",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -607,7 +628,8 @@
 		"functions": [
 			"Equals",
 			"Hash",
-			"Copy"
+			"Copy",
+			"EnumerateChildren"
 		],
 		"members": [
 			{
@@ -628,7 +650,8 @@
 			{
 				"id": 203,
 				"name": "children",
-				"type": "vector<unique_ptr<ParsedExpression>>"
+				"type": "vector<unique_ptr<ParsedExpression>>",
+				"iterate_via": "GetChildren()"
 			}
 		]
 	}

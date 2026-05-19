@@ -310,6 +310,8 @@ supported_member_entries = [
     'equals_ci',
     'equals_custom',
     'hash_skip',
+    # iterator generation annotation (used by generate_util.py)
+    'iterate_via',
 ]
 
 
