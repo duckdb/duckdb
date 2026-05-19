@@ -147,13 +147,13 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 	} // LCOV_EXCL_STOP
 
 	// Merge the segment statistics into the global statistics.
-	global_stats->Merge(segment->stats.statistics);
+	global_stats->Merge(segment->GetStats());
 
 	block_id_t block_id = INVALID_BLOCK;
 	uint32_t offset_in_block = 0;
 
 	unique_lock<mutex> partial_block_lock;
-	if (segment->stats.statistics.IsConstant()) {
+	if (segment->GetStats().IsConstant()) {
 		// Constant block.
 		segment->ConvertToPersistent(partial_block_manager.GetClientContext(), nullptr, INVALID_BLOCK);
 	} else if (segment_size != 0) {
@@ -201,7 +201,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 	}
 
 	// construct the data pointer
-	DataPointer data_pointer(segment->stats.statistics.Copy());
+	DataPointer data_pointer(segment->GetStats().Copy());
 	data_pointer.block_pointer.block_id = block_id;
 	data_pointer.block_pointer.offset = offset_in_block;
 	data_pointer.row_start = 0;

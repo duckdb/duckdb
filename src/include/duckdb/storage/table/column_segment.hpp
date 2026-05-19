@@ -126,6 +126,14 @@ public:
 
 	void VisitBlockIds(BlockIdVisitor &visitor) const;
 
+	const BaseStatistics &GetStats() const {
+		return stats.statistics;
+	}
+
+	BaseStatistics &GetStatsMutable() {
+		return stats.statistics;
+	}
+
 private:
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result);
 	void ScanPartial(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset);
@@ -139,8 +147,6 @@ public:
 	idx_t type_size;
 	//! The column segment type (transient or persistent)
 	ColumnSegmentType segment_type;
-	//! The statistics for the segment
-	SegmentStatistics stats;
 	//! The block that this segment relates to
 	shared_ptr<BlockHandle> block;
 
@@ -155,6 +161,8 @@ private:
 	idx_t segment_size;
 	//! Storage associated with the compressed segment
 	unique_ptr<CompressedSegmentState> segment_state;
+	//! The statistics for the segment
+	SegmentStatistics stats;
 };
 
 } // namespace duckdb

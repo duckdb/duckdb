@@ -284,6 +284,7 @@ public:
 	void RegisterExplain();
 	void RegisterExpression();
 	void RegisterInsert();
+	void RegisterConnect();
 	void RegisterLoad();
 	void RegisterMergeInto();
 	void RegisterPivot();
@@ -368,6 +369,12 @@ private:
 	static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer, ParseResult &parse_result);
 	static AnalyzeTarget TransformAnalyzeTarget(PEGTransformer &transformer, ParseResult &parse_result);
 
+	// connect.gram — both rules have optional sub-clauses, so the generator skips them and we
+	// hand-write the (PEGTransformer&, ParseResult&) entry points.
+	static unique_ptr<SQLStatement> TransformConnectStatement(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformDisconnectStatement(PEGTransformer &transformer,
+	                                                             ParseResult &parse_result);
+
 	// attach.gram
 	static unique_ptr<SQLStatement> TransformAttachStatement(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformAttachAlias(PEGTransformer &transformer, ParseResult &parse_result);
@@ -375,6 +382,8 @@ private:
 	static vector<GenericCopyOption> TransformGenericCopyOptionList(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
 	static GenericCopyOption TransformGenericCopyOption(PEGTransformer &transformer, ParseResult &parse_result);
+	static vector<OrderByNode> TransformGenericCopyOptionParenthesizedExpressionList(PEGTransformer &transformer,
+	                                                                                 ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformDatabasePath(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// call.gram
@@ -860,6 +869,16 @@ private:
 	static unique_ptr<ParsedExpression> TransformTrimExpression(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformTrimDirection(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformTrimSource(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformOverlayExpression(PEGTransformer &transformer,
+	                                                               ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformOverlayArguments(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformOverlayParameters(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformFromExpression(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformForExpression(PEGTransformer &transformer, ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformOverlayExpressionList(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformPositionExpression(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformCastExpression(PEGTransformer &transformer, ParseResult &parse_result);

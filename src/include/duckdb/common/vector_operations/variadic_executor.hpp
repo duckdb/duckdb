@@ -56,12 +56,12 @@ struct VariadicStandardOperatorWrapper {
 //! a parameter pack must be last (or followed only by deducible params).
 //! The named executors (TernaryExecutor, etc.) provide backward-compatible APIs.
 struct VariadicExecutor {
-	using VectorRef = std::reference_wrapper<Vector>;
+	using VectorRef = std::reference_wrapper<const Vector>;
 
 private:
 	template <size_t N, size_t... Is>
 	static std::array<VectorRef, N> MakeInputArrayImpl(DataChunk &input, std::index_sequence<Is...>) {
-		return {{std::ref(input.data[Is])...}};
+		return {{std::cref(input.data[Is])...}};
 	}
 
 	template <size_t N>
@@ -100,6 +100,7 @@ private:
 
 		if (AllConstant<N>(inputs)) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			FlatVector::SetSize(result, count);
 			if (AnyConstantNull<N>(inputs)) {
 				ConstantVector::SetNull(result, true);
 			} else {
@@ -210,12 +211,40 @@ private:
 		}
 	}
 
+private:
+	//-------------------------------------------------------------------
+	// Derive count from inputs: first non-constant vector's size, or first vector's size if all constant.
+	// Also checks that all non-constant vectors agree on size.
+	//-------------------------------------------------------------------
+	template <size_t N>
+	static idx_t GetCount(const std::array<VectorRef, N> &inputs) {
+		idx_t count = 0;
+		for (size_t i = 0; i < N; i++) {
+			if (inputs[i].get().GetVectorType() != VectorType::CONSTANT_VECTOR) {
+				if (count == 0) {
+					count = inputs[i].get().size();
+				} else if (inputs[i].get().size() != count) {
+					throw InternalException(
+					    "Mismatch in input vector sizes for VariadicExecutor - expected %d rows but got %d", count,
+					    inputs[i].get().size());
+				}
+			}
+		}
+		if (count == 0 && N > 0) {
+			// All inputs are constant vectors; use the first vector's size (set to the chunk size by execute_constant)
+			count = inputs[0].get().size();
+		}
+		return count;
+	}
+
 public:
 	//-------------------------------------------------------------------
 	// Execute: lambda-based, with Vector array
 	//-------------------------------------------------------------------
 	template <class RESULT_TYPE, class... ARGS, class FUN>
-	static void Execute(std::array<VectorRef, sizeof...(ARGS)> inputs, Vector &result, idx_t count, FUN fun) {
+	static void Execute(std::array<VectorRef, sizeof...(ARGS)> inputs, Vector &result, FUN fun) {
+		constexpr size_t N = sizeof...(ARGS);
+		const idx_t count = GetCount<N>(inputs);
 		ExecuteImplWithIndices<RESULT_TYPE, VariadicLambdaWrapper, FUN, ARGS...>(inputs, result, count, fun,
 		                                                                         std::index_sequence_for<ARGS...> {});
 	}
@@ -234,7 +263,9 @@ public:
 	// ExecuteStandard: static OP::Operation, with Vector array
 	//-------------------------------------------------------------------
 	template <class RESULT_TYPE, class OP, class... ARGS>
-	static void ExecuteStandard(std::array<VectorRef, sizeof...(ARGS)> inputs, Vector &result, idx_t count) {
+	static void ExecuteStandard(std::array<VectorRef, sizeof...(ARGS)> inputs, Vector &result) {
+		constexpr size_t N = sizeof...(ARGS);
+		const idx_t count = GetCount<N>(inputs);
 		bool dummy = false;
 		ExecuteImplWithIndices<RESULT_TYPE, VariadicStandardOperatorWrapper<OP>, bool, ARGS...>(
 		    inputs, result, count, dummy, std::index_sequence_for<ARGS...> {});

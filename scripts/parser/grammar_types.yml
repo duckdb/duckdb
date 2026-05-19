@@ -45,6 +45,7 @@ SQLStatement:
     - CallStatement
     - CheckpointStatement
     - CommentStatement
+    - ConnectStatement
     - CopyStatement
     - CopySelect
     - CopyFromDatabase
@@ -54,6 +55,7 @@ SQLStatement:
     - DeleteStatement
     - TruncateStatement
     - DetachStatement
+    - DisconnectStatement
     - DropStatement
     - ExecuteStatement
     - ExplainStatement
@@ -380,6 +382,7 @@ Expression:
     - SubstringExpression
     - TrimExpression
     - TrimSource
+    - OverlayExpression
     - PositionExpression
     - CastExpression
     - CaseExpression
@@ -512,6 +515,11 @@ ExpressionList:
     - SubstringParameters
     - SubstringArguments
     - SubstringExpressionList
+    - OverlayArguments
+    - OverlayParameters
+    - FromExpression
+    - ForExpression
+    - OverlayExpressionList
     - PartitionOptions
     - SortedOptions
     - PivotUsing

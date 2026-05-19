@@ -11,6 +11,7 @@ add_library_unity(
   transform_checkpoint.cpp
   transform_comment.cpp
   transform_common.cpp
+  transform_connect.cpp
   transform_copy.cpp
   transform_create_index.cpp
   transform_create_macro.cpp
@@ -30,6 +31,7 @@ add_library_unity(
   transform_explain.cpp
   transform_export.cpp
   transform_expression.cpp
+  transform_generic_copy_option.cpp
   transform_import.cpp
   transform_insert.cpp
   transform_load.cpp

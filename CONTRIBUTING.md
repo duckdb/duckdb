@@ -31,6 +31,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * If you are working on a bigger issue try to split it up into several smaller issues.
 * Please do not open "Draft" pull requests and ensure that you run CI on your fork + branch first before opening a PR (see CI section below). GH actions is free for public forks of open source projects.
 * We reserve full and final discretion over whether or not we will merge a pull request. Adhering to these guidelines is not a complete guarantee that your pull request will be merged.
+* Please refrain from opening pull requests to fix minor typos.
 
 ## CI for pull requests
 
