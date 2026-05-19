@@ -1,0 +1,19 @@
+# name: test/sql/copy/parquet/parquet_page_skip_select.test
+# description: Parquet skip page decode by previous column filter result: skip pages with no selected rows
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification;
+
+query II
+SELECT COUNT(*), SUM(LENGTH(col_b)) FROM 'data/parquet-testing/page_skip_select.parquet' WHERE col_a = 1
+----
+24	4320
+
+# no filter
+query III
+SELECT COUNT(*), MIN(LENGTH(col_b)), MAX(LENGTH(col_b)) FROM 'data/parquet-testing/page_skip_select.parquet'
+----
+49152	180	180
