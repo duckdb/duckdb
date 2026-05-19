@@ -1,0 +1,20 @@
+# name: test/sql/pivot/pivot_query_text.test
+# description: PIVOT MultiStatement sub-statements should have their query field populated at construction
+# group: [pivot]
+
+statement ok
+CREATE TABLE t(c VARCHAR, v INTEGER);
+
+statement ok
+INSERT INTO t VALUES ('a', 1), ('b', 2);
+
+# current_query() inside the PIVOT's SELECT child returns that child's own ToString(). The
+# auto-generated enum name (a UUID) is stripped with regexp_replace so the expected text is
+# deterministic.
+query III
+PIVOT (SELECT c, v,
+              regexp_replace(current_query(), '__pivot_enum_[0-9a-f\-]+', '__pivot_enum_X') AS q
+       FROM t) ON c USING ANY_VALUE(q) ORDER BY v;
+----
+1	SELECT * FROM (SELECT c, v, regexp_replace(current_query(), '__pivot_enum_[0-9a-f\-]+', '__pivot_enum_X') AS q FROM t) PIVOT (any_value(q) FOR (c) IN "__pivot_enum_X") ORDER BY v	NULL
+2	NULL	SELECT * FROM (SELECT c, v, regexp_replace(current_query(), '__pivot_enum_[0-9a-f\-]+', '__pivot_enum_X') AS q FROM t) PIVOT (any_value(q) FOR (c) IN "__pivot_enum_X") ORDER BY v

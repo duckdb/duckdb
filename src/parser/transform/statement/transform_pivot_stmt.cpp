@@ -123,10 +123,13 @@ unique_ptr<SQLStatement> Transformer::CreatePivotStatement(unique_ptr<SQLStateme
 			    "PIVOT ... ON %s IN (val1, val2, ...)",
 			    pivot->column->ToString());
 		}
-		result->statements.push_back(GenerateCreateEnumStmt(std::move(pivot)));
+		auto enum_stmt = GenerateCreateEnumStmt(std::move(pivot));
+		enum_stmt->query = enum_stmt->ToString();
+		result->statements.push_back(std::move(enum_stmt));
 	}
 	result->stmt_location = statement->stmt_location;
 	result->stmt_length = statement->stmt_length;
+	statement->query = statement->ToString();
 	result->statements.push_back(std::move(statement));
 	// FIXME: drop the types again!?
 	//	for(auto &pivot : pivot_entries) {
