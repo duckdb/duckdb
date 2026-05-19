@@ -1,7 +1,7 @@
 # name: test/sql/types/geo/geometry_persist.test
 # group: [geo]
 
-load __TEST_DIR__/test_geo_persist.db readwrite v1.5.0
+load {TEST_DIR}/test_geo_persist.db readwrite v1.5.0
 
 statement ok
 create table t1(g GEOMETRY);

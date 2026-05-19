@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "sqllogic_command.hpp"
 #include "test_config.hpp"
@@ -65,7 +66,6 @@ public:
 	duckdb::unique_ptr<Command> top_level_loop;
 	bool original_sqlite_test = false;
 	bool output_sql = false;
-	bool enable_verification = false;
 	bool skip_reload = false;
 	unordered_map<string, string> environment_variables;
 	string local_extension_repo;
@@ -96,11 +96,17 @@ public:
 	void EndLoop();
 	string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
 	string LoopReplacement(string text, const vector<LoopDefinition> &loops);
-	bool ForEachTokenReplace(const string &parameter, vector<string> &result);
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
+	void SkipTest(const string &reason);
+	static string GetSkipReasonSummary();
 
 private:
 	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);
+	static void AddSkipReason(const string &reason);
+
+private:
+	static mutex skip_reason_lock;
+	static map<string, idx_t> skip_reason_counts;
 };
 
 } // namespace duckdb

@@ -81,6 +81,7 @@ InsertionOrderPreservingMap<string> PhysicalStreamingLimit::ParamsToString() con
 			result["Offset"] = to_string(offset);
 		}
 	}
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

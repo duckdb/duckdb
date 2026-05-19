@@ -57,6 +57,7 @@ struct StorageManagerOptions {
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
 class SingleFileBlockManager : public BlockManager {
+public:
 	//! The location in the file where the block writing starts
 	static constexpr uint64_t BLOCK_START = Storage::FILE_HEADER_SIZE * 3;
 

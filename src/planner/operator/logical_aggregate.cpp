@@ -14,10 +14,10 @@ LogicalAggregate::LogicalAggregate(TableIndex group_index, TableIndex aggregate_
 
 const Expression &LogicalAggregate::GetExpression(ColumnBinding binding) const {
 	if (binding.table_index == group_index) {
-		return *groups[binding.column_index.index];
+		return *groups[binding.column_index];
 	}
 	if (binding.table_index == aggregate_index) {
-		return *expressions[binding.column_index.index];
+		return *expressions[binding.column_index];
 	}
 	if (binding.table_index == groupings_index) {
 		throw InternalException("Groupings function does not have an expression defined");
@@ -32,11 +32,11 @@ const Expression &LogicalAggregate::GetGroupExpression(ProjectionIndex group_col
 void LogicalAggregate::ResolveTypes() {
 	D_ASSERT(groupings_index.IsValid() || grouping_functions.empty());
 	for (auto &expr : groups) {
-		types.push_back(expr->return_type);
+		types.push_back(expr->GetReturnType());
 	}
 	// get the chunk types from the projection list
 	for (auto &expr : expressions) {
-		types.push_back(expr->return_type);
+		types.push_back(expr->GetReturnType());
 	}
 	for (idx_t i = 0; i < grouping_functions.size(); i++) {
 		types.emplace_back(LogicalType::BIGINT);

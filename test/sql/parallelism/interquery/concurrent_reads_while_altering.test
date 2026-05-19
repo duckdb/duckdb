@@ -18,11 +18,11 @@ BEGIN;
 
 onlyif threadid=0
 statement ok
-ALTER TABLE integers ADD COLUMN newcol_${i} INTEGER
+ALTER TABLE integers ADD COLUMN newcol_{i} INTEGER
 
 onlyif threadid=0
 statement ok
-INSERT INTO integers (i) SELECT * FROM range(10000 + ${i} * 100, 10100 + ${i} * 100);
+INSERT INTO integers (i) SELECT * FROM range(10000 + {i} * 100, 10100 + {i} * 100);
 
 onlyif threadid=0
 statement ok

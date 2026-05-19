@@ -3,7 +3,7 @@
 
 require tpch
 
-load __TEST_DIR__/tpch_sf001_variant.db readwrite v1.5.0
+load {TEST_DIR}/tpch_sf001_variant.db readwrite v1.5.0
 
 statement ok
 call dbgen(sf=0.01, suffix='_normal');
@@ -16,7 +16,7 @@ SET variant_minimum_shredding_size = 0;
 foreach tbl customer lineitem nation orders part partsupp region supplier
 
 statement ok
-create table ${tbl}_variant as select ${tbl}_normal::VARIANT ${tbl} from ${tbl}_normal;
+create table {tbl}_variant as select {tbl}_normal::VARIANT {tbl} from {tbl}_normal;
 
 endloop
 
@@ -129,17 +129,17 @@ FROM region_variant
 loop i 1 9
 
 query I
-PRAGMA tpch(${i})
+PRAGMA tpch({i})
 ----
-<FILE>:extension/tpch/dbgen/answers/sf0.01/q0${i}.csv
+<FILE>:extension/tpch/dbgen/answers/sf0.01/q0{i}.csv
 
 endloop
 
 loop i 10 23
 
 query I
-PRAGMA tpch(${i})
+PRAGMA tpch({i})
 ----
-<FILE>:extension/tpch/dbgen/answers/sf0.01/q${i}.csv
+<FILE>:extension/tpch/dbgen/answers/sf0.01/q{i}.csv
 
 endloop

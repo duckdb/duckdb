@@ -38,6 +38,10 @@ public:
         active_metrics[GetMetricsIndex(metric)] += addition;
     }
 
+    void ResetMetric(const MetricType metric) {
+        active_metrics[GetMetricsIndex(metric)] = 0;
+    }
+
     idx_t GetMetricValue(const MetricType metric) const {
         return active_metrics[GetMetricsIndex(metric)];
     }

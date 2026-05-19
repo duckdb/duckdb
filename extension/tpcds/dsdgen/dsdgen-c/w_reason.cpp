@@ -70,9 +70,9 @@ int mk_w_reason(void *info_arr, ds_key_t index) {
 
 	void *info = append_info_get(info_arr, REASON);
 	append_row_start(info);
-	append_key(info, r->r_reason_sk);
-	append_varchar(info, r->r_reason_id);
-	append_varchar(info, r->r_reason_description);
+	append_key(info, r->r_reason_sk, R_REASON_SK);
+	append_varchar(info, r->r_reason_id, R_REASON_ID);
+	append_varchar(info, r->r_reason_description, R_REASON_DESCRIPTION);
 	append_row_end(info);
 
 	return 0;

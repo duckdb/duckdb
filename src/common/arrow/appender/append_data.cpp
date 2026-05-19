@@ -6,7 +6,7 @@ void ArrowAppendData::AppendValidity(UnifiedVectorFormat &format, idx_t from, id
 	// resize the buffer, filling the validity buffer with all valid values
 	idx_t size = to - from;
 	ResizeValidity(GetValidityBuffer(), row_count + size);
-	if (format.validity.AllValid()) {
+	if (format.validity.CannotHaveNull()) {
 		// if all values are valid we don't need to do anything else
 		return;
 	}

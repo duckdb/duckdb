@@ -19,7 +19,7 @@ statement ok
 SET wal_autocheckpoint='1TB';
 
 statement ok
-ATTACH '__TEST_DIR__/wal_autocheckpoint.db' AS autocheckpoint_db;
+ATTACH '{TEST_DIR}/wal_autocheckpoint.db' AS autocheckpoint_db;
 
 statement ok
 CREATE TABLE autocheckpoint_db.tbl(x INTEGER);
@@ -47,10 +47,10 @@ statement ok
 BEGIN TRANSACTION;
 
 statement ok
-INSERT INTO autocheckpoint_db.tbl VALUES (${i});
+INSERT INTO autocheckpoint_db.tbl VALUES ({i});
 
 statement ok
-DELETE FROM autocheckpoint_db.delete_tbl WHERE x = ${i};
+DELETE FROM autocheckpoint_db.delete_tbl WHERE x = {i};
 
 statement ok
 COMMIT;
@@ -93,7 +93,7 @@ statement ok
 SET wal_autocheckpoint_entries=0;
 
 statement ok
-ATTACH '__TEST_DIR__/wal_entry_count.db' AS entry_count_db;
+ATTACH '{TEST_DIR}/wal_entry_count.db' AS entry_count_db;
 
 statement ok
 CREATE TABLE entry_count_db.tbl(x INTEGER);
@@ -114,10 +114,10 @@ statement ok
 BEGIN TRANSACTION;
 
 statement ok
-INSERT INTO entry_count_db.tbl VALUES (${i});
+INSERT INTO entry_count_db.tbl VALUES ({i});
 
 statement ok
-DELETE FROM entry_count_db.delete_tbl WHERE x = ${i};
+DELETE FROM entry_count_db.delete_tbl WHERE x = {i};
 
 statement ok
 COMMIT;
@@ -132,7 +132,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/wal_replay.json';
+PRAGMA profiling_output = '{TEST_DIR}/wal_replay.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"WAL_REPLAY_ENTRY_COUNT": "true"}';
@@ -142,13 +142,13 @@ SET profiling_coverage='ALL';
 
 # replay happens on attach
 statement ok
-ATTACH '__TEST_DIR__/wal_entry_count.db' AS entry_count_db;
+ATTACH '{TEST_DIR}/wal_entry_count.db' AS entry_count_db;
 
 statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE replay_metrics AS SELECT * FROM '__TEST_DIR__/wal_replay.json';
+CREATE OR REPLACE TABLE replay_metrics AS SELECT * FROM '{TEST_DIR}/wal_replay.json';
 
 query I
 SELECT wal_replay_entry_count FROM replay_metrics;

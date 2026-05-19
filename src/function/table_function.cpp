@@ -26,7 +26,8 @@ TableFunction::TableFunction(string name, const vector<LogicalType> &arguments, 
       supports_pushdown_type(nullptr), supports_pushdown_extract(nullptr), get_partition_info(nullptr),
       get_partition_stats(nullptr), get_virtual_columns(nullptr), get_row_id_columns(nullptr), set_scan_order(nullptr),
       serialize(nullptr), deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false),
-      sampling_pushdown(false), late_materialization(false) {
+      sampling_pushdown(false), late_materialization(false),
+      return_type(TableFunctionReturnType::TABLE_RETURNING_FUNCTION) {
 }
 
 TableFunction::TableFunction(string name, const vector<LogicalType> &arguments, std::nullptr_t function_,
@@ -41,7 +42,8 @@ TableFunction::TableFunction(string name, const vector<LogicalType> &arguments, 
       supports_pushdown_type(nullptr), supports_pushdown_extract(nullptr), get_partition_info(nullptr),
       get_partition_stats(nullptr), get_virtual_columns(nullptr), get_row_id_columns(nullptr), set_scan_order(nullptr),
       serialize(nullptr), deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false),
-      sampling_pushdown(false), late_materialization(false) {
+      sampling_pushdown(false), late_materialization(false),
+      return_type(TableFunctionReturnType::TABLE_RETURNING_FUNCTION) {
 }
 
 TableFunction::TableFunction(const vector<LogicalType> &arguments, table_function_t function_,
@@ -59,7 +61,7 @@ TableFunction::TableFunction() : TableFunction("", {}, nullptr, nullptr, nullptr
 }
 
 bool TableFunction::operator==(const TableFunction &rhs) const {
-	return name == rhs.name && arguments == rhs.arguments && varargs == rhs.varargs && bind == rhs.bind &&
+	return name == rhs.name && arguments == rhs.GetArguments() && varargs == rhs.GetVarArgs() && bind == rhs.bind &&
 	       bind_replace == rhs.bind_replace && bind_operator == rhs.bind_operator && init_global == rhs.init_global &&
 	       init_local == rhs.init_local && function == rhs.function && in_out_function == rhs.in_out_function &&
 	       in_out_function_final == rhs.in_out_function_final && statistics == rhs.statistics &&
@@ -75,7 +77,7 @@ bool TableFunction::operator==(const TableFunction &rhs) const {
 	       verify_serialization == rhs.verify_serialization && projection_pushdown == rhs.projection_pushdown &&
 	       filter_pushdown == rhs.filter_pushdown && filter_prune == rhs.filter_prune &&
 	       sampling_pushdown == rhs.sampling_pushdown && late_materialization == rhs.late_materialization &&
-	       global_initialization == rhs.global_initialization;
+	       return_type == rhs.return_type && global_initialization == rhs.global_initialization;
 }
 
 bool TableFunction::operator!=(const TableFunction &rhs) const {
@@ -84,17 +86,17 @@ bool TableFunction::operator!=(const TableFunction &rhs) const {
 
 bool TableFunction::Equal(const TableFunction &rhs) const {
 	// number of types
-	if (this->arguments.size() != rhs.arguments.size()) {
+	if (this->GetArguments().size() != rhs.GetArguments().size()) {
 		return false;
 	}
 	// argument types
-	for (idx_t i = 0; i < this->arguments.size(); ++i) {
-		if (this->arguments[i] != rhs.arguments[i]) {
+	for (idx_t i = 0; i < this->GetArguments().size(); ++i) {
+		if (this->GetArguments()[i] != rhs.GetArguments()[i]) {
 			return false;
 		}
 	}
 	// varargs
-	if (this->varargs != rhs.varargs) {
+	if (this->GetVarArgs() != rhs.GetVarArgs()) {
 		return false;
 	}
 

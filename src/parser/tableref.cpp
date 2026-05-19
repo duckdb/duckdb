@@ -24,7 +24,7 @@ string TableRef::AliasToString(const vector<string> &column_name_alias) const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += KeywordHelper::WriteOptionallyQuoted(column_name_alias[i]);
+			result += SQLIdentifier(column_name_alias[i]);
 		}
 		result += ")";
 	}

@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
@@ -28,7 +28,7 @@ public:
 		if (!FoundExpression()) {
 			return false;
 		}
-		return expression->type == ExpressionType::BOUND_COLUMN_REF;
+		return expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF;
 	}
 
 public:
@@ -57,8 +57,7 @@ public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 public:
-	static idx_t InspectTableFilter(idx_t cardinality, idx_t column_index, const TableFilter &filter,
-	                                BaseStatistics &base_stats);
+	static idx_t InspectTableFilter(idx_t cardinality, const TableFilter &filter, BaseStatistics &base_stats);
 	//	static idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
 	//	                                  BaseStatistics &base_stats);
 	//! Extract Statistics from a LogicalGet.

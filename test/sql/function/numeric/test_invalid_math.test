@@ -2,6 +2,9 @@
 # description: Test invalid input for math functions
 # group: [numeric]
 
+statement ok
+SET ieee_floating_point_ops = false;
+
 # cannot take log of negative number or zero
 statement error
 SELECT log(0);
@@ -51,3 +54,6 @@ query R
 SELECT DEGREES(1e308)
 ----
 inf
+
+statement ok
+RESET ieee_floating_point_ops;

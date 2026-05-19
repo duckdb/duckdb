@@ -1,3 +1,4 @@
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/operator/persistent/physical_merge_into.hpp"
 #include "duckdb/execution/operator/persistent/physical_delete.hpp"
@@ -32,10 +33,10 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		for (auto &def : op.bound_defaults) {
 			defaults.push_back(def->Copy());
 		}
-		result->op =
-		    planner.Make<PhysicalUpdate>(std::move(return_types), op.table, op.table.GetStorage(),
-		                                 std::move(action.columns), std::move(action.expressions), std::move(defaults),
-		                                 std::move(bound_constraints), cardinality, op.return_chunk);
+		result->op = planner.Make<PhysicalUpdate>(std::move(return_types), op.table.Cast<DuckTableEntry>(),
+		                                          op.table.GetStorage(), std::move(action.columns),
+		                                          std::move(action.expressions), std::move(defaults),
+		                                          std::move(bound_constraints), cardinality, op.return_chunk);
 		auto &cast_update = result->op->Cast<PhysicalUpdate>();
 		cast_update.update_is_del_and_insert = action.update_is_del_and_insert;
 		break;
@@ -43,9 +44,9 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 	case MergeActionType::MERGE_DELETE: {
 		// Use delete_return_columns if available (for optimized RETURNING path)
 		vector<idx_t> return_columns = op.delete_return_columns;
-		result->op = planner.Make<PhysicalDelete>(std::move(return_types), op.table, op.table.GetStorage(),
-		                                          std::move(bound_constraints), op.row_id_start, cardinality,
-		                                          op.return_chunk, std::move(return_columns));
+		result->op = planner.Make<PhysicalDelete>(std::move(return_types), op.table.Cast<DuckTableEntry>(),
+		                                          op.table.GetStorage(), std::move(bound_constraints), op.row_id_start,
+		                                          cardinality, op.return_chunk, std::move(return_columns));
 		break;
 	}
 	case MergeActionType::MERGE_INSERT: {
@@ -55,11 +56,11 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 		unordered_set<column_t> on_conflict_filter;
 		vector<column_t> columns_to_fetch;
 
-		result->op = planner.Make<PhysicalInsert>(std::move(return_types), op.table, std::move(bound_constraints),
-		                                          std::move(set_expressions), std::move(set_columns),
-		                                          std::move(set_types), cardinality, op.return_chunk, !op.return_chunk,
-		                                          OnConflictAction::THROW, nullptr, nullptr,
-		                                          std::move(on_conflict_filter), std::move(columns_to_fetch), false);
+		result->op = planner.Make<PhysicalInsert>(
+		    std::move(return_types), op.table.Cast<DuckTableEntry>(), std::move(bound_constraints),
+		    std::move(set_expressions), std::move(set_columns), std::move(set_types), cardinality, op.return_chunk,
+		    !op.return_chunk, OnConflictAction::THROW, nullptr, nullptr, std::move(on_conflict_filter),
+		    std::move(columns_to_fetch), false);
 		// transform expressions if required
 		if (!action.column_index_map.empty()) {
 			vector<unique_ptr<Expression>> new_expressions;

@@ -12,8 +12,9 @@
 
 namespace duckdb {
 
-// Move constant expression parameters to the left in expression(i.e. x + 2 + y + 2 => 2 + 2 + x + y)
-// for convenience of other rules(i.e. ConstantFoldingRule).
+// Group constant expression parameters together in commutative arithmetic expressions to expose
+// constant folding opportunities. After folding collapses multiplication constants into a single
+// value, keep that constant on the right to match the canonical binary operator shape.
 class ConstantOrderNormalizationRule : public Rule {
 public:
 	explicit ConstantOrderNormalizationRule(ExpressionRewriter &rewriter);

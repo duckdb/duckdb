@@ -25,7 +25,7 @@ struct AlpAnalyzeState : public AnalyzeState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	explicit AlpAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), compression_data() {
+	explicit AlpAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager), compression_data() {
 	}
 
 	idx_t total_bytes_used = 0;
@@ -66,8 +66,7 @@ public:
 
 template <class T>
 unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
-	auto state = make_uniq<AlpAnalyzeState<T>>(info);
+	auto state = make_uniq<AlpAnalyzeState<T>>(col_data.GetBlockManager());
 	state->storage_version = col_data.GetStorageManager().GetStorageVersion();
 	return unique_ptr<AnalyzeState>(std::move(state));
 }
@@ -76,13 +75,14 @@ unique_ptr<AnalyzeState> AlpInitAnalyze(ColumnData &col_data, PhysicalType type)
  * ALP Analyze step only pushes the needed samples to estimate the compression size in the finalize step
  */
 template <class T>
-bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
+bool AlpAnalyze(AnalyzeState &state, const Vector &input) {
 	if (state.info.GetBlockSize() + state.info.GetBlockHeaderSize() < DEFAULT_BLOCK_ALLOC_SIZE) {
 		return false;
 	}
 
 	auto &analyze_state = state.Cast<AlpAnalyzeState<T>>();
 
+	const auto count = input.size();
 	bool must_skip_current_vector = alp::AlpUtils::MustSkipSamplingFromCurrentVector(
 	    analyze_state.vectors_count, analyze_state.vectors_sampled_count, count);
 	analyze_state.vectors_count += 1;
@@ -92,7 +92,7 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	}
 
 	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
+	input.ToUnifiedFormat(vdata);
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
 	alp::AlpSamplingParameters sampling_params = alp::AlpUtils::GetSamplingParameters(count);
@@ -105,7 +105,7 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	//! We need to store the entire sampled vector to perform the 'analyze' compression in it
 	idx_t nulls_idx = 0;
 	// We optimize by doing a different loop when there are no nulls
-	if (vdata.validity.AllValid()) {
+	if (vdata.validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < sampling_params.n_lookup_values; i++) {
 			auto idx = vdata.sel->get_index(i);
 			T value = data[idx];

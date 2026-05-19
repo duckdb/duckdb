@@ -188,7 +188,11 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(string &format) {
 		auto type_info = make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW);
 		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
 	} else if (format[0] == 'w') {
-		string parameters = format.substr(format.find(':') + 1);
+		// Arrow C Data Interface spec: fixed-size binary is "w:NN", colon always at position 1
+		if (format.size() <= 2 || format[1] != ':') {
+			throw InvalidInputException("Invalid Arrow fixed-size binary format string: \"%s\"", format);
+		}
+		string parameters = format.substr(2);
 		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
 		auto type_info = make_uniq<ArrowStringInfo>(fixed_size);
 		return make_uniq<ArrowType>(LogicalType::BLOB, std::move(type_info));
@@ -198,6 +202,7 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(string &format) {
 		unique_ptr<ArrowTypeInfo> type_info;
 		if (format[2] == 'n') {
 			type_info = make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::NANOSECONDS);
+			return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ_NS, std::move(type_info));
 		} else if (format[2] == 'u') {
 			type_info = make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS);
 		} else if (format[2] == 'm') {
@@ -227,7 +232,11 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(ClientContext &context, Arrow
 	} else if (format == "+vL") {
 		return CreateListType(context, *schema.children[0], ArrowVariableSizeType::SUPER_SIZE, true);
 	} else if (format[0] == '+' && format[1] == 'w') {
-		std::string parameters = format.substr(format.find(':') + 1);
+		// Arrow C Data Interface spec: fixed-size list is "+w:NN", colon always at position 2
+		if (format.size() <= 3 || format[2] != ':') {
+			throw InvalidInputException("Invalid Arrow fixed-size list format string: \"%s\"", format);
+		}
+		std::string parameters = format.substr(3);
 		auto fixed_size = NumericCast<idx_t>(std::stoi(parameters));
 		auto child_type = GetArrowLogicalType(context, *schema.children[0]);
 

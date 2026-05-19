@@ -35,9 +35,6 @@ struct RegrBaseOperation {
 			return;
 		}
 		auto var_pop = state.var_pop.count > 1 ? (state.var_pop.dsquared / state.var_pop.count) : 0;
-		if (!Value::DoubleIsFinite(var_pop)) {
-			throw OutOfRangeException("VARPOP is out of range!");
-		}
 		RegrCountFunction::Finalize<T, uint64_t>(state.count, target, finalize_data);
 		target *= var_pop;
 	}
@@ -63,10 +60,16 @@ struct RegrSYYOperation : RegrBaseOperation {
 	}
 };
 
-LogicalType GetRegrSStateType(const AggregateFunction &) {
+LogicalType GetRegrSStateType(const BoundAggregateFunction &) {
+	child_list_t<LogicalType> stddev_types;
+	stddev_types.emplace_back("count", LogicalType::UBIGINT);
+	stddev_types.emplace_back("mean", LogicalType::DOUBLE);
+	stddev_types.emplace_back("dsquared", LogicalType::DOUBLE);
+	auto stddev_type = LogicalType::STRUCT(std::move(stddev_types));
+
 	child_list_t<LogicalType> state_children;
 	state_children.emplace_back("count", LogicalType::UBIGINT);
-	state_children.emplace_back("var_pop", VarPopFun::GetFunction().GetStateType());
+	state_children.emplace_back("var_pop", stddev_type);
 	return LogicalType::STRUCT(std::move(state_children));
 }
 

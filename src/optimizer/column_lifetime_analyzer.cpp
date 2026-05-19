@@ -196,7 +196,9 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 }
 
 void ColumnLifetimeAnalyzer::Verify(LogicalOperator &op) {
-#ifdef DEBUG
+	if (!Settings::Get<DebugVerificationProjectionSetting>(optimizer.context)) {
+		return;
+	}
 	if (everything_referenced) {
 		return;
 	}
@@ -216,7 +218,6 @@ void ColumnLifetimeAnalyzer::Verify(LogicalOperator &op) {
 	default:
 		break;
 	}
-#endif
 }
 
 void ColumnLifetimeAnalyzer::AddVerificationProjection(unique_ptr<LogicalOperator> &child) {
@@ -241,7 +242,7 @@ void ColumnLifetimeAnalyzer::AddVerificationProjection(unique_ptr<LogicalOperato
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		const auto &old_binding = child_bindings[col_idx];
 		ProjectionIndex new_col_idx(projection_column_count - 2 - col_idx * 2);
-		expressions[new_col_idx.index] = make_uniq<BoundColumnRefExpression>(child_types[col_idx], old_binding);
+		expressions[new_col_idx] = make_uniq<BoundColumnRefExpression>(child_types[col_idx], old_binding);
 		replacer.replacement_bindings.emplace_back(old_binding, ColumnBinding(table_index, new_col_idx));
 	}
 

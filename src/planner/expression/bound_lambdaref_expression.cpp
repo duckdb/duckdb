@@ -41,7 +41,7 @@ string BoundLambdaRefExpression::ToString() const {
 	if (!alias.empty()) {
 		return alias;
 	}
-	return "#[" + to_string(binding.table_index.index) + "." + to_string(binding.column_index.index) + "." +
+	return "#[" + to_string(binding.table_index.index) + "." + to_string(binding.column_index) + "." +
 	       to_string(lambda_idx) + "]";
 }
 } // namespace duckdb

@@ -80,7 +80,7 @@ public:
 	static void YieldThread();
 
 	//! Set the allocator flush threshold
-	void SetAllocatorFlushTreshold(idx_t threshold);
+	void SetAllocatorFlushThreshold(idx_t threshold);
 	//! Sets the allocator background thread
 	void SetAllocatorBackgroundThreads(bool enable);
 

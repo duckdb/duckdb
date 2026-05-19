@@ -17,6 +17,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
+#include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 
 namespace duckdb {
 
@@ -135,6 +136,16 @@ public:
 		OnPropertyBegin(field_id, tag);
 		ReadDataPtr(ret, count);
 		OnPropertyEnd();
+	}
+
+	inline bool ReadOptionalProperty(const field_id_t field_id, const char *tag, data_ptr_t ret, idx_t count) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			OnOptionalPropertyEnd(false);
+			return false;
+		}
+		ReadDataPtr(ret, count);
+		OnOptionalPropertyEnd(true);
+		return true;
 	}
 
 	// Try to read a property, if it is not present, continue, otherwise read and discard the value
@@ -274,6 +285,18 @@ private:
 		}
 		OnNullableEnd();
 		return ptr;
+	}
+
+	// Deserialize a duckdb_optional
+	template <class T, typename ELEMENT_TYPE = typename is_duckdb_optional<T>::ELEMENT_TYPE>
+	inline typename std::enable_if<is_duckdb_optional<T>::value, T>::type Read() {
+		auto is_present = OnNullableBegin();
+		T result;
+		if (is_present) {
+			result = Read<ELEMENT_TYPE>();
+		}
+		OnNullableEnd();
+		return result;
 	}
 
 	// Deserialize a vector
@@ -538,6 +561,12 @@ private:
 	inline typename std::enable_if<std::is_same<T, optional_idx>::value, T>::type Read() {
 		auto idx = ReadUnsignedInt64();
 		return idx == DConstants::INVALID_INDEX ? optional_idx() : optional_idx(idx);
+	}
+
+	// Deserialize a ProjectionIndex
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, PerColumnMetadataBlock>::value, T>::type Read() {
+		return PerColumnMetadataBlock::Unpack(ReadUnsignedInt64());
 	}
 
 protected:

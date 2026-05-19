@@ -130,18 +130,25 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 		my_stream->column_types = result.types;
 		my_stream->column_names = result.names;
 	}
-	idx_t result_count;
-	ErrorData error;
-	if (!ArrowUtil::TryFetchChunk(scan_state, result.client_properties, my_stream->batch_size, out, result_count, error,
-	                              my_stream->extension_types)) {
-		D_ASSERT(error.HasError());
-		my_stream->last_error = error;
+
+	try {
+		idx_t result_count;
+		ErrorData error;
+		if (!ArrowUtil::TryFetchChunk(scan_state, result.client_properties, my_stream->batch_size, out, result_count,
+		                              error, my_stream->extension_types)) {
+			D_ASSERT(error.HasError());
+			my_stream->last_error = error;
+			return -1;
+		}
+		if (result_count == 0) {
+			// Nothing to output
+			out->release = nullptr;
+		}
+	} catch (std::exception &e) {
+		my_stream->last_error = ErrorData(e);
 		return -1;
 	}
-	if (result_count == 0) {
-		// Nothing to output
-		out->release = nullptr;
-	}
+
 	return 0;
 }
 

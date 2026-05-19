@@ -1,12 +1,22 @@
 #pragma once
 
+#include <string>
+
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types/variant.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 
 struct ShreddingType;
+class ClientContext;
+class Deserializer;
+class Serializer;
 
 struct ChildShreddingTypes {
 public:

@@ -1,4 +1,6 @@
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
@@ -22,7 +24,7 @@ string UpdateSetInfo::ToString() const {
 		if (i > 0) {
 			result += ", ";
 		}
-		result += KeywordHelper::WriteOptionallyQuoted(columns[i]);
+		result += SQLIdentifier(columns[i]);
 		result += " = ";
 		result += expressions[i]->ToString();
 	}
@@ -33,50 +35,39 @@ unique_ptr<UpdateSetInfo> UpdateSetInfo::Copy() const {
 	return unique_ptr<UpdateSetInfo>(new UpdateSetInfo(*this));
 }
 
-UpdateStatement::UpdateStatement()
-    : SQLStatement(StatementType::UPDATE_STATEMENT), prioritize_table_when_binding(false) {
+bool UpdateSetInfo::Equals(const unique_ptr<UpdateSetInfo> &left, const unique_ptr<UpdateSetInfo> &right) {
+	if (!left && !right) {
+		return true;
+	}
+	if (!left || !right) {
+		return false;
+	}
+	if (left->columns != right->columns) {
+		return false;
+	}
+	if (left->expressions.size() != right->expressions.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < left->expressions.size(); i++) {
+		if (!ParsedExpression::Equals(left->expressions[i], right->expressions[i])) {
+			return false;
+		}
+	}
+	return ParsedExpression::Equals(left->condition, right->condition);
+}
+
+UpdateStatement::UpdateStatement() : SQLStatement(StatementType::UPDATE_STATEMENT), node(make_uniq<UpdateQueryNode>()) {
+}
+
+UpdateStatement::~UpdateStatement() {
 }
 
 UpdateStatement::UpdateStatement(const UpdateStatement &other)
-    : SQLStatement(other), table(other.table->Copy()), set_info(other.set_info->Copy()) {
-	if (other.from_table) {
-		from_table = other.from_table->Copy();
-	}
-	for (auto &expr : other.returning_list) {
-		returning_list.emplace_back(expr->Copy());
-	}
-	cte_map = other.cte_map.Copy();
-	prioritize_table_when_binding = other.prioritize_table_when_binding;
+    : SQLStatement(other), node(unique_ptr_cast<QueryNode, UpdateQueryNode>(other.node->Copy())) {
 }
 
 string UpdateStatement::ToString() const {
-	string result;
-	result = cte_map.ToString();
-	result += "UPDATE ";
-	result += table->ToString();
-	result += " ";
-	result += set_info->ToString();
-	if (from_table) {
-		result += " FROM " + from_table->ToString();
-	}
-	if (set_info->condition) {
-		result += " WHERE " + set_info->condition->ToString();
-	}
-	if (!returning_list.empty()) {
-		result += " RETURNING ";
-		for (idx_t i = 0; i < returning_list.size(); i++) {
-			if (i > 0) {
-				result += ", ";
-			}
-			auto column = returning_list[i]->ToString();
-			if (!returning_list[i]->GetAlias().empty()) {
-				column +=
-				    StringUtil::Format(" AS %s", KeywordHelper::WriteOptionallyQuoted(returning_list[i]->GetAlias()));
-			}
-			result += column;
-		}
-	}
-	return result;
+	return node->ToString();
 }
 
 unique_ptr<SQLStatement> UpdateStatement::Copy() const {

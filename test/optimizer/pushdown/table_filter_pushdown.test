@@ -58,7 +58,7 @@ logical_opt	<!REGEX>:.*FILTER.*
 foreach type <numeric>
 
 statement ok
-CREATE TABLE tablinho_numbers(i ${type}, j ${type}, k ${type})
+CREATE TABLE tablinho_numbers(i {type}, j {type}, k {type})
 
 statement ok
 INSERT INTO tablinho_numbers VALUES (0, 0, 0), (1, 1, 1), (2, 2, 2)
@@ -161,7 +161,7 @@ PRAGMA explain_output = PHYSICAL_ONLY;
 query II
 explain select count(*) from t where b <=3 and b>=0;
 ----
-physical_plan	<REGEX>:.*b<=3.*
+physical_plan	<REGEX>:.*\(b <= 3\).*
 
 # test time pushdown
 

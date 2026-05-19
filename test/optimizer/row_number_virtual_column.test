@@ -1,0 +1,217 @@
+# name: test/optimizer/row_number_virtual_column.test
+# description: Test row_number virtual column
+# group: [optimizer]
+
+statement ok
+CREATE OR REPLACE TABLE foo AS SELECT range a FROM range(130000);
+
+# Check that row_number is not accessible
+statement error
+SELECT a, row_number FROM foo;
+----
+Binder Error: Referenced column "row_number" not found in FROM clause
+
+query I
+SELECT a as row_number FROM foo limit 3;
+----
+0
+1
+2
+
+query I
+select row_number() over() from foo where a < 3;
+----
+1
+2
+3
+
+statement ok
+delete from foo where a < 5000;
+
+query III
+select row_number() over(), a, rowid from foo order by a desc limit 1;
+----
+125000	129999	129999
+
+query III
+select a, rowid, row_number() over() from foo order by a desc limit 1;
+----
+129999	129999	125000
+
+query II
+explain select a,rowid, row_number() over() as x from foo order by a desc limit 1;
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+statement ok
+select setseed(0.1);
+
+statement ok
+create or replace table test as select (random()*10)::INT a, (random()*5)::INT b  from range(10);
+
+statement ok
+create or replace table test2 as select (random()*100)::INT c, (random()*5)::INT b  from range(10);
+
+# Try with a window function and a Join
+
+query II
+explain SELECT t.row_num, t.a, t2.c FROM ( SELECT a, b, ROW_NUMBER() OVER () AS row_num FROM test) t JOIN test2 t2 ON t.b = t2.b limit 10;
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+
+statement ok
+create table t1 as select range::FLOAT a, range b, range c, range d from range (3);
+
+query I
+SELECT CASE WHEN row_number() OVER () = 2 THEN 2222::BIGINT ELSE 1111::BIGINT END FROM t1;
+----
+1111
+2222
+1111
+
+statement ok
+CREATE OR REPLACE TABLE numbers AS SELECT range(1, 5) AS num;
+
+query II
+SELECT row_number() OVER(), unnest(num) FROM numbers;
+----
+1	1
+1	2
+1	3
+1	4
+
+query II
+SELECT row_number() OVER (), nums FROM (SELECT unnest(num) AS nums from numbers);
+----
+1	1
+2	2
+3	3
+4	4
+
+# Try with a join on the row_number
+
+statement ok
+CREATE OR REPLACE TABLE foo AS SELECT range a from range(3);
+
+statement ok
+CREATE OR REPLACE TABLE bar AS SELECT range b from range(2,5);
+
+query II
+EXPLAIN SELECT f.row_num AS foo_row, b.row_num AS bar_row, f.a, b.b FROM (SELECT row_number() OVER () AS row_num, a FROM foo) f
+JOIN (SELECT row_number() OVER () AS row_num, b FROM bar) b ON f.row_num = b.row_num;
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+# -------------------------------------------------------------------
+# Multi-column tables with various types
+# -------------------------------------------------------------------
+
+statement ok
+CREATE OR REPLACE TABLE multi_types (col1 INT, col2 DATE, col3 VARCHAR);
+
+statement ok
+INSERT INTO multi_types VALUES (1, '2024-01-01', 'hello'), (2, '2024-06-15', 'world'), (3, '2024-12-31', 'foo');
+
+query II
+SELECT col3, row_number() OVER () FROM multi_types ORDER BY col1;
+----
+hello	1
+world	2
+foo	3
+
+query III
+SELECT col1, col2, row_number() OVER () FROM multi_types ORDER BY col1;
+----
+1	2024-01-01	1
+2	2024-06-15	2
+3	2024-12-31	3
+
+query IIII
+SELECT row_number() OVER (), col1, col2, col3 FROM multi_types ORDER BY col1;
+----
+1	1	2024-01-01	hello
+2	2	2024-06-15	world
+3	3	2024-12-31	foo
+
+query II
+SELECT col2, row_number() OVER () FROM multi_types WHERE col1 > 1 ORDER BY col1;
+----
+2024-06-15	1
+2024-12-31	2
+
+# select only non-rowid columns alongside row_number in a subquery
+query III
+SELECT rn, col3, col2 FROM (SELECT row_number() OVER () AS rn, col2, col3 FROM multi_types) sub ORDER BY rn;
+----
+1	hello	2024-01-01
+2	world	2024-06-15
+3	foo	2024-12-31
+
+# row_number with expressions on other columns
+query II
+SELECT col1 * 10, row_number() OVER () FROM multi_types ORDER BY col1;
+----
+10	1
+20	2
+30	3
+
+# verify the optimization still kicks in with mixed column types
+query II
+EXPLAIN SELECT col3, row_number() OVER () FROM multi_types;
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+# -------------------------------------------------------------------
+# row_number should not be rewritten when there are pushed-down filters
+# -------------------------------------------------------------------
+
+statement ok
+CREATE OR REPLACE TABLE filter_test (col1 INT, col2 VARCHAR);
+
+statement ok
+INSERT INTO filter_test VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma'), (4, 'delta'), (5, 'epsilon');
+
+# with a WHERE filter the optimization should NOT kick in
+query II
+EXPLAIN SELECT col2, row_number() OVER () FROM filter_test WHERE col1 > 2;
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+query II
+SELECT col2, row_number() OVER () FROM filter_test WHERE col1 > 2 ORDER BY col1;
+----
+gamma	1
+delta	2
+epsilon	3
+
+# same with transaction-local data and a filter
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO filter_test VALUES (6, 'zeta');
+
+query II
+SELECT col2, row_number() OVER () FROM filter_test WHERE col1 > 3 ORDER BY col1;
+----
+delta	1
+epsilon	2
+zeta	3
+
+statement ok
+COMMIT;
+
+statement ok
+pragma disable_optimizer;
+
+statement ok
+create table tbl as select range a from range(3);
+
+statement ok
+pragma enable_optimizer;
+
+query II
+EXPLAIN SELECT row_number + 1 FROM (SELECT row_number() OVER () AS row_number FROM tbl);
+----
+physical_plan	<!REGEX>:.*WINDOW.*

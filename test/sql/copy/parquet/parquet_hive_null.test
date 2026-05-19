@@ -8,11 +8,11 @@ statement ok
 create table test as select i%5 as a, i%2 as b from range(0,10) tbl(i);
 
 statement ok
-copy (FROM test UNION ALL select 'NULL' as a, 'NULL' as b) to '__TEST_DIR__/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet', WRITE_PARTITION_COLUMNS);
+copy (FROM test UNION ALL select 'NULL' as a, 'NULL' as b) to '{TEST_DIR}/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet', WRITE_PARTITION_COLUMNS);
 
 query II
 select * 
-from parquet_scan('__TEST_DIR__/null-parquet/**/*.parquet', hive_partitioning=1, hive_types={'a': INT})
+from parquet_scan('{TEST_DIR}/null-parquet/**/*.parquet', hive_partitioning=1, hive_types={'a': INT})
 ORDER BY ALL
 ----
 0	0
@@ -31,11 +31,11 @@ statement ok
 create table test2 as select i%5 as a, i%2 as b, i as c from range(0,10) tbl(i);
 
 statement ok
-copy (FROM test2 UNION ALL select 'NULL' as a, 'NULL' as b, 'NULL' as c) to '__TEST_DIR__/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet', OVERWRITE);
+copy (FROM test2 UNION ALL select 'NULL' as a, 'NULL' as b, 'NULL' as c) to '{TEST_DIR}/null-parquet' (PARTITION_BY (a,b), FORMAT 'parquet', OVERWRITE);
 
 query III
 select * 
-from parquet_scan('__TEST_DIR__/null-parquet/**/*.parquet', hive_partitioning=1, hive_types={'a': INT})
+from parquet_scan('{TEST_DIR}/null-parquet/**/*.parquet', hive_partitioning=1, hive_types={'a': INT})
 ORDER BY ALL
 ----
 0	0	0
@@ -53,15 +53,15 @@ NULL	NULL	NULL
 # Test __HIVE_DEFAULT_PARTITION__ is treated as NULL when reading
 # First create the nested directory structure using a dummy partitioned write
 statement ok
-copy (select 0 as c, NULL::INT as a, NULL::INT as b) to '__TEST_DIR__/hive-default-partition-test' (PARTITION_BY (a, b), FORMAT 'parquet', OVERWRITE);
+copy (select 0 as c, NULL::INT as a, NULL::INT as b) to '{TEST_DIR}/hive-default-partition-test' (PARTITION_BY (a, b), FORMAT 'parquet', OVERWRITE);
 
 # Now overwrite the file in that directory to test reading __HIVE_DEFAULT_PARTITION__
 statement ok
-copy (select 1 as c) to '__TEST_DIR__/hive-default-partition-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/data.parquet' (FORMAT 'parquet');
+copy (select 1 as c) to '{TEST_DIR}/hive-default-partition-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/data.parquet' (FORMAT 'parquet');
 
 query III
 select *
-from parquet_scan('__TEST_DIR__/hive-default-partition-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/data.parquet', hive_partitioning=1, hive_types={'a': INT, 'b': INT})
+from parquet_scan('{TEST_DIR}/hive-default-partition-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/data.parquet', hive_partitioning=1, hive_types={'a': INT, 'b': INT})
 ORDER BY ALL
 ----
 1	NULL	NULL
@@ -71,18 +71,18 @@ statement ok
 create table test_null_write as select 1 as c, NULL::INT as a, NULL::INT as b;
 
 statement ok
-copy test_null_write to '__TEST_DIR__/hive-null-write-test' (PARTITION_BY (a,b), FORMAT 'parquet');
+copy test_null_write to '{TEST_DIR}/hive-null-write-test' (PARTITION_BY (a,b), FORMAT 'parquet');
 
 # Verify we can read the data back (proves __HIVE_DEFAULT_PARTITION__ is used and read correctly)
 query III
 select *
-from parquet_scan('__TEST_DIR__/hive-null-write-test/**/*.parquet', hive_partitioning=1, hive_types={'a': INT, 'b': INT})
+from parquet_scan('{TEST_DIR}/hive-null-write-test/**/*.parquet', hive_partitioning=1, hive_types={'a': INT, 'b': INT})
 ORDER BY ALL
 ----
 1	NULL	NULL
 
 # Verify the directory structure uses __HIVE_DEFAULT_PARTITION__
 query I
-select count(*) from glob('__TEST_DIR__/hive-null-write-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/*.parquet');
+select count(*) from glob('{TEST_DIR}/hive-null-write-test/a=__HIVE_DEFAULT_PARTITION__/b=__HIVE_DEFAULT_PARTITION__/*.parquet');
 ----
 1

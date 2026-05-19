@@ -355,4 +355,20 @@ size_t Path::ParseUNCScheme(const string &input, Path &parsed) {
 }
 #endif
 
+string Path::AddSuffixToPath(const string &path, const string &suffix) {
+	// we append the ".wal" **before** a question mark in case of GET parameters
+	// but only if we are not in a windows long path (which starts with \\?\)
+	std::size_t question_mark_pos = std::string::npos;
+	if (!StringUtil::StartsWith(path, "\\\\?\\")) {
+		question_mark_pos = path.find('?');
+	}
+	auto result = path;
+	if (question_mark_pos != std::string::npos) {
+		result.insert(question_mark_pos, suffix);
+	} else {
+		result += suffix;
+	}
+	return result;
+}
+
 } // namespace duckdb

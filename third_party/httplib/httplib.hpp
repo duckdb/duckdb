@@ -203,6 +203,12 @@
     "cpp-httplib doesn't support platforms where size_t is less than 64 bits."
 #endif
 
+#ifdef __MVS__
+#define REGEX_SCOPE static
+#else
+#define REGEX_SCOPE thread_local
+#endif
+
 /*
  * Headers
  */
@@ -266,6 +272,7 @@ using socklen_t = int;
 #endif
 #ifdef __MVS__
 #include <strings.h>
+#include <sys/time.h>
 #ifndef NI_MAXHOST
 #define NI_MAXHOST 1025
 #endif
@@ -2946,7 +2953,7 @@ inline std::string encode_path(const std::string &s) {
 
 inline std::string file_extension(const std::string &path) {
   Match m;
-  thread_local auto re = Regex("\\.([a-zA-Z0-9]+)$");
+  REGEX_SCOPE auto re = Regex("\\.([a-zA-Z0-9]+)$");
   if (duckdb_re2::RegexSearch(path, m, re)) { return m[1].str(); }
   return std::string();
 }
@@ -4927,7 +4934,7 @@ inline ReadContentResult read_content_chunked(Stream &strm, T &x,
   if (!line_reader.getline()) { return ReadContentResult::Success; }
 
   // RFC 7230 Section 4.1.2 - Headers prohibited in trailers
-  thread_local case_ignore::unordered_set<std::string> prohibited_trailers = {
+  static const case_ignore::unordered_set<std::string> prohibited_trailers = {
       // Message framing
       "transfer-encoding", "content-length",
 
@@ -5715,7 +5722,7 @@ public:
             file_.content_type =
                 trim_copy(header.substr(str_len(header_content_type)));
           } else {
-            thread_local const Regex re_content_disposition(
+            REGEX_SCOPE const Regex re_content_disposition(
                 R"~(^Content-Disposition:\s*form-data;\s*(.*)$)~",
                 duckdb_re2::RegexOptions::CASE_INSENSITIVE);
 
@@ -5738,7 +5745,7 @@ public:
               it = params.find("filename*");
               if (it != params.end()) {
                 // Only allow UTF-8 encoding...
-                thread_local const Regex re_rfc5987_encoding(
+                REGEX_SCOPE const Regex re_rfc5987_encoding(
                     R"~(^UTF-8''(.+?)$)~", duckdb_re2::RegexOptions::CASE_INSENSITIVE);
 
                 Match m2;
@@ -6475,7 +6482,7 @@ inline bool parse_www_authenticate(const Response &res,
                                    bool is_proxy) {
   auto auth_key = is_proxy ? "Proxy-Authenticate" : "WWW-Authenticate";
   if (res.has_header(auth_key)) {
-    thread_local auto re =
+    REGEX_SCOPE auto re =
         Regex(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~");
     auto s = res.get_header_value(auth_key);
     auto pos = s.find(' ');
@@ -6793,7 +6800,7 @@ inline std::string decode_query_component(const std::string &component,
 inline std::string append_query_params(const std::string &path,
                                        const Params &params) {
   std::string path_with_query = path;
-  thread_local const Regex re("[^?]+\\?.*");
+  REGEX_SCOPE const Regex re("[^?]+\\?.*");
   auto delm = RegexMatch(path, re) ? '&' : '?';
   path_with_query += delm + detail::params_to_query_str(params);
   return path_with_query;
@@ -8814,9 +8821,9 @@ inline bool ClientImpl::read_response_line(Stream &strm, const Request &req,
   if (!line_reader.getline()) { return false; }
 
 #ifdef CPPHTTPLIB_ALLOW_LF_AS_LINE_TERMINATOR
-  thread_local const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
+  REGEX_SCOPE const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
 #else
-  thread_local const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
+  REGEX_SCOPE const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
 #endif
 
   Match m;
@@ -9071,7 +9078,7 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
 	 return true;
 	}
 
-  thread_local const Regex re(
+  REGEX_SCOPE const Regex re(
       R"((?:(https?):)?(?://(?:\[([a-fA-F\d:]+)\]|([^:/?#]+))(?::(\d+))?)?([^?#]*)(\?[^#]*)?(?:#.*)?)");
 
   Match m;

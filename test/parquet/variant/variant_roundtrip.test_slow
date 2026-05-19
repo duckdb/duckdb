@@ -9,14 +9,14 @@ statement ok
 COPY (
 	SELECT
 		COLUMNS(*)::VARIANT
-	FROM read_parquet('data/parquet-testing/${parquet_file}')
-) TO '__TEST_DIR__/variant_${parquet_file}' (FORMAT PARQUET);
+	FROM read_parquet('data/parquet-testing/{parquet_file}')
+) TO '{TEST_DIR}/variant_{parquet_file}' (FORMAT PARQUET);
 
 query I nosort expected_res
-SELECT COLUMNS(*)::VARIANT FROM read_parquet('data/parquet-testing/${parquet_file}')
+SELECT COLUMNS(*)::VARIANT FROM read_parquet('data/parquet-testing/{parquet_file}')
 
 query I nosort expected_res
-SELECT COLUMNS(*)::VARIANT FROM read_parquet('__TEST_DIR__/variant_${parquet_file}')
+SELECT COLUMNS(*)::VARIANT FROM read_parquet('{TEST_DIR}/variant_{parquet_file}')
 
 reset label expected_res
 
@@ -28,10 +28,10 @@ statement ok
 COPY (
 	SELECT
 		COLUMNS(*)::VARIANT
-	FROM read_parquet('data/parquet-testing/${parquet_file}')
-) TO '__TEST_DIR__/variant_${parquet_file}' (FORMAT PARQUET);
+	FROM read_parquet('data/parquet-testing/{parquet_file}')
+) TO '{TEST_DIR}/variant_{parquet_file}' (FORMAT PARQUET);
 
 statement ok
-SELECT COLUMNS(*)::VARIANT FROM read_parquet('__TEST_DIR__/variant_${parquet_file}')
+SELECT COLUMNS(*)::VARIANT FROM read_parquet('{TEST_DIR}/variant_{parquet_file}')
 
 endloop

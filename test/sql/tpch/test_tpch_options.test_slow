@@ -82,7 +82,7 @@ select n_nationkey, n_name, n_regionkey from nation
 loop i 2 50
 
 statement ok
-CALL dbgen(sf=1, children =100, step = ${i});
+CALL dbgen(sf=1, children =100, step = {i});
 
 endloop
 
@@ -120,7 +120,7 @@ select n_nationkey, n_name, n_regionkey from nation
 loop i 50 110
 
 statement ok
-CALL dbgen(sf=1, children =100, step = ${i});
+CALL dbgen(sf=1, children =100, step = {i});
 
 endloop
 
@@ -130,12 +130,12 @@ CALL dbgen(sf=1, suffix='_og');
 foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
 
 query I
-select count(*) from (SELECT * FROM ${tpch_tbl} EXCEPT SELECT * FROM ${tpch_tbl}_og);
+select count(*) from (SELECT * FROM {tpch_tbl} EXCEPT SELECT * FROM {tpch_tbl}_og);
 ----
 0
 
 query I
-select count (*) from (SELECT * FROM ${tpch_tbl}_og EXCEPT SELECT * FROM ${tpch_tbl});
+select count (*) from (SELECT * FROM {tpch_tbl}_og EXCEPT SELECT * FROM {tpch_tbl});
 ----
 0
 
@@ -150,12 +150,12 @@ CALL dbgen(sf=1, catalog='db1');
 foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
 
 query I
-select count(*) from (SELECT * FROM ${tpch_tbl} EXCEPT SELECT * FROM db1.${tpch_tbl});
+select count(*) from (SELECT * FROM {tpch_tbl} EXCEPT SELECT * FROM db1.{tpch_tbl});
 ----
 0
 
 query I
-select count (*) from (SELECT * FROM db1.${tpch_tbl} EXCEPT SELECT * FROM ${tpch_tbl});
+select count (*) from (SELECT * FROM db1.{tpch_tbl} EXCEPT SELECT * FROM {tpch_tbl});
 ----
 0
 
@@ -170,12 +170,12 @@ CALL dbgen(sf=1, catalog='db1', schema='test_schema');
 foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
 
 query I
-select count(*) from (SELECT * FROM ${tpch_tbl} EXCEPT SELECT * FROM db1.test_schema.${tpch_tbl});
+select count(*) from (SELECT * FROM {tpch_tbl} EXCEPT SELECT * FROM db1.test_schema.{tpch_tbl});
 ----
 0
 
 query I
-select count (*) from (SELECT * FROM db1.test_schema.${tpch_tbl} EXCEPT SELECT * FROM ${tpch_tbl});
+select count (*) from (SELECT * FROM db1.test_schema.{tpch_tbl} EXCEPT SELECT * FROM {tpch_tbl});
 ----
 0
 

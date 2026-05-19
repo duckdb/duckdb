@@ -2,7 +2,7 @@
 # description: Ensure crypto cipher can not be downgraded to strip integrity checks
 # group: [attach]
 
-load __TEST_DIR__/tmp.db
+load {TEST_DIR}/tmp.db
 
 require httpfs
 

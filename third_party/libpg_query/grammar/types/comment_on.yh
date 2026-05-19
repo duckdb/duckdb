@@ -1,2 +1,0 @@
-%type <node> comment_value
-%type <objtype> comment_on_type_any_name

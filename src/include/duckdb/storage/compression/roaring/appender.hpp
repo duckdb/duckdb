@@ -45,12 +45,13 @@ public:
 		}
 	}
 
-	static void AppendVector(STATE_TYPE &state, Vector &input, idx_t input_size) {
+	static void AppendVector(STATE_TYPE &state, const Vector &input) {
+		const idx_t input_size = input.size();
 		UnifiedVectorFormat unified;
-		input.ToUnifiedFormat(input_size, unified);
+		input.ToUnifiedFormat(unified);
 		auto &validity = unified.validity;
 
-		if (validity.AllValid()) {
+		if (validity.CannotHaveNull()) {
 			// All bits are set implicitly
 			idx_t appended = 0;
 			while (appended < input_size) {

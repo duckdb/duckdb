@@ -6,31 +6,28 @@
 namespace duckdb {
 
 template <class T, class OP>
-static void TemplatedMarkJoin(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
+static void TemplatedMarkJoin(const Vector &left, const Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
 	using MATCH_OP = ComparisonOperationWrapper<OP>;
 
-	UnifiedVectorFormat left_data, right_data;
-	left.ToUnifiedFormat(lcount, left_data);
-	right.ToUnifiedFormat(rcount, right_data);
-
-	auto ldata = UnifiedVectorFormat::GetData<T>(left_data);
-	auto rdata = UnifiedVectorFormat::GetData<T>(right_data);
+	auto left_entries = left.Values<T>();
+	auto right_entries = right.Values<T>();
 	for (idx_t i = 0; i < lcount; i++) {
 		if (found_match[i]) {
 			continue;
 		}
-		auto lidx = left_data.sel->get_index(i);
-		const auto left_null = !left_data.validity.RowIsValid(lidx);
+		auto left_entry = left_entries[i];
+		const auto left_null = !left_entry.IsValid();
 		if (!MATCH_OP::COMPARE_NULL && left_null) {
 			continue;
 		}
 		for (idx_t j = 0; j < rcount; j++) {
-			auto ridx = right_data.sel->get_index(j);
-			const auto right_null = !right_data.validity.RowIsValid(ridx);
+			auto right_entry = right_entries[j];
+			const auto right_null = !right_entry.IsValid();
 			if (!MATCH_OP::COMPARE_NULL && right_null) {
 				continue;
 			}
-			if (MATCH_OP::template Operation<T>(ldata[lidx], rdata[ridx], left_null, right_null)) {
+			if (MATCH_OP::template Operation<T>(left_entries.GetValueUnsafe(i), right_entries.GetValueUnsafe(j),
+			                                    left_null, right_null)) {
 				found_match[i] = true;
 				break;
 			}
@@ -38,14 +35,14 @@ static void TemplatedMarkJoin(Vector &left, Vector &right, idx_t lcount, idx_t r
 	}
 }
 
-static void MarkJoinNested(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
+static void MarkJoinNested(const Vector &left, const Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
                            ExpressionType comparison_type) {
 	Vector left_reference(left.GetType());
 	for (idx_t i = 0; i < lcount; i++) {
 		if (found_match[i]) {
 			continue;
 		}
-		ConstantVector::Reference(left_reference, left, i, rcount);
+		ConstantVector::Reference(left_reference, count_t(rcount), left, i, lcount);
 		idx_t count;
 		switch (comparison_type) {
 		case ExpressionType::COMPARE_EQUAL:
@@ -82,7 +79,7 @@ static void MarkJoinNested(Vector &left, Vector &right, idx_t lcount, idx_t rcou
 }
 
 template <class OP>
-static void MarkJoinSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
+static void MarkJoinSwitch(const Vector &left, const Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -116,8 +113,8 @@ static void MarkJoinSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcou
 	}
 }
 
-static void MarkJoinComparisonSwitch(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[],
-                                     ExpressionType comparison_type) {
+static void MarkJoinComparisonSwitch(const Vector &left, const Vector &right, idx_t lcount, idx_t rcount,
+                                     bool found_match[], ExpressionType comparison_type) {
 	switch (left.GetType().InternalType()) {
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:

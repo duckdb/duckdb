@@ -135,6 +135,8 @@ public:
 		return FromString(input).ToString();
 	}
 
+	static string AddSuffixToPath(const string &path, const string &suffix);
+
 private:
 	string scheme;
 	string authority;

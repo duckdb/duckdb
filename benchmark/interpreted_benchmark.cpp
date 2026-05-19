@@ -623,8 +623,8 @@ ScopedConfigSetting PrepareResultCollector(ClientConfig &config, InterpretedBenc
 		return ScopedConfigSetting(
 		    config,
 		    [&benchmark](ClientConfig &config) {
-			    config.get_result_collector = [&benchmark](ClientContext &context,
-			                                               PreparedStatementData &data) -> PhysicalOperator & {
+			    config.get_result_collector =
+			        [&benchmark](ClientContext &context, PreparedStatementData &data) -> unique_ptr<PhysicalOperator> {
 				    return PhysicalArrowCollector::Create(context, data, benchmark.ArrowBatchSize());
 			    };
 		    },
@@ -783,7 +783,7 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 		if (i > 0) {
 			create_tbl += ", ";
 		}
-		create_tbl += KeywordHelper::WriteOptionallyQuoted(names[i]);
+		create_tbl += SQLIdentifier(names[i]);
 		create_tbl += " ";
 		create_tbl += types[i].ToString();
 	}

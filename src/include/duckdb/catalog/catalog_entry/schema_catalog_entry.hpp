@@ -81,7 +81,7 @@ public:
 	                                                        CreatePragmaFunctionInfo &info) = 0;
 	//! Create a collation within the given schema
 	virtual optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) = 0;
-	//! Create a coordiante system within the given schema
+	//! Create a coordinate system within the given schema
 	virtual optional_ptr<CatalogEntry> CreateCoordinateSystem(CatalogTransaction transaction,
 	                                                          CreateCoordinateSystemInfo &info) {
 		throw NotImplementedException("Coordinate systems are not supported in schema '%s'", name);

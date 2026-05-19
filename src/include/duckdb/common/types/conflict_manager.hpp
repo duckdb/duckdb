@@ -216,7 +216,7 @@ private:
 		conflict_data[i].inverted_sel = make_uniq<SelectionVector>(chunk_size);
 		conflict_data[i].validity.Initialize(chunk_size, false);
 		conflict_data[i].row_ids = make_uniq<Vector>(LogicalType::ROW_TYPE, chunk_size);
-		conflict_data[i].row_ids_data = FlatVector::GetData<row_t>(*conflict_data[i].row_ids);
+		conflict_data[i].row_ids_data = FlatVector::GetDataMutable<row_t>(*conflict_data[i].row_ids);
 		return conflict_data[i];
 	}
 

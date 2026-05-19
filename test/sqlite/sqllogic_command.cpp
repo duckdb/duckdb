@@ -390,9 +390,164 @@ static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
 	}
 }
 
+bool LoopCommand::ForEachTokenReplace(Connection &con, const string &parameter, vector<string> &result) const {
+	if (parameter.empty()) {
+		return true;
+	}
+	auto token_name = StringUtil::Lower(parameter);
+	StringUtil::Trim(token_name);
+	bool collection = false;
+	bool is_compression = token_name == "<compression>";
+	bool is_all = token_name == "<alltypes>";
+	bool is_numeric = is_all || token_name == "<numeric>";
+	bool is_integral = is_numeric || token_name == "<integral>";
+	bool is_signed = is_integral || token_name == "<signed>";
+	bool is_unsigned = is_integral || token_name == "<unsigned>";
+	bool is_all_types_column = token_name == "<all_types_columns>";
+	bool is_variable = StringUtil::StartsWith(token_name, "<variable:");
+	if (token_name[0] == '!') {
+		// !token tries to remove the token from the list of tokens
+		auto entry = std::find(result.begin(), result.end(), parameter.substr(1));
+		if (entry == result.end()) {
+			// not found - insert as-is
+			return false;
+		}
+		// found - erase the entry
+		result.erase(entry);
+		collection = true;
+	}
+	if (is_variable) {
+		// variable - get variable name
+		auto var_size = string("<variable:").size();
+		if (token_name.back() != '>') {
+			throw InvalidInputException("Expected <variable:var_name>, got %s", token_name);
+		}
+		auto variable_name = token_name.substr(var_size, token_name.size() - var_size - 1);
+		Value value;
+		if (!ClientConfig::GetConfig(*con.context).GetUserVariable(variable_name, value)) {
+			throw InvalidInputException("Variable with name \"%s\" was not defined", variable_name);
+		}
+		if (value.IsNull()) {
+			throw InvalidInputException("Variable with name \"%s\" is NULL - cannot iterate over this", variable_name);
+		}
+		auto list_val = value.CastAs(*con.context, LogicalType::LIST(LogicalType::VARCHAR));
+		for (auto &val : ListValue::GetChildren(list_val)) {
+			result.push_back(StringValue::Get(val));
+		}
+		collection = true;
+	}
+	if (is_signed) {
+		result.push_back("tinyint");
+		result.push_back("smallint");
+		result.push_back("integer");
+		result.push_back("bigint");
+		result.push_back("hugeint");
+		collection = true;
+	}
+	if (is_unsigned) {
+		result.push_back("utinyint");
+		result.push_back("usmallint");
+		result.push_back("uinteger");
+		result.push_back("ubigint");
+		result.push_back("uhugeint");
+		collection = true;
+	}
+	if (is_numeric) {
+		result.push_back("float");
+		result.push_back("double");
+		collection = true;
+	}
+	if (is_all) {
+		result.push_back("bool");
+		result.push_back("interval");
+		result.push_back("varchar");
+		collection = true;
+	}
+	if (is_compression) {
+		result.push_back("none");
+		result.push_back("uncompressed");
+		result.push_back("rle");
+		result.push_back("bitpacking");
+		result.push_back("dictionary");
+		result.push_back("fsst");
+		result.push_back("dict_fsst");
+		result.push_back("alp");
+		result.push_back("alprd");
+		collection = true;
+	}
+	if (is_all_types_column) {
+		result.push_back("bool");
+		result.push_back("tinyint");
+		result.push_back("smallint");
+		result.push_back("int");
+		result.push_back("bigint");
+		result.push_back("hugeint");
+		result.push_back("uhugeint");
+		result.push_back("utinyint");
+		result.push_back("usmallint");
+		result.push_back("uint");
+		result.push_back("ubigint");
+		result.push_back("date");
+		result.push_back("time");
+		result.push_back("timestamp");
+		result.push_back("timestamp_s");
+		result.push_back("timestamp_ms");
+		result.push_back("timestamp_ns");
+		result.push_back("time_tz");
+		result.push_back("timestamp_tz");
+		result.push_back("float");
+		result.push_back("double");
+		result.push_back("dec_4_1");
+		result.push_back("dec_9_4");
+		result.push_back("dec_18_6");
+		result.push_back("dec38_10");
+		result.push_back("uuid");
+		result.push_back("interval");
+		result.push_back("varchar");
+		result.push_back("blob");
+		result.push_back("bit");
+		result.push_back("small_enum");
+		result.push_back("medium_enum");
+		result.push_back("large_enum");
+		result.push_back("int_array");
+		result.push_back("double_array");
+		result.push_back("date_array");
+		result.push_back("timestamp_array");
+		result.push_back("timestamptz_array");
+		result.push_back("varchar_array");
+		result.push_back("nested_int_array");
+		result.push_back("struct");
+		result.push_back("struct_of_arrays");
+		result.push_back("array_of_structs");
+		result.push_back("map");
+		result.push_back("union");
+		result.push_back("fixed_int_array");
+		result.push_back("fixed_varchar_array");
+		result.push_back("fixed_nested_int_array");
+		result.push_back("fixed_nested_varchar_array");
+		result.push_back("fixed_struct_array");
+		result.push_back("struct_of_fixed_array");
+		result.push_back("fixed_array_of_int_list");
+		result.push_back("list_of_fixed_int_array");
+		collection = true;
+	}
+	return collection;
+}
+
 void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 	LoopDefinition loop_def = definition;
 	loop_def.loop_idx = definition.loop_start;
+
+	if (!loop_def.tokens.empty()) {
+		loop_def.tokens.clear();
+		// expand any parameters in the loop definition
+		for (auto &token : definition.tokens) {
+			if (!ForEachTokenReplace(*runner.con, token, loop_def.tokens)) {
+				loop_def.tokens.push_back(token);
+			}
+		}
+		loop_def.loop_end = loop_def.tokens.size();
+	}
 	if (loop_def.is_parallel) {
 		for (auto &running_loop : context.running_loops) {
 			if (running_loop.is_parallel) {
@@ -419,31 +574,45 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 
 		// parallel loop: launch threads
 		std::list<ParallelExecuteContext> contexts;
-		for (auto &loop_index : loop_indexes) {
-			loop_def.loop_idx = loop_index;
+		for (auto &parallel_loop_idx : loop_indexes) {
+			loop_def.loop_idx = parallel_loop_idx;
 			auto running_loops = context.running_loops;
 			running_loops.emplace_back(loop_def);
 			contexts.emplace_back(runner, loop_commands, std::move(running_loops));
 		}
+		auto &test_config = TestConfiguration::Get();
+		auto max_threads_config = test_config.GetMaxTestThreads();
+		idx_t max_threads =
+		    max_threads_config.IsValid() ? max_threads_config.GetIndex() : NumericLimits<idx_t>::Maximum();
+		max_threads = MaxValue<idx_t>(max_threads, 1);
+
 		std::list<std::thread> threads;
-		for (auto &context : contexts) {
-			threads.emplace_back(ParallelExecuteLoop, &context);
+		idx_t finished_thread_idx = 0;
+		auto context_it = contexts.begin();
+		while (context_it != contexts.end()) {
+			// launch threads
+			for (; context_it != contexts.end() && threads.size() - finished_thread_idx < max_threads; ++context_it) {
+				auto &execute_context = *context_it;
+				threads.emplace_back(ParallelExecuteLoop, &execute_context);
+			}
+			// wait for active threads to finish
+			for (auto it = std::next(threads.begin(), static_cast<int64_t>(finished_thread_idx)); it != threads.end();
+			     ++it) {
+				it->join();
+				finished_thread_idx++;
+			}
 		}
-		for (auto &thread : threads) {
-			thread.join();
-		}
-		for (auto &context : contexts) {
-			if (!context.success) {
-				if (!context.error_message.empty()) {
-					FAIL(context.error_message);
+		for (auto &execute_context : contexts) {
+			if (!execute_context.success) {
+				if (!execute_context.error_message.empty()) {
+					FAIL(execute_context.error_message);
 				} else {
-					FAIL_LINE(context.error_file, context.error_line, 0);
+					FAIL_LINE(execute_context.error_file, execute_context.error_line, 0);
 				}
 			}
 		}
 	} else {
-		bool finished = false;
-		while (!finished && !runner.finished_processing_file) {
+		while (!runner.finished_processing_file) {
 			// execute the current iteration of the loop
 			idx_t loop_index = context.running_loops.size();
 			context.running_loops.push_back(loop_def);

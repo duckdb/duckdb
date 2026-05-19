@@ -81,6 +81,7 @@ public:
 		return true;
 	}
 	bool ParallelSource() const override;
+	TableFunctionParallelism SourceParallelism() const override;
 
 	bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const override;
 
@@ -89,6 +90,9 @@ public:
 	InsertionOrderPreservingMap<string> ExtraSourceParams(GlobalSourceState &gstate,
 	                                                      LocalSourceState &lstate) const override;
 	optional_idx GetRowsScanned(GlobalSourceState &gstate_p, LocalSourceState &lstate) const;
+
+private:
+	string GetFilterInfo(const TableFilterSet &filter_set) const;
 };
 
 } // namespace duckdb

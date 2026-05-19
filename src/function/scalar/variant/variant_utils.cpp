@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/enum_util.hpp"
@@ -187,8 +190,8 @@ Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &varian
 void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<uint32_t> &dictionary,
                                        SelectionVector &sel, idx_t sel_size) {
 	auto &keys = VariantVector::GetKeys(variant);
-	auto &keys_entry = ListVector::GetEntry(keys);
-	auto keys_entry_data = FlatVector::GetData<string_t>(keys_entry);
+	auto &keys_entry = ListVector::GetChildMutable(keys);
+	auto keys_entry_data = FlatVector::GetDataMutable<string_t>(keys_entry);
 
 	bool already_sorted = true;
 
@@ -217,9 +220,9 @@ void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<u
 	}
 }
 
-bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t count) {
+bool VariantUtils::Verify(const Vector &variant, const SelectionVector &sel_p, idx_t count) {
 	RecursiveUnifiedVectorFormat format;
-	Vector::RecursiveToUnifiedFormat(variant, count, format);
+	Vector::RecursiveToUnifiedFormat(variant, format);
 
 	//! keys
 	auto &keys = UnifiedVariantVector::GetKeys(format);
@@ -228,7 +231,7 @@ bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t c
 	//! keys_entry
 	auto &keys_entry = UnifiedVariantVector::GetKeysEntry(format);
 	auto keys_entry_data = keys_entry.GetData<string_t>(keys_entry);
-	D_ASSERT(keys_entry.validity.AllValid());
+	D_ASSERT(keys_entry.validity.CannotHaveNull());
 
 	//! children
 	auto &children = UnifiedVariantVector::GetChildren(format);
@@ -393,6 +396,7 @@ bool VariantUtils::VariantSupportsType(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::GEOMETRY:

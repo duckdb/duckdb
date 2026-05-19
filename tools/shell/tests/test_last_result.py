@@ -39,6 +39,19 @@ def test_stacking_last_result(shell):
     result = test.run()
     result.check_stdout("4200000")
 
+def test_query_last_result(shell):
+    test = (
+        ShellTest(shell)
+        .statement("SELECT 42 a")
+        .statement('SELECT a * 10 a FROM _')
+        .statement("FROM query('SELECT a * 10 a FROM _')")
+        .statement('SELECT a * 10 a FROM _')
+        .statement("FROM query('SELECT a * 10 a FROM _')")
+        .statement('SELECT a * 10 a FROM _')
+    )
+    result = test.run()
+    result.check_stdout("4200000")
+
 # errors do not overwrite last results
 def test_last_result_error(shell):
     test = (

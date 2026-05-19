@@ -71,7 +71,7 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 
 		// Otherwise, return the user type directly!
 		auto result_expr = make_uniq<BoundConstantExpression>(Value::TYPE(type_entry.user_type));
-		result_expr->query_location = type_expr.GetQueryLocation();
+		result_expr->SetQueryLocation(type_expr.GetQueryLocation());
 		return BindResult(std::move(result_expr));
 	}
 
@@ -107,7 +107,7 @@ BindResult ExpressionBinder::BindExpression(TypeExpression &type_expr, idx_t dep
 
 	// Return the resulting type!
 	auto result_expr = make_uniq<BoundConstantExpression>(Value::TYPE(result_type));
-	result_expr->query_location = type_expr.GetQueryLocation();
+	result_expr->SetQueryLocation(type_expr.GetQueryLocation());
 	return BindResult(std::move(result_expr));
 }
 

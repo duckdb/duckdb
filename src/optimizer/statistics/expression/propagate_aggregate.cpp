@@ -10,16 +10,16 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggreg
 	for (auto &child : aggr.children) {
 		auto stat = PropagateExpression(child);
 		if (!stat) {
-			stats.push_back(BaseStatistics::CreateUnknown(child->return_type));
+			stats.push_back(BaseStatistics::CreateUnknown(child->GetReturnType()));
 		} else {
 			stats.push_back(stat->Copy());
 		}
 	}
-	if (!aggr.function.HasStatisticsCallback()) {
+	if (!aggr.function.GetCallbacks().HasStatisticsCallback()) {
 		return nullptr;
 	}
 	AggregateStatisticsInput input(aggr.bind_info.get(), stats, node_stats.get());
-	return aggr.function.GetStatisticsCallback()(context, aggr, input);
+	return aggr.function.GetCallbacks().GetStatisticsCallback()(context, aggr, input);
 }
 
 } // namespace duckdb

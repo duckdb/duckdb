@@ -52,7 +52,8 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 			return false;
 		}
 		if (op_type == LogicalOperatorType::LOGICAL_FILTER ||
-		    op_type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		    op_type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ||
+		    op_type == LogicalOperatorType::LOGICAL_DISTINCT) {
 			row_limit.SetInvalid();
 			row_offset.SetInvalid();
 		}
@@ -113,21 +114,13 @@ optional_ptr<LogicalOrder> RowGroupPruner::FindLogicalOrder(const LogicalLimit &
 	}
 
 	auto &logical_order = current_op.get().Cast<LogicalOrder>();
-	for (const auto &order : logical_order.orders) {
-		// FIXME: the logic to handle this has now been implemented in the row group reorderer,
-		// but we do not enable the optimization until more thorough testing
-		if (order.null_order == OrderByNullType::NULLS_FIRST) {
-			return nullptr;
-		}
-	}
-
-	auto order_column_type = logical_order.orders[0].expression->return_type;
+	auto order_column_type = logical_order.orders[0].expression->GetReturnType();
 	if (!order_column_type.IsNumeric() && !order_column_type.IsTemporal() &&
 	    order_column_type != LogicalType::VARCHAR) {
 		return nullptr;
 	}
 
-	if (logical_order.orders[0].expression->type != ExpressionType::BOUND_COLUMN_REF) {
+	if (logical_order.orders[0].expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return nullptr;
 	}
 
@@ -139,7 +132,9 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 	const auto &primary_order = logical_order.orders[0];
 	auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
 
-	vector<JoinFilterPushdownColumn> columns {JoinFilterPushdownColumn {colref.binding}};
+	JoinFilterPushdownColumn column;
+	column.probe_column_index = colref.binding;
+	vector<JoinFilterPushdownColumn> columns {std::move(column)};
 	vector<PushdownFilterTarget> pushdown_targets;
 	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*logical_order.children[0], std::move(columns),
 	                                                      pushdown_targets);
@@ -167,7 +162,7 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
                                                const StorageIndex &storage_index, LogicalLimit &logical_limit) const {
 	const auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
 	const auto column_type =
-	    colref.return_type == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
+	    colref.GetReturnType() == LogicalType::VARCHAR ? OrderByColumnType::STRING : OrderByColumnType::NUMERIC;
 	const auto order_type = primary_order.type;
 	const auto null_order = primary_order.null_order;
 	const auto order_by = order_type == OrderType::ASCENDING ? OrderByStatistics::MIN : OrderByStatistics::MAX;
@@ -183,8 +178,8 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 		if (!partition_stats.empty()) {
 			auto offset_puning_result = RowGroupReorderer::GetOffsetAfterPruning(
 			    order_by, column_type, order_type, null_order, storage_index, row_offset.GetIndex(), partition_stats);
-			if (offset_puning_result.pruned_row_group_count > 0) {
-				// We can prune row groups and reduce the offset
+			if (offset_puning_result.pruned_row_group_count > 0 || offset_puning_result.leading_null_group_offset > 0) {
+				// We can prune row groups and/or reduce the offset by consuming definite NULL-only groups
 				logical_limit.offset_val =
 				    BoundLimitNode::ConstantValue(NumericCast<int64_t>(offset_puning_result.offset_remainder));
 
@@ -193,7 +188,8 @@ RowGroupPruner::CreateRowGroupReordererOptions(const optional_idx row_limit, con
 				}
 
 				return make_uniq<RowGroupOrderOptions>(storage_index, order_by, order_type, null_order, column_type,
-				                                       combined_limit, offset_puning_result.pruned_row_group_count);
+				                                       combined_limit, offset_puning_result.pruned_row_group_count,
+				                                       offset_puning_result.leading_null_group_offset);
 			}
 		}
 	}

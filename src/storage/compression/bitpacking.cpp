@@ -12,6 +12,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -125,7 +126,7 @@ public:
 
 	void CalculateDeltaStats() {
 		// TODO: currently we dont support delta compression of values above NumericLimits<T_S>::Maximum(),
-		// 		 we could support this with some clever substract trickery?
+		// 		 we could support this with some clever subtract trickery?
 		if (maximum > static_cast<T>(NumericLimits<T_S>::Maximum())) {
 			return;
 		}
@@ -270,7 +271,8 @@ public:
 	}
 
 	template <class OP = EmptyBitpackingWriter>
-	bool Update(T value, bool is_valid) {
+	bool Update(typename VectorIterator<T>::ValueEntry val) {
+		auto is_valid = val.IsValid();
 		compression_buffer_validity[compression_buffer_idx] = is_valid;
 		has_valid = has_valid || is_valid;
 		has_invalid = has_invalid || !is_valid;
@@ -278,6 +280,7 @@ public:
 		all_invalid = all_invalid && !is_valid;
 
 		if (is_valid) {
+			auto value = val.GetValue();
 			compression_buffer[compression_buffer_idx] = value;
 			minimum = MinValue<T>(minimum, value);
 			maximum = MaxValue<T>(maximum, value);
@@ -299,21 +302,20 @@ public:
 //===--------------------------------------------------------------------===//
 template <class T>
 struct BitpackingAnalyzeState : public AnalyzeState {
-	explicit BitpackingAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {};
+	explicit BitpackingAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager) {};
 	BitpackingState<T> state;
 };
 
 template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
-	auto state = make_uniq<BitpackingAnalyzeState<T>>(info);
+	auto state = make_uniq<BitpackingAnalyzeState<T>>(col_data.GetBlockManager());
 	state->state.mode = Settings::Get<ForceBitpackingModeSetting>(col_data.GetDatabase());
 
 	return std::move(state);
 }
 
 template <class T>
-bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
+bool BitpackingAnalyze(AnalyzeState &state, const Vector &input) {
 	// We use BITPACKING_METADATA_GROUP_SIZE tuples, which can exceed the block size.
 	// In that case, we disable bitpacking.
 	// we are conservative here by multiplying by 2
@@ -323,13 +325,8 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	}
 
 	auto &analyze_state = state.Cast<BitpackingAnalyzeState<T>>();
-	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
-
-	auto data = UnifiedVectorFormat::GetData<T>(vdata);
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(data[idx], vdata.validity.RowIsValid(idx))) {
+	for (auto entry : input.Values<T>()) {
+		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(entry)) {
 			return false;
 		}
 	}
@@ -350,22 +347,17 @@ idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 // Compress
 //===--------------------------------------------------------------------===//
 template <class T, bool WRITE_STATISTICS, class T_S = typename MakeSigned<T>::type>
-struct BitpackingCompressionState : public CompressionState {
+struct BitpackingCompressionState : public StandardCompressionState {
 public:
-	explicit BitpackingCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
-	    : CompressionState(info), checkpoint_data(checkpoint_data),
-	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_BITPACKING)) {
+	explicit BitpackingCompressionState(ColumnDataCheckpointData &checkpoint_data)
+	    : StandardCompressionState(checkpoint_data, CompressionType::COMPRESSION_BITPACKING) {
 		CreateEmptySegment();
 
 		state.data_ptr = reinterpret_cast<void *>(this);
 		state.mode = Settings::Get<ForceBitpackingModeSetting>(checkpoint_data.GetDatabase());
 	}
 
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
-	unique_ptr<ColumnSegment> current_segment;
-	BufferHandle handle;
-
+	StatsWriter<T> stats_writer;
 	// Ptr to next free spot in segment;
 	data_ptr_t data_ptr;
 	// Ptr to next free spot for storing bitwidths and frame-of-references (growing downwards).
@@ -438,7 +430,7 @@ public:
 		}
 
 		static void WriteMetaData(BitpackingCompressionState<T, WRITE_STATISTICS> *state, BitpackingMode mode) {
-			bitpacking_metadata_t metadata {mode, (uint32_t)(state->data_ptr - state->handle.Ptr())};
+			bitpacking_metadata_t metadata {mode, (uint32_t)(state->data_ptr - state->handle.GetDataMutable())};
 			state->metadata_ptr -= sizeof(bitpacking_metadata_encoded_t);
 			Store<bitpacking_metadata_encoded_t>(EncodeMeta(metadata), state->metadata_ptr);
 		}
@@ -453,16 +445,14 @@ public:
 			state->current_segment->count += count;
 
 			if (WRITE_STATISTICS) {
+				auto &stats_writer = state->stats_writer;
 				if (state->state.has_valid) {
-					state->current_segment->stats.statistics.SetHasNoNullFast();
+					stats_writer.SetHasValid();
+					stats_writer.UpdateMinMax(state->state.minimum);
+					stats_writer.UpdateMinMax(state->state.maximum);
 				}
 				if (state->state.has_invalid) {
-					state->current_segment->stats.statistics.SetHasNullFast();
-				}
-
-				if (!state->state.all_invalid) {
-					state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.maximum);
-					state->current_segment->stats.statistics.template UpdateNumericStats<T>(state->state.minimum);
+					stats_writer.SetHasNull();
 				}
 			}
 		}
@@ -477,27 +467,15 @@ public:
 	}
 
 	void CreateEmptySegment() {
-		auto &db = checkpoint_data.GetDatabase();
-		auto &type = checkpoint_data.GetType();
+		CreateAndPinNewSegment();
 
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
-		current_segment = std::move(compressed_segment);
-
-		auto &buffer_manager = BufferManager::GetBufferManager(db);
-		handle = buffer_manager.Pin(current_segment->block);
-
-		data_ptr = handle.Ptr() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
-		metadata_ptr = handle.Ptr() + info.GetBlockSize();
+		data_ptr = handle.GetDataMutable() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
+		metadata_ptr = handle.GetDataMutable() + info.GetBlockSize();
 	}
 
-	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = UnifiedVectorFormat::GetData<T>(vdata);
-
-		for (idx_t i = 0; i < count; i++) {
-			idx_t idx = vdata.sel->get_index(i);
-			state.template Update<BitpackingCompressionState<T, WRITE_STATISTICS, T_S>::BitpackingWriter>(
-			    data[idx], vdata.validity.RowIsValid(idx));
+	void Append(const Vector &input) {
+		for (auto entry : input.Values<T>()) {
+			state.template Update<BitpackingWriter>(entry);
 		}
 	}
 
@@ -509,8 +487,7 @@ public:
 	}
 
 	void FlushSegment() {
-		auto &state = checkpoint_data.GetCheckpointState();
-		auto base_ptr = handle.Ptr();
+		auto base_ptr = handle.GetDataMutable();
 
 		// Compact the segment by moving the metadata next to the data.
 
@@ -532,8 +509,7 @@ public:
 
 		// Store the offset of the metadata of the first group (which is at the highest address).
 		Store<idx_t>(metadata_offset + metadata_size, base_ptr);
-
-		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
+		FlushCurrentSegment(stats_writer, total_segment_size);
 	}
 
 	void Finalize() {
@@ -546,15 +522,13 @@ public:
 template <class T, bool WRITE_STATISTICS>
 unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                        unique_ptr<AnalyzeState> state) {
-	return make_uniq<BitpackingCompressionState<T, WRITE_STATISTICS>>(checkpoint_data, state->info);
+	return make_uniq<BitpackingCompressionState<T, WRITE_STATISTICS>>(checkpoint_data);
 }
 
 template <class T, bool WRITE_STATISTICS>
-void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void BitpackingCompress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = state_p.Cast<BitpackingCompressionState<T, WRITE_STATISTICS>>();
-	UnifiedVectorFormat vdata;
-	scan_vector.ToUnifiedFormat(count, vdata);
-	state.Append(vdata, count);
+	state.Append(scan_vector);
 }
 
 template <class T, bool WRITE_STATISTICS>
@@ -610,13 +584,13 @@ public:
 	explicit BitpackingScanState(const QueryContext &context, ColumnSegment &segment) : current_segment(segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(context, segment.block);
-		auto data_ptr = handle.Ptr();
+		auto data_ptr = handle.GetDataMutable();
 
 		// load offset to bitpacking widths pointer
 		auto bitpacking_metadata_offset = Load<idx_t>(data_ptr + segment.GetBlockOffset());
 		bitpacking_metadata_ptr =
 		    data_ptr + segment.GetBlockOffset() + bitpacking_metadata_offset - sizeof(bitpacking_metadata_encoded_t);
-		if (bitpacking_metadata_ptr >= handle.Ptr() + current_segment.GetBlockSize()) {
+		if (bitpacking_metadata_ptr >= handle.GetDataMutable() + current_segment.GetBlockSize()) {
 			throw InternalException("Bitpacking offset is out of range at block \"%llu\" - corrupt database file",
 			                        segment.block->BlockId());
 		}
@@ -645,8 +619,8 @@ public:
 	//! It also loads any metadata at the start of a compressed buffer (e.g. the width, for, or constant value)
 	//! depending on the bitpacking mode of that group.
 	void LoadNextGroup() {
-		D_ASSERT(bitpacking_metadata_ptr > handle.Ptr() &&
-		         (bitpacking_metadata_ptr < handle.Ptr() + current_segment.GetBlockSize()));
+		D_ASSERT(bitpacking_metadata_ptr > handle.GetDataMutable() &&
+		         (bitpacking_metadata_ptr < handle.GetDataMutable() + current_segment.GetBlockSize()));
 		current_group_offset = 0;
 		current_group = DecodeMeta(reinterpret_cast<bitpacking_metadata_encoded_t *>(bitpacking_metadata_ptr));
 
@@ -758,7 +732,7 @@ public:
 	}
 
 	data_ptr_t GetPtr(bitpacking_metadata_t group) {
-		return handle.Ptr() + current_segment.GetBlockOffset() + group.offset;
+		return handle.GetDataMutable() + current_segment.GetBlockOffset() + group.offset;
 	}
 };
 
@@ -776,7 +750,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
                            idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<BitpackingScanState<T>>();
 
-	T *result_data = FlatVector::GetData<T>(result);
+	T *result_data = FlatVector::GetDataMutable<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
@@ -879,7 +853,7 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	D_ASSERT(scan_state.current_group_offset < BITPACKING_METADATA_GROUP_SIZE);
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	T *result_data = FlatVector::GetData<T>(result);
+	T *result_data = FlatVector::GetDataMutable<T>(result);
 	T *current_result_ptr = result_data + result_idx;
 
 	idx_t offset_in_compression_group =

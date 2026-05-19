@@ -10,6 +10,7 @@
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/compression/alp/alp_constants.hpp"
@@ -23,13 +24,12 @@
 namespace duckdb {
 
 template <class T>
-struct AlpRDCompressionState : public CompressionState {
+struct AlpRDCompressionState : public StandardCompressionState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	AlpRDCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpRDAnalyzeState<T> *analyze_state)
-	    : CompressionState(analyze_state->info), checkpoint_data(checkpoint_data),
-	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ALPRD)) {
+	    : StandardCompressionState(checkpoint_data, CompressionType::COMPRESSION_ALPRD) {
 		//! State variables from the analyze step that are needed for compression
 		compression_data.left_parts_dict_map = std::move(analyze_state->compression_data.left_parts_dict_map);
 		compression_data.left_bit_width = analyze_state->compression_data.left_bit_width;
@@ -43,11 +43,7 @@ public:
 		CreateEmptySegment();
 	}
 
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
-	unique_ptr<ColumnSegment> current_segment;
-	BufferHandle handle;
-
+	StatsWriter<T> stats_writer;
 	idx_t vector_idx = 0;
 	idx_t nulls_idx = 0;
 	idx_t vectors_flushed = 0;
@@ -73,7 +69,7 @@ public:
 	bool HasEnoughSpace(idx_t vector_size) {
 		//! If [start of block + used space + required space] is more than whats left (current position
 		//! of metadata pointer - the size of a new metadata pointer)
-		if ((handle.Ptr() + AlignValue(UsedSpace() + vector_size)) >=
+		if ((handle.GetDataMutable() + AlignValue(UsedSpace() + vector_size)) >=
 		    (metadata_ptr - AlpRDConstants::METADATA_POINTER_SIZE)) {
 			return false;
 		}
@@ -85,21 +81,13 @@ public:
 	}
 
 	void CreateEmptySegment() {
-		auto &db = checkpoint_data.GetDatabase();
-		auto &type = checkpoint_data.GetType();
-
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
-		current_segment = std::move(compressed_segment);
-
-		auto &buffer_manager = BufferManager::GetBufferManager(db);
-		handle = buffer_manager.Pin(current_segment->block);
+		CreateAndPinNewSegment();
 
 		// The pointer to the start of the compressed data.
-		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + AlpRDConstants::HEADER_SIZE +
+		data_ptr = handle.GetDataMutable() + current_segment->GetBlockOffset() + AlpRDConstants::HEADER_SIZE +
 		           actual_dictionary_size_bytes;
 		// The pointer to the start of the metadata.
-		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + info.GetBlockSize();
+		metadata_ptr = handle.GetDataMutable() + current_segment->GetBlockOffset() + info.GetBlockSize();
 		next_vector_byte_index_start = AlpRDConstants::HEADER_SIZE + actual_dictionary_size_bytes;
 	}
 
@@ -124,13 +112,13 @@ public:
 			CreateEmptySegment();
 		}
 		if (nulls_idx) {
-			current_segment->stats.statistics.SetHasNullFast();
+			stats_writer.SetHasNull();
 		}
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
-			current_segment->stats.statistics.SetHasNoNullFast();
+			stats_writer.SetHasValid();
 			for (idx_t i = 0; i < vector_idx; i++) {
 				T floating_point_value = Load<T>(const_data_ptr_cast(&input_vector[i]));
-				current_segment->stats.statistics.UpdateNumericStats<T>(floating_point_value);
+				stats_writer.UpdateMinMax(floating_point_value);
 			}
 		}
 		current_segment->count += vector_idx;
@@ -203,8 +191,7 @@ public:
 	}
 
 	void FlushSegment() {
-		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
-		auto dataptr = handle.Ptr();
+		auto dataptr = handle.GetDataMutable();
 
 		idx_t metadata_offset = AlignValue(UsedSpace());
 
@@ -252,7 +239,7 @@ public:
 		// Store the Dictionary
 		memcpy((void *)dataptr, (void *)compression_data.left_parts_dict, actual_dictionary_size_bytes);
 
-		checkpoint_state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
+		FlushCurrentSegment(stats_writer, total_segment_size);
 		data_bytes_used = 0;
 		vectors_flushed = 0;
 	}
@@ -274,7 +261,7 @@ public:
 			// to avoid checking if input_vector is filled in each iteration
 			auto values_to_fill_alp_input =
 			    MinValue<idx_t>(AlpConstants::ALP_VECTOR_SIZE - vector_idx, values_left_in_data);
-			if (vdata.validity.AllValid()) { //! We optimize a loop when there are no null
+			if (vdata.validity.CannotHaveNull()) { //! We optimize a loop when there are no null
 				for (idx_t i = 0; i < values_to_fill_alp_input; i++) {
 					auto idx = vdata.sel->get_index(offset_in_data + i);
 					EXACT_TYPE value = Load<EXACT_TYPE>(const_data_ptr_cast(&data[idx]));
@@ -310,11 +297,11 @@ unique_ptr<CompressionState> AlpRDInitCompression(ColumnDataCheckpointData &chec
 }
 
 template <class T>
-void AlpRDCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void AlpRDCompress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = (AlpRDCompressionState<T> &)state_p;
 	UnifiedVectorFormat vdata;
-	scan_vector.ToUnifiedFormat(count, vdata);
-	state.Append(vdata, count);
+	scan_vector.ToUnifiedFormat(vdata);
+	state.Append(vdata, scan_vector.size());
 }
 
 template <class T>

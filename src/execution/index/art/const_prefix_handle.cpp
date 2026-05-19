@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/art/const_prefix_handle.hpp"
 
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 
@@ -22,8 +23,8 @@ uint8_t ConstPrefixHandle::GetByte(const idx_t pos) const {
 
 namespace {
 // Tree-style branch characters
-const string PREFIX_BRANCH_END = "└── ";
-const string PREFIX_SPACE = "    ";
+constexpr const char *const PREFIX_BRANCH_END = "└── ";
+constexpr const char *const PREFIX_SPACE = "    ";
 
 // ASCII printable character range
 constexpr uint8_t PREFIX_ASCII_PRINTABLE_MIN = 32;
@@ -40,12 +41,12 @@ string ConstPrefixHandle::ToString(ART &art, const Node &node, const ToStringOpt
 	};
 
 	// Print prefix bytes (single branch, child follows on next line)
-	auto str = options.tree_prefix + PREFIX_BRANCH_END + "Prefix: |";
+	auto str = StringUtil::Format("%s%sPrefix: |", options.tree_prefix, PREFIX_BRANCH_END);
 	reference<const Node> ref(node);
 	auto child_options = options;
 	Iterator(art, ref, true, [&](const ConstPrefixHandle &handle) {
 		for (idx_t i = 0; i < handle.data[art.PrefixCount()]; i++) {
-			str += format_byte(handle.data[i]) + "|";
+			str += StringUtil::Format("%s|", format_byte(handle.data[i]));
 			if (options.key_path) {
 				child_options.key_depth++;
 			}
@@ -54,7 +55,7 @@ string ConstPrefixHandle::ToString(ART &art, const Node &node, const ToStringOpt
 	str += "\n";
 
 	// Child is printed indented under the prefix (not as a sibling)
-	child_options.tree_prefix = options.tree_prefix + PREFIX_SPACE;
+	child_options.tree_prefix = StringUtil::Format("%s%s", options.tree_prefix, PREFIX_SPACE);
 	str += ref.get().ToString(art, child_options);
 	return str;
 }

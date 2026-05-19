@@ -180,8 +180,8 @@ public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
 	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
 	                  idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler, CSVIterator &iterator,
-	                  bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing,
-	                  const string &path, idx_t scan_id, bool &used_unstrictness);
+	                  shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing, const string &path,
+	                  idx_t scan_id, bool &used_unstrictness);
 
 	~StringValueResult();
 
@@ -191,7 +191,7 @@ public:
 
 	//! Variables to iterate over the CSV buffers
 
-	char *buffer_ptr;
+	const char *buffer_ptr;
 	idx_t buffer_size;
 	idx_t position_before_comment;
 
@@ -218,7 +218,6 @@ public:
 	FullLinePosition current_line_position;
 	//! Used for CSV line reconstruction on flushed errors
 	unordered_map<idx_t, FullLinePosition> line_positions_per_row;
-	bool store_line_size = false;
 	bool added_last_line = false;
 	bool quoted_new_line = false;
 

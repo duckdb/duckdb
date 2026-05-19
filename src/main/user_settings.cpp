@@ -2,6 +2,9 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/types/string.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#ifdef __MVS__
+#include <zos-tls.h>
+#endif
 
 namespace duckdb {
 
@@ -135,8 +138,13 @@ bool GlobalUserSettings::TryGetExtensionOption(const String &name, ExtensionOpti
 
 #ifndef __MINGW32__
 CachedGlobalSettings &GlobalUserSettings::GetSettings() const {
-	// Cache of global settings - used to allow lock-free access to global settings in a thread-safe manner
+// Cache of global settings - used to allow lock-free access to global settings in a thread-safe manner
+#ifdef __MVS__
+	static __tlssim<CachedGlobalSettings> current_cache_impl;
+#define current_cache (*current_cache_impl.access())
+#else
 	thread_local CachedGlobalSettings current_cache;
+#endif
 
 	const auto current_version = settings_version.load(std::memory_order_relaxed);
 	if (!current_cache.global_user_settings || this != current_cache.global_user_settings.get() ||
@@ -146,6 +154,9 @@ CachedGlobalSettings &GlobalUserSettings::GetSettings() const {
 		current_cache = CachedGlobalSettings(*this, settings_version, settings_map);
 	}
 	return current_cache;
+#ifdef __MVS__
+#undef current_cache
+#endif
 }
 
 hugeint_t GlobalUserSettings::GetUUID() const {

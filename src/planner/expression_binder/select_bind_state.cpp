@@ -35,7 +35,7 @@ void SelectBindState::AddExpandedColumn(idx_t expand_count) {
 	if (expanded_column_indices.empty()) {
 		expanded_column_indices.emplace_back(0);
 	}
-	expanded_column_indices.push_back(ProjectionIndex(expanded_column_indices.back().index + expand_count));
+	expanded_column_indices.push_back(ProjectionIndex(expanded_column_indices.back() + expand_count));
 }
 
 void SelectBindState::AddRegularColumn() {

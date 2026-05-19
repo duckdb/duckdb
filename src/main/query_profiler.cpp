@@ -113,6 +113,9 @@ void QueryProfiler::Reset() {
 
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
 	lock_guard<std::mutex> guard(lock);
+	// Always reset byte counters at the start of each query so the progress bar shows per-query values
+	query_metrics.ResetMetric(MetricType::TOTAL_BYTES_READ);
+	query_metrics.ResetMetric(MetricType::TOTAL_BYTES_WRITTEN);
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
 	}
@@ -237,6 +240,11 @@ void QueryProfiler::FinalizeMetrics() {
 }
 
 void QueryProfiler::AddToCounter(const MetricType type, const idx_t amount) {
+	// Always track bytes read/written so the progress bar can display them
+	if (type == MetricType::TOTAL_BYTES_READ || type == MetricType::TOTAL_BYTES_WRITTEN) {
+		query_metrics.UpdateMetric(type, amount);
+		return;
+	}
 	if (IsEnabled()) {
 		query_metrics.UpdateMetric(type, amount);
 	}
@@ -276,7 +284,7 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 		lock_guard<std::mutex> guard(lock);
 		// checking the tree to ensure the query is really empty
 		// the query string is empty when a logical plan is deserialized
-		if (query_metrics.query_name.empty() && !root) {
+		if (query_metrics.query_name.empty() || !root) {
 			return "";
 		}
 		auto renderer = TreeRenderer::CreateRenderer(GetExplainFormat(format));
@@ -355,6 +363,7 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 				auto &info = GetOperatorInfo(*active_operator);
 				auto params = active_operator->ParamsToString();
 				info.extra_info = params;
+				info.extra_info_dirty = true;
 			}
 		}
 
@@ -383,7 +392,7 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 			info.AddMetric(MetricType::OPERATOR_CARDINALITY, chunk->size());
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::RESULT_SET_SIZE) && chunk) {
-			auto result_set_size = chunk->GetAllocationSize();
+			auto result_set_size = chunk->GetDataSize();
 			info.AddMetric(MetricType::RESULT_SET_SIZE, result_set_size);
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {
@@ -420,6 +429,7 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 					info.extra_info.insert(std::move(new_info));
 				}
 			}
+			info.extra_info_dirty = info.extra_info_dirty || !extra_info.empty();
 		}
 		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_ROWS_SCANNED) &&
 		    active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN) {
@@ -466,7 +476,9 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 	}
 
 	auto &info = entry->second;
-	info.name = phys_op.GetName();
+	if (info.name.empty()) {
+		info.name = phys_op.GetName();
+	}
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
@@ -494,8 +506,9 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		if (ProfilingInfo::Enabled(profiler.settings, MetricType::RESULT_SET_SIZE)) {
 			info.MetricSum<idx_t>(MetricType::RESULT_SET_SIZE, node.second.result_set_size);
 		}
-		if (ProfilingInfo::Enabled(profiler.settings, MetricType::EXTRA_INFO)) {
+		if (ProfilingInfo::Enabled(profiler.settings, MetricType::EXTRA_INFO) && node.second.extra_info_dirty) {
 			info.metrics[MetricType::EXTRA_INFO] = Value::MAP(node.second.extra_info);
+			node.second.extra_info_dirty = false;
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {
 			query_metrics.query_global_info.MetricMax(MetricType::SYSTEM_PEAK_BUFFER_MEMORY,
@@ -505,8 +518,8 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			query_metrics.query_global_info.MetricMax(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE,
 			                                          node.second.system_peak_temp_directory_size);
 		}
+		node.second.ResetMetrics();
 	}
-	profiler.operator_infos.clear();
 }
 
 void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {

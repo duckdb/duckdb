@@ -31,11 +31,11 @@ PhysicalCreateIndex::PhysicalCreateIndex(PhysicalPlan &physical_plan, LogicalOpe
 
 	for (idx_t i = 0; i < unbound_expressions.size(); ++i) {
 		auto &expr = unbound_expressions[i];
-		indexed_column_types.push_back(expr->return_type);
+		indexed_column_types.push_back(expr->GetReturnType());
 		indexed_columns.push_back(i);
 	}
 
-	// Row id is alway last
+	// Row id is always last
 	rowid_column.push_back(unbound_expressions.size());
 }
 
@@ -91,9 +91,8 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	// Check for NULLs, if we are creating a PRIMARY KEY.
 	// FIXME: Later, we want to ensure that we skip the NULL check for any non-PK alter.
 	if (alter_table_info) {
-		auto row_count = lstate.key_chunk.size();
 		for (idx_t i = 0; i < lstate.key_chunk.ColumnCount(); i++) {
-			if (VectorOperations::HasNull(lstate.key_chunk.data[i], row_count)) {
+			if (VectorOperations::HasNull(lstate.key_chunk.data[i])) {
 				throw ConstraintException("NOT NULL constraint failed: %s", info->index_name);
 			}
 		}

@@ -19,6 +19,7 @@ constexpr LogLevel HTTPLogType::LEVEL;
 constexpr LogLevel PhysicalOperatorLogType::LEVEL;
 constexpr LogLevel MetricsLogType::LEVEL;
 constexpr LogLevel CheckpointLogType::LEVEL;
+constexpr LogLevel AdaptiveFilterLogType::LEVEL;
 
 //===--------------------------------------------------------------------===//
 // QueryLogType
@@ -250,6 +251,36 @@ string TransactionLogType::ConstructLogMessage(const AttachedDatabase &db, const
 	    {"transaction_id", transaction_id == MAX_TRANSACTION_ID ? Value() : Value::UBIGINT(transaction_id)},
 	};
 
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+//===--------------------------------------------------------------------===//
+// AdaptiveFilterLogType
+//===--------------------------------------------------------------------===//
+AdaptiveFilterLogType::AdaptiveFilterLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType AdaptiveFilterLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"event", LogicalType::VARCHAR},
+	    {"file_path", LogicalType::VARCHAR},
+	    {"permutation", LogicalType::VARCHAR},
+	    {"info", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string AdaptiveFilterLogType::ConstructLogMessage(const char *event, const string &file_path,
+                                                  const vector<idx_t> &permutation,
+                                                  const vector<pair<string, string>> &info) {
+	auto permutation_str =
+	    "[" + StringUtil::Join(permutation, permutation.size(), ", ", [](idx_t v) { return to_string(v); }) + "]";
+	child_list_t<Value> child_list = {
+	    {"event", Value(event)},
+	    {"file_path", Value(file_path)},
+	    {"permutation", Value(std::move(permutation_str))},
+	    {"info", StringPairIterableToMap(info)},
+	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }
 

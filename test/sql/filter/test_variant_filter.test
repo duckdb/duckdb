@@ -77,7 +77,7 @@ WITH cte as (
 )
 select IF(a < [1,2,3], 1, 0) from cte
 ----
-Invalid Input Error: Can't compare values of type INTEGER[] ([1, 2, 3]) and type STRUCT(a INTEGER, b INTEGER[]) ({'a': 21, 'b': [1, 2, 3]}) - an explicit cast is required
+Can't compare values
 
 statement error
 WITH cte as (

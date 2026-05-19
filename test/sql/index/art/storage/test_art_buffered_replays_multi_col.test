@@ -2,7 +2,7 @@
 # description: Test buffered replays with multiple columns, generated column, and unique index on middle column
 # group: [storage]
 
-load __TEST_DIR__/test_art_buffered_replays_multi_col.db
+load {TEST_DIR}/test_art_buffered_replays_multi_col.db
 
 statement ok
 SET wal_autocheckpoint = '1TB';
@@ -33,12 +33,12 @@ restart
 loop i 0 50
 
 query II
-EXPLAIN ANALYZE SELECT idx_col FROM tbl WHERE idx_col = ${i} * 2;
+EXPLAIN ANALYZE SELECT idx_col FROM tbl WHERE idx_col = {i} * 2;
 ----
 analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 query I
-SELECT EXISTS (SELECT 1 FROM tbl WHERE idx_col = ${i} * 2);
+SELECT EXISTS (SELECT 1 FROM tbl WHERE idx_col = {i} * 2);
 ----
 0
 
@@ -47,17 +47,17 @@ endloop
 loop i 0 50
 
 query II
-EXPLAIN ANALYZE SELECT idx_col FROM tbl WHERE idx_col = ${i} * 2 + 1;
+EXPLAIN ANALYZE SELECT idx_col FROM tbl WHERE idx_col = {i} * 2 + 1;
 ----
 analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 query I
-SELECT EXISTS (SELECT 1 FROM tbl WHERE idx_col = ${i} * 2 + 1);
+SELECT EXISTS (SELECT 1 FROM tbl WHERE idx_col = {i} * 2 + 1);
 ----
 1
 
 statement error
-INSERT INTO tbl (col1, col2, idx_col, col5) VALUES (${i} * 2 + 1, ${i} * 4 + 2, ${i} * 2 + 1, 'duplicate' || (${i} * 2 + 1)::VARCHAR);
+INSERT INTO tbl (col1, col2, idx_col, col5) VALUES ({i} * 2 + 1, {i} * 4 + 2, {i} * 2 + 1, 'duplicate' || ({i} * 2 + 1)::VARCHAR);
 ----
 <REGEX>:.*Constraint Error: Duplicate key.*violates unique constraint.*
 

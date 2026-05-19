@@ -69,7 +69,7 @@ void LogicalOperatorVisitor::VisitChildOfOperatorWithProjectionMap(unique_ptr<Lo
 	vector<ProjectionIndex> new_projection_map;
 	new_projection_map.reserve(projection_map.size());
 	for (const auto proj_idx_before : projection_map) {
-		auto &desired_binding = child_bindings_before[proj_idx_before.index];
+		auto &desired_binding = child_bindings_before[proj_idx_before];
 		idx_t proj_idx_after;
 		for (proj_idx_after = 0; proj_idx_after < child_bindings_after.size(); proj_idx_after++) {
 			if (child_bindings_after[proj_idx_after] == desired_binding) {
@@ -235,9 +235,6 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	case ExpressionClass::BOUND_AGGREGATE:
 		result = VisitReplace(expr.Cast<BoundAggregateExpression>(), expression);
 		break;
-	case ExpressionClass::BOUND_BETWEEN:
-		result = VisitReplace(expr.Cast<BoundBetweenExpression>(), expression);
-		break;
 	case ExpressionClass::BOUND_CASE:
 		result = VisitReplace(expr.Cast<BoundCaseExpression>(), expression);
 		break;
@@ -246,9 +243,6 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 		break;
 	case ExpressionClass::BOUND_COLUMN_REF:
 		result = VisitReplace(expr.Cast<BoundColumnRefExpression>(), expression);
-		break;
-	case ExpressionClass::BOUND_COMPARISON:
-		result = VisitReplace(expr.Cast<BoundComparisonExpression>(), expression);
 		break;
 	case ExpressionClass::BOUND_CONJUNCTION:
 		result = VisitReplace(expr.Cast<BoundConjunctionExpression>(), expression);
@@ -295,15 +289,10 @@ void LogicalOperatorVisitor::VisitExpressionChildren(Expression &expr) {
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &expr) { VisitExpression(&expr); });
 }
 
-// these are all default methods that can be overriden
+// these are all default methods that can be overridden
 // we don't care about coverage here
 // LCOV_EXCL_START
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundAggregateExpression &expr,
-                                                            unique_ptr<Expression> *expr_ptr) {
-	return nullptr;
-}
-
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundBetweenExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
@@ -319,11 +308,6 @@ unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundCastExpression 
 }
 
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundColumnRefExpression &expr,
-                                                            unique_ptr<Expression> *expr_ptr) {
-	return nullptr;
-}
-
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundComparisonExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }

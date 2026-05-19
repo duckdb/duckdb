@@ -2,13 +2,10 @@
 # description: Test various ways of installing extensions
 # group: [extension]
 
-statement ok
-PRAGMA enable_verification
-
 # Now httpfs might be already loaded or not, we keep the test agnostic via REGEX https? that matches both http AND https
 
 statement ok
-set extension_directory='__TEST_DIR__/install_extension'
+set extension_directory='{TEST_DIR}/install_extension'
 
 # Check defaults are correct
 statement error
@@ -44,4 +41,4 @@ IO Error: Failed to install local extension "will_never_exist", no access to the
 statement error
 INSTALL will_never_exist FROM core;
 ----
-For more info, visit https://duckdb.org/docs/stable/extensions/troubleshooting
+For more info, visit https://duckdb.org/docs/current/extensions/troubleshooting

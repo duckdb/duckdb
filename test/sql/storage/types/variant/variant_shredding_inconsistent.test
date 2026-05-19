@@ -3,7 +3,7 @@
 
 require json
 
-load __TEST_DIR__/variant_shredding_inconsistent.db readwrite v1.5.0
+load {TEST_DIR}/variant_shredding_inconsistent.db readwrite v1.5.0
 
 # Always shred
 statement ok

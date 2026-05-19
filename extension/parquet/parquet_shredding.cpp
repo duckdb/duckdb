@@ -1,8 +1,14 @@
 #include "parquet_shredding.hpp"
+
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
 #include "duckdb/common/exception/binder_exception.hpp"
-#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 ChildShreddingTypes::ChildShreddingTypes() : types(make_uniq<case_insensitive_map_t<ShreddingType>>()) {
 }

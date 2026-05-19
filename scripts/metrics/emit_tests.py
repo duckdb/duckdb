@@ -67,7 +67,7 @@ ORDER BY ALL
     f.write("\"OPTIMIZER_JOIN_ORDER\": \"true\"\n\n")
 
     _write_statement(
-        f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';"
+        f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';"
     )
 
     query = """
@@ -90,7 +90,7 @@ FROM metrics_output;
     _write_default_query(f)
 
     _write_statement(
-        f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';"
+        f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';"
     )
 
     query = """
@@ -128,7 +128,7 @@ ORDER BY ALL
 
 def _generate_group_test(f, groups: list[str], all_metrics: Dict[str, List[str]]):
     _write_statement(f, "ok", "PRAGMA enable_profiling = 'json';")
-    _write_statement(f, "ok", "PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';")
+    _write_statement(f, "ok", "PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';")
 
     group_str = ", ".join(f'"{g.upper()}": "true"' for g in groups)
     _write_statement(f, "ok", f"PRAGMA custom_profiling_settings='{{{group_str}}}';")
@@ -150,7 +150,7 @@ def _generate_group_test(f, groups: list[str], all_metrics: Dict[str, List[str]]
     f.write("\n")
 
     _write_statement(
-        f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';"
+        f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';"
     )
 
     cols: list[str] = []
@@ -219,7 +219,7 @@ def _generate_profiling_setting_tests(out_dir: Path, all_metrics: Dict[str, List
             f.write("require json\n\n")
 
             _write_statement(f, "ok", "PRAGMA enable_profiling = 'json';")
-            _write_statement(f, "ok", "PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';")
+            _write_statement(f, "ok", "PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';")
 
             mode = "standard" if group == "default" else group
             _write_statement(f, "ok", f"SET profiling_mode='{mode}';")
@@ -235,7 +235,7 @@ def _generate_profiling_setting_tests(out_dir: Path, all_metrics: Dict[str, List
             f.write("\n")
 
             _write_statement(
-                f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';"
+                f, "ok", "CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';"
             )
             _write_statement(f, "ok", "SELECT cpu_time, extra_info, rows_returned, latency FROM metrics_output;")
         format_file(test_file)

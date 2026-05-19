@@ -7,7 +7,6 @@ if(${DISABLE_THREADS})
 endif()
 
 add_subdirectory(capi)
-add_subdirectory(udf_function)
 
 set(TEST_API_OBJECTS
     test_api.cpp
@@ -38,6 +37,7 @@ set(TEST_API_OBJECTS
     test_windows_header_compatibility.cpp
     test_windows_unicode_path.cpp
     test_object_cache.cpp
+    test_partial_executor.cpp
     test_buffer_pool_eviction.cpp)
 
 if(NOT WIN32)
@@ -53,6 +53,6 @@ if(DUCKDB_EXTENSION_TPCH_SHOULD_LINK)
 endif()
 
 add_library(test_api OBJECT ${TEST_API_OBJECTS})
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_api>
+set(UNITTEST_OBJECT_FILES
+    ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_api>
     PARENT_SCOPE)

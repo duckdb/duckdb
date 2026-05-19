@@ -12,20 +12,12 @@ namespace duckdb {
 static void MapEntriesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto count = args.size();
 
-	auto &map = args.data[0];
+	const auto &map = args.data[0];
 	if (map.GetType().id() == LogicalTypeId::SQLNULL) {
-		// Input is a constant NULL
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result, count_t(count));
 		return;
 	}
-
-	MapUtil::ReinterpretMap(result, map, count);
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(count);
+	MapUtil::ReinterpretMap(result, map);
 }
 
 ScalarFunction MapEntriesFun::GetFunction() {

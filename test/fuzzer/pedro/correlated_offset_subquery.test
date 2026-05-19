@@ -2,9 +2,6 @@
 # description: Issue #4563: Correlated offset subquery
 # group: [pedro]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SELECT (SELECT 1 OFFSET c0) FROM (VALUES(1)) c0;
 ----

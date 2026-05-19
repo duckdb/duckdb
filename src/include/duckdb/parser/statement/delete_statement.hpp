@@ -12,6 +12,7 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 
 namespace duckdb {
 
@@ -22,12 +23,7 @@ public:
 public:
 	DeleteStatement();
 
-	unique_ptr<ParsedExpression> condition;
-	unique_ptr<TableRef> table;
-	vector<unique_ptr<TableRef>> using_clauses;
-	vector<unique_ptr<ParsedExpression>> returning_list;
-	//! CTEs
-	CommonTableExpressionMap cte_map;
+	unique_ptr<DeleteQueryNode> node;
 
 protected:
 	DeleteStatement(const DeleteStatement &other);

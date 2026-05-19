@@ -19,11 +19,11 @@ SET VARIABLE initial_count = (SELECT COUNT(*) FROM integers WHERE i >= 0)
 loop i 0 50
 
 statement ok
-INSERT INTO integers VALUES (${threadid} * 1000 + ${i})
+INSERT INTO integers VALUES ({threadid} * 1000 + {i})
 
 query I
 SELECT CASE
-	WHEN COUNT(*) = (getvariable('initial_count') + ${i} + 1)
+	WHEN COUNT(*) = (getvariable('initial_count') + {i} + 1)
 	THEN NULL
 	ELSE {'initial': getvariable('initial_count'), 'count': COUNT(*), 'count_distinct': COUNT(DISTINCT i)}
 	END FROM integers WHERE i >= 0

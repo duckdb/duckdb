@@ -18,7 +18,7 @@ loop j 0 10
 
 onlyif threadid=0
 statement ok
-INSERT INTO t1 VALUES (${j}, (select string_agg(chr(48 + (random() * 9)::INT), '') from range(20000)));
+INSERT INTO t1 VALUES ({j}, (select string_agg(chr(48 + (random() * 9)::INT), '') from range(20000)));
 
 endloop
 

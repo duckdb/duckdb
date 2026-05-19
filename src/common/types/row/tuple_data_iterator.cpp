@@ -82,15 +82,15 @@ TupleDataChunkState &TupleDataChunkIterator::GetChunkState() {
 }
 
 data_ptr_t *TupleDataChunkIterator::GetRowLocations() {
-	return FlatVector::GetData<data_ptr_t>(state.chunk_state.row_locations);
+	return FlatVector::GetDataMutable<data_ptr_t>(state.chunk_state.row_locations);
 }
 
 data_ptr_t *TupleDataChunkIterator::GetHeapLocations() {
-	return FlatVector::GetData<data_ptr_t>(state.chunk_state.heap_locations);
+	return FlatVector::GetDataMutable<data_ptr_t>(state.chunk_state.heap_locations);
 }
 
 idx_t *TupleDataChunkIterator::GetHeapSizes() {
-	return FlatVector::GetData<idx_t>(state.chunk_state.heap_sizes);
+	return FlatVector::GetDataMutable<idx_t>(state.chunk_state.heap_sizes);
 }
 
 } // namespace duckdb

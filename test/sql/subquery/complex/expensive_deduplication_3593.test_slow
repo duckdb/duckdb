@@ -2,9 +2,6 @@
 # description: Issue #3593: Macros causes crash: memory consumption or recursion or something
 # group: [complex]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT
 (

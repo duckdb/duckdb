@@ -15,7 +15,7 @@ INSERT INTO self_ref VALUES (2, 1);
 # this is a limitation until there is ALTER TABLE <constraint> implemented, in which case
 # ALTER TABLES can we exported to add the self referencing constraints.
 statement error
-EXPORT DATABASE '__TEST_DIR__/test_data'
+EXPORT DATABASE '{TEST_DIR}/test_data'
 ----
 self-referencing foreign key
 

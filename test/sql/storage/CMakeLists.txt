@@ -7,6 +7,6 @@ add_library_unity(
   test_storage.cpp
   test_database_size.cpp
   wal_torn_write.cpp)
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_storage>
+set(UNITTEST_OBJECT_FILES
+    ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_storage>
     PARENT_SCOPE)

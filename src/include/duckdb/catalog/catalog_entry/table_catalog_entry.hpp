@@ -8,7 +8,11 @@
 
 #pragma once
 
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_transaction.hpp"
 #include "duckdb/catalog/standard_entry.hpp"
+#include "duckdb/common/enums/column_segment_info_scan_type.hpp"
+#include "duckdb/common/enums/trigger_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -23,6 +27,7 @@
 namespace duckdb {
 
 class DataTable;
+struct CreateTriggerInfo;
 
 struct RenameColumnInfo;
 struct RenameFieldInfo;
@@ -112,7 +117,9 @@ public:
 	static string ColumnNamesToSQL(const ColumnList &columns);
 
 	//! Returns a list of segment information for this table, if exists
-	virtual vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
+	virtual vector<ColumnSegmentInfo>
+	GetColumnSegmentInfo(const QueryContext &context,
+	                     ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL);
 
 	//! Returns the storage info of this table
 	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;
@@ -129,6 +136,15 @@ public:
 	virtual virtual_column_map_t GetVirtualColumns() const;
 
 	virtual vector<column_t> GetRowIdColumns() const;
+
+	//! Create a trigger on this table (throws for table types that don't support triggers)
+	virtual optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info);
+	//! Scan all triggers on this table (default: no-op - non-DuckDB tables have no triggers)
+	virtual void ScanTriggers(CatalogTransaction transaction,
+	                          const std::function<void(CatalogEntry &)> &callback) const;
+	//! Collect triggers matching the given timing and event type
+	vector<const_reference<TriggerCatalogEntry>>
+	GetTriggersForEvent(CatalogTransaction transaction, TriggerTiming timing, TriggerEventType event_type) const;
 
 protected:
 	//! A list of columns that are part of this table

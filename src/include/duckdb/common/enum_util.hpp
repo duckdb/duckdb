@@ -42,6 +42,8 @@ enum class ARTScanResult : uint8_t;
 
 enum class AccessMode : uint8_t;
 
+enum class AdaptiveFilterSource : uint8_t;
+
 enum class AggregateCombineType : uint8_t;
 
 enum class AggregateDistinctDependent : uint8_t;
@@ -106,6 +108,8 @@ enum class CSVState : uint8_t;
 
 enum class CTEMaterialize : uint8_t;
 
+enum class CacheBlockState : uint8_t;
+
 enum class CacheValidationMode : uint8_t;
 
 enum class CachingMode : uint8_t;
@@ -116,13 +120,19 @@ enum class CatalogType : uint8_t;
 
 enum class CheckpointAbort : uint8_t;
 
+enum class CheckpointOnDetach : uint8_t;
+
 enum class ChunkInfoType : uint8_t;
+
+enum class ClientInterruptState : uint8_t;
 
 enum class ColumnDataAllocatorType : uint8_t;
 
 enum class ColumnDataScanProperties : uint8_t;
 
 enum class ColumnIndexType : uint8_t;
+
+enum class ColumnSegmentInfoScanType : uint8_t;
 
 enum class ColumnSegmentType : uint8_t;
 
@@ -138,6 +148,8 @@ enum class ConstraintType : uint8_t;
 
 enum class CoordinateReferenceSystemType : uint8_t;
 
+enum class CopyFunctionFlushBatchReason : uint8_t;
+
 enum class CopyFunctionReturnType : uint8_t;
 
 enum class CopyOverwriteMode : uint8_t;
@@ -152,7 +164,11 @@ enum class DatePartSpecifier : uint8_t;
 
 enum class DebugInitialize : uint8_t;
 
+enum class DebugStatementVerification : uint8_t;
+
 enum class DebugVectorVerification : uint8_t;
+
+enum class DebugVerificationMode : uint8_t;
 
 enum class DecimalBitWidth : uint8_t;
 
@@ -248,6 +264,8 @@ enum class JoinRefType : uint8_t;
 
 enum class JoinType : uint8_t;
 
+enum class KeywordCase : uint8_t;
+
 enum class KeywordCategory : uint8_t;
 
 enum class LambdaSyntax : uint8_t;
@@ -288,6 +306,8 @@ enum class MetricGroup : uint8_t;
 
 enum class MetricType : uint8_t;
 
+enum class Monotonicity : uint8_t;
+
 enum class MultiFileColumnMappingMode : uint8_t;
 
 enum class MultiFileFileState : uint8_t;
@@ -326,7 +346,11 @@ enum class OrdinalityType : uint8_t;
 
 enum class OutputStream : uint8_t;
 
+enum class PEGKeywordCategory : uint8_t;
+
 enum class ParseInfoType : uint8_t;
+
+enum class ParseResultType : uint8_t;
 
 enum class ParserExtensionResultType : uint8_t;
 
@@ -370,6 +394,10 @@ enum class QueryResultType : uint8_t;
 
 enum class RecoveryMode : uint8_t;
 
+enum class RecursiveCTEInlineStageType : uint8_t;
+
+enum class RecursiveProbeSidePreference : uint8_t;
+
 enum class RelationType : uint8_t;
 
 enum class RenderMode : uint8_t;
@@ -377,6 +405,8 @@ enum class RenderMode : uint8_t;
 enum class RequestType : uint8_t;
 
 enum class ResultModifierType : uint8_t;
+
+enum class RowGroupAppendMode : uint8_t;
 
 enum class SampleMethod : uint8_t;
 
@@ -440,9 +470,13 @@ enum class StreamExecutionResult : uint8_t;
 
 enum class SubqueryType : uint8_t;
 
+enum class SuggestionState : uint8_t;
+
 enum class TableColumnType : uint8_t;
 
 enum class TableFilterType : uint8_t;
+
+enum class TableFunctionParallelism : uint8_t;
 
 enum class TablePartitionInfo : uint8_t;
 
@@ -459,6 +493,8 @@ enum class TemporaryCompressionLevel : int;
 enum class ThreadPinMode : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
+
+enum class TransactionInvalidationPolicy : uint8_t;
 
 enum class TransactionModifierType : uint8_t;
 
@@ -488,13 +524,9 @@ enum class VariantStatsShreddingState : uint8_t;
 
 enum class VariantValueType : uint8_t;
 
-enum class VectorAuxiliaryDataType : uint8_t;
-
 enum class VectorBufferType : uint8_t;
 
 enum class VectorType : uint8_t;
-
-enum class VerificationType : uint8_t;
 
 enum class VerifyExistenceType : uint8_t;
 
@@ -525,6 +557,9 @@ const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
+
+template<>
+const char* EnumUtil::ToChars<AdaptiveFilterSource>(AdaptiveFilterSource value);
 
 template<>
 const char* EnumUtil::ToChars<AggregateCombineType>(AggregateCombineType value);
@@ -623,6 +658,9 @@ template<>
 const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
 
 template<>
+const char* EnumUtil::ToChars<CacheBlockState>(CacheBlockState value);
+
+template<>
 const char* EnumUtil::ToChars<CacheValidationMode>(CacheValidationMode value);
 
 template<>
@@ -638,7 +676,13 @@ template<>
 const char* EnumUtil::ToChars<CheckpointAbort>(CheckpointAbort value);
 
 template<>
+const char* EnumUtil::ToChars<CheckpointOnDetach>(CheckpointOnDetach value);
+
+template<>
 const char* EnumUtil::ToChars<ChunkInfoType>(ChunkInfoType value);
+
+template<>
+const char* EnumUtil::ToChars<ClientInterruptState>(ClientInterruptState value);
 
 template<>
 const char* EnumUtil::ToChars<ColumnDataAllocatorType>(ColumnDataAllocatorType value);
@@ -648,6 +692,9 @@ const char* EnumUtil::ToChars<ColumnDataScanProperties>(ColumnDataScanProperties
 
 template<>
 const char* EnumUtil::ToChars<ColumnIndexType>(ColumnIndexType value);
+
+template<>
+const char* EnumUtil::ToChars<ColumnSegmentInfoScanType>(ColumnSegmentInfoScanType value);
 
 template<>
 const char* EnumUtil::ToChars<ColumnSegmentType>(ColumnSegmentType value);
@@ -671,6 +718,9 @@ template<>
 const char* EnumUtil::ToChars<CoordinateReferenceSystemType>(CoordinateReferenceSystemType value);
 
 template<>
+const char* EnumUtil::ToChars<CopyFunctionFlushBatchReason>(CopyFunctionFlushBatchReason value);
+
+template<>
 const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType value);
 
 template<>
@@ -692,7 +742,13 @@ template<>
 const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value);
 
 template<>
+const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value);
+
+template<>
 const char* EnumUtil::ToChars<DebugVectorVerification>(DebugVectorVerification value);
+
+template<>
+const char* EnumUtil::ToChars<DebugVerificationMode>(DebugVerificationMode value);
 
 template<>
 const char* EnumUtil::ToChars<DecimalBitWidth>(DecimalBitWidth value);
@@ -836,6 +892,9 @@ template<>
 const char* EnumUtil::ToChars<JoinType>(JoinType value);
 
 template<>
+const char* EnumUtil::ToChars<KeywordCase>(KeywordCase value);
+
+template<>
 const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value);
 
 template<>
@@ -896,6 +955,9 @@ template<>
 const char* EnumUtil::ToChars<MetricType>(MetricType value);
 
 template<>
+const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
+
+template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
 
 template<>
@@ -953,7 +1015,13 @@ template<>
 const char* EnumUtil::ToChars<OutputStream>(OutputStream value);
 
 template<>
+const char* EnumUtil::ToChars<PEGKeywordCategory>(PEGKeywordCategory value);
+
+template<>
 const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value);
+
+template<>
+const char* EnumUtil::ToChars<ParseResultType>(ParseResultType value);
 
 template<>
 const char* EnumUtil::ToChars<ParserExtensionResultType>(ParserExtensionResultType value);
@@ -1019,6 +1087,12 @@ template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
 
 template<>
+const char* EnumUtil::ToChars<RecursiveCTEInlineStageType>(RecursiveCTEInlineStageType value);
+
+template<>
+const char* EnumUtil::ToChars<RecursiveProbeSidePreference>(RecursiveProbeSidePreference value);
+
+template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
 
 template<>
@@ -1029,6 +1103,9 @@ const char* EnumUtil::ToChars<RequestType>(RequestType value);
 
 template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
+
+template<>
+const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value);
 
 template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
@@ -1124,10 +1201,16 @@ template<>
 const char* EnumUtil::ToChars<SubqueryType>(SubqueryType value);
 
 template<>
+const char* EnumUtil::ToChars<SuggestionState>(SuggestionState value);
+
+template<>
 const char* EnumUtil::ToChars<TableColumnType>(TableColumnType value);
 
 template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value);
+
+template<>
+const char* EnumUtil::ToChars<TableFunctionParallelism>(TableFunctionParallelism value);
 
 template<>
 const char* EnumUtil::ToChars<TablePartitionInfo>(TablePartitionInfo value);
@@ -1152,6 +1235,9 @@ const char* EnumUtil::ToChars<ThreadPinMode>(ThreadPinMode value);
 
 template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
+
+template<>
+const char* EnumUtil::ToChars<TransactionInvalidationPolicy>(TransactionInvalidationPolicy value);
 
 template<>
 const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value);
@@ -1196,16 +1282,10 @@ template<>
 const char* EnumUtil::ToChars<VariantValueType>(VariantValueType value);
 
 template<>
-const char* EnumUtil::ToChars<VectorAuxiliaryDataType>(VectorAuxiliaryDataType value);
-
-template<>
 const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value);
 
 template<>
 const char* EnumUtil::ToChars<VectorType>(VectorType value);
-
-template<>
-const char* EnumUtil::ToChars<VerificationType>(VerificationType value);
 
 template<>
 const char* EnumUtil::ToChars<VerifyExistenceType>(VerifyExistenceType value);
@@ -1243,6 +1323,9 @@ ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
+
+template<>
+AdaptiveFilterSource EnumUtil::FromString<AdaptiveFilterSource>(const char *value);
 
 template<>
 AggregateCombineType EnumUtil::FromString<AggregateCombineType>(const char *value);
@@ -1341,6 +1424,9 @@ template<>
 CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value);
 
 template<>
+CacheBlockState EnumUtil::FromString<CacheBlockState>(const char *value);
+
+template<>
 CacheValidationMode EnumUtil::FromString<CacheValidationMode>(const char *value);
 
 template<>
@@ -1356,7 +1442,13 @@ template<>
 CheckpointAbort EnumUtil::FromString<CheckpointAbort>(const char *value);
 
 template<>
+CheckpointOnDetach EnumUtil::FromString<CheckpointOnDetach>(const char *value);
+
+template<>
 ChunkInfoType EnumUtil::FromString<ChunkInfoType>(const char *value);
+
+template<>
+ClientInterruptState EnumUtil::FromString<ClientInterruptState>(const char *value);
 
 template<>
 ColumnDataAllocatorType EnumUtil::FromString<ColumnDataAllocatorType>(const char *value);
@@ -1366,6 +1458,9 @@ ColumnDataScanProperties EnumUtil::FromString<ColumnDataScanProperties>(const ch
 
 template<>
 ColumnIndexType EnumUtil::FromString<ColumnIndexType>(const char *value);
+
+template<>
+ColumnSegmentInfoScanType EnumUtil::FromString<ColumnSegmentInfoScanType>(const char *value);
 
 template<>
 ColumnSegmentType EnumUtil::FromString<ColumnSegmentType>(const char *value);
@@ -1389,6 +1484,9 @@ template<>
 CoordinateReferenceSystemType EnumUtil::FromString<CoordinateReferenceSystemType>(const char *value);
 
 template<>
+CopyFunctionFlushBatchReason EnumUtil::FromString<CopyFunctionFlushBatchReason>(const char *value);
+
+template<>
 CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *value);
 
 template<>
@@ -1410,7 +1508,13 @@ template<>
 DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value);
 
 template<>
+DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value);
+
+template<>
 DebugVectorVerification EnumUtil::FromString<DebugVectorVerification>(const char *value);
+
+template<>
+DebugVerificationMode EnumUtil::FromString<DebugVerificationMode>(const char *value);
 
 template<>
 DecimalBitWidth EnumUtil::FromString<DecimalBitWidth>(const char *value);
@@ -1554,6 +1658,9 @@ template<>
 JoinType EnumUtil::FromString<JoinType>(const char *value);
 
 template<>
+KeywordCase EnumUtil::FromString<KeywordCase>(const char *value);
+
+template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value);
 
 template<>
@@ -1614,6 +1721,9 @@ template<>
 MetricType EnumUtil::FromString<MetricType>(const char *value);
 
 template<>
+Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);
+
+template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);
 
 template<>
@@ -1671,7 +1781,13 @@ template<>
 OutputStream EnumUtil::FromString<OutputStream>(const char *value);
 
 template<>
+PEGKeywordCategory EnumUtil::FromString<PEGKeywordCategory>(const char *value);
+
+template<>
 ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value);
+
+template<>
+ParseResultType EnumUtil::FromString<ParseResultType>(const char *value);
 
 template<>
 ParserExtensionResultType EnumUtil::FromString<ParserExtensionResultType>(const char *value);
@@ -1737,6 +1853,12 @@ template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
 
 template<>
+RecursiveCTEInlineStageType EnumUtil::FromString<RecursiveCTEInlineStageType>(const char *value);
+
+template<>
+RecursiveProbeSidePreference EnumUtil::FromString<RecursiveProbeSidePreference>(const char *value);
+
+template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);
 
 template<>
@@ -1747,6 +1869,9 @@ RequestType EnumUtil::FromString<RequestType>(const char *value);
 
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
+
+template<>
+RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);
@@ -1842,10 +1967,16 @@ template<>
 SubqueryType EnumUtil::FromString<SubqueryType>(const char *value);
 
 template<>
+SuggestionState EnumUtil::FromString<SuggestionState>(const char *value);
+
+template<>
 TableColumnType EnumUtil::FromString<TableColumnType>(const char *value);
 
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value);
+
+template<>
+TableFunctionParallelism EnumUtil::FromString<TableFunctionParallelism>(const char *value);
 
 template<>
 TablePartitionInfo EnumUtil::FromString<TablePartitionInfo>(const char *value);
@@ -1870,6 +2001,9 @@ ThreadPinMode EnumUtil::FromString<ThreadPinMode>(const char *value);
 
 template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
+
+template<>
+TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value);
 
 template<>
 TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value);
@@ -1914,16 +2048,10 @@ template<>
 VariantValueType EnumUtil::FromString<VariantValueType>(const char *value);
 
 template<>
-VectorAuxiliaryDataType EnumUtil::FromString<VectorAuxiliaryDataType>(const char *value);
-
-template<>
 VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value);
 
 template<>
 VectorType EnumUtil::FromString<VectorType>(const char *value);
-
-template<>
-VerificationType EnumUtil::FromString<VerificationType>(const char *value);
 
 template<>
 VerifyExistenceType EnumUtil::FromString<VerifyExistenceType>(const char *value);

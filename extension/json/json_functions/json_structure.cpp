@@ -287,13 +287,13 @@ void JSONStructureNode::EliminateCandidateTypes(const idx_t vec_count, Vector &s
 }
 
 template <class OP, class T>
-bool TryParse(Vector &string_vector, StrpTimeFormat &format, const idx_t count) {
+bool TryParse(const Vector &string_vector, StrpTimeFormat &format, const idx_t count) {
 	const auto strings = FlatVector::GetData<string_t>(string_vector);
 	const auto &validity = FlatVector::Validity(string_vector);
 
 	T result;
 	string error_message;
-	if (validity.AllValid()) {
+	if (validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			if (!OP::template Operation<T>(format, strings[i], result, error_message)) {
 				return false;
@@ -517,7 +517,7 @@ static yyjson_mut_val *ConvertStructure(const JSONStructureNode &node, yyjson_mu
 	}
 }
 
-static string_t JSONStructureFunction(yyjson_val *val, yyjson_alc *alc, Vector &, ValidityMask &, idx_t) {
+static optional<string_t> JSONStructureFunction(yyjson_val *val, yyjson_alc *alc, Vector &) {
 	return JSONCommon::WriteVal<yyjson_mut_val>(
 	    ConvertStructure(ExtractStructureInternal(val, true), yyjson_mut_doc_new(alc)), alc);
 }
@@ -527,13 +527,16 @@ static void StructureFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type}, LogicalType::JSON(), StructureFunction, nullptr, nullptr, nullptr,
+	set.AddFunction(ScalarFunction({input_type}, LogicalType::JSON(), StructureFunction, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	ScalarFunctionSet set("json_structure");
 	GetStructureFunctionInternal(set, LogicalType::VARCHAR);
+	for (auto &func : set.functions) {
+		func.SetFallible();
+	}
 	GetStructureFunctionInternal(set, LogicalType::JSON());
 	return set;
 }

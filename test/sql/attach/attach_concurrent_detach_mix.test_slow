@@ -7,22 +7,22 @@ concurrentloop i 0 40
 loop k 0 10
 
 statement maybe
-ATTACH IF NOT EXISTS '__TEST_DIR__/attach_mix_${k}.db'
+ATTACH IF NOT EXISTS '{TEST_DIR}/attach_mix_{k}.db'
 ----
 Unique file handle conflict
 
 onlyif i<20
 statement maybe
-CREATE TABLE attach_mix_${k}.tbl${i} AS SELECT * FROM range(${k} * ${i}) t(i)
+CREATE TABLE attach_mix_{k}.tbl{i} AS SELECT * FROM range({k} * {i}) t(i)
 ----
 
 onlyif i>=20
 statement maybe
-SELECT COUNT(*) FROM attach_mix_${k}.tbl${k}
+SELECT COUNT(*) FROM attach_mix_{k}.tbl{k}
 ----
 
 statement maybe
-DETACH attach_mix_${k}
+DETACH attach_mix_{k}
 ----
 database not found
 

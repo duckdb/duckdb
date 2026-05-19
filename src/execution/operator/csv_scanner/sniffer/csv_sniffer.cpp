@@ -122,7 +122,7 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 	for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
 		auto &cur_vector = data_chunk.data[col_idx];
 		const auto vector_data = FlatVector::GetData<string_t>(cur_vector);
-		auto &validity = FlatVector::Validity(cur_vector);
+		auto &validity = FlatVector::ValidityMutable(cur_vector);
 		HeaderValue val;
 		if (validity.RowIsValid(0)) {
 			val = HeaderValue(vector_data[0]);

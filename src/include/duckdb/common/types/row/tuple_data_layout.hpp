@@ -123,8 +123,11 @@ public:
 		return aggr_destructor_idxs;
 	}
 	//! Returns whether none of the columns have NULLs
-	inline bool AllValid() const {
+	inline bool CannotHaveNull() const {
 		return validity_type == TupleDataValidityType::CANNOT_HAVE_NULL_VALUES;
+	}
+	inline bool CanHaveNull() const {
+		return validity_type != TupleDataValidityType::CANNOT_HAVE_NULL_VALUES;
 	}
 
 private:

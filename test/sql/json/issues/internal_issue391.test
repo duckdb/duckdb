@@ -5,9 +5,6 @@
 require json
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table test as select {i: range}::JSON j from range(10)
 
 query II

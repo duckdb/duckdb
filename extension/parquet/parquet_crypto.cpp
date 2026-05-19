@@ -1,7 +1,8 @@
 #include "parquet_crypto.hpp"
 
-#include "mbedtls_wrapper.hpp"
-#include "thrift_tools.hpp"
+#include <string.h>
+#include <memory>
+#include <utility>
 
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/helper.hpp"
@@ -9,9 +10,28 @@
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/encryption_state.hpp"
+#include "duckdb/common/encryption_types.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/original/std/memory.hpp"
+#include "thrift/TBase.h"
+#include "thrift/protocol/TCompactProtocol.h"
+#include "thrift/protocol/TProtocol.h"
+#include "thrift/transport/TTransport.h"
+
+namespace duckdb {
+class ClientContext;
+} // namespace duckdb
 
 using duckdb_parquet::ColumnChunk;
-class Allocator;
 
 namespace duckdb {
 
@@ -495,9 +515,9 @@ int16_t ParquetCrypto::GetFinalPageOrdinal(const ColumnChunk &chunk, uint8_t mod
 		} else if (chunk.meta_data.__isset.bloom_filter_offset) {
 			page_ordinal -= 1;
 		}
-		return page_ordinal;
+		return NumericCast<int16_t>(page_ordinal);
 	case DATA_PAGE:
-		return page_ordinal;
+		return NumericCast<int16_t>(page_ordinal);
 	default:
 		// All modules except DataPage(Header) are -1 (absent)
 		return -1;

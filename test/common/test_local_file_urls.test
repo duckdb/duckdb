@@ -1,16 +1,16 @@
 # name: test/common/test_local_file_urls.test
 # group: [common]
 
-# Note: __WORKING_DIRECTORY__ will be replaced with the full path to the working dir of the tests (root of duckdb repo)
+# Note: {WORKING_DIRECTORY} will be replaced with the full path to the working dir of the tests (root of duckdb repo)
 
 statement ok
-SET VARIABLE work_dir_no_host='file:/' || ltrim(replace('__WORKING_DIRECTORY__', '\', '/'), '/')
+SET VARIABLE work_dir_no_host='file:/' || ltrim(replace('{WORKING_DIRECTORY}', '\', '/'), '/')
 
 statement ok
-SET VARIABLE work_dir_triple_slash='file:///' || ltrim(replace('__WORKING_DIRECTORY__', '\', '/'), '/')
+SET VARIABLE work_dir_triple_slash='file:///' || ltrim(replace('{WORKING_DIRECTORY}', '\', '/'), '/')
 
 statement ok
-SET VARIABLE work_dir_localhost='file://localhost/' || ltrim(replace('__WORKING_DIRECTORY__', '\', '/'), '/')
+SET VARIABLE work_dir_localhost='file://localhost/' || ltrim(replace('{WORKING_DIRECTORY}', '\', '/'), '/')
 
 # testing file:/some/path/to/duckdb/repo
 query II
@@ -93,6 +93,6 @@ secret_file_url_localhost
 
 # raw paths now do not match
 query I
-SELECT name FROM which_secret('__WORKING_DIRECTORY__/data/csv/hive-partitioning/simple/*/*/test.csv', 'http')
+SELECT name FROM which_secret('{WORKING_DIRECTORY}/data/csv/hive-partitioning/simple/*/*/test.csv', 'http')
 ----
 secret_without_file_path

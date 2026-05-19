@@ -17,6 +17,7 @@
 namespace duckdb {
 class ColumnData;
 class DataTable;
+class DuckTableEntry;
 class Vector;
 struct UpdateInfo;
 struct UpdateNode;
@@ -38,8 +39,8 @@ public:
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);
 	void FetchCommittedRange(idx_t start_row, idx_t count, Vector &result);
-	void Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update, row_t *ids,
-	            idx_t count, Vector &base_data, idx_t row_group_start);
+	void Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index, Vector &update,
+	            row_t *ids, idx_t count, Vector &base_data, idx_t row_group_start);
 	void FetchRow(TransactionData transaction, idx_t row_id, Vector &result, idx_t result_idx);
 
 	void RollbackUpdate(UpdateInfo &info);
@@ -100,6 +101,7 @@ private:
 	void InitializeUpdateInfo(idx_t vector_idx);
 	void InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const SelectionVector &sel, idx_t count, idx_t vector_index,
 	                          idx_t vector_offset);
+	void ReallocateRootInfoIfNeeded(UpdateInfo &current_info, idx_t update_count, idx_t vector_index);
 };
 
 struct UpdateNode {

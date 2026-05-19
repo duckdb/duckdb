@@ -384,7 +384,7 @@ static idx_t GetFileUrlOffset(const string &path) {
 #endif
 	}
 
-	// unkown file:/ url format
+	// unknown file:/ url format
 	return 0;
 }
 
@@ -767,7 +767,7 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 
 int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
+		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_WRITTEN, nr_bytes);
 	}
 
 	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));

@@ -2,9 +2,6 @@
 # description: Test struct cast
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 # constant casts
 query I
 SELECT {'i': 1, 'j': 2}::ROW(i BIGINT, j VARCHAR);

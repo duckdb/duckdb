@@ -4,6 +4,7 @@
 #include "duckdb/function/register_function_list_helper.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_window_function_info.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 
 namespace duckdb {
@@ -73,6 +74,17 @@ static void RegisterFunctionList(REGISTER_CONTEXT &context, const StaticFunction
 			}
 			result.name = function.name;
 			CreateAggregateFunctionInfo info(result);
+			FillExtraInfo<OP>(function, info);
+			OP::RegisterFunction(context, info);
+		} else if (function.get_window_function || function.get_window_function_set) {
+			WindowFunctionSet result;
+			if (function.get_window_function) {
+				result.AddFunction(function.get_window_function());
+			} else {
+				result = function.get_window_function_set();
+			}
+			result.name = function.name;
+			CreateWindowFunctionInfo info(result);
 			FillExtraInfo<OP>(function, info);
 			OP::RegisterFunction(context, info);
 		} else {

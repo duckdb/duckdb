@@ -62,6 +62,8 @@ public:
 	optional_idx ordinality_idx;
 	//! Row group order options (if set)
 	unique_ptr<RowGroupOrderOptions> row_group_order_options;
+	//! Partition indices to scan, empty means scan all
+	vector<idx_t> scan_partition_indices;
 
 	string GetName() const override;
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
@@ -76,14 +78,16 @@ public:
 
 public:
 	void SetColumnIds(vector<ColumnIndex> &&column_ids);
-	void AddColumnId(column_t column_id);
+	ProjectionIndex AddColumnId(column_t column_id);
 	void ClearColumnIds();
+	ProjectionIndex TryGetProjectionIndex(idx_t col_idx) const;
 	const vector<ColumnIndex> &GetColumnIds() const;
 	vector<ColumnIndex> &GetMutableColumnIds();
 	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 	bool TryGetStorageIndex(const ColumnIndex &column_index, StorageIndex &out_index) const;
 	void SetScanOrder(unique_ptr<RowGroupOrderOptions> options);
+	void SetPartitionsToScan(vector<idx_t> partition_indices);
 
 	vector<TableIndex> GetTableIndex() const override;
 	//! Skips the serialization check in VerifyPlan

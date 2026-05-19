@@ -133,7 +133,7 @@ FullSortLocalSinkState::FullSortLocalSinkState(ExecutionContext &context, const 
     : full_sort(full_sort), sort_exec(context.client) {
 	vector<LogicalType> sort_types;
 	for (const auto &expr : full_sort.sort_exprs) {
-		sort_types.emplace_back(expr->return_type);
+		sort_types.emplace_back(expr->GetReturnType());
 		sort_exec.AddExpression(*expr);
 	}
 	sort_chunk.Initialize(context.client, sort_types);
@@ -173,8 +173,7 @@ SinkResultType FullSort::Sink(ExecutionContext &context, DataChunk &input_chunk,
 	if (force_payload) {
 		auto &vec = payload_chunk.data[input_chunk.ColumnCount() + sort_chunk.ColumnCount()];
 		D_ASSERT(vec.GetType().id() == LogicalTypeId::BOOLEAN);
-		vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(vec, true);
+		ConstantVector::SetNull(vec, count_t(input_chunk.size()));
 	}
 
 	payload_chunk.SetCardinality(input_chunk);
@@ -257,7 +256,7 @@ FullSort::FullSort(ClientContext &client, const vector<BoundOrderByNode> &order_
 
 		//	Real expression - replace with a ref and save the expression
 		auto saved = std::move(order.expression);
-		const auto type = saved->return_type;
+		const auto type = saved->GetReturnType();
 		const auto idx = payload_types.size();
 		order.expression = make_uniq<BoundReferenceExpression>(type, idx);
 		sort_ids.emplace_back(idx);

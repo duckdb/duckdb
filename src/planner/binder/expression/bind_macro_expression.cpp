@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
@@ -123,9 +124,22 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 		window_expr.schema = macro_expr.schema;
 		window_expr.function_name = macro_expr.function_name;
 		window_expr.children = std::move(macro_expr.children);
-		window_expr.distinct = macro_expr.distinct;
-		window_expr.filter_expr = std::move(macro_expr.filter);
-		// TODO: transfer order_bys when window functions support them
+		if (!window_expr.distinct) {
+			window_expr.distinct = macro_expr.distinct;
+		}
+		if (window_expr.filter_expr && macro_expr.filter) {
+			// Two FILTER clauses: combine
+			window_expr.filter_expr = make_uniq<ConjunctionExpression>(
+			    ExpressionType::CONJUNCTION_AND, std::move(window_expr.filter_expr), std::move(macro_expr.filter));
+		} else if (macro_expr.filter) {
+			//	One FILTER from the MACRO
+			window_expr.filter_expr = std::move(macro_expr.filter);
+		}
+		// Transfer argument ORDER BYs
+		if (macro_expr.order_bys) {
+			auto clone = macro_expr.order_bys->Copy();
+			window_expr.arg_orders = std::move(clone->Cast<OrderModifier>().orders);
+		}
 	} else {
 		expr = macro_def.expression->Copy();
 	}

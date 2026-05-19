@@ -159,4 +159,17 @@ public:
 	                                  transaction_t transaction_id = MAX_TRANSACTION_ID);
 };
 
+class AdaptiveFilterLogType : public LogType {
+public:
+	static constexpr const char *NAME = "AdaptiveFilter";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
+
+	AdaptiveFilterLogType();
+
+	static LogicalType GetLogType();
+
+	static string ConstructLogMessage(const char *event, const string &file_path, const vector<idx_t> &permutation,
+	                                  const vector<pair<string, string>> &info);
+};
+
 } // namespace duckdb

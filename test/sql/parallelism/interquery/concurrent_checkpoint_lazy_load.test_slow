@@ -1,0 +1,32 @@
+# name: test/sql/parallelism/interquery/concurrent_checkpoint_lazy_load.test_slow
+# group: [interquery]
+
+load {TEST_DIR}/concurrent_checkpoint_lazy_load.db
+
+# create a table with many columns
+
+statement ok
+CREATE TABLE wide_table AS
+SELECT i col0, i col1, i col2, i col3, i col4, i col5, i col6, i col7, i col8, i col9, i col10, i col11, i col12, i col13, i col14, i col15, i col16, i col17, i col18, i col19, i col20, i col21, i col22, i col23, i col24, i col25, i col26, i col27, i col28, i col29, i col30, i col31, i col32, i col33, i col34, i col35, i col36, i col37, i col38, i col39, i col40, i col41, i col42, i col43, i col44, i col45, i col46, i col47, i col48, i col49, i col50, i col51, i col52, i col53, i col54, i col55, i col56, i col57, i col58, i col59, i col60, i col61, i col62, i col63, i col64, i col65, i col66, i col67, i col68, i col69, i col70, i col71, i col72, i col73, i col74, i col75, i col76, i col77, i col78, i col79, i col80, i col81, i col82, i col83, i col84, i col85, i col86, i col87, i col88, i col89, i col90, i col91, i col92, i col93, i col94, i col95, i col96, i col97, i col98, i col99
+FROM range(1_000_000) t(i)
+
+# restart to force everything to be unloaded
+restart
+
+statement ok
+INSERT INTO wide_table DEFAULT VALUES
+
+concurrentloop i 0 101
+
+# every connection except the last one queries one of the columns
+onlyif i<>100
+query II
+SELECT MIN(col{i}), MAX(col{i}) FROM wide_table
+----
+0	999999
+
+onlyif i=100
+statement ok
+CHECKPOINT
+
+endloop

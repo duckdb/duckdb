@@ -20,10 +20,6 @@ public:
 	DUCKDB_API BetweenExpression(unique_ptr<ParsedExpression> input, unique_ptr<ParsedExpression> lower,
 	                             unique_ptr<ParsedExpression> upper);
 
-	unique_ptr<ParsedExpression> input;
-	unique_ptr<ParsedExpression> lower;
-	unique_ptr<ParsedExpression> upper;
-
 public:
 	string ToString() const override;
 
@@ -34,14 +30,37 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
+	const ParsedExpression &Input() const {
+		return *input;
+	}
+	const ParsedExpression &LowerBound() const {
+		return *lower;
+	}
+	const ParsedExpression &UpperBound() const {
+		return *upper;
+	}
+	unique_ptr<ParsedExpression> &InputMutable() {
+		return input;
+	}
+	unique_ptr<ParsedExpression> &LowerBoundMutable() {
+		return lower;
+	}
+	unique_ptr<ParsedExpression> &UpperBoundMutable() {
+		return upper;
+	}
+
 public:
-	template <class T, class BASE>
-	static string ToString(const T &entry) {
-		return "(" + entry.input->ToString() + " BETWEEN " + entry.lower->ToString() + " AND " +
-		       entry.upper->ToString() + ")";
+	template <class T>
+	static string ToString(const T &input, const T &lower, const T &upper) {
+		return "(" + input.ToString() + " BETWEEN " + lower.ToString() + " AND " + upper.ToString() + ")";
 	}
 
 private:
 	BetweenExpression();
+
+private:
+	unique_ptr<ParsedExpression> input;
+	unique_ptr<ParsedExpression> lower;
+	unique_ptr<ParsedExpression> upper;
 };
 } // namespace duckdb

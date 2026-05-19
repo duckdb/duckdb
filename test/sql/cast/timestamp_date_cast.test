@@ -3,9 +3,6 @@
 # group: [cast]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table test as
 select '2021-02-04 19:30:00'::timestamp t;
 
@@ -30,7 +27,7 @@ foreach source TIMESTAMP TIMESTAMP_S TIMESTAMP_MS TIMESTAMP_NS
 query I
 WITH t AS (
     SELECT
-        '2020-09-13 00:30:00'::${source} AS a,
+        '2020-09-13 00:30:00'::{source} AS a,
 )
 SELECT
     a::DATE = '2020-09-13'::DATE,

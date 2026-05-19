@@ -2,7 +2,7 @@
 # description: Test eviction queue behavior during transactions
 # group: [table_function]
 
-load __TEST_DIR__/eviction_queues_txn.db
+load {TEST_DIR}/eviction_queues_txn.db
 
 statement ok
 CREATE MACRO fudge() AS (20);

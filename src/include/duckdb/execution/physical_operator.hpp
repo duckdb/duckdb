@@ -34,6 +34,7 @@ class PipelineBuildState;
 class MetaPipeline;
 class PhysicalPlan;
 
+enum class TableFunctionParallelism : uint8_t;
 enum class OperatorCachingMode : uint8_t { NONE, PARTITIONED, ORDERED, UNORDERED };
 
 //! PhysicalOperator is the base class of the physical operators present in the execution plan.
@@ -96,6 +97,7 @@ public:
 	// Operator interface
 	virtual unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const;
+	virtual bool ResetGlobalOperatorState(ClientContext &context, GlobalOperatorState &state) const;
 	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                   GlobalOperatorState &gstate, OperatorState &state) const;
 	virtual OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk,
@@ -144,6 +146,9 @@ public:
 	virtual bool ParallelSource() const {
 		return false;
 	}
+
+	//! How this source manages parallelism
+	virtual TableFunctionParallelism SourceParallelism() const;
 
 	virtual bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
 		if (partition_info.AnyRequired()) {
@@ -253,6 +258,14 @@ public:
 	}
 
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
+	}
+
+	void ResetCachingState() {
+		cached_chunk.reset();
+		initialized = false;
+		can_cache_chunk = OperatorCachingMode::NONE;
+		must_return_continuation_chunk = false;
+		cached_result = OperatorResultType::NEED_MORE_INPUT;
 	}
 
 	unique_ptr<DataChunk> cached_chunk;

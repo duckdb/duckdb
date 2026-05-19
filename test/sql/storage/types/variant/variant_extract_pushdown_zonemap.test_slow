@@ -1,0 +1,19 @@
+# name: test/sql/storage/types/variant/variant_extract_pushdown_zonemap.test_slow
+# group: [variant]
+
+load {TEST_DIR}/variant_extract_pushdown.test readwrite v1.5.0
+
+statement ok
+SET variant_minimum_shredding_size = 0;
+
+statement ok
+CREATE TABLE variant_extract_pushdown(v VARIANT);
+
+statement ok
+INSERT INTO variant_extract_pushdown
+SELECT {'x': i, 'y': i * 100, 'z': i * 10000}::VARIANT FROM range(1_000_000) t(i)
+
+query I
+SELECT COUNT(*) FROM variant_extract_pushdown WHERE v.x::BIGINT=5
+----
+1

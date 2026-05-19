@@ -30,7 +30,7 @@ public:
 	//! Whether or not the table is temporary
 	bool IsTemporary() const;
 
-	AttachedDatabase &GetDB() {
+	AttachedDatabase &GetDB() const {
 		return db;
 	}
 
@@ -47,6 +47,7 @@ public:
 		return checkpoint_lock.GetSharedLock();
 	}
 	bool AppendRequiresNewRowGroup(RowGroupCollection &collection, transaction_t checkpoint_id);
+	optional_idx CheckpointRowGroupCount(const CheckpointOptions &options) const;
 	void VerifyIndexBuffers();
 
 	string GetSchemaName();

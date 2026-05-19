@@ -3,9 +3,6 @@
 # group: [string]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);
 
 statement ok
@@ -15,7 +12,7 @@ foreach FUN substring substring_grapheme
 
 # test zero length
 query TT
-SELECT ${FUN}('🦆ab', 1, 0), ${FUN}('abc', 1, 0)
+SELECT {FUN}('🦆ab', 1, 0), {FUN}('abc', 1, 0)
 ----
 (empty)	(empty)
 
@@ -148,7 +145,7 @@ NULL
 
 # negative length
 query T
-SELECT ${FUN}(s, 2, -2) FROM strings
+SELECT {FUN}(s, 2, -2) FROM strings
 ----
 h
 w
@@ -157,7 +154,7 @@ NULL
 
 # negative offset and negative length
 query T
-SELECT ${FUN}(s, -2, -2) FROM strings
+SELECT {FUN}(s, -2, -2) FROM strings
 ----
 el
 or
@@ -166,7 +163,7 @@ NULL
 
 # length 0
 query T
-SELECT ${FUN}(s, 2, 0) FROM strings
+SELECT {FUN}(s, 2, 0) FROM strings
 ----
 (empty)
 (empty)
@@ -175,7 +172,7 @@ NULL
 
 # no length
 query T
-SELECT ${FUN}(s, 2) FROM strings
+SELECT {FUN}(s, 2) FROM strings
 ----
 ello
 orld
@@ -183,7 +180,7 @@ orld
 NULL
 
 query T
-SELECT ${FUN}(${FUN}(s, 2), 2) FROM strings
+SELECT {FUN}({FUN}(s, 2), 2) FROM strings
 ----
 llo
 rld
@@ -192,7 +189,7 @@ NULL
 
 # very large offset and length
 query T
-SELECT ${FUN}(s, 2147483647, 2147483647) FROM strings
+SELECT {FUN}(s, 2147483647, 2147483647) FROM strings
 ----
 (empty)
 (empty)
@@ -200,15 +197,7 @@ SELECT ${FUN}(s, 2147483647, 2147483647) FROM strings
 NULL
 
 query T
-SELECT ${FUN}(s, 2147483647, -2147483648) FROM strings
-----
-hello
-world
-b
-NULL
-
-query T
-SELECT ${FUN}(s, -2147483647, 2147483647) FROM strings
+SELECT {FUN}(s, 2147483647, -2147483648) FROM strings
 ----
 hello
 world
@@ -216,7 +205,15 @@ b
 NULL
 
 query T
-SELECT ${FUN}(s, -2147483648, -2147483648) FROM strings
+SELECT {FUN}(s, -2147483647, 2147483647) FROM strings
+----
+hello
+world
+b
+NULL
+
+query T
+SELECT {FUN}(s, -2147483648, -2147483648) FROM strings
 ----
 (empty)
 (empty)
@@ -225,23 +222,23 @@ NULL
 
 # Issue #2553 - accept BIGINT arguments
 query I
-SELECT ${FUN}('abc', INSTR('abc', 'b'));
+SELECT {FUN}('abc', INSTR('abc', 'b'));
 ----
 bc
 
 # Issue #4978 - substring integer overflow
 query I
-SELECT ${FUN}('a', -1)
+SELECT {FUN}('a', -1)
 ----
 a
 
 query I
-SELECT ${FUN}('abcd', -1)
+SELECT {FUN}('abcd', -1)
 ----
 d
 
 query I
-SELECT ${FUN}('abcd', -7)
+SELECT {FUN}('abcd', -7)
 ----
 abcd
 
@@ -250,53 +247,53 @@ abcd
 # length calculations within a 64-bit integer to avoid overflows.
 
 statement error
-SELECT ${FUN}(s, 9223372036854775807, -9223372036854775808) FROM strings
+SELECT {FUN}(s, 9223372036854775807, -9223372036854775808) FROM strings
 ----
 Out of Range Error: Substring offset outside of supported range (> 4294967295)
 
 statement error
-SELECT ${FUN}(s, -9223372036854775808, -9223372036854775808) FROM strings
+SELECT {FUN}(s, -9223372036854775808, -9223372036854775808) FROM strings
 ----
 Out of Range Error: Substring offset outside of supported range (< -4294967296)
 
 statement error
-SELECT ${FUN}(s, 9223372036854775807, 9223372036854775807) FROM strings
+SELECT {FUN}(s, 9223372036854775807, 9223372036854775807) FROM strings
 ----
 Out of Range Error: Substring offset outside of supported range (> 4294967295)
 
 statement error
-SELECT ${FUN}(s, -9223372036854775808, 9223372036854775807) FROM strings
+SELECT {FUN}(s, -9223372036854775808, 9223372036854775807) FROM strings
 ----
 Out of Range Error: Substring offset outside of supported range (< -4294967296)
 
 statement error
-SELECT ${FUN}(s, 0, 9223372036854775807) FROM strings
+SELECT {FUN}(s, 0, 9223372036854775807) FROM strings
 ----
 Out of Range Error: Substring length outside of supported range (> 4294967295)
 
 statement error
-SELECT ${FUN}(s, 0, -9223372036854775808) FROM strings
+SELECT {FUN}(s, 0, -9223372036854775808) FROM strings
 ----
 Out of Range Error: Substring length outside of supported range (< -4294967296)
 
 # int32_t limits
 statement error
-SELECT ${FUN}(s, 4294967296, 2147483647) FROM strings
+SELECT {FUN}(s, 4294967296, 2147483647) FROM strings
 ----
 Out of Range Error: Substring offset outside of supported range (> 4294967295)
 
 statement error
-SELECT ${FUN}(s, -4294967297, 2147483647) FROM strings
+SELECT {FUN}(s, -4294967297, 2147483647) FROM strings
 ----
 Out of Range Error: Substring offset outside of supported range (< -4294967296)
 
 statement error
-SELECT ${FUN}(s, 0, 4294967296) FROM strings
+SELECT {FUN}(s, 0, 4294967296) FROM strings
 ----
 Out of Range Error: Substring length outside of supported range (> 4294967295)
 
 statement error
-SELECT ${FUN}(s, 0, -4294967297) FROM strings
+SELECT {FUN}(s, 0, -4294967297) FROM strings
 ----
 Out of Range Error: Substring length outside of supported range (< -4294967296)
 

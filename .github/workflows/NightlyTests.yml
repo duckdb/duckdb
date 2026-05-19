@@ -7,6 +7,7 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**'
       - '!.github/workflows/NightlyTests.yml'
@@ -54,7 +55,6 @@ jobs:
          python-version: '3.12'
 
      - name: Install Ninja
-       shell: bash
        run: python3 scripts/ci/retry.py -- make toolsci
 
      - uses: ./.github/actions/ccache-action
@@ -90,10 +90,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      shell: bash
-      run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq libcurl4-openssl-dev
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
@@ -102,7 +99,9 @@ jobs:
     - uses: ./.github/actions/swap_space
 
     - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11.1
+      uses: lukka/run-vcpkg@v11.5
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       with:
         vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
 
@@ -116,7 +115,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --time_execution
+          python3 scripts/ci/run_tests.py --test-config test/configs/release_assertions.json --batch-timeout 600 build/relassert/test/unittest "*"
 
   release-assert-osx-storage:
     name: Release Assertions OSX Storage
@@ -139,7 +138,7 @@ jobs:
         python-version: '3.12'
 
     - name: Install Ninja
-      run: brew install ninja
+      run: python3 scripts/ci/retry.py -- brew install ninja
 
     - uses: ./.github/actions/ccache-action
 
@@ -154,7 +153,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --force-storage --time_execution
+          python3 scripts/ci/run_tests.py --test-config test/configs/release_assertions.json --batch-timeout 600 build/relassert/test/unittest "*"
 
   smaller-binary:
     name: Smaller Binary
@@ -169,10 +168,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/cleanup_runner
-
     - name: Install
-      shell: bash
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
@@ -213,13 +209,8 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/cleanup_runner
-
     - name: Install
-      shell: bash
-      run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq llvm libcurl4-openssl-dev
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
@@ -228,7 +219,9 @@ jobs:
     - uses: ./.github/actions/swap_space
 
     - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11.1
+      uses: lukka/run-vcpkg@v11.5
+      env:
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       with:
         vcpkgGitCommitId: 84bab45d415d22042bd0b9081aea57f362da3f35
 
@@ -242,7 +235,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --time_execution
+          python3 scripts/ci/run_tests.py --test-config test/configs/release_assertions.json --batch-timeout 600 build/relassert/test/unittest "*"
 
   sqllogic:
      name: Sqllogic tests
@@ -262,7 +255,7 @@ jobs:
 
      - name: Install tools
        shell: bash
-       run: python3 scripts/ci/retry.py -- make toolsci
+       run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
      # Build is implied by 'make sqlite' that will invoke implicitly 'make release' (we make it explicit)
      - name: Build
@@ -275,19 +268,17 @@ jobs:
 
   storage-initialization:
      name: Storage Initialization Verification
-     runs-on: ubuntu-22.04
+     runs-on: ubuntu-24.04
      needs: linux-memory-leaks
      env:
-       CC: gcc-10
-       CXX: g++-10
+       CC: gcc
+       CXX: g++
        GEN: ninja
 
      steps:
      - uses: actions/checkout@v6
        with:
          fetch-depth: 0
-
-     - uses: ./.github/actions/cleanup_runner
 
      - name: Install
        shell: bash
@@ -309,11 +300,11 @@ jobs:
 
   extension-updating:
     name: Extension updating test
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc
+      CXX: g++
       GEN: ninja
 
     steps:
@@ -329,7 +320,6 @@ jobs:
           path: duckdb-httpfs
 
       - name: Install
-        shell: bash
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: actions/setup-python@v6
@@ -338,7 +328,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: pip install awscli
+        run: curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | sudo bash
 
       - uses: ./.github/actions/ccache-action
 
@@ -368,11 +358,11 @@ jobs:
 
   regression-test-memory-safety:
    name: Regression Tests between safe and unsafe builds
-   runs-on: ubuntu-22.04
+   runs-on: ubuntu-24.04
    needs: linux-memory-leaks
    env:
-     CC: gcc-10
-     CXX: g++-10
+     CC: gcc
+     CXX: g++
      GEN: ninja
      BUILD_BENCHMARK: 1
      BUILD_JEMALLOC: 1
@@ -383,8 +373,6 @@ jobs:
        uses: actions/checkout@v6
        with:
          fetch-depth: 0
-
-     - uses: ./.github/actions/cleanup_runner
 
      - name: Checkout tools repo
        uses: actions/checkout@v6
@@ -397,11 +385,7 @@ jobs:
          python-version: '3.12'
 
      - name: Install
-       shell: bash
-       run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq libcurl4-openssl-dev
-        python3 scripts/ci/retry.py -- pip install requests
+       run: python3 scripts/ci/retry.py -- make toolsci
 
      - uses: ./.github/actions/ccache-action
 
@@ -465,7 +449,6 @@ jobs:
           fetch-depth: 0
 
       - name: Install
-        shell: bash
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
@@ -492,42 +475,9 @@ jobs:
         shell: bash
         run: python3 scripts/ci/run_tests.py --test-config=test/configs/block_size_16kB.json ./build/relassert/test/unittest "*"
 
-  linux-debug-configs:
-    name: Tests different configurations with a debug build
-    runs-on: ubuntu-24.04
-    env:
-      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
-    needs: linux-memory-leaks
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
-
-      - name: Install
+      - name: All tests with a smaller initial column segment size
         shell: bash
-        run: python3 scripts/ci/retry.py -- make toolsci
-
-      - uses: ./.github/actions/ccache-action
-
-      - uses: ./.github/actions/cleanup_runner
-
-      - uses: ./.github/actions/swap_space
-
-      - name: Build
-        id: build
-        shell: bash
-        env:
-          CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
-          GEN: ninja
-        run: make debug
-
-      - name: test/configs/enable_verification_for_debug.json
-        if: (success() || failure()) && steps.build.conclusion == 'success'
-        shell: bash
-        run: python3 scripts/ci/run_tests.py --test-config=test/configs/enable_verification_for_debug.json ./build/debug/test/unittest
+        run: python3 scripts/ci/run_tests.py --test-config=test/configs/initial_column_segment_size.json ./build/relassert/test/unittest "*"
 
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
@@ -544,7 +494,6 @@ jobs:
           fetch-depth: 0
 
       - name: Install
-        shell: bash
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
@@ -561,16 +510,16 @@ jobs:
 
       - name: Test
         shell: bash
-        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --timeout 600 --time_execution
+        run: python3 scripts/ci/run_tests.py --batch-timeout 600 build/relassert/test/unittest
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds
     # disable in NightlyTests
-    if: false
+    if: ${{ vars.ENABLE_WASM_EXPERIMENTAL == 'true' }}
     needs: check-draft
     runs-on: ubuntu-22.04
     steps:
-    - uses: mymindstorm/setup-emsdk@v12
+    - uses: mymindstorm/setup-emsdk@v16
       with:
         version: 'latest'
 
@@ -579,10 +528,10 @@ jobs:
       run: |
         python3 scripts/ci/retry.py -- git clone https://github.com/duckdb/duckdb-wasm
         cd duckdb-wasm
-        git checkout ${{ env.DUCKDB_WASM_VERSION }}
+        git checkout "${{ env.DUCKDB_WASM_VERSION }}"
         shopt -s nullglob
         for filename in ../.github/patches/duckdb-wasm/*.patch; do
-          git apply $filename
+          git apply "$filename"
         done
         git submodule init
         git submodule update
@@ -618,19 +567,19 @@ jobs:
       shell: bash
       run: |
         cd duckdb-wasm
-        bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/submodules/duckdb
+        bash scripts/wasm_build_lib.sh relsize mvp "$PWD/submodules/duckdb"
 
     - name: Build WebAssembly EH
       shell: bash
       run: |
         cd duckdb-wasm
-        bash scripts/wasm_build_lib.sh relsize eh $(pwd)/submodules/duckdb
+        bash scripts/wasm_build_lib.sh relsize eh "$PWD/submodules/duckdb"
 
     - name: Build WebAssembly COI
       shell: bash
       run: |
         cd duckdb-wasm
-        bash scripts/wasm_build_lib.sh relsize coi $(pwd)/submodules/duckdb
+        bash scripts/wasm_build_lib.sh relsize coi "$PWD/submodules/duckdb"
 
     - name: Package
       shell: bash
@@ -661,7 +610,6 @@ jobs:
          fetch-depth: 0
 
      - name: Install
-       shell: bash
        run: python3 scripts/ci/retry.py -- make toolsci
 
      - uses: ./.github/actions/ccache-action
@@ -676,19 +624,31 @@ jobs:
 
      - name: Test
        shell: bash
-       run: build/relassert/test/unittest --test-config test/configs/hash_zero.json
+       # HASH_ZERO=1 triggers hash collisions; some test statements can turn
+       # into quadratic runtime and thus very slow. Report tests >30s, but only
+       # fail when a test runtime exceeds 2 minutes.
+       run: make unittest_relassert T="--track-runtime 30 --batch-timeout 120 --test-config=test/configs/hash_zero.json"
 
 
-  bwc_build:
+  bwc-build:
     name: Build DuckDB
     runs-on: ubuntu-latest
+    outputs:
+      groups: ${{ steps.resolve.outputs.groups }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Install dependencies
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
+      - name: Resolve versions
+        id: resolve
+        run: |
+          groups_json=$(python3 test/bwc/list_versions.py --groups-json)
+          echo "groups=${groups_json}" >> "$GITHUB_OUTPUT"
+          echo "Resolved BWC version groups: ${groups_json}"
+
+      - name: Install
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - name: Setup ccache
         uses: ./.github/actions/ccache-action
@@ -706,28 +666,13 @@ jobs:
           path: build/release/duckdb
 
   bwc-test:
-    name: BWC Test (DuckDB ${{ matrix.old_duckdb_version }})
+    name: BWC Test (DuckDB ${{ matrix.series.group }})
     runs-on: ubuntu-latest
-    needs: bwc_build
+    needs: bwc-build
     strategy:
       fail-fast: false
       matrix:
-        old_duckdb_version:
-          - v1.1.0
-          - v1.1.1
-          - v1.1.2
-          - v1.1.3
-          - v1.2.0
-          - v1.2.1
-          - v1.2.2
-          - v1.3.0
-          - v1.3.1
-          - v1.3.2
-          - v1.4.0
-          - v1.4.1
-          - v1.4.2
-          - v1.4.3
-          - v1.4.4
+        series: ${{ fromJSON(needs.bwc-build.outputs.groups) }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -738,7 +683,7 @@ jobs:
           python-version: '3.11'
 
       - name: Download DuckDB binary
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: duckdb-binary
           path: build/release
@@ -747,48 +692,66 @@ jobs:
         run: chmod +x build/release/duckdb
 
       - name: Install Python dependencies
-        run: pip install duckdb git+https://github.com/duckdb/duckdb-sqllogictest-python.git
+        run: python3 scripts/ci/retry.py -- pip install duckdb git+https://github.com/duckdb/duckdb-sqllogictest-python.git
 
-      - name: Download BWC cache
-        if: false
+      - name: Run BWC series
         run: |
-          VERSION=${{ matrix.old_duckdb_version }}
-          CACHE_ARCHIVE="runtime_${VERSION}.tar.gz"
+          versions='${{ toJson(matrix.series.versions) }}'
+          mapfile -t VERSION_LIST < <(python3 -c 'import json,sys; [print(v) for v in json.loads(sys.argv[1])]' "$versions")
+          FAILED=0
+          FAILED_VERSIONS=""
           RUNTIME_DIR="duckdb_unittest_tempdir/bwc/runtime"
           mkdir -p "${RUNTIME_DIR}"
+          mkdir -p duckdb_unittest_tempdir/bwc/cache
 
-          # Download the cache archive from test-utils repo
-          DOWNLOAD_URL="https://raw.githubusercontent.com/duckdb/bwc-test-utils/main/cache/${CACHE_ARCHIVE}"
-          HTTP_CODE=$(curl -sL -w '%{http_code}' -o "/tmp/${CACHE_ARCHIVE}" "${DOWNLOAD_URL}" || true)
+          for VERSION in "${VERSION_LIST[@]}"; do
+            echo "============================================================"
+            echo "Running BWC for ${VERSION} (group: ${{ matrix.series.group }})"
+            echo "============================================================"
 
-          if [ "${HTTP_CODE}" != "200" ]; then
-            echo "Failed to download cache for ${VERSION} (HTTP ${HTTP_CODE})"
+            if [ "${{ vars.ENABLE_BWC_CACHE_DOWNLOAD }}" = "true" ]; then
+              CACHE_ARCHIVE="runtime_${VERSION}.tar.gz"
+              DOWNLOAD_URL="https://raw.githubusercontent.com/duckdb/bwc-test-utils/main/cache/${CACHE_ARCHIVE}"
+              HTTP_CODE=$(curl -sL -w '%{http_code}' -o "/tmp/${CACHE_ARCHIVE}" "${DOWNLOAD_URL}" || true)
+              if [ "${HTTP_CODE}" = "200" ]; then
+                tar xzf "/tmp/${CACHE_ARCHIVE}" -C "${RUNTIME_DIR}"
+                CACHED=$(find "${RUNTIME_DIR}/${VERSION}" -name "*.plan.bin" | wc -l)
+                echo "Extracted cache for ${VERSION}: ${CACHED} cached test plans"
+              else
+                echo "Failed to download cache for ${VERSION} (HTTP ${HTTP_CODE})"
+                FAILED=1
+                FAILED_VERSIONS="${FAILED_VERSIONS} ${VERSION}(cache)"
+              fi
+            fi
+
+            if ! python3.11 test/bwc/runner.py --old_duckdb_version="${VERSION}"; then
+              FAILED=1
+              FAILED_VERSIONS="${FAILED_VERSIONS} ${VERSION}(tests)"
+            fi
+
+            if ! python3.11 test/bwc/export_cache.py --version "${VERSION}" --output-dir duckdb_unittest_tempdir/bwc/cache; then
+              FAILED=1
+              FAILED_VERSIONS="${FAILED_VERSIONS} ${VERSION}(export)"
+            fi
+          done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "BWC series had failures:${FAILED_VERSIONS}"
             exit 1
           fi
-
-          tar xzf "/tmp/${CACHE_ARCHIVE}" -C "${RUNTIME_DIR}"
-          CACHED=$(find "${RUNTIME_DIR}/${VERSION}" -name "*.plan.bin" | wc -l)
-          echo "Extracted cache for ${VERSION}: ${CACHED} cached test plans"
-
-      - name: Run BWC tests
-        run: python3.11 test/bwc/runner.py --old_duckdb_version=${{ matrix.old_duckdb_version }}
-
-      - name: Export BWC cache
-        if: always()
-        run: python3.11 test/bwc/export_cache.py --version ${{ matrix.old_duckdb_version }} --output-dir duckdb_unittest_tempdir/bwc/cache
 
       - name: Upload BWC cache
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: bwc-cache-${{ matrix.old_duckdb_version }}
-          path: duckdb_unittest_tempdir/bwc/cache/runtime_${{ matrix.old_duckdb_version }}.tar.gz
+          name: bwc-cache-${{ matrix.series.group }}
+          path: duckdb_unittest_tempdir/bwc/cache/runtime_*.tar.gz
 
       - name: Upload test artifacts
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: bwc-test-results-${{ matrix.old_duckdb_version }}
+          name: bwc-test-results-${{ matrix.series.group }}
           path: |
             duckdb_unittest_tempdir/bwc/tests_summary_*.txt
             duckdb_unittest_tempdir/bwc/reports/test_report_*.duckdb
@@ -800,7 +763,7 @@ jobs:
     if: always()
     steps:
       - name: Download all test artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: bwc-test-results-*
           merge-multiple: true
@@ -813,7 +776,8 @@ jobs:
           failed=0
           for summary in tests_summary_*.txt; do
             [ -f "$summary" ] || continue
-            version=$(echo "$summary" | sed 's/tests_summary_\(.*\)\.txt/\1/')
+            version="${summary#tests_summary_}"
+            version="${version%.txt}"
             failures=$(grep '# FAILED' "$summary" || true)
             if [ -n "$failures" ]; then
               echo ""
@@ -831,3 +795,45 @@ jobs:
           else
             echo "All BWC tests passed."
           fi
+
+  # checks that cmake-generated project is consistent on re-configure
+  cmake-reconfigure-check:
+    name: CMake Reconfigure Check
+    runs-on: ${{ matrix.os }}
+    needs: check-draft
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Create Dir
+        run: |
+          mkdir build
+
+      - name: Configure
+        working-directory: build
+        run: |
+          cmake .. -G Ninja
+
+      - name: Reconfigure
+        working-directory: build
+        run: |
+          cp build.ninja clean_build.ninja
+          cmake .. -G Ninja
+
+      - name: Cleanup Build Files
+        working-directory: build
+        run: |
+          perl -i -ne 'print unless /TARGET_COMPILE_PDB/' clean_build.ninja
+          perl -i -ne 'print unless /TARGET_COMPILE_PDB/' build.ninja
+          perl -i -ne 'print unless /TARGET_PDB/' clean_build.ninja
+          perl -i -ne 'print unless /TARGET_PDB/' build.ninja
+          perl -i -ne 'print unless /DuckDBConfig.cmake.in/' clean_build.ninja
+          perl -i -ne 'print unless /DuckDBConfig.cmake.in/' build.ninja
+
+      - name: Compare Build Files
+        working-directory: build
+        run: |
+          diff -u clean_build.ninja build.ninja

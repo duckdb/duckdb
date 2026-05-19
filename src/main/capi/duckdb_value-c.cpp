@@ -221,6 +221,18 @@ duckdb_timestamp duckdb_get_timestamp_tz(duckdb_value val) {
 	return {CAPIGetValue<duckdb::timestamp_tz_t, LogicalTypeId::TIMESTAMP_TZ>(val).value};
 }
 
+duckdb_value duckdb_create_timestamp_tz_ns(duckdb_timestamp_ns input) {
+	duckdb::timestamp_tz_ns_t ts(input.nanos);
+	return CAPICreateValue(ts);
+}
+
+duckdb_timestamp_ns duckdb_get_timestamp_tz_ns(duckdb_value val) {
+	if (!val) {
+		return {0};
+	}
+	return {CAPIGetValue<duckdb::timestamp_tz_ns_t, LogicalTypeId::TIMESTAMP_TZ_NS>(val).value};
+}
+
 duckdb_value duckdb_create_timestamp_s(duckdb_timestamp_s input) {
 	duckdb::timestamp_sec_t ts(input.seconds);
 	return CAPICreateValue(ts);

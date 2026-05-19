@@ -38,14 +38,16 @@ void DuckDBTemporaryFilesFunction(ClientContext &context, TableFunctionInput &da
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// path, VARCHAR
+	auto &path = output.data[0];
+	// size, BIGINT
+	auto &size = output.data[1];
+
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
-		// return values:
-		idx_t col = 0;
-		// database_name, VARCHAR
-		output.SetValue(col++, count, entry.path);
-		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.size)));
+		path.Append(Value(entry.path));
+		size.Append(Value::BIGINT(NumericCast<int64_t>(entry.size)));
 		count++;
 	}
 	output.SetCardinality(count);

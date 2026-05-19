@@ -28,12 +28,10 @@ unique_ptr<IndexBuildBindData> ARTBuildBind(IndexBuildBindInput &input) {
 	auto bind_data = make_uniq<ARTBuildBindData>();
 
 	// TODO: Verify that the the ART is applicable for the given columns and types.
+
+	// We used to not sort for VARCHAR and multi-column indexes with the old sort implementation
+	// The new sorting implementation handles these cases much better and sorting improves performance now
 	bind_data->sorted = true;
-	if (input.expressions.size() > 1) {
-		bind_data->sorted = false;
-	} else if (input.expressions[0]->return_type.InternalType() == PhysicalType::VARCHAR) {
-		bind_data->sorted = false;
-	}
 
 	return std::move(bind_data);
 }

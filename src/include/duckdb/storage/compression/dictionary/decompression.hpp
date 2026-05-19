@@ -41,7 +41,7 @@ public:
 	uint32_t *index_buffer_ptr;
 	uint32_t index_buffer_count;
 
-	buffer_ptr<VectorChildBuffer> dictionary;
+	buffer_ptr<DictionaryEntry> dictionary;
 	idx_t dictionary_size;
 	StringDictionaryContainer dict;
 	idx_t block_size;

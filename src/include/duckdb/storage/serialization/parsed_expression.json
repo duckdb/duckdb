@@ -409,7 +409,8 @@
       {
         "id": 203,
         "name": "children",
-        "type": "vector<ParsedExpression*>"
+        "type": "vector<ParsedExpression*>",
+        "serialize_property": "SerializedChildren(serializer)"
       },
       {
         "id": 204,
@@ -444,12 +445,14 @@
       {
         "id": 210,
         "name": "offset_expr",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "serialize_property": "SerializedOffset(serializer)"
       },
       {
         "id": 211,
         "name": "default_expr",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "serialize_property": "SerializedDefault(serializer)"
       },
       {
         "id": 212,
@@ -476,9 +479,15 @@
         "id": 216,
         "name": "arg_orders",
         "type": "vector<OrderByNode>"
+      },
+      {
+        "id": 217,
+        "name": "has_ignore_nulls",
+        "type": "bool",
+        "version": "8"
       }
     ],
-    "constructor": ["type"]
+    "constructor": ["type", "children", "offset_expr", "default_expr"]
   },
   {
     "class": "TypeExpression",

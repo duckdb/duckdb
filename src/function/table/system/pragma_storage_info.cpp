@@ -13,6 +13,7 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/common/enums/column_segment_info_scan_type.hpp"
 
 #include <algorithm>
 
@@ -23,6 +24,7 @@ struct PragmaStorageFunctionData : public TableFunctionData {
 	}
 
 	TableCatalogEntry &table_entry;
+	ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL;
 	vector<ColumnSegmentInfo> column_segments_info;
 };
 
@@ -89,7 +91,12 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 	auto result = make_uniq<PragmaStorageFunctionData>(table_entry);
-	result->column_segments_info = table_entry.GetColumnSegmentInfo(context);
+
+	auto scan_type_entry = input.named_parameters.find("scan_type");
+	if (scan_type_entry != input.named_parameters.end()) {
+		result->scan_type = ColumnSegmentInfoScanTypeFromString(scan_type_entry->second.GetValue<string>());
+	}
+	result->column_segments_info = table_entry.GetColumnSegmentInfo(context, result->scan_type);
 	return std::move(result);
 }
 
@@ -110,51 +117,68 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 	auto &data = data_p.global_state->Cast<PragmaStorageOperatorData>();
 	idx_t count = 0;
 	auto &columns = bind_data.table_entry.GetColumns();
+
+	// row_group_id
+	auto &row_group_id = output.data[0];
+	// column_name
+	auto &column_name = output.data[1];
+	// column_id
+	auto &column_id = output.data[2];
+	// column_path
+	auto &column_path = output.data[3];
+	// segment_id
+	auto &segment_id = output.data[4];
+	// segment_type
+	auto &segment_type = output.data[5];
+	// start
+	auto &start = output.data[6];
+	// count
+	auto &count_col = output.data[7];
+	// compression
+	auto &compression = output.data[8];
+	// stats
+	auto &stats = output.data[9];
+	// has_updates
+	auto &has_updates = output.data[10];
+	// persistent
+	auto &persistent = output.data[11];
+	// block_id
+	auto &block_id = output.data[12];
+	// block_offset
+	auto &block_offset = output.data[13];
+	// segment_info
+	auto &segment_info = output.data[14];
+	// additional_block_ids
+	auto &additional_block_ids = output.data[15];
+
 	while (data.offset < bind_data.column_segments_info.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.column_segments_info[data.offset++];
 
-		idx_t col_idx = 0;
-		// row_group_id
-		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.row_group_index)));
-		// column_name
+		row_group_id.Append(Value::BIGINT(NumericCast<int64_t>(entry.row_group_index)));
 		auto &col = columns.GetColumn(PhysicalIndex(entry.column_id));
-		output.SetValue(col_idx++, count, Value(col.Name()));
-		// column_id
-		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.column_id)));
-		// column_path
-		output.SetValue(col_idx++, count, Value(entry.column_path));
-		// segment_id
-		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.segment_idx)));
-		// segment_type
-		output.SetValue(col_idx++, count, Value(entry.segment_type));
-		// start
-		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.segment_start)));
-		// count
-		output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.segment_count)));
-		// compression
-		output.SetValue(col_idx++, count, Value(entry.compression_type));
-		// stats
-		output.SetValue(col_idx++, count, entry.segment_stats);
-		// has_updates
-		output.SetValue(col_idx++, count, Value::BOOLEAN(entry.has_updates));
-		// persistent
-		output.SetValue(col_idx++, count, Value::BOOLEAN(entry.persistent));
-		// block_id
-		// block_offset
+		column_name.Append(Value(col.Name()));
+		column_id.Append(Value::BIGINT(NumericCast<int64_t>(entry.column_id)));
+		column_path.Append(Value(entry.column_path));
+		segment_id.Append(Value::BIGINT(NumericCast<int64_t>(entry.segment_idx)));
+		segment_type.Append(Value(entry.segment_type));
+		start.Append(Value::BIGINT(NumericCast<int64_t>(entry.segment_start)));
+		count_col.Append(Value::BIGINT(NumericCast<int64_t>(entry.segment_count)));
+		compression.Append(Value(entry.compression_type));
+		stats.Append(entry.segment_stats);
+		has_updates.Append(Value::BOOLEAN(entry.has_updates));
+		persistent.Append(Value::BOOLEAN(entry.persistent));
 		if (entry.persistent) {
-			output.SetValue(col_idx++, count, Value::BIGINT(entry.block_id));
-			output.SetValue(col_idx++, count, Value::BIGINT(NumericCast<int64_t>(entry.block_offset)));
+			block_id.Append(Value::BIGINT(entry.block_id));
+			block_offset.Append(Value::BIGINT(NumericCast<int64_t>(entry.block_offset)));
 		} else {
-			output.SetValue(col_idx++, count, Value());
-			output.SetValue(col_idx++, count, Value());
+			block_id.Append(Value());
+			block_offset.Append(Value());
 		}
-		// segment_info
-		output.SetValue(col_idx++, count, Value(entry.segment_info));
-		// additional_block_ids
+		segment_info.Append(Value(entry.segment_info));
 		if (entry.persistent) {
-			output.SetValue(col_idx++, count, ValueFromBlockIdList(entry.additional_blocks));
+			additional_block_ids.Append(ValueFromBlockIdList(entry.additional_blocks));
 		} else {
-			output.SetValue(col_idx++, count, Value());
+			additional_block_ids.Append(Value());
 		}
 
 		count++;
@@ -163,8 +187,10 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 }
 
 void PragmaStorageInfo::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_storage_info", {LogicalType::VARCHAR}, PragmaStorageInfoFunction,
-	                              PragmaStorageInfoBind, PragmaStorageInfoInit));
+	TableFunction func("pragma_storage_info", {LogicalType::VARCHAR}, PragmaStorageInfoFunction, PragmaStorageInfoBind,
+	                   PragmaStorageInfoInit);
+	func.named_parameters["scan_type"] = LogicalType::VARCHAR;
+	set.AddFunction(func);
 }
 
 } // namespace duckdb

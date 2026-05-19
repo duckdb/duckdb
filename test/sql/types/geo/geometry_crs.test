@@ -7,6 +7,16 @@ select st_crs(NULL);
 NULL
 
 query I
+select st_crs('foobar');
+----
+NULL
+
+statement error
+select st_crs(1);
+----
+Binder Error: No function matches the given name and argument types
+
+query I
 select st_crs(st_setcrs('POINT(0 1)', 'OGC:CRS84'));
 ----
 OGC:CRS84

@@ -73,7 +73,7 @@ string SelectNode::ToString() const {
 				if (!first) {
 					result += ", ";
 				}
-				result += groups.group_expressions[grp.index]->ToString();
+				result += groups.group_expressions[grp]->ToString();
 				first = false;
 			}
 			if (grouping_sets) {

@@ -8,6 +8,18 @@ CREATE TABLE integers(i INTEGER);
 statement ok
 CREATE VIEW vintegers AS SELECT 42;
 
+# cannot create a table with the same name as a view
+statement error
+CREATE TABLE vintegers(i INTEGER);
+----
+Catalog Error: View with name "vintegers" already exists!
+
+# cannot create a view with the same name as a table
+statement error
+CREATE VIEW integers AS SELECT 42;
+----
+Catalog Error: Table with name "integers" already exists!
+
 # cannot CREATE OR REPLACE a table with a view
 statement error
 CREATE OR REPLACE VIEW integers AS SELECT 42;

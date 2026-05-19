@@ -45,7 +45,7 @@ void LogicalRecursiveCTE::ResolveTypes() {
 
 	unordered_set<ProjectionIndex> key_idx;
 	for (auto &key_target : key_targets) {
-		D_ASSERT(key_target->type == ExpressionType::BOUND_COLUMN_REF);
+		D_ASSERT(key_target->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF);
 		auto &bound_ref = key_target->Cast<BoundColumnRefExpression>();
 		key_idx.insert(bound_ref.binding.column_index);
 	}
@@ -55,7 +55,7 @@ void LogicalRecursiveCTE::ResolveTypes() {
 		if (key_idx.find(ProjectionIndex(i)) != key_idx.end()) {
 			continue;
 		}
-		types[i] = payload_aggregates[pay_idx++]->return_type;
+		types[i] = payload_aggregates[pay_idx++]->GetReturnType();
 	}
 }
 

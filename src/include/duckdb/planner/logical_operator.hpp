@@ -57,6 +57,11 @@ public:
 	//! Resolve the types of the logical operator and its children
 	void ResolveOperatorTypes();
 
+	//! Returns true if this operator or any of its descendants has side effects
+	//! (INSERT, UPDATE, DELETE, MERGE INTO). Used to prevent inlining or
+	//! elimination of DML CTEs.
+	bool HasSideEffects() const;
+
 	virtual string GetName() const;
 	virtual InsertionOrderPreservingMap<string> ParamsToString() const;
 	virtual string ToString(ExplainFormat format = ExplainFormat::DEFAULT) const;

@@ -131,6 +131,7 @@ enum class VariantLogicalType : uint8_t {
 	BIGNUM = 31,
 	BITSTRING = 32,
 	GEOMETRY = 33,
+	TIMESTAMP_NANOS_TZ = 34,
 	ENUM_SIZE /* always kept as last item of the enum */
 };
 

@@ -1,0 +1,179 @@
+# name: test/sql/trigger/create_trigger_catalog.test
+# description: Test CREATE TRIGGER stores in catalog and duckdb_triggers()
+# group: [trigger]
+
+require noforcestorage
+
+
+# Create table for trigger
+statement ok
+CREATE TABLE t1 (id INTEGER, data VARCHAR);
+
+# Create log table for trigger body
+statement ok
+CREATE TABLE log_table (id INTEGER);
+
+# Basic AFTER INSERT trigger - should succeed
+statement ok
+CREATE TRIGGER my_trigger AFTER INSERT ON t1 INSERT INTO log_table VALUES (1);
+
+# Verify trigger appears in duckdb_triggers
+query TTTT
+SELECT trigger_name, table_name, action_timing, event_manipulation FROM duckdb_triggers() WHERE trigger_name = 'my_trigger';
+----
+my_trigger	t1	AFTER	INSERT
+
+# Create another trigger - BEFORE DELETE
+statement ok
+CREATE TRIGGER del_trigger BEFORE DELETE ON t1 INSERT INTO log_table VALUES (2);
+
+# Verify both triggers
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE table_name = 't1';
+----
+2
+
+# AFTER UPDATE trigger
+statement ok
+CREATE TRIGGER upd_trigger AFTER UPDATE ON t1 INSERT INTO log_table VALUES (3);
+
+# AFTER UPDATE OF specific columns
+statement ok
+CREATE TABLE t_upd_of (id INTEGER, data VARCHAR);
+
+statement ok
+CREATE TRIGGER upd_col_trigger AFTER UPDATE OF id ON t_upd_of INSERT INTO log_table VALUES (4);
+
+query TT
+SELECT trigger_name, columns FROM duckdb_triggers() WHERE trigger_name = 'upd_col_trigger';
+----
+upd_col_trigger	[id]
+
+# IF NOT EXISTS - should not error when trigger already exists
+statement ok
+CREATE TABLE t_ifne (id INTEGER);
+
+statement ok
+CREATE TRIGGER ifne_trigger AFTER INSERT ON t_ifne INSERT INTO log_table VALUES (1);
+
+statement ok
+CREATE TRIGGER IF NOT EXISTS ifne_trigger AFTER INSERT ON t_ifne INSERT INTO log_table VALUES (1);
+
+# Verify no duplicate was created
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE trigger_name = 'ifne_trigger';
+----
+1
+
+# --- Trigger with UPDATE body ---
+statement ok
+CREATE TABLE t_upd_body (id INTEGER);
+
+statement ok
+CREATE TRIGGER update_body_trigger AFTER INSERT ON t_upd_body UPDATE log_table SET id = 99 WHERE log_table.id = 1;
+
+query TT
+SELECT trigger_name, sql FROM duckdb_triggers() WHERE trigger_name = 'update_body_trigger';
+----
+update_body_trigger	CREATE TRIGGER update_body_trigger AFTER INSERT ON t_upd_body FOR EACH STATEMENT UPDATE log_table SET id = 99 WHERE (log_table.id = 1);
+
+# --- Trigger with DELETE body ---
+statement ok
+CREATE TABLE t_del_body (id INTEGER);
+
+statement ok
+CREATE TRIGGER delete_body_trigger BEFORE DELETE ON t_del_body DELETE FROM log_table WHERE log_table.id = 1;
+
+query TT
+SELECT trigger_name, sql FROM duckdb_triggers() WHERE trigger_name = 'delete_body_trigger';
+----
+delete_body_trigger	CREATE TRIGGER delete_body_trigger BEFORE DELETE ON t_del_body FOR EACH STATEMENT DELETE FROM log_table WHERE (log_table.id = 1);
+
+# --- Trigger with INSERT ... SELECT body ---
+statement ok
+CREATE TABLE t_ins_sel (id INTEGER);
+
+statement ok
+CREATE TRIGGER insert_select_trigger AFTER UPDATE ON t_ins_sel INSERT INTO log_table SELECT id FROM t_ins_sel;
+
+query TT
+SELECT trigger_name, sql FROM duckdb_triggers() WHERE trigger_name = 'insert_select_trigger';
+----
+insert_select_trigger	CREATE TRIGGER insert_select_trigger AFTER UPDATE ON t_ins_sel FOR EACH STATEMENT INSERT INTO log_table SELECT id FROM t_ins_sel;
+
+# Cleanup - CASCADE to drop dependent triggers
+statement ok
+DROP TABLE t1 CASCADE;
+
+statement ok
+DROP TABLE log_table;
+
+# --- Trigger inherits schema from its table ---
+statement ok
+CREATE SCHEMA my_schema;
+
+statement ok
+CREATE TABLE my_schema.t2 (id INTEGER);
+
+statement ok
+CREATE TABLE my_schema.log2 (id INTEGER);
+
+statement ok
+CREATE TRIGGER schema_trigger AFTER INSERT ON my_schema.t2 INSERT INTO my_schema.log2 VALUES (1);
+
+# Verify trigger is in the same schema as the table
+query TTT
+SELECT schema_name, trigger_name, table_name FROM duckdb_triggers() WHERE trigger_name = 'schema_trigger';
+----
+my_schema	schema_trigger	t2
+
+statement ok
+DROP TABLE my_schema.t2 CASCADE;
+
+statement ok
+DROP TABLE my_schema.log2;
+
+statement ok
+DROP SCHEMA my_schema CASCADE;
+
+# --- Same trigger name on different tables ---
+statement ok
+CREATE TABLE a (id INTEGER);
+
+statement ok
+CREATE TABLE b (id INTEGER);
+
+statement ok
+CREATE TABLE log_ab (id INTEGER);
+
+statement ok
+CREATE TRIGGER same_name AFTER INSERT ON a INSERT INTO log_ab VALUES (1);
+
+statement ok
+CREATE TRIGGER same_name AFTER INSERT ON b INSERT INTO log_ab VALUES (2);
+
+# Both triggers should exist
+query TT
+SELECT trigger_name, table_name FROM duckdb_triggers() WHERE trigger_name = 'same_name' ORDER BY table_name;
+----
+same_name	a
+same_name	b
+
+# Duplicate on same table should error
+statement error
+CREATE TRIGGER same_name AFTER DELETE ON a INSERT INTO log_ab VALUES (3);
+----
+already exists
+
+# IF NOT EXISTS on same table should succeed silently
+statement ok
+CREATE TRIGGER IF NOT EXISTS same_name AFTER DELETE ON a INSERT INTO log_ab VALUES (3);
+
+statement ok
+DROP TABLE a CASCADE;
+
+statement ok
+DROP TABLE b CASCADE;
+
+statement ok
+DROP TABLE log_ab;

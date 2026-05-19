@@ -9,41 +9,41 @@ foreach type DOUBLE INTEGER BIGINT SMALLINT HUGEINT
 
 # avg() has the new get_state_type callback
 query T
-SELECT typeof(avg(1.0::${type}) EXPORT_STATE) = 'AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>';
+SELECT typeof(avg(1.0::{type}) EXPORT_STATE) = 'AGGREGATE_STATE<avg({type})::DOUBLE, STRUCT(count UBIGINT, "value" {type})>';
 ----
 true
 
 # Works in a table
 # (Forward compatability tests are covered because of this statement) 
 statement ok
-CREATE TABLE t1_${type} AS SELECT avg(range::${type}) EXPORT_STATE as state FROM range(10);
+CREATE TABLE t1_{type} AS SELECT avg(range::{type}) EXPORT_STATE as state FROM range(10);
 
 # Test reading from the table
 # We cannot run in force storage mode, as this configuration still uses the old serialization version
 query T
-SELECT column_type='AGGREGATE_STATE<avg(${type})::DOUBLE, STRUCT(count UBIGINT, "value" ${type})>' FROM (DESCRIBE t1_${type}) WHERE column_name = 'state';
+SELECT column_type='AGGREGATE_STATE<avg({type})::DOUBLE, STRUCT(count UBIGINT, "value" {type})>' FROM (DESCRIBE t1_{type}) WHERE column_name = 'state';
 ----
 true
 
 # Test combine and finalize
 query R
-SELECT finalize(combine(state, state)) FROM t1_${type};
+SELECT finalize(combine(state, state)) FROM t1_{type};
 ----
 4.500000
 
 # Test that state typing is independent of input expressions
 statement ok
-INSERT INTO t1_${type} SELECT avg((range::${type} + 10.0)::${type}) EXPORT_STATE FROM range(10);
+INSERT INTO t1_{type} SELECT avg((range::{type} + 10.0)::{type}) EXPORT_STATE FROM range(10);
 
 query R
-SELECT finalize(state) FROM t1_${type} ORDER BY 1;
+SELECT finalize(state) FROM t1_{type} ORDER BY 1;
 ----
 4.500000
 14.500000
 
 # Test combine with multiple states
 query R
-SELECT finalize(combine(state, state)) FROM t1_${type} ORDER BY 1;
+SELECT finalize(combine(state, state)) FROM t1_{type} ORDER BY 1;
 ----
 4.500000
 14.500000

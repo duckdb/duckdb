@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "array",
+  "title": "DuckDB Metric Types Definition Schema",
+  "description": "Schema for DuckDB metric type definitions",
+  "items": {
+    "type": "object",
+    "required": ["group", "description", "metrics"],
+    "properties": {
+      "group": {
+        "type": "string",
+        "description": "The name of the group the metrics belong to"
+      },
+      "description": {
+        "type": "string",
+        "description": "A description of the metric group"
+      },
+      "generated": {
+        "type": "boolean",
+        "description": "Whether the metrics in this group are automatically generated, for example, through other enum values"
+      },
+      "metrics": {
+        "type": "array",
+        "description": "Array of metric definitions",
+        "items": {
+          "type": "object",
+          "required": ["name", "enum_value", "description", "type", "unit", "is_default", "collection_method"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The name of the metric"
+            },
+            "enum_value": {
+              "type": "integer",
+              "description": "The enum value associated with the metric"
+            },
+            "description": {
+              "type": "string",
+              "description": "A description of the metric"
+            },
+            "type": {
+              "type": "string",
+              "description": "The data type of the metric (e.g., double, uint64, string, Value::MAP)"
+            },
+            "unit": {
+              "type": "string",
+              "description": "The unit of measurement for the metric (e.g., seconds, bytes, milliseconds, absolute)"
+            },
+            "is_default": {
+              "type": "boolean",
+              "description": "Whether the metric is enabled by default"
+            },
+            "collection_method": {
+              "type": "string",
+              "description": "The method used to collect the metric (e.g., cumulative, timer, query_metric, child, cumulative_operators)"
+            },
+            "query_root": {
+              "type": "boolean",
+              "description": "Whether the metric exists in the query root"
+            },
+            "child": {
+              "type": "string",
+              "description": "The name of the child metric if collection_method is 'child'"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "additionalProperties": false
+  }
+}

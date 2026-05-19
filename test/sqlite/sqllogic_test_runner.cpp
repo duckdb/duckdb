@@ -20,6 +20,9 @@
 
 namespace duckdb {
 
+mutex SQLLogicTestRunner::skip_reason_lock;
+map<string, idx_t> SQLLogicTestRunner::skip_reason_counts;
+
 SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
 	config->SetOptionByName("allow_unredacted_secrets", true);
@@ -80,6 +83,28 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 		}
 		DeleteDatabase(loaded_path);
 	}
+}
+
+void SQLLogicTestRunner::AddSkipReason(const string &reason) {
+	lock_guard<mutex> guard(skip_reason_lock);
+	skip_reason_counts[reason]++;
+}
+
+void SQLLogicTestRunner::SkipTest(const string &reason) {
+	AddSkipReason(reason);
+	SKIP_TEST(reason);
+}
+
+string SQLLogicTestRunner::GetSkipReasonSummary() {
+	lock_guard<mutex> guard(skip_reason_lock);
+	if (skip_reason_counts.empty()) {
+		return string();
+	}
+	std::ostringstream oss;
+	for (auto &entry : skip_reason_counts) {
+		oss << entry.first << ": " << entry.second << "\n";
+	}
+	return oss.str();
 }
 
 void SQLLogicTestRunner::ExecuteCommand(duckdb::unique_ptr<Command> command) {
@@ -176,9 +201,6 @@ void SQLLogicTestRunner::Reconnect() {
 	auto &client_config = ClientConfig::GetConfig(*con->context);
 	client_config.enable_progress_bar = true;
 	client_config.print_progress_bar = false;
-	if (enable_verification) {
-		con->EnableQueryVerification();
-	}
 	// Set the local extension repo for autoinstalling extensions
 	if (!local_extension_repo.empty()) {
 		auto res1 = con->Query("SET autoinstall_extension_repository='" + local_extension_repo + "'");
@@ -195,6 +217,18 @@ void SQLLogicTestRunner::Reconnect() {
 	}
 }
 
+void StringReplaceLoopIterator(string &text, const string &loop_iterator_name, const string &replacement,
+                               const string &test_name) {
+	auto loop_it = "{" + loop_iterator_name + "}";
+	auto deprecated_loop_it = "$" + loop_it;
+	if (StringUtil::Contains(text, deprecated_loop_it)) {
+		Printer::PrintF("Replacing deprecated loop iterator %s in test \"%s\" - please use the new loop iterator %s",
+		                deprecated_loop_it, test_name, loop_it);
+		text = StringUtil::Replace(text, deprecated_loop_it, replacement);
+	}
+	text = StringUtil::Replace(text, loop_it, replacement);
+}
+
 string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator_name, string replacement) {
 	replacement = ReplaceKeywords(replacement);
 	if (StringUtil::Contains(loop_iterator_name, ",")) {
@@ -205,11 +239,12 @@ string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator
 			     ") does not match number of commas in replacement (" + replacement + ")");
 		}
 		for (idx_t i = 0; i < name_splits.size(); i++) {
-			text = StringUtil::Replace(text, "${" + name_splits[i] + "}", replacement_splits[i]);
+			StringReplaceLoopIterator(text, name_splits[i], replacement_splits[i], file_name);
 		}
 		return text;
 	} else {
-		return StringUtil::Replace(text, "${" + loop_iterator_name + "}", replacement);
+		StringReplaceLoopIterator(text, loop_iterator_name, replacement, file_name);
+		return text;
 	}
 }
 
@@ -227,144 +262,31 @@ string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinit
 }
 
 string SQLLogicTestRunner::ReplaceKeywords(string input) {
-	// TODO: (@benfleis) Remove after ${} syntax replaced (test-env, loop vars, ???), and __BUILD_DIRECTORY__ and
 	// ProcessPath replaced, can simplify this into simple `ReplaceVariables` loop.
 	//
 	// Replace environment variables in the SQL
 	for (auto &it : environment_variables) {
 		auto &name = it.first;
 		auto &value = it.second;
-		input = StringUtil::Replace(input, StringUtil::Format("${%s}", name), value);
-		input = StringUtil::Replace(input, StringUtil::Format("{%s}", name), value);
+		auto legacy_syntax = StringUtil::Format("${%s}", name);
+		auto env_syntax = StringUtil::Format("{%s}", name);
+		if (StringUtil::Contains(input, legacy_syntax)) {
+			Printer::PrintF("Replacing deprecated %s in test %s - please replace with %s", legacy_syntax, file_name,
+			                env_syntax);
+			input = StringUtil::Replace(input, legacy_syntax, value);
+		}
+		input = StringUtil::Replace(input, env_syntax, value);
 	}
 	auto &test_config = TestConfiguration::Get();
 	test_config.ProcessPath(input, file_name);
-	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+	input = StringUtil::Replace(input, "{BUILD_DIRECTORY}", DUCKDB_BUILD_DIRECTORY);
+	if (StringUtil::Contains(input, "__BUILD_DIRECTORY__")) {
+		Printer::PrintF("Replacing deprecated __BUILD_DIRECTORY__ in test %s - please replace with {BUILD_DIRECTORY}",
+		                file_name);
+		input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+	}
 
 	return input;
-}
-
-bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<string> &result) {
-	if (parameter.empty()) {
-		return true;
-	}
-	auto token_name = StringUtil::Lower(parameter);
-	StringUtil::Trim(token_name);
-	bool collection = false;
-	bool is_compression = token_name == "<compression>";
-	bool is_all = token_name == "<alltypes>";
-	bool is_numeric = is_all || token_name == "<numeric>";
-	bool is_integral = is_numeric || token_name == "<integral>";
-	bool is_signed = is_integral || token_name == "<signed>";
-	bool is_unsigned = is_integral || token_name == "<unsigned>";
-	bool is_all_types_column = token_name == "<all_types_columns>";
-	if (token_name[0] == '!') {
-		// !token tries to remove the token from the list of tokens
-		auto entry = std::find(result.begin(), result.end(), parameter.substr(1));
-		if (entry == result.end()) {
-			// not found - insert as-is
-			return false;
-		}
-		// found - erase the entry
-		result.erase(entry);
-		collection = true;
-	}
-	if (is_signed) {
-		result.push_back("tinyint");
-		result.push_back("smallint");
-		result.push_back("integer");
-		result.push_back("bigint");
-		result.push_back("hugeint");
-		collection = true;
-	}
-	if (is_unsigned) {
-		result.push_back("utinyint");
-		result.push_back("usmallint");
-		result.push_back("uinteger");
-		result.push_back("ubigint");
-		result.push_back("uhugeint");
-		collection = true;
-	}
-	if (is_numeric) {
-		result.push_back("float");
-		result.push_back("double");
-		collection = true;
-	}
-	if (is_all) {
-		result.push_back("bool");
-		result.push_back("interval");
-		result.push_back("varchar");
-		collection = true;
-	}
-	if (is_compression) {
-		result.push_back("none");
-		result.push_back("uncompressed");
-		result.push_back("rle");
-		result.push_back("bitpacking");
-		result.push_back("dictionary");
-		result.push_back("fsst");
-		result.push_back("dict_fsst");
-		result.push_back("alp");
-		result.push_back("alprd");
-		collection = true;
-	}
-	if (is_all_types_column) {
-		result.push_back("bool");
-		result.push_back("tinyint");
-		result.push_back("smallint");
-		result.push_back("int");
-		result.push_back("bigint");
-		result.push_back("hugeint");
-		result.push_back("uhugeint");
-		result.push_back("utinyint");
-		result.push_back("usmallint");
-		result.push_back("uint");
-		result.push_back("ubigint");
-		result.push_back("date");
-		result.push_back("time");
-		result.push_back("timestamp");
-		result.push_back("timestamp_s");
-		result.push_back("timestamp_ms");
-		result.push_back("timestamp_ns");
-		result.push_back("time_tz");
-		result.push_back("timestamp_tz");
-		result.push_back("float");
-		result.push_back("double");
-		result.push_back("dec_4_1");
-		result.push_back("dec_9_4");
-		result.push_back("dec_18_6");
-		result.push_back("dec38_10");
-		result.push_back("uuid");
-		result.push_back("interval");
-		result.push_back("varchar");
-		result.push_back("blob");
-		result.push_back("bit");
-		result.push_back("small_enum");
-		result.push_back("medium_enum");
-		result.push_back("large_enum");
-		result.push_back("int_array");
-		result.push_back("double_array");
-		result.push_back("date_array");
-		result.push_back("timestamp_array");
-		result.push_back("timestamptz_array");
-		result.push_back("varchar_array");
-		result.push_back("nested_int_array");
-		result.push_back("struct");
-		result.push_back("struct_of_arrays");
-		result.push_back("array_of_structs");
-		result.push_back("map");
-		result.push_back("union");
-		result.push_back("fixed_int_array");
-		result.push_back("fixed_varchar_array");
-		result.push_back("fixed_nested_int_array");
-		result.push_back("fixed_nested_varchar_array");
-		result.push_back("fixed_struct_array");
-		result.push_back("struct_of_fixed_array");
-		result.push_back("fixed_array_of_int_list");
-		result.push_back("list_of_fixed_int_array");
-		collection = true;
-	}
-	return collection;
 }
 
 static string ParseExplanation(SQLLogicParser &parser, const vector<string> &params, size_t &index) {
@@ -601,6 +523,12 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		return RequireResult::MISSING;
 	}
+	if (param == "vacuum_rebuild_indexes") {
+		if (Settings::Get<VacuumRebuildIndexesSetting>(*config) > 0) {
+			return RequireResult::PRESENT;
+		}
+		return RequireResult::MISSING;
+	}
 
 	bool excluded_from_autoloading = true;
 	for (const auto &ext : AUTOLOADABLE_EXTENSIONS) {
@@ -722,7 +650,7 @@ void add_env_tag(vector<string> &tags, const string &name, const string *value =
 void SQLLogicTestRunner::ExecuteFile(string script) {
 	auto &test_config = TestConfiguration::Get();
 	if (test_config.ShouldSkipTest(script)) {
-		SKIP_TEST("config skip_tests");
+		SkipTest("config skip_tests");
 		return;
 	}
 
@@ -781,7 +709,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		// Check tags first time we hit test statements, since all explicit & implicit tags now present
 		if (parser.IsTestCommand(token.type) && !test_expr_executed) {
 			if (test_config.GetPolicyForTagSet(file_tags) == TestConfiguration::SelectPolicy::SKIP) {
-				SKIP_TEST("select tag-set");
+				SkipTest("select tag-set");
 				return;
 			}
 			test_expr_executed = true;
@@ -948,11 +876,19 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_HALT) {
 			break;
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_MODE) {
-			if (token.parameters.size() != 1) {
-				parser.Fail("mode requires one parameter");
+			if (token.parameters.empty()) {
+				parser.Fail("mode requires at least one parameter");
 			}
 			string parameter = token.parameters[0];
 			if (parameter == "skip") {
+				string reason = "unspecified";
+				if (token.parameters.size() > 1) {
+					reason = token.parameters[1];
+					for (idx_t i = 2; i < token.parameters.size(); i++) {
+						reason += " " + token.parameters[i];
+					}
+				}
+				AddSkipReason("mode skip " + reason);
 				skip_level++;
 			} else if (parameter == "unskip") {
 				skip_level--;
@@ -1054,9 +990,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			def.loop_iterator_name = token.parameters[0];
 			for (idx_t i = 1; i < token.parameters.size(); i++) {
 				D_ASSERT(!token.parameters[i].empty());
-				if (!ForEachTokenReplace(token.parameters[i], def.tokens)) {
-					def.tokens.push_back(token.parameters[i]);
-				}
+				def.tokens.push_back(token.parameters[i]);
 			}
 			def.loop_idx = 0;
 			def.loop_start = 0;
@@ -1073,7 +1007,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					// This extension / setting was explicitly required
 					parser.Fail(StringUtil::Format("require %s: FAILED", param));
 				}
-				SKIP_TEST("require " + token.parameters[0]);
+				SkipTest("require " + token.parameters[0]);
 				return;
 			}
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_TEST_ENV) {
@@ -1117,7 +1051,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			if (env_actual == nullptr) {
 				// Environment variable was not found, this test should not be run
-				SKIP_TEST("require-env " + token.parameters[0]);
+				SkipTest("require-env " + token.parameters[0]);
 				return;
 			}
 
@@ -1126,7 +1060,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				auto env_value = token.parameters[1];
 				if (std::strcmp(env_actual, env_value.c_str()) != 0) {
 					// It's not, check the test
-					SKIP_TEST("require-env " + token.parameters[0] + " " + token.parameters[1]);
+					SkipTest("require-env " + token.parameters[0] + " " + token.parameters[1]);
 					return;
 				}
 
@@ -1142,7 +1076,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
 			auto &test_config = TestConfiguration::Get();
 			if (test_config.OnLoadCommand() == "skip") {
-				SKIP_TEST("config on_load skip");
+				SkipTest("config on_load skip");
 				return;
 			}
 			bool is_read_only = false;
@@ -1198,7 +1132,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_UNZIP) {
 			if (token.parameters.size() != 1 && token.parameters.size() != 2) {
 				parser.Fail("unzip requires 1 argument: <path/to/file.db.gz> [optional: "
-				            "<path/to/unzipped_file.db>, default: __TEST_DIR__/<file.db>]");
+				            "<path/to/unzipped_file.db>, default: {TEST_DIR}/<file.db>]");
 			}
 
 			// set input path
@@ -1212,7 +1146,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			string filename = input_path.substr(filename_start_pos, input_path.size() - filename_start_pos - 3);
 
 			// extraction path
-			string default_extraction_path = ReplaceKeywords("__TEST_DIR__/" + filename);
+			string default_extraction_path = ReplaceKeywords("{TEST_DIR}/" + filename);
 			string extraction_path =
 			    (token.parameters.size() == 2) ? ReplaceKeywords(token.parameters[1]) : default_extraction_path;
 			if (extraction_path == "NULL") {
@@ -1225,7 +1159,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// NOTE: tags-before-test-commands is the low bar right now
 			// 1 better: all non-command lines precede command lines
 			// Mo better: parse first, build entire context before execution; allows e.g.
-			// - implicit tag scans of e.g. strings, vars, etc., like '${ENVVAR}', '__TEST_DIR__', 'ATTACH'
+			// - implicit tag scans of e.g. strings, vars, etc., like '{ENVVAR}', '{TEST_DIR}', 'ATTACH'
 			// - faster subset runs
 			// - tag match runs to generate lists
 			if (test_expr_executed) {

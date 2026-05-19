@@ -11,10 +11,10 @@ onlyif compression=dict_fsst
 statement ok
 SET storage_compatibility_version='v1.3.0'
 
-load __TEST_DIR__/test_struct_${compression}.db
+load {TEST_DIR}/test_struct_{compression}.db
 
 statement ok
-PRAGMA force_compression='${compression}'
+PRAGMA force_compression='{compression}'
 
 statement ok
 CREATE TABLE test (s ROW(a VARCHAR));
@@ -41,7 +41,7 @@ statement ok
 CHECKPOINT
 
 query I
-SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+SELECT lower(compression)='{compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
 1
 

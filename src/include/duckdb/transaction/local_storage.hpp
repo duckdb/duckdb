@@ -22,6 +22,7 @@ class CollectionScanState;
 class ColumnDefinition;
 class DataChunk;
 class DataTable;
+class DuckTableEntry;
 class DuckTransaction;
 class Expression;
 class ExpressionExecutor;
@@ -54,6 +55,10 @@ public:
 	QueryContext context;
 
 	reference<DataTable> table_ref;
+	//! The DuckTableEntry visible to this transaction that references table_ref.
+	//! Updated through the append path (InitializeAppend, Append, LocalMerge) and
+	//! propagated from parent storage on ALTER operations.
+	optional_ptr<DuckTableEntry> table_entry;
 
 	Allocator &allocator;
 	//! The main row group collection.
@@ -148,15 +153,17 @@ public:
 	                      CollectionScanState &scan_state);
 
 	//! Begin appending to the local storage
-	void InitializeAppend(LocalAppendState &state, DataTable &table);
+	void InitializeAppend(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);
 	//! Initialize the storage and its indexes, but no row groups.
-	void InitializeStorage(LocalAppendState &state, DataTable &table);
+	void InitializeStorage(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);
+
 	//! Append a chunk to the local storage
-	static void Append(LocalAppendState &state, DataChunk &table_chunk, DataTableInfo &data_table_info);
+	static void Append(LocalAppendState &state, DuckTableEntry &table_entry, DataChunk &table_chunk,
+	                   DataTableInfo &data_table_info);
 	//! Finish appending to the local storage
 	static void FinalizeAppend(LocalAppendState &state);
 	//! Merge a row group collection into the transaction-local storage
-	void LocalMerge(DataTable &table, OptimisticWriteCollection &collection);
+	void LocalMerge(DataTable &table, DuckTableEntry &table_entry, OptimisticWriteCollection &collection);
 	//! Create an optimistic row group collection for this table.
 	//! Returns the index into the optimistic_collections vector for newly created collection.
 	PhysicalIndex CreateOptimisticCollection(DataTable &table, unique_ptr<OptimisticWriteCollection> collection);
@@ -168,9 +175,10 @@ public:
 	OptimisticDataWriter &GetOptimisticWriter(DataTable &table);
 
 	//! Delete a set of rows from the local storage
-	idx_t Delete(DataTable &table, Vector &row_ids, idx_t count);
+	idx_t Delete(DataTable &table, DuckTableEntry &table_entry, Vector &row_ids, idx_t count);
 	//! Update a set of rows in the local storage
-	void Update(DataTable &table, Vector &row_ids, const vector<PhysicalIndex> &column_ids, DataChunk &data);
+	void Update(DataTable &table, DuckTableEntry &table_entry, Vector &row_ids, const vector<PhysicalIndex> &column_ids,
+	            DataChunk &data);
 
 	//! Commits the local storage, writing it to the WAL and completing the commit
 	void Commit(optional_ptr<StorageCommitState> commit_state);
@@ -193,7 +201,7 @@ public:
 	                const vector<StorageIndex> &bound_columns, Expression &cast_expr);
 
 	void MoveStorage(DataTable &old_dt, DataTable &new_dt);
-	void FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
+	void FetchChunk(DataTable &table, const Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
 	                DataChunk &chunk, ColumnFetchState &fetch_state);
 	//! Returns true, if the local storage contains the row id.
 	bool CanFetch(DataTable &table, const row_t row_id);

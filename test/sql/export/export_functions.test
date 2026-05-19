@@ -5,9 +5,6 @@
 require icu
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 BEGIN TRANSACTION
 
 statement ok
@@ -23,10 +20,10 @@ CREATE TABLE tbl(
 );
 
 statement ok
-EXPORT DATABASE '__TEST_DIR__/export_special_functions' (FORMAT CSV)
+EXPORT DATABASE '{TEST_DIR}/export_special_functions' (FORMAT CSV)
 
 statement ok
 ROLLBACK
 
 statement ok
-IMPORT DATABASE '__TEST_DIR__/export_special_functions'
+IMPORT DATABASE '{TEST_DIR}/export_special_functions'

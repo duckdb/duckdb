@@ -5,6 +5,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
@@ -60,14 +61,15 @@ bool PushdownInternal(ClientContext &context, const MultiFileOptions &options, c
 	// construct the set of expressions from the table filters
 	vector<unique_ptr<Expression>> filter_expressions;
 	for (auto &entry : filters) {
-		idx_t local_index = entry.ColumnIndex();
-		idx_t column_idx = column_ids[local_index];
+		auto filter_idx = entry.GetIndex();
+		idx_t column_idx = column_ids[filter_idx];
 		if (IsVirtualColumn(column_idx)) {
 			continue;
 		}
-		auto column_ref = make_uniq<BoundColumnRefExpression>(
-		    types[column_idx], ColumnBinding(table_index, ProjectionIndex(entry.ColumnIndex())));
-		auto filter_expr = entry.Filter().ToExpression(*column_ref);
+		auto column_ref =
+		    make_uniq<BoundColumnRefExpression>(types[column_idx], ColumnBinding(table_index, entry.GetIndex()));
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "MultiFilePushdownInfo::Pushdown");
+		auto filter_expr = expr_filter.ToExpression(*column_ref);
 		filter_expressions.push_back(std::move(filter_expr));
 	}
 
@@ -332,7 +334,7 @@ bool LazyMultiFileList::ExpandNextPathInternal() const {
 	if (all_files_expanded) {
 		return false;
 	}
-	if (context && context->interrupted) {
+	if (context && context->IsInterrupted()) {
 		throw InterruptException();
 	}
 	if (!ExpandNextPath()) {

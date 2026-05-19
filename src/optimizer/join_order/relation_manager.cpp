@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
 
@@ -171,6 +172,15 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 		}
 	}
 	return false;
+}
+
+static bool RecursiveCTERefCanReorder(optional_ptr<LogicalOperator> parent) {
+	if (!parent || parent->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		return false;
+	}
+	auto &join = parent->Cast<LogicalComparisonJoin>();
+	idx_t range_count = 0;
+	return join.HasEquality(range_count);
 }
 
 static bool HasNonReorderableChild(LogicalOperator &op) {
@@ -452,7 +462,11 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 
 		auto is_recursive = optimizer.recursive_cte_indexes.find(cte_ref.cte_index);
 		if (is_recursive != optimizer.recursive_cte_indexes.end()) {
-			return false;
+			// Only let recursive CTE references participate in join reordering when they sit directly
+			// under an equality comparison join. This still enables the reusable recursive hash-join
+			// case, while avoiding broader reorderings that let residual/range predicates drive the
+			// reconstructed join tree into expensive range-join plans.
+			return RecursiveCTERefCanReorder(parent);
 		}
 		return true;
 	}
@@ -526,7 +540,8 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	}
 }
 
-void RelationManager::GetColumnBindingsFromExpression(Expression &expression, column_binding_set_t &column_bindings) {
+void RelationManager::GetColumnBindingsFromExpression(const Expression &expression,
+                                                      column_binding_set_t &column_bindings) {
 	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		// Here you have a filter on a single column in a table. Return a binding for the column
 		// being filtered on so the filter estimator knows what HLL count to pull
@@ -544,7 +559,7 @@ void RelationManager::GetColumnBindingsFromExpression(Expression &expression, co
 
 	// TODO: handle inequality filters with functions.
 	ExpressionIterator::EnumerateChildren(
-	    expression, [&](Expression &expr) { GetColumnBindingsFromExpression(expr, column_bindings); });
+	    expression, [&](const Expression &expr) { GetColumnBindingsFromExpression(expr, column_bindings); });
 }
 
 optional_ptr<JoinRelationSet> RelationManager::GetJoinRelations(column_binding_set_t &column_bindings,
@@ -559,7 +574,7 @@ optional_ptr<JoinRelationSet> RelationManager::GetJoinRelations(column_binding_s
 	return *ret;
 }
 
-void RelationManager::ExtractBindings(Expression &expression, unordered_set<RelationIndex> &bindings) {
+bool RelationManager::ExtractBindings(const Expression &expression, unordered_set<RelationIndex> &bindings) {
 	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
@@ -571,7 +586,7 @@ void RelationManager::ExtractBindings(Expression &expression, unordered_set<Rela
 			// Here we return true and don't fill the bindings, the expression can be reordered.
 			// A filter will be created using this expression, and pushed back on top of the parent
 			// operator during plan reconstruction
-			return;
+			return true;
 		}
 		if (relation_mapping.find(colref.binding.table_index) != relation_mapping.end()) {
 			bindings.insert(relation_mapping[colref.binding.table_index]);
@@ -580,11 +595,17 @@ void RelationManager::ExtractBindings(Expression &expression, unordered_set<Rela
 	if (expression.GetExpressionType() == ExpressionType::BOUND_REF) {
 		// bound expression, clear bindings as we can't use this
 		bindings.clear();
-		return;
+		return false;
 	}
 	D_ASSERT(expression.GetExpressionType() != ExpressionType::SUBQUERY);
-	// Recurse into children. Any child that is a BOUND_REF will clear `bindings` and return false
-	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { ExtractBindings(expr, bindings); });
+	bool can_reorder = true;
+	ExpressionIterator::EnumerateChildren(expression, [&](const Expression &expr) {
+		if (!ExtractBindings(expr, bindings)) {
+			can_reorder = false;
+			return;
+		}
+	});
+	return can_reorder;
 }
 
 vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op,
@@ -618,8 +639,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				// Instead they are stored as residual predicates below.
 				for (auto &cond : join.conditions) {
 					if (cond.IsComparison()) {
-						auto comparison = make_uniq<BoundComparisonExpression>(
-						    cond.GetComparisonType(), cond.GetLHS().Copy(), cond.GetRHS().Copy());
+						auto comparison = BoundComparisonExpression::Create(cond.GetComparisonType(),
+						                                                    cond.GetLHS().Copy(), cond.GetRHS().Copy());
 						conjunction_expression->children.push_back(std::move(comparison));
 					}
 				}
@@ -629,11 +650,12 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					optional_ptr<JoinRelationSet> left_set;
 					optional_ptr<JoinRelationSet> right_set;
 					for (auto &bound_expr : conjunction_expression->children) {
-						D_ASSERT(bound_expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
-						auto &comp = bound_expr->Cast<BoundComparisonExpression>();
 						unordered_set<RelationIndex> right_bindings, left_bindings;
-						ExtractBindings(*comp.right, right_bindings);
-						ExtractBindings(*comp.left, left_bindings);
+						auto &comp = bound_expr->Cast<BoundFunctionExpression>();
+						auto &left = BoundComparisonExpression::Left(comp);
+						auto &right = BoundComparisonExpression::Right(comp);
+						ExtractBindings(right, right_bindings);
+						ExtractBindings(left, left_bindings);
 
 						if (!left_set) {
 							left_set = set_manager.GetJoinRelation(left_bindings);
@@ -712,8 +734,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						GetColumnBindingsFromExpression(cond.GetLHS(), cond_left_bindings);
 						GetColumnBindingsFromExpression(cond.GetRHS(), cond_right_bindings);
 
-						auto comparison = make_uniq<BoundComparisonExpression>(
-						    cond.GetComparisonType(), cond.GetLHS().Copy(), cond.GetRHS().Copy());
+						auto comparison = BoundComparisonExpression::Create(cond.GetComparisonType(),
+						                                                    cond.GetLHS().Copy(), cond.GetRHS().Copy());
 
 						auto filter_info = make_uniq<FilterInfo>(std::move(comparison), full_set,
 						                                         filters_and_bindings.size(), join.join_type);
@@ -772,8 +794,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 
 					if (cond.IsComparison()) {
 						auto comp_type = cond.GetComparisonType();
-						expr =
-						    make_uniq<BoundComparisonExpression>(comp_type, cond.GetLHS().Copy(), cond.GetRHS().Copy());
+						expr = BoundComparisonExpression::Create(comp_type, cond.GetLHS().Copy(), cond.GetRHS().Copy());
 					} else {
 						expr = cond.GetJoinExpression().Copy();
 						is_residual = true;

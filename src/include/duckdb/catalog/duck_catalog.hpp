@@ -70,6 +70,7 @@ public:
 
 	DUCKDB_API bool InMemory() override;
 	DUCKDB_API string GetDBPath() override;
+	bool SupportsMultipleDMLCTEs() const override;
 	DUCKDB_API bool IsEncrypted() const override;
 	DUCKDB_API string GetEncryptionCipher() const override;
 

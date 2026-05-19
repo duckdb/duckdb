@@ -119,10 +119,10 @@ public:
 	static void CheckMagicBytes(QueryContext context, FileHandle &handle);
 
 	string LibraryGitDesc() {
-		return string(char_ptr_cast(library_git_desc), 0, MAX_VERSION_SIZE);
+		return string(char_ptr_cast(library_git_desc), MAX_VERSION_SIZE);
 	}
 	string LibraryGitHash() {
-		return string(char_ptr_cast(library_git_hash), 0, MAX_VERSION_SIZE);
+		return string(char_ptr_cast(library_git_hash), MAX_VERSION_SIZE);
 	}
 
 	bool IsEncrypted() const {

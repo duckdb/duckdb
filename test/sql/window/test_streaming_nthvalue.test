@@ -1,0 +1,70 @@
+# name: test/sql/window/test_streaming_nthvalue.test
+# description: Streaming Nth_Value
+# group: [window]
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+# Nth_Value requires running totals
+query TT
+explain select nth_value(i, 1) over () 
+from range(10) tbl(i)
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+explain select nth_value(i, 2) over (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) 
+from range(5) tbl(i)
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query I
+select nth_value(i, 2) over (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) 
+from range(5) tbl(i)
+----
+NULL
+1
+1
+1
+1
+
+# Nth_Value maps negative indices to NULL
+query TT
+explain select nth_value(i, -1) over (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) 
+from range(5) tbl(i)
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query I
+select nth_value(i, -1) over (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) 
+from range(5) tbl(i)
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query II
+SELECT s,
+	nth_value(s, 2 IGNORE NULLS) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM (VALUES 
+	(NULL), 
+	('A'), 
+	(NULL), 
+	('B')
+	) t(s)
+----
+NULL	NULL
+A	NULL
+NULL	NULL
+B	B
+
+# Test short circuit
+query II
+select i, nth_value(i, 2049) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) n
+from range(2049) tbl(i)
+QUALIFY n IS NOT NULL;
+----
+2048	2048
+

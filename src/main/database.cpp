@@ -1,4 +1,5 @@
 #include "duckdb/main/database.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/http_util.hpp"
@@ -29,7 +30,7 @@
 #include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/compression/empty_validity.hpp"
-#include "duckdb/storage/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
 #include "duckdb/storage/storage_extension.hpp"
@@ -74,6 +75,11 @@ DBConfig::~DBConfig() {
 DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 	config.is_user_config = false;
 	create_api_v1 = nullptr;
+	parser_cache = make_uniq<ParserCache>();
+}
+
+ParserCache &DatabaseInstance::GetParserCache() {
+	return *parser_cache;
 }
 
 DatabaseInstance::~DatabaseInstance() {
@@ -316,7 +322,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		}
 		auto storage_extension = StorageExtension::Find(config, config.options.database_type);
 		if (!storage_extension) {
-			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
+			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, {config.options.database_type});
 		}
 	}
 

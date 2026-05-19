@@ -2,9 +2,6 @@
 # description: Test interval addition/subtraction
 # group: [interval]
 
-statement ok
-PRAGMA enable_verification
-
 # we can add/subtract intervals to/from dates
 query T
 SELECT DATE '1992-03-01' + INTERVAL '1' YEAR

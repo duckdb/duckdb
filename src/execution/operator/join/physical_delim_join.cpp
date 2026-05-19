@@ -26,6 +26,7 @@ vector<const_reference<PhysicalOperator>> PhysicalDelimJoin::GetChildren() const
 InsertionOrderPreservingMap<string> PhysicalDelimJoin::ParamsToString() const {
 	auto result = join.ParamsToString();
 	result["Delim Index"] = StringUtil::Format("%llu", delim_idx.GetIndex());
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

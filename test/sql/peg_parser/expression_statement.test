@@ -2,11 +2,6 @@
 # description: Test expression statement
 # group: [peg_parser]
 
-require autocomplete
-
-statement ok 
-call enable_peg_parser();
-
 query I
 1 + 1; 
 ----
@@ -49,12 +44,12 @@ foo: 1 + 1, bar: ('hello world').replace(' ', '_'), [1,2,3][1] as list_element;
 statement error
 1 + 1 foo
 ----
-Parser Error: Syntax error at or near "foo"
+syntax error
 
 statement error
 selec 42
 ----
-Parser Error: Syntax error at or near "42"
+syntax error
 
 statement error
 SEL 

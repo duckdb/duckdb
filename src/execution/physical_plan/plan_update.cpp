@@ -1,3 +1,4 @@
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/operator/persistent/physical_update.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -9,8 +10,8 @@ namespace duckdb {
 PhysicalOperator &DuckCatalog::PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op,
                                           PhysicalOperator &plan) {
 	auto &update = planner.Make<PhysicalUpdate>(
-	    op.types, op.table, op.table.GetStorage(), op.columns, std::move(op.expressions), std::move(op.bound_defaults),
-	    std::move(op.bound_constraints), op.estimated_cardinality, op.return_chunk);
+	    op.types, op.table.Cast<DuckTableEntry>(), op.table.GetStorage(), op.columns, std::move(op.expressions),
+	    std::move(op.bound_defaults), std::move(op.bound_constraints), op.estimated_cardinality, op.return_chunk);
 	auto &cast_update = update.Cast<PhysicalUpdate>();
 	cast_update.update_is_del_and_insert = op.update_is_del_and_insert;
 	cast_update.children.push_back(plan);

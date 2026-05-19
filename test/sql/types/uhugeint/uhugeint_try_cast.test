@@ -2,9 +2,6 @@
 # description: Test try_cast for uhugeint
 # group: [uhugeint]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SELECT CAST('340282366920938463463374607431768211456' AS UHUGEINT)
 ----

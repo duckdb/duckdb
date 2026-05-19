@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
@@ -85,8 +86,7 @@ public:
 				source.Reset();
 				for (idx_t i = 0; i < source.ColumnCount(); ++i) {
 					auto &vec = source.data[i];
-					vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-					ConstantVector::SetNull(vec, true);
+					ConstantVector::SetNull(vec, count_t(STANDARD_VECTOR_SIZE));
 				}
 				exhausted = true;
 			}
@@ -178,7 +178,7 @@ SourceResultType PhysicalPositionalScan::GetDataInternal(ExecutionContext &conte
 		col_offset += scanner->CopyData(context, output, count, col_offset);
 	}
 
-	output.SetCardinality(count);
+	output.SetChildCardinality(count);
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 

@@ -1,0 +1,23 @@
+# name: test/sql/settings/reset/reset_memory_limit.test
+# description: Test that RESET memory_limit actually applies to the buffer manager
+# group: [reset]
+
+# Disable temp directory so the buffer manager cannot spill to disk
+statement ok
+PRAGMA temp_directory='';
+
+# Set an impossibly low limit
+statement ok
+SET memory_limit='2MB';
+
+# Takes ~8MiB
+statement error
+CREATE TABLE t1 AS SELECT * FROM range(1000000);
+----
+
+statement ok
+RESET memory_limit;
+
+# After reset, the buffer manager should allow the allocation
+statement ok
+CREATE TABLE t1 AS SELECT * FROM range(1000000);

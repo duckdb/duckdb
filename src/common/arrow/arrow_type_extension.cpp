@@ -351,21 +351,21 @@ struct ArrowBignum {
 
 struct ArrowBool8 {
 	static void ArrowToDuck(ClientContext &context, Vector &source, Vector &result, idx_t count) {
-		auto source_ptr = reinterpret_cast<int8_t *>(FlatVector::GetData(source));
-		auto result_ptr = reinterpret_cast<bool *>(FlatVector::GetData(result));
+		auto source_ptr = FlatVector::GetData<int8_t>(source);
+		auto result_data = FlatVector::Writer<bool>(result, count);
 		for (idx_t i = 0; i < count; i++) {
-			result_ptr[i] = source_ptr[i];
+			result_data.WriteValue(source_ptr[i]);
 		}
 	}
 	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
-		UnifiedVectorFormat format;
-		source.ToUnifiedFormat(count, format);
-		FlatVector::SetValidity(result, format.validity);
-		auto source_ptr = reinterpret_cast<bool *>(format.data);
-		auto result_ptr = reinterpret_cast<int8_t *>(FlatVector::GetData(result));
+		auto entries = source.Values<bool>();
+		auto result_data = FlatVector::Writer<int8_t>(result, count);
 		for (idx_t i = 0; i < count; i++) {
-			if (format.validity.RowIsValid(i)) {
-				result_ptr[i] = static_cast<int8_t>(source_ptr[i]);
+			auto entry = entries[i];
+			if (entry.IsValid()) {
+				result_data.WriteValue(static_cast<int8_t>(entry.GetValue()));
+			} else {
+				result_data.WriteNull();
 			}
 		}
 	}
@@ -542,7 +542,7 @@ struct ArrowGeometry {
 	}
 
 	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
-		Geometry::ToBinary(source, result, count);
+		Geometry::ToBinary(source, result);
 	}
 };
 

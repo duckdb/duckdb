@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5...3.29)
+cmake_minimum_required(VERSION 3.14...3.29)
 
 if(NOT CLANG_TIDY)
   find_package(Python3)
@@ -23,6 +23,16 @@ endif()
 project(DuckDB)
 
 find_package(Threads REQUIRED)
+
+# Consume optional vcpkg-related cache variables passed by CI/Makefile to avoid
+# "manually-specified variables were not used by the project" warnings in
+# extension-config-only runs.
+if(DEFINED VCPKG_BUILD)
+  set(_duckdb_vcpkg_build "${VCPKG_BUILD}")
+endif()
+if(DEFINED VCPKG_MANIFEST_DIR)
+  set(_duckdb_vcpkg_manifest_dir "${VCPKG_MANIFEST_DIR}")
+endif()
 
 set(DUCKDB_MODULE_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
@@ -51,7 +61,16 @@ if(CMAKE_EXPORT_COMPILE_COMMANDS AND UNIX)
   )
 endif()
 
-set(CMAKE_CXX_STANDARD "17" CACHE STRING "C++ standard to enforce")
+if(DEFINED CMAKE_CXX_STANDARD)
+  set(_duckdb_allowed_cxx_std 17 20 23 26)
+  if(NOT CMAKE_CXX_STANDARD IN_LIST _duckdb_allowed_cxx_std)
+    message(FATAL_ERROR
+      "DuckDB requires C++17 or higher; got CMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD}. "
+      "Pass -DCMAKE_CXX_STANDARD=17 (or higher), or unset it to use the default.")
+  endif()
+endif()
+
+set(CMAKE_CXX_STANDARD 17 CACHE STRING "Default C++ standard (minimum 17)")                                                                                                             
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -80,16 +99,32 @@ if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
     endif()
 endif()
 
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(DEFAULT_BUILD_TYPE "Release")
+  message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}'.")
+  set(CMAKE_BUILD_TYPE
+      "${DEFAULT_BUILD_TYPE}"
+      CACHE STRING "Choose the type of build." FORCE)
+endif()
+
 if(NOT DUCKDB_LINKER AND DEFINED ENV{CI} AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
   set(DUCKDB_LINKER "mold")
 endif()
 
 if (DUCKDB_LINKER)
   set(DUCKDB_LINKER_FLAG "-fuse-ld=${DUCKDB_LINKER}")
+  set(DUCKDB_LINKER_MESSAGE "Using linker from DUCKDB_LINKER=${DUCKDB_LINKER}")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
   set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
-  message(STATUS "Using linker from DUCKDB_LINKER=${DUCKDB_LINKER}")
+  if(CMAKE_BUILD_TYPE STREQUAL "Release" AND DUCKDB_LINKER STREQUAL "mold")
+    set(DUCKDB_MOLD_FLAGS "-Wl,--icf=safe")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
+    set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
+    set(DUCKDB_LINKER_MESSAGE "${DUCKDB_LINKER_MESSAGE} with (${DUCKDB_MOLD_FLAGS})")
+  endif()
+  message(STATUS "${DUCKDB_LINKER_MESSAGE}")
 endif()
 
 
@@ -116,9 +151,25 @@ set(INSTALL_CMAKE_DIR
     CACHE PATH "Installation directory for CMake files")
 set(DUCKDB_EXPORT_SET "DuckDBExports")
 
+option(EXTENSION_STATIC_BUILD
+        "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
+        TRUE)
+option(DISABLE_GCC_FUNCTION_SECTIONS
+        "Do not allow to use '-ffunction-sections -fdata-sections' GCC compile flags."
+        FALSE)
+
+if(ZOS)
+  set(EXTENSION_STATIC_BUILD TRUE)
+endif()
+
+if(WIN32)
+  set(EXTENSION_STATIC_BUILD TRUE)
+  add_definitions(-D_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS=1)
+endif()
+
 # This option allows --gc-sections flag during extension linking to discard any unused functions or data
-if (EXTENSION_STATIC_BUILD AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+if (EXTENSION_STATIC_BUILD)
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND NOT DISABLE_GCC_FUNCTION_SECTIONS)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -ffunction-sections -fdata-sections")
   elseif(WIN32 AND MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Gy")
@@ -206,6 +257,31 @@ else()
   set(OS_NAME "unknown")
 endif()
 
+# Codesign a target with get-task-allow so lldb can attach to it on macOS.
+# Only applied for debug build types where you'd actually want to debug.
+function(duckdb_codesign_for_debugging target)
+  if(APPLE AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
+    set(ENTITLEMENTS_FILE "${CMAKE_BINARY_DIR}/debug_entitlements.plist")
+    if(NOT EXISTS "${ENTITLEMENTS_FILE}")
+      file(WRITE "${ENTITLEMENTS_FILE}"
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"https://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
+        "<plist version=\"1.0\"><dict><key>com.apple.security.get-task-allow</key><true/></dict></plist>"
+      )
+    endif()
+    set(CODESIGN_SCRIPT "${CMAKE_BINARY_DIR}/codesign_debug.cmake")
+    if(NOT EXISTS "${CODESIGN_SCRIPT}")
+      file(WRITE "${CODESIGN_SCRIPT}"
+        "execute_process(COMMAND codesign -s - -f --entitlements \"\${ENTITLEMENTS_FILE}\" \"\${TARGET_FILE}\" ERROR_QUIET)\n"
+      )
+    endif()
+    add_custom_command(TARGET ${target} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -DTARGET_FILE=$<TARGET_FILE:${target}> -DENTITLEMENTS_FILE=${ENTITLEMENTS_FILE} -P "${CODESIGN_SCRIPT}"
+      VERBATIM
+    )
+  endif()
+endfunction()
+
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
 option(ENABLE_EXTENSION_AUTOLOADING "Enable extension auto-loading by default." FALSE)
@@ -279,7 +355,7 @@ endif()
 
 option(EXPORT_DYNAMIC_SYMBOLS "Export dynamic symbols." FALSE)
 if(${EXPORT_DYNAMIC_SYMBOLS})
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rdynamic")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
 endif()
 
 set(VERSIONING_TAG_MATCH "v*.*.*")
@@ -288,7 +364,6 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 # MAIN_BRANCH_VERSIONING default should be 'FALSE' for release branches
 # MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
 # - CMakeLists.txt
-# - scripts/amalgamation.py
 # - scripts/package_build.py
 ######
 option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
@@ -386,7 +461,11 @@ else()
           OUTPUT_VARIABLE GIT_DESCRIBE
           OUTPUT_STRIP_TRAILING_WHITESPACE)
     if (GIT_RESULT)
-      message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Consider providing explicit OVERRIDE_GIT_DESCRIBE or clone with tags. Continuing with dummy version v0.0.1")
+      if ("$ENV{GITHUB_EVENT_NAME}" STREQUAL "pull_request")
+        message(STATUS "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Continuing with dummy version v0.0.1 for pull_request CI")
+      else()
+        message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Consider providing explicit OVERRIDE_GIT_DESCRIBE or clone with tags. Continuing with dummy version v0.0.1")
+      endif()
       set(GIT_DESCRIBE "v0.0.1-0-g${GIT_COMMIT_HASH}")
     endif()
   else()
@@ -453,19 +532,6 @@ message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}, extensio
 option(BUILD_MAIN_DUCKDB_LIBRARY
         "Build the main duckdb library and executable."
         TRUE)
-option(EXTENSION_STATIC_BUILD
-        "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
-        TRUE)
-
-if(ZOS)
-  set(EXTENSION_STATIC_BUILD TRUE)
-endif()
-
-if(WIN32)
-  set(EXTENSION_STATIC_BUILD TRUE)
-  add_definitions(-D_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS=1)
-endif()
-
 option(BUILD_EXTENSIONS_ONLY "Build all extension as linkable, overriding DONT_LINK, and don't build core." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
@@ -474,6 +540,7 @@ option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified 
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(DISABLE_EXTENSION_LOAD "Disable support for loading and installing extensions" FALSE)
+option(DISABLE_BUILTIN_HTTPLIB "Disable support for built-in http-only httplib" FALSE)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
 option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
@@ -504,6 +571,14 @@ option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabl
 option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)
 option(PREBUILT_BINARY "Whether to use a prebuilt version of the DuckDB library, typically called libduckdb_static.a" "")
 
+if(DISABLE_EXTENSION_LOAD)
+  add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
+endif()
+
+if(DISABLE_BUILTIN_HTTPLIB)
+  add_definitions(-DDUCKDB_DISABLE_BUILTIN_HTTPLIB)
+endif()
+
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
 endif()
@@ -514,6 +589,10 @@ endif()
 
 if(EXTENSION_CONFIG_BUILD)
   set(BUILD_MAIN_DUCKDB_LIBRARY FALSE)
+endif()
+
+if(EXTENSION_CONFIG_BUILD AND TARGET clangd_cache)
+  set_target_properties(clangd_cache PROPERTIES EXCLUDE_FROM_ALL 1)
 endif()
 
 if (NOT BUILD_MAIN_DUCKDB_LIBRARY)
@@ -531,7 +610,11 @@ if(TREAT_WARNINGS_AS_ERRORS)
 endif()
 
 if(NATIVE_ARCH)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mcpu=native")
+  else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+  endif()
 endif()
 
 if(OVERRIDE_NEW_DELETE)
@@ -696,14 +779,6 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-  set(DEFAULT_BUILD_TYPE "Release")
-  message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}'.")
-  set(CMAKE_BUILD_TYPE
-      "${DEFAULT_BUILD_TYPE}"
-      CACHE STRING "Choose the type of build." FORCE)
-endif()
-
 set(DUCKDB_RELEASE_LINK_JOBS
     4
     CACHE STRING "Maximum number of concurrent linker jobs for Release builds")
@@ -722,6 +797,8 @@ if(NOT DEFINED CMAKE_JOB_POOL_LINK)
     set(CMAKE_JOB_POOL_LINK debug_link_jobs)
   endif()
 endif()
+message(STATUS
+        "Build workers: compile=$ENV{CMAKE_BUILD_PARALLEL_LEVEL} link_release=${DUCKDB_RELEASE_LINK_JOBS} link_non_release=${DUCKDB_DEBUG_LINK_JOBS}")
 
 if(OS_NAME STREQUAL "windows")
   list (FIND DUCKDB_EXTENSION_NAMES jemalloc _index)
@@ -732,25 +809,27 @@ if(OS_NAME STREQUAL "windows")
 endif()
 
 include_directories(src/include)
-include_directories(third_party/fsst)
-include_directories(third_party/fmt/include)
-include_directories(third_party/hyperloglog)
-include_directories(third_party/fastpforlib)
-include_directories(third_party/skiplist)
-include_directories(third_party/ska_sort)
-include_directories(third_party/fast_float)
-include_directories(third_party/re2)
-include_directories(third_party/miniz)
-include_directories(third_party/utf8proc/include)
-include_directories(third_party/concurrentqueue)
-include_directories(third_party/pcg)
-include_directories(third_party/pdqsort)
-include_directories(third_party/tdigest)
-include_directories(third_party/mbedtls/include)
-include_directories(third_party/jaro_winkler)
-include_directories(third_party/vergesort)
-include_directories(third_party/yyjson/include)
-include_directories(third_party/zstd/include)
+if (NOT EXTENSION_CONFIG_BUILD)
+  include_directories(third_party/fsst)
+  include_directories(third_party/fmt/include)
+  include_directories(third_party/hyperloglog)
+  include_directories(third_party/fastpforlib)
+  include_directories(third_party/skiplist)
+  include_directories(third_party/ska_sort)
+  include_directories(third_party/fast_float)
+  include_directories(third_party/re2)
+  include_directories(third_party/miniz)
+  include_directories(third_party/utf8proc/include)
+  include_directories(third_party/concurrentqueue)
+  include_directories(third_party/pcg)
+  include_directories(third_party/pdqsort)
+  include_directories(third_party/tdigest)
+  include_directories(third_party/mbedtls/include)
+  include_directories(third_party/jaro_winkler)
+  include_directories(third_party/vergesort)
+  include_directories(third_party/yyjson/include)
+  include_directories(third_party/zstd/include)
+endif()
 
 # todo only regenerate ub file if one of the input files changed hack alert
 function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
@@ -859,43 +938,46 @@ elseif (BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(extension)
 endif()
 
-add_third_party(fastpforlib)
-add_third_party(fmt)
-add_third_party(fsst)
-add_third_party(hyperloglog)
-add_third_party(libpg_query)
-add_third_party(mbedtls)
-add_third_party(miniz)
-add_third_party(re2)
-add_third_party(skiplist)
-add_third_party(utf8proc)
-add_third_party(yyjson)
-add_third_party(zstd)
-
-if(NOT DUCKDB_EXPLICIT_PLATFORM)
-  set(VERSION_SOURCES tools/utils/test_platform.cpp)
-
-  add_executable(duckdb_platform_binary ${VERSION_SOURCES})
-  link_threads(duckdb_platform_binary "")
-
-  set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
-  set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                         ${PROJECT_BINARY_DIR})
-  add_custom_command(
-          OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
-          DEPENDS duckdb_platform_binary
-	  COMMAND $<TARGET_FILE:duckdb_platform_binary> > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
-          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-          )
-else()
-  add_custom_command(
-          OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
-          COMMAND
-          ${CMAKE_COMMAND} -E echo_append \"${DUCKDB_EXPLICIT_PLATFORM}\" > ${PROJECT_BINARY_DIR}/duckdb_platform_out
-          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-          )
+if (NOT EXTENSION_CONFIG_BUILD)
+  add_third_party(fastpforlib)
+  add_third_party(fmt)
+  add_third_party(fsst)
+  add_third_party(hyperloglog)
+  add_third_party(mbedtls)
+  add_third_party(miniz)
+  add_third_party(re2)
+  add_third_party(skiplist)
+  add_third_party(utf8proc)
+  add_third_party(yyjson)
+  add_third_party(zstd)
 endif()
-add_custom_target(duckdb_platform DEPENDS ${PROJECT_BINARY_DIR}/duckdb_platform_out)
+
+if (NOT EXTENSION_CONFIG_BUILD)
+  if(NOT DUCKDB_EXPLICIT_PLATFORM)
+    set(VERSION_SOURCES tools/utils/test_platform.cpp)
+
+    add_executable(duckdb_platform_binary ${VERSION_SOURCES})
+    link_threads(duckdb_platform_binary "")
+
+    set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
+    set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                           ${PROJECT_BINARY_DIR})
+    add_custom_command(
+            OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
+            DEPENDS duckdb_platform_binary
+            COMMAND $<TARGET_FILE:duckdb_platform_binary> > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+            )
+  else()
+    add_custom_command(
+            OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
+            COMMAND
+            ${CMAKE_COMMAND} -E echo_append \"${DUCKDB_EXPLICIT_PLATFORM}\" > ${PROJECT_BINARY_DIR}/duckdb_platform_out
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+            )
+  endif()
+  add_custom_target(duckdb_platform DEPENDS ${PROJECT_BINARY_DIR}/duckdb_platform_out)
+endif()
 
 if(NOT CLANG_TIDY)
   if(${BUILD_UNITTESTS})
@@ -944,5 +1026,3 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
           "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
-
-

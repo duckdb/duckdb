@@ -43,6 +43,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		result = LogicalComparisonJoin::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_CONNECT:
+		result = LogicalSimple::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
 		result = LogicalCopyDatabase::Deserialize(deserializer);
 		break;
@@ -63,6 +66,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		break;
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		result = LogicalCreateTable::Deserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_TRIGGER:
+		result = LogicalCreate::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
 		result = LogicalCreate::Deserialize(deserializer);
@@ -86,6 +92,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		result = LogicalComparisonJoin::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_DETACH:
+		result = LogicalSimple::Deserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_DISCONNECT:
 		result = LogicalSimple::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
@@ -189,6 +198,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	}
 	deserializer.Unset<LogicalOperatorType>();
 	result->children = std::move(children);
+	if (type == LogicalOperatorType::LOGICAL_UPDATE) {
+		LogicalUpdate::RewriteInPlaceUpdates(*result);
+	}
 	return result;
 }
 

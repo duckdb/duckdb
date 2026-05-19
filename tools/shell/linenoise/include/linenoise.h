@@ -57,9 +57,11 @@ enum linenoiseTerminalColorMode {
 typedef void(linenoiseCompletionCallback)(const char *, linenoiseCompletions *);
 typedef char *(linenoiseHintsCallback)(const char *, int *color, int *bold);
 typedef void(linenoiseFreeHintsCallback)(void *);
+typedef char *(linenoiseFormatCallback)(const char *);
 void linenoiseSetCompletionCallback(linenoiseCompletionCallback *);
 void linenoiseSetHintsCallback(linenoiseHintsCallback *);
 void linenoiseSetFreeHintsCallback(linenoiseFreeHintsCallback *);
+void linenoiseSetFormatCallback(linenoiseFormatCallback *);
 void linenoiseAddCompletion(linenoiseCompletions *, const char *line, const char *completion, size_t nCompletion,
                             size_t completion_start, const char *completion_type, size_t score, char extra_char);
 

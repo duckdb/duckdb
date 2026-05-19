@@ -22,6 +22,7 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**'
       - '!.github/workflows/Android.yml'
@@ -78,7 +79,7 @@ jobs:
     - name: Install Android NDK
       shell: bash
       run: |
-        wget https://dl.google.com/android/repository/android-ndk-r27-linux.zip
+        python3 scripts/ci/retry.py -- wget https://dl.google.com/android/repository/android-ndk-r27-linux.zip
         unzip android-ndk-r27-linux.zip
         mv android-ndk-r27 android-ndk
 

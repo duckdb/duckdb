@@ -1,0 +1,17 @@
+# name: test/fuzzer/duckfuzz/corrupted_parquet.test
+# description: Corrupted Parquet files
+# group: [duckfuzz]
+
+require parquet
+
+statement error
+from read_parquet('data/parquet-testing/broken/fuzzer4360.parquet', filename=true, filename=map {
+                    1: {name: 'cool_column', type: 'VARCHAR', default_value: NULL}
+                  });
+----
+Failed to read
+
+statement error
+from read_parquet('data/parquet-testing/broken/fuzzer4362.parquet', union_by_name=true);
+----
+Failed to read

@@ -37,7 +37,7 @@ static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> root_
 		    if (right_bindings.find(bound_colref.binding.table_index) != right_bindings.end()) {
 			    // bound colref belongs to RHS
 			    // replace it with a constant NULL
-			    expr = make_uniq<BoundConstantExpression>(Value(expr->return_type));
+			    expr = make_uniq<BoundConstantExpression>(Value(expr->GetReturnType()));
 		    }
 	    });
 	return root_expr;
@@ -108,10 +108,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
                                                              unordered_set<TableIndex> &left_bindings,
                                                              unordered_set<TableIndex> &right_bindings) {
 	auto &join = op->Cast<LogicalJoin>();
-	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		op = PushFiltersIntoDelimJoin(std::move(op));
-		return FinishPushdown(std::move(op));
-	}
 	FilterPushdown left_pushdown(optimizer, convert_mark_joins), right_pushdown(optimizer, convert_mark_joins);
 	// for a comparison join we create a FilterCombiner that checks if we can push conditions on LHS join conditions
 	// into the RHS of the join
@@ -123,7 +119,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		auto &comparison_join = op->Cast<LogicalComparisonJoin>();
 		for (auto &cond : comparison_join.conditions) {
 			if (cond.IsComparison()) {
-				filter_combiner.AddFilter(make_uniq<BoundComparisonExpression>(
+				filter_combiner.AddFilter(BoundComparisonExpression::Create(
 				    cond.GetComparisonType(), cond.GetLHS().Copy(), cond.GetRHS().Copy()));
 			} else {
 				filter_combiner.AddFilter(cond.GetJoinExpression().Copy());

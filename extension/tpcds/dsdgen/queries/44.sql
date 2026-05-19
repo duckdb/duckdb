@@ -43,6 +43,8 @@ FROM
 WHERE asceding.rnk = descending.rnk
   AND i1.i_item_sk=asceding.item_sk
   AND i2.i_item_sk=descending.item_sk
-ORDER BY asceding.rnk
+ORDER BY asceding.rnk,
+    i1.i_product_name desc,
+    i2.i_product_name desc
 LIMIT 100;
 

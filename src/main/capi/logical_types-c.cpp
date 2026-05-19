@@ -2,6 +2,7 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/types/geometry_crs.hpp"
 
 namespace duckdb {
 
@@ -123,7 +124,7 @@ duckdb_logical_type duckdb_create_enum_type(const char **member_names, idx_t mem
 		return nullptr;
 	}
 	duckdb::Vector enum_vector(duckdb::LogicalType::VARCHAR, member_count);
-	auto enum_vector_ptr = duckdb::FlatVector::GetData<duckdb::string_t>(enum_vector);
+	auto enum_vector_ptr = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(enum_vector);
 
 	for (idx_t i = 0; i < member_count; i++) {
 		if (!member_names[i]) {
@@ -404,4 +405,15 @@ duckdb_state duckdb_register_logical_type(duckdb_connection connection, duckdb_l
 		return DuckDBError;
 	}
 	return DuckDBSuccess;
+}
+
+char *duckdb_geometry_type_get_crs(duckdb_logical_type type) {
+	if (!AssertLogicalTypeId(type, duckdb::LogicalTypeId::GEOMETRY)) {
+		return nullptr;
+	}
+	auto &logical_type = *(reinterpret_cast<duckdb::LogicalType *>(type));
+	if (!duckdb::GeoType::HasCRS(logical_type)) {
+		return nullptr;
+	}
+	return strdup(duckdb::GeoType::GetCRS(logical_type).GetDefinition().c_str());
 }

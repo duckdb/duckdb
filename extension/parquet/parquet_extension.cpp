@@ -1,31 +1,22 @@
 #include "parquet_extension.hpp"
 
-#include "duckdb.hpp"
-#include "duckdb/parser/expression/positional_reference_expression.hpp"
+#include <stdint.h>
+#include <string>
+#include <vector>
+#include <memory>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "parquet_geometry.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_metadata.hpp"
-#include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
 #include "parquet_shredding.hpp"
-#include "reader/struct_column_reader.hpp"
 #include "zstd_file_system.hpp"
 #include "writer/primitive_column_writer.hpp"
 #include "writer/variant_column_writer.hpp"
-
-#include <fstream>
-#include <iostream>
-#include <numeric>
-#include <string>
-#include <vector>
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
@@ -36,28 +27,54 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
-#include "duckdb/common/primitive_dictionary.hpp"
-#include "duckdb/logging/log_manager.hpp"
-#include "duckdb/main/settings.hpp"
 #include "parquet_multi_file_info.hpp"
+#include "column_reader.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/copy_option_mode.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/execution/execution_context.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/storage_info.hpp"
+#include "parquet_field_id.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
+class ClientContext;
+class DataChunk;
+class PhysicalOperator;
 
 struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
@@ -90,6 +107,8 @@ struct ParquetWriteBindData : public TableFunctionData {
 	ShreddingType shredding_types;
 	//! The compression level, higher value is more
 	int64_t compression_level = ZStdFileSystem::DefaultCompressionLevel();
+	//! Per-column NOT NULL flags
+	vector<bool> not_null_columns;
 
 	//! Which encodings to include when writing
 	ParquetVersion parquet_version = ParquetVersion::V1;
@@ -104,17 +123,6 @@ struct ParquetWriteBindData : public TableFunctionData {
 	TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc = TimeStampIsAdjustedToUTC::AUTO;
 };
 
-void ParquetWriteGlobalState::LogFlushingRowGroup(const ColumnDataCollection &buffer, const string &reason) {
-	if (!op) {
-		return;
-	}
-	DUCKDB_LOG(writer->GetContext(), PhysicalOperatorLogType, *op, "ParquetWriter", "FlushRowGroup",
-	           {{"file", writer->GetFileName()},
-	            {"rows", to_string(buffer.Count())},
-	            {"size", to_string(buffer.SizeInBytes())},
-	            {"reason", reason}});
-}
-
 ParquetWriteLocalState::ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
     : buffer(context, types) {
 	buffer.SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
@@ -123,16 +131,11 @@ ParquetWriteLocalState::ParquetWriteLocalState(ClientContext &context, const vec
 
 static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &input) {
 	auto &copy_options = input.options;
-	copy_options["row_group_size"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::READ_WRITE);
-	copy_options["chunk_size"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
-	copy_options["row_group_size_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
-	copy_options["row_groups_per_file"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["compression"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
 	copy_options["codec"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
 	copy_options["field_ids"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["kv_metadata"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["encryption_config"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_WRITE);
-	copy_options["dictionary_compression_ratio_threshold"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["dictionary_size_limit"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["string_dictionary_page_size_limit"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["bloom_filter_false_positive_ratio"] = CopyOption(LogicalType::DOUBLE, CopyOptionMode::WRITE_ONLY);
@@ -147,12 +150,18 @@ static void ParquetListCopyOptions(ClientContext &context, CopyOptionsInput &inp
 	copy_options["shredding"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 	copy_options["write_timestamp_as_int96"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 	copy_options["timestamp_is_adjusted_to_utc"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+
+	// Deprecated
+	copy_options["row_group_size"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["chunk_size"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["row_group_size_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+	copy_options["row_groups_per_file"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
+	copy_options["dictionary_compression_ratio_threshold"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 }
 
 static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
                                                  const vector<string> &names, const vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
-	bool row_group_size_bytes_set = false;
 	bool compression_level_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
 	for (auto &option : input.info.options) {
@@ -161,19 +170,7 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			// All parquet write options require exactly one argument
 			throw BinderException("%s requires exactly one argument", StringUtil::Upper(loption));
 		}
-		if (loption == "row_group_size" || loption == "chunk_size") {
-			bind_data->row_group_size = option.second[0].GetValue<uint64_t>();
-		} else if (loption == "row_group_size_bytes") {
-			auto roption = option.second[0];
-			if (roption.GetTypeMutable().id() == LogicalTypeId::VARCHAR) {
-				bind_data->row_group_size_bytes = DBConfig::ParseMemoryLimit(roption.ToString());
-			} else {
-				bind_data->row_group_size_bytes = option.second[0].GetValue<uint64_t>();
-			}
-			row_group_size_bytes_set = true;
-		} else if (loption == "row_groups_per_file") {
-			bind_data->row_groups_per_file = option.second[0].GetValue<uint64_t>();
-		} else if (loption == "compression" || loption == "codec") {
+		if (loption == "compression" || loption == "codec") {
 			const auto roption = StringUtil::Lower(option.second[0].ToString());
 			if (roption == "uncompressed") {
 				bind_data->codec = duckdb_parquet::CompressionCodec::UNCOMPRESSED;
@@ -279,7 +276,9 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			}
 		} else if (loption == "encryption_config") {
 			bind_data->encryption_config = ParquetEncryptionConfig::Create(context, option.second[0]);
-		} else if (loption == "dictionary_compression_ratio_threshold" || loption == "debug_use_openssl") {
+		} else if (loption == "dictionary_compression_ratio_threshold" || loption == "debug_use_openssl" ||
+		           loption == "row_group_size" || loption == "chunk_size" || loption == "row_group_size_bytes" ||
+		           loption == "row_groups_per_file") {
 			// deprecated, ignore setting
 		} else if (loption == "dictionary_size_limit") {
 			auto val = option.second[0].GetValue<int64_t>();
@@ -344,12 +343,6 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 			throw InternalException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
 	}
-	if (row_group_size_bytes_set) {
-		if (Settings::Get<PreserveInsertionOrderSetting>(context)) {
-			throw BinderException("ROW_GROUP_SIZE_BYTES does not work while preserving insertion order. Use \"SET "
-			                      "preserve_insertion_order=false;\" to disable preserving insertion order.");
-		}
-	}
 
 	if (compression_level_set && bind_data->codec != CompressionCodec::ZSTD) {
 		throw BinderException("Compression level is only supported for the ZSTD compression codec");
@@ -357,7 +350,22 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
+
 	return std::move(bind_data);
+}
+
+static void ParquetCopyToPropagateStatistics(CopyToPropagateStatsInput &input) {
+	auto &parquet_bind = input.bind_data.Cast<ParquetWriteBindData>();
+	auto count = parquet_bind.sql_types.size();
+	if (input.column_stats.size() != count) {
+		return;
+	}
+	parquet_bind.not_null_columns.assign(count, false);
+	for (idx_t i = 0; i < count; i++) {
+		if (input.column_stats[i] && !input.column_stats[i]->CanHaveNull()) {
+			parquet_bind.not_null_columns[i] = true;
+		}
+	}
 }
 
 static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data,
@@ -366,14 +374,26 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer = make_uniq<ParquetWriter>(
-	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
-	    parquet_bind.field_ids.Copy(), parquet_bind.shredding_types.Copy(), parquet_bind.kv_metadata,
-	    parquet_bind.encryption_config, parquet_bind.dictionary_size_limit,
-	    parquet_bind.string_dictionary_page_size_limit, parquet_bind.enable_bloom_filters,
-	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.parquet_version,
-	    parquet_bind.geoparquet_version, parquet_bind.write_timestamp_as_int96,
-	    parquet_bind.timestamp_is_adjusted_to_utc);
+
+	ParquetWriterOptions options;
+	options.file_name = file_path;
+	options.sql_types = parquet_bind.sql_types;
+	options.column_names = parquet_bind.column_names;
+	options.codec = parquet_bind.codec, options.field_ids = parquet_bind.field_ids.Copy();
+	options.shredding_types = parquet_bind.shredding_types.Copy();
+	options.encryption_config = parquet_bind.encryption_config;
+	options.dictionary_size_limit = parquet_bind.dictionary_size_limit,
+	options.string_dictionary_page_size_limit = parquet_bind.string_dictionary_page_size_limit;
+	options.enable_bloom_filters = parquet_bind.enable_bloom_filters,
+	options.bloom_filter_false_positive_ratio = parquet_bind.bloom_filter_false_positive_ratio;
+	options.compression_level = parquet_bind.compression_level;
+	options.parquet_version = parquet_bind.parquet_version,
+	options.geoparquet_version = parquet_bind.geoparquet_version;
+	options.write_timestamp_as_int96 = parquet_bind.write_timestamp_as_int96,
+	options.timestamp_is_adjusted_to_utc = parquet_bind.timestamp_is_adjusted_to_utc;
+	options.not_null_columns = parquet_bind.not_null_columns;
+
+	global_state->writer = make_uniq<ParquetWriter>(context, fs, std::move(options), parquet_bind.kv_metadata);
 	return std::move(global_state);
 }
 
@@ -394,9 +414,6 @@ static void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_
 
 	if (local_state.buffer.Count() >= bind_data.row_group_size ||
 	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes) {
-		const string reason =
-		    local_state.buffer.Count() >= bind_data.row_group_size ? "ROW_GROUP_SIZE" : "ROW_GROUP_SIZE_BYTES";
-		global_state.LogFlushingRowGroup(local_state.buffer, reason);
 		// if the chunk collection exceeds a certain size (rows/bytes) we flush it to the parquet file
 		local_state.append_state.current_chunk_state.handles.clear();
 		global_state.writer->Flush(local_state.buffer, local_state.transform_data);
@@ -413,7 +430,6 @@ static void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_da
 	if (local_state.buffer.Count() >= bind_data.row_group_size / 2 ||
 	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes / 2) {
 		// local state buffer is more than half of the row_group_size(_bytes), just flush it
-		global_state.LogFlushingRowGroup(local_state.buffer, "Combine");
 		global_state.writer->Flush(local_state.buffer, local_state.transform_data);
 		return;
 	}
@@ -427,7 +443,6 @@ static void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_da
 			// After combining, the combine buffer is more than half of the row_group_size(_bytes), so we flush
 			auto owned_combine_buffer = std::move(global_state.combine_buffer);
 			guard.unlock();
-			global_state.LogFlushingRowGroup(*owned_combine_buffer, "Combine");
 			// Lock free, of course
 			global_state.writer->Flush(*owned_combine_buffer, local_state.transform_data);
 		}
@@ -442,7 +457,6 @@ static void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	// flush the combine buffer (if it's there)
 	if (global_state.combine_buffer) {
-		global_state.LogFlushingRowGroup(*global_state.combine_buffer, "Finalize");
 		global_state.writer->Flush(*global_state.combine_buffer, global_state.transform_data);
 	}
 
@@ -626,8 +640,10 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	serializer.WriteProperty(100, "sql_types", bind_data.sql_types);
 	serializer.WriteProperty(101, "column_names", bind_data.column_names);
 	serializer.WriteProperty(102, "codec", bind_data.codec);
-	serializer.WriteProperty(103, "row_group_size", bind_data.row_group_size);
-	serializer.WriteProperty(104, "row_group_size_bytes", bind_data.row_group_size_bytes);
+
+	// 103 was row_group_size, but was deleted
+	// 104 was row_group_size_bytes, but was deleted
+
 	serializer.WriteProperty(105, "kv_metadata", bind_data.kv_metadata);
 	serializer.WriteProperty(106, "field_ids", bind_data.field_ids);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
@@ -642,8 +658,9 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	D_ASSERT(DeserializeCompressionLevel(compression_level) == bind_data.compression_level);
 	ParquetWriteBindData default_value;
 	serializer.WritePropertyWithDefault(109, "compression_level", compression_level);
-	serializer.WritePropertyWithDefault(110, "row_groups_per_file", bind_data.row_groups_per_file,
-	                                    default_value.row_groups_per_file);
+
+	// 110 was row_groups_per_file, but was deleted
+
 	serializer.WritePropertyWithDefault(112, "dictionary_size_limit", bind_data.dictionary_size_limit,
 	                                    default_value.dictionary_size_limit);
 	serializer.WritePropertyWithDefault(113, "bloom_filter_false_positive_ratio",
@@ -662,6 +679,8 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                    default_value.timestamp_is_adjusted_to_utc);
 	serializer.WritePropertyWithDefault(119, "write_timestamp_as_int96", bind_data.write_timestamp_as_int96,
 	                                    default_value.write_timestamp_as_int96);
+	serializer.WritePropertyWithDefault<vector<bool>>(120, "not_null_columns", bind_data.not_null_columns,
+	                                                  default_value.not_null_columns);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -669,8 +688,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->sql_types = deserializer.ReadProperty<vector<LogicalType>>(100, "sql_types");
 	data->column_names = deserializer.ReadProperty<vector<string>>(101, "column_names");
 	data->codec = deserializer.ReadProperty<duckdb_parquet::CompressionCodec::type>(102, "codec");
-	data->row_group_size = deserializer.ReadProperty<idx_t>(103, "row_group_size");
-	data->row_group_size_bytes = deserializer.ReadProperty<idx_t>(104, "row_group_size_bytes");
+	deserializer.ReadDeletedProperty<idx_t>(103, "row_group_size");
+	deserializer.ReadDeletedProperty<idx_t>(104, "row_group_size_bytes");
 	data->kv_metadata = deserializer.ReadProperty<vector<pair<string, string>>>(105, "kv_metadata");
 	data->field_ids = deserializer.ReadProperty<ChildFieldIDs>(106, "field_ids");
 	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(
@@ -682,8 +701,7 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->compression_level = DeserializeCompressionLevel(compression_level);
 	D_ASSERT(SerializeCompressionLevel(data->compression_level) == compression_level);
 	ParquetWriteBindData default_value;
-	data->row_groups_per_file = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(
-	    110, "row_groups_per_file", default_value.row_groups_per_file);
+	deserializer.ReadDeletedProperty<optional_idx>(110, "row_groups_per_file");
 	deserializer.ReadDeletedProperty<bool>(111, "debug_use_openssl");
 	data->dictionary_size_limit =
 	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(112, "dictionary_size_limit", optional_idx());
@@ -701,6 +719,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    118, "timestamp_is_adjusted_to_utc", default_value.timestamp_is_adjusted_to_utc);
 	data->write_timestamp_as_int96 = deserializer.ReadPropertyWithExplicitDefault(
 	    119, "write_timestamp_as_int96", default_value.write_timestamp_as_int96);
+	data->not_null_columns =
+	    deserializer.ReadPropertyWithExplicitDefault<vector<bool>>(120, "not_null_columns", vector<bool>());
 
 	return std::move(data);
 }
@@ -761,25 +781,11 @@ static idx_t ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &
 }
 
 //===--------------------------------------------------------------------===//
-// File rotation
+// File Size Bytes
 //===--------------------------------------------------------------------===//
-static bool ParquetWriteRotateFiles(FunctionData &bind_data_p, const optional_idx &file_size_bytes) {
-	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
-	return file_size_bytes.IsValid() || bind_data.row_groups_per_file.IsValid();
-}
-
-static bool ParquetWriteRotateNextFile(GlobalFunctionData &gstate, FunctionData &bind_data_p,
-                                       const optional_idx &file_size_bytes) {
+static idx_t ParquetWriteFileSizeBytes(GlobalFunctionData &gstate) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
-	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
-	if (file_size_bytes.IsValid() && global_state.writer->FileSize() > file_size_bytes.GetIndex()) {
-		return true;
-	}
-	if (bind_data.row_groups_per_file.IsValid() &&
-	    global_state.writer->NumberOfRowGroups() >= bind_data.row_groups_per_file.GetIndex()) {
-		return true;
-	}
-	return false;
+	return global_state.writer->FileSize();
 }
 
 //===--------------------------------------------------------------------===//
@@ -840,7 +846,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 	bool any_change = false;
 
 	for (auto &expr : input.select_list) {
-		const auto &type = expr->return_type;
+		const auto &type = expr->GetReturnType();
 		const auto &name = expr->GetAlias();
 
 		// Spatial types need to be encoded into WKB when writing GeoParquet.
@@ -934,6 +940,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	function.supports_sql_null = true;
 	function.copy_to_select = ParquetWriteSelect;
 	function.copy_to_bind = ParquetWriteBind;
+	function.copy_to_propagate_statistics = ParquetCopyToPropagateStatistics;
 	function.copy_options = ParquetListCopyOptions;
 	function.copy_to_initialize_global = ParquetWriteInitializeGlobal;
 	function.copy_to_initialize_local = ParquetWriteInitializeLocal;
@@ -945,11 +952,13 @@ static void LoadInternal(ExtensionLoader &loader) {
 	function.initialize_operator = ParquetWriteInitializeOperator;
 	function.copy_from_bind = MultiFileFunction<ParquetMultiFileInfo>::MultiFileBindCopy;
 	function.copy_from_function = scan_fun.functions[0];
+
 	function.prepare_batch = ParquetWritePrepareBatch;
 	function.flush_batch = ParquetWriteFlushBatch;
+	function.file_size_bytes = ParquetWriteFileSizeBytes;
+
 	function.desired_batch_size = ParquetWriteDesiredBatchSize;
-	function.rotate_files = ParquetWriteRotateFiles;
-	function.rotate_next_file = ParquetWriteRotateNextFile;
+
 	function.serialize = ParquetCopySerialize;
 	function.deserialize = ParquetCopyDeserialize;
 

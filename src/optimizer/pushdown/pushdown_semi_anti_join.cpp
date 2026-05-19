@@ -11,10 +11,6 @@ using Filter = FilterPushdown::Filter;
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSemiAntiJoin(unique_ptr<LogicalOperator> op) {
 	auto &join = op->Cast<LogicalJoin>();
-	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		op = PushFiltersIntoDelimJoin(std::move(op));
-		return FinishPushdown(std::move(op));
-	}
 
 	// push all current filters down the left side
 	op->children[0] = Rewrite(std::move(op->children[0]));

@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
@@ -27,6 +28,7 @@
 #include "duckdb/function/scalar/struct_utils.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include <utility>
 
@@ -181,10 +183,10 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 			if (cond.GetRHS().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
 			}
-			if (cond.GetLHS().Cast<BoundColumnRefExpression>().return_type.IsFloating()) {
+			if (cond.GetLHS().Cast<BoundColumnRefExpression>().GetReturnType().IsFloating()) {
 				continue;
 			}
-			if (cond.GetRHS().Cast<BoundColumnRefExpression>().return_type.IsFloating()) {
+			if (cond.GetRHS().Cast<BoundColumnRefExpression>().GetReturnType().IsFloating()) {
 				continue;
 			}
 			// comparison join between two bound column refs
@@ -328,7 +330,7 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 		auto &distinct = op.Cast<LogicalDistinct>();
 		if (distinct.distinct_type == DistinctType::DISTINCT_ON) {
 			// distinct type references columns that need to be distinct on, so no
-			// need to implicity reference everything.
+			// need to implicitly reference everything.
 			break;
 		}
 		// distinct, all projected columns are used for the DISTINCT computation
@@ -481,17 +483,6 @@ void RemoveUnusedColumns::VisitOperator(unique_ptr<LogicalOperator> &op_ref) {
 	}
 }
 
-static ProjectionIndex GetColumnIdsIndexForFilter(vector<ColumnIndex> &column_ids, idx_t filter_idx) {
-	// Find the index in the column_ids that contains the column referenced by the filter
-	auto it = std::find_if(column_ids.begin(), column_ids.end(), [&filter_idx](const ColumnIndex &column_index) {
-		return column_index.GetPrimaryIndex() == filter_idx;
-	});
-	if (it == column_ids.end()) {
-		throw InternalException("Could not find column index for table filter");
-	}
-	return ProjectionIndex(static_cast<idx_t>(std::distance(column_ids.begin(), it)));
-}
-
 //! returns: found_path, depth of the found path
 std::pair<column_index_set::iterator, idx_t> FindShortestMatchingPath(column_index_set &all_paths,
                                                                       const ColumnIndex &full_path) {
@@ -555,15 +546,15 @@ void RemoveUnusedColumns::WritePushdownExtractColumns(
 		auto &component = struct_extract.components[depth];
 		auto &expr = component.cast ? *component.cast : component.extract;
 
-		auto return_type = expr->return_type;
+		auto return_type = expr->GetReturnType();
 
 		auto &colref = col.bindings[struct_extract.bindings_idx];
 		auto colref_copy = colref.get().Copy();
 		expr = std::move(colref_copy);
 		auto &new_expr = expr->Cast<BoundColumnRefExpression>();
-		new_expr.return_type = return_type;
+		new_expr.SetReturnType(return_type);
 
-		auto column_index = callback(*entry, component.cast ? &(*component.cast)->return_type : nullptr);
+		auto column_index = callback(*entry, component.cast ? &(*component.cast)->GetReturnType() : nullptr);
 		new_expr.binding.column_index = column_index;
 	}
 }
@@ -571,9 +562,8 @@ void RemoveUnusedColumns::WritePushdownExtractColumns(
 static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &context, unique_ptr<Expression> target,
                                                              const ColumnIndex &path) {
 	auto extract_function = GetKeyExtractFunction();
-	auto bind_callback = extract_function.GetBindCallback();
 
-	auto &struct_type = target->return_type;
+	auto &struct_type = target->GetReturnType();
 	D_ASSERT(struct_type.id() == LogicalTypeId::STRUCT);
 	reference<const LogicalType> type_iter(struct_type);
 	reference<const ColumnIndex> path_iter(path);
@@ -584,14 +574,10 @@ static unique_ptr<Expression> ConstructStructExtractFromPath(ClientContext &cont
 		auto &key = child_types[child_index].first;
 		type_iter = child_types[child_index].second;
 
-		auto function = extract_function;
 		vector<unique_ptr<Expression>> arguments(2);
 		arguments[0] = (std::move(target));
 		arguments[1] = (make_uniq<BoundConstantExpression>(Value(key)));
-		auto bind_info = bind_callback(context, function, arguments);
-		auto return_type = function.GetReturnType();
-		target = make_uniq<BoundFunctionExpression>(return_type, std::move(function), std::move(arguments),
-		                                            std::move(bind_info));
+		target = extract_function.Bind(context, std::move(arguments));
 		if (!path_iter.get().HasChildren()) {
 			break;
 		}
@@ -621,7 +607,7 @@ void RemoveUnusedColumns::RewriteExpressions(LogicalProjection &proj, idx_t expr
 		auto &expr = *proj.expressions[expression_idx++];
 		auto &colref = expr.Cast<BoundColumnRefExpression>();
 		auto original_binding = colref.binding;
-		auto &column_type = expr.return_type;
+		auto &column_type = expr.GetReturnType();
 		idx_t start = expressions.size();
 		//! Pushdown Extract is supported, emit a column for every field
 		WritePushdownExtractColumns(
@@ -695,7 +681,7 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto &proj = op.Cast<LogicalProjection>();
 		for (auto proj_idx : ProjectionIndex::GetIndexes(proj.expressions.size())) {
-			auto &expr = *proj.expressions[proj_idx.index];
+			auto &expr = *proj.expressions[proj_idx];
 			auto record = column_references.find(ColumnBinding(proj.table_index, proj_idx));
 			if (record == column_references.end()) {
 				//! Not referenced, skip
@@ -707,11 +693,11 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 				//! No children of this column are referenced, skip
 				continue;
 			}
-			if (expr.type != ExpressionType::BOUND_COLUMN_REF) {
+			if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				//! Not a column reference, can't pull up the extract
 				continue;
 			}
-			if (expr.return_type.id() != LogicalTypeId::STRUCT) {
+			if (expr.GetReturnType().id() != LogicalTypeId::STRUCT) {
 				//! Extract pull up only supported for STRUCT currently
 				continue;
 			}
@@ -765,15 +751,16 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	//! for each filter that was pushed down - convert them into an expression
 	vector<unique_ptr<Expression>> filter_expressions;
 	for (auto &entry : get.table_filters) {
-		auto filter_idx = entry.ColumnIndex();
+		auto filter_idx = entry.GetIndex();
 		auto &filter = entry.Filter();
-		auto index = GetColumnIdsIndexForFilter(old_column_ids, filter_idx);
-		auto column_type = get.GetColumnType(ColumnIndex(filter_idx));
+		auto &col_id = get.GetColumnIndex(filter_idx);
+		auto column_type = get.GetColumnType(col_id);
 
-		ColumnBinding filter_binding(get.table_index, index);
+		ColumnBinding filter_binding(get.table_index, filter_idx);
 		auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
 		//! Convert the filter to an expression, so we can visit it
-		auto filter_expr = filter.ToExpression(*column_ref);
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RemoveUnusedColumns::VisitGet");
+		auto filter_expr = expr_filter.ToExpression(*column_ref);
 		if (filter_expr->IsScalar()) {
 			filter_expr = std::move(column_ref);
 		}
@@ -791,7 +778,7 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	bool has_pushdown_extract = false;
 	// Now set the column ids in the LogicalGet using the "selection vector"
 	for (auto &col_sel_idx : col_sel) {
-		auto &logical_column_id = old_column_ids[col_sel_idx.index];
+		auto &logical_column_id = old_column_ids[col_sel_idx];
 		auto &column_type = get.GetColumnType(logical_column_id);
 		auto entry = column_references.find(ColumnBinding(get.table_index, col_sel_idx));
 		if (entry == column_references.end()) {
@@ -844,6 +831,25 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	}
 	get.SetColumnIds(std::move(new_column_ids));
 
+	// remap table filters so they point towards the new set of ids
+	if (get.table_filters.HasFilters()) {
+		// Build a mapping from old ProjectionIndex -> new ProjectionIndex using original_ids
+		unordered_map<ProjectionIndex, ProjectionIndex> old_to_new_pos;
+		old_to_new_pos.reserve(original_ids.size());
+		for (idx_t new_pos = 0; new_pos < original_ids.size(); new_pos++) {
+			old_to_new_pos[original_ids[new_pos]] = ProjectionIndex(new_pos);
+		}
+		TableFilterSet remapped_filters;
+		for (auto &entry : get.table_filters) {
+			auto it = old_to_new_pos.find(entry.GetIndex());
+			if (it == old_to_new_pos.end()) {
+				throw InternalException("RemoveUnusedColumns: removed a filter column");
+			}
+			remapped_filters.PushFilter(it->second, entry.TakeFilter());
+		}
+		get.table_filters = std::move(remapped_filters);
+	}
+
 	if (has_pushdown_extract && !filter_expressions.empty()) {
 		// if we have performed pushdown extract and we have filter expressions we might have adjusted the filter
 		// expressions remove the table filters and push a filter, then try to re-push the filters with the new set of
@@ -852,8 +858,10 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 		filter->expressions = std::move(filter_expressions);
 		filter->children.push_back(std::move(op_ref));
 		get.table_filters.ClearFilters();
-		// push the final result in the operator
-		op_ref = std::move(filter);
+
+		// try to push filters back into the table scan
+		FilterPushdown pushdown(optimizer);
+		op_ref = pushdown.Rewrite(std::move(filter));
 		return;
 	}
 
@@ -936,13 +944,13 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> &expr_p,
                                            vector<ReferencedExtractComponent> &expressions) {
 	auto &function = expr_p->Cast<BoundFunctionExpression>();
 	auto &child = function.children[0];
-	D_ASSERT(child->return_type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(child->GetReturnType().id() == LogicalTypeId::STRUCT);
 	auto &bind_data = function.bind_info->Cast<StructExtractBindData>();
 	// struct extract, check if left child is a bound column ref
 	if (child->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		// column reference - check if it is a struct
 		auto &ref = child->Cast<BoundColumnRefExpression>();
-		if (ref.return_type.id() != LogicalTypeId::STRUCT) {
+		if (ref.GetReturnType().id() != LogicalTypeId::STRUCT) {
 			return false;
 		}
 		colref = &ref;
@@ -970,7 +978,7 @@ bool BaseColumnPruner::HandleVariantExtract(unique_ptr<Expression> &expr_p,
                                             vector<ReferencedExtractComponent> &expressions) {
 	auto &function = expr_p->Cast<BoundFunctionExpression>();
 	auto &child = function.children[0];
-	D_ASSERT(child->return_type.id() == LogicalTypeId::VARIANT);
+	D_ASSERT(child->GetReturnType().id() == LogicalTypeId::VARIANT);
 	auto &bind_data = function.bind_info->Cast<VariantExtractBindData>();
 	if (bind_data.component.lookup_mode != VariantChildLookupMode::BY_KEY) {
 		//! We don't push down variant extract on ARRAY values
@@ -980,7 +988,7 @@ bool BaseColumnPruner::HandleVariantExtract(unique_ptr<Expression> &expr_p,
 	if (child->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		// column reference - check if it is a variant
 		auto &ref = child->Cast<BoundColumnRefExpression>();
-		if (ref.return_type.id() != LogicalTypeId::VARIANT) {
+		if (ref.GetReturnType().id() != LogicalTypeId::VARIANT) {
 			return false;
 		}
 		colref = &ref;
@@ -1014,15 +1022,15 @@ bool BaseColumnPruner::HandleExtractRecursive(unique_ptr<Expression> &expr_p,
 		return false;
 	}
 	auto &function = expr.Cast<BoundFunctionExpression>();
-	if (function.function.name != "struct_extract_at" && function.function.name != "struct_extract" &&
-	    function.function.name != "array_extract" && function.function.name != "variant_extract") {
+	if (function.function.GetName() != "struct_extract_at" && function.function.GetName() != "struct_extract" &&
+	    function.function.GetName() != "array_extract" && function.function.GetName() != "variant_extract") {
 		return false;
 	}
 	if (!function.bind_info) {
 		return false;
 	}
 	auto &child = function.children[0];
-	auto child_type = child->return_type.id();
+	auto child_type = child->GetReturnType().id();
 	switch (child_type) {
 	case LogicalTypeId::STRUCT:
 		return HandleStructExtract(expr_p, colref, path_ref, expressions);
@@ -1046,7 +1054,7 @@ bool BaseColumnPruner::HandleExtractExpression(unique_ptr<Expression> *expressio
 	if (cast_expression) {
 		auto &top_level = expressions.back();
 		top_level.cast = cast_expression;
-		path_ref.get().SetType((*cast_expression)->return_type);
+		path_ref.get().SetType((*cast_expression)->GetReturnType());
 	}
 
 	AddBinding(*colref, path.GetChildIndex(0), expressions);
@@ -1176,7 +1184,7 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col) {
 }
 
 static bool TryGetCastChild(unique_ptr<Expression> &expr, optional_ptr<unique_ptr<Expression>> &child) {
-	if (expr->type != ExpressionType::OPERATOR_CAST) {
+	if (expr->GetExpressionType() != ExpressionType::OPERATOR_CAST) {
 		return false;
 	}
 	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_CAST);

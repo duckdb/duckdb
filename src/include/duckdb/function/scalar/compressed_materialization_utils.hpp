@@ -19,8 +19,7 @@ struct CMUtils {
 	//! The types we compress strings to
 	static const vector<LogicalType> StringTypes();
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                     vector<unique_ptr<Expression>> &arguments);
+	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input);
 };
 
 //! Needed for (de)serialization without binding

@@ -103,21 +103,20 @@ void TableIndexList::RemoveIndex(const string &name) {
 			if (!index.IsBound()) {
 				unbound_count--;
 			}
+			index.ResetStorage();
 			index_entries.erase_at(i);
 			return;
 		}
 	}
 }
 
-void TableIndexList::CommitDrop(const string &name) {
+unordered_set<string> TableIndexList::DistinctIndexTypes() const {
 	lock_guard<mutex> lock(index_entries_lock);
+	unordered_set<string> result;
 	for (auto &entry : index_entries) {
-		auto &index = *entry->index;
-		if (index.GetIndexName() == name) {
-			index.CommitDrop();
-			return;
-		}
+		result.insert(entry->index->GetIndexType());
 	}
+	return result;
 }
 
 bool TableIndexList::NameIsUnique(const string &name) {

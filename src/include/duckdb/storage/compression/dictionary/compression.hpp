@@ -4,6 +4,7 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/compression/dictionary/common.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 
 namespace duckdb {
@@ -21,31 +22,27 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-struct DictionaryCompressionCompressState : public DictionaryCompressionState {
+struct DictionaryCompressionCompressState : public StandardCompressionState {
 public:
-	DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info,
+	DictionaryCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p,
 	                                   idx_t max_unique_count_across_all_segments);
 
 public:
 	void CreateEmptySegment();
-	void Verify() override;
-	bool LookupString(string_t str) override;
-	void AddNewString(string_t str) override;
-	void AddNull() override;
-	void AddLastLookup() override;
-	bool CalculateSpaceRequirements(bool new_string, idx_t string_size) override;
-	void Flush(bool final = false) override;
+	void Verify();
+	bool LookupString(string_t str);
+	void AddNewString(string_t str);
+	void AddNull();
+	void AddLastLookup();
+	bool CalculateSpaceRequirements(bool new_string, idx_t string_size);
+	void Flush(bool final = false);
 	idx_t Finalize();
 
 public:
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
-
 	// State regarding current segment
-	unique_ptr<ColumnSegment> current_segment;
-	BufferHandle current_handle;
 	StringDictionaryContainer current_dictionary;
 	data_ptr_t current_end_ptr;
+	StatsWriter<string_t> stats_writer;
 
 	// Buffers and map for current segment
 	PrimitiveDictionary<string_t> current_string_map;

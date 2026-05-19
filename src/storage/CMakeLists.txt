@@ -1,26 +1,28 @@
 add_subdirectory(buffer)
 add_subdirectory(checkpoint)
 add_subdirectory(compression)
+add_subdirectory(external_file_cache)
 add_subdirectory(metadata)
 add_subdirectory(serialization)
 add_subdirectory(statistics)
 add_subdirectory(table)
+
+if(${EXIT_TIME_DESTRUCTORS_WARNING})
+  set(CMAKE_CXX_FLAGS_DEBUG
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
+endif()
 
 add_library_unity(
   duckdb_storage
   OBJECT
   arena_allocator.cpp
   buffer_manager.cpp
-  caching_file_system.cpp
-  caching_file_system_wrapper.cpp
   checkpoint_manager.cpp
   temporary_memory_manager.cpp
   block.cpp
   block_allocator.cpp
   data_pointer.cpp
   data_table.cpp
-  external_file_cache.cpp
-  external_file_cache_util.cpp
   index.cpp
   local_storage.cpp
   magic_bytes.cpp

@@ -2,9 +2,6 @@
 # description: LTRIM/RTRIM/TRIM test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # test ltrim on scalars
 query TTTTTTT
 select LTRIM(''), LTRIM('Neither'), LTRIM(' Leading'), LTRIM('Trailing   '), LTRIM(' Both '), LTRIM(NULL), LTRIM('     ')

@@ -6,7 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/table/range.hpp"
 #include "utf8proc_wrapper.hpp"
-#include "duckdb/storage/caching_file_system.hpp"
+#include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 
 namespace duckdb {
 

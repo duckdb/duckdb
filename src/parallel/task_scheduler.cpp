@@ -438,7 +438,7 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 	requested_thread_count = NumericCast<int32_t>(total_threads - external_threads);
 }
 
-void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
+void TaskScheduler::SetAllocatorFlushThreshold(idx_t threshold) {
 	allocator_flush_threshold = threshold;
 }
 
@@ -461,7 +461,7 @@ void TaskScheduler::YieldThread() {
 }
 
 idx_t TaskScheduler::GetEstimatedCPUId() {
-#if defined(EMSCRIPTEN)
+#if defined(__EMSCRIPTEN__)
 	// FIXME: Wasm + multithreads can likely be implemented as
 	//   return return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
 	return 0;

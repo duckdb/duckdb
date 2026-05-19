@@ -87,7 +87,7 @@ statement ok
 PRAGMA enable_profiling = 'json'
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/sleep_profiling.json'
+PRAGMA profiling_output = '{TEST_DIR}/sleep_profiling.json'
 
 statement ok
 SELECT sleep_ms(50) FROM range(1)
@@ -97,7 +97,7 @@ PRAGMA disable_profiling
 
 # Extract timing from JSON profiling output and validate it's >= 0.05s
 statement ok
-CREATE OR REPLACE TABLE sleep_profiling AS SELECT * FROM read_json('__TEST_DIR__/sleep_profiling.json')
+CREATE OR REPLACE TABLE sleep_profiling AS SELECT * FROM read_json('{TEST_DIR}/sleep_profiling.json')
 
 query T
 SELECT cpu_time >= 0.05 FROM sleep_profiling WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1
@@ -113,7 +113,7 @@ statement ok
 PRAGMA enable_profiling = 'json'
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/sleep_profiling_multi.json'
+PRAGMA profiling_output = '{TEST_DIR}/sleep_profiling_multi.json'
 
 statement ok
 SELECT sleep_ms(10) FROM range(5)
@@ -123,7 +123,7 @@ PRAGMA disable_profiling
 
 # Extract timing from JSON profiling output and validate it's >= 0.05s
 statement ok
-CREATE OR REPLACE TABLE sleep_profiling_multi AS SELECT * FROM read_json('__TEST_DIR__/sleep_profiling_multi.json')
+CREATE OR REPLACE TABLE sleep_profiling_multi AS SELECT * FROM read_json('{TEST_DIR}/sleep_profiling_multi.json')
 
 query T
 SELECT cpu_time >= 0.05 FROM sleep_profiling_multi WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1
@@ -151,7 +151,7 @@ statement ok
 PRAGMA enable_profiling = 'json'
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/sleep_nested_profiling.json'
+PRAGMA profiling_output = '{TEST_DIR}/sleep_nested_profiling.json'
 
 statement ok
 SELECT sleep_ms(sleep_ms(50)) FROM range(1)
@@ -161,7 +161,7 @@ PRAGMA disable_profiling
 
 # Extract timing from JSON profiling output and validate it's >= 0.05s
 statement ok
-CREATE OR REPLACE TABLE sleep_nested_profiling AS SELECT * FROM read_json('__TEST_DIR__/sleep_nested_profiling.json')
+CREATE OR REPLACE TABLE sleep_nested_profiling AS SELECT * FROM read_json('{TEST_DIR}/sleep_nested_profiling.json')
 
 query T
 SELECT cpu_time >= 0.05 FROM sleep_nested_profiling WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1

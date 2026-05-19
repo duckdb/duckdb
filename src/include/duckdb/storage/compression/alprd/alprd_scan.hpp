@@ -11,6 +11,7 @@
 #include "duckdb/storage/compression/alprd/algorithm/alprd.hpp"
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -72,7 +73,7 @@ public:
 		handle = buffer_manager.Pin(segment.block);
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
-		segment_data = handle.Ptr() + segment.GetBlockOffset();
+		segment_data = handle.GetDataMutable() + segment.GetBlockOffset();
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
 
@@ -84,7 +85,11 @@ public:
 		uint8_t actual_dictionary_size =
 		    Load<uint8_t>(segment_data + AlpRDConstants::METADATA_POINTER_SIZE + AlpRDConstants::RIGHT_BIT_WIDTH_SIZE +
 		                  AlpRDConstants::LEFT_BIT_WIDTH_SIZE);
-		uint8_t actual_dictionary_size_bytes = actual_dictionary_size * AlpRDConstants::DICTIONARY_ELEMENT_SIZE;
+		if (actual_dictionary_size > AlpRDConstants::MAX_DICTIONARY_SIZE) {
+			throw IOException("Corrupt database file: ALPRD dictionary size exceeds maximum");
+		}
+		idx_t actual_dictionary_size_bytes =
+		    static_cast<idx_t>(actual_dictionary_size) * AlpRDConstants::DICTIONARY_ELEMENT_SIZE;
 
 		// Load the left parts dictionary which is after the segment header and is of a fixed size
 		memcpy(vector_state.left_parts_dict, (void *)(segment_data + AlpRDConstants::HEADER_SIZE),
@@ -161,6 +166,9 @@ public:
 			}
 			return;
 		}
+		if (vector_state.exceptions_count > vector_size) {
+			throw IOException("Corrupt database file: ALPRD exceptions_count exceeds vector size");
+		}
 
 		auto left_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.left_bit_width);
 		auto right_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.right_bit_width);
@@ -225,7 +233,7 @@ void AlpRDScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 	auto &scan_state = (AlpRDScanState<T> &)*state.scan_state;
 
 	// Get the pointer to the result values
-	auto current_result_ptr = FlatVector::GetDataUnsafe<EXACT_TYPE>(result);
+	auto current_result_ptr = FlatVector::GetDataMutableUnsafe<EXACT_TYPE>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	current_result_ptr += result_offset;
 

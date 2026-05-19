@@ -6,7 +6,7 @@
 require no_alternative_verify
 
 statement ok
-ATTACH '__TEST_DIR__/read_duckdb_index.db'
+ATTACH '{TEST_DIR}/read_duckdb_index.db'
 
 statement ok
 CREATE TABLE read_duckdb_index.my_tbl(i INTEGER PRIMARY KEY);
@@ -18,11 +18,11 @@ statement ok
 DETACH read_duckdb_index
 
 query I
-SELECT * FROM read_duckdb('__TEST_DIR__/read_duckdb_index.db') WHERE i=42873
+SELECT * FROM read_duckdb('{TEST_DIR}/read_duckdb_index.db') WHERE i=42873
 ----
 42873
 
 query II
-SELECT *, rowid FROM read_duckdb('__TEST_DIR__/read_duckdb_index.db') WHERE i=42873
+SELECT *, rowid FROM read_duckdb('{TEST_DIR}/read_duckdb_index.db') WHERE i=42873
 ----
 42873	42872

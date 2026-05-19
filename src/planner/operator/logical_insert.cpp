@@ -36,7 +36,7 @@ vector<ColumnBinding> LogicalInsert::GetColumnBindings() {
 	if (return_chunk) {
 		return GenerateColumnBindings(table_index, table.GetTypes().size());
 	}
-	return {ColumnBinding(TableIndex(0), ProjectionIndex(0))};
+	return {ColumnBinding(table_index, ProjectionIndex(0))};
 }
 
 void LogicalInsert::ResolveTypes() {

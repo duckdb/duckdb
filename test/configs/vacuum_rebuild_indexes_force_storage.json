@@ -1,0 +1,24 @@
+{
+  "base_config": "test/configs/force_storage.json",
+  "description": "Run tests on persistent storage with vacuum rebuild indexes enabled",
+  "settings": [
+    {
+      "name": "vacuum_rebuild_indexes",
+      "value": "500000"
+    }
+  ],
+  "skip_tests": [
+    {
+      "reason": "Tests check explicit rowid values which shift when vacuum compacts row groups.",
+      "paths": [
+        "test/issues/rigger/test_609.test",
+        "test/sql/upsert/upsert_explicit_index.test",
+        "test/sql/index/art/constraints/test_art_simple_update.test",
+        "test/sql/index/art/constraints/test_art_tx_upserts_local.test",
+        "test/sql/index/art/constraints/test_art_tx_deletes_varchar.test",
+        "test/sql/index/art/constraints/test_art_eager_constraint_checking.test",
+        "test/sql/index/art/constraints/test_art_tx_deletes_list.test"
+      ]
+    }
+  ]
+}

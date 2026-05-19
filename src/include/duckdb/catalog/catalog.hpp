@@ -332,6 +332,9 @@ public:
 	virtual bool SupportsTimeTravel() const {
 		return false;
 	}
+	virtual bool SupportsMultipleDMLCTEs() const {
+		return false;
+	}
 	virtual bool IsEncrypted() const {
 		return false;
 	}
@@ -355,7 +358,7 @@ public:
 	DUCKDB_API string GetDefaultTable() const;
 	DUCKDB_API string GetDefaultTableSchema() const;
 
-	//! Returns the dependency manager of this catalog - if the catalog has anye
+	//! Returns the dependency manager of this catalog - if the catalog has any
 	virtual optional_ptr<DependencyManager> GetDependencyManager();
 
 	//! Whether attaching a catalog with the given path and attach options would be considered a conflict

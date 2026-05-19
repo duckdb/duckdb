@@ -2,49 +2,46 @@
 # description: Test STRUCT distinctions
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 foreach type <numeric>
 
 # Constant single integer column distinct
 query T
-SELECT {'x': 1::${type}} IS NOT DISTINCT FROM {'x': 2::${type}}
+SELECT {'x': 1::{type}} IS NOT DISTINCT FROM {'x': 2::{type}}
 ----
 false
 
 query T
-SELECT {'x': 1::${type}} IS NOT DISTINCT FROM {'x': 1::${type}}
+SELECT {'x': 1::{type}} IS NOT DISTINCT FROM {'x': 1::{type}}
 ----
 true
 
 query T
-SELECT NULL IS NOT DISTINCT FROM {'x': 1::${type}}
+SELECT NULL IS NOT DISTINCT FROM {'x': 1::{type}}
 ----
 false
 
 query T
-SELECT {'x': 1::${type}} IS DISTINCT FROM {'x': 2::${type}}
+SELECT {'x': 1::{type}} IS DISTINCT FROM {'x': 2::{type}}
 ----
 true
 
 query T
-SELECT {'x': 1::${type}} IS DISTINCT FROM {'x': 1::${type}}
+SELECT {'x': 1::{type}} IS DISTINCT FROM {'x': 1::{type}}
 ----
 false
 
 query T
-SELECT {'x': 1::${type}} IS DISTINCT FROM NULL
+SELECT {'x': 1::{type}} IS DISTINCT FROM NULL
 ----
 true
 
 statement ok
 CREATE OR REPLACE VIEW struct_int AS SELECT * FROM (VALUES
-	({'x': 1::${type}}, {'x': 1::${type}}),
-	({'x': 1::${type}}, {'x': 2::${type}}),
-	({'x': 2::${type}}, {'x': 1::${type}}),
-	(NULL, {'x': 1::${type}}),
-	({'x': 2::${type}}, NULL),
+	({'x': 1::{type}}, {'x': 1::{type}}),
+	({'x': 1::{type}}, {'x': 2::{type}}),
+	({'x': 2::{type}}, {'x': 1::{type}}),
+	(NULL, {'x': 1::{type}}),
+	({'x': 2::{type}}, NULL),
 	(NULL, NULL)
 	) tbl(l, r);
 

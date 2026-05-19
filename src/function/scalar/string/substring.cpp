@@ -265,38 +265,38 @@ struct SubstringGraphemeOp {
 
 template <class OP>
 void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input_vector = args.data[0];
-	auto &offset_vector = args.data[1];
+	const auto &input_vector = args.data[0];
+	const auto &offset_vector = args.data[1];
 	if (args.ColumnCount() == 3) {
-		auto &length_vector = args.data[2];
+		const auto &length_vector = args.data[2];
 
 		TernaryExecutor::Execute<string_t, int64_t, int64_t, string_t>(
-		    input_vector, offset_vector, length_vector, result, args.size(),
+		    input_vector, offset_vector, length_vector, result,
 		    [&](string_t input_string, int64_t offset, int64_t length) {
 			    return OP::Substring(result, input_string, offset, length);
 		    });
 	} else {
 		BinaryExecutor::Execute<string_t, int64_t, string_t>(
-		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int64_t offset) {
+		    input_vector, offset_vector, result, [&](string_t input_string, int64_t offset) {
 			    return OP::Substring(result, input_string, offset, NumericLimits<uint32_t>::Maximum());
 		    });
 	}
 }
 
 void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input_vector = args.data[0];
-	auto &offset_vector = args.data[1];
+	const auto &input_vector = args.data[0];
+	const auto &offset_vector = args.data[1];
 	if (args.ColumnCount() == 3) {
-		auto &length_vector = args.data[2];
+		const auto &length_vector = args.data[2];
 
 		TernaryExecutor::Execute<string_t, int64_t, int64_t, string_t>(
-		    input_vector, offset_vector, length_vector, result, args.size(),
+		    input_vector, offset_vector, length_vector, result,
 		    [&](string_t input_string, int64_t offset, int64_t length) {
 			    return SubstringASCII(result, input_string, offset, length);
 		    });
 	} else {
 		BinaryExecutor::Execute<string_t, int64_t, string_t>(
-		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int64_t offset) {
+		    input_vector, offset_vector, result, [&](string_t input_string, int64_t offset) {
 			    return SubstringASCII(result, input_string, offset, NumericLimits<uint32_t>::Maximum());
 		    });
 	}
@@ -318,11 +318,10 @@ unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, Funct
 ScalarFunctionSet SubstringFun::GetFunctions() {
 	ScalarFunctionSet substr("substring");
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                  LogicalType::VARCHAR, SubstringFunction<SubstringUnicodeOp>, nullptr, nullptr,
+	                                  LogicalType::VARCHAR, SubstringFunction<SubstringUnicodeOp>, nullptr,
 	                                  SubstringPropagateStats));
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                                  SubstringFunction<SubstringUnicodeOp>, nullptr, nullptr,
-	                                  SubstringPropagateStats));
+	                                  SubstringFunction<SubstringUnicodeOp>, nullptr, SubstringPropagateStats));
 	return (substr);
 }
 
@@ -330,9 +329,9 @@ ScalarFunctionSet SubstringGraphemeFun::GetFunctions() {
 	ScalarFunctionSet substr_grapheme("substring_grapheme");
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                           LogicalType::VARCHAR, SubstringFunction<SubstringGraphemeOp>, nullptr,
-	                                           nullptr, SubstringPropagateStats));
+	                                           SubstringPropagateStats));
 	substr_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                                           SubstringFunction<SubstringGraphemeOp>, nullptr, nullptr,
+	                                           SubstringFunction<SubstringGraphemeOp>, nullptr,
 	                                           SubstringPropagateStats));
 	return (substr_grapheme);
 }

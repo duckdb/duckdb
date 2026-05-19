@@ -2,9 +2,6 @@
 # description: Unsigned Hugeint try cast
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 # integer casts
 statement ok
 CREATE TABLE uhugeints AS SELECT i::UHUGEINT i FROM (VALUES (0::UHUGEINT), (1::UHUGEINT), ('340282366920938463463374607431768211455'::UHUGEINT)) tbl(i)

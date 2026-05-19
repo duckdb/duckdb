@@ -1,5 +1,6 @@
 #include "duckdb/main/relation/update_relation.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -24,13 +25,14 @@ BoundStatement UpdateRelation::Bind(Binder &binder) {
 	basetable->table_name = table_name;
 
 	UpdateStatement stmt;
-	stmt.set_info = make_uniq<UpdateSetInfo>();
+	auto &node = *stmt.node;
 
-	stmt.set_info->condition = condition ? condition->Copy() : nullptr;
-	stmt.table = std::move(basetable);
-	stmt.set_info->columns = update_columns;
+	node.set_info = make_uniq<UpdateSetInfo>();
+	node.set_info->condition = condition ? condition->Copy() : nullptr;
+	node.table = std::move(basetable);
+	node.set_info->columns = update_columns;
 	for (auto &expr : expressions) {
-		stmt.set_info->expressions.push_back(expr->Copy());
+		node.set_info->expressions.push_back(expr->Copy());
 	}
 	return binder.Bind(stmt.Cast<SQLStatement>());
 }

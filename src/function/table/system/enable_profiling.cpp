@@ -136,7 +136,7 @@ void EnableProfilingFun::RegisterFunction(BuiltinFunctions &set) {
 	enable_fun.named_parameters.emplace("mode", LogicalType::VARCHAR);
 	enable_fun.named_parameters.emplace("metrics", LogicalType::ANY);
 
-	enable_fun.varargs = LogicalType::LIST(LogicalType::VARCHAR);
+	enable_fun.SetVarArgs(LogicalType::LIST(LogicalType::VARCHAR));
 	set.AddFunction(enable_fun);
 
 	auto disable_fun = TableFunction("disable_profiling", {}, DisableProfiling, BindDisableProfiling, nullptr, nullptr);

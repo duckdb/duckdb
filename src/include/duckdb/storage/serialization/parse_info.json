@@ -551,6 +551,40 @@
     ]
   },
   {
+    "class": "ConnectInfo",
+    "base": "ParseInfo",
+    "enum": "CONNECT_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/connect_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "name_is_string_literal",
+        "type": "bool"
+      },
+      {
+        "id": 202,
+        "name": "target_is_local",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "DisconnectInfo",
+    "base": "ParseInfo",
+    "enum": "DISCONNECT_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/disconnect_info.hpp"
+    ],
+    "members": []
+  },
+  {
     "class": "DropInfo",
     "base": "ParseInfo",
     "enum": "DROP_INFO",
@@ -632,6 +666,11 @@
         "id": 204,
         "name": "repo_is_alias",
         "type": "bool"
+      },
+      {
+        "id": 205,
+        "name": "alias",
+        "type": "string"
       }
     ]
   },
@@ -692,6 +731,17 @@
         "id": 201,
         "name": "modifier",
         "type": "TransactionModifierType"
+      },
+      {
+        "id": 202,
+        "name": "invalidation_policy",
+        "type": "TransactionInvalidationPolicy",
+        "default" : "TransactionInvalidationPolicy::STANDARD_POLICY"
+      },
+      {
+        "id": 203,
+        "name": "auto_rollback",
+        "type": "bool"
       }
     ]
   },

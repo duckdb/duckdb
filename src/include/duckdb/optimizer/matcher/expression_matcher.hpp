@@ -67,7 +67,7 @@ public:
 class ComparisonExpressionMatcher : public ExpressionMatcher {
 public:
 	ComparisonExpressionMatcher()
-	    : ExpressionMatcher(ExpressionClass::BOUND_COMPARISON), policy(SetMatcher::Policy::INVALID) {
+	    : ExpressionMatcher(ExpressionClass::BOUND_FUNCTION), policy(SetMatcher::Policy::INVALID) {
 	}
 	//! The matchers for the child expressions
 	vector<unique_ptr<ExpressionMatcher>> matchers;

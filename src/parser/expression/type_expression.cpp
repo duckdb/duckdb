@@ -1,5 +1,6 @@
 #include "duckdb/parser/expression/type_expression.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -23,10 +24,10 @@ TypeExpression::TypeExpression() : ParsedExpression(ExpressionType::TYPE, Expres
 string TypeExpression::ToString() const {
 	string result;
 	if (!catalog.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
+		result += SQLIdentifier(catalog) + ".";
 	}
 	if (!schema.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+		result += SQLIdentifier(schema) + ".";
 	}
 
 	auto &params = children;
@@ -47,7 +48,7 @@ string TypeExpression::ToString() const {
 		}
 		string struct_result = "STRUCT(";
 		for (idx_t i = 0; i < params.size(); i++) {
-			struct_result += KeywordHelper::WriteOptionallyQuoted(params[i]->GetAlias()) + " " + params[i]->ToString();
+			struct_result += SQLIdentifier(params[i]->GetAlias()) + " " + params[i]->ToString();
 			if (i < params.size() - 1) {
 				struct_result += ", ";
 			}
@@ -61,7 +62,7 @@ string TypeExpression::ToString() const {
 		}
 		string union_result = "UNION(";
 		for (idx_t i = 0; i < params.size(); i++) {
-			union_result += KeywordHelper::WriteOptionallyQuoted(params[i]->GetAlias()) + " " + params[i]->ToString();
+			union_result += SQLIdentifier(params[i]->GetAlias()) + " " + params[i]->ToString();
 			if (i < params.size() - 1) {
 				union_result += ", ";
 			}
@@ -78,7 +79,7 @@ string TypeExpression::ToString() const {
 		if (params.back()->HasAlias() && StringUtil::CIEquals(params.back()->GetAlias(), "collation")) {
 			// Special case for VARCHAR with collation
 			auto collate_expr = params.back()->Cast<ConstantExpression>();
-			return StringUtil::Format("VARCHAR COLLATE %s", SQLIdentifier(StringValue::Get(collate_expr.value)));
+			return StringUtil::Format("VARCHAR COLLATE %s", SQLIdentifier(StringValue::Get(collate_expr.GetValue())));
 		}
 	}
 
@@ -87,7 +88,13 @@ string TypeExpression::ToString() const {
 		return "INTERVAL";
 	}
 
-	result += KeywordHelper::WriteOptionallyQuoted(type_name, '"', true, KeywordCategory::KEYWORD_COL_NAME);
+	auto type_id = TransformStringToLogicalTypeId(type_name);
+	if (type_id != LogicalTypeId::UNBOUND && type_id != LogicalTypeId::SQLNULL) {
+		// Built-in type name
+		result += type_name;
+	} else {
+		result += SQLIdentifier(type_name);
+	}
 
 	if (!params.empty()) {
 		result += "(";

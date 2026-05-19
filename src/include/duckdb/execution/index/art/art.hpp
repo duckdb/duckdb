@@ -119,8 +119,8 @@ public:
 	                 optional_ptr<SelectionVector> deleted_sel = nullptr,
 	                 optional_ptr<SelectionVector> non_deleted_sel = nullptr);
 
-	//! Drop the ART.
-	void CommitDrop(IndexLock &index_lock) override;
+	//! Reset all ART storage.
+	void ResetStorage(IndexLock &index_lock) override;
 
 	//! Build an ART from a vector of sorted keys and their row IDs.
 	ARTConflictType Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);
@@ -146,8 +146,8 @@ public:
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
 	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
-	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
-	                        unsafe_vector<ARTKey> &row_id_keys);
+	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
+	                        unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys);
 
 	//! Verifies the nodes.
 	void Verify(IndexLock &l) override;

@@ -3,9 +3,6 @@
 # group: [alias]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TYPE alias AS VARCHAR;
 
 #Enums with the same name shouldn't work

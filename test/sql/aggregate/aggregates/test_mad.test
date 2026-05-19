@@ -2,9 +2,6 @@
 # description: Test MAD (Moving Absolute Deviation) aggregate
 # group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
 # scalar mad is zero
 query II
 SELECT mad(NULL), mad(1)
@@ -30,17 +27,17 @@ create table tinys as
 foreach type tinyint decimal(4,1)
 
 query I
-SELECT mad(r::${type}) FROM tinys
+SELECT mad(r::{type}) FROM tinys
 ----
 25
 
 query I
-SELECT mad(NULL::${type}) FROM tinys
+SELECT mad(NULL::{type}) FROM tinys
 ----
 NULL
 
 query I
-SELECT mad(42::${type}) FROM tinys
+SELECT mad(42::{type}) FROM tinys
 ----
 0
 
@@ -59,17 +56,17 @@ create table numerics as
 foreach type smallint integer bigint hugeint uhugeint float double decimal(8,1) decimal(12,1) decimal(18,1) decimal(24,1)
 
 query I
-SELECT mad(r::${type}) FROM numerics
+SELECT mad(r::{type}) FROM numerics
 ----
 2500
 
 query I
-SELECT mad(NULL::${type}) FROM numerics
+SELECT mad(NULL::{type}) FROM numerics
 ----
 NULL
 
 query I
-SELECT mad(42::${type}) FROM numerics
+SELECT mad(42::{type}) FROM numerics
 ----
 0
 

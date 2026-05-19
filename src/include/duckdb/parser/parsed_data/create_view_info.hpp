@@ -14,6 +14,8 @@
 namespace duckdb {
 class SchemaCatalogEntry;
 
+enum class CreateViewBindingMode { BIND_ON_CREATE, SKIP_BINDING };
+
 struct CreateViewInfo : public CreateInfo {
 public:
 	CreateViewInfo();
@@ -33,6 +35,8 @@ public:
 	unordered_map<string, Value> column_comments_map;
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
+	//! Whether or not to bind the view on create
+	CreateViewBindingMode binding_mode = CreateViewBindingMode::BIND_ON_CREATE;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;

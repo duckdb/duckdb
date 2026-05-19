@@ -8,7 +8,7 @@ The supported platforms are:
 - `linux_amd64`
 - `osx_amd64` and `osx_arm64`
 
-Support for the [other](https://duckdb.org/docs/stable/extensions/extension_distribution#platforms) DuckDB platforms is
+Support for the [other](https://duckdb.org/docs/current/extensions/extension_distribution#platforms) DuckDB platforms is
 work-in-progress
 
 # How to use
@@ -19,7 +19,7 @@ This extension is distributed as a binary extension. To use it, simply use one o
 FROM delta_scan('s3://some/delta/table');
 ```
 
-Note that using DuckDB [Secrets](https://duckdb.org/docs/stable/configuration/secrets_manager) for S3 authentication is supported:
+Note that using DuckDB [Secrets](https://duckdb.org/docs/current/configuration/secrets_manager) for S3 authentication is supported:
 
 ```SQL
 CREATE SECRET (TYPE S3, provider credential_chain);
@@ -51,7 +51,7 @@ See the [Extension Template](https://github.com/duckdb/extension-template) for g
 
 # Running tests
 There are various tests available for the delta extension:
-1. Delta Acceptence Test (DAT) based tests in `/test/sql/dat`
+1. Delta Acceptance Test (DAT) based tests in `/test/sql/dat`
 2. delta-kernel-rs based tests in `/test/sql/delta_kernel_rs`
 3. Generated data based tests in `tests/sql/generated` (generated using [delta-rs](https://delta-io.github.io/delta-rs/), [PySpark](https://spark.apache.org/docs/latest/api/python/index.html), and DuckDB)
 

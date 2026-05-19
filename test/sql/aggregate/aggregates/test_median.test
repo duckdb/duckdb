@@ -3,10 +3,7 @@
 # group: [aggregates]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
-PRAGMA verify_external
+SET debug_force_external=true;
 
 # scalar quantiles
 query II
@@ -111,7 +108,7 @@ foreach type <integral> DECIMAL(4,1) DECIMAL(9,1) DECIMAL(18,1) DECIMAL(38,1) fl
 # We don't need to cast these values because 
 # they are too small for the 1% floating point margin to affect the result
 query I
-SELECT MEDIAN(range::${type})
+SELECT MEDIAN(range::{type})
 FROM range(0,10);
 ----
 4.5
@@ -121,7 +118,7 @@ endloop
 foreach type date timestamp timestamp_s timestamp_ms timestamp_ns
 
 query I
-SELECT MEDIAN(range::${type}) 
+SELECT MEDIAN(range::{type}) 
 FROM range('2024-01-01'::date, '2024-01-11'::date, INTERVAL 1 DAY);
 ----
 2024-01-05 12:00:00
@@ -161,7 +158,7 @@ FROM (VALUES
 foreach type varchar
 
 query I
-SELECT MEDIAN(range::${type}) FROM range(0,10);
+SELECT MEDIAN(range::{type}) FROM range(0,10);
 ----
 4
 
