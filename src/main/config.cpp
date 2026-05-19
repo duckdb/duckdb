@@ -153,6 +153,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(ExternalThreadsSetting),
     DUCKDB_SETTING(FileSearchPathSetting),
     DUCKDB_SETTING_CALLBACK(ForceBitpackingModeSetting),
+    DUCKDB_SETTING(ForceColumnMetadataReuseSetting),
     DUCKDB_SETTING_CALLBACK(ForceCompressionSetting),
     DUCKDB_GLOBAL(ForceMbedtlsUnsafeSetting),
     DUCKDB_GLOBAL(ForceVariantShredding),
@@ -226,12 +227,12 @@ static const ConfigurationOption internal_options[] = {
 
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 27),
                                                      DUCKDB_SETTING_ALIAS("custom_profiling_settings", 27),
-                                                     DUCKDB_SETTING_ALIAS("memory_limit", 114),
+                                                     DUCKDB_SETTING_ALIAS("memory_limit", 115),
                                                      DUCKDB_SETTING_ALIAS("null_order", 52),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 135),
-                                                     DUCKDB_SETTING_ALIAS("user", 150),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 136),
+                                                     DUCKDB_SETTING_ALIAS("user", 151),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 26),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 149),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 150),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

@@ -170,9 +170,8 @@ struct HexUhugeIntOperator {
 template <class INPUT, class OP>
 static void ToHexFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
-	auto &input = args.data[0];
-	idx_t count = args.size();
-	UnaryExecutor::ExecuteString<INPUT, string_t, OP>(input, result, count);
+	const auto &input = args.data[0];
+	UnaryExecutor::ExecuteString<INPUT, string_t, OP>(input, result);
 }
 
 struct BinaryStrOperator {
@@ -361,27 +360,22 @@ struct FromBinaryOperator {
 template <class INPUT, class OP>
 static void ToBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
-	auto &input = args.data[0];
-	idx_t count = args.size();
-	UnaryExecutor::ExecuteString<INPUT, string_t, OP>(input, result, count);
+	const auto &input = args.data[0];
+	UnaryExecutor::ExecuteString<INPUT, string_t, OP>(input, result);
 }
 
 static void FromBinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 	D_ASSERT(args.data[0].GetType().InternalType() == PhysicalType::VARCHAR);
-	auto &input = args.data[0];
-	idx_t count = args.size();
-
-	UnaryExecutor::ExecuteString<string_t, string_t, FromBinaryOperator>(input, result, count);
+	const auto &input = args.data[0];
+	UnaryExecutor::ExecuteString<string_t, string_t, FromBinaryOperator>(input, result);
 }
 
 static void FromHexFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
 	D_ASSERT(args.data[0].GetType().InternalType() == PhysicalType::VARCHAR);
-	auto &input = args.data[0];
-	idx_t count = args.size();
-
-	UnaryExecutor::ExecuteString<string_t, string_t, FromHexOperator>(input, result, count);
+	const auto &input = args.data[0];
+	UnaryExecutor::ExecuteString<string_t, string_t, FromHexOperator>(input, result);
 }
 
 ScalarFunctionSet HexFun::GetFunctions() {

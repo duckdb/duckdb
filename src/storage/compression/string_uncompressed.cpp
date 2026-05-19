@@ -23,8 +23,8 @@ UncompressedStringSegmentState::~UncompressedStringSegmentState() {
 // Analyze
 //===--------------------------------------------------------------------===//
 struct StringAnalyzeState : public AnalyzeState {
-	explicit StringAnalyzeState(const CompressionInfo &info)
-	    : AnalyzeState(info), count(0), total_string_size(0), overflow_strings(0) {
+	explicit StringAnalyzeState(BlockManager &block_manager)
+	    : AnalyzeState(block_manager), count(0), total_string_size(0), overflow_strings(0) {
 	}
 
 	idx_t count;
@@ -33,15 +33,15 @@ struct StringAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<StringAnalyzeState>(info);
+	return make_uniq<StringAnalyzeState>(col_data.GetBlockManager());
 }
 
-bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
+bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {
 	auto &state = state_p.Cast<StringAnalyzeState>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(vdata);
 
+	const auto count = input.size();
 	state.count += count;
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 	for (idx_t i = 0; i < count; i++) {

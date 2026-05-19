@@ -14,7 +14,7 @@ struct EscapeOperator {
 };
 
 void RegexpEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::ExecuteString<string_t, string_t, EscapeOperator>(args.data[0], result, args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, EscapeOperator>(args.data[0], result);
 }
 
 } // namespace

@@ -175,20 +175,19 @@ const validity_t ValidityUncompressed::UPPER_MASKS[] = {0x0,
 // Analyze
 //===--------------------------------------------------------------------===//
 struct ValidityAnalyzeState : public AnalyzeState {
-	explicit ValidityAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), count(0) {
+	explicit ValidityAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager), count(0) {
 	}
 
 	idx_t count;
 };
 
 unique_ptr<AnalyzeState> ValidityInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<ValidityAnalyzeState>(info);
+	return make_uniq<ValidityAnalyzeState>(col_data.GetBlockManager());
 }
 
-bool ValidityAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
+bool ValidityAnalyze(AnalyzeState &state_p, const Vector &input) {
 	auto &state = state_p.Cast<ValidityAnalyzeState>();
-	state.count += count;
+	state.count += input.size();
 	return true;
 }
 

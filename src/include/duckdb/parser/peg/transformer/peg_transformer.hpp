@@ -283,6 +283,7 @@ public:
 	void RegisterExplain();
 	void RegisterExpression();
 	void RegisterInsert();
+	void RegisterConnect();
 	void RegisterLoad();
 	void RegisterMergeInto();
 	void RegisterPivot();
@@ -366,6 +367,12 @@ private:
 	// analyze.gram
 	static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer, ParseResult &parse_result);
 	static AnalyzeTarget TransformAnalyzeTarget(PEGTransformer &transformer, ParseResult &parse_result);
+
+	// connect.gram — both rules have optional sub-clauses, so the generator skips them and we
+	// hand-write the (PEGTransformer&, ParseResult&) entry points.
+	static unique_ptr<SQLStatement> TransformConnectStatement(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformDisconnectStatement(PEGTransformer &transformer,
+	                                                             ParseResult &parse_result);
 
 	// attach.gram
 	static unique_ptr<SQLStatement> TransformAttachStatement(PEGTransformer &transformer, ParseResult &parse_result);
