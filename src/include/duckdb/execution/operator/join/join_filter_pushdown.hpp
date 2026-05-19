@@ -32,6 +32,8 @@ struct JoinFilterPushdownColumn {
 	LogicalType storage_type;
 	//! The original type of the pushed probe expression before rewriting to the LogicalGet storage column
 	LogicalType filter_type;
+	//! Whether runtime filter evaluation can safely reconstruct the pushed probe expression on raw scan values
+	bool runtime_cast_is_safe = true;
 };
 
 struct JoinFilterGlobalState {

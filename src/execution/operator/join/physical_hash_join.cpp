@@ -1378,11 +1378,13 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 			auto condition_type = min_val.type();
 			auto runtime_filter_input_type =
 			    pushdown_column.filter_type.IsValid() ? pushdown_column.filter_type : condition_type;
-			bool runtime_filter_type_matches = true;
+			bool runtime_filter_type_matches = pushdown_column.runtime_cast_is_safe;
 			if (perfect_join_executor) {
-				runtime_filter_type_matches = runtime_filter_input_type == perfect_join_executor->GetKeyType();
+				runtime_filter_type_matches =
+				    runtime_filter_type_matches && runtime_filter_input_type == perfect_join_executor->GetKeyType();
 			} else if (ht) {
-				runtime_filter_type_matches = runtime_filter_input_type == ht->conditions[0].GetLHS().GetReturnType();
+				runtime_filter_type_matches = runtime_filter_type_matches &&
+				                              runtime_filter_input_type == ht->conditions[0].GetLHS().GetReturnType();
 			}
 
 			// if the HT is small we can generate a complete "OR" filter
