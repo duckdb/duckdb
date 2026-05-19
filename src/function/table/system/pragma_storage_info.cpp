@@ -176,11 +176,10 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 			if (lstate.buffer.empty()) {
 				continue;
 			}
-			// every entry in buffer comes from the same row group; use its index as the batch index
-			lstate.batch_index = lstate.buffer.front().row_group_index;
 		}
 
 		auto &entry = lstate.buffer[lstate.buffer_offset++];
+		lstate.batch_index = entry.row_group_index;
 
 		row_group_id.Append(Value::BIGINT(NumericCast<int64_t>(entry.row_group_index)));
 		auto &col = columns.GetColumn(PhysicalIndex(entry.column_id));
