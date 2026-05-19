@@ -25,7 +25,6 @@ PEGTransformerFactory::TransformExportStatement(PEGTransformer &transformer, con
 		}
 	}
 
-
 	auto result = make_uniq<ExportStatement>(std::move(info));
 	result->database = export_source;
 	return std::move(result);
