@@ -912,9 +912,9 @@ static unique_ptr<TableRef> QueryReplacement(const string &query) {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_uniq<ConstantExpression>(Value(query)));
 
-	auto result = make_uniq<TableFunctionRef>();
-	result->function = make_uniq<FunctionExpression>("query", std::move(children));
-	return unique_ptr_cast<TableFunctionRef, TableRef>(std::move(result));
+	auto result = make_uniq_base<TableRef, TableFunctionRef>();
+	result->Cast<TableFunctionRef>().function = make_uniq<FunctionExpression>("query", std::move(children));
+	return result;
 }
 
 static unique_ptr<TableRef> ParquetFallbackBindReplace(ClientContext &context, TableFunctionBindInput &input) {
