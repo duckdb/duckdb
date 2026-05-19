@@ -68,6 +68,12 @@
         "test/sql/trigger/drop_trigger.test",
         "test/sql/trigger/drop_trigger_wal.test"
       ]
+    },
+    {
+      "reason": "Test relies on temp directory being required for sorting, but with force_storage the persistent DB file serves as external storage, so the invalid temp directory is never accessed.",
+      "paths": [
+        "test/sql/tpch/dbgen_error.test"
+      ]
     }
 
   ]
