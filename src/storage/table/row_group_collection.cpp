@@ -136,7 +136,7 @@ void RowGroupCollection::Initialize(PersistentTableData &data) {
 	auto l = owned_row_groups->Lock();
 	this->total_rows = data.total_rows;
 	this->next_row_id = data.next_row_id;
-	D_ASSERT(this->next_row_id == this->total_rows);
+	D_ASSERT(this->next_row_id >= this->total_rows);
 	metadata_pointer = data.base_table_pointer;
 	metadata_pointers = data.read_metadata_pointers;
 	owned_row_groups->Initialize(data, metadata_pointers);
@@ -218,15 +218,21 @@ void RowGroupCollection::Verify() {
 #ifdef DEBUG
 	idx_t current_total_rows = 0;
 	auto row_groups = GetRowGroups();
-	row_groups->Verify();
+	auto expected_dense_start = row_groups->GetBaseRowId();
+	idx_t current_rowid_end = row_groups->GetBaseRowId();
 	for (auto &entry : row_groups->SegmentNodes()) {
 		auto &row_group = entry.GetNode();
 		row_group.Verify();
 		D_ASSERT(&row_group.GetCollection() == this);
-		D_ASSERT(entry.GetRowStart() == row_groups->GetBaseRowId() + current_total_rows);
+		D_ASSERT(entry.GetRowStart() >= current_rowid_end);
+		D_ASSERT(entry.GetRowStart() == expected_dense_start);
 		current_total_rows += row_group.count;
+		current_rowid_end = entry.GetRowStart() + row_group.count;
+		expected_dense_start += row_group.count;
 	}
 	D_ASSERT(current_total_rows == total_rows.load());
+	D_ASSERT(row_groups->GetBaseRowId() + next_row_id.load() >= current_rowid_end);
+	// Dense row groups are still required until rowid gap support is enabled end-to-end.
 	D_ASSERT(next_row_id.load() == total_rows.load());
 #endif
 }
@@ -1639,7 +1645,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				auto row_group_writer = checkpoint_state.writer.GetRowGroupWriter(row_group);
 				row_group.CheckpointDeletes(*row_group_writer);
 			}
-			writer.WriteUnchangedTable(metadata_pointer, metadata_pointers, total_rows.load());
+			writer.WriteUnchangedTable(metadata_pointer, metadata_pointers, total_rows.load(), next_row_id.load());
 			// copy over existing stats into the global stats
 			CopyStats(global_stats);
 			return;
@@ -1654,6 +1660,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	global_stats.InitializeEmpty(stats);
 
 	idx_t new_total_rows = 0;
+	idx_t new_next_row_id = 0;
 	unordered_set<idx_t> columns_with_incomplete_stats;
 	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 		auto entry = checkpoint_state.GetSegment(segment_idx);
@@ -1666,8 +1673,10 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		auto &row_group_writer = checkpoint_state.writers[segment_idx];
 		if (!row_group_writer) {
 			// row group was not checkpointed - this can happen if compressing is disabled for in-memory tables
+			auto row_start = new_next_row_id;
 			new_row_groups->AppendSegment(l, entry->ReferenceNode());
 			new_total_rows += existing_row_group.count;
+			new_next_row_id = row_start + existing_row_group.count;
 
 			auto lock = global_stats.GetLock();
 			for (idx_t column_idx = 0; column_idx < existing_row_group.GetColumnCount(); column_idx++) {
@@ -1678,7 +1687,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			continue;
 		}
 		auto &row_group_write_data = checkpoint_state.write_data[segment_idx];
-		idx_t row_start = new_total_rows;
+		idx_t row_start = new_next_row_id;
 		auto write_action = row_group_write_data.write_action;
 		auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
 		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
@@ -1719,6 +1728,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 		writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
 		new_total_rows += row_group.count;
+		new_next_row_id = row_start + row_group.count;
 		new_row_groups->AppendSegment(l, std::move(new_row_group));
 
 		if (debug_verify_blocks) {
@@ -1892,7 +1902,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	writer.FlushPartialBlocks();
 	// override the row group segment tree
 	total_rows = new_total_rows;
-	next_row_id = total_rows.load();
+	next_row_id = new_next_row_id;
+	D_ASSERT(next_row_id.load() >= total_rows.load());
 	SetRowGroups(std::move(new_row_groups));
 	Verify();
 	// Rebuild indexes if:

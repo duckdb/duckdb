@@ -76,11 +76,12 @@ MetadataManager &SingleFileTableDataWriter::GetMetadataManager() {
 }
 
 void SingleFileTableDataWriter::WriteUnchangedTable(MetaBlockPointer pointer,
-                                                    const vector<MetaBlockPointer> &metadata_pointers,
-                                                    idx_t total_rows) {
+                                                    const vector<MetaBlockPointer> &metadata_pointers, idx_t total_rows,
+                                                    idx_t next_row_id) {
 	existing_pointer = pointer;
 	existing_pointers = metadata_pointers;
 	existing_rows = total_rows;
+	existing_next_row_id = next_row_id;
 }
 
 void SingleFileTableDataWriter::FlushPartialBlocks() {
@@ -111,10 +112,12 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 		// now start writing the row group pointers to disk
 		table_data_writer.Write<uint64_t>(row_group_pointers.size());
 		total_rows = 0;
+		next_row_id = 0;
 		for (auto &row_group_pointer : row_group_pointers) {
-			auto row_group_count = row_group_pointer.row_start + row_group_pointer.tuple_count;
-			if (row_group_count > total_rows) {
-				total_rows = row_group_count;
+			total_rows += row_group_pointer.tuple_count;
+			auto row_group_end = row_group_pointer.row_start + row_group_pointer.tuple_count;
+			if (row_group_end > next_row_id) {
+				next_row_id = row_group_end;
 			}
 
 			// Each RowGroup is its own unit
@@ -123,14 +126,14 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 			RowGroup::Serialize(row_group_pointer, row_group_serializer, supports_per_column_writes);
 			row_group_serializer.End();
 		}
-		next_row_id = total_rows;
 		table_data_writer.SetWrittenPointers(nullptr);
 		collection.FinalizeCheckpoint(pointer, written_pointers);
 	} else {
 		// we have existing metadata and the table is unchanged - write a pointer to the existing metadata
 		pointer = existing_pointer;
 		total_rows = existing_rows.GetIndex();
-		next_row_id = total_rows;
+		next_row_id = existing_next_row_id.GetIndex();
+		D_ASSERT(next_row_id >= total_rows);
 
 		// label the blocks as used again to prevent them from being freed
 		auto &metadata_manager = checkpoint_manager.GetMetadataManager();
@@ -173,6 +176,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 			}
 		}
 	}
+	D_ASSERT(next_row_id >= total_rows);
 	// Now begin the metadata as a unit
 	// Pointer to the table itself goes to the metadata stream.
 	serializer.WriteProperty(101, "table_pointer", pointer);

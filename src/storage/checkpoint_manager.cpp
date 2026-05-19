@@ -728,7 +728,7 @@ void CheckpointReader::ReadTableData(CatalogTransaction transaction, Deserialize
 	auto index_storage_infos =
 	    deserializer.ReadPropertyWithExplicitDefault<vector<IndexStorageInfo>>(104, "index_storage_infos", {});
 	auto next_row_id = deserializer.ReadPropertyWithExplicitDefault<idx_t>(105, "next_row_id", total_rows);
-	D_ASSERT(next_row_id == total_rows);
+	D_ASSERT(next_row_id >= total_rows);
 
 	if (!index_storage_infos.empty()) {
 		bound_info.indexes = std::move(index_storage_infos);
