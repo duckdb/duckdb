@@ -10,11 +10,7 @@ namespace duckdb {
 profiler_settings_t MetricsUtils::GetAllMetrics() {
 	auto result = profiler_settings_t {
 		"ALL_OPTIMIZERS",
-		"ATTACH_LOAD_STORAGE_LATENCY",
-		"ATTACH_REPLAY_WAL_LATENCY",
 		"BLOCKED_THREAD_TIME",
-		"CHECKPOINT_LATENCY",
-		"COMMIT_LOCAL_STORAGE_LATENCY",
 		"CPU_TIME",
 		"CUMULATIVE_CARDINALITY",
 		"CUMULATIVE_OPTIMIZER_TIMING",
@@ -38,16 +34,16 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		"ROWS_RETURNED",
 		"SYSTEM_PEAK_BUFFER_MEMORY",
 		"SYSTEM_PEAK_TEMP_DIR_SIZE",
-		"TOTAL_BYTES_READ",
-		"TOTAL_BYTES_WRITTEN",
 		"TOTAL_MEMORY_ALLOCATED",
-		"WAITING_TO_ATTACH_LATENCY",
-		"WAL_REPLAY_ENTRY_COUNT",
-		"WRITE_TO_WAL_LATENCY",
 	};
 	// Add all optimizer metrics
 	auto optimizer_metrics = GetOptimizerMetrics();
 	for (const auto &m : optimizer_metrics) {
+		result.insert(m);
+	}
+	// Add all storage metrics
+	auto storage_metrics = GetStorageMetrics();
+	for (const auto &m : storage_metrics) {
 		result.insert(m);
 	}
 	return result;
@@ -63,14 +59,14 @@ profiler_settings_t MetricsUtils::GetMetricsByGroupType(MetricGroup type) {
 		return GetDefaultMetrics();
 	case MetricGroup::EXECUTION:
 		return GetExecutionMetrics();
-	case MetricGroup::FILE:
-		return GetFileMetrics();
 	case MetricGroup::OPERATOR:
 		return GetOperatorMetrics();
 	case MetricGroup::OPTIMIZER:
 		return GetOptimizerMetrics();
 	case MetricGroup::PHASE_TIMING:
 		return GetPhaseTimingMetrics();
+	case MetricGroup::STORAGE:
+		return GetStorageMetrics();
 	default:
 		throw InternalException("The MetricGroup passed is invalid");
 	}
@@ -106,12 +102,8 @@ bool MetricsUtils::IsCoreMetric(MetricType type) {
 }
 
 profiler_settings_t MetricsUtils::GetDefaultMetrics() {
-	return {
-		"ATTACH_LOAD_STORAGE_LATENCY",
-		"ATTACH_REPLAY_WAL_LATENCY",
+	profiler_settings_t result {
 		"BLOCKED_THREAD_TIME",
-		"CHECKPOINT_LATENCY",
-		"COMMIT_LOCAL_STORAGE_LATENCY",
 		"CPU_TIME",
 		"CUMULATIVE_CARDINALITY",
 		"CUMULATIVE_ROWS_SCANNED",
@@ -127,22 +119,19 @@ profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 		"ROWS_RETURNED",
 		"SYSTEM_PEAK_BUFFER_MEMORY",
 		"SYSTEM_PEAK_TEMP_DIR_SIZE",
-		"TOTAL_BYTES_READ",
-		"TOTAL_BYTES_WRITTEN",
 		"TOTAL_MEMORY_ALLOCATED",
-		"WAITING_TO_ATTACH_LATENCY",
-		"WAL_REPLAY_ENTRY_COUNT",
-		"WRITE_TO_WAL_LATENCY",
 	};
+	// Add all storage metrics (they are in the default set)
+	auto storage_metrics = GetStorageMetrics();
+	for (const auto &m : storage_metrics) {
+		result.insert(m);
+	}
+	return result;
 }
 
 bool MetricsUtils::IsDefaultMetric(MetricType type) {
 	switch(type) {
-	case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
-	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
 	case MetricType::BLOCKED_THREAD_TIME:
-	case MetricType::CHECKPOINT_LATENCY:
-	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_CARDINALITY:
 	case MetricType::CUMULATIVE_ROWS_SCANNED:
@@ -158,12 +147,7 @@ bool MetricsUtils::IsDefaultMetric(MetricType type) {
 	case MetricType::ROWS_RETURNED:
 	case MetricType::SYSTEM_PEAK_BUFFER_MEMORY:
 	case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE:
-	case MetricType::TOTAL_BYTES_READ:
-	case MetricType::TOTAL_BYTES_WRITTEN:
 	case MetricType::TOTAL_MEMORY_ALLOCATED:
-	case MetricType::WAITING_TO_ATTACH_LATENCY:
-	case MetricType::WAL_REPLAY_ENTRY_COUNT:
-	case MetricType::WRITE_TO_WAL_LATENCY:
 		return true;
 	default:
 		return false;
@@ -191,35 +175,26 @@ bool MetricsUtils::IsExecutionMetric(MetricType type) {
 	}
 }
 
-profiler_settings_t MetricsUtils::GetFileMetrics() {
+profiler_settings_t MetricsUtils::GetStorageMetrics() {
 	return {
-		"ATTACH_LOAD_STORAGE_LATENCY",
-		"ATTACH_REPLAY_WAL_LATENCY",
-		"CHECKPOINT_LATENCY",
-		"COMMIT_LOCAL_STORAGE_LATENCY",
-		"TOTAL_BYTES_READ",
-		"TOTAL_BYTES_WRITTEN",
-		"WAITING_TO_ATTACH_LATENCY",
-		"WAL_REPLAY_ENTRY_COUNT",
-		"WRITE_TO_WAL_LATENCY",
+		"storage.attach_load_storage_latency",
+		"storage.attach_replay_wal_latency",
+		"storage.checkpoint_latency",
+		"storage.commit_local_storage_latency",
+		"storage.total_bytes_read",
+		"storage.total_bytes_written",
+		"storage.waiting_to_attach_latency",
+		"storage.wal_replay_entry_count",
+		"storage.write_to_wal_latency",
 	};
 }
 
-bool MetricsUtils::IsFileMetric(MetricType type) {
-	switch(type) {
-	case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
-	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
-	case MetricType::CHECKPOINT_LATENCY:
-	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
-	case MetricType::TOTAL_BYTES_READ:
-	case MetricType::TOTAL_BYTES_WRITTEN:
-	case MetricType::WAITING_TO_ATTACH_LATENCY:
-	case MetricType::WAL_REPLAY_ENTRY_COUNT:
-	case MetricType::WRITE_TO_WAL_LATENCY:
-		return true;
-	default:
-		return false;
-	}
+bool MetricsUtils::IsStorageMetricKey(const string &key) {
+	return StringUtil::StartsWith(key, "storage.");
+}
+
+bool MetricsUtils::IsStorageTimerKey(const string &key) {
+	return IsStorageMetricKey(key) && StringUtil::EndsWith(key, "_latency");
 }
 
 profiler_settings_t MetricsUtils::GetOperatorMetrics() {
@@ -292,11 +267,7 @@ bool MetricsUtils::IsPhaseTimingMetric(MetricType type) {
 profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 	auto result = profiler_settings_t {
 		"ALL_OPTIMIZERS",
-		"ATTACH_LOAD_STORAGE_LATENCY",
-		"ATTACH_REPLAY_WAL_LATENCY",
 		"BLOCKED_THREAD_TIME",
-		"CHECKPOINT_LATENCY",
-		"COMMIT_LOCAL_STORAGE_LATENCY",
 		"CUMULATIVE_OPTIMIZER_TIMING",
 		"LATENCY",
 		"PHYSICAL_PLANNER",
@@ -307,16 +278,16 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 		"PLANNER_BINDING",
 		"QUERY_NAME",
 		"ROWS_RETURNED",
-		"TOTAL_BYTES_READ",
-		"TOTAL_BYTES_WRITTEN",
 		"TOTAL_MEMORY_ALLOCATED",
-		"WAITING_TO_ATTACH_LATENCY",
-		"WAL_REPLAY_ENTRY_COUNT",
-		"WRITE_TO_WAL_LATENCY",
 	};
 	// Add all optimizer metrics (they are root-scope only)
 	auto optimizer_metrics = GetOptimizerMetrics();
 	for (const auto &m : optimizer_metrics) {
+		result.insert(m);
+	}
+	// Add all storage metrics (they are root-scope only)
+	auto storage_metrics = GetStorageMetrics();
+	for (const auto &m : storage_metrics) {
 		result.insert(m);
 	}
 	return result;
@@ -325,11 +296,7 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 bool MetricsUtils::IsRootScopeMetric(MetricType type) {
 	switch(type) {
 	case MetricType::ALL_OPTIMIZERS:
-	case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
-	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
 	case MetricType::BLOCKED_THREAD_TIME:
-	case MetricType::CHECKPOINT_LATENCY:
-	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 	case MetricType::LATENCY:
 	case MetricType::PHYSICAL_PLANNER:
@@ -340,12 +307,7 @@ bool MetricsUtils::IsRootScopeMetric(MetricType type) {
 	case MetricType::PLANNER_BINDING:
 	case MetricType::QUERY_NAME:
 	case MetricType::ROWS_RETURNED:
-	case MetricType::TOTAL_BYTES_READ:
-	case MetricType::TOTAL_BYTES_WRITTEN:
 	case MetricType::TOTAL_MEMORY_ALLOCATED:
-	case MetricType::WAITING_TO_ATTACH_LATENCY:
-	case MetricType::WAL_REPLAY_ENTRY_COUNT:
-	case MetricType::WRITE_TO_WAL_LATENCY:
 		return true;
 	default:
 		return false;

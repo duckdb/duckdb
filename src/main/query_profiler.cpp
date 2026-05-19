@@ -77,8 +77,8 @@ profiler_settings_t QueryProfiler::GetQueryMetrics(ClientContext &context) {
 	profiler_settings_t local_settings;
 	for (const auto &metric : context_metrics) {
 		local_settings.insert(metric);
-		// Optimizer metrics are string-keyed; they don't map to MetricType and need no expansion.
-		if (!MetricsUtils::IsOptimizerMetricKey(metric)) {
+		// Optimizer and storage metrics are string-keyed; they don't map to MetricType and need no expansion.
+		if (!MetricsUtils::IsOptimizerMetricKey(metric) && !MetricsUtils::IsStorageMetricKey(metric)) {
 			ProfilingInfo::Expand(local_settings, EnumUtil::FromString<MetricType>(metric));
 		}
 	}
@@ -175,8 +175,8 @@ void QueryProfiler::Reset() {
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
 	lock_guard<std::mutex> guard(lock);
 	// Always reset byte counters at the start of each query so the progress bar shows per-query values
-	query_metrics.ResetMetric(MetricType::TOTAL_BYTES_READ);
-	query_metrics.ResetMetric(MetricType::TOTAL_BYTES_WRITTEN);
+	query_metrics.bytes_read = 0;
+	query_metrics.bytes_written = 0;
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
 	}
@@ -285,22 +285,31 @@ void QueryProfiler::FinalizeMetrics() {
 }
 
 void QueryProfiler::AddToCounter(const MetricType type, const idx_t amount) {
-	// Always track bytes read/written so the progress bar can display them
-	if (type == MetricType::TOTAL_BYTES_READ || type == MetricType::TOTAL_BYTES_WRITTEN) {
-		query_metrics.UpdateMetric(type, amount);
-		return;
-	}
 	if (IsEnabled()) {
 		query_metrics.UpdateMetric(type, amount);
 	}
 }
 
+void QueryProfiler::TrackBytesRead(const idx_t amount) {
+	query_metrics.UpdateBytesRead(amount);
+}
+
+void QueryProfiler::TrackBytesWritten(const idx_t amount) {
+	query_metrics.UpdateBytesWritten(amount);
+}
+
+void QueryProfiler::AddToStringCounter(const string &key, const idx_t amount) {
+	if (IsEnabled()) {
+		query_metrics.UpdateStringCounter(key, amount);
+	}
+}
+
 idx_t QueryProfiler::GetBytesRead() const {
-	return query_metrics.GetMetricValue(MetricType::TOTAL_BYTES_READ);
+	return query_metrics.GetBytesRead();
 }
 
 idx_t QueryProfiler::GetBytesWritten() const {
-	return query_metrics.GetMetricValue(MetricType::TOTAL_BYTES_WRITTEN);
+	return query_metrics.GetBytesWritten();
 }
 
 ActiveTimer QueryProfiler::StartTimer(const MetricType type) {
@@ -606,6 +615,9 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 		if (MetricsUtils::IsOptimizerMetricKey(metric)) {
 			// "optimizer.expression_rewriter" -> display as "expression_rewriter"
 			optimizer_timings[metric.substr(10)] = entry.second.GetValue<double>();
+		} else if (MetricsUtils::IsStorageMetricKey(metric)) {
+			// storage metrics are not phase timings; skip them here
+			continue;
 		} else {
 			auto metric_type = EnumUtil::FromString<MetricType>(metric);
 			if (!MetricsUtils::IsPhaseTimingMetric(metric_type)) {
@@ -1057,6 +1069,18 @@ void QueryProfiler::FinalizeMetricsInternal() {
 	for (auto &metric : info.GetMetricsMutable()) {
 		if (MetricsUtils::IsOptimizerMetricKey(metric.first)) {
 			metric.second = Value::DOUBLE(query_metrics.GetStringMetricInSeconds(metric.first));
+			continue;
+		}
+		if (MetricsUtils::IsStorageMetricKey(metric.first)) {
+			if (metric.first == "storage.total_bytes_read") {
+				metric.second = Value::UBIGINT(query_metrics.GetBytesRead());
+			} else if (metric.first == "storage.total_bytes_written") {
+				metric.second = Value::UBIGINT(query_metrics.GetBytesWritten());
+			} else if (metric.first == "storage.wal_replay_entry_count") {
+				metric.second = Value::UBIGINT(query_metrics.GetStringCounter(metric.first));
+			} else {
+				metric.second = Value::DOUBLE(query_metrics.GetStringMetricInSeconds(metric.first));
+			}
 			continue;
 		}
 		auto metric_type = EnumUtil::FromString<MetricType>(metric.first);

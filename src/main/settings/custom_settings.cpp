@@ -364,6 +364,8 @@ static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const s
 			if (IsEnabledOptimizerKey(converted_metric, disabled_optimizers)) {
 				enabled_metrics.insert(converted_metric);
 			}
+		} else if (MetricsUtils::IsStorageMetricKey(converted_metric)) {
+			enabled_metrics.insert(converted_metric);
 		} else {
 			insert_if_enabled(EnumUtil::FromString<MetricType>(converted_metric));
 		}
@@ -376,6 +378,15 @@ static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const s
 					enabled_metrics.insert(metric);
 				}
 			} catch (std::exception &) {
+				invalid_settings.push_back(metric);
+			}
+			return;
+		}
+		if (MetricsUtils::IsStorageMetricKey(metric)) {
+			auto storage_metrics = MetricsUtils::GetStorageMetrics();
+			if (storage_metrics.count(metric)) {
+				enabled_metrics.insert(metric);
+			} else {
 				invalid_settings.push_back(metric);
 			}
 			return;

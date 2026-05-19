@@ -188,11 +188,7 @@ RESET custom_profiling_settings;
 query I
 SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
-ATTACH_LOAD_STORAGE_LATENCY
-ATTACH_REPLAY_WAL_LATENCY
 BLOCKED_THREAD_TIME
-CHECKPOINT_LATENCY
-COMMIT_LOCAL_STORAGE_LATENCY
 CPU_TIME
 CUMULATIVE_CARDINALITY
 CUMULATIVE_ROWS_SCANNED
@@ -208,12 +204,16 @@ RESULT_SET_SIZE
 ROWS_RETURNED
 SYSTEM_PEAK_BUFFER_MEMORY
 SYSTEM_PEAK_TEMP_DIR_SIZE
-TOTAL_BYTES_READ
-TOTAL_BYTES_WRITTEN
 TOTAL_MEMORY_ALLOCATED
-WAITING_TO_ATTACH_LATENCY
-WAL_REPLAY_ENTRY_COUNT
-WRITE_TO_WAL_LATENCY
+storage.attach_load_storage_latency
+storage.attach_replay_wal_latency
+storage.checkpoint_latency
+storage.commit_local_storage_latency
+storage.total_bytes_read
+storage.total_bytes_written
+storage.waiting_to_attach_latency
+storage.wal_replay_entry_count
+storage.write_to_wal_latency
 
 # Set metrics straight into function
 statement ok
@@ -227,13 +227,13 @@ RESULT_SET_SIZE
 
 # Set metrics straight into function with other settings too
 statement ok
-CALL enable_profiling(['TOTAL_BYTES_READ', 'TOTAL_BYTES_WRITTEN'], mode = 'detailed');
+CALL enable_profiling(['storage.total_bytes_read', 'storage.total_bytes_written'], mode = 'detailed');
 
 query I
 SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
-TOTAL_BYTES_READ
-TOTAL_BYTES_WRITTEN
+storage.total_bytes_read
+storage.total_bytes_written
 
 query I
 SELECT CURRENT_SETTING('profiling_mode');

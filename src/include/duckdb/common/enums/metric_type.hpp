@@ -21,10 +21,10 @@ enum class MetricGroup : uint8_t {
 	CORE,
 	DEFAULT,
 	EXECUTION,
-	FILE,
 	OPERATOR,
 	OPTIMIZER,
 	PHASE_TIMING,
+	STORAGE,
 	INVALID,
 };
 
@@ -43,16 +43,6 @@ enum class MetricType : uint8_t {
 	SYSTEM_PEAK_BUFFER_MEMORY = 14,
 	SYSTEM_PEAK_TEMP_DIR_SIZE = 15,
 	TOTAL_MEMORY_ALLOCATED = 91,
-	// File metrics
-	ATTACH_LOAD_STORAGE_LATENCY = 92,
-	ATTACH_REPLAY_WAL_LATENCY = 93,
-	CHECKPOINT_LATENCY = 94,
-	COMMIT_LOCAL_STORAGE_LATENCY = 95,
-	TOTAL_BYTES_READ = 16,
-	TOTAL_BYTES_WRITTEN = 17,
-	WAITING_TO_ATTACH_LATENCY = 96,
-	WAL_REPLAY_ENTRY_COUNT = 97,
-	WRITE_TO_WAL_LATENCY = 98,
 	// Operator metrics
 	OPERATOR_CARDINALITY = 6,
 	OPERATOR_NAME = 13,
@@ -92,9 +82,10 @@ public:
 	static profiler_settings_t GetExecutionMetrics();
 	static bool IsExecutionMetric(MetricType type);
 
-	// File metrics
-	static profiler_settings_t GetFileMetrics();
-	static bool IsFileMetric(MetricType type);
+	// Storage metrics — stored as "storage.<lowercase_name>" strings, not as MetricType values
+	static profiler_settings_t GetStorageMetrics();
+	static bool IsStorageMetricKey(const string &key);
+	static bool IsStorageTimerKey(const string &key);
 
 	// Operator metrics
 	static profiler_settings_t GetOperatorMetrics();

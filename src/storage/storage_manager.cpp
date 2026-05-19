@@ -503,7 +503,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		auto client_context = context.GetClientContext();
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			timer = make_uniq<ActiveTimer>(profiler->StartTimer(MetricType::ATTACH_LOAD_STORAGE_LATENCY));
+			timer = make_uniq<ActiveTimer>(profiler->StartTimer("storage.attach_load_storage_latency"));
 		}
 
 		// Load the checkpoint from storage.
@@ -519,7 +519,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		// Start timing the WAL replay step.
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			timer = make_uniq<ActiveTimer>(profiler->StartTimer(MetricType::ATTACH_REPLAY_WAL_LATENCY));
+			timer = make_uniq<ActiveTimer>(profiler->StartTimer("storage.attach_replay_wal_latency"));
 		}
 
 		// Replay the WAL.
@@ -707,7 +707,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 			auto client_context = context.GetClientContext();
 			ActiveTimer profiler;
 			if (client_context) {
-				profiler = client_context->client_data->profiler->StartTimer(MetricType::CHECKPOINT_LATENCY);
+				profiler = client_context->client_data->profiler->StartTimer("storage.checkpoint_latency");
 			}
 
 			// Write the checkpoint.

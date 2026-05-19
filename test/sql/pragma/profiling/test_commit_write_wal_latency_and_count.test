@@ -37,7 +37,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/wal_commit.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"COMMIT_LOCAL_STORAGE_LATENCY": "true", "WRITE_TO_WAL_LATENCY": "true"}';
+PRAGMA custom_profiling_settings='{"storage.commit_local_storage_latency": "true", "storage.write_to_wal_latency": "true"}';
 
 statement ok
 SET profiling_coverage='ALL';
@@ -52,12 +52,12 @@ statement ok
 CREATE OR REPLACE TABLE commit_metrics AS SELECT * FROM '{TEST_DIR}/wal_commit.json';
 
 query I
-SELECT CASE WHEN COMMIT_LOCAL_STORAGE_LATENCY >= 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
+SELECT CASE WHEN storage.commit_local_storage_latency >= 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
 ----
 true
 
 query I
-SELECT CASE WHEN WRITE_TO_WAL_LATENCY >= 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
+SELECT CASE WHEN storage.write_to_wal_latency >= 0 THEN 'true' ELSE 'false' END FROM commit_metrics;
 ----
 true
 
@@ -68,7 +68,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/wal_replay.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"WAL_REPLAY_ENTRY_COUNT": "true", "ATTACH_REPLAY_WAL_LATENCY": "true"}';
+PRAGMA custom_profiling_settings='{"storage.wal_replay_entry_count": "true", "storage.attach_replay_wal_latency": "true"}';
 
 statement ok
 SET profiling_coverage='ALL';
@@ -86,11 +86,11 @@ statement ok
 CREATE OR REPLACE TABLE replay_metrics AS SELECT * FROM '{TEST_DIR}/wal_replay.json';
 
 query I
-SELECT CASE WHEN wal_replay_entry_count > 0 THEN 'true' ELSE 'false' END FROM replay_metrics;
+SELECT CASE WHEN storage.wal_replay_entry_count > 0 THEN 'true' ELSE 'false' END FROM replay_metrics;
 ----
 true
 
 query I
-SELECT CASE WHEN attach_replay_wal_latency > 0 THEN 'true' ELSE 'false' END FROM replay_metrics;
+SELECT CASE WHEN storage.attach_replay_wal_latency > 0 THEN 'true' ELSE 'false' END FROM replay_metrics;
 ----
 true

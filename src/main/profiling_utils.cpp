@@ -27,11 +27,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	auto key = EnumUtil::ToString(type);
 	switch(type) {
 	case MetricType::ALL_OPTIMIZERS:
-	case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
-	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
 	case MetricType::BLOCKED_THREAD_TIME:
-	case MetricType::CHECKPOINT_LATENCY:
-	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 	case MetricType::LATENCY:
@@ -43,8 +39,6 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES:
 	case MetricType::PLANNER:
 	case MetricType::PLANNER_BINDING:
-	case MetricType::WAITING_TO_ATTACH_LATENCY:
-	case MetricType::WRITE_TO_WAL_LATENCY:
 		metrics[key] = Value::CreateValue(0.0);
 		break;
 	case MetricType::CUMULATIVE_CARDINALITY:
@@ -55,10 +49,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::ROWS_RETURNED:
 	case MetricType::SYSTEM_PEAK_BUFFER_MEMORY:
 	case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE:
-	case MetricType::TOTAL_BYTES_READ:
-	case MetricType::TOTAL_BYTES_WRITTEN:
 	case MetricType::TOTAL_MEMORY_ALLOCATED:
-	case MetricType::WAL_REPLAY_ENTRY_COUNT:
 		metrics[key] = Value::CreateValue<uint64_t>(0);
 		break;
 	case MetricType::EXTRA_INFO:
@@ -78,14 +69,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 
 void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingInfo &result) {
 	switch(type) {
-	// File / IO metrics
-	case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
-	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
-	case MetricType::CHECKPOINT_LATENCY:
-	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::LATENCY:
-	case MetricType::WAITING_TO_ATTACH_LATENCY:
-	case MetricType::WRITE_TO_WAL_LATENCY:
 	// Phase timing metrics
 	case MetricType::ALL_OPTIMIZERS:
 	case MetricType::PARSER:
@@ -100,17 +84,8 @@ void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_
 	case MetricType::QUERY_NAME:
 		metric = query_metrics.query_name;
 		break;
-	case MetricType::TOTAL_BYTES_READ:
-		metric = Value::UBIGINT(query_metrics.GetMetricValue(MetricType::TOTAL_BYTES_READ));
-		break;
-	case MetricType::TOTAL_BYTES_WRITTEN:
-		metric = Value::UBIGINT(query_metrics.GetMetricValue(MetricType::TOTAL_BYTES_WRITTEN));
-		break;
 	case MetricType::TOTAL_MEMORY_ALLOCATED:
 		metric = Value::UBIGINT(query_metrics.GetMetricValue(MetricType::TOTAL_MEMORY_ALLOCATED));
-		break;
-	case MetricType::WAL_REPLAY_ENTRY_COUNT:
-		metric = Value::UBIGINT(query_metrics.GetMetricValue(MetricType::WAL_REPLAY_ENTRY_COUNT));
 		break;
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 		metric = GetCumulativeOptimizers(query_metrics);

@@ -27,7 +27,7 @@ struct ActiveTimer;
 // Top level query metrics
 struct QueryMetrics {
 public:
-    QueryMetrics() {
+    QueryMetrics() : bytes_read(0), bytes_written(0) {
         Reset();
     }
 
@@ -38,6 +38,10 @@ public:
 	std::string query_name;
 	unique_ptr<ActiveTimer> latency_timer;
 
+	// Always-tracked byte counters (used by progress bar even when profiling is disabled)
+	atomic<idx_t> bytes_read;
+	atomic<idx_t> bytes_written;
+
 public:
     void UpdateMetric(const MetricType metric, idx_t addition) {
         active_metrics[GetMetricsIndex(metric)] += addition;
@@ -45,6 +49,18 @@ public:
 
     void UpdateStringMetric(const string &key, idx_t addition) {
         string_timings[key] += addition;
+    }
+
+    void UpdateStringCounter(const string &key, idx_t addition) {
+        string_counters[key] += addition;
+    }
+
+    void UpdateBytesRead(idx_t n) {
+        bytes_read += n;
+    }
+
+    void UpdateBytesWritten(idx_t n) {
+        bytes_written += n;
     }
 
     void ResetMetric(const MetricType metric) {
@@ -67,8 +83,28 @@ public:
         return static_cast<double>(it->second) / 1e9;
     }
 
+    idx_t GetStringCounter(const string &key) const {
+        auto it = string_counters.find(key);
+        if (it == string_counters.end()) {
+            return 0;
+        }
+        return it->second;
+    }
+
+    idx_t GetBytesRead() const {
+        return bytes_read.load();
+    }
+
+    idx_t GetBytesWritten() const {
+        return bytes_written.load();
+    }
+
     const unordered_map<string, idx_t> &GetStringTimings() const {
         return string_timings;
+    }
+
+    const unordered_map<string, idx_t> &GetStringCounters() const {
+        return string_counters;
     }
 
     void Reset() {
@@ -76,6 +112,9 @@ public:
             active_metrics[i] = 0;
         }
         string_timings.clear();
+        string_counters.clear();
+        bytes_read = 0;
+        bytes_written = 0;
 
         latency_timer.reset();
     	query_name = "";
@@ -91,43 +130,40 @@ public:
         for (const auto &entry : other.string_timings) {
             string_timings[entry.first] += entry.second;
         }
+        for (const auto &entry : other.string_counters) {
+            string_counters[entry.first] += entry.second;
+        }
+        bytes_read += other.bytes_read.load();
+        bytes_written += other.bytes_written.load();
     }
 
 	static idx_t GetMetricsIndex(MetricType type) {
 		switch(type) {
-		// File / IO metrics
-		case MetricType::ATTACH_LOAD_STORAGE_LATENCY: return 0;
-		case MetricType::ATTACH_REPLAY_WAL_LATENCY: return 1;
-		case MetricType::CHECKPOINT_LATENCY: return 2;
-		case MetricType::COMMIT_LOCAL_STORAGE_LATENCY: return 3;
-		case MetricType::LATENCY: return 4;
-		case MetricType::WAITING_TO_ATTACH_LATENCY: return 5;
-		case MetricType::WRITE_TO_WAL_LATENCY: return 6;
-		case MetricType::TOTAL_BYTES_READ: return 7;
-		case MetricType::TOTAL_BYTES_WRITTEN: return 8;
-		case MetricType::TOTAL_MEMORY_ALLOCATED: return 9;
-		case MetricType::WAL_REPLAY_ENTRY_COUNT: return 10;
+		case MetricType::LATENCY: return 0;
+		case MetricType::TOTAL_MEMORY_ALLOCATED: return 1;
 		// Phase timing metrics
-		case MetricType::ALL_OPTIMIZERS: return 11;
-		case MetricType::PARSER: return 12;
-		case MetricType::PHYSICAL_PLANNER: return 13;
-		case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING: return 14;
-		case MetricType::PHYSICAL_PLANNER_CREATE_PLAN: return 15;
-		case MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES: return 16;
-		case MetricType::PLANNER: return 17;
-		case MetricType::PLANNER_BINDING: return 18;
+		case MetricType::ALL_OPTIMIZERS: return 2;
+		case MetricType::PARSER: return 3;
+		case MetricType::PHYSICAL_PLANNER: return 4;
+		case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING: return 5;
+		case MetricType::PHYSICAL_PLANNER_CREATE_PLAN: return 6;
+		case MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES: return 7;
+		case MetricType::PLANNER: return 8;
+		case MetricType::PLANNER_BINDING: return 9;
 		default:
 			throw InternalException("MetricType %s is not actively tracked.", EnumUtil::ToString(type));
 		}
 	}
 
 private:
-	// 11 file/IO + 8 phase timing metrics
-	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 19;
+	// LATENCY + TOTAL_MEMORY_ALLOCATED + 8 phase timing metrics
+	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 10;
 
 	atomic<idx_t> active_metrics[ACTIVELY_TRACKED_METRICS];
-	// String-keyed timings for optimizer metrics (e.g. "optimizer.expression_rewriter")
+	// String-keyed timings for optimizer and storage timer metrics
 	unordered_map<string, idx_t> string_timings;
+	// String-keyed counters for storage counter metrics (e.g. "storage.wal_replay_entry_count")
+	unordered_map<string, idx_t> string_counters;
 };
 
 class ProfilingUtils {

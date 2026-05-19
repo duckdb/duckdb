@@ -34,7 +34,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/cp_noop.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"CHECKPOINT_LATENCY": "true"}';
+PRAGMA custom_profiling_settings='{"storage.checkpoint_latency": "true"}';
 
 statement ok
 SET profiling_coverage='ALL';
@@ -46,7 +46,7 @@ statement ok
 PRAGMA disable_profiling;
 
 query I
-SELECT CASE WHEN checkpoint_latency = 0 THEN 'true' ELSE 'false' END FROM '{TEST_DIR}/cp_noop.json';
+SELECT CASE WHEN storage.checkpoint_latency = 0 THEN 'true' ELSE 'false' END FROM '{TEST_DIR}/cp_noop.json';
 ----
 true
 
@@ -66,7 +66,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE TABLE first_cp AS SELECT checkpoint_latency AS latency FROM '{TEST_DIR}/cp_first.json';
+CREATE TABLE first_cp AS SELECT storage.checkpoint_latency AS latency FROM '{TEST_DIR}/cp_first.json';
 
 query I
 SELECT CASE WHEN latency > 0 THEN 'true' ELSE 'false' END FROM first_cp;
@@ -89,7 +89,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE TABLE second_cp AS SELECT checkpoint_latency AS latency FROM '{TEST_DIR}/cp_second.json';
+CREATE TABLE second_cp AS SELECT storage.checkpoint_latency AS latency FROM '{TEST_DIR}/cp_second.json';
 
 query I
 SELECT CASE WHEN latency > 0 THEN 'true' ELSE 'false' END FROM second_cp;
@@ -132,7 +132,7 @@ PRAGMA disable_profiling;
 
 onlyif threadid=0
 query I
-SELECT CASE WHEN checkpoint_latency >= 0 THEN 'true' ELSE 'false' END FROM '{TEST_DIR}/cp_concurrent_{x}.json';
+SELECT CASE WHEN storage.checkpoint_latency >= 0 THEN 'true' ELSE 'false' END FROM '{TEST_DIR}/cp_concurrent_{x}.json';
 ----
 true
 
@@ -144,6 +144,6 @@ statement ok
 CREATE OR REPLACE TABLE metrics AS SELECT * FROM '{TEST_DIR}/cp_concurrent_0.json';
 
 query I
-SELECT CASE WHEN checkpoint_latency > 0 THEN 'true' ELSE 'false' END FROM metrics;
+SELECT CASE WHEN storage.checkpoint_latency > 0 THEN 'true' ELSE 'false' END FROM metrics;
 ----
 true

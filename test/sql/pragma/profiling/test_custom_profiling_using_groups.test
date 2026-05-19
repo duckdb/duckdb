@@ -26,11 +26,7 @@ query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
 ALL_OPTIMIZERS
-ATTACH_LOAD_STORAGE_LATENCY
-ATTACH_REPLAY_WAL_LATENCY
 BLOCKED_THREAD_TIME
-CHECKPOINT_LATENCY
-COMMIT_LOCAL_STORAGE_LATENCY
 CPU_TIME
 CUMULATIVE_CARDINALITY
 CUMULATIVE_OPTIMIZER_TIMING
@@ -54,12 +50,7 @@ RESULT_SET_SIZE
 ROWS_RETURNED
 SYSTEM_PEAK_BUFFER_MEMORY
 SYSTEM_PEAK_TEMP_DIR_SIZE
-TOTAL_BYTES_READ
-TOTAL_BYTES_WRITTEN
 TOTAL_MEMORY_ALLOCATED
-WAITING_TO_ATTACH_LATENCY
-WAL_REPLAY_ENTRY_COUNT
-WRITE_TO_WAL_LATENCY
 optimizer.aggregate_function_rewriter
 optimizer.build_side_probe_side
 optimizer.column_lifetime
@@ -98,17 +89,22 @@ optimizer.top_n_window_elimination
 optimizer.unnest_rewriter
 optimizer.unused_columns
 optimizer.window_self_join
+storage.attach_load_storage_latency
+storage.attach_replay_wal_latency
+storage.checkpoint_latency
+storage.commit_local_storage_latency
+storage.total_bytes_read
+storage.total_bytes_written
+storage.waiting_to_attach_latency
+storage.wal_replay_entry_count
+storage.write_to_wal_latency
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT ALL_OPTIMIZERS,
-	ATTACH_LOAD_STORAGE_LATENCY,
-	ATTACH_REPLAY_WAL_LATENCY,
 	BLOCKED_THREAD_TIME,
-	CHECKPOINT_LATENCY,
-	COMMIT_LOCAL_STORAGE_LATENCY,
 	CPU_TIME,
 	CUMULATIVE_CARDINALITY,
 	CUMULATIVE_OPTIMIZER_TIMING,
@@ -165,12 +161,16 @@ SELECT ALL_OPTIMIZERS,
 	ROWS_RETURNED,
 	SYSTEM_PEAK_BUFFER_MEMORY,
 	SYSTEM_PEAK_TEMP_DIR_SIZE,
-	TOTAL_BYTES_READ,
-	TOTAL_BYTES_WRITTEN,
-	TOTAL_MEMORY_ALLOCATED,
-	WAITING_TO_ATTACH_LATENCY,
-	WAL_REPLAY_ENTRY_COUNT,
-	WRITE_TO_WAL_LATENCY
+	storage.attach_load_storage_latency,
+	storage.attach_replay_wal_latency,
+	storage.checkpoint_latency,
+	storage.commit_local_storage_latency,
+	storage.total_bytes_read,
+	storage.total_bytes_written,
+	storage.waiting_to_attach_latency,
+	storage.wal_replay_entry_count,
+	storage.write_to_wal_latency,
+	TOTAL_MEMORY_ALLOCATED
 FROM metrics_output;
 
 statement ok
@@ -232,11 +232,7 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-ATTACH_LOAD_STORAGE_LATENCY
-ATTACH_REPLAY_WAL_LATENCY
 BLOCKED_THREAD_TIME
-CHECKPOINT_LATENCY
-COMMIT_LOCAL_STORAGE_LATENCY
 CPU_TIME
 CUMULATIVE_CARDINALITY
 CUMULATIVE_ROWS_SCANNED
@@ -252,22 +248,22 @@ RESULT_SET_SIZE
 ROWS_RETURNED
 SYSTEM_PEAK_BUFFER_MEMORY
 SYSTEM_PEAK_TEMP_DIR_SIZE
-TOTAL_BYTES_READ
-TOTAL_BYTES_WRITTEN
 TOTAL_MEMORY_ALLOCATED
-WAITING_TO_ATTACH_LATENCY
-WAL_REPLAY_ENTRY_COUNT
-WRITE_TO_WAL_LATENCY
+storage.attach_load_storage_latency
+storage.attach_replay_wal_latency
+storage.checkpoint_latency
+storage.commit_local_storage_latency
+storage.total_bytes_read
+storage.total_bytes_written
+storage.waiting_to_attach_latency
+storage.wal_replay_entry_count
+storage.write_to_wal_latency
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT ATTACH_LOAD_STORAGE_LATENCY,
-	ATTACH_REPLAY_WAL_LATENCY,
-	BLOCKED_THREAD_TIME,
-	CHECKPOINT_LATENCY,
-	COMMIT_LOCAL_STORAGE_LATENCY,
+SELECT BLOCKED_THREAD_TIME,
 	CPU_TIME,
 	CUMULATIVE_CARDINALITY,
 	CUMULATIVE_ROWS_SCANNED,
@@ -278,12 +274,16 @@ SELECT ATTACH_LOAD_STORAGE_LATENCY,
 	ROWS_RETURNED,
 	SYSTEM_PEAK_BUFFER_MEMORY,
 	SYSTEM_PEAK_TEMP_DIR_SIZE,
-	TOTAL_BYTES_READ,
-	TOTAL_BYTES_WRITTEN,
-	TOTAL_MEMORY_ALLOCATED,
-	WAITING_TO_ATTACH_LATENCY,
-	WAL_REPLAY_ENTRY_COUNT,
-	WRITE_TO_WAL_LATENCY
+	storage.attach_load_storage_latency,
+	storage.attach_replay_wal_latency,
+	storage.checkpoint_latency,
+	storage.commit_local_storage_latency,
+	storage.total_bytes_read,
+	storage.total_bytes_written,
+	storage.waiting_to_attach_latency,
+	storage.wal_replay_entry_count,
+	storage.write_to_wal_latency,
+	TOTAL_MEMORY_ALLOCATED
 FROM metrics_output;
 
 statement ok
@@ -326,7 +326,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"FILE": "true"}';
+PRAGMA custom_profiling_settings='{"STORAGE": "true"}';
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -337,29 +337,29 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-ATTACH_LOAD_STORAGE_LATENCY
-ATTACH_REPLAY_WAL_LATENCY
-CHECKPOINT_LATENCY
-COMMIT_LOCAL_STORAGE_LATENCY
-TOTAL_BYTES_READ
-TOTAL_BYTES_WRITTEN
-WAITING_TO_ATTACH_LATENCY
-WAL_REPLAY_ENTRY_COUNT
-WRITE_TO_WAL_LATENCY
+storage.attach_load_storage_latency
+storage.attach_replay_wal_latency
+storage.checkpoint_latency
+storage.commit_local_storage_latency
+storage.total_bytes_read
+storage.total_bytes_written
+storage.waiting_to_attach_latency
+storage.wal_replay_entry_count
+storage.write_to_wal_latency
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT ATTACH_LOAD_STORAGE_LATENCY,
-	ATTACH_REPLAY_WAL_LATENCY,
-	CHECKPOINT_LATENCY,
-	COMMIT_LOCAL_STORAGE_LATENCY,
-	TOTAL_BYTES_READ,
-	TOTAL_BYTES_WRITTEN,
-	WAITING_TO_ATTACH_LATENCY,
-	WAL_REPLAY_ENTRY_COUNT,
-	WRITE_TO_WAL_LATENCY
+SELECT storage.attach_load_storage_latency,
+	storage.attach_replay_wal_latency,
+	storage.checkpoint_latency,
+	storage.commit_local_storage_latency,
+	storage.total_bytes_read,
+	storage.total_bytes_written,
+	storage.waiting_to_attach_latency,
+	storage.wal_replay_entry_count,
+	storage.write_to_wal_latency
 FROM metrics_output;
 
 statement ok
@@ -626,7 +626,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"DEFAULT": "true", "FILE": "true"}';
+PRAGMA custom_profiling_settings='{"DEFAULT": "true", "STORAGE": "true"}';
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -637,11 +637,7 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-ATTACH_LOAD_STORAGE_LATENCY
-ATTACH_REPLAY_WAL_LATENCY
 BLOCKED_THREAD_TIME
-CHECKPOINT_LATENCY
-COMMIT_LOCAL_STORAGE_LATENCY
 CPU_TIME
 CUMULATIVE_CARDINALITY
 CUMULATIVE_ROWS_SCANNED
@@ -657,22 +653,22 @@ RESULT_SET_SIZE
 ROWS_RETURNED
 SYSTEM_PEAK_BUFFER_MEMORY
 SYSTEM_PEAK_TEMP_DIR_SIZE
-TOTAL_BYTES_READ
-TOTAL_BYTES_WRITTEN
 TOTAL_MEMORY_ALLOCATED
-WAITING_TO_ATTACH_LATENCY
-WAL_REPLAY_ENTRY_COUNT
-WRITE_TO_WAL_LATENCY
+storage.attach_load_storage_latency
+storage.attach_replay_wal_latency
+storage.checkpoint_latency
+storage.commit_local_storage_latency
+storage.total_bytes_read
+storage.total_bytes_written
+storage.waiting_to_attach_latency
+storage.wal_replay_entry_count
+storage.write_to_wal_latency
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT ATTACH_LOAD_STORAGE_LATENCY,
-	ATTACH_REPLAY_WAL_LATENCY,
-	BLOCKED_THREAD_TIME,
-	CHECKPOINT_LATENCY,
-	COMMIT_LOCAL_STORAGE_LATENCY,
+SELECT BLOCKED_THREAD_TIME,
 	CPU_TIME,
 	CUMULATIVE_CARDINALITY,
 	CUMULATIVE_ROWS_SCANNED,
@@ -683,12 +679,16 @@ SELECT ATTACH_LOAD_STORAGE_LATENCY,
 	ROWS_RETURNED,
 	SYSTEM_PEAK_BUFFER_MEMORY,
 	SYSTEM_PEAK_TEMP_DIR_SIZE,
-	TOTAL_BYTES_READ,
-	TOTAL_BYTES_WRITTEN,
-	TOTAL_MEMORY_ALLOCATED,
-	WAITING_TO_ATTACH_LATENCY,
-	WAL_REPLAY_ENTRY_COUNT,
-	WRITE_TO_WAL_LATENCY
+	storage.attach_load_storage_latency,
+	storage.attach_replay_wal_latency,
+	storage.checkpoint_latency,
+	storage.commit_local_storage_latency,
+	storage.total_bytes_read,
+	storage.total_bytes_written,
+	storage.waiting_to_attach_latency,
+	storage.wal_replay_entry_count,
+	storage.write_to_wal_latency,
+	TOTAL_MEMORY_ALLOCATED
 FROM metrics_output;
 
 statement ok
@@ -698,7 +698,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"FILE": "true", "OPTIMIZER": "true"}';
+PRAGMA custom_profiling_settings='{"STORAGE": "true", "OPTIMIZER": "true"}';
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -709,15 +709,6 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-ATTACH_LOAD_STORAGE_LATENCY
-ATTACH_REPLAY_WAL_LATENCY
-CHECKPOINT_LATENCY
-COMMIT_LOCAL_STORAGE_LATENCY
-TOTAL_BYTES_READ
-TOTAL_BYTES_WRITTEN
-WAITING_TO_ATTACH_LATENCY
-WAL_REPLAY_ENTRY_COUNT
-WRITE_TO_WAL_LATENCY
 optimizer.aggregate_function_rewriter
 optimizer.build_side_probe_side
 optimizer.column_lifetime
@@ -756,16 +747,21 @@ optimizer.top_n_window_elimination
 optimizer.unnest_rewriter
 optimizer.unused_columns
 optimizer.window_self_join
+storage.attach_load_storage_latency
+storage.attach_replay_wal_latency
+storage.checkpoint_latency
+storage.commit_local_storage_latency
+storage.total_bytes_read
+storage.total_bytes_written
+storage.waiting_to_attach_latency
+storage.wal_replay_entry_count
+storage.write_to_wal_latency
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT ATTACH_LOAD_STORAGE_LATENCY,
-	ATTACH_REPLAY_WAL_LATENCY,
-	CHECKPOINT_LATENCY,
-	COMMIT_LOCAL_STORAGE_LATENCY,
-	optimizer.aggregate_function_rewriter,
+SELECT optimizer.aggregate_function_rewriter,
 	optimizer.build_side_probe_side,
 	optimizer.column_lifetime,
 	optimizer.common_aggregate,
@@ -803,11 +799,15 @@ SELECT ATTACH_LOAD_STORAGE_LATENCY,
 	optimizer.unnest_rewriter,
 	optimizer.unused_columns,
 	optimizer.window_self_join,
-	TOTAL_BYTES_READ,
-	TOTAL_BYTES_WRITTEN,
-	WAITING_TO_ATTACH_LATENCY,
-	WAL_REPLAY_ENTRY_COUNT,
-	WRITE_TO_WAL_LATENCY
+	storage.attach_load_storage_latency,
+	storage.attach_replay_wal_latency,
+	storage.checkpoint_latency,
+	storage.commit_local_storage_latency,
+	storage.total_bytes_read,
+	storage.total_bytes_written,
+	storage.waiting_to_attach_latency,
+	storage.wal_replay_entry_count,
+	storage.write_to_wal_latency
 FROM metrics_output;
 
 statement ok
@@ -817,7 +817,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"PHASE_TIMING": "true", "EXECUTION": "true", "FILE": "true"}';
+PRAGMA custom_profiling_settings='{"PHASE_TIMING": "true", "EXECUTION": "true", "STORAGE": "true"}';
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -829,11 +829,7 @@ query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
 ALL_OPTIMIZERS
-ATTACH_LOAD_STORAGE_LATENCY
-ATTACH_REPLAY_WAL_LATENCY
 BLOCKED_THREAD_TIME
-CHECKPOINT_LATENCY
-COMMIT_LOCAL_STORAGE_LATENCY
 CUMULATIVE_OPTIMIZER_TIMING
 PARSER
 PHYSICAL_PLANNER
@@ -844,12 +840,7 @@ PLANNER
 PLANNER_BINDING
 SYSTEM_PEAK_BUFFER_MEMORY
 SYSTEM_PEAK_TEMP_DIR_SIZE
-TOTAL_BYTES_READ
-TOTAL_BYTES_WRITTEN
 TOTAL_MEMORY_ALLOCATED
-WAITING_TO_ATTACH_LATENCY
-WAL_REPLAY_ENTRY_COUNT
-WRITE_TO_WAL_LATENCY
 optimizer.aggregate_function_rewriter
 optimizer.build_side_probe_side
 optimizer.column_lifetime
@@ -888,17 +879,22 @@ optimizer.top_n_window_elimination
 optimizer.unnest_rewriter
 optimizer.unused_columns
 optimizer.window_self_join
+storage.attach_load_storage_latency
+storage.attach_replay_wal_latency
+storage.checkpoint_latency
+storage.commit_local_storage_latency
+storage.total_bytes_read
+storage.total_bytes_written
+storage.waiting_to_attach_latency
+storage.wal_replay_entry_count
+storage.write_to_wal_latency
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT ALL_OPTIMIZERS,
-	ATTACH_LOAD_STORAGE_LATENCY,
-	ATTACH_REPLAY_WAL_LATENCY,
 	BLOCKED_THREAD_TIME,
-	CHECKPOINT_LATENCY,
-	COMMIT_LOCAL_STORAGE_LATENCY,
 	CUMULATIVE_OPTIMIZER_TIMING,
 	optimizer.aggregate_function_rewriter,
 	optimizer.build_side_probe_side,
@@ -947,10 +943,14 @@ SELECT ALL_OPTIMIZERS,
 	PLANNER_BINDING,
 	SYSTEM_PEAK_BUFFER_MEMORY,
 	SYSTEM_PEAK_TEMP_DIR_SIZE,
-	TOTAL_BYTES_READ,
-	TOTAL_BYTES_WRITTEN,
-	TOTAL_MEMORY_ALLOCATED,
-	WAITING_TO_ATTACH_LATENCY,
-	WAL_REPLAY_ENTRY_COUNT,
-	WRITE_TO_WAL_LATENCY
+	storage.attach_load_storage_latency,
+	storage.attach_replay_wal_latency,
+	storage.checkpoint_latency,
+	storage.commit_local_storage_latency,
+	storage.total_bytes_read,
+	storage.total_bytes_written,
+	storage.waiting_to_attach_latency,
+	storage.wal_replay_entry_count,
+	storage.write_to_wal_latency,
+	TOTAL_MEMORY_ALLOCATED
 FROM metrics_output;

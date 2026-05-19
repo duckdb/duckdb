@@ -36,7 +36,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/acp_before.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"CHECKPOINT_LATENCY": "true", "TOTAL_BYTES_WRITTEN": "true", "COMMIT_LOCAL_STORAGE_LATENCY": "true", "WRITE_TO_WAL_LATENCY": "true"}';
+PRAGMA custom_profiling_settings='{"storage.checkpoint_latency": "true", "storage.total_bytes_written": "true", "storage.commit_local_storage_latency": "true", "storage.write_to_wal_latency": "true"}';
 
 statement ok
 SET profiling_coverage='ALL';
@@ -51,10 +51,10 @@ PRAGMA disable_profiling;
 
 query IIII
 SELECT
-    CASE WHEN checkpoint_latency = 0 THEN 'true' ELSE 'false' END,
-    CASE WHEN total_bytes_written = 0 THEN 'true' ELSE 'false' END,
-    CASE WHEN commit_local_storage_latency > 0 THEN 'true' ELSE 'false' END,
-    CASE WHEN write_to_wal_latency > 0 THEN 'true' ELSE 'false' END
+    CASE WHEN storage.checkpoint_latency = 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN storage.total_bytes_written = 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN storage.commit_local_storage_latency > 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN storage.write_to_wal_latency > 0 THEN 'true' ELSE 'false' END
 FROM '{TEST_DIR}/acp_before.json';
 ----
 true	true	true	true
@@ -79,10 +79,10 @@ PRAGMA disable_profiling;
 # After auto-checkpoint, all metrics should be > 0.
 query IIII
 SELECT
-    CASE WHEN checkpoint_latency > 0 THEN 'true' ELSE 'false' END,
-    CASE WHEN total_bytes_written > 0 THEN 'true' ELSE 'false' END,
-    CASE WHEN commit_local_storage_latency > 0 THEN 'true' ELSE 'false' END,
-    CASE WHEN write_to_wal_latency > 0 THEN 'true' ELSE 'false' END
+    CASE WHEN storage.checkpoint_latency > 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN storage.total_bytes_written > 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN storage.commit_local_storage_latency > 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN storage.write_to_wal_latency > 0 THEN 'true' ELSE 'false' END
 FROM '{TEST_DIR}/acp_after.json';
 ----
 true	true	true	true

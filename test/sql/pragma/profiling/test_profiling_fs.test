@@ -30,7 +30,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profile_fs.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"TOTAL_BYTES_READ": "true", "TOTAL_BYTES_WRITTEN": "true"}';
+PRAGMA custom_profiling_settings='{"storage.total_bytes_read": "true", "storage.total_bytes_written": "true"}';
 
 statement ok
 SET profiling_coverage='ALL';
@@ -45,11 +45,11 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profile_fs.json';
 
 statement ok
-SELECT total_bytes_written FROM metrics_output;
+SELECT storage.total_bytes_written FROM metrics_output;
 
 query I
 SELECT
-	CASE WHEN total_bytes_written > 0 THEN 'true'
+	CASE WHEN storage.total_bytes_written > 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
@@ -68,7 +68,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profile_fs.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"TOTAL_BYTES_READ": "true", "TOTAL_BYTES_WRITTEN": "true"}';
+PRAGMA custom_profiling_settings='{"storage.total_bytes_read": "true", "storage.total_bytes_written": "true"}';
 
 statement ok
 ATTACH '{TEST_DIR}/profile_fs.db';
@@ -84,7 +84,7 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profile_fs.j
 
 query I
 SELECT
-	CASE WHEN total_bytes_read > 0 THEN 'true'
+	CASE WHEN storage.total_bytes_read > 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----

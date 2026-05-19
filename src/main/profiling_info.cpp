@@ -19,7 +19,7 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 		settings.insert("OPERATOR_TYPE");
 	}
 	for (const auto &metric : settings) {
-		if (MetricsUtils::IsOptimizerMetricKey(metric)) {
+		if (MetricsUtils::IsOptimizerMetricKey(metric) || MetricsUtils::IsStorageMetricKey(metric)) {
 			expanded_settings.insert(metric);
 			continue;
 		}
@@ -44,11 +44,24 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 void ProfilingInfo::ResetMetrics() {
 	metrics.clear();
 	for (const auto &metric : expanded_settings) {
-		if (MetricsUtils::IsOptimizerMetricKey(metric) || MetricsUtils::IsPhaseTimingMetric(EnumUtil::FromString<MetricType>(metric))) {
+		if (MetricsUtils::IsOptimizerMetricKey(metric)) {
 			metrics[metric] = Value::CreateValue(0.0);
 			continue;
 		}
-		ProfilingUtils::SetMetricToDefault(metrics, EnumUtil::FromString<MetricType>(metric));
+		if (MetricsUtils::IsStorageMetricKey(metric)) {
+			if (MetricsUtils::IsStorageTimerKey(metric)) {
+				metrics[metric] = Value::CreateValue(0.0);
+			} else {
+				metrics[metric] = Value::CreateValue<uint64_t>(0);
+			}
+			continue;
+		}
+		auto metric_type = EnumUtil::FromString<MetricType>(metric);
+		if (MetricsUtils::IsPhaseTimingMetric(metric_type)) {
+			metrics[metric] = Value::CreateValue(0.0);
+			continue;
+		}
+		ProfilingUtils::SetMetricToDefault(metrics, metric_type);
 	}
 }
 
