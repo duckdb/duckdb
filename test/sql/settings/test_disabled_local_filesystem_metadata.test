@@ -8,7 +8,7 @@ statement ok
 PRAGMA disable_verification;
 
 statement ok
-SET secret_directory='__TEST_DIR__/disabled_fs_secrets';
+SET secret_directory='{TEST_DIR}/disabled_fs_secrets';
 
 statement ok
 SET disabled_filesystems='LocalFileSystem';

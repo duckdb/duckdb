@@ -74,6 +74,12 @@
       "paths": [
         "test/sql/tpch/dbgen_error.test"
       ]
+    },
+    {
+      "reason": "Test sets temp_directory='' and memory_limit='2MB' to trigger OOM, but with a persistent DB file the buffer manager can spill to the DB file regardless of temp_directory.",
+      "paths": [
+        "test/sql/settings/reset/reset_memory_limit.test"
+      ]
     }
 
   ]
