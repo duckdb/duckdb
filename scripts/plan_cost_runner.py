@@ -103,7 +103,7 @@ def op_inspect(op) -> PlanCost:
         cost.total += left_cost.total + right_cost.total
         return cost
 
-    for child_op in op['children']:
+    for child_op in op.get('children', []):
         cost += op_inspect(child_op)
 
     return cost
