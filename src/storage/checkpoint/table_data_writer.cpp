@@ -177,7 +177,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 
 	// prior: ser version 3
 	auto v1_0_0_storage = StorageManager::IsPriorToVersion(
-	    StorageVersion::V1_1_0, serializer.GetOptions().storage_compatibility.storage_version);
+	    StorageVersion::V1_2_0, serializer.GetOptions().storage_compatibility.storage_version);
 	IndexSerializationInfo serialization_info;
 	if (!v1_0_0_storage) {
 		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);

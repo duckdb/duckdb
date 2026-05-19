@@ -279,7 +279,7 @@ void DatabaseHeader::Write(WriteStream &ser) {
 
 void DatabaseHeader::SetStorageVersionInDatabaseHeader(DatabaseHeader &header, StorageVersion main_version,
                                                        StorageVersion read_version) {
-	if (main_version == MainHeader::DEPRECATED_VERSION_NUMBER) {
+	if ((main_version == MainHeader::DEPRECATED_VERSION_NUMBER) || (read_version >= StorageVersion::V2_0_0)) {
 		// From v2.0.0 onwards, we use and store only the storage version number
 		switch (read_version) {
 		case StorageVersion::V2_0_0:
@@ -287,34 +287,29 @@ void DatabaseHeader::SetStorageVersionInDatabaseHeader(DatabaseHeader &header, S
 			break;
 			// new versions should be added here
 		default:
-			throw InvalidInputException("Storage Version is not found!");
+			throw InvalidInputException("Storage Version '%d' is not found!", static_cast<idx_t>(read_version));
 		}
 	} else {
-		// before V2.0.0
-		// The Storage Version in the main header could be written in two different ways
+		// Before V2.0.0 the Storage Version in the main header could be written in two different ways
 		// 1) When the DB is created from scratch -- with e.g. ATTACH (STORAGE_VERSION "v1.4.0")
 		// 2) if the db file got bumped to a higher version
-		// (e.g. "ATTACH 'bump.dp' (STORAGE_VERSION 'v.1.4.0'), when bump.db already exists")
-		// in case 1, the main header serialized the explicit storage version (e.g. 1.4.0 = 67, in the example)
-		// in case 2, the main_header version number is bumped at maximum to 65 (v1.2.0)
+		// (e.g. "ATTACH 'bump.dp' (STORAGE_VERSION 'v.1.5.0'), when bump.db already exists")
+		// in case 1, the explicit storage version is serialized in the MAIN header (e.g. 1.4.0 = 67, in the example)
+		// in case 2, the version number in the MAIN header is bumped to at most v65 (v1.2.0)
 		// thus, in case 2, the main header storage version is often lower then the actual storage version
 		// that's also why we need the logic below for backwards compatibility
 		// if the main header version and db header version are < v2.0.0
 		// then we fall back to the serialization version
 		switch (static_cast<idx_t>(read_version)) {
-		case static_cast<idx_t>(SerializationVersionDeprecated::V0_10_2):
-			// If read version is 0
-		case static_cast<idx_t>(StorageVersion::INVALID):
 			// In some old duckdb versions, storage version (64)
 			// is (by mistake) serialized instead of serialization version
+		case static_cast<idx_t>(StorageVersion::INVALID):
+			// If read version is 0
+		case static_cast<idx_t>(SerializationVersionDeprecated::V0_10_2):
 		case static_cast<idx_t>(StorageVersion::V0_10_2):
-			header.storage_compatibility = StorageVersion::V0_10_2;
-			break;
 		case static_cast<idx_t>(SerializationVersionDeprecated::V1_0_0):
-			header.storage_compatibility = StorageVersion::V1_0_0;
-			break;
 		case static_cast<idx_t>(SerializationVersionDeprecated::V1_1_0):
-			header.storage_compatibility = StorageVersion::V1_1_0;
+			header.storage_compatibility = StorageVersion::V0_10_2;
 			break;
 		case static_cast<idx_t>(SerializationVersionDeprecated::V1_2_0):
 			header.storage_compatibility = StorageVersion::V1_2_0;
@@ -329,7 +324,8 @@ void DatabaseHeader::SetStorageVersionInDatabaseHeader(DatabaseHeader &header, S
 			header.storage_compatibility = StorageVersion::V1_5_0;
 			break;
 		default:
-			throw InvalidInputException("Deprecated Serialization Version is not found!");
+			throw InvalidInputException("Deprecated Serialization Version '%d' is not found!",
+			                            static_cast<idx_t>(read_version));
 		}
 	}
 }
