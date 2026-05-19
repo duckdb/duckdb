@@ -99,8 +99,6 @@ public:
 	struct LoadedSegment {
 		LoadedSegment() {
 		}
-		explicit LoadedSegment(shared_ptr<T> segment_p) : segment(std::move(segment_p)) {
-		}
 		LoadedSegment(shared_ptr<T> segment_p, idx_t row_start_p)
 		    : segment(std::move(segment_p)), row_start(row_start_p) {
 		}
@@ -459,11 +457,7 @@ private:
 		if (!result.segment) {
 			return false;
 		}
-		if (result.row_start.IsValid()) {
-			AppendSegmentInternal(l, std::move(result.segment), result.row_start.GetIndex());
-		} else {
-			AppendSegmentInternal(l, std::move(result.segment));
-		}
+		AppendSegmentInternal(l, std::move(result.segment), result.row_start.GetIndex());
 		return true;
 	}
 
