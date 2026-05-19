@@ -167,6 +167,13 @@ public:
 	};
 };
 
+static void CloseFileAndAppendError(int fd, string &extended_error) {
+	if (close(fd) == -1) {
+		extended_error += ". Also, failed closing file: ";
+		extended_error += strerror(errno);
+	}
+}
+
 static FileMetadata StatsFromStruct(struct stat s) {
 	FileMetadata file_metadata;
 	file_metadata.file_size = s.st_size;
@@ -397,12 +404,8 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		rc = fcntl(fd, F_NOCACHE, 1);
 		if (rc == -1) {
 			int retained_errno = errno;
-			rc = close(fd);
 			string extended_error = strerror(retained_errno);
-			if (rc == -1) {
-				extended_error += ". Also, failed closing file: ";
-				extended_error += strerror(errno);
-			}
+			CloseFileAndAppendError(fd, extended_error);
 			throw IOException({{"errno", std::to_string(retained_errno)}},
 			                  "Could not enable direct IO for file \"%s\": %s", path, extended_error);
 		}
@@ -458,10 +461,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 						}
 					}
 				}
-				rc = close(fd);
-				if (rc == -1) {
-					extended_error += ". Also, failed closing file";
-				}
+				CloseFileAndAppendError(fd, extended_error);
 				extended_error += ". See also https://duckdb.org/docs/current/connect/concurrency";
 				throw IOException({{"errno", std::to_string(retained_errno)}}, "Could not set lock on file \"%s\": %s",
 				                  path, extended_error);
