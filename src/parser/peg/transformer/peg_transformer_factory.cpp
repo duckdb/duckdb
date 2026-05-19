@@ -680,14 +680,6 @@ void PEGTransformerFactory::RegisterPivot() {
 	REGISTER_TRANSFORM(TransformIncludeOrExcludeNulls);
 }
 
-void PEGTransformerFactory::RegisterPragma() {
-	// pragma.gram
-	REGISTER_TRANSFORM(TransformPragmaStatement);
-	REGISTER_TRANSFORM(TransformPragmaAssign);
-	REGISTER_TRANSFORM(TransformPragmaFunction);
-	REGISTER_TRANSFORM(TransformPragmaParameters);
-}
-
 void PEGTransformerFactory::RegisterSelect() {
 	// select.gram
 	REGISTER_TRANSFORM(TransformSelectStatement);
@@ -1021,7 +1013,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterLoad();
 	RegisterMergeInto();
 	RegisterPivot();
-	RegisterPragma();
 	RegisterSelect();
 	RegisterSet();
 	RegisterKeywordsAndIdentifiers();

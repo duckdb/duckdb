@@ -1046,7 +1046,7 @@ def main():
         'export.gram',
         # 'insert.gram',
         # 'load.gram',
-        # 'pragma.gram',
+        'pragma.gram',
         'prepare.gram',
         'transaction.gram',
         'update.gram',
