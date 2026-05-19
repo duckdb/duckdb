@@ -384,8 +384,6 @@ def _classify_reference(name, idx, rule_types, excluded_rules):
         var_name = to_snake_case(name)
         lines = [f"\tauto {var_name} = list_pr.Child<IdentifierParseResult>({idx}).identifier;"]
         return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
-    if name in excluded_rules:
-        return _classify_literal()
     if name in rule_types:
         cpp_type = rule_types[name].cpp_type
         var_name = to_snake_case(name)
@@ -397,6 +395,8 @@ def _classify_reference(name, idx, rule_types, excluded_rules):
             by_value=_is_by_value(name, rule_types),
             extraction_lines=lines,
         )
+    if name in excluded_rules:
+        return _classify_literal()
     return None
 
 
@@ -418,8 +418,6 @@ def _classify_optional_reference(name, idx, rule_types, excluded_rules):
             f"\t}}",
         ]
         return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
-    if name in excluded_rules:
-        return _classify_literal()
     if name in rule_types:
         cpp_type = rule_types[name].cpp_type
         lines = [
@@ -433,6 +431,8 @@ def _classify_optional_reference(name, idx, rule_types, excluded_rules):
             by_value=_is_by_value(name, rule_types),
             extraction_lines=lines,
         )
+    if name in excluded_rules:
+        return _classify_literal()
     return None
 
 
@@ -774,6 +774,10 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
             skipped.append((rule_name, "no return type in grammar_types.yml"))
             continue
 
+        if rule_name in excluded_rules:
+            skipped.append((rule_name, "in excluded_rules (manually registered)"))
+            continue
+
         try:
             ast = rule_to_ast(rule)
         except Exception as e:
@@ -1061,7 +1065,7 @@ def main():
         'attach.gram',
         'call.gram',
         'checkpoint.gram',
-        # 'comment.gram',
+        'comment.gram',
         # 'common.gram',
         'connect.gram',
         # 'copy.gram',

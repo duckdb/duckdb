@@ -185,8 +185,6 @@ void PEGTransformerFactory::RegisterAlter() {
 
 void PEGTransformerFactory::RegisterComment() {
 	// comment.gram
-	REGISTER_TRANSFORM(TransformCommentStatement);
-	REGISTER_TRANSFORM(TransformCommentOnType);
 	REGISTER_TRANSFORM(TransformCommentValue);
 }
 
@@ -879,19 +877,7 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<SecretPersistType>("TemporaryPersistent", SecretPersistType::TEMPORARY);
 	RegisterEnum<SecretPersistType>("Persistent", SecretPersistType::PERSISTENT);
 
-	RegisterEnum<CatalogType>("CommentTable", CatalogType::TABLE_ENTRY);
-	RegisterEnum<CatalogType>("CommentSequence", CatalogType::SEQUENCE_ENTRY);
-	RegisterEnum<CatalogType>("CommentFunction", CatalogType::MACRO_ENTRY);
-	RegisterEnum<CatalogType>("CommentMacroTable", CatalogType::TABLE_MACRO_ENTRY);
-	RegisterEnum<CatalogType>("CommentMacro", CatalogType::MACRO_ENTRY);
-	RegisterEnum<CatalogType>("CommentView", CatalogType::VIEW_ENTRY);
 	RegisterEnum<CatalogType>("MaterializedViewEntry", CatalogType::VIEW_ENTRY);
-	RegisterEnum<CatalogType>("CommentDatabase", CatalogType::DATABASE_ENTRY);
-	RegisterEnum<CatalogType>("CommentIndex", CatalogType::INDEX_ENTRY);
-	RegisterEnum<CatalogType>("CommentSchema", CatalogType::SCHEMA_ENTRY);
-	RegisterEnum<CatalogType>("CommentType", CatalogType::TYPE_ENTRY);
-	RegisterEnum<CatalogType>("CommentColumn", CatalogType::INVALID);
-
 	RegisterEnum<TriggerTiming>("TriggerBefore", TriggerTiming::BEFORE);
 	RegisterEnum<TriggerTiming>("TriggerAfter", TriggerTiming::AFTER);
 	RegisterEnum<TriggerTiming>("TriggerInsteadOf", TriggerTiming::INSTEAD_OF);

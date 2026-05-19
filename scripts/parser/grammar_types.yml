@@ -919,6 +919,37 @@ CommonTableExpressionMap:
   rules:
     - WithClause
 
+CatalogType:
+  type: "CatalogType"
+  by_value: false
+  rules:
+    - CommentOnType
+    - CommentTable
+    - CommentSequence
+    - CommentFunction
+    - CommentMacroTable
+    - CommentMacro
+    - CommentView
+    - CommentDatabase
+    - CommentIndex
+    - CommentSchema
+    - CommentType
+    - CommentColumn
+    - TableOrView
+    - MaterializedViewEntry
+
+
+Value:
+  type: "Value"
+  by_value: false
+  rules:
+    - CommentValue
+    - NullLiteral
+    - UnknownLiteral
+    - TrueLiteral
+    - FalseLiteral
+
+
 # ---------------------------------------------------------------------------
 # Overrides: rules with unique or complex return types that don't share a
 # category with other rules. Typically pair<>, map<>, or one-off structs.
@@ -931,9 +962,6 @@ overrides:
   TimeOrTimestamp: "LogicalTypeId"
   Interval: "DatePartSpecifier"
   IntervalToInterval: "DatePartSpecifier"
-  # comment.gram
-  CommentOnType: "CatalogType"
-  CommentValue: "Value"
   # copy.gram
   CopyDatabaseFlag: "CopyDatabaseType"
   SchemaOrData: "CopyDatabaseType"
@@ -963,8 +991,6 @@ overrides:
   ShowOrDescribeOrSummarize: "ShowType"
   ShowOrDescribe: "ShowType"
   Summarize: "ShowType"
-  # drop.gram
-  TableOrView: "CatalogType"
   # expression.gram
   ComparisonOperator: "ExpressionType"
   IsDistinctFromOp: "ExpressionType"
@@ -1035,6 +1061,7 @@ overrides:
 # ---------------------------------------------------------------------------
 
 excluded_rules:
+  - CommentValue
   - Program
   - FunctionType
   - Database

@@ -45,7 +45,7 @@ CatalogType PEGTransformerFactory::TransformTableOrView(PEGTransformer &transfor
 	if (choice_pr.name == "MaterializedViewEntry") {
 		throw NotImplementedException("Cannot drop MATERIALIZED VIEW yet");
 	}
-	return transformer.TransformEnum<CatalogType>(choice_pr);
+	return transformer.Transform<CatalogType>(choice_pr);
 }
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer,
@@ -53,7 +53,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTableFunction(PEGT
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
-	auto catalog_type = transformer.TransformEnum<CatalogType>(list_pr.Child<ListParseResult>(0));
+	auto catalog_type = transformer.Transform<CatalogType>(list_pr.Child<ListParseResult>(0));
 	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto table_function_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
 	if (table_function_list.size() > 1) {
