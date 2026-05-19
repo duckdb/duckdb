@@ -119,7 +119,7 @@ def query_plan_cost(cli, dbname, query):
         print("-------------------------")
         raise e
     with open(PROFILE_FILENAME, 'r') as file:
-        return op_inspect(json.load(file)['operator_info'])
+        return op_inspect(json.load(file)['operator_info'][0])
 
 
 def print_banner(text):
