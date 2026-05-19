@@ -26,7 +26,7 @@ static void RunStringSerializationBenchmark(idx_t storage_version) {
 	for (idx_t i = 0; i < 10000; i++) {
 		MemoryStream stream;
 		SerializationOptions options;
-		options.storage_compatibility = StorageCompatibility::FromIndex(storage_version);
+		options.storage_compatibility = StorageCompatibility::FromIndex(static_cast<StorageVersion>(storage_version));
 		BinarySerializer serializer(stream, options);
 		serializer.Begin();
 		string_vector.Serialize(serializer, true);
