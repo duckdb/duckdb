@@ -3,11 +3,12 @@
 
 #include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
 profiler_settings_t MetricsUtils::GetAllMetrics() {
-	return {
+	auto result = profiler_settings_t {
 		"ALL_OPTIMIZERS",
 		"ATTACH_LOAD_STORAGE_LATENCY",
 		"ATTACH_REPLAY_WAL_LATENCY",
@@ -25,44 +26,6 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		"OPERATOR_ROWS_SCANNED",
 		"OPERATOR_TIMING",
 		"OPERATOR_TYPE",
-		"OPTIMIZER_AGGREGATE_FUNCTION_REWRITER",
-		"OPTIMIZER_BUILD_SIDE_PROBE_SIDE",
-		"OPTIMIZER_COLUMN_LIFETIME",
-		"OPTIMIZER_COMMON_AGGREGATE",
-		"OPTIMIZER_COMMON_SUBEXPRESSIONS",
-		"OPTIMIZER_COMMON_SUBPLAN",
-		"OPTIMIZER_COMPRESSED_MATERIALIZATION",
-		"OPTIMIZER_CTE_FILTER_PUSHER",
-		"OPTIMIZER_CTE_INLINING",
-		"OPTIMIZER_DELIMINATOR",
-		"OPTIMIZER_DUPLICATE_GROUPS",
-		"OPTIMIZER_EMPTY_RESULT_PULLUP",
-		"OPTIMIZER_EXPRESSION_REWRITER",
-		"OPTIMIZER_EXTENSION",
-		"OPTIMIZER_FILTER_PULLUP",
-		"OPTIMIZER_FILTER_PUSHDOWN",
-		"OPTIMIZER_IN_CLAUSE",
-		"OPTIMIZER_JOIN_ELIMINATION",
-		"OPTIMIZER_JOIN_FILTER_PUSHDOWN",
-		"OPTIMIZER_JOIN_ORDER",
-		"OPTIMIZER_LATE_MATERIALIZATION",
-		"OPTIMIZER_LIMIT_PUSHDOWN",
-		"OPTIMIZER_MATERIALIZED_CTE",
-		"OPTIMIZER_OUTER_JOIN_SIMPLIFICATION",
-		"OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN",
-		"OPTIMIZER_PARTITIONED_EXECUTION",
-		"OPTIMIZER_PROJECTION_PULLUP",
-		"OPTIMIZER_REGEX_RANGE",
-		"OPTIMIZER_REORDER_FILTER",
-		"OPTIMIZER_ROW_GROUP_PRUNER",
-		"OPTIMIZER_ROW_NUMBER_REWRITER",
-		"OPTIMIZER_SAMPLING_PUSHDOWN",
-		"OPTIMIZER_STATISTICS_PROPAGATION",
-		"OPTIMIZER_TOP_N",
-		"OPTIMIZER_TOP_N_WINDOW_ELIMINATION",
-		"OPTIMIZER_UNNEST_REWRITER",
-		"OPTIMIZER_UNUSED_COLUMNS",
-		"OPTIMIZER_WINDOW_SELF_JOIN",
 		"PARSER",
 		"PHYSICAL_PLANNER",
 		"PHYSICAL_PLANNER_COLUMN_BINDING",
@@ -82,6 +45,12 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		"WAL_REPLAY_ENTRY_COUNT",
 		"WRITE_TO_WAL_LATENCY",
 	};
+	// Add all optimizer metrics
+	auto optimizer_metrics = GetOptimizerMetrics();
+	for (const auto &m : optimizer_metrics) {
+		result.insert(m);
+	}
+	return result;
 }
 
 profiler_settings_t MetricsUtils::GetMetricsByGroupType(MetricGroup type) {
@@ -278,41 +247,15 @@ bool MetricsUtils::IsOperatorMetric(MetricType type) {
 
 profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
 	profiler_settings_t result;
-	for (auto metric = START_OPTIMIZER; metric <= END_OPTIMIZER; metric++) {
-		result.insert(EnumUtil::ToString(static_cast<MetricType>(metric)));
+	for (auto opt = static_cast<uint8_t>(OptimizerType::EXPRESSION_REWRITER);
+	     opt <= static_cast<uint8_t>(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN); opt++) {
+		result.insert("optimizer." + StringUtil::Lower(EnumUtil::ToString(static_cast<OptimizerType>(opt))));
 	}
 	return result;
 }
 
-bool MetricsUtils::IsOptimizerMetric(MetricType type) {
-	return static_cast<uint8_t>(type) >= START_OPTIMIZER && static_cast<uint8_t>(type) <= END_OPTIMIZER;
-}
-
-
-MetricType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
-	if (type == OptimizerType::INVALID) {
-		throw InternalException("Invalid OptimizerType: INVALID");
-	}
-
-	const auto base_opt = static_cast<uint8_t>(OptimizerType::EXPRESSION_REWRITER);
-	const auto idx = static_cast<uint8_t>(type) - base_opt;
-
-	const auto metric_u8 = static_cast<uint8_t>(START_OPTIMIZER + idx);
-	if (metric_u8 < START_OPTIMIZER || metric_u8 > END_OPTIMIZER) {
-		throw InternalException("OptimizerType out of MetricType optimizer range");
-	}
-	return static_cast<MetricType>(metric_u8);
-}
-
-OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricType type) {
-	const auto metric_u8 = static_cast<uint8_t>(type);
-	if (!IsOptimizerMetric(type)) {
-		throw InternalException("MetricType is not an optimizer metric");
-	}
-
-	const auto idx = static_cast<uint8_t>(metric_u8 - START_OPTIMIZER);
-	const auto result = static_cast<uint8_t>(OptimizerType::EXPRESSION_REWRITER) + idx;
-	return static_cast<OptimizerType>(result);
+bool MetricsUtils::IsOptimizerMetricKey(const string &key) {
+	return StringUtil::StartsWith(key, "optimizer.");
 }
 
 profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
@@ -347,7 +290,7 @@ bool MetricsUtils::IsPhaseTimingMetric(MetricType type) {
 }
 
 profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
-	return {
+	auto result = profiler_settings_t {
 		"ALL_OPTIMIZERS",
 		"ATTACH_LOAD_STORAGE_LATENCY",
 		"ATTACH_REPLAY_WAL_LATENCY",
@@ -356,44 +299,6 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 		"COMMIT_LOCAL_STORAGE_LATENCY",
 		"CUMULATIVE_OPTIMIZER_TIMING",
 		"LATENCY",
-		"OPTIMIZER_AGGREGATE_FUNCTION_REWRITER",
-		"OPTIMIZER_BUILD_SIDE_PROBE_SIDE",
-		"OPTIMIZER_COLUMN_LIFETIME",
-		"OPTIMIZER_COMMON_AGGREGATE",
-		"OPTIMIZER_COMMON_SUBEXPRESSIONS",
-		"OPTIMIZER_COMMON_SUBPLAN",
-		"OPTIMIZER_COMPRESSED_MATERIALIZATION",
-		"OPTIMIZER_CTE_FILTER_PUSHER",
-		"OPTIMIZER_CTE_INLINING",
-		"OPTIMIZER_DELIMINATOR",
-		"OPTIMIZER_DUPLICATE_GROUPS",
-		"OPTIMIZER_EMPTY_RESULT_PULLUP",
-		"OPTIMIZER_EXPRESSION_REWRITER",
-		"OPTIMIZER_EXTENSION",
-		"OPTIMIZER_FILTER_PULLUP",
-		"OPTIMIZER_FILTER_PUSHDOWN",
-		"OPTIMIZER_IN_CLAUSE",
-		"OPTIMIZER_JOIN_ELIMINATION",
-		"OPTIMIZER_JOIN_FILTER_PUSHDOWN",
-		"OPTIMIZER_JOIN_ORDER",
-		"OPTIMIZER_LATE_MATERIALIZATION",
-		"OPTIMIZER_LIMIT_PUSHDOWN",
-		"OPTIMIZER_MATERIALIZED_CTE",
-		"OPTIMIZER_OUTER_JOIN_SIMPLIFICATION",
-		"OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN",
-		"OPTIMIZER_PARTITIONED_EXECUTION",
-		"OPTIMIZER_PROJECTION_PULLUP",
-		"OPTIMIZER_REGEX_RANGE",
-		"OPTIMIZER_REORDER_FILTER",
-		"OPTIMIZER_ROW_GROUP_PRUNER",
-		"OPTIMIZER_ROW_NUMBER_REWRITER",
-		"OPTIMIZER_SAMPLING_PUSHDOWN",
-		"OPTIMIZER_STATISTICS_PROPAGATION",
-		"OPTIMIZER_TOP_N",
-		"OPTIMIZER_TOP_N_WINDOW_ELIMINATION",
-		"OPTIMIZER_UNNEST_REWRITER",
-		"OPTIMIZER_UNUSED_COLUMNS",
-		"OPTIMIZER_WINDOW_SELF_JOIN",
 		"PHYSICAL_PLANNER",
 		"PHYSICAL_PLANNER_COLUMN_BINDING",
 		"PHYSICAL_PLANNER_CREATE_PLAN",
@@ -409,6 +314,12 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 		"WAL_REPLAY_ENTRY_COUNT",
 		"WRITE_TO_WAL_LATENCY",
 	};
+	// Add all optimizer metrics (they are root-scope only)
+	auto optimizer_metrics = GetOptimizerMetrics();
+	for (const auto &m : optimizer_metrics) {
+		result.insert(m);
+	}
+	return result;
 }
 
 bool MetricsUtils::IsRootScopeMetric(MetricType type) {
@@ -421,44 +332,6 @@ bool MetricsUtils::IsRootScopeMetric(MetricType type) {
 	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 	case MetricType::LATENCY:
-	case MetricType::OPTIMIZER_AGGREGATE_FUNCTION_REWRITER:
-	case MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
-	case MetricType::OPTIMIZER_COLUMN_LIFETIME:
-	case MetricType::OPTIMIZER_COMMON_AGGREGATE:
-	case MetricType::OPTIMIZER_COMMON_SUBEXPRESSIONS:
-	case MetricType::OPTIMIZER_COMMON_SUBPLAN:
-	case MetricType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
-	case MetricType::OPTIMIZER_CTE_FILTER_PUSHER:
-	case MetricType::OPTIMIZER_CTE_INLINING:
-	case MetricType::OPTIMIZER_DELIMINATOR:
-	case MetricType::OPTIMIZER_DUPLICATE_GROUPS:
-	case MetricType::OPTIMIZER_EMPTY_RESULT_PULLUP:
-	case MetricType::OPTIMIZER_EXPRESSION_REWRITER:
-	case MetricType::OPTIMIZER_EXTENSION:
-	case MetricType::OPTIMIZER_FILTER_PULLUP:
-	case MetricType::OPTIMIZER_FILTER_PUSHDOWN:
-	case MetricType::OPTIMIZER_IN_CLAUSE:
-	case MetricType::OPTIMIZER_JOIN_ELIMINATION:
-	case MetricType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
-	case MetricType::OPTIMIZER_JOIN_ORDER:
-	case MetricType::OPTIMIZER_LATE_MATERIALIZATION:
-	case MetricType::OPTIMIZER_LIMIT_PUSHDOWN:
-	case MetricType::OPTIMIZER_MATERIALIZED_CTE:
-	case MetricType::OPTIMIZER_OUTER_JOIN_SIMPLIFICATION:
-	case MetricType::OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN:
-	case MetricType::OPTIMIZER_PARTITIONED_EXECUTION:
-	case MetricType::OPTIMIZER_PROJECTION_PULLUP:
-	case MetricType::OPTIMIZER_REGEX_RANGE:
-	case MetricType::OPTIMIZER_REORDER_FILTER:
-	case MetricType::OPTIMIZER_ROW_GROUP_PRUNER:
-	case MetricType::OPTIMIZER_ROW_NUMBER_REWRITER:
-	case MetricType::OPTIMIZER_SAMPLING_PUSHDOWN:
-	case MetricType::OPTIMIZER_STATISTICS_PROPAGATION:
-	case MetricType::OPTIMIZER_TOP_N:
-	case MetricType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION:
-	case MetricType::OPTIMIZER_UNNEST_REWRITER:
-	case MetricType::OPTIMIZER_UNUSED_COLUMNS:
-	case MetricType::OPTIMIZER_WINDOW_SELF_JOIN:
 	case MetricType::PHYSICAL_PLANNER:
 	case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
 	case MetricType::PHYSICAL_PLANNER_CREATE_PLAN:

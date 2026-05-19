@@ -3,6 +3,7 @@
 
 #include "duckdb/main/profiling_utils.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/profiling_node.hpp"
 #include "duckdb/main/query_profiler.hpp"
 
@@ -14,8 +15,10 @@ namespace duckdb {
 
 static Value GetCumulativeOptimizers(QueryMetrics &query_metrics) {
 	double count = 0;
-	for (auto i = MetricsUtils::START_OPTIMIZER; i <= MetricsUtils::END_OPTIMIZER; i++) {
-		count += query_metrics.GetMetricInSeconds(static_cast<MetricType>(i));
+	for (const auto &entry : query_metrics.GetStringTimings()) {
+		if (MetricsUtils::IsOptimizerMetricKey(entry.first)) {
+			count += static_cast<double>(entry.second) / 1e9;
+		}
 	}
 	return Value::CreateValue(count);
 }
@@ -33,44 +36,6 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 	case MetricType::LATENCY:
 	case MetricType::OPERATOR_TIMING:
-	case MetricType::OPTIMIZER_AGGREGATE_FUNCTION_REWRITER:
-	case MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
-	case MetricType::OPTIMIZER_COLUMN_LIFETIME:
-	case MetricType::OPTIMIZER_COMMON_AGGREGATE:
-	case MetricType::OPTIMIZER_COMMON_SUBEXPRESSIONS:
-	case MetricType::OPTIMIZER_COMMON_SUBPLAN:
-	case MetricType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
-	case MetricType::OPTIMIZER_CTE_FILTER_PUSHER:
-	case MetricType::OPTIMIZER_CTE_INLINING:
-	case MetricType::OPTIMIZER_DELIMINATOR:
-	case MetricType::OPTIMIZER_DUPLICATE_GROUPS:
-	case MetricType::OPTIMIZER_EMPTY_RESULT_PULLUP:
-	case MetricType::OPTIMIZER_EXPRESSION_REWRITER:
-	case MetricType::OPTIMIZER_EXTENSION:
-	case MetricType::OPTIMIZER_FILTER_PULLUP:
-	case MetricType::OPTIMIZER_FILTER_PUSHDOWN:
-	case MetricType::OPTIMIZER_IN_CLAUSE:
-	case MetricType::OPTIMIZER_JOIN_ELIMINATION:
-	case MetricType::OPTIMIZER_JOIN_FILTER_PUSHDOWN:
-	case MetricType::OPTIMIZER_JOIN_ORDER:
-	case MetricType::OPTIMIZER_LATE_MATERIALIZATION:
-	case MetricType::OPTIMIZER_LIMIT_PUSHDOWN:
-	case MetricType::OPTIMIZER_MATERIALIZED_CTE:
-	case MetricType::OPTIMIZER_OUTER_JOIN_SIMPLIFICATION:
-	case MetricType::OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN:
-	case MetricType::OPTIMIZER_PARTITIONED_EXECUTION:
-	case MetricType::OPTIMIZER_PROJECTION_PULLUP:
-	case MetricType::OPTIMIZER_REGEX_RANGE:
-	case MetricType::OPTIMIZER_REORDER_FILTER:
-	case MetricType::OPTIMIZER_ROW_GROUP_PRUNER:
-	case MetricType::OPTIMIZER_ROW_NUMBER_REWRITER:
-	case MetricType::OPTIMIZER_SAMPLING_PUSHDOWN:
-	case MetricType::OPTIMIZER_STATISTICS_PROPAGATION:
-	case MetricType::OPTIMIZER_TOP_N:
-	case MetricType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION:
-	case MetricType::OPTIMIZER_UNNEST_REWRITER:
-	case MetricType::OPTIMIZER_UNUSED_COLUMNS:
-	case MetricType::OPTIMIZER_WINDOW_SELF_JOIN:
 	case MetricType::PARSER:
 	case MetricType::PHYSICAL_PLANNER:
 	case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
@@ -151,9 +116,6 @@ void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_
 		metric = GetCumulativeOptimizers(query_metrics);
 		break;
 	default:
-		if (MetricsUtils::IsOptimizerMetric(type)) {
-			metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(type));
-		}
 		return;
 	}
 }

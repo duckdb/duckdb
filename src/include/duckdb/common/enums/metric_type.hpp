@@ -12,7 +12,6 @@
 
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
 
 namespace duckdb {
@@ -60,45 +59,6 @@ enum class MetricType : uint8_t {
 	OPERATOR_ROWS_SCANNED = 8,
 	OPERATOR_TIMING = 9,
 	OPERATOR_TYPE = 5,
-	// Optimizer metrics
-	OPTIMIZER_EXPRESSION_REWRITER = 26,
-	OPTIMIZER_FILTER_PULLUP = 27,
-	OPTIMIZER_FILTER_PUSHDOWN = 28,
-	OPTIMIZER_EMPTY_RESULT_PULLUP = 29,
-	OPTIMIZER_CTE_FILTER_PUSHER = 30,
-	OPTIMIZER_REGEX_RANGE = 31,
-	OPTIMIZER_IN_CLAUSE = 32,
-	OPTIMIZER_JOIN_ORDER = 33,
-	OPTIMIZER_DELIMINATOR = 34,
-	OPTIMIZER_UNNEST_REWRITER = 35,
-	OPTIMIZER_UNUSED_COLUMNS = 36,
-	OPTIMIZER_STATISTICS_PROPAGATION = 37,
-	OPTIMIZER_COMMON_SUBEXPRESSIONS = 38,
-	OPTIMIZER_COMMON_AGGREGATE = 39,
-	OPTIMIZER_COLUMN_LIFETIME = 40,
-	OPTIMIZER_BUILD_SIDE_PROBE_SIDE = 41,
-	OPTIMIZER_LIMIT_PUSHDOWN = 42,
-	OPTIMIZER_TOP_N = 43,
-	OPTIMIZER_COMPRESSED_MATERIALIZATION = 44,
-	OPTIMIZER_DUPLICATE_GROUPS = 45,
-	OPTIMIZER_REORDER_FILTER = 46,
-	OPTIMIZER_SAMPLING_PUSHDOWN = 47,
-	OPTIMIZER_JOIN_FILTER_PUSHDOWN = 48,
-	OPTIMIZER_EXTENSION = 49,
-	OPTIMIZER_MATERIALIZED_CTE = 50,
-	OPTIMIZER_AGGREGATE_FUNCTION_REWRITER = 51,
-	OPTIMIZER_LATE_MATERIALIZATION = 52,
-	OPTIMIZER_CTE_INLINING = 53,
-	OPTIMIZER_ROW_GROUP_PRUNER = 54,
-	OPTIMIZER_TOP_N_WINDOW_ELIMINATION = 55,
-	OPTIMIZER_COMMON_SUBPLAN = 56,
-	OPTIMIZER_JOIN_ELIMINATION = 57,
-	OPTIMIZER_WINDOW_SELF_JOIN = 58,
-	OPTIMIZER_PROJECTION_PULLUP = 59,
-	OPTIMIZER_OUTER_JOIN_SIMPLIFICATION = 60,
-	OPTIMIZER_ROW_NUMBER_REWRITER = 61,
-	OPTIMIZER_PARTITIONED_EXECUTION = 62,
-	OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN = 63,
 	// PhaseTiming metrics
 	ALL_OPTIMIZERS = 18,
 	CUMULATIVE_OPTIMIZER_TIMING = 19,
@@ -116,11 +76,6 @@ typedef unordered_map<string, Value> profiler_metrics_t;
 
 class MetricsUtils {
 public:
-	static constexpr uint8_t START_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_EXPRESSION_REWRITER);
-	static constexpr uint8_t END_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN);
-
-public:
-
 	// All metrics
 	static profiler_settings_t GetAllMetrics();
 	static profiler_settings_t GetMetricsByGroupType(MetricGroup type);
@@ -145,11 +100,9 @@ public:
 	static profiler_settings_t GetOperatorMetrics();
 	static bool IsOperatorMetric(MetricType type);
 
-	// Optimizer metrics
+	// Optimizer metrics — stored as "optimizer.<lowercase_name>" strings, not as MetricType values
 	static profiler_settings_t GetOptimizerMetrics();
-	static bool IsOptimizerMetric(MetricType type);
-	static MetricType GetOptimizerMetricByType(OptimizerType type);
-	static OptimizerType GetOptimizerTypeByMetric(MetricType type);
+	static bool IsOptimizerMetricKey(const string &key);
 
 	// PhaseTiming metrics
 	static profiler_settings_t GetPhaseTimingMetrics();

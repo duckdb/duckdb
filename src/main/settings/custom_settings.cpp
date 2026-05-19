@@ -342,10 +342,12 @@ Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Configure Profiling
 //===----------------------------------------------------------------------===//
-bool IsEnabledOptimizer(MetricType metric, const set<OptimizerType> &disabled_optimizers) {
-	auto matching_optimizer_type = MetricsUtils::GetOptimizerTypeByMetric(metric);
-	return matching_optimizer_type != OptimizerType::INVALID &&
-	       disabled_optimizers.find(matching_optimizer_type) == disabled_optimizers.end();
+// Check whether an optimizer metric key (e.g. "optimizer.expression_rewriter") is enabled.
+bool IsEnabledOptimizerKey(const string &metric_key, const set<OptimizerType> &disabled_optimizers) {
+	D_ASSERT(MetricsUtils::IsOptimizerMetricKey(metric_key));
+	auto opt_name = StringUtil::Upper(metric_key.substr(10));
+	auto opt_type = EnumUtil::FromString<OptimizerType>(opt_name);
+	return disabled_optimizers.find(opt_type) == disabled_optimizers.end();
 }
 
 template <typename ExtractFromType>
@@ -354,12 +356,30 @@ static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const s
 	profiler_settings_t enabled_metrics;
 
 	auto insert_if_enabled = [&](MetricType m) {
-		if (!MetricsUtils::IsOptimizerMetric(m) || IsEnabledOptimizer(m, disabled_optimizers)) {
-			enabled_metrics.insert(EnumUtil::ToString(m));
+		enabled_metrics.insert(EnumUtil::ToString(m));
+	};
+
+	auto insert_group_metric = [&](const string &converted_metric) {
+		if (MetricsUtils::IsOptimizerMetricKey(converted_metric)) {
+			if (IsEnabledOptimizerKey(converted_metric, disabled_optimizers)) {
+				enabled_metrics.insert(converted_metric);
+			}
+		} else {
+			insert_if_enabled(EnumUtil::FromString<MetricType>(converted_metric));
 		}
 	};
 
 	extract_from([&](const std::string &metric) {
+		if (MetricsUtils::IsOptimizerMetricKey(metric)) {
+			try {
+				if (IsEnabledOptimizerKey(metric, disabled_optimizers)) {
+					enabled_metrics.insert(metric);
+				}
+			} catch (std::exception &) {
+				invalid_settings.push_back(metric);
+			}
+			return;
+		}
 		const auto upper = StringUtil::Upper(metric);
 		try {
 			insert_if_enabled(EnumUtil::FromString<MetricType>(upper));
@@ -367,7 +387,7 @@ static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const s
 			try {
 				auto group = EnumUtil::FromString<MetricGroup>(upper);
 				for (const auto &converted_metric : MetricsUtils::GetMetricsByGroupType(group)) {
-					insert_if_enabled(EnumUtil::FromString<MetricType>(converted_metric));
+					insert_group_metric(converted_metric);
 				}
 			} catch (std::exception &) {
 				invalid_settings.push_back(metric);
@@ -381,8 +401,7 @@ void AddOptimizerMetrics(profiler_settings_t &settings, const set<OptimizerType>
 	if (settings.find("ALL_OPTIMIZERS") != settings.end()) {
 		auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
 		for (const auto &metric : optimizer_metrics) {
-			auto metric_type = EnumUtil::FromString<MetricType>(metric);
-			if (IsEnabledOptimizer(metric_type, disabled_optimizers)) {
+			if (IsEnabledOptimizerKey(metric, disabled_optimizers)) {
 				settings.insert(metric);
 			}
 		}

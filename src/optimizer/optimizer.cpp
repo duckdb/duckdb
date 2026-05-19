@@ -111,7 +111,7 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 	}
 	auto &profiler = QueryProfiler::Get(context);
 	{
-		auto optimizer_timer = profiler.StartTimer(MetricsUtils::GetOptimizerMetricByType(type));
+		auto optimizer_timer = profiler.StartTimer("optimizer." + StringUtil::Lower(EnumUtil::ToString(type)));
 		callback();
 	}
 	if (plan) {

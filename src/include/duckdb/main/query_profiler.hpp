@@ -98,6 +98,8 @@ public:
 
 	//! Start/End a timer for a specific metric type.
 	DUCKDB_API ActiveTimer StartTimer(MetricType type);
+	//! Start a string-keyed timer (used for optimizer metrics, e.g. "optimizer.expression_rewriter").
+	DUCKDB_API ActiveTimer StartTimer(const string &key);
 
 	DUCKDB_API void StartExplainAnalyze();
 

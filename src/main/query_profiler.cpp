@@ -77,7 +77,10 @@ profiler_settings_t QueryProfiler::GetQueryMetrics(ClientContext &context) {
 	profiler_settings_t local_settings;
 	for (const auto &metric : context_metrics) {
 		local_settings.insert(metric);
-		ProfilingInfo::Expand(local_settings, EnumUtil::FromString<MetricType>(metric));
+		// Optimizer metrics are string-keyed; they don't map to MetricType and need no expansion.
+		if (!MetricsUtils::IsOptimizerMetricKey(metric)) {
+			ProfilingInfo::Expand(local_settings, EnumUtil::FromString<MetricType>(metric));
+		}
 	}
 	return local_settings;
 }
@@ -302,6 +305,10 @@ idx_t QueryProfiler::GetBytesWritten() const {
 
 ActiveTimer QueryProfiler::StartTimer(const MetricType type) {
 	return ActiveTimer(query_metrics, type, IsEnabled());
+}
+
+ActiveTimer QueryProfiler::StartTimer(const string &key) {
+	return ActiveTimer(query_metrics, key, IsEnabled());
 }
 
 string QueryProfiler::ToString(ExplainFormat explain_format) const {
@@ -596,7 +603,8 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 
 	for (const auto &entry : info.GetMetrics()) {
 		const auto &metric = entry.first;
-		if (StringUtil::StartsWith(metric, "OPTIMIZER_")) {
+		if (MetricsUtils::IsOptimizerMetricKey(metric)) {
+			// "optimizer.expression_rewriter" -> display as "expression_rewriter"
 			optimizer_timings[metric.substr(10)] = entry.second.GetValue<double>();
 		} else {
 			auto metric_type = EnumUtil::FromString<MetricType>(metric);
@@ -1047,6 +1055,10 @@ void QueryProfiler::FinalizeMetricsInternal() {
 	}
 
 	for (auto &metric : info.GetMetricsMutable()) {
+		if (MetricsUtils::IsOptimizerMetricKey(metric.first)) {
+			metric.second = Value::DOUBLE(query_metrics.GetStringMetricInSeconds(metric.first));
+			continue;
+		}
 		auto metric_type = EnumUtil::FromString<MetricType>(metric.first);
 		if (info.EnabledForCollection(metric_type)) {
 			ProfilingUtils::CollectMetrics(metric_type, query_metrics, metric.second, info);

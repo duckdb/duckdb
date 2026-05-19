@@ -28,20 +28,6 @@ namespace duckdb {
 struct QueryProfileResult;
 enum class ProfilingParameterNames : uint8_t { FORMAT, COVERAGE, SAVE_LOCATION, MODE, METRICS };
 
-class ProfilerSettings {
-public:
-	ProfilerSettings() = default;
-	explicit ProfilerSettings(profiler_settings_t settings);
-
-	bool MetricIsEnabled(MetricType metric) const;
-	bool AnyMetricsEnabled() const {
-		return !settings.empty();
-	}
-
-private:
-	profiler_settings_t settings;
-};
-
 class ProfilingInfo {
 public:
 	ProfilingInfo() = default;
@@ -67,62 +53,9 @@ public:
 	}
 
 public:
-	string GetMetricAsString(const MetricType metric) const;
 	void WriteMetricsToLog(ClientContext &context) const;
 	//! Copy all enabled metrics into a QueryProfileResult node using lowercase string keys
 	void MetricsToProfileResult(QueryProfileResult &result) const;
-
-public:
-	template <class METRIC_TYPE>
-	METRIC_TYPE GetMetricValue(const MetricType type) const {
-		auto val = metrics.at(EnumUtil::ToString(type));
-		return val.GetValue<METRIC_TYPE>();
-	}
-
-	template <class METRIC_TYPE>
-	void MetricUpdate(const MetricType type, const Value &value,
-	                  const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
-		auto key = EnumUtil::ToString(type);
-		if (metrics.find(key) == metrics.end()) {
-			metrics[key] = value;
-			return;
-		}
-		auto new_value = update_fun(metrics[key].GetValue<METRIC_TYPE>(), value.GetValue<METRIC_TYPE>());
-		metrics[key] = Value::CreateValue(new_value);
-	}
-
-	template <class METRIC_TYPE>
-	void MetricUpdate(const MetricType type, const METRIC_TYPE &value,
-	                  const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
-		auto new_value = Value::CreateValue(value);
-		MetricUpdate<METRIC_TYPE>(type, new_value, update_fun);
-	}
-
-	template <class METRIC_TYPE>
-	void MetricSum(const MetricType type, const Value &value) {
-		MetricUpdate<METRIC_TYPE>(type, value, [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) {
-			return old_value + new_value;
-		});
-	}
-
-	template <class METRIC_TYPE>
-	void MetricSum(const MetricType type, const METRIC_TYPE &value) {
-		auto new_value = Value::CreateValue(value);
-		return MetricSum<METRIC_TYPE>(type, new_value);
-	}
-
-	template <class METRIC_TYPE>
-	void MetricMax(const MetricType type, const Value &value) {
-		MetricUpdate<METRIC_TYPE>(type, value, [](const METRIC_TYPE &old_value, const METRIC_TYPE &new_value) {
-			return MaxValue(old_value, new_value);
-		});
-	}
-
-	template <class METRIC_TYPE>
-	void MetricMax(const MetricType type, const METRIC_TYPE &value) {
-		auto new_value = Value::CreateValue(value);
-		return MetricMax<METRIC_TYPE>(type, new_value);
-	}
 
 private:
 	//! Enabling a metric adds it to this set.
@@ -133,19 +66,4 @@ private:
 	profiler_metrics_t metrics;
 };
 
-// Specialization for InsertionOrderPreservingMap<string>
-template <>
-inline InsertionOrderPreservingMap<string>
-ProfilingInfo::GetMetricValue<InsertionOrderPreservingMap<string>>(const MetricType type) const {
-	auto val = metrics.at(EnumUtil::ToString(type));
-	InsertionOrderPreservingMap<string> result;
-	auto children = MapValue::GetChildren(val);
-	for (auto &child : children) {
-		auto struct_children = StructValue::GetChildren(child);
-		auto key = struct_children[0].GetValue<string>();
-		auto value = struct_children[1].GetValue<string>();
-		result.insert(key, value);
-	}
-	return result;
-}
 } // namespace duckdb

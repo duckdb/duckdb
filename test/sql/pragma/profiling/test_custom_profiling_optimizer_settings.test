@@ -42,7 +42,7 @@ SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPTIMIZER_JOIN_ORDER": "true"}'
+PRAGMA custom_profiling_settings='{"optimizer.join_order": "true"}'
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -53,14 +53,14 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-OPTIMIZER_JOIN_ORDER
+optimizer.join_order
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 query I
 SELECT
-    CASE WHEN optimizer_join_order > 0 THEN 'true'
+    CASE WHEN "optimizer.join_order" > 0 THEN 'true'
      ELSE 'false' END
 FROM metrics_output;
 ----
@@ -70,7 +70,7 @@ statement ok
 SET disabled_optimizers = 'JOIN_ORDER';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPTIMIZER_JOIN_ORDER": "true"}'
+PRAGMA custom_profiling_settings='{"optimizer.join_order": "true"}'
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();

@@ -12,13 +12,6 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
-ProfilerSettings::ProfilerSettings(profiler_settings_t settings_p) : settings(std::move(settings_p)) {
-}
-
-bool ProfilerSettings::MetricIsEnabled(MetricType metric) const {
-	return settings.find(EnumUtil::ToString(metric)) != settings.end();
-}
-
 ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t depth) : settings(n_settings) {
 	// Expand.
 	if (depth > 0) {
@@ -26,6 +19,10 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 		settings.insert("OPERATOR_TYPE");
 	}
 	for (const auto &metric : settings) {
+		if (MetricsUtils::IsOptimizerMetricKey(metric)) {
+			expanded_settings.insert(metric);
+			continue;
+		}
 		Expand(expanded_settings, EnumUtil::FromString<MetricType>(metric));
 	}
 
@@ -47,12 +44,11 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 void ProfilingInfo::ResetMetrics() {
 	metrics.clear();
 	for (const auto &metric : expanded_settings) {
-		auto metric_type = EnumUtil::FromString<MetricType>(metric);
-		if (MetricsUtils::IsOptimizerMetric(metric_type) || MetricsUtils::IsPhaseTimingMetric(metric_type)) {
+		if (MetricsUtils::IsOptimizerMetricKey(metric) || MetricsUtils::IsPhaseTimingMetric(EnumUtil::FromString<MetricType>(metric))) {
 			metrics[metric] = Value::CreateValue(0.0);
 			continue;
 		}
-		ProfilingUtils::SetMetricToDefault(metrics, metric_type);
+		ProfilingUtils::SetMetricToDefault(metrics, EnumUtil::FromString<MetricType>(metric));
 	}
 }
 
@@ -92,16 +88,6 @@ void ProfilingInfo::Expand(profiler_settings_t &settings, const MetricType metri
 
 void ProfilingInfo::SetMetricValue(MetricType type, Value new_value) {
 	metrics[EnumUtil::ToString(type)] = std::move(new_value);
-}
-
-string ProfilingInfo::GetMetricAsString(const MetricType metric) const {
-	if (!Enabled(metric)) {
-		throw InternalException("Metric %s not enabled", EnumUtil::ToString(metric));
-	}
-
-	auto key = EnumUtil::ToString(metric);
-	D_ASSERT(!metrics.at(key).IsNull());
-	return metrics.at(key).ToString();
 }
 
 void ProfilingInfo::WriteMetricsToLog(ClientContext &context) const {

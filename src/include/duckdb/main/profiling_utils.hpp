@@ -43,6 +43,10 @@ public:
         active_metrics[GetMetricsIndex(metric)] += addition;
     }
 
+    void UpdateStringMetric(const string &key, idx_t addition) {
+        string_timings[key] += addition;
+    }
+
     void ResetMetric(const MetricType metric) {
         active_metrics[GetMetricsIndex(metric)] = 0;
     }
@@ -55,10 +59,23 @@ public:
         return static_cast<double>(active_metrics[GetMetricsIndex(metric)]) / 1e9;
     }
 
+    double GetStringMetricInSeconds(const string &key) const {
+        auto it = string_timings.find(key);
+        if (it == string_timings.end()) {
+            return 0.0;
+        }
+        return static_cast<double>(it->second) / 1e9;
+    }
+
+    const unordered_map<string, idx_t> &GetStringTimings() const {
+        return string_timings;
+    }
+
     void Reset() {
         for(idx_t i = 0; i < ACTIVELY_TRACKED_METRICS; i++) {
             active_metrics[i] = 0;
         }
+        string_timings.clear();
 
         latency_timer.reset();
     	query_name = "";
@@ -70,6 +87,9 @@ public:
     void Merge(const QueryMetrics &other) {
         for(idx_t i = 0; i < ACTIVELY_TRACKED_METRICS; i++) {
             active_metrics[i] += other.active_metrics[i];
+        }
+        for (const auto &entry : other.string_timings) {
+            string_timings[entry.first] += entry.second;
         }
     }
 
@@ -97,19 +117,17 @@ public:
 		case MetricType::PLANNER: return 17;
 		case MetricType::PLANNER_BINDING: return 18;
 		default:
-			// Optimizer metrics occupy a contiguous range
-			if (MetricsUtils::IsOptimizerMetric(type)) {
-				return 19 + (static_cast<idx_t>(type) - MetricsUtils::START_OPTIMIZER);
-			}
 			throw InternalException("MetricType %s is not actively tracked.", EnumUtil::ToString(type));
 		}
 	}
 
 private:
-	// 11 file/IO + 8 phase timing + (END_OPTIMIZER - START_OPTIMIZER + 1) optimizer metrics
-	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 19 + (MetricsUtils::END_OPTIMIZER - MetricsUtils::START_OPTIMIZER + 1);
+	// 11 file/IO + 8 phase timing metrics
+	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 19;
 
 	atomic<idx_t> active_metrics[ACTIVELY_TRACKED_METRICS];
+	// String-keyed timings for optimizer metrics (e.g. "optimizer.expression_rewriter")
+	unordered_map<string, idx_t> string_timings;
 };
 
 class ProfilingUtils {
@@ -120,10 +138,20 @@ public:
 
 struct ActiveTimer {
 public:
-	ActiveTimer() : metric(MetricType::EXTRA_INFO), is_active(false) {
+	ActiveTimer() : metric(MetricType::EXTRA_INFO), is_string_metric(false), is_active(false) {
 	}
-	ActiveTimer(QueryMetrics &query_metrics, const MetricType metric, const bool is_active = true) : query_metrics(query_metrics), metric(metric), is_active(is_active) {
-		// start on constructor
+	// MetricType-based constructor (for fixed-array metrics)
+	ActiveTimer(QueryMetrics &query_metrics, const MetricType metric, const bool is_active = true)
+	    : query_metrics(query_metrics), metric(metric), is_string_metric(false), is_active(is_active) {
+		if (!is_active) {
+			return;
+		}
+		profiler.Start();
+	}
+	// String-key constructor (for optimizer metrics stored in string_timings)
+	ActiveTimer(QueryMetrics &query_metrics, string key, const bool is_active = true)
+	    : query_metrics(query_metrics), metric(MetricType::EXTRA_INFO), string_key(std::move(key)),
+	      is_string_metric(true), is_active(is_active) {
 		if (!is_active) {
 			return;
 		}
@@ -142,13 +170,17 @@ public:
 	ActiveTimer(ActiveTimer &&other) noexcept : is_active(false) {
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric, other.metric);
+		std::swap(string_key, other.string_key);
 		std::swap(profiler, other.profiler);
+		std::swap(is_string_metric, other.is_string_metric);
 		std::swap(is_active, other.is_active);
 	}
 	ActiveTimer &operator=(ActiveTimer &&other) noexcept {
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric, other.metric);
+		std::swap(string_key, other.string_key);
 		std::swap(profiler, other.profiler);
+		std::swap(is_string_metric, other.is_string_metric);
 		std::swap(is_active, other.is_active);
 		return *this;
 	}
@@ -161,7 +193,11 @@ public:
 		// stop profiling and report
 		is_active = false;
 		profiler.End();
-		query_metrics->UpdateMetric(metric, profiler.ElapsedNanos());
+		if (is_string_metric) {
+			query_metrics->UpdateStringMetric(string_key, profiler.ElapsedNanos());
+		} else {
+			query_metrics->UpdateMetric(metric, profiler.ElapsedNanos());
+		}
 	}
 
 	void Reset() {
@@ -175,7 +211,9 @@ public:
 private:
 	optional_ptr<QueryMetrics> query_metrics;
 	MetricType metric;
+	string string_key;
 	Profiler profiler;
+	bool is_string_metric;
 	bool is_active;
 };
 

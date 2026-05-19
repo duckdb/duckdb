@@ -42,44 +42,6 @@ OPERATOR_NAME
 OPERATOR_ROWS_SCANNED
 OPERATOR_TIMING
 OPERATOR_TYPE
-OPTIMIZER_AGGREGATE_FUNCTION_REWRITER
-OPTIMIZER_BUILD_SIDE_PROBE_SIDE
-OPTIMIZER_COLUMN_LIFETIME
-OPTIMIZER_COMMON_AGGREGATE
-OPTIMIZER_COMMON_SUBEXPRESSIONS
-OPTIMIZER_COMMON_SUBPLAN
-OPTIMIZER_COMPRESSED_MATERIALIZATION
-OPTIMIZER_CTE_FILTER_PUSHER
-OPTIMIZER_CTE_INLINING
-OPTIMIZER_DELIMINATOR
-OPTIMIZER_DUPLICATE_GROUPS
-OPTIMIZER_EMPTY_RESULT_PULLUP
-OPTIMIZER_EXPRESSION_REWRITER
-OPTIMIZER_EXTENSION
-OPTIMIZER_FILTER_PULLUP
-OPTIMIZER_FILTER_PUSHDOWN
-OPTIMIZER_IN_CLAUSE
-OPTIMIZER_JOIN_ELIMINATION
-OPTIMIZER_JOIN_FILTER_PUSHDOWN
-OPTIMIZER_JOIN_ORDER
-OPTIMIZER_LATE_MATERIALIZATION
-OPTIMIZER_LIMIT_PUSHDOWN
-OPTIMIZER_MATERIALIZED_CTE
-OPTIMIZER_OUTER_JOIN_SIMPLIFICATION
-OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN
-OPTIMIZER_PARTITIONED_EXECUTION
-OPTIMIZER_PROJECTION_PULLUP
-OPTIMIZER_REGEX_RANGE
-OPTIMIZER_REORDER_FILTER
-OPTIMIZER_ROW_GROUP_PRUNER
-OPTIMIZER_ROW_NUMBER_REWRITER
-OPTIMIZER_SAMPLING_PUSHDOWN
-OPTIMIZER_STATISTICS_PROPAGATION
-OPTIMIZER_TOP_N
-OPTIMIZER_TOP_N_WINDOW_ELIMINATION
-OPTIMIZER_UNNEST_REWRITER
-OPTIMIZER_UNUSED_COLUMNS
-OPTIMIZER_WINDOW_SELF_JOIN
 PARSER
 PHYSICAL_PLANNER
 PHYSICAL_PLANNER_COLUMN_BINDING
@@ -98,6 +60,44 @@ TOTAL_MEMORY_ALLOCATED
 WAITING_TO_ATTACH_LATENCY
 WAL_REPLAY_ENTRY_COUNT
 WRITE_TO_WAL_LATENCY
+optimizer.aggregate_function_rewriter
+optimizer.build_side_probe_side
+optimizer.column_lifetime
+optimizer.common_aggregate
+optimizer.common_subexpressions
+optimizer.common_subplan
+optimizer.compressed_materialization
+optimizer.cte_filter_pusher
+optimizer.cte_inlining
+optimizer.deliminator
+optimizer.duplicate_groups
+optimizer.empty_result_pullup
+optimizer.expression_rewriter
+optimizer.extension
+optimizer.filter_pullup
+optimizer.filter_pushdown
+optimizer.in_clause
+optimizer.join_elimination
+optimizer.join_filter_pushdown
+optimizer.join_order
+optimizer.late_materialization
+optimizer.limit_pushdown
+optimizer.materialized_cte
+optimizer.outer_join_simplification
+optimizer.partial_aggregate_pushdown
+optimizer.partitioned_execution
+optimizer.projection_pullup
+optimizer.regex_range
+optimizer.reorder_filter
+optimizer.row_group_pruner
+optimizer.row_number_rewriter
+optimizer.sampling_pushdown
+optimizer.statistics_propagation
+optimizer.top_n
+optimizer.top_n_window_elimination
+optimizer.unnest_rewriter
+optimizer.unused_columns
+optimizer.window_self_join
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
@@ -115,44 +115,44 @@ SELECT ALL_OPTIMIZERS,
 	CUMULATIVE_ROWS_SCANNED,
 	EXTRA_INFO,
 	LATENCY,
-	OPTIMIZER_AGGREGATE_FUNCTION_REWRITER,
-	OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
-	OPTIMIZER_COLUMN_LIFETIME,
-	OPTIMIZER_COMMON_AGGREGATE,
-	OPTIMIZER_COMMON_SUBEXPRESSIONS,
-	OPTIMIZER_COMMON_SUBPLAN,
-	OPTIMIZER_COMPRESSED_MATERIALIZATION,
-	OPTIMIZER_CTE_FILTER_PUSHER,
-	OPTIMIZER_CTE_INLINING,
-	OPTIMIZER_DELIMINATOR,
-	OPTIMIZER_DUPLICATE_GROUPS,
-	OPTIMIZER_EMPTY_RESULT_PULLUP,
-	OPTIMIZER_EXPRESSION_REWRITER,
-	OPTIMIZER_EXTENSION,
-	OPTIMIZER_FILTER_PULLUP,
-	OPTIMIZER_FILTER_PUSHDOWN,
-	OPTIMIZER_IN_CLAUSE,
-	OPTIMIZER_JOIN_ELIMINATION,
-	OPTIMIZER_JOIN_FILTER_PUSHDOWN,
-	OPTIMIZER_JOIN_ORDER,
-	OPTIMIZER_LATE_MATERIALIZATION,
-	OPTIMIZER_LIMIT_PUSHDOWN,
-	OPTIMIZER_MATERIALIZED_CTE,
-	OPTIMIZER_OUTER_JOIN_SIMPLIFICATION,
-	OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN,
-	OPTIMIZER_PARTITIONED_EXECUTION,
-	OPTIMIZER_PROJECTION_PULLUP,
-	OPTIMIZER_REGEX_RANGE,
-	OPTIMIZER_REORDER_FILTER,
-	OPTIMIZER_ROW_GROUP_PRUNER,
-	OPTIMIZER_ROW_NUMBER_REWRITER,
-	OPTIMIZER_SAMPLING_PUSHDOWN,
-	OPTIMIZER_STATISTICS_PROPAGATION,
-	OPTIMIZER_TOP_N,
-	OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
-	OPTIMIZER_UNNEST_REWRITER,
-	OPTIMIZER_UNUSED_COLUMNS,
-	OPTIMIZER_WINDOW_SELF_JOIN,
+	"optimizer.aggregate_function_rewriter",
+	"optimizer.build_side_probe_side",
+	"optimizer.column_lifetime",
+	"optimizer.common_aggregate",
+	"optimizer.common_subexpressions",
+	"optimizer.common_subplan",
+	"optimizer.compressed_materialization",
+	"optimizer.cte_filter_pusher",
+	"optimizer.cte_inlining",
+	"optimizer.deliminator",
+	"optimizer.duplicate_groups",
+	"optimizer.empty_result_pullup",
+	"optimizer.expression_rewriter",
+	"optimizer.extension",
+	"optimizer.filter_pullup",
+	"optimizer.filter_pushdown",
+	"optimizer.in_clause",
+	"optimizer.join_elimination",
+	"optimizer.join_filter_pushdown",
+	"optimizer.join_order",
+	"optimizer.late_materialization",
+	"optimizer.limit_pushdown",
+	"optimizer.materialized_cte",
+	"optimizer.outer_join_simplification",
+	"optimizer.partial_aggregate_pushdown",
+	"optimizer.partitioned_execution",
+	"optimizer.projection_pullup",
+	"optimizer.regex_range",
+	"optimizer.reorder_filter",
+	"optimizer.row_group_pruner",
+	"optimizer.row_number_rewriter",
+	"optimizer.sampling_pushdown",
+	"optimizer.statistics_propagation",
+	"optimizer.top_n",
+	"optimizer.top_n_window_elimination",
+	"optimizer.unnest_rewriter",
+	"optimizer.unused_columns",
+	"optimizer.window_self_join",
 	PARSER,
 	PHYSICAL_PLANNER,
 	PHYSICAL_PLANNER_COLUMN_BINDING,
@@ -417,87 +417,87 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-OPTIMIZER_AGGREGATE_FUNCTION_REWRITER
-OPTIMIZER_BUILD_SIDE_PROBE_SIDE
-OPTIMIZER_COLUMN_LIFETIME
-OPTIMIZER_COMMON_AGGREGATE
-OPTIMIZER_COMMON_SUBEXPRESSIONS
-OPTIMIZER_COMMON_SUBPLAN
-OPTIMIZER_COMPRESSED_MATERIALIZATION
-OPTIMIZER_CTE_FILTER_PUSHER
-OPTIMIZER_CTE_INLINING
-OPTIMIZER_DELIMINATOR
-OPTIMIZER_DUPLICATE_GROUPS
-OPTIMIZER_EMPTY_RESULT_PULLUP
-OPTIMIZER_EXPRESSION_REWRITER
-OPTIMIZER_EXTENSION
-OPTIMIZER_FILTER_PULLUP
-OPTIMIZER_FILTER_PUSHDOWN
-OPTIMIZER_IN_CLAUSE
-OPTIMIZER_JOIN_ELIMINATION
-OPTIMIZER_JOIN_FILTER_PUSHDOWN
-OPTIMIZER_JOIN_ORDER
-OPTIMIZER_LATE_MATERIALIZATION
-OPTIMIZER_LIMIT_PUSHDOWN
-OPTIMIZER_MATERIALIZED_CTE
-OPTIMIZER_OUTER_JOIN_SIMPLIFICATION
-OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN
-OPTIMIZER_PARTITIONED_EXECUTION
-OPTIMIZER_PROJECTION_PULLUP
-OPTIMIZER_REGEX_RANGE
-OPTIMIZER_REORDER_FILTER
-OPTIMIZER_ROW_GROUP_PRUNER
-OPTIMIZER_ROW_NUMBER_REWRITER
-OPTIMIZER_SAMPLING_PUSHDOWN
-OPTIMIZER_STATISTICS_PROPAGATION
-OPTIMIZER_TOP_N
-OPTIMIZER_TOP_N_WINDOW_ELIMINATION
-OPTIMIZER_UNNEST_REWRITER
-OPTIMIZER_UNUSED_COLUMNS
-OPTIMIZER_WINDOW_SELF_JOIN
+optimizer.aggregate_function_rewriter
+optimizer.build_side_probe_side
+optimizer.column_lifetime
+optimizer.common_aggregate
+optimizer.common_subexpressions
+optimizer.common_subplan
+optimizer.compressed_materialization
+optimizer.cte_filter_pusher
+optimizer.cte_inlining
+optimizer.deliminator
+optimizer.duplicate_groups
+optimizer.empty_result_pullup
+optimizer.expression_rewriter
+optimizer.extension
+optimizer.filter_pullup
+optimizer.filter_pushdown
+optimizer.in_clause
+optimizer.join_elimination
+optimizer.join_filter_pushdown
+optimizer.join_order
+optimizer.late_materialization
+optimizer.limit_pushdown
+optimizer.materialized_cte
+optimizer.outer_join_simplification
+optimizer.partial_aggregate_pushdown
+optimizer.partitioned_execution
+optimizer.projection_pullup
+optimizer.regex_range
+optimizer.reorder_filter
+optimizer.row_group_pruner
+optimizer.row_number_rewriter
+optimizer.sampling_pushdown
+optimizer.statistics_propagation
+optimizer.top_n
+optimizer.top_n_window_elimination
+optimizer.unnest_rewriter
+optimizer.unused_columns
+optimizer.window_self_join
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT OPTIMIZER_AGGREGATE_FUNCTION_REWRITER,
-	OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
-	OPTIMIZER_COLUMN_LIFETIME,
-	OPTIMIZER_COMMON_AGGREGATE,
-	OPTIMIZER_COMMON_SUBEXPRESSIONS,
-	OPTIMIZER_COMMON_SUBPLAN,
-	OPTIMIZER_COMPRESSED_MATERIALIZATION,
-	OPTIMIZER_CTE_FILTER_PUSHER,
-	OPTIMIZER_CTE_INLINING,
-	OPTIMIZER_DELIMINATOR,
-	OPTIMIZER_DUPLICATE_GROUPS,
-	OPTIMIZER_EMPTY_RESULT_PULLUP,
-	OPTIMIZER_EXPRESSION_REWRITER,
-	OPTIMIZER_EXTENSION,
-	OPTIMIZER_FILTER_PULLUP,
-	OPTIMIZER_FILTER_PUSHDOWN,
-	OPTIMIZER_IN_CLAUSE,
-	OPTIMIZER_JOIN_ELIMINATION,
-	OPTIMIZER_JOIN_FILTER_PUSHDOWN,
-	OPTIMIZER_JOIN_ORDER,
-	OPTIMIZER_LATE_MATERIALIZATION,
-	OPTIMIZER_LIMIT_PUSHDOWN,
-	OPTIMIZER_MATERIALIZED_CTE,
-	OPTIMIZER_OUTER_JOIN_SIMPLIFICATION,
-	OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN,
-	OPTIMIZER_PARTITIONED_EXECUTION,
-	OPTIMIZER_PROJECTION_PULLUP,
-	OPTIMIZER_REGEX_RANGE,
-	OPTIMIZER_REORDER_FILTER,
-	OPTIMIZER_ROW_GROUP_PRUNER,
-	OPTIMIZER_ROW_NUMBER_REWRITER,
-	OPTIMIZER_SAMPLING_PUSHDOWN,
-	OPTIMIZER_STATISTICS_PROPAGATION,
-	OPTIMIZER_TOP_N,
-	OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
-	OPTIMIZER_UNNEST_REWRITER,
-	OPTIMIZER_UNUSED_COLUMNS,
-	OPTIMIZER_WINDOW_SELF_JOIN
+SELECT "optimizer.aggregate_function_rewriter",
+	"optimizer.build_side_probe_side",
+	"optimizer.column_lifetime",
+	"optimizer.common_aggregate",
+	"optimizer.common_subexpressions",
+	"optimizer.common_subplan",
+	"optimizer.compressed_materialization",
+	"optimizer.cte_filter_pusher",
+	"optimizer.cte_inlining",
+	"optimizer.deliminator",
+	"optimizer.duplicate_groups",
+	"optimizer.empty_result_pullup",
+	"optimizer.expression_rewriter",
+	"optimizer.extension",
+	"optimizer.filter_pullup",
+	"optimizer.filter_pushdown",
+	"optimizer.in_clause",
+	"optimizer.join_elimination",
+	"optimizer.join_filter_pushdown",
+	"optimizer.join_order",
+	"optimizer.late_materialization",
+	"optimizer.limit_pushdown",
+	"optimizer.materialized_cte",
+	"optimizer.outer_join_simplification",
+	"optimizer.partial_aggregate_pushdown",
+	"optimizer.partitioned_execution",
+	"optimizer.projection_pullup",
+	"optimizer.regex_range",
+	"optimizer.reorder_filter",
+	"optimizer.row_group_pruner",
+	"optimizer.row_number_rewriter",
+	"optimizer.sampling_pushdown",
+	"optimizer.statistics_propagation",
+	"optimizer.top_n",
+	"optimizer.top_n_window_elimination",
+	"optimizer.unnest_rewriter",
+	"optimizer.unused_columns",
+	"optimizer.window_self_join"
 FROM metrics_output;
 
 statement ok
@@ -520,44 +520,6 @@ SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
 ALL_OPTIMIZERS
 CUMULATIVE_OPTIMIZER_TIMING
-OPTIMIZER_AGGREGATE_FUNCTION_REWRITER
-OPTIMIZER_BUILD_SIDE_PROBE_SIDE
-OPTIMIZER_COLUMN_LIFETIME
-OPTIMIZER_COMMON_AGGREGATE
-OPTIMIZER_COMMON_SUBEXPRESSIONS
-OPTIMIZER_COMMON_SUBPLAN
-OPTIMIZER_COMPRESSED_MATERIALIZATION
-OPTIMIZER_CTE_FILTER_PUSHER
-OPTIMIZER_CTE_INLINING
-OPTIMIZER_DELIMINATOR
-OPTIMIZER_DUPLICATE_GROUPS
-OPTIMIZER_EMPTY_RESULT_PULLUP
-OPTIMIZER_EXPRESSION_REWRITER
-OPTIMIZER_EXTENSION
-OPTIMIZER_FILTER_PULLUP
-OPTIMIZER_FILTER_PUSHDOWN
-OPTIMIZER_IN_CLAUSE
-OPTIMIZER_JOIN_ELIMINATION
-OPTIMIZER_JOIN_FILTER_PUSHDOWN
-OPTIMIZER_JOIN_ORDER
-OPTIMIZER_LATE_MATERIALIZATION
-OPTIMIZER_LIMIT_PUSHDOWN
-OPTIMIZER_MATERIALIZED_CTE
-OPTIMIZER_OUTER_JOIN_SIMPLIFICATION
-OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN
-OPTIMIZER_PARTITIONED_EXECUTION
-OPTIMIZER_PROJECTION_PULLUP
-OPTIMIZER_REGEX_RANGE
-OPTIMIZER_REORDER_FILTER
-OPTIMIZER_ROW_GROUP_PRUNER
-OPTIMIZER_ROW_NUMBER_REWRITER
-OPTIMIZER_SAMPLING_PUSHDOWN
-OPTIMIZER_STATISTICS_PROPAGATION
-OPTIMIZER_TOP_N
-OPTIMIZER_TOP_N_WINDOW_ELIMINATION
-OPTIMIZER_UNNEST_REWRITER
-OPTIMIZER_UNUSED_COLUMNS
-OPTIMIZER_WINDOW_SELF_JOIN
 PARSER
 PHYSICAL_PLANNER
 PHYSICAL_PLANNER_COLUMN_BINDING
@@ -565,6 +527,44 @@ PHYSICAL_PLANNER_CREATE_PLAN
 PHYSICAL_PLANNER_RESOLVE_TYPES
 PLANNER
 PLANNER_BINDING
+optimizer.aggregate_function_rewriter
+optimizer.build_side_probe_side
+optimizer.column_lifetime
+optimizer.common_aggregate
+optimizer.common_subexpressions
+optimizer.common_subplan
+optimizer.compressed_materialization
+optimizer.cte_filter_pusher
+optimizer.cte_inlining
+optimizer.deliminator
+optimizer.duplicate_groups
+optimizer.empty_result_pullup
+optimizer.expression_rewriter
+optimizer.extension
+optimizer.filter_pullup
+optimizer.filter_pushdown
+optimizer.in_clause
+optimizer.join_elimination
+optimizer.join_filter_pushdown
+optimizer.join_order
+optimizer.late_materialization
+optimizer.limit_pushdown
+optimizer.materialized_cte
+optimizer.outer_join_simplification
+optimizer.partial_aggregate_pushdown
+optimizer.partitioned_execution
+optimizer.projection_pullup
+optimizer.regex_range
+optimizer.reorder_filter
+optimizer.row_group_pruner
+optimizer.row_number_rewriter
+optimizer.sampling_pushdown
+optimizer.statistics_propagation
+optimizer.top_n
+optimizer.top_n_window_elimination
+optimizer.unnest_rewriter
+optimizer.unused_columns
+optimizer.window_self_join
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
@@ -572,44 +572,44 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_ou
 statement ok
 SELECT ALL_OPTIMIZERS,
 	CUMULATIVE_OPTIMIZER_TIMING,
-	OPTIMIZER_AGGREGATE_FUNCTION_REWRITER,
-	OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
-	OPTIMIZER_COLUMN_LIFETIME,
-	OPTIMIZER_COMMON_AGGREGATE,
-	OPTIMIZER_COMMON_SUBEXPRESSIONS,
-	OPTIMIZER_COMMON_SUBPLAN,
-	OPTIMIZER_COMPRESSED_MATERIALIZATION,
-	OPTIMIZER_CTE_FILTER_PUSHER,
-	OPTIMIZER_CTE_INLINING,
-	OPTIMIZER_DELIMINATOR,
-	OPTIMIZER_DUPLICATE_GROUPS,
-	OPTIMIZER_EMPTY_RESULT_PULLUP,
-	OPTIMIZER_EXPRESSION_REWRITER,
-	OPTIMIZER_EXTENSION,
-	OPTIMIZER_FILTER_PULLUP,
-	OPTIMIZER_FILTER_PUSHDOWN,
-	OPTIMIZER_IN_CLAUSE,
-	OPTIMIZER_JOIN_ELIMINATION,
-	OPTIMIZER_JOIN_FILTER_PUSHDOWN,
-	OPTIMIZER_JOIN_ORDER,
-	OPTIMIZER_LATE_MATERIALIZATION,
-	OPTIMIZER_LIMIT_PUSHDOWN,
-	OPTIMIZER_MATERIALIZED_CTE,
-	OPTIMIZER_OUTER_JOIN_SIMPLIFICATION,
-	OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN,
-	OPTIMIZER_PARTITIONED_EXECUTION,
-	OPTIMIZER_PROJECTION_PULLUP,
-	OPTIMIZER_REGEX_RANGE,
-	OPTIMIZER_REORDER_FILTER,
-	OPTIMIZER_ROW_GROUP_PRUNER,
-	OPTIMIZER_ROW_NUMBER_REWRITER,
-	OPTIMIZER_SAMPLING_PUSHDOWN,
-	OPTIMIZER_STATISTICS_PROPAGATION,
-	OPTIMIZER_TOP_N,
-	OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
-	OPTIMIZER_UNNEST_REWRITER,
-	OPTIMIZER_UNUSED_COLUMNS,
-	OPTIMIZER_WINDOW_SELF_JOIN,
+	"optimizer.aggregate_function_rewriter",
+	"optimizer.build_side_probe_side",
+	"optimizer.column_lifetime",
+	"optimizer.common_aggregate",
+	"optimizer.common_subexpressions",
+	"optimizer.common_subplan",
+	"optimizer.compressed_materialization",
+	"optimizer.cte_filter_pusher",
+	"optimizer.cte_inlining",
+	"optimizer.deliminator",
+	"optimizer.duplicate_groups",
+	"optimizer.empty_result_pullup",
+	"optimizer.expression_rewriter",
+	"optimizer.extension",
+	"optimizer.filter_pullup",
+	"optimizer.filter_pushdown",
+	"optimizer.in_clause",
+	"optimizer.join_elimination",
+	"optimizer.join_filter_pushdown",
+	"optimizer.join_order",
+	"optimizer.late_materialization",
+	"optimizer.limit_pushdown",
+	"optimizer.materialized_cte",
+	"optimizer.outer_join_simplification",
+	"optimizer.partial_aggregate_pushdown",
+	"optimizer.partitioned_execution",
+	"optimizer.projection_pullup",
+	"optimizer.regex_range",
+	"optimizer.reorder_filter",
+	"optimizer.row_group_pruner",
+	"optimizer.row_number_rewriter",
+	"optimizer.sampling_pushdown",
+	"optimizer.statistics_propagation",
+	"optimizer.top_n",
+	"optimizer.top_n_window_elimination",
+	"optimizer.unnest_rewriter",
+	"optimizer.unused_columns",
+	"optimizer.window_self_join",
 	PARSER,
 	PHYSICAL_PLANNER,
 	PHYSICAL_PLANNER_COLUMN_BINDING,
@@ -713,49 +713,49 @@ ATTACH_LOAD_STORAGE_LATENCY
 ATTACH_REPLAY_WAL_LATENCY
 CHECKPOINT_LATENCY
 COMMIT_LOCAL_STORAGE_LATENCY
-OPTIMIZER_AGGREGATE_FUNCTION_REWRITER
-OPTIMIZER_BUILD_SIDE_PROBE_SIDE
-OPTIMIZER_COLUMN_LIFETIME
-OPTIMIZER_COMMON_AGGREGATE
-OPTIMIZER_COMMON_SUBEXPRESSIONS
-OPTIMIZER_COMMON_SUBPLAN
-OPTIMIZER_COMPRESSED_MATERIALIZATION
-OPTIMIZER_CTE_FILTER_PUSHER
-OPTIMIZER_CTE_INLINING
-OPTIMIZER_DELIMINATOR
-OPTIMIZER_DUPLICATE_GROUPS
-OPTIMIZER_EMPTY_RESULT_PULLUP
-OPTIMIZER_EXPRESSION_REWRITER
-OPTIMIZER_EXTENSION
-OPTIMIZER_FILTER_PULLUP
-OPTIMIZER_FILTER_PUSHDOWN
-OPTIMIZER_IN_CLAUSE
-OPTIMIZER_JOIN_ELIMINATION
-OPTIMIZER_JOIN_FILTER_PUSHDOWN
-OPTIMIZER_JOIN_ORDER
-OPTIMIZER_LATE_MATERIALIZATION
-OPTIMIZER_LIMIT_PUSHDOWN
-OPTIMIZER_MATERIALIZED_CTE
-OPTIMIZER_OUTER_JOIN_SIMPLIFICATION
-OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN
-OPTIMIZER_PARTITIONED_EXECUTION
-OPTIMIZER_PROJECTION_PULLUP
-OPTIMIZER_REGEX_RANGE
-OPTIMIZER_REORDER_FILTER
-OPTIMIZER_ROW_GROUP_PRUNER
-OPTIMIZER_ROW_NUMBER_REWRITER
-OPTIMIZER_SAMPLING_PUSHDOWN
-OPTIMIZER_STATISTICS_PROPAGATION
-OPTIMIZER_TOP_N
-OPTIMIZER_TOP_N_WINDOW_ELIMINATION
-OPTIMIZER_UNNEST_REWRITER
-OPTIMIZER_UNUSED_COLUMNS
-OPTIMIZER_WINDOW_SELF_JOIN
 TOTAL_BYTES_READ
 TOTAL_BYTES_WRITTEN
 WAITING_TO_ATTACH_LATENCY
 WAL_REPLAY_ENTRY_COUNT
 WRITE_TO_WAL_LATENCY
+optimizer.aggregate_function_rewriter
+optimizer.build_side_probe_side
+optimizer.column_lifetime
+optimizer.common_aggregate
+optimizer.common_subexpressions
+optimizer.common_subplan
+optimizer.compressed_materialization
+optimizer.cte_filter_pusher
+optimizer.cte_inlining
+optimizer.deliminator
+optimizer.duplicate_groups
+optimizer.empty_result_pullup
+optimizer.expression_rewriter
+optimizer.extension
+optimizer.filter_pullup
+optimizer.filter_pushdown
+optimizer.in_clause
+optimizer.join_elimination
+optimizer.join_filter_pushdown
+optimizer.join_order
+optimizer.late_materialization
+optimizer.limit_pushdown
+optimizer.materialized_cte
+optimizer.outer_join_simplification
+optimizer.partial_aggregate_pushdown
+optimizer.partitioned_execution
+optimizer.projection_pullup
+optimizer.regex_range
+optimizer.reorder_filter
+optimizer.row_group_pruner
+optimizer.row_number_rewriter
+optimizer.sampling_pushdown
+optimizer.statistics_propagation
+optimizer.top_n
+optimizer.top_n_window_elimination
+optimizer.unnest_rewriter
+optimizer.unused_columns
+optimizer.window_self_join
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
@@ -765,44 +765,44 @@ SELECT ATTACH_LOAD_STORAGE_LATENCY,
 	ATTACH_REPLAY_WAL_LATENCY,
 	CHECKPOINT_LATENCY,
 	COMMIT_LOCAL_STORAGE_LATENCY,
-	OPTIMIZER_AGGREGATE_FUNCTION_REWRITER,
-	OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
-	OPTIMIZER_COLUMN_LIFETIME,
-	OPTIMIZER_COMMON_AGGREGATE,
-	OPTIMIZER_COMMON_SUBEXPRESSIONS,
-	OPTIMIZER_COMMON_SUBPLAN,
-	OPTIMIZER_COMPRESSED_MATERIALIZATION,
-	OPTIMIZER_CTE_FILTER_PUSHER,
-	OPTIMIZER_CTE_INLINING,
-	OPTIMIZER_DELIMINATOR,
-	OPTIMIZER_DUPLICATE_GROUPS,
-	OPTIMIZER_EMPTY_RESULT_PULLUP,
-	OPTIMIZER_EXPRESSION_REWRITER,
-	OPTIMIZER_EXTENSION,
-	OPTIMIZER_FILTER_PULLUP,
-	OPTIMIZER_FILTER_PUSHDOWN,
-	OPTIMIZER_IN_CLAUSE,
-	OPTIMIZER_JOIN_ELIMINATION,
-	OPTIMIZER_JOIN_FILTER_PUSHDOWN,
-	OPTIMIZER_JOIN_ORDER,
-	OPTIMIZER_LATE_MATERIALIZATION,
-	OPTIMIZER_LIMIT_PUSHDOWN,
-	OPTIMIZER_MATERIALIZED_CTE,
-	OPTIMIZER_OUTER_JOIN_SIMPLIFICATION,
-	OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN,
-	OPTIMIZER_PARTITIONED_EXECUTION,
-	OPTIMIZER_PROJECTION_PULLUP,
-	OPTIMIZER_REGEX_RANGE,
-	OPTIMIZER_REORDER_FILTER,
-	OPTIMIZER_ROW_GROUP_PRUNER,
-	OPTIMIZER_ROW_NUMBER_REWRITER,
-	OPTIMIZER_SAMPLING_PUSHDOWN,
-	OPTIMIZER_STATISTICS_PROPAGATION,
-	OPTIMIZER_TOP_N,
-	OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
-	OPTIMIZER_UNNEST_REWRITER,
-	OPTIMIZER_UNUSED_COLUMNS,
-	OPTIMIZER_WINDOW_SELF_JOIN,
+	"optimizer.aggregate_function_rewriter",
+	"optimizer.build_side_probe_side",
+	"optimizer.column_lifetime",
+	"optimizer.common_aggregate",
+	"optimizer.common_subexpressions",
+	"optimizer.common_subplan",
+	"optimizer.compressed_materialization",
+	"optimizer.cte_filter_pusher",
+	"optimizer.cte_inlining",
+	"optimizer.deliminator",
+	"optimizer.duplicate_groups",
+	"optimizer.empty_result_pullup",
+	"optimizer.expression_rewriter",
+	"optimizer.extension",
+	"optimizer.filter_pullup",
+	"optimizer.filter_pushdown",
+	"optimizer.in_clause",
+	"optimizer.join_elimination",
+	"optimizer.join_filter_pushdown",
+	"optimizer.join_order",
+	"optimizer.late_materialization",
+	"optimizer.limit_pushdown",
+	"optimizer.materialized_cte",
+	"optimizer.outer_join_simplification",
+	"optimizer.partial_aggregate_pushdown",
+	"optimizer.partitioned_execution",
+	"optimizer.projection_pullup",
+	"optimizer.regex_range",
+	"optimizer.reorder_filter",
+	"optimizer.row_group_pruner",
+	"optimizer.row_number_rewriter",
+	"optimizer.sampling_pushdown",
+	"optimizer.statistics_propagation",
+	"optimizer.top_n",
+	"optimizer.top_n_window_elimination",
+	"optimizer.unnest_rewriter",
+	"optimizer.unused_columns",
+	"optimizer.window_self_join",
 	TOTAL_BYTES_READ,
 	TOTAL_BYTES_WRITTEN,
 	WAITING_TO_ATTACH_LATENCY,
@@ -835,44 +835,6 @@ BLOCKED_THREAD_TIME
 CHECKPOINT_LATENCY
 COMMIT_LOCAL_STORAGE_LATENCY
 CUMULATIVE_OPTIMIZER_TIMING
-OPTIMIZER_AGGREGATE_FUNCTION_REWRITER
-OPTIMIZER_BUILD_SIDE_PROBE_SIDE
-OPTIMIZER_COLUMN_LIFETIME
-OPTIMIZER_COMMON_AGGREGATE
-OPTIMIZER_COMMON_SUBEXPRESSIONS
-OPTIMIZER_COMMON_SUBPLAN
-OPTIMIZER_COMPRESSED_MATERIALIZATION
-OPTIMIZER_CTE_FILTER_PUSHER
-OPTIMIZER_CTE_INLINING
-OPTIMIZER_DELIMINATOR
-OPTIMIZER_DUPLICATE_GROUPS
-OPTIMIZER_EMPTY_RESULT_PULLUP
-OPTIMIZER_EXPRESSION_REWRITER
-OPTIMIZER_EXTENSION
-OPTIMIZER_FILTER_PULLUP
-OPTIMIZER_FILTER_PUSHDOWN
-OPTIMIZER_IN_CLAUSE
-OPTIMIZER_JOIN_ELIMINATION
-OPTIMIZER_JOIN_FILTER_PUSHDOWN
-OPTIMIZER_JOIN_ORDER
-OPTIMIZER_LATE_MATERIALIZATION
-OPTIMIZER_LIMIT_PUSHDOWN
-OPTIMIZER_MATERIALIZED_CTE
-OPTIMIZER_OUTER_JOIN_SIMPLIFICATION
-OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN
-OPTIMIZER_PARTITIONED_EXECUTION
-OPTIMIZER_PROJECTION_PULLUP
-OPTIMIZER_REGEX_RANGE
-OPTIMIZER_REORDER_FILTER
-OPTIMIZER_ROW_GROUP_PRUNER
-OPTIMIZER_ROW_NUMBER_REWRITER
-OPTIMIZER_SAMPLING_PUSHDOWN
-OPTIMIZER_STATISTICS_PROPAGATION
-OPTIMIZER_TOP_N
-OPTIMIZER_TOP_N_WINDOW_ELIMINATION
-OPTIMIZER_UNNEST_REWRITER
-OPTIMIZER_UNUSED_COLUMNS
-OPTIMIZER_WINDOW_SELF_JOIN
 PARSER
 PHYSICAL_PLANNER
 PHYSICAL_PLANNER_COLUMN_BINDING
@@ -888,6 +850,44 @@ TOTAL_MEMORY_ALLOCATED
 WAITING_TO_ATTACH_LATENCY
 WAL_REPLAY_ENTRY_COUNT
 WRITE_TO_WAL_LATENCY
+optimizer.aggregate_function_rewriter
+optimizer.build_side_probe_side
+optimizer.column_lifetime
+optimizer.common_aggregate
+optimizer.common_subexpressions
+optimizer.common_subplan
+optimizer.compressed_materialization
+optimizer.cte_filter_pusher
+optimizer.cte_inlining
+optimizer.deliminator
+optimizer.duplicate_groups
+optimizer.empty_result_pullup
+optimizer.expression_rewriter
+optimizer.extension
+optimizer.filter_pullup
+optimizer.filter_pushdown
+optimizer.in_clause
+optimizer.join_elimination
+optimizer.join_filter_pushdown
+optimizer.join_order
+optimizer.late_materialization
+optimizer.limit_pushdown
+optimizer.materialized_cte
+optimizer.outer_join_simplification
+optimizer.partial_aggregate_pushdown
+optimizer.partitioned_execution
+optimizer.projection_pullup
+optimizer.regex_range
+optimizer.reorder_filter
+optimizer.row_group_pruner
+optimizer.row_number_rewriter
+optimizer.sampling_pushdown
+optimizer.statistics_propagation
+optimizer.top_n
+optimizer.top_n_window_elimination
+optimizer.unnest_rewriter
+optimizer.unused_columns
+optimizer.window_self_join
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
@@ -900,44 +900,44 @@ SELECT ALL_OPTIMIZERS,
 	CHECKPOINT_LATENCY,
 	COMMIT_LOCAL_STORAGE_LATENCY,
 	CUMULATIVE_OPTIMIZER_TIMING,
-	OPTIMIZER_AGGREGATE_FUNCTION_REWRITER,
-	OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
-	OPTIMIZER_COLUMN_LIFETIME,
-	OPTIMIZER_COMMON_AGGREGATE,
-	OPTIMIZER_COMMON_SUBEXPRESSIONS,
-	OPTIMIZER_COMMON_SUBPLAN,
-	OPTIMIZER_COMPRESSED_MATERIALIZATION,
-	OPTIMIZER_CTE_FILTER_PUSHER,
-	OPTIMIZER_CTE_INLINING,
-	OPTIMIZER_DELIMINATOR,
-	OPTIMIZER_DUPLICATE_GROUPS,
-	OPTIMIZER_EMPTY_RESULT_PULLUP,
-	OPTIMIZER_EXPRESSION_REWRITER,
-	OPTIMIZER_EXTENSION,
-	OPTIMIZER_FILTER_PULLUP,
-	OPTIMIZER_FILTER_PUSHDOWN,
-	OPTIMIZER_IN_CLAUSE,
-	OPTIMIZER_JOIN_ELIMINATION,
-	OPTIMIZER_JOIN_FILTER_PUSHDOWN,
-	OPTIMIZER_JOIN_ORDER,
-	OPTIMIZER_LATE_MATERIALIZATION,
-	OPTIMIZER_LIMIT_PUSHDOWN,
-	OPTIMIZER_MATERIALIZED_CTE,
-	OPTIMIZER_OUTER_JOIN_SIMPLIFICATION,
-	OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN,
-	OPTIMIZER_PARTITIONED_EXECUTION,
-	OPTIMIZER_PROJECTION_PULLUP,
-	OPTIMIZER_REGEX_RANGE,
-	OPTIMIZER_REORDER_FILTER,
-	OPTIMIZER_ROW_GROUP_PRUNER,
-	OPTIMIZER_ROW_NUMBER_REWRITER,
-	OPTIMIZER_SAMPLING_PUSHDOWN,
-	OPTIMIZER_STATISTICS_PROPAGATION,
-	OPTIMIZER_TOP_N,
-	OPTIMIZER_TOP_N_WINDOW_ELIMINATION,
-	OPTIMIZER_UNNEST_REWRITER,
-	OPTIMIZER_UNUSED_COLUMNS,
-	OPTIMIZER_WINDOW_SELF_JOIN,
+	"optimizer.aggregate_function_rewriter",
+	"optimizer.build_side_probe_side",
+	"optimizer.column_lifetime",
+	"optimizer.common_aggregate",
+	"optimizer.common_subexpressions",
+	"optimizer.common_subplan",
+	"optimizer.compressed_materialization",
+	"optimizer.cte_filter_pusher",
+	"optimizer.cte_inlining",
+	"optimizer.deliminator",
+	"optimizer.duplicate_groups",
+	"optimizer.empty_result_pullup",
+	"optimizer.expression_rewriter",
+	"optimizer.extension",
+	"optimizer.filter_pullup",
+	"optimizer.filter_pushdown",
+	"optimizer.in_clause",
+	"optimizer.join_elimination",
+	"optimizer.join_filter_pushdown",
+	"optimizer.join_order",
+	"optimizer.late_materialization",
+	"optimizer.limit_pushdown",
+	"optimizer.materialized_cte",
+	"optimizer.outer_join_simplification",
+	"optimizer.partial_aggregate_pushdown",
+	"optimizer.partitioned_execution",
+	"optimizer.projection_pullup",
+	"optimizer.regex_range",
+	"optimizer.reorder_filter",
+	"optimizer.row_group_pruner",
+	"optimizer.row_number_rewriter",
+	"optimizer.sampling_pushdown",
+	"optimizer.statistics_propagation",
+	"optimizer.top_n",
+	"optimizer.top_n_window_elimination",
+	"optimizer.unnest_rewriter",
+	"optimizer.unused_columns",
+	"optimizer.window_self_join",
 	PARSER,
 	PHYSICAL_PLANNER,
 	PHYSICAL_PLANNER_COLUMN_BINDING,
@@ -954,4 +954,3 @@ SELECT ALL_OPTIMIZERS,
 	WAL_REPLAY_ENTRY_COUNT,
 	WRITE_TO_WAL_LATENCY
 FROM metrics_output;
-
