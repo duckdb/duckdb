@@ -1295,7 +1295,10 @@ void Catalog::OnDetach(ClientContext &context) {
 
 bool Catalog::HasConflictingAttachOptions(const string &path, const AttachOptions &options) {
 	auto const db_type = options.db_type.empty() ? "duckdb" : options.db_type;
-	return GetDBPath() != path || GetCatalogType() != db_type;
+	// Normalize through the extension alias table so that equivalent forms
+	auto canonical_actual = ExtensionHelper::ApplyExtensionAlias(GetCatalogType());
+	auto canonical_requested = ExtensionHelper::ApplyExtensionAlias(db_type);
+	return GetDBPath() != path || !StringUtil::CIEquals(canonical_actual, canonical_requested);
 }
 
 } // namespace duckdb
