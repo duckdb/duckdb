@@ -914,7 +914,7 @@ static unique_ptr<TableRef> QueryReplacement(const string &query) {
 
 	auto result = make_uniq<TableFunctionRef>();
 	result->function = make_uniq<FunctionExpression>("query", std::move(children));
-	return result;
+	return unique_ptr_cast<TableFunctionRef, TableRef>(std::move(result));
 }
 
 static unique_ptr<TableRef> ParquetFallbackBindReplace(ClientContext &context, TableFunctionBindInput &input) {
