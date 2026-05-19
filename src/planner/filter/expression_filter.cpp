@@ -257,13 +257,11 @@ static FilterPropagateResult CheckComparisonStatistics(const BoundFunctionExpres
 		                                                                : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
 	auto result = CheckZonemapAgainstConstants(*filter_stats, comparison_type, array_ptr<const Value>(&constant, 1));
-	if (comparison_type == ExpressionType::COMPARE_DISTINCT_FROM &&
-	    result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-		// Mixed-null checkpointed segments can still reach this path with value stats that only capture the
-		// non-null payload. Avoid claiming the filter is always false unless another layer proves away NULLs.
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
 	if (filter_stats->CanHaveNull()) {
+		if (comparison_type == ExpressionType::COMPARE_DISTINCT_FROM &&
+		    result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
 		if (comparison_type != ExpressionType::COMPARE_DISTINCT_FROM &&
 		    result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
