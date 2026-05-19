@@ -29,7 +29,7 @@ public:
 	virtual Allocator &GetAllocator() = 0;
 
 	//! Cast a single source vector to VARCHAR. Delegates to the chunk-level virtual.
-	void CastToVarchar(Vector &source, Vector &result, idx_t count);
+	void CastToVarchar(const Vector &source, Vector &result, idx_t count);
 
 protected:
 	//! Cast source chunk columns to VARCHAR into result chunk. Derived classes implement this.

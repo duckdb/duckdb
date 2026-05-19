@@ -119,6 +119,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(DefaultNullOrderSetting),
     DUCKDB_SETTING_CALLBACK(DefaultOrderSetting),
     DUCKDB_GLOBAL(DefaultSecretStorageSetting),
+    DUCKDB_SETTING_CALLBACK(DefaultTransactionInvalidationPolicySetting),
     DUCKDB_SETTING_CALLBACK(DeprecatedUsingKeySyntaxSetting),
     DUCKDB_SETTING_CALLBACK(DisableDatabaseInvalidationSetting),
     DUCKDB_SETTING(DisableTimestamptzCastsSetting),

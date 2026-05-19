@@ -52,6 +52,14 @@ void TupleDataAllocator::SetDestroyBufferUponUnpin() {
 	}
 }
 
+void TupleDataAllocator::Reset() {
+	// Mark existing blocks for cleanup when they are unpinned, then drop our references.
+	// Avoids copy-constructing a fresh TupleDataAllocator object just to clear the block lists.
+	SetDestroyBufferUponUnpin();
+	row_blocks.clear();
+	heap_blocks.clear();
+}
+
 void TupleDataAllocator::DestroyRowBlocks(const idx_t row_block_begin, const idx_t row_block_end) {
 	if (row_block_begin == row_block_end) {
 		return;
@@ -327,6 +335,7 @@ void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDa
 
 	InitializeChunkStateInternal(pin_state, chunk_state, 0, true, init_heap, init_heap, chunk_state.chunk_parts,
 	                             sort_key_payload_state);
+	FlatVector::SetSize(chunk_state.row_locations, chunk.count);
 
 	chunk_state.chunk_lock = &chunk.lock.get();
 }

@@ -145,7 +145,8 @@ private:
 #endif
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
-	static inline void ExecuteStandard(Vector &input, Vector &result, idx_t count, DATA_TYPE &data, bool adds_nulls,
+	static inline void ExecuteStandard(const Vector &input, Vector &result, idx_t count, DATA_TYPE &data,
+	                                   bool adds_nulls,
 	                                   FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 		switch (input.GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR: {
@@ -166,6 +167,7 @@ private:
 #ifndef DUCKDB_SMALLER_BINARY
 		case VectorType::FLAT_VECTOR: {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
+			FlatVector::SetSize(result, count);
 			auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 
@@ -208,6 +210,7 @@ private:
 			input.ToUnifiedFormat(vdata);
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
+			FlatVector::SetSize(result, count);
 			auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			auto ldata = UnifiedVectorFormat::GetData<INPUT_TYPE>(vdata);
 
@@ -220,13 +223,13 @@ private:
 
 public:
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void Execute(Vector &input, Vector &result, idx_t count) {
+	static void Execute(const Vector &input, Vector &result, idx_t count) {
 		std::nullptr_t no_data = nullptr;
 		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryOperatorWrapper, OP>(input, result, count, no_data, false);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
-	static void Execute(Vector &input, Vector &result, idx_t count, FUNC fun,
+	static void Execute(const Vector &input, Vector &result, idx_t count, FUNC fun,
 	                    FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 		constexpr bool adds_nulls =
 		    std::is_same<decltype(fun(std::declval<INPUT_TYPE>())), optional<RESULT_TYPE>>::value;
@@ -235,14 +238,37 @@ public:
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP, class DATA_TYPE>
-	static void GenericExecute(Vector &input, Vector &result, idx_t count, DATA_TYPE &data, bool adds_nulls = false) {
+	static void GenericExecute(const Vector &input, Vector &result, idx_t count, DATA_TYPE &data,
+	                           bool adds_nulls = false) {
 		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, GenericUnaryWrapper, OP>(input, result, count, data, adds_nulls);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void ExecuteString(Vector &input, Vector &result, idx_t count) {
+	static void ExecuteString(const Vector &input, Vector &result, idx_t count) {
 		auto &heap = StringVector::GetStringHeap(result);
 		UnaryExecutor::GenericExecute<INPUT_TYPE, RESULT_TYPE, UnaryStringOperator<OP>>(input, result, count, heap);
+	}
+
+	//! Convenience overloads without explicit count - count is derived from input.size().
+	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
+	static void Execute(const Vector &input, Vector &result) {
+		Execute<INPUT_TYPE, RESULT_TYPE, OP>(input, result, input.size());
+	}
+
+	template <class INPUT_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
+	static void Execute(const Vector &input, Vector &result, FUNC fun,
+	                    FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
+		Execute<INPUT_TYPE, RESULT_TYPE, FUNC>(input, result, input.size(), fun, errors);
+	}
+
+	template <class INPUT_TYPE, class RESULT_TYPE, class OP, class DATA_TYPE>
+	static void GenericExecute(const Vector &input, Vector &result, DATA_TYPE &data, bool adds_nulls = false) {
+		GenericExecute<INPUT_TYPE, RESULT_TYPE, OP, DATA_TYPE>(input, result, input.size(), data, adds_nulls);
+	}
+
+	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
+	static void ExecuteString(const Vector &input, Vector &result) {
+		ExecuteString<INPUT_TYPE, RESULT_TYPE, OP>(input, result, input.size());
 	}
 
 private:
@@ -251,7 +277,7 @@ private:
 	          bool HAS_FALSE_SEL>
 	static inline idx_t SelectLoop(const INPUT_TYPE *__restrict input_data, const SelectionVector *result_sel,
 	                               const idx_t count, FUNC fun, const SelectionVector &input_sel,
-	                               ValidityMask &input_validity, SelectionVector *true_sel,
+	                               const ValidityMask &input_validity, SelectionVector *true_sel,
 	                               SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
 		for (idx_t i = 0; i < count; i++) {
@@ -306,7 +332,7 @@ private:
 
 public:
 	template <class INPUT_TYPE, class FUNC = std::function<bool(INPUT_TYPE)>>
-	static idx_t Select(Vector &input, const SelectionVector *sel, const idx_t count, FUNC fun,
+	static idx_t Select(const Vector &input, const SelectionVector *sel, const idx_t count, FUNC fun,
 	                    SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (!sel) {
 			sel = FlatVector::IncrementalSelectionVector();

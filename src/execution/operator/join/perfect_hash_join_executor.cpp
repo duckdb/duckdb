@@ -189,7 +189,7 @@ bool PerfectHashJoinExecutor::FullScanHashTable() {
 	return true;
 }
 
-bool PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(Vector &source, SelectionVector &sel_vec,
+bool PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(const Vector &source, SelectionVector &sel_vec,
                                                              SelectionVector &seq_sel_vec, idx_t count) {
 	switch (source.GetType().InternalType()) {
 	case PhysicalType::INT8:
@@ -218,7 +218,7 @@ bool PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(Vector &source, Sel
 }
 
 template <typename T>
-bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, SelectionVector &sel_vec,
+bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(const Vector &source, SelectionVector &sel_vec,
                                                                 SelectionVector &seq_sel_vec, idx_t count) {
 	if (perfect_join_statistics.build_min.IsNull() || perfect_join_statistics.build_max.IsNull()) {
 		return false;
@@ -283,7 +283,7 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 	state.join_keys.Reset();
 	state.probe_executor.Execute(input, state.join_keys);
 	// select the keys that are in the min-max range
-	auto &keys_vec = state.join_keys.data[0];
+	const auto &keys_vec = state.join_keys.data[0];
 	auto keys_count = state.join_keys.size();
 	// todo: add check for fast pass when probe is part of build domain
 	FillSelectionVectorSwitchProbe(keys_vec, keys_count, state.probe_sel_vec, probe_sel_count, &state.build_sel_vec);
@@ -304,7 +304,7 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
-void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, const idx_t &count,
+void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(const Vector &source, const idx_t &count,
                                                              SelectionVector &probe_sel_vec, idx_t &probe_sel_count,
                                                              optional_ptr<SelectionVector> build_sel_vec) const {
 	if (build_sel_vec) {
@@ -315,7 +315,7 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, con
 }
 
 template <bool BUILD_SEL_VEC>
-void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, const idx_t &count,
+void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(const Vector &source, const idx_t &count,
                                                              SelectionVector &probe_sel_vec, idx_t &probe_sel_count,
                                                              SelectionVector *build_sel_vec) const {
 	D_ASSERT(BUILD_SEL_VEC == static_cast<bool>(build_sel_vec));
@@ -366,7 +366,7 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, con
 }
 
 template <typename T, bool BUILD_SEL_VEC>
-void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, const idx_t &count,
+void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(const Vector &source, const idx_t &count,
                                                                 SelectionVector &probe_sel_vec, idx_t &probe_sel_count,
                                                                 SelectionVector *build_sel_vec) const {
 	D_ASSERT(probe_sel_count == 0);

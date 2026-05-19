@@ -14,7 +14,7 @@ void ArrowFixedSizeListData::Initialize(ArrowAppendData &result, const LogicalTy
 	result.child_data.push_back(std::move(child_buffer));
 }
 
-void ArrowFixedSizeListData::Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to,
+void ArrowFixedSizeListData::Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to,
                                     idx_t input_size) {
 	UnifiedVectorFormat format;
 	input.ToUnifiedFormat(format);
@@ -22,7 +22,7 @@ void ArrowFixedSizeListData::Append(ArrowAppendData &append_data, Vector &input,
 	append_data.AppendValidity(format, from, to);
 	input.Flatten();
 	auto array_size = ArrayType::GetSize(input.GetType());
-	auto &child_vector = ArrayVector::GetChildMutable(input);
+	auto &child_vector = ArrayVector::GetChild(input);
 	auto &child_data = *append_data.child_data[0];
 	child_data.append_vector(child_data, child_vector, from * array_size, to * array_size, size * array_size);
 	append_data.row_count += size;

@@ -335,7 +335,7 @@ select * from t0 where (NULL OR cast(t0.c1 as bool)) order by all;
 2
 
 
-mode skip
+mode skip instable
 
 #### numeric statistics
 # notequal and constant > max
@@ -361,7 +361,7 @@ SELECT * FROM integers WHERE a!=10 OR a>3
 statement ok
 PRAGMA enable_profiling
 
-mode skip
+mode skip instable
 
 # should return 2 rows: 1 and 5
 query II

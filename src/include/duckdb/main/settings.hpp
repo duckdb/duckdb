@@ -698,6 +698,19 @@ struct DefaultSecretStorageSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DefaultTransactionInvalidationPolicySetting {
+	using RETURN_TYPE = TransactionInvalidationPolicy;
+	static constexpr const char *Name = "default_transaction_invalidation_policy";
+	static constexpr const char *Description =
+	    "When to invalidate transactions when errors occur (SYNTACTIC_ERRORS_DO_NOT_INVALIDATE, i.e. parser and binder "
+	    "exceptions do not invalidate, or ALL_ERRORS_INVALIDATE_TRANSACTION)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "ALL_ERRORS_INVALIDATE_TRANSACTION";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct DeprecatedUsingKeySyntaxSetting {
 	using RETURN_TYPE = DeprecatedUsingKeySyntax;
 	static constexpr const char *Name = "deprecated_using_key_syntax";

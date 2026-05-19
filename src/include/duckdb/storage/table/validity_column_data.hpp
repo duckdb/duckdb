@@ -23,7 +23,7 @@ public:
 
 public:
 	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
-	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
+	void AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(const RowGroup &row_group,
 	                                                        PartialBlockManager &partial_block_manager) override;
 

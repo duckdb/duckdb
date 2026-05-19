@@ -264,10 +264,10 @@ public:
 
 	//! Convert from WKB
 	DUCKDB_API static bool FromBinary(const string_t &wkb, string_t &result, StringHeap &heap, bool strict);
-	DUCKDB_API static bool FromBinary(Vector &source, Vector &result, idx_t count, bool strict);
+	DUCKDB_API static bool FromBinary(const Vector &source, Vector &result, idx_t count, bool strict);
 
 	//! Convert to WKB
-	DUCKDB_API static void ToBinary(Vector &source, Vector &result, idx_t count);
+	DUCKDB_API static void ToBinary(const Vector &source, Vector &result);
 
 	//! Get the geometry type and vertex type from the WKB
 	DUCKDB_API static pair<GeometryType, VertexType> GetType(const string_t &wkb);
@@ -277,14 +277,15 @@ public:
 	DUCKDB_API static uint32_t GetExtent(const string_t &wkb, GeometryExtent &extent, bool &has_any_empty);
 
 	//! Convert to vectorized format
-	DUCKDB_API static void ToVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
+	DUCKDB_API static void ToVectorizedFormat(const Vector &source, Vector &target, idx_t count, GeometryType geom_type,
 	                                          VertexType vert_type);
-	DUCKDB_API static void ToVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryStorageType type);
+	DUCKDB_API static void ToVectorizedFormat(const Vector &source, Vector &target, idx_t count,
+	                                          GeometryStorageType type);
 	//! Convert from vectorized format
-	DUCKDB_API static void FromVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryType geom_type,
-	                                            VertexType vert_type, idx_t result_offset);
-	DUCKDB_API static void FromVectorizedFormat(Vector &source, Vector &target, idx_t count, GeometryStorageType type,
-	                                            idx_t result_offset);
+	DUCKDB_API static void FromVectorizedFormat(const Vector &source, Vector &target, idx_t count,
+	                                            GeometryType geom_type, VertexType vert_type, idx_t result_offset);
+	DUCKDB_API static void FromVectorizedFormat(const Vector &source, Vector &target, idx_t count,
+	                                            GeometryStorageType type, idx_t result_offset);
 
 	//! Get the vectorized logical type for a given geometry and vertex type
 	DUCKDB_API static LogicalType GetVectorizedType(GeometryStorageType type);
@@ -293,11 +294,11 @@ public:
 	DUCKDB_API static pair<GeometryType, VertexType> GetSpecializedType(GeometryStorageType type);
 
 	DUCKDB_API static void FromSpatialGeometry(const string_t &source, string_t &target, Vector &vector);
-	DUCKDB_API static void FromSpatialGeometry(Vector &source, Vector &target, idx_t count, idx_t result_offset);
+	DUCKDB_API static void FromSpatialGeometry(const Vector &source, Vector &target, idx_t count, idx_t result_offset);
 	DUCKDB_API static void FromSpatialGeometry(const string_t &source, string &target);
 
 	DUCKDB_API static void ToSpatialGeometry(const string_t &source, string_t &target, Vector &vector);
-	DUCKDB_API static void ToSpatialGeometry(Vector &source, Vector &target, idx_t count);
+	DUCKDB_API static void ToSpatialGeometry(const Vector &source, Vector &target, idx_t count);
 	DUCKDB_API static void ToSpatialGeometry(const string_t &source, string &target);
 };
 

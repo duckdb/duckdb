@@ -63,15 +63,12 @@ public:
 	using GlobalSortedTable = PhysicalRangeJoin::GlobalSortedTable;
 
 public:
-	MergeJoinGlobalState(ClientContext &client, const PhysicalPiecewiseMergeJoin &op) {
+	MergeJoinGlobalState(ClientContext &client, const PhysicalPiecewiseMergeJoin &op) : op(op) {
 		const auto &rhs_types = op.children[1].get().GetTypes();
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
 		table = make_uniq<GlobalSortedTable>(client, rhs_order, rhs_types, op);
-		if (op.filter_pushdown) {
-			skip_filter_pushdown = op.filter_pushdown->probe_info.empty();
-			global_filter_state = op.filter_pushdown->GetGlobalState(client, op);
-		}
+		ResetState(client);
 	}
 
 	inline idx_t Count() const {
@@ -80,12 +77,35 @@ public:
 
 	void Sink(ExecutionContext &context, DataChunk &input, MergeJoinLocalState &lstate);
 
+	const PhysicalPiecewiseMergeJoin &op;
 	//! The sorted table
 	unique_ptr<GlobalSortedTable> table;
 	//! Should we not bother pushing down filters?
 	bool skip_filter_pushdown = false;
 	//! The global filter states to push down (if any)
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
+
+private:
+	void ResetState(ClientContext &client) {
+		table->ResetForReuse(client);
+		if (op.filter_pushdown) {
+			skip_filter_pushdown = op.filter_pushdown->probe_info.empty();
+			global_filter_state = op.filter_pushdown->GetGlobalState(client, op);
+		} else {
+			skip_filter_pushdown = false;
+			global_filter_state.reset();
+		}
+		GlobalSinkState::Reset(client);
+	}
+
+public:
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ClientContext &client) override {
+		ResetState(client);
+	}
 };
 
 class MergeJoinLocalState : public LocalSinkState {
@@ -95,16 +115,34 @@ public:
 
 	MergeJoinLocalState(ExecutionContext &context, MergeJoinGlobalState &gstate, const idx_t child)
 	    : table(context, *gstate.table, child) {
-		auto &op = gstate.table->op;
-		if (op.filter_pushdown) {
-			local_filter_state = op.filter_pushdown->GetLocalState(*gstate.global_filter_state);
-		}
+		ResetState(gstate);
 	}
 
 	//! The local sort state
 	LocalSortedTable table;
 	//! Local state for accumulating filter statistics
 	unique_ptr<JoinFilterLocalState> local_filter_state;
+
+private:
+	void ResetState(MergeJoinGlobalState &gstate) {
+		auto &op = gstate.table->op;
+		if (op.filter_pushdown) {
+			local_filter_state = op.filter_pushdown->GetLocalState(*gstate.global_filter_state);
+		} else {
+			local_filter_state.reset();
+		}
+	}
+
+public:
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ExecutionContext &context, GlobalSinkState &gstate_p) override {
+		auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
+		table.ResetForReuse(context);
+		ResetState(gstate);
+	}
 };
 
 unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -198,6 +236,7 @@ public:
 
 		//	Sort on the first column
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
+		lhs_global_table = make_uniq<GlobalSortedTable>(client, lhs_order, op.children[0].get().GetTypes(), op);
 
 		// Set up shared data for multiple predicates
 		sel.Initialize(STANDARD_VECTOR_SIZE);
@@ -210,13 +249,7 @@ public:
 		rhs_input.Initialize(client, op.children[1].get().GetTypes());
 
 		auto &gsink = op.sink_state->Cast<MergeJoinGlobalState>();
-		auto &rhs_table = *gsink.table;
-		rhs_iterator = rhs_table.CreateIteratorState();
-		rhs_table.InitializePayloadState(rhs_chunk_state);
-		rhs_scan_state = rhs_table.CreateScanState(client);
-
-		//	Since we have now materialized the payload, the keys will not have payloads?
-		sort_key_type = rhs_table.GetSortKeyType();
+		InitializeRightScanState(gsink);
 
 		if (op.predicate) {
 			pred_executor.AddExpression(*op.predicate);
@@ -263,11 +296,50 @@ public:
 	SelectionVector pred_matches;
 
 public:
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset() override {
+		ResetCachingState();
+		left_outer.Reset();
+		lhs_payload.Reset();
+		lhs_scan.Reset();
+		left_position = 0;
+		first_fetch = true;
+		finished = true;
+		lhs_iterator.reset();
+		rhs_iterator.reset();
+		right_position = 0;
+		right_chunk_index = 0;
+		right_base = 0;
+		prev_left_index = 0;
+		rhs_chunk_state.ResetForScan();
+		rhs_keys.Reset();
+		rhs_input.Reset();
+		lhs_global_table->ResetForReuse(client);
+	}
+
+	void InitializeRightScanState(MergeJoinGlobalState &gsink) {
+		auto &rhs_table = *gsink.table;
+		rhs_iterator = rhs_table.CreateIteratorState();
+		rhs_chunk_state.ResetForScan();
+		rhs_table.InitializePayloadState(rhs_chunk_state);
+		if (!rhs_scan_state) {
+			rhs_scan_state = rhs_table.CreateScanState(client);
+		}
+		//	Since we have now materialized the payload, the keys will not have payloads?
+		sort_key_type = rhs_table.GetSortKeyType();
+	}
+
 	void ResolveJoinKeys(ExecutionContext &context, DataChunk &input) {
 		// sort by join key
-		const auto &lhs_types = lhs_payload.GetTypes();
-		lhs_global_table = make_uniq<GlobalSortedTable>(context.client, lhs_order, lhs_types, op);
-		lhs_local_table = make_uniq<LocalSortedTable>(context, *lhs_global_table, 0U);
+		lhs_global_table->ResetForReuse(context.client);
+		if (!lhs_local_table) {
+			lhs_local_table = make_uniq<LocalSortedTable>(context, *lhs_global_table, 0U);
+		} else {
+			lhs_local_table->ResetForReuse(context);
+		}
 		lhs_local_table->Sink(context, input);
 		lhs_global_table->Combine(context, *lhs_local_table);
 
@@ -575,6 +647,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 	do {
 		if (state.first_fetch) {
 			state.ResolveJoinKeys(context, input);
+			state.InitializeRightScanState(gstate);
 			state.lhs_payload.Verify(context.client.db);
 
 			state.right_chunk_index = 0;

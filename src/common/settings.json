@@ -445,6 +445,13 @@
         "custom_implementation": true
     },
     {
+        "name": "default_transaction_invalidation_policy",
+        "description": "When to invalidate transactions when errors occur (SYNTACTIC_ERRORS_DO_NOT_INVALIDATE, i.e. parser and binder exceptions do not invalidate, or ALL_ERRORS_INVALIDATE_TRANSACTION)",
+        "type": "ENUM<TransactionInvalidationPolicy>",
+        "default_scope": "global",
+        "default_value": "ALL_ERRORS_INVALIDATE_TRANSACTION"
+    },
+    {
         "name": "deprecated_using_key_syntax",
         "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
         "type": "ENUM<DeprecatedUsingKeySyntax>",
