@@ -15,7 +15,6 @@
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/main/profiling_info.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/user_settings.hpp"

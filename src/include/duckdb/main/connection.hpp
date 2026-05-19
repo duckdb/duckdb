@@ -19,7 +19,6 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/sql_statement.hpp"
-#include "duckdb/main/profiling_node.hpp"
 
 namespace duckdb {
 

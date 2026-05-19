@@ -9,17 +9,6 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/deque.hpp"
-#include "duckdb/common/enums/profiler_format.hpp"
-#include "duckdb/common/pair.hpp"
-#include "duckdb/common/profiler.hpp"
-#include "duckdb/common/reference_map.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/winapi.hpp"
-#include "duckdb/execution/expression_executor_state.hpp"
-#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/profiling_info.hpp"
 
 namespace duckdb {
