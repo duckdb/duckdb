@@ -162,7 +162,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		expr.GetVerificationStats()->Verify(vector, count);
 	}
 	if (debug_vector_verification == DebugVectorVerification::DICTIONARY_EXPRESSION) {
-		Vector::DebugTransformToDictionary(vector, count);
+		Vector::DebugTransformToDictionary(vector);
 	}
 	if (debug_vector_verification == DebugVectorVerification::VARIANT_VECTOR) {
 		if (TypeVisitor::Contains(vector.GetType(), [](const LogicalType &type) {

@@ -189,3 +189,38 @@ query I
 SELECT len(s) FROM string_test WHERE s = repeat('x', 50) || '1'
 ----
 51
+
+# after checkpoint, new appends must also start from initial_column_segment_size
+statement ok
+DROP TABLE validity_test
+
+statement ok
+DROP TABLE string_test
+
+statement ok
+CHECKPOINT
+
+statement ok
+CREATE TABLE post_checkpoint_mem (a INT NOT NULL, b INT NOT NULL, c INT NOT NULL, d INT NOT NULL, e INT NOT NULL)
+
+statement ok
+INSERT INTO post_checkpoint_mem VALUES (1, 2, 3, 4, 5)
+
+statement ok
+CHECKPOINT
+
+statement ok
+INSERT INTO post_checkpoint_mem VALUES (6, 7, 8, 9, 10)
+
+query I
+SELECT CASE WHEN memory_usage_bytes < 2000
+            THEN 'ok'
+            ELSE error(concat('expected < 2000 bytes after checkpoint, got ', memory_usage_bytes))
+       END
+FROM duckdb_memory()
+WHERE tag = 'IN_MEMORY_TABLE'
+----
+ok
+
+statement ok
+DROP TABLE post_checkpoint_mem

@@ -23,6 +23,9 @@
 #include "duckdb/storage/table/variant_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/storage/statistics/array_stats.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -91,7 +94,7 @@ bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
 bool ColumnData::HasChanges() const {
 	for (auto &segment_node : data.SegmentNodes()) {
 		auto &segment = segment_node.GetNode();
-		if (segment.segment_type == ColumnSegmentType::TRANSIENT) {
+		if (segment.GetSegmentType() == ColumnSegmentType::TRANSIENT) {
 			// transient segment: always need to write to disk
 			return true;
 		}
@@ -198,7 +201,7 @@ void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
 		auto &current = state.current->GetNode();
 		current.Skip(state);
 	}
-	D_ASSERT(state.current->GetNode().type == type);
+	D_ASSERT(state.current->GetNode().GetType() == type);
 }
 
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type,
@@ -389,18 +392,32 @@ void ColumnData::Skip(ColumnScanState &state, idx_t s_count) {
 	state.Next(s_count);
 }
 
-void ColumnData::Append(BaseStatistics &append_stats, ColumnAppendState &state, Vector &vector, idx_t append_count) {
+void ColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t append_count) {
 	UnifiedVectorFormat vdata;
 	vector.ToUnifiedFormat(vdata);
-	AppendData(append_stats, state, vdata, append_count);
+	AppendData(state, vdata, append_count);
 }
 
-void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t append_count) {
+void ColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	// flush remaining stats
+	state.FinalFlush(finalize_state.global_stats);
+}
+
+void ColumnData::FinalizeAppend(optional_ptr<BaseStatistics> table_stats, ColumnAppendState &state) {
 	if (!stats) {
-		throw InternalException("ColumnData::Append called on a column with a parent or without stats");
+		throw InternalException("ColumnData::FinalizeAppend called on a column with a parent or without stats");
 	}
 	lock_guard<mutex> l(stats_lock);
-	Append(stats->statistics, state, vector, append_count);
+	ColumnDataFinalizeAppendState finalize_state(stats->statistics);
+	if (table_stats) {
+		finalize_state.global_stats.emplace_back(*table_stats);
+	}
+	FinalizeAppend(finalize_state, state);
+}
+
+void ColumnData::FinalizeAppendLocked(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	lock_guard<mutex> l(stats_lock);
+	FinalizeAppend(finalize_state, state);
 }
 
 FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -419,8 +436,8 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 		lock_guard<mutex> l(stats_lock);
 		auto &segment_stats =
 		    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
-		        ? state.child_states[0].current->GetNode().stats.statistics
-		        : state.current->GetNode().stats.statistics;
+		        ? state.child_states[0].current->GetNode().GetStats()
+		        : state.current->GetNode().GetStats();
 		prune_result = expr_filter.CheckStatistics(segment_stats);
 		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -493,6 +510,63 @@ void ColumnData::MergeIntoStatistics(BaseStatistics &other) {
 	return other.Merge(stats->statistics);
 }
 
+void ColumnAppendState::InitializeStats(const LogicalType &type) {
+	append_stats = BaseStatistics::CreateEmpty(type).ToUnique();
+}
+
+void ColumnAppendState::FlushSegmentStats() {
+	// we finished appending to this segment but we have another segment to append to
+	// first flush the stats into the column segment
+	// flush stats into the ColumnData and ColumnSegment stats
+	auto &append_segment = current->GetNode();
+	append_segment.GetStatsMutable().Merge(*append_stats);
+
+	// now merge the stats into the "full_append_stats"
+	if (!full_append_stats) {
+		full_append_stats = std::move(append_stats);
+	} else {
+		full_append_stats->Merge(*append_stats);
+	}
+	// clear the current append stats
+	append_stats.reset();
+}
+
+void ColumnAppendState::FinalFlush(vector<reference<BaseStatistics>> &global_stats) {
+	// flush stats to the final segment
+	FlushSegmentStats();
+	// now merge the final append stats into the global stats
+	for (auto &stats_ref : global_stats) {
+		auto &target_stats = stats_ref.get();
+		target_stats.Merge(*full_append_stats);
+	}
+}
+
+ColumnDataFinalizeAppendState::ColumnDataFinalizeAppendState(ColumnDataFinalizeAppendState &parent,
+                                                             LogicalTypeId type_transform, optional_idx child_offset) {
+	for (auto &parent_stats_ref : parent.global_stats) {
+		auto &parent_stats = parent_stats_ref.get();
+
+		optional_ptr<BaseStatistics> transformed_stats;
+		switch (type_transform) {
+		case LogicalTypeId::ARRAY:
+			transformed_stats = ArrayStats::GetChildStats(parent_stats);
+			break;
+		case LogicalTypeId::LIST:
+			transformed_stats = ListStats::GetChildStats(parent_stats);
+			break;
+		case LogicalTypeId::STRUCT:
+			transformed_stats = StructStats::GetChildStats(parent_stats, child_offset.GetIndex());
+			break;
+		case LogicalTypeId::VARIANT:
+			transformed_stats = VariantStats::GetUnshreddedStats(parent_stats);
+			break;
+		default:
+			throw InternalException("Unsupported type for ColumnDataFinalizeAppendState inheritance");
+		}
+		global_stats.emplace_back(*transformed_stats);
+	}
+}
+
 void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	auto l = data.Lock();
 	if (data.IsEmpty(l)) {
@@ -501,7 +575,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	}
 	auto segment = data.GetLastSegment(l);
 	auto &last_segment = segment->GetNode();
-	if (last_segment.segment_type == ColumnSegmentType::PERSISTENT ||
+	if (last_segment.GetSegmentType() == ColumnSegmentType::PERSISTENT ||
 	    !last_segment.GetCompressionFunction().init_append) {
 		// we cannot append to this segment - append a new segment
 		auto total_rows = segment->GetRowStart() + last_segment.count;
@@ -510,25 +584,32 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	} else {
 		state.current = segment;
 	}
+	state.InitializeStats(GetType());
 	auto &append_segment = state.current->GetNode();
-	D_ASSERT(append_segment.segment_type == ColumnSegmentType::TRANSIENT);
+	D_ASSERT(append_segment.GetSegmentType() == ColumnSegmentType::TRANSIENT);
 	append_segment.InitializeAppend(state);
 	D_ASSERT(append_segment.GetCompressionFunction().append);
 }
 
-void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
-                            idx_t append_count) {
+void ColumnData::AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t append_count) {
 	idx_t offset = 0;
 	while (true) {
 		// append the data from the vector
 		auto &append_segment = state.current->GetNode();
 		idx_t copied_elements = append_segment.Append(state, vdata, offset, append_count);
 		this->count += copied_elements;
-		append_stats.Merge(append_segment.stats.statistics);
 		if (copied_elements == append_count) {
 			// finished copying everything
 			break;
 		}
+		// segment is full and we have more to copy
+		// first flush the stats into the segment and the column data
+		{
+			lock_guard<mutex> guard(stats_lock);
+			state.FlushSegmentStats();
+		}
+		// re-initialize the stats
+		state.InitializeStats(GetType());
 
 		// we couldn't fit everything we wanted in the current column segment, create a new one
 		{
@@ -573,7 +654,7 @@ void ColumnData::RevertAppend(row_t new_count_p) {
 		data.EraseSegments(l, segment_index + 1);
 
 		auto &transient = segment->GetNode();
-		D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
+		D_ASSERT(transient.GetSegmentType() == ColumnSegmentType::TRANSIENT);
 		segment->SetNext(nullptr);
 		transient.RevertAppend(new_count - segment->GetRowStart());
 	}
@@ -640,7 +721,7 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row, optiona
 	auto &config = DBConfig::GetConfig(db);
 
 	idx_t segment_size;
-	if (!prev_segment) {
+	if (!prev_segment || prev_segment->GetSegmentType() == ColumnSegmentType::PERSISTENT) {
 		// We start with the `initial_bytes` setting, but we ensure that we have enough space for at least one row.
 		const auto initial_bytes = Settings::Get<InitialColumnSegmentSizeSetting>(config);
 		segment_size = MaxValue<idx_t>(GetTypeIdSize(type.InternalType()), initial_bytes);
@@ -771,7 +852,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 
 		// create a persistent segment
 		auto segment = ColumnSegment::CreatePersistentSegment(
-		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type,
+		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset,
 		    data_pointer.tuple_count, data_pointer.compression_type, std::move(data_pointer.statistics),
 		    std::move(data_pointer.segment_state));
 
@@ -782,7 +863,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 
 bool ColumnData::IsPersistent() {
 	for (auto &segment : data.Segments()) {
-		if (segment.segment_type != ColumnSegmentType::PERSISTENT) {
+		if (segment.GetSegmentType() != ColumnSegmentType::PERSISTENT) {
 			return false;
 		}
 	}
@@ -1178,13 +1259,13 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 		column_info.compression_type = CompressionTypeToString(segment.GetCompressionFunction().type);
 		{
 			lock_guard<mutex> l(stats_lock);
-			column_info.segment_stats = segment.stats.statistics.ToStruct();
+			column_info.segment_stats = segment.GetStats().ToStruct();
 		}
 		column_info.has_updates = ColumnData::HasUpdates();
 		// persistent
 		// block_id
 		// block_offset
-		if (segment.segment_type == ColumnSegmentType::PERSISTENT) {
+		if (segment.GetSegmentType() == ColumnSegmentType::PERSISTENT) {
 			column_info.persistent = true;
 			column_info.block_id = segment.GetBlockId();
 			column_info.block_offset = segment.GetBlockOffset();

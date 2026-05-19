@@ -303,7 +303,7 @@ static bool TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 }
 
 template <class OP, class T>
-static bool TransformStringWithFormat(Vector &string_vector, const StrpTimeFormat &format, const idx_t count,
+static bool TransformStringWithFormat(const Vector &string_vector, const StrpTimeFormat &format, const idx_t count,
                                       Vector &result, JSONTransformOptions &options) {
 	const auto source_strings = FlatVector::GetData<string_t>(string_vector);
 	const auto &source_validity = FlatVector::Validity(string_vector);
@@ -953,7 +953,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	}
 }
 
-static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &result, yyjson_alc *alc,
+static bool TransformFunctionInternal(const Vector &input, const idx_t count, Vector &result, yyjson_alc *alc,
                                       JSONTransformOptions &options) {
 	UnifiedVectorFormat input_data;
 	input.ToUnifiedFormat(input_data);

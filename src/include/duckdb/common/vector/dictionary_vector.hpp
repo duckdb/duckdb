@@ -22,9 +22,9 @@ public:
 	Vector data;
 	//! Optional id to uniquely identify re-occurring dictionaries
 	string id;
-	//! For caching the hashes of a child buffer
-	mutex cached_hashes_lock;
-	unique_ptr<Vector> cached_hashes;
+	//! For caching the hashes of a child buffer (mutable: cache is logically const)
+	mutable mutex cached_hashes_lock;
+	mutable unique_ptr<Vector> cached_hashes;
 };
 
 //! The DictionaryBuffer holds a selection vector and a reference to a DictionaryEntry
@@ -151,7 +151,7 @@ struct DictionaryVector {
 		return DictionarySize(vector).IsValid() && !DictionaryId(vector).empty() && CanCacheHashes(vector.GetType());
 	}
 	static buffer_ptr<DictionaryEntry> CreateReusableDictionary(const LogicalType &type, const idx_t &size);
-	static const Vector &GetCachedHashes(Vector &input);
+	static const Vector &GetCachedHashes(const Vector &input);
 };
 
 } // namespace duckdb
