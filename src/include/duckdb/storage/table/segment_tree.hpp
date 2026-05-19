@@ -219,6 +219,10 @@ public:
 		auto l = Lock();
 		AppendSegment(l, std::move(segment));
 	}
+	void AppendSegment(shared_ptr<T> segment, idx_t row_start) {
+		auto l = Lock();
+		AppendSegment(l, std::move(segment), row_start);
+	}
 	void AppendSegment(SegmentLock &l, shared_ptr<T> segment) {
 		LoadAllSegments(l);
 		AppendSegmentInternal(l, std::move(segment));

@@ -734,11 +734,14 @@ bool RowGroupCollection::IsPersistent() const {
 void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<DataTable> table,
                                       optional_ptr<StorageCommitState> commit_state) {
 	D_ASSERT(data.types == types);
-	auto segments = data.GetRowGroups()->MoveSegments();
+	auto source_row_groups = data.GetRowGroups();
+	auto source_base_row_id = source_row_groups->GetBaseRowId();
+	auto source_next_row_id = data.next_row_id.load();
+	auto segments = source_row_groups->MoveSegments();
 	auto row_groups = GetRowGroups();
-	D_ASSERT(next_row_id.load() == total_rows.load());
-	auto start_index = row_groups->GetBaseRowId() + next_row_id.load();
-	auto index = start_index;
+	D_ASSERT(next_row_id.load() >= total_rows.load());
+	auto target_base_row_id = row_groups->GetBaseRowId();
+	auto start_index = target_base_row_id + next_row_id.load();
 
 	// check if the row groups we are merging are optimistically written
 	// if all row groups are optimistically written we keep around the block pointers
@@ -763,18 +766,22 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 		}
 	}
 	bool is_persistent = segments.back()->GetNode().IsPersistent();
+	idx_t merged_count = 0;
 	for (auto &entry : segments) {
+		D_ASSERT(entry->GetRowStart() >= source_base_row_id);
+		auto source_offset = entry->GetRowStart() - source_base_row_id;
+		auto target_row_start = start_index + source_offset;
 		auto row_group = entry->MoveNode();
 		row_group->MoveToCollection(*this);
 
-		if (commit_state && (index - start_index) < optimistically_written_count) {
+		if (commit_state && merged_count < optimistically_written_count) {
 			// serialize the block pointers of this row group
-			auto persistent_data = row_group->SerializeRowGroupInfo(index);
+			auto persistent_data = row_group->SerializeRowGroupInfo(target_row_start);
 			persistent_data.types = types;
 			row_group_data->row_group_data.push_back(std::move(persistent_data));
 		}
-		index += row_group->count;
-		row_groups->AppendSegment(std::move(row_group));
+		merged_count += row_group->count;
+		row_groups->AppendSegment(std::move(row_group), target_row_start);
 	}
 	if (commit_state && optimistically_written_count > 0) {
 		// if we have serialized the row groups - push the serialized block pointers into the commit state
@@ -783,7 +790,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 	stats.MergeStats(data.stats);
 	D_ASSERT(data.next_row_id.load() >= data.total_rows.load());
 	total_rows += data.total_rows.load();
-	next_row_id = index - row_groups->GetBaseRowId();
+	next_row_id = start_index + source_next_row_id - target_base_row_id;
 	if (is_persistent) {
 		SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	}
