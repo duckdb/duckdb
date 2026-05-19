@@ -486,6 +486,11 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformParensExpression);
 	REGISTER_TRANSFORM(TransformSingleExpression);
 	REGISTER_TRANSFORM(TransformConstantLiteral);
+	REGISTER_TRANSFORM(TransformFalseLiteral);
+	REGISTER_TRANSFORM(TransformTrueLiteral);
+	REGISTER_TRANSFORM(TransformNullLiteral);
+	REGISTER_TRANSFORM(TransformUnknownLiteral);
+
 	REGISTER_TRANSFORM(TransformPrefixOperator);
 	REGISTER_TRANSFORM(TransformListExpression);
 	REGISTER_TRANSFORM(TransformStructExpression);
@@ -839,11 +844,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<SetScope>("GlobalScope", SetScope::GLOBAL);
 	RegisterEnum<SetScope>("SessionScope", SetScope::SESSION);
 	RegisterEnum<SetScope>("VariableScope", SetScope::VARIABLE);
-
-	RegisterEnum<Value>("FalseLiteral", Value(false));
-	RegisterEnum<Value>("TrueLiteral", Value(true));
-	RegisterEnum<Value>("NullLiteral", Value());
-	RegisterEnum<Value>("UnknownLiteral", Value());
 
 	RegisterEnum<CopyDatabaseType>("CopySchema", CopyDatabaseType::COPY_SCHEMA);
 	RegisterEnum<CopyDatabaseType>("CopyData", CopyDatabaseType::COPY_DATA);

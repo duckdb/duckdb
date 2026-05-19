@@ -1477,7 +1477,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"CommentSchema <- 'SCHEMA'\n"
 	"CommentType <- 'TYPE'\n"
 	"CommentColumn <- 'COLUMN'\n"
-	"CommentValue <- 'NULL' / StringLiteral\n"
+	"CommentValue <- NullLiteral / StringLiteral\n"
 	"CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody\n"
 	"TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement\n"
 	"TriggerTiming <- TriggerBefore / TriggerAfter / TriggerInsteadOf\n"

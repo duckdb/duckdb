@@ -47,13 +47,13 @@ CatalogType PEGTransformerFactory::TransformCommentOnType(PEGTransformer &transf
 }
 
 Value PEGTransformerFactory::TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result) {
-	// CommentValue <- 'NULL'i / StringLiteral
+	// CommentValue <- NullLiteral / StringLiteral
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	if (choice_pr.GetResult().type == ParseResultType::STRING) {
 		return Value(choice_pr.GetResult().Cast<StringLiteralParseResult>().result);
 	}
-	return Value();
+	return transformer.Transform<Value>(choice_pr.GetResult());
 }
 
 } // namespace duckdb

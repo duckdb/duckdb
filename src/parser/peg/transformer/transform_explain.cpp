@@ -58,9 +58,10 @@ bool PEGTransformerFactory::TransformExplainAnalyze(PEGTransformer &transformer)
 	return true;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainSelectStatement(PEGTransformer &transformer,
-                                                                                unique_ptr<SelectStatement> stmt) {
-	return std::move(stmt);
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformExplainSelectStatement(PEGTransformer &transformer,
+                                                       unique_ptr<SelectStatement> select_statement_internal) {
+	return std::move(select_statement_internal);
 }
 
 vector<GenericCopyOption>
