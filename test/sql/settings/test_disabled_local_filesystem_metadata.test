@@ -1,5 +1,5 @@
 # name: test/sql/settings/test_disabled_local_filesystem_metadata.test
-# description: Test that persistent secrets fail when LocalFileSystem is disabled
+# description: Test metadata queries when LocalFileSystem is disabled
 # group: [settings]
 
 require skip_reload
@@ -13,12 +13,11 @@ SET secret_directory='__TEST_DIR__/disabled_fs_secrets';
 statement ok
 SET disabled_filesystems='LocalFileSystem';
 
-# metadata queries that touch the local filesystem should also fail
-statement error
+# duckdb_secrets() initializes with no persistent secrets when LocalFileSystem is disabled
+statement ok
 SELECT * FROM duckdb_secrets();
-----
-File system LocalFileSystem has been disabled by configuration
 
+# duckdb_extensions() scans the local extension directory, so it fails
 statement error
 SELECT * FROM duckdb_extensions();
 ----

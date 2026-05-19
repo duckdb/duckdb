@@ -13,7 +13,7 @@ index efdc87d..8f19c91 100644
 +
 +		CURLcode res;
 +		{
-+			CURLU *url = curl_url_dup(base_url);
++			CURLU *url = curl_url_dup(curl_base_url);
 +
 +			string normalized_path = NormalizePathToBeAdded(info.path);
 +			curl_url_set(url, CURLUPART_URL, normalized_path.c_str(), 0);

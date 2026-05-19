@@ -1,6 +1,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -141,16 +142,24 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
 	persistent = true;
 
 	// Check existence of persistent secret dir
-	auto &fs = FileSystem::GetLocal(db);
-	if (fs.DirectoryExists(secret_path)) {
-		fs.ListFiles(secret_path, [&](const string &fname, bool is_dir) {
-			string full_path = fs.JoinPath(secret_path, fname);
+	try {
+		auto &fs = FileSystem::GetLocal(db);
+		if (fs.DirectoryExists(secret_path)) {
+			fs.ListFiles(secret_path, [&](const string &fname, bool is_dir) {
+				string full_path = fs.JoinPath(secret_path, fname);
 
-			if (StringUtil::EndsWith(full_path, ".duckdb_secret")) {
-				string secret_name = fname.substr(0, fname.size() - 14); // size of file ext
-				persistent_secrets.insert(secret_name);
-			}
-		});
+				if (StringUtil::EndsWith(full_path, ".duckdb_secret")) {
+					string secret_name = fname.substr(0, fname.size() - 14); // size of file ext
+					persistent_secrets.insert(secret_name);
+				}
+			});
+		}
+	} catch (PermissionException &ex) {
+		// If LocalFileSystem is specifically disabled (not all external access), skip loading persistent secrets
+		auto &vfs = static_cast<VirtualFileSystem &>(*DBConfig::GetConfig(db).file_system);
+		if (!vfs.SubSystemIsDisabled("LocalFileSystem")) {
+			throw;
+		}
 	}
 
 	auto &catalog = Catalog::GetSystemCatalog(db);
