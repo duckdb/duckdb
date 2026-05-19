@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
@@ -217,15 +218,16 @@ LogicalType CMHelper::GetSameWidthIntegralType(const LogicalType &type, const bo
 
 bool CMHelper::ValuePreservingCastFits(const Value &value, const LogicalType &source_type,
                                        const LogicalType &target_type) {
-	if (value < Value::MinimumValue(target_type) || value > Value::MaximumValue(target_type)) {
-		return false;
-	}
 	Value cast_value;
-	if (!value.DefaultTryCastAs(target_type, cast_value, nullptr, true)) {
-		return false;
-	}
 	Value roundtrip_value;
-	if (!cast_value.DefaultTryCastAs(source_type, roundtrip_value, nullptr, true)) {
+	try {
+		if (!value.DefaultTryCastAs(target_type, cast_value, nullptr, true)) {
+			return false;
+		}
+		if (!cast_value.DefaultTryCastAs(source_type, roundtrip_value, nullptr, true)) {
+			return false;
+		}
+	} catch (ConversionException &) {
 		return false;
 	}
 	return value == roundtrip_value;
