@@ -290,37 +290,10 @@ static unique_ptr<FunctionData> VariantKeysBind(BindScalarFunctionInput &input) 
 	throw BinderException("'variant_keys' received an unexpected type for the second argument");
 }
 
-static void CastParameterToVariant(Vector &input, Vector &result, const idx_t count) {
-	const auto input_type = input.GetType();
-
-	if (input_type == LogicalType::VARIANT()) {
-		result.Reference(input);
-		return;
-	}
-
-	if (input_type == LogicalType::JSON()) {
-		VectorOperations::DefaultTryCast(input, result, count, nullptr);
-		return;
-	}
-
-	if (input_type == LogicalType::VARCHAR) {
-		//! Save on a redundant parse step, and in case of a malformed object let it fail in the cast.
-		Vector json_vec(LogicalType::JSON());
-		json_vec.Reinterpret(input);
-		VectorOperations::DefaultTryCast(json_vec, result, count, nullptr);
-		return;
-	}
-
-	throw BinderException("'variant_keys' received an unexpected input type for the first argument: %s",
-	                      input_type.ToString());
-}
-
 static void VariantKeysFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1 || input.ColumnCount() == 2);
 	const auto count = input.size();
-
-	Vector variant_vec(LogicalType::VARIANT());
-	CastParameterToVariant(input.data[0], variant_vec, count);
+	const auto& variant_vec = input.data[0];
 
 	if (input.ColumnCount() == 2) {
 		const auto &path = input.data[1];
@@ -369,7 +342,6 @@ ScalarFunctionSet VariantKeysFun::GetFunctions() {
 	ScalarFunctionSet fun_set;
 
 	AddFunctionsWithParameterType(fun_set, LogicalType::VARIANT());
-	AddFunctionsWithParameterType(fun_set, LogicalType::VARCHAR);
 
 	return fun_set;
 }

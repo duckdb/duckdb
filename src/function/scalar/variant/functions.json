@@ -108,53 +108,6 @@
 				"categories": [
 					"variant"
 				]
-			},
-			{
-				"parameters": [
-					{
-						"name": "input_variant",
-						"type": "VARCHAR"
-					}
-				],
-				"description": "Returns the keys present at the root level of the object.",
-				"example": "variant_keys('{\"a\": { \"a\": 1, \"b\": 2}}')",
-				"categories": [
-					"variant"
-				]
-			},
-			{
-				"parameters": [
-					{
-						"name": "input_variant",
-						"type": "VARCHAR"
-					},
-					{
-						"name": "path",
-						"type": "VARCHAR"
-					}
-				],
-				"description": "Returns the keys present at the level of the specified path.",
-				"example": "variant_keys('{\"a\": { \"a\": 1, \"b\": 2}}', 'a')",
-				"categories": [
-					"variant"
-				]
-			},
-			{
-				"parameters": [
-					{
-						"name": "input_variant",
-						"type": "VARCHAR"
-					},
-					{
-						"name": "path",
-						"type": "VARCHAR[]"
-					}
-				],
-				"description": "Returns a list of keys present at the level of each specified path.",
-				"example": "variant_keys('{\"a\": { \"a\": 1, \"b\": 2}, \"b\": {\"c\": 3}}', ['a', 'b'])",
-				"categories": [
-					"variant"
-				]
 			}
 		],
 		"type": "scalar_function_set"
