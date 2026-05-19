@@ -269,6 +269,7 @@ jobs:
         with:
           extension-repository: duckdb/extension-template
           extension-ref: main
+          duckdb-repository: ${{ github.repository }}
           duckdb-ref: ${{ inputs.git_ref }}
           duckdb-sha: ${{ inputs.git_sha }}
 
