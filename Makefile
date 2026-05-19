@@ -516,6 +516,7 @@ TEST_CONFIGS := \
 	test/configs/force_storage_restart.json \
 	test/configs/latest_storage.json \
 	test/configs/block_verification.json \
+	test/configs/block_verification_latest.json \
 	test/configs/disable_optimizer.json \
 	test/configs/internal_vector_serialization.json \
 	test/configs/internal_vector_verification.json \
