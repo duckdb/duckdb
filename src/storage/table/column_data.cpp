@@ -201,7 +201,7 @@ void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
 		auto &current = state.current->GetNode();
 		current.Skip(state);
 	}
-	D_ASSERT(state.current->GetNode().type == type);
+	D_ASSERT(state.current->GetNode().GetType() == type);
 }
 
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type,
@@ -581,7 +581,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	}
 	state.InitializeStats(GetType());
 	auto &append_segment = state.current->GetNode();
-	D_ASSERT(append_segment.segment_type == ColumnSegmentType::TRANSIENT);
+	D_ASSERT(append_segment.GetSegmentType() == ColumnSegmentType::TRANSIENT);
 	append_segment.InitializeAppend(state);
 	D_ASSERT(append_segment.GetCompressionFunction().append);
 }
@@ -649,7 +649,7 @@ void ColumnData::RevertAppend(row_t new_count_p) {
 		data.EraseSegments(l, segment_index + 1);
 
 		auto &transient = segment->GetNode();
-		D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
+		D_ASSERT(transient.GetSegmentType() == ColumnSegmentType::TRANSIENT);
 		segment->SetNext(nullptr);
 		transient.RevertAppend(new_count - segment->GetRowStart());
 	}

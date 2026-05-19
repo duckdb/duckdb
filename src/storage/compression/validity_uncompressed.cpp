@@ -461,7 +461,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 
 	auto buffer_ptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
-	D_ASSERT(scan_state.block_id == segment.block->BlockId());
+	D_ASSERT(scan_state.block_id == segment.GetBlockHandle()->BlockId());
 	auto &result_mask = FlatVector::ValidityMutable(result);
 	ValidityUncompressed::UnalignedScan(buffer_ptr, segment.count, start, result_mask, result_offset, scan_count);
 }
@@ -474,7 +474,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 		auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 
 		auto buffer_ptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
-		D_ASSERT(scan_state.block_id == segment.block->BlockId());
+		D_ASSERT(scan_state.block_id == segment.GetBlockHandle()->BlockId());
 		auto &result_mask = FlatVector::ValidityMutable(result);
 		ValidityUncompressed::AlignedScan(buffer_ptr, start, result_mask, scan_count);
 	} else {
