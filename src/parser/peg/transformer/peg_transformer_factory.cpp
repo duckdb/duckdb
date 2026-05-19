@@ -405,6 +405,7 @@ void PEGTransformerFactory::RegisterCreateTrigger() {
 	REGISTER_TRANSFORM(TransformTriggerEventUpdateOf);
 	REGISTER_TRANSFORM(TransformTriggerColumnList);
 	REGISTER_TRANSFORM(TransformTriggerBody);
+	REGISTER_TRANSFORM(TransformReferencingNewTableAs);
 }
 
 void PEGTransformerFactory::RegisterDeallocate() {

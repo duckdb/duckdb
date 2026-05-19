@@ -591,6 +591,7 @@ private:
 	static TriggerEventInfo TransformTriggerEventUpdateOf(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<string> TransformTriggerColumnList(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformTriggerBody(PEGTransformer &transformer, ParseResult &parse_result);
+	static string TransformReferencingNewTableAs(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// deallocate.gram
 	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer,

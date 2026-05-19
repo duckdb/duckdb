@@ -7,7 +7,6 @@ add_library_unity(
   bind_copy_database.cpp
   bind_create.cpp
   bind_create_table.cpp
-  trigger_body_transformer.cpp
   bind_delete.cpp
   bind_detach.cpp
   bind_drop.cpp

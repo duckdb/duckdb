@@ -25,7 +25,7 @@ static unique_ptr<QueryNode> ExtractQueryNode(unique_ptr<SQLStatement> stmt) {
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PEGTransformer &transformer,
                                                                               ParseResult &parse_result) {
 	// CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName
-	// ForEachClause? TriggerBody
+	// ReferencingNewTableAs? ForEachClause? TriggerBody
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto trigger_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(2)); // TriggerName
@@ -33,12 +33,17 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PE
 	auto trigger_event = transformer.Transform<TriggerEventInfo>(list_pr.Child<ListParseResult>(4));
 	// index 5 is 'ON'
 	auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(6));
-	auto &for_each_opt = list_pr.Child<OptionalParseResult>(7);
+	auto &referencing_opt = list_pr.Child<OptionalParseResult>(7);
+	string referencing_new_table;
+	if (referencing_opt.HasResult()) {
+		referencing_new_table = transformer.Transform<string>(referencing_opt.GetResult());
+	}
+	auto &for_each_opt = list_pr.Child<OptionalParseResult>(8);
 	TriggerForEach for_each = TriggerForEach::STATEMENT;
 	if (for_each_opt.HasResult()) {
 		for_each = transformer.Transform<TriggerForEach>(for_each_opt.GetResult());
 	}
-	auto trigger_action = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(8));
+	auto trigger_action = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(9));
 
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTriggerInfo>();
@@ -48,6 +53,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PE
 	info->event_type = trigger_event.event_type;
 	info->columns = std::move(trigger_event.columns);
 	info->base_table = std::move(base_table);
+	info->referencing_new_table = referencing_new_table;
 	info->for_each = for_each;
 	info->trigger_action = ExtractQueryNode(std::move(trigger_action));
 	result->info = std::move(info);
@@ -118,6 +124,12 @@ vector<string> PEGTransformerFactory::TransformTriggerColumnList(PEGTransformer 
 		result.push_back(transformer.Transform<string>(column));
 	}
 	return result;
+}
+
+string PEGTransformerFactory::TransformReferencingNewTableAs(PEGTransformer &transformer, ParseResult &parse_result) {
+	// ReferencingNewTableAs <- 'REFERENCING' 'NEW' 'TABLE' 'AS' ColId
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<string>(list_pr.Child<ListParseResult>(4));
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTriggerBody(PEGTransformer &transformer,

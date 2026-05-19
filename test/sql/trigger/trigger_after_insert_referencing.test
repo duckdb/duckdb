@@ -1,0 +1,193 @@
+# name: test/sql/trigger/trigger_after_insert_referencing.test
+# description: Test AFTER INSERT trigger with REFERENCING NEW TABLE AS <alias>
+# group: [trigger]
+
+require noforcestorage
+
+# Basic: alias exposes all inserted rows to the trigger body
+statement ok
+CREATE TABLE target (id INTEGER, val VARCHAR);
+
+statement ok
+CREATE TABLE audit (id INTEGER, val VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_ref AFTER INSERT ON target
+REFERENCING NEW TABLE AS inserted
+FOR EACH STATEMENT
+    INSERT INTO audit SELECT id, val FROM inserted;
+
+statement ok
+INSERT INTO target VALUES (1, 'a');
+
+query II rowsort
+SELECT id, val FROM target;
+----
+1	a
+
+query II rowsort
+SELECT id, val FROM audit;
+----
+1	a
+
+# Multi-row INSERT: all rows visible through the alias
+statement ok
+INSERT INTO target VALUES (2, 'b'), (3, 'c'), (4, 'd');
+
+query II rowsort
+SELECT id, val FROM target;
+----
+1	a
+2	b
+3	c
+4	d
+
+query II rowsort
+SELECT id, val FROM audit;
+----
+1	a
+2	b
+3	c
+4	d
+
+# Only the rows from the current INSERT are in the alias (not the full table)
+statement ok
+CREATE TABLE t_rows (id INTEGER);
+
+statement ok
+CREATE TABLE t_rows_log (n INTEGER);
+
+statement ok
+CREATE TRIGGER trg_rows AFTER INSERT ON t_rows
+REFERENCING NEW TABLE AS new_rows
+FOR EACH STATEMENT
+    INSERT INTO t_rows_log SELECT COUNT(*) FROM new_rows;
+
+statement ok
+INSERT INTO t_rows VALUES (1), (2), (3);
+
+query I
+SELECT n FROM t_rows_log;
+----
+3
+
+statement ok
+INSERT INTO t_rows VALUES (10), (20);
+
+query I rowsort
+SELECT n FROM t_rows_log;
+----
+2
+3
+
+# Trigger without REFERENCING still works (alias is simply not available)
+statement ok
+CREATE TABLE t_plain (id INTEGER);
+
+statement ok
+CREATE TABLE t_plain_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_plain AFTER INSERT ON t_plain FOR EACH STATEMENT
+    INSERT INTO t_plain_log VALUES ('fired');
+
+statement ok
+INSERT INTO t_plain VALUES (1);
+
+query I
+SELECT COUNT(*) FROM t_plain_log;
+----
+1
+
+# Body references alias that doesn't exist - rejected at CREATE TRIGGER time
+statement ok
+CREATE TABLE t_bad (id INTEGER);
+
+statement ok
+CREATE TABLE t_bad_log (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_bad AFTER INSERT ON t_bad FOR EACH STATEMENT
+    INSERT INTO t_bad_log SELECT id FROM nonexistent_alias;
+----
+Catalog Error:
+
+# Alias name referenced in body must match the declared alias
+statement ok
+CREATE TABLE t_alias_mismatch (id INTEGER);
+
+statement ok
+CREATE TABLE t_alias_mismatch_log (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_alias_mismatch AFTER INSERT ON t_alias_mismatch
+REFERENCING NEW TABLE AS new_rows
+FOR EACH STATEMENT
+    INSERT INTO t_alias_mismatch_log SELECT id FROM wrong_alias;
+----
+Catalog Error:
+
+# ToSQL round-trips REFERENCING clause correctly
+statement ok
+CREATE TABLE t_tosql (id INTEGER);
+
+statement ok
+CREATE TABLE t_tosql_log (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_tosql AFTER INSERT ON t_tosql
+REFERENCING NEW TABLE AS ins
+FOR EACH STATEMENT
+    INSERT INTO t_tosql_log SELECT id FROM ins;
+
+query I
+SELECT sql LIKE '%REFERENCING NEW TABLE AS ins%' FROM duckdb_triggers() WHERE trigger_name = 'trg_tosql';
+----
+true
+
+# Aggregate over alias: count inserted rows and store in log
+statement ok
+CREATE TABLE t_agg (val INTEGER);
+
+statement ok
+CREATE TABLE t_agg_log (total INTEGER, cnt INTEGER);
+
+statement ok
+CREATE TRIGGER trg_agg AFTER INSERT ON t_agg
+REFERENCING NEW TABLE AS new_vals
+FOR EACH STATEMENT
+    INSERT INTO t_agg_log SELECT SUM(val), COUNT(*) FROM new_vals;
+
+statement ok
+INSERT INTO t_agg VALUES (10), (20), (30);
+
+query II
+SELECT total, cnt FROM t_agg_log;
+----
+60	3
+
+# Rollback: if trigger body fails, the whole statement rolls back
+statement ok
+CREATE TABLE t_rollback (id INTEGER);
+
+statement ok
+CREATE TABLE t_rollback_log (id INTEGER UNIQUE);
+
+statement ok
+INSERT INTO t_rollback_log VALUES (999);
+
+statement ok
+CREATE TRIGGER trg_rollback AFTER INSERT ON t_rollback
+REFERENCING NEW TABLE AS ins
+FOR EACH STATEMENT
+    INSERT INTO t_rollback_log SELECT id FROM ins;
+
+statement error
+INSERT INTO t_rollback VALUES (999);
+----
+Constraint Error:
+
+query I
+SELECT COUNT(*) FROM t_rollback;
+----
+0

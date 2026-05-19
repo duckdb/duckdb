@@ -41,26 +41,18 @@ SELECT COUNT(*) FROM audit;
 ----
 3
 
-# FOR EACH ROW with a constant VALUES body - fires once per inserted row
+# FOR EACH ROW is not yet supported - blocked at CREATE TRIGGER time
 statement ok
 CREATE TABLE multi_target (id INTEGER);
 
 statement ok
 CREATE TABLE multi_audit (msg VARCHAR);
 
-statement ok
+statement error
 CREATE TRIGGER trg_multi AFTER INSERT ON multi_target FOR EACH ROW
     INSERT INTO multi_audit VALUES ('row');
-
-statement ok
-INSERT INTO multi_target VALUES (1), (2), (3);
-
-query I rowsort
-SELECT * FROM multi_audit;
 ----
-row
-row
-row
+Not implemented Error: FOR EACH ROW triggers are not yet supported
 
 # Trigger body failure rolls back the entire statement
 statement ok

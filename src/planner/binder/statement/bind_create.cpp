@@ -30,7 +30,6 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
-#include "duckdb/planner/trigger_body_transformer.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
@@ -509,9 +508,11 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			}
 		}
 	}
-	if (create_trigger_info.for_each == TriggerForEach::ROW &&
-	    create_trigger_info.event_type != TriggerEventType::INSERT_EVENT) {
-		throw NotImplementedException("FOR EACH ROW is only supported for AFTER INSERT triggers");
+	if (create_trigger_info.for_each == TriggerForEach::ROW) {
+		throw NotImplementedException("FOR EACH ROW triggers are not yet supported");
+	}
+	if (!create_trigger_info.referencing_old_table.empty()) {
+		throw NotImplementedException("REFERENCING OLD TABLE is not yet supported");
 	}
 
 	if (create_trigger_info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
@@ -532,20 +533,18 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.trigger_name;
 	auto body_copy = create_trigger_info.trigger_action->Copy();
 
-	if (create_trigger_info.for_each == TriggerForEach::ROW) {
-		TransformTriggerBody(*body_copy, create_trigger_info.event_type);
-
-		// Inject a dummy __duckdb_trigger_base CTE so the binder can validate the transformed body
-		auto base_select = make_uniq<SelectNode>();
-		base_select->select_list.push_back(make_uniq<StarExpression>());
-		auto table_ref = make_uniq<BaseTableRef>();
-		table_ref->table_name = table.name;
-		table_ref->schema_name = table.schema.name;
-		table_ref->catalog_name = table.catalog.GetName();
-		base_select->from_table = std::move(table_ref);
-		auto base_cte = make_uniq<CommonTableExpressionInfo>();
-		base_cte->query_node = std::move(base_select);
-		body_copy->cte_map.map[TRIGGER_BASE_CTE_NAME] = std::move(base_cte);
+	if (!create_trigger_info.referencing_new_table.empty()) {
+		// Dummy CTE to make the query valid
+		auto alias_select = make_uniq<SelectNode>();
+		alias_select->select_list.push_back(make_uniq<StarExpression>());
+		auto alias_table_ref = make_uniq<BaseTableRef>();
+		alias_table_ref->table_name = table.name;
+		alias_table_ref->schema_name = table.schema.name;
+		alias_table_ref->catalog_name = table.catalog.GetName();
+		alias_select->from_table = std::move(alias_table_ref);
+		auto alias_cte = make_uniq<CommonTableExpressionInfo>();
+		alias_cte->query_node = std::move(alias_select);
+		body_copy->cte_map.map[create_trigger_info.referencing_new_table] = std::move(alias_cte);
 	}
 	validation_binder->Bind(*body_copy);
 
