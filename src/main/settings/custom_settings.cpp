@@ -494,7 +494,7 @@ Value ConfigureProfilingSetting::GetSetting(const ClientContext &context) {
 	for (auto &entry : enabled_settings) {
 		children.emplace_back(entry);
 	}
-	return Value::LIST(std::move(children));
+	return Value::LIST(LogicalType::VARCHAR, std::move(children));
 }
 
 //===----------------------------------------------------------------------===//
