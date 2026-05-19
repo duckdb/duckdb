@@ -184,7 +184,7 @@ void QueryProfiler::Finalize(ProfilingNode &node) {
 		Finalize(*child);
 
 		auto &info = node.GetProfilingInfo();
-		auto type = PhysicalOperatorType(info.GetMetricValue<uint8_t>(MetricType::OPERATOR_TYPE));
+		auto type = EnumUtil::FromString<PhysicalOperatorType>(info.GetMetricAsString(MetricType::OPERATOR_TYPE));
 		if (type == PhysicalOperatorType::UNION &&
 		    info.EnabledForCollection(MetricType::OPERATOR_CARDINALITY)) {
 			auto &child_info = child->GetProfilingInfo();
@@ -868,7 +868,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 
 	if (depth != 0) {
 		info.SetMetricValue(MetricType::OPERATOR_NAME, root_p.GetName());
-		info.MetricSum<uint8_t>(MetricType::OPERATOR_TYPE, static_cast<uint8_t>(root_p.type));
+		info.SetMetricValue(MetricType::OPERATOR_TYPE, EnumUtil::ToString(root_p.type));
 	}
 	if (info.Enabled(MetricType::EXTRA_INFO)) {
 		info.SetMetricValue(MetricType::EXTRA_INFO, Value::MAP(root_p.ParamsToString()));

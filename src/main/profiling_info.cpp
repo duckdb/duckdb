@@ -107,10 +107,6 @@ string ProfilingInfo::GetMetricAsString(const MetricType metric) const {
 
 	// The metric cannot be NULL and must be initialized.
 	D_ASSERT(!metrics.at(metric).IsNull());
-	if (metric == MetricType::OPERATOR_TYPE) {
-		const auto type = PhysicalOperatorType(metrics.at(metric).GetValue<uint8_t>());
-		return EnumUtil::ToString(type);
-	}
 	return metrics.at(metric).ToString();
 }
 

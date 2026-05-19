@@ -55,12 +55,7 @@ duckdb_value duckdb_profiling_info_get_metrics(duckdb_profiling_info info) {
 			continue;
 		}
 
-		if (key == EnumUtil::ToString(MetricType::OPERATOR_TYPE)) {
-			auto type = duckdb::PhysicalOperatorType(metric.second.GetValue<uint8_t>());
-			metrics_map[key] = EnumUtil::ToString(type);
-		} else {
-			metrics_map[key] = metric.second.ToString();
-		}
+		metrics_map[key] = metric.second.ToString();
 	}
 
 	auto map = duckdb::Value::MAP(metrics_map);

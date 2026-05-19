@@ -219,10 +219,8 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 		break;
 	case MetricType::OPERATOR_NAME:
 	case MetricType::QUERY_NAME:
-		yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, metrics[type].GetValue<string>().c_str());
-		break;
 	case MetricType::OPERATOR_TYPE:
-		yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, OperatorToString(metrics[type]).c_str());
+		yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, metrics[type].GetValue<string>().c_str());
 		break;
 	default:
 		throw InternalException("Unknown metric type %s", EnumUtil::ToString(type));
