@@ -101,7 +101,7 @@ class ProfilingUtils {
 public:
 	static void SetMetricToDefault(profiler_metrics_t &metrics, const MetricType &type);
 	static void MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *dest, const char *key_ptr, const Value &val);
-	static void CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingInfo &result, ProfilingNode &root, OperatorInformation &cumulative_metrics);
+	static void CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingInfo &result);
 };
 
 struct ActiveTimer {

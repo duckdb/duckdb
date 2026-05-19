@@ -119,7 +119,7 @@ public:
 	}
 
 private:
-	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const profiler_settings_t &settings,
+	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root,
 	                                     const idx_t depth = 0);
 	void Render(const ProfilingNode &node, std::ostream &str) const;
 	string RenderDisabledMessage(ProfilerPrintFormat format) const;

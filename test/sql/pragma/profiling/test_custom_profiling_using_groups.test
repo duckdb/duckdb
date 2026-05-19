@@ -392,11 +392,10 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_ou
 statement ok
 SELECT OPERATOR_CARDINALITY,
 	OPERATOR_NAME,
-	OPERATOR_ROWS_SCANNED,
 	OPERATOR_TIMING,
 	OPERATOR_TYPE
 FROM (
-	SELECT unnest(children, max_depth := 2)
+	SELECT unnest(operator_info, max_depth := 2)
 	FROM metrics_output
 )
 

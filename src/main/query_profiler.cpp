@@ -33,12 +33,6 @@ profiler_settings_t QueryProfiler::GetQueryMetrics(ClientContext &context) {
 		local_settings.insert(metric);
 		ProfilingInfo::Expand(local_settings, metric);
 	}
-
-	// Reduce.
-	auto root_metrics = MetricsUtils::GetRootScopeMetrics();
-	for (const auto metric : root_metrics) {
-		local_settings.erase(metric);
-	}
 	return local_settings;
 }
 
@@ -335,11 +329,6 @@ void QueryProfiler::EndPhase() {
 
 OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
 	enabled = QueryProfiler::Get(context).IsEnabled();
-	auto local_settings = QueryProfiler::GetQueryMetrics(context);
-	settings = ProfilerSettings(std::move(local_settings));
-	if (!settings.AnyMetricsEnabled()) {
-		enabled = false;
-	}
 }
 
 void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
@@ -351,14 +340,12 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	}
 	active_operator = phys_op;
 
-	if (settings.MetricIsEnabled(MetricType::EXTRA_INFO)) {
-		if (!OperatorInfoIsInitialized(*active_operator)) {
-			// first time calling into this operator - fetch the info
-			auto &info = GetOperatorInfo(*active_operator);
-			auto params = active_operator->ParamsToString();
-			info.extra_info = params;
-			info.extra_info_dirty = true;
-		}
+	if (!OperatorInfoIsInitialized(*active_operator)) {
+		// first time calling into this operator - fetch the info
+		auto &info = GetOperatorInfo(*active_operator);
+		auto params = active_operator->ParamsToString();
+		info.extra_info = params;
+		info.extra_info_dirty = true;
 	}
 
 	// Start the timing of the current operator.
@@ -403,11 +390,9 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		throw InternalException("OperatorProfiler: Attempting to call EndOperator while no operator is active");
 	}
 
-	if (settings.AnyMetricsEnabled()) {
-		auto &info = GetOperatorInfo(*active_operator);
-		op.End();
-		info.GatherMetrics(context, op.Elapsed(), chunk);
-	}
+	auto &info = GetOperatorInfo(*active_operator);
+	op.End();
+	info.GatherMetrics(context, op.Elapsed(), chunk);
 	active_operator = nullptr;
 }
 
@@ -418,27 +403,23 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 	if (!active_operator) {
 		throw InternalException("OperatorProfiler: Attempting to call FinishSource while no operator is active");
 	}
-	if (!settings.AnyMetricsEnabled()) {
-		return;
-	}
-	if (settings.MetricIsEnabled(MetricType::EXTRA_INFO)) {
-		// we're emitting extra info - get the extra source info
-		auto &info = GetOperatorInfo(*active_operator);
-		auto extra_info = active_operator->ExtraSourceParams(gstate, lstate);
-		for (auto &new_info : extra_info) {
-			auto entry = info.extra_info.find(new_info.first);
-			if (entry != info.extra_info.end()) {
-				// entry exists - override
-				entry->second = std::move(new_info.second);
-			} else {
-				// entry does not exist yet - insert
-				info.extra_info.insert(std::move(new_info));
-			}
+
+	// we're emitting extra info - get the extra source info
+	auto &info = GetOperatorInfo(*active_operator);
+	auto extra_info = active_operator->ExtraSourceParams(gstate, lstate);
+	for (auto &new_info : extra_info) {
+		auto entry = info.extra_info.find(new_info.first);
+		if (entry != info.extra_info.end()) {
+			// entry exists - override
+			entry->second = std::move(new_info.second);
+		} else {
+			// entry does not exist yet - insert
+			info.extra_info.insert(std::move(new_info));
 		}
-		info.extra_info_dirty = info.extra_info_dirty || !extra_info.empty();
 	}
-	if (settings.MetricIsEnabled(MetricType::OPERATOR_ROWS_SCANNED) &&
-	    active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN) {
+	info.extra_info_dirty = info.extra_info_dirty || !extra_info.empty();
+
+	if (active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN) {
 		const auto &table_scan = active_operator->Cast<PhysicalTableScan>();
 		const auto rows_scanned = table_scan.GetRowsScanned(gstate, lstate);
 		auto &info = GetOperatorInfo(*active_operator);
@@ -737,12 +718,12 @@ profiler_metrics_t OperatorInformation::GetMetrics(const ProfilingInfo &info) co
 		result[MetricType::OPERATOR_TIMING] = Value::DOUBLE(time);
 	}
 	if (info.EnabledForCollection(MetricType::OPERATOR_CARDINALITY)) {
-		result[MetricType::OPERATOR_TIMING] = Value::UBIGINT(elements_returned);
+		result[MetricType::OPERATOR_CARDINALITY] = Value::UBIGINT(elements_returned);
 	}
 	if (info.EnabledForCollection(MetricType::RESULT_SET_SIZE)) {
 		result[MetricType::RESULT_SET_SIZE] = Value::UBIGINT(result_set_size);
 	}
-	if (info.EnabledForCollection(MetricType::OPERATOR_ROWS_SCANNED)) {
+	if (info.EnabledForCollection(MetricType::OPERATOR_ROWS_SCANNED) && operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result[MetricType::OPERATOR_ROWS_SCANNED] = Value::UBIGINT(rows_scanned);
 	}
 	if (info.EnabledForCollection(MetricType::EXTRA_INFO)) {
@@ -818,7 +799,7 @@ string QueryProfiler::ToJSON() const {
 
 	// recursively print the physical operator tree
 	auto children_list = yyjson_mut_arr(json_holder.doc);
-	yyjson_mut_obj_add_val(json_holder.doc, result_obj, "children", children_list);
+	yyjson_mut_obj_add_val(json_holder.doc, result_obj, "operator_info", children_list);
 	auto child = ToJSONRecursive(json_holder.doc, settings, *root);
 	yyjson_mut_arr_add_val(children_list, child);
 	return StringifyAndFree(json_holder, result_obj);
@@ -832,7 +813,7 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 	file->Close();
 }
 
-unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root_p, const profiler_settings_t &settings,
+unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root_p,
                                                     const idx_t depth) {
 	if (OperatorRequiresProfiling(root_p.type)) {
 		query_requires_profiling = true;
@@ -849,7 +830,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root_p), reference<ProfilingNode>(*node)));
 	auto children = root_p.GetChildren();
 	for (auto &child : children) {
-		auto child_node = CreateTree(child.get(), settings, depth + 1);
+		auto child_node = CreateTree(child.get(), depth + 1);
 		node->AddChild(std::move(child_node));
 	}
 	return node;
@@ -902,9 +883,7 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 		return;
 	}
 	query_requires_profiling = false;
-	ClientConfig &config = ClientConfig::GetConfig(context);
-	root = CreateTree(root_op, config.profiler_settings, 0);
-	root_info = make_uniq<ProfilingInfo>(GetQueryMetrics(context));
+	root = CreateTree(root_op, 0);
 	if (!query_requires_profiling) {
 		// query does not require profiling: disable profiling for this query
 		running = false;
@@ -912,6 +891,8 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 		root = nullptr;
 		phase_timings.clear();
 		phase_stack.clear();
+	} else {
+		root_info = make_uniq<ProfilingInfo>(GetQueryMetrics(context));
 	}
 }
 
@@ -951,7 +932,7 @@ static void MergeOperatorMeasurements(ProfilingNode &root, OperatorInformation &
 }
 
 void QueryProfiler::FinalizeMetricsInternal() {
-	if (metrics_finalized || !IsEnabled() || !root) {
+	if (metrics_finalized || !IsEnabled() || !root_info) {
 		return;
 	}
 
@@ -971,13 +952,25 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		info.SetMetricValue(MetricType::BLOCKED_THREAD_TIME, Value::DOUBLE(query_metrics.blocked_thread_time));
 	}
 
-	OperatorInformation cumulative_metrics;
-	MergeOperatorMeasurements(*root, cumulative_metrics);
+	if (root) {
+		OperatorInformation cumulative_metrics;
+		MergeOperatorMeasurements(*root, cumulative_metrics);
+
+		if (info.EnabledForCollection(MetricType::CPU_TIME)) {
+			info.SetMetricValue(MetricType::CPU_TIME, Value::DOUBLE(cumulative_metrics.time));
+		}
+		if (info.EnabledForCollection(MetricType::CUMULATIVE_CARDINALITY)) {
+			info.SetMetricValue(MetricType::CUMULATIVE_CARDINALITY, Value::UBIGINT(cumulative_metrics.elements_returned));
+		}
+		if (info.EnabledForCollection(MetricType::CUMULATIVE_ROWS_SCANNED)) {
+			info.SetMetricValue(MetricType::CUMULATIVE_ROWS_SCANNED, Value::UBIGINT(cumulative_metrics.rows_scanned));
+		}
+	}
 
 	MoveOptimizerPhasesToRoot();
 	for (auto &metric : info.GetMetricsMutable()) {
 		if (info.EnabledForCollection(metric.first)) {
-			ProfilingUtils::CollectMetrics(metric.first, query_metrics, metric.second, info, *root, cumulative_metrics);
+			ProfilingUtils::CollectMetrics(metric.first, query_metrics, metric.second, info);
 		}
 	}
 	metrics_finalized = true;

@@ -131,17 +131,8 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 	yyjson_mut_obj_add_strcpy(doc, dest, key_ptr, val.GetValue<string>().c_str());
 }
 
-void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingInfo &result, ProfilingNode &root, OperatorInformation &cumulative_metrics) {
+void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingInfo &result) {
 	switch(type) {
-	case MetricType::CPU_TIME:
-		metric = Value::DOUBLE(cumulative_metrics.time);
-		break;
-	case MetricType::CUMULATIVE_CARDINALITY:
-		metric = Value::UBIGINT(cumulative_metrics.elements_returned);
-		break;
-	case MetricType::CUMULATIVE_ROWS_SCANNED:
-		metric = Value::UBIGINT(cumulative_metrics.rows_scanned);
-		break;
 	case MetricType::ATTACH_LOAD_STORAGE_LATENCY:
 		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::ATTACH_LOAD_STORAGE_LATENCY));
 		break;
@@ -177,12 +168,6 @@ void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_
 		break;
 	case MetricType::WAL_REPLAY_ENTRY_COUNT:
 		metric = Value::UBIGINT(query_metrics.GetMetricValue(MetricType::WAL_REPLAY_ENTRY_COUNT));
-		break;
-	case MetricType::RESULT_SET_SIZE:
-		metric = Value::UBIGINT(root.GetOperatorInfo().result_set_size);
-		break;
-	case MetricType::ROWS_RETURNED:
-		metric = Value::UBIGINT(root.GetOperatorInfo().elements_returned);
 		break;
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 		metric = GetCumulativeOptimizers(result);
