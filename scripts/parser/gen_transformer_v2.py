@@ -364,7 +364,7 @@ def _is_by_value(rule_name, rule_types):
     info = rule_types.get(rule_name)
     if info is None:
         return False
-    return info.by_value or info.cpp_type.startswith('unique_ptr<')
+    return info.by_value or 'unique_ptr<' in info.cpp_type
 
 
 def _classify_literal():
@@ -522,7 +522,10 @@ def _classify_macro(node, idx, rule_types):
     item_access = _build_wrapped_expr(item_var, post_parens)
 
     if is_identifier:
-        push_line = f"\t\t{var_name}.push_back({item_access}.Cast<IdentifierParseResult>().identifier);"
+        # item_var is reference<ParseResult> (std::reference_wrapper); need .get() when not already
+        # unwrapped by ExtractResultFromParens (which returns ParseResult&).
+        ident_access = f"{item_access}.get()" if post_parens == 0 else item_access
+        push_line = f"\t\t{var_name}.push_back({ident_access}.Cast<IdentifierParseResult>().identifier);"
     else:
         push_line = f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({item_access}));"
 
@@ -1028,13 +1031,22 @@ def main():
         'checkpoint.gram',
         'create_schema.gram',
         'create_secret.gram',
+        # 'create_trigger.gram',
         'create_view.gram',
         'connect.gram',
         'deallocate.gram',
+        # 'delete.gram',
         'detach.gram',
+        # 'drop.gram',
         'execute.gram',
+        # 'explain.gram',
         'export.gram',
+        # 'insert.gram',
+        # 'load.gram',
+        # 'pragma.gram',
+        # 'prepare.gram',
         'transaction.gram',
+        'update.gram',
         'use.gram',
         'vacuum.gram',
     ]

@@ -1124,7 +1124,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"UpdateSetTuple <- Parens(List(ColumnName)) '=' Expression\n"
 	"UpdateSetElementList <- List(UpdateSetElement)\n"
 	"UpdateSetElement <- UpdateSetColumnTarget '=' Expression\n"
-	"UpdateSetColumnTarget <- ColumnName ('.' Identifier)*\n"
+	"UpdateSetColumnTarget <- ColumnName DotIdentifier*\n"
 	"InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?\n"
 	"OrAction <- 'OR' 'REPLACE' / 'IGNORE'\n"
 	"ByNameOrPosition <- 'BY' InsertByName / InsertByPosition\n"

@@ -849,20 +849,6 @@ void PEGTransformerFactory::RegisterSet() {
 	REGISTER_TRANSFORM(TransformZoneIntervalWithPrecision);
 }
 
-void PEGTransformerFactory::RegisterUpdate() {
-	// update.gram
-	REGISTER_TRANSFORM(TransformUpdateStatement);
-	REGISTER_TRANSFORM(TransformUpdateTarget);
-	REGISTER_TRANSFORM(TransformBaseTableSet);
-	REGISTER_TRANSFORM(TransformBaseTableAliasSet);
-	REGISTER_TRANSFORM(TransformUpdateAlias);
-	REGISTER_TRANSFORM(TransformUpdateSetClause);
-	REGISTER_TRANSFORM(TransformUpdateSetTuple);
-	REGISTER_TRANSFORM(TransformUpdateSetElementList);
-	REGISTER_TRANSFORM(TransformUpdateSetElement);
-	REGISTER_TRANSFORM(TransformUpdateSetColumnTarget);
-}
-
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("PragmaName", &TransformIdentifierOrKeyword);
 	Register("TypeName", &TransformIdentifierOrKeyword);
@@ -1044,7 +1030,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterPrepare();
 	RegisterSelect();
 	RegisterSet();
-	RegisterUpdate();
 	RegisterKeywordsAndIdentifiers();
 	RegisterEnums();
 }

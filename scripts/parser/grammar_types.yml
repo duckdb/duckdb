@@ -902,6 +902,12 @@ AnalyzeTarget:
   rules:
     - AnalyzeTarget
 
+CommonTableExpressionMap:
+  type: "CommonTableExpressionMap"
+  by_value: true
+  rules:
+    - WithClause
+
 # ---------------------------------------------------------------------------
 # Overrides: rules with unique or complex return types that don't share a
 # category with other rules. Typically pair<>, map<>, or one-off structs.
@@ -996,7 +1002,6 @@ overrides:
   SeqOwnedBy: "pair<string, unique_ptr<SequenceOption>>"
   # select.gram
   SetopType: "SetOperationType"
-  WithClause: "CommonTableExpressionMap"
   WithStatement: "pair<string, unique_ptr<CommonTableExpressionInfo>>"
   JoinType: "JoinType"
   SampleProperties: "pair<SampleMethod, optional_idx>"
