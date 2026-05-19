@@ -105,12 +105,28 @@ void ProfilingInfo::WriteMetricsToLog(ClientContext &context) const {
 }
 
 void ProfilingInfo::MetricsToProfileResult(QueryProfileResult &result) const {
+	// Group dotted metric keys (e.g. "optimizer.join_order") into nested result objects.
+	unordered_map<string, reference<QueryProfileResult>> groups;
+
 	for (auto &entry : metrics) {
 		if (settings.find(entry.first) == settings.end()) {
 			continue;
 		}
-		auto key = StringUtil::Lower(entry.first);
-		result.AddValue(key, entry.second);
+		auto dot_pos = entry.first.find('.');
+		if (dot_pos != string::npos) {
+			auto prefix = entry.first.substr(0, dot_pos);
+			auto suffix = entry.first.substr(dot_pos + 1);
+			auto it = groups.find(prefix);
+			if (it == groups.end()) {
+				auto &obj = result.AddObject(prefix);
+				groups.emplace(prefix, obj);
+				obj.AddValue(suffix, entry.second);
+			} else {
+				it->second.get().AddValue(suffix, entry.second);
+			}
+		} else {
+			result.AddValue(StringUtil::Lower(entry.first), entry.second);
+		}
 	}
 }
 
