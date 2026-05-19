@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
 #include "duckdb/common/vector.hpp"
@@ -95,6 +96,19 @@ private:
 	class SegmentNodeIterationHelper;
 
 public:
+	struct LoadedSegment {
+		LoadedSegment() {
+		}
+		explicit LoadedSegment(shared_ptr<T> segment_p) : segment(std::move(segment_p)) {
+		}
+		LoadedSegment(shared_ptr<T> segment_p, idx_t row_start_p)
+		    : segment(std::move(segment_p)), row_start(row_start_p) {
+		}
+
+		shared_ptr<T> segment;
+		optional_idx row_start;
+	};
+
 	explicit SegmentTree(idx_t base_row_id = 0) : finished_loading(true), base_row_id(base_row_id) {
 	}
 	virtual ~SegmentTree() {
@@ -325,8 +339,8 @@ protected:
 	mutable atomic<bool> finished_loading;
 
 	//! Load the next segment - only used when lazily loading
-	virtual shared_ptr<T> LoadSegment() const {
-		return nullptr;
+	virtual LoadedSegment LoadSegment() const {
+		return LoadedSegment();
 	}
 
 	optional_ptr<SegmentNode<T>> GetRootSegmentInternal() const {
@@ -442,11 +456,15 @@ private:
 			return false;
 		}
 		auto result = LoadSegment();
-		if (result) {
-			AppendSegmentInternal(l, std::move(result));
-			return true;
+		if (!result.segment) {
+			return false;
 		}
-		return false;
+		if (result.row_start.IsValid()) {
+			AppendSegmentInternal(l, std::move(result.segment), result.row_start.GetIndex());
+		} else {
+			AppendSegmentInternal(l, std::move(result.segment));
+		}
+		return true;
 	}
 
 	//! Load all segments, if there are any left to load

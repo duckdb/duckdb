@@ -45,18 +45,19 @@ void RowGroupSegmentTree::Initialize(PersistentTableData &data, optional_ptr<vec
 	root_pointer = data.block_pointer;
 }
 
-shared_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() const {
+SegmentTree<RowGroup, true>::LoadedSegment RowGroupSegmentTree::LoadSegment() const {
 	if (current_row_group >= max_row_group) {
 		reader.reset();
 		finished_loading = true;
-		return nullptr;
+		return LoadedSegment();
 	}
 	BinaryDeserializer deserializer(*reader);
 	deserializer.Begin();
 	auto row_group_pointer = RowGroup::Deserialize(deserializer);
 	deserializer.End();
 	current_row_group++;
-	return make_shared_ptr<RowGroup>(collection, std::move(row_group_pointer));
+	auto row_start = row_group_pointer.row_start;
+	return LoadedSegment(make_shared_ptr<RowGroup>(collection, std::move(row_group_pointer)), row_start);
 }
 
 //===--------------------------------------------------------------------===//

@@ -28,7 +28,7 @@ public:
 	}
 
 protected:
-	shared_ptr<RowGroup> LoadSegment() const override;
+	SegmentTree<RowGroup, true>::LoadedSegment LoadSegment() const override;
 
 	RowGroupCollection &collection;
 	mutable idx_t current_row_group;
