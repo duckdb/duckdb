@@ -25,15 +25,23 @@ class PerfectHashJoinExecutor;
 struct GlobalUngroupedAggregateState;
 struct LocalUngroupedAggregateState;
 
+enum class JoinFilterPushdownMode : uint8_t {
+	//! The pushed expression can be reconstructed on top of the raw scan value for BF/PRF/PHJ runtime filters
+	RECONSTRUCT_EXPRESSION,
+	//! Only storage-domain filters are safe; BF/PRF/PHJ reconstruction on raw scan values is not
+	STORAGE_ONLY
+};
+
 struct JoinFilterPushdownColumn {
 	//! The probe column index to which this filter should be applied
 	ColumnBinding probe_column_index;
 	//! The type of the value in storage (LogicalGet)
 	LogicalType storage_type;
-	//! The original type of the pushed probe expression before rewriting to the LogicalGet storage column
-	LogicalType filter_type;
-	//! Whether runtime filter evaluation can safely reconstruct the pushed probe expression on raw scan values
-	bool runtime_cast_is_safe = true;
+	//! Whether runtime filters can reconstruct the pushed expression, or whether only storage-domain filters are safe
+	JoinFilterPushdownMode mode = JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
+	//! The original type of the pushed probe expression before rewriting to the LogicalGet storage column. Only used
+	//! when the mode allows reconstruction of the probe expression for BF/PRF/PHJ runtime filters.
+	LogicalType runtime_filter_type;
 };
 
 struct JoinFilterGlobalState {

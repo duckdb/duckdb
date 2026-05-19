@@ -1203,7 +1203,7 @@ static unique_ptr<ExpressionFilter> CreateSelectivityOptionalExpressionFilter(un
                                                                               SelectivityOptionalFilterType type);
 
 static LogicalType GetRuntimeFilterInputType(const JoinFilterPushdownColumn &column, const LogicalType &runtime_type) {
-	return column.filter_type.IsValid() ? column.filter_type : runtime_type;
+	return column.runtime_filter_type.IsValid() ? column.runtime_filter_type : runtime_type;
 }
 
 static unique_ptr<Expression> CreateRuntimeFilterInputExpression(ClientContext &context,
@@ -1376,15 +1376,12 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 			}
 
 			auto condition_type = min_val.type();
-			auto runtime_filter_input_type =
-			    pushdown_column.filter_type.IsValid() ? pushdown_column.filter_type : condition_type;
-			bool runtime_filter_type_matches = pushdown_column.runtime_cast_is_safe;
-			if (perfect_join_executor) {
-				runtime_filter_type_matches =
-				    runtime_filter_type_matches && runtime_filter_input_type == perfect_join_executor->GetKeyType();
-			} else if (ht) {
-				runtime_filter_type_matches = runtime_filter_type_matches &&
-				                              runtime_filter_input_type == ht->conditions[0].GetLHS().GetReturnType();
+			auto runtime_filter_input_type = GetRuntimeFilterInputType(pushdown_column, condition_type);
+			bool can_emit_runtime_filters = pushdown_column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
+			if (can_emit_runtime_filters && perfect_join_executor) {
+				can_emit_runtime_filters = runtime_filter_input_type == perfect_join_executor->GetKeyType();
+			} else if (can_emit_runtime_filters && ht) {
+				can_emit_runtime_filters = runtime_filter_input_type == ht->conditions[0].GetLHS().GetReturnType();
 			}
 
 			// if the HT is small we can generate a complete "OR" filter
@@ -1431,14 +1428,14 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 					break;
 				}
 
-				if (runtime_filter_type_matches && perfect_join_executor) {
+				if (can_emit_runtime_filters && perfect_join_executor) {
 					PushPerfectHashJoinFilter(context, op, *perfect_join_executor, info, filter_idx, filter_col_idx);
-				} else if (runtime_filter_type_matches &&
+				} else if (can_emit_runtime_filters &&
 				           CanUsePrefixRangeFilter(context, ht, op, cmp, min_val_before_cast, max_val_before_cast)) {
 					// It's important that these get the min/max val before casting
 					RegisterPrefixRangeFilter(info, context, *ht, op, filter_idx, filter_col_idx, min_val_before_cast,
 					                          max_val_before_cast);
-				} else if (runtime_filter_type_matches && ht && CanUseBloomFilter(context, op, cmp, ht)) {
+				} else if (can_emit_runtime_filters && ht && CanUseBloomFilter(context, op, cmp, ht)) {
 					PushBloomFilter(context, op, *ht, info, filter_idx, filter_col_idx);
 				}
 			}

@@ -29,8 +29,8 @@ bool JoinFilterPushdownUtil::PushdownJoinFilterExpression(const Expression &expr
 		// interval is not supported for pushdown
 		return false;
 	}
-	if (!filter.filter_type.IsValid()) {
-		filter.filter_type = expr.GetReturnType();
+	if (filter.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION && !filter.runtime_filter_type.IsValid()) {
+		filter.runtime_filter_type = expr.GetReturnType();
 	}
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_COLUMN_REF: {
@@ -59,10 +59,10 @@ bool JoinFilterPushdownUtil::PushdownJoinFilterExpression(const Expression &expr
 		const bool widening_unsigned_to_signed_cast =
 		    !src.IsSigned() && tgt.IsSigned() && GetTypeIdSize(tgt.InternalType()) > GetTypeIdSize(src.InternalType());
 		if (widening_signed_cast || widening_unsigned_to_signed_cast) {
-			filter.filter_type = expr.GetReturnType();
+			filter.runtime_filter_type = expr.GetReturnType();
 		} else {
-			filter.runtime_cast_is_safe = false;
-			filter.filter_type = LogicalType::INVALID;
+			filter.mode = JoinFilterPushdownMode::STORAGE_ONLY;
+			filter.runtime_filter_type = LogicalType::INVALID;
 		}
 		return true;
 	}
