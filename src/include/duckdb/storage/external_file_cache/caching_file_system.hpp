@@ -36,7 +36,8 @@ public:
 
 public:
 	DUCKDB_API CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system, const OpenFileInfo &path,
-	                             FileOpenFlags flags, optional_ptr<FileOpener> opener, CachedFile &cached_file);
+	                             FileOpenFlags flags, optional_ptr<FileOpener> opener,
+	                             shared_ptr<CachedFile> cached_file);
 	DUCKDB_API ~CachingFileHandle();
 
 public:
@@ -75,7 +76,7 @@ private:
 	//! Cache validation mode for this file
 	CacheValidationMode validate;
 	//! The associated CachedFile with cached blocks
-	CachedFile &cached_file;
+	shared_ptr<CachedFile> cached_file;
 
 	//! Used to ensure file handle and cached file metadata is only initialized once.
 	annotated_mutex file_handle_mutex;

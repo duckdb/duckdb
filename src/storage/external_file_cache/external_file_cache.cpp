@@ -242,13 +242,13 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 	return buffer_manager;
 }
 
-ExternalFileCache::CachedFile &ExternalFileCache::GetOrCreateCachedFile(const string &path) {
+shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFile(const string &path) {
 	lock_guard<mutex> guard(lock);
 	auto &entry = cached_files[path];
 	if (!entry) {
-		entry = make_uniq<CachedFile>(path);
+		entry = make_shared_ptr<CachedFile>(path);
 	}
-	return *entry;
+	return entry;
 }
 
 } // namespace duckdb

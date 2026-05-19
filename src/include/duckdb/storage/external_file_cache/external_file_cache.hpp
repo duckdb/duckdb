@@ -16,7 +16,6 @@
 #include "duckdb/common/thread_annotation.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/typedefs.hpp"
-#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
@@ -78,7 +77,7 @@ public:
 
 	BufferManager &GetBufferManager() const;
 	//! Gets the cached file, or creates it if is not yet present
-	CachedFile &GetOrCreateCachedFile(const string &path);
+	shared_ptr<CachedFile> GetOrCreateCachedFile(const string &path);
 
 	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
 	                               const string &current_version_tag, timestamp_t current_last_modified);
@@ -93,7 +92,7 @@ private:
 	//! Whether or not file caching is enabled
 	atomic<bool> enable;
 	//! Mapping from file path to cached file with cached blocks
-	unordered_map<string, unique_ptr<CachedFile>> cached_files;
+	unordered_map<string, shared_ptr<CachedFile>> cached_files;
 	//! Lock for accessing the cached files
 	mutable mutex lock;
 };
