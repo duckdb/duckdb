@@ -347,6 +347,9 @@ OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
 		local_settings.erase(metric);
 	}
 	settings = ProfilerSettings(std::move(local_settings));
+	if (!settings.AnyMetricsEnabled()) {
+		enabled = false;
+	}
 }
 
 void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
@@ -357,10 +360,6 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 		throw InternalException("OperatorProfiler: Attempting to call StartOperator while another operator is active");
 	}
 	active_operator = phys_op;
-
-	if (!settings.AnyMetricsEnabled()) {
-		return;
-	}
 
 	if (settings.MetricIsEnabled(MetricType::EXTRA_INFO)) {
 		if (!OperatorInfoIsInitialized(*active_operator)) {
@@ -373,8 +372,35 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	}
 
 	// Start the timing of the current operator.
-	if (settings.MetricIsEnabled(MetricType::OPERATOR_TIMING)) {
-		op.Start();
+	op.Start();
+}
+
+void OperatorInformation::GatherMetrics(ClientContext &context, double elapsed_time, optional_ptr<DataChunk> chunk) {
+	time += elapsed_time;
+	if (chunk) {
+		elements_returned += chunk->size();
+		result_set_size += LossyNumericCast<idx_t>(chunk->GetDataSize());
+	}
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	auto used_memory = buffer_manager.GetBufferPool().GetUsedMemory(false);
+	if (used_memory > system_peak_buffer_manager_memory) {
+		system_peak_buffer_manager_memory = used_memory;
+	}
+	auto used_swap = buffer_manager.GetUsedSwap();
+	if (used_swap > system_peak_temp_directory_size) {
+		system_peak_temp_directory_size = used_swap;
+	}
+}
+
+void OperatorInformation::Merge(const OperatorInformation &other) {
+	time += other.time;
+	elements_returned += other.elements_returned;
+	result_set_size += other.result_set_size;
+	if (other.system_peak_buffer_manager_memory > system_peak_buffer_manager_memory) {
+		system_peak_buffer_manager_memory = other.system_peak_buffer_manager_memory;
+	}
+	if (other.system_peak_temp_directory_size > system_peak_temp_directory_size) {
+		system_peak_temp_directory_size = other.system_peak_temp_directory_size;
 	}
 }
 
@@ -388,25 +414,8 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 
 	if (settings.AnyMetricsEnabled()) {
 		auto &info = GetOperatorInfo(*active_operator);
-		if (settings.MetricIsEnabled(MetricType::OPERATOR_TIMING)) {
-			op.End();
-			info.AddMetric(MetricType::OPERATOR_TIMING, op.Elapsed());
-		}
-		if (settings.MetricIsEnabled(MetricType::OPERATOR_CARDINALITY) && chunk) {
-			info.AddMetric(MetricType::OPERATOR_CARDINALITY, chunk->size());
-		}
-		if (settings.MetricIsEnabled(MetricType::RESULT_SET_SIZE) && chunk) {
-			auto result_set_size = chunk->GetDataSize();
-			info.AddMetric(MetricType::RESULT_SET_SIZE, result_set_size);
-		}
-		if (settings.MetricIsEnabled(MetricType::SYSTEM_PEAK_BUFFER_MEMORY)) {
-			auto used_memory = BufferManager::GetBufferManager(context).GetBufferPool().GetUsedMemory(false);
-			info.AddMetric(MetricType::SYSTEM_PEAK_BUFFER_MEMORY, used_memory);
-		}
-		if (settings.MetricIsEnabled(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE)) {
-			auto used_swap = BufferManager::GetBufferManager(context).GetUsedSwap();
-			info.AddMetric(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE, used_swap);
-		}
+		op.End();
+		info.GatherMetrics(context, op.Elapsed(), chunk);
 	}
 	active_operator = nullptr;
 }
@@ -444,14 +453,14 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 		auto &info = GetOperatorInfo(*active_operator);
 		if (rows_scanned.IsValid()) {
 			// Use exact value if available.
-			info.AddMetric(MetricType::OPERATOR_ROWS_SCANNED, rows_scanned.GetIndex());
+			info.rows_scanned += rows_scanned.GetIndex();
 		} else {
 			// Otherwise estimate as the cardinality of the table scan, if there is no exact value available.
 			auto &bind_data = table_scan.bind_data;
 			if (bind_data && table_scan.function.cardinality) {
 				auto cardinality = table_scan.function.cardinality(context, &(*bind_data));
 				if (cardinality && cardinality->has_estimated_cardinality) {
-					info.AddMetric(MetricType::OPERATOR_ROWS_SCANNED, cardinality->estimated_cardinality);
+					info.rows_scanned += cardinality->estimated_cardinality;
 				}
 			}
 		}

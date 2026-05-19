@@ -40,16 +40,17 @@ enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
 
 struct OperatorInformation {
 	explicit OperatorInformation() {
+		ResetMetrics();
 	}
 
 	string name;
 
-	double time = 0;
-	idx_t elements_returned = 0;
-	idx_t result_set_size = 0;
-	idx_t system_peak_buffer_manager_memory = 0;
-	idx_t system_peak_temp_directory_size = 0;
-	idx_t rows_scanned = 0;
+	double time;
+	idx_t elements_returned;
+	idx_t result_set_size;
+	idx_t system_peak_buffer_manager_memory;
+	idx_t system_peak_temp_directory_size;
+	idx_t rows_scanned;
 
 	InsertionOrderPreservingMap<string> extra_info;
 	bool extra_info_dirty = false;
@@ -62,38 +63,8 @@ struct OperatorInformation {
 		system_peak_temp_directory_size = 0;
 		rows_scanned = 0;
 	}
-
-	template <typename T>
-	void AddMetric(MetricType type, T metric) {
-		switch (type) {
-		case MetricType::OPERATOR_TIMING:
-			time += static_cast<double>(metric);
-			break;
-		case MetricType::OPERATOR_CARDINALITY:
-			elements_returned += LossyNumericCast<idx_t>(metric);
-			break;
-		case MetricType::RESULT_SET_SIZE:
-			result_set_size += LossyNumericCast<idx_t>(metric);
-			break;
-		case MetricType::SYSTEM_PEAK_BUFFER_MEMORY: {
-			if (metric > static_cast<T>(system_peak_buffer_manager_memory)) {
-				system_peak_buffer_manager_memory = LossyNumericCast<idx_t>(metric);
-			}
-			break;
-		}
-		case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE: {
-			if (metric > static_cast<T>(system_peak_temp_directory_size)) {
-				system_peak_temp_directory_size = LossyNumericCast<idx_t>(metric);
-			}
-			break;
-		}
-		case MetricType::OPERATOR_ROWS_SCANNED:
-			rows_scanned = LossyNumericCast<idx_t>(metric);
-			break;
-		default:
-			throw InternalException("OperatorProfiler: Unknown metric type");
-		}
-	}
+	void GatherMetrics(ClientContext &context, double elapsed_time, optional_ptr<DataChunk> chunk);
+	void Merge(const OperatorInformation &other);
 };
 
 //! The OperatorProfiler measures timings of individual operators
