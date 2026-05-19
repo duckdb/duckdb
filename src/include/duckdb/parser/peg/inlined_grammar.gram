@@ -1580,10 +1580,13 @@ SeqOwnedBy <- 'OWNED' 'BY' QualifiedName
 SeqMinOrMax <- MinValue / MaxValue
 MinValue <- 'MINVALUE'
 MaxValue <- 'MAXVALUE'
-ExplainStatement <- 'EXPLAIN' 'ANALYZE'? ExplainOptionList? ExplainableStatements
+ExplainStatement <- 'EXPLAIN' ExplainAnalyze? ExplainOptionList? ExplainableStatements
+ExplainAnalyze <- 'ANALYZE'
 ExplainOptionList <- Parens(List(ExplainOption))
 ExplainOption <- ExplainOptionName Expression?
 ExplainOptionName <- 'ANALYZE' / 'ANALYSE' / ColId / FuncNameKeyword / TypeNameKeyword
+
+ExplainSelectStatement <- SelectStatementInternal
 
 ExplainableStatements <-
     AlterStatement /
@@ -1601,7 +1604,7 @@ ExplainableStatements <-
     MergeIntoStatement /
     PragmaStatement /
     PrepareStatement /
-    SelectStatementInternal /
+    ExplainSelectStatement /
     TransactionStatement /
     UpdateStatement /
     VacuumStatement /

@@ -414,15 +414,6 @@ void PEGTransformerFactory::RegisterDrop() {
 	REGISTER_TRANSFORM(TransformDropTrigger);
 }
 
-void PEGTransformerFactory::RegisterExplain() {
-	// explain.gram
-	REGISTER_TRANSFORM(TransformExplainStatement);
-	REGISTER_TRANSFORM(TransformExplainableStatements);
-	REGISTER_TRANSFORM(TransformExplainOptionList);
-	REGISTER_TRANSFORM(TransformExplainOption);
-	Register("ExplainOptionName", &TransformIdentifierOrKeyword);
-}
-
 void PEGTransformerFactory::RegisterExpression() {
 	// expression.gram
 	REGISTER_TRANSFORM(TransformExpressionStatement);
@@ -839,6 +830,7 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("FuncNameKeyword", &TransformIdentifierOrKeyword);
 	Register("TypeNameKeyword", &TransformIdentifierOrKeyword);
 	Register("SettingName", &TransformIdentifierOrKeyword);
+	Register("ExplainOptionName", &TransformIdentifierOrKeyword);
 	Register("ReservedSchemaQualification", &TransformSchemaQualification);
 }
 
@@ -997,7 +989,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterDelete();
 	RegisterDescribe();
 	RegisterDrop();
-	RegisterExplain();
 	RegisterExpression();
 	RegisterInsert();
 	RegisterConnect();

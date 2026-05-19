@@ -60,6 +60,7 @@ SQLStatement:
     - ExecuteStatement
     - ExplainStatement
     - ExplainableStatements
+    - ExplainSelectStatement
     - ExportStatement
     - ExpressionStatement
     - ImportStatement
@@ -843,6 +844,7 @@ String:
     - OptFreeze
     - OptVerbose
     - ExtensionAlias
+    - ExplainOptionAnalyze
 
 Bool:
   type: "bool"
@@ -871,6 +873,7 @@ Bool:
     - OrReplace
     - DeallocatePrepare
     - CreateRecursive
+    - ExplainAnalyze
 
 
 Int64:

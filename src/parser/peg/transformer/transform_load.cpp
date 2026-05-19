@@ -47,7 +47,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInstallStatement(
 }
 
 ExtensionRepositoryInfo PEGTransformerFactory::TransformFromSourceIdentifier(PEGTransformer &transformer,
-                                                                              const string &identifier) {
+                                                                             const string &identifier) {
 	ExtensionRepositoryInfo result;
 	result.name = identifier;
 	result.repository_is_alias = true;

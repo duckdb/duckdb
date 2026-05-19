@@ -204,6 +204,62 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExecuteStatemen
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExplainStatementInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool explain_analyze {};
+	transformer.TransformOptional(list_pr, 1, explain_analyze);
+	vector<GenericCopyOption> explain_option_list {};
+	transformer.TransformOptional(list_pr, 2, explain_option_list);
+	auto explainable_statements = transformer.Transform<unique_ptr<SQLStatement>>(list_pr, 3);
+	auto result = TransformExplainStatement(transformer, explain_analyze, explain_option_list, std::move(explainable_statements));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExplainAnalyzeInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
+	auto result = TransformExplainAnalyze(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExplainOptionListInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<GenericCopyOption> explain_option;
+	auto explain_option_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	for (auto &explain_option_item : explain_option_items) {
+		explain_option.push_back(transformer.Transform<GenericCopyOption>(explain_option_item));
+	}
+	auto result = TransformExplainOptionList(transformer, explain_option);
+	return make_uniq<TypedTransformResult<vector<GenericCopyOption>>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExplainOptionInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto explain_option_name = transformer.Transform<string>(list_pr, 0);
+	unique_ptr<ParsedExpression> expression {};
+	transformer.TransformOptional(list_pr, 1, expression);
+	auto result = TransformExplainOption(transformer, explain_option_name, std::move(expression));
+	return make_uniq<TypedTransformResult<GenericCopyOption>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExplainSelectStatementInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto select_statement_internal = transformer.Transform<unique_ptr<SelectStatement>>(list_pr, 0);
+	auto result = TransformExplainSelectStatement(transformer, std::move(select_statement_internal));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExplainableStatementsInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExportStatementInternal(
     PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -699,6 +755,12 @@ void PEGTransformerFactory::RegisterGenerated() {
 		{"DeallocatePrepare", &PEGTransformerFactory::TransformDeallocatePrepareInternal},
 		{"DetachStatement", &PEGTransformerFactory::TransformDetachStatementInternal},
 		{"ExecuteStatement", &PEGTransformerFactory::TransformExecuteStatementInternal},
+		{"ExplainStatement", &PEGTransformerFactory::TransformExplainStatementInternal},
+		{"ExplainAnalyze", &PEGTransformerFactory::TransformExplainAnalyzeInternal},
+		{"ExplainOptionList", &PEGTransformerFactory::TransformExplainOptionListInternal},
+		{"ExplainOption", &PEGTransformerFactory::TransformExplainOptionInternal},
+		{"ExplainSelectStatement", &PEGTransformerFactory::TransformExplainSelectStatementInternal},
+		{"ExplainableStatements", &PEGTransformerFactory::TransformExplainableStatementsInternal},
 		{"ExportStatement", &PEGTransformerFactory::TransformExportStatementInternal},
 		{"ExportSource", &PEGTransformerFactory::TransformExportSourceInternal},
 		{"ImportStatement", &PEGTransformerFactory::TransformImportStatementInternal},

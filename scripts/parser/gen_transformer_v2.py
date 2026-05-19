@@ -1070,7 +1070,7 @@ def main():
         'detach.gram',
         # 'drop.gram',
         'execute.gram',
-        # 'explain.gram',
+        'explain.gram',
         'export.gram',
         # 'insert.gram',
         'load.gram',

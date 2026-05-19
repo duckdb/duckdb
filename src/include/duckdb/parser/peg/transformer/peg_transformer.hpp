@@ -271,7 +271,6 @@ public:
 	void RegisterDelete();
 	void RegisterDescribe();
 	void RegisterDrop();
-	void RegisterExplain();
 	void RegisterExpression();
 	void RegisterInsert();
 	void RegisterConnect();
@@ -1180,6 +1179,17 @@ private:
 	static unique_ptr<SQLStatement> TransformDetachStatement(PEGTransformer &transformer, const bool &if_exists, const string &catalog_name);
 	static unique_ptr<TransformResultValue> TransformExecuteStatementInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformExecuteStatement(PEGTransformer &transformer, const string &identifier, vector<unique_ptr<ParsedExpression>> table_function_arguments);
+	static unique_ptr<TransformResultValue> TransformExplainStatementInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformExplainStatement(PEGTransformer &transformer, const bool &explain_analyze, const vector<GenericCopyOption> &explain_option_list, unique_ptr<SQLStatement> explainable_statements);
+	static unique_ptr<TransformResultValue> TransformExplainAnalyzeInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static bool TransformExplainAnalyze(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformExplainOptionListInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static vector<GenericCopyOption> TransformExplainOptionList(PEGTransformer &transformer, const vector<GenericCopyOption> &explain_option);
+	static unique_ptr<TransformResultValue> TransformExplainOptionInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static GenericCopyOption TransformExplainOption(PEGTransformer &transformer, const string &explain_option_name, unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformExplainSelectStatementInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformExplainSelectStatement(PEGTransformer &transformer, unique_ptr<SelectStatement> select_statement_internal);
+	static unique_ptr<TransformResultValue> TransformExplainableStatementsInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformExportStatementInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformExportStatement(PEGTransformer &transformer, const string &export_source, const string &string_literal, const vector<GenericCopyOption> &generic_copy_option_list);
 	static unique_ptr<TransformResultValue> TransformExportSourceInternal(PEGTransformer &transformer, ParseResult &parse_result);
