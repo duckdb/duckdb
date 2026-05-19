@@ -900,7 +900,10 @@ def _extract_func_signature(text, func_name):
 
 
 def _norm_ws(s):
-    return re.sub(r'\s+', ' ', s).strip()
+    s = re.sub(r'\s+', ' ', s).strip()
+    s = re.sub(r'\(\s+', '(', s)
+    s = re.sub(r'\s+\)', ')', s)
+    return s
 
 
 def _check_implementations(gram_stem, body_stubs):
@@ -1044,7 +1047,7 @@ def main():
         # 'insert.gram',
         # 'load.gram',
         # 'pragma.gram',
-        # 'prepare.gram',
+        'prepare.gram',
         'transaction.gram',
         'update.gram',
         'use.gram',

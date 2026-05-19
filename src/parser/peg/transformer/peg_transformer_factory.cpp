@@ -688,11 +688,6 @@ void PEGTransformerFactory::RegisterPragma() {
 	REGISTER_TRANSFORM(TransformPragmaParameters);
 }
 
-void PEGTransformerFactory::RegisterPrepare() {
-	// prepare.gram
-	REGISTER_TRANSFORM(TransformPrepareStatement);
-}
-
 void PEGTransformerFactory::RegisterSelect() {
 	// select.gram
 	REGISTER_TRANSFORM(TransformSelectStatement);
@@ -1027,7 +1022,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterMergeInto();
 	RegisterPivot();
 	RegisterPragma();
-	RegisterPrepare();
 	RegisterSelect();
 	RegisterSet();
 	RegisterKeywordsAndIdentifiers();

@@ -5,14 +5,10 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformUpdateStatement(PEGTransformer &transformer,
-                                                CommonTableExpressionMap with_clause,
-                                                unique_ptr<TableRef> update_target,
-                                                unique_ptr<UpdateSetInfo> update_set_clause,
-                                                unique_ptr<TableRef> from_clause,
-                                                unique_ptr<ParsedExpression> where_clause,
-                                                vector<unique_ptr<ParsedExpression>> returning_clause) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformUpdateStatement(
+    PEGTransformer &transformer, CommonTableExpressionMap with_clause, unique_ptr<TableRef> update_target,
+    unique_ptr<UpdateSetInfo> update_set_clause, unique_ptr<TableRef> from_clause,
+    unique_ptr<ParsedExpression> where_clause, vector<unique_ptr<ParsedExpression>> returning_clause) {
 	auto result = make_uniq<UpdateStatement>();
 	auto &node = *result->node;
 	node.cte_map = std::move(with_clause);
@@ -82,14 +78,12 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetElementList(
 }
 
 pair<string, unique_ptr<ParsedExpression>>
-PEGTransformerFactory::TransformUpdateSetElement(PEGTransformer &transformer,
-                                                 const string &update_set_column_target,
+PEGTransformerFactory::TransformUpdateSetElement(PEGTransformer &transformer, const string &update_set_column_target,
                                                  unique_ptr<ParsedExpression> expression) {
 	return {update_set_column_target, std::move(expression)};
 }
 
-string PEGTransformerFactory::TransformUpdateSetColumnTarget(PEGTransformer &transformer,
-                                                             const string &column_name,
+string PEGTransformerFactory::TransformUpdateSetColumnTarget(PEGTransformer &transformer, const string &column_name,
                                                              const vector<string> &dot_identifier) {
 	if (!dot_identifier.empty()) {
 		throw ParserException("Qualified column names in UPDATE .. SET not supported");

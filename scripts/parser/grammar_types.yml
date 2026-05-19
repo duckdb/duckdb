@@ -885,6 +885,12 @@ LogicalType:
     - Type
     - EnumStringLiteralList
 
+LogicalTypeList:
+  type: "vector<LogicalType>"
+  by_value: false
+  rules:
+    - TypeList
+
 TransactionModifierType:
   type: "TransactionModifierType"
   by_value: false
@@ -1067,7 +1073,6 @@ excluded_rules:
   - ReservedSchemaQualification
   - UsingSample
   - TableSample
-  - TypeList
   - NamedParameterAssignment
   - WithOrdinality
   - ByName

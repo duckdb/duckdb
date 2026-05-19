@@ -1036,7 +1036,8 @@ ByTarget <- 'BY' 'TARGET'
 
 
 
-PragmaStatement <- 'PRAGMA' (PragmaAssign / PragmaFunction)
+PragmaStatement <- 'PRAGMA' PragmaAssignOrFunction
+PragmaAssignOrFunction <- PragmaAssign / PragmaFunction
 
 PragmaAssign <- SettingName '=' VariableList
 PragmaFunction <- PragmaName PragmaParameters?
@@ -1151,7 +1152,7 @@ LoadStatement <- 'LOAD' ColIdOrString ExtensionAlias?
 ExtensionAlias <- 'AS' Identifier
 InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
 UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
-FromSource <- 'FROM' (Identifier / StringLiteral)
+FromSource <- 'FROM' IdentifierOrStringLiteral
 VersionNumber <- 'VERSION' IdentifierOrStringLiteral
 DropStatement <- 'DROP' DropEntries DropBehavior?
 
