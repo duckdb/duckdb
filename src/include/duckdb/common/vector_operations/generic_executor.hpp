@@ -386,23 +386,16 @@ private:
 		}
 	}
 
-	static idx_t GetExecuteCount(std::initializer_list<const Vector *> inputs) {
-		idx_t result = 0;
+	static idx_t CheckExecuteCount(std::initializer_list<const Vector *> inputs) {
+		idx_t count = (*inputs.begin())->size();
 		for (auto *v : inputs) {
-			if (v->GetVectorType() != VectorType::CONSTANT_VECTOR) {
-				if (result != 0 && result != v->size()) {
-					throw InternalException("Mismatch in input vector sizes for GenericExecutor - "
-					                        "expected %d rows but got %d",
-					                        result, v->size());
-				}
-				result = v->size();
+			if (v->size() != count) {
+				throw InternalException("Mismatch in input vector sizes for GenericExecutor - "
+				                        "expected %d rows but got %d",
+				                        count, v->size());
 			}
 		}
-		if (result == 0) {
-			// all constant - use the first one's size
-			result = (*inputs.begin())->size();
-		}
-		return result;
+		return count;
 	}
 
 public:
@@ -420,7 +413,7 @@ public:
 	}
 	template <class A_TYPE, class B_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
 	static void ExecuteBinary(const Vector &a, const Vector &b, Vector &result, FUNC fun) {
-		ExecuteBinaryInternal<A_TYPE, B_TYPE, RESULT_TYPE, FUNC>(a, b, result, GetExecuteCount({&a, &b}), fun);
+		ExecuteBinaryInternal<A_TYPE, B_TYPE, RESULT_TYPE, FUNC>(a, b, result, CheckExecuteCount({&a, &b}), fun);
 	}
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE,
 	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
@@ -432,7 +425,7 @@ public:
 	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
 	static void ExecuteTernary(const Vector &a, const Vector &b, const Vector &c, Vector &result, FUNC fun) {
 		ExecuteTernaryInternal<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, FUNC>(a, b, c, result,
-		                                                                  GetExecuteCount({&a, &b, &c}), fun);
+		                                                                  CheckExecuteCount({&a, &b, &c}), fun);
 	}
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class D_TYPE, class RESULT_TYPE,
 	          class FUNC = std::function<RESULT_TYPE(A_TYPE)>>
@@ -445,7 +438,7 @@ public:
 	static void ExecuteQuaternary(const Vector &a, const Vector &b, const Vector &c, const Vector &d, Vector &result,
 	                              FUNC fun) {
 		ExecuteQuaternaryInternal<A_TYPE, B_TYPE, C_TYPE, D_TYPE, RESULT_TYPE, FUNC>(
-		    a, b, c, d, result, GetExecuteCount({&a, &b, &c, &d}), fun);
+		    a, b, c, d, result, CheckExecuteCount({&a, &b, &c, &d}), fun);
 	}
 };
 
