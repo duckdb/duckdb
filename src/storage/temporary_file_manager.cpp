@@ -142,6 +142,10 @@ idx_t BlockIndexManager::GetMaxIndex() const {
 	return max_index;
 }
 
+idx_t BlockIndexManager::GetUsedBlockCount() const {
+	return indexes_in_use.size();
+}
+
 bool BlockIndexManager::HasFreeBlocks() const {
 	return !free_indexes.empty();
 }
@@ -318,7 +322,7 @@ TemporaryFileInformation TemporaryFileHandle::GetTemporaryFile() {
 	TemporaryFileLock lock(file_lock);
 	TemporaryFileInformation info;
 	info.path = path;
-	info.size = GetPositionInFile(index_manager.GetMaxIndex());
+	info.size = GetPositionInFile(index_manager.GetUsedBlockCount());
 	return info;
 }
 
