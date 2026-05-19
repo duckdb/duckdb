@@ -113,19 +113,6 @@ StarExpression::DeserializeStarExpression(string &&relation_name, const case_ins
 	return std::move(result);
 }
 
-unique_ptr<ParsedExpression> StarExpression::Copy() const {
-	auto copy = make_uniq<StarExpression>(relation_name);
-	copy->exclude_list = exclude_list;
-	for (auto &entry : replace_list) {
-		copy->replace_list[entry.first] = entry.second->Copy();
-	}
-	copy->rename_list = rename_list;
-	copy->columns = columns;
-	copy->expr = expr ? expr->Copy() : nullptr;
-	copy->CopyProperties(*this);
-	return std::move(copy);
-}
-
 StarExpression::StarExpression(const case_insensitive_set_t &exclude_list_p, qualified_column_set_t qualified_set)
     : ParsedExpression(ExpressionType::STAR, ExpressionClass::STAR), exclude_list(std::move(qualified_set)) {
 	for (auto &entry : exclude_list_p) {

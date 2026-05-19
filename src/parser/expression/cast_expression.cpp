@@ -17,10 +17,4 @@ string CastExpression::ToString() const {
 	return ToString<CastExpression, ParsedExpression>(*this);
 }
 
-unique_ptr<ParsedExpression> CastExpression::Copy() const {
-	auto copy = make_uniq<CastExpression>(cast_type, child->Copy(), try_cast);
-	copy->CopyProperties(*this);
-	return std::move(copy);
-}
-
 } // namespace duckdb

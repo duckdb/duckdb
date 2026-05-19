@@ -16,10 +16,4 @@ string ConstantExpression::ToString() const {
 	return value.ToSQLString();
 }
 
-unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
-	auto copy = make_uniq<ConstantExpression>(value);
-	copy->CopyProperties(*this);
-	return std::move(copy);
-}
-
 } // namespace duckdb

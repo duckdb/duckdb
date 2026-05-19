@@ -2,6 +2,9 @@
 
 namespace duckdb {
 
+ComparisonExpression::ComparisonExpression() : ParsedExpression(ExpressionType::INVALID, ExpressionClass::COMPARISON) {
+}
+
 ComparisonExpression::ComparisonExpression(ExpressionType type) : ParsedExpression(type, ExpressionClass::COMPARISON) {
 }
 
@@ -12,12 +15,6 @@ ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<Parse
 
 string ComparisonExpression::ToString() const {
 	return ToString<ParsedExpression>(type, *left, *right);
-}
-
-unique_ptr<ParsedExpression> ComparisonExpression::Copy() const {
-	auto copy = make_uniq<ComparisonExpression>(type, left->Copy(), right->Copy());
-	copy->CopyProperties(*this);
-	return std::move(copy);
 }
 
 } // namespace duckdb

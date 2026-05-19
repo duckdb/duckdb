@@ -4,6 +4,10 @@
 
 namespace duckdb {
 
+ConjunctionExpression::ConjunctionExpression()
+    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::CONJUNCTION) {
+}
+
 ConjunctionExpression::ConjunctionExpression(ExpressionType type)
     : ParsedExpression(type, ExpressionClass::CONJUNCTION) {
 }
@@ -36,18 +40,6 @@ void ConjunctionExpression::AddExpression(unique_ptr<ParsedExpression> expr) {
 
 string ConjunctionExpression::ToString() const {
 	return ToString<ConjunctionExpression, ParsedExpression>(*this);
-}
-
-unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {
-	vector<unique_ptr<ParsedExpression>> copy_children;
-	copy_children.reserve(children.size());
-	for (auto &expr : children) {
-		copy_children.push_back(expr->Copy());
-	}
-
-	auto copy = make_uniq<ConjunctionExpression>(type, std::move(copy_children));
-	copy->CopyProperties(*this);
-	return std::move(copy);
 }
 
 } // namespace duckdb

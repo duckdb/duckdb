@@ -44,7 +44,8 @@
 		"base": "ParsedExpression",
 		"enum": "BETWEEN",
 		"functions": [
-			"Equals"
+			"Equals",
+			"Copy"
 		],
 		"members": [
 			{
@@ -69,7 +70,8 @@
 		"base": "ParsedExpression",
 		"enum": "CASE",
 		"functions": [
-			"Equals"
+			"Equals",
+			"Copy"
 		],
 		"members": [
 			{
@@ -90,7 +92,8 @@
 		"enum": "CAST",
 		"functions": [
 			"Equals",
-			"Hash"
+			"Hash",
+			"Copy"
 		],
 		"members": [
 			{
@@ -116,7 +119,8 @@
 		"enum": "COLLATE",
 		"functions": [
 			"Equals",
-			"Hash"
+			"Hash",
+			"Copy"
 		],
 		"members": [
 			{
@@ -137,7 +141,8 @@
 		"enum": "COLUMN_REF",
 		"functions": [
 			"Equals",
-			"Hash"
+			"Hash",
+			"Copy"
 		],
 		"members": [
 			{
@@ -154,7 +159,8 @@
 		"enum": "LAMBDA_REF",
 		"functions": [
 			"Equals",
-			"Hash"
+			"Hash",
+			"Copy"
 		],
 		"members": [
 			{
@@ -179,7 +185,8 @@
 		"base": "ParsedExpression",
 		"enum": "COMPARISON",
 		"functions": [
-			"Equals"
+			"Equals",
+			"Copy"
 		],
 		"members": [
 			{
@@ -202,7 +209,8 @@
 		"base": "ParsedExpression",
 		"enum": "CONJUNCTION",
 		"functions": [
-			"Equals"
+			"Equals",
+			"Copy"
 		],
 		"members": [
 			{
@@ -221,7 +229,8 @@
 		"enum": "CONSTANT",
 		"functions": [
 			"Equals",
-			"Hash"
+			"Hash",
+			"Copy"
 		],
 		"members": [
 			{
@@ -236,7 +245,8 @@
 		"base": "ParsedExpression",
 		"enum": "DEFAULT",
 		"functions": [
-			"Equals"
+			"Equals",
+			"Copy"
 		],
 		"members": []
 	},
@@ -246,7 +256,8 @@
 		"enum": "FUNCTION",
 		"functions": [
 			"Equals",
-			"Hash"
+			"Hash",
+			"Copy"
 		],
 		"members": [
 			{
@@ -303,7 +314,8 @@
 		"base": "ParsedExpression",
 		"enum": "LAMBDA",
 		"functions": [
-			"Equals"
+			"Equals",
+			"Copy"
 		],
 		"members": [
 			{
@@ -331,7 +343,8 @@
 		"base": "ParsedExpression",
 		"enum": "OPERATOR",
 		"functions": [
-			"Equals"
+			"Equals",
+			"Copy"
 		],
 		"members": [
 			{
@@ -350,7 +363,8 @@
 		"enum": "PARAMETER",
 		"functions": [
 			"Equals",
-			"Hash"
+			"Hash",
+			"Copy"
 		],
 		"members": [
 			{
@@ -367,7 +381,8 @@
 		"enum": "POSITIONAL_REFERENCE",
 		"functions": [
 			"Equals",
-			"Hash"
+			"Hash",
+			"Copy"
 		],
 		"members": [
 			{
@@ -383,7 +398,8 @@
 		"enum": "STAR",
 		"functions": [
 			"Equals",
-			"Hash"
+			"Hash",
+			"Copy"
 		],
 		"members": [
 			{
@@ -443,7 +459,8 @@
 		"enum": "SUBQUERY",
 		"functions": [
 			"Equals",
-			"Hash"
+			"Hash",
+			"Copy"
 		],
 		"members": [
 			{
@@ -474,7 +491,8 @@
 		"enum": "WINDOW",
 		"functions": [
 			"Equals",
-			"Hash"
+			"Hash",
+			"Copy"
 		],
 		"members": [
 			{
@@ -588,7 +606,8 @@
 		"enum": "TYPE",
 		"functions": [
 			"Equals",
-			"Hash"
+			"Hash",
+			"Copy"
 		],
 		"members": [
 			{

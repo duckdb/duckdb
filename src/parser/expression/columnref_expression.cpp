@@ -78,10 +78,4 @@ string ColumnRefExpression::ToString() const {
 	return result;
 }
 
-unique_ptr<ParsedExpression> ColumnRefExpression::Copy() const {
-	auto copy = make_uniq<ColumnRefExpression>(column_names);
-	copy->CopyProperties(*this);
-	return std::move(copy);
-}
-
 } // namespace duckdb

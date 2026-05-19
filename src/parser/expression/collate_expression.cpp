@@ -16,10 +16,4 @@ string CollateExpression::ToString() const {
 	return StringUtil::Format("%s COLLATE %s", child->ToString(), SQLIdentifier(collation));
 }
 
-unique_ptr<ParsedExpression> CollateExpression::Copy() const {
-	auto copy = make_uniq<CollateExpression>(collation, child->Copy());
-	copy->CopyProperties(*this);
-	return std::move(copy);
-}
-
 } // namespace duckdb

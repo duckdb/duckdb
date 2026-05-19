@@ -56,6 +56,15 @@ bool BetweenExpression::Equals(const ParsedExpression &other) const {
 	return true;
 }
 
+unique_ptr<ParsedExpression> BetweenExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<BetweenExpression>(new BetweenExpression());
+	copy->input = input ? input->Copy() : nullptr;
+	copy->lower = lower ? lower->Copy() : nullptr;
+	copy->upper = upper ? upper->Copy() : nullptr;
+	copy->CopyProperties(*this);
+	return std::move(copy);
+}
+
 bool CaseExpression::Equals(const ParsedExpression &other) const {
 	if (!ParsedExpression::Equals(other)) {
 		return false;
@@ -76,6 +85,19 @@ bool CaseExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	return true;
+}
+
+unique_ptr<ParsedExpression> CaseExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<CaseExpression>(new CaseExpression());
+	for (auto &check : case_checks) {
+		CaseCheck new_check;
+		new_check.when_expr = check.when_expr->Copy();
+		new_check.then_expr = check.then_expr->Copy();
+		copy->case_checks.push_back(std::move(new_check));
+	}
+	copy->else_expr = else_expr ? else_expr->Copy() : nullptr;
+	copy->CopyProperties(*this);
+	return std::move(copy);
 }
 
 bool CastExpression::Equals(const ParsedExpression &other) const {
@@ -102,6 +124,15 @@ hash_t CastExpression::Hash() const {
 	return hash;
 }
 
+unique_ptr<ParsedExpression> CastExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<CastExpression>(new CastExpression());
+	copy->child = child ? child->Copy() : nullptr;
+	copy->cast_type = cast_type;
+	copy->try_cast = try_cast;
+	copy->CopyProperties(*this);
+	return std::move(copy);
+}
+
 bool CollateExpression::Equals(const ParsedExpression &other) const {
 	if (!ParsedExpression::Equals(other)) {
 		return false;
@@ -120,6 +151,14 @@ hash_t CollateExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
 	hash = CombineHash(hash, duckdb::Hash<const char *>(collation.c_str()));
 	return hash;
+}
+
+unique_ptr<ParsedExpression> CollateExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<CollateExpression>(new CollateExpression());
+	copy->child = child ? child->Copy() : nullptr;
+	copy->collation = collation;
+	copy->CopyProperties(*this);
+	return std::move(copy);
 }
 
 bool ColumnRefExpression::Equals(const ParsedExpression &other) const {
@@ -146,6 +185,13 @@ hash_t ColumnRefExpression::Hash() const {
 	return hash;
 }
 
+unique_ptr<ParsedExpression> ColumnRefExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<ColumnRefExpression>(new ColumnRefExpression());
+	copy->column_names = column_names;
+	copy->CopyProperties(*this);
+	return std::move(copy);
+}
+
 bool LambdaRefExpression::Equals(const ParsedExpression &other) const {
 	if (!ParsedExpression::Equals(other)) {
 		return false;
@@ -167,6 +213,10 @@ hash_t LambdaRefExpression::Hash() const {
 	return hash;
 }
 
+unique_ptr<ParsedExpression> LambdaRefExpression::Copy() const {
+	throw InternalException("lambda reference expressions are transient, Copy should never be called");
+}
+
 bool ComparisonExpression::Equals(const ParsedExpression &other) const {
 	if (!ParsedExpression::Equals(other)) {
 		return false;
@@ -181,6 +231,14 @@ bool ComparisonExpression::Equals(const ParsedExpression &other) const {
 	return true;
 }
 
+unique_ptr<ParsedExpression> ComparisonExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<ComparisonExpression>(new ComparisonExpression());
+	copy->left = left ? left->Copy() : nullptr;
+	copy->right = right ? right->Copy() : nullptr;
+	copy->CopyProperties(*this);
+	return std::move(copy);
+}
+
 bool ConjunctionExpression::Equals(const ParsedExpression &other) const {
 	if (!ParsedExpression::Equals(other)) {
 		return false;
@@ -190,6 +248,15 @@ bool ConjunctionExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	return true;
+}
+
+unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<ConjunctionExpression>(new ConjunctionExpression());
+	for (auto &child : children) {
+		copy->children.push_back(child->Copy());
+	}
+	copy->CopyProperties(*this);
+	return std::move(copy);
 }
 
 bool ConstantExpression::Equals(const ParsedExpression &other) const {
@@ -209,11 +276,24 @@ hash_t ConstantExpression::Hash() const {
 	return hash;
 }
 
+unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<ConstantExpression>(new ConstantExpression());
+	copy->value = value;
+	copy->CopyProperties(*this);
+	return std::move(copy);
+}
+
 bool DefaultExpression::Equals(const ParsedExpression &other) const {
 	if (!ParsedExpression::Equals(other)) {
 		return false;
 	}
 	return true;
+}
+
+unique_ptr<ParsedExpression> DefaultExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<DefaultExpression>(new DefaultExpression());
+	copy->CopyProperties(*this);
+	return std::move(copy);
 }
 
 bool FunctionExpression::Equals(const ParsedExpression &other) const {
@@ -258,6 +338,23 @@ hash_t FunctionExpression::Hash() const {
 	return hash;
 }
 
+unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
+	copy->function_name = function_name;
+	copy->schema = schema;
+	for (auto &child : children) {
+		copy->children.push_back(child->Copy());
+	}
+	copy->filter = filter ? filter->Copy() : nullptr;
+	copy->order_bys = order_bys ? unique_ptr_cast<ResultModifier, OrderModifier>(order_bys->Copy()) : nullptr;
+	copy->distinct = distinct;
+	copy->is_operator = is_operator;
+	copy->export_state = export_state;
+	copy->catalog = catalog;
+	copy->CopyProperties(*this);
+	return std::move(copy);
+}
+
 bool LambdaExpression::Equals(const ParsedExpression &other) const {
 	if (!ParsedExpression::Equals(other)) {
 		return false;
@@ -272,6 +369,15 @@ bool LambdaExpression::Equals(const ParsedExpression &other) const {
 	return true;
 }
 
+unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<LambdaExpression>(new LambdaExpression());
+	copy->lhs = lhs ? lhs->Copy() : nullptr;
+	copy->expr = expr ? expr->Copy() : nullptr;
+	copy->syntax_type = syntax_type;
+	copy->CopyProperties(*this);
+	return std::move(copy);
+}
+
 bool OperatorExpression::Equals(const ParsedExpression &other) const {
 	if (!ParsedExpression::Equals(other)) {
 		return false;
@@ -281,6 +387,15 @@ bool OperatorExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	return true;
+}
+
+unique_ptr<ParsedExpression> OperatorExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<OperatorExpression>(new OperatorExpression());
+	for (auto &child : children) {
+		copy->children.push_back(child->Copy());
+	}
+	copy->CopyProperties(*this);
+	return std::move(copy);
 }
 
 bool ParameterExpression::Equals(const ParsedExpression &other) const {
@@ -300,6 +415,13 @@ hash_t ParameterExpression::Hash() const {
 	return hash;
 }
 
+unique_ptr<ParsedExpression> ParameterExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<ParameterExpression>(new ParameterExpression());
+	copy->identifier = identifier;
+	copy->CopyProperties(*this);
+	return std::move(copy);
+}
+
 bool PositionalReferenceExpression::Equals(const ParsedExpression &other) const {
 	if (!ParsedExpression::Equals(other)) {
 		return false;
@@ -315,6 +437,13 @@ hash_t PositionalReferenceExpression::Hash() const {
 	hash_t hash = ParsedExpression::Hash();
 	hash = CombineHash(hash, duckdb::Hash<uint64_t>(index));
 	return hash;
+}
+
+unique_ptr<ParsedExpression> PositionalReferenceExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<PositionalReferenceExpression>(new PositionalReferenceExpression());
+	copy->index = index;
+	copy->CopyProperties(*this);
+	return std::move(copy);
 }
 
 bool StarExpression::Equals(const ParsedExpression &other) const {
@@ -359,6 +488,20 @@ hash_t StarExpression::Hash() const {
 	return hash;
 }
 
+unique_ptr<ParsedExpression> StarExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<StarExpression>(new StarExpression());
+	copy->relation_name = relation_name;
+	copy->exclude_list = exclude_list;
+	for (auto &entry : replace_list) {
+		copy->replace_list[entry.first] = entry.second->Copy();
+	}
+	copy->columns = columns;
+	copy->expr = expr ? expr->Copy() : nullptr;
+	copy->rename_list = rename_list;
+	copy->CopyProperties(*this);
+	return std::move(copy);
+}
+
 bool SubqueryExpression::Equals(const ParsedExpression &other) const {
 	if (!ParsedExpression::Equals(other)) {
 		return false;
@@ -384,6 +527,16 @@ hash_t SubqueryExpression::Hash() const {
 	hash = CombineHash(hash, duckdb::Hash<uint32_t>(static_cast<uint32_t>(subquery_type)));
 	hash = CombineHash(hash, duckdb::Hash<uint32_t>(static_cast<uint32_t>(comparison_type)));
 	return hash;
+}
+
+unique_ptr<ParsedExpression> SubqueryExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<SubqueryExpression>(new SubqueryExpression());
+	copy->subquery_type = subquery_type;
+	copy->subquery = subquery ? unique_ptr_cast<SQLStatement, SelectStatement>(subquery->Copy()) : nullptr;
+	copy->child = child ? child->Copy() : nullptr;
+	copy->comparison_type = comparison_type;
+	copy->CopyProperties(*this);
+	return std::move(copy);
 }
 
 bool WindowExpression::Equals(const ParsedExpression &other) const {
@@ -486,6 +639,36 @@ hash_t WindowExpression::Hash() const {
 	return hash;
 }
 
+unique_ptr<ParsedExpression> WindowExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<WindowExpression>(new WindowExpression());
+	copy->function_name = function_name;
+	copy->schema = schema;
+	copy->catalog = catalog;
+	for (auto &child : children) {
+		copy->children.push_back(child->Copy());
+	}
+	for (auto &child : partitions) {
+		copy->partitions.push_back(child->Copy());
+	}
+	for (auto &order : orders) {
+		copy->orders.emplace_back(order.type, order.null_order, order.expression->Copy());
+	}
+	copy->start = start;
+	copy->end = end;
+	copy->start_expr = start_expr ? start_expr->Copy() : nullptr;
+	copy->end_expr = end_expr ? end_expr->Copy() : nullptr;
+	copy->ignore_nulls = ignore_nulls;
+	copy->filter_expr = filter_expr ? filter_expr->Copy() : nullptr;
+	copy->exclude_clause = exclude_clause;
+	copy->distinct = distinct;
+	for (auto &order : arg_orders) {
+		copy->arg_orders.emplace_back(order.type, order.null_order, order.expression->Copy());
+	}
+	copy->has_ignore_nulls = has_ignore_nulls;
+	copy->CopyProperties(*this);
+	return std::move(copy);
+}
+
 bool TypeExpression::Equals(const ParsedExpression &other) const {
 	if (!ParsedExpression::Equals(other)) {
 		return false;
@@ -512,6 +695,18 @@ hash_t TypeExpression::Hash() const {
 	hash = CombineHash(hash, duckdb::Hash<const char *>(schema.c_str()));
 	hash = CombineHash(hash, duckdb::Hash<const char *>(type_name.c_str()));
 	return hash;
+}
+
+unique_ptr<ParsedExpression> TypeExpression::Copy() const {
+	auto copy = duckdb::unique_ptr<TypeExpression>(new TypeExpression());
+	copy->catalog = catalog;
+	copy->schema = schema;
+	copy->type_name = type_name;
+	for (auto &child : children) {
+		copy->children.push_back(child->Copy());
+	}
+	copy->CopyProperties(*this);
+	return std::move(copy);
 }
 
 } // namespace duckdb

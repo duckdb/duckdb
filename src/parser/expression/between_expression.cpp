@@ -17,10 +17,4 @@ string BetweenExpression::ToString() const {
 	return ToString<ParsedExpression>(Input(), LowerBound(), UpperBound());
 }
 
-unique_ptr<ParsedExpression> BetweenExpression::Copy() const {
-	auto copy = make_uniq<BetweenExpression>(input->Copy(), lower->Copy(), upper->Copy());
-	copy->CopyProperties(*this);
-	return std::move(copy);
-}
-
 } // namespace duckdb

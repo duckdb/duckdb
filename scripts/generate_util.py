@@ -245,6 +245,92 @@ def generate_subclass_equals(entry):
 
 
 # ---------------------------------------------------------------------------
+# Copy generation
+# ---------------------------------------------------------------------------
+
+
+def member_should_be_copied(member):
+    if member.get('status') in ('read_only', 'deleted'):
+        return False
+    # Synthetic serialization views that alias an already-copied field
+    if member.get('serialize_property') and member.get('equals_skip'):
+        return False
+    return True
+
+
+def generate_member_copy(member, indent='\t'):
+    field = get_member_field_name(member)
+    type_str = member['type']
+    ii = indent + '\t'
+
+    if is_parsed_expression_ptr(type_str):
+        return [f'{indent}copy->{field} = {field} ? {field}->Copy() : nullptr;']
+
+    if is_parsed_expression_list(type_str):
+        return [
+            f'{indent}for (auto &child : {field}) {{',
+            f'{ii}copy->{field}.push_back(child->Copy());',
+            f'{indent}}}',
+        ]
+
+    if is_order_modifier_ptr(type_str):
+        base = member.get('base', 'ResultModifier')
+        return [f'{indent}copy->{field} = {field} ? unique_ptr_cast<{base}, OrderModifier>({field}->Copy()) : nullptr;']
+
+    if type_str == 'SelectStatement*':
+        return [f'{indent}copy->{field} = {field} ? unique_ptr_cast<SQLStatement, SelectStatement>({field}->Copy()) : nullptr;']
+
+    if type_str == 'vector<CaseCheck>':
+        return [
+            f'{indent}for (auto &check : {field}) {{',
+            f'{ii}CaseCheck new_check;',
+            f'{ii}new_check.when_expr = check.when_expr->Copy();',
+            f'{ii}new_check.then_expr = check.then_expr->Copy();',
+            f'{ii}copy->{field}.push_back(std::move(new_check));',
+            f'{indent}}}',
+        ]
+
+    if type_str == 'vector<OrderByNode>':
+        return [
+            f'{indent}for (auto &order : {field}) {{',
+            f'{ii}copy->{field}.emplace_back(order.type, order.null_order, order.expression->Copy());',
+            f'{indent}}}',
+        ]
+
+    if is_expression_map(type_str):
+        return [
+            f'{indent}for (auto &entry : {field}) {{',
+            f'{ii}copy->{field}[entry.first] = entry.second->Copy();',
+            f'{indent}}}',
+        ]
+
+    return [f'{indent}copy->{field} = {field};']
+
+
+def generate_subclass_copy(entry):
+    class_name = entry['class']
+
+    if class_name == 'LambdaRefExpression':
+        return [
+            'unique_ptr<ParsedExpression> LambdaRefExpression::Copy() const {',
+            '\tthrow InternalException("lambda reference expressions are transient, Copy should never be called");',
+            '}',
+        ]
+
+    lines = [f'unique_ptr<ParsedExpression> {class_name}::Copy() const {{']
+    lines.append(f'\tauto copy = duckdb::unique_ptr<{class_name}>(new {class_name}());')
+
+    for member in entry.get('members', []):
+        if member_should_be_copied(member):
+            lines.extend(generate_member_copy(member))
+
+    lines.append('\tcopy->CopyProperties(*this);')
+    lines.append('\treturn std::move(copy);')
+    lines.append('}')
+    return lines
+
+
+# ---------------------------------------------------------------------------
 # Hash generation
 # ---------------------------------------------------------------------------
 
@@ -402,6 +488,10 @@ def main():
                 emit(output_lines, generate_base_hash(entry), first)
             else:
                 emit(output_lines, generate_subclass_hash(entry), first)
+
+        if 'Copy' in functions:
+            if not is_base:
+                emit(output_lines, generate_subclass_copy(entry), first)
 
     output_lines.append(FOOTER)
 

@@ -4,6 +4,9 @@
 
 namespace duckdb {
 
+WindowExpression::WindowExpression() : ParsedExpression(ExpressionType::INVALID, ExpressionClass::WINDOW) {
+}
+
 WindowExpression::WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children_p,
                                    unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr)
     : ParsedExpression(type, ExpressionClass::WINDOW), children(std::move(children_p)) {
@@ -125,40 +128,6 @@ bool WindowExpression::HasBoundedParts() {
 		}
 	}
 	return false;
-}
-
-unique_ptr<ParsedExpression> WindowExpression::Copy() const {
-	auto new_window = make_uniq<WindowExpression>(catalog, schema, function_name);
-	new_window->CopyProperties(*this);
-
-	for (auto &child : children) {
-		new_window->children.push_back(child->Copy());
-	}
-
-	for (auto &e : partitions) {
-		new_window->partitions.push_back(e->Copy());
-	}
-
-	for (auto &o : orders) {
-		new_window->orders.emplace_back(o.type, o.null_order, o.expression->Copy());
-	}
-
-	for (auto &o : arg_orders) {
-		new_window->arg_orders.emplace_back(o.type, o.null_order, o.expression->Copy());
-	}
-
-	new_window->filter_expr = filter_expr ? filter_expr->Copy() : nullptr;
-
-	new_window->start = start;
-	new_window->end = end;
-	new_window->exclude_clause = exclude_clause;
-	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
-	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
-	new_window->has_ignore_nulls = has_ignore_nulls;
-	new_window->ignore_nulls = ignore_nulls;
-	new_window->distinct = distinct;
-
-	return std::move(new_window);
 }
 
 } // namespace duckdb

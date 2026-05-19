@@ -13,11 +13,4 @@ string ParameterExpression::ToString() const {
 	return "$" + identifier;
 }
 
-unique_ptr<ParsedExpression> ParameterExpression::Copy() const {
-	auto copy = make_uniq<ParameterExpression>();
-	copy->identifier = identifier;
-	copy->CopyProperties(*this);
-	return std::move(copy);
-}
-
 } // namespace duckdb

@@ -18,10 +18,4 @@ string PositionalReferenceExpression::ToString() const {
 	return "#" + to_string(index);
 }
 
-unique_ptr<ParsedExpression> PositionalReferenceExpression::Copy() const {
-	auto copy = make_uniq<PositionalReferenceExpression>(index);
-	copy->CopyProperties(*this);
-	return std::move(copy);
-}
-
 } // namespace duckdb

@@ -109,19 +109,6 @@ string TypeExpression::ToString() const {
 	return result;
 }
 
-unique_ptr<ParsedExpression> TypeExpression::Copy() const {
-	vector<unique_ptr<ParsedExpression>> copy_children;
-	copy_children.reserve(children.size());
-	for (const auto &child : children) {
-		copy_children.push_back(child->Copy());
-	}
-
-	auto copy = make_uniq<TypeExpression>(catalog, schema, type_name, std::move(copy_children));
-	copy->CopyProperties(*this);
-
-	return std::move(copy);
-}
-
 void TypeExpression::Verify() const {
 	D_ASSERT(!type_name.empty());
 }

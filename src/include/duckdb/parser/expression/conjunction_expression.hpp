@@ -38,6 +38,9 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
+private:
+	ConjunctionExpression();
+
 public:
 	template <class T, class BASE>
 	static string ToString(const T &entry) {

@@ -36,24 +36,6 @@ string FunctionExpression::ToString() const {
 	                                                      filter.get(), order_bys.get(), export_state, true);
 }
 
-unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
-	vector<unique_ptr<ParsedExpression>> copy_children;
-	unique_ptr<ParsedExpression> filter_copy;
-	copy_children.reserve(children.size());
-	for (auto &child : children) {
-		copy_children.push_back(child->Copy());
-	}
-	if (filter) {
-		filter_copy = filter->Copy();
-	}
-	auto order_copy = order_bys ? unique_ptr_cast<ResultModifier, OrderModifier>(order_bys->Copy()) : nullptr;
-	auto copy =
-	    make_uniq<FunctionExpression>(catalog, schema, function_name, std::move(copy_children), std::move(filter_copy),
-	                                  std::move(order_copy), distinct, is_operator, export_state);
-	copy->CopyProperties(*this);
-	return std::move(copy);
-}
-
 void FunctionExpression::Verify() const {
 	D_ASSERT(!function_name.empty());
 }

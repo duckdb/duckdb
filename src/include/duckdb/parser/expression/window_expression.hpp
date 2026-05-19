@@ -281,6 +281,7 @@ public:
 	}
 
 private:
+	WindowExpression();
 	//	Backwards-compatible serialization interface
 	WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children,
 	                 unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr);

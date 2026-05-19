@@ -42,5 +42,6 @@ public:
 
 private:
 	explicit ComparisonExpression(ExpressionType type);
+	ComparisonExpression();
 };
 } // namespace duckdb
