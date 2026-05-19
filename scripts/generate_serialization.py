@@ -307,6 +307,8 @@ supported_member_entries = [
     'version',
     # equality generation annotations (used by generate_equality.py)
     'equals_skip',
+    'equals_ci',
+    'equals_custom',
 ]
 
 

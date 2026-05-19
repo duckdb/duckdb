@@ -822,6 +822,7 @@ generate-files:
 	$(PYTHON) scripts/generate_functions.py
 	$(PYTHON) scripts/generate_settings.py
 	$(PYTHON) scripts/generate_serialization.py
+	$(PYTHON) scripts/generate_equality.py
 	$(PYTHON) scripts/generate_storage_info.py
 	$(PYTHON) scripts/generate_metric_enums.py
 	$(PYTHON) scripts/generate_enum_util.py

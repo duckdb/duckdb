@@ -127,7 +127,8 @@
       {
         "id": 200,
         "name": "column_names",
-        "type": "vector<string>"
+        "type": "vector<string>",
+        "equals_ci": true
       }
     ]
   },
@@ -244,7 +245,8 @@
       {
         "id": 206,
         "name": "is_operator",
-        "type": "bool"
+        "type": "bool",
+        "equals_skip": true
       },
       {
         "id": 207,
@@ -279,7 +281,8 @@
         "name": "syntax_type",
         "type": "LambdaSyntaxType",
         "default": "LambdaSyntaxType::SINGLE_ARROW_STORAGE",
-        "version": "v1.3.0"
+        "version": "v1.3.0",
+        "equals_skip": true
       }
     ]
   },
@@ -306,7 +309,8 @@
       {
         "id": 200,
         "name": "identifier",
-        "type": "string"
+        "type": "string",
+        "equals_ci": true
       }
     ]
   },
