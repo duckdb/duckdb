@@ -24,23 +24,21 @@
 namespace duckdb {
 
 struct PragmaStorageFunctionData : public TableFunctionData {
-	PragmaStorageFunctionData(TableCatalogEntry &table_entry, ColumnSegmentInfoScanState scan_state_p)
-	    : table_entry(table_entry), scan_state(std::move(scan_state_p)) {
+	PragmaStorageFunctionData(TableCatalogEntry &table_entry, ColumnSegmentInfoScanType scan_type)
+	    : table_entry(table_entry), scan_type(scan_type) {
 	}
 
 	TableCatalogEntry &table_entry;
-	//! Pinned row-group snapshot taken at bind time. Mutable because the cursor advances during
-	//! execution; concurrent access is serialized via PragmaStorageGlobalState::lock.
-	mutable ColumnSegmentInfoScanState scan_state;
+	ColumnSegmentInfoScanType scan_type;
 };
 
 struct PragmaStorageGlobalState : public GlobalTableFunctionState {
 	explicit PragmaStorageGlobalState(idx_t max_threads_p) : max_threads(max_threads_p) {
 	}
 
-	//! Protects access to the shared scan state in bind data while local threads pull row groups.
 	mutex lock;
 	idx_t max_threads;
+	ColumnSegmentInfoScanState scan_state;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
@@ -110,19 +108,22 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	// look up the table name in the catalog
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
-	ColumnSegmentInfoScanState scan_state;
+	auto scan_type = ColumnSegmentInfoScanType::ALL;
 	auto scan_type_entry = input.named_parameters.find("scan_type");
 	if (scan_type_entry != input.named_parameters.end()) {
-		scan_state.scan_type = ColumnSegmentInfoScanTypeFromString(scan_type_entry->second.GetValue<string>());
+		scan_type = ColumnSegmentInfoScanTypeFromString(scan_type_entry->second.GetValue<string>());
 	}
-	table_entry.InitializeColumnSegmentInfoScan(scan_state);
-	return make_uniq<PragmaStorageFunctionData>(table_entry, std::move(scan_state));
+	return make_uniq<PragmaStorageFunctionData>(table_entry, scan_type);
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaStorageInfoInitGlobal(ClientContext &context,
                                                                  TableFunctionInitInput &input) {
+	auto &bind_data = input.bind_data->Cast<PragmaStorageFunctionData>();
 	auto max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
-	return make_uniq<PragmaStorageGlobalState>(max_threads);
+	auto gstate = make_uniq<PragmaStorageGlobalState>(max_threads);
+	gstate->scan_state.scan_type = bind_data.scan_type;
+	bind_data.table_entry.InitializeColumnSegmentInfoScan(gstate->scan_state);
+	return std::move(gstate);
 }
 
 unique_ptr<LocalTableFunctionState> PragmaStorageInfoInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
@@ -173,7 +174,7 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 			{
 				lock_guard<mutex> guard(gstate.lock);
 				has_more =
-				    bind_data.table_entry.ScanColumnSegmentInfo(query_context, bind_data.scan_state, lstate.buffer);
+				    bind_data.table_entry.ScanColumnSegmentInfo(query_context, gstate.scan_state, lstate.buffer);
 			}
 			if (!has_more) {
 				break;
