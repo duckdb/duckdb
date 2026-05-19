@@ -1,10 +1,13 @@
 # name: test/sql/storage/metadata/full_table_metadata_reuse_v7.test
-# description: Test that column metadata is not loaded when making no changes to a table (v1.5.0 / serialization version 7)
+# description: Test that column metadata is not loaded when making no changes to a table (with force_column_metadata_reuse on v1.5.0)
 # group: [metadata]
 
 require no_alternative_verify
 
 load {TEST_DIR}/full_table_metadata_reuse_v7.test.db readwrite v1.5.0
+
+statement ok
+SET force_column_metadata_reuse=true
 
 # create a table with several columns
 statement ok

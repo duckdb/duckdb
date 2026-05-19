@@ -1945,9 +1945,6 @@ vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(const QueryCo
 
 bool RowGroupCollection::SupportsPerColumnWrites() {
 	auto version = SerializationCompatibility::FromDatabase(GetAttached());
-	if (version.serialization_version >= SerializationCompatibility::FromString("v2.0.0").serialization_version) {
-		return true;
-	}
 	if (version.serialization_version >= SerializationCompatibility::FromString("v1.4.0").serialization_version) {
 		return Settings::Get<ForceColumnMetadataReuseSetting>(GetAttached().GetDatabase());
 	}
