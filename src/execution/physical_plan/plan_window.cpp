@@ -39,7 +39,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 		Columns partition_columns;
 		if (enable_optimizer && PhysicalStreamingWindow::IsStreamingFunction(context, wexpr)) {
 			streaming_windows.push_back(expr_idx);
-		} else if (HasSingleValuePartitions(context, wexpr.partitions, plan, partition_columns)) {
+		} else if (!wexpr.partitions.empty() &&
+		           HasSingleValuePartitions(context, wexpr.partitions, plan, partition_columns)) {
 			partitioned_windows.push_back(expr_idx);
 		} else {
 			blocking_windows.push_back(expr_idx);
