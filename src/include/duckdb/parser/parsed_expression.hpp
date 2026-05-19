@@ -14,7 +14,79 @@
 
 namespace duckdb {
 class Deserializer;
+class ParsedExpression;
 class Serializer;
+
+//! Lightweight view of a ParsedExpression's direct children (as owning-pointer references).
+//! Stores up to INLINE_CAPACITY children on the stack; spills to heap beyond that.
+//! Iterating yields unique_ptr<ParsedExpression>& — supports both reading and in-place replacement.
+class ChildrenView {
+public:
+	static constexpr idx_t INLINE_CAPACITY = 8;
+
+	ChildrenView() : count(0) {
+	}
+	ChildrenView(const ChildrenView &) = delete;
+	ChildrenView &operator=(const ChildrenView &) = delete;
+	ChildrenView(ChildrenView &&other) noexcept : count(other.count), overflow(std::move(other.overflow)) {
+		if (count <= INLINE_CAPACITY) {
+			for (idx_t i = 0; i < count; i++) {
+				inline_storage[i] = other.inline_storage[i];
+			}
+		}
+		other.count = 0;
+	}
+
+	void Append(unique_ptr<ParsedExpression> &child) {
+		if (count < INLINE_CAPACITY) {
+			inline_storage[count] = &child;
+		} else {
+			if (overflow.empty()) {
+				overflow.reserve(count + 8);
+				for (idx_t i = 0; i < count; i++) {
+					overflow.push_back(inline_storage[i]);
+				}
+			}
+			overflow.push_back(&child);
+		}
+		count++;
+	}
+
+	struct iterator {
+		unique_ptr<ParsedExpression> **ptr;
+		unique_ptr<ParsedExpression> &operator*() const {
+			return **ptr;
+		}
+		iterator &operator++() {
+			++ptr;
+			return *this;
+		}
+		bool operator!=(const iterator &other) const {
+			return ptr != other.ptr;
+		}
+	};
+
+	iterator begin() {
+		auto *ptr = count <= INLINE_CAPACITY ? inline_storage : overflow.data();
+		return {ptr};
+	}
+	iterator end() {
+		auto *ptr = count <= INLINE_CAPACITY ? inline_storage : overflow.data();
+		return {ptr + count};
+	}
+
+	idx_t size() const {
+		return count;
+	}
+	bool empty() const {
+		return count == 0;
+	}
+
+private:
+	idx_t count;
+	unique_ptr<ParsedExpression> *inline_storage[INLINE_CAPACITY];
+	vector<unique_ptr<ParsedExpression> *> overflow;
+};
 
 //!  The ParsedExpression class is a base class that can represent any expression
 //!  part of a SQL statement.
@@ -44,6 +116,9 @@ public:
 
 	//! Create a copy of this expression
 	virtual unique_ptr<ParsedExpression> Copy() const = 0;
+
+	//! Returns a view over all direct ParsedExpression children of this expression
+	ChildrenView Children();
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);

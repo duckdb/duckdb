@@ -39,6 +39,18 @@ hash_t ParsedExpression::Hash() const {
 	return hash;
 }
 
+ChildrenView ParsedExpression::Children() {
+	ChildrenView result;
+	switch (GetExpressionClass()) {
+	case ExpressionClass::BOUND_EXPRESSION:
+		// these node types have no children
+		break;
+	default:
+		throw NotImplementedException("Unimplemented expression class");
+	}
+	return result;
+}
+
 bool BetweenExpression::Equals(const ParsedExpression &other) const {
 	if (!ParsedExpression::Equals(other)) {
 		return false;
@@ -55,6 +67,7 @@ bool BetweenExpression::Equals(const ParsedExpression &other) const {
 	}
 	return true;
 }
+
 
 unique_ptr<ParsedExpression> BetweenExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<BetweenExpression>(new BetweenExpression());
@@ -86,6 +99,7 @@ bool CaseExpression::Equals(const ParsedExpression &other) const {
 	}
 	return true;
 }
+
 
 unique_ptr<ParsedExpression> CaseExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<CaseExpression>(new CaseExpression());
@@ -231,6 +245,7 @@ bool ComparisonExpression::Equals(const ParsedExpression &other) const {
 	return true;
 }
 
+
 unique_ptr<ParsedExpression> ComparisonExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<ComparisonExpression>(new ComparisonExpression());
 	copy->left = left ? left->Copy() : nullptr;
@@ -249,6 +264,7 @@ bool ConjunctionExpression::Equals(const ParsedExpression &other) const {
 	}
 	return true;
 }
+
 
 unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<ConjunctionExpression>(new ConjunctionExpression());
@@ -289,6 +305,7 @@ bool DefaultExpression::Equals(const ParsedExpression &other) const {
 	}
 	return true;
 }
+
 
 unique_ptr<ParsedExpression> DefaultExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<DefaultExpression>(new DefaultExpression());
@@ -369,6 +386,7 @@ bool LambdaExpression::Equals(const ParsedExpression &other) const {
 	return true;
 }
 
+
 unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<LambdaExpression>(new LambdaExpression());
 	copy->lhs = lhs ? lhs->Copy() : nullptr;
@@ -388,6 +406,7 @@ bool OperatorExpression::Equals(const ParsedExpression &other) const {
 	}
 	return true;
 }
+
 
 unique_ptr<ParsedExpression> OperatorExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<OperatorExpression>(new OperatorExpression());
@@ -707,169 +726,6 @@ unique_ptr<ParsedExpression> TypeExpression::Copy() const {
 	}
 	copy->CopyProperties(*this);
 	return std::move(copy);
-}
-
-void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expression,
-                                                  const std::function<void(const ParsedExpression &child)> &callback) {
-	EnumerateChildren((ParsedExpression &)expression, [&](unique_ptr<ParsedExpression> &child) {
-		D_ASSERT(child);
-		callback(*child);
-	});
-}
-
-void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,
-                                                  const std::function<void(ParsedExpression &child)> &callback) {
-	EnumerateChildren(expr, [&](unique_ptr<ParsedExpression> &child) {
-		D_ASSERT(child);
-		callback(*child);
-	});
-}
-
-void ParsedExpressionIterator::EnumerateChildren(
-    ParsedExpression &expr, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
-	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::BETWEEN: {
-		auto &cast_expr = expr.Cast<BetweenExpression>();
-		callback(cast_expr.InputMutable());
-		callback(cast_expr.LowerBoundMutable());
-		callback(cast_expr.UpperBoundMutable());
-		break;
-	}
-	case ExpressionClass::CASE: {
-		auto &cast_expr = expr.Cast<CaseExpression>();
-		for (auto &check : cast_expr.case_checks) {
-			callback(check.when_expr);
-			callback(check.then_expr);
-		}
-		if (cast_expr.else_expr) {
-			callback(cast_expr.else_expr);
-		}
-		break;
-	}
-	case ExpressionClass::CAST: {
-		auto &cast_expr = expr.Cast<CastExpression>();
-		if (cast_expr.child) {
-			callback(cast_expr.child);
-		}
-		break;
-	}
-	case ExpressionClass::COLLATE: {
-		auto &cast_expr = expr.Cast<CollateExpression>();
-		if (cast_expr.child) {
-			callback(cast_expr.child);
-		}
-		break;
-	}
-	case ExpressionClass::COMPARISON: {
-		auto &cast_expr = expr.Cast<ComparisonExpression>();
-		if (cast_expr.left) {
-			callback(cast_expr.left);
-		}
-		if (cast_expr.right) {
-			callback(cast_expr.right);
-		}
-		break;
-	}
-	case ExpressionClass::CONJUNCTION: {
-		auto &cast_expr = expr.Cast<ConjunctionExpression>();
-		for (auto &child : cast_expr.children) {
-			callback(child);
-		}
-		break;
-	}
-	case ExpressionClass::FUNCTION: {
-		auto &cast_expr = expr.Cast<FunctionExpression>();
-		for (auto &child : cast_expr.children) {
-			callback(child);
-		}
-		if (cast_expr.filter) {
-			callback(cast_expr.filter);
-		}
-		if (cast_expr.order_bys) {
-			for (auto &order : cast_expr.order_bys->orders) {
-				callback(order.expression);
-			}
-		}
-		break;
-	}
-	case ExpressionClass::LAMBDA: {
-		auto &cast_expr = expr.Cast<LambdaExpression>();
-		if (cast_expr.lhs) {
-			callback(cast_expr.lhs);
-		}
-		if (cast_expr.expr) {
-			callback(cast_expr.expr);
-		}
-		break;
-	}
-	case ExpressionClass::OPERATOR: {
-		auto &cast_expr = expr.Cast<OperatorExpression>();
-		for (auto &child : cast_expr.children) {
-			callback(child);
-		}
-		break;
-	}
-	case ExpressionClass::STAR: {
-		auto &cast_expr = expr.Cast<StarExpression>();
-		for (auto &item : cast_expr.replace_list) {
-			callback(item.second);
-		}
-		if (cast_expr.expr) {
-			callback(cast_expr.expr);
-		}
-		break;
-	}
-	case ExpressionClass::SUBQUERY: {
-		auto &cast_expr = expr.Cast<SubqueryExpression>();
-		if (cast_expr.child) {
-			callback(cast_expr.child);
-		}
-		break;
-	}
-	case ExpressionClass::WINDOW: {
-		auto &cast_expr = expr.Cast<WindowExpression>();
-		for (auto &child : cast_expr.children) {
-			callback(child);
-		}
-		for (auto &child : cast_expr.partitions) {
-			callback(child);
-		}
-		for (auto &order : cast_expr.orders) {
-			callback(order.expression);
-		}
-		if (cast_expr.start_expr) {
-			callback(cast_expr.start_expr);
-		}
-		if (cast_expr.end_expr) {
-			callback(cast_expr.end_expr);
-		}
-		if (cast_expr.filter_expr) {
-			callback(cast_expr.filter_expr);
-		}
-		for (auto &order : cast_expr.arg_orders) {
-			callback(order.expression);
-		}
-		break;
-	}
-	case ExpressionClass::TYPE: {
-		auto &cast_expr = expr.Cast<TypeExpression>();
-		for (auto &child : cast_expr.GetChildren()) {
-			callback(child);
-		}
-		break;
-	}
-	case ExpressionClass::BOUND_EXPRESSION:
-	case ExpressionClass::COLUMN_REF:
-	case ExpressionClass::LAMBDA_REF:
-	case ExpressionClass::CONSTANT:
-	case ExpressionClass::DEFAULT:
-	case ExpressionClass::PARAMETER:
-	case ExpressionClass::POSITIONAL_REFERENCE:
-		// these node types have no children
-		break;
-	default:
-		throw NotImplementedException("Unimplemented expression class");
-	}
 }
 
 } // namespace duckdb

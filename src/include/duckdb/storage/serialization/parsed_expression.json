@@ -10,7 +10,8 @@
 		],
 		"functions": [
 			"Equals",
-			"Hash"
+			"Hash",
+			"Children"
 		],
 		"members": [
 			{
@@ -44,9 +45,7 @@
 		"base": "ParsedExpression",
 		"enum": "BETWEEN",
 		"functions": [
-			"Equals",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -74,9 +73,7 @@
 		"base": "ParsedExpression",
 		"enum": "CASE",
 		"functions": [
-			"Equals",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -96,10 +93,7 @@
 		"base": "ParsedExpression",
 		"enum": "CAST",
 		"functions": [
-			"Equals",
-			"Hash",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -124,10 +118,7 @@
 		"base": "ParsedExpression",
 		"enum": "COLLATE",
 		"functions": [
-			"Equals",
-			"Hash",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -147,10 +138,7 @@
 		"base": "ParsedExpression",
 		"enum": "COLUMN_REF",
 		"functions": [
-			"Equals",
-			"Hash",
-			"Copy",
-			"Children"
+			"Copy"
 		],
 		"members": [
 			{
@@ -165,10 +153,7 @@
 		"base": "ParsedExpression",
 		"enum": "LAMBDA_REF",
 		"functions": [
-			"Equals",
-			"Hash",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -192,9 +177,7 @@
 		"base": "ParsedExpression",
 		"enum": "COMPARISON",
 		"functions": [
-			"Equals",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -217,9 +200,7 @@
 		"base": "ParsedExpression",
 		"enum": "CONJUNCTION",
 		"functions": [
-			"Equals",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -237,10 +218,7 @@
 		"base": "ParsedExpression",
 		"enum": "CONSTANT",
 		"functions": [
-			"Equals",
-			"Hash",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -255,9 +233,7 @@
 		"base": "ParsedExpression",
 		"enum": "DEFAULT",
 		"functions": [
-			"Equals",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": []
 	},
@@ -266,10 +242,7 @@
 		"base": "ParsedExpression",
 		"enum": "FUNCTION",
 		"functions": [
-			"Equals",
-			"Hash",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -326,9 +299,7 @@
 		"base": "ParsedExpression",
 		"enum": "LAMBDA",
 		"functions": [
-			"Equals",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -356,9 +327,7 @@
 		"base": "ParsedExpression",
 		"enum": "OPERATOR",
 		"functions": [
-			"Equals",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -376,17 +345,13 @@
 		"base": "ParsedExpression",
 		"enum": "PARAMETER",
 		"functions": [
-			"Equals",
-			"Hash",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
 				"id": 200,
 				"name": "identifier",
-				"type": "string",
-				"equals_ci": true
+				"type": "Identifier"
 			}
 		]
 	},
@@ -395,10 +360,7 @@
 		"base": "ParsedExpression",
 		"enum": "POSITIONAL_REFERENCE",
 		"functions": [
-			"Equals",
-			"Hash",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -413,10 +375,7 @@
 		"base": "ParsedExpression",
 		"enum": "STAR",
 		"functions": [
-			"Equals",
-			"Hash",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -475,10 +434,7 @@
 		"base": "ParsedExpression",
 		"enum": "SUBQUERY",
 		"functions": [
-			"Equals",
-			"Hash",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -508,10 +464,7 @@
 		"base": "ParsedExpression",
 		"enum": "WINDOW",
 		"functions": [
-			"Equals",
-			"Hash",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{
@@ -624,10 +577,7 @@
 		"base": "ParsedExpression",
 		"enum": "TYPE",
 		"functions": [
-			"Equals",
-			"Hash",
-			"Copy",
-			"EnumerateChildren"
+			"Copy"
 		],
 		"members": [
 			{

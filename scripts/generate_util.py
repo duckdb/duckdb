@@ -436,11 +436,7 @@ def generate_subclass_hash(entry):
         extra.extend(generate_member_hash(member))
 
     if not extra:
-        return [
-            f'hash_t {class_name}::Hash() const {{',
-            '\treturn ParsedExpression::Hash();',
-            '}',
-        ]
+        return []
 
     lines = [
         f'hash_t {class_name}::Hash() const {{',
@@ -453,7 +449,7 @@ def generate_subclass_hash(entry):
 
 
 # ---------------------------------------------------------------------------
-# EnumerateChildren generation
+# Children() generation
 # ---------------------------------------------------------------------------
 
 
@@ -474,21 +470,20 @@ def member_is_iterable_expression(member):
     )
 
 
-def generate_iterator_member_callbacks(member, expr_var, indent):
+def generate_member_children_appends(member, expr_var):
     field = get_member_field_name(member)
     type_str = member['type']
-    ii = indent + '\t'
 
     iterate_via = member.get('iterate_via')
     if iterate_via:
         access = f'{expr_var}.{iterate_via}'
         if is_parsed_expression_ptr(type_str):
-            return [f'{indent}callback({access});']
+            return [f'\t\tresult.Append({access});']
         if is_parsed_expression_list(type_str):
             return [
-                f'{indent}for (auto &child : {access}) {{',
-                f'{ii}callback(child);',
-                f'{indent}}}',
+                f'\t\tfor (auto &child : {access}) {{',
+                f'\t\t\tresult.Append(child);',
+                f'\t\t}}',
             ]
         return []
 
@@ -496,67 +491,51 @@ def generate_iterator_member_callbacks(member, expr_var, indent):
 
     if is_parsed_expression_ptr(type_str):
         return [
-            f'{indent}if ({access}) {{',
-            f'{ii}callback({access});',
-            f'{indent}}}',
+            f'\t\tif ({access}) {{',
+            f'\t\t\tresult.Append({access});',
+            f'\t\t}}',
         ]
     if is_parsed_expression_list(type_str):
         return [
-            f'{indent}for (auto &child : {access}) {{',
-            f'{ii}callback(child);',
-            f'{indent}}}',
+            f'\t\tfor (auto &child : {access}) {{',
+            f'\t\t\tresult.Append(child);',
+            f'\t\t}}',
         ]
     if type_str == 'vector<CaseCheck>':
         return [
-            f'{indent}for (auto &check : {access}) {{',
-            f'{ii}callback(check.when_expr);',
-            f'{ii}callback(check.then_expr);',
-            f'{indent}}}',
+            f'\t\tfor (auto &check : {access}) {{',
+            f'\t\t\tresult.Append(check.when_expr);',
+            f'\t\t\tresult.Append(check.then_expr);',
+            f'\t\t}}',
         ]
     if type_str == 'vector<OrderByNode>':
         return [
-            f'{indent}for (auto &order : {access}) {{',
-            f'{ii}callback(order.expression);',
-            f'{indent}}}',
+            f'\t\tfor (auto &order : {access}) {{',
+            f'\t\t\tresult.Append(order.expression);',
+            f'\t\t}}',
         ]
     if is_expression_map(type_str):
         return [
-            f'{indent}for (auto &item : {access}) {{',
-            f'{ii}callback(item.second);',
-            f'{indent}}}',
+            f'\t\tfor (auto &item : {access}) {{',
+            f'\t\t\tresult.Append(item.second);',
+            f'\t\t}}',
         ]
     if is_order_modifier_ptr(type_str):
         return [
-            f'{indent}if ({access}) {{',
-            f'{ii}for (auto &order : {access}->orders) {{',
-            f'{ii}\tcallback(order.expression);',
-            f'{ii}}}',
-            f'{indent}}}',
+            f'\t\tif ({access}) {{',
+            f'\t\t\tfor (auto &order : {access}->orders) {{',
+            f'\t\t\t\tresult.Append(order.expression);',
+            f'\t\t\t}}',
+            f'\t\t}}',
         ]
     return []
 
 
-def generate_enumerate_children(entries):
+def generate_base_children(entries):
     lines = [
-        'void ParsedExpressionIterator::EnumerateChildren(const ParsedExpression &expression,',
-        '                                                  const std::function<void(const ParsedExpression &child)> &callback) {',
-        '\tEnumerateChildren((ParsedExpression &)expression, [&](unique_ptr<ParsedExpression> &child) {',
-        '\t\tD_ASSERT(child);',
-        '\t\tcallback(*child);',
-        '\t});',
-        '}',
-        '',
-        'void ParsedExpressionIterator::EnumerateChildren(ParsedExpression &expr,',
-        '                                                  const std::function<void(ParsedExpression &child)> &callback) {',
-        '\tEnumerateChildren(expr, [&](unique_ptr<ParsedExpression> &child) {',
-        '\t\tD_ASSERT(child);',
-        '\t\tcallback(*child);',
-        '\t});',
-        '}',
-        '',
-        'void ParsedExpressionIterator::EnumerateChildren(',
-        '    ParsedExpression &expr, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {',
-        '\tswitch (expr.GetExpressionClass()) {',
+        'ChildrenView ParsedExpression::Children() {',
+        '\tChildrenView result;',
+        '\tswitch (GetExpressionClass()) {',
     ]
 
     no_child_enums = []
@@ -564,7 +543,7 @@ def generate_enumerate_children(entries):
     for entry in entries:
         if entry.get('class_type') == 'expression_class':
             continue
-        if 'EnumerateChildren' not in entry.get('functions', []):
+        if 'Children' not in entry.get('functions', []):
             continue
 
         class_name = entry['class']
@@ -576,9 +555,9 @@ def generate_enumerate_children(entries):
             continue
 
         lines.append(f'\tcase ExpressionClass::{enum_val}: {{')
-        lines.append(f'\t\tauto &cast_expr = expr.Cast<{class_name}>();')
+        lines.append(f'\t\tauto &cast_expr = Cast<{class_name}>();')
         for member in iterable:
-            lines.extend(generate_iterator_member_callbacks(member, 'cast_expr', '\t\t'))
+            lines.extend(generate_member_children_appends(member, 'cast_expr'))
         lines.append('\t\tbreak;')
         lines.append('\t}')
 
@@ -590,6 +569,7 @@ def generate_enumerate_children(entries):
     lines.append('\tdefault:')
     lines.append('\t\tthrow NotImplementedException("Unimplemented expression class");')
     lines.append('\t}')
+    lines.append('\treturn result;')
     lines.append('}')
     return lines
 
@@ -610,12 +590,24 @@ def main():
     with open(JSON_PATH, 'r') as f:
         entries = json.load(f)
 
+    # Collect base (parent) functions for inheritance
+    base_functions = []
+    for entry in entries:
+        if entry.get('class_type') == 'expression_class':
+            base_functions = entry.get('functions', [])
+            break
+
     output_lines = [HEADER]
     first = [True]  # mutable via list
 
     for entry in entries:
-        functions = entry.get('functions', [])
+        own_functions = entry.get('functions', [])
         is_base = entry.get('class_type') == 'expression_class'
+        # Subclasses inherit all base functions automatically
+        if is_base:
+            functions = own_functions
+        else:
+            functions = list(dict.fromkeys(base_functions + own_functions))
 
         if 'Equals' in functions:
             if is_base:
@@ -630,12 +622,13 @@ def main():
             else:
                 emit(output_lines, generate_subclass_hash(entry), first)
 
+        if 'Children' in functions:
+            if is_base:
+                emit(output_lines, generate_base_children(entries), first)
+
         if 'Copy' in functions:
             if not is_base:
                 emit(output_lines, generate_subclass_copy(entry), first)
-
-    if any('EnumerateChildren' in e.get('functions', []) for e in entries):
-        emit(output_lines, generate_enumerate_children(entries), first)
 
     output_lines.append(FOOTER)
 
