@@ -13,6 +13,7 @@
 #include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/common/enums/column_segment_info_scan_type.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
 #include "duckdb/common/enums/row_group_append_mode.hpp"
 
@@ -50,6 +51,7 @@ class TableScanState;
 struct ColumnSegmentInfoScanState {
 	shared_ptr<RowGroupSegmentTree> row_groups;
 	optional_ptr<SegmentNode<RowGroup>> current_row_group;
+	ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL;
 };
 
 class RowGroupCollection {
@@ -143,12 +145,15 @@ public:
 	void CommitDropTable();
 
 	vector<PartitionStatistics> GetPartitionStats() const;
-	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
+	vector<ColumnSegmentInfo>
+	GetColumnSegmentInfo(const QueryContext &context,
+	                     ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL) const;
 	//! Initialize an incremental scan over column segment info, pinning the current row groups for consistency.
-	void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state);
+	void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) const;
 	//! Append the next row group's column segment info to result. Returns false when no row groups remain.
 	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
-	                           vector<ColumnSegmentInfo> &result);
+	                           vector<ColumnSegmentInfo> &result) const;
+	bool SupportsPerColumnWrites();
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
