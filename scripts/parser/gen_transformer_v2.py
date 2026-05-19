@@ -1029,6 +1029,7 @@ def main():
         'create_schema.gram',
         'create_secret.gram',
         'create_view.gram',
+        'connect.gram',
         'deallocate.gram',
         'detach.gram',
         'execute.gram',

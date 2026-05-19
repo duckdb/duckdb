@@ -637,7 +637,6 @@ void PEGTransformerFactory::RegisterConnect() {
 	// connect.gram — both rules are hand-written; the generator skips them because of the
 	// optional SessionTarget sub-rule.
 	REGISTER_TRANSFORM(TransformConnectStatement);
-	REGISTER_TRANSFORM(TransformDisconnectStatement);
 }
 
 void PEGTransformerFactory::RegisterMergeInto() {
