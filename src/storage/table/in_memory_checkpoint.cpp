@@ -118,7 +118,7 @@ MetadataManager &InMemoryTableDataWriter::GetMetadataManager() {
 
 InMemoryPartialBlock::InMemoryPartialBlock(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
                                            BlockManager &block_manager)
-    : PartialBlock(state, block_manager, segment.block) {
+    : PartialBlock(state, block_manager, segment.GetBlockHandle()) {
 	InMemoryPartialBlock::AddSegmentToTail(data, segment, 0);
 }
 
