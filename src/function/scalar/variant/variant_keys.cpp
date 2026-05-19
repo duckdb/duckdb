@@ -65,55 +65,47 @@ bool VariantKeysBindData::Equals(const FunctionData &other) const {
 }
 
 struct VariantKeysResult {
+	explicit VariantKeysResult(const idx_t count) {
+		key_ids.Initialize(VectorDataInitialization::UNINITIALIZED, count);
+		path_validity.Initialize(count);
+	}
+
 	//! By row found keys at the requested path in the VARIANT
 	Vector key_ids {LogicalType::LIST(LogicalType::UBIGINT)};
 	//! By row flag if the requested path exists in the VARIANT
 	ValidityMask path_validity;
 };
 
-static void PrepareKeyList(VariantKeysResult &result, const ValidityMask &object_validity,
-                           const VariantNestedData *nested_data, const idx_t count) {
-	idx_t total_key_count = 0;
-	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		if (!result.path_validity.RowIsValid(row_idx) || !object_validity.RowIsValid(row_idx)) {
-			continue;
+struct VariantPathSelection {
+	explicit VariantPathSelection(const idx_t count) {
+		value_index_sel.Initialize(count);
+		new_value_index_sel.Initialize(count);
+
+		// We start at values[0] for every row.
+		for (idx_t i = 0; i < count; i++) {
+			value_index_sel[i] = 0;
 		}
-		total_key_count += nested_data[row_idx].child_count;
 	}
 
-	ListVector::Reserve(result.key_ids, total_key_count);
-	ListVector::SetListSize(result.key_ids, total_key_count);
-}
+	SelectionVector &Input(const idx_t depth) {
+		return depth % 2 == 0 ? value_index_sel : new_value_index_sel;
+	}
 
-// TODO: Currently collection will always happen on the unshredded variant, introduce a fast path for shredded variants.
-static VariantKeysResult CollectVariantKeys(const UnifiedVariantVectorData &variant,
-                                            const vector<VariantPathComponent> &components, const idx_t count) {
-	VariantKeysResult result;
-	result.key_ids.Initialize(VectorDataInitialization::UNINITIALIZED, count);
-	result.path_validity.Initialize(count);
-	result.path_validity.SetAllInvalid(count);
+	SelectionVector &Output(const idx_t depth) {
+		return depth % 2 == 0 ? new_value_index_sel : value_index_sel;
+	}
 
-	auto &allocator = Allocator::DefaultAllocator();
-
-	// Input and output buffers used during the object walk, switched per iteration
+	//! Input and output buffers used during the object walk, switched per iteration
 	SelectionVector value_index_sel, new_value_index_sel;
-	value_index_sel.Initialize(count);
-	new_value_index_sel.Initialize(count);
+};
 
-	// We start at values[0] for every row.
-	for (idx_t i = 0; i < count; i++) {
-		value_index_sel[i] = 0;
-	}
-
-	// Construct a tracker for every row
-	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
-	auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
-
-	ValidityMask validity(count);
+static void TraverseVariantPath(const UnifiedVariantVectorData &variant, const vector<VariantPathComponent> &components,
+                                const idx_t count, VariantNestedData *nested_data, ValidityMask &validity,
+                                VariantPathSelection &path_selection) {
 	for (idx_t i = 0; i < components.size(); i++) {
 		auto &component = components[i];
-		auto &input_indices = i % 2 == 0 ? value_index_sel : new_value_index_sel;
-		auto &output_indices = i % 2 == 0 ? new_value_index_sel : value_index_sel;
+		auto &input_indices = path_selection.Input(i);
+		auto &output_indices = path_selection.Output(i);
 
 		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
 			throw InternalException("'variant_keys' does not support path indexes");
@@ -136,25 +128,25 @@ static VariantKeysResult CollectVariantKeys(const UnifiedVariantVectorData &vari
 			}
 		}
 	}
+}
 
+static void PrepareKeyListStorage(VariantKeysResult &result, const ValidityMask &object_validity,
+                           const VariantNestedData *nested_data, const idx_t count) {
+	idx_t total_key_count = 0;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		if (validity.RowIsValid(row_idx)) {
-			result.path_validity.SetValid(row_idx);
+		if (!result.path_validity.RowIsValid(row_idx) || !object_validity.RowIsValid(row_idx)) {
+			continue;
 		}
+		total_key_count += nested_data[row_idx].child_count;
 	}
 
-	ValidityMask object_validity(count);
-	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		if (!result.path_validity.RowIsValid(row_idx)) {
-			object_validity.SetInvalid(row_idx);
-		}
-	}
+	ListVector::Reserve(result.key_ids, total_key_count);
+	ListVector::SetListSize(result.key_ids, total_key_count);
+}
 
-	const auto &input_indices = components.size() % 2 == 0 ? value_index_sel : new_value_index_sel;
-	(void)VariantUtils::CollectNestedData(variant, VariantLogicalType::OBJECT, input_indices, count, optional_idx(), 0,
-	                                      nested_data, object_validity);
-
-	PrepareKeyList(result, object_validity, nested_data, count);
+static void WriteKeyIdList(const UnifiedVariantVectorData &variant, VariantKeysResult &result,
+                           VariantNestedData *nested_data, const ValidityMask &object_validity, const idx_t count) {
+	PrepareKeyListStorage(result, object_validity, nested_data, count);
 
 	const auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result.key_ids);
 	auto &key_id_child = ListVector::GetChildMutable(result.key_ids);
@@ -180,6 +172,34 @@ static VariantKeysResult CollectVariantKeys(const UnifiedVariantVectorData &vari
 
 		current_offset += entry.length;
 	}
+}
+
+// TODO: Currently collection will always happen on the unshredded variant, introduce a fast path for shredded variants.
+static VariantKeysResult CollectVariantKeys(const UnifiedVariantVectorData &variant,
+                                            const vector<VariantPathComponent> &components, const idx_t count) {
+	VariantKeysResult result(count);
+	VariantPathSelection path_selection(count);
+
+	auto &allocator = Allocator::DefaultAllocator();
+	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
+	const auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
+
+	TraverseVariantPath(variant, components, count, nested_data, result.path_validity, path_selection);
+
+	// For the final collection of nested_data we use an auxiliary validity vector so we can distinguish "path missing"
+	// from "path exists but not an object" (producing NULL and [] as output respectively).
+	ValidityMask object_validity(count);
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		if (!result.path_validity.RowIsValid(row_idx)) {
+			object_validity.SetInvalid(row_idx);
+		}
+	}
+
+	const auto &final_indices = path_selection.Input(components.size());
+	(void)VariantUtils::CollectNestedData(variant, VariantLogicalType::OBJECT, final_indices, count, optional_idx(), 0,
+	                                      nested_data, object_validity);
+
+	WriteKeyIdList(variant, result, nested_data, object_validity, count);
 
 	return result;
 }
