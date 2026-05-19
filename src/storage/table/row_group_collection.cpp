@@ -219,22 +219,17 @@ void RowGroupCollection::Verify() {
 #ifdef DEBUG
 	idx_t current_total_rows = 0;
 	auto row_groups = GetRowGroups();
-	auto expected_dense_start = row_groups->GetBaseRowId();
 	idx_t current_rowid_end = row_groups->GetBaseRowId();
 	for (auto &entry : row_groups->SegmentNodes()) {
 		auto &row_group = entry.GetNode();
 		row_group.Verify();
 		D_ASSERT(&row_group.GetCollection() == this);
 		D_ASSERT(entry.GetRowStart() >= current_rowid_end);
-		D_ASSERT(entry.GetRowStart() == expected_dense_start);
 		current_total_rows += row_group.count;
 		current_rowid_end = entry.GetRowStart() + row_group.count;
-		expected_dense_start += row_group.count;
 	}
 	D_ASSERT(current_total_rows == total_rows.load());
 	D_ASSERT(row_groups->GetBaseRowId() + next_row_id.load() >= current_rowid_end);
-	// Dense row groups are still required until rowid gap support is enabled end-to-end.
-	D_ASSERT(next_row_id.load() == total_rows.load());
 #endif
 }
 
@@ -515,7 +510,7 @@ bool RowGroupCollection::IsEmpty() const {
 
 void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppendState &state) {
 	auto append_row_id = next_row_id.load();
-	D_ASSERT(append_row_id == total_rows.load());
+	D_ASSERT(append_row_id >= total_rows.load());
 	state.row_start = UnsafeNumericCast<row_t>(append_row_id);
 	state.current_row = state.row_start;
 	state.total_append_count = 0;
@@ -526,6 +521,11 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	// We need a new row group if there are none yet or the append mode forces us to create a new row group
 	bool needs_new_row_group = state.row_groups->IsEmpty(l) || row_group_append_mode == RowGroupAppendMode::REQUIRE_NEW;
 	// Otherwise we evaluate the row_group_append_mode
+	if (!needs_new_row_group) {
+		auto last_row_group = state.row_groups->GetLastSegment(l);
+		auto append_start = state.row_groups->GetBaseRowId() + append_row_id;
+		needs_new_row_group = last_row_group->GetRowEnd() != append_start;
+	}
 	if (!needs_new_row_group) {
 		if (info->GetIndexes().Empty()) {
 			// We honor SUGGEST_NEW unless the table has indexes because there is no vacuuming for indexed tables...
@@ -627,7 +627,7 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 	}
 	total_rows += state.total_append_count;
 	next_row_id += state.total_append_count;
-	D_ASSERT(next_row_id.load() == total_rows.load());
+	D_ASSERT(next_row_id.load() >= total_rows.load());
 
 	state.total_append_count = 0;
 	state.start_row_group = nullptr;
@@ -678,8 +678,10 @@ void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
 	if (last_segment->GetRowEnd() <= new_end_idx) {
 		return;
 	}
+	D_ASSERT(new_end_idx >= row_groups->GetBaseRowId());
 	auto reverted_row_groups = make_shared_ptr<RowGroupSegmentTree>(*this, row_groups->GetBaseRowId());
 	auto rlock = reverted_row_groups->Lock();
+	idx_t new_total_rows = 0;
 	for (auto &entry : row_groups->SegmentNodes(l)) {
 		idx_t row_start = entry.GetRowStart();
 		idx_t row_end = row_start + entry.GetCount();
@@ -692,11 +694,13 @@ void RowGroupCollection::RevertAppendInternal(idx_t new_end_idx) {
 			// this is the last row group - have to revert WITHIN it
 			entry.GetNode().RevertAppend(new_end_idx - row_start);
 		}
-		reverted_row_groups->AppendSegment(rlock, entry.ReferenceNode());
+		new_total_rows += entry.GetNode().count;
+		reverted_row_groups->AppendSegment(rlock, entry.ReferenceNode(), row_start);
 	}
 	SetRowGroups(std::move(reverted_row_groups));
-	total_rows = new_end_idx;
-	next_row_id = total_rows.load();
+	total_rows = new_total_rows;
+	next_row_id = new_end_idx - row_groups->GetBaseRowId();
+	D_ASSERT(next_row_id.load() >= total_rows.load());
 }
 
 void RowGroupCollection::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
