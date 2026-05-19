@@ -3,11 +3,15 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 
 namespace duckdb {
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaStatement(PEGTransformer &transformer, unique_ptr<SQLStatement> pragma_assign_or_function) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformPragmaStatement(PEGTransformer &transformer,
+                                                unique_ptr<SQLStatement> pragma_assign_or_function) {
 	return pragma_assign_or_function;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const string &setting_name, vector<unique_ptr<ParsedExpression>> variable_list) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer, const string &setting_name,
+                                             vector<unique_ptr<ParsedExpression>> variable_list) {
 	// Rule: PragmaAssign <- SettingName '=' Expression
 	auto result = make_uniq<PragmaStatement>();
 	auto &info = *result->info;
@@ -38,7 +42,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaAssign(PEGTransfo
 	return std::move(set_statement);
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaFunction(PEGTransformer &transformer, const string &pragma_name, vector<unique_ptr<ParsedExpression>> pragma_parameters) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformPragmaFunction(PEGTransformer &transformer, const string &pragma_name,
+                                               vector<unique_ptr<ParsedExpression>> pragma_parameters) {
 	// Rule: PragmaFunction <- PragmaName PragmaParameters?
 	auto result = make_uniq<PragmaStatement>();
 	result->info->name = pragma_name;
@@ -67,7 +73,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaFunction(PEGTrans
 	return std::move(result);
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformPragmaParameters(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> expression) {
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformPragmaParameters(PEGTransformer &transformer,
+                                                 vector<unique_ptr<ParsedExpression>> expression) {
 	return expression;
 }
 

@@ -842,6 +842,7 @@ String:
     - OptFull
     - OptFreeze
     - OptVerbose
+    - ExtensionAlias
 
 Bool:
   type: "bool"
@@ -989,6 +990,8 @@ overrides:
   ByNameOrPosition: "InsertColumnOrder"
   # load.gram
   FromSource: "ExtensionRepositoryInfo"
+  FromSourceIdentifier: "ExtensionRepositoryInfo"
+  FromSourceString: "ExtensionRepositoryInfo"
   # merge_into.gram
   MergeMatch: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"
   MatchedClause: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"

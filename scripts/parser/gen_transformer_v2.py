@@ -467,7 +467,7 @@ def _build_wrapped_expr(base_expr, parens_count):
     return expr
 
 
-def _classify_macro(node, idx, rule_types):
+def _classify_macro(node, idx, rule_types, optional=False):
     """
     Unified classifier for arbitrary Parens/List nesting around a leaf rule.
 
@@ -478,6 +478,9 @@ def _classify_macro(node, idx, rule_types):
       List(D), Parens(List(D)), List(Parens(D)), Parens(List(Parens(D))), ...
 
     Nested lists (List(List(D))) produce vector<vector<T>> and are not supported.
+
+    When optional=True the node is wrapped in an OptionalParseResult: the vector
+    case emits a HasResult() guard (scalar optional macros are not supported).
     """
     result = _analyze_macro_node(node)
     if result is None:
@@ -497,6 +500,8 @@ def _classify_macro(node, idx, rule_types):
         return None  # nested lists not supported
 
     if not list_positions:
+        if optional:
+            return None  # scalar optional macro not supported
         # Scalar path: all ops are 'parens'.
         access_expr = _build_wrapped_expr(f"list_pr.GetChild({idx})", len(ops))
         if is_identifier:
@@ -517,7 +522,6 @@ def _classify_macro(node, idx, rule_types):
     pre_parens = ops[:list_pos].count('parens')
     post_parens = ops[list_pos + 1 :].count('parens')
 
-    outer_expr = _build_wrapped_expr(f"list_pr.GetChild({idx})", pre_parens)
     item_var = f"{var_name}_item"
     item_access = _build_wrapped_expr(item_var, post_parens)
 
@@ -525,17 +529,39 @@ def _classify_macro(node, idx, rule_types):
         # item_var is reference<ParseResult> (std::reference_wrapper); need .get() when not already
         # unwrapped by ExtractResultFromParens (which returns ParseResult&).
         ident_access = f"{item_access}.get()" if post_parens == 0 else item_access
-        push_line = f"\t\t{var_name}.push_back({ident_access}.Cast<IdentifierParseResult>().identifier);"
+        push_content = f"{var_name}.push_back({ident_access}.Cast<IdentifierParseResult>().identifier);"
     else:
-        push_line = f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({item_access}));"
+        push_content = f"{var_name}.push_back(transformer.Transform<{child_type}>({item_access}));"
 
-    lines = [
-        f"\tauto {var_name}_items = ExtractParseResultsFromList({outer_expr});",
-        f"\tvector<{child_type}> {var_name};",
-        f"\tfor (auto &{item_var} : {var_name}_items) {{",
-        push_line,
-        f"\t}}",
+    if optional:
+        opt_var = f"{var_name}_opt"
+        base_expr = f"{opt_var}.GetResult()"
+        ind = "\t\t"
+    else:
+        base_expr = f"list_pr.GetChild({idx})"
+        ind = "\t"
+
+    outer_expr = _build_wrapped_expr(base_expr, pre_parens)
+    loop_lines = [
+        f"{ind}auto {var_name}_items = ExtractParseResultsFromList({outer_expr});",
+        f"{ind}for (auto &{item_var} : {var_name}_items) {{",
+        f"{ind}\t{push_content}",
+        f"{ind}}}",
     ]
+
+    if optional:
+        lines = [
+            f"\tauto &{opt_var} = list_pr.Child<OptionalParseResult>({idx});",
+            f"\tvector<{child_type}> {var_name};",
+            f"\tif ({opt_var}.HasResult()) {{",
+            *loop_lines,
+            f"\t}}",
+        ]
+    else:
+        lines = [
+            f"\tvector<{child_type}> {var_name};",
+            *loop_lines,
+        ]
     return SeqElement(
         skip=False,
         var_name=var_name,
@@ -609,7 +635,9 @@ def classify_sequence_element(child, idx, rule_types, excluded_rules):
             # A* is represented as OptionalNode(RepeatNode(A)), matching the runtime
             # OptionalMatcher(RepeatMatcher(A)) structure.
             return _classify_repeat(inner, idx, rule_types, optional=True)
-        return None  # OptionalNode(ParensNode) etc. - deferred
+        if isinstance(inner, (ParensNode, ListMacroNode)):
+            return _classify_macro(inner, idx, rule_types, optional=True)
+        return None
     if isinstance(child, RepeatNode):
         return _classify_repeat(child, idx, rule_types, optional=False)
     if isinstance(child, (ParensNode, ListMacroNode)):
@@ -1045,7 +1073,7 @@ def main():
         # 'explain.gram',
         'export.gram',
         # 'insert.gram',
-        # 'load.gram',
+        'load.gram',
         'pragma.gram',
         'prepare.gram',
         'transaction.gram',

@@ -624,15 +624,6 @@ void PEGTransformerFactory::RegisterInsert() {
 	REGISTER_TRANSFORM(TransformReturningClause);
 }
 
-void PEGTransformerFactory::RegisterLoad() {
-	// load.gram
-	REGISTER_TRANSFORM(TransformLoadStatement);
-	REGISTER_TRANSFORM(TransformInstallStatement);
-	REGISTER_TRANSFORM(TransformUpdateExtensionsStatement);
-	REGISTER_TRANSFORM(TransformFromSource);
-	REGISTER_TRANSFORM(TransformVersionNumber);
-}
-
 void PEGTransformerFactory::RegisterConnect() {
 	// connect.gram — both rules are hand-written; the generator skips them because of the
 	// optional SessionTarget sub-rule.
@@ -1010,7 +1001,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterExpression();
 	RegisterInsert();
 	RegisterConnect();
-	RegisterLoad();
 	RegisterMergeInto();
 	RegisterPivot();
 	RegisterSelect();
