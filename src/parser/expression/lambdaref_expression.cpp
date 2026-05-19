@@ -23,13 +23,6 @@ string LambdaRefExpression::ToString() const {
 	throw InternalException("lambda reference expressions are transient, ToString should never be called");
 }
 
-hash_t LambdaRefExpression::Hash() const {
-	hash_t result = ParsedExpression::Hash();
-	result = CombineHash(result, lambda_idx);
-	result = CombineHash(result, StringUtil::CIHash(column_name));
-	return result;
-}
-
 unique_ptr<ParsedExpression> LambdaRefExpression::Copy() const {
 	throw InternalException("lambda reference expressions are transient, Copy should never be called");
 }

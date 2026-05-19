@@ -20,9 +20,4 @@ unique_ptr<ParsedExpression> ParameterExpression::Copy() const {
 	return std::move(copy);
 }
 
-hash_t ParameterExpression::Hash() const {
-	hash_t result = ParsedExpression::Hash();
-	return CombineHash(duckdb::Hash(identifier.c_str(), identifier.size()), result);
-}
-
 } // namespace duckdb

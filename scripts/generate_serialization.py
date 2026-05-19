@@ -305,10 +305,11 @@ supported_member_entries = [
     'default',
     'status',
     'version',
-    # equality generation annotations (used by generate_equality.py)
+    # equality/hash generation annotations (used by generate_util.py)
     'equals_skip',
     'equals_ci',
     'equals_custom',
+    'hash_skip',
 ]
 
 

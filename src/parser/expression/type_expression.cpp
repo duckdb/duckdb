@@ -126,12 +126,4 @@ void TypeExpression::Verify() const {
 	D_ASSERT(!type_name.empty());
 }
 
-hash_t TypeExpression::Hash() const {
-	hash_t result = ParsedExpression::Hash();
-	result = CombineHash(result, duckdb::Hash<const char *>(catalog.c_str()));
-	result = CombineHash(result, duckdb::Hash<const char *>(schema.c_str()));
-	result = CombineHash(result, duckdb::Hash<const char *>(type_name.c_str()));
-	return result;
-}
-
 } // namespace duckdb

@@ -24,9 +24,4 @@ unique_ptr<ParsedExpression> PositionalReferenceExpression::Copy() const {
 	return std::move(copy);
 }
 
-hash_t PositionalReferenceExpression::Hash() const {
-	hash_t result = ParsedExpression::Hash();
-	return CombineHash(duckdb::Hash(index), result);
-}
-
 } // namespace duckdb

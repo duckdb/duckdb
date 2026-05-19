@@ -78,14 +78,6 @@ string ColumnRefExpression::ToString() const {
 	return result;
 }
 
-hash_t ColumnRefExpression::Hash() const {
-	hash_t result = ParsedExpression::Hash();
-	for (auto &column_name : column_names) {
-		result = CombineHash(result, StringUtil::CIHash(column_name));
-	}
-	return result;
-}
-
 unique_ptr<ParsedExpression> ColumnRefExpression::Copy() const {
 	auto copy = make_uniq<ColumnRefExpression>(column_names);
 	copy->CopyProperties(*this);

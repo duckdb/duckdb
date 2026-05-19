@@ -16,10 +16,6 @@ string ConstantExpression::ToString() const {
 	return value.ToSQLString();
 }
 
-hash_t ConstantExpression::Hash() const {
-	return value.Hash();
-}
-
 unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
 	auto copy = make_uniq<ConstantExpression>(value);
 	copy->CopyProperties(*this);

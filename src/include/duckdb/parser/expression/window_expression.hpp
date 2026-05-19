@@ -84,6 +84,7 @@ public:
 	string ToString() const override;
 
 	bool Equals(const ParsedExpression &other) const override;
+	hash_t Hash() const override;
 
 	bool HasBoundedParts();
 

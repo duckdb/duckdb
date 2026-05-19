@@ -32,6 +32,7 @@ public:
 	string ToString() const override;
 
 	bool Equals(const ParsedExpression &other) const override;
+	hash_t Hash() const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;
 

@@ -47,13 +47,6 @@ bool ParsedExpression::HasSubquery() const {
 	return has_subquery;
 }
 
-hash_t ParsedExpression::Hash() const {
-	hash_t hash = duckdb::Hash<uint32_t>(static_cast<uint32_t>(type));
-	ParsedExpressionIterator::EnumerateChildren(
-	    *this, [&](const ParsedExpression &child) { hash = CombineHash(child.Hash(), hash); });
-	return hash;
-}
-
 bool ParsedExpression::Equals(const unique_ptr<ParsedExpression> &left, const unique_ptr<ParsedExpression> &right) {
 	if (left.get() == right.get()) {
 		return true;

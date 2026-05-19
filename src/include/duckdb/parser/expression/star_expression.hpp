@@ -41,6 +41,7 @@ public:
 	string ToString() const override;
 
 	bool Equals(const ParsedExpression &other) const override;
+	hash_t Hash() const override;
 	static bool IsStar(const ParsedExpression &a);
 	static bool IsColumns(const ParsedExpression &a);
 	static bool IsColumnsUnpacked(const ParsedExpression &a);

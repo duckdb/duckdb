@@ -36,15 +36,6 @@ string FunctionExpression::ToString() const {
 	                                                      filter.get(), order_bys.get(), export_state, true);
 }
 
-hash_t FunctionExpression::Hash() const {
-	hash_t result = ParsedExpression::Hash();
-	result = CombineHash(result, duckdb::Hash<const char *>(schema.c_str()));
-	result = CombineHash(result, duckdb::Hash<const char *>(function_name.c_str()));
-	result = CombineHash(result, duckdb::Hash<bool>(distinct));
-	result = CombineHash(result, duckdb::Hash<bool>(export_state));
-	return result;
-}
-
 unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	vector<unique_ptr<ParsedExpression>> copy_children;
 	unique_ptr<ParsedExpression> filter_copy;
