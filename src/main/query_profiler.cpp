@@ -24,6 +24,52 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
+void QueryProfileResult::AddValue(const string &k, Value val) {
+	D_ASSERT(kind == QueryProfileResultKind::OBJECT);
+	auto child = make_uniq<QueryProfileResult>();
+	child->kind = QueryProfileResultKind::VALUE;
+	child->key = k;
+	child->value = std::move(val);
+	children.push_back(std::move(child));
+}
+
+QueryProfileResult &QueryProfileResult::AddObject(const string &k) {
+	D_ASSERT(kind == QueryProfileResultKind::OBJECT);
+	auto child = make_uniq<QueryProfileResult>();
+	child->kind = QueryProfileResultKind::OBJECT;
+	child->key = k;
+	auto &ref = *child;
+	children.push_back(std::move(child));
+	return ref;
+}
+
+QueryProfileResult &QueryProfileResult::AddList(const string &k) {
+	D_ASSERT(kind == QueryProfileResultKind::OBJECT);
+	auto child = make_uniq<QueryProfileResult>();
+	child->kind = QueryProfileResultKind::LIST;
+	child->key = k;
+	auto &ref = *child;
+	children.push_back(std::move(child));
+	return ref;
+}
+
+QueryProfileResult &QueryProfileResult::AppendObject() {
+	D_ASSERT(kind == QueryProfileResultKind::LIST);
+	auto child = make_uniq<QueryProfileResult>();
+	child->kind = QueryProfileResultKind::OBJECT;
+	auto &ref = *child;
+	children.push_back(std::move(child));
+	return ref;
+}
+
+QueryProfileResult &QueryProfileResult::AppendList() {
+	auto child = make_uniq<QueryProfileResult>();
+	child->kind = QueryProfileResultKind::LIST;
+	auto &ref = *child;
+	children.push_back(std::move(child));
+	return ref;
+}
+
 profiler_settings_t QueryProfiler::GetQueryMetrics(ClientContext &context) {
 	auto &context_metrics = ClientConfig::GetConfig(context).profiler_settings;
 
@@ -121,6 +167,7 @@ void QueryProfiler::Reset() {
 	phase_stack.clear();
 	running = false;
 	query_metrics.Reset();
+	result_tree.reset();
 	metrics_finalized = false;
 }
 
@@ -738,20 +785,65 @@ profiler_metrics_t OperatorInformation::GetMetrics(const ProfilingInfo &info) co
 	return result;
 }
 
-static yyjson_mut_val *ToJSONRecursive(yyjson_mut_doc *doc, const ProfilingInfo &profiling_info, ProfilingNode &node) {
-	auto result_obj = yyjson_mut_obj(doc);
-	auto &operator_info = node.GetOperatorInfo();
-
-	auto operator_metrics = operator_info.GetMetrics(profiling_info);
-	ProfilingInfo::MetricsToJSON(operator_metrics, doc, result_obj);
-
-	auto children_list = yyjson_mut_arr(doc);
-	for (idx_t i = 0; i < node.GetChildCount(); i++) {
-		auto child = ToJSONRecursive(doc, profiling_info, *node.GetChild(i));
-		yyjson_mut_arr_add_val(children_list, child);
+static yyjson_mut_val *ValueToJSON(yyjson_mut_doc *doc, const Value &val) {
+	if (val.IsNull()) {
+		return yyjson_mut_null(doc);
 	}
-	yyjson_mut_obj_add_val(doc, result_obj, "children", children_list);
-	return result_obj;
+	auto &type = val.type();
+	if (type.id() == LogicalTypeId::MAP) {
+		// MAP values (e.g. extra_info) become JSON objects; multiline string values become arrays
+		auto obj = yyjson_mut_obj(doc);
+		for (auto &child : MapValue::GetChildren(val)) {
+			auto kv = StructValue::GetChildren(child);
+			auto k = kv[0].GetValue<string>();
+			auto v = kv[1].GetValue<string>();
+			auto key_ptr = yyjson_mut_get_str(yyjson_mut_strcpy(doc, k.c_str()));
+			auto splits = StringUtil::Split(v, "\n");
+			if (splits.size() > 1) {
+				auto arr = yyjson_mut_arr(doc);
+				for (auto &s : splits) {
+					yyjson_mut_arr_add_strcpy(doc, arr, s.c_str());
+				}
+				yyjson_mut_obj_add_val(doc, obj, key_ptr, arr);
+			} else {
+				yyjson_mut_obj_add_strcpy(doc, obj, key_ptr, v.c_str());
+			}
+		}
+		return obj;
+	}
+	if (type.IsIntegral()) {
+		return yyjson_mut_uint(doc, val.GetValue<uint64_t>());
+	}
+	if (type.IsNumeric()) {
+		return yyjson_mut_real(doc, val.GetValue<double>());
+	}
+	auto str = val.GetValue<string>();
+	return yyjson_mut_strncpy(doc, str.c_str(), str.size());
+}
+
+static yyjson_mut_val *QueryProfileResultToJSON(yyjson_mut_doc *doc, const QueryProfileResult &node) {
+	switch (node.kind) {
+	case QueryProfileResultKind::VALUE:
+		return ValueToJSON(doc, node.value);
+	case QueryProfileResultKind::LIST: {
+		auto arr = yyjson_mut_arr(doc);
+		for (auto &child : node.children) {
+			yyjson_mut_arr_add_val(arr, QueryProfileResultToJSON(doc, *child));
+		}
+		return arr;
+	}
+	case QueryProfileResultKind::OBJECT: {
+		auto obj = yyjson_mut_obj(doc);
+		for (auto &child : node.children) {
+			D_ASSERT(!child->key.empty());
+			auto key_ptr = yyjson_mut_get_str(yyjson_mut_strcpy(doc, child->key.c_str()));
+			yyjson_mut_obj_add_val(doc, obj, key_ptr, QueryProfileResultToJSON(doc, *child));
+		}
+		return obj;
+	}
+	default:
+		throw InternalException("Unknown QueryProfileResultKind");
+	}
 }
 
 static string StringifyAndFree(ConvertedJSONHolder &json_holder, yyjson_mut_val *object) {
@@ -777,32 +869,55 @@ void QueryProfiler::ToLog() const {
 	settings.WriteMetricsToLog(context);
 }
 
+static void OperatorToResultTree(const ProfilingInfo &settings, ProfilingNode &node, QueryProfileResult &result) {
+	auto operator_metrics = node.GetOperatorInfo().GetMetrics(settings);
+	for (auto &entry : operator_metrics) {
+		auto key = StringUtil::Lower(EnumUtil::ToString(entry.first));
+		result.AddValue(key, std::move(entry.second));
+	}
+	if (node.GetChildCount() > 0) {
+		auto &children_list = result.AddList("children");
+		for (idx_t i = 0; i < node.GetChildCount(); i++) {
+			auto &child_result = children_list.AppendObject();
+			OperatorToResultTree(settings, *node.GetChild(i), child_result);
+		}
+	}
+}
+
+unique_ptr<QueryProfileResult> QueryProfiler::ToResultTree() const {
+	auto result = make_uniq<QueryProfileResult>();
+	if (!root) {
+		result->AddValue("result", Value(query_metrics.query_name.empty() ? "empty" : "error"));
+		return result;
+	}
+	root_info->MetricsToProfileResult(*result);
+	auto &op_list = result->AddList("operator_info");
+	auto &op_node = op_list.AppendObject();
+	OperatorToResultTree(*root_info, *root, op_node);
+	return result;
+}
+
+QueryProfileResult &QueryProfiler::GetResult() {
+	lock_guard<std::mutex> guard(lock);
+	if (!result_tree) {
+		result_tree = ToResultTree();
+	}
+	return *result_tree;
+}
+
+bool QueryProfiler::HasRoot() const {
+	return root != nullptr;
+}
+
+
 string QueryProfiler::ToJSON() const {
 	lock_guard<std::mutex> guard(lock);
 	ConvertedJSONHolder json_holder;
-
 	json_holder.doc = yyjson_mut_doc_new(nullptr);
-	auto result_obj = yyjson_mut_obj(json_holder.doc);
-	yyjson_mut_doc_set_root(json_holder.doc, result_obj);
-
-	if (query_metrics.query_name.empty() && !root) {
-		yyjson_mut_obj_add_str(json_holder.doc, result_obj, "result", "empty");
-		return StringifyAndFree(json_holder, result_obj);
-	}
-	if (!root) {
-		yyjson_mut_obj_add_str(json_holder.doc, result_obj, "result", "error");
-		return StringifyAndFree(json_holder, result_obj);
-	}
-
-	auto &settings = *root_info;
-	settings.WriteMetricsToJSON(json_holder.doc, result_obj);
-
-	// recursively print the physical operator tree
-	auto children_list = yyjson_mut_arr(json_holder.doc);
-	yyjson_mut_obj_add_val(json_holder.doc, result_obj, "operator_info", children_list);
-	auto child = ToJSONRecursive(json_holder.doc, settings, *root);
-	yyjson_mut_arr_add_val(children_list, child);
-	return StringifyAndFree(json_holder, result_obj);
+	auto result = ToResultTree();
+	auto root_val = QueryProfileResultToJSON(json_holder.doc, *result);
+	yyjson_mut_doc_set_root(json_holder.doc, root_val);
+	return StringifyAndFree(json_holder, root_val);
 }
 
 void QueryProfiler::WriteToFile(const char *path, string &info) const {

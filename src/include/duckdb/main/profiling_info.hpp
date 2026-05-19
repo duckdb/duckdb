@@ -23,6 +23,8 @@ struct yyjson_mut_val;
 } // namespace duckdb_yyjson
 
 namespace duckdb {
+
+struct QueryProfileResult;
 enum class ProfilingParameterNames : uint8_t { FORMAT, COVERAGE, SAVE_LOCATION, MODE, METRICS };
 
 class ProfilerSettings {
@@ -66,8 +68,8 @@ public:
 public:
 	string GetMetricAsString(const MetricType metric) const;
 	void WriteMetricsToLog(ClientContext &context) const;
-	void WriteMetricsToJSON(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *destination) const;
-	static void MetricsToJSON(const profiler_metrics_t &metrics, duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *dest);
+	//! Copy all enabled metrics into a QueryProfileResult node using lowercase string keys
+	void MetricsToProfileResult(QueryProfileResult &result) const;
 
 public:
 	template <class METRIC_TYPE>

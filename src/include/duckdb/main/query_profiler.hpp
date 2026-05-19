@@ -39,6 +39,35 @@ class OperatorProfiler;
 
 enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
 
+//! A JSON-like recursive profiling value.
+//! FIXME: this should at some point be replaced by a "Value" - but that's not easily possible until our VARIANT Value is extended to be able to easily hold arbitrary values
+enum class QueryProfileResultKind : uint8_t {
+	VALUE,
+	LIST,
+	OBJECT,
+};
+
+struct QueryProfileResult {
+	QueryProfileResultKind kind = QueryProfileResultKind::OBJECT;
+	//! Non-empty for children of an OBJECT node; empty for LIST items and the root
+	string key;
+	//! Valid when kind == VALUE
+	Value value;
+	//! Ordered children; valid when kind == LIST or OBJECT
+	vector<unique_ptr<QueryProfileResult>> children;
+
+	//! Add a named VALUE leaf to this OBJECT node
+	void AddValue(const string &k, Value val);
+	//! Add a named OBJECT child to this OBJECT node; returns the new child
+	QueryProfileResult &AddObject(const string &k);
+	//! Add a named LIST child to this OBJECT node; returns the new child
+	QueryProfileResult &AddList(const string &k);
+	//! Append an anonymous OBJECT item to this LIST node; returns the new item
+	QueryProfileResult &AppendObject();
+	//! Append an anonymous LIST item to this node; returns the new item
+	QueryProfileResult &AppendList();
+};
+
 //! QueryProfiler collects the profiling metrics of a query.
 class QueryProfiler {
 public:
@@ -106,17 +135,10 @@ public:
 		return tree_map.size();
 	}
 
-	//! Return the root of the query tree.
-	optional_ptr<ProfilingNode> GetRoot() {
-		return root.get();
-	}
-
-	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications.
-	//! This can be useful when implementing continuous profiling or making customizations.
-	DUCKDB_API void GetRootUnderLock(const std::function<void(optional_ptr<ProfilingNode>)> &callback) {
-		lock_guard<std::mutex> guard(lock);
-		callback(GetRoot());
-	}
+	//! Return the result tree (generating it if it does not yet exist)
+	QueryProfileResult &GetResult();
+	//! Returns true if the last query produced a profiling tree (i.e. profiling was enabled and the query succeeded)
+	bool HasRoot() const;
 
 private:
 	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root,
@@ -143,6 +165,8 @@ private:
 	//! Top level query information.
 	QueryMetrics query_metrics;
 
+	unique_ptr<QueryProfileResult> result_tree;
+
 	//! A map of a Physical Operator pointer to a tree node
 	TreeMap tree_map;
 	//! Whether or not we are running as part of a explain_analyze query
@@ -168,6 +192,8 @@ private:
 private:
 	void MoveOptimizerPhasesToRoot();
 	void FinalizeMetricsInternal();
+
+	unique_ptr<QueryProfileResult> ToResultTree() const;
 
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.

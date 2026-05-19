@@ -1,7 +1,9 @@
 #include "duckdb/main/profiling_info.hpp"
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/profiling_utils.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/logging/log_manager.hpp"
 
 #include "yyjson.hpp"
@@ -115,52 +117,14 @@ void ProfilingInfo::WriteMetricsToLog(ClientContext &context) const {
 	}
 }
 
-void ProfilingInfo::MetricsToJSON(const profiler_metrics_t &metrics, yyjson_mut_doc *doc, yyjson_mut_val *dest) {
+void ProfilingInfo::MetricsToProfileResult(QueryProfileResult &result) const {
 	for (auto &entry : metrics) {
-		auto metric = entry.first;
-		auto &metric_value = entry.second;
-		auto metric_str = StringUtil::Lower(EnumUtil::ToString(metric));
-		auto key_val = yyjson_mut_strcpy(doc, metric_str.c_str());
-		auto key_ptr = yyjson_mut_get_str(key_val);
-
-		// FIXME: special casing is not necessary, make MetricToJson deal with nested types
-		if (metric == MetricType::EXTRA_INFO) {
-			auto extra_info_obj = yyjson_mut_obj(doc);
-			auto children = MapValue::GetChildren(metric_value);
-			for (auto &child : children) {
-				auto struct_children = StructValue::GetChildren(child);
-				auto key = struct_children[0].GetValue<string>();
-				auto value = struct_children[1].GetValue<string>();
-
-				auto key_mut = unsafe_yyjson_mut_strncpy(doc, key.c_str(), key.size());
-				auto value_mut = unsafe_yyjson_mut_strncpy(doc, value.c_str(), value.size());
-
-				auto splits = StringUtil::Split(value_mut, "\n");
-				if (splits.size() > 1) {
-					auto list_items = yyjson_mut_arr(doc);
-					for (auto &split : splits) {
-						yyjson_mut_arr_add_strcpy(doc, list_items, split.c_str());
-					}
-					yyjson_mut_obj_add_val(doc, extra_info_obj, key_mut, list_items);
-				} else {
-					yyjson_mut_obj_add_strcpy(doc, extra_info_obj, key_mut, value_mut);
-				}
-			}
-			yyjson_mut_obj_add_val(doc, dest, key_ptr, extra_info_obj);
+		if (settings.find(entry.first) == settings.end()) {
 			continue;
 		}
-
-		if (MetricsUtils::IsOptimizerMetric(metric) || MetricsUtils::IsPhaseTimingMetric(metric)) {
-			yyjson_mut_obj_add_real(doc, dest, key_ptr, metric_value.GetValue<double>());
-			continue;
-		}
-
-		ProfilingUtils::MetricToJson(doc, dest, key_ptr, metric_value);
+		auto key = StringUtil::Lower(EnumUtil::ToString(entry.first));
+		result.AddValue(key, entry.second);
 	}
-}
-
-void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest) const {
-	MetricsToJSON(metrics, doc, dest);
 }
 
 } // namespace duckdb

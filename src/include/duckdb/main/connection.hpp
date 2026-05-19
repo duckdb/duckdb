@@ -53,9 +53,6 @@ public:
 	//! Returns query profiling information for the current query
 	DUCKDB_API string GetProfilingInformation(ProfilerPrintFormat format = ProfilerPrintFormat::QUERY_TREE);
 
-	//! Returns the first node of the query profiling tree
-	DUCKDB_API optional_ptr<ProfilingNode> GetProfilingTree();
-
 	//! Interrupt execution of the current query
 	DUCKDB_API void Interrupt();
 
