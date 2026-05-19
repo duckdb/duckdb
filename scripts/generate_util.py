@@ -278,7 +278,9 @@ def generate_member_copy(member, indent='\t'):
         return [f'{indent}copy->{field} = {field} ? unique_ptr_cast<{base}, OrderModifier>({field}->Copy()) : nullptr;']
 
     if type_str == 'SelectStatement*':
-        return [f'{indent}copy->{field} = {field} ? unique_ptr_cast<SQLStatement, SelectStatement>({field}->Copy()) : nullptr;']
+        return [
+            f'{indent}copy->{field} = {field} ? unique_ptr_cast<SQLStatement, SelectStatement>({field}->Copy()) : nullptr;'
+        ]
 
     if type_str == 'vector<CaseCheck>':
         return [
@@ -466,12 +468,12 @@ def member_is_iterable_expression(member):
         return False
     type_str = member['type']
     return (
-        is_parsed_expression_ptr(type_str) or
-        is_parsed_expression_list(type_str) or
-        type_str == 'vector<CaseCheck>' or
-        type_str == 'vector<OrderByNode>' or
-        is_expression_map(type_str) or
-        is_order_modifier_ptr(type_str)
+        is_parsed_expression_ptr(type_str)
+        or is_parsed_expression_list(type_str)
+        or type_str == 'vector<CaseCheck>'
+        or type_str == 'vector<OrderByNode>'
+        or is_expression_map(type_str)
+        or is_order_modifier_ptr(type_str)
     )
 
 

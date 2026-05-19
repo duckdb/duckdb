@@ -4,8 +4,7 @@
 
 namespace duckdb {
 
-OperatorExpression::OperatorExpression()
-    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::OPERATOR) {
+OperatorExpression::OperatorExpression() : ParsedExpression(ExpressionType::INVALID, ExpressionClass::OPERATOR) {
 }
 
 OperatorExpression::OperatorExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
