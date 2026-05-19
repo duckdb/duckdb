@@ -20,7 +20,7 @@ static string OperatorToString(const Value &val) {
 template <class METRIC_TYPE>
 static void AggregateMetric(ProfilingNode &node, MetricType aggregated_metric, MetricType child_metric, const std::function<METRIC_TYPE(const METRIC_TYPE &, const METRIC_TYPE &)> &update_fun) {
 	auto &info = node.GetProfilingInfo();
-	info.metrics[aggregated_metric] = info.metrics[child_metric];
+	info.SetMetricValue(aggregated_metric, info.GetMetricValue<Value>(child_metric));
 
 	for (idx_t i = 0; i < node.GetChildCount(); i++) {
 		auto child = node.GetChild(i);
@@ -40,7 +40,7 @@ static void GetCumulativeMetric(ProfilingNode &node, MetricType cumulative_metri
 }
 
 static Value GetCumulativeOptimizers(ProfilingNode &node) {
-	auto &metrics = node.GetProfilingInfo().metrics;
+	auto &metrics = node.GetProfilingInfo().GetMetrics();
 	double count = 0;
 	for (auto &metric : metrics) {
 		if (MetricsUtils::IsOptimizerMetric(metric.first)) {
@@ -277,10 +277,10 @@ void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_
 		metric = Value::UBIGINT(query_metrics.GetMetricValue(MetricType::WAL_REPLAY_ENTRY_COUNT));
 		break;
 	case MetricType::RESULT_SET_SIZE:
-		metric = child_info.metrics[MetricType::RESULT_SET_SIZE];
+		metric = child_info.GetMetricValue<Value>(MetricType::RESULT_SET_SIZE);
 		break;
 	case MetricType::ROWS_RETURNED:
-		metric = child_info.metrics[MetricType::OPERATOR_CARDINALITY];
+		metric = child_info.GetMetricValue<Value>(MetricType::OPERATOR_CARDINALITY);
 		break;
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 		metric = GetCumulativeOptimizers(node);

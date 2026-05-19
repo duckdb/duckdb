@@ -122,8 +122,8 @@ public:
 private:
 	//! Whether or not the profiler is enabled
 	bool enabled;
-	//! Sub-settings for the operator profiler
-	profiler_settings_t settings;
+	//! Sub-settings for the profiler
+	ProfilerSettings settings;
 
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;

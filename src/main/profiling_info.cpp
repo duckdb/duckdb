@@ -10,6 +10,12 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
+ProfilerSettings::ProfilerSettings(profiler_settings_t settings_p) : settings(std::move(settings_p)) {}
+
+bool ProfilerSettings::MetricIsEnabled(MetricType metric) const {
+	return settings.find(metric) != settings.end();
+}
+
 ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t depth) : settings(n_settings) {
 	// Expand.
 	if (depth > 0) {
@@ -47,11 +53,21 @@ void ProfilingInfo::ResetMetrics() {
 	}
 }
 
-bool ProfilingInfo::Enabled(const profiler_settings_t &settings, const MetricType metric) {
-	if (settings.find(metric) != settings.end()) {
-		return true;
+bool ProfilingInfo::Enabled(const MetricType metric) const {
+	return settings.find(metric) != settings.end();
+}
+
+bool ProfilingInfo::EnabledForCollection(const MetricType metric) const {
+	return expanded_settings.find(metric) != expanded_settings.end();
+}
+
+bool ProfilingInfo::TryGetMetric(MetricType type, Value &result) const {
+	auto entry = metrics.find(type);
+	if (entry == metrics.end()) {
+		return false;
 	}
-	return false;
+	result = entry->second;
+	return true;
 }
 
 void ProfilingInfo::Expand(profiler_settings_t &settings, const MetricType metric) {
@@ -76,12 +92,16 @@ void ProfilingInfo::Expand(profiler_settings_t &settings, const MetricType metri
 		return;
 	}
 	default:
-		return;
+		break;
 	}
 }
 
+void ProfilingInfo::SetMetricValue(MetricType type, Value new_value) {
+	metrics[type] = std::move(new_value);
+}
+
 string ProfilingInfo::GetMetricAsString(const MetricType metric) const {
-	if (!Enabled(settings, metric)) {
+	if (!Enabled(metric)) {
 		throw InternalException("Metric %s not enabled", EnumUtil::ToString(metric));
 	}
 
