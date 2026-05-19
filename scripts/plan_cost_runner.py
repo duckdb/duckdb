@@ -130,9 +130,7 @@ def query_plan_cost(cli, dbname, query):
         raise e
     with open(PROFILE_FILENAME, 'r') as file:
         data = json.load(file)
-        cost = op_inspect(get_root_operator(data))
-        cost.time = data.get('latency', 0)
-        return cost
+        return op_inspect(get_root_operator(data))
 
 
 def print_banner(text):
