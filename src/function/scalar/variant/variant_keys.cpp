@@ -131,7 +131,7 @@ static void TraverseVariantPath(const UnifiedVariantVectorData &variant, const v
 }
 
 static void PrepareKeyListStorage(VariantKeysResult &result, const ValidityMask &object_validity,
-                           const VariantNestedData *nested_data, const idx_t count) {
+                                  const VariantNestedData *nested_data, const idx_t count) {
 	idx_t total_key_count = 0;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		if (!result.path_validity.RowIsValid(row_idx) || !object_validity.RowIsValid(row_idx)) {
