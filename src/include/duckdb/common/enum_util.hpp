@@ -132,6 +132,8 @@ enum class ColumnDataScanProperties : uint8_t;
 
 enum class ColumnIndexType : uint8_t;
 
+enum class ColumnSegmentInfoScanType : uint8_t;
+
 enum class ColumnSegmentType : uint8_t;
 
 enum class CompressedMaterializationDirection : uint8_t;
@@ -690,6 +692,9 @@ const char* EnumUtil::ToChars<ColumnDataScanProperties>(ColumnDataScanProperties
 
 template<>
 const char* EnumUtil::ToChars<ColumnIndexType>(ColumnIndexType value);
+
+template<>
+const char* EnumUtil::ToChars<ColumnSegmentInfoScanType>(ColumnSegmentInfoScanType value);
 
 template<>
 const char* EnumUtil::ToChars<ColumnSegmentType>(ColumnSegmentType value);
@@ -1453,6 +1458,9 @@ ColumnDataScanProperties EnumUtil::FromString<ColumnDataScanProperties>(const ch
 
 template<>
 ColumnIndexType EnumUtil::FromString<ColumnIndexType>(const char *value);
+
+template<>
+ColumnSegmentInfoScanType EnumUtil::FromString<ColumnSegmentInfoScanType>(const char *value);
 
 template<>
 ColumnSegmentType EnumUtil::FromString<ColumnSegmentType>(const char *value);
