@@ -9,8 +9,8 @@ if [[ ! -f "$GRAMMAR_FILE" ]]; then
   exit 1
 fi
 
-python "$GRAMMAR_FILE" --grammar-file
-python "$GRAMMAR_FILE"
+python3 "$GRAMMAR_FILE" --grammar-file
+python3 "$GRAMMAR_FILE"
 
 echo "Successfully built grammar files"
 
@@ -21,7 +21,7 @@ if [[ ! -f "$GEN_TRANSFORMER_FILE" ]]; then
   exit 1
 fi
 
-python "$GEN_TRANSFORMER_FILE" --write
+python3 "$GEN_TRANSFORMER_FILE" --write
 
 echo "Successfully generated transformer wrappers"
 

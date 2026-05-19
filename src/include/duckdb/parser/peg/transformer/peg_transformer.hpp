@@ -274,6 +274,7 @@ public:
 	void RegisterExplain();
 	void RegisterExpression();
 	void RegisterInsert();
+	void RegisterConnect();
 	void RegisterLoad();
 	void RegisterMergeInto();
 	void RegisterPivot();
@@ -352,6 +353,13 @@ private:
 	static unique_ptr<AlterTableInfo> TransformSetOptions(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<AlterTableInfo> TransformResetOptions(PEGTransformer &transformer, ParseResult &parse_result);
 
+	// connect.gram — both rules have optional sub-clauses, so the generator skips them and we
+	// hand-write the (PEGTransformer&, ParseResult&) entry points.
+	static unique_ptr<SQLStatement> TransformConnectStatement(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformDisconnectStatement(PEGTransformer &transformer,
+	                                                             ParseResult &parse_result);
+	static vector<OrderByNode> TransformGenericCopyOptionParenthesizedExpressionList(PEGTransformer &transformer,
+	                                                                                 ParseResult &parse_result);
 	// comment.gram
 	static unique_ptr<SQLStatement> TransformCommentStatement(PEGTransformer &transformer, ParseResult &parse_result);
 	static CatalogType TransformCommentOnType(PEGTransformer &transformer, ParseResult &parse_result);
@@ -813,6 +821,16 @@ private:
 	static unique_ptr<ParsedExpression> TransformTrimExpression(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformTrimDirection(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformTrimSource(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformOverlayExpression(PEGTransformer &transformer,
+	                                                               ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformOverlayArguments(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformOverlayParameters(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformFromExpression(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformForExpression(PEGTransformer &transformer, ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformOverlayExpressionList(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformPositionExpression(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformCastExpression(PEGTransformer &transformer, ParseResult &parse_result);
@@ -1157,14 +1175,6 @@ private:
 	static pair<string, unique_ptr<ParsedExpression>> TransformUpdateSetElement(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);
 	static string TransformUpdateSetColumnTarget(PEGTransformer &transformer, ParseResult &parse_result);
-
-	// vacuum.gram
-	static unique_ptr<SQLStatement> TransformVacuumStatement(PEGTransformer &transformer, ParseResult &parse_result);
-	static VacuumOptions TransformVacuumOptions(PEGTransformer &transformer, ParseResult &parse_result);
-	static VacuumOptions TransformVacuumLegacyOptions(PEGTransformer &transformer, ParseResult &parse_result);
-	static VacuumOptions TransformVacuumParensOptions(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformVacuumOption(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<string> TransformNameList(PEGTransformer &transformer, ParseResult &parse_result);
 
 	//===--------------------------------------------------------------------===//
 	// START GENERATED RULES

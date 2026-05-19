@@ -18,14 +18,13 @@ static unique_ptr<FunctionData> ToBaseBind(BindScalarFunctionInput &input) {
 }
 
 static void ToBaseFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input = args.data[0];
-	auto &radix = args.data[1];
-	auto &min_length = args.data[2];
-	auto count = args.size();
+	const auto &input = args.data[0];
+	const auto &radix = args.data[1];
+	const auto &min_length = args.data[2];
 
 	auto &heap = StringVector::GetStringHeap(result);
 	TernaryExecutor::Execute<int64_t, int32_t, int32_t, string_t>(
-	    input, radix, min_length, result, count, [&](int64_t input, int32_t radix, int32_t min_length) {
+	    input, radix, min_length, result, [&](int64_t input, int32_t radix, int32_t min_length) {
 		    if (input < 0) {
 			    throw InvalidInputException("'to_base' number must be greater than or equal to 0");
 		    }

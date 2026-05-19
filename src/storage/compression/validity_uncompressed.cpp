@@ -175,20 +175,19 @@ const validity_t ValidityUncompressed::UPPER_MASKS[] = {0x0,
 // Analyze
 //===--------------------------------------------------------------------===//
 struct ValidityAnalyzeState : public AnalyzeState {
-	explicit ValidityAnalyzeState(const CompressionInfo &info) : AnalyzeState(info), count(0) {
+	explicit ValidityAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager), count(0) {
 	}
 
 	idx_t count;
 };
 
 unique_ptr<AnalyzeState> ValidityInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<ValidityAnalyzeState>(info);
+	return make_uniq<ValidityAnalyzeState>(col_data.GetBlockManager());
 }
 
-bool ValidityAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
+bool ValidityAnalyze(AnalyzeState &state_p, const Vector &input) {
 	auto &state = state_p.Cast<ValidityAnalyzeState>();
-	state.count += count;
+	state.count += input.size();
 	return true;
 }
 
@@ -540,10 +539,9 @@ unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, b
 	return nullptr;
 }
 
-idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,
+idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segment, BaseStatistics &validity_stats,
                      UnifiedVectorFormat &data, idx_t offset, idx_t vcount) {
 	D_ASSERT(segment.GetBlockOffset() == 0);
-	auto &validity_stats = stats.statistics;
 
 	auto max_tuples = segment.SegmentSize() / ValidityMask::STANDARD_MASK_SIZE * STANDARD_VECTOR_SIZE;
 	idx_t append_count = MinValue<idx_t>(vcount, max_tuples - segment.count);
@@ -568,7 +566,7 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 	return append_count;
 }
 
-idx_t ValidityFinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
+idx_t ValidityFinalizeAppend(ColumnSegment &segment, BaseStatistics &stats) {
 	return ((segment.count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE) * ValidityMask::STANDARD_MASK_SIZE;
 }
 

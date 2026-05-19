@@ -5,6 +5,7 @@
 #include "duckdb/main/relation/materialized_relation.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/main/relation/query_relation.hpp"
 
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
 ArrowStreamTestFactory::CreateStream(uintptr_t this_ptr, duckdb::ArrowStreamParameters &parameters) {
@@ -148,59 +149,57 @@ unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, vector
 	return arrow_result;
 }
 
-bool ArrowTestHelper::CompareResults(Connection &con, unique_ptr<QueryResult> arrow,
-                                     unique_ptr<MaterializedQueryResult> duck, const string &query) {
-	auto &materialized_arrow = (MaterializedQueryResult &)*arrow;
-	// compare the results
-	if (materialized_arrow.statement_type == StatementType::INVALID_STATEMENT ||
-	    duck->statement_type == StatementType::INVALID_STATEMENT) {
-		return materialized_arrow.type == duck->type;
+bool ArrowTestHelper::CompareResults(Connection &con, shared_ptr<Relation> arrow_tbl, const string &query) {
+	// run FROM arrow_scan(...) EXCEPT ALL <query> - this should be empty
+	shared_ptr<Relation> regular_result;
+	auto statements = con.ExtractStatements(query);
+	if (statements.size() != 1 || statements[0]->type != StatementType::SELECT_STATEMENT) {
+		auto query_result = con.Query(query);
+		auto duck_collection = query_result->TakeCollection();
+		regular_result =
+		    make_shared_ptr<MaterializedRelation>(con.context, std::move(duck_collection), query_result->names, "duck");
+	} else {
+		regular_result = con.RelationFromQuery(query, "regular_result");
 	}
 
-	string error;
-
-	auto arrow_collection = materialized_arrow.TakeCollection();
-	auto arrow_rel = make_shared_ptr<MaterializedRelation>(con.context, std::move(arrow_collection),
-	                                                       materialized_arrow.names, "arrow");
-
-	auto duck_collection = duck->TakeCollection();
-	auto duck_rel = make_shared_ptr<MaterializedRelation>(con.context, std::move(duck_collection), duck->names, "duck");
-
-	if (materialized_arrow.types != duck->types) {
-		bool mismatch_error = false;
+	auto result = arrow_tbl->Except(regular_result)->Execute();
+	if (result->HasError()) {
 		std::ostringstream error_msg;
 		error_msg << "-------------------------------------\n";
 		error_msg << "Arrow round-trip type comparison failed\n";
 		error_msg << "-------------------------------------\n";
 		error_msg << "Query: " << query.c_str() << "\n";
-		for (idx_t i = 0; i < materialized_arrow.types.size(); i++) {
-			if (materialized_arrow.types[i] != duck->types[i] && duck->types[i].id() != LogicalTypeId::ENUM) {
-				mismatch_error = true;
-				error_msg << "Column " << i << " mismatch. DuckDB: '" << duck->types[i].ToString() << "'. Arrow '"
-				          << materialized_arrow.types[i].ToString() << "'\n";
-			}
-		}
 		error_msg << "-------------------------------------\n";
-		if (mismatch_error) {
-			printf("%s", error_msg.str().c_str());
-			return false;
-		}
+		error_msg << "Query failed to execute:\n";
+		error_msg << result->GetError();
+		error_msg << "-------------------------------------\n";
+		printf("%s", error_msg.str().c_str());
+		return false;
 	}
-	// We perform a SELECT * FROM "duck_rel" EXCEPT ALL SELECT * FROM "arrow_rel"
-	// this will tell us if there are tuples missing from 'arrow_rel' that are present in 'duck_rel'
-	auto except_rel = make_shared_ptr<SetOpRelation>(duck_rel, arrow_rel, SetOperationType::EXCEPT, /*setop_all=*/true);
-	auto except_result_p = except_rel->Execute();
-	auto &except_result = except_result_p->Cast<MaterializedQueryResult>();
-	if (except_result.RowCount() != 0) {
-		printf("-------------------------------------\n");
-		printf("Arrow round-trip failed: %s\n", error.c_str());
-		printf("-------------------------------------\n");
-		printf("Query: %s\n", query.c_str());
-		printf("-----------------DuckDB-------------------\n");
-		Printer::Print(duck_rel->ToString(0));
-		printf("-----------------Arrow--------------------\n");
-		Printer::Print(arrow_rel->ToString(0));
-		printf("-------------------------------------\n");
+	vector<string> rows;
+	for (auto &row : *result) {
+		string row_str;
+		for (idx_t c = 0; c < result->ColumnCount(); ++c) {
+			if (!row_str.empty()) {
+				row_str += "\t";
+			}
+			row_str += row.GetValue<string>(c);
+		}
+		rows.push_back(row_str);
+	}
+	if (!rows.empty()) {
+		std::ostringstream error_msg;
+		error_msg << "-------------------------------------\n";
+		error_msg << "Arrow round-trip type comparison failed\n";
+		error_msg << "-------------------------------------\n";
+		error_msg << "Query: " << query.c_str() << "\n";
+		error_msg << "-------------------------------------\n";
+		error_msg << "Rows existed in Arrow result set but not in regular result set:\n";
+		error_msg << "-------------------------------------\n";
+		for (auto &row : rows) {
+			error_msg << row << "\n";
+		}
+		printf("%s", error_msg.str().c_str());
 		return false;
 	}
 	return true;
@@ -262,44 +261,22 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	// And construct a `arrow_scan` to read the created "arrow object"
 	auto params = ConstructArrowScan(factory);
 
-	// Executing the scan gives us back a MaterializedQueryResult from the ArrowQueryResult we read
-	// query -> ArrowQueryResult -> arrow_scan() -> MaterializedQueryResult
-	auto arrow_result = ScanArrowObject(con, params);
-	if (!arrow_result) {
-		printf("Query: %s\n", query.c_str());
-		return false;
-	}
-
-	// This query goes directly from:
-	// query -> MaterializedQueryResult
-	auto expected = con.Query(query);
-	return CompareResults(con, std::move(arrow_result), std::move(expected), query);
+	auto arrow_scan = con.TableFunction("arrow_scan", params);
+	return CompareResults(con, std::move(arrow_scan), query);
 }
 
 bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream) {
-	unique_ptr<QueryResult> arrow_result;
 	if (!arrow_stream.private_data) {
-		// no data, treat as empty result
-		StatementProperties properties;
-		vector<string> names;
-		auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator());
-		arrow_result = make_uniq<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties,
-		                                                  std::move(names), std::move(collection), ClientProperties());
-	} else {
-		// construct the arrow scan
-		auto params = ConstructArrowScan(arrow_stream);
-
-		// run the arrow scan over the result
-		arrow_result = ScanArrowObject(con, params);
-		arrow_stream.release = nullptr;
+		// no data - skip comparison
+		return true;
 	}
+	// construct the arrow scan
+	auto params = ConstructArrowScan(arrow_stream);
+	auto arrow_scan = con.TableFunction("arrow_scan", params);
 
-	if (!arrow_result) {
-		printf("Query: %s\n", query.c_str());
-		return false;
-	}
-
-	return CompareResults(con, std::move(arrow_result), con.Query(query), query);
+	auto success = CompareResults(con, std::move(arrow_scan), query);
+	arrow_stream.release = nullptr;
+	return success;
 }
 
 } // namespace duckdb

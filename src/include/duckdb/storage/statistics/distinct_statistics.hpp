@@ -33,8 +33,8 @@ public:
 
 	unique_ptr<DistinctStatistics> Copy() const;
 
-	void UpdateSample(Vector &new_data, idx_t count, Vector &hashes);
-	void Update(Vector &new_data, idx_t count, Vector &hashes);
+	void UpdateSample(const Vector &new_data, idx_t count, Vector &hashes);
+	void Update(const Vector &new_data, idx_t count, Vector &hashes);
 
 	string ToString() const;
 	idx_t GetCount() const;
@@ -45,7 +45,7 @@ public:
 	static unique_ptr<DistinctStatistics> Deserialize(Deserializer &deserializer);
 
 private:
-	void UpdateInternal(Vector &update, idx_t count, Vector &hashes);
+	void UpdateInternal(const Vector &update, idx_t count, Vector &hashes);
 
 private:
 	//! For distinct statistics we sample the input to speed up insertions

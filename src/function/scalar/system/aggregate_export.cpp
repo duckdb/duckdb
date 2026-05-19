@@ -141,9 +141,9 @@ struct AggregateStateLayout {
  */
 struct LoadFieldOp {
 	template <class T>
-	static void Operation(idx_t root_stride, Vector &struct_vec, idx_t field_idx, const UnifiedVectorFormat &state_data,
-	                      idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
-		auto &child = StructVector::GetEntries(struct_vec)[field_idx];
+	static void Operation(idx_t root_stride, const Vector &struct_vec, idx_t field_idx,
+	                      const UnifiedVectorFormat &state_data, idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
+		const auto &child = StructVector::GetEntries(struct_vec)[field_idx];
 		auto child_data = FlatVector::GetData<T>(child);
 
 		for (idx_t row = 0; row < count; row++) {
@@ -174,9 +174,9 @@ struct StoreFieldOp {
 
 struct CopyFromInputFieldOp {
 	template <class T>
-	static void Operation(Vector &input_vec, Vector &result_vec, idx_t field_idx, const SelectionVector &sel,
+	static void Operation(const Vector &input_vec, Vector &result_vec, idx_t field_idx, const SelectionVector &sel,
 	                      idx_t count, const UnifiedVectorFormat &input_data) {
-		auto &input_child = StructVector::GetEntries(input_vec)[field_idx];
+		const auto &input_child = StructVector::GetEntries(input_vec)[field_idx];
 		auto input_child_data = FlatVector::GetData<T>(input_child);
 
 		auto &result_child = StructVector::GetEntries(result_vec)[field_idx];
@@ -192,10 +192,10 @@ struct CopyFromInputFieldOp {
 
 struct LoadFieldForSelectedRowsOp {
 	template <class T>
-	static void Operation(const AggregateStateLayout &layout, Vector &struct_vec, idx_t field_idx,
+	static void Operation(const AggregateStateLayout &layout, const Vector &struct_vec, idx_t field_idx,
 	                      const SelectionVector &sel, idx_t count, const UnifiedVectorFormat &state_data,
 	                      data_ptr_t base_ptr, idx_t field_offset) {
-		auto &child = StructVector::GetEntries(struct_vec)[field_idx];
+		const auto &child = StructVector::GetEntries(struct_vec)[field_idx];
 		auto child_data = FlatVector::GetData<T>(child);
 
 		for (idx_t i = 0; i < count; i++) {
@@ -237,7 +237,7 @@ idx_t GetRecursivePhysicalSize(const LogicalType &type) {
 // Uses LoadFieldOp for tight SIMD-friendly loops.
 // root_stride is the aligned size of the top-level state, used to stride between rows in the buffer (root-state's
 // size must be taken into account)
-void DeserializeStructFields(const AggregateStateLayout &layout, idx_t root_stride, Vector &struct_vec,
+void DeserializeStructFields(const AggregateStateLayout &layout, idx_t root_stride, const Vector &struct_vec,
                              const UnifiedVectorFormat &state_data, idx_t count, data_ptr_t dest_buffer) {
 	idx_t offset_in_state = 0;
 	for (idx_t field_idx = 0; field_idx < layout.child_types->size(); field_idx++) {
@@ -249,7 +249,7 @@ void DeserializeStructFields(const AggregateStateLayout &layout, idx_t root_stri
 
 		if (field_type.id() == LogicalTypeId::STRUCT) {
 			auto child_layout = AggregateStateLayout(field_type, field_size);
-			auto &struct_entries = StructVector::GetEntries(struct_vec);
+			const auto &struct_entries = StructVector::GetEntries(struct_vec);
 			DeserializeStructFields(child_layout, root_stride, struct_entries[field_idx], state_data, count,
 			                        dest_buffer + offset_in_state);
 		} else {
@@ -891,13 +891,13 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 		return_type = LogicalType::LEGACY_AGGREGATE_STATE(std::move(state_type));
 	}
 
-	auto export_function =
-	    AggregateFunction("aggregate_state_export_" + bound_function.GetName(), bound_function.GetArguments(),
-	                      return_type, bound_function.GetStateSizeCallback(), bound_function.GetStateInitCallback(),
-	                      bound_function.GetStateUpdateCallback(), bound_function.GetStateCombineCallback(),
-	                      ExportAggregateFinalize, bound_function.GetStateSimpleUpdateCallback(),
-	                      /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
-	                      /* can't propagate statistics */ nullptr, nullptr);
+	auto export_function = AggregateFunction(
+	    "aggregate_state_export_" + bound_function.GetName(), bound_function.GetArguments(), return_type,
+	    bound_function.GetStateSizeCallback(), bound_function.GetStateInitCallback(),
+	    bound_function.GetStateUpdateCallback(), bound_function.GetStateCombineCallback(), ExportAggregateFinalize,
+	    FunctionNullHandling::DEFAULT_NULL_HANDLING, bound_function.GetStateClusterUpdateCallback(),
+	    /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
+	    /* can't propagate statistics */ nullptr, nullptr);
 	export_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	export_function.SetSerializeCallback(ExportStateAggregateSerialize);
 	export_function.SetDeserializeCallback(ExportStateAggregateDeserialize);
@@ -968,10 +968,11 @@ ScalarFunctionSet CombineFun::GetFunctions() {
 }
 
 AggregateFunction CombineAggrFun::GetFunction() {
-	auto function = AggregateFunction("combine_aggr", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::AGGREGATE_STATE,
-	                                  nullptr, nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize, nullptr,
-	                                  CombineAggrBind, nullptr, nullptr, nullptr);
-	function.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	auto function =
+	    AggregateFunction("combine_aggr", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::AGGREGATE_STATE, nullptr,
+	                      nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize,
+	                      FunctionNullHandling::SPECIAL_HANDLING, nullptr, CombineAggrBind, nullptr, nullptr, nullptr);
+	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return function;
 }
 

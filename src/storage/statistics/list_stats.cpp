@@ -59,14 +59,14 @@ void ListStats::SetChildStats(BaseStatistics &stats, unique_ptr<BaseStatistics> 
 	}
 }
 
-void ListStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
+void ListStats::Merge(BaseStatistics &stats, const BaseStatistics &other, StatsMergeType merge_type) {
 	if (other.GetType().id() == LogicalTypeId::VALIDITY) {
 		return;
 	}
 
 	auto &child_stats = ListStats::GetChildStats(stats);
 	auto &other_child_stats = ListStats::GetChildStats(other);
-	child_stats.Merge(other_child_stats);
+	child_stats.Merge(other_child_stats, merge_type);
 }
 
 void ListStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
@@ -92,9 +92,9 @@ child_list_t<Value> ListStats::ToStruct(const BaseStatistics &stats) {
 	return result;
 }
 
-void ListStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void ListStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &child_stats = ListStats::GetChildStats(stats);
-	auto &child_entry = ListVector::GetChildMutable(vector);
+	const auto &child_entry = ListVector::GetChild(vector);
 	auto entries = vector.Values<list_entry_t>();
 
 	idx_t total_list_count = 0;

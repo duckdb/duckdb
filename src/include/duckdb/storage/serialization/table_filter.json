@@ -14,29 +14,29 @@
     ]
   },
   {
-    "class": "IsNullFilter",
+    "class": "LegacyIsNullFilter",
     "base": "TableFilter",
     "includes": [
       "duckdb/planner/filter/null_filter.hpp"
     ],
-    "enum": "IS_NULL",
+    "enum": "LEGACY_IS_NULL",
     "members": [
     ]
   },
   {
-    "class": "IsNotNullFilter",
+    "class": "LegacyIsNotNullFilter",
     "base": "TableFilter",
-    "enum": "IS_NOT_NULL",
+    "enum": "LEGACY_IS_NOT_NULL",
     "members": [
     ]
   },
   {
-    "class": "ConstantFilter",
+    "class": "LegacyConstantFilter",
     "base": "TableFilter",
     "includes": [
       "duckdb/planner/filter/constant_filter.hpp"
     ],
-    "enum": "CONSTANT_COMPARISON",
+    "enum": "LEGACY_CONSTANT_COMPARISON",
     "members": [
       {
         "id": 200,
@@ -52,12 +52,12 @@
     "constructor": ["comparison_type", "constant"]
   },
   {
-    "class": "ConjunctionOrFilter",
+    "class": "LegacyConjunctionOrFilter",
     "base": "TableFilter",
     "includes": [
       "duckdb/planner/filter/conjunction_filter.hpp"
     ],
-    "enum": "CONJUNCTION_OR",
+    "enum": "LEGACY_CONJUNCTION_OR",
     "members": [
       {
         "id": 200,
@@ -67,9 +67,9 @@
     ]
   },
   {
-    "class": "ConjunctionAndFilter",
+    "class": "LegacyConjunctionAndFilter",
     "base": "TableFilter",
-    "enum": "CONJUNCTION_AND",
+    "enum": "LEGACY_CONJUNCTION_AND",
     "members": [
       {
         "id": 200,
@@ -79,9 +79,9 @@
     ]
   },
   {
-    "class": "StructFilter",
+    "class": "LegacyStructFilter",
     "base": "TableFilter",
-    "enum": "STRUCT_EXTRACT",
+    "enum": "LEGACY_STRUCT_EXTRACT",
     "includes": [
       "duckdb/planner/filter/struct_filter.hpp"
     ],
@@ -105,9 +105,9 @@
     "constructor": ["child_idx", "child_name", "child_filter"]
   },
   {
-    "class": "OptionalFilter",
+    "class": "LegacyOptionalFilter",
     "base": "TableFilter",
-    "enum": "OPTIONAL_FILTER",
+    "enum": "LEGACY_OPTIONAL_FILTER",
     "includes": [
       "duckdb/planner/filter/optional_filter.hpp"
     ],
@@ -120,9 +120,9 @@
     ]
   },
   {
-    "class": "InFilter",
+    "class": "LegacyInFilter",
     "base": "TableFilter",
-    "enum": "IN_FILTER",
+    "enum": "LEGACY_IN_FILTER",
     "includes": [
       "duckdb/planner/filter/in_filter.hpp"
     ],
@@ -136,12 +136,12 @@
     "constructor": ["values"]
   },
   {
-    "class": "DynamicFilter",
+    "class": "LegacyDynamicFilter",
     "base": "TableFilter",
     "includes": [
       "duckdb/planner/filter/dynamic_filter.hpp"
     ],
-    "enum": "DYNAMIC_FILTER",
+    "enum": "LEGACY_DYNAMIC_FILTER",
     "members": [
     ]
   },

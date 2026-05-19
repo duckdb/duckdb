@@ -1,0 +1,84 @@
+# name: test/optimizer/compressed_materialization_grouping_sets.test
+# description: Compressed materialization with grouping sets
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+statement ok
+create table grouping_set_cm(a integer not null, b varchar not null, v integer)
+
+statement ok
+insert into grouping_set_cm values (1, 'aa', 10), (1, 'bb', 20), (2, 'aa', 30)
+
+query ITI
+select a, b, sum(v)::bigint as s from grouping_set_cm group by rollup(a, b) order by a nulls first, b nulls first, s
+----
+NULL	NULL	60
+1	NULL	30
+1	aa	10
+1	bb	20
+2	NULL	30
+2	aa	30
+
+query I
+select count(*) from (select a, b, sum(v)::bigint as s from grouping_set_cm group by rollup(a, b)) x where a is null
+----
+1
+
+query II
+explain select a, b, sum(v)::bigint as s from grouping_set_cm group by rollup(a, b)
+----
+logical_opt	<REGEX>:(.*__internal_compress.*){2}
+
+# Windows that need an order should specify one; compressed materialization can
+# change the hash aggregate iteration order.
+statement ok
+CREATE TABLE grouping_set_window(i INT, j INT, k INT)
+
+statement ok
+INSERT INTO grouping_set_window VALUES
+	(1,1,1),
+	(1,4,1),
+	(1,2,1),
+	(1,4,1),
+	(1,4,1),
+	(1,1,2),
+	(1,4,2),
+	(1,2,2),
+	(1,4,2),
+	(1,1,3),
+	(1,4,3),
+	(1,2,3),
+	(1,4,3),
+	(1,1,4),
+	(1,4,4),
+	(1,2,4),
+	(1,4,4)
+
+query IRII
+SELECT
+	k,
+	STDDEV_POP(i),
+	SUM(j),
+	COUNT(k) OVER (ORDER BY k NULLS FIRST ROWS UNBOUNDED PRECEDING) cnt_wf
+FROM grouping_set_window
+GROUP BY ROLLUP(k)
+ORDER BY k NULLS FIRST
+----
+NULL	0.0	48	0
+1	0.0	15	1
+2	0.0	11	2
+3	0.0	11	3
+4	0.0	11	4
+
+query II
+explain SELECT
+	k,
+	STDDEV_POP(i),
+	SUM(j),
+	COUNT(k) OVER (ORDER BY k NULLS FIRST ROWS UNBOUNDED PRECEDING) cnt_wf
+FROM grouping_set_window
+GROUP BY ROLLUP(k)
+----
+logical_opt	<REGEX>:(.*__internal_compress.*)

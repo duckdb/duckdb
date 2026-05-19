@@ -18,7 +18,6 @@
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -40,7 +39,6 @@
 #include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
@@ -359,6 +357,10 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 	}
 }
 
+bool IsVariantNull(const string &str) {
+	return str.size() == 1 && str[0] == '\0';
+}
+
 static bool ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStatistics> input_p) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::UINTEGER);
 
@@ -369,14 +371,16 @@ static bool ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStat
 	D_ASSERT(input.GetType().id() == LogicalTypeId::BLOB);
 	result.CopyValidity(input);
 
-	auto min = StringStats::Min(input);
-	auto max = StringStats::Max(input);
-
 	if (!result.CanHaveNoNull()) {
 		return true;
 	}
+	if (!StringStats::HasMinMax(input)) {
+		return false;
+	}
 
-	if (min.empty() && max.empty()) {
+	auto min = StringStats::Min(input);
+	auto max = StringStats::Max(input);
+	if (IsVariantNull(min) && IsVariantNull(max)) {
 		//! All non-shredded values are NULL or VARIANT_NULL, set the stats to indicate this
 		NumericStats::SetMin<uint32_t>(result, 0);
 		NumericStats::SetMax<uint32_t>(result, 0);
@@ -436,6 +440,17 @@ static bool ConvertShreddedStats(BaseStatistics &result, optional_ptr<BaseStatis
 	return true;
 }
 
+bool StringStatsAreValid(const string &stats, bool is_varchar, StringStatsType stats_type) {
+	if (stats_type == StringStatsType::TRUNCATED_STATS) {
+		// truncated stats can contain invalid UTF8 due to truncation - this is fine
+		return true;
+	}
+	// for exact stats we need the stats to be valid because we might emit them
+	// we could optionally convert these into truncated stats...
+	// but if a file has corrupt exact string stats it's likely these are bogus, so just ignore them
+	return StringColumnReader::IsValid(stats, is_varchar);
+}
+
 unique_ptr<BaseStatistics>
 ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, const ParquetColumnSchema &schema,
                                                    const duckdb_parquet::Statistics &parquet_stats, bool can_have_nan,
@@ -479,15 +494,23 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 	case LogicalTypeId::VARCHAR: {
 		auto string_stats = StringStats::CreateUnknown(type);
 		const bool is_varchar = type.id() == LogicalTypeId::VARCHAR;
-		if (parquet_stats.__isset.min_value && StringColumnReader::IsValid(parquet_stats.min_value, is_varchar)) {
-			StringStats::SetMin(string_stats, parquet_stats.min_value);
-		} else if (parquet_stats.__isset.min && StringColumnReader::IsValid(parquet_stats.min, is_varchar)) {
-			StringStats::SetMin(string_stats, parquet_stats.min);
+		auto min_stats_type = parquet_stats.__isset.is_min_value_exact && parquet_stats.is_min_value_exact
+		                          ? StringStatsType::EXACT_STATS
+		                          : StringStatsType::TRUNCATED_STATS;
+		auto max_stats_type = parquet_stats.__isset.is_max_value_exact && parquet_stats.is_max_value_exact
+		                          ? StringStatsType::EXACT_STATS
+		                          : StringStatsType::TRUNCATED_STATS;
+		if (parquet_stats.__isset.min_value &&
+		    StringStatsAreValid(parquet_stats.min_value, is_varchar, min_stats_type)) {
+			StringStats::SetMin(string_stats, parquet_stats.min_value, min_stats_type);
+		} else if (parquet_stats.__isset.min && StringStatsAreValid(parquet_stats.min, is_varchar, min_stats_type)) {
+			StringStats::SetMin(string_stats, parquet_stats.min, min_stats_type);
 		}
-		if (parquet_stats.__isset.max_value && StringColumnReader::IsValid(parquet_stats.max_value, is_varchar)) {
-			StringStats::SetMax(string_stats, parquet_stats.max_value);
-		} else if (parquet_stats.__isset.max && StringColumnReader::IsValid(parquet_stats.max, is_varchar)) {
-			StringStats::SetMax(string_stats, parquet_stats.max);
+		if (parquet_stats.__isset.max_value &&
+		    StringStatsAreValid(parquet_stats.max_value, is_varchar, max_stats_type)) {
+			StringStats::SetMax(string_stats, parquet_stats.max_value, max_stats_type);
+		} else if (parquet_stats.__isset.max && StringStatsAreValid(parquet_stats.max, is_varchar, max_stats_type)) {
+			StringStats::SetMax(string_stats, parquet_stats.max, max_stats_type);
 		}
 		return string_stats.ToUnique();
 	}
@@ -671,31 +694,8 @@ static bool HasFilterConstants(const Expression &expr) {
 }
 
 static bool HasFilterConstants(const TableFilter &duckdb_filter) {
-	switch (duckdb_filter.filter_type) {
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and_filter = duckdb_filter.Cast<ConjunctionAndFilter>();
-		bool child_has_constant = false;
-		for (auto &child_filter : conjunction_and_filter.child_filters) {
-			child_has_constant |= HasFilterConstants(*child_filter);
-		}
-		return child_has_constant;
-	}
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction_or_filter = duckdb_filter.Cast<ConjunctionOrFilter>();
-		bool child_has_constant = false;
-		for (auto &child_filter : conjunction_or_filter.child_filters) {
-			child_has_constant |= HasFilterConstants(*child_filter);
-		}
-		return child_has_constant;
-	}
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr_filter =
-		    ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::HasFilterConstants");
-		return HasFilterConstants(*expr_filter.expr);
-	}
-	default:
-		return false;
-	}
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::HasFilterConstants");
+	return HasFilterConstants(*expr_filter.expr);
 }
 
 template <class T>
@@ -775,30 +775,8 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 }
 
 static bool ApplyBloomFilter(const TableFilter &duckdb_filter, ParquetBloomFilter &bloom_filter) {
-	switch (duckdb_filter.filter_type) {
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and_filter = duckdb_filter.Cast<ConjunctionAndFilter>();
-		bool any_children_true = false;
-		for (auto &child_filter : conjunction_and_filter.child_filters) {
-			any_children_true |= ApplyBloomFilter(*child_filter, bloom_filter);
-		}
-		return any_children_true;
-	}
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction_or_filter = duckdb_filter.Cast<ConjunctionOrFilter>();
-		bool all_children_true = true;
-		for (auto &child_filter : conjunction_or_filter.child_filters) {
-			all_children_true &= ApplyBloomFilter(*child_filter, bloom_filter);
-		}
-		return all_children_true;
-	}
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::ApplyBloomFilter");
-		return ApplyBloomFilter(*expr_filter.expr, bloom_filter);
-	}
-	default:
-		return false;
-	}
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::ApplyBloomFilter");
+	return ApplyBloomFilter(*expr_filter.expr, bloom_filter);
 }
 
 bool ParquetStatisticsUtils::BloomFilterSupported(const LogicalTypeId &type_id) {

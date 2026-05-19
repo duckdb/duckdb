@@ -64,24 +64,24 @@ static string_t BarScalarFunction(double x, double min, double max, double max_w
 
 static void BarFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 3 || args.ColumnCount() == 4);
-	auto &x_arg = args.data[0];
-	auto &min_arg = args.data[1];
-	auto &max_arg = args.data[2];
+	const auto &x_arg = args.data[0];
+	const auto &min_arg = args.data[1];
+	const auto &max_arg = args.data[2];
 	string buffer;
 
 	auto &heap = StringVector::GetStringHeap(result);
 	if (args.ColumnCount() == 3) {
 		GenericExecutor::ExecuteTernary<PrimitiveType<double>, PrimitiveType<double>, PrimitiveType<double>,
 		                                PrimitiveType<string_t>>(
-		    x_arg, min_arg, max_arg, result, args.size(),
+		    x_arg, min_arg, max_arg, result,
 		    [&](PrimitiveType<double> x, PrimitiveType<double> min, PrimitiveType<double> max) {
 			    return heap.AddString(BarScalarFunction(x.val, min.val, max.val, 80, buffer));
 		    });
 	} else {
-		auto &width_arg = args.data[3];
+		const auto &width_arg = args.data[3];
 		GenericExecutor::ExecuteQuaternary<PrimitiveType<double>, PrimitiveType<double>, PrimitiveType<double>,
 		                                   PrimitiveType<double>, PrimitiveType<string_t>>(
-		    x_arg, min_arg, max_arg, width_arg, result, args.size(),
+		    x_arg, min_arg, max_arg, width_arg, result,
 		    [&](PrimitiveType<double> x, PrimitiveType<double> min, PrimitiveType<double> max,
 		        PrimitiveType<double> width) {
 			    return heap.AddString(BarScalarFunction(x.val, min.val, max.val, width.val, buffer));
