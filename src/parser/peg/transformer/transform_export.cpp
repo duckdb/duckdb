@@ -1,6 +1,7 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/statement/export_statement.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 namespace duckdb {
@@ -16,7 +17,18 @@ PEGTransformerFactory::TransformExportStatement(PEGTransformer &transformer, con
 
 	for (const auto &option : generic_copy_option_list) {
 		if (option.name == "format") {
-			info->format = option.children[0].GetValue<string>();
+			if (option.children.empty() && !option.expression) {
+				throw InvalidInputException("Unknown format specified");
+			}
+			if (option.expression) {
+				if (option.expression->GetExpressionClass() != ExpressionClass::CONSTANT) {
+					throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
+				}
+				auto const_expr = option.expression->Cast<ConstantExpression>();
+				info->format = const_expr.GetValue().GetValue<string>();
+			} else {
+				info->format = option.children[0].GetValue<string>();
+			}
 			info->is_format_auto_detected = false;
 		} else if (option.expression) {
 			info->parsed_options[StringUtil::Upper(option.name)] = option.expression->Copy();

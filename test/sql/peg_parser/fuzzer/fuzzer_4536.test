@@ -1,0 +1,16 @@
+# name: test/sql/peg_parser/fuzzer/fuzzer_4434.test
+# description: Throw proper error when encountering unimplemented explain type
+# group: [fuzzer]
+
+
+# issue: https://github.com/duckdb/duckdb-fuzzer/issues/4536
+statement error
+explain (FORMAT$X) select 1;
+----
+Invalid Input Error: "$X" is not a valid FORMAT argument, valid options are: mermaid, default, graphviz, yaml, json, html, text
+
+# issue: https://github.com/duckdb/duckdb-fuzzer/issues/4537
+statement error
+export database '' (FORMAT X!);
+----
+Parser Error: Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'
