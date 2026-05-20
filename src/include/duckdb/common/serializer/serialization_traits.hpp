@@ -23,6 +23,7 @@ namespace duckdb {
 
 class Serializer;   // Forward declare
 class Deserializer; // Forward declare
+class CommonTableExpressionMap;
 
 typedef uint16_t field_id_t;
 const field_id_t MESSAGE_TERMINATOR_FIELD_ID = 0xFFFF;
@@ -327,6 +328,17 @@ struct SerializationDefaultValue {
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<is_insertion_preserving_map<T>::value, T>::type &value) {
 		return value.empty();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<std::is_same<T, CommonTableExpressionMap>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool
+	IsDefault(const typename std::enable_if<std::is_same<T, CommonTableExpressionMap>::value, T>::type &value) {
+		return value.map.empty();
 	}
 
 	template <typename T = void>
