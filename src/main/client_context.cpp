@@ -435,7 +435,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	}
 
 	{
-		auto planner_timer = profiler.StartTimer("planner.total_time");
+		auto planner_timer = profiler.StartTimer<MetricPlannerTotalTime>();
 		logical_planner.CreatePlan(std::move(statement));
 		D_ASSERT(logical_planner.plan || !logical_planner.properties.bound_all_parameters);
 	}
@@ -473,7 +473,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	}
 	if (optimize && logical_plan->RequireOptimizer()) {
 		{
-			auto optimizer_timer = profiler.StartTimer("optimizers.total_time");
+			auto optimizer_timer = profiler.StartTimer<MetricOptimizerTotalTime>();
 			Optimizer optimizer(*logical_planner.binder, *this);
 			logical_plan = optimizer.Optimize(std::move(logical_plan));
 			D_ASSERT(logical_plan);
@@ -485,7 +485,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 
 	// Convert the logical query plan into a physical query plan.
 	{
-		auto physical_timer = profiler.StartTimer("physical_planner.total_time");
+		auto physical_timer = profiler.StartTimer<MetricPhysicalPlannerTotalTime>();
 		PhysicalPlanGenerator physical_planner(*this);
 		result->physical_plan = physical_planner.Plan(std::move(logical_plan));
 	}
@@ -744,7 +744,7 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 		Parser parser(GetParserOptions());
 		auto &profiler = QueryProfiler::Get(*this);
 		profiler.StartQuery(query);
-		auto parser_timer = profiler.StartTimer("parsers.total_time");
+		auto parser_timer = profiler.StartTimer<MetricParserTotalTime>();
 		parser.ParseQuery(query);
 
 		StatementPreprocessor preprocessor(*this);

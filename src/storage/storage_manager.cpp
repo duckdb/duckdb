@@ -5,6 +5,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
@@ -503,7 +504,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		auto client_context = context.GetClientContext();
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			timer = make_uniq<ActiveTimer>(profiler->StartTimer("storage.attach_load_storage_latency"));
+			timer = make_uniq<ActiveTimer>(profiler->StartTimer<MetricStorageAttachLoadStorageLatency>());
 		}
 
 		// Load the checkpoint from storage.
@@ -518,7 +519,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		// Start timing the WAL replay step.
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			timer = make_uniq<ActiveTimer>(profiler->StartTimer("storage.attach_replay_wal_latency"));
+			timer = make_uniq<ActiveTimer>(profiler->StartTimer<MetricStorageAttachReplayWALLatency>());
 		}
 
 		// Replay the WAL.
@@ -703,7 +704,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 			auto client_context = context.GetClientContext();
 			ActiveTimer timer;
 			if (client_context) {
-				timer = client_context->client_data->profiler->StartTimer("storage.checkpoint_latency");
+				timer = client_context->client_data->profiler->StartTimer<MetricStorageCheckpointLatency>();
 			}
 
 			// Write the checkpoint.

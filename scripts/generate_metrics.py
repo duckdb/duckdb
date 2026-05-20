@@ -28,8 +28,8 @@ GROUP_ORDER = [
     "io",
     "storage",
     "operator",
-    "optimizers",
-    "parsers",
+    "optimizer",
+    "parser",
     "planner",
     "physical_planner",
 ]

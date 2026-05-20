@@ -14,7 +14,7 @@ statement ok
 SET profiling_mode='standard';
 
 statement ok
-SET tracked_metrics = 'optimizers.total_time';
+SET tracked_metrics = 'optimizer.total_time';
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -25,7 +25,7 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('tracked_metrics'));
 ----
-optimizers.total_time
+optimizer.total_time
 
 statement ok
 SET tracked_metrics = [];
@@ -78,7 +78,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SET tracked_metrics = 'optimizers.total_time';
+SET tracked_metrics = 'optimizer.total_time';
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -91,7 +91,7 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_ou
 
 query I
 SELECT
-    CASE WHEN optimizers.total_time > 0 THEN 'true'
+    CASE WHEN optimizer.total_time > 0 THEN 'true'
     ELSE 'false' END
 FROM metrics_output;
 ----

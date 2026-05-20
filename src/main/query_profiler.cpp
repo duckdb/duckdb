@@ -157,7 +157,7 @@ void QueryProfiler::Start(const string &query) {
 	Reset();
 	running = true;
 	query_metrics.query_sql = query;
-	query_metrics.latency_timer = make_uniq<ActiveTimer>(StartTimer("query.time"));
+	query_metrics.latency_timer = make_uniq<ActiveTimer>(StartTimer<MetricQueryTime>());
 }
 
 void QueryProfiler::Reset() {
@@ -290,9 +290,9 @@ void QueryProfiler::TrackBytesWritten(const idx_t amount) {
 	query_metrics.UpdateBytesWritten(amount);
 }
 
-void QueryProfiler::AddToStringCounter(const string &key, const idx_t amount) {
+void QueryProfiler::AddToMetricCounter(const string &key, const idx_t amount) {
 	if (IsEnabled()) {
-		query_metrics.UpdateStringCounter(key, amount);
+		query_metrics.UpdateMetricCounter(key, amount);
 	}
 }
 
@@ -304,7 +304,7 @@ idx_t QueryProfiler::GetBytesWritten() const {
 	return query_metrics.GetBytesWritten();
 }
 
-ActiveTimer QueryProfiler::StartTimer(const string &key) {
+ActiveTimer QueryProfiler::StartTimerInternal(const string &key) {
 	return ActiveTimer(query_metrics, key, IsEnabled());
 }
 
@@ -359,8 +359,7 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	if (!OperatorMetricsIsInitialized(*active_operator)) {
 		// first time calling into this operator - fetch the info
 		auto &info = GetOperatorMetrics(*active_operator);
-		auto params = active_operator->ParamsToString();
-		info.extra_info = params;
+		info.SetExtraInfo(active_operator->ParamsToString());
 	}
 
 	// Start the timing of the current operator.
@@ -582,11 +581,11 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const GatheredMetrics &info, id
 			physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
 		} else if (MetricsUtils::IsMetric<MetricPhysicalPlannerTotalTime>(metric)) {
 			physical_planner_head = {"Physical Planner", entry.second.GetValue<double>()};
-		} else if (MetricsUtils::IsMetric<MetricOptimizersTotalTime>(metric)) {
+		} else if (MetricsUtils::IsMetric<MetricOptimizerTotalTime>(metric)) {
 			optimizer_head = {"Optimizer", entry.second.GetValue<double>()};
 		} else if (MetricsUtils::IsMetric<MetricPlannerTotalTime>(metric)) {
 			planner_head = {"Planner", entry.second.GetValue<double>()};
-		} else if (MetricsUtils::IsMetric<MetricParsersTotalTime>(metric)) {
+		} else if (MetricsUtils::IsMetric<MetricParserTotalTime>(metric)) {
 			parser_head = {"Parser", entry.second.GetValue<double>()};
 		} else if (MetricsUtils::IsMetric<MetricPlannerBindingTime>(metric)) {
 			planner_timings["binding_time"] = entry.second.GetValue<double>();
@@ -715,7 +714,13 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	if (info.MetricIsEnabled<MetricOperatorRowsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["rows_scanned"] = Value::UBIGINT(rows_scanned);
 	}
-	if (info.MetricIsEnabled<MetricOperatorExtraInfo>() && !extra_info.empty()) {
+	if (info.MetricIsEnabled<MetricOperatorRowGroupsScanned>()) {
+		result["row_groups_scanned"] = Value::UBIGINT(row_groups_scanned);
+	}
+	if (info.MetricIsEnabled<MetricOperatorTotalRowGroupsToScan>()) {
+		result["total_row_groups_to_scan"] = Value::UBIGINT(total_row_groups_to_scan);
+	}
+	if (info.MetricIsEnabled<MetricOperatorExtraInfo>()) {
 		result["extra_info"] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
 	}
 	return result;
@@ -885,7 +890,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 
 	info.name = EnumUtil::ToString(root_p.type);
 	info.operator_type = root_p.type;
-	info.extra_info = root_p.ParamsToString();
+	info.SetExtraInfo(root_p.ParamsToString());
 
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root_p), reference<ProfilingNode>(*node)));
 	auto children = root_p.GetChildren();
@@ -993,8 +998,8 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		metrics->SetMetric<MetricQueryTotalIntermediateRows>(cumulative_metrics.elements_returned);
 		metrics->SetMetric<MetricQueryTotalRowsScanned>(cumulative_metrics.rows_scanned);
 		metrics->SetMetric<MetricQueryResultSetSize>(cumulative_metrics.result_set_size);
-		// metrics->SetMetric<MetricQueryTotalRowGroupsScanned>(cumulative_metrics.row_groups_scanned);
-		// metrics->SetMetric<MetricQueryTotalRowGroupsToScan>(cumulative_metrics.total_row_groups_to_scan);
+		metrics->SetMetric<MetricQueryTotalRowGroupsScanned>(cumulative_metrics.row_groups_scanned);
+		metrics->SetMetric<MetricQueryTotalRowGroupsToScan>(cumulative_metrics.total_row_groups_to_scan);
 	}
 	query_metrics.FinalizeMetrics(*metrics);
 	metrics_finalized = true;

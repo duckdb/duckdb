@@ -30,8 +30,6 @@ struct OperatorMetrics {
 	idx_t row_groups_scanned;
 	idx_t total_row_groups_to_scan;
 
-	InsertionOrderPreservingMap<string> extra_info;
-
 	profiler_metrics_t GetMetrics(const GatheredMetrics &info) const;
 	void ResetMetrics() {
 		time = 0;
@@ -43,12 +41,23 @@ struct OperatorMetrics {
 		row_groups_scanned = 0;
 		total_row_groups_to_scan = 0;
 		operator_type = PhysicalOperatorType::INVALID;
+		extra_info.clear();
+	}
+	void AddExtraInfo(string key, string value) {
+		extra_info.insert(make_pair(std::move(key), std::move(value)));
+	}
+	void SetExtraInfo(InsertionOrderPreservingMap<string> info) {
+		extra_info = std::move(info);
+	}
+	const InsertionOrderPreservingMap<string> &GetExtraInfo() const {
+		return extra_info;
 	}
 	void GatherMetrics(ClientContext &context, double elapsed_time, optional_ptr<DataChunk> chunk);
 	void Merge(const OperatorMetrics &other);
 	void Accumulate(const OperatorMetrics &other);
 
 private:
+	InsertionOrderPreservingMap<string> extra_info;
 	void MergeInternal(const OperatorMetrics &other);
 };
 

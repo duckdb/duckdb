@@ -455,7 +455,7 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 
 	// If source was not exhausted (e.g. LIMIT stopped the pipeline), collect exact metrics now
 	if (!source_profiling_finalized && local_source_state) {
-		context.thread.profiler.FinishSource(*pipeline.source_state, *local_source_state);
+		context.thread.profiler.FinishSource(*pipeline.source, *pipeline.source_state, *local_source_state);
 	}
 
 	// flush all query profiler info

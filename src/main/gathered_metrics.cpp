@@ -115,26 +115,30 @@ void GatheredMetrics::WriteMetricsToLog(ClientContext &context) const {
 	}
 }
 
-void GatheredMetrics::MetricsToProfileResult(QueryProfileResult &result) const {
-	// Group dotted metric keys (e.g. "optimizer.join_order") into nested result objects.
-	unordered_map<string, reference<QueryProfileResult>> groups;
-
-	for (auto &entry : metrics) {
-		auto dot_pos = entry.first.find('.');
-		if (dot_pos != string::npos) {
-			auto prefix = entry.first.substr(0, dot_pos);
-			auto suffix = entry.first.substr(dot_pos + 1);
-			auto it = groups.find(prefix);
-			if (it == groups.end()) {
-				auto &obj = result.AddObject(prefix);
-				groups.emplace(prefix, obj);
-				obj.AddValue(suffix, entry.second);
-			} else {
-				it->second.get().AddValue(suffix, entry.second);
-			}
-		} else {
-			result.AddValue(StringUtil::Lower(entry.first), entry.second);
+static QueryProfileResult &GetOrCreateObject(QueryProfileResult &parent, const string &key) {
+	for (auto &child : parent.children) {
+		if (child->kind == QueryProfileResultKind::OBJECT && child->key == key) {
+			return *child;
 		}
+	}
+	return parent.AddObject(key);
+}
+
+static void AddMetricToResult(QueryProfileResult &obj, const string &key, const Value &value) {
+	auto dot_pos = key.find('.');
+	if (dot_pos == string::npos) {
+		obj.AddValue(key, value);
+	} else {
+		auto prefix = key.substr(0, dot_pos);
+		auto suffix = key.substr(dot_pos + 1);
+		auto &sub_obj = GetOrCreateObject(obj, prefix);
+		AddMetricToResult(sub_obj, suffix, value);
+	}
+}
+
+void GatheredMetrics::MetricsToProfileResult(QueryProfileResult &result) const {
+	for (auto &entry : metrics) {
+		AddMetricToResult(result, entry.first, entry.second);
 	}
 }
 

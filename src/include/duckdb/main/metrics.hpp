@@ -50,6 +50,20 @@ struct MetricQueryTotalIntermediateRows {
 	static constexpr const char *Unit = "rows";
 	static constexpr const char *TypeStr = "uint64";
 };
+struct MetricQueryTotalRowGroupsScanned {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "query.total_row_groups_scanned";
+	static constexpr const char *Description = "Cumulative number of row groups scanned by the query";
+	static constexpr const char *Unit = "row_groups";
+	static constexpr const char *TypeStr = "uint64";
+};
+struct MetricQueryTotalRowGroupsToScan {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "query.total_row_groups_to_scan";
+	static constexpr const char *Description = "Cumulative total number of row groups available to scan";
+	static constexpr const char *Unit = "row_groups";
+	static constexpr const char *TypeStr = "uint64";
+};
 struct MetricQueryTotalRowsScanned {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "query.total_rows_scanned";
@@ -133,6 +147,13 @@ struct MetricStorageCommitLocalStorageLatency {
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
+struct MetricStorageTotalVacuumTime {
+	using METRIC_TYPE = double;
+	static constexpr const char *Name = "storage.total_vacuum_time";
+	static constexpr const char *Description = "Total time spent running vacuum tasks during checkpointing";
+	static constexpr const char *Unit = "seconds";
+	static constexpr const char *TypeStr = "double";
+};
 struct MetricStorageWaitingToAttachLatency {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "storage.waiting_to_attach_latency";
@@ -191,6 +212,13 @@ struct MetricOperatorName {
 	static constexpr const char *Unit = "";
 	static constexpr const char *TypeStr = "string";
 };
+struct MetricOperatorRowGroupsScanned {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "operator.row_groups_scanned";
+	static constexpr const char *Description = "Number of row groups scanned by the operator";
+	static constexpr const char *Unit = "row_groups";
+	static constexpr const char *TypeStr = "uint64";
+};
 struct MetricOperatorRowsScanned {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "operator.rows_scanned";
@@ -205,6 +233,13 @@ struct MetricOperatorTiming {
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
+struct MetricOperatorTotalRowGroupsToScan {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "operator.total_row_groups_to_scan";
+	static constexpr const char *Description = "Total number of row groups available for the operator to scan";
+	static constexpr const char *Unit = "row_groups";
+	static constexpr const char *TypeStr = "uint64";
+};
 struct MetricOperatorType {
 	using METRIC_TYPE = string;
 	static constexpr const char *Name = "operator.type";
@@ -213,19 +248,19 @@ struct MetricOperatorType {
 	static constexpr const char *TypeStr = "string";
 };
 
-// Optimizers metrics
-struct MetricOptimizersTotalTime {
+// Optimizer metrics
+struct MetricOptimizerTotalTime {
 	using METRIC_TYPE = double;
-	static constexpr const char *Name = "optimizers.total_time";
+	static constexpr const char *Name = "optimizer.total_time";
 	static constexpr const char *Description = "Time spent in all optimizers combined";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
 
-// Parsers metrics
-struct MetricParsersTotalTime {
+// Parser metrics
+struct MetricParserTotalTime {
 	using METRIC_TYPE = double;
-	static constexpr const char *Name = "parsers.total_time";
+	static constexpr const char *Name = "parser.total_time";
 	static constexpr const char *Description = "Time spent parsing the SQL query";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";

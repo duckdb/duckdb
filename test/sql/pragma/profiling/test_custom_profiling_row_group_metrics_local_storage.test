@@ -35,7 +35,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+SET tracked_metrics = ['operator.row_groups_scanned', 'operator.total_row_groups_to_scan', 'operator.type', 'query.total_row_groups_scanned', 'query.total_row_groups_to_scan'];
 
 statement ok
 SELECT count(*) FROM local_pruned a, persistent_only b WHERE a.i < 100 AND b.i < 100;
@@ -50,9 +50,9 @@ WITH RECURSIVE ops AS (
     UNION ALL
     SELECT unnest(op.children) FROM ops WHERE len(op.children) > 0
 )
-SELECT op.operator_type,
-       op.operator_row_groups_scanned AS scanned,
-       op.operator_total_row_groups_to_scan AS total
+SELECT op.type AS operator_type,
+       op.row_groups_scanned AS scanned,
+       op.total_row_groups_to_scan AS total
 FROM ops;
 
 query III
@@ -70,7 +70,7 @@ WHERE operator_type = 'TABLE_SCAN';
 2/3
 
 query II
-SELECT cumulative_row_groups_scanned::BIGINT, cumulative_total_row_groups_to_scan::BIGINT
+SELECT query.total_row_groups_scanned::BIGINT, query.total_row_groups_to_scan::BIGINT
 FROM '{TEST_DIR}/profiling_output.json';
 ----
 2	3

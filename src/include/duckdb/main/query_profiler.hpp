@@ -101,11 +101,16 @@ public:
 	DUCKDB_API void TrackBytesRead(idx_t amount);
 	//! Track bytes written (always tracked, even when profiling disabled).
 	DUCKDB_API void TrackBytesWritten(idx_t amount);
-	//! Add to a string-keyed counter (profiling-only).
-	DUCKDB_API void AddToStringCounter(const string &key, idx_t amount);
+	//! Add to a metric counter (profiling-only).
+	DUCKDB_API void AddToMetricCounter(const string &key, idx_t amount);
 
-	//! Start a timer for a string-keyed metric.
-	DUCKDB_API ActiveTimer StartTimer(const string &key);
+	//! Start a timer for a metric identified by its struct type.
+	template <class METRIC>
+	ActiveTimer StartTimer() {
+		return StartTimerInternal(METRIC::Name);
+	}
+	//! Start a timer for a string-keyed metric (use the template overload when possible).
+	DUCKDB_API ActiveTimer StartTimerInternal(const string &key);
 
 	DUCKDB_API void StartExplainAnalyze();
 

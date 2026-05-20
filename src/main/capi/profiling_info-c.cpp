@@ -82,24 +82,26 @@ duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const c
 	return nullptr;
 }
 
+static void FlattenNode(const QueryProfileResult &node, const duckdb::string &prefix,
+                        duckdb::InsertionOrderPreservingMap<duckdb::string> &metrics_map) {
+	for (auto &child : node.children) {
+		if (child->kind == QueryProfileResultKind::VALUE) {
+			auto key = prefix.empty() ? child->key : prefix + "." + child->key;
+			metrics_map.insert(key, child->value.ToString());
+		} else if (child->kind == QueryProfileResultKind::OBJECT) {
+			auto sub_prefix = prefix.empty() ? child->key : prefix + "." + child->key;
+			FlattenNode(*child, sub_prefix, metrics_map);
+		}
+	}
+}
+
 duckdb_value duckdb_profiling_info_get_metrics(duckdb_profiling_info info) {
 	if (!info) {
 		return nullptr;
 	}
 	auto &node = *reinterpret_cast<QueryProfileResult *>(info);
 	duckdb::InsertionOrderPreservingMap<duckdb::string> metrics_map;
-	for (auto &child : node.children) {
-		if (child->kind == QueryProfileResultKind::VALUE) {
-			metrics_map.insert(child->key, child->value.ToString());
-		} else if (child->kind == QueryProfileResultKind::OBJECT) {
-			// Flatten nested objects into dotted keys (e.g. "operator" + "timing" -> "operator.timing")
-			for (auto &grandchild : child->children) {
-				if (grandchild->kind == QueryProfileResultKind::VALUE) {
-					metrics_map.insert(child->key + "." + grandchild->key, grandchild->value.ToString());
-				}
-			}
-		}
-	}
+	FlattenNode(node, "", metrics_map);
 	auto map = duckdb::Value::MAP(metrics_map);
 	return reinterpret_cast<duckdb_value>(new duckdb::Value(map));
 }

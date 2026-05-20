@@ -1830,7 +1830,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 		ActiveTimer timer;
 		auto context = writer.TryGetClientContext();
 		if (context) {
-			timer = QueryProfiler::Get(*context).StartTimer("storage.total_vacuum_time");
+			timer = QueryProfiler::Get(*context).StartTimer<MetricStorageTotalVacuumTime>();
 		}
 		RebuildIndexes();
 		timer.EndTimer();

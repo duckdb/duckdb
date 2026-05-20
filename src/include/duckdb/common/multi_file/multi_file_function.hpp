@@ -887,10 +887,8 @@ public:
 
 	static void MultiFileGetMetrics(TableFunctionGetMetricsInput &input) {
 		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
-		auto &extra_info = input.operator_metrics.extra_info;
-		InsertionOrderPreservingMap<string> result;
 		auto files_loaded = gstate.files_opened.load();
-		extra_info.insert(make_pair("Total Files Read", std::to_string(files_loaded)));
+		input.operator_metrics.AddExtraInfo("Total Files Read", std::to_string(files_loaded));
 
 		constexpr size_t FILE_NAME_LIST_LIMIT = 5;
 		auto file_paths = gstate.file_list.GetDisplayFileList(FILE_NAME_LIST_LIMIT + 1);
@@ -903,7 +901,7 @@ public:
 				file_path_names.push_back("...");
 			}
 			auto list_of_types = StringUtil::Join(file_path_names, ", ");
-			extra_info.insert(make_pair("Filename(s)", list_of_types));
+			input.operator_metrics.AddExtraInfo("Filename(s)", list_of_types);
 		}
 	}
 

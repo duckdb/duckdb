@@ -1222,7 +1222,7 @@ public:
 		ActiveTimer timer;
 		auto context = checkpoint_state.writer.TryGetClientContext();
 		if (context) {
-			timer = QueryProfiler::Get(*context).StartTimer("storage.total_vacuum_time");
+			timer = QueryProfiler::Get(*context).StartTimer<MetricStorageTotalVacuumTime>();
 		}
 
 		auto &collection = checkpoint_state.collection;
