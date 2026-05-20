@@ -274,21 +274,13 @@ public:
 			return false;
 		}
 		idx_t lower = 0;
-		idx_t upper = nodes.size() - 1;
+		idx_t upper = nodes.size();
 		// binary search to find the node
-		while (lower <= upper) {
-			idx_t index = (lower + upper) / 2;
-			if (index >= nodes.size()) {
-				string segments;
-				for (auto &entry : nodes) {
-					segments += StringUtil::Format("Start %d Count %d", entry->GetRowStart(), entry->GetCount());
-				}
-				throw InternalException("Segment tree index not found for row number %d\nSegments:%s", row_number,
-				                        segments);
-			}
+		while (lower < upper) {
+			idx_t index = lower + (upper - lower) / 2;
 			auto &entry = *nodes[index];
 			if (row_number < entry.GetRowStart()) {
-				upper = index - 1;
+				upper = index;
 			} else if (row_number >= entry.GetRowEnd()) {
 				lower = index + 1;
 			} else {
