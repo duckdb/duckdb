@@ -669,12 +669,24 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 				auto is_reference = expr->GetExpressionType() == ExpressionType::BOUND_REF;
 				expressions.push_back(std::move(expr));
 
-				MultiFileLocalColumnId local_id(reader.columns.size());
-				auto local_index = global_id.RemapRootIndex(local_id.GetId());
-
 				// add the virtual column to the reader
-				reader.columns.emplace_back(virtual_entry->second.name, virtual_column_type);
+				bool seen_virtual_column = false;
 				for (auto &id : column_ids) {
+					if (!IsVirtualColumn(id)) {
+						reader.column_ids.push_back(MultiFileLocalColumnId(id));
+						reader.column_indexes.push_back(global_id.RemapRootIndex(id));
+						continue;
+					}
+					if (seen_virtual_column) {
+						throw InternalException("GetVirtualColumnExpression is only allowed to return one virtual "
+						                        "column id for the EXPRESSION result");
+					}
+					MultiFileLocalColumnId local_id(reader.columns.size());
+					auto local_index = global_id.RemapRootIndex(local_id.GetId());
+
+					reader.columns.emplace_back(virtual_entry->second.name, virtual_column_type);
+					reader.column_ids.push_back(local_id);
+					reader.column_indexes.push_back(std::move(local_index));
 					reader.AddVirtualColumn(id);
 				}
 
@@ -684,8 +696,6 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 					index_mapping.filter_conversion = FilterConversionType::CANNOT_CONVERT;
 				}
 				result.global_to_local.insert(make_pair(global_idx, std::move(index_mapping)));
-				reader.column_ids.push_back(local_id);
-				reader.column_indexes.push_back(std::move(local_index));
 				continue;
 			}
 			case MultiFileReaderVirtualColumnBinding::VirtualColumnBindingType::COLUMN_REFERENCE: {

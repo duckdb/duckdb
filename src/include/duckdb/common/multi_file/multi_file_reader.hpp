@@ -227,7 +227,7 @@ public:
 	//! Gets an expression to evaluate the given virtual column
 	DUCKDB_API virtual MultiFileReaderVirtualColumnBinding
 	GetVirtualColumnExpression(ClientContext &context, MultiFileReaderData &reader_data,
-	                           const vector<MultiFileColumnDefinition> &local_columns, idx_t column_id,
+	                           const vector<MultiFileColumnDefinition> &local_columns, const idx_t column_id,
 	                           const LogicalType &type, MultiFileLocalIndex local_index);
 
 	DUCKDB_API virtual unique_ptr<MultiFileReader> Copy() const;
