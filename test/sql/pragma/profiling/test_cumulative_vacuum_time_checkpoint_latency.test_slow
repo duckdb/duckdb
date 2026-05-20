@@ -28,7 +28,7 @@ statement ok
 SET threads = 1;
 
 statement ok
-ATTACH '__TEST_DIR__/single_thread_vacuum_latency.db' AS single_thread_vacuum (ROW_GROUP_SIZE 2048);
+ATTACH '{TEST_DIR}/single_thread_vacuum_latency.db' AS single_thread_vacuum (ROW_GROUP_SIZE 2048);
 
 statement ok
 CREATE TABLE single_thread_vacuum.tbl AS
@@ -48,7 +48,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/single_thread_vacuum_latency.json';
+PRAGMA profiling_output = '{TEST_DIR}/single_thread_vacuum_latency.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"CUMULATIVE_VACUUM_TIME": "true", "CHECKPOINT_LATENCY": "true"}';
@@ -63,7 +63,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE single_thread_vacuum_metrics AS SELECT * FROM '__TEST_DIR__/single_thread_vacuum_latency.json';
+CREATE OR REPLACE TABLE single_thread_vacuum_metrics AS SELECT * FROM '{TEST_DIR}/single_thread_vacuum_latency.json';
 
 query T
 SELECT CASE

@@ -47,6 +47,10 @@ struct OperatorInformation {
 	}
 	void GatherMetrics(ClientContext &context, double elapsed_time, optional_ptr<DataChunk> chunk);
 	void Merge(const OperatorInformation &other);
+	void Accumulate(const OperatorInformation &other);
+
+private:
+	void MergeInternal(const OperatorInformation &other);
 };
 
 //! The OperatorProfiler measures timings of individual operators

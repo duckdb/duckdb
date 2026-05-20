@@ -416,13 +416,12 @@ void OperatorInformation::GatherMetrics(ClientContext &context, double elapsed_t
 	}
 }
 
-void OperatorInformation::Merge(const OperatorInformation &other) {
+void OperatorInformation::MergeInternal(const OperatorInformation &other) {
 	time += other.time;
 	elements_returned += other.elements_returned;
 	result_set_size += other.result_set_size;
 	rows_scanned += other.rows_scanned;
 	row_groups_scanned += other.row_groups_scanned;
-	total_row_groups_to_scan += other.total_row_groups_to_scan;
 	if (other.extra_info_dirty) {
 		for (auto &entry : other.extra_info) {
 			auto it = extra_info.find(entry.first);
@@ -442,6 +441,16 @@ void OperatorInformation::Merge(const OperatorInformation &other) {
 	}
 }
 
+void OperatorInformation::Accumulate(const OperatorInformation &other) {
+	MergeInternal(other);
+	total_row_groups_to_scan += other.total_row_groups_to_scan;
+}
+
+void OperatorInformation::Merge(const OperatorInformation &other) {
+	MergeInternal(other);
+	total_row_groups_to_scan = MaxValue<idx_t>(total_row_groups_to_scan, other.total_row_groups_to_scan);
+}
+
 void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 	if (!enabled) {
 		return;
@@ -459,11 +468,7 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 static void CollectTableScanMetrics(ClientContext &context, GlobalSourceState &gstate, LocalSourceState &lstate,
                                     const PhysicalTableScan &table_scan, OperatorInformation &info,
                                     bool estimate_if_missing) {
-	// Try exact rows_scanned from function.rows_scanned callback
-	const auto rows_scanned = table_scan.GetRowsScanned(gstate, lstate);
-	if (rows_scanned.IsValid()) {
-		info.rows_scanned = rows_scanned.GetIndex();
-	} else if (table_scan.function.get_metrics) {
+	if (table_scan.function.get_metrics) {
 		// Try via get_metrics callback (used by the DuckDB sequential table scan)
 		profiler_settings_t req = {MetricType::OPERATOR_ROWS_SCANNED, MetricType::OPERATOR_ROW_GROUPS_SCANNED,
 		                           MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN};
@@ -482,6 +487,11 @@ static void CollectTableScanMetrics(ClientContext &context, GlobalSourceState &g
 			info.total_row_groups_to_scan = tot->second.GetValue<uint64_t>();
 		}
 		return;
+	}
+	// Try exact rows_scanned from function.rows_scanned callback
+	const auto rows_scanned = table_scan.GetRowsScanned(gstate, lstate);
+	if (rows_scanned.IsValid()) {
+		info.rows_scanned = rows_scanned.GetIndex();
 	} else if (estimate_if_missing) {
 		// Fall back to cardinality estimate (only valid when source is exhausted)
 		auto &bind_data = table_scan.bind_data;
@@ -492,21 +502,6 @@ static void CollectTableScanMetrics(ClientContext &context, GlobalSourceState &g
 			}
 		}
 		return;
-	}
-	// Also collect row_group metrics when rows_scanned came from function.rows_scanned
-	if (table_scan.function.get_metrics) {
-		profiler_settings_t req = {MetricType::OPERATOR_ROW_GROUPS_SCANNED,
-		                           MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN};
-		profiler_metrics_t metrics;
-		table_scan.GetMetrics(context, gstate, lstate, req, metrics);
-		auto rg = metrics.find(MetricType::OPERATOR_ROW_GROUPS_SCANNED);
-		if (rg != metrics.end()) {
-			info.row_groups_scanned = rg->second.GetValue<uint64_t>();
-		}
-		auto tot = metrics.find(MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN);
-		if (tot != metrics.end()) {
-			info.total_row_groups_to_scan = tot->second.GetValue<uint64_t>();
-		}
 	}
 }
 
@@ -1121,7 +1116,7 @@ void QueryProfiler::MoveOptimizerPhasesToRoot() {
 
 static void MergeOperatorMeasurements(ProfilingNode &root, OperatorInformation &result) {
 	// merge in this layer
-	result.Merge(root.GetOperatorInfo());
+	result.Accumulate(root.GetOperatorInfo());
 	// recurse into children
 	for (idx_t i = 0; i < root.GetChildCount(); i++) {
 		auto child = root.GetChild(i);

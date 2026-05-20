@@ -21,7 +21,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-ATTACH '__TEST_DIR__/cumulative_vacuum_time_vacuum.db' AS vacuum_db;
+ATTACH '{TEST_DIR}/cumulative_vacuum_time_vacuum.db' AS vacuum_db;
 
 statement ok
 CREATE TABLE vacuum_db.tbl AS SELECT range AS id FROM range(480_000);
@@ -36,7 +36,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/cumulative_vacuum_time_vacuum.json';
+PRAGMA profiling_output = '{TEST_DIR}/cumulative_vacuum_time_vacuum.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"CUMULATIVE_VACUUM_TIME": "true", "CHECKPOINT_LATENCY": "true"}';
@@ -51,7 +51,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE vacuum_metrics AS SELECT * FROM '__TEST_DIR__/cumulative_vacuum_time_vacuum.json';
+CREATE OR REPLACE TABLE vacuum_metrics AS SELECT * FROM '{TEST_DIR}/cumulative_vacuum_time_vacuum.json';
 
 query I
 SELECT CASE
@@ -65,7 +65,7 @@ true
 # Dropping fully-deleted row groups during vacuum initialization is not timed.
 
 statement ok
-ATTACH '__TEST_DIR__/cumulative_vacuum_time_drop.db' AS drop_vacuum;
+ATTACH '{TEST_DIR}/cumulative_vacuum_time_drop.db' AS drop_vacuum;
 
 statement ok
 CREATE TABLE drop_vacuum.tbl AS SELECT range AS id FROM range(300_000);
@@ -80,7 +80,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/cumulative_vacuum_time_drop.json';
+PRAGMA profiling_output = '{TEST_DIR}/cumulative_vacuum_time_drop.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"CUMULATIVE_VACUUM_TIME": "true", "CHECKPOINT_LATENCY": "true"}';
@@ -95,7 +95,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE drop_metrics AS SELECT * FROM '__TEST_DIR__/cumulative_vacuum_time_drop.json';
+CREATE OR REPLACE TABLE drop_metrics AS SELECT * FROM '{TEST_DIR}/cumulative_vacuum_time_drop.json';
 
 query I
 SELECT CASE
@@ -109,7 +109,7 @@ true
 # With an index and vacuum_rebuild_indexes enabled, the same drop-only vacuum rebuilds indexes and is timed.
 
 statement ok
-ATTACH '__TEST_DIR__/cumulative_vacuum_time_index.db' AS index_vacuum;
+ATTACH '{TEST_DIR}/cumulative_vacuum_time_index.db' AS index_vacuum;
 
 statement ok
 CREATE TABLE index_vacuum.tbl AS SELECT range AS id FROM range(300_000);
@@ -127,7 +127,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/cumulative_vacuum_time_index.json';
+PRAGMA profiling_output = '{TEST_DIR}/cumulative_vacuum_time_index.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"CUMULATIVE_VACUUM_TIME": "true", "CHECKPOINT_LATENCY": "true"}';
@@ -142,7 +142,7 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE index_metrics AS SELECT * FROM '__TEST_DIR__/cumulative_vacuum_time_index.json';
+CREATE OR REPLACE TABLE index_metrics AS SELECT * FROM '{TEST_DIR}/cumulative_vacuum_time_index.json';
 
 query I
 SELECT CASE
