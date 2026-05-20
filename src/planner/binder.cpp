@@ -602,6 +602,18 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 	if (!returning_list.empty()) {
 		throw NotImplementedException("RETURNING is not yet supported on tables with AFTER triggers");
 	}
+	if (node.type == QueryNodeType::INSERT_QUERY_NODE) {
+		auto &insert_node = node.Cast<InsertQueryNode>();
+		if (insert_node.on_conflict_info &&
+		    insert_node.on_conflict_info->action_type != OnConflictAction::NOTHING) {
+			for (auto &trigger : triggers) {
+				if (!trigger.get().referencing_new_table.empty()) {
+					throw NotImplementedException(
+					    "ON CONFLICT DO UPDATE is not yet supported with REFERENCING NEW TABLE AS triggers");
+				}
+			}
+		}
+	}
 	expanded_tables.insert(table);
 	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, triggers));
 }

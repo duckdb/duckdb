@@ -166,6 +166,52 @@ SELECT total, cnt FROM t_agg_log;
 ----
 60	3
 
+# ON CONFLICT DO NOTHING: alias only sees rows that were actually inserted
+statement ok
+CREATE TABLE t_conflict (id INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE t_conflict_log (id INTEGER);
+
+statement ok
+INSERT INTO t_conflict VALUES (1);
+
+statement ok
+CREATE TRIGGER trg_conflict AFTER INSERT ON t_conflict
+REFERENCING NEW TABLE AS ins
+FOR EACH STATEMENT
+    INSERT INTO t_conflict_log SELECT id FROM ins;
+
+statement ok
+INSERT INTO t_conflict VALUES (1), (2), (3) ON CONFLICT DO NOTHING;
+
+query I rowsort
+SELECT id FROM t_conflict_log;
+----
+2
+3
+
+# ON CONFLICT DO UPDATE is blocked when trigger uses REFERENCING NEW TABLE AS
+statement ok
+CREATE TABLE t_upsert (id INTEGER PRIMARY KEY, val INTEGER);
+
+statement ok
+CREATE TABLE t_upsert_log (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO t_upsert VALUES (1, 100);
+
+statement ok
+CREATE TRIGGER trg_upsert AFTER INSERT ON t_upsert
+REFERENCING NEW TABLE AS ins
+FOR EACH STATEMENT
+    INSERT INTO t_upsert_log SELECT id, val FROM ins;
+
+statement error
+INSERT INTO t_upsert VALUES (1, 999), (2, 200) ON CONFLICT (id) DO UPDATE SET val = excluded.val;
+----
+Not implemented Error: ON CONFLICT DO UPDATE is not yet supported with REFERENCING NEW TABLE AS triggers
+
 # Rollback: if trigger body fails, the whole statement rolls back
 statement ok
 CREATE TABLE t_rollback (id INTEGER);
