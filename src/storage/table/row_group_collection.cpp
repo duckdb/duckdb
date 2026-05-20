@@ -1449,11 +1449,6 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		// we cannot vacuum deletes - cannot vacuum
 		return false;
 	}
-	if (!state.can_change_row_ids) {
-		// Dropping whole row groups is handled when the vacuum state is initialized. Vacuum tasks rewrite rows into new
-		// row groups, which can remap row IDs and is not allowed unless indexes can tolerate/rebuild that remap.
-		return false;
-	}
 	if (segment_idx < state.next_vacuum_idx) {
 		// this segment is being vacuumed by a previously scheduled task
 		return true;
@@ -1482,6 +1477,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		auto total_target_size = target_count * row_group_size;
 		merge_count = 0;
 		merge_rows = 0;
+		optional_idx expected_row_start;
 		for (next_idx = segment_idx; next_idx < checkpoint_state.SegmentCount(); next_idx++) {
 			if (!state.row_group_counts[next_idx].IsValid()) {
 				// cannot vacuum this row group - break
@@ -1489,7 +1485,29 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 			}
 			auto next_row_count = state.row_group_counts[next_idx].GetIndex();
 			if (next_row_count == 0) {
+				if (!state.can_change_row_ids) {
+					// Do not merge across a dropped row group when indexes depend on stable rowids.
+					break;
+				}
 				continue;
+			}
+			auto next_segment = checkpoint_state.GetSegment(next_idx);
+			if (!next_segment) {
+				break;
+			}
+			auto &next_row_group = next_segment->GetNode();
+			auto next_total_count = next_row_group.count.load();
+			if (!state.can_change_row_ids) {
+				if (next_row_count != next_total_count) {
+					break;
+				}
+				if (!expected_row_start.IsValid()) {
+					expected_row_start = next_segment->GetRowStart();
+				}
+				if (next_segment->GetRowStart() != expected_row_start.GetIndex()) {
+					break;
+				}
+				expected_row_start = next_segment->GetRowStart() + next_total_count;
 			}
 			if (merge_rows + next_row_count > total_target_size) {
 				// does not fit
@@ -1571,8 +1589,10 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			if (vacuum_tasks) {
 				// vacuum tasks were scheduled - don't schedule a checkpoint task yet
 				total_vacuum_tasks++;
-				vacuum_state.row_ids_changed = true;
-				writer.SetRowIdsChanged();
+				if (vacuum_state.can_change_row_ids) {
+					vacuum_state.row_ids_changed = true;
+					writer.SetRowIdsChanged();
+				}
 				continue;
 			}
 			if (checkpoint_state.SegmentIsDropped(segment_idx)) {
