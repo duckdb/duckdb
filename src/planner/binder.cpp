@@ -604,8 +604,7 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 	}
 	if (node.type == QueryNodeType::INSERT_QUERY_NODE) {
 		auto &insert_node = node.Cast<InsertQueryNode>();
-		if (insert_node.on_conflict_info &&
-		    insert_node.on_conflict_info->action_type != OnConflictAction::NOTHING) {
+		if (insert_node.on_conflict_info && insert_node.on_conflict_info->action_type != OnConflictAction::NOTHING) {
 			for (auto &trigger : triggers) {
 				if (!trigger.get().referencing_new_table.empty()) {
 					throw NotImplementedException(
@@ -617,7 +616,6 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 	expanded_tables.insert(table);
 	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, triggers));
 }
-
 
 BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
                                            const vector<const_reference<TriggerCatalogEntry>> &triggers) {

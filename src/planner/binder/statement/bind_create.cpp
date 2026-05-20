@@ -534,8 +534,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	// Set up trigger_creation_table to detect recursive triggers during the validation.
 	auto validation_binder = Binder::CreateBinder(context);
 	validation_binder->SetCatalogLookupCallback([](CatalogEntry &entry) {
-		if (entry.type == CatalogType::TABLE_ENTRY &&
-		    StringUtil::StartsWith(entry.name, TRIGGER_INTERNAL_CTE_PREFIX)) {
+		if (entry.type == CatalogType::TABLE_ENTRY && StringUtil::StartsWith(entry.name, TRIGGER_INTERNAL_CTE_PREFIX)) {
 			throw BinderException("Trigger body cannot reference table \"%s\" - name is reserved for internal use",
 			                      entry.name);
 		}
