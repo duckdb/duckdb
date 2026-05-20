@@ -1,4 +1,4 @@
-# name: test/sql/peg_parser/fuzzer/fuzzer_4434.test
+# name: test/sql/peg_parser/fuzzer/fuzzer_4490.test
 # description: Properly transform pivot statement
 # group: [fuzzer]
 

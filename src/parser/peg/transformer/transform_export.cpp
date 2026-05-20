@@ -22,7 +22,8 @@ PEGTransformerFactory::TransformExportStatement(PEGTransformer &transformer, con
 			}
 			if (option.expression) {
 				if (option.expression->GetExpressionClass() != ExpressionClass::CONSTANT) {
-					throw ParserException("Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
+					throw ParserException(
+					    "Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'");
 				}
 				auto const_expr = option.expression->Cast<ConstantExpression>();
 				info->format = const_expr.GetValue().GetValue<string>();

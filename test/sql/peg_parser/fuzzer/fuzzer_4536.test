@@ -1,7 +1,6 @@
-# name: test/sql/peg_parser/fuzzer/fuzzer_4434.test
+# name: test/sql/peg_parser/fuzzer/fuzzer_4536.test
 # description: Throw proper error when encountering unimplemented explain type
 # group: [fuzzer]
-
 
 # issue: https://github.com/duckdb/duckdb-fuzzer/issues/4536
 statement error
