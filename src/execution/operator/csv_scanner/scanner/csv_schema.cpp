@@ -43,6 +43,8 @@ bool CSVSchema::CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::UHUGEINT:
 		return destination == LogicalTypeId::BIGNUM || destination == LogicalTypeId::DOUBLE;
+	case LogicalTypeId::BIGNUM:
+		return destination == LogicalTypeId::DOUBLE;
 	case LogicalTypeId::FLOAT:
 		return destination == LogicalTypeId::DOUBLE;
 	default:

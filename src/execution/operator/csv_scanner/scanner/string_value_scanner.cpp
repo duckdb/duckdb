@@ -1,8 +1,10 @@
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
@@ -300,7 +302,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 	}
 	bool success = true;
 	string strip_thousands;
-	if (LogicalType::IsNumeric(parse_types[chunk_col_id].type_id) &&
+	if ((LogicalType::IsNumeric(parse_types[chunk_col_id].type_id) ||
+	     parse_types[chunk_col_id].type_id == LogicalTypeId::BIGNUM) &&
 	    state_machine.options.thousands_separator != '\0') {
 		// If we have a thousands separator we should try to use that
 		strip_thousands = BaseScanner::RemoveSeparator(value_ptr, size, state_machine.options.thousands_separator);
@@ -344,6 +347,16 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 		success = TrySimpleIntegerCast<uint64_t, false>(
 		    value_ptr, size, static_cast<uint64_t *>(vector_ptr[chunk_col_id])[number_of_rows], false);
 		break;
+	case LogicalTypeId::BIGNUM: {
+		try {
+			auto bignum = Bignum::VarcharToBignum(string_t(value_ptr, NumericCast<uint32_t>(size)));
+			static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] =
+			    StringVector::AddStringOrBlob(parse_chunk.data[chunk_col_id], bignum.data(), bignum.size());
+		} catch (const ConversionException &) {
+			success = false;
+		}
+		break;
+	}
 	case LogicalTypeId::DOUBLE:
 		success =
 		    TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[chunk_col_id])[number_of_rows],
@@ -1765,6 +1778,7 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loade
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DATE:

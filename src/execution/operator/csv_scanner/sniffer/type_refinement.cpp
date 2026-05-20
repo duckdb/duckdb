@@ -41,10 +41,20 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 	if (sql_type.id() == LogicalTypeId::BIGNUM) {
 		auto vector_data = FlatVector::GetData<string_t>(parse_chunk_col);
 		auto &validity = FlatVector::ValidityMutable(parse_chunk_col);
+		string strip_thousands;
 		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			if (validity.RowIsValid(row_idx) &&
-			    !CSVSniffer::CanYouCastBignum(vector_data[row_idx].GetData(), vector_data[row_idx].GetSize())) {
-				return false;
+			if (validity.RowIsValid(row_idx)) {
+				auto value_ptr = vector_data[row_idx].GetData();
+				auto value_size = vector_data[row_idx].GetSize();
+				if (sniffing_state_machine.options.thousands_separator != '\0') {
+					strip_thousands = BaseScanner::RemoveSeparator(value_ptr, value_size,
+					                                               sniffing_state_machine.options.thousands_separator);
+					value_ptr = strip_thousands.c_str();
+					value_size = strip_thousands.size();
+				}
+				if (!CSVSniffer::CanYouCastBignum(value_ptr, value_size)) {
+					return false;
+				}
 			}
 		}
 	}

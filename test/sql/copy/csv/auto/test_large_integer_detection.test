@@ -54,3 +54,34 @@ query T
 SELECT typeof(value) FROM read_csv_auto('{TEST_DIR}/csv_decimal_values.csv') LIMIT 1;
 ----
 DOUBLE
+
+statement ok
+COPY (SELECT * FROM (VALUES
+	('340,282,366,920,938,463,463,374,607,431,768,211,456'),
+	('987,654,321,098,765,432,109,876,543,210,987,654,321,098,765,432,109,876,543,210')
+) AS t(value)) TO '{TEST_DIR}/csv_large_bignum_thousands.csv' (FORMAT CSV, DELIMITER ';', HEADER);
+
+query TT
+SELECT typeof(value), value::VARCHAR FROM read_csv_auto('{TEST_DIR}/csv_large_bignum_thousands.csv',
+	delim = ';', thousands = ',') ORDER BY value::VARCHAR;
+----
+BIGNUM	340282366920938463463374607431768211456
+BIGNUM	987654321098765432109876543210987654321098765432109876543210
+
+statement ok
+COPY (SELECT * FROM (VALUES
+	('340282366920938463463374607431768211456')
+) AS t(value)) TO '{TEST_DIR}/csv_merge_bignum.csv' (FORMAT CSV, HEADER);
+
+statement ok
+COPY (SELECT * FROM (VALUES
+	('1.5')
+) AS t(value)) TO '{TEST_DIR}/csv_merge_double.csv' (FORMAT CSV, HEADER);
+
+query T
+SELECT typeof(value) FROM read_csv_auto([
+	'{TEST_DIR}/csv_merge_bignum.csv',
+	'{TEST_DIR}/csv_merge_double.csv'
+], files_to_sniff = -1) LIMIT 1;
+----
+DOUBLE
