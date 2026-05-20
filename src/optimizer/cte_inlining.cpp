@@ -165,11 +165,10 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 			// With ref_count>1 and requires_copy, the DML would execute once per copy.
 			return;
 		}
-		if (!cte.correlated_columns.empty() && ContainsDelimGet(*cte.children[0]) &&
-		    HasCTEReferenceBelowDelimJoin(*op->children[1], cte.table_index)) {
-			// Correlated CTEs can be decorrelated into DELIM_GET consumers. Inlining stays safe while all matching
-			// CTE scans remain outside DELIM_JOIN subtrees, but once a scan is nested below another DELIM_JOIN the
-			// inlined DELIM_GETs can attach to the wrong duplicate-elimination source.
+		if (ContainsDelimGet(*cte.children[0]) && HasCTEReferenceBelowDelimJoin(*op->children[1], cte.table_index)) {
+			// Inlining a CTE that already contains a DELIM_GET stays safe while all matching CTE scans remain outside
+			// DELIM_JOIN subtrees, but once a scan is nested below another DELIM_JOIN the inlined DELIM_GETs can attach
+			// to the wrong duplicate-elimination source.
 			return;
 		}
 		if (cte.materialize == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
