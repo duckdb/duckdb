@@ -59,6 +59,7 @@ public:
 	unique_ptr<Expression> expression;
 	//! The column id(s) to provide to the reader to produce the input(s) for the 'expression'
 	vector<idx_t> local_virtual_column_ids;
+	vector<idx_t> local_column_ids;
 
 	//! COLUMN_REFERENCE state:
 	//! The column reference to replace the virtual column with
