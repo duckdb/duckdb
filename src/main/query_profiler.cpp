@@ -421,6 +421,8 @@ void OperatorInformation::Merge(const OperatorInformation &other) {
 	elements_returned += other.elements_returned;
 	result_set_size += other.result_set_size;
 	rows_scanned += other.rows_scanned;
+	row_groups_scanned += other.row_groups_scanned;
+	total_row_groups_to_scan += other.total_row_groups_to_scan;
 	if (other.extra_info_dirty) {
 		for (auto &entry : other.extra_info) {
 			auto it = extra_info.find(entry.first);
@@ -454,6 +456,60 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 	active_operator = nullptr;
 }
 
+static void CollectTableScanMetrics(ClientContext &context, GlobalSourceState &gstate, LocalSourceState &lstate,
+                                    const PhysicalTableScan &table_scan, OperatorInformation &info,
+                                    bool estimate_if_missing) {
+	// Try exact rows_scanned from function.rows_scanned callback
+	const auto rows_scanned = table_scan.GetRowsScanned(gstate, lstate);
+	if (rows_scanned.IsValid()) {
+		info.rows_scanned = rows_scanned.GetIndex();
+	} else if (table_scan.function.get_metrics) {
+		// Try via get_metrics callback (used by the DuckDB sequential table scan)
+		profiler_settings_t req = {MetricType::OPERATOR_ROWS_SCANNED, MetricType::OPERATOR_ROW_GROUPS_SCANNED,
+		                           MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN};
+		profiler_metrics_t metrics;
+		table_scan.GetMetrics(context, gstate, lstate, req, metrics);
+		auto rs = metrics.find(MetricType::OPERATOR_ROWS_SCANNED);
+		if (rs != metrics.end()) {
+			info.rows_scanned = rs->second.GetValue<uint64_t>();
+		}
+		auto rg = metrics.find(MetricType::OPERATOR_ROW_GROUPS_SCANNED);
+		if (rg != metrics.end()) {
+			info.row_groups_scanned = rg->second.GetValue<uint64_t>();
+		}
+		auto tot = metrics.find(MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN);
+		if (tot != metrics.end()) {
+			info.total_row_groups_to_scan = tot->second.GetValue<uint64_t>();
+		}
+		return;
+	} else if (estimate_if_missing) {
+		// Fall back to cardinality estimate (only valid when source is exhausted)
+		auto &bind_data = table_scan.bind_data;
+		if (bind_data && table_scan.function.cardinality) {
+			auto cardinality = table_scan.function.cardinality(context, &(*bind_data));
+			if (cardinality && cardinality->has_estimated_cardinality) {
+				info.rows_scanned = cardinality->estimated_cardinality;
+			}
+		}
+		return;
+	}
+	// Also collect row_group metrics when rows_scanned came from function.rows_scanned
+	if (table_scan.function.get_metrics) {
+		profiler_settings_t req = {MetricType::OPERATOR_ROW_GROUPS_SCANNED,
+		                           MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN};
+		profiler_metrics_t metrics;
+		table_scan.GetMetrics(context, gstate, lstate, req, metrics);
+		auto rg = metrics.find(MetricType::OPERATOR_ROW_GROUPS_SCANNED);
+		if (rg != metrics.end()) {
+			info.row_groups_scanned = rg->second.GetValue<uint64_t>();
+		}
+		auto tot = metrics.find(MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN);
+		if (tot != metrics.end()) {
+			info.total_row_groups_to_scan = tot->second.GetValue<uint64_t>();
+		}
+	}
+}
+
 void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState &lstate) {
 	if (!enabled) {
 		return;
@@ -479,21 +535,33 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 
 	if (active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN) {
 		const auto &table_scan = active_operator->Cast<PhysicalTableScan>();
-		const auto rows_scanned = table_scan.GetRowsScanned(gstate, lstate);
 		auto &info = GetOperatorInfo(*active_operator);
-		if (rows_scanned.IsValid()) {
-			// Use exact value if available.
-			info.rows_scanned += rows_scanned.GetIndex();
+		CollectTableScanMetrics(context, gstate, lstate, table_scan, info, /*estimate_if_missing=*/true);
+	}
+}
+
+void OperatorProfiler::FinalizeSource(GlobalSourceState &gstate, LocalSourceState &lstate,
+                                      const PhysicalOperator &phys_op) {
+	if (!enabled || !OperatorInfoIsInitialized(phys_op)) {
+		return;
+	}
+	auto &info = GetOperatorInfo(phys_op);
+	// Collect extra source info
+	auto extra_info = phys_op.ExtraSourceParams(gstate, lstate);
+	for (auto &new_info : extra_info) {
+		auto entry = info.extra_info.find(new_info.first);
+		if (entry != info.extra_info.end()) {
+			entry->second = std::move(new_info.second);
 		} else {
-			// Otherwise estimate as the cardinality of the table scan, if there is no exact value available.
-			auto &bind_data = table_scan.bind_data;
-			if (bind_data && table_scan.function.cardinality) {
-				auto cardinality = table_scan.function.cardinality(context, &(*bind_data));
-				if (cardinality && cardinality->has_estimated_cardinality) {
-					info.rows_scanned += cardinality->estimated_cardinality;
-				}
-			}
+			info.extra_info.insert(std::move(new_info));
 		}
+	}
+	info.extra_info_dirty = info.extra_info_dirty || !extra_info.empty();
+
+	if (phys_op.type == PhysicalOperatorType::TABLE_SCAN) {
+		const auto &table_scan = phys_op.Cast<PhysicalTableScan>();
+		// Only collect exact metrics; do not estimate for non-exhausted sources
+		CollectTableScanMetrics(context, gstate, lstate, table_scan, info, /*estimate_if_missing=*/false);
 	}
 }
 
@@ -784,6 +852,12 @@ profiler_metrics_t OperatorInformation::GetMetrics(const ProfilingInfo &info) co
 	if (info.EnabledForCollection(MetricType::OPERATOR_ROWS_SCANNED) &&
 	    operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result[MetricType::OPERATOR_ROWS_SCANNED] = Value::UBIGINT(rows_scanned);
+	}
+	if (info.EnabledForCollection(MetricType::OPERATOR_ROW_GROUPS_SCANNED)) {
+		result[MetricType::OPERATOR_ROW_GROUPS_SCANNED] = Value::UBIGINT(row_groups_scanned);
+	}
+	if (info.EnabledForCollection(MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN)) {
+		result[MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN] = Value::UBIGINT(total_row_groups_to_scan);
 	}
 	if (info.EnabledForCollection(MetricType::EXTRA_INFO)) {
 		result[MetricType::EXTRA_INFO] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
@@ -1091,6 +1165,14 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		}
 		if (info.EnabledForCollection(MetricType::CUMULATIVE_ROWS_SCANNED)) {
 			info.SetMetricValue(MetricType::CUMULATIVE_ROWS_SCANNED, Value::UBIGINT(cumulative_metrics.rows_scanned));
+		}
+		if (info.EnabledForCollection(MetricType::CUMULATIVE_ROW_GROUPS_SCANNED)) {
+			info.SetMetricValue(MetricType::CUMULATIVE_ROW_GROUPS_SCANNED,
+			                    Value::UBIGINT(cumulative_metrics.row_groups_scanned));
+		}
+		if (info.EnabledForCollection(MetricType::CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN)) {
+			info.SetMetricValue(MetricType::CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN,
+			                    Value::UBIGINT(cumulative_metrics.total_row_groups_to_scan));
 		}
 	}
 

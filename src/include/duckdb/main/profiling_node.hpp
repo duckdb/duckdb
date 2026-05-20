@@ -27,6 +27,8 @@ struct OperatorInformation {
 	idx_t system_peak_buffer_manager_memory;
 	idx_t system_peak_temp_directory_size;
 	idx_t rows_scanned;
+	idx_t row_groups_scanned;
+	idx_t total_row_groups_to_scan;
 
 	InsertionOrderPreservingMap<string> extra_info;
 	bool extra_info_dirty = false;
@@ -39,6 +41,8 @@ struct OperatorInformation {
 		system_peak_buffer_manager_memory = 0;
 		system_peak_temp_directory_size = 0;
 		rows_scanned = 0;
+		row_groups_scanned = 0;
+		total_row_groups_to_scan = 0;
 		operator_type = PhysicalOperatorType::INVALID;
 	}
 	void GatherMetrics(ClientContext &context, double elapsed_time, optional_ptr<DataChunk> chunk);
@@ -59,6 +63,10 @@ public:
 	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
 	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
 	DUCKDB_API void FinishSource(GlobalSourceState &gstate, LocalSourceState &lstate);
+	//! Called from PushFinalize when the source was not exhausted (e.g. LIMIT stopped the pipeline).
+	//! Only collects exact metrics, never estimates.
+	DUCKDB_API void FinalizeSource(GlobalSourceState &gstate, LocalSourceState &lstate,
+	                               const PhysicalOperator &phys_op);
 
 	//! Adds the timings in the OperatorProfiler (tree) to the QueryProfiler (tree).
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op);

@@ -46,7 +46,7 @@ PRAGMA disable_profiling;
 statement ok
 CREATE VIEW operator_metrics AS
 WITH RECURSIVE ops AS (
-    SELECT unnest(children) AS op FROM '__TEST_DIR__/profiling_output.json'
+    SELECT unnest(operator_info) AS op FROM '__TEST_DIR__/profiling_output.json'
     UNION ALL
     SELECT unnest(op.children) FROM ops WHERE len(op.children) > 0
 )

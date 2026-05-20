@@ -130,6 +130,9 @@ private:
 	//! Flushing of caching operators is done
 	bool done_flushing = false;
 
+	//! Whether FinishSource has already been called (so FinalizeSource is skipped in PushFinalize)
+	bool source_profiling_finalized = false;
+
 	//! This flag is set when the pipeline gets interrupted by the Sink -> the final_chunk should be re-sink-ed.
 	bool remaining_sink_chunk = false;
 
