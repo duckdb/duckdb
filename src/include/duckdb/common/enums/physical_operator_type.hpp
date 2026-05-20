@@ -121,6 +121,8 @@ enum class PhysicalOperatorType : uint8_t {
 	EXTENSION,
 	VERIFY_VECTOR,
 	UPDATE_EXTENSIONS,
+	CONNECT,
+	DISCONNECT,
 
 	// -----------------------------
 	// Secret

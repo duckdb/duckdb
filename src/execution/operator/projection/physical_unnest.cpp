@@ -88,16 +88,16 @@ void UnnestOperatorState::PrepareInput(DataChunk &input, const vector<unique_ptr
 	// get the UnifiedVectorFormat of each list_data vector (LIST vectors for the different UNNESTs)
 	// both for the vector itself and its child vector
 	for (idx_t col_idx = 0; col_idx < list_data.ColumnCount(); col_idx++) {
-		auto &list_vector = list_data.data[col_idx];
+		const auto &list_vector = list_data.data[col_idx];
 		list_vector.ToUnifiedFormat(list_vector_data[col_idx]);
 
 		if (list_vector.GetType() == LogicalType::SQLNULL) {
 			// UNNEST(NULL): SQLNULL vectors don't have child vectors, but we need to point to the child vector of
 			// each vector, so we just get the UnifiedVectorFormat of the vector itself
-			auto &child_vector = list_vector;
+			const auto &child_vector = list_vector;
 			child_vector.ToUnifiedFormat(list_child_data[col_idx]);
 		} else {
-			auto &child_vector = ListVector::GetChild(list_vector);
+			const auto &child_vector = ListVector::GetChild(list_vector);
 			child_vector.ToUnifiedFormat(list_child_data[col_idx]);
 		}
 	}
@@ -236,7 +236,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			col_offset = input.ColumnCount();
 		}
 		for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
-			auto &list_vector = state.list_data.data[col_idx];
+			const auto &list_vector = state.list_data.data[col_idx];
 			auto &result_vector = chunk.data[col_offset + col_idx];
 			if (state.list_data.data[col_idx].GetType() == LogicalType::SQLNULL ||
 			    ListType::GetChildType(state.list_data.data[col_idx].GetType()) == LogicalType::SQLNULL ||
@@ -246,7 +246,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 				ConstantVector::SetNull(result_vector, count_t(result_length));
 				continue;
 			}
-			auto &child_vector = ListVector::GetChild(list_vector);
+			const auto &child_vector = ListVector::GetChild(list_vector);
 			result_vector.Slice(child_vector, state.unnest_sels[col_idx], result_length);
 			if (state.null_counts[col_idx] > 0) {
 				// we have NULL values that we need to set - flatten

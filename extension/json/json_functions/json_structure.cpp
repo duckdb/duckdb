@@ -287,7 +287,7 @@ void JSONStructureNode::EliminateCandidateTypes(const idx_t vec_count, Vector &s
 }
 
 template <class OP, class T>
-bool TryParse(Vector &string_vector, StrpTimeFormat &format, const idx_t count) {
+bool TryParse(const Vector &string_vector, StrpTimeFormat &format, const idx_t count) {
 	const auto strings = FlatVector::GetData<string_t>(string_vector);
 	const auto &validity = FlatVector::Validity(string_vector);
 
@@ -336,7 +336,6 @@ bool JSONStructureNode::EliminateCandidateFormats(const idx_t vec_count, Vector 
 		}
 
 		if (success) {
-			date_format_map.ShrinkFormatsToSize(type, i);
 			return true;
 		}
 	}

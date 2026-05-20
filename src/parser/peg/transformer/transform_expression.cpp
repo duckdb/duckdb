@@ -796,7 +796,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeExpres
 	bool has_not = op_list.Child<OptionalParseResult>(0).HasResult();
 	if (between_in_like_expr->GetExpressionClass() == ExpressionClass::BETWEEN) {
 		auto between_expr = unique_ptr_cast<ParsedExpression, BetweenExpression>(std::move(between_in_like_expr));
-		between_expr->input = std::move(expr);
+		between_expr->InputMutable() = std::move(expr);
 		if (has_not) {
 			expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(between_expr));
 		} else {

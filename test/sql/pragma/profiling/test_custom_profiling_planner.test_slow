@@ -36,14 +36,10 @@ statement ok
 PRAGMA disable_profiling;
 
 query I rowsort
-SELECT unnest(res) FROM (
-	SELECT current_setting('custom_profiling_settings') AS raw_setting,
-	raw_setting.trim('{}') AS setting,
-	string_split(setting, ', ') AS res
-) ORDER BY ALL
+SELECT unnest(current_setting('custom_profiling_settings'))
 ----
-"PHYSICAL_PLANNER": "true"
-"PLANNER": "true"
+PHYSICAL_PLANNER
+PLANNER
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';

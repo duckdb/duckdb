@@ -390,8 +390,7 @@ private:
 
 private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
-	void InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkState &chunk_state, InsertState &insert_statebool,
-	                  bool parallel);
+	void InsertHashes(Vector &hashes_v, TupleDataChunkState &chunk_state, InsertState &insert_state, bool parallel);
 	//! Prepares keys by filtering NULLs
 	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data,
 	                  optional_ptr<const SelectionVector> &current_sel, SelectionVector &sel, bool build_side);
@@ -506,6 +505,7 @@ public:
 	void SetBuildBloomFilter(const bool should_build) {
 		this->should_build_bloom_filter = should_build;
 	}
+	void PrepareBuildBloomFilter(idx_t estimated_row_count);
 
 	BloomFilter &GetBloomFilter() {
 		return bloom_filter;

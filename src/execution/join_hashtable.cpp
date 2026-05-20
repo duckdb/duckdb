@@ -150,10 +150,15 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 		}
 	}
 
+	if (bloom_filter.IsInitialized() && other.bloom_filter.IsInitialized()) {
+		bloom_filter.Merge(other.bloom_filter);
+	}
+
 	sink_collection->Combine(*other.sink_collection);
 }
 
-static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const idx_t &count, const idx_t &bitmask) {
+static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const idx_t &bitmask) {
+	const idx_t count = hashes_v.size();
 	if (hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto &hash = *ConstantVector::GetData<hash_t>(hashes_v);
 		salt_v.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -165,10 +170,10 @@ static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const 
 		hashes_v.Flatten();
 	} else {
 		hashes_v.Flatten();
-		auto salts = FlatVector::GetDataMutable<hash_t>(salt_v);
+		auto salt_data = FlatVector::Writer<hash_t>(salt_v, count_t(count));
 		auto hashes = FlatVector::GetDataMutable<hash_t>(hashes_v);
 		for (idx_t i = 0; i < count; i++) {
-			salts[i] = ht_entry_t::ExtractSalt(hashes[i]);
+			salt_data.WriteValue(ht_entry_t::ExtractSalt(hashes[i]));
 			hashes[i] &= bitmask;
 		}
 	}
@@ -354,9 +359,9 @@ void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_sta
 void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes) {
 	if (count == keys.size()) {
 		// no null values are filtered: use regular hash functions
-		VectorOperations::Hash(keys.data[0], hashes, keys.size());
+		VectorOperations::Hash(keys.data[0], hashes, count);
 		for (idx_t i = 1; i < equality_types.size(); i++) {
-			VectorOperations::CombineHash(hashes, keys.data[i], keys.size());
+			VectorOperations::CombineHash(hashes, keys.data[i], count);
 		}
 	} else {
 		// null values were filtered: use selection vector
@@ -446,6 +451,9 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
 	Hash(keys, *current_sel, added_count, hash_values);
+	if (bloom_filter.IsInitialized()) {
+		bloom_filter.InsertHashes(hash_values);
+	}
 
 	// Re-reference and ToUnifiedFormat the hash column after computing it
 	source_chunk.data[col_offset].Reference(hash_values);
@@ -601,10 +609,11 @@ static inline void InsertMatchesAndIncrementMisses(unsafe_optional_ptr<atomic<ht
 
 template <bool PARALLEL>
 static void InsertHashesLoop(unsafe_optional_ptr<atomic<ht_entry_t>> entries, Vector &row_locations, Vector &hashes_v,
-                             const idx_t &count, JoinHashTable::InsertState &state,
-                             const TupleDataCollection &data_collection, JoinHashTable &ht) {
+                             JoinHashTable::InsertState &state, const TupleDataCollection &data_collection,
+                             JoinHashTable &ht) {
 	D_ASSERT(hashes_v.GetType().id() == LogicalType::HASH);
-	ApplyBitmaskAndGetSaltBuild(hashes_v, state.salt_v, count, ht.bitmask);
+	ApplyBitmaskAndGetSaltBuild(hashes_v, state.salt_v, ht.bitmask);
+	const idx_t count = hashes_v.size();
 
 	const auto &layout = data_collection.GetLayout();
 
@@ -726,18 +735,18 @@ static void InsertHashesLoop(unsafe_optional_ptr<atomic<ht_entry_t>> entries, Ve
 	}
 }
 
-void JoinHashTable::InsertHashes(Vector &hashes_v, const idx_t count, TupleDataChunkState &chunk_state,
-                                 InsertState &insert_state, bool parallel) {
+void JoinHashTable::InsertHashes(Vector &hashes_v, TupleDataChunkState &chunk_state, InsertState &insert_state,
+                                 bool parallel) {
 	// Insert Hashes into the BF
 	if (bloom_filter.IsInitialized()) {
-		bloom_filter.InsertHashes(hashes_v, count);
+		bloom_filter.InsertHashes(hashes_v);
 	}
 	auto atomic_entries = GetAtomicEntries();
 	auto &row_locations = chunk_state.row_locations;
 	if (parallel) {
-		InsertHashesLoop<true>(atomic_entries, row_locations, hashes_v, count, insert_state, *data_collection, *this);
+		InsertHashesLoop<true>(atomic_entries, row_locations, hashes_v, insert_state, *data_collection, *this);
 	} else {
-		InsertHashesLoop<false>(atomic_entries, row_locations, hashes_v, count, insert_state, *data_collection, *this);
+		InsertHashesLoop<false>(atomic_entries, row_locations, hashes_v, insert_state, *data_collection, *this);
 	}
 }
 
@@ -753,7 +762,7 @@ void JoinHashTable::InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx
 	auto &sel = *FlatVector::IncrementalSelectionVector();
 	data_collection->Gather(chunk_state.row_locations, sel, count, 0, build_keys, sel, nullptr);
 	FlatVector::SetSize(build_keys, count_t(count));
-	prefix_range_filter->InsertKeys(build_keys, count, state);
+	prefix_range_filter->InsertKeys(build_keys, state);
 }
 
 void JoinHashTable::MergePrefixRangeBuildState(PrefixRangeFilter::BuildState &state) {
@@ -770,7 +779,7 @@ void JoinHashTable::AllocatePointerTable() {
 		throw InternalException("Hashtable capacity exceeds 48-bit limit (2^48 - 1)");
 	}
 
-	if (should_build_bloom_filter) {
+	if (should_build_bloom_filter && !bloom_filter.IsInitialized()) {
 		bloom_filter.Initialize(context, Count());
 	}
 
@@ -797,6 +806,13 @@ void JoinHashTable::AllocatePointerTable() {
 	            {"size", to_string(data_collection->SizeInBytes() + hash_map.GetSize())}});
 }
 
+void JoinHashTable::PrepareBuildBloomFilter(idx_t estimated_row_count) {
+	should_build_bloom_filter = true;
+	if (!bloom_filter.IsInitialized()) {
+		bloom_filter.Initialize(context, MaxValue<idx_t>(estimated_row_count, idx_t(1)));
+	}
+}
+
 void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx_to) {
 	// initialize HT with all-zero entries
 	auto entries = GetEntries();
@@ -817,13 +833,13 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	InsertState insert_state(*this);
 	do {
 		const auto count = iterator.GetCurrentChunkCount();
-		auto hash_data = FlatVector::GetDataMutable<hash_t>(hashes);
+		auto hash_data = FlatVector::Writer<hash_t>(hashes, count_t(count));
 		for (idx_t i = 0; i < count; i++) {
-			hash_data[i] = Load<hash_t>(row_locations[i] + pointer_offset);
+			hash_data.WriteValue(Load<hash_t>(row_locations[i] + pointer_offset));
 		}
 		TupleDataChunkState &chunk_state = iterator.GetChunkState();
 
-		InsertHashes(hashes, count, chunk_state, insert_state, parallel);
+		InsertHashes(hashes, chunk_state, insert_state, parallel);
 		if (prefix_range_state) {
 			InsertPrefixRangeChunk(chunk_state, count, *prefix_range_state);
 		}
@@ -1904,6 +1920,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	total_probe_matches = 0;
 	load_factor = DEFAULT_LOAD_FACTOR;
 	should_build_bloom_filter = false;
+	bloom_filter.Reset();
 	prefix_range_filter.reset();
 	should_build_prefix_range_filter = false;
 	ResetCorrelatedMarkJoinInfo(*this);

@@ -87,7 +87,7 @@ public:
 	}
 
 	template <typename T, typename CONVERTER>
-	void InsertKeys(Vector &keys, idx_t count, uint64_t *state_bitmap) const {
+	void InsertKeys(Vector &keys, uint64_t *state_bitmap) const {
 		for (const auto &entry : keys.template ValidValues<T>()) {
 			const U y = CONVERTER::Convert(entry.GetValue()) - min;
 			// All keys are in-range by construction, so the range check can be omitted here.
@@ -256,9 +256,9 @@ public:
 		return bitmap.InitializeBuildState(context);
 	}
 
-	void InsertKeys(Vector &keys, idx_t count, BuildState &state) const override {
+	void InsertKeys(Vector &keys, BuildState &state) const override {
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
-		bitmap.template InsertKeys<T, NumericConverter<T>>(keys, count, bitmap_state.bitmap);
+		bitmap.template InsertKeys<T, NumericConverter<T>>(keys, bitmap_state.bitmap);
 	}
 
 	void MergeBuildState(BuildState &state) override {
@@ -310,9 +310,9 @@ public:
 		return bitmap.InitializeBuildState(context);
 	}
 
-	void InsertKeys(Vector &keys, idx_t count, BuildState &state) const override {
+	void InsertKeys(Vector &keys, BuildState &state) const override {
 		auto &bitmap_state = state.Cast<PrefixRangeBitmapBuildState>();
-		bitmap.template InsertKeys<string_t, StringPrefixConverter>(keys, count, bitmap_state.bitmap);
+		bitmap.template InsertKeys<string_t, StringPrefixConverter>(keys, bitmap_state.bitmap);
 	}
 
 	void MergeBuildState(BuildState &state) override {
@@ -548,19 +548,30 @@ FilterPropagateResult PrefixRangeScalarFun::FilterPrune(const FunctionStatistics
 	if (!data.filter || !data.filter->IsInitialized()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	if (input.stats.GetStatsType() != StatisticsType::NUMERIC_STATS) {
+	switch (input.stats.GetStatsType()) {
+	case StatisticsType::NUMERIC_STATS: {
+		if (!NumericStats::HasMinMax(input.stats)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		const auto min = NumericStats::Min(input.stats);
+		const auto max = NumericStats::Max(input.stats);
+		if (min > max) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return data.filter->LookupRange(min, max);
+	}
+	case StatisticsType::STRING_STATS: {
+		if (!StringStats::HasMinMax(input.stats)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		// String stats may contain raw parquet bytes that are not valid UTF-8. Reconstruct them as BLOBs so the
+		// prefix-range comparable logic can inspect the raw bytes without value-construction validation.
+		return data.filter->LookupRange(Value::BLOB_RAW(StringStats::Min(input.stats)),
+		                                Value::BLOB_RAW(StringStats::Max(input.stats)));
+	}
+	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	if (!NumericStats::HasMinMax(input.stats)) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	const auto min = NumericStats::Min(input.stats);
-	const auto max = NumericStats::Max(input.stats);
-	if (min > max) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	return data.filter->LookupRange(min, max);
 }
 
 ScalarFunction TableFilterPrefixRangeFun::GetFunction() {

@@ -88,10 +88,10 @@ struct StringConstructArgument {
 };
 
 template <class T, class OP = StandardConstructArgument, class CTX>
-static void ConvertArguments(const Vector &input, idx_t count, idx_t arg_idx,
+static void ConvertArguments(const Vector &input, idx_t arg_idx,
                              vector<vector<duckdb_fmt::basic_format_arg<CTX>>> &result_args) {
 	auto result = input.Values<T>();
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < input.size(); i++) {
 		auto &args = result_args[i];
 		if (args.size() != arg_idx - 1) {
 			// this entry has a NULL as one of the parameters
@@ -117,40 +117,40 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	auto format_data = args.data[0].Values<string_t>();
 
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
-		auto &col = args.data[i];
+		const auto &col = args.data[i];
 		switch (col.GetType().id()) {
 		case LogicalTypeId::BOOLEAN:
-			ConvertArguments<bool>(col, count, i, format_args);
+			ConvertArguments<bool>(col, i, format_args);
 			break;
 		case LogicalTypeId::TINYINT:
-			ConvertArguments<int8_t>(col, count, i, format_args);
+			ConvertArguments<int8_t>(col, i, format_args);
 			break;
 		case LogicalTypeId::SMALLINT:
-			ConvertArguments<int16_t>(col, count, i, format_args);
+			ConvertArguments<int16_t>(col, i, format_args);
 			break;
 		case LogicalTypeId::INTEGER:
-			ConvertArguments<int32_t>(col, count, i, format_args);
+			ConvertArguments<int32_t>(col, i, format_args);
 			break;
 		case LogicalTypeId::BIGINT:
-			ConvertArguments<int64_t>(col, count, i, format_args);
+			ConvertArguments<int64_t>(col, i, format_args);
 			break;
 		case LogicalTypeId::UBIGINT:
-			ConvertArguments<uint64_t>(col, count, i, format_args);
+			ConvertArguments<uint64_t>(col, i, format_args);
 			break;
 		case LogicalTypeId::FLOAT:
-			ConvertArguments<float>(col, count, i, format_args);
+			ConvertArguments<float>(col, i, format_args);
 			break;
 		case LogicalTypeId::HUGEINT:
-			ConvertArguments<hugeint_t>(col, count, i, format_args);
+			ConvertArguments<hugeint_t>(col, i, format_args);
 			break;
 		case LogicalTypeId::UHUGEINT:
-			ConvertArguments<uhugeint_t>(col, count, i, format_args);
+			ConvertArguments<uhugeint_t>(col, i, format_args);
 			break;
 		case LogicalTypeId::DOUBLE:
-			ConvertArguments<double>(col, count, i, format_args);
+			ConvertArguments<double>(col, i, format_args);
 			break;
 		case LogicalTypeId::VARCHAR:
-			ConvertArguments<string_t, StringConstructArgument>(col, count, i, format_args);
+			ConvertArguments<string_t, StringConstructArgument>(col, i, format_args);
 			break;
 		default:
 			throw InternalException("Unexpected type for printf format");
