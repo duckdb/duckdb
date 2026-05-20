@@ -40,4 +40,8 @@ void ColumnBindingReplacer::VisitExpression(unique_ptr<Expression> *expression) 
 	VisitExpressionChildren(**expression);
 }
 
+void ColumnBindingReplacer::VisitOperatorExpressionsOnly(LogicalOperator &op) {
+	VisitOperatorExpressions(op);
+}
+
 } // namespace duckdb
