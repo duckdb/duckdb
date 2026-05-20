@@ -23,7 +23,6 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/enums/checkpoint_on_detach.hpp"
-#include "duckdb/common/enums/column_segment_info_scan_type.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
@@ -1225,25 +1224,6 @@ const char* EnumUtil::ToChars<ColumnIndexType>(ColumnIndexType value) {
 template<>
 ColumnIndexType EnumUtil::FromString<ColumnIndexType>(const char *value) {
 	return static_cast<ColumnIndexType>(StringUtil::StringToEnum(GetColumnIndexTypeValues(), 3, "ColumnIndexType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetColumnSegmentInfoScanTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ColumnSegmentInfoScanType::STANDARD), "STANDARD" },
-		{ static_cast<uint32_t>(ColumnSegmentInfoScanType::EXTENDED), "EXTENDED" },
-		{ static_cast<uint32_t>(ColumnSegmentInfoScanType::EXTENDED_ONLY_LOADED), "EXTENDED_ONLY_LOADED" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<ColumnSegmentInfoScanType>(ColumnSegmentInfoScanType value) {
-	return StringUtil::EnumToString(GetColumnSegmentInfoScanTypeValues(), 3, "ColumnSegmentInfoScanType", static_cast<uint32_t>(value));
-}
-
-template<>
-ColumnSegmentInfoScanType EnumUtil::FromString<ColumnSegmentInfoScanType>(const char *value) {
-	return static_cast<ColumnSegmentInfoScanType>(StringUtil::StringToEnum(GetColumnSegmentInfoScanTypeValues(), 3, "ColumnSegmentInfoScanType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetColumnSegmentTypeValues() {

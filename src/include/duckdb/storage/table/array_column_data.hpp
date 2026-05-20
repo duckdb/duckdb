@@ -63,7 +63,7 @@ public:
 
 	void GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
 	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result,
-	                          ColumnSegmentInfoScanType scan_type) override;
+	                          const ColumnSegmentInfoScanOptions &options) override;
 
 	void Verify(RowGroup &parent) override;
 

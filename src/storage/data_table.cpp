@@ -392,7 +392,7 @@ void DataTable::RebuildIndexes() {
 		scan_chunk.Initialize(Allocator::Get(db), scan_types);
 
 		CreateIndexScanState state;
-		auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS;
+		auto options = TableScanType::TABLE_SCAN_COMMITTED_ROWS;
 		state.Initialize(scan_column_ids, nullptr);
 		QueryContext context;
 		row_groups->InitializeScan(context, state.table_state, scan_column_ids, nullptr);
@@ -403,7 +403,7 @@ void DataTable::RebuildIndexes() {
 
 		while (true) {
 			scan_chunk.Reset();
-			state.table_state.Scan(scan_chunk, scan_type, state.segment_lock);
+			state.table_state.Scan(scan_chunk, options, state.segment_lock);
 			if (scan_chunk.size() == 0) {
 				break;
 			}
@@ -1861,8 +1861,8 @@ void DataTable::CommitDropTable(CommitDropState &drop_state) {
 // Column Segment Info
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo(const QueryContext &context,
-                                                          ColumnSegmentInfoScanType scan_type) {
-	return row_groups->GetColumnSegmentInfo(context, scan_type);
+                                                          const ColumnSegmentInfoScanOptions &options) {
+	return row_groups->GetColumnSegmentInfo(context, options);
 }
 
 void DataTable::InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) {

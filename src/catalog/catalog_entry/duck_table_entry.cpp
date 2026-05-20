@@ -1359,8 +1359,8 @@ TableFunction DuckTableEntry::GetScanFunction(ClientContext &context, unique_ptr
 }
 
 vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo(const QueryContext &context,
-                                                               ColumnSegmentInfoScanType scan_type) {
-	return storage->GetColumnSegmentInfo(context, scan_type);
+                                                               const ColumnSegmentInfoScanOptions &options) {
+	return storage->GetColumnSegmentInfo(context, options);
 }
 
 void DuckTableEntry::InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) {

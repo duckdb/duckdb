@@ -280,9 +280,9 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 		if (!storage_index.IsPushdownExtract()) {
 			return;
 		}
-		auto &scan_type = storage_index.GetScanType();
-		if (scan_type.id() != LogicalTypeId::VARIANT) {
-			PushDownCast(type, scan_type);
+		auto &options = storage_index.GetScanType();
+		if (options.id() != LogicalTypeId::VARIANT) {
+			PushDownCast(type, options);
 		}
 		return;
 	}
@@ -1815,14 +1815,14 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
 void RowGroup::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index,
-                                    vector<ColumnSegmentInfo> &result, ColumnSegmentInfoScanType scan_type) {
+                                    vector<ColumnSegmentInfo> &result, const ColumnSegmentInfoScanOptions &options) {
 	for (idx_t col_idx = 0; col_idx < GetColumnCount(); col_idx++) {
-		if (ColumnSegmentInfoOnlyLoaded(scan_type) && !ColumnIsLoaded(col_idx)) {
+		if (options.loaded_segments_only && !ColumnIsLoaded(col_idx)) {
 			// column is not loaded - skip it
 			continue;
 		}
 		auto &col_data = GetColumn(col_idx);
-		col_data.GetColumnSegmentInfo(context, row_group_index, {col_idx}, result, scan_type);
+		col_data.GetColumnSegmentInfo(context, row_group_index, {col_idx}, result, options);
 	}
 }
 

@@ -38,7 +38,7 @@ SELECT compression FROM pragma_storage_info('strings') WHERE segment_type == 'VA
 ----
 
 query I
-SELECT EXISTS (SELECT * FROM pragma_storage_info('strings', scan_type='EXTENDED') WHERE contains(segment_info, 'Overflow String'));
+SELECT EXISTS (SELECT * FROM pragma_storage_info('strings', include_segment_info=true) WHERE contains(segment_info, 'Overflow String'));
 ----
 true
 

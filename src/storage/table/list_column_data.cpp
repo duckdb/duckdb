@@ -439,12 +439,13 @@ void ListColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSta
 }
 
 void ListColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                          vector<ColumnSegmentInfo> &result, ColumnSegmentInfoScanType scan_type) {
-	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result, scan_type);
+                                          vector<ColumnSegmentInfo> &result,
+                                          const ColumnSegmentInfoScanOptions &options) {
+	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result, scan_type);
+	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	col_path.back() = 1;
-	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result, scan_type);
+	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 }
 
 } // namespace duckdb

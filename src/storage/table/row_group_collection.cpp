@@ -1959,10 +1959,10 @@ vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(const QueryContext &context,
-                                                                   ColumnSegmentInfoScanType scan_type) const {
+                                                                   const ColumnSegmentInfoScanOptions &options) const {
 	vector<ColumnSegmentInfo> result;
 	ColumnSegmentInfoScanState state;
-	state.scan_type = scan_type;
+	state.options = options;
 	InitializeColumnSegmentInfoScan(state);
 	while (ScanColumnSegmentInfo(context, state, result)) {
 	}
@@ -1984,7 +1984,7 @@ bool RowGroupCollection::ScanColumnSegmentInfo(const QueryContext &context, Colu
 		return false;
 	}
 	auto &node = *state.current_row_group;
-	node.GetNode().GetColumnSegmentInfo(context, node.GetIndex(), result, state.scan_type);
+	node.GetNode().GetColumnSegmentInfo(context, node.GetIndex(), result, state.options);
 	// Advance to the next row group. For lazy-loading segment trees this acquires
 	// the node lock briefly only while more segments still need to be loaded.
 	state.current_row_group = state.row_groups->GetNextSegment(node);
@@ -2121,7 +2121,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 
 	// Use SCAN_COMMITTED to scan the latest data.
 	CreateIndexScanState state;
-	auto scan_type = TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED;
+	auto options = TableScanType::TABLE_SCAN_OMIT_PERMANENTLY_DELETED;
 	state.Initialize(column_ids, nullptr);
 	InitializeScan(context, state.table_state, column_ids, nullptr);
 
@@ -2129,7 +2129,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 
 	while (true) {
 		scan_chunk.Reset();
-		state.table_state.Scan(scan_chunk, scan_type, state.segment_lock);
+		state.table_state.Scan(scan_chunk, options, state.segment_lock);
 		if (scan_chunk.size() == 0) {
 			break;
 		}

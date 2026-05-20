@@ -1,5 +1,5 @@
 # name: test/sql/storage/pragma_storage_info_scan_type.test
-# description: Test the scan_type named parameter of pragma_storage_info
+# description: Test the include_segment_info / loaded_segments_only named parameters of pragma_storage_info
 # group: [storage]
 
 require block_size 262144
@@ -23,15 +23,15 @@ INSERT INTO bp_tbl SELECT 2 FROM range(0, 10000) tbl(i)
 statement ok
 CHECKPOINT
 
-# Default scan_type is STANDARD: segment_info column is not present in the output.
+# By default include_segment_info=false: the segment_info column is not present.
 statement error
 SELECT segment_info FROM pragma_storage_info('bp_tbl') LIMIT 1
 ----
 <REGEX>:Binder Error:.*segment_info.*
 
-# Explicit STANDARD also omits segment_info.
+# Explicit include_segment_info=false also omits the column.
 statement error
-SELECT segment_info FROM pragma_storage_info('bp_tbl', scan_type='standard') LIMIT 1
+SELECT segment_info FROM pragma_storage_info('bp_tbl', include_segment_info=false) LIMIT 1
 ----
 <REGEX>:Binder Error:.*segment_info.*
 
@@ -41,37 +41,36 @@ SELECT COUNT(*) > 0 FROM pragma_storage_info('bp_tbl') WHERE segment_type NOT IN
 ----
 true
 
-# EXTENDED populates the (expensive) segment_info column with per-segment bitpacking modes.
+# include_segment_info=true populates the (expensive) segment_info column with per-segment bitpacking modes.
 query I
-SELECT segment_info FROM pragma_storage_info('bp_tbl', scan_type='extended') WHERE segment_type NOT IN ('VALIDITY')
+SELECT segment_info FROM pragma_storage_info('bp_tbl', include_segment_info=true) WHERE segment_type NOT IN ('VALIDITY')
 ----
 CONSTANT: 9, DELTA_FOR: 1
 
-# Same row counts across modes (the filter only affects per-column visibility / segment_info contents).
+# Same row counts whether or not we include segment_info.
 query I
-SELECT COUNT(*) = (SELECT COUNT(*) FROM pragma_storage_info('bp_tbl', scan_type='extended'))
-FROM pragma_storage_info('bp_tbl', scan_type='standard')
+SELECT COUNT(*) = (SELECT COUNT(*) FROM pragma_storage_info('bp_tbl', include_segment_info=true))
+FROM pragma_storage_info('bp_tbl')
 ----
 true
 
-# extended_only_loaded combines both bits: skip unloaded columns AND populate segment_info.
+# loaded_segments_only is orthogonal: it can be combined with either include_segment_info value.
 # After the CHECKPOINT above all columns of bp_tbl are unloaded; force a load by reading them.
 statement ok
 SELECT * FROM bp_tbl LIMIT 1;
 
 query I
-SELECT segment_info FROM pragma_storage_info('bp_tbl', scan_type='extended_only_loaded') WHERE segment_type NOT IN ('VALIDITY')
+SELECT segment_info FROM pragma_storage_info('bp_tbl', include_segment_info=true, loaded_segments_only=true) WHERE segment_type NOT IN ('VALIDITY')
 ----
 CONSTANT: 9, DELTA_FOR: 1
 
-# Sanity: case-insensitive parsing.
-query I
-SELECT DISTINCT segment_info FROM pragma_storage_info('bp_tbl', scan_type='EXTeNDED') WHERE segment_type NOT IN ('VALIDITY')
-----
-CONSTANT: 9, DELTA_FOR: 1
-
-# Invalid scan_type errors.
+# loaded_segments_only without include_segment_info is also valid (no segment_info column emitted).
 statement error
-SELECT * FROM pragma_storage_info('bp_tbl', scan_type='bogus')
+SELECT segment_info FROM pragma_storage_info('bp_tbl', loaded_segments_only=true) LIMIT 1
 ----
-<REGEX>:Parser Error: Unrecognized column segment info scan type.*
+<REGEX>:Binder Error:.*segment_info.*
+
+query I
+SELECT COUNT(*) > 0 FROM pragma_storage_info('bp_tbl', loaded_segments_only=true) WHERE segment_type NOT IN ('VALIDITY')
+----
+true

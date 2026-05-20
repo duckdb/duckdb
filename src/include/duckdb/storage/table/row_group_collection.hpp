@@ -51,7 +51,7 @@ class TableScanState;
 struct ColumnSegmentInfoScanState {
 	shared_ptr<RowGroupSegmentTree> row_groups;
 	optional_ptr<SegmentNode<RowGroup>> current_row_group;
-	ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::STANDARD;
+	ColumnSegmentInfoScanOptions options;
 };
 
 class RowGroupCollection {
@@ -147,7 +147,7 @@ public:
 	vector<PartitionStatistics> GetPartitionStats() const;
 	vector<ColumnSegmentInfo>
 	GetColumnSegmentInfo(const QueryContext &context,
-	                     ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::STANDARD) const;
+	                     const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {}) const;
 	//! Initialize an incremental scan over column segment info, pinning the current row groups for consistency.
 	void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) const;
 	//! Append the next row group's column segment info to result. Returns false when no row groups remain.
