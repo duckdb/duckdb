@@ -436,8 +436,8 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 		lock_guard<mutex> l(stats_lock);
 		auto &segment_stats =
 		    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
-		        ? state.child_states[0].current->GetNode().GetStats()
-		        : state.current->GetNode().GetStats();
+		        ? state.child_states[0].current->GetNode().GetStatsMutable()
+		        : state.current->GetNode().GetStatsMutable();
 		prune_result = expr_filter.CheckStatistics(segment_stats);
 		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;

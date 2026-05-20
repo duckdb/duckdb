@@ -16,6 +16,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -390,8 +391,6 @@ void AddOptimizerMetrics(profiler_settings_t &settings, const set<OptimizerType>
 
 void ExtractFromList(ClientConfig &config, profiler_settings_t &enabled_metrics, vector<string> &invalid_settings,
                      const Value &input, const set<OptimizerType> &disabled_optimizers) {
-	config.profiler_settings_type = LogicalTypeId::LIST;
-
 	enabled_metrics = ExtractSettings(
 	    [&](const std::function<void(const std::string &)> &func) {
 		    for (auto &val : ListValue::GetChildren(input)) {
@@ -403,8 +402,6 @@ void ExtractFromList(ClientConfig &config, profiler_settings_t &enabled_metrics,
 
 void ExtractFromStruct(ClientConfig &config, profiler_settings_t &enabled_metrics, vector<string> &invalid_settings,
                        const Value &input, const set<OptimizerType> &disabled_optimizers) {
-	config.profiler_settings_type = LogicalTypeId::STRUCT;
-
 	enabled_metrics = ExtractSettings(
 	    [&](const std::function<void(const std::string &)> &func) {
 		    auto &children = StructValue::GetChildren(input);
@@ -421,8 +418,6 @@ void ExtractFromStruct(ClientConfig &config, profiler_settings_t &enabled_metric
 
 void ExtractFromJSON(ClientConfig &config, profiler_settings_t &enabled_metrics, vector<string> &invalid_settings,
                      const Value &input, const set<OptimizerType> &disabled_optimizers) {
-	config.profiler_settings_type = LogicalTypeId::VARCHAR;
-
 	// JSON string: parse, then accept entries with value == "true"
 	std::unordered_map<std::string, std::string> json;
 	try {
@@ -487,7 +482,6 @@ void ConfigureProfilingSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_profiler = ClientConfig().enable_profiler;
 	config.profiler_settings = MetricsUtils::GetDefaultMetrics();
-	config.profiler_settings_type = LogicalTypeId::VARCHAR;
 }
 
 Value ConfigureProfilingSetting::GetSetting(const ClientContext &context) {
@@ -497,37 +491,11 @@ Value ConfigureProfilingSetting::GetSetting(const ClientContext &context) {
 	for (auto &entry : config.profiler_settings) {
 		enabled_settings.insert(EnumUtil::ToString(entry));
 	}
-
-	switch (config.profiler_settings_type) {
-	case LogicalTypeId::VARCHAR: {
-		// i.e. JSON
-		string profiling_settings_str;
-		for (auto &entry : enabled_settings) {
-			if (!profiling_settings_str.empty()) {
-				profiling_settings_str += ", ";
-			}
-			profiling_settings_str += "\"" + entry + "\": \"true\"";
-		}
-
-		return Value(StringUtil::Format("{%s}", profiling_settings_str));
+	vector<Value> children;
+	for (auto &entry : enabled_settings) {
+		children.emplace_back(entry);
 	}
-	case LogicalTypeId::STRUCT: {
-		child_list_t<Value> children;
-		for (auto &entry : enabled_settings) {
-			children.emplace_back(entry, Value::BOOLEAN(true));
-		}
-		return Value::STRUCT(std::move(children));
-	}
-	case LogicalTypeId::LIST: {
-		vector<Value> children;
-		for (auto &entry : enabled_settings) {
-			children.emplace_back(entry);
-		}
-		return Value::LIST(std::move(children));
-	}
-	default:
-		throw InternalException("Invalid custom profiler settings type");
-	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(children));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1305,6 +1273,17 @@ Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// HTTP Proxy
+//===----------------------------------------------------------------------===//
+void HTTPProxySetting::SetGlobal(DatabaseInstance *, DBConfig &config, const Value &input) {
+	config.options.http_proxy = input.GetValue<string>();
+}
+
+void HTTPProxySetting::ResetGlobal(DatabaseInstance *, DBConfig &config) {
+	config.options.http_proxy = FileSystem::GetEnvVariable("HTTP_PROXY");
+}
+
+//===----------------------------------------------------------------------===//
 // Index Scan Percentage
 //===----------------------------------------------------------------------===//
 void IndexScanPercentageSetting::OnSet(SettingCallbackInfo &, Value &input) {
@@ -1770,6 +1749,32 @@ void WarningsAsErrorsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 		    ExceptionType::SETTINGS,
 		    "Can not set 'warnings_as_errors=true'; no logger is available. To solve, run: 'SET enable_logging=true;'");
 	}
+}
+
+//===----------------------------------------------------------------------===//
+// Streaming Buffer Size
+//===----------------------------------------------------------------------===//
+void WriteBufferRowGroupMemoryLimitSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull() || input.ToString().empty()) {
+		config.options.write_buffer_row_group_memory_limit = optional_idx();
+	} else {
+		config.options.write_buffer_row_group_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
+	}
+}
+
+void WriteBufferRowGroupMemoryLimitSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.write_buffer_row_group_memory_limit = optional_idx();
+}
+
+Value WriteBufferRowGroupMemoryLimitSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	idx_t bytes = 0;
+	if (config.options.write_buffer_row_group_memory_limit.IsValid()) {
+		bytes = config.options.write_buffer_row_group_memory_limit.GetIndex();
+	} else {
+		bytes = config.options.maximum_memory / 5 / (config.options.maximum_threads + 1);
+	}
+	return Value(StringUtil::BytesToHumanReadableString(bytes));
 }
 
 void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &input) {

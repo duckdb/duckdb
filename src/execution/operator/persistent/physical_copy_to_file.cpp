@@ -668,9 +668,12 @@ void PartitionedCopyHashGroup::Materialize(ExecutionContext &execution_context, 
 	auto unused = make_uniq<LocalSourceState>();
 	OperatorSourceInput source_input {source, *unused, interrupt};
 	partitioned_copy.sort_strategy->MaterializeColumnData(execution_context, group_idx, source_input);
+	// Read `blocks` before incrementing `materialized`: once materialized == blocks another thread can advance
+	// the stage all the way to FLUSH completion and delete this hash group, making `blocks` a dangling read.
+	const idx_t local_blocks = blocks;
 	const auto new_materialized = (materialized += (task.end_idx - task.begin_idx));
 
-	if (new_materialized >= blocks) {
+	if (new_materialized >= local_blocks) {
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		if (!collection) {
 			collection = partitioned_copy.sort_strategy->GetColumnData(group_idx, source_input);

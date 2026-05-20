@@ -401,8 +401,11 @@ void PEGTransformerFactory::RegisterDrop() {
 	REGISTER_TRANSFORM(TransformDropFunction);
 	REGISTER_TRANSFORM(TransformDropSchema);
 	REGISTER_TRANSFORM(TransformQualifiedSchemaName);
+	REGISTER_TRANSFORM(TransformCatalogReservedSchema);
 	REGISTER_TRANSFORM(TransformDropIndex);
 	REGISTER_TRANSFORM(TransformQualifiedIndexName);
+	REGISTER_TRANSFORM(TransformSchemaReservedIndex);
+	REGISTER_TRANSFORM(TransformCatalogReservedSchemaIndex);
 	REGISTER_TRANSFORM(TransformDropSequence);
 	REGISTER_TRANSFORM(TransformCollationName);
 	REGISTER_TRANSFORM(TransformDropCollation);

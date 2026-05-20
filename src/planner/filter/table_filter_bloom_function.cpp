@@ -42,6 +42,24 @@ void BloomFilter::Initialize(ClientContext &context_p, idx_t number_of_rows) {
 	initialized = true;
 }
 
+void BloomFilter::Merge(const BloomFilter &other) {
+	D_ASSERT(initialized);
+	D_ASSERT(other.initialized);
+	D_ASSERT(num_sectors == other.num_sectors);
+	D_ASSERT(bitmask == other.bitmask);
+	for (idx_t i = 0; i < num_sectors; i++) {
+		bf[i] |= other.bf[i];
+	}
+}
+
+void BloomFilter::Reset() {
+	buf_.Reset();
+	num_sectors = 0;
+	bitmask = 0;
+	initialized = false;
+	bf = nullptr;
+}
+
 inline uint64_t GetMask(const hash_t hash) {
 	const uint64_t shifts = hash & SHIFT_MASK;
 	const auto shifts_8 = reinterpret_cast<const uint8_t *>(&shifts);

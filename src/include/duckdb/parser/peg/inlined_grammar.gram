@@ -51,6 +51,7 @@ ReservedIdentifier <- Identifier
 ColumnName <- Identifier
 ReservedColumnName <- Identifier
 IndexName <- Identifier
+ReservedIndexName <- Identifier
 SettingName <- Identifier
 PragmaName <- Identifier
 FunctionName <- Identifier
@@ -1174,7 +1175,9 @@ DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
 DropFunction <- FunctionType IfExists? List(FunctionIdentifier)
 DropSchema <- 'SCHEMA' IfExists? List(QualifiedSchemaName)
 DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
-QualifiedIndexName <- CatalogQualification? SchemaQualification? IndexName
+QualifiedIndexName <- CatalogReservedSchemaIndex / SchemaReservedIndex / IndexName
+SchemaReservedIndex <- SchemaQualification ReservedIndexName
+CatalogReservedSchemaIndex <- CatalogQualification ReservedSchemaQualification ReservedIndexName
 DropSequence <- 'SEQUENCE' IfExists? List(QualifiedSequenceName)
 DropCollation <- 'COLLATION' IfExists? List(CollationName)
 DropType <- 'TYPE' IfExists? List(QualifiedTypeName)
@@ -1187,7 +1190,8 @@ FunctionType <- 'MACRO' / 'FUNCTION'
 DropBehavior <- 'CASCADE' / 'RESTRICT'
 
 IfExists <- 'IF' 'EXISTS'
-QualifiedSchemaName <- CatalogQualification? SchemaName
+QualifiedSchemaName <- CatalogReservedSchema / SchemaName
+CatalogReservedSchema <- CatalogQualification ReservedSchemaName
 
 DropSecretStorage <- 'FROM' Identifier
 UpdateStatement <- WithClause? 'UPDATE' UpdateTarget UpdateSetClause FromClause? WhereClause? ReturningClause?

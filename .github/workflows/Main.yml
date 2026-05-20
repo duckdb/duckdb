@@ -443,6 +443,14 @@ jobs:
         EOF
         make tidy-check-clangd CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*
 
+    - name: Upload clangd-tidy logs
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: clangd-tidy-logs
+        path: build/tidy/clangd-tidy-logs
+        if-no-files-found: ignore
+
  extensions:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions') }}
     uses: ./.github/workflows/Extensions.yml

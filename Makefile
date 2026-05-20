@@ -195,8 +195,8 @@ endif
 ifeq (${BUILD_JSON}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};json
 endif
-ifeq (${BUILD_JEMALLOC}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};jemalloc
+ifdef BUILD_JEMALLOC
+	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_JEMALLOC=${BUILD_JEMALLOC}
 endif
 ifdef CORE_EXTENSIONS
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};${CORE_EXTENSIONS}
@@ -824,7 +824,6 @@ generate-files:
 	$(PYTHON) scripts/generate_settings.py
 	$(PYTHON) scripts/generate_serialization.py
 	$(PYTHON) scripts/generate_storage_info.py
-	$(PYTHON) scripts/generate_metric_enums.py
 	$(PYTHON) scripts/generate_enum_util.py
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
