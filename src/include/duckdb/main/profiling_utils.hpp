@@ -31,7 +31,9 @@ public:
         Reset();
     }
 
-	ProfilingInfo query_global_info;
+	idx_t system_peak_buffer_memory;
+	idx_t system_peak_temp_dir_size;
+	double blocked_thread_time;
 
 	std::string query_name;
 	unique_ptr<ActiveTimer> latency_timer;
@@ -59,7 +61,10 @@ public:
         }
 
         latency_timer.reset();
-        query_name = "";
+    	query_name = "";
+    	system_peak_buffer_memory = 0;
+    	system_peak_temp_dir_size = 0;
+    	blocked_thread_time = 0;
     }
 
     void Merge(const QueryMetrics &other) {
@@ -95,8 +100,8 @@ private:
 class ProfilingUtils {
 public:
 	static void SetMetricToDefault(profiler_metrics_t &metrics, const MetricType &type);
-	static void MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *dest, const char *key_ptr,  profiler_metrics_t &metrics, const MetricType &type);
-	static void CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingNode &node, ProfilingInfo &child_info);
+	static void MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *dest, const char *key_ptr, const Value &val);
+	static void CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingInfo &result);
 };
 
 struct ActiveTimer {

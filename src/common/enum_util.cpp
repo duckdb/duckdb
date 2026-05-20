@@ -119,6 +119,7 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
+#include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
@@ -155,6 +156,7 @@
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
+#include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
@@ -1279,6 +1281,25 @@ const char* EnumUtil::ToChars<CompressedMaterializationDirection>(CompressedMate
 template<>
 CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializationDirection>(const char *value) {
 	return static_cast<CompressedMaterializationDirection>(StringUtil::StringToEnum(GetCompressedMaterializationDirectionValues(), 3, "CompressedMaterializationDirection", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCompressedMaterializationTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CompressedMaterializationType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(CompressedMaterializationType::FUNCTION), "FUNCTION" },
+		{ static_cast<uint32_t>(CompressedMaterializationType::CAST), "CAST" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CompressedMaterializationType>(CompressedMaterializationType value) {
+	return StringUtil::EnumToString(GetCompressedMaterializationTypeValues(), 3, "CompressedMaterializationType", static_cast<uint32_t>(value));
+}
+
+template<>
+CompressedMaterializationType EnumUtil::FromString<CompressedMaterializationType>(const char *value) {
+	return static_cast<CompressedMaterializationType>(StringUtil::StringToEnum(GetCompressedMaterializationTypeValues(), 3, "CompressedMaterializationType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
@@ -2750,6 +2771,24 @@ const char* EnumUtil::ToChars<InterruptMode>(InterruptMode value) {
 template<>
 InterruptMode EnumUtil::FromString<InterruptMode>(const char *value) {
 	return static_cast<InterruptMode>(StringUtil::StringToEnum(GetInterruptModeValues(), 3, "InterruptMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetJoinFilterPushdownModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION), "RECONSTRUCT_EXPRESSION" },
+		{ static_cast<uint32_t>(JoinFilterPushdownMode::STORAGE_ONLY), "STORAGE_ONLY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<JoinFilterPushdownMode>(JoinFilterPushdownMode value) {
+	return StringUtil::EnumToString(GetJoinFilterPushdownModeValues(), 2, "JoinFilterPushdownMode", static_cast<uint32_t>(value));
+}
+
+template<>
+JoinFilterPushdownMode EnumUtil::FromString<JoinFilterPushdownMode>(const char *value) {
+	return static_cast<JoinFilterPushdownMode>(StringUtil::StringToEnum(GetJoinFilterPushdownModeValues(), 2, "JoinFilterPushdownMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetJoinRefTypeValues() {

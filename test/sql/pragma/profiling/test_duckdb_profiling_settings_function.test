@@ -29,7 +29,7 @@ pragma custom_profiling_settings='{"CPU_TIME": "true"}';
 query II
 SELECT * EXCLUDE(description) FROM duckdb_profiling_settings();
 ----
-custom_profiling_settings	{"CPU_TIME": "true"}
+custom_profiling_settings	[CPU_TIME]
 enable_profiling	json
 profiling_coverage	ALL
 profiling_mode	detailed
