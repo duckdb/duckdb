@@ -44,10 +44,12 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(PEGTra
 					throw InvalidInputException("FORMAT can not be provided more than once");
 				}
 				Value unparsed_explain_format;
-				if (option.children.empty()) {
+				if (option.expression) {
 					unparsed_explain_format = option.expression->ToString();
-				} else {
+				} else if (!option.children.empty()) {
 					unparsed_explain_format = option.children[0];
+				} else {
+					throw InvalidInputException("Unable to determine FORMAT option");
 				}
 				explain_format = ParseExplainFormat(unparsed_explain_format);
 				format_is_set = true;
