@@ -1648,16 +1648,13 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		auto write_action = row_group_write_data.write_action;
 		auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
 		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
-		std::vector<bool> reuse_column;
+		vector<bool> reuse_column;
 		if (debug_verify_blocks) {
 			if (write_action == RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA) {
 				auto existing_column_count = entry->ReferenceNode()->GetColumnCount();
-				reuse_column.reserve(existing_column_count);
-				for (idx_t column_idx = 0; column_idx < existing_column_count; column_idx++) {
-					reuse_column[column_idx] = true;
-				}
+				reuse_column.resize(existing_column_count, true);
 			} else {
-				reuse_column.reserve(row_group_write_data.states.size());
+				reuse_column.resize(row_group_write_data.states.size());
 				for (idx_t column_idx = 0; column_idx < row_group_write_data.states.size(); column_idx++) {
 					reuse_column[column_idx] = !row_group_write_data.states[column_idx];
 				}
