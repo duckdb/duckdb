@@ -1112,6 +1112,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"http_retry_wait_ms", "httpfs"},
     {"http_timeout", "httpfs"},
     {"httpfs_client_implementation", "httpfs"},
+    {"httpfs_connection_caching", "httpfs"},
     {"iceberg_test_force_token_expiry", "iceberg"},
     {"iceberg_use_metadata_log", "iceberg"},
     {"iceberg_via_aws_sdk_for_catalog_interactions", "iceberg"},
