@@ -597,31 +597,24 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const GatheredMetrics &info, id
 	pair<string, double> parser_head;
 	pair<string, double> physical_planner_head;
 
-
-
 	for (const auto &entry : info.GetMetrics()) {
 		const auto &metric = entry.first;
-		if (StringUtil::StartsWith(metric, "optimizer.")) {
+		if (MetricsUtils::MetricInGroup(metric, "optimizer")) {
 			// "optimizer.expression_rewriter" -> display as "expression_rewriter"
 			optimizer_timings[metric.substr(10)] = entry.second.GetValue<double>();
-		} else if (StringUtil::StartsWith(metric, "physical_planner.")) {
-			// "physical_planner.total_time" -> head; others -> sub-timings
-			if (metric == "physical_planner.total_time") {
-				physical_planner_head = {"Physical Planner", entry.second.GetValue<double>()};
-			} else {
-				// "physical_planner.column_binding" -> display as "column_binding"
-				physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
-			}
-		} else if (MetricsUtils::IsPhaseTimingKey(metric)) {
-			if (metric == "optimizers.total_time") {
-				optimizer_head = {"Optimizer", entry.second.GetValue<double>()};
-			} else if (metric == "planner.total_time") {
-				planner_head = {"Planner", entry.second.GetValue<double>()};
-			} else if (metric == "parsers.total_time") {
-				parser_head = {"Parser", entry.second.GetValue<double>()};
-			} else if (metric == "planner.binding_time") {
-				planner_timings["binding_time"] = entry.second.GetValue<double>();
-			}
+		} else if (MetricsUtils::MetricInGroup(metric, "physical_planner")) {
+			// "physical_planner.column_binding" -> display as "column_binding"
+			physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
+		} else if (MetricsUtils::IsMetric<MetricPhysicalPlannerTotalTime>(metric)) {
+			physical_planner_head = {"Physical Planner", entry.second.GetValue<double>()};
+		} else if (MetricsUtils::IsMetric<MetricOptimizersTotalTime>(metric)) {
+			optimizer_head = {"Optimizer", entry.second.GetValue<double>()};
+		} else if (MetricsUtils::IsMetric<MetricPlannerTotalTime>(metric)) {
+			planner_head = {"Planner", entry.second.GetValue<double>()};
+		} else if (MetricsUtils::IsMetric<MetricParsersTotalTime>(metric)) {
+			parser_head = {"Parser", entry.second.GetValue<double>()};
+		} else if (MetricsUtils::IsMetric<MetricPlannerBindingTime>(metric)) {
+			planner_timings["binding_time"] = entry.second.GetValue<double>();
 		}
 	}
 
