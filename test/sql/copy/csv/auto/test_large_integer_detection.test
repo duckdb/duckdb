@@ -1,5 +1,5 @@
 # name: test/sql/copy/csv/auto/test_large_integer_detection.test
-# description: Test CSV type detection for integer values larger than BIGINT
+# description: Test CSV type detection for large integer values
 # group: [auto]
 
 statement ok
