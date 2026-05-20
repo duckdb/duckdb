@@ -38,6 +38,16 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 		return CSVCast::TryCastDecimalVectorCommaSeparated(options, parse_chunk_col, dummy_result, size, parameters,
 		                                                   sql_type, line_error);
 	}
+	if (sql_type.id() == LogicalTypeId::BIGNUM) {
+		auto vector_data = FlatVector::GetData<string_t>(parse_chunk_col);
+		auto &validity = FlatVector::ValidityMutable(parse_chunk_col);
+		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+			if (validity.RowIsValid(row_idx) &&
+			    !CSVSniffer::CanYouCastBignum(vector_data[row_idx].GetData(), vector_data[row_idx].GetSize())) {
+				return false;
+			}
+		}
+	}
 	// target type is not varchar: perform a cast
 	string error_message;
 	return VectorOperations::DefaultTryCast(parse_chunk_col, dummy_result, size, &error_message, true);

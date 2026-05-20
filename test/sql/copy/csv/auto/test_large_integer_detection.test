@@ -1,0 +1,56 @@
+# name: test/sql/copy/csv/auto/test_large_integer_detection.test
+# description: Test CSV type detection for integer values larger than BIGINT
+# group: [auto]
+
+statement ok
+COPY (SELECT * FROM (VALUES
+	('12345678901234567890', 'abc'),
+	('99999999999999999999', 'def')
+) AS t(value, name)) TO '{TEST_DIR}/csv_large_hugeint_ids.csv' (FORMAT CSV, HEADER);
+
+query TT
+SELECT typeof(value), value::VARCHAR FROM read_csv_auto('{TEST_DIR}/csv_large_hugeint_ids.csv') ORDER BY name;
+----
+HUGEINT	12345678901234567890
+HUGEINT	99999999999999999999
+
+statement ok
+COPY (SELECT * FROM (VALUES
+	('340282366920938463463374607431768211456'),
+	('987654321098765432109876543210987654321098765432109876543210')
+) AS t(value)) TO '{TEST_DIR}/csv_large_bignum_ids.csv' (FORMAT CSV, HEADER);
+
+query TT
+SELECT typeof(value), value::VARCHAR FROM read_csv_auto('{TEST_DIR}/csv_large_bignum_ids.csv') ORDER BY value::VARCHAR;
+----
+BIGNUM	340282366920938463463374607431768211456
+BIGNUM	987654321098765432109876543210987654321098765432109876543210
+
+query T
+SELECT typeof(value) FROM read_csv_auto('{TEST_DIR}/csv_large_bignum_ids.csv',
+	auto_type_candidates = ['BIGNUM', 'VARCHAR']) LIMIT 1;
+----
+BIGNUM
+
+statement ok
+COPY (SELECT * FROM (VALUES
+	('0012345678901234567890'),
+	('0001')
+) AS t(value)) TO '{TEST_DIR}/csv_leading_zero_ids.csv' (FORMAT CSV, HEADER);
+
+query TT
+SELECT typeof(value), value FROM read_csv_auto('{TEST_DIR}/csv_leading_zero_ids.csv') ORDER BY value;
+----
+VARCHAR	0001
+VARCHAR	0012345678901234567890
+
+statement ok
+COPY (SELECT * FROM (VALUES
+	('1.5'),
+	('2.5')
+) AS t(value)) TO '{TEST_DIR}/csv_decimal_values.csv' (FORMAT CSV, HEADER);
+
+query T
+SELECT typeof(value) FROM read_csv_auto('{TEST_DIR}/csv_decimal_values.csv') LIMIT 1;
+----
+DOUBLE

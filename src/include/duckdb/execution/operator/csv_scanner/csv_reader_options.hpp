@@ -83,9 +83,9 @@ struct CSVReaderOptions {
 	bool columns_set = false;
 	//! Types considered as candidates for auto-detection ordered by ascending specificity (~ from low to high)
 	vector<LogicalType> auto_type_candidates = {
-	    LogicalType::VARCHAR,      LogicalType::DOUBLE,    LogicalType::BIGINT,
-	    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP, LogicalType::DATE,
-	    LogicalType::TIME,         LogicalType::BOOLEAN,   LogicalType::SQLNULL};
+	    LogicalType::VARCHAR, LogicalType::DOUBLE, LogicalType::BIGNUM,       LogicalType::UHUGEINT,
+	    LogicalType::HUGEINT, LogicalType::BIGINT, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP,
+	    LogicalType::DATE,    LogicalType::TIME,   LogicalType::BOOLEAN,      LogicalType::SQLNULL};
 	//! In case the sniffer found a mismatch error from user defined types or dialect
 	string sniffer_user_mismatch_error;
 	//! In case the sniffer found a mismatch error from user defined types or dialect
