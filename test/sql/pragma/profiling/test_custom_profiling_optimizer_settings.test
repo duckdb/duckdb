@@ -142,8 +142,8 @@ operator.rows_scanned
 operator.timing
 operator.type
 query.cpu_time
-query.query_name
 query.rows_returned
+query.sql
 query.time
 query.total_intermediate_rows
 query.total_rows_scanned
@@ -165,5 +165,5 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT operator.extra_info, operator.intermediate_size_bytes, query.cpu_time, query.rows_returned, query.time FROM metrics_output;
+SELECT operator_info[1].extra_info, operator_info[1].intermediate_size_bytes, query.cpu_time, query.rows_returned, query.time FROM metrics_output;
 

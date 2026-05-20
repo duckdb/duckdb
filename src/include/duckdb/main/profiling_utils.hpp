@@ -34,7 +34,7 @@ public:
 	idx_t system_peak_temp_dir_size;
 	double blocked_thread_time;
 
-	std::string query_name;
+	std::string query_sql;
 
 	// Always-tracked byte counters (used by progress bar even when profiling is disabled)
 	atomic<idx_t> bytes_read;
@@ -96,7 +96,7 @@ public:
         bytes_written = 0;
 
         latency_timer.reset();
-    	query_name = "";
+    	query_sql = "";
     	system_peak_buffer_memory = 0;
     	system_peak_temp_dir_size = 0;
     	blocked_thread_time = 0;

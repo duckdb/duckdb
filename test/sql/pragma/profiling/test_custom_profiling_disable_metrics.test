@@ -38,19 +38,19 @@ SELECT query.cpu_time FROM metrics_output;
 <REGEX>:Binder Error.*
 
 statement ok
-SELECT operator.extra_info, query.time FROM metrics_output;
+SELECT operator_info[1].extra_info, query.time FROM metrics_output;
 
 # Re-enable the CPU TIME.
 
 statement ok
-PRAGMA configure_profiling='{"query.query_name": "true", "query.cpu_time": "true", "operator.extra_info": "true", "query.total_intermediate_rows": "true", "query.total_rows_scanned": "true"}'
+PRAGMA configure_profiling='{"query.sql": "true", "query.cpu_time": "true", "operator.extra_info": "true", "query.total_intermediate_rows": "true", "query.total_rows_scanned": "true"}'
 
 query I
 SELECT unnest(current_setting('configure_profiling')) ORDER BY ALL
 ----
 operator.extra_info
 query.cpu_time
-query.query_name
+query.sql
 query.total_intermediate_rows
 query.total_rows_scanned
 
@@ -109,10 +109,10 @@ SELECT
 ----
 true
 
-# Check if query.query_name contains the query.
+# Check if query.sql contains the query.
 query I
 SELECT
-	query.query_name
+	query.sql
 FROM metrics_output;
 ----
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -120,7 +120,7 @@ SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 
 # Disable all query.* metrics to verify the query struct disappears from output.
 
 statement ok
-PRAGMA configure_profiling='{"query.query_name": "false", "query.cpu_time": "false", "query.total_intermediate_rows": "false", "query.total_rows_scanned": "false"}'
+PRAGMA configure_profiling='{"query.sql": "false", "query.cpu_time": "false", "query.total_intermediate_rows": "false", "query.total_rows_scanned": "false"}'
 
 statement ok
 PRAGMA enable_profiling = 'json';

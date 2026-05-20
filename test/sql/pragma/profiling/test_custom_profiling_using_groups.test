@@ -79,8 +79,8 @@ physical_planner.total_time
 planner.binding_time
 planner.total_time
 query.cpu_time
-query.query_name
 query.rows_returned
+query.sql
 query.time
 query.total_intermediate_rows
 query.total_rows_scanned
@@ -102,7 +102,7 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT operator.extra_info,
+SELECT operator_info[1].extra_info,
 	optimizer.aggregate_function_rewriter,
 	optimizer.build_side_probe_side,
 	optimizer.column_lifetime,
@@ -149,13 +149,13 @@ SELECT operator.extra_info,
 	physical_planner.total_time,
 	planner.binding_time,
 	planner.total_time,
-	operator.intermediate_size_bytes,
+	operator_info[1].intermediate_size_bytes,
 	query.cpu_time,
 	query.total_intermediate_rows,
 	query.total_rows_scanned,
 	query.time,
-	query.query_name,
 	query.rows_returned,
+	query.sql,
 	storage.attach_load_storage_latency,
 	storage.attach_replay_wal_latency,
 	storage.checkpoint_latency,
@@ -190,8 +190,8 @@ query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
 query.cpu_time
-query.query_name
 query.rows_returned
+query.sql
 query.time
 query.total_intermediate_rows
 query.total_rows_scanned
@@ -204,7 +204,7 @@ SELECT query.cpu_time,
 	query.total_intermediate_rows,
 	query.total_rows_scanned,
 	query.time,
-	query.query_name,
+	query.sql,
 	query.rows_returned
 FROM metrics_output;
 
@@ -234,8 +234,8 @@ operator.rows_scanned
 operator.timing
 operator.type
 query.cpu_time
-query.query_name
 query.rows_returned
+query.sql
 query.time
 query.total_intermediate_rows
 query.total_rows_scanned
@@ -257,14 +257,14 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT operator.extra_info,
-	operator.intermediate_size_bytes,
+SELECT operator_info[1].extra_info,
+	operator_info[1].intermediate_size_bytes,
 	query.cpu_time,
 	query.total_intermediate_rows,
 	query.total_rows_scanned,
 	query.time,
-	query.query_name,
 	query.rows_returned,
+	query.sql,
 	storage.attach_load_storage_latency,
 	storage.attach_replay_wal_latency,
 	storage.checkpoint_latency,
@@ -640,8 +640,8 @@ operator.rows_scanned
 operator.timing
 operator.type
 query.cpu_time
-query.query_name
 query.rows_returned
+query.sql
 query.time
 query.total_intermediate_rows
 query.total_rows_scanned
@@ -663,14 +663,14 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT operator.extra_info,
-	operator.intermediate_size_bytes,
+SELECT operator_info[1].extra_info,
+	operator_info[1].intermediate_size_bytes,
 	query.cpu_time,
 	query.total_intermediate_rows,
 	query.total_rows_scanned,
 	query.time,
-	query.query_name,
 	query.rows_returned,
+	query.sql,
 	storage.attach_load_storage_latency,
 	storage.attach_replay_wal_latency,
 	storage.checkpoint_latency,

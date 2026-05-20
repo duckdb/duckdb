@@ -25,8 +25,8 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_ou
 query I
 SELECT
     CASE
-        WHEN operator.intermediate_size_bytes < 10_000 THEN NULL
-        ELSE operator.intermediate_size_bytes
+        WHEN operator_info[1].intermediate_size_bytes < 10_000 THEN NULL
+        ELSE operator_info[1].intermediate_size_bytes
     END AS result
 FROM metrics_output;
 ----

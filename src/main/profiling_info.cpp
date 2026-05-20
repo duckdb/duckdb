@@ -54,7 +54,7 @@ void ProfilingInfo::ResetMetrics() {
 		if (MetricsUtils::IsQueryMetricKey(metric)) {
 			if (metric == "query.time" || metric == "query.cpu_time") {
 				metrics[metric] = Value::CreateValue(0.0);
-			} else if (metric == "query.query_name") {
+			} else if (metric == "query.sql") {
 				metrics[metric] = Value::CreateValue("");
 			} else {
 				metrics[metric] = Value::CreateValue<uint64_t>(0);

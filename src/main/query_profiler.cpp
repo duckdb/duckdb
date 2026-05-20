@@ -147,7 +147,7 @@ QueryProfiler &QueryProfiler::Get(ClientContext &context) {
 void QueryProfiler::Start(const string &query) {
 	Reset();
 	running = true;
-	query_metrics.query_name = query;
+	query_metrics.query_sql = query;
 	query_metrics.latency_timer = make_uniq<ActiveTimer>(StartTimer("query.time"));
 }
 
@@ -321,7 +321,7 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 		lock_guard<std::mutex> guard(lock);
 		// checking the tree to ensure the query is really empty
 		// the query string is empty when a logical plan is deserialized
-		if (query_metrics.query_name.empty() || !root) {
+		if (query_metrics.query_sql.empty() || !root) {
 			return "";
 		}
 		auto renderer = TreeRenderer::CreateRenderer(GetExplainFormat(format));
@@ -630,18 +630,18 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	bool show_query_name = false;
 	if (root) {
 		auto &info = *root_info;
-		show_query_name = info.EnabledForCollection("query.query_name");
+		show_query_name = info.EnabledForCollection("query.sql");
 	}
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
 	ss << "││    Query Profiling Information    ││\n";
 	ss << "│└───────────────────────────────────┘│\n";
 	ss << "└─────────────────────────────────────┘\n";
-	ss << (show_query_name ? StringUtil::Replace(query_metrics.query_name, "\n", " ") : "") + "\n";
+	ss << (show_query_name ? StringUtil::Replace(query_metrics.query_sql, "\n", " ") : "") + "\n";
 
 	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized
-	if (query_metrics.query_name.empty() && !root) {
+	if (query_metrics.query_sql.empty() && !root) {
 		return;
 	}
 
@@ -795,10 +795,23 @@ static yyjson_mut_val *QueryProfileResultToJSON(yyjson_mut_doc *doc, const Query
 	}
 	case QueryProfileResultKind::OBJECT: {
 		auto obj = yyjson_mut_obj(doc);
+		// Sort children alphabetically by key for deterministic output
+		vector<reference<const QueryProfileResult>> sorted_children;
+		sorted_children.reserve(node.children.size());
 		for (auto &child : node.children) {
-			D_ASSERT(!child->key.empty());
-			auto key_ptr = yyjson_mut_get_str(yyjson_mut_strcpy(doc, child->key.c_str()));
-			yyjson_mut_obj_add_val(doc, obj, key_ptr, QueryProfileResultToJSON(doc, *child));
+			sorted_children.push_back(*child);
+		}
+		std::sort(sorted_children.begin(), sorted_children.end(),
+		          [](const QueryProfileResult &a, const QueryProfileResult &b) {
+			          if (a.IsNested() != b.IsNested()) {
+				          return !a.IsNested();
+			          }
+			          return a.key < b.key;
+		          });
+		for (const QueryProfileResult &child : sorted_children) {
+			D_ASSERT(!child.key.empty());
+			auto key_ptr = yyjson_mut_get_str(yyjson_mut_strcpy(doc, child.key.c_str()));
+			yyjson_mut_obj_add_val(doc, obj, key_ptr, QueryProfileResultToJSON(doc, child));
 		}
 		return obj;
 	}
@@ -850,38 +863,13 @@ static void OperatorToResultTree(const ProfilingInfo &settings, ProfilingNode &n
 unique_ptr<QueryProfileResult> QueryProfiler::ToResultTree() const {
 	auto result = make_uniq<QueryProfileResult>();
 	if (!root) {
-		result->AddValue("result", Value(query_metrics.query_name.empty() ? "empty" : "error"));
+		result->AddValue("result", Value(query_metrics.query_sql.empty() ? "empty" : "error"));
 		return result;
 	}
 	root_info->MetricsToProfileResult(*result);
-	// Add root operator's own metrics at the root level (grouped as an "operator" struct)
-	auto root_op_metrics = root->GetOperatorInfo().GetMetrics(*root_info);
-	unordered_map<string, reference<QueryProfileResult>> groups;
-	for (auto &entry : root_op_metrics) {
-		auto dot_pos = entry.first.find('.');
-		if (dot_pos != string::npos) {
-			auto prefix = entry.first.substr(0, dot_pos);
-			auto suffix = entry.first.substr(dot_pos + 1);
-			auto it = groups.find(prefix);
-			if (it == groups.end()) {
-				auto &obj = result->AddObject(prefix);
-				groups.emplace(prefix, obj);
-				obj.AddValue(suffix, std::move(entry.second));
-			} else {
-				it->second.get().AddValue(suffix, std::move(entry.second));
-			}
-		} else {
-			result->AddValue(StringUtil::Lower(entry.first), std::move(entry.second));
-		}
-	}
-	// Add root operator's children as "operator_info"
-	if (root->GetChildCount() > 0) {
-		auto &op_list = result->AddList("operator_info");
-		for (idx_t i = 0; i < root->GetChildCount(); i++) {
-			auto &child_result = op_list.AppendObject();
-			OperatorToResultTree(*root_info, *root->GetChild(i), child_result);
-		}
-	}
+	auto &op_list = result->AddList("operator_info");
+	auto &op_node = op_list.AppendObject();
+	OperatorToResultTree(*root_info, *root, op_node);
 	return result;
 }
 
@@ -1044,8 +1032,8 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		if (MetricsUtils::IsQueryMetricKey(metric.first)) {
 			if (metric.first == "query.time") {
 				metric.second = Value::DOUBLE(query_metrics.GetStringMetricInSeconds("query.time"));
-			} else if (metric.first == "query.query_name") {
-				metric.second = Value(query_metrics.query_name);
+			} else if (metric.first == "query.sql") {
+				metric.second = Value(query_metrics.query_sql);
 			} else if (root) {
 				if (metric.first == "query.cpu_time") {
 					metric.second = Value::DOUBLE(cumulative_metrics.time);

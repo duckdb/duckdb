@@ -40,17 +40,26 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 		auto key_str = duckdb::string(key_c_str);
 		auto value_str = duckdb::string(value_c_str);
 
-		if (depth > 0) {
-			// At depth>0 operator nodes keys are unprefixed (e.g. "timing", not "operator.timing")
-			REQUIRE(key_str != "query.query_name");
+		if (depth == 0) {
+			// At depth=0 root node: only query/system/storage metrics, no per-operator metrics
+			REQUIRE(key_str != "intermediate_rows");
+			REQUIRE(key_str != "rows_scanned");
+			REQUIRE(key_str != "timing");
+			REQUIRE(key_str != "name");
+			REQUIRE(key_str != "type");
+		} else {
+			// At depth>0 operator nodes: keys are unprefixed (e.g. "timing", not "operator.timing")
+			REQUIRE(key_str != "query.sql");
 			REQUIRE(key_str != "system.blocked_thread_time");
 			REQUIRE(key_str != "query.time");
 			REQUIRE(key_str != "query.rows_returned");
 		}
 
 		// These keys are non-numeric: skip stod for them
+		// At depth=0: "operator.name", "operator.extra_info", "query.sql" (prefixed)
+		// At depth>0: "name", "type", "extra_info" (unprefixed)
 		if (key_str == "operator.name" || key_str == "operator.type" || key_str == "operator.extra_info" ||
-		    key_str == "query.query_name" ||
+		    key_str == "query.sql" ||
 		    key_str == "name" || key_str == "type" || key_str == "extra_info") {
 			REQUIRE(!value_str.empty());
 		} else {
@@ -142,10 +151,8 @@ TEST_CASE("Test profiling with cumulative metrics", "[capi]") {
 	auto info = duckdb_get_profiling_info(tester.connection);
 	REQUIRE(info != nullptr);
 
-	// depth=0 has "operator.timing" / "operator.intermediate_rows" (root operator, prefixed)
-	// depth>0 has "timing" / "intermediate_rows" (child operators, unprefixed)
-	duckdb::map<string, double> cumulative_counter = {{"operator.timing", 0}, {"operator.intermediate_rows", 0},
-	                                                  {"timing", 0}, {"intermediate_rows", 0}};
+	// All operator nodes (depth>0) have unprefixed keys: "timing", "intermediate_rows"
+	duckdb::map<string, double> cumulative_counter = {{"timing", 0}, {"intermediate_rows", 0}};
 	duckdb::map<string, double> cumulative_result;
 
 	TraverseTree(info, cumulative_counter, cumulative_result, 0);
@@ -165,11 +172,8 @@ TEST_CASE("Test profiling with cumulative metrics", "[capi]") {
 	duckdb_free(total_rows_str);
 	duckdb_destroy_value(&total_rows_val);
 
-	// Total timing = root operator (depth=0 "operator.timing") + child operators (depth>0 "timing")
-	REQUIRE(ConvertToInt(root_cpu_time) ==
-	        ConvertToInt(cumulative_counter["operator.timing"] + cumulative_counter["timing"]));
-	REQUIRE(ConvertToInt(root_total_intermediate_rows) ==
-	        ConvertToInt(cumulative_counter["operator.intermediate_rows"] + cumulative_counter["intermediate_rows"]));
+	REQUIRE(ConvertToInt(root_cpu_time) == ConvertToInt(cumulative_counter["timing"]));
+	REQUIRE(ConvertToInt(root_total_intermediate_rows) == ConvertToInt(cumulative_counter["intermediate_rows"]));
 	tester.Cleanup();
 }
 
@@ -369,7 +373,7 @@ TEST_CASE("Test profiling with the appender", "[capi]") {
 	REQUIRE(info);
 
 	// Check that the query name matches the appender query.
-	auto query_name = duckdb_profiling_info_get_value(info, "query.query_name");
+	auto query_name = duckdb_profiling_info_get_value(info, "query.sql");
 	REQUIRE(query_name);
 	auto query_name_c_str = duckdb_get_varchar(query_name);
 	auto query_name_str = duckdb::string(query_name_c_str);
@@ -409,7 +413,7 @@ TEST_CASE("Test profiling with the non-query appender", "[capi]") {
 	REQUIRE(info);
 
 	// Check that the query name matches the appender query.
-	auto query_name = duckdb_profiling_info_get_value(info, "query.query_name");
+	auto query_name = duckdb_profiling_info_get_value(info, "query.sql");
 	REQUIRE(query_name);
 
 	auto query_name_c_str = duckdb_get_varchar(query_name);

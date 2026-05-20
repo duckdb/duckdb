@@ -108,7 +108,7 @@ profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 profiler_settings_t MetricsUtils::GetQueryMetrics() {
 	return {
 		"query.cpu_time",
-		"query.query_name",
+		"query.sql",
 		"query.rows_returned",
 		"query.time",
 		"query.total_intermediate_rows",
@@ -236,7 +236,7 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 		"planner.binding_time",
 		// Root-scope query metrics (not operator-level)
 		"query.cpu_time",
-		"query.query_name",
+		"query.sql",
 		"query.rows_returned",
 		"query.time",
 		"query.total_intermediate_rows",

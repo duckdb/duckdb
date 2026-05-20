@@ -67,6 +67,10 @@ struct QueryProfileResult {
 	QueryProfileResult &AppendObject();
 	//! Append an anonymous LIST item to this node; returns the new item
 	QueryProfileResult &AppendList();
+	//! Returns true if this node is a nested type (OBJECT or LIST)
+	bool IsNested() const {
+		return kind == QueryProfileResultKind::OBJECT || kind == QueryProfileResultKind::LIST;
+	}
 };
 
 //! QueryProfiler collects the profiling metrics of a query.
