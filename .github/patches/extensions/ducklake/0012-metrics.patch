@@ -1,0 +1,70 @@
+diff --git a/src/storage/ducklake_scan.cpp b/src/storage/ducklake_scan.cpp
+index 797a54ed..e5fec1e1 100644
+--- a/src/storage/ducklake_scan.cpp
++++ b/src/storage/ducklake_scan.cpp
+@@ -31,10 +31,9 @@ static InsertionOrderPreservingMap<string> DuckLakeFunctionToString(TableFunctio
+ 	return result;
+ }
+ 
+-static InsertionOrderPreservingMap<string> DuckLakeDynamicToString(TableFunctionDynamicToStringInput &input) {
+-	InsertionOrderPreservingMap<string> result;
++static void DuckLakeGetMetrics(TableFunctionGetMetricsInput &input) {
+ 	if (!input.global_state) {
+-		return result;
++		return;
+ 	}
+ 	auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
+ 	auto &file_list = gstate.file_list.Cast<DuckLakeMultiFileList>();
+@@ -64,12 +63,12 @@ static InsertionOrderPreservingMap<string> DuckLakeDynamicToString(TableFunction
+ 		}
+ 	}
+ 
+-	result.insert(make_pair("Total Files Read", std::to_string(data_files_read)));
++	input.operator_metrics.AddExtraInfo("Total Files Read", std::to_string(data_files_read));
+ 	if (data_files_skipped > 0) {
+-		result.insert(make_pair("Total Files Skipped", std::to_string(data_files_skipped)));
++		input.operator_metrics.AddExtraInfo("Total Files Skipped", std::to_string(data_files_skipped));
+ 	}
+ 	if (inlined_tables_read > 0) {
+-		result.insert(make_pair("Inlined Tables Read", std::to_string(inlined_tables_read)));
++		input.operator_metrics.AddExtraInfo("Inlined Tables Read", std::to_string(inlined_tables_read));
+ 	}
+ 
+ 	// Build filename list showing only actual data files (not inlined data tables)
+@@ -85,10 +84,8 @@ static InsertionOrderPreservingMap<string> DuckLakeDynamicToString(TableFunction
+ 			file_path_names.resize(FILE_NAME_LIST_LIMIT);
+ 			file_path_names.push_back("...");
+ 		}
+-		auto list_of_files = StringUtil::Join(file_path_names, ", ");
+-		result.insert(make_pair("Filename(s)", list_of_files));
++		input.operator_metrics.AddExtraInfo("Filename(s)", StringUtil::Join(file_path_names, ", "));
+ 	}
+-	return result;
+ }
+ 
+ unique_ptr<BaseStatistics> DuckLakeStatistics(ClientContext &context, const FunctionData *bind_data,
+@@ -213,7 +210,7 @@ TableFunction DuckLakeFunctions::GetDuckLakeScanFunction(DatabaseInstance &insta
+ 	function.deserialize = DuckLakeScanDeserialize;
+ 
+ 	function.to_string = DuckLakeFunctionToString;
+-	function.dynamic_to_string = DuckLakeDynamicToString;
++	function.get_metrics = DuckLakeGetMetrics;
+ 
+ 	function.name = "ducklake_scan";
+ 	return function;
+diff --git a/test/sql/settings/max_retry_count.test b/test/sql/settings/max_retry_count.test
+index 964ff8da..ae706215 100644
+--- a/test/sql/settings/max_retry_count.test
++++ b/test/sql/settings/max_retry_count.test
+@@ -51,9 +51,9 @@ SELECT current_setting('ducklake_max_retry_count')
+ statement ok
+ INSERT INTO retry_test VALUES (2, 'test with retry count 7');
+ 
+-# Test 5: Test session scope
++# Test 5: Set to 2
+ statement ok
+-SET SESSION ducklake_max_retry_count = 2;
++SET ducklake_max_retry_count = 2;
+ 
+ query I
+ SELECT current_setting('ducklake_max_retry_count')
