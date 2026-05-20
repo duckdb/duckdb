@@ -47,7 +47,6 @@
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
-#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
@@ -3277,31 +3276,6 @@ const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value) {
 template<>
 MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value) {
 	return static_cast<MetaPipelineType>(StringUtil::StringToEnum(GetMetaPipelineTypeValues(), 2, "MetaPipelineType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetMetricGroupValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(MetricGroup::ALL), "ALL" },
-		{ static_cast<uint32_t>(MetricGroup::CORE), "CORE" },
-		{ static_cast<uint32_t>(MetricGroup::DEFAULT), "DEFAULT" },
-		{ static_cast<uint32_t>(MetricGroup::EXECUTION), "EXECUTION" },
-		{ static_cast<uint32_t>(MetricGroup::OPERATOR), "OPERATOR" },
-		{ static_cast<uint32_t>(MetricGroup::OPTIMIZER), "OPTIMIZER" },
-		{ static_cast<uint32_t>(MetricGroup::PHASE_TIMING), "PHASE_TIMING" },
-		{ static_cast<uint32_t>(MetricGroup::STORAGE), "STORAGE" },
-		{ static_cast<uint32_t>(MetricGroup::INVALID), "INVALID" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<MetricGroup>(MetricGroup value) {
-	return StringUtil::EnumToString(GetMetricGroupValues(), 9, "MetricGroup", static_cast<uint32_t>(value));
-}
-
-template<>
-MetricGroup EnumUtil::FromString<MetricGroup>(const char *value) {
-	return static_cast<MetricGroup>(StringUtil::StringToEnum(GetMetricGroupValues(), 9, "MetricGroup", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMonotonicityValues() {

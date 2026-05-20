@@ -15,71 +15,23 @@
 
 namespace duckdb {
 
-enum class MetricGroup : uint8_t {
-	ALL,
-	CORE,
-	DEFAULT,
-	EXECUTION,
-	IO,
-	OPERATOR,
-	OPTIMIZER,
-	PHASE_TIMING,
-	STORAGE,
-	INVALID,
-};
-
-typedef unordered_set<string> profiler_settings_t;
 typedef unordered_map<string, Value> profiler_metrics_t;
 
 class MetricsUtils {
 public:
-	// All metrics
-	static profiler_settings_t GetAllMetrics();
-	static profiler_settings_t GetMetricsByGroupType(MetricGroup type);
+	template<class T>
+	static bool IsMetric(const string &metric_name) {
+		return StringUtil::Equals(metric_name, T::Name);
+	}
 
-	// Core metrics
-	static profiler_settings_t GetCoreMetrics();
-
-	// Default metrics
-	static profiler_settings_t GetDefaultMetrics();
-
-	// Query metrics — stored as "query.<lowercase_name>" strings
-	static profiler_settings_t GetQueryMetrics();
-	static bool IsQueryMetricKey(const string &key);
-	static bool IsQueryTimerMetricKey(const string &key);
-
-	// Execution/System metrics — stored as "system.<lowercase_name>" strings
-	static profiler_settings_t GetExecutionMetrics();
-	static profiler_settings_t GetSystemMetrics();
-	static bool IsSystemMetricKey(const string &key);
-	static bool IsSystemTimerKey(const string &key);
-
-	// IO metrics — stored as "io.<lowercase_name>" strings
-	static profiler_settings_t GetIOMetrics();
-	static bool IsIOMetricKey(const string &key);
-
-	// Storage metrics — stored as "storage.<lowercase_name>" strings
-	static profiler_settings_t GetStorageMetrics();
-	static bool IsStorageMetricKey(const string &key);
-	static bool IsStorageTimerKey(const string &key);
-
-	// Operator metrics — stored as "operator.<lowercase_name>" strings
-	static profiler_settings_t GetOperatorMetrics();
-	static bool IsOperatorMetricKey(const string &key);
-
-	// Optimizer metrics — stored as "optimizer.<lowercase_name>" strings
-	static profiler_settings_t GetOptimizerMetrics();
-	static bool IsOptimizerMetricKey(const string &key);
-
-	// PhaseTiming metrics — stored as "optimizers.*", "parsers.*", "planner.*" strings
-	static profiler_settings_t GetPhaseTimingMetrics();
-	static bool IsPhaseTimingKey(const string &key);
-
-	// PhysicalPlanner metrics — stored as "physical_planner.<lowercase_name>" strings
-	static profiler_settings_t GetPhysicalPlannerMetrics();
-	static bool IsPhysicalPlannerMetricKey(const string &key);
-
-	// RootScope metrics
-	static profiler_settings_t GetRootScopeMetrics();
+	static bool MetricInGroup(const string &metric_name, const string &group_name) {
+		if (metric_name.size() < group_name.size() + 1) {
+			return false;
+		}
+		if (!StringUtil::StartsWith(metric_name, group_name)) {
+			return false;
+		}
+		return metric_name[group_name.size()] == '.';
+	}
 };
 } // namespace duckdb

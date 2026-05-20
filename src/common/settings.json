@@ -1193,6 +1193,13 @@
         ]
     },
     {
+        "name": "tracked_metrics",
+        "description": "A list of metric glob patterns to enable for collection (e.g. ['query.*', 'optimizer.*'])",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "username",
         "description": "The username to use. Ignored for legacy compatibility.",
         "type": "VARCHAR",
