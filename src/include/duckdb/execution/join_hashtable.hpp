@@ -202,7 +202,8 @@ public:
 		Vector ht_offsets_and_salts_v;
 		Vector hashes_dense_v;
 		SelectionVector non_empty_sel;
-		ProbeDictionaryState dict_state;
+		//! Allocated only when the operator gates the compressed-probe paths on; null otherwise
+		unique_ptr<ProbeDictionaryState> dict_state;
 	};
 
 	struct InsertState : SharedState {
@@ -243,12 +244,6 @@ public:
 	//! Probe the HT with the given input chunk, resulting in the given result
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
-	//! Dictionary-aware variant of Probe. Returns false if the LHS keys are not dictionary-eligible.
-	bool TryProbeDictionary(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
-	                        ProbeState &probe_state);
-	//! Constant-vector variant of Probe. Returns false if the LHS keys are not a constant vector.
-	bool TryProbeConstant(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
-	                      ProbeState &probe_state);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;
 
@@ -406,6 +401,13 @@ private:
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                             optional_ptr<const SelectionVector> &current_sel);
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
+
+	//! Dictionary-aware variant of Probe. Returns false if the LHS keys are not dictionary-eligible.
+	bool TryProbeDictionary(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
+	                        ProbeState &probe_state);
+	//! Constant-vector variant of Probe. Returns false if the LHS keys are not a constant vector.
+	bool TryProbeConstant(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
+	                      ProbeState &probe_state);
 
 	bool UseSalt() const;
 

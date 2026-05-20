@@ -876,8 +876,33 @@ void JoinHashTable::InitializeScanStructure(ScanStructure &scan_structure, DataC
 	}
 }
 
+//! Per-chunk fast-reject so non-dictionary chunks skip the TryProbeDictionary call entirely
+static bool LHSChunkIsDictionaryEligible(const Vector &lhs_key) {
+	if (lhs_key.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+		return false;
+	}
+	return DictionaryVector::DictionarySize(lhs_key).IsValid();
+}
+
+//! Per-chunk fast-reject so non-constant chunks skip the TryProbeConstant call entirely
+static bool LHSChunkIsConstant(const Vector &lhs_key) {
+	return lhs_key.GetVectorType() == VectorType::CONSTANT_VECTOR;
+}
+
 void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
                           ProbeState &probe_state, optional_ptr<Vector> precomputed_hashes) {
+	// dispatch into the compressed-vector fast paths when the operator gated them on. precomputed_hashes
+	// is incompatible: the caller hashed the full N-row chunk; the fast paths re-hash a sliced D-row chunk.
+	if (probe_state.dict_state && !precomputed_hashes) {
+		auto &lhs_key = keys.data[0];
+		if (LHSChunkIsConstant(lhs_key) && TryProbeConstant(scan_structure, keys, key_state, probe_state)) {
+			return;
+		}
+		if (LHSChunkIsDictionaryEligible(lhs_key) && TryProbeDictionary(scan_structure, keys, key_state, probe_state)) {
+			return;
+		}
+	}
+
 	optional_ptr<const SelectionVector> current_sel;
 	InitializeScanStructure(scan_structure, keys, key_state, current_sel);
 	if (scan_structure.count == 0) {
@@ -932,7 +957,8 @@ bool JoinHashTable::TryProbeDictionary(ScanStructure &scan_structure, DataChunk 
 
 	auto &dictionary_vector = DictionaryVector::Child(dict_col);
 	auto &offsets = DictionaryVector::SelVector(dict_col);
-	auto &dict_state = probe_state.dict_state;
+	D_ASSERT(probe_state.dict_state);
+	auto &dict_state = *probe_state.dict_state;
 
 	if (dict_state.dictionary_id.empty() || dict_state.dictionary_id != dictionary_id) {
 		// new dictionary - initialize the per-id cache
@@ -1056,7 +1082,8 @@ bool JoinHashTable::TryProbeConstant(ScanStructure &scan_structure, DataChunk &k
 
 	// constant vectors carry no dictionary id, so there is no cross-chunk cache - resolve the
 	// single distinct key with one hash-table lookup per chunk
-	auto &dict_state = probe_state.dict_state;
+	D_ASSERT(probe_state.dict_state);
+	auto &dict_state = *probe_state.dict_state;
 	auto &unique_values = dict_state.unique_values;
 	if (unique_values.ColumnCount() == 0) {
 		unique_values.InitializeEmpty(vector<LogicalType> {equality_types[0]});
