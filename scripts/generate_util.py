@@ -307,6 +307,16 @@ def generate_member_copy(member, indent='\t'):
     return [f'{indent}copy->{field} = {field};']
 
 
+def generate_base_copy(base_entry):
+    lines = ['void ParsedExpression::CopyBase(const ParsedExpression &other) {']
+    for member in base_entry.get('members', []):
+        if member_should_be_copied(member):
+            field = get_member_field_name(member)
+            lines.append(f'\t{field} = other.{field};')
+    lines.append('}')
+    return lines
+
+
 def generate_subclass_copy(entry):
     class_name = entry['class']
 
@@ -324,7 +334,7 @@ def generate_subclass_copy(entry):
         if member_should_be_copied(member):
             lines.extend(generate_member_copy(member))
 
-    lines.append('\tcopy->CopyProperties(*this);')
+    lines.append('\tcopy->CopyBase(*this);')
     lines.append('\treturn std::move(copy);')
     lines.append('}')
     return lines
@@ -674,9 +684,18 @@ def main():
     output_lines = [HEADER]
     first = [True]  # mutable via list
 
+    base_function_set = set(base_functions)
+
     for entry in entries:
         own_functions = entry.get('functions', [])
         is_base = entry.get('class_type') == 'expression_class'
+        if not is_base:
+            for func in own_functions:
+                if func in base_function_set:
+                    raise ValueError(
+                        f"{entry['class']}: function '{func}' is already defined in the parent class "
+                        f"and must not be listed explicitly"
+                    )
         # Subclasses inherit all base functions automatically
         if is_base:
             functions = own_functions
@@ -702,7 +721,9 @@ def main():
                 emit(output_lines, generate_base_children_mutable(entries, base_functions), first)
 
         if 'Copy' in functions:
-            if not is_base:
+            if is_base:
+                emit(output_lines, generate_base_copy(entry), first)
+            else:
                 emit(output_lines, generate_subclass_copy(entry), first)
 
     output_lines.append(FOOTER)

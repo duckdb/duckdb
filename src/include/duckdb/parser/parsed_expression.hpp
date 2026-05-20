@@ -196,19 +196,12 @@ public:
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
+	//! Copies the base class properties (type, expression_class, alias, query_location) from other into this
+	void CopyBase(const ParsedExpression &other);
+
 	static bool Equals(const unique_ptr<ParsedExpression> &left, const unique_ptr<ParsedExpression> &right);
 	static bool ListEquals(const vector<unique_ptr<ParsedExpression>> &left,
 	                       const vector<unique_ptr<ParsedExpression>> &right);
-
-protected:
-	//! Copy base Expression properties from another expression to this one,
-	//! used in Copy method
-	void CopyProperties(const ParsedExpression &other) {
-		type = other.type;
-		expression_class = other.expression_class;
-		alias = other.alias;
-		query_location = other.query_location;
-	}
 };
 
 } // namespace duckdb
