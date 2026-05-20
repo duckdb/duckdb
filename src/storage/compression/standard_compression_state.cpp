@@ -24,8 +24,8 @@ void StandardCompressionState::CreateAndPinNewSegment() {
 	auto compressed_segment = CreateNewSegment();
 	current_segment = std::move(compressed_segment);
 
-	auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
-	handle = buffer_manager.Pin(current_segment->block);
+	auto &buffer_manager = BufferManager::GetBufferManager(current_segment->GetDatabase());
+	handle = buffer_manager.Pin(current_segment->GetBlockHandle());
 }
 
 void StandardCompressionState::FlushCurrentSegment(idx_t segment_size) {

@@ -45,6 +45,7 @@ SQLStatement:
     - CallStatement
     - CheckpointStatement
     - CommentStatement
+    - ConnectStatement
     - CopyStatement
     - CopySelect
     - CopyFromDatabase
@@ -54,6 +55,7 @@ SQLStatement:
     - DeleteStatement
     - TruncateStatement
     - DetachStatement
+    - DisconnectStatement
     - DropStatement
     - ExecuteStatement
     - ExplainStatement
@@ -568,7 +570,7 @@ StringList:
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
-  by_value: true
+  by_value: false
   rules:
     - AttachOptions
     - GenericCopyOptionList
@@ -834,6 +836,11 @@ String:
     - ExplainOptionName
     - OperatorLiteral
     - DotIdentifier
+    - VacuumOption
+    - OptAnalyze
+    - OptFull
+    - OptFreeze
+    - OptVerbose
 
 Bool:
   type: "bool"
@@ -856,6 +863,13 @@ Bool:
     - PrecedingOrFollowing
     - IfExists
     - IncludeOrExcludeNulls
+    - AnalyzeVerbose
+    - CheckpointForce
+    - IfNotExists
+    - OrReplace
+    - DeallocatePrepare
+    - CreateRecursive
+
 
 Int64:
   type: "int64_t"
@@ -870,6 +884,23 @@ LogicalType:
   rules:
     - Type
     - EnumStringLiteralList
+
+TransactionModifierType:
+  type: "TransactionModifierType"
+  by_value: false
+  rules:
+    - ReadOnly
+    - ReadWrite
+
+# ---------------------------------------------------------------------------
+# Structs passed by value (contain move-only members like unique_ptr<T>)
+# ---------------------------------------------------------------------------
+
+AnalyzeTarget:
+  type: "AnalyzeTarget"
+  by_value: true
+  rules:
+    - AnalyzeTarget
 
 # ---------------------------------------------------------------------------
 # Overrides: rules with unique or complex return types that don't share a
@@ -972,8 +1003,6 @@ overrides:
   SampleSeed: "optional_idx"
   RepeatableSample: "optional_idx"
   SampleFunction: "SampleMethod"
-  # analyze.gram
-  AnalyzeTarget: "AnalyzeTarget"
   # transaction.gram
   ReadOrWrite: "TransactionModifierType"
   ReadOnlyOrReadWrite: "TransactionModifierType"
@@ -1004,11 +1033,9 @@ excluded_rules:
   - RowOrRows
   - Recursive
   - StarSymbol
-  - IfNotExists
   - PlainIdentifier
   - QuotedIdentifier
   - CreateTableColumnElement
-  - OrReplace
   - ReservedIdentifier
   - CatalogName
   - SchemaName

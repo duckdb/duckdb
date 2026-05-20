@@ -26,13 +26,9 @@ statement ok
 PRAGMA disable_profiling;
 
 query I
-SELECT unnest(res) FROM (
-	SELECT current_setting('configure_profiling') AS raw_setting,
-	raw_setting.trim('{}') AS setting,
-	string_split(setting, ', ') AS res
-) ORDER BY ALL
+SELECT unnest(current_setting('configure_profiling')) ORDER BY ALL
 ----
-"BLOCKED_THREAD_TIME": "true"
+BLOCKED_THREAD_TIME
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';

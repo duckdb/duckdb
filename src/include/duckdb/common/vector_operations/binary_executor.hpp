@@ -286,35 +286,32 @@ public:
 	}
 
 private:
-	static idx_t GetExecuteCount(const Vector &left, const Vector &right) {
-		const bool left_const = left.GetVectorType() == VectorType::CONSTANT_VECTOR;
-		const bool right_const = right.GetVectorType() == VectorType::CONSTANT_VECTOR;
-		if (!left_const && !right_const && left.size() != right.size()) {
+	static idx_t CheckExecuteCount(const Vector &left, const Vector &right) {
+		if (left.size() != right.size()) {
 			throw InternalException(
 			    "Mismatch in input vector sizes for BinaryExecutor - left has %d rows but right has %d", left.size(),
 			    right.size());
 		}
-		return left_const ? right.size() : left.size();
+		return left.size();
 	}
 
 public:
 	//! Convenience overloads without explicit count - count is derived from the input vectors.
-	//! These add a size-mismatch check for non-constant vectors.
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE,
 	          class FUNC = std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE)>>
 	static void Execute(const Vector &left, const Vector &right, Vector &result, FUNC fun) {
-		Execute<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, FUNC>(left, right, result, GetExecuteCount(left, right), fun);
+		Execute<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, FUNC>(left, right, result, CheckExecuteCount(left, right), fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP,
 	          class OPWRAPPER = BinarySingleArgumentOperatorWrapper>
 	static void Execute(const Vector &left, const Vector &right, Vector &result) {
-		Execute<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, OPWRAPPER>(left, right, result, GetExecuteCount(left, right));
+		Execute<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP, OPWRAPPER>(left, right, result, CheckExecuteCount(left, right));
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
 	static void ExecuteStandard(const Vector &left, const Vector &right, Vector &result) {
-		ExecuteStandard<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(left, right, result, GetExecuteCount(left, right));
+		ExecuteStandard<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(left, right, result, CheckExecuteCount(left, right));
 	}
 
 public:

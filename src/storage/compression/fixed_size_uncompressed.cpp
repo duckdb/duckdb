@@ -80,7 +80,7 @@ void UncompressedCompressState::CreateEmptySegment() {
 
 void UncompressedCompressState::FlushSegment(idx_t segment_size) {
 	auto &state = checkpoint_data.GetCheckpointState();
-	if (current_segment->type.InternalType() == PhysicalType::VARCHAR) {
+	if (current_segment->GetType().InternalType() == PhysicalType::VARCHAR) {
 		auto &segment_state = current_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		if (segment_state.overflow_writer) {
 			segment_state.overflow_writer->Flush();
@@ -145,8 +145,8 @@ struct FixedSizeScanState : public SegmentScanState {
 
 unique_ptr<SegmentScanState> FixedSizeInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq<FixedSizeScanState>();
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	result->handle = buffer_manager.Pin(context, segment.block);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	result->handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 	return std::move(result);
 }
 
@@ -185,8 +185,8 @@ void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_co
 template <class T>
 void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                        idx_t result_idx) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto handle = buffer_manager.Pin(segment.block);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
 
 	// first fetch the data from the base table
 	auto data_ptr = handle.GetDataMutable() + segment.GetBlockOffset() + NumericCast<idx_t>(row_id) * sizeof(T);
@@ -198,8 +198,8 @@ void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t ro
 // Append
 //===--------------------------------------------------------------------===//
 static unique_ptr<CompressionAppendState> FixedSizeInitAppend(ColumnSegment &segment) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto handle = buffer_manager.Pin(segment.block);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto handle = buffer_manager.Pin(segment.GetBlockHandle());
 	return make_uniq<CompressionAppendState>(std::move(handle));
 }
 

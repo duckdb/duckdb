@@ -15,7 +15,6 @@
 #include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/profiler.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -36,111 +35,38 @@ class ProfilingNode;
 class PhysicalOperator;
 class SQLStatement;
 struct ActiveTimer;
+class OperatorProfiler;
 
 enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
 
-struct OperatorInformation {
-	explicit OperatorInformation() {
-	}
-
-	string name;
-
-	double time = 0;
-	idx_t elements_returned = 0;
-	idx_t result_set_size = 0;
-	idx_t system_peak_buffer_manager_memory = 0;
-	idx_t system_peak_temp_directory_size = 0;
-	idx_t rows_scanned = 0;
-	idx_t row_groups_scanned = 0;
-	optional_idx total_row_groups_to_scan;
-
-	InsertionOrderPreservingMap<string> extra_info;
-	bool extra_info_dirty = false;
-
-	void ResetMetrics() {
-		time = 0;
-		elements_returned = 0;
-		result_set_size = 0;
-		system_peak_buffer_manager_memory = 0;
-		system_peak_temp_directory_size = 0;
-		rows_scanned = 0;
-	}
-
-	template <typename T>
-	void AddMetric(MetricType type, T metric) {
-		switch (type) {
-		case MetricType::OPERATOR_TIMING:
-			time += static_cast<double>(metric);
-			break;
-		case MetricType::OPERATOR_CARDINALITY:
-			elements_returned += LossyNumericCast<idx_t>(metric);
-			break;
-		case MetricType::RESULT_SET_SIZE:
-			result_set_size += LossyNumericCast<idx_t>(metric);
-			break;
-		case MetricType::SYSTEM_PEAK_BUFFER_MEMORY: {
-			if (metric > static_cast<T>(system_peak_buffer_manager_memory)) {
-				system_peak_buffer_manager_memory = LossyNumericCast<idx_t>(metric);
-			}
-			break;
-		}
-		case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE: {
-			if (metric > static_cast<T>(system_peak_temp_directory_size)) {
-				system_peak_temp_directory_size = LossyNumericCast<idx_t>(metric);
-			}
-			break;
-		}
-		case MetricType::OPERATOR_ROWS_SCANNED:
-			rows_scanned = LossyNumericCast<idx_t>(metric);
-			break;
-		case MetricType::OPERATOR_ROW_GROUPS_SCANNED:
-			row_groups_scanned = LossyNumericCast<idx_t>(metric);
-			break;
-		case MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN:
-			total_row_groups_to_scan = optional_idx(LossyNumericCast<idx_t>(metric));
-			break;
-		default:
-			throw InternalException("OperatorProfiler: Unknown metric type");
-		}
-	}
+//! A JSON-like recursive profiling value.
+//! FIXME: this should at some point be replaced by a "Value" - but that's not easily possible until our VARIANT Value
+//! is extended to be able to easily hold arbitrary values
+enum class QueryProfileResultKind {
+	VALUE,
+	LIST,
+	OBJECT,
 };
 
-//! The OperatorProfiler measures timings of individual operators
-//! This class exists once for all operators and collects `OperatorInfo` for each operator
-class OperatorProfiler {
-	friend class QueryProfiler;
+struct QueryProfileResult {
+	QueryProfileResultKind kind = QueryProfileResultKind::OBJECT;
+	//! Non-empty for children of an OBJECT node; empty for LIST items and the root
+	string key;
+	//! Valid when kind == VALUE
+	Value value;
+	//! Ordered children; valid when kind == LIST or OBJECT
+	vector<unique_ptr<QueryProfileResult>> children;
 
-public:
-	DUCKDB_API explicit OperatorProfiler(ClientContext &context);
-	~OperatorProfiler() {
-	}
-
-public:
-	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
-	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
-	DUCKDB_API void FinalizeSourceProfiling(GlobalSourceState &gstate, LocalSourceState &lstate,
-	                                        const PhysicalOperator &phys_op, bool source_exhausted);
-
-	//! Adds the timings in the OperatorProfiler (tree) to the QueryProfiler (tree).
-	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
-	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
-	DUCKDB_API bool OperatorInfoIsInitialized(const PhysicalOperator &phys_op);
-
-public:
-	ClientContext &context;
-
-private:
-	//! Whether or not the profiler is enabled
-	bool enabled;
-	//! Sub-settings for the operator profiler
-	profiler_settings_t settings;
-
-	//! The timer used to time the execution time of the individual Physical Operators
-	Profiler op;
-	//! The stack of Physical Operators that are currently active
-	optional_ptr<const PhysicalOperator> active_operator;
-	//! A mapping of physical operators to profiled operator information.
-	reference_map_t<const PhysicalOperator, OperatorInformation> operator_infos;
+	//! Add a named VALUE leaf to this OBJECT node
+	void AddValue(const string &k, Value val);
+	//! Add a named OBJECT child to this OBJECT node; returns the new child
+	QueryProfileResult &AddObject(const string &k);
+	//! Add a named LIST child to this OBJECT node; returns the new child
+	QueryProfileResult &AddList(const string &k);
+	//! Append an anonymous OBJECT item to this LIST node; returns the new item
+	QueryProfileResult &AppendObject();
+	//! Append an anonymous LIST item to this node; returns the new item
+	QueryProfileResult &AppendList();
 };
 
 //! QueryProfiler collects the profiling metrics of a query.
@@ -204,27 +130,19 @@ public:
 	DUCKDB_API idx_t GetBytesRead() const;
 	DUCKDB_API idx_t GetBytesWritten() const;
 
+	static profiler_settings_t GetQueryMetrics(ClientContext &context);
+
 	idx_t OperatorSize() {
 		return tree_map.size();
 	}
 
-	void Finalize(ProfilingNode &node);
-
-	//! Return the root of the query tree.
-	optional_ptr<ProfilingNode> GetRoot() {
-		return root.get();
-	}
-
-	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications.
-	//! This can be useful when implementing continuous profiling or making customizations.
-	DUCKDB_API void GetRootUnderLock(const std::function<void(optional_ptr<ProfilingNode>)> &callback) {
-		lock_guard<std::mutex> guard(lock);
-		callback(GetRoot());
-	}
+	//! Return the result tree (generating it if it does not yet exist)
+	QueryProfileResult &GetResult();
+	//! Returns true if the last query produced a profiling tree (i.e. profiling was enabled and the query succeeded)
+	bool HasRoot() const;
 
 private:
-	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const profiler_settings_t &settings,
-	                                     const idx_t depth = 0);
+	unique_ptr<ProfilingNode> CreateTree(const PhysicalOperator &root, const idx_t depth = 0);
 	void Render(const ProfilingNode &node, std::ostream &str) const;
 	string RenderDisabledMessage(ProfilerPrintFormat format) const;
 
@@ -242,8 +160,12 @@ private:
 	//! The root of the query tree
 	unique_ptr<ProfilingNode> root;
 
+	unique_ptr<ProfilingInfo> root_info;
+
 	//! Top level query information.
 	QueryMetrics query_metrics;
+
+	unique_ptr<QueryProfileResult> result_tree;
 
 	//! A map of a Physical Operator pointer to a tree node
 	TreeMap tree_map;
@@ -270,6 +192,8 @@ private:
 private:
 	void MoveOptimizerPhasesToRoot();
 	void FinalizeMetricsInternal();
+
+	unique_ptr<QueryProfileResult> ToResultTree() const;
 
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.

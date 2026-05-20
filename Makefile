@@ -516,6 +516,7 @@ TEST_CONFIGS := \
 	test/configs/force_storage_restart.json \
 	test/configs/latest_storage.json \
 	test/configs/block_verification.json \
+	test/configs/block_verification_latest.json \
 	test/configs/disable_optimizer.json \
 	test/configs/internal_vector_serialization.json \
 	test/configs/internal_vector_verification.json \
@@ -823,7 +824,6 @@ generate-files:
 	$(PYTHON) scripts/generate_settings.py
 	$(PYTHON) scripts/generate_serialization.py
 	$(PYTHON) scripts/generate_storage_info.py
-	$(PYTHON) scripts/generate_metric_enums.py
 	$(PYTHON) scripts/generate_enum_util.py
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main

@@ -505,6 +505,7 @@ public:
 	void SetBuildBloomFilter(const bool should_build) {
 		this->should_build_bloom_filter = should_build;
 	}
+	void PrepareBuildBloomFilter(idx_t estimated_row_count);
 
 	BloomFilter &GetBloomFilter() {
 		return bloom_filter;
