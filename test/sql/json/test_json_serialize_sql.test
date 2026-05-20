@@ -101,12 +101,13 @@ select json_serialize_sql($$select '10'::blob$$);
 ----
 <!REGEX>:.*query_location:.*11
 
-# TODO: We should add an option for the deserializer to allow missing properties in the JSON if they can be default constructed
-# Alternatively, make them optional for all the Deserializer's.
-statement error
+# Missing empty/null properties in JSON SQL should deserialize using the C++ defaults
+query III
 SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM tbl2', skip_null := true, skip_empty := true));
 ----
-Parser Error: Expected but did not find property 'cte_map' in json object
+1	2	3
+4	5	6
+7	8	9
 
 
 # Test execute json serialized sql with multiple nested type tags

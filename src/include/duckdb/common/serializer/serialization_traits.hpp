@@ -381,4 +381,10 @@ struct SerializationDefaultValue {
 	}
 };
 
+template <typename T, typename = void>
+struct has_serialization_default : std::false_type {};
+
+template <typename T>
+struct has_serialization_default<T, void_t<decltype(SerializationDefaultValue::GetDefault<T>())>> : std::true_type {};
+
 } // namespace duckdb

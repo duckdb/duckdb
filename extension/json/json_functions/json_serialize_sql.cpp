@@ -209,7 +209,7 @@ static vector<unique_ptr<SelectStatement>> DeserializeSelectStatement(string_t i
 	idx_t max;
 	yyjson_val *stmt_json;
 	yyjson_arr_foreach(statements, idx, max, stmt_json) {
-		JsonDeserializer deserializer(stmt_json, doc);
+		JsonDeserializer deserializer(stmt_json, doc, true);
 		auto stmt = SelectStatement::Deserialize(deserializer);
 		if (!stmt->node) {
 			throw ParserException("Error parsing json: no select node found in json");
