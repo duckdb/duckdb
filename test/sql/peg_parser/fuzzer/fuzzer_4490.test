@@ -1,0 +1,13 @@
+# name: test/sql/peg_parser/fuzzer/fuzzer_4434.test
+# description: Properly transform pivot statement
+# group: [fuzzer]
+
+statement ok
+create table Produce as
+  select 'Kale' as product, 51 as sales, 'Q1' as quarter, 2020 as year;
+
+statement error
+select * from Produce pivot(SUM(sales) for quarter in ('Q1', 'Q2', Q3', $Q4')) order by all;
+----
+Catalog Error: Type with name Q3 does not exist!
+
