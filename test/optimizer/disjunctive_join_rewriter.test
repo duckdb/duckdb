@@ -1,0 +1,232 @@
+# name: test/optimizer/disjunctive_join_rewriter.test
+# description: Tests for DisjunctiveJoinRewriter optimizer
+# group: [optimizer]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0);
+
+statement ok
+ALTER TABLE orders ALTER o_orderkey DROP NOT NULL;
+
+statement ok
+ALTER TABLE orders ALTER o_custkey DROP NOT NULL;
+
+statement ok
+INSERT INTO orders VALUES
+    (1, 10, 'O', 100.00, '1996-01-01', '1-URGENT', 'Clerk#000000001', 0, 'X1'),
+    (2, 20, 'O', 200.00, '1996-01-02', '1-URGENT', 'Clerk#000000002', 0, 'X2'),
+    (3, 30, 'O', 300.00, '1996-01-03', '1-URGENT', 'Clerk#000000003', 0, 'Y3'),
+    (4, NULL, 'O', 400.00, '1996-01-04', '1-URGENT', 'Clerk#000000004', 0, 'X4'),
+    (5, 50, 'O', 500.00, '1996-01-05', '1-URGENT', 'Clerk#000000005', 0, 'X5'),
+    (6, 60, 'O', 600.00, '1996-01-06', '1-URGENT', 'Clerk#000000006', 0, 'X6'),
+    (NULL, NULL, 'O', 700.00, '1996-01-07', '1-URGENT', 'Clerk#000000007', 0, 'X7');
+
+statement ok
+INSERT INTO lineitem VALUES
+    (1, 99, 1, 1, 1.00, 10.00, 0.00, 0.00, 'N', 'O', '1996-01-10', '1996-01-15', '1996-01-20', 'NONE', 'AIR', 'X1'),
+    (88, 20, 1, 1, 1.00, 10.00, 0.00, 0.00, 'N', 'O', '1996-01-11', '1996-01-16', '1996-01-21', 'NONE', 'AIR', 'X2'),
+    (3, 30, 1, 1, 1.00, 10.00, 0.00, 0.00, 'N', 'O', '1996-01-12', '1996-01-17', '1996-01-22', 'NONE', 'AIR', 'Y3'),
+    (4, 77, 1, 1, 1.00, 10.00, 0.00, 0.00, 'N', 'O', '1996-01-13', '1996-01-18', '1996-01-23', 'NONE', 'AIR', 'X4'),
+    (6, 60, 1, 1, 1.00, 10.00, 0.00, 0.00, 'N', 'O', '1996-01-14', '1996-01-19', '1996-01-24', 'NONE', 'AIR', 'X6'),
+    (101, 100, 1, 1, 1.00, 10.00, 0.00, 0.00, 'N', 'O', '1996-01-15', '1996-01-20', '1996-01-25', 'NONE', 'AIR', 'X5'),
+    (100, 100, 1, 1, 1.00, 600.00, 0.00, 0.00, 'N', 'O', '1996-01-16', '1996-01-21', '1996-01-26', 'NONE', 'AIR', 'Z7');
+
+
+query II
+EXPLAIN SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey
+FROM orders o JOIN lineitem l ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
+
+query IIII rowsort
+SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey
+FROM orders o JOIN lineitem l ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+1	10	1	99
+2	20	88	20
+3	30	3	30
+4	NULL	4	77
+6	60	6	60
+
+query II
+EXPLAIN SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey
+FROM orders o LEFT JOIN lineitem l ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
+
+query IIII rowsort
+SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey
+FROM orders o LEFT JOIN lineitem l ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+1	10	1	99
+2	20	88	20
+3	30	3	30
+4	NULL	4	77
+5	50	NULL	NULL
+6	60	6	60
+NULL	NULL	NULL	NULL
+
+query II
+EXPLAIN SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey
+FROM orders o RIGHT JOIN lineitem l ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
+
+query IIII rowsort
+SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey
+FROM orders o RIGHT JOIN lineitem l ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+1	10	1	99
+2	20	88	20
+3	30	3	30
+4	NULL	4	77
+6	60	6	60
+NULL	NULL	100	100
+NULL	NULL	101	100
+
+query II
+EXPLAIN SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey
+FROM orders o FULL JOIN lineitem l ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
+
+query IIII rowsort
+SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey
+FROM orders o FULL JOIN lineitem l ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+1	10	1	99
+2	20	88	20
+3	30	3	30
+4	NULL	4	77
+5	50	NULL	NULL
+6	60	6	60
+NULL	NULL	100	100
+NULL	NULL	101	100
+NULL	NULL	NULL	NULL
+
+query II
+EXPLAIN SELECT o.o_orderkey, o.o_custkey
+FROM orders o SEMI JOIN lineitem l ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
+
+query II rowsort
+SELECT o.o_orderkey, o.o_custkey
+FROM orders o SEMI JOIN lineitem l ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+1	10
+2	20
+3	30
+4	NULL
+6	60
+
+query II
+EXPLAIN SELECT o.o_orderkey, o.o_custkey
+FROM orders o ANTI JOIN lineitem l ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
+
+query II rowsort
+SELECT o.o_orderkey, o.o_custkey
+FROM orders o ANTI JOIN lineitem l ON o.o_orderkey = l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+5	50
+NULL	NULL
+
+query IIIIII rowsort
+SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey, o.o_totalprice, l.l_extendedprice
+FROM orders o JOIN lineitem l
+ON o.o_orderkey = l.l_orderkey
+   OR o.o_custkey = l.l_partkey
+   OR o.o_totalprice = l.l_extendedprice
+   OR o.o_orderkey + 100 = l.l_orderkey;
+----
+1	10	1	99	100	10
+1	10	101	100	100	10
+2	20	88	20	200	10
+3	30	3	30	300	10
+4	NULL	4	77	400	10
+6	60	100	100	600	600
+6	60	6	60	600	10
+
+query IIIIII rowsort
+SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey, o.o_totalprice, l.l_extendedprice
+FROM orders o LEFT JOIN lineitem l
+ON o.o_orderkey = l.l_orderkey
+   OR o.o_custkey = l.l_partkey
+   OR o.o_totalprice = l.l_extendedprice
+   OR o.o_orderkey + 100 = l.l_orderkey;
+----
+1	10	1	99	100	10
+1	10	101	100	100	10
+2	20	88	20	200	10
+3	30	3	30	300	10
+4	NULL	4	77	400	10
+5	50	NULL	NULL	500	NULL
+6	60	100	100	600	600
+6	60	6	60	600	10
+NULL	NULL	NULL	NULL	700	NULL
+
+query II
+EXPLAIN SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey, o.o_comment, l.l_comment
+FROM orders o JOIN lineitem l
+ON o.o_orderkey + 100 = l.l_orderkey
+   OR o.o_custkey + 1000 = l.l_partkey
+   OR SUBSTRING(o.o_comment, 1, 2) = SUBSTRING(l.l_comment, 1, 2);
+----
+physical_plan	<!REGEX>:.*BLOCKWISE_NL_JOIN.*
+
+query IIIIII rowsort
+SELECT o.o_orderkey, o.o_custkey, l.l_orderkey, l.l_partkey, o.o_comment, l.l_comment
+FROM orders o JOIN lineitem l
+ON o.o_orderkey + 100 = l.l_orderkey
+   OR o.o_custkey + 1000 = l.l_partkey
+   OR SUBSTRING(o.o_comment, 1, 2) = SUBSTRING(l.l_comment, 1, 2);
+----
+1	10	1	99	X1	X1
+1	10	101	100	X1	X5
+2	20	88	20	X2	X2
+3	30	3	30	Y3	Y3
+4	NULL	4	77	X4	X4
+5	50	101	100	X5	X5
+6	60	6	60	X6	X6
+
+query IIII rowsort
+SELECT o1.o_orderkey, l1.l_orderkey, o2.o_orderkey, l2.l_orderkey
+FROM orders o1
+JOIN lineitem l1 ON o1.o_orderkey = l1.l_orderkey OR o1.o_custkey = l1.l_partkey
+JOIN orders o2 ON o1.o_orderkey = o2.o_orderkey
+JOIN lineitem l2 ON o2.o_orderkey = l2.l_orderkey OR o2.o_custkey = l2.l_partkey;
+----
+1	1	1	1
+2	88	2	88
+3	3	3	3
+4	4	4	4
+6	6	6	6
+
+query II
+EXPLAIN SELECT o.o_orderkey, l.l_orderkey
+FROM orders o JOIN lineitem l
+ON o.o_orderkey > l.l_orderkey OR o.o_custkey = l.l_partkey;
+----
+physical_plan	<REGEX>:.*BLOCKWISE_NL_JOIN.*
+
+query II
+EXPLAIN SELECT o.o_orderkey, l.l_orderkey
+FROM orders o JOIN lineitem l
+ON o.o_orderkey = l.l_orderkey
+   OR o.o_custkey = l.l_partkey
+   OR o.o_orderkey + 1 = l.l_orderkey
+   OR o.o_orderkey + 2 = l.l_orderkey
+   OR o.o_orderkey + 3 = l.l_orderkey
+   OR o.o_orderkey + 4 = l.l_orderkey
+   OR o.o_orderkey + 5 = l.l_orderkey
+   OR o.o_orderkey + 6 = l.l_orderkey
+   OR o.o_orderkey + 7 = l.l_orderkey
+   OR o.o_orderkey + 8 = l.l_orderkey;
+----
+physical_plan	<REGEX>:.*BLOCKWISE_NL_JOIN.*
+
+
