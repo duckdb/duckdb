@@ -213,6 +213,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(StreamingBufferSizeSetting),
     DUCKDB_GLOBAL(TempDirectorySetting),
     DUCKDB_SETTING_CALLBACK(TempFileEncryptionSetting),
+    DUCKDB_LOCAL(TrackedMetricsSetting),
     DUCKDB_GLOBAL(ThreadsSetting),
     DUCKDB_SETTING(UsernameSetting),
     DUCKDB_SETTING_CALLBACK(VacuumRebuildIndexesSetting),

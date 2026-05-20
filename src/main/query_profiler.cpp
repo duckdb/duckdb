@@ -70,9 +70,6 @@ QueryProfileResult &QueryProfileResult::AppendList() {
 	return ref;
 }
 
-profiler_settings_t QueryProfiler::GetQueryMetrics(ClientContext &context) {
-	return ClientConfig::GetConfig(context).profiler_settings;
-}
 
 QueryProfiler::QueryProfiler(ClientContext &context_p)
     : context(context_p), running(false), query_requires_profiling(false), is_explain_analyze(false),
@@ -133,7 +130,23 @@ ExplainFormat QueryProfiler::GetExplainFormat(ProfilerPrintFormat format) const 
 }
 
 bool QueryProfiler::PrintOptimizerOutput() const {
-	return GetPrintFormat() == ProfilerPrintFormat::QUERY_TREE_OPTIMIZER || IsDetailedEnabled();
+	if (GetPrintFormat() == ProfilerPrintFormat::QUERY_TREE_OPTIMIZER || IsDetailedEnabled()) {
+		return true;
+	}
+	auto &config = ClientConfig::GetConfig(context);
+	// Check if any explicit setting targets optimizer metrics
+	for (const auto &setting : config.profiler_settings) {
+		if (MetricsUtils::IsOptimizerMetricKey(setting)) {
+			return true;
+		}
+	}
+	// Check if any tracked_metrics pattern could match "optimizer.*" keys
+	for (const auto &pattern : config.tracked_metrics) {
+		if (StringUtil::StartsWith(pattern, "optimizer")) {
+			return true;
+		}
+	}
+	return false;
 }
 
 string QueryProfiler::GetSaveLocation() const {
@@ -975,7 +988,8 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 		tree_map.clear();
 		root = nullptr;
 	} else {
-		metrics = make_uniq<GatheredMetrics>(GetQueryMetrics(context));
+		auto &client_config = ClientConfig::GetConfig(context);
+		metrics = make_uniq<GatheredMetrics>(client_config.profiler_settings, client_config.tracked_metrics);
 	}
 }
 

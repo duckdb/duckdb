@@ -1,6 +1,8 @@
 #include "duckdb/main/gathered_metrics.hpp"
 
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/main/profiling_utils.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/logging/log_manager.hpp"
@@ -11,8 +13,34 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
-GatheredMetrics::GatheredMetrics(const profiler_settings_t &n_settings) : settings(n_settings) {
+static bool IsPrefixPattern(const string &pattern) {
+	if (pattern.empty() || pattern.back() != '*') {
+		return false;
+	}
+	for (idx_t i = 0; i + 1 < pattern.size(); i++) {
+		if (pattern[i] == '*' || pattern[i] == '?' || pattern[i] == '[') {
+			return false;
+		}
+	}
+	return true;
+}
+
+GatheredMetrics::GatheredMetrics(const profiler_settings_t &n_settings, const vector<string> &tracked_metrics)
+    : settings(n_settings) {
+	InitTrackedMetrics(tracked_metrics);
 	ResetMetrics();
+}
+
+void GatheredMetrics::InitTrackedMetrics(const vector<string> &patterns) {
+	for (const auto &pattern : patterns) {
+		if (!FileSystem::HasGlob(pattern)) {
+			tracked_exact.insert(pattern);
+		} else if (IsPrefixPattern(pattern)) {
+			tracked_prefixes.insert(pattern.substr(0, pattern.size() - 1));
+		} else {
+			tracked_globs.push_back(pattern);
+		}
+	}
 }
 
 void GatheredMetrics::ResetMetrics() {
@@ -20,7 +48,32 @@ void GatheredMetrics::ResetMetrics() {
 }
 
 bool GatheredMetrics::MetricIsEnabled(const string &key) const {
-	return settings.find(key) != settings.end();
+	// Exact match from profiler_settings
+	if (settings.find(key) != settings.end()) {
+		return true;
+	}
+	// Exact match from tracked_metrics
+	if (tracked_exact.find(key) != tracked_exact.end()) {
+		return true;
+	}
+	// Prefix match: walk backwards from the largest prefix <= key
+	{
+		auto it = tracked_prefixes.upper_bound(key);
+		while (it != tracked_prefixes.begin()) {
+			--it;
+			const auto &prefix = *it;
+			if (prefix.size() <= key.size() && key.compare(0, prefix.size(), prefix) == 0) {
+				return true;
+			}
+		}
+	}
+	// Arbitrary glob patterns
+	for (const auto &glob : tracked_globs) {
+		if (Glob(key.c_str(), key.size(), glob.c_str(), glob.size())) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void GatheredMetrics::SetMetric(const string &key, Value new_value) {

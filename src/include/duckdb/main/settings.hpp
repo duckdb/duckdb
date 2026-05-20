@@ -1719,6 +1719,17 @@ struct TempFileEncryptionSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct TrackedMetricsSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "tracked_metrics";
+	static constexpr const char *Description =
+	    "A list of metric glob patterns to enable for collection (e.g. ['query.*', 'optimizer.*'])";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetLocal(ClientContext &context, const Value &input);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ThreadsSetting {
 	using RETURN_TYPE = int64_t;
 	static constexpr const char *Name = "threads";

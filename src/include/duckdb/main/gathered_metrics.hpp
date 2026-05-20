@@ -16,6 +16,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/metric_type.hpp"
+#include "duckdb/common/set.hpp"
 #include "duckdb/main/metrics.hpp"
 
 namespace duckdb_yyjson {
@@ -31,7 +32,7 @@ enum class ProfilingParameterNames : uint8_t { FORMAT, COVERAGE, SAVE_LOCATION, 
 class GatheredMetrics {
 public:
 	GatheredMetrics() = default;
-	explicit GatheredMetrics(const profiler_settings_t &n_settings);
+	explicit GatheredMetrics(const profiler_settings_t &n_settings, const vector<string> &tracked_metrics = {});
 	GatheredMetrics(GatheredMetrics &) = default;
 	GatheredMetrics &operator=(GatheredMetrics const &) = default;
 
@@ -64,8 +65,17 @@ public:
 	void MetricsToProfileResult(QueryProfileResult &result) const;
 
 private:
-	//! Enabling a metric adds it to this set (controls both collection and output).
+	void InitTrackedMetrics(const vector<string> &patterns);
+
+private:
+	//! Exact metric names enabled via profiler_settings.
 	profiler_settings_t settings;
+	//! Exact metric names from tracked_metrics globs with no wildcard characters.
+	unordered_set<string> tracked_exact;
+	//! Prefix strings from tracked_metrics patterns of the form "prefix*" (stored without the trailing '*').
+	set<string> tracked_prefixes;
+	//! Arbitrary glob patterns from tracked_metrics that don't fit the prefix category.
+	vector<string> tracked_globs;
 	//! Contains all enabled metrics.
 	profiler_metrics_t metrics;
 };

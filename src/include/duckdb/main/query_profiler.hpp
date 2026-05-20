@@ -135,8 +135,6 @@ public:
 	DUCKDB_API idx_t GetBytesRead() const;
 	DUCKDB_API idx_t GetBytesWritten() const;
 
-	static profiler_settings_t GetQueryMetrics(ClientContext &context);
-
 	//! Return the result tree (generating it if it does not yet exist)
 	QueryProfileResult &GetResult();
 	//! Returns true if the last query produced a profiling tree (i.e. profiling was enabled and the query succeeded)

@@ -1783,6 +1783,50 @@ void TempFileEncryptionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 }
 
 //===----------------------------------------------------------------------===//
+// Tracked Metrics
+//===----------------------------------------------------------------------===//
+void TrackedMetricsSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.tracked_metrics.clear();
+	if (input.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
+		for (auto &child : ListValue::GetChildren(input)) {
+			config.tracked_metrics.push_back(child.GetValue<string>());
+		}
+	} else if (input.type().id() == LogicalTypeId::VARCHAR) {
+		auto str = input.GetValue<string>();
+		StringUtil::Trim(str);
+		if (str.size() >= 2 && str.front() == '[' && str.back() == ']') {
+			// DuckDB list literal stringified as "[item1, item2, ...]"
+			auto inner = str.substr(1, str.size() - 2);
+			for (auto part : StringUtil::Split(inner, ',')) {
+				StringUtil::Trim(part);
+				if (!part.empty()) {
+					config.tracked_metrics.push_back(part);
+				}
+			}
+		} else if (!str.empty()) {
+			config.tracked_metrics.push_back(str);
+		}
+	} else {
+		throw InvalidInputException("Invalid tracked_metrics type \"%s\", expected LIST(VARCHAR) or VARCHAR",
+		                            input.type().ToString());
+	}
+}
+
+void TrackedMetricsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).tracked_metrics.clear();
+}
+
+Value TrackedMetricsSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	vector<Value> children;
+	for (const auto &pattern : config.tracked_metrics) {
+		children.emplace_back(pattern);
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(children));
+}
+
+//===----------------------------------------------------------------------===//
 // Threads
 //===----------------------------------------------------------------------===//
 void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
