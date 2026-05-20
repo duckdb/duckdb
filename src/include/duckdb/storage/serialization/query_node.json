@@ -19,7 +19,8 @@
       {
         "id": 102,
         "name": "cte_map",
-        "type": "CommonTableExpressionMap"
+        "type": "CommonTableExpressionMap",
+        "default": "CommonTableExpressionMap()"
       }
     ],
     "finalize_deserialization": [

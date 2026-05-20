@@ -27,6 +27,8 @@
 
 namespace duckdb {
 
+class CommonTableExpressionMap;
+
 class SerializationOptions {
 public:
 	SerializationOptions() = default;
@@ -411,6 +413,12 @@ void Serializer::WriteValue(const vector<bool> &vec);
 template <>
 void Serializer::WritePropertyWithDefault<Value>(const field_id_t field_id, const char *tag, const Value &value,
                                                  const Value &default_value);
+
+// Specialization for CommonTableExpressionMap to allow an explicit empty-map default
+template <>
+void Serializer::WritePropertyWithDefault<CommonTableExpressionMap>(const field_id_t field_id, const char *tag,
+                                                                    const CommonTableExpressionMap &value,
+                                                                    const CommonTableExpressionMap &default_value);
 
 // List Impl
 template <class FUNC>
