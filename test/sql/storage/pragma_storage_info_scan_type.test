@@ -1,0 +1,77 @@
+# name: test/sql/storage/pragma_storage_info_scan_type.test
+# description: Test the scan_type named parameter of pragma_storage_info
+# group: [storage]
+
+require block_size 262144
+
+require vector_size 2048
+
+load {TEST_DIR}/test_pragma_storage_info_scan_type.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+statement ok
+CREATE TABLE bp_tbl (a INTEGER)
+
+statement ok
+INSERT INTO bp_tbl SELECT 1 FROM range(0, 10000) tbl(i)
+
+statement ok
+INSERT INTO bp_tbl SELECT 2 FROM range(0, 10000) tbl(i)
+
+statement ok
+CHECKPOINT
+
+# Default scan_type is STANDARD: segment_info column is not present in the output.
+statement error
+SELECT segment_info FROM pragma_storage_info('bp_tbl') LIMIT 1
+----
+<REGEX>:Binder Error:.*segment_info.*
+
+# Explicit STANDARD also omits segment_info.
+statement error
+SELECT segment_info FROM pragma_storage_info('bp_tbl', scan_type='standard') LIMIT 1
+----
+<REGEX>:Binder Error:.*segment_info.*
+
+# Other columns are still there.
+query I
+SELECT COUNT(*) > 0 FROM pragma_storage_info('bp_tbl') WHERE segment_type NOT IN ('VALIDITY')
+----
+true
+
+# EXTENDED populates the (expensive) segment_info column with per-segment bitpacking modes.
+query I
+SELECT segment_info FROM pragma_storage_info('bp_tbl', scan_type='extended') WHERE segment_type NOT IN ('VALIDITY')
+----
+CONSTANT: 9, DELTA_FOR: 1
+
+# Same row counts across modes (the filter only affects per-column visibility / segment_info contents).
+query I
+SELECT COUNT(*) = (SELECT COUNT(*) FROM pragma_storage_info('bp_tbl', scan_type='extended'))
+FROM pragma_storage_info('bp_tbl', scan_type='standard')
+----
+true
+
+# extended_only_loaded combines both bits: skip unloaded columns AND populate segment_info.
+# After the CHECKPOINT above all columns of bp_tbl are unloaded; force a load by reading them.
+statement ok
+SELECT * FROM bp_tbl LIMIT 1;
+
+query I
+SELECT segment_info FROM pragma_storage_info('bp_tbl', scan_type='extended_only_loaded') WHERE segment_type NOT IN ('VALIDITY')
+----
+CONSTANT: 9, DELTA_FOR: 1
+
+# Sanity: case-insensitive parsing.
+query I
+SELECT DISTINCT segment_info FROM pragma_storage_info('bp_tbl', scan_type='EXTeNDED') WHERE segment_type NOT IN ('VALIDITY')
+----
+CONSTANT: 9, DELTA_FOR: 1
+
+# Invalid scan_type errors.
+statement error
+SELECT * FROM pragma_storage_info('bp_tbl', scan_type='bogus')
+----
+<REGEX>:Parser Error: Unrecognized column segment info scan type.*

@@ -97,8 +97,17 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	names.emplace_back("block_offset");
 	return_types.emplace_back(LogicalType::BIGINT);
 
-	names.emplace_back("segment_info");
-	return_types.emplace_back(LogicalType::VARCHAR);
+	auto scan_type = ColumnSegmentInfoScanType::STANDARD;
+	auto scan_type_entry = input.named_parameters.find("scan_type");
+	if (scan_type_entry != input.named_parameters.end()) {
+		scan_type = ColumnSegmentInfoScanTypeFromString(scan_type_entry->second.GetValue<string>());
+	}
+
+	// segment_info is only emitted when the (expensive) per-segment info was actually collected.
+	if (ColumnSegmentInfoIncludesSegmentInfo(scan_type)) {
+		names.emplace_back("segment_info");
+		return_types.emplace_back(LogicalType::VARCHAR);
+	}
 
 	names.emplace_back("additional_block_ids");
 	return_types.emplace_back(LogicalType::LIST(LogicalTypeId::BIGINT));
@@ -108,11 +117,6 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	// look up the table name in the catalog
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
-	auto scan_type = ColumnSegmentInfoScanType::ALL;
-	auto scan_type_entry = input.named_parameters.find("scan_type");
-	if (scan_type_entry != input.named_parameters.end()) {
-		scan_type = ColumnSegmentInfoScanTypeFromString(scan_type_entry->second.GetValue<string>());
-	}
 	return make_uniq<PragmaStorageFunctionData>(table_entry, scan_type);
 }
 
@@ -148,22 +152,24 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 
 	idx_t count = 0;
 
-	auto &row_group_id = output.data[0];
-	auto &column_name = output.data[1];
-	auto &column_id = output.data[2];
-	auto &column_path = output.data[3];
-	auto &segment_id = output.data[4];
-	auto &segment_type = output.data[5];
-	auto &start = output.data[6];
-	auto &count_col = output.data[7];
-	auto &compression = output.data[8];
-	auto &stats = output.data[9];
-	auto &has_updates = output.data[10];
-	auto &persistent = output.data[11];
-	auto &block_id = output.data[12];
-	auto &block_offset = output.data[13];
-	auto &segment_info = output.data[14];
-	auto &additional_block_ids = output.data[15];
+	idx_t col_idx = 0;
+	auto &row_group_id = output.data[col_idx++];
+	auto &column_name = output.data[col_idx++];
+	auto &column_id = output.data[col_idx++];
+	auto &column_path = output.data[col_idx++];
+	auto &segment_id = output.data[col_idx++];
+	auto &segment_type = output.data[col_idx++];
+	auto &start = output.data[col_idx++];
+	auto &count_col = output.data[col_idx++];
+	auto &compression = output.data[col_idx++];
+	auto &stats = output.data[col_idx++];
+	auto &has_updates = output.data[col_idx++];
+	auto &persistent = output.data[col_idx++];
+	auto &block_id = output.data[col_idx++];
+	auto &block_offset = output.data[col_idx++];
+	optional_ptr<Vector> segment_info =
+	    ColumnSegmentInfoIncludesSegmentInfo(bind_data.scan_type) ? &output.data[col_idx++] : nullptr;
+	auto &additional_block_ids = output.data[col_idx++];
 
 	while (count < STANDARD_VECTOR_SIZE) {
 		if (lstate.buffer_offset >= lstate.buffer.size()) {
@@ -212,7 +218,9 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 			block_id.Append(Value());
 			block_offset.Append(Value());
 		}
-		segment_info.Append(Value(entry.segment_info));
+		if (segment_info) {
+			segment_info->Append(Value(entry.segment_info));
+		}
 		if (entry.persistent) {
 			additional_block_ids.Append(ValueFromBlockIdList(entry.additional_blocks));
 		} else {

@@ -1229,20 +1229,21 @@ ColumnIndexType EnumUtil::FromString<ColumnIndexType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetColumnSegmentInfoScanTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ColumnSegmentInfoScanType::ALL), "ALL" },
-		{ static_cast<uint32_t>(ColumnSegmentInfoScanType::ONLY_LOADED_SEGMENTS), "ONLY_LOADED_SEGMENTS" }
+		{ static_cast<uint32_t>(ColumnSegmentInfoScanType::STANDARD), "STANDARD" },
+		{ static_cast<uint32_t>(ColumnSegmentInfoScanType::EXTENDED), "EXTENDED" },
+		{ static_cast<uint32_t>(ColumnSegmentInfoScanType::EXTENDED_ONLY_LOADED), "EXTENDED_ONLY_LOADED" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ColumnSegmentInfoScanType>(ColumnSegmentInfoScanType value) {
-	return StringUtil::EnumToString(GetColumnSegmentInfoScanTypeValues(), 2, "ColumnSegmentInfoScanType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetColumnSegmentInfoScanTypeValues(), 3, "ColumnSegmentInfoScanType", static_cast<uint32_t>(value));
 }
 
 template<>
 ColumnSegmentInfoScanType EnumUtil::FromString<ColumnSegmentInfoScanType>(const char *value) {
-	return static_cast<ColumnSegmentInfoScanType>(StringUtil::StringToEnum(GetColumnSegmentInfoScanTypeValues(), 2, "ColumnSegmentInfoScanType", value));
+	return static_cast<ColumnSegmentInfoScanType>(StringUtil::StringToEnum(GetColumnSegmentInfoScanTypeValues(), 3, "ColumnSegmentInfoScanType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetColumnSegmentTypeValues() {

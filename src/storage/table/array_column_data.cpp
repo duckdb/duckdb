@@ -383,11 +383,11 @@ void ArrayColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSt
 }
 
 void ArrayColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                           vector<ColumnSegmentInfo> &result) {
+                                           vector<ColumnSegmentInfo> &result, ColumnSegmentInfoScanType scan_type) {
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result, scan_type);
 	col_path.back() = 1;
-	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result, scan_type);
 }
 
 void ArrayColumnData::Verify(RowGroup &parent) {

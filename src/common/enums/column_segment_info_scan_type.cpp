@@ -6,10 +6,12 @@ namespace duckdb {
 
 ColumnSegmentInfoScanType ColumnSegmentInfoScanTypeFromString(const string &input) {
 	auto parameter = StringUtil::Lower(input);
-	if (parameter == "all") {
-		return ColumnSegmentInfoScanType::ALL;
-	} else if (parameter == "only_loaded_segments") {
-		return ColumnSegmentInfoScanType::ONLY_LOADED_SEGMENTS;
+	if (parameter == "standard") {
+		return ColumnSegmentInfoScanType::STANDARD;
+	} else if (parameter == "extended") {
+		return ColumnSegmentInfoScanType::EXTENDED;
+	} else if (parameter == "extended_only_loaded") {
+		return ColumnSegmentInfoScanType::EXTENDED_ONLY_LOADED;
 	} else {
 		throw ParserException("Unrecognized column segment info scan type \"%s\"", input);
 	}

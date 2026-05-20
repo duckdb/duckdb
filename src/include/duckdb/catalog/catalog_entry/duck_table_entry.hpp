@@ -55,7 +55,7 @@ public:
 
 	vector<ColumnSegmentInfo>
 	GetColumnSegmentInfo(const QueryContext &context,
-	                     ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL) override;
+	                     ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::STANDARD) override;
 	void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) override;
 	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
 	                           vector<ColumnSegmentInfo> &result) override;

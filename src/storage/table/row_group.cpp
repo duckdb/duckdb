@@ -1817,12 +1817,12 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 void RowGroup::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index,
                                     vector<ColumnSegmentInfo> &result, ColumnSegmentInfoScanType scan_type) {
 	for (idx_t col_idx = 0; col_idx < GetColumnCount(); col_idx++) {
-		if (scan_type == ColumnSegmentInfoScanType::ONLY_LOADED_SEGMENTS && !ColumnIsLoaded(col_idx)) {
+		if (ColumnSegmentInfoOnlyLoaded(scan_type) && !ColumnIsLoaded(col_idx)) {
 			// column is not loaded - skip it
 			continue;
 		}
 		auto &col_data = GetColumn(col_idx);
-		col_data.GetColumnSegmentInfo(context, row_group_index, {col_idx}, result);
+		col_data.GetColumnSegmentInfo(context, row_group_index, {col_idx}, result, scan_type);
 	}
 }
 

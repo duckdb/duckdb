@@ -120,7 +120,7 @@ public:
 	//! Returns a list of segment information for this table, if exists
 	virtual vector<ColumnSegmentInfo>
 	GetColumnSegmentInfo(const QueryContext &context,
-	                     ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL);
+	                     ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::STANDARD);
 	//! Initialize an incremental scan over the table's column segment info.
 	virtual void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state);
 	//! Append the next row group's column segment info to result. Returns false when no row groups remain.

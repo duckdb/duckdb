@@ -845,12 +845,12 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 }
 
 void VariantColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                             vector<ColumnSegmentInfo> &result) {
+                                             vector<ColumnSegmentInfo> &result, ColumnSegmentInfoScanType scan_type) {
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result, scan_type);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		col_path.back() = i + 1;
-		sub_columns[i]->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+		sub_columns[i]->GetColumnSegmentInfo(context, row_group_index, col_path, result, scan_type);
 	}
 }
 

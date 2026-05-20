@@ -43,7 +43,7 @@ query I
 SELECT
 	segment_info
 FROM
-	pragma_storage_info('test_bp')
+	pragma_storage_info('test_bp', scan_type='EXTENDED')
 WHERE segment_type NOT IN ('VALIDITY')
 ----
 CONSTANT: 9, DELTA_FOR: 1
@@ -75,7 +75,7 @@ query I
 SELECT
 	segment_info
 FROM
-	pragma_storage_info('test_bp')
+	pragma_storage_info('test_bp', scan_type='EXTENDED')
 WHERE segment_type NOT IN ('VALIDITY')
 ----
 DELTA_FOR: 5

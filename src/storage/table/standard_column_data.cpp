@@ -326,11 +326,11 @@ void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, Bas
 }
 
 void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
-                                              vector<duckdb::idx_t> col_path,
-                                              vector<duckdb::ColumnSegmentInfo> &result) {
-	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result);
+                                              vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result,
+                                              ColumnSegmentInfoScanType scan_type) {
+	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result, scan_type);
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, std::move(col_path), result);
+	validity->GetColumnSegmentInfo(context, row_group_index, std::move(col_path), result, scan_type);
 }
 
 void StandardColumnData::Verify(RowGroup &parent) {

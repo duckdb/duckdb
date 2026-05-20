@@ -252,7 +252,7 @@ public:
 
 	vector<ColumnSegmentInfo>
 	GetColumnSegmentInfo(const QueryContext &context,
-	                     ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL);
+	                     ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::STANDARD);
 	void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state);
 	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
 	                           vector<ColumnSegmentInfo> &result);
