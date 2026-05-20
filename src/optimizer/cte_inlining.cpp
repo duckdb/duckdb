@@ -115,6 +115,23 @@ static bool ContainsDelimGet(const LogicalOperator &op) {
 	return false;
 }
 
+static bool HasCTEReferenceBelowDelimJoin(const LogicalOperator &op, TableIndex cte_index,
+                                          bool below_delim_join = false) {
+	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
+		auto &cteref = op.Cast<LogicalCTERef>();
+		if (cteref.cte_index == cte_index) {
+			return below_delim_join;
+		}
+	}
+	auto child_below_delim_join = below_delim_join || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN;
+	for (auto &child : op.children) {
+		if (HasCTEReferenceBelowDelimJoin(*child, cte_index, child_below_delim_join)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 	if (op->type == LogicalOperatorType::LOGICAL_PREPARE) {
 		// we are in a prepare statement, if we have to copy an operator during inlining,
@@ -148,10 +165,11 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 			// With ref_count>1 and requires_copy, the DML would execute once per copy.
 			return;
 		}
-		if (!cte.correlated_columns.empty() && ContainsDelimGet(*cte.children[0])) {
-			// Correlated CTEs can be decorrelated into DELIM_GET consumers. After that rewrite the CTE definition
-			// must stay scoped to its original duplicate-elimination source; inlining it under a different subtree can
-			// attach those DELIM_GETs to the wrong delim scan.
+		if (!cte.correlated_columns.empty() && ContainsDelimGet(*cte.children[0]) &&
+		    HasCTEReferenceBelowDelimJoin(*op->children[1], cte.table_index)) {
+			// Correlated CTEs can be decorrelated into DELIM_GET consumers. Inlining stays safe while all matching
+			// CTE scans remain outside DELIM_JOIN subtrees, but once a scan is nested below another DELIM_JOIN the
+			// inlined DELIM_GETs can attach to the wrong duplicate-elimination source.
 			return;
 		}
 		if (cte.materialize == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
