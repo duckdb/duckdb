@@ -12,11 +12,11 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/main/query_context.hpp"
 
 namespace duckdb {
 
 struct FileHandle;
-class QueryContext;
 
 //! The standard row group size
 #define DEFAULT_ROW_GROUP_SIZE 122880ULL
