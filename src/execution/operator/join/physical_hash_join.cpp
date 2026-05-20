@@ -1645,6 +1645,10 @@ public:
 		} else {
 			spill_chunk.Reset();
 		}
+		// discard cached build-side pointers; the HT may have been reset between iterations (e.g. recursive CTE)
+		if (probe_state.dict_state) {
+			probe_state.dict_state = make_uniq<JoinHashTable::ProbeDictionaryState>();
+		}
 		// perfect_hash_join_state will be lazily initialized on first Execute when we have a real ExecutionContext
 	}
 };
