@@ -1,6 +1,6 @@
-# name: benchmark/micro/join/fnord.benchmark
+# name: benchmark/micro/window/partitioned_scan.benchmark
 # description: Window with partitioned scan
-# group: [join]
+# group: [window]
 
 name WindowBatching
 group micro
