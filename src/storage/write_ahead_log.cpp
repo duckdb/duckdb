@@ -381,7 +381,7 @@ void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, T
 	case_insensitive_map_t<Value> options;
 	auto storage_version = db.GetStorageManager().GetStorageVersion();
 	// Before: serialization version 3
-	auto v1_0_0_storage = StorageManager::IsPriorToVersion(StorageVersion::V1_1_0, storage_version);
+	auto v1_0_0_storage = StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version);
 	if (!v1_0_0_storage) {
 		options["v1_0_0_storage"] = v1_0_0_storage;
 	}
