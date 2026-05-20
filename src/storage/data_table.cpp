@@ -1827,7 +1827,7 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	row_groups->Checkpoint(writer, global_stats);
 	row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	if (writer.GetRebuildIndexes()) {
-		ActiveTimer timer;
+		MetricsTimer timer;
 		auto context = writer.TryGetClientContext();
 		if (context) {
 			timer = QueryProfiler::Get(*context).StartTimer<MetricStorageTotalVacuumTime>();

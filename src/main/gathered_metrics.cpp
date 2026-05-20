@@ -49,7 +49,7 @@ void GatheredMetrics::ResetMetrics() {
 	metrics.clear();
 }
 
-bool GatheredMetrics::MetricIsEnabled(const string &key) const {
+bool GatheredMetrics::MetricIsTracked(const string &key) const {
 	if (track_all) {
 		return true;
 	}
@@ -78,28 +78,28 @@ bool GatheredMetrics::MetricIsEnabled(const string &key) const {
 }
 
 void GatheredMetrics::SetMetric(const string &key, Value new_value) {
-	if (!MetricIsEnabled(key)) {
+	if (!MetricIsTracked(key)) {
 		return;
 	}
 	metrics[key] = std::move(new_value);
 }
 
 void GatheredMetrics::SetMetric(const string &key, idx_t value) {
-	if (!MetricIsEnabled(key)) {
+	if (!MetricIsTracked(key)) {
 		return;
 	}
 	metrics[key] = Value::UBIGINT(value);
 }
 
 void GatheredMetrics::SetMetric(const string &key, double value) {
-	if (!MetricIsEnabled(key)) {
+	if (!MetricIsTracked(key)) {
 		return;
 	}
 	metrics[key] = Value::DOUBLE(value);
 }
 
 void GatheredMetrics::SetMetric(const string &key, const string &value) {
-	if (!MetricIsEnabled(key)) {
+	if (!MetricIsTracked(key)) {
 		return;
 	}
 	metrics[key] = Value(value);

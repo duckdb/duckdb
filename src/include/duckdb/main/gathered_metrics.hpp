@@ -39,15 +39,15 @@ public:
 public:
 	void ResetMetrics();
 	//! Returns true if this metric is enabled (and should therefore be collected and output).
-	bool MetricIsEnabled(const string &key) const;
+	bool MetricIsTracked(const string &key) const;
 	void SetMetric(const string &key, Value new_value);
 	void SetMetric(const string &key, idx_t value);
 	void SetMetric(const string &key, double value);
 	void SetMetric(const string &key, const string &value);
 
 	template <class T>
-	bool MetricIsEnabled() const {
-		return MetricIsEnabled(T::Name);
+	bool MetricIsTracked() const {
+		return MetricIsTracked(T::Name);
 	}
 
 	template <class T>

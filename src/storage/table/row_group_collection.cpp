@@ -1219,7 +1219,7 @@ public:
 	}
 
 	void ExecuteTask() override {
-		ActiveTimer timer;
+		MetricsTimer timer;
 		auto context = checkpoint_state.writer.TryGetClientContext();
 		if (context) {
 			timer = QueryProfiler::Get(*context).StartTimer<MetricStorageTotalVacuumTime>();

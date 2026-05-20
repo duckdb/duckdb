@@ -34,7 +34,7 @@ class ExpressionExecutor;
 class ProfilingNode;
 class PhysicalOperator;
 class SQLStatement;
-struct ActiveTimer;
+struct MetricsTimer;
 class OperatorProfiler;
 
 enum class ProfilingCoverage : uint8_t { SELECT = 0, ALL = 1 };
@@ -106,11 +106,11 @@ public:
 
 	//! Start a timer for a metric identified by its struct type.
 	template <class METRIC>
-	ActiveTimer StartTimer() {
+	MetricsTimer StartTimer() {
 		return StartTimerInternal(METRIC::Name);
 	}
 	//! Start a timer for a string-keyed metric (use the template overload when possible).
-	DUCKDB_API ActiveTimer StartTimerInternal(const string &key);
+	DUCKDB_API MetricsTimer StartTimerInternal(const string &key);
 
 	DUCKDB_API void StartExplainAnalyze();
 

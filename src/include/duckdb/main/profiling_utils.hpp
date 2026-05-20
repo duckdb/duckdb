@@ -21,7 +21,7 @@ struct yyjson_mut_val;
 
 namespace duckdb {
 
-struct ActiveTimer;
+struct MetricsTimer;
 
 // Top level query metrics
 struct QueryMetrics {
@@ -80,11 +80,11 @@ public:
 		return bytes_written.load();
 	}
 
-	const unordered_map<string, idx_t> &GetStringTimings() const {
+	const unordered_map<string, idx_t> &GetMetricTimings() const {
 		return string_timings;
 	}
 
-	const unordered_map<string, idx_t> &GetStringCounters() const {
+	const unordered_map<string, idx_t> &GetMetricCounters() const {
 		return string_counters;
 	}
 
@@ -123,36 +123,36 @@ private:
 
 public:
 	// Declared after string_timings so it is destroyed first; its destructor writes to string_timings.
-	unique_ptr<ActiveTimer> latency_timer;
+	unique_ptr<MetricsTimer> latency_timer;
 };
 
-struct ActiveTimer {
+struct MetricsTimer {
 public:
-	ActiveTimer() : metric_name(""), is_active(false) {
+	MetricsTimer() : metric_name(""), is_active(false) {
 	}
-	ActiveTimer(QueryMetrics &query_metrics, string key, const bool is_active = true)
+	MetricsTimer(QueryMetrics &query_metrics, string key, const bool is_active = true)
 	    : query_metrics(query_metrics), metric_name(std::move(key)), is_active(is_active) {
 		if (!is_active) {
 			return;
 		}
 		profiler.Start();
 	}
-	~ActiveTimer() {
+	~MetricsTimer() {
 		if (is_active && !Exception::UncaughtException()) {
 			EndTimer();
 		}
 	}
 	// disable copy constructors
-	ActiveTimer(const ActiveTimer &other) = delete;
-	ActiveTimer &operator=(const ActiveTimer &) = delete;
+	MetricsTimer(const MetricsTimer &other) = delete;
+	MetricsTimer &operator=(const MetricsTimer &) = delete;
 	//! enable move constructors
-	ActiveTimer(ActiveTimer &&other) noexcept : is_active(false) {
+	MetricsTimer(MetricsTimer &&other) noexcept : is_active(false) {
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric_name, other.metric_name);
 		std::swap(profiler, other.profiler);
 		std::swap(is_active, other.is_active);
 	}
-	ActiveTimer &operator=(ActiveTimer &&other) noexcept {
+	MetricsTimer &operator=(MetricsTimer &&other) noexcept {
 		std::swap(query_metrics, other.query_metrics);
 		std::swap(metric_name, other.metric_name);
 		std::swap(profiler, other.profiler);

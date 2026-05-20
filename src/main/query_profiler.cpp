@@ -133,7 +133,7 @@ bool QueryProfiler::PrintOptimizerOutput() const {
 		return true;
 	}
 	if (metrics) {
-		return metrics->MetricIsEnabled("optimizer.join_order");
+		return metrics->MetricIsTracked("optimizer.join_order");
 	}
 	// Fall back to checking tracked_metrics patterns directly
 	auto &config = ClientConfig::GetConfig(context);
@@ -157,7 +157,7 @@ void QueryProfiler::Start(const string &query) {
 	Reset();
 	running = true;
 	query_metrics.query_sql = query;
-	query_metrics.latency_timer = make_uniq<ActiveTimer>(StartTimer<MetricQueryTime>());
+	query_metrics.latency_timer = make_uniq<MetricsTimer>(StartTimer<MetricQueryTime>());
 }
 
 void QueryProfiler::Reset() {
@@ -304,8 +304,8 @@ idx_t QueryProfiler::GetBytesWritten() const {
 	return query_metrics.GetBytesWritten();
 }
 
-ActiveTimer QueryProfiler::StartTimerInternal(const string &key) {
-	return ActiveTimer(query_metrics, key, IsEnabled());
+MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
+	return MetricsTimer(query_metrics, key, IsEnabled());
 }
 
 string QueryProfiler::ToString(ExplainFormat explain_format) const {
@@ -618,7 +618,7 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	bool show_query_name = false;
 	if (root) {
 		auto &info = *metrics;
-		show_query_name = info.MetricIsEnabled<MetricQuerySQL>();
+		show_query_name = info.MetricIsTracked<MetricQuerySQL>();
 	}
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
@@ -710,31 +710,31 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 
 profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) const {
 	profiler_metrics_t result;
-	if (info.MetricIsEnabled<MetricOperatorName>()) {
+	if (info.MetricIsTracked<MetricOperatorName>()) {
 		result["name"] = Value(name);
 	}
-	if (info.MetricIsEnabled<MetricOperatorType>()) {
+	if (info.MetricIsTracked<MetricOperatorType>()) {
 		result["type"] = Value(EnumUtil::ToString(operator_type));
 	}
-	if (info.MetricIsEnabled<MetricOperatorTiming>()) {
+	if (info.MetricIsTracked<MetricOperatorTiming>()) {
 		result["timing"] = Value::DOUBLE(time);
 	}
-	if (info.MetricIsEnabled<MetricOperatorIntermediateRows>()) {
+	if (info.MetricIsTracked<MetricOperatorIntermediateRows>()) {
 		result["intermediate_rows"] = Value::UBIGINT(elements_returned);
 	}
-	if (info.MetricIsEnabled<MetricOperatorIntermediateSizeBytes>()) {
+	if (info.MetricIsTracked<MetricOperatorIntermediateSizeBytes>()) {
 		result["intermediate_size_bytes"] = Value::UBIGINT(result_set_size);
 	}
-	if (info.MetricIsEnabled<MetricOperatorRowsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
+	if (info.MetricIsTracked<MetricOperatorRowsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["rows_scanned"] = Value::UBIGINT(rows_scanned);
 	}
-	if (info.MetricIsEnabled<MetricOperatorRowGroupsScanned>()) {
+	if (info.MetricIsTracked<MetricOperatorRowGroupsScanned>()) {
 		result["row_groups_scanned"] = Value::UBIGINT(row_groups_scanned);
 	}
-	if (info.MetricIsEnabled<MetricOperatorTotalRowGroupsToScan>()) {
+	if (info.MetricIsTracked<MetricOperatorTotalRowGroupsToScan>()) {
 		result["total_row_groups_to_scan"] = Value::UBIGINT(total_row_groups_to_scan);
 	}
-	if (info.MetricIsEnabled<MetricOperatorExtraInfo>()) {
+	if (info.MetricIsTracked<MetricOperatorExtraInfo>()) {
 		result["extra_info"] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
 	}
 	return result;
