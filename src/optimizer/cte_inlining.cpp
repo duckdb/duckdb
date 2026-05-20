@@ -103,6 +103,18 @@ static bool EndsInDummyScan(const LogicalOperator &op) {
 	return false;
 }
 
+static bool ContainsDelimGet(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_DELIM_GET) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsDelimGet(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 	if (op->type == LogicalOperatorType::LOGICAL_PREPARE) {
 		// we are in a prepare statement, if we have to copy an operator during inlining,
@@ -134,6 +146,12 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 			// side reads the modified table.  With ref_count==1, inlining would merge
 			// the DML into the query pipeline so it no longer precedes the scan.
 			// With ref_count>1 and requires_copy, the DML would execute once per copy.
+			return;
+		}
+		if (!cte.correlated_columns.empty() && ContainsDelimGet(*cte.children[0])) {
+			// Correlated CTEs can be decorrelated into DELIM_GET consumers. After that rewrite the CTE definition
+			// must stay scoped to its original duplicate-elimination source; inlining it under a different subtree can
+			// attach those DELIM_GETs to the wrong delim scan.
 			return;
 		}
 		if (cte.materialize == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
