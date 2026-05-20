@@ -74,7 +74,7 @@ if merged_overlay_ports:
 if merged_overlay_triplets:
     data['vcpkg-configuration']['overlay-triplets'] = merged_overlay_triplets
 
-REGISTRY_BASELINE = 'c4e1e0969823572af6904413a7e838a61ac0f2ff'
+REGISTRY_BASELINE = 'f13de79b66345fe31d3f9c119517613023d194a8'
 # NOTE: use 'scripts/list_vcpkg_registry_packages.py --baseline <baseline>' to generate the list of packages
 data['vcpkg-configuration']['registries'] = [
     {

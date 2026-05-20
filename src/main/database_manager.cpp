@@ -147,14 +147,13 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 
 	if (requires_tracking_attaches) {
 		// Start timing the ATTACH-delay step.
-		auto profiler = context.client_data->profiler->StartTimer("storage.waiting_to_attach_latency");
-
+		auto timer = context.client_data->profiler->StartTimer("storage.waiting_to_attach_latency");
+		// Start trying to attach.
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists
 			// first check if it exists within this transaction
 			auto &meta_transaction = MetaTransaction::Get(context);
-			auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name);
-			if (existing_db) {
+			if (auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name)) {
 				// it does! return it
 				return existing_db;
 			}
@@ -169,6 +168,8 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 			}
 			context.InterruptCheck();
 		}
+		// Returning in the loop above will also end the timer, otherwise, do it explicitly here.
+		timer.EndTimer();
 	}
 	auto &config = DBConfig::GetConfig(context);
 	GetDatabaseType(context, info, config, options);

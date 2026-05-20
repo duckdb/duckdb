@@ -13,6 +13,7 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/common/enums/column_segment_info_scan_type.hpp"
 
 #include <algorithm>
 
@@ -23,6 +24,7 @@ struct PragmaStorageFunctionData : public TableFunctionData {
 	}
 
 	TableCatalogEntry &table_entry;
+	ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL;
 	vector<ColumnSegmentInfo> column_segments_info;
 };
 
@@ -89,7 +91,12 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 	auto result = make_uniq<PragmaStorageFunctionData>(table_entry);
-	result->column_segments_info = table_entry.GetColumnSegmentInfo(context);
+
+	auto scan_type_entry = input.named_parameters.find("scan_type");
+	if (scan_type_entry != input.named_parameters.end()) {
+		result->scan_type = ColumnSegmentInfoScanTypeFromString(scan_type_entry->second.GetValue<string>());
+	}
+	result->column_segments_info = table_entry.GetColumnSegmentInfo(context, result->scan_type);
 	return std::move(result);
 }
 
@@ -180,8 +187,10 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 }
 
 void PragmaStorageInfo::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_storage_info", {LogicalType::VARCHAR}, PragmaStorageInfoFunction,
-	                              PragmaStorageInfoBind, PragmaStorageInfoInit));
+	TableFunction func("pragma_storage_info", {LogicalType::VARCHAR}, PragmaStorageInfoFunction, PragmaStorageInfoBind,
+	                   PragmaStorageInfoInit);
+	func.named_parameters["scan_type"] = LogicalType::VARCHAR;
+	set.AddFunction(func);
 }
 
 } // namespace duckdb

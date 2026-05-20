@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
@@ -134,6 +135,10 @@ Catalog &Catalog::GetCatalog(AttachedDatabase &db) {
 
 FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
 	return db.GetFileSystem();
+}
+
+FileSystem &FileSystem::GetLocal(DatabaseInstance &db) {
+	return db.GetLocalFileSystem();
 }
 
 FileSystem &FileSystem::Get(AttachedDatabase &db) {
@@ -286,6 +291,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	create_api_v1 = CreateAPIv1Wrapper;
 
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
+	local_db_file_system = make_uniq<LocalDatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
 	if (config.buffer_manager) {
 		buffer_manager = config.buffer_manager;
@@ -311,12 +317,12 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// initialize the secret manager
 	config.secret_manager->Initialize(*this);
 
+	// initialize the system catalog
+	db_manager->InitializeSystemCatalog();
+
 	// resolve the type of the database we are opening
 	auto &fs = FileSystem::GetFileSystem(*this);
 	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
-
-	// initialize the system catalog
-	db_manager->InitializeSystemCatalog();
 
 	if (!config.options.database_type.empty() && !StringUtil::CIEquals(config.options.database_type, "duckdb")) {
 		// if we are opening an extension database - load the extension
@@ -393,6 +399,32 @@ FileSystem &DatabaseInstance::GetFileSystem() {
 	return *db_file_system;
 }
 
+FileSystem &DatabaseInstance::GetLocalFileSystem() {
+	return *local_db_file_system;
+}
+
+static FileSystem &ResolveLocalFileSystem(DatabaseInstance &db, unique_ptr<FileSystem> &owned) {
+	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
+	auto &default_fs = vfs.GetDefaultFileSystem();
+	if (default_fs.IsLocalFileSystem()) {
+		return default_fs;
+	}
+	owned = make_uniq<LocalFileSystem>();
+	return *owned;
+}
+
+LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
+    : db(db_p), local_fs(ResolveLocalFileSystem(db_p, owned_file_system)), database_opener(db_p) {
+}
+
+FileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
+	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
+	if (vfs.SubSystemIsDisabled(local_fs.GetName())) {
+		throw PermissionException("File system %s has been disabled by configuration", local_fs.GetName());
+	}
+	return local_fs;
+}
+
 ExternalFileCache &DatabaseInstance::GetExternalFileCache() {
 	return *external_file_cache;
 }
@@ -441,6 +473,10 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 
 	if (new_config.options.temporary_directory.empty()) {
 		config.SetDefaultTempDirectory();
+	}
+
+	if (new_config.options.http_proxy.empty()) {
+		HTTPProxySetting::ResetGlobal(this, config);
 	}
 
 	if (config.options.access_mode == AccessMode::UNDEFINED) {

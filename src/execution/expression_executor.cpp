@@ -286,7 +286,7 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	default:
 		throw InternalException("Attempting to execute expression of unknown type!");
 	}
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF && result.size() != count_t(count)) {
 		// BoundReferenceExpression shares buffer with its source - we cannot resize it
 		// all other expressions produce a fresh result vector that we own
 		FlatVector::SetSize(result, count_t(count));

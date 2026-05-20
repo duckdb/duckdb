@@ -195,8 +195,8 @@ endif
 ifeq (${BUILD_JSON}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};json
 endif
-ifeq (${BUILD_JEMALLOC}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};jemalloc
+ifdef BUILD_JEMALLOC
+	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_JEMALLOC=${BUILD_JEMALLOC}
 endif
 ifdef CORE_EXTENSIONS
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};${CORE_EXTENSIONS}
@@ -516,6 +516,7 @@ TEST_CONFIGS := \
 	test/configs/force_storage_restart.json \
 	test/configs/latest_storage.json \
 	test/configs/block_verification.json \
+	test/configs/block_verification_latest.json \
 	test/configs/disable_optimizer.json \
 	test/configs/internal_vector_serialization.json \
 	test/configs/internal_vector_verification.json \

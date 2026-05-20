@@ -77,6 +77,14 @@
         "test/sql/storage/total_string_length_repeated_insert.test",
         "test/sql/storage/extended_string_stats.test"
       ]
+    },
+    {
+      "reason": "Test checks which columns are loaded",
+      "paths": [
+        "test/sql/storage/metadata/partial_column_metadata_reuse.test",
+        "test/sql/storage/metadata/partial_column_metadata_reuse_v7.test",
+        "test/sql/storage/metadata/full_table_metadata_reuse_v7.test"
+      ]
     }
   ]
 }

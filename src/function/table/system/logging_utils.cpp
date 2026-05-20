@@ -53,7 +53,6 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 	auto result = make_uniq<EnableLoggingBindData>();
 
 	bool storage_isset = false;
-	bool storage_path_isset = false;
 
 	for (const auto &param : input.named_parameters) {
 		auto key = StringUtil::Lower(param.first);
@@ -71,7 +70,6 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 				result->storage_config[StructType::GetChildName(param.second.type(), i)] = children[i];
 			}
 		} else if (key == "storage_path") {
-			storage_path_isset = true;
 			result->storage_config["path"] = param.second;
 		} else if (key == "storage_normalize") {
 			result->storage_config["normalize"] = param.second;
@@ -82,9 +80,15 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 		}
 	}
 
-	// This will implicitly set the log storage if the storage_path param is set and the storage is omitted
-	if (!storage_isset && storage_path_isset) {
-		result->config.storage = LogConfig::FILE_STORAGE_NAME;
+	// If the user didn't explicitly set storage=, infer it. A 'path' in storage_config (provided
+	// either via storage_path= or storage_config={path:...}) implies file storage. Otherwise
+	// preserve the currently configured storage so logging_storage isn't silently reset.
+	if (!storage_isset) {
+		if (result->storage_config.find("path") != result->storage_config.end()) {
+			result->config.storage = LogConfig::FILE_STORAGE_NAME;
+		} else {
+			result->config.storage = context.db->GetLogManager().GetConfig().storage;
+		}
 	}
 
 	// Process positional params

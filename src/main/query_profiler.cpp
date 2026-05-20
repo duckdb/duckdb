@@ -361,7 +361,6 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 		auto &info = GetOperatorMetrics(*active_operator);
 		auto params = active_operator->ParamsToString();
 		info.extra_info = params;
-		info.extra_info_dirty = true;
 	}
 
 	// Start the timing of the current operator.
@@ -385,28 +384,28 @@ void OperatorMetrics::GatherMetrics(ClientContext &context, double elapsed_time,
 	}
 }
 
-void OperatorMetrics::Merge(const OperatorMetrics &other) {
+void OperatorMetrics::MergeInternal(const OperatorMetrics &other) {
 	time += other.time;
 	elements_returned += other.elements_returned;
 	result_set_size += other.result_set_size;
 	rows_scanned += other.rows_scanned;
-	if (other.extra_info_dirty) {
-		for (auto &entry : other.extra_info) {
-			auto it = extra_info.find(entry.first);
-			if (it != extra_info.end()) {
-				it->second = entry.second;
-			} else {
-				extra_info.insert(entry.first, entry.second);
-			}
-		}
-		extra_info_dirty = true;
-	}
+	row_groups_scanned += other.row_groups_scanned;
 	if (other.system_peak_buffer_manager_memory > system_peak_buffer_manager_memory) {
 		system_peak_buffer_manager_memory = other.system_peak_buffer_manager_memory;
 	}
 	if (other.system_peak_temp_directory_size > system_peak_temp_directory_size) {
 		system_peak_temp_directory_size = other.system_peak_temp_directory_size;
 	}
+}
+
+void OperatorMetrics::Accumulate(const OperatorMetrics &other) {
+	MergeInternal(other);
+	total_row_groups_to_scan += other.total_row_groups_to_scan;
+}
+
+void OperatorMetrics::Merge(const OperatorMetrics &other) {
+	MergeInternal(other);
+	total_row_groups_to_scan = MaxValue<idx_t>(total_row_groups_to_scan, other.total_row_groups_to_scan);
 }
 
 void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
@@ -430,39 +429,15 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 	if (!active_operator) {
 		throw InternalException("OperatorProfiler: Attempting to call FinishSource while no operator is active");
 	}
+	FinishSource(*active_operator, gstate, lstate);
+}
 
-	// we're emitting extra info - get the extra source info
-	auto &info = GetOperatorMetrics(*active_operator);
-	auto extra_info = active_operator->ExtraSourceParams(gstate, lstate);
-	for (auto &new_info : extra_info) {
-		auto entry = info.extra_info.find(new_info.first);
-		if (entry != info.extra_info.end()) {
-			// entry exists - override
-			entry->second = std::move(new_info.second);
-		} else {
-			// entry does not exist yet - insert
-			info.extra_info.insert(std::move(new_info));
-		}
-	}
-	info.extra_info_dirty = info.extra_info_dirty || !extra_info.empty();
-
-	if (active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN) {
-		const auto &table_scan = active_operator->Cast<PhysicalTableScan>();
-		const auto rows_scanned = table_scan.GetRowsScanned(gstate, lstate);
-		auto &info = GetOperatorMetrics(*active_operator);
-		if (rows_scanned.IsValid()) {
-			// Use exact value if available.
-			info.rows_scanned += rows_scanned.GetIndex();
-		} else {
-			// Otherwise estimate as the cardinality of the table scan, if there is no exact value available.
-			auto &bind_data = table_scan.bind_data;
-			if (bind_data && table_scan.function.cardinality) {
-				auto cardinality = table_scan.function.cardinality(context, &(*bind_data));
-				if (cardinality && cardinality->has_estimated_cardinality) {
-					info.rows_scanned += cardinality->estimated_cardinality;
-				}
-			}
-		}
+void OperatorProfiler::FinishSource(const PhysicalOperator &phys_op, GlobalSourceState &gstate,
+                                    LocalSourceState &lstate) {
+	if (phys_op.type == PhysicalOperatorType::TABLE_SCAN) {
+		const auto &table_scan = phys_op.Cast<PhysicalTableScan>();
+		auto &scan_metrics = GetOperatorMetrics(phys_op);
+		table_scan.GetMetrics(context, gstate, lstate, scan_metrics);
 	}
 }
 
@@ -740,12 +715,8 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	if (info.MetricIsEnabled<MetricOperatorRowsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["rows_scanned"] = Value::UBIGINT(rows_scanned);
 	}
-	if (info.MetricIsEnabled<MetricOperatorExtraInfo>()) {
-		if (!extra_info.empty()) {
-			result["extra_info"] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
-		} else {
-			result["extra_info"] = Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, {}, {});
-		}
+	if (info.MetricIsEnabled<MetricOperatorExtraInfo>() && !extra_info.empty()) {
+		result["extra_info"] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
 	}
 	return result;
 }
@@ -1000,7 +971,7 @@ void QueryProfiler::Print() {
 
 static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &result) {
 	// merge in this layer
-	result.Merge(root.GetOperatorMetrics());
+	result.Accumulate(root.GetOperatorMetrics());
 	// recurse into children
 	for (idx_t i = 0; i < root.GetChildCount(); i++) {
 		auto child = root.GetChild(i);
@@ -1022,6 +993,8 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		metrics->SetMetric<MetricQueryTotalIntermediateRows>(cumulative_metrics.elements_returned);
 		metrics->SetMetric<MetricQueryTotalRowsScanned>(cumulative_metrics.rows_scanned);
 		metrics->SetMetric<MetricQueryResultSetSize>(cumulative_metrics.result_set_size);
+		// metrics->SetMetric<MetricQueryTotalRowGroupsScanned>(cumulative_metrics.row_groups_scanned);
+		// metrics->SetMetric<MetricQueryTotalRowGroupsToScan>(cumulative_metrics.total_row_groups_to_scan);
 	}
 	query_metrics.FinalizeMetrics(*metrics);
 	metrics_finalized = true;

@@ -213,9 +213,9 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 		commit_state = storage_manager.GenStorageCommitState(*wal);
 
 		auto &profiler = *context.client_data->profiler;
-
 		auto commit_timer = profiler.StartTimer("storage.commit_local_storage_latency");
 		storage->Commit(commit_state.get());
+		commit_timer.EndTimer();
 
 		auto wal_timer = profiler.StartTimer("storage.write_to_wal_latency");
 		undo_buffer.WriteToWAL(*wal, commit_state.get());
@@ -225,6 +225,8 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 			// hence we need to ensure those optimistically written blocks are persisted
 			storage_manager.GetBlockManager().FileSync();
 		}
+		wal_timer.EndTimer();
+
 	} catch (std::exception &ex) {
 		// Call RevertCommit() outside this try-catch as it itself may throw
 		error_data = ErrorData(ex);
