@@ -35,9 +35,17 @@ GROUP_ORDER = [
 ]
 
 
+ABBREVIATIONS = {"sql", "cpu", "wal", "io"}
+
+
 def to_pascal_case(s: str) -> str:
-    """'physical_planner.total_time' -> 'PhysicalPlannerTotalTime'"""
-    return "".join(p.capitalize() for p in s.replace(".", "_").split("_"))
+    """'physical_planner.total_time' -> 'MetricPhysicalPlannerTotalTime'
+    Known abbreviations (SQL, CPU, WAL, IO) are fully uppercased."""
+    parts = s.replace(".", "_").split("_")
+    result = "Metric"
+    for p in parts:
+        result += p.upper() if p.lower() in ABBREVIATIONS else p.capitalize()
+    return result
 
 
 def iter_metrics(data: dict):

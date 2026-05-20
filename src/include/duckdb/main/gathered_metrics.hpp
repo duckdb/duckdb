@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/profiling_info.hpp
+// duckdb/main/gathered_metrics.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -16,6 +16,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/metric_type.hpp"
+#include "duckdb/main/metrics.hpp"
 
 namespace duckdb_yyjson {
 struct yyjson_mut_doc;
@@ -27,21 +28,31 @@ namespace duckdb {
 struct QueryProfileResult;
 enum class ProfilingParameterNames : uint8_t { FORMAT, COVERAGE, SAVE_LOCATION, MODE, METRICS };
 
-class ProfilingInfo {
+class GatheredMetrics {
 public:
-	ProfilingInfo() = default;
-	explicit ProfilingInfo(const profiler_settings_t &n_settings);
-	ProfilingInfo(ProfilingInfo &) = default;
-	ProfilingInfo &operator=(ProfilingInfo const &) = default;
+	GatheredMetrics() = default;
+	explicit GatheredMetrics(const profiler_settings_t &n_settings);
+	GatheredMetrics(GatheredMetrics &) = default;
+	GatheredMetrics &operator=(GatheredMetrics const &) = default;
 
 public:
 	void ResetMetrics();
 	//! Returns true if this metric is enabled (and should therefore be collected and output).
-	bool EnabledForCollection(const string &key) const;
-	void SetMetricValue(const string &key, Value new_value);
-	void SetMetricValue(const string &key, idx_t value);
-	void SetMetricValue(const string &key, double value);
-	void SetMetricValue(const string &key, const string &value);
+	bool MetricIsEnabled(const string &key) const;
+	void SetMetric(const string &key, Value new_value);
+	void SetMetric(const string &key, idx_t value);
+	void SetMetric(const string &key, double value);
+	void SetMetric(const string &key, const string &value);
+
+	template <class T>
+	bool MetricIsEnabled() const {
+		return MetricIsEnabled(T::Name);
+	}
+
+	template <class T>
+	void SetMetric(const typename T::METRIC_TYPE &value) {
+		SetMetric(T::Name, value);
+	}
 
 	const profiler_metrics_t &GetMetrics() const {
 		return metrics;

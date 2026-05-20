@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/main/profiling_info.hpp"
+#include "duckdb/main/gathered_metrics.hpp"
 
 namespace duckdb {
 
@@ -31,7 +31,7 @@ struct OperatorMetrics {
 	InsertionOrderPreservingMap<string> extra_info;
 	bool extra_info_dirty = false;
 
-	profiler_metrics_t GetMetrics(const ProfilingInfo &info) const;
+	profiler_metrics_t GetMetrics(const GatheredMetrics &info) const;
 	void ResetMetrics() {
 		time = 0;
 		elements_returned = 0;

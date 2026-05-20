@@ -137,10 +137,6 @@ public:
 
 	static profiler_settings_t GetQueryMetrics(ClientContext &context);
 
-	idx_t OperatorSize() {
-		return tree_map.size();
-	}
-
 	//! Return the result tree (generating it if it does not yet exist)
 	QueryProfileResult &GetResult();
 	//! Returns true if the last query produced a profiling tree (i.e. profiling was enabled and the query succeeded)
@@ -165,7 +161,7 @@ private:
 	//! The root of the query tree
 	unique_ptr<ProfilingNode> root;
 
-	unique_ptr<ProfilingInfo> root_info;
+	unique_ptr<GatheredMetrics> metrics;
 
 	//! Top level query information.
 	QueryMetrics query_metrics;

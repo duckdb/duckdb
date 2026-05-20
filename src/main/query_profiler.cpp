@@ -13,7 +13,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/profiling_utils.hpp"
-#include "duckdb/main/profiling_info.hpp"
+#include "duckdb/main/gathered_metrics.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "yyjson.hpp"
 #include "yyjson_utils.hpp"
@@ -154,7 +154,7 @@ void QueryProfiler::Start(const string &query) {
 void QueryProfiler::Reset() {
 	tree_map.clear();
 	root = nullptr;
-	root_info.reset();
+	metrics.reset();
 	running = false;
 	query_metrics.Reset();
 	result_tree.reset();
@@ -578,7 +578,7 @@ void RenderPhaseTimings(std::ostream &ss, const pair<string, double> &head, map<
 	ss << "└────────────────────────────────────────────────┘\n";
 }
 
-void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_t width) {
+void PrintPhaseTimingsToStream(std::ostream &ss, const GatheredMetrics &info, idx_t width) {
 	map<string, double> optimizer_timings;
 	map<string, double> planner_timings;
 	map<string, double> parser_timings;
@@ -629,8 +629,8 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 
 	bool show_query_name = false;
 	if (root) {
-		auto &info = *root_info;
-		show_query_name = info.EnabledForCollection("query.sql");
+		auto &info = *metrics;
+		show_query_name = info.MetricIsEnabled<MetricQuerySQL>();
 	}
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
@@ -660,7 +660,7 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	if (root) {
 		// print phase timings
 		if (PrintOptimizerOutput()) {
-			PrintPhaseTimingsToStream(ss, *root_info, TOTAL_BOX_WIDTH);
+			PrintPhaseTimingsToStream(ss, *metrics, TOTAL_BOX_WIDTH);
 		}
 		Render(*root, ss);
 	}
@@ -720,27 +720,27 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 	return result;
 }
 
-profiler_metrics_t OperatorMetrics::GetMetrics(const ProfilingInfo &info) const {
+profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) const {
 	profiler_metrics_t result;
-	if (info.EnabledForCollection("operator.name")) {
+	if (info.MetricIsEnabled<MetricOperatorName>()) {
 		result["name"] = Value(name);
 	}
-	if (info.EnabledForCollection("operator.type")) {
+	if (info.MetricIsEnabled<MetricOperatorType>()) {
 		result["type"] = Value(EnumUtil::ToString(operator_type));
 	}
-	if (info.EnabledForCollection("operator.timing")) {
+	if (info.MetricIsEnabled<MetricOperatorTiming>()) {
 		result["timing"] = Value::DOUBLE(time);
 	}
-	if (info.EnabledForCollection("operator.intermediate_rows")) {
+	if (info.MetricIsEnabled<MetricOperatorIntermediateRows>()) {
 		result["intermediate_rows"] = Value::UBIGINT(elements_returned);
 	}
-	if (info.EnabledForCollection("operator.intermediate_size_bytes")) {
+	if (info.MetricIsEnabled<MetricOperatorIntermediateSizeBytes>()) {
 		result["intermediate_size_bytes"] = Value::UBIGINT(result_set_size);
 	}
-	if (info.EnabledForCollection("operator.rows_scanned") && operator_type == PhysicalOperatorType::TABLE_SCAN) {
+	if (info.MetricIsEnabled<MetricOperatorRowsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["rows_scanned"] = Value::UBIGINT(rows_scanned);
 	}
-	if (info.EnabledForCollection("operator.extra_info")) {
+	if (info.MetricIsEnabled<MetricOperatorExtraInfo>() && !extra_info.empty()) {
 		result["extra_info"] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
 	}
 	return result;
@@ -834,7 +834,7 @@ void QueryProfiler::ToLogInternal() const {
 	if (!root) {
 		return;
 	}
-	root_info->WriteMetricsToLog(context);
+	metrics->WriteMetricsToLog(context);
 }
 
 void QueryProfiler::ToLog() const {
@@ -842,7 +842,7 @@ void QueryProfiler::ToLog() const {
 	ToLogInternal();
 }
 
-static void OperatorToResultTree(const ProfilingInfo &settings, ProfilingNode &node, QueryProfileResult &result) {
+static void OperatorToResultTree(const GatheredMetrics &settings, ProfilingNode &node, QueryProfileResult &result) {
 	auto operator_metrics = node.GetOperatorMetrics().GetMetrics(settings);
 	for (auto &entry : operator_metrics) {
 		result.AddValue(entry.first, std::move(entry.second));
@@ -862,10 +862,10 @@ unique_ptr<QueryProfileResult> QueryProfiler::ToResultTree() const {
 		result->AddValue("result", Value(query_metrics.query_sql.empty() ? "empty" : "error"));
 		return result;
 	}
-	root_info->MetricsToProfileResult(*result);
+	metrics->MetricsToProfileResult(*result);
 	auto &op_list = result->AddList("operator_info");
 	auto &op_node = op_list.AppendObject();
-	OperatorToResultTree(*root_info, *root, op_node);
+	OperatorToResultTree(*metrics, *root, op_node);
 	return result;
 }
 
@@ -975,7 +975,7 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 		tree_map.clear();
 		root = nullptr;
 	} else {
-		root_info = make_uniq<ProfilingInfo>(GetQueryMetrics(context));
+		metrics = make_uniq<GatheredMetrics>(GetQueryMetrics(context));
 	}
 }
 
@@ -1005,7 +1005,7 @@ static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &resu
 }
 
 void QueryProfiler::FinalizeMetricsInternal() {
-	if (metrics_finalized || !IsEnabled() || !root_info) {
+	if (metrics_finalized || !IsEnabled() || !metrics) {
 		return;
 	}
 	if (query_metrics.latency_timer) {
@@ -1014,10 +1014,12 @@ void QueryProfiler::FinalizeMetricsInternal() {
 	if (root) {
 		OperatorMetrics cumulative_metrics;
 		MergeOperatorMeasurements(*root, cumulative_metrics);
-		query_metrics.FinalizeMetrics(*root_info, &cumulative_metrics);
-	} else {
-		query_metrics.FinalizeMetrics(*root_info, nullptr);
+		metrics->SetMetric<MetricQueryCPUTime>(cumulative_metrics.time);
+		metrics->SetMetric<MetricQueryTotalIntermediateRows>(cumulative_metrics.elements_returned);
+		metrics->SetMetric<MetricQueryTotalRowsScanned>(cumulative_metrics.rows_scanned);
+		metrics->SetMetric<MetricQueryResultSetSize>(cumulative_metrics.result_set_size);
 	}
+	query_metrics.FinalizeMetrics(*metrics);
 	metrics_finalized = true;
 }
 

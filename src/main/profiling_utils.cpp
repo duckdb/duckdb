@@ -6,44 +6,20 @@
 
 namespace duckdb {
 
-void QueryMetrics::FinalizeMetrics(ProfilingInfo &info, const OperatorMetrics *cumulative_metrics) {
-	info.SetMetricValue("query.sql", query_sql);
-	if (cumulative_metrics) {
-		info.SetMetricValue("query.cpu_time", cumulative_metrics->time);
-		info.SetMetricValue("query.total_intermediate_rows", cumulative_metrics->elements_returned);
-		info.SetMetricValue("query.total_rows_scanned", cumulative_metrics->rows_scanned);
-		info.SetMetricValue("query.result_set_size", cumulative_metrics->result_set_size);
-	}
+void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
+	info.SetMetric<MetricQuerySQL>(query_sql);
 	for (const auto &[key, ns] : string_timings) {
-		info.SetMetricValue(key, static_cast<double>(ns) / 1e9);
+		info.SetMetric(key, static_cast<double>(ns) / 1e9);
 	}
 	for (const auto &[key, count] : string_counters) {
-		info.SetMetricValue(key, count);
+		info.SetMetric(key, count);
 	}
-	info.SetMetricValue("io.total_bytes_read", GetBytesRead());
-	info.SetMetricValue("io.total_bytes_written", GetBytesWritten());
-	info.SetMetricValue("system.blocked_thread_time", blocked_thread_time);
-	info.SetMetricValue("system.peak_buffer_memory", system_peak_buffer_memory);
-	info.SetMetricValue("system.peak_temp_dir_size", system_peak_temp_dir_size);
-	info.SetMetricValue("system.total_memory_allocated", GetStringCounter("system.total_memory_allocated"));
-}
-
-void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const string &key) {
-	if (MetricsUtils::IsPhaseTimingKey(key) || MetricsUtils::IsOptimizerMetricKey(key) ||
-	    MetricsUtils::IsPhysicalPlannerMetricKey(key) || key == "operator.timing" || key == "operator.cpu_time") {
-		metrics[key] = Value::CreateValue(0.0);
-	} else if (key == "operator.intermediate_rows" || key == "operator.rows_scanned" ||
-	           key == "operator.intermediate_size_bytes") {
-		metrics[key] = Value::CreateValue<uint64_t>(0);
-	} else if (key == "operator.extra_info") {
-		metrics[key] = Value::MAP(InsertionOrderPreservingMap<string>());
-	} else if (key == "operator.name") {
-		metrics[key] = Value::CreateValue("");
-	} else if (key == "operator.type") {
-		metrics[key] = Value::CreateValue<uint8_t>(0);
-	} else {
-		throw InternalException("Unknown metric key: %s", key);
-	}
+	info.SetMetric<MetricIOTotalBytesRead>(GetBytesRead());
+	info.SetMetric<MetricIOTotalBytesWritten>(GetBytesWritten());
+	info.SetMetric<MetricSystemBlockedThreadTime>(blocked_thread_time);
+	info.SetMetric<MetricSystemPeakBufferMemory>(system_peak_buffer_memory);
+	info.SetMetric<MetricSystemPeakTempDirSize>(system_peak_temp_dir_size);
+	info.SetMetric<MetricSystemTotalMemoryAllocated>(GetStringCounter(MetricSystemTotalMemoryAllocated::Name));
 }
 
 }

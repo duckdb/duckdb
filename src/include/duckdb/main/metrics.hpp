@@ -15,42 +15,42 @@
 namespace duckdb {
 
 // Query metrics
-struct QueryCpuTime {
+struct MetricQueryCPUTime {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "query.cpu_time";
 	static constexpr const char *Description = "CPU time spent on the query";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct QueryResultSetSize {
+struct MetricQueryResultSetSize {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "query.result_set_size";
 	static constexpr const char *Description = "The size of the result set";
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
-struct QuerySql {
+struct MetricQuerySQL {
 	using METRIC_TYPE = string;
 	static constexpr const char *Name = "query.sql";
 	static constexpr const char *Description = "The SQL string of the query";
 	static constexpr const char *Unit = "";
 	static constexpr const char *TypeStr = "string";
 };
-struct QueryTime {
+struct MetricQueryTime {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "query.time";
 	static constexpr const char *Description = "Time spent executing the entire query";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct QueryTotalIntermediateRows {
+struct MetricQueryTotalIntermediateRows {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "query.total_intermediate_rows";
 	static constexpr const char *Description = "Cumulative number of intermediate rows produced by the query";
 	static constexpr const char *Unit = "rows";
 	static constexpr const char *TypeStr = "uint64";
 };
-struct QueryTotalRowsScanned {
+struct MetricQueryTotalRowsScanned {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "query.total_rows_scanned";
 	static constexpr const char *Description = "Cumulative number of rows scanned by the query";
@@ -59,28 +59,28 @@ struct QueryTotalRowsScanned {
 };
 
 // System metrics
-struct SystemBlockedThreadTime {
+struct MetricSystemBlockedThreadTime {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "system.blocked_thread_time";
 	static constexpr const char *Description = "Time spent waiting for a thread to become available";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct SystemPeakBufferMemory {
+struct MetricSystemPeakBufferMemory {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "system.peak_buffer_memory";
 	static constexpr const char *Description = "Peak memory usage of the buffer manager";
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
-struct SystemPeakTempDirSize {
+struct MetricSystemPeakTempDirSize {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "system.peak_temp_dir_size";
 	static constexpr const char *Description = "Peak size of the temporary directory";
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
-struct SystemTotalMemoryAllocated {
+struct MetricSystemTotalMemoryAllocated {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "system.total_memory_allocated";
 	static constexpr const char *Description = "The total memory allocated by the buffer manager";
@@ -89,14 +89,14 @@ struct SystemTotalMemoryAllocated {
 };
 
 // Io metrics
-struct IoTotalBytesRead {
+struct MetricIOTotalBytesRead {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "io.total_bytes_read";
 	static constexpr const char *Description = "The total amount of bytes read from storage";
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
-struct IoTotalBytesWritten {
+struct MetricIOTotalBytesWritten {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "io.total_bytes_written";
 	static constexpr const char *Description = "The total amount of bytes written to storage";
@@ -105,49 +105,49 @@ struct IoTotalBytesWritten {
 };
 
 // Storage metrics
-struct StorageAttachLoadStorageLatency {
+struct MetricStorageAttachLoadStorageLatency {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "storage.attach_load_storage_latency";
 	static constexpr const char *Description = "Time spent loading from storage";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct StorageAttachReplayWalLatency {
+struct MetricStorageAttachReplayWALLatency {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "storage.attach_replay_wal_latency";
 	static constexpr const char *Description = "Time spent replaying the WAL file";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct StorageCheckpointLatency {
+struct MetricStorageCheckpointLatency {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "storage.checkpoint_latency";
 	static constexpr const char *Description = "Time spent running checkpoints";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct StorageCommitLocalStorageLatency {
+struct MetricStorageCommitLocalStorageLatency {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "storage.commit_local_storage_latency";
 	static constexpr const char *Description = "Time spent committing the transaction-local storage";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct StorageWaitingToAttachLatency {
+struct MetricStorageWaitingToAttachLatency {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "storage.waiting_to_attach_latency";
 	static constexpr const char *Description = "Time spent waiting to ATTACH a file";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct StorageWalReplayEntryCount {
+struct MetricStorageWALReplayEntryCount {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "storage.wal_replay_entry_count";
 	static constexpr const char *Description = "The total number of entries to replay in the WAL";
 	static constexpr const char *Unit = "rows";
 	static constexpr const char *TypeStr = "uint64";
 };
-struct StorageWriteToWalLatency {
+struct MetricStorageWriteToWALLatency {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "storage.write_to_wal_latency";
 	static constexpr const char *Description = "Time spent writing to the WAL";
@@ -156,56 +156,56 @@ struct StorageWriteToWalLatency {
 };
 
 // Operator metrics
-struct OperatorCpuTime {
+struct MetricOperatorCPUTime {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "operator.cpu_time";
 	static constexpr const char *Description = "CPU time spent in the operator";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct OperatorExtraInfo {
+struct MetricOperatorExtraInfo {
 	using METRIC_TYPE = Value;
 	static constexpr const char *Name = "operator.extra_info";
 	static constexpr const char *Description = "Unique operator metrics";
 	static constexpr const char *Unit = "";
 	static constexpr const char *TypeStr = "map";
 };
-struct OperatorIntermediateRows {
+struct MetricOperatorIntermediateRows {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "operator.intermediate_rows";
 	static constexpr const char *Description = "Number of intermediate rows produced by the operator";
 	static constexpr const char *Unit = "rows";
 	static constexpr const char *TypeStr = "uint64";
 };
-struct OperatorIntermediateSizeBytes {
+struct MetricOperatorIntermediateSizeBytes {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "operator.intermediate_size_bytes";
 	static constexpr const char *Description = "Intermediate size in bytes produced by the operator";
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
-struct OperatorName {
+struct MetricOperatorName {
 	using METRIC_TYPE = string;
 	static constexpr const char *Name = "operator.name";
 	static constexpr const char *Description = "Name of the operator";
 	static constexpr const char *Unit = "";
 	static constexpr const char *TypeStr = "string";
 };
-struct OperatorRowsScanned {
+struct MetricOperatorRowsScanned {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "operator.rows_scanned";
 	static constexpr const char *Description = "Number of rows scanned by the operator";
 	static constexpr const char *Unit = "rows";
 	static constexpr const char *TypeStr = "uint64";
 };
-struct OperatorTiming {
+struct MetricOperatorTiming {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "operator.timing";
 	static constexpr const char *Description = "Time spent in the operator";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct OperatorType {
+struct MetricOperatorType {
 	using METRIC_TYPE = string;
 	static constexpr const char *Name = "operator.type";
 	static constexpr const char *Description = "Type of the operator";
@@ -214,7 +214,7 @@ struct OperatorType {
 };
 
 // Optimizers metrics
-struct OptimizersTotalTime {
+struct MetricOptimizersTotalTime {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "optimizers.total_time";
 	static constexpr const char *Description = "Time spent in all optimizers combined";
@@ -223,7 +223,7 @@ struct OptimizersTotalTime {
 };
 
 // Parsers metrics
-struct ParsersTotalTime {
+struct MetricParsersTotalTime {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "parsers.total_time";
 	static constexpr const char *Description = "Time spent parsing the SQL query";
@@ -232,14 +232,14 @@ struct ParsersTotalTime {
 };
 
 // Planner metrics
-struct PlannerBindingTime {
+struct MetricPlannerBindingTime {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "planner.binding_time";
 	static constexpr const char *Description = "Time spent binding the logical plan";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct PlannerTotalTime {
+struct MetricPlannerTotalTime {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "planner.total_time";
 	static constexpr const char *Description = "Time spent generating the logical plan";
@@ -248,28 +248,28 @@ struct PlannerTotalTime {
 };
 
 // Physical Planner metrics
-struct PhysicalPlannerColumnBinding {
+struct MetricPhysicalPlannerColumnBinding {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "physical_planner.column_binding";
 	static constexpr const char *Description = "Time spent binding the columns in the logical plan to physical columns";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct PhysicalPlannerCreatePlan {
+struct MetricPhysicalPlannerCreatePlan {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "physical_planner.create_plan";
 	static constexpr const char *Description = "Time spent creating the physical plan";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct PhysicalPlannerResolveTypes {
+struct MetricPhysicalPlannerResolveTypes {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "physical_planner.resolve_types";
 	static constexpr const char *Description = "Time spent resolving the types in the logical plan to physical types";
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct PhysicalPlannerTotalTime {
+struct MetricPhysicalPlannerTotalTime {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "physical_planner.total_time";
 	static constexpr const char *Description = "Time spent generating the physical plan";

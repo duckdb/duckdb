@@ -12,7 +12,7 @@
 
 #include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/main/profiling_info.hpp"
+#include "duckdb/main/gathered_metrics.hpp"
 #include "duckdb/main/profiling_node.hpp"
 #include "duckdb/common/profiler.hpp"
 
@@ -103,9 +103,8 @@ public:
     	blocked_thread_time = 0;
     }
 
-    //! Write all query-level metrics into the given ProfilingInfo.
-    //! Pass a pre-merged cumulative_metrics for operator-derived fields (cpu_time, etc.); pass nullptr if unavailable.
-    void FinalizeMetrics(ProfilingInfo &info, const OperatorMetrics *cumulative_metrics);
+    //! Write all query-level metrics into the given GatheredMetrics.
+    void FinalizeMetrics(GatheredMetrics &info);
 
     void Merge(const QueryMetrics &other) {
         for (const auto &entry : other.string_timings) {
@@ -127,11 +126,6 @@ private:
 public:
 	// Declared after string_timings so it is destroyed first; its destructor writes to string_timings.
 	unique_ptr<ActiveTimer> latency_timer;
-};
-
-class ProfilingUtils {
-public:
-	static void SetMetricToDefault(profiler_metrics_t &metrics, const string &key);
 };
 
 struct ActiveTimer {

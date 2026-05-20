@@ -1,4 +1,4 @@
-#include "duckdb/main/profiling_info.hpp"
+#include "duckdb/main/gathered_metrics.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/profiling_utils.hpp"
@@ -11,47 +11,47 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
-ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings) : settings(n_settings) {
+GatheredMetrics::GatheredMetrics(const profiler_settings_t &n_settings) : settings(n_settings) {
 	ResetMetrics();
 }
 
-void ProfilingInfo::ResetMetrics() {
+void GatheredMetrics::ResetMetrics() {
 	metrics.clear();
 }
 
-bool ProfilingInfo::EnabledForCollection(const string &key) const {
+bool GatheredMetrics::MetricIsEnabled(const string &key) const {
 	return settings.find(key) != settings.end();
 }
 
-void ProfilingInfo::SetMetricValue(const string &key, Value new_value) {
-	if (!EnabledForCollection(key)) {
+void GatheredMetrics::SetMetric(const string &key, Value new_value) {
+	if (!MetricIsEnabled(key)) {
 		return;
 	}
 	metrics[key] = std::move(new_value);
 }
 
-void ProfilingInfo::SetMetricValue(const string &key, idx_t value) {
-	if (!EnabledForCollection(key)) {
+void GatheredMetrics::SetMetric(const string &key, idx_t value) {
+	if (!MetricIsEnabled(key)) {
 		return;
 	}
 	metrics[key] = Value::UBIGINT(value);
 }
 
-void ProfilingInfo::SetMetricValue(const string &key, double value) {
-	if (!EnabledForCollection(key)) {
+void GatheredMetrics::SetMetric(const string &key, double value) {
+	if (!MetricIsEnabled(key)) {
 		return;
 	}
 	metrics[key] = Value::DOUBLE(value);
 }
 
-void ProfilingInfo::SetMetricValue(const string &key, const string &value) {
-	if (!EnabledForCollection(key)) {
+void GatheredMetrics::SetMetric(const string &key, const string &value) {
+	if (!MetricIsEnabled(key)) {
 		return;
 	}
 	metrics[key] = Value(value);
 }
 
-void ProfilingInfo::WriteMetricsToLog(ClientContext &context) const {
+void GatheredMetrics::WriteMetricsToLog(ClientContext &context) const {
 	auto &logger = Logger::Get(context);
 	if (logger.ShouldLog(MetricsLogType::NAME, MetricsLogType::LEVEL)) {
 		for (const auto &metric : settings) {
@@ -65,7 +65,7 @@ void ProfilingInfo::WriteMetricsToLog(ClientContext &context) const {
 	}
 }
 
-void ProfilingInfo::MetricsToProfileResult(QueryProfileResult &result) const {
+void GatheredMetrics::MetricsToProfileResult(QueryProfileResult &result) const {
 	// Group dotted metric keys (e.g. "optimizer.join_order") into nested result objects.
 	unordered_map<string, reference<QueryProfileResult>> groups;
 
