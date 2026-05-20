@@ -57,6 +57,7 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 				}
 			}
 		}
+		return true;
 	}
 	// target type is not varchar: perform a cast
 	string error_message;
