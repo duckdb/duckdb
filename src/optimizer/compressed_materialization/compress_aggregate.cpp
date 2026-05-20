@@ -32,7 +32,7 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 	// But we can try to compress the expression directly
 	column_binding_set_t referenced_bindings;
 	vector<ColumnBinding> group_bindings(groups.size(), ColumnBinding());
-	vector<bool> needs_decompression(groups.size(), false);
+	vector<CompressedMaterializationType> materialization_types(groups.size(), CompressedMaterializationType::INVALID);
 	vector<unique_ptr<BaseStatistics>> stored_group_stats;
 	stored_group_stats.resize(groups.size());
 	for (idx_t group_idx = 0; group_idx < groups.size(); group_idx++) {
@@ -54,7 +54,7 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 		// Try to compress, if successful, replace the expression
 		auto compress_expr = GetCompressExpression(group_expr.Copy(), *group_stats[group_idx]);
 		if (compress_expr) {
-			needs_decompression[group_idx] = true;
+			materialization_types[group_idx] = compress_expr->materialization_type;
 			stored_group_stats[group_idx] = std::move(group_stats[group_idx]);
 			groups[group_idx] = std::move(compress_expr->expression);
 			group_stats[group_idx] = std::move(compress_expr->stats);
@@ -94,8 +94,8 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 		if (!aggregate.grouping_sets.empty() && group_stats[group_idx]) {
 			binding_info.stats = group_stats[group_idx]->ToUnique();
 		}
-		binding_info.needs_decompression = needs_decompression[group_idx];
-		if (needs_decompression[group_idx]) {
+		binding_info.materialization_type = materialization_types[group_idx];
+		if (materialization_types[group_idx] != CompressedMaterializationType::INVALID) {
 			// Compressed non-generically
 			auto entry = info.binding_map.emplace(bindings_out[group_idx], std::move(binding_info));
 			entry.first->second.stats = std::move(stored_group_stats[group_idx]);

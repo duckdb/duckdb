@@ -63,10 +63,22 @@ class PlanCost:
         return self.total == other.total and self.build_side == other.build_side and self.probe_side == other.probe_side
 
 
+def get_operator_name(op) -> str:
+    # Old format used 'name', new format uses 'operator_name'
+    if 'operator_name' in op:
+        return op['operator_name']
+    return op.get('name', '')
+
+
+def get_root_operator(data) -> dict:
+    # Old binary (main) uses 'children', new binary uses 'operator_info'
+    if 'operator_info' in data:
+        return data['operator_info'][0]
+    return data['children'][0]
+
+
 def is_measured_join(op) -> bool:
-    if 'name' not in op:
-        return False
-    if op['name'] != 'HASH_JOIN':
+    if get_operator_name(op) != 'HASH_JOIN':
         return False
     if 'Join Type' not in op['extra_info']:
         return False
@@ -77,8 +89,6 @@ def is_measured_join(op) -> bool:
 
 def op_inspect(op) -> PlanCost:
     cost = PlanCost()
-    if 'Query' in op:
-        cost.time = op['operator_timing']
     if is_measured_join(op):
         cost.total = op['operator_cardinality']
         if 'operator_cardinality' in op['children'][0]:
@@ -93,7 +103,7 @@ def op_inspect(op) -> PlanCost:
         cost.total += left_cost.total + right_cost.total
         return cost
 
-    for child_op in op['children']:
+    for child_op in op.get('children', []):
         cost += op_inspect(child_op)
 
     return cost
@@ -119,7 +129,8 @@ def query_plan_cost(cli, dbname, query):
         print("-------------------------")
         raise e
     with open(PROFILE_FILENAME, 'r') as file:
-        return op_inspect(json.load(file))
+        data = json.load(file)
+        return op_inspect(get_root_operator(data))
 
 
 def print_banner(text):

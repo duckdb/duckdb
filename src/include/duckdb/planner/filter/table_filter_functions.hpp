@@ -93,6 +93,8 @@ public:
 
 	void InsertOne(hash_t hash) const;
 	bool LookupOne(hash_t hash) const;
+	void Merge(const BloomFilter &other);
+	void Reset();
 
 	bool IsInitialized() const {
 		return initialized;

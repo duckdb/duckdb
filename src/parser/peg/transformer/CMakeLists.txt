@@ -32,7 +32,6 @@ add_library_unity(
   transform_export.cpp
   transform_expression.cpp
   transform_generic_copy_option.cpp
-  transform_import.cpp
   transform_insert.cpp
   transform_load.cpp
   transform_merge_into.cpp

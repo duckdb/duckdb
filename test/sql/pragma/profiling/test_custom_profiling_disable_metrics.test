@@ -22,16 +22,12 @@ PRAGMA disable_profiling;
 # Evaluate results.
 
 query I rowsort
-SELECT unnest(res) FROM (
-	SELECT current_setting('configure_profiling') AS raw_setting,
-	raw_setting.trim('{}') AS setting,
-	string_split(setting, ', ') AS res
-) ORDER BY ALL;
+SELECT unnest(current_setting('configure_profiling')) ORDER BY ALL;
 ----
-"EXTRA_INFO": "true"
-"LATENCY": "true"
-"OPERATOR_CARDINALITY": "true"
-"OPERATOR_TIMING": "true"
+EXTRA_INFO
+LATENCY
+OPERATOR_CARDINALITY
+OPERATOR_TIMING
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
@@ -50,17 +46,13 @@ statement ok
 PRAGMA configure_profiling='{"QUERY_NAME": "true", "CPU_TIME": "true", "EXTRA_INFO": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"}'
 
 query I
-SELECT unnest(res) FROM (
-	SELECT current_setting('configure_profiling') AS raw_setting,
-	raw_setting.trim('{}') AS setting,
-	string_split(setting, ', ') AS res
-) ORDER BY ALL
+SELECT unnest(current_setting('configure_profiling')) ORDER BY ALL
 ----
-"CPU_TIME": "true"
-"CUMULATIVE_CARDINALITY": "true"
-"CUMULATIVE_ROWS_SCANNED": "true"
-"EXTRA_INFO": "true"
-"QUERY_NAME": "true"
+CPU_TIME
+CUMULATIVE_CARDINALITY
+CUMULATIVE_ROWS_SCANNED
+EXTRA_INFO
+QUERY_NAME
 
 # Re-enabled profiling.
 
