@@ -289,7 +289,7 @@ static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<Func
 	ParquetOptionsSerialization serialization(parquet_data.GetParquetOptions(), bind_data.file_options);
 	serializer.WriteProperty(103, "parquet_options", serialization);
 	// previously serialization version 3
-	if (serializer.ShouldSerialize(StorageVersion::V1_1_0)) {
+	if (serializer.ShouldSerialize(StorageVersion::V1_2_0)) {
 		serializer.WriteProperty(104, "table_columns", bind_data.table_columns);
 	}
 }
