@@ -232,7 +232,7 @@ static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("confi
                                                      DUCKDB_SETTING_ALIAS("profiling_output", 135),
                                                      DUCKDB_SETTING_ALIAS("user", 151),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 26),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 150),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 149),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
