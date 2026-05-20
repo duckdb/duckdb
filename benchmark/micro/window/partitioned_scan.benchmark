@@ -1,0 +1,31 @@
+# name: benchmark/micro/join/fnord.benchmark
+# description: Window with partitioned scan
+# group: [join]
+
+name WindowBatching
+group micro
+subgroup join
+
+require parquet
+
+argument n 100_000_000
+argument p1 7
+argument p2 11
+
+load
+create or replace table partitioned_tbl2 as
+	select 
+		i % ${p1} AS partition1, 
+		i % ${p2} AS partition2, 
+		i col1, 
+		i + 1 col2 
+	from range(${n}) as tbl(i);
+COPY partitioned_tbl2 TO '${BENCHMARK_DIR}/partition_group_by_multiple' (FORMAT parquet, PARTITION_BY (partition1, partition2), OVERWRITE);
+DROP TABLE partitioned_tbl2;
+CREATE VIEW partitioned_tbl2 AS FROM '${BENCHMARK_DIR}/partition_group_by_multiple/**/*.parquet';
+
+run
+SELECT partition1, partition2, LAG(col1) OVER w AS prev
+FROM partitioned_tbl2
+WINDOW w AS (PARTITION BY partition1, partition2 ORDER BY col1)
+QUALIFY (col1 - prev) <> ${p1} * ${p2}
