@@ -88,11 +88,7 @@ void Allocator::ThreadFlush(bool allocator_background_threads, idx_t threshold, 
 		// Flush thread-local cache
 		SetJemallocCTL("thread.tcache.flush");
 
-		// Flush this thread's arena
-		const auto purge_arena = PurgeArenaString(idx_t(GetJemallocCTL<unsigned>("thread.arena")));
-		SetJemallocCTL(purge_arena.c_str());
-
-		// Reset the peak after resetting
+		// Reset the peak after flushing
 		SetJemallocCTL("thread.peak.reset");
 	}
 }
