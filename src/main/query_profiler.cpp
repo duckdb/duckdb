@@ -296,6 +296,20 @@ void QueryProfiler::AddToMetricCounter(const string &key, const idx_t amount) {
 	}
 }
 
+void QueryProfiler::SetMetric(const string &key, Value new_value) {
+	if (!IsEnabled()) {
+		return;
+	}
+	metrics->SetMetric(key, std::move(new_value));
+}
+
+bool QueryProfiler::MetricIsTracked(const string &key) const {
+	if (!IsEnabled()) {
+		return false;
+	}
+	return metrics->MetricIsTracked(key);
+}
+
 idx_t QueryProfiler::GetBytesRead() const {
 	return query_metrics.GetBytesRead();
 }

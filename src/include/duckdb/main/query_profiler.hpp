@@ -104,6 +104,12 @@ public:
 	//! Add to a metric counter (profiling-only).
 	DUCKDB_API void AddToMetricCounter(const string &key, idx_t amount);
 
+	//! Set an arbitrary metric value (profiling-only; no-op when profiling is disabled).
+	DUCKDB_API void SetMetric(const string &key, Value new_value);
+	//! Returns true if the given metric is currently being tracked.
+	//! Always returns false when profiling is disabled.
+	DUCKDB_API bool MetricIsTracked(const string &key) const;
+
 	//! Start a timer for a metric identified by its struct type.
 	template <class METRIC>
 	MetricsTimer StartTimer() {

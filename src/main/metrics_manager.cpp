@@ -82,15 +82,17 @@ MetricsManager &MetricsManager::Get(DatabaseInstance &db) {
 }
 
 idx_t MetricsManager::GetMetricCount() const {
+	lock_guard<mutex> guard(registered_metrics_lock);
 	idx_t count = sizeof(internal_metrics) / sizeof(MetricDescriptor) - 1;
 	count += static_cast<idx_t>(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN) -
 	         static_cast<idx_t>(OptimizerType::EXPRESSION_REWRITER) + 1;
+	count += registered_metrics.size();
 	return count;
 }
 
-vector<MetricsManager::MetricInfo> MetricsManager::GetAllMetrics() const {
+vector<MetricInfo> MetricsManager::GetAllMetrics() const {
+	lock_guard<mutex> guard(registered_metrics_lock);
 	vector<MetricInfo> result;
-	result.reserve(GetMetricCount());
 	for (idx_t i = 0; internal_metrics[i].name; i++) {
 		MetricInfo info;
 		info.name = internal_metrics[i].name;
@@ -111,7 +113,21 @@ vector<MetricsManager::MetricInfo> MetricsManager::GetAllMetrics() const {
 		info.unit = "seconds";
 		result.push_back(std::move(info));
 	}
+	// Extension-registered metrics.
+	for (const auto &m : registered_metrics) {
+		result.push_back(m);
+	}
 	return result;
+}
+
+void MetricsManager::RegisterMetric(MetricInfo info) {
+	lock_guard<mutex> guard(registered_metrics_lock);
+	for (const auto &existing : registered_metrics) {
+		if (existing.name == info.name) {
+			return; // silently ignore duplicate
+		}
+	}
+	registered_metrics.push_back(std::move(info));
 }
 
 } // namespace duckdb

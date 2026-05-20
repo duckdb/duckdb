@@ -8,7 +8,7 @@ struct DuckDBMetricsData : public GlobalTableFunctionState {
 	DuckDBMetricsData() : offset(0) {
 	}
 
-	vector<MetricsManager::MetricInfo> metrics;
+	vector<MetricInfo> metrics;
 	idx_t offset;
 };
 
