@@ -597,15 +597,14 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const GatheredMetrics &info, id
 	pair<string, double> parser_head;
 	pair<string, double> physical_planner_head;
 
+
+
 	for (const auto &entry : info.GetMetrics()) {
 		const auto &metric = entry.first;
-		if (MetricsUtils::IsOptimizerMetricKey(metric)) {
+		if (StringUtil::StartsWith(metric, "optimizer.")) {
 			// "optimizer.expression_rewriter" -> display as "expression_rewriter"
 			optimizer_timings[metric.substr(10)] = entry.second.GetValue<double>();
-		} else if (MetricsUtils::IsStorageMetricKey(metric)) {
-			// storage metrics are not phase timings; skip them here
-			continue;
-		} else if (MetricsUtils::IsPhysicalPlannerMetricKey(metric)) {
+		} else if (StringUtil::StartsWith(metric, "physical_planner.")) {
 			// "physical_planner.total_time" -> head; others -> sub-timings
 			if (metric == "physical_planner.total_time") {
 				physical_planner_head = {"Physical Planner", entry.second.GetValue<double>()};
