@@ -153,6 +153,9 @@ struct RLECompressState : public StandardCompressionState {
 		auto data = UnifiedVectorFormat::GetData<T>(vdata);
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
+			if (WRITE_STATISTICS && !vdata.validity.RowIsValid(idx)) {
+				stats_writer.SetHasNull();
+			}
 			state.template Update<RLECompressState<T, WRITE_STATISTICS>::RLEWriter>(data, vdata.validity, idx);
 		}
 	}
