@@ -157,7 +157,7 @@ public:
 	idx_t blocks = 0;
 	//! The partition boundary mask
 	ValidityMask partition_mask;
-	//! The order boundary mask
+	//! The order boundary mask (maps sort column END to mask)
 	OrderMasks order_masks;
 	//! The fully materialised data collection
 	unique_ptr<WindowCollection> collection;
@@ -213,6 +213,7 @@ public:
 	//! The partitioned sunk data
 	unique_ptr<SortStrategy> sort_strategy;
 	//! The partitioned sunk data. With partitioning there may be more than one
+	mutex lock;
 	vector<GlobalStatePtr> strategy_sinks;
 	//! The number of sunk rows (for progress)
 	atomic<idx_t> count;
@@ -228,8 +229,9 @@ public:
 	void Reset(ClientContext &context) override {
 		// The sort strategy, executors, and shared expression layout are iteration-invariant. Only the
 		// sort sink holds per-iteration materialized data, so replace that while preserving the setup.
+		lock_guard<mutex> sinks_guard(lock);
 		strategy_sinks.clear();
-		if (op.partitions.empty()) {
+		if (!op.partition_info.RequiresPartitionColumns()) {
 			strategy_sinks.emplace_back(sort_strategy->GetGlobalSinkState(context));
 		}
 		count = 0;
@@ -284,7 +286,7 @@ PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> 
                                vector<column_t> partitions)
     : PhysicalOperator(physical_plan, TYPE, std::move(types), estimated_cardinality),
       select_list(std::move(select_list_p)), order_idx(0), is_order_dependent(false),
-      partitions(std::move(partitions)) {
+      partition_info(std::move(partitions)) {
 	idx_t max_orders = 0;
 	for (idx_t i = 0; i < select_list.size(); ++i) {
 		auto &expr = select_list[i];
@@ -331,7 +333,7 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 		executors.emplace_back(std::move(wexec));
 	}
 
-	if (op.partitions.empty()) {
+	if (!op.partition_info.RequiresPartitionColumns()) {
 		sort_strategy = SortStrategy::Factory(client, wexpr.partitions, wexpr.orders, op.children[0].get().GetTypes(),
 		                                      wexpr.partitions_stats, op.estimated_cardinality);
 		strategy_sinks.emplace_back(sort_strategy->GetGlobalSinkState(client));
@@ -348,15 +350,15 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 // Sink
 //===--------------------------------------------------------------------===//
 OperatorPartitionInfo PhysicalWindow::RequiredPartitionInfo() const {
-	if (partitions.empty()) {
+	if (!partition_info.RequiresPartitionColumns()) {
 		return PhysicalOperator::RequiredPartitionInfo();
 	}
 
-	return OperatorPartitionInfo::PartitionColumns(partitions);
+	return partition_info;
 }
 
 SinkNextBatchType PhysicalWindow::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &batch) const {
-	if (partitions.empty()) {
+	if (!partition_info.RequiresPartitionColumns()) {
 		return PhysicalOperator::NextBatch(context, batch);
 	}
 
@@ -374,7 +376,7 @@ SinkResultType PhysicalWindow::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &lstate = sink.local_state.Cast<WindowLocalSinkState>();
 	gstate.count += chunk.size();
 
-	if (!partitions.empty()) {
+	if (partition_info.RequiresPartitionColumns()) {
 		//	Sink into the current partition
 		auto &partition_global = *lstate.partition_globals.back();
 		auto &partition_local = *lstate.partition_locals.back();
@@ -390,7 +392,7 @@ SinkCombineResultType PhysicalWindow::Combine(ExecutionContext &context, Operato
 	auto &gstate = combine.global_state.Cast<WindowGlobalSinkState>();
 	auto &lstate = combine.local_state.Cast<WindowLocalSinkState>();
 
-	if (!partitions.empty()) {
+	if (partition_info.RequiresPartitionColumns()) {
 		//	Combine all the partitions
 		SinkCombineResultType result = SinkCombineResultType::FINISHED;
 		for (idx_t i = 0; i < lstate.partition_globals.size(); ++i) {
@@ -398,6 +400,7 @@ SinkCombineResultType PhysicalWindow::Combine(ExecutionContext &context, Operato
 			auto &partition_local = lstate.partition_locals[i];
 			OperatorSinkCombineInput hcombine {*partition_global, *partition_local, combine.interrupt_state};
 			result = gstate.sort_strategy->Combine(context, hcombine);
+			lock_guard<mutex> sinks_guard(gstate.lock);
 			gstate.strategy_sinks.emplace_back(std::move(partition_global));
 		}
 		return result;
@@ -408,7 +411,7 @@ SinkCombineResultType PhysicalWindow::Combine(ExecutionContext &context, Operato
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) const {
-	if (!partitions.empty()) {
+	if (partition_info.RequiresPartitionColumns()) {
 		return make_uniq<WindowLocalSinkState>(context);
 	}
 
@@ -425,6 +428,7 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 	auto &gsink = input.global_state.Cast<WindowGlobalSinkState>();
 	auto &sort_strategy = *gsink.sort_strategy;
 	SinkFinalizeType result = SinkFinalizeType::READY;
+	lock_guard<mutex> sinks_guard(gsink.lock);
 	for (auto &strategy_sink : gsink.strategy_sinks) {
 		OperatorSinkFinalizeInput hfinalize {*strategy_sink, input.interrupt_state};
 		result = sort_strategy.Finalize(client, hfinalize);
@@ -436,8 +440,13 @@ ProgressData PhysicalWindow::GetSinkProgress(ClientContext &context, GlobalSinkS
                                              const ProgressData source_progress) const {
 	auto &gsink = gstate.Cast<WindowGlobalSinkState>();
 	auto progress = source_progress;
+	lock_guard<mutex> sinks_guard(gsink.lock);
 	for (auto &strategy_sink : gsink.strategy_sinks) {
-		progress.Add(gsink.sort_strategy->GetSinkProgress(context, *strategy_sink, source_progress));
+		ProgressData delta;
+		if (strategy_sink) {
+			delta = gsink.sort_strategy->GetSinkProgress(context, *strategy_sink, progress);
+		}
+		progress.Add(delta);
 	}
 	return progress;
 }
@@ -626,7 +635,9 @@ void WindowHashGroup::AllocateMasks() {
 	const auto &executors = gsink.executors;
 	for (auto &wexec : executors) {
 		auto &wexpr = wexec->wexpr;
-		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
+
+		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : wexpr.partitions.size();
+		auto &order_mask = order_masks[order_begin + wexpr.orders.size()];
 		if (order_mask.IsMaskSet()) {
 			continue;
 		}
@@ -661,13 +672,12 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 
 	//	If we are not sorting, then only the partition boundaries are needed.
 	const auto &wexpr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
-	auto &partitions = wexpr.partitions;
-	if (partitions.empty() && wexpr.orders.empty()) {
-		return;
-	}
 
 	//	Set up the partition compare structs
-	const auto key_count = partitions.size();
+	const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : wexpr.partitions.size();
+	if (!order_begin && wexpr.orders.empty()) {
+		return;
+	}
 
 	//	Set up the order data structures
 	auto &collection = *rows;
@@ -675,15 +685,15 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 	WindowCollectionChunkScanner scanner(collection, scan_cols, block_begin);
 	unordered_map<idx_t, DataChunk> prefixes;
 	for (auto &order_mask : order_masks) {
-		D_ASSERT(order_mask.first >= key_count);
-		auto order_type = scanner.PrefixStructType(order_mask.first, key_count);
+		D_ASSERT(order_mask.first >= order_begin);
+		auto order_type = scanner.PrefixStructType(order_mask.first, order_begin);
 		vector<LogicalType> types(2, order_type);
 		auto &keys = prefixes[order_mask.first];
 		// We can't use InitializeEmpty here because it doesn't set up all of the STRUCT internals...
 		keys.Initialize(collection.GetAllocator(), types);
 	}
 
-	WindowDeltaScanner(collection, block_begin, block_end, scan_cols, key_count,
+	WindowDeltaScanner(collection, block_begin, block_end, scan_cols, order_begin,
 	                   [&](const idx_t row_idx, DataChunk &prev, DataChunk &curr, const idx_t ndistinct,
 	                       SelectionVector &distinct, const SelectionVector &matching) {
 		                   //	Process the partition boundaries
@@ -705,15 +715,15 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 		                   for (auto &order_mask : order_masks) {
 			                   // If there are no order columns, then all the partition elements are peers and we are
 			                   // done
-			                   if (partitions.size() == order_mask.first) {
+			                   if (order_begin == order_mask.first) {
 				                   continue;
 			                   }
 			                   auto &prefix = prefixes[order_mask.first];
 			                   prefix.Reset();
 			                   auto &order_prev = prefix.data[0];
 			                   auto &order_curr = prefix.data[1];
-			                   scanner.ReferenceStructColumns(prev, order_prev, order_mask.first, partitions.size());
-			                   scanner.ReferenceStructColumns(curr, order_curr, order_mask.first, partitions.size());
+			                   scanner.ReferenceStructColumns(prev, order_prev, order_mask.first, order_begin);
+			                   scanner.ReferenceStructColumns(curr, order_curr, order_mask.first, order_begin);
 			                   if (ndistinct) {
 				                   prefix.Slice(matching, nmatch);
 			                   } else {
@@ -863,7 +873,8 @@ WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::GetGlobalStates(ClientCo
 	// These can be large so we defer building them until we are ready.
 	for (auto &wexec : executors) {
 		auto &wexpr = wexec->wexpr;
-		auto &order_mask = order_masks[wexpr.partitions.size() + wexpr.orders.size()];
+		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : wexpr.partitions.size();
+		auto &order_mask = order_masks[order_begin + wexpr.orders.size()];
 		gestates.emplace_back(wexec->GetGlobalState(client, count, partition_mask, order_mask));
 	}
 

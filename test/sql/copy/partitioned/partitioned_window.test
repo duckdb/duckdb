@@ -1,0 +1,59 @@
+# name: test/sql/copy/partitioned/partitioned_window.test
+# description: Test partitioned windowing
+# group: [partitioned]
+
+require no_vector_verification # query plans are not robust against VERIFY_VECTOR operator
+
+require parquet
+
+statement ok
+CREATE TABLE partitioned_tbl AS 
+	SELECT 
+		i%2 AS partition, 
+		i col1, 
+		i // 7 col2, 
+		(i%3)::VARCHAR col3 
+	FROM range(10000) t(i)
+
+statement ok
+COPY partitioned_tbl TO '{TEST_DIR}/partition_window' (FORMAT parquet, PARTITION_BY (partition))
+
+statement ok
+DROP TABLE partitioned_tbl
+
+statement ok
+CREATE VIEW partitioned_tbl AS FROM '{TEST_DIR}/partition_window/**/*.parquet'
+
+# partition on a single column
+query II
+SELECT partition, LAG(col1) OVER w AS prev
+FROM partitioned_tbl
+WINDOW w AS (PARTITION BY partition ORDER BY col1)
+QUALIFY (col1 - prev) <> 2
+----
+
+# partition on multiple columns
+statement ok
+CREATE TABLE partitioned_tbl2 AS 
+	SELECT 
+		i%2 AS partition1, 
+		i%3 AS partition2, 
+		i col1, 
+		i + 1 col2 
+	FROM range(10000) t(i)
+
+statement ok
+COPY partitioned_tbl2 TO '{TEST_DIR}/partition_group_by_multiple' (FORMAT parquet, PARTITION_BY (partition1, partition2))
+
+statement ok
+DROP TABLE partitioned_tbl2
+
+statement ok
+CREATE VIEW partitioned_tbl2 AS FROM '{TEST_DIR}/partition_group_by_multiple/**/*.parquet'
+
+query III
+SELECT partition1, partition2, LAG(col1) OVER w AS prev
+FROM partitioned_tbl2
+WINDOW w AS (PARTITION BY partition1, partition2 ORDER BY col1)
+QUALIFY (col1 - prev) <> 6
+----

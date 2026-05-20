@@ -32,8 +32,8 @@ public:
 	//! Whether or not the window is order dependent (only true if ANY window function contains neither an order nor a
 	//! partition clause)
 	bool is_order_dependent;
-	//! The partitions over which this is grouped
-	vector<column_t> partitions;
+	//! The partitions over which this is grouped (if any)
+	OperatorPartitionInfo partition_info;
 
 public:
 	// Source interface
