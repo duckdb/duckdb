@@ -58,7 +58,6 @@ ReservedFunctionName <- Identifier
 TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier
-TriggerName <- Identifier
 CollationName <- Identifier
 CopyOptionName <- ColLabel
 
@@ -1647,6 +1646,7 @@ CommentValue <- NullLiteral / StringLiteral
 CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody
 
 TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
+TriggerName <- Identifier
 
 TriggerTiming <- TriggerBefore / TriggerAfter / TriggerInsteadOf
 TriggerBefore <- 'BEFORE'

@@ -355,20 +355,6 @@ void PEGTransformerFactory::RegisterCreateType() {
 	REGISTER_TRANSFORM(TransformEnumStringLiteralList);
 }
 
-void PEGTransformerFactory::RegisterCreateTrigger() {
-	REGISTER_TRANSFORM(TransformCreateTriggerStmt);
-	REGISTER_TRANSFORM(TransformForEachClause);
-	REGISTER_TRANSFORM(TransformTriggerName);
-	REGISTER_TRANSFORM(TransformTriggerTiming);
-	REGISTER_TRANSFORM(TransformTriggerEvent);
-	REGISTER_TRANSFORM(TransformTriggerEventInsert);
-	REGISTER_TRANSFORM(TransformTriggerEventDelete);
-	REGISTER_TRANSFORM(TransformTriggerEventUpdate);
-	REGISTER_TRANSFORM(TransformTriggerEventUpdateOf);
-	REGISTER_TRANSFORM(TransformTriggerColumnList);
-	REGISTER_TRANSFORM(TransformTriggerBody);
-}
-
 void PEGTransformerFactory::RegisterDelete() {
 	// delete.gram
 	REGISTER_TRANSFORM(TransformDeleteStatement);
@@ -878,11 +864,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<SecretPersistType>("Persistent", SecretPersistType::PERSISTENT);
 
 	RegisterEnum<CatalogType>("MaterializedViewEntry", CatalogType::VIEW_ENTRY);
-	RegisterEnum<TriggerTiming>("TriggerBefore", TriggerTiming::BEFORE);
-	RegisterEnum<TriggerTiming>("TriggerAfter", TriggerTiming::AFTER);
-	RegisterEnum<TriggerTiming>("TriggerInsteadOf", TriggerTiming::INSTEAD_OF);
-	RegisterEnum<TriggerForEach>("ForEachRow", TriggerForEach::ROW);
-	RegisterEnum<TriggerForEach>("ForEachStatement", TriggerForEach::STATEMENT);
 
 	RegisterEnum<string>("MinValue", "minvalue");
 	RegisterEnum<string>("MaxValue", "maxvalue");
@@ -971,7 +952,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCreateSequence();
 	RegisterCreateTable();
 	RegisterCreateType();
-	RegisterCreateTrigger();
 	RegisterDelete();
 	RegisterDescribe();
 	RegisterDrop();

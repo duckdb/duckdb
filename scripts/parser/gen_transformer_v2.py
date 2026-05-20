@@ -1075,7 +1075,7 @@ def main():
         'create_secret.gram',
         # 'create_sequence.gram',
         # 'create_table.gram',
-        # 'create_trigger.gram',
+        'create_trigger.gram',
         # 'create_type.gram',
         'create_view.gram',
         'deallocate.gram',

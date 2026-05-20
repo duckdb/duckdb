@@ -949,6 +949,20 @@ Value:
     - TrueLiteral
     - FalseLiteral
 
+TriggerTiming:
+  type: "TriggerTiming"
+  by_value: false
+  rules:
+    - TriggerBefore
+    - TriggerAfter
+    - TriggerInsteadOf
+
+TriggerForEach:
+  type: "TriggerForEach"
+  by_value: false
+  rules:
+    - ForEachRow
+    - ForEachStatement
 
 # ---------------------------------------------------------------------------
 # Overrides: rules with unique or complex return types that don't share a
@@ -1119,8 +1133,6 @@ excluded_rules:
   - DefArg
   - NoneLiteral
   - RowOrStruct
-  - ForEachRow
-  - ForEachStatement
   - SetData
   - CTEBodyContent
   - SingleArrowPair
