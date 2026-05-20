@@ -1719,12 +1719,8 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
 void RowGroup::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index,
-                                    vector<ColumnSegmentInfo> &result, ColumnSegmentInfoScanType scan_type) {
+                                    vector<ColumnSegmentInfo> &result) {
 	for (idx_t col_idx = 0; col_idx < GetColumnCount(); col_idx++) {
-		if (scan_type == ColumnSegmentInfoScanType::ONLY_LOADED_SEGMENTS && !ColumnIsLoaded(col_idx)) {
-			// column is not loaded - skip it
-			continue;
-		}
 		auto &col_data = GetColumn(col_idx);
 		col_data.GetColumnSegmentInfo(context, row_group_index, {col_idx}, result);
 	}

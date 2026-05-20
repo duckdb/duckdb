@@ -1928,14 +1928,13 @@ vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 //===--------------------------------------------------------------------===//
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
-vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(const QueryContext &context,
-                                                                   ColumnSegmentInfoScanType scan_type) const {
+vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(const QueryContext &context) const {
 	vector<ColumnSegmentInfo> result;
 	auto row_groups = GetRowGroups();
 	auto lock = row_groups->Lock();
 	for (auto &node : row_groups->SegmentNodes(lock)) {
 		auto &row_group = node.GetNode();
-		row_group.GetColumnSegmentInfo(context, node.GetIndex(), result, scan_type);
+		row_group.GetColumnSegmentInfo(context, node.GetIndex(), result);
 	}
 	return result;
 }

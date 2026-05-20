@@ -18,21 +18,6 @@ FROM range(200000) t(i);
 # first checkpoint
 restart
 
-# verify no columns are loaded after restart (all lazy)
-query I
-SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', scan_type='only_loaded_segments')
-----
-0
-
-# checkpoint again without any changes
-restart
-
-# verify still no columns are loaded after a second restart
-query I
-SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', scan_type='only_loaded_segments')
-----
-0
-
 # verify data is correct
 query II
 SELECT COUNT(*), SUM(c0) FROM tbl
@@ -49,23 +34,12 @@ CREATE TABLE other_tbl AS SELECT i AS x FROM range(1000) t(i);
 statement ok
 CHECKPOINT
 
-# verify tbl still has no columns loaded
-query I
-SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', scan_type='only_loaded_segments')
-----
-0
-
 # modify the other table and checkpoint again
 statement ok
 INSERT INTO other_tbl SELECT i FROM range(1000, 2000) t(i);
 
 statement ok
 CHECKPOINT
-
-query I
-SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', scan_type='only_loaded_segments')
-----
-0
 
 # verify data on both tables is correct
 query II

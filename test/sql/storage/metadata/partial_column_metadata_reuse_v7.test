@@ -21,23 +21,12 @@ FROM range(200000) t(i);
 # first checkpoint
 restart
 
-# verify no columns are loaded after restart (all lazy)
-query I
-SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('wide_tbl', scan_type='only_loaded_segments')
-----
-0
-
 # --- ADD COLUMN: should only load the new column ---
 statement ok
 ALTER TABLE wide_tbl ADD COLUMN c20 INTEGER DEFAULT 42
 
 statement ok
 CHECKPOINT
-
-query I
-SELECT DISTINCT column_name FROM pragma_storage_info('wide_tbl', scan_type='only_loaded_segments')
-----
-c20
 
 # verify data
 query III
@@ -61,11 +50,6 @@ ALTER TABLE wide_tbl DROP COLUMN c10
 statement ok
 CHECKPOINT
 
-query I
-SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('wide_tbl', scan_type='only_loaded_segments')
-----
-0
-
 query III
 SELECT COUNT(*), SUM(c0), SUM(c20) FROM wide_tbl
 ----
@@ -76,11 +60,6 @@ restart
 # --- UPDATE single column: should only load that column ---
 statement ok
 UPDATE wide_tbl SET c0 = c0 + 1 WHERE c0 < 100
-
-query I
-SELECT DISTINCT column_name FROM pragma_storage_info('wide_tbl', scan_type='only_loaded_segments')
-----
-c0
 
 query II
 SELECT COUNT(*), SUM(c0) FROM wide_tbl
