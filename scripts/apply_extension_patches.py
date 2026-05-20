@@ -31,20 +31,17 @@ def apply_patch(patch_file, current_dir):
             stderr=subprocess.PIPE,
         )
     except subprocess.CalledProcessError as e:
-        repro_args = args[:]
-        repro_args[1:1] = ["-d", current_dir]
+        args[1:1] = ["-d", current_dir]
+        command = " ".join(args)
 
-        print("Failed to apply patch")
-        print("\nCommand to reproduce locally:")
-        print(" ".join(repro_args))
-
+        print(f"Failed to apply patch, command to reproduce locally:\n{command}")
         print("\nError output:")
         print(e.stderr.decode("utf-8"))
-
         print("\nStandard output:")
         print(e.stdout.decode("utf-8"))
+        print("Exiting")
 
-        sys.exit(1)
+        raise_error("Patch application failed")
 
 
 def commit_patch(patch_name):
@@ -56,24 +53,31 @@ def ensure_clean_repo(directory):
     status = git("status", "--porcelain", capture_output=True).stdout.strip()
 
     if status:
-        print("Detected local changes - aborting patch application\n")
+        print("Detected local changes - aborting patch application")
 
         print("--------------------------------------------------")
+        print("Uncommitted changes detected:")
+        print(status)
+        print("--------------------------------------------------")
+
         print("Generate a patch file using the following command:")
         print("--------------------------------------------------")
-        print(f"(cd {os.getcwd()} && " f"git diff > {os.path.join(directory, 'fix.patch')})")
+        print(f"(cd {os.getcwd()} && git diff > {os.path.join(directory, 'fix.patch')})")
         print("--------------------------------------------------")
 
-        raise_error(
-            "Repository has uncommitted changes. " "Please commit or stash them before running patch application."
-        )
+        raise_error("Repository has uncommitted changes. " "Please commit, stash, or convert them into a patch first.")
 
 
 def ensure_patched_branch():
     existing = git("branch", "--list", PATCHED_BRANCH, capture_output=True).stdout.strip()
 
     if existing:
-        current = git("rev-parse", "--abbrev-ref", "HEAD", capture_output=True).stdout.strip()
+        current = git(
+            "rev-parse",
+            "--abbrev-ref",
+            "HEAD",
+            capture_output=True,
+        ).stdout.strip()
 
         if current == PATCHED_BRANCH:
             git("checkout", "HEAD", "--detach")
@@ -99,10 +103,17 @@ def main():
 
     for patch in patches:
         if not patch.endswith(".patch"):
-            raise_error(f'Patch file {patch} found in directory {directory} ' 'does not end in ".patch"')
+            raise_error(
+                f'Patch file {patch} found in directory {directory} does not end in ".patch" - rename the patch file'
+            )
 
     if not patches:
-        raise_error(f"\nERROR: Extension patching enabled, but no patches found in '{directory}'.")
+        error_message = (
+            f"\nERROR: Extension patching enabled, but no patches found in '{directory}'. "
+            "Please make sure APPLY_PATCHES is only enabled when there are actually patches present. "
+            "See .github/patches/extensions/README.md for more details."
+        )
+        raise_error(error_message)
 
     print(f"Applying patches in '{os.getcwd()}'")
 
