@@ -37,7 +37,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/wal_commit.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"storage.commit_local_storage_latency": "true", "storage.write_to_wal_latency": "true"}';
+SET tracked_metrics = ['storage.commit_local_storage_latency', 'storage.write_to_wal_latency'];
 
 statement ok
 SET profiling_coverage='ALL';
@@ -68,7 +68,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/wal_replay.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"storage.wal_replay_entry_count": "true", "storage.attach_replay_wal_latency": "true"}';
+SET tracked_metrics = ['storage.wal_replay_entry_count', 'storage.attach_replay_wal_latency'];
 
 statement ok
 SET profiling_coverage='ALL';

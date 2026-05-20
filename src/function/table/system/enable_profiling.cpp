@@ -52,7 +52,7 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 	}
 
 	if (!bind_data.metrics.IsNull()) {
-		ConfigureProfilingSetting::SetLocal(context, bind_data.metrics);
+		TrackedMetricsSetting::SetLocal(context, bind_data.metrics);
 	}
 }
 
@@ -83,9 +83,8 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 			break;
 		case ProfilingParameterNames::METRICS: {
 			if (named_param.second.type() != LogicalType::LIST(LogicalType::VARCHAR) &&
-			    named_param.second.type().id() != LogicalTypeId::STRUCT &&
 			    named_param.second.type() != LogicalType::VARCHAR) {
-				throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a JSON string");
+				throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a VARCHAR pattern");
 			}
 
 			bind_data->metrics = named_param.second;
@@ -100,8 +99,8 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 			throw InvalidInputException("EnableProfiling: cannot specify both metrics and positional parameters");
 		}
 		if (input.inputs[0].type() != LogicalType::LIST(LogicalType::VARCHAR) &&
-		    input.inputs[0].type().id() != LogicalTypeId::STRUCT && input.inputs[0].type() != LogicalType::VARCHAR) {
-			throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a JSON string");
+		    input.inputs[0].type() != LogicalType::VARCHAR) {
+			throw InvalidInputException("EnableProfiling: metrics must be a list of strings or a VARCHAR pattern");
 		}
 
 		bind_data->metrics = input.inputs[0];

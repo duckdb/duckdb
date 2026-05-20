@@ -34,7 +34,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/cp_noop.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"storage.checkpoint_latency": "true", "query.time": "true"}';
+SET tracked_metrics = ['storage.checkpoint_latency', 'query.time'];
 
 statement ok
 SET profiling_coverage='ALL';

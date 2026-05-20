@@ -18,7 +18,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"operator.intermediate_rows": "true", "operator.rows_scanned": "true", "query.total_intermediate_rows": "true", "query.total_rows_scanned": "true"}';
+SET tracked_metrics = ['operator.intermediate_rows', 'operator.rows_scanned', 'query.total_intermediate_rows', 'query.total_rows_scanned'];
 
 statement ok
 SELECT * FROM '{TEST_DIR}/range.parquet' order by all;

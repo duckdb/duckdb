@@ -60,8 +60,7 @@ void DuckDBMetricsFunction(ClientContext &context, TableFunctionInput &data_p, D
 }
 
 void DuckDBMetricsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("duckdb_metrics", {}, DuckDBMetricsFunction, DuckDBMetricsBind, DuckDBMetricsInit));
+	set.AddFunction(TableFunction("duckdb_metrics", {}, DuckDBMetricsFunction, DuckDBMetricsBind, DuckDBMetricsInit));
 }
 
 } // namespace duckdb

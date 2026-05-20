@@ -11,7 +11,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"operator.intermediate_rows": "true", "operator.rows_scanned": "true", "query.total_intermediate_rows": "true", "query.total_rows_scanned": "true"}';
+SET tracked_metrics = ['operator.intermediate_rows', 'operator.rows_scanned', 'query.total_intermediate_rows', 'query.total_rows_scanned'];
 
 statement ok
 CREATE TABLE integers(i INTEGER);
@@ -48,7 +48,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"query.total_intermediate_rows": "true", "query.total_rows_scanned": "true", "system.blocked_thread_time": "true"}';
+SET tracked_metrics = ['query.total_intermediate_rows', 'query.total_rows_scanned', 'system.blocked_thread_time'];
 
 statement ok
 SELECT * FROM integers i1, integers i2 WHERE i1.i = i2.i ORDER BY 1;

@@ -25,15 +25,17 @@ static bool IsPrefixPattern(const string &pattern) {
 	return true;
 }
 
-GatheredMetrics::GatheredMetrics(const profiler_settings_t &n_settings, const vector<string> &tracked_metrics)
-    : settings(n_settings) {
+GatheredMetrics::GatheredMetrics(const vector<string> &tracked_metrics) {
 	InitTrackedMetrics(tracked_metrics);
 	ResetMetrics();
 }
 
 void GatheredMetrics::InitTrackedMetrics(const vector<string> &patterns) {
 	for (const auto &pattern : patterns) {
-		if (!FileSystem::HasGlob(pattern)) {
+		if (pattern == "*") {
+			track_all = true;
+			return;
+		} else if (!FileSystem::HasGlob(pattern)) {
 			tracked_exact.insert(pattern);
 		} else if (IsPrefixPattern(pattern)) {
 			tracked_prefixes.insert(pattern.substr(0, pattern.size() - 1));
@@ -48,8 +50,7 @@ void GatheredMetrics::ResetMetrics() {
 }
 
 bool GatheredMetrics::MetricIsEnabled(const string &key) const {
-	// Exact match from profiler_settings
-	if (settings.find(key) != settings.end()) {
+	if (track_all) {
 		return true;
 	}
 	// Exact match from tracked_metrics
@@ -107,13 +108,9 @@ void GatheredMetrics::SetMetric(const string &key, const string &value) {
 void GatheredMetrics::WriteMetricsToLog(ClientContext &context) const {
 	auto &logger = Logger::Get(context);
 	if (logger.ShouldLog(MetricsLogType::NAME, MetricsLogType::LEVEL)) {
-		for (const auto &metric : settings) {
-			auto entry = metrics.find(metric);
-			if (entry == metrics.end()) {
-				continue; // Metric was not recorded this query
-			}
+		for (const auto &entry : metrics) {
 			logger.WriteLog(MetricsLogType::NAME, MetricsLogType::LEVEL,
-			                MetricsLogType::ConstructLogMessage(metric, entry->second));
+			                MetricsLogType::ConstructLogMessage(entry.first, entry.second));
 		}
 	}
 }
@@ -123,9 +120,6 @@ void GatheredMetrics::MetricsToProfileResult(QueryProfileResult &result) const {
 	unordered_map<string, reference<QueryProfileResult>> groups;
 
 	for (auto &entry : metrics) {
-		if (settings.find(entry.first) == settings.end()) {
-			continue;
-		}
 		auto dot_pos = entry.first.find('.');
 		if (dot_pos != string::npos) {
 			auto prefix = entry.first.substr(0, dot_pos);

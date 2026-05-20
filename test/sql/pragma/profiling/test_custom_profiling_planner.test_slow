@@ -11,7 +11,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"planner.total_time": "true", "physical_planner.total_time": "true"}';
+SET tracked_metrics = ['planner.total_time', 'physical_planner.total_time'];
 
 loop i 0 8
 
@@ -36,7 +36,7 @@ statement ok
 PRAGMA disable_profiling;
 
 query I rowsort
-SELECT unnest(current_setting('custom_profiling_settings'))
+SELECT unnest(current_setting('tracked_metrics'))
 ----
 physical_planner.total_time
 planner.total_time

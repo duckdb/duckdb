@@ -135,7 +135,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/wal_replay.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"storage.wal_replay_entry_count": "true"}';
+SET tracked_metrics = ['storage.wal_replay_entry_count'];
 
 statement ok
 SET profiling_coverage='ALL';

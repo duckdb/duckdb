@@ -11,7 +11,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"operator.intermediate_size_bytes": "true", "operator.intermediate_rows": "true"}'
+SET tracked_metrics = ['operator.intermediate_size_bytes', 'operator.intermediate_rows'];
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();

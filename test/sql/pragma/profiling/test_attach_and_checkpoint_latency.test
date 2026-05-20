@@ -38,7 +38,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profile_fs.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"storage.waiting_to_attach_latency": "true", "storage.attach_load_storage_latency": "true", "storage.attach_replay_wal_latency": "true", "storage.checkpoint_latency": "true"}';
+SET tracked_metrics = ['storage.waiting_to_attach_latency', 'storage.attach_load_storage_latency', 'storage.attach_replay_wal_latency', 'storage.checkpoint_latency'];
 
 statement ok
 SET profiling_coverage='ALL';

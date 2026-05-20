@@ -1,25 +1,37 @@
 # name: test/sql/pragma/profiling/test_custom_profiling_errors.test
-# description: Test different errors for custom_profiling_settings.
+# description: Test that custom_profiling_settings is deprecated and errors on use.
 # group: [profiling]
 
 require json
 
 statement error
-PRAGMA custom_profiling_settings='}}}}}}'
+PRAGMA custom_profiling_settings='}}}}}}';
 ----
-<REGEX>:IO Error.*Could not parse the custom profiler settings file due to incorrect JSON: "}}}}}}".*
+<REGEX>:Invalid Input Error.*deprecated.*tracked_metrics.*
 
 statement error
-PRAGMA custom_profiling_settings=BONJOUR
+PRAGMA custom_profiling_settings=BONJOUR;
 ----
-<REGEX>:IO Error.*Could not parse the custom profiler settings file due to incorrect JSON: "BONJOUR".*
+<REGEX>:Invalid Input Error.*deprecated.*tracked_metrics.*
 
 statement error
-PRAGMA custom_profiling_settings=[NOT_A_JSON]
+PRAGMA configure_profiling='{"INVALID_SETTING": "true"}';
 ----
-<REGEX>:Binder Error.*SET value cannot contain column names.*
+<REGEX>:Invalid Input Error.*deprecated.*tracked_metrics.*
 
 statement error
-PRAGMA custom_profiling_settings='{"INVALID_SETTING": "true"}'
+SET configure_metrics = 'hello';
 ----
-<REGEX>:IO Error.*Invalid custom profiler settings: "INVALID_SETTING".*
+<REGEX>:Invalid Input Error.*deprecated.*tracked_metrics.*
+
+# Verify tracked_metrics is the new way
+statement ok
+SET tracked_metrics = '*';
+
+query I
+SELECT unnest(current_setting('tracked_metrics'));
+----
+*
+
+statement ok
+RESET tracked_metrics;

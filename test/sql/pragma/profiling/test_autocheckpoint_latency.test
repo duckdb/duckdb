@@ -36,7 +36,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/acp_before.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"storage.checkpoint_latency": "true", "io.total_bytes_written": "true", "storage.commit_local_storage_latency": "true", "storage.write_to_wal_latency": "true"}';
+SET tracked_metrics = ['storage.checkpoint_latency', 'io.total_bytes_written', 'storage.commit_local_storage_latency', 'storage.write_to_wal_latency'];
 
 statement ok
 SET profiling_coverage='ALL';

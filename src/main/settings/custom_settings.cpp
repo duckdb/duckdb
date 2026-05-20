@@ -537,48 +537,19 @@ void ConstructInvalidSettingsAndThrow(const vector<string> &invalid_settings) {
 }
 
 void ConfigureProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-
-	auto &db_config = DBConfig::GetConfig(context);
-	auto &disabled_optimizers = db_config.options.disabled_optimizers;
-
-	vector<string> invalid_settings;
-	profiler_settings_t enabled_metrics;
-	if (input.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
-		ExtractFromList(config, enabled_metrics, invalid_settings, input, disabled_optimizers);
-	} else if (input.type().id() == LogicalTypeId::STRUCT) {
-		ExtractFromStruct(config, enabled_metrics, invalid_settings, input, disabled_optimizers);
-	} else if (input.type() == LogicalType::VARCHAR) {
-		ExtractFromJSON(config, enabled_metrics, invalid_settings, input, disabled_optimizers);
-	} else {
-		throw ParserException("Invalid custom profiler settings type \"%s\", expected LIST(VARCHAR) or JSON",
-		                      input.type().ToString());
-	}
-
-	if (!invalid_settings.empty()) {
-		ConstructInvalidSettingsAndThrow(invalid_settings);
-	}
-
-	AddOptimizerMetrics(enabled_metrics, disabled_optimizers);
-	config.enable_profiler = true;
-	config.profiler_settings = enabled_metrics;
+	throw InvalidInputException(
+	    "configure_profiling (and its aliases configure_metrics, custom_profiling_settings) is deprecated. "
+	    "Use SET tracked_metrics = '...' instead. "
+	    "For example: SET tracked_metrics = '*' to track all metrics, "
+	    "or SET tracked_metrics = ['query.time', 'operator.*'] to track specific metrics.");
 }
 
 void ConfigureProfilingSetting::ResetLocal(ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.enable_profiler = ClientConfig().enable_profiler;
-	config.profiler_settings = MetricsUtils::GetDefaultMetrics();
+	ClientConfig::GetConfig(context).tracked_metrics = ClientConfig().tracked_metrics;
 }
 
 Value ConfigureProfilingSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-
-	set<string> enabled_settings(config.profiler_settings.begin(), config.profiler_settings.end());
-	vector<Value> children;
-	for (auto &entry : enabled_settings) {
-		children.emplace_back(entry);
-	}
-	return Value::LIST(LogicalType::VARCHAR, std::move(children));
+	return TrackedMetricsSetting::GetSetting(context);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1121,18 +1092,6 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
 	} else if (parameter == "query_tree_optimizer") {
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
-
-		// add optimizer settings to the profiler settings
-		auto optimizer_settings = MetricsUtils::GetOptimizerMetrics();
-		for (auto &setting : optimizer_settings) {
-			config.profiler_settings.insert(setting);
-		}
-
-		// add the phase timing settings to the profiler settings
-		auto phase_timing_settings = MetricsUtils::GetPhaseTimingMetrics();
-		for (auto &setting : phase_timing_settings) {
-			config.profiler_settings.insert(setting);
-		}
 	} else if (parameter == "no_output") {
 		config.profiler_print_format = ProfilerPrintFormat::NO_OUTPUT;
 		config.emit_profiler_output = false;
@@ -1152,7 +1111,6 @@ void EnableProfilingSetting::ResetLocal(ClientContext &context) {
 	config.profiler_print_format = ClientConfig().profiler_print_format;
 	config.enable_profiler = ClientConfig().enable_profiler;
 	config.emit_profiler_output = ClientConfig().emit_profiler_output;
-	config.profiler_settings = ClientConfig().profiler_settings;
 }
 
 Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
@@ -1563,34 +1521,19 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 	} else if (parameter == "detailed") {
 		config.enable_profiler = true;
 		config.enable_detailed_profiling = true;
-
-		// add optimizer settings to the profiler settings
-		auto optimizer_settings = MetricsUtils::GetOptimizerMetrics();
-		for (auto &setting : optimizer_settings) {
-			config.profiler_settings.insert(setting);
-		}
-
-		// add the phase timing settings to the profiler settings
-		auto phase_timing_settings = MetricsUtils::GetPhaseTimingMetrics();
-		for (auto &setting : phase_timing_settings) {
-			config.profiler_settings.insert(setting);
-		}
 	} else if (parameter == "all") {
 		config.enable_profiler = true;
-		auto all_metrics = MetricsUtils::GetAllMetrics();
-		for (auto &metric : all_metrics) {
-			config.profiler_settings.insert(metric);
-		}
 	} else {
-		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed]", parameter);
+		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed, all]",
+		                      parameter);
 	}
 }
 
 void ProfilingModeSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).enable_profiler = ClientConfig().enable_profiler;
-	ClientConfig::GetConfig(context).enable_detailed_profiling = ClientConfig().enable_detailed_profiling;
-	ClientConfig::GetConfig(context).emit_profiler_output = ClientConfig().emit_profiler_output;
-	ClientConfig::GetConfig(context).profiler_settings = ClientConfig().profiler_settings;
+	auto &config = ClientConfig::GetConfig(context);
+	config.enable_profiler = ClientConfig().enable_profiler;
+	config.enable_detailed_profiling = ClientConfig().enable_detailed_profiling;
+	config.emit_profiler_output = ClientConfig().emit_profiler_output;
 }
 
 Value ProfilingModeSetting::GetSetting(const ClientContext &context) {
@@ -1814,7 +1757,7 @@ void TrackedMetricsSetting::SetLocal(ClientContext &context, const Value &input)
 }
 
 void TrackedMetricsSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).tracked_metrics.clear();
+	ClientConfig::GetConfig(context).tracked_metrics = ClientConfig().tracked_metrics;
 }
 
 Value TrackedMetricsSetting::GetSetting(const ClientContext &context) {

@@ -40,8 +40,9 @@ TEST_CASE("Test query profiler, no query in the profiling output.", "[api]") {
 	// don't pollute the console with profiler info.
 	con.context->config.emit_profiler_output = false;
 
-	// Disable `QUERY_NAME` in profiling output.
-	REQUIRE_NO_FAIL(con.Query(R"(PRAGMA custom_profiling_settings = '{"query.query_name": "false"}')"));
+	// Disable `QUERY_SQL` in profiling output by only tracking other metrics.
+	REQUIRE_NO_FAIL(con.Query(
+	    "SET tracked_metrics = ['query.cpu_time', 'query.time', 'operator.timing', 'operator.name', 'operator.type']"));
 	string query = "SELECT * FROM (SELECT 42) tbl1, (SELECT 33) tbl2";
 	REQUIRE_NO_FAIL(con.Query(query));
 

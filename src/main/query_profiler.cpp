@@ -70,7 +70,6 @@ QueryProfileResult &QueryProfileResult::AppendList() {
 	return ref;
 }
 
-
 QueryProfiler::QueryProfiler(ClientContext &context_p)
     : context(context_p), running(false), query_requires_profiling(false), is_explain_analyze(false),
       metrics_finalized(false) {
@@ -133,16 +132,13 @@ bool QueryProfiler::PrintOptimizerOutput() const {
 	if (GetPrintFormat() == ProfilerPrintFormat::QUERY_TREE_OPTIMIZER || IsDetailedEnabled()) {
 		return true;
 	}
-	auto &config = ClientConfig::GetConfig(context);
-	// Check if any explicit setting targets optimizer metrics
-	for (const auto &setting : config.profiler_settings) {
-		if (MetricsUtils::IsOptimizerMetricKey(setting)) {
-			return true;
-		}
+	if (metrics) {
+		return metrics->MetricIsEnabled("optimizer.join_order");
 	}
-	// Check if any tracked_metrics pattern could match "optimizer.*" keys
+	// Fall back to checking tracked_metrics patterns directly
+	auto &config = ClientConfig::GetConfig(context);
 	for (const auto &pattern : config.tracked_metrics) {
-		if (StringUtil::StartsWith(pattern, "optimizer")) {
+		if (pattern == "*" || StringUtil::StartsWith(pattern, "optimizer")) {
 			return true;
 		}
 	}
@@ -346,7 +342,6 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 		throw InternalException("Unknown ProfilerPrintFormat \"%s\"", EnumUtil::ToString(format));
 	}
 }
-
 
 OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
 	enabled = QueryProfiler::Get(context).IsEnabled();
@@ -753,8 +748,12 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	if (info.MetricIsEnabled<MetricOperatorRowsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["rows_scanned"] = Value::UBIGINT(rows_scanned);
 	}
-	if (info.MetricIsEnabled<MetricOperatorExtraInfo>() && !extra_info.empty()) {
-		result["extra_info"] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
+	if (info.MetricIsEnabled<MetricOperatorExtraInfo>()) {
+		if (!extra_info.empty()) {
+			result["extra_info"] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
+		} else {
+			result["extra_info"] = Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, {}, {});
+		}
 	}
 	return result;
 }
@@ -989,7 +988,7 @@ void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
 		root = nullptr;
 	} else {
 		auto &client_config = ClientConfig::GetConfig(context);
-		metrics = make_uniq<GatheredMetrics>(client_config.profiler_settings, client_config.tracked_metrics);
+		metrics = make_uniq<GatheredMetrics>(client_config.tracked_metrics);
 	}
 }
 
@@ -1006,7 +1005,6 @@ void QueryProfiler::Render(const ProfilingNode &node, std::ostream &ss) const {
 void QueryProfiler::Print() {
 	Printer::Print(QueryTreeToString());
 }
-
 
 static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &result) {
 	// merge in this layer

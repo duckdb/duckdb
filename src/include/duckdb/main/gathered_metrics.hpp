@@ -32,7 +32,7 @@ enum class ProfilingParameterNames : uint8_t { FORMAT, COVERAGE, SAVE_LOCATION, 
 class GatheredMetrics {
 public:
 	GatheredMetrics() = default;
-	explicit GatheredMetrics(const profiler_settings_t &n_settings, const vector<string> &tracked_metrics = {});
+	explicit GatheredMetrics(const vector<string> &tracked_metrics);
 	GatheredMetrics(GatheredMetrics &) = default;
 	GatheredMetrics &operator=(GatheredMetrics const &) = default;
 
@@ -68,8 +68,8 @@ private:
 	void InitTrackedMetrics(const vector<string> &patterns);
 
 private:
-	//! Exact metric names enabled via profiler_settings.
-	profiler_settings_t settings;
+	//! When tracked_metrics contains "*", all metrics are enabled and pattern matching is skipped.
+	bool track_all = false;
 	//! Exact metric names from tracked_metrics globs with no wildcard characters.
 	unordered_set<string> tracked_exact;
 	//! Prefix strings from tracked_metrics patterns of the form "prefix*" (stored without the trailing '*').

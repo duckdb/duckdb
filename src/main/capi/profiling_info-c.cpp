@@ -66,7 +66,7 @@ duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const c
 			}
 			if (duckdb::StringUtil::CIEquals(child->key, prefix)) {
 				return duckdb_profiling_info_get_value(reinterpret_cast<duckdb_profiling_info>(child.get()),
-				                                      suffix.c_str());
+				                                       suffix.c_str());
 			}
 		}
 		return nullptr;

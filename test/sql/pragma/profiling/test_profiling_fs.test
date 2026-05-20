@@ -30,7 +30,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profile_fs.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"io.total_bytes_read": "true", "io.total_bytes_written": "true"}';
+SET tracked_metrics = ['io.total_bytes_read', 'io.total_bytes_written'];
 
 statement ok
 SET profiling_coverage='ALL';
@@ -68,7 +68,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profile_fs.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"io.total_bytes_read": "true", "io.total_bytes_written": "true"}';
+SET tracked_metrics = ['io.total_bytes_read', 'io.total_bytes_written'];
 
 statement ok
 ATTACH '{TEST_DIR}/profile_fs.db';

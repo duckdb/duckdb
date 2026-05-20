@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"system.peak_buffer_memory": "true", "system.peak_temp_dir_size": "true"}';
+SET tracked_metrics = ['system.peak_buffer_memory', 'system.peak_temp_dir_size'];
 
 statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
@@ -40,7 +40,7 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"system.peak_buffer_memory": "false", "system.peak_temp_dir_size": "false"}';
+SET tracked_metrics = [];
 
 statement ok
 CREATE OR REPLACE TABLE test AS SELECT hash(range) i FROM range(100_000_000);
