@@ -176,12 +176,33 @@ public:
 		SelectionVector keys_no_match_sel;
 	};
 
+	//! Mirrors GroupedAggregateHashTable::AggregateDictionaryState for the join probe path
+	struct ProbeDictionaryState {
+		ProbeDictionaryState();
+
+		//! The current dictionary vector id (if any)
+		string dictionary_id;
+		DataChunk unique_values;
+		TupleDataChunkState unique_key_state;
+		Vector hashes;
+		Vector new_dictionary_pointers;
+		SelectionVector unique_entries;
+		//! Per-slot head-of-chain pointer cache; nullptr marks a miss
+		unique_ptr<Vector> dictionary_pointers;
+		unsafe_unique_array<bool> found_entry;
+		idx_t capacity = 0;
+		SelectionVector match_sel;
+		//! Number of dict slots already resolved; the unique-entries walk is skipped once it reaches dict_size
+		idx_t resolved_count = 0;
+	};
+
 	struct ProbeState : SharedState {
 		ProbeState();
 
 		Vector ht_offsets_and_salts_v;
 		Vector hashes_dense_v;
 		SelectionVector non_empty_sel;
+		ProbeDictionaryState dict_state;
 	};
 
 	struct InsertState : SharedState {
@@ -222,6 +243,12 @@ public:
 	//! Probe the HT with the given input chunk, resulting in the given result
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
+	//! Dictionary-aware variant of Probe. Returns false if the LHS keys are not dictionary-eligible.
+	bool TryProbeDictionary(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
+	                        ProbeState &probe_state);
+	//! Constant-vector variant of Probe. Returns false if the LHS keys are not a constant vector.
+	bool TryProbeConstant(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
+	                      ProbeState &probe_state);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;
 
