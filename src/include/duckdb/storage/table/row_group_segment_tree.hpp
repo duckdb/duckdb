@@ -28,7 +28,7 @@ public:
 	}
 
 protected:
-	SegmentTree<RowGroup, true>::LoadedSegment LoadSegment() const override;
+	optional<LoadedSegment<RowGroup>> LoadSegment() const override;
 
 	RowGroupCollection &collection;
 	mutable idx_t current_row_group;

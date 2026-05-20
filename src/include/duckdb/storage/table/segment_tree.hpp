@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
 #include "duckdb/common/vector.hpp"
@@ -84,6 +84,15 @@ private:
 	idx_t index;
 };
 
+template <class T>
+struct LoadedSegment {
+	LoadedSegment(shared_ptr<T> segment_p, idx_t row_start_p) : segment(std::move(segment_p)), row_start(row_start_p) {
+	}
+
+	shared_ptr<T> segment;
+	idx_t row_start;
+};
+
 //! The SegmentTree maintains a list of all segments of a specific column in a table, and allows searching for a segment
 //! by row number
 // The const-ness of the SegmentTree is implemented in an odd manner due to the lazy loading
@@ -96,17 +105,6 @@ private:
 	class SegmentNodeIterationHelper;
 
 public:
-	struct LoadedSegment {
-		LoadedSegment() {
-		}
-		LoadedSegment(shared_ptr<T> segment_p, idx_t row_start_p)
-		    : segment(std::move(segment_p)), row_start(row_start_p) {
-		}
-
-		shared_ptr<T> segment;
-		optional_idx row_start;
-	};
-
 	explicit SegmentTree(idx_t base_row_id = 0) : finished_loading(true), base_row_id(base_row_id) {
 	}
 	virtual ~SegmentTree() {
@@ -341,8 +339,8 @@ protected:
 	mutable atomic<bool> finished_loading;
 
 	//! Load the next segment - only used when lazily loading
-	virtual LoadedSegment LoadSegment() const {
-		return LoadedSegment();
+	virtual optional<LoadedSegment<T>> LoadSegment() const {
+		return nullopt;
 	}
 
 	optional_ptr<SegmentNode<T>> GetRootSegmentInternal() const {
@@ -458,10 +456,10 @@ private:
 			return false;
 		}
 		auto result = LoadSegment();
-		if (!result.segment) {
+		if (!result) {
 			return false;
 		}
-		AppendSegmentInternal(l, std::move(result.segment), result.row_start.GetIndex());
+		AppendSegmentInternal(l, std::move(result->segment), result->row_start);
 		return true;
 	}
 

@@ -45,11 +45,11 @@ void RowGroupSegmentTree::Initialize(PersistentTableData &data, optional_ptr<vec
 	root_pointer = data.block_pointer;
 }
 
-SegmentTree<RowGroup, true>::LoadedSegment RowGroupSegmentTree::LoadSegment() const {
+optional<LoadedSegment<RowGroup>> RowGroupSegmentTree::LoadSegment() const {
 	if (current_row_group >= max_row_group) {
 		reader.reset();
 		finished_loading = true;
-		return LoadedSegment();
+		return nullopt;
 	}
 	BinaryDeserializer deserializer(*reader);
 	deserializer.Begin();
