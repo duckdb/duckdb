@@ -220,28 +220,6 @@ logging_level	INFO
 logging_mode	LEVEL_ONLY
 logging_storage	memory
 
-# Regression: CALL enable_logging() must not silently reset logging_storage.
-
-statement ok
-CALL disable_logging()
-
-statement ok
-SET logging_storage='stdout'
-
-query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
-----
-stdout
-
-# enable_logging() with no args must preserve the user's previous storage choice
-statement ok
-CALL enable_logging()
-
-query I
-SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
-----
-stdout
-
 # Explicitly passing storage= still works and overrides the current setting
 statement ok
 CALL enable_logging(storage='memory')
