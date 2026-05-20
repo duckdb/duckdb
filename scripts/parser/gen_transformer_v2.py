@@ -1079,7 +1079,7 @@ def main():
         # 'create_type.gram',
         'create_view.gram',
         'deallocate.gram',
-        # 'delete.gram',
+        'delete.gram',
         # 'describe.gram',
         'detach.gram',
         # 'drop.gram',

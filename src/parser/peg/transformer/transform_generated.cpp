@@ -397,6 +397,54 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDeallocatePrepa
 	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDeleteStatementInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	CommonTableExpressionMap with_clause {};
+	transformer.TransformOptional(list_pr, 0, with_clause);
+	auto target_opt_alias = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr, 3);
+	vector<unique_ptr<TableRef>> delete_using_clause {};
+	transformer.TransformOptional(list_pr, 4, delete_using_clause);
+	unique_ptr<ParsedExpression> where_clause {};
+	transformer.TransformOptional(list_pr, 5, where_clause);
+	vector<unique_ptr<ParsedExpression>> returning_clause {};
+	transformer.TransformOptional(list_pr, 6, returning_clause);
+	auto result =
+	    TransformDeleteStatement(transformer, std::move(with_clause), std::move(target_opt_alias),
+	                             std::move(delete_using_clause), std::move(where_clause), std::move(returning_clause));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTruncateStatementInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto base_table_name = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr, 2);
+	auto result = TransformTruncateStatement(transformer, std::move(base_table_name));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTargetOptAliasInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto base_table_name = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr, 0);
+	string col_id {};
+	transformer.TransformOptional(list_pr, 2, col_id);
+	auto result = TransformTargetOptAlias(transformer, std::move(base_table_name), col_id);
+	return make_uniq<TypedTransformResult<unique_ptr<BaseTableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDeleteUsingClauseInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<unique_ptr<TableRef>> table_ref;
+	auto table_ref_items = ExtractParseResultsFromList(list_pr.GetChild(1));
+	for (auto &table_ref_item : table_ref_items) {
+		table_ref.push_back(transformer.Transform<unique_ptr<TableRef>>(table_ref_item));
+	}
+	auto result = TransformDeleteUsingClause(transformer, std::move(table_ref));
+	return make_uniq<TypedTransformResult<vector<unique_ptr<TableRef>>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDetachStatementInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -1000,6 +1048,10 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CreateRecursive", &PEGTransformerFactory::TransformCreateRecursiveInternal},
 	    {"DeallocateStatement", &PEGTransformerFactory::TransformDeallocateStatementInternal},
 	    {"DeallocatePrepare", &PEGTransformerFactory::TransformDeallocatePrepareInternal},
+	    {"DeleteStatement", &PEGTransformerFactory::TransformDeleteStatementInternal},
+	    {"TruncateStatement", &PEGTransformerFactory::TransformTruncateStatementInternal},
+	    {"TargetOptAlias", &PEGTransformerFactory::TransformTargetOptAliasInternal},
+	    {"DeleteUsingClause", &PEGTransformerFactory::TransformDeleteUsingClauseInternal},
 	    {"DetachStatement", &PEGTransformerFactory::TransformDetachStatementInternal},
 	    {"ExecuteStatement", &PEGTransformerFactory::TransformExecuteStatementInternal},
 	    {"ExplainStatement", &PEGTransformerFactory::TransformExplainStatementInternal},

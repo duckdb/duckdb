@@ -355,14 +355,6 @@ void PEGTransformerFactory::RegisterCreateType() {
 	REGISTER_TRANSFORM(TransformEnumStringLiteralList);
 }
 
-void PEGTransformerFactory::RegisterDelete() {
-	// delete.gram
-	REGISTER_TRANSFORM(TransformDeleteStatement);
-	REGISTER_TRANSFORM(TransformTargetOptAlias);
-	REGISTER_TRANSFORM(TransformDeleteUsingClause);
-	REGISTER_TRANSFORM(TransformTruncateStatement);
-}
-
 void PEGTransformerFactory::RegisterDescribe() {
 	// describe.gram
 	REGISTER_TRANSFORM(TransformDescribeStatement);
@@ -952,7 +944,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCreateSequence();
 	RegisterCreateTable();
 	RegisterCreateType();
-	RegisterDelete();
 	RegisterDescribe();
 	RegisterDrop();
 	RegisterExpression();
