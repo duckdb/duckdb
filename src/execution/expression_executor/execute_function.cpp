@@ -102,7 +102,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 			// Offset the input dictionary
 			Vector offset_input(DictionaryVector::Child(unary_input), offset, offset + count);
 			input_chunk.data[input_col_idx.GetIndex()].Reference(offset_input);
-			input_chunk.SetCardinality(count);
+			input_chunk.SetChildCardinality(count);
 
 			// Execute, storing the result in an intermediate vector, and copying it to the output dictionary
 			Vector output_intermediate(result.GetType());

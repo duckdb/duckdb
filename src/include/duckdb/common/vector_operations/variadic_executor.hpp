@@ -213,26 +213,18 @@ private:
 
 private:
 	//-------------------------------------------------------------------
-	// Derive count from inputs: first non-constant vector's size, or first vector's size if all constant.
-	// Also checks that all non-constant vectors agree on size.
+	// Verify all inputs have the same size and return that size.
 	//-------------------------------------------------------------------
 	template <size_t N>
-	static idx_t GetCount(const std::array<VectorRef, N> &inputs) {
-		idx_t count = 0;
-		for (size_t i = 0; i < N; i++) {
-			if (inputs[i].get().GetVectorType() != VectorType::CONSTANT_VECTOR) {
-				if (count == 0) {
-					count = inputs[i].get().size();
-				} else if (inputs[i].get().size() != count) {
-					throw InternalException(
-					    "Mismatch in input vector sizes for VariadicExecutor - expected %d rows but got %d", count,
-					    inputs[i].get().size());
-				}
+	static idx_t CheckExecuteCount(const std::array<VectorRef, N> &inputs) {
+		static_assert(N > 0, "VariadicExecutor requires at least one input");
+		idx_t count = inputs[0].get().size();
+		for (size_t i = 1; i < N; i++) {
+			if (inputs[i].get().size() != count) {
+				throw InternalException(
+				    "Mismatch in input vector sizes for VariadicExecutor - expected %d rows but got %d", count,
+				    inputs[i].get().size());
 			}
-		}
-		if (count == 0 && N > 0) {
-			// All inputs are constant vectors; use the first vector's size (set to the chunk size by execute_constant)
-			count = inputs[0].get().size();
 		}
 		return count;
 	}
@@ -244,7 +236,7 @@ public:
 	template <class RESULT_TYPE, class... ARGS, class FUN>
 	static void Execute(std::array<VectorRef, sizeof...(ARGS)> inputs, Vector &result, FUN fun) {
 		constexpr size_t N = sizeof...(ARGS);
-		const idx_t count = GetCount<N>(inputs);
+		const idx_t count = CheckExecuteCount<N>(inputs);
 		ExecuteImplWithIndices<RESULT_TYPE, VariadicLambdaWrapper, FUN, ARGS...>(inputs, result, count, fun,
 		                                                                         std::index_sequence_for<ARGS...> {});
 	}
@@ -265,7 +257,7 @@ public:
 	template <class RESULT_TYPE, class OP, class... ARGS>
 	static void ExecuteStandard(std::array<VectorRef, sizeof...(ARGS)> inputs, Vector &result) {
 		constexpr size_t N = sizeof...(ARGS);
-		const idx_t count = GetCount<N>(inputs);
+		const idx_t count = CheckExecuteCount<N>(inputs);
 		bool dummy = false;
 		ExecuteImplWithIndices<RESULT_TYPE, VariadicStandardOperatorWrapper<OP>, bool, ARGS...>(
 		    inputs, result, count, dummy, std::index_sequence_for<ARGS...> {});
