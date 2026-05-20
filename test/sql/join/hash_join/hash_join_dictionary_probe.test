@@ -212,7 +212,8 @@ statement ok
 CREATE OR REPLACE TABLE fact_s (k STRUCT(a VARCHAR))
 
 statement ok
-INSERT INTO fact_s SELECT {'a': k} FROM fact WHERE k IS NOT NULL
+INSERT INTO fact_s SELECT {'a': CASE i%4 WHEN 0 THEN 'A' WHEN 1 THEN 'B' WHEN 2 THEN 'C' ELSE 'D' END}
+FROM range(5000) t(i)
 
 statement ok
 CHECKPOINT
