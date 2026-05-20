@@ -635,6 +635,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 		auto global_column_id = global_id.GetPrimaryIndex();
 		optional_ptr<MultiFileColumnDefinition> global_column_reference;
 
+		optional_ptr<const MultiFileColumnDefinition> global_column_p;
 		auto local_idx = MultiFileLocalIndex(reader.column_ids.size());
 		if (IsVirtualColumn(global_column_id)) {
 			// virtual column - look it up in the virtual column entry map
@@ -653,24 +654,18 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 			}
 			// the column is not constant for the file
 			// get the expression to evaluate the column OR the global column to read into
-			auto expr =
-			    multi_file_reader.GetVirtualColumnExpression(context, reader_data, local_columns, global_column_id,
-			                                                 virtual_column_type, local_idx, global_column_reference);
-			if ((!expr && !global_column_reference) || (expr && global_column_reference.get())) {
-				throw InternalException(R"(
-					The GetVirtualColumnExpression is expected to either:"
-					- return an expression applied in FinalizeChunk to create the value for this global column,
-					  forwarding the (potentially changed) 'global_column_id' to the reader to create the needed data for the expression.
-					- set the 'global_column_reference' to replace this virtual column with a MultiFileColumnDefinition, as if it was defined in the schema.
-					Doing neither or both is not a valid option.
-				)");
-			}
-			if (expr && expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-				// the column is constant after all - handle it
-				expressions.push_back(std::move(expr));
+			auto virtual_column_bind_result = multi_file_reader.GetVirtualColumnExpression(
+			    context, reader_data, local_columns, global_column_id, virtual_column_type, local_idx);
+			auto bind_result_type = virtual_column_bind_result.GetType();
+			switch (bind_result_type) {
+			case MultiFileReaderVirtualColumnBinding::VirtualColumnBindingType::CONSTANT: {
+				expressions.push_back(make_uniq<BoundConstantExpression>(virtual_column_bind_result.constant));
 				continue;
 			}
-			if (!global_column_reference) {
+			case MultiFileReaderVirtualColumnBinding::VirtualColumnBindingType::EXPRESSION: {
+				auto &expr = virtual_column_bind_result.expression;
+				auto &column_ids = virtual_column_bind_result.local_virtual_column_ids;
+
 				auto is_reference = expr->GetExpressionType() == ExpressionType::BOUND_REF;
 				expressions.push_back(std::move(expr));
 
@@ -679,7 +674,9 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 
 				// add the virtual column to the reader
 				reader.columns.emplace_back(virtual_entry->second.name, virtual_column_type);
-				reader.AddVirtualColumn(global_column_id);
+				for (auto &id : column_ids) {
+					reader.AddVirtualColumn(id);
+				}
 
 				// set it as being projected in this spot
 				MultiFileColumnMap index_mapping(local_idx, virtual_column_type, virtual_column_type);
@@ -691,10 +688,16 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 				reader.column_indexes.push_back(std::move(local_index));
 				continue;
 			}
+			case MultiFileReaderVirtualColumnBinding::VirtualColumnBindingType::COLUMN_REFERENCE: {
+				global_column_p = virtual_column_bind_result.global_column_reference;
+				break;
+			}
+			}
+		} else {
+			global_column_p = global_columns[global_column_id];
 		}
 
-		const auto &global_column =
-		    global_column_reference ? *global_column_reference : global_columns[global_column_id];
+		const auto &global_column = *global_column_p;
 		if (reader.UseCastMap()) {
 			// reader is responsible for converting types - perform a top-level match only
 			auto entry = mapper.Find(global_column);
