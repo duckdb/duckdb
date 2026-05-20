@@ -64,6 +64,7 @@ public:
 
 	FilterPropagateResult CheckStatistics(const BaseStatistics &stats) const;
 	string ToString(const string &column_name) const;
+	string DebugToString() const;
 	bool Equals(const ExpressionFilter &other) const;
 	unique_ptr<ExpressionFilter> Copy() const;
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
