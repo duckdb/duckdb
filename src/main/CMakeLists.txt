@@ -47,6 +47,7 @@ add_library_unity(
   pending_query_result.cpp
   prepared_statement.cpp
   prepared_statement_data.cpp
+  metrics_manager.cpp
   profiling_info.cpp
   profiling_utils.cpp
   relation.cpp

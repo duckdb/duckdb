@@ -33,6 +33,7 @@ struct AttachOptions;
 class DatabaseFileSystem;
 struct DatabaseCacheEntry;
 class LogManager;
+class MetricsManager;
 class ExternalFileCache;
 class ResultSetManager;
 struct ParserCache;
@@ -61,6 +62,7 @@ public:
 	DUCKDB_API ExtensionManager &GetExtensionManager();
 	DUCKDB_API ValidChecker &GetValidChecker();
 	DUCKDB_API LogManager &GetLogManager() const;
+	DUCKDB_API MetricsManager &GetMetricsManager();
 	DUCKDB_API ParserCache &GetParserCache();
 
 	DUCKDB_API const duckdb_ext_api_v1 GetExtensionAPIV1();
@@ -97,6 +99,7 @@ private:
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
 	unique_ptr<LogManager> log_manager;
+	unique_ptr<MetricsManager> metrics_manager;
 	unique_ptr<ExternalFileCache> external_file_cache;
 	unique_ptr<ResultSetManager> result_set_manager;
 	unique_ptr<ParserCache> parser_cache;

@@ -1,0 +1,191 @@
+{
+	"query": {
+		"sql": {
+			"metric_type": "string",
+			"description": "The SQL string of the query"
+		},
+		"time": {
+			"metric_type": "double",
+			"description": "Time spent executing the entire query",
+			"unit": "seconds"
+		},
+		"cpu_time": {
+			"metric_type": "double",
+			"description": "CPU time spent on the query",
+			"unit": "seconds"
+		},
+		"total_intermediate_rows": {
+			"metric_type": "uint64",
+			"description": "Cumulative number of intermediate rows produced by the query",
+			"unit": "rows"
+		},
+		"total_rows_scanned": {
+			"metric_type": "uint64",
+			"description": "Cumulative number of rows scanned by the query",
+			"unit": "rows"
+		},
+		"result_set_size": {
+			"metric_type": "uint64",
+			"description": "The size of the result set",
+			"unit": "bytes"
+		}
+	},
+	"system": {
+		"blocked_thread_time": {
+			"metric_type": "double",
+			"description": "Time spent waiting for a thread to become available",
+			"unit": "seconds"
+		},
+		"peak_buffer_memory": {
+			"metric_type": "uint64",
+			"description": "Peak memory usage of the buffer manager",
+			"unit": "bytes"
+		},
+		"peak_temp_dir_size": {
+			"metric_type": "uint64",
+			"description": "Peak size of the temporary directory",
+			"unit": "bytes"
+		},
+		"total_memory_allocated": {
+			"metric_type": "uint64",
+			"description": "The total memory allocated by the buffer manager",
+			"unit": "bytes"
+		}
+	},
+	"io": {
+		"total_bytes_read": {
+			"metric_type": "uint64",
+			"description": "The total amount of bytes read from storage",
+			"unit": "bytes"
+		},
+		"total_bytes_written": {
+			"metric_type": "uint64",
+			"description": "The total amount of bytes written to storage",
+			"unit": "bytes"
+		}
+	},
+	"storage": {
+		"attach_load_storage_latency": {
+			"metric_type": "double",
+			"description": "Time spent loading from storage",
+			"unit": "seconds"
+		},
+		"attach_replay_wal_latency": {
+			"metric_type": "double",
+			"description": "Time spent replaying the WAL file",
+			"unit": "seconds"
+		},
+		"checkpoint_latency": {
+			"metric_type": "double",
+			"description": "Time spent running checkpoints",
+			"unit": "seconds"
+		},
+		"commit_local_storage_latency": {
+			"metric_type": "double",
+			"description": "Time spent committing the transaction-local storage",
+			"unit": "seconds"
+		},
+		"waiting_to_attach_latency": {
+			"metric_type": "double",
+			"description": "Time spent waiting to ATTACH a file",
+			"unit": "seconds"
+		},
+		"wal_replay_entry_count": {
+			"metric_type": "uint64",
+			"description": "The total number of entries to replay in the WAL",
+			"unit": "rows"
+		},
+		"write_to_wal_latency": {
+			"metric_type": "double",
+			"description": "Time spent writing to the WAL",
+			"unit": "seconds"
+		}
+	},
+	"operator": {
+		"cpu_time": {
+			"metric_type": "double",
+			"description": "CPU time spent in the operator",
+			"unit": "seconds"
+		},
+		"extra_info": {
+			"metric_type": "map",
+			"description": "Unique operator metrics"
+		},
+		"intermediate_rows": {
+			"metric_type": "uint64",
+			"description": "Number of intermediate rows produced by the operator",
+			"unit": "rows"
+		},
+		"intermediate_size_bytes": {
+			"metric_type": "uint64",
+			"description": "Intermediate size in bytes produced by the operator",
+			"unit": "bytes"
+		},
+		"name": {
+			"metric_type": "string",
+			"description": "Name of the operator"
+		},
+		"rows_scanned": {
+			"metric_type": "uint64",
+			"description": "Number of rows scanned by the operator",
+			"unit": "rows"
+		},
+		"timing": {
+			"metric_type": "double",
+			"description": "Time spent in the operator",
+			"unit": "seconds"
+		},
+		"type": {
+			"metric_type": "string",
+			"description": "Type of the operator"
+		}
+	},
+	"optimizers": {
+		"total_time": {
+			"metric_type": "double",
+			"description": "Time spent in all optimizers combined",
+			"unit": "seconds"
+		}
+	},
+	"parsers": {
+		"total_time": {
+			"metric_type": "double",
+			"description": "Time spent parsing the SQL query",
+			"unit": "seconds"
+		}
+	},
+	"planner": {
+		"total_time": {
+			"metric_type": "double",
+			"description": "Time spent generating the logical plan",
+			"unit": "seconds"
+		},
+		"binding_time": {
+			"metric_type": "double",
+			"description": "Time spent binding the logical plan",
+			"unit": "seconds"
+		}
+	},
+	"physical_planner": {
+		"total_time": {
+			"metric_type": "double",
+			"description": "Time spent generating the physical plan",
+			"unit": "seconds"
+		},
+		"column_binding": {
+			"metric_type": "double",
+			"description": "Time spent binding the columns in the logical plan to physical columns",
+			"unit": "seconds"
+		},
+		"create_plan": {
+			"metric_type": "double",
+			"description": "Time spent creating the physical plan",
+			"unit": "seconds"
+		},
+		"resolve_types": {
+			"metric_type": "double",
+			"description": "Time spent resolving the types in the logical plan to physical types",
+			"unit": "seconds"
+		}
+	}
+}

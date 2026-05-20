@@ -1,4 +1,5 @@
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/metrics_manager.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
@@ -294,6 +295,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	log_manager = make_uniq<LogManager>(*this, LogConfig());
 	log_manager->Initialize();
+
+	metrics_manager = make_uniq<MetricsManager>();
 
 	bool enable_external_file_cache = Settings::Get<EnableExternalFileCacheSetting>(config);
 	external_file_cache = make_uniq<ExternalFileCache>(*this, enable_external_file_cache);
@@ -592,6 +595,10 @@ const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 
 LogManager &DatabaseInstance::GetLogManager() const {
 	return *log_manager;
+}
+
+MetricsManager &DatabaseInstance::GetMetricsManager() {
+	return *metrics_manager;
 }
 
 ValidChecker &ValidChecker::Get(DatabaseInstance &db) {
