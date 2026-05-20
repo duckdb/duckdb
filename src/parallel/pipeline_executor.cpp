@@ -453,9 +453,6 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 
 	finalized = true;
 
-	context.thread.profiler.FinalizeSourceProfiling(*pipeline.source_state, *local_source_state, *pipeline.source,
-	                                                exhausted_source);
-
 	// flush all query profiler info
 	for (idx_t i = 0; i < intermediate_states.size(); i++) {
 		intermediate_states[i]->Finalize(pipeline.operators[i].get(), context);
@@ -608,6 +605,10 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 
 	// Ensures sources only return empty results when Blocking or Finished
 	D_ASSERT(res != SourceResultType::BLOCKED || result.size() == 0);
+	if (res == SourceResultType::FINISHED) {
+		// final call into the source - finish source execution
+		context.thread.profiler.FinishSource(*pipeline.source_state, *local_source_state);
+	}
 	EndOperator(*pipeline.source, &result);
 
 	return res;

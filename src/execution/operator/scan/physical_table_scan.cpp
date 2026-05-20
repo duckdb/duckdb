@@ -445,4 +445,13 @@ void PhysicalTableScan::GetMetrics(ClientContext &context, GlobalSourceState &gs
 	}
 }
 
+optional_idx PhysicalTableScan::GetRowsScanned(GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
+	if (function.rows_scanned) {
+		auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
+		auto &state = lstate.Cast<TableScanLocalSourceState>();
+		return function.rows_scanned(*gstate.global_state, *state.local_state);
+	}
+	return optional_idx();
+}
+
 } // namespace duckdb
