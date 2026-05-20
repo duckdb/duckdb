@@ -99,8 +99,8 @@ mode skip unsupported: 1
                     test_list_path.unlink(missing_ok=True)
 
                 self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-                self.assertIn("all tests passed in ", proc.stdout)
-                self.assertIn(f"({case['expected_skip_count']} skipped tests)", proc.stdout)
+                self.assertIn("ran tests: ", proc.stdout)
+                self.assertIn(f", {case['expected_skip_count']} skipped in ", proc.stdout)
                 self.assertIn("Skipped tests for the following reasons:", proc.stdout)
                 for expected_reason in case["expected_reasons"]:
                     self.assertIn(expected_reason, proc.stdout)
@@ -157,7 +157,7 @@ mode skip unsupported: 1
             test_list_path.unlink(missing_ok=True)
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn("(5 skipped tests)", proc.stdout)
+        self.assertIn(", 5 skipped in ", proc.stdout)
         self.assertIn("require windows: 1", proc.stdout)
         self.assertIn("require-env A: 3", proc.stdout)
         self.assertIn("require-env B: 1", proc.stdout)
@@ -201,7 +201,7 @@ require-env FOO: 1
             test_list_path.unlink(missing_ok=True)
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn("(4 skipped tests)", proc.stdout)
+        self.assertIn(", 4 skipped in ", proc.stdout)
         self.assertIn("require json: 3", proc.stdout)
         self.assertIn("require-env FOO: 1", proc.stdout)
 
@@ -256,7 +256,7 @@ require windows: 2
             test_list_path.unlink(missing_ok=True)
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn("(2 skipped tests)", proc.stdout)
+        self.assertIn(", 2 skipped in ", proc.stdout)
         summary_block = proc.stdout.rsplit("Skipped tests for the following reasons:", 1)[-1]
         self.assertIn("require windows: 2", summary_block)
         self.assertNotIn("require windows: 7", summary_block)
@@ -305,10 +305,10 @@ require windows: 2
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("generated test list using:", proc.stdout)
-        self.assertIn("found 2 tests", proc.stdout)
+        self.assertNotIn("found 2 tests", proc.stdout)
         self.assertIn("test/sql/slow.test took", proc.stdout)
         self.assertIn("test/sql/fast.test took", proc.stdout)
-        self.assertIn("all tests passed in ", proc.stdout)
+        self.assertIn("ran tests: ", proc.stdout)
 
     def test_runs_with_echo_test_command(self):
         test_list_path = create_temp_file("test/sql/a.test\ntest/sql/b.test\n")
@@ -331,8 +331,10 @@ require windows: 2
             test_list_path.unlink(missing_ok=True)
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn("found 2 tests", proc.stdout)
-        self.assertIn("all tests passed in ", proc.stdout)
+        self.assertNotIn("found 2 tests", proc.stdout)
+        self.assertIn("ran tests: ", proc.stdout)
+        self.assertNotIn("=== config run: default ===", proc.stdout)
+        self.assertNotIn("all 1 config runs passed", proc.stdout)
 
     def test_changed_tests_flag_uses_second_list_file(self):
         base_test_list_path = create_temp_file(
@@ -393,7 +395,7 @@ require windows: 2
         self.assertIn(f"-f {base_test_list_path}", proc.stdout)
         self.assertIn(f"-f {changed_test_list_path}", proc.stdout)
         self.assertIn("added 1 tests from --changed-tests file to the smoke test run", proc.stdout)
-        self.assertIn("all tests passed in ", proc.stdout)
+        self.assertIn("ran tests: ", proc.stdout)
 
     def test_retries_failed_fake_job(self):
         test_list_path = create_temp_file("test/sql/a.test\n")
@@ -441,7 +443,7 @@ require windows: 2
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("retrying failed test batch 0 (attempt 1/1, retry 1/4)", proc.stdout)
         self.assertIn("fake failure", proc.stdout)
-        self.assertIn("all tests passed in ", proc.stdout)
+        self.assertIn("ran tests: ", proc.stdout)
 
     def test_retries_timed_out_sleep_job(self):
         test_list_path = create_temp_file("test/sql/a.test\n")
@@ -488,7 +490,7 @@ require windows: 2
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn(f"batch timed out after {batch_timeout} seconds", proc.stdout)
         self.assertIn("retrying failed test", proc.stdout)
-        self.assertIn("all tests passed in ", proc.stdout)
+        self.assertIn("ran tests: ", proc.stdout)
 
     def test_multiple_test_configs_run_independently(self):
         listed_tests_path = create_temp_file(
@@ -539,7 +541,7 @@ require windows: 2
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("running 2 configs", proc.stdout)
-        self.assertEqual(proc.stdout.count("found 1 tests"), 2)
+        self.assertEqual(proc.stdout.count("ran tests: "), 2)
         self.assertIn("all 2 config runs passed", proc.stdout)
 
     def test_multiple_test_configs_aggregate_failure(self):
@@ -625,7 +627,10 @@ require windows: 2
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("::group::test config: test/configs/a.json", proc.stdout)
         self.assertIn("::group::test config: test/configs/b.json", proc.stdout)
+        self.assertNotIn("=== config run: test/configs/a.json ===", proc.stdout)
+        self.assertNotIn("=== config run: test/configs/b.json ===", proc.stdout)
         self.assertEqual(proc.stdout.count("::endgroup::"), 2)
+        self.assertGreaterEqual(proc.stdout.count("ran tests: "), 2)
 
     def test_ci_groups_stay_open_after_first_failed_config(self):
         failing_helper = create_temp_file(
@@ -667,7 +672,8 @@ require windows: 2
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
         self.assertIn("::group::test config: test/configs/fail.json", proc.stdout)
         self.assertIn("::group::test config: test/configs/pass.json", proc.stdout)
-        self.assertEqual(proc.stdout.count("::endgroup::"), 0)
+        self.assertEqual(proc.stdout.count("::endgroup::"), 2)
+        self.assertIn("❌ ran tests: ", proc.stdout)
 
 
 if __name__ == "__main__":
