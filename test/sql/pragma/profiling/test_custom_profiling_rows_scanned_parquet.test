@@ -18,7 +18,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "query.cumulative_cardinality": "true", "query.cumulative_rows_scanned": "true"}';
+PRAGMA custom_profiling_settings='{"operator.intermediate_rows": "true", "operator.rows_scanned": "true", "query.total_intermediate_rows": "true", "query.total_rows_scanned": "true"}';
 
 statement ok
 SELECT * FROM '{TEST_DIR}/range.parquet' order by all;
@@ -30,11 +30,11 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT query.cumulative_cardinality, query.cumulative_rows_scanned FROM metrics_output;
+SELECT query.total_intermediate_rows, query.total_rows_scanned FROM metrics_output;
 
 query I
 SELECT
-	CASE WHEN query.cumulative_rows_scanned = 10 THEN 'true'
+	CASE WHEN query.total_rows_scanned = 10 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----

@@ -12,7 +12,6 @@
 
 #include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/main/profiling_node.hpp"
 #include "duckdb/main/profiling_info.hpp"
 #include "duckdb/common/profiler.hpp"
 
@@ -42,10 +41,6 @@ public:
 	atomic<idx_t> bytes_written;
 
 public:
-    void UpdateMetric(const MetricType metric, idx_t addition) {
-        active_metrics[GetMetricsIndex(metric)] += addition;
-    }
-
     void UpdateStringMetric(const string &key, idx_t addition) {
         string_timings[key] += addition;
     }
@@ -60,18 +55,6 @@ public:
 
     void UpdateBytesWritten(idx_t n) {
         bytes_written += n;
-    }
-
-    void ResetMetric(const MetricType metric) {
-        active_metrics[GetMetricsIndex(metric)] = 0;
-    }
-
-    idx_t GetMetricValue(const MetricType metric) const {
-        return active_metrics[GetMetricsIndex(metric)];
-    }
-
-    double GetMetricInSeconds(const MetricType metric) const {
-        return static_cast<double>(active_metrics[GetMetricsIndex(metric)]) / 1e9;
     }
 
     double GetStringMetricInSeconds(const string &key) const {
@@ -107,9 +90,6 @@ public:
     }
 
     void Reset() {
-        for(idx_t i = 0; i < ACTIVELY_TRACKED_METRICS; i++) {
-            active_metrics[i] = 0;
-        }
         string_timings.clear();
         string_counters.clear();
         bytes_read = 0;
@@ -123,9 +103,6 @@ public:
     }
 
     void Merge(const QueryMetrics &other) {
-        for(idx_t i = 0; i < ACTIVELY_TRACKED_METRICS; i++) {
-            active_metrics[i] += other.active_metrics[i];
-        }
         for (const auto &entry : other.string_timings) {
             string_timings[entry.first] += entry.second;
         }
@@ -136,24 +113,8 @@ public:
         bytes_written += other.bytes_written.load();
     }
 
-	static idx_t GetMetricsIndex(MetricType type) {
-		switch(type) {
-		// Phase timing metrics
-		case MetricType::ALL_OPTIMIZERS: return 0;
-		case MetricType::PARSER: return 1;
-		case MetricType::PLANNER: return 2;
-		case MetricType::PLANNER_BINDING: return 3;
-		default:
-			throw InternalException("MetricType %s is not actively tracked.", EnumUtil::ToString(type));
-		}
-	}
-
 private:
-	// 4 phase timing metrics
-	static constexpr const idx_t ACTIVELY_TRACKED_METRICS = 4;
-
-	atomic<idx_t> active_metrics[ACTIVELY_TRACKED_METRICS];
-	// String-keyed timings for optimizer and storage timer metrics
+	// String-keyed timings for optimizer, storage and phase timing metrics
 	unordered_map<string, idx_t> string_timings;
 	// String-keyed counters for storage counter metrics (e.g. "storage.wal_replay_entry_count")
 	unordered_map<string, idx_t> string_counters;
@@ -165,26 +126,15 @@ public:
 
 class ProfilingUtils {
 public:
-	static void SetMetricToDefault(profiler_metrics_t &metrics, const MetricType &type);
-	static void CollectMetrics(const MetricType &type, QueryMetrics &query_metrics, Value &metric, ProfilingInfo &result);
+	static void SetMetricToDefault(profiler_metrics_t &metrics, const string &key);
 };
 
 struct ActiveTimer {
 public:
-	ActiveTimer() : metric(MetricType::ALL_OPTIMIZERS), is_string_metric(false), is_active(false) {
+	ActiveTimer() : string_key(""), is_active(false) {
 	}
-	// MetricType-based constructor (for fixed-array metrics)
-	ActiveTimer(QueryMetrics &query_metrics, const MetricType metric, const bool is_active = true)
-	    : query_metrics(query_metrics), metric(metric), is_string_metric(false), is_active(is_active) {
-		if (!is_active) {
-			return;
-		}
-		profiler.Start();
-	}
-	// String-key constructor (for string_timings, e.g. "query.latency", "optimizer.*" etc.)
 	ActiveTimer(QueryMetrics &query_metrics, string key, const bool is_active = true)
-	    : query_metrics(query_metrics), metric(MetricType::ALL_OPTIMIZERS), string_key(std::move(key)),
-	      is_string_metric(true), is_active(is_active) {
+	    : query_metrics(query_metrics), string_key(std::move(key)), is_active(is_active) {
 		if (!is_active) {
 			return;
 		}
@@ -201,18 +151,14 @@ public:
 	//! enable move constructors
 	ActiveTimer(ActiveTimer &&other) noexcept : is_active(false) {
 		std::swap(query_metrics, other.query_metrics);
-		std::swap(metric, other.metric);
 		std::swap(string_key, other.string_key);
 		std::swap(profiler, other.profiler);
-		std::swap(is_string_metric, other.is_string_metric);
 		std::swap(is_active, other.is_active);
 	}
 	ActiveTimer &operator=(ActiveTimer &&other) noexcept {
 		std::swap(query_metrics, other.query_metrics);
-		std::swap(metric, other.metric);
 		std::swap(string_key, other.string_key);
 		std::swap(profiler, other.profiler);
-		std::swap(is_string_metric, other.is_string_metric);
 		std::swap(is_active, other.is_active);
 		return *this;
 	}
@@ -222,14 +168,9 @@ public:
 		if (!is_active) {
 			return;
 		}
-		// stop profiling and report
 		is_active = false;
 		profiler.End();
-		if (is_string_metric) {
-			query_metrics->UpdateStringMetric(string_key, profiler.ElapsedNanos());
-		} else {
-			query_metrics->UpdateMetric(metric, profiler.ElapsedNanos());
-		}
+		query_metrics->UpdateStringMetric(string_key, profiler.ElapsedNanos());
 	}
 
 	void Reset() {
@@ -242,10 +183,8 @@ public:
 
 private:
 	optional_ptr<QueryMetrics> query_metrics;
-	MetricType metric;
 	string string_key;
 	Profiler profiler;
-	bool is_string_metric;
 	bool is_active;
 };
 

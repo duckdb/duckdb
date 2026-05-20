@@ -3304,34 +3304,6 @@ MetricGroup EnumUtil::FromString<MetricGroup>(const char *value) {
 	return static_cast<MetricGroup>(StringUtil::StringToEnum(GetMetricGroupValues(), 9, "MetricGroup", value));
 }
 
-const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(MetricType::EXTRA_INFO), "EXTRA_INFO" },
-		{ static_cast<uint32_t>(MetricType::OPERATOR_CARDINALITY), "OPERATOR_CARDINALITY" },
-		{ static_cast<uint32_t>(MetricType::OPERATOR_NAME), "OPERATOR_NAME" },
-		{ static_cast<uint32_t>(MetricType::OPERATOR_ROWS_SCANNED), "OPERATOR_ROWS_SCANNED" },
-		{ static_cast<uint32_t>(MetricType::OPERATOR_TIMING), "OPERATOR_TIMING" },
-		{ static_cast<uint32_t>(MetricType::OPERATOR_TYPE), "OPERATOR_TYPE" },
-		{ static_cast<uint32_t>(MetricType::RESULT_SET_SIZE), "RESULT_SET_SIZE" },
-		{ static_cast<uint32_t>(MetricType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
-		{ static_cast<uint32_t>(MetricType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
-		{ static_cast<uint32_t>(MetricType::PARSER), "PARSER" },
-		{ static_cast<uint32_t>(MetricType::PLANNER), "PLANNER" },
-		{ static_cast<uint32_t>(MetricType::PLANNER_BINDING), "PLANNER_BINDING" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<MetricType>(MetricType value) {
-	return StringUtil::EnumToString(GetMetricTypeValues(), 12, "MetricType", static_cast<uint32_t>(value));
-}
-
-template<>
-MetricType EnumUtil::FromString<MetricType>(const char *value) {
-	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 12, "MetricType", value));
-}
-
 const StringUtil::EnumStringLiteral *GetMonotonicityValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(Monotonicity::UNKNOWN), "UNKNOWN" },

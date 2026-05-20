@@ -52,7 +52,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	// first bind the tables and columns to the catalog
 	bool parameters_resolved = true;
 	try {
-		auto binding_timer = profiler.StartTimer(MetricType::PLANNER_BINDING);
+		auto binding_timer = profiler.StartTimer("planner.binding_time");
 		binder->SetParameters(bound_parameters);
 		auto bound_statement = binder->Bind(statement);
 		binding_timer.EndTimer();

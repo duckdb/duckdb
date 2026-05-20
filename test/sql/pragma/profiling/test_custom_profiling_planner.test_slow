@@ -11,7 +11,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"PLANNER": "true", "physical_planner.total_time": "true"}';
+PRAGMA custom_profiling_settings='{"planner.total_time": "true", "physical_planner.total_time": "true"}';
 
 loop i 0 8
 
@@ -38,14 +38,14 @@ PRAGMA disable_profiling;
 query I rowsort
 SELECT unnest(current_setting('custom_profiling_settings'))
 ----
-PLANNER
 physical_planner.total_time
+planner.total_time
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 query I
-SELECT 
+SELECT
 	CASE WHEN physical_planner.total_time > 0 THEN 'true'
     ELSE 'false' END
 FROM metrics_output;
@@ -53,8 +53,8 @@ FROM metrics_output;
 true
 
 query I
-SELECT 
-	CASE WHEN planner > 0 THEN 'true'
+SELECT
+	CASE WHEN planner.total_time > 0 THEN 'true'
     ELSE 'false' END
 FROM metrics_output;
 ----

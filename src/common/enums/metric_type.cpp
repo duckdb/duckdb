@@ -3,24 +3,24 @@
 
 #include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
 profiler_settings_t MetricsUtils::GetAllMetrics() {
 	auto result = profiler_settings_t {
-		"ALL_OPTIMIZERS",
-		"CUMULATIVE_OPTIMIZER_TIMING",
-		"EXTRA_INFO",
-		"OPERATOR_CARDINALITY",
-		"OPERATOR_NAME",
-		"OPERATOR_ROWS_SCANNED",
-		"OPERATOR_TIMING",
-		"OPERATOR_TYPE",
-		"PARSER",
-		"PLANNER",
-		"PLANNER_BINDING",
-		"RESULT_SET_SIZE",
+		"operator.extra_info",
+		"operator.intermediate_rows",
+		"operator.intermediate_size_bytes",
+		"operator.name",
+		"operator.rows_scanned",
+		"operator.timing",
+		"operator.type",
+		"optimizers.total_time",
+		"parsers.total_time",
+		"planner.total_time",
+		"planner.binding_time",
 	};
 	// Add all query metrics
 	auto query_metrics = GetQueryMetrics();
@@ -77,19 +77,15 @@ profiler_settings_t MetricsUtils::GetCoreMetrics() {
 	return GetQueryMetrics();
 }
 
-bool MetricsUtils::IsCoreMetric(MetricType type) {
-	return false;
-}
-
 profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 	profiler_settings_t result {
-		"EXTRA_INFO",
-		"OPERATOR_CARDINALITY",
-		"OPERATOR_NAME",
-		"OPERATOR_ROWS_SCANNED",
-		"OPERATOR_TIMING",
-		"OPERATOR_TYPE",
-		"RESULT_SET_SIZE",
+		"operator.extra_info",
+		"operator.intermediate_rows",
+		"operator.intermediate_size_bytes",
+		"operator.name",
+		"operator.rows_scanned",
+		"operator.timing",
+		"operator.type",
 	};
 	// Add all query metrics (they are in the default set)
 	auto query_metrics = GetQueryMetrics();
@@ -109,29 +105,14 @@ profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 	return result;
 }
 
-bool MetricsUtils::IsDefaultMetric(MetricType type) {
-	switch(type) {
-	case MetricType::EXTRA_INFO:
-	case MetricType::OPERATOR_CARDINALITY:
-	case MetricType::OPERATOR_NAME:
-	case MetricType::OPERATOR_ROWS_SCANNED:
-	case MetricType::OPERATOR_TIMING:
-	case MetricType::OPERATOR_TYPE:
-	case MetricType::RESULT_SET_SIZE:
-		return true;
-	default:
-		return false;
-	}
-}
-
 profiler_settings_t MetricsUtils::GetQueryMetrics() {
 	return {
 		"query.cpu_time",
-		"query.cumulative_cardinality",
-		"query.cumulative_rows_scanned",
-		"query.latency",
 		"query.query_name",
 		"query.rows_returned",
+		"query.time",
+		"query.total_intermediate_rows",
+		"query.total_rows_scanned",
 	};
 }
 
@@ -140,7 +121,7 @@ bool MetricsUtils::IsQueryMetricKey(const string &key) {
 }
 
 bool MetricsUtils::IsQueryTimerMetricKey(const string &key) {
-	return key == "query.latency" || key == "query.cpu_time";
+	return key == "query.time" || key == "query.cpu_time";
 }
 
 profiler_settings_t MetricsUtils::GetSystemMetrics() {
@@ -162,10 +143,6 @@ bool MetricsUtils::IsSystemTimerKey(const string &key) {
 
 profiler_settings_t MetricsUtils::GetExecutionMetrics() {
 	return GetSystemMetrics();
-}
-
-bool MetricsUtils::IsExecutionMetric(MetricType type) {
-	return false;
 }
 
 profiler_settings_t MetricsUtils::GetStorageMetrics() {
@@ -192,25 +169,19 @@ bool MetricsUtils::IsStorageTimerKey(const string &key) {
 
 profiler_settings_t MetricsUtils::GetOperatorMetrics() {
 	return {
-		"OPERATOR_CARDINALITY",
-		"OPERATOR_NAME",
-		"OPERATOR_ROWS_SCANNED",
-		"OPERATOR_TIMING",
-		"OPERATOR_TYPE",
+		"operator.cpu_time",
+		"operator.extra_info",
+		"operator.intermediate_rows",
+		"operator.intermediate_size_bytes",
+		"operator.name",
+		"operator.rows_scanned",
+		"operator.timing",
+		"operator.type",
 	};
 }
 
-bool MetricsUtils::IsOperatorMetric(MetricType type) {
-	switch(type) {
-	case MetricType::OPERATOR_CARDINALITY:
-	case MetricType::OPERATOR_NAME:
-	case MetricType::OPERATOR_ROWS_SCANNED:
-	case MetricType::OPERATOR_TIMING:
-	case MetricType::OPERATOR_TYPE:
-		return true;
-	default:
-		return false;
-	}
+bool MetricsUtils::IsOperatorMetricKey(const string &key) {
+	return StringUtil::StartsWith(key, "operator.");
 }
 
 profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
@@ -241,11 +212,10 @@ bool MetricsUtils::IsPhysicalPlannerMetricKey(const string &key) {
 
 profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
 	profiler_settings_t result {
-		"ALL_OPTIMIZERS",
-		"CUMULATIVE_OPTIMIZER_TIMING",
-		"PARSER",
-		"PLANNER",
-		"PLANNER_BINDING",
+		"optimizers.total_time",
+		"parsers.total_time",
+		"planner.total_time",
+		"planner.binding_time",
 	};
 	auto physical_planner_metrics = GetPhysicalPlannerMetrics();
 	for (const auto &m : physical_planner_metrics) {
@@ -254,32 +224,23 @@ profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
 	return result;
 }
 
-bool MetricsUtils::IsPhaseTimingMetric(MetricType type) {
-	switch(type) {
-	case MetricType::ALL_OPTIMIZERS:
-	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
-	case MetricType::PARSER:
-	case MetricType::PLANNER:
-	case MetricType::PLANNER_BINDING:
-		return true;
-	default:
-		return false;
-	}
+bool MetricsUtils::IsPhaseTimingKey(const string &key) {
+	return StringUtil::StartsWith(key, "optimizers.") || StringUtil::StartsWith(key, "parsers.") ||
+	       StringUtil::StartsWith(key, "planner.");
 }
 
 profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 	auto result = profiler_settings_t {
-		"ALL_OPTIMIZERS",
-		"CUMULATIVE_OPTIMIZER_TIMING",
-		"PLANNER",
-		"PLANNER_BINDING",
+		"optimizers.total_time",
+		"planner.total_time",
+		"planner.binding_time",
 		// Root-scope query metrics (not operator-level)
 		"query.cpu_time",
-		"query.cumulative_cardinality",
-		"query.cumulative_rows_scanned",
-		"query.latency",
 		"query.query_name",
 		"query.rows_returned",
+		"query.time",
+		"query.total_intermediate_rows",
+		"query.total_rows_scanned",
 	};
 	// Add all optimizer metrics (they are root-scope only)
 	auto optimizer_metrics = GetOptimizerMetrics();
@@ -304,16 +265,5 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 	return result;
 }
 
-bool MetricsUtils::IsRootScopeMetric(MetricType type) {
-	switch(type) {
-	case MetricType::ALL_OPTIMIZERS:
-	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
-	case MetricType::PLANNER:
-	case MetricType::PLANNER_BINDING:
-		return true;
-	default:
-		return false;
-	}
-}
 
 }

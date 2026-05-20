@@ -71,20 +71,7 @@ QueryProfileResult &QueryProfileResult::AppendList() {
 }
 
 profiler_settings_t QueryProfiler::GetQueryMetrics(ClientContext &context) {
-	auto &context_metrics = ClientConfig::GetConfig(context).profiler_settings;
-
-	// Expand.
-	profiler_settings_t local_settings;
-	for (const auto &metric : context_metrics) {
-		local_settings.insert(metric);
-		// String-keyed metrics don't map to MetricType and need no expansion.
-		if (!MetricsUtils::IsOptimizerMetricKey(metric) && !MetricsUtils::IsStorageMetricKey(metric) &&
-		    !MetricsUtils::IsPhysicalPlannerMetricKey(metric) && !MetricsUtils::IsSystemMetricKey(metric) &&
-		    !MetricsUtils::IsQueryMetricKey(metric)) {
-			ProfilingInfo::Expand(local_settings, EnumUtil::FromString<MetricType>(metric));
-		}
-	}
-	return local_settings;
+	return ClientConfig::GetConfig(context).profiler_settings;
 }
 
 QueryProfiler::QueryProfiler(ClientContext &context_p)
@@ -161,7 +148,7 @@ void QueryProfiler::Start(const string &query) {
 	Reset();
 	running = true;
 	query_metrics.query_name = query;
-	query_metrics.latency_timer = make_uniq<ActiveTimer>(StartTimer("query.latency"));
+	query_metrics.latency_timer = make_uniq<ActiveTimer>(StartTimer("query.time"));
 }
 
 void QueryProfiler::Reset() {
@@ -286,12 +273,6 @@ void QueryProfiler::FinalizeMetrics() {
 	FinalizeMetricsInternal();
 }
 
-void QueryProfiler::AddToCounter(const MetricType type, const idx_t amount) {
-	if (IsEnabled()) {
-		query_metrics.UpdateMetric(type, amount);
-	}
-}
-
 void QueryProfiler::TrackBytesRead(const idx_t amount) {
 	query_metrics.UpdateBytesRead(amount);
 }
@@ -312,10 +293,6 @@ idx_t QueryProfiler::GetBytesRead() const {
 
 idx_t QueryProfiler::GetBytesWritten() const {
 	return query_metrics.GetBytesWritten();
-}
-
-ActiveTimer QueryProfiler::StartTimer(const MetricType type) {
-	return ActiveTimer(query_metrics, type, IsEnabled());
 }
 
 ActiveTimer QueryProfiler::StartTimer(const string &key) {
@@ -628,25 +605,15 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 				// "physical_planner.column_binding" -> display as "column_binding"
 				physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
 			}
-		} else {
-			auto metric_type = EnumUtil::FromString<MetricType>(metric);
-			if (!MetricsUtils::IsPhaseTimingMetric(metric_type)) {
-				continue;
-			}
-			if (metric == "CUMULATIVE_OPTIMIZER_TIMING") {
-				continue;
-			} else if (metric == "ALL_OPTIMIZERS") {
+		} else if (MetricsUtils::IsPhaseTimingKey(metric)) {
+			if (metric == "optimizers.total_time") {
 				optimizer_head = {"Optimizer", entry.second.GetValue<double>()};
-			} else if (metric == "PLANNER") {
+			} else if (metric == "planner.total_time") {
 				planner_head = {"Planner", entry.second.GetValue<double>()};
-			} else if (metric == "PARSER") {
+			} else if (metric == "parsers.total_time") {
 				parser_head = {"Parser", entry.second.GetValue<double>()};
-			}
-
-			if (StringUtil::StartsWith(metric, "PLANNER") && metric != "PLANNER") {
-				planner_timings[metric.substr(8)] = entry.second.GetValue<double>();
-			} else if (StringUtil::StartsWith(metric, "PARSER")) {
-				parser_timings[metric] = entry.second.GetValue<double>();
+			} else if (metric == "planner.binding_time") {
+				planner_timings["binding_time"] = entry.second.GetValue<double>();
 			}
 		}
 	}
@@ -685,7 +652,7 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	constexpr idx_t TOTAL_BOX_WIDTH = 50;
 	ss << "┌────────────────────────────────────────────────┐\n";
 	ss << "│┌──────────────────────────────────────────────┐│\n";
-	string total_time = "Total Time: " + RenderTiming(query_metrics.GetStringMetricInSeconds("query.latency"));
+	string total_time = "Total Time: " + RenderTiming(query_metrics.GetStringMetricInSeconds("query.time"));
 	ss << "││" + DrawPadded(total_time, TOTAL_BOX_WIDTH - 4) + "││\n";
 	ss << "│└──────────────────────────────────────────────┘│\n";
 	ss << "└────────────────────────────────────────────────┘\n";
@@ -755,27 +722,26 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 
 profiler_metrics_t OperatorInformation::GetMetrics(const ProfilingInfo &info) const {
 	profiler_metrics_t result;
-	if (info.EnabledForCollection(MetricType::OPERATOR_NAME)) {
-		result["OPERATOR_NAME"] = Value(name);
+	if (info.EnabledForCollection("operator.name")) {
+		result["operator.name"] = Value(name);
 	}
-	if (info.EnabledForCollection(MetricType::OPERATOR_TYPE)) {
-		result["OPERATOR_TYPE"] = Value(EnumUtil::ToString(operator_type));
+	if (info.EnabledForCollection("operator.type")) {
+		result["operator.type"] = Value(EnumUtil::ToString(operator_type));
 	}
-	if (info.EnabledForCollection(MetricType::OPERATOR_TIMING)) {
-		result["OPERATOR_TIMING"] = Value::DOUBLE(time);
+	if (info.EnabledForCollection("operator.timing")) {
+		result["operator.timing"] = Value::DOUBLE(time);
 	}
-	if (info.EnabledForCollection(MetricType::OPERATOR_CARDINALITY)) {
-		result["OPERATOR_CARDINALITY"] = Value::UBIGINT(elements_returned);
+	if (info.EnabledForCollection("operator.intermediate_rows")) {
+		result["operator.intermediate_rows"] = Value::UBIGINT(elements_returned);
 	}
-	if (info.EnabledForCollection(MetricType::RESULT_SET_SIZE)) {
-		result["RESULT_SET_SIZE"] = Value::UBIGINT(result_set_size);
+	if (info.EnabledForCollection("operator.intermediate_size_bytes")) {
+		result["operator.intermediate_size_bytes"] = Value::UBIGINT(result_set_size);
 	}
-	if (info.EnabledForCollection(MetricType::OPERATOR_ROWS_SCANNED) &&
-	    operator_type == PhysicalOperatorType::TABLE_SCAN) {
-		result["OPERATOR_ROWS_SCANNED"] = Value::UBIGINT(rows_scanned);
+	if (info.EnabledForCollection("operator.rows_scanned") && operator_type == PhysicalOperatorType::TABLE_SCAN) {
+		result["operator.rows_scanned"] = Value::UBIGINT(rows_scanned);
 	}
-	if (info.EnabledForCollection(MetricType::EXTRA_INFO)) {
-		result["EXTRA_INFO"] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
+	if (info.EnabledForCollection("operator.extra_info")) {
+		result["operator.extra_info"] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
 	}
 	return result;
 }
@@ -867,7 +833,9 @@ void QueryProfiler::ToLog() const {
 static void OperatorToResultTree(const ProfilingInfo &settings, ProfilingNode &node, QueryProfileResult &result) {
 	auto operator_metrics = node.GetOperatorInfo().GetMetrics(settings);
 	for (auto &entry : operator_metrics) {
-		auto key = StringUtil::Lower(entry.first);
+		// Strip the "operator." prefix — metrics appear as direct children (e.g. "timing", "extra_info")
+		auto dot_pos = entry.first.find('.');
+		auto key = dot_pos != string::npos ? entry.first.substr(dot_pos + 1) : StringUtil::Lower(entry.first);
 		result.AddValue(key, std::move(entry.second));
 	}
 	if (node.GetChildCount() > 0) {
@@ -886,9 +854,34 @@ unique_ptr<QueryProfileResult> QueryProfiler::ToResultTree() const {
 		return result;
 	}
 	root_info->MetricsToProfileResult(*result);
-	auto &op_list = result->AddList("operator_info");
-	auto &op_node = op_list.AppendObject();
-	OperatorToResultTree(*root_info, *root, op_node);
+	// Add root operator's own metrics at the root level (grouped as an "operator" struct)
+	auto root_op_metrics = root->GetOperatorInfo().GetMetrics(*root_info);
+	unordered_map<string, reference<QueryProfileResult>> groups;
+	for (auto &entry : root_op_metrics) {
+		auto dot_pos = entry.first.find('.');
+		if (dot_pos != string::npos) {
+			auto prefix = entry.first.substr(0, dot_pos);
+			auto suffix = entry.first.substr(dot_pos + 1);
+			auto it = groups.find(prefix);
+			if (it == groups.end()) {
+				auto &obj = result->AddObject(prefix);
+				groups.emplace(prefix, obj);
+				obj.AddValue(suffix, std::move(entry.second));
+			} else {
+				it->second.get().AddValue(suffix, std::move(entry.second));
+			}
+		} else {
+			result->AddValue(StringUtil::Lower(entry.first), std::move(entry.second));
+		}
+	}
+	// Add root operator's children as "operator_info"
+	if (root->GetChildCount() > 0) {
+		auto &op_list = result->AddList("operator_info");
+		for (idx_t i = 0; i < root->GetChildCount(); i++) {
+			auto &child_result = op_list.AppendObject();
+			OperatorToResultTree(*root_info, *root->GetChild(i), child_result);
+		}
+	}
 	return result;
 }
 
@@ -1049,21 +1042,21 @@ void QueryProfiler::FinalizeMetricsInternal() {
 			continue;
 		}
 		if (MetricsUtils::IsQueryMetricKey(metric.first)) {
-			if (metric.first == "query.latency") {
-				metric.second = Value::DOUBLE(query_metrics.GetStringMetricInSeconds("query.latency"));
+			if (metric.first == "query.time") {
+				metric.second = Value::DOUBLE(query_metrics.GetStringMetricInSeconds("query.time"));
 			} else if (metric.first == "query.query_name") {
 				metric.second = Value(query_metrics.query_name);
 			} else if (root) {
 				if (metric.first == "query.cpu_time") {
 					metric.second = Value::DOUBLE(cumulative_metrics.time);
-				} else if (metric.first == "query.cumulative_cardinality") {
+				} else if (metric.first == "query.total_intermediate_rows") {
 					metric.second = Value::UBIGINT(cumulative_metrics.elements_returned);
-				} else if (metric.first == "query.cumulative_rows_scanned") {
+				} else if (metric.first == "query.total_rows_scanned") {
 					metric.second = Value::UBIGINT(cumulative_metrics.rows_scanned);
 				} else if (metric.first == "query.result_set_size") {
 					metric.second = Value::UBIGINT(cumulative_metrics.result_set_size);
 				}
-				// query.extra_info and query.rows_returned stay at their default values
+				// query.rows_returned stays at its default value
 			}
 			continue;
 		}
@@ -1091,9 +1084,8 @@ void QueryProfiler::FinalizeMetricsInternal() {
 			}
 			continue;
 		}
-		auto metric_type = EnumUtil::FromString<MetricType>(metric.first);
-		if (info.EnabledForCollection(metric_type)) {
-			ProfilingUtils::CollectMetrics(metric_type, query_metrics, metric.second, info);
+		if (MetricsUtils::IsPhaseTimingKey(metric.first)) {
+			metric.second = Value::DOUBLE(query_metrics.GetStringMetricInSeconds(metric.first));
 		}
 	}
 	metrics_finalized = true;

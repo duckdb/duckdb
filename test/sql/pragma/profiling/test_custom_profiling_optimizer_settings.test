@@ -17,7 +17,7 @@ statement ok
 SET profiling_mode='standard';
 
 statement ok
-PRAGMA custom_profiling_settings='{"ALL_OPTIMIZERS": "true"}';
+PRAGMA custom_profiling_settings='{"optimizers.total_time": "true"}';
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -83,7 +83,7 @@ SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
 
 statement ok
-PRAGMA custom_profiling_settings='{"CUMULATIVE_OPTIMIZER_TIMING": "true"}';
+PRAGMA custom_profiling_settings='{"optimizers.total_time": "true"}';
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -96,7 +96,7 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_ou
 
 query I
 SELECT
-    CASE WHEN cumulative_optimizer_timing > 0 THEN 'true'
+    CASE WHEN optimizers.total_time > 0 THEN 'true'
     ELSE 'false' END
 FROM metrics_output;
 ----
@@ -134,19 +134,19 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-EXTRA_INFO
-OPERATOR_CARDINALITY
-OPERATOR_NAME
-OPERATOR_ROWS_SCANNED
-OPERATOR_TIMING
-OPERATOR_TYPE
-RESULT_SET_SIZE
+operator.extra_info
+operator.intermediate_rows
+operator.intermediate_size_bytes
+operator.name
+operator.rows_scanned
+operator.timing
+operator.type
 query.cpu_time
-query.cumulative_cardinality
-query.cumulative_rows_scanned
-query.latency
 query.query_name
 query.rows_returned
+query.time
+query.total_intermediate_rows
+query.total_rows_scanned
 storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
@@ -165,5 +165,5 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT extra_info, result_set_size, query.cpu_time, query.rows_returned, query.latency FROM metrics_output;
+SELECT operator.extra_info, operator.intermediate_size_bytes, query.cpu_time, query.rows_returned, query.time FROM metrics_output;
 

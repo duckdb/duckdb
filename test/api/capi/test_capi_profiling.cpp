@@ -40,22 +40,18 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 		auto key_str = duckdb::string(key_c_str);
 		auto value_str = duckdb::string(value_c_str);
 
-		if (depth == 0) {
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_CARDINALITY));
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_ROWS_SCANNED));
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_TIMING));
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_NAME));
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_TYPE));
-		} else {
-			REQUIRE(key_str != "QUERY_NAME");
-			REQUIRE(key_str != "BLOCKED_THREAD_TIME");
-			REQUIRE(key_str != "LATENCY");
-			REQUIRE(key_str != "ROWS_RETURNED");
+		if (depth > 0) {
+			// At depth>0 operator nodes keys are unprefixed (e.g. "timing", not "operator.timing")
+			REQUIRE(key_str != "query.query_name");
+			REQUIRE(key_str != "system.blocked_thread_time");
+			REQUIRE(key_str != "query.time");
+			REQUIRE(key_str != "query.rows_returned");
 		}
 
-		if (key_str == EnumUtil::ToString(MetricType::OPERATOR_NAME) ||
-		    key_str == EnumUtil::ToString(MetricType::OPERATOR_TYPE) ||
-		    key_str == EnumUtil::ToString(MetricType::EXTRA_INFO)) {
+		// These keys are non-numeric: skip stod for them
+		if (key_str == "operator.name" || key_str == "operator.type" || key_str == "operator.extra_info" ||
+		    key_str == "query.query_name" ||
+		    key_str == "name" || key_str == "type" || key_str == "extra_info") {
 			REQUIRE(!value_str.empty());
 		} else {
 			double result = 0;
@@ -109,15 +105,19 @@ TEST_CASE("Test profiling with a single metric and get_value", "[capi]") {
 
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
 
-	// test only query.cpu_time profiling
-	duckdb::vector<string> settings = {"query.cpu_time"};
+	// test query.cpu_time profiling alongside operator.extra_info so the metrics map is non-empty
+	duckdb::vector<string> settings = {"query.cpu_time", "operator.extra_info"};
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildSettingsString(settings)));
 	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
 
 	auto info = duckdb_get_profiling_info(tester.connection);
 	REQUIRE(info != nullptr);
 	// Retrieve a metric that is not enabled.
-	REQUIRE(duckdb_profiling_info_get_value(info, "EXTRA_INFO") == nullptr);
+	REQUIRE(duckdb_profiling_info_get_value(info, "operator.intermediate_rows") == nullptr);
+	// Retrieve query.cpu_time via dotted path.
+	auto cpu_time_val = duckdb_profiling_info_get_value(info, "query.cpu_time");
+	REQUIRE(cpu_time_val != nullptr);
+	duckdb_destroy_value(&cpu_time_val);
 
 	duckdb::map<string, double> cumulative_counter;
 	duckdb::map<string, double> cumulative_result;
@@ -134,20 +134,23 @@ TEST_CASE("Test profiling with cumulative metrics", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
 
 	// test all profiling metrics
-	duckdb::vector<string> settings = {"system.blocked_thread_time", "query.cpu_time", "query.cumulative_cardinality",
-	                                   "EXTRA_INFO", "OPERATOR_CARDINALITY", "OPERATOR_TIMING"};
+	duckdb::vector<string> settings = {"system.blocked_thread_time", "query.cpu_time", "query.total_intermediate_rows",
+	                                   "operator.extra_info", "operator.intermediate_rows", "operator.timing"};
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildSettingsString(settings)));
 	REQUIRE_NO_FAIL(tester.Query("SELECT 42"));
 
 	auto info = duckdb_get_profiling_info(tester.connection);
 	REQUIRE(info != nullptr);
 
-	duckdb::map<string, double> cumulative_counter = {{"OPERATOR_TIMING", 0}, {"OPERATOR_CARDINALITY", 0}};
+	// depth=0 has "operator.timing" / "operator.intermediate_rows" (root operator, prefixed)
+	// depth>0 has "timing" / "intermediate_rows" (child operators, unprefixed)
+	duckdb::map<string, double> cumulative_counter = {{"operator.timing", 0}, {"operator.intermediate_rows", 0},
+	                                                  {"timing", 0}, {"intermediate_rows", 0}};
 	duckdb::map<string, double> cumulative_result;
 
 	TraverseTree(info, cumulative_counter, cumulative_result, 0);
 
-	// query.cpu_time and query.cumulative_cardinality are nested in the "query" object, access via get_value
+	// query.cpu_time and query.total_intermediate_rows are nested in the "query" object, access via get_value
 	auto cpu_time_val = duckdb_profiling_info_get_value(info, "query.cpu_time");
 	REQUIRE(cpu_time_val != nullptr);
 	auto cpu_time_str = duckdb_get_varchar(cpu_time_val);
@@ -155,15 +158,18 @@ TEST_CASE("Test profiling with cumulative metrics", "[capi]") {
 	duckdb_free(cpu_time_str);
 	duckdb_destroy_value(&cpu_time_val);
 
-	auto cumul_card_val = duckdb_profiling_info_get_value(info, "query.cumulative_cardinality");
-	REQUIRE(cumul_card_val != nullptr);
-	auto cumul_card_str = duckdb_get_varchar(cumul_card_val);
-	double root_cumulative_cardinality = std::stod(cumul_card_str);
-	duckdb_free(cumul_card_str);
-	duckdb_destroy_value(&cumul_card_val);
+	auto total_rows_val = duckdb_profiling_info_get_value(info, "query.total_intermediate_rows");
+	REQUIRE(total_rows_val != nullptr);
+	auto total_rows_str = duckdb_get_varchar(total_rows_val);
+	double root_total_intermediate_rows = std::stod(total_rows_str);
+	duckdb_free(total_rows_str);
+	duckdb_destroy_value(&total_rows_val);
 
-	REQUIRE(ConvertToInt(root_cpu_time) == ConvertToInt(cumulative_counter["OPERATOR_TIMING"]));
-	REQUIRE(ConvertToInt(root_cumulative_cardinality) == ConvertToInt(cumulative_counter["OPERATOR_CARDINALITY"]));
+	// Total timing = root operator (depth=0 "operator.timing") + child operators (depth>0 "timing")
+	REQUIRE(ConvertToInt(root_cpu_time) ==
+	        ConvertToInt(cumulative_counter["operator.timing"] + cumulative_counter["timing"]));
+	REQUIRE(ConvertToInt(root_total_intermediate_rows) ==
+	        ConvertToInt(cumulative_counter["operator.intermediate_rows"] + cumulative_counter["intermediate_rows"]));
 	tester.Cleanup();
 }
 
@@ -279,9 +285,9 @@ TEST_CASE("Test profiling with Extra Info enabled", "[capi]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA enable_profiling = 'no_output'"));
-	duckdb::vector<string> settings = {"EXTRA_INFO"};
+	duckdb::vector<string> settings = {"operator.extra_info"};
 	REQUIRE_NO_FAIL(tester.Query("PRAGMA custom_profiling_settings=" + BuildSettingsString(settings)));
-	REQUIRE_NO_FAIL(tester.Query("SELECT 1"));
+	REQUIRE_NO_FAIL(tester.Query("SELECT unnest([1,2,3]) ORDER BY 1"));
 
 	auto info = duckdb_get_profiling_info(tester.connection);
 	REQUIRE(info);
@@ -307,9 +313,8 @@ TEST_CASE("Test profiling with Extra Info enabled", "[capi]") {
 		auto value_c_str = duckdb_get_varchar(value);
 		auto value_str = duckdb::string(value_c_str);
 
-		if (key_str == EnumUtil::ToString(MetricType::EXTRA_INFO)) {
-			REQUIRE(value_str.find("__order_by__"));
-			REQUIRE(value_str.find("ASC"));
+		if (key_str == "extra_info") {
+			REQUIRE(!value_str.empty());
 			found_extra_info = true;
 		}
 

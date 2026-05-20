@@ -355,10 +355,6 @@ static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const s
                                            vector<std::string> &invalid_settings) {
 	profiler_settings_t enabled_metrics;
 
-	auto insert_if_enabled = [&](MetricType m) {
-		enabled_metrics.insert(EnumUtil::ToString(m));
-	};
-
 	auto insert_group_metric = [&](const string &converted_metric) {
 		if (MetricsUtils::IsOptimizerMetricKey(converted_metric)) {
 			if (IsEnabledOptimizerKey(converted_metric, disabled_optimizers)) {
@@ -372,8 +368,10 @@ static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const s
 			enabled_metrics.insert(converted_metric);
 		} else if (MetricsUtils::IsQueryMetricKey(converted_metric)) {
 			enabled_metrics.insert(converted_metric);
-		} else {
-			insert_if_enabled(EnumUtil::FromString<MetricType>(converted_metric));
+		} else if (MetricsUtils::IsOperatorMetricKey(converted_metric)) {
+			enabled_metrics.insert(converted_metric);
+		} else if (MetricsUtils::IsPhaseTimingKey(converted_metric)) {
+			enabled_metrics.insert(converted_metric);
 		}
 	};
 
@@ -424,25 +422,39 @@ static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const s
 			}
 			return;
 		}
-		const auto upper = StringUtil::Upper(metric);
-		try {
-			insert_if_enabled(EnumUtil::FromString<MetricType>(upper));
-		} catch (std::exception &) {
-			try {
-				auto group = EnumUtil::FromString<MetricGroup>(upper);
-				for (const auto &converted_metric : MetricsUtils::GetMetricsByGroupType(group)) {
-					insert_group_metric(converted_metric);
-				}
-			} catch (std::exception &) {
+		if (MetricsUtils::IsOperatorMetricKey(metric)) {
+			auto op_metrics = MetricsUtils::GetOperatorMetrics();
+			if (op_metrics.count(metric)) {
+				enabled_metrics.insert(metric);
+			} else {
 				invalid_settings.push_back(metric);
 			}
+			return;
+		}
+		if (MetricsUtils::IsPhaseTimingKey(metric)) {
+			auto phase_metrics = MetricsUtils::GetPhaseTimingMetrics();
+			if (phase_metrics.count(metric)) {
+				enabled_metrics.insert(metric);
+			} else {
+				invalid_settings.push_back(metric);
+			}
+			return;
+		}
+		const auto upper = StringUtil::Upper(metric);
+		try {
+			auto group = EnumUtil::FromString<MetricGroup>(upper);
+			for (const auto &converted_metric : MetricsUtils::GetMetricsByGroupType(group)) {
+				insert_group_metric(converted_metric);
+			}
+		} catch (std::exception &) {
+			invalid_settings.push_back(metric);
 		}
 	});
 	return enabled_metrics;
 }
 
 void AddOptimizerMetrics(profiler_settings_t &settings, const set<OptimizerType> &disabled_optimizers) {
-	if (settings.find("ALL_OPTIMIZERS") != settings.end()) {
+	if (settings.find("optimizers.total_time") != settings.end()) {
 		auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
 		for (const auto &metric : optimizer_metrics) {
 			if (IsEnabledOptimizerKey(metric, disabled_optimizers)) {

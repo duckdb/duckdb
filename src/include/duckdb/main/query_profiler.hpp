@@ -93,8 +93,6 @@ public:
 	//! Finalize query metrics for output; safe to call multiple times.
 	DUCKDB_API void FinalizeMetrics();
 
-	//! Adds amount to a specific metric type.
-	DUCKDB_API void AddToCounter(MetricType type, const idx_t amount);
 	//! Track bytes read (always tracked, even when profiling disabled).
 	DUCKDB_API void TrackBytesRead(idx_t amount);
 	//! Track bytes written (always tracked, even when profiling disabled).
@@ -102,9 +100,7 @@ public:
 	//! Add to a string-keyed counter (profiling-only).
 	DUCKDB_API void AddToStringCounter(const string &key, idx_t amount);
 
-	//! Start/End a timer for a specific metric type.
-	DUCKDB_API ActiveTimer StartTimer(MetricType type);
-	//! Start a string-keyed timer (used for optimizer/storage metrics, e.g. "optimizer.expression_rewriter").
+	//! Start a timer for a string-keyed metric.
 	DUCKDB_API ActiveTimer StartTimer(const string &key);
 
 	DUCKDB_API void StartExplainAnalyze();

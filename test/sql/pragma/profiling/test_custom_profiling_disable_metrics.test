@@ -11,7 +11,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA configure_profiling='{"query.cpu_time": "false", "EXTRA_INFO": "true", "OPERATOR_CARDINALITY": "true", "OPERATOR_TIMING": "true", "query.latency": "true"}';
+PRAGMA configure_profiling='{"query.cpu_time": "false", "operator.extra_info": "true", "operator.intermediate_rows": "true", "operator.timing": "true", "query.time": "true"}';
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -24,10 +24,10 @@ PRAGMA disable_profiling;
 query I rowsort
 SELECT unnest(current_setting('configure_profiling')) ORDER BY ALL;
 ----
-EXTRA_INFO
-OPERATOR_CARDINALITY
-OPERATOR_TIMING
-query.latency
+operator.extra_info
+operator.intermediate_rows
+operator.timing
+query.time
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
@@ -38,21 +38,21 @@ SELECT query.cpu_time FROM metrics_output;
 <REGEX>:Binder Error.*
 
 statement ok
-SELECT extra_info, query.latency FROM metrics_output;
+SELECT operator.extra_info, query.time FROM metrics_output;
 
 # Re-enable the CPU TIME.
 
 statement ok
-PRAGMA configure_profiling='{"query.query_name": "true", "query.cpu_time": "true", "EXTRA_INFO": "true", "query.cumulative_cardinality": "true", "query.cumulative_rows_scanned": "true"}'
+PRAGMA configure_profiling='{"query.query_name": "true", "query.cpu_time": "true", "operator.extra_info": "true", "query.total_intermediate_rows": "true", "query.total_rows_scanned": "true"}'
 
 query I
 SELECT unnest(current_setting('configure_profiling')) ORDER BY ALL
 ----
-EXTRA_INFO
+operator.extra_info
 query.cpu_time
-query.cumulative_cardinality
-query.cumulative_rows_scanned
 query.query_name
+query.total_intermediate_rows
+query.total_rows_scanned
 
 # Re-enabled profiling.
 
@@ -81,7 +81,7 @@ true
 
 query I
 SELECT
-	CASE WHEN query.cumulative_cardinality > 0 THEN 'true'
+	CASE WHEN query.total_intermediate_rows > 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
@@ -90,7 +90,7 @@ true
 # Only collect ROWS_SCANNED for table queries.
 query I
 SELECT
-	CASE WHEN query.cumulative_rows_scanned > 0 THEN 'true'
+	CASE WHEN query.total_rows_scanned > 0 THEN 'true'
 	ELSE 'false' END
 FROM metrics_output;
 ----
@@ -120,7 +120,7 @@ SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 
 # Disable all query.* metrics to verify the query struct disappears from output.
 
 statement ok
-PRAGMA configure_profiling='{"query.query_name": "false", "query.cpu_time": "false", "query.cumulative_cardinality": "false", "query.cumulative_rows_scanned": "false"}'
+PRAGMA configure_profiling='{"query.query_name": "false", "query.cpu_time": "false", "query.total_intermediate_rows": "false", "query.total_rows_scanned": "false"}'
 
 statement ok
 PRAGMA enable_profiling = 'json';

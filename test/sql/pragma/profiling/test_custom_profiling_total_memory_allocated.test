@@ -69,7 +69,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"system.total_memory_allocated": "true", "OPERATOR_NAME": "true", "OPERATOR_TYPE": "true"}';
+PRAGMA custom_profiling_settings='{"system.total_memory_allocated": "true", "operator.name": "true", "operator.type": "true"}';
 
 statement ok
 SELECT * FROM test WHERE id < 1000 ORDER BY id;

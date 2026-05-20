@@ -1,6 +1,5 @@
 #include "duckdb/main/profiling_info.hpp"
 
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/profiling_utils.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -15,20 +14,18 @@ namespace duckdb {
 ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t depth) : settings(n_settings) {
 	// Expand.
 	if (depth > 0) {
-		settings.insert("OPERATOR_NAME");
-		settings.insert("OPERATOR_TYPE");
+		settings.insert("operator.name");
+		settings.insert("operator.type");
 	}
 	for (const auto &metric : settings) {
-		if (MetricsUtils::IsOptimizerMetricKey(metric) || MetricsUtils::IsStorageMetricKey(metric) ||
-		    MetricsUtils::IsPhysicalPlannerMetricKey(metric) || MetricsUtils::IsSystemMetricKey(metric)) {
-			expanded_settings.insert(metric);
-			continue;
+		expanded_settings.insert(metric);
+		// When "optimizers.total_time" is enabled, also enable individual optimizer timers.
+		if (metric == "optimizers.total_time") {
+			auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
+			for (const auto &optimizer_metric : optimizer_metrics) {
+				expanded_settings.insert(optimizer_metric);
+			}
 		}
-		if (MetricsUtils::IsQueryMetricKey(metric)) {
-			expanded_settings.insert(metric);
-			continue;
-		}
-		Expand(expanded_settings, EnumUtil::FromString<MetricType>(metric));
 	}
 
 	// Reduce.
@@ -49,12 +46,13 @@ ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t 
 void ProfilingInfo::ResetMetrics() {
 	metrics.clear();
 	for (const auto &metric : expanded_settings) {
-		if (MetricsUtils::IsOptimizerMetricKey(metric) || MetricsUtils::IsPhysicalPlannerMetricKey(metric)) {
+		if (MetricsUtils::IsOptimizerMetricKey(metric) || MetricsUtils::IsPhysicalPlannerMetricKey(metric) ||
+		    MetricsUtils::IsPhaseTimingKey(metric)) {
 			metrics[metric] = Value::CreateValue(0.0);
 			continue;
 		}
 		if (MetricsUtils::IsQueryMetricKey(metric)) {
-			if (metric == "query.latency" || metric == "query.cpu_time") {
+			if (metric == "query.time" || metric == "query.cpu_time") {
 				metrics[metric] = Value::CreateValue(0.0);
 			} else if (metric == "query.query_name") {
 				metrics[metric] = Value::CreateValue("");
@@ -79,46 +77,16 @@ void ProfilingInfo::ResetMetrics() {
 			}
 			continue;
 		}
-		auto metric_type = EnumUtil::FromString<MetricType>(metric);
-		if (MetricsUtils::IsPhaseTimingMetric(metric_type)) {
-			metrics[metric] = Value::CreateValue(0.0);
+		if (MetricsUtils::IsOperatorMetricKey(metric)) {
+			ProfilingUtils::SetMetricToDefault(metrics, metric);
 			continue;
 		}
-		ProfilingUtils::SetMetricToDefault(metrics, metric_type);
+		throw InternalException("Unknown metric key in ResetMetrics: %s", metric);
 	}
-}
-
-bool ProfilingInfo::Enabled(const MetricType metric) const {
-	return settings.find(EnumUtil::ToString(metric)) != settings.end();
-}
-
-bool ProfilingInfo::EnabledForCollection(const MetricType metric) const {
-	return expanded_settings.find(EnumUtil::ToString(metric)) != expanded_settings.end();
 }
 
 bool ProfilingInfo::EnabledForCollection(const string &key) const {
 	return expanded_settings.find(key) != expanded_settings.end();
-}
-
-void ProfilingInfo::Expand(profiler_settings_t &settings, const MetricType metric) {
-	settings.insert(EnumUtil::ToString(metric));
-
-	switch (metric) {
-	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
-	case MetricType::ALL_OPTIMIZERS: {
-		auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
-		for (const auto &optimizer_metric : optimizer_metrics) {
-			settings.insert(optimizer_metric);
-		}
-		return;
-	}
-	default:
-		break;
-	}
-}
-
-void ProfilingInfo::SetMetricValue(MetricType type, Value new_value) {
-	metrics[EnumUtil::ToString(type)] = std::move(new_value);
 }
 
 void ProfilingInfo::SetMetricValue(const string &key, Value new_value) {

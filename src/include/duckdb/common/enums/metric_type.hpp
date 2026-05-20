@@ -12,7 +12,6 @@
 
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/enums/optimizer_type.hpp"
 
 namespace duckdb {
 
@@ -28,25 +27,6 @@ enum class MetricGroup : uint8_t {
 	INVALID,
 };
 
-enum class MetricType : uint8_t {
-	// (Core metrics moved to "query.*" string keys)
-	// (Execution metrics moved to "system.*" string keys)
-	// Operator metrics
-	EXTRA_INFO = 3,
-	OPERATOR_CARDINALITY = 6,
-	OPERATOR_NAME = 13,
-	OPERATOR_ROWS_SCANNED = 8,
-	OPERATOR_TIMING = 9,
-	OPERATOR_TYPE = 5,
-	RESULT_SET_SIZE = 10,
-	// PhaseTiming metrics
-	ALL_OPTIMIZERS = 18,
-	CUMULATIVE_OPTIMIZER_TIMING = 19,
-	PARSER = 99,
-	PLANNER = 20,
-	PLANNER_BINDING = 21,
-};
-
 typedef unordered_set<string> profiler_settings_t;
 typedef unordered_map<string, Value> profiler_metrics_t;
 
@@ -58,40 +38,37 @@ public:
 
 	// Core metrics
 	static profiler_settings_t GetCoreMetrics();
-	static bool IsCoreMetric(MetricType type);
 
 	// Default metrics
 	static profiler_settings_t GetDefaultMetrics();
-	static bool IsDefaultMetric(MetricType type);
 
-	// Core metrics — stored as "query.<lowercase_name>" strings, not as MetricType values
+	// Query metrics — stored as "query.<lowercase_name>" strings
 	static profiler_settings_t GetQueryMetrics();
 	static bool IsQueryMetricKey(const string &key);
 	static bool IsQueryTimerMetricKey(const string &key);
 
-	// Execution metrics — stored as "system.<lowercase_name>" strings, not as MetricType values
+	// Execution/System metrics — stored as "system.<lowercase_name>" strings
 	static profiler_settings_t GetExecutionMetrics();
-	static bool IsExecutionMetric(MetricType type);
 	static profiler_settings_t GetSystemMetrics();
 	static bool IsSystemMetricKey(const string &key);
 	static bool IsSystemTimerKey(const string &key);
 
-	// Storage metrics — stored as "storage.<lowercase_name>" strings, not as MetricType values
+	// Storage metrics — stored as "storage.<lowercase_name>" strings
 	static profiler_settings_t GetStorageMetrics();
 	static bool IsStorageMetricKey(const string &key);
 	static bool IsStorageTimerKey(const string &key);
 
-	// Operator metrics
+	// Operator metrics — stored as "operator.<lowercase_name>" strings
 	static profiler_settings_t GetOperatorMetrics();
-	static bool IsOperatorMetric(MetricType type);
+	static bool IsOperatorMetricKey(const string &key);
 
-	// Optimizer metrics — stored as "optimizer.<lowercase_name>" strings, not as MetricType values
+	// Optimizer metrics — stored as "optimizer.<lowercase_name>" strings
 	static profiler_settings_t GetOptimizerMetrics();
 	static bool IsOptimizerMetricKey(const string &key);
 
-	// PhaseTiming metrics
+	// PhaseTiming metrics — stored as "optimizers.*", "parsers.*", "planner.*" strings
 	static profiler_settings_t GetPhaseTimingMetrics();
-	static bool IsPhaseTimingMetric(MetricType type);
+	static bool IsPhaseTimingKey(const string &key);
 
 	// PhysicalPlanner metrics — stored as "physical_planner.<lowercase_name>" strings
 	static profiler_settings_t GetPhysicalPlannerMetrics();
@@ -99,6 +76,5 @@ public:
 
 	// RootScope metrics
 	static profiler_settings_t GetRootScopeMetrics();
-	static bool IsRootScopeMetric(MetricType type);
 };
 } // namespace duckdb

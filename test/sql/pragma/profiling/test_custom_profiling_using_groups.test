@@ -25,18 +25,13 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-ALL_OPTIMIZERS
-CUMULATIVE_OPTIMIZER_TIMING
-EXTRA_INFO
-OPERATOR_CARDINALITY
-OPERATOR_NAME
-OPERATOR_ROWS_SCANNED
-OPERATOR_TIMING
-OPERATOR_TYPE
-PARSER
-PLANNER
-PLANNER_BINDING
-RESULT_SET_SIZE
+operator.extra_info
+operator.intermediate_rows
+operator.intermediate_size_bytes
+operator.name
+operator.rows_scanned
+operator.timing
+operator.type
 optimizer.aggregate_function_rewriter
 optimizer.build_side_probe_side
 optimizer.column_lifetime
@@ -75,16 +70,20 @@ optimizer.top_n_window_elimination
 optimizer.unnest_rewriter
 optimizer.unused_columns
 optimizer.window_self_join
+optimizers.total_time
+parsers.total_time
 physical_planner.column_binding
 physical_planner.create_plan
 physical_planner.resolve_types
 physical_planner.total_time
+planner.binding_time
+planner.total_time
 query.cpu_time
-query.cumulative_cardinality
-query.cumulative_rows_scanned
-query.latency
 query.query_name
 query.rows_returned
+query.time
+query.total_intermediate_rows
+query.total_rows_scanned
 storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
@@ -103,9 +102,7 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT ALL_OPTIMIZERS,
-	CUMULATIVE_OPTIMIZER_TIMING,
-	EXTRA_INFO,
+SELECT operator.extra_info,
 	optimizer.aggregate_function_rewriter,
 	optimizer.build_side_probe_side,
 	optimizer.column_lifetime,
@@ -144,18 +141,19 @@ SELECT ALL_OPTIMIZERS,
 	optimizer.unnest_rewriter,
 	optimizer.unused_columns,
 	optimizer.window_self_join,
-	PARSER,
+	optimizers.total_time,
+	parsers.total_time,
 	physical_planner.column_binding,
 	physical_planner.create_plan,
 	physical_planner.resolve_types,
 	physical_planner.total_time,
-	PLANNER,
-	PLANNER_BINDING,
-	RESULT_SET_SIZE,
+	planner.binding_time,
+	planner.total_time,
+	operator.intermediate_size_bytes,
 	query.cpu_time,
-	query.cumulative_cardinality,
-	query.cumulative_rows_scanned,
-	query.latency,
+	query.total_intermediate_rows,
+	query.total_rows_scanned,
+	query.time,
 	query.query_name,
 	query.rows_returned,
 	storage.attach_load_storage_latency,
@@ -192,20 +190,20 @@ query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
 query.cpu_time
-query.cumulative_cardinality
-query.cumulative_rows_scanned
-query.latency
 query.query_name
 query.rows_returned
+query.time
+query.total_intermediate_rows
+query.total_rows_scanned
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT query.cpu_time,
-	query.cumulative_cardinality,
-	query.cumulative_rows_scanned,
-	query.latency,
+	query.total_intermediate_rows,
+	query.total_rows_scanned,
+	query.time,
 	query.query_name,
 	query.rows_returned
 FROM metrics_output;
@@ -228,19 +226,19 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-EXTRA_INFO
-OPERATOR_CARDINALITY
-OPERATOR_NAME
-OPERATOR_ROWS_SCANNED
-OPERATOR_TIMING
-OPERATOR_TYPE
-RESULT_SET_SIZE
+operator.extra_info
+operator.intermediate_rows
+operator.intermediate_size_bytes
+operator.name
+operator.rows_scanned
+operator.timing
+operator.type
 query.cpu_time
-query.cumulative_cardinality
-query.cumulative_rows_scanned
-query.latency
 query.query_name
 query.rows_returned
+query.time
+query.total_intermediate_rows
+query.total_rows_scanned
 storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
@@ -259,12 +257,12 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT extra_info,
-	result_set_size,
+SELECT operator.extra_info,
+	operator.intermediate_size_bytes,
 	query.cpu_time,
-	query.cumulative_cardinality,
-	query.cumulative_rows_scanned,
-	query.latency,
+	query.total_intermediate_rows,
+	query.total_rows_scanned,
+	query.time,
 	query.query_name,
 	query.rows_returned,
 	storage.attach_load_storage_latency,
@@ -376,20 +374,23 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-OPERATOR_CARDINALITY
-OPERATOR_NAME
-OPERATOR_ROWS_SCANNED
-OPERATOR_TIMING
-OPERATOR_TYPE
+operator.cpu_time
+operator.extra_info
+operator.intermediate_rows
+operator.intermediate_size_bytes
+operator.name
+operator.rows_scanned
+operator.timing
+operator.type
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT OPERATOR_CARDINALITY,
-	OPERATOR_NAME,
-	OPERATOR_TIMING,
-	OPERATOR_TYPE
+SELECT intermediate_rows,
+	name,
+	timing,
+	type
 FROM (
 	SELECT unnest(operator_info, max_depth := 2)
 	FROM metrics_output
@@ -514,11 +515,6 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-ALL_OPTIMIZERS
-CUMULATIVE_OPTIMIZER_TIMING
-PARSER
-PLANNER
-PLANNER_BINDING
 optimizer.aggregate_function_rewriter
 optimizer.build_side_probe_side
 optimizer.column_lifetime
@@ -557,17 +553,20 @@ optimizer.top_n_window_elimination
 optimizer.unnest_rewriter
 optimizer.unused_columns
 optimizer.window_self_join
+optimizers.total_time
+parsers.total_time
 physical_planner.column_binding
 physical_planner.create_plan
 physical_planner.resolve_types
 physical_planner.total_time
+planner.binding_time
+planner.total_time
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT ALL_OPTIMIZERS,
-	CUMULATIVE_OPTIMIZER_TIMING,
+SELECT optimizers.total_time,
 	optimizer.aggregate_function_rewriter,
 	optimizer.build_side_probe_side,
 	optimizer.column_lifetime,
@@ -606,13 +605,13 @@ SELECT ALL_OPTIMIZERS,
 	optimizer.unnest_rewriter,
 	optimizer.unused_columns,
 	optimizer.window_self_join,
+	parsers.total_time,
 	physical_planner.column_binding,
 	physical_planner.create_plan,
 	physical_planner.resolve_types,
 	physical_planner.total_time,
-	PARSER,
-	PLANNER,
-	PLANNER_BINDING
+	planner.binding_time,
+	planner.total_time
 FROM metrics_output;
 
 statement ok
@@ -633,19 +632,19 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-EXTRA_INFO
-OPERATOR_CARDINALITY
-OPERATOR_NAME
-OPERATOR_ROWS_SCANNED
-OPERATOR_TIMING
-OPERATOR_TYPE
-RESULT_SET_SIZE
+operator.extra_info
+operator.intermediate_rows
+operator.intermediate_size_bytes
+operator.name
+operator.rows_scanned
+operator.timing
+operator.type
 query.cpu_time
-query.cumulative_cardinality
-query.cumulative_rows_scanned
-query.latency
 query.query_name
 query.rows_returned
+query.time
+query.total_intermediate_rows
+query.total_rows_scanned
 storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
@@ -664,12 +663,12 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT extra_info,
-	result_set_size,
+SELECT operator.extra_info,
+	operator.intermediate_size_bytes,
 	query.cpu_time,
-	query.cumulative_cardinality,
-	query.cumulative_rows_scanned,
-	query.latency,
+	query.total_intermediate_rows,
+	query.total_rows_scanned,
+	query.time,
 	query.query_name,
 	query.rows_returned,
 	storage.attach_load_storage_latency,
@@ -824,11 +823,6 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
-ALL_OPTIMIZERS
-CUMULATIVE_OPTIMIZER_TIMING
-PARSER
-PLANNER
-PLANNER_BINDING
 optimizer.aggregate_function_rewriter
 optimizer.build_side_probe_side
 optimizer.column_lifetime
@@ -867,10 +861,14 @@ optimizer.top_n_window_elimination
 optimizer.unnest_rewriter
 optimizer.unused_columns
 optimizer.window_self_join
+optimizers.total_time
+parsers.total_time
 physical_planner.column_binding
 physical_planner.create_plan
 physical_planner.resolve_types
 physical_planner.total_time
+planner.binding_time
+planner.total_time
 storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
@@ -889,8 +887,7 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT ALL_OPTIMIZERS,
-	CUMULATIVE_OPTIMIZER_TIMING,
+SELECT optimizers.total_time,
 	optimizer.aggregate_function_rewriter,
 	optimizer.build_side_probe_side,
 	optimizer.column_lifetime,
@@ -929,13 +926,13 @@ SELECT ALL_OPTIMIZERS,
 	optimizer.unnest_rewriter,
 	optimizer.unused_columns,
 	optimizer.window_self_join,
+	parsers.total_time,
 	physical_planner.column_binding,
 	physical_planner.create_plan,
 	physical_planner.resolve_types,
 	physical_planner.total_time,
-	PARSER,
-	PLANNER,
-	PLANNER_BINDING,
+	planner.binding_time,
+	planner.total_time,
 	storage.attach_load_storage_latency,
 	storage.attach_replay_wal_latency,
 	storage.checkpoint_latency,
