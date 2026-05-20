@@ -7,6 +7,9 @@
 
 namespace duckdb {
 
+static constexpr const char *TRIGGER_INTERNAL_CTE_PREFIX = "__duckdb_trigger";
+static constexpr const char *TRIGGER_BASE_CTE_NAME = "__duckdb_trigger_base";
+
 //! A trigger catalog entry
 class TriggerCatalogEntry : public StandardEntry {
 public:

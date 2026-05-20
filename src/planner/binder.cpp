@@ -618,7 +618,6 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, triggers));
 }
 
-static constexpr const char *TRIGGER_BASE_CTE_NAME = "__duckdb_trigger_base";
 
 BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
                                            const vector<const_reference<TriggerCatalogEntry>> &triggers) {

@@ -237,3 +237,62 @@ query I
 SELECT COUNT(*) FROM t_rollback;
 ----
 0
+
+# Alias cannot collide with internal CTE names
+statement ok
+CREATE TABLE t_reserved (id INTEGER);
+
+statement ok
+CREATE TABLE t_reserved_log (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_reserved_base AFTER INSERT ON t_reserved
+REFERENCING NEW TABLE AS __duckdb_trigger_base
+FOR EACH STATEMENT
+    INSERT INTO t_reserved_log SELECT id FROM __duckdb_trigger_base;
+----
+Binder Error: REFERENCING alias cannot use reserved internal name "__duckdb_trigger_base"
+
+statement error
+CREATE TRIGGER trg_reserved_1 AFTER INSERT ON t_reserved
+REFERENCING NEW TABLE AS __duckdb_trigger_1
+FOR EACH STATEMENT
+    INSERT INTO t_reserved_log SELECT id FROM __duckdb_trigger_1;
+----
+Binder Error: REFERENCING alias cannot use reserved internal name "__duckdb_trigger_1"
+
+# Trigger body cannot reference a real table whose name matches internal prefix
+statement ok
+CREATE TABLE __duckdb_trigger_base (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_reserved_real AFTER INSERT ON t_reserved FOR EACH STATEMENT
+    INSERT INTO t_reserved_log SELECT id FROM __duckdb_trigger_base;
+----
+Binder Error: Trigger body cannot reference table "__duckdb_trigger_base"
+
+# Trigger body referencing internal name without a real table fails naturally
+statement ok
+DROP TABLE __duckdb_trigger_base;
+
+statement error
+CREATE TRIGGER trg_reserved_noexist AFTER INSERT ON t_reserved FOR EACH STATEMENT
+    INSERT INTO t_reserved_log SELECT id FROM __duckdb_trigger_base;
+----
+Catalog Error:
+
+# INSERT query using a CTE with internal name still works (scoped inside, no collision)
+statement ok
+CREATE TRIGGER trg_reserved_ok AFTER INSERT ON t_reserved
+REFERENCING NEW TABLE AS ins
+FOR EACH STATEMENT
+    INSERT INTO t_reserved_log SELECT id FROM ins;
+
+statement ok
+WITH __duckdb_trigger_base AS (SELECT 7 as id)
+INSERT INTO t_reserved SELECT id FROM __duckdb_trigger_base;
+
+query I
+SELECT id FROM t_reserved_log;
+----
+7
