@@ -151,7 +151,9 @@ private:
 		switch (input.GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR: {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			FlatVector::SetSize(result, count);
+			if (result.size() != count) {
+				FlatVector::SetSize(result, count);
+			}
 			auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
 			auto ldata = ConstantVector::GetData<INPUT_TYPE>(input);
 
@@ -167,7 +169,9 @@ private:
 #ifndef DUCKDB_SMALLER_BINARY
 		case VectorType::FLAT_VECTOR: {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			FlatVector::SetSize(result, count);
+			if (result.size() != count) {
+				FlatVector::SetSize(result, count);
+			}
 			auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 
@@ -210,7 +214,9 @@ private:
 			input.ToUnifiedFormat(vdata);
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			FlatVector::SetSize(result, count);
+			if (result.size() != count) {
+				FlatVector::SetSize(result, count);
+			}
 			auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			auto ldata = UnifiedVectorFormat::GetData<INPUT_TYPE>(vdata);
 

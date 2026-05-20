@@ -74,6 +74,13 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 		masks.push_back(ValidityMask(result_size));
 	}
 
+	// Ensure list children are flat so FlatVector::Validity can be used below
+	for (idx_t i = 0; i < args_size; i++) {
+		if (input_lists[i].has_value() && ListVector::GetListSize(args.data[i]) > 0) {
+			ListVector::GetChildMutable(args.data[i]).Flatten();
+		}
+	}
+
 	idx_t offset = 0;
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
@@ -113,15 +120,17 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 		result_data.WriteValue(entry);
 		offset += len;
 	}
-	if (result_size > 0) {
-		for (idx_t child_idx = 0; child_idx < args_size; child_idx++) {
-			if (args.data[child_idx].GetType() != LogicalType::SQLNULL) {
-				struct_entries[child_idx].Slice(ListVector::GetChild(args.data[child_idx]), selections[child_idx],
-				                                result_size);
-			}
-			struct_entries[child_idx].Flatten();
-			FlatVector::SetValidity((struct_entries[child_idx]), masks[child_idx]);
+	for (idx_t child_idx = 0; child_idx < args_size; child_idx++) {
+		if (args.data[child_idx].GetType() == LogicalType::SQLNULL ||
+		    ListVector::GetListSize(args.data[child_idx]) == 0) {
+			struct_entries[child_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(struct_entries[child_idx], true);
+		} else {
+			struct_entries[child_idx].Slice(ListVector::GetChild(args.data[child_idx]), selections[child_idx],
+			                                result_size);
 		}
+		struct_entries[child_idx].Flatten();
+		FlatVector::SetValidity((struct_entries[child_idx]), masks[child_idx]);
 	}
 }
 

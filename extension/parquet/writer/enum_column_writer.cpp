@@ -22,6 +22,18 @@ class Vector;
 
 using duckdb_parquet::Encoding;
 
+namespace {
+class EnumStatisticsState : public StringStatisticsState {
+public:
+	bool MinIsExact() override {
+		return false;
+	}
+	bool MaxIsExact() override {
+		return false;
+	}
+};
+} // namespace
+
 class EnumWriterPageState : public ColumnWriterPageState {
 public:
 	explicit EnumWriterPageState(uint32_t bit_width) : encoder(bit_width), written_value(false) {
@@ -39,7 +51,7 @@ EnumColumnWriter::EnumColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&
 }
 
 unique_ptr<ColumnWriterStatistics> EnumColumnWriter::InitializeStatsState() {
-	return make_uniq<StringStatisticsState>();
+	return make_uniq<EnumStatisticsState>();
 }
 
 template <class T>

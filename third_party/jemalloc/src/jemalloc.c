@@ -25,7 +25,7 @@
 #include "jemalloc/internal/thread_event.h"
 #include "jemalloc/internal/util.h"
 
-#include "malloc_ncpus.h"
+#include "duckdb/malloc_ncpus.h"
 
 /******************************************************************************/
 /* Data. */
