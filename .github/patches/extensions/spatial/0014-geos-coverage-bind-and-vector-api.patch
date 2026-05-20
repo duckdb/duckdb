@@ -1,0 +1,80 @@
+diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
+index 7f4ccdd01d..bc2b2e3394 100644
+--- a/src/spatial/modules/geos/geos_module.cpp
++++ b/src/spatial/modules/geos/geos_module.cpp
+@@ -849,8 +849,10 @@ struct ST_ConvexHull {
+ 
+ struct ST_CoverageClean {
+ 
+-       static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+-                                                                                vector<unique_ptr<Expression>> &arguments) {
++       static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
++		auto &arguments = input.GetArguments();
++		auto &bound_function = input.GetBoundFunction();
++		auto &context = input.GetClientContext();
+                // set default values for coverage_clean parameters
+                const size_t num_args = arguments.size();
+                if (num_args == 2) { // gap max width
+@@ -870,15 +872,14 @@ struct ST_CoverageClean {
+                UnifiedVectorFormat format;
+ 
+                auto &list_vec = args.data[0];
+-               auto &item_vec = ListVector::GetEntry(list_vec);
+-               item_vec.ToUnifiedFormat(ListVector::GetListSize(list_vec), format);
++               auto &item_vec = ListVector::GetChild(list_vec);
++		item_vec.ToUnifiedFormat(format);
+ 
+                // Collection to hold the working set of geometries
+                GeosCollection collection(lstate.GetContext());
+ 
+                TernaryExecutor::Execute<list_entry_t, double, double, string_t>(
+-                   list_vec, args.data[1], args.data[2],
+-                   result, args.size(), [&](const list_entry_t &list,
++                   list_vec, args.data[1], args.data[2], result, [&](const list_entry_t &list,
+                        double snapping_distance, double gap_maximum_width) {
+                            // Reset the collection
+                            collection.clear();
+@@ -970,8 +971,8 @@ struct ST_CoverageInvalidEdges {
+ 		UnifiedVectorFormat format;
+ 
+ 		auto &list_vec = args.data[0];
+-		auto &item_vec = ListVector::GetEntry(list_vec);
+-		item_vec.ToUnifiedFormat(ListVector::GetListSize(list_vec), format);
++		auto &item_vec = ListVector::GetChild(list_vec);
++		item_vec.ToUnifiedFormat(format);
+ 
+ 		// Collection to hold the working set of geometries
+ 		GeosCollection collection(lstate.GetContext());
+@@ -1064,8 +1065,8 @@ struct ST_CoverageSimplify {
+ 		UnifiedVectorFormat format;
+ 
+ 		auto &list_vec = args.data[0];
+-		auto &item_vec = ListVector::GetEntry(list_vec);
+-		item_vec.ToUnifiedFormat(ListVector::GetListSize(list_vec), format);
++		auto &item_vec = ListVector::GetChild(list_vec);
++		item_vec.ToUnifiedFormat(format);
+ 
+ 		// Collection to hold the working set of geometries
+ 		GeosCollection collection(lstate.GetContext());
+@@ -1145,8 +1146,8 @@ struct ST_CoverageUnion {
+ 		UnifiedVectorFormat format;
+ 
+ 		auto &list_vec = args.data[0];
+-		auto &item_vec = ListVector::GetEntry(list_vec);
+-		item_vec.ToUnifiedFormat(ListVector::GetListSize(list_vec), format);
++		auto &item_vec = ListVector::GetChild(list_vec);
++		item_vec.ToUnifiedFormat(format);
+ 
+ 		// Collection to hold the working set of geometries
+ 		GeosCollection collection(lstate.GetContext());
+@@ -2035,8 +2036,8 @@ struct ST_Polygonize {
+ 		UnifiedVectorFormat format;
+ 
+ 		auto &list_vec = args.data[0];
+-		auto &item_vec = ListVector::GetEntry(list_vec);
+-		item_vec.ToUnifiedFormat(ListVector::GetListSize(list_vec), format);
++		auto &item_vec = ListVector::GetChild(list_vec);
++		item_vec.ToUnifiedFormat(format);
+ 
+ 		// Collection to hold the working set of geometries
+ 		GeosCollection collection(lstate.GetContext());
