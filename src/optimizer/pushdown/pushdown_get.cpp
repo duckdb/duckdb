@@ -79,8 +79,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		if (expr.IsVolatile()) {
 			continue;
 		}
-		// IN with enough values benefits from a hash join and is handled by InClauseRewriter - skip pushdown
+		// IN with enough values benefits from a hash join and is handled by InClauseRewriter - skip pushdown.
+		// Also skip throwing IN expressions: scan pushdown loses short-circuit evaluation semantics.
 		if (expr.GetExpressionType() == ExpressionType::COMPARE_IN) {
+			if (expr.CanThrow()) {
+				continue;
+			}
 			auto &in_expr = expr.Cast<BoundOperatorExpression>();
 			if (!in_expr.children.empty() &&
 			    in_expr.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
