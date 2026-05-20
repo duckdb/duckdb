@@ -1759,7 +1759,8 @@ int Linenoise::Edit() {
 			EditMoveEndOfLine();
 			break;
 		case CTRL_L: /* ctrl+l, clear screen */
-			linenoiseClearScreen();
+			/* the screen clear is emitted by RefreshLine() in the same write
+			 * as the redraw, so the prompt is guaranteed to land at row 1 */
 			clear_screen = true;
 			RefreshLine();
 			break;
