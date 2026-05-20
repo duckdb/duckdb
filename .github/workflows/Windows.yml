@@ -186,7 +186,7 @@ jobs:
    needs:
     - win-release-64
    if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
-   runs-on: windows-latest
+   runs-on: windows-2025-vs2026
    env:
      GEN: ninja
 
@@ -331,7 +331,7 @@ jobs:
          run: make unittest_release SKIP_BUILD=1
 
  win-packaged-upload:
-   runs-on: windows-latest
+   runs-on: windows-2025-vs2026
    needs:
      - win-release-64
      - win-release-arm64
