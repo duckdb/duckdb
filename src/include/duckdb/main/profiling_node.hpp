@@ -13,8 +13,8 @@
 
 namespace duckdb {
 
-struct OperatorInformation {
-	explicit OperatorInformation() {
+struct OperatorMetrics {
+	explicit OperatorMetrics() {
 		ResetMetrics();
 	}
 
@@ -42,7 +42,7 @@ struct OperatorInformation {
 		operator_type = PhysicalOperatorType::INVALID;
 	}
 	void GatherMetrics(ClientContext &context, double elapsed_time, optional_ptr<DataChunk> chunk);
-	void Merge(const OperatorInformation &other);
+	void Merge(const OperatorMetrics &other);
 };
 
 //! The OperatorProfiler measures timings of individual operators
@@ -62,8 +62,8 @@ public:
 
 	//! Adds the timings in the OperatorProfiler (tree) to the QueryProfiler (tree).
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
-	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
-	DUCKDB_API bool OperatorInfoIsInitialized(const PhysicalOperator &phys_op);
+	DUCKDB_API OperatorMetrics &GetOperatorMetrics(const PhysicalOperator &phys_op);
+	DUCKDB_API bool OperatorMetricsIsInitialized(const PhysicalOperator &phys_op);
 
 public:
 	ClientContext &context;
@@ -76,7 +76,7 @@ private:
 	//! The stack of Physical Operators that are currently active
 	optional_ptr<const PhysicalOperator> active_operator;
 	//! A mapping of physical operators to profiled operator information.
-	reference_map_t<const PhysicalOperator, OperatorInformation> operator_infos;
+	reference_map_t<const PhysicalOperator, OperatorMetrics> operator_metrics;
 };
 
 //! Recursive tree mirroring the operator tree.
@@ -87,7 +87,7 @@ public:
 	virtual ~ProfilingNode() {};
 
 private:
-	OperatorInformation operator_info;
+	OperatorMetrics operator_info;
 
 public:
 	idx_t depth = 0;
@@ -97,10 +97,10 @@ public:
 	idx_t GetChildCount() {
 		return children.size();
 	}
-	OperatorInformation &GetOperatorInfo() {
+	OperatorMetrics &GetOperatorMetrics() {
 		return operator_info;
 	}
-	const OperatorInformation &GetOperatorInfo() const {
+	const OperatorMetrics &GetOperatorMetrics() const {
 		return operator_info;
 	}
 	optional_ptr<ProfilingNode> GetChild(idx_t idx) {

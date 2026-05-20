@@ -100,7 +100,7 @@ static unique_ptr<RenderTreeNode> CreateNode(const PipelineRenderNode &op) {
 }
 
 static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
-	auto &info = op.GetOperatorInfo();
+	auto &info = op.GetOperatorMetrics();
 	auto &extra_info = info.extra_info;
 
 	auto &node_name = info.name;

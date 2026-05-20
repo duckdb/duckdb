@@ -360,6 +360,8 @@ static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const s
 			if (IsEnabledOptimizerKey(converted_metric, disabled_optimizers)) {
 				enabled_metrics.insert(converted_metric);
 			}
+		} else if (MetricsUtils::IsIOMetricKey(converted_metric)) {
+			enabled_metrics.insert(converted_metric);
 		} else if (MetricsUtils::IsStorageMetricKey(converted_metric)) {
 			enabled_metrics.insert(converted_metric);
 		} else if (MetricsUtils::IsPhysicalPlannerMetricKey(converted_metric)) {
@@ -382,6 +384,15 @@ static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const s
 					enabled_metrics.insert(metric);
 				}
 			} catch (std::exception &) {
+				invalid_settings.push_back(metric);
+			}
+			return;
+		}
+		if (MetricsUtils::IsIOMetricKey(metric)) {
+			auto io_metrics = MetricsUtils::GetIOMetrics();
+			if (io_metrics.count(metric)) {
+				enabled_metrics.insert(metric);
+			} else {
 				invalid_settings.push_back(metric);
 			}
 			return;

@@ -30,20 +30,20 @@ enum class ProfilingParameterNames : uint8_t { FORMAT, COVERAGE, SAVE_LOCATION, 
 class ProfilingInfo {
 public:
 	ProfilingInfo() = default;
-	explicit ProfilingInfo(const profiler_settings_t &n_settings, const idx_t depth = 0);
+	explicit ProfilingInfo(const profiler_settings_t &n_settings);
 	ProfilingInfo(ProfilingInfo &) = default;
 	ProfilingInfo &operator=(ProfilingInfo const &) = default;
 
 public:
 	void ResetMetrics();
-	//! Returns true if the query profiler must collect this metric.
+	//! Returns true if this metric is enabled (and should therefore be collected and output).
 	bool EnabledForCollection(const string &key) const;
 	void SetMetricValue(const string &key, Value new_value);
+	void SetMetricValue(const string &key, idx_t value);
+	void SetMetricValue(const string &key, double value);
+	void SetMetricValue(const string &key, const string &value);
 
 	const profiler_metrics_t &GetMetrics() const {
-		return metrics;
-	}
-	profiler_metrics_t &GetMetricsMutable() {
 		return metrics;
 	}
 
@@ -53,10 +53,8 @@ public:
 	void MetricsToProfileResult(QueryProfileResult &result) const;
 
 private:
-	//! Enabling a metric adds it to this set.
+	//! Enabling a metric adds it to this set (controls both collection and output).
 	profiler_settings_t settings;
-	//! This set contains the expanded to-be-collected metrics, which can differ from 'settings'.
-	profiler_settings_t expanded_settings;
 	//! Contains all enabled metrics.
 	profiler_metrics_t metrics;
 };

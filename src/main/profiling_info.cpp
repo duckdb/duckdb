@@ -11,86 +11,44 @@ using namespace duckdb_yyjson; // NOLINT
 
 namespace duckdb {
 
-ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings, const idx_t depth) : settings(n_settings) {
-	// Expand.
-	if (depth > 0) {
-		settings.insert("operator.name");
-		settings.insert("operator.type");
-	}
-	for (const auto &metric : settings) {
-		expanded_settings.insert(metric);
-		// When "optimizers.total_time" is enabled, also enable individual optimizer timers.
-		if (metric == "optimizers.total_time") {
-			auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
-			for (const auto &optimizer_metric : optimizer_metrics) {
-				expanded_settings.insert(optimizer_metric);
-			}
-		}
-	}
-
-	// Reduce.
-	if (depth == 0) {
-		auto op_metrics = MetricsUtils::GetOperatorMetrics();
-		for (const auto &metric : op_metrics) {
-			settings.erase(metric);
-		}
-	} else {
-		auto root_metrics = MetricsUtils::GetRootScopeMetrics();
-		for (const auto &metric : root_metrics) {
-			settings.erase(metric);
-		}
-	}
+ProfilingInfo::ProfilingInfo(const profiler_settings_t &n_settings) : settings(n_settings) {
 	ResetMetrics();
 }
 
 void ProfilingInfo::ResetMetrics() {
 	metrics.clear();
-	for (const auto &metric : expanded_settings) {
-		if (MetricsUtils::IsOptimizerMetricKey(metric) || MetricsUtils::IsPhysicalPlannerMetricKey(metric) ||
-		    MetricsUtils::IsPhaseTimingKey(metric)) {
-			metrics[metric] = Value::CreateValue(0.0);
-			continue;
-		}
-		if (MetricsUtils::IsQueryMetricKey(metric)) {
-			if (metric == "query.time" || metric == "query.cpu_time") {
-				metrics[metric] = Value::CreateValue(0.0);
-			} else if (metric == "query.sql") {
-				metrics[metric] = Value::CreateValue("");
-			} else {
-				metrics[metric] = Value::CreateValue<uint64_t>(0);
-			}
-			continue;
-		}
-		if (MetricsUtils::IsSystemMetricKey(metric)) {
-			if (MetricsUtils::IsSystemTimerKey(metric)) {
-				metrics[metric] = Value::CreateValue(0.0);
-			} else {
-				metrics[metric] = Value::CreateValue<uint64_t>(0);
-			}
-			continue;
-		}
-		if (MetricsUtils::IsStorageMetricKey(metric)) {
-			if (MetricsUtils::IsStorageTimerKey(metric)) {
-				metrics[metric] = Value::CreateValue(0.0);
-			} else {
-				metrics[metric] = Value::CreateValue<uint64_t>(0);
-			}
-			continue;
-		}
-		if (MetricsUtils::IsOperatorMetricKey(metric)) {
-			ProfilingUtils::SetMetricToDefault(metrics, metric);
-			continue;
-		}
-		throw InternalException("Unknown metric key in ResetMetrics: %s", metric);
-	}
 }
 
 bool ProfilingInfo::EnabledForCollection(const string &key) const {
-	return expanded_settings.find(key) != expanded_settings.end();
+	return settings.find(key) != settings.end();
 }
 
 void ProfilingInfo::SetMetricValue(const string &key, Value new_value) {
+	if (!EnabledForCollection(key)) {
+		return;
+	}
 	metrics[key] = std::move(new_value);
+}
+
+void ProfilingInfo::SetMetricValue(const string &key, idx_t value) {
+	if (!EnabledForCollection(key)) {
+		return;
+	}
+	metrics[key] = Value::UBIGINT(value);
+}
+
+void ProfilingInfo::SetMetricValue(const string &key, double value) {
+	if (!EnabledForCollection(key)) {
+		return;
+	}
+	metrics[key] = Value::DOUBLE(value);
+}
+
+void ProfilingInfo::SetMetricValue(const string &key, const string &value) {
+	if (!EnabledForCollection(key)) {
+		return;
+	}
+	metrics[key] = Value(value);
 }
 
 void ProfilingInfo::WriteMetricsToLog(ClientContext &context) const {
@@ -99,7 +57,7 @@ void ProfilingInfo::WriteMetricsToLog(ClientContext &context) const {
 		for (const auto &metric : settings) {
 			auto entry = metrics.find(metric);
 			if (entry == metrics.end()) {
-				throw InternalException("Metric not instantiated correctly");
+				continue; // Metric was not recorded this query
 			}
 			logger.WriteLog(MetricsLogType::NAME, MetricsLogType::LEVEL,
 			                MetricsLogType::ConstructLogMessage(metric, entry->second));

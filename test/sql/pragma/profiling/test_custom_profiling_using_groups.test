@@ -25,6 +25,8 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
+io.total_bytes_read
+io.total_bytes_written
 operator.extra_info
 operator.intermediate_rows
 operator.intermediate_size_bytes
@@ -79,7 +81,6 @@ physical_planner.total_time
 planner.binding_time
 planner.total_time
 query.cpu_time
-query.rows_returned
 query.sql
 query.time
 query.total_intermediate_rows
@@ -88,8 +89,6 @@ storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
 storage.commit_local_storage_latency
-storage.total_bytes_read
-storage.total_bytes_written
 storage.waiting_to_attach_latency
 storage.wal_replay_entry_count
 storage.write_to_wal_latency
@@ -103,44 +102,7 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_ou
 
 statement ok
 SELECT operator_info[1].extra_info,
-	optimizer.aggregate_function_rewriter,
-	optimizer.build_side_probe_side,
-	optimizer.column_lifetime,
-	optimizer.common_aggregate,
-	optimizer.common_subexpressions,
-	optimizer.common_subplan,
-	optimizer.compressed_materialization,
-	optimizer.cte_filter_pusher,
-	optimizer.cte_inlining,
-	optimizer.deliminator,
-	optimizer.duplicate_groups,
-	optimizer.empty_result_pullup,
-	optimizer.expression_rewriter,
-	optimizer.extension,
-	optimizer.filter_pullup,
-	optimizer.filter_pushdown,
-	optimizer.in_clause,
-	optimizer.join_elimination,
-	optimizer.join_filter_pushdown,
-	optimizer.join_order,
-	optimizer.late_materialization,
-	optimizer.limit_pushdown,
-	optimizer.materialized_cte,
-	optimizer.outer_join_simplification,
-	optimizer.partial_aggregate_pushdown,
-	optimizer.partitioned_execution,
-	optimizer.projection_pullup,
-	optimizer.regex_range,
-	optimizer.reorder_filter,
-	optimizer.row_group_pruner,
-	optimizer.row_number_rewriter,
-	optimizer.sampling_pushdown,
-	optimizer.statistics_propagation,
-	optimizer.top_n,
-	optimizer.top_n_window_elimination,
-	optimizer.unnest_rewriter,
-	optimizer.unused_columns,
-	optimizer.window_self_join,
+	optimizer,
 	optimizers.total_time,
 	parsers.total_time,
 	physical_planner.column_binding,
@@ -154,17 +116,7 @@ SELECT operator_info[1].extra_info,
 	query.total_intermediate_rows,
 	query.total_rows_scanned,
 	query.time,
-	query.rows_returned,
 	query.sql,
-	storage.attach_load_storage_latency,
-	storage.attach_replay_wal_latency,
-	storage.checkpoint_latency,
-	storage.commit_local_storage_latency,
-	storage.total_bytes_read,
-	storage.total_bytes_written,
-	storage.waiting_to_attach_latency,
-	storage.wal_replay_entry_count,
-	storage.write_to_wal_latency,
 	system.blocked_thread_time,
 	system.peak_buffer_memory,
 	system.peak_temp_dir_size,
@@ -190,7 +142,6 @@ query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
 query.cpu_time
-query.rows_returned
 query.sql
 query.time
 query.total_intermediate_rows
@@ -205,7 +156,6 @@ SELECT query.cpu_time,
 	query.total_rows_scanned,
 	query.time,
 	query.sql,
-	query.rows_returned
 FROM metrics_output;
 
 statement ok
@@ -226,6 +176,8 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
+io.total_bytes_read
+io.total_bytes_written
 operator.extra_info
 operator.intermediate_rows
 operator.intermediate_size_bytes
@@ -234,7 +186,6 @@ operator.rows_scanned
 operator.timing
 operator.type
 query.cpu_time
-query.rows_returned
 query.sql
 query.time
 query.total_intermediate_rows
@@ -243,8 +194,6 @@ storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
 storage.commit_local_storage_latency
-storage.total_bytes_read
-storage.total_bytes_written
 storage.waiting_to_attach_latency
 storage.wal_replay_entry_count
 storage.write_to_wal_latency
@@ -263,17 +212,7 @@ SELECT operator_info[1].extra_info,
 	query.total_intermediate_rows,
 	query.total_rows_scanned,
 	query.time,
-	query.rows_returned,
 	query.sql,
-	storage.attach_load_storage_latency,
-	storage.attach_replay_wal_latency,
-	storage.checkpoint_latency,
-	storage.commit_local_storage_latency,
-	storage.total_bytes_read,
-	storage.total_bytes_written,
-	storage.waiting_to_attach_latency,
-	storage.wal_replay_entry_count,
-	storage.write_to_wal_latency,
 	system.blocked_thread_time,
 	system.peak_buffer_memory,
 	system.peak_temp_dir_size,
@@ -335,8 +274,6 @@ storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
 storage.commit_local_storage_latency
-storage.total_bytes_read
-storage.total_bytes_written
 storage.waiting_to_attach_latency
 storage.wal_replay_entry_count
 storage.write_to_wal_latency
@@ -345,16 +282,7 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT storage.attach_load_storage_latency,
-	storage.attach_replay_wal_latency,
-	storage.checkpoint_latency,
-	storage.commit_local_storage_latency,
-	storage.total_bytes_read,
-	storage.total_bytes_written,
-	storage.waiting_to_attach_latency,
-	storage.wal_replay_entry_count,
-	storage.write_to_wal_latency
-FROM metrics_output;
+SELECT operator_info FROM metrics_output;
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -457,45 +385,7 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT optimizer.aggregate_function_rewriter,
-	optimizer.build_side_probe_side,
-	optimizer.column_lifetime,
-	optimizer.common_aggregate,
-	optimizer.common_subexpressions,
-	optimizer.common_subplan,
-	optimizer.compressed_materialization,
-	optimizer.cte_filter_pusher,
-	optimizer.cte_inlining,
-	optimizer.deliminator,
-	optimizer.duplicate_groups,
-	optimizer.empty_result_pullup,
-	optimizer.expression_rewriter,
-	optimizer.extension,
-	optimizer.filter_pullup,
-	optimizer.filter_pushdown,
-	optimizer.in_clause,
-	optimizer.join_elimination,
-	optimizer.join_filter_pushdown,
-	optimizer.join_order,
-	optimizer.late_materialization,
-	optimizer.limit_pushdown,
-	optimizer.materialized_cte,
-	optimizer.outer_join_simplification,
-	optimizer.partial_aggregate_pushdown,
-	optimizer.partitioned_execution,
-	optimizer.projection_pullup,
-	optimizer.regex_range,
-	optimizer.reorder_filter,
-	optimizer.row_group_pruner,
-	optimizer.row_number_rewriter,
-	optimizer.sampling_pushdown,
-	optimizer.statistics_propagation,
-	optimizer.top_n,
-	optimizer.top_n_window_elimination,
-	optimizer.unnest_rewriter,
-	optimizer.unused_columns,
-	optimizer.window_self_join
-FROM metrics_output;
+SELECT optimizer FROM metrics_output;
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -567,44 +457,7 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_ou
 
 statement ok
 SELECT optimizers.total_time,
-	optimizer.aggregate_function_rewriter,
-	optimizer.build_side_probe_side,
-	optimizer.column_lifetime,
-	optimizer.common_aggregate,
-	optimizer.common_subexpressions,
-	optimizer.common_subplan,
-	optimizer.compressed_materialization,
-	optimizer.cte_filter_pusher,
-	optimizer.cte_inlining,
-	optimizer.deliminator,
-	optimizer.duplicate_groups,
-	optimizer.empty_result_pullup,
-	optimizer.expression_rewriter,
-	optimizer.extension,
-	optimizer.filter_pullup,
-	optimizer.filter_pushdown,
-	optimizer.in_clause,
-	optimizer.join_elimination,
-	optimizer.join_filter_pushdown,
-	optimizer.join_order,
-	optimizer.late_materialization,
-	optimizer.limit_pushdown,
-	optimizer.materialized_cte,
-	optimizer.outer_join_simplification,
-	optimizer.partial_aggregate_pushdown,
-	optimizer.partitioned_execution,
-	optimizer.projection_pullup,
-	optimizer.regex_range,
-	optimizer.reorder_filter,
-	optimizer.row_group_pruner,
-	optimizer.row_number_rewriter,
-	optimizer.sampling_pushdown,
-	optimizer.statistics_propagation,
-	optimizer.top_n,
-	optimizer.top_n_window_elimination,
-	optimizer.unnest_rewriter,
-	optimizer.unused_columns,
-	optimizer.window_self_join,
+	optimizer,
 	parsers.total_time,
 	physical_planner.column_binding,
 	physical_planner.create_plan,
@@ -632,6 +485,8 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
+io.total_bytes_read
+io.total_bytes_written
 operator.extra_info
 operator.intermediate_rows
 operator.intermediate_size_bytes
@@ -640,7 +495,6 @@ operator.rows_scanned
 operator.timing
 operator.type
 query.cpu_time
-query.rows_returned
 query.sql
 query.time
 query.total_intermediate_rows
@@ -649,8 +503,6 @@ storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
 storage.commit_local_storage_latency
-storage.total_bytes_read
-storage.total_bytes_written
 storage.waiting_to_attach_latency
 storage.wal_replay_entry_count
 storage.write_to_wal_latency
@@ -669,17 +521,7 @@ SELECT operator_info[1].extra_info,
 	query.total_intermediate_rows,
 	query.total_rows_scanned,
 	query.time,
-	query.rows_returned,
 	query.sql,
-	storage.attach_load_storage_latency,
-	storage.attach_replay_wal_latency,
-	storage.checkpoint_latency,
-	storage.commit_local_storage_latency,
-	storage.total_bytes_read,
-	storage.total_bytes_written,
-	storage.waiting_to_attach_latency,
-	storage.wal_replay_entry_count,
-	storage.write_to_wal_latency,
 	system.blocked_thread_time,
 	system.peak_buffer_memory,
 	system.peak_temp_dir_size,
@@ -746,8 +588,6 @@ storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
 storage.commit_local_storage_latency
-storage.total_bytes_read
-storage.total_bytes_written
 storage.waiting_to_attach_latency
 storage.wal_replay_entry_count
 storage.write_to_wal_latency
@@ -756,54 +596,7 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT optimizer.aggregate_function_rewriter,
-	optimizer.build_side_probe_side,
-	optimizer.column_lifetime,
-	optimizer.common_aggregate,
-	optimizer.common_subexpressions,
-	optimizer.common_subplan,
-	optimizer.compressed_materialization,
-	optimizer.cte_filter_pusher,
-	optimizer.cte_inlining,
-	optimizer.deliminator,
-	optimizer.duplicate_groups,
-	optimizer.empty_result_pullup,
-	optimizer.expression_rewriter,
-	optimizer.extension,
-	optimizer.filter_pullup,
-	optimizer.filter_pushdown,
-	optimizer.in_clause,
-	optimizer.join_elimination,
-	optimizer.join_filter_pushdown,
-	optimizer.join_order,
-	optimizer.late_materialization,
-	optimizer.limit_pushdown,
-	optimizer.materialized_cte,
-	optimizer.outer_join_simplification,
-	optimizer.partial_aggregate_pushdown,
-	optimizer.partitioned_execution,
-	optimizer.projection_pullup,
-	optimizer.regex_range,
-	optimizer.reorder_filter,
-	optimizer.row_group_pruner,
-	optimizer.row_number_rewriter,
-	optimizer.sampling_pushdown,
-	optimizer.statistics_propagation,
-	optimizer.top_n,
-	optimizer.top_n_window_elimination,
-	optimizer.unnest_rewriter,
-	optimizer.unused_columns,
-	optimizer.window_self_join,
-	storage.attach_load_storage_latency,
-	storage.attach_replay_wal_latency,
-	storage.checkpoint_latency,
-	storage.commit_local_storage_latency,
-	storage.total_bytes_read,
-	storage.total_bytes_written,
-	storage.waiting_to_attach_latency,
-	storage.wal_replay_entry_count,
-	storage.write_to_wal_latency
-FROM metrics_output;
+SELECT optimizer FROM metrics_output;
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -873,8 +666,6 @@ storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
 storage.commit_local_storage_latency
-storage.total_bytes_read
-storage.total_bytes_written
 storage.waiting_to_attach_latency
 storage.wal_replay_entry_count
 storage.write_to_wal_latency
@@ -888,44 +679,7 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_ou
 
 statement ok
 SELECT optimizers.total_time,
-	optimizer.aggregate_function_rewriter,
-	optimizer.build_side_probe_side,
-	optimizer.column_lifetime,
-	optimizer.common_aggregate,
-	optimizer.common_subexpressions,
-	optimizer.common_subplan,
-	optimizer.compressed_materialization,
-	optimizer.cte_filter_pusher,
-	optimizer.cte_inlining,
-	optimizer.deliminator,
-	optimizer.duplicate_groups,
-	optimizer.empty_result_pullup,
-	optimizer.expression_rewriter,
-	optimizer.extension,
-	optimizer.filter_pullup,
-	optimizer.filter_pushdown,
-	optimizer.in_clause,
-	optimizer.join_elimination,
-	optimizer.join_filter_pushdown,
-	optimizer.join_order,
-	optimizer.late_materialization,
-	optimizer.limit_pushdown,
-	optimizer.materialized_cte,
-	optimizer.outer_join_simplification,
-	optimizer.partial_aggregate_pushdown,
-	optimizer.partitioned_execution,
-	optimizer.projection_pullup,
-	optimizer.regex_range,
-	optimizer.reorder_filter,
-	optimizer.row_group_pruner,
-	optimizer.row_number_rewriter,
-	optimizer.sampling_pushdown,
-	optimizer.statistics_propagation,
-	optimizer.top_n,
-	optimizer.top_n_window_elimination,
-	optimizer.unnest_rewriter,
-	optimizer.unused_columns,
-	optimizer.window_self_join,
+	optimizer,
 	parsers.total_time,
 	physical_planner.column_binding,
 	physical_planner.create_plan,
@@ -933,15 +687,6 @@ SELECT optimizers.total_time,
 	physical_planner.total_time,
 	planner.binding_time,
 	planner.total_time,
-	storage.attach_load_storage_latency,
-	storage.attach_replay_wal_latency,
-	storage.checkpoint_latency,
-	storage.commit_local_storage_latency,
-	storage.total_bytes_read,
-	storage.total_bytes_written,
-	storage.waiting_to_attach_latency,
-	storage.wal_replay_entry_count,
-	storage.write_to_wal_latency,
 	system.blocked_thread_time,
 	system.peak_buffer_memory,
 	system.peak_temp_dir_size,

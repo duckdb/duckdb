@@ -186,6 +186,8 @@ public:
 
 private:
 	void FinalizeMetricsInternal();
+	//! Write metrics to log without acquiring the lock (must be called with lock held).
+	void ToLogInternal() const;
 
 	unique_ptr<QueryProfileResult> ToResultTree() const;
 

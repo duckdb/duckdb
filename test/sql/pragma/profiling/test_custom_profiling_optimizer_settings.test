@@ -134,6 +134,8 @@ PRAGMA disable_profiling;
 query I
 SELECT unnest(current_setting('custom_profiling_settings')) ORDER BY ALL;
 ----
+io.total_bytes_read
+io.total_bytes_written
 operator.extra_info
 operator.intermediate_rows
 operator.intermediate_size_bytes
@@ -142,7 +144,6 @@ operator.rows_scanned
 operator.timing
 operator.type
 query.cpu_time
-query.rows_returned
 query.sql
 query.time
 query.total_intermediate_rows
@@ -151,8 +152,6 @@ storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
 storage.commit_local_storage_latency
-storage.total_bytes_read
-storage.total_bytes_written
 storage.waiting_to_attach_latency
 storage.wal_replay_entry_count
 storage.write_to_wal_latency
@@ -165,5 +164,5 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT operator_info[1].extra_info, operator_info[1].intermediate_size_bytes, query.cpu_time, query.rows_returned, query.time FROM metrics_output;
+SELECT operator_info[1].extra_info, operator_info[1].intermediate_size_bytes, query.cpu_time,  query.time FROM metrics_output;
 

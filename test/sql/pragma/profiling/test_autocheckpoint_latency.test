@@ -36,12 +36,12 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/acp_before.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"storage.checkpoint_latency": "true", "storage.total_bytes_written": "true", "storage.commit_local_storage_latency": "true", "storage.write_to_wal_latency": "true"}';
+PRAGMA custom_profiling_settings='{"storage.checkpoint_latency": "true", "io.total_bytes_written": "true", "storage.commit_local_storage_latency": "true", "storage.write_to_wal_latency": "true"}';
 
 statement ok
 SET profiling_coverage='ALL';
 
-# A simple INSERT with no auto-checkpoint should have checkpoint_latency == 0 and total_bytes_written == 0.
+# A simple INSERT with no auto-checkpoint should have checkpoint_latency absent (not recorded) and total_bytes_written == 0.
 # COMMIT_LOCAL_STORAGE_LATENCY and WRITE_TO_WAL_LATENCY will be > 0 since the INSERT still commits and writes WAL.
 statement ok
 INSERT INTO acp_db.tbl VALUES (1);
@@ -51,8 +51,8 @@ PRAGMA disable_profiling;
 
 query IIII
 SELECT
-    CASE WHEN storage.checkpoint_latency = 0 THEN 'true' ELSE 'false' END,
-    CASE WHEN storage.total_bytes_written = 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN json_extract(to_json(storage), '$.checkpoint_latency') IS NULL THEN 'true' ELSE 'false' END,
+    CASE WHEN io.total_bytes_written = 0 THEN 'true' ELSE 'false' END,
     CASE WHEN storage.commit_local_storage_latency > 0 THEN 'true' ELSE 'false' END,
     CASE WHEN storage.write_to_wal_latency > 0 THEN 'true' ELSE 'false' END
 FROM '{TEST_DIR}/acp_before.json';
@@ -80,7 +80,7 @@ PRAGMA disable_profiling;
 query IIII
 SELECT
     CASE WHEN storage.checkpoint_latency > 0 THEN 'true' ELSE 'false' END,
-    CASE WHEN storage.total_bytes_written > 0 THEN 'true' ELSE 'false' END,
+    CASE WHEN io.total_bytes_written > 0 THEN 'true' ELSE 'false' END,
     CASE WHEN storage.commit_local_storage_latency > 0 THEN 'true' ELSE 'false' END,
     CASE WHEN storage.write_to_wal_latency > 0 THEN 'true' ELSE 'false' END
 FROM '{TEST_DIR}/acp_after.json';

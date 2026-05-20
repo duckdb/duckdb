@@ -20,6 +20,7 @@ enum class MetricGroup : uint8_t {
 	CORE,
 	DEFAULT,
 	EXECUTION,
+	IO,
 	OPERATOR,
 	OPTIMIZER,
 	PHASE_TIMING,
@@ -52,6 +53,10 @@ public:
 	static profiler_settings_t GetSystemMetrics();
 	static bool IsSystemMetricKey(const string &key);
 	static bool IsSystemTimerKey(const string &key);
+
+	// IO metrics — stored as "io.<lowercase_name>" strings
+	static profiler_settings_t GetIOMetrics();
+	static bool IsIOMetricKey(const string &key);
 
 	// Storage metrics — stored as "storage.<lowercase_name>" strings
 	static profiler_settings_t GetStorageMetrics();

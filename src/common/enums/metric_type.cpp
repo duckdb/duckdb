@@ -32,6 +32,11 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 	for (const auto &m : optimizer_metrics) {
 		result.insert(m);
 	}
+	// Add all IO metrics
+	auto io_metrics = GetIOMetrics();
+	for (const auto &m : io_metrics) {
+		result.insert(m);
+	}
 	// Add all storage metrics
 	auto storage_metrics = GetStorageMetrics();
 	for (const auto &m : storage_metrics) {
@@ -60,6 +65,8 @@ profiler_settings_t MetricsUtils::GetMetricsByGroupType(MetricGroup type) {
 		return GetDefaultMetrics();
 	case MetricGroup::EXECUTION:
 		return GetExecutionMetrics();
+	case MetricGroup::IO:
+		return GetIOMetrics();
 	case MetricGroup::OPERATOR:
 		return GetOperatorMetrics();
 	case MetricGroup::OPTIMIZER:
@@ -92,6 +99,11 @@ profiler_settings_t MetricsUtils::GetDefaultMetrics() {
 	for (const auto &m : query_metrics) {
 		result.insert(m);
 	}
+	// Add all IO metrics (they are in the default set)
+	auto io_metrics = GetIOMetrics();
+	for (const auto &m : io_metrics) {
+		result.insert(m);
+	}
 	// Add all storage metrics (they are in the default set)
 	auto storage_metrics = GetStorageMetrics();
 	for (const auto &m : storage_metrics) {
@@ -109,7 +121,6 @@ profiler_settings_t MetricsUtils::GetQueryMetrics() {
 	return {
 		"query.cpu_time",
 		"query.sql",
-		"query.rows_returned",
 		"query.time",
 		"query.total_intermediate_rows",
 		"query.total_rows_scanned",
@@ -145,14 +156,23 @@ profiler_settings_t MetricsUtils::GetExecutionMetrics() {
 	return GetSystemMetrics();
 }
 
+profiler_settings_t MetricsUtils::GetIOMetrics() {
+	return {
+		"io.total_bytes_read",
+		"io.total_bytes_written",
+	};
+}
+
+bool MetricsUtils::IsIOMetricKey(const string &key) {
+	return StringUtil::StartsWith(key, "io.");
+}
+
 profiler_settings_t MetricsUtils::GetStorageMetrics() {
 	return {
 		"storage.attach_load_storage_latency",
 		"storage.attach_replay_wal_latency",
 		"storage.checkpoint_latency",
 		"storage.commit_local_storage_latency",
-		"storage.total_bytes_read",
-		"storage.total_bytes_written",
 		"storage.waiting_to_attach_latency",
 		"storage.wal_replay_entry_count",
 		"storage.write_to_wal_latency",
@@ -237,7 +257,6 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 		// Root-scope query metrics (not operator-level)
 		"query.cpu_time",
 		"query.sql",
-		"query.rows_returned",
 		"query.time",
 		"query.total_intermediate_rows",
 		"query.total_rows_scanned",
@@ -245,6 +264,11 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 	// Add all optimizer metrics (they are root-scope only)
 	auto optimizer_metrics = GetOptimizerMetrics();
 	for (const auto &m : optimizer_metrics) {
+		result.insert(m);
+	}
+	// Add all IO metrics (they are root-scope only)
+	auto io_metrics = GetIOMetrics();
+	for (const auto &m : io_metrics) {
 		result.insert(m);
 	}
 	// Add all storage metrics (they are root-scope only)

@@ -188,6 +188,8 @@ RESET custom_profiling_settings;
 query I
 SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
+io.total_bytes_read
+io.total_bytes_written
 operator.extra_info
 operator.intermediate_rows
 operator.intermediate_size_bytes
@@ -196,7 +198,6 @@ operator.rows_scanned
 operator.timing
 operator.type
 query.cpu_time
-query.rows_returned
 query.sql
 query.time
 query.total_intermediate_rows
@@ -205,8 +206,6 @@ storage.attach_load_storage_latency
 storage.attach_replay_wal_latency
 storage.checkpoint_latency
 storage.commit_local_storage_latency
-storage.total_bytes_read
-storage.total_bytes_written
 storage.waiting_to_attach_latency
 storage.wal_replay_entry_count
 storage.write_to_wal_latency
@@ -227,13 +226,13 @@ query.time
 
 # Set metrics straight into function with other settings too
 statement ok
-CALL enable_profiling(['storage.total_bytes_read', 'storage.total_bytes_written'], mode = 'detailed');
+CALL enable_profiling(['io.total_bytes_read', 'io.total_bytes_written'], mode = 'detailed');
 
 query I
 SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
-storage.total_bytes_read
-storage.total_bytes_written
+io.total_bytes_read
+io.total_bytes_written
 
 query I
 SELECT CURRENT_SETTING('profiling_mode');

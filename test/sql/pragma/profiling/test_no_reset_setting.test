@@ -9,7 +9,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profile_file.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"storage.total_bytes_read": "true", "storage.total_bytes_written": "true"}';
+PRAGMA custom_profiling_settings='{"io.total_bytes_read": "true", "io.total_bytes_written": "true"}';
 
 statement ok
 SET profiling_coverage='ALL';

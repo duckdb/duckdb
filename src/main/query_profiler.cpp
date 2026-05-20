@@ -250,10 +250,10 @@ void QueryProfiler::EndQuery() {
 
 	is_explain_analyze = false;
 
-	guard.unlock();
-
 	// To log is inexpensive, whether to log or not depends on whether logging is active
-	ToLog();
+	ToLogInternal();
+
+	guard.unlock();
 
 	if (emit_output) {
 		string tree = ToString();
@@ -348,9 +348,9 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	}
 	active_operator = phys_op;
 
-	if (!OperatorInfoIsInitialized(*active_operator)) {
+	if (!OperatorMetricsIsInitialized(*active_operator)) {
 		// first time calling into this operator - fetch the info
-		auto &info = GetOperatorInfo(*active_operator);
+		auto &info = GetOperatorMetrics(*active_operator);
 		auto params = active_operator->ParamsToString();
 		info.extra_info = params;
 		info.extra_info_dirty = true;
@@ -360,7 +360,7 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	op.Start();
 }
 
-void OperatorInformation::GatherMetrics(ClientContext &context, double elapsed_time, optional_ptr<DataChunk> chunk) {
+void OperatorMetrics::GatherMetrics(ClientContext &context, double elapsed_time, optional_ptr<DataChunk> chunk) {
 	time += elapsed_time;
 	if (chunk) {
 		elements_returned += chunk->size();
@@ -377,7 +377,7 @@ void OperatorInformation::GatherMetrics(ClientContext &context, double elapsed_t
 	}
 }
 
-void OperatorInformation::Merge(const OperatorInformation &other) {
+void OperatorMetrics::Merge(const OperatorMetrics &other) {
 	time += other.time;
 	elements_returned += other.elements_returned;
 	result_set_size += other.result_set_size;
@@ -409,7 +409,7 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		throw InternalException("OperatorProfiler: Attempting to call EndOperator while no operator is active");
 	}
 
-	auto &info = GetOperatorInfo(*active_operator);
+	auto &info = GetOperatorMetrics(*active_operator);
 	op.End();
 	info.GatherMetrics(context, op.Elapsed(), chunk);
 	active_operator = nullptr;
@@ -424,7 +424,7 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 	}
 
 	// we're emitting extra info - get the extra source info
-	auto &info = GetOperatorInfo(*active_operator);
+	auto &info = GetOperatorMetrics(*active_operator);
 	auto extra_info = active_operator->ExtraSourceParams(gstate, lstate);
 	for (auto &new_info : extra_info) {
 		auto entry = info.extra_info.find(new_info.first);
@@ -441,7 +441,7 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 	if (active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN) {
 		const auto &table_scan = active_operator->Cast<PhysicalTableScan>();
 		const auto rows_scanned = table_scan.GetRowsScanned(gstate, lstate);
-		auto &info = GetOperatorInfo(*active_operator);
+		auto &info = GetOperatorMetrics(*active_operator);
 		if (rows_scanned.IsValid()) {
 			// Use exact value if available.
 			info.rows_scanned += rows_scanned.GetIndex();
@@ -458,25 +458,25 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 	}
 }
 
-bool OperatorProfiler::OperatorInfoIsInitialized(const PhysicalOperator &phys_op) {
-	auto entry = operator_infos.find(phys_op);
-	return entry != operator_infos.end();
+bool OperatorProfiler::OperatorMetricsIsInitialized(const PhysicalOperator &phys_op) {
+	auto entry = operator_metrics.find(phys_op);
+	return entry != operator_metrics.end();
 }
 
-OperatorInformation &OperatorProfiler::GetOperatorInfo(const PhysicalOperator &phys_op) {
-	auto entry = operator_infos.find(phys_op);
-	if (entry != operator_infos.end()) {
+OperatorMetrics &OperatorProfiler::GetOperatorMetrics(const PhysicalOperator &phys_op) {
+	auto entry = operator_metrics.find(phys_op);
+	if (entry != operator_metrics.end()) {
 		return entry->second;
 	}
 
 	// Add a new entry.
-	operator_infos[phys_op] = OperatorInformation();
-	return operator_infos[phys_op];
+	operator_metrics[phys_op] = OperatorMetrics();
+	return operator_metrics[phys_op];
 }
 
 void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
-	auto entry = operator_infos.find(phys_op);
-	if (entry == operator_infos.end()) {
+	auto entry = operator_metrics.find(phys_op);
+	if (entry == operator_metrics.end()) {
 		return;
 	}
 
@@ -491,13 +491,13 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	if (!IsEnabled() || !running) {
 		return;
 	}
-	for (auto &node : profiler.operator_infos) {
+	for (auto &node : profiler.operator_metrics) {
 		auto &op = node.first.get();
 		auto entry = tree_map.find(op);
 		D_ASSERT(entry != tree_map.end());
 
 		auto &tree_node = entry->second.get();
-		auto &info = tree_node.GetOperatorInfo();
+		auto &info = tree_node.GetOperatorMetrics();
 		info.Merge(node.second);
 
 		if (node.second.system_peak_buffer_manager_memory > query_metrics.system_peak_buffer_memory) {
@@ -720,28 +720,28 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 	return result;
 }
 
-profiler_metrics_t OperatorInformation::GetMetrics(const ProfilingInfo &info) const {
+profiler_metrics_t OperatorMetrics::GetMetrics(const ProfilingInfo &info) const {
 	profiler_metrics_t result;
 	if (info.EnabledForCollection("operator.name")) {
-		result["operator.name"] = Value(name);
+		result["name"] = Value(name);
 	}
 	if (info.EnabledForCollection("operator.type")) {
-		result["operator.type"] = Value(EnumUtil::ToString(operator_type));
+		result["type"] = Value(EnumUtil::ToString(operator_type));
 	}
 	if (info.EnabledForCollection("operator.timing")) {
-		result["operator.timing"] = Value::DOUBLE(time);
+		result["timing"] = Value::DOUBLE(time);
 	}
 	if (info.EnabledForCollection("operator.intermediate_rows")) {
-		result["operator.intermediate_rows"] = Value::UBIGINT(elements_returned);
+		result["intermediate_rows"] = Value::UBIGINT(elements_returned);
 	}
 	if (info.EnabledForCollection("operator.intermediate_size_bytes")) {
-		result["operator.intermediate_size_bytes"] = Value::UBIGINT(result_set_size);
+		result["intermediate_size_bytes"] = Value::UBIGINT(result_set_size);
 	}
 	if (info.EnabledForCollection("operator.rows_scanned") && operator_type == PhysicalOperatorType::TABLE_SCAN) {
-		result["operator.rows_scanned"] = Value::UBIGINT(rows_scanned);
+		result["rows_scanned"] = Value::UBIGINT(rows_scanned);
 	}
 	if (info.EnabledForCollection("operator.extra_info")) {
-		result["operator.extra_info"] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
+		result["extra_info"] = QueryProfiler::JSONSanitize(Value::MAP(extra_info));
 	}
 	return result;
 }
@@ -830,26 +830,22 @@ static string StringifyAndFree(ConvertedJSONHolder &json_holder, yyjson_mut_val 
 	return result;
 }
 
-void QueryProfiler::ToLog() const {
-	lock_guard<std::mutex> guard(lock);
-
+void QueryProfiler::ToLogInternal() const {
 	if (!root) {
-		// No root, not much to do
 		return;
 	}
+	root_info->WriteMetricsToLog(context);
+}
 
-	auto &settings = *root_info;
-
-	settings.WriteMetricsToLog(context);
+void QueryProfiler::ToLog() const {
+	lock_guard<std::mutex> guard(lock);
+	ToLogInternal();
 }
 
 static void OperatorToResultTree(const ProfilingInfo &settings, ProfilingNode &node, QueryProfileResult &result) {
-	auto operator_metrics = node.GetOperatorInfo().GetMetrics(settings);
+	auto operator_metrics = node.GetOperatorMetrics().GetMetrics(settings);
 	for (auto &entry : operator_metrics) {
-		// Strip the "operator." prefix — metrics appear as direct children (e.g. "timing", "extra_info")
-		auto dot_pos = entry.first.find('.');
-		auto key = dot_pos != string::npos ? entry.first.substr(dot_pos + 1) : StringUtil::Lower(entry.first);
-		result.AddValue(key, std::move(entry.second));
+		result.AddValue(entry.first, std::move(entry.second));
 	}
 	if (node.GetChildCount() > 0) {
 		auto &children_list = result.AddList("children");
@@ -909,7 +905,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	}
 
 	auto node = make_uniq<ProfilingNode>();
-	auto &info = node->GetOperatorInfo();
+	auto &info = node->GetOperatorMetrics();
 	node->depth = depth;
 
 	info.name = EnumUtil::ToString(root_p.type);
@@ -998,9 +994,9 @@ void QueryProfiler::Print() {
 }
 
 
-static void MergeOperatorMeasurements(ProfilingNode &root, OperatorInformation &result) {
+static void MergeOperatorMeasurements(ProfilingNode &root, OperatorMetrics &result) {
 	// merge in this layer
-	result.Merge(root.GetOperatorInfo());
+	result.Merge(root.GetOperatorMetrics());
 	// recurse into children
 	for (idx_t i = 0; i < root.GetChildCount(); i++) {
 		auto child = root.GetChild(i);
@@ -1012,69 +1008,15 @@ void QueryProfiler::FinalizeMetricsInternal() {
 	if (metrics_finalized || !IsEnabled() || !root_info) {
 		return;
 	}
-
 	if (query_metrics.latency_timer) {
 		query_metrics.latency_timer->EndTimer();
 	}
-
-	auto &info = *root_info;
-
-	OperatorInformation cumulative_metrics;
 	if (root) {
+		OperatorMetrics cumulative_metrics;
 		MergeOperatorMeasurements(*root, cumulative_metrics);
-	}
-
-	for (auto &metric : info.GetMetricsMutable()) {
-		if (MetricsUtils::IsOptimizerMetricKey(metric.first) || MetricsUtils::IsPhysicalPlannerMetricKey(metric.first)) {
-			metric.second = Value::DOUBLE(query_metrics.GetStringMetricInSeconds(metric.first));
-			continue;
-		}
-		if (MetricsUtils::IsQueryMetricKey(metric.first)) {
-			if (metric.first == "query.time") {
-				metric.second = Value::DOUBLE(query_metrics.GetStringMetricInSeconds("query.time"));
-			} else if (metric.first == "query.sql") {
-				metric.second = Value(query_metrics.query_sql);
-			} else if (root) {
-				if (metric.first == "query.cpu_time") {
-					metric.second = Value::DOUBLE(cumulative_metrics.time);
-				} else if (metric.first == "query.total_intermediate_rows") {
-					metric.second = Value::UBIGINT(cumulative_metrics.elements_returned);
-				} else if (metric.first == "query.total_rows_scanned") {
-					metric.second = Value::UBIGINT(cumulative_metrics.rows_scanned);
-				} else if (metric.first == "query.result_set_size") {
-					metric.second = Value::UBIGINT(cumulative_metrics.result_set_size);
-				}
-				// query.rows_returned stays at its default value
-			}
-			continue;
-		}
-		if (MetricsUtils::IsSystemMetricKey(metric.first)) {
-			if (MetricsUtils::IsSystemTimerKey(metric.first)) {
-				metric.second = Value::DOUBLE(query_metrics.blocked_thread_time);
-			} else if (metric.first == "system.total_memory_allocated") {
-				metric.second = Value::UBIGINT(query_metrics.GetStringCounter("system.total_memory_allocated"));
-			} else if (metric.first == "system.peak_buffer_memory") {
-				metric.second = Value::UBIGINT(query_metrics.system_peak_buffer_memory);
-			} else if (metric.first == "system.peak_temp_dir_size") {
-				metric.second = Value::UBIGINT(query_metrics.system_peak_temp_dir_size);
-			}
-			continue;
-		}
-		if (MetricsUtils::IsStorageMetricKey(metric.first)) {
-			if (metric.first == "storage.total_bytes_read") {
-				metric.second = Value::UBIGINT(query_metrics.GetBytesRead());
-			} else if (metric.first == "storage.total_bytes_written") {
-				metric.second = Value::UBIGINT(query_metrics.GetBytesWritten());
-			} else if (metric.first == "storage.wal_replay_entry_count") {
-				metric.second = Value::UBIGINT(query_metrics.GetStringCounter(metric.first));
-			} else {
-				metric.second = Value::DOUBLE(query_metrics.GetStringMetricInSeconds(metric.first));
-			}
-			continue;
-		}
-		if (MetricsUtils::IsPhaseTimingKey(metric.first)) {
-			metric.second = Value::DOUBLE(query_metrics.GetStringMetricInSeconds(metric.first));
-		}
+		query_metrics.FinalizeMetrics(*root_info, &cumulative_metrics);
+	} else {
+		query_metrics.FinalizeMetrics(*root_info, nullptr);
 	}
 	metrics_finalized = true;
 }

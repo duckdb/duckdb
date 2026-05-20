@@ -6,6 +6,28 @@
 
 namespace duckdb {
 
+void QueryMetrics::FinalizeMetrics(ProfilingInfo &info, const OperatorMetrics *cumulative_metrics) {
+	info.SetMetricValue("query.sql", query_sql);
+	if (cumulative_metrics) {
+		info.SetMetricValue("query.cpu_time", cumulative_metrics->time);
+		info.SetMetricValue("query.total_intermediate_rows", cumulative_metrics->elements_returned);
+		info.SetMetricValue("query.total_rows_scanned", cumulative_metrics->rows_scanned);
+		info.SetMetricValue("query.result_set_size", cumulative_metrics->result_set_size);
+	}
+	for (const auto &[key, ns] : string_timings) {
+		info.SetMetricValue(key, static_cast<double>(ns) / 1e9);
+	}
+	for (const auto &[key, count] : string_counters) {
+		info.SetMetricValue(key, count);
+	}
+	info.SetMetricValue("io.total_bytes_read", GetBytesRead());
+	info.SetMetricValue("io.total_bytes_written", GetBytesWritten());
+	info.SetMetricValue("system.blocked_thread_time", blocked_thread_time);
+	info.SetMetricValue("system.peak_buffer_memory", system_peak_buffer_memory);
+	info.SetMetricValue("system.peak_temp_dir_size", system_peak_temp_dir_size);
+	info.SetMetricValue("system.total_memory_allocated", GetStringCounter("system.total_memory_allocated"));
+}
+
 void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const string &key) {
 	if (MetricsUtils::IsPhaseTimingKey(key) || MetricsUtils::IsOptimizerMetricKey(key) ||
 	    MetricsUtils::IsPhysicalPlannerMetricKey(key) || key == "operator.timing" || key == "operator.cpu_time") {
