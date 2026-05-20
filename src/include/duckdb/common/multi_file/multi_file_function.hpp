@@ -663,6 +663,7 @@ public:
 			output.SetCardinality(scan_chunk.size());
 
 			if (scan_chunk.size() > 0) {
+				data.rows_scanned += scan_chunk.size();
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data,
 				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
@@ -887,6 +888,10 @@ public:
 
 	static void MultiFileGetMetrics(TableFunctionGetMetricsInput &input) {
 		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
+		if (input.local_state) {
+			auto &local = input.local_state->Cast<MultiFileLocalState>();
+			input.operator_metrics.rows_scanned = local.rows_scanned;
+		}
 		auto files_loaded = gstate.files_opened.load();
 		input.operator_metrics.AddExtraInfo("Total Files Read", std::to_string(files_loaded));
 

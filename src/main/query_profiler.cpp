@@ -481,6 +481,11 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		auto &tree_node = entry->second.get();
 		auto &info = tree_node.GetOperatorMetrics();
 		info.Merge(node.second);
+		// Update extra_info from the per-thread metrics: these are set during execution (StartOperator),
+		// so they capture runtime values like dynamic filters that aren't known at plan-creation time.
+		if (!node.second.GetExtraInfo().empty()) {
+			info.SetExtraInfo(node.second.GetExtraInfo());
+		}
 
 		if (node.second.system_peak_buffer_manager_memory > query_metrics.system_peak_buffer_memory) {
 			query_metrics.system_peak_buffer_memory = node.second.system_peak_buffer_manager_memory;
@@ -573,29 +578,38 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const GatheredMetrics &info, id
 
 	for (const auto &entry : info.GetMetrics()) {
 		const auto &metric = entry.first;
-		if (MetricsUtils::MetricInGroup(metric, "optimizer")) {
+		// Check specific total_time metrics BEFORE group checks — MetricInGroup would otherwise match these first.
+		if (MetricsUtils::IsMetric<MetricOptimizerTotalTime>(metric)) {
+			optimizer_head = {"Optimizer", entry.second.GetValue<double>()};
+		} else if (MetricsUtils::IsMetric<MetricPhysicalPlannerTotalTime>(metric)) {
+			physical_planner_head = {"Physical Planner", entry.second.GetValue<double>()};
+		} else if (MetricsUtils::IsMetric<MetricPlannerTotalTime>(metric)) {
+			planner_head = {"Planner", entry.second.GetValue<double>()};
+		} else if (MetricsUtils::IsMetric<MetricParserTotalTime>(metric)) {
+			parser_head = {"Parser", entry.second.GetValue<double>()};
+		} else if (MetricsUtils::MetricInGroup(metric, "optimizer")) {
 			// "optimizer.expression_rewriter" -> display as "expression_rewriter"
 			optimizer_timings[metric.substr(10)] = entry.second.GetValue<double>();
 		} else if (MetricsUtils::MetricInGroup(metric, "physical_planner")) {
 			// "physical_planner.column_binding" -> display as "column_binding"
 			physical_planner_timings[metric.substr(17)] = entry.second.GetValue<double>();
-		} else if (MetricsUtils::IsMetric<MetricPhysicalPlannerTotalTime>(metric)) {
-			physical_planner_head = {"Physical Planner", entry.second.GetValue<double>()};
-		} else if (MetricsUtils::IsMetric<MetricOptimizerTotalTime>(metric)) {
-			optimizer_head = {"Optimizer", entry.second.GetValue<double>()};
-		} else if (MetricsUtils::IsMetric<MetricPlannerTotalTime>(metric)) {
-			planner_head = {"Planner", entry.second.GetValue<double>()};
-		} else if (MetricsUtils::IsMetric<MetricParserTotalTime>(metric)) {
-			parser_head = {"Parser", entry.second.GetValue<double>()};
 		} else if (MetricsUtils::IsMetric<MetricPlannerBindingTime>(metric)) {
 			planner_timings["binding_time"] = entry.second.GetValue<double>();
 		}
 	}
 
-	RenderPhaseTimings(ss, optimizer_head, optimizer_timings, width);
-	RenderPhaseTimings(ss, physical_planner_head, physical_planner_timings, width);
-	RenderPhaseTimings(ss, planner_head, planner_timings, width);
-	RenderPhaseTimings(ss, parser_head, parser_timings, width);
+	if (!optimizer_head.first.empty()) {
+		RenderPhaseTimings(ss, optimizer_head, optimizer_timings, width);
+	}
+	if (!physical_planner_head.first.empty()) {
+		RenderPhaseTimings(ss, physical_planner_head, physical_planner_timings, width);
+	}
+	if (!planner_head.first.empty()) {
+		RenderPhaseTimings(ss, planner_head, planner_timings, width);
+	}
+	if (!parser_head.first.empty()) {
+		RenderPhaseTimings(ss, parser_head, parser_timings, width);
+	}
 }
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
@@ -890,7 +904,8 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 
 	info.name = EnumUtil::ToString(root_p.type);
 	info.operator_type = root_p.type;
-	info.SetExtraInfo(root_p.ParamsToString());
+	auto params = root_p.ParamsToString();
+	info.SetExtraInfo(std::move(params));
 
 	tree_map.insert(make_pair(reference<const PhysicalOperator>(root_p), reference<ProfilingNode>(*node)));
 	auto children = root_p.GetChildren();
