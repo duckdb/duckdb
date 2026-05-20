@@ -142,6 +142,9 @@ typedef unique_ptr<GlobalFunctionData> (*copy_to_initialize_global_t)(ClientCont
                                                                       const string &file_path);
 typedef void (*copy_to_sink_t)(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                                LocalFunctionData &lstate, DataChunk &input);
+typedef SinkResultType (*copy_to_sink_with_result_t)(ExecutionContext &context, FunctionData &bind_data,
+                                                     GlobalFunctionData &gstate, LocalFunctionData &lstate,
+                                                     DataChunk &input);
 typedef void (*copy_to_combine_t)(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                                   LocalFunctionData &lstate);
 typedef void (*copy_to_finalize_t)(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate);
@@ -243,6 +246,7 @@ public:
 	copy_to_initialize_global_t copy_to_initialize_global;
 	copy_to_get_written_statistics_t copy_to_get_written_statistics;
 	copy_to_sink_t copy_to_sink;
+	copy_to_sink_with_result_t copy_to_sink_with_result;
 	copy_to_combine_t copy_to_combine;
 	copy_to_finalize_t copy_to_finalize;
 	copy_to_execution_mode_t execution_mode;

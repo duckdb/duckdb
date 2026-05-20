@@ -1736,8 +1736,8 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	if (batch_analyzer.MeetsFlushCriteria()) {
 		lstate.batch_append_state.current_chunk_state.handles.clear();
 		auto &file_state_ptr = per_thread_output ? lstate.global_file_state : gstate.global_state;
-		PrepareAndFlushBatch(context.client, gstate, file_state_ptr, gstate.create_file_state_fun,
-		                     std::move(lstate.batch));
+		return PrepareAndFlushBatch(context.client, gstate, file_state_ptr, gstate.create_file_state_fun,
+		                            std::move(lstate.batch));
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -1849,13 +1849,15 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 	return SinkFinalizeType::READY;
 }
 
-void PhysicalCopyToFile::PrepareAndFlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
-                                              unique_ptr<GlobalFileState> &file_state_ptr,
-                                              const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
-                                              unique_ptr<ColumnDataCollection> batch) const {
+SinkResultType
+PhysicalCopyToFile::PrepareAndFlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
+                                         unique_ptr<GlobalFileState> &file_state_ptr,
+                                         const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+                                         unique_ptr<ColumnDataCollection> batch) const {
 	auto [batch_analyzer, prepared_batch] =
 	    PrepareBatch(context, gstate_p, file_state_ptr, create_file_state_fun, std::move(batch));
-	FlushBatch(context, gstate_p, file_state_ptr, create_file_state_fun, batch_analyzer, std::move(prepared_batch));
+	return FlushBatch(context, gstate_p, file_state_ptr, create_file_state_fun, batch_analyzer,
+	                  std::move(prepared_batch));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1883,9 +1885,11 @@ static unique_ptr<PreparedBatchData> PrepareLegacyCopyBatch(unique_ptr<ColumnDat
 	return make_uniq<LegacyCopyPreparedBatch>(std::move(batch));
 }
 
-static void FlushLegacyCopyBatch(ClientContext &context, const CopyFunction &function, FunctionData &bind_data,
-                                 GlobalFunctionData &gstate, PreparedBatchData &prepared_batch) {
-	if (!function.copy_to_initialize_local || !function.copy_to_sink || !function.copy_to_combine) {
+static SinkResultType FlushLegacyCopyBatch(ClientContext &context, const CopyFunction &function,
+                                           FunctionData &bind_data, GlobalFunctionData &gstate,
+                                           PreparedBatchData &prepared_batch) {
+	if (!function.copy_to_initialize_local || (!function.copy_to_sink && !function.copy_to_sink_with_result) ||
+	    !function.copy_to_combine) {
 		throw InternalException("Legacy copy function is missing required sink/combine callbacks");
 	}
 
@@ -1893,10 +1897,19 @@ static void FlushLegacyCopyBatch(ClientContext &context, const CopyFunction &fun
 	ThreadContext thread_context(context);
 	ExecutionContext execution_context(context, thread_context, nullptr);
 	auto local_state = function.copy_to_initialize_local(execution_context, bind_data);
+	auto result = SinkResultType::NEED_MORE_INPUT;
 	for (auto &chunk : legacy_batch.collection->Chunks()) {
-		function.copy_to_sink(execution_context, bind_data, gstate, *local_state, chunk);
+		if (function.copy_to_sink_with_result) {
+			result = function.copy_to_sink_with_result(execution_context, bind_data, gstate, *local_state, chunk);
+			if (result != SinkResultType::NEED_MORE_INPUT) {
+				break;
+			}
+		} else {
+			function.copy_to_sink(execution_context, bind_data, gstate, *local_state, chunk);
+		}
 	}
 	function.copy_to_combine(execution_context, bind_data, gstate, *local_state);
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1931,12 +1944,13 @@ PhysicalCopyToFile::PrepareBatch(ClientContext &context, GlobalSinkState &gstate
 	return {batch_analyzer, function.prepare_batch(context, *bind_data, *prepare_global_state->data, std::move(batch))};
 }
 
-void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
-                                    unique_ptr<GlobalFileState> &file_state_ptr,
-                                    const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
-                                    const CopyFunctionBatchAnalyzer &batch_analyzer,
-                                    unique_ptr<PreparedBatchData> prepared_batch) const {
+SinkResultType PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
+                                              unique_ptr<GlobalFileState> &file_state_ptr,
+                                              const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+                                              const CopyFunctionBatchAnalyzer &batch_analyzer,
+                                              unique_ptr<PreparedBatchData> prepared_batch) const {
 	auto &gstate = gstate_p.Cast<CopyToFileGlobalState>();
+	auto result = SinkResultType::NEED_MORE_INPUT;
 
 	while (true) {
 		// Decide which file to flush to
@@ -1965,13 +1979,14 @@ void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gst
 			            {"size", to_string(batch_analyzer.current_batch_size_bytes)},
 			            {"reason", EnumUtil::ToString(batch_analyzer.ToReason())}});
 			if (UsesLegacyCopyBatchAPI(function)) {
-				FlushLegacyCopyBatch(context, function, *bind_data, *file_state_ptr->data, *prepared_batch);
+				result = FlushLegacyCopyBatch(context, function, *bind_data, *file_state_ptr->data, *prepared_batch);
 			} else {
 				function.flush_batch(context, *bind_data, *file_state_ptr->data, *prepared_batch);
 			}
 			break;
 		}
 	}
+	return result;
 }
 
 //===--------------------------------------------------------------------===//

@@ -50,18 +50,19 @@ public:
 
 	bool Rotate() const;
 
-	void PrepareAndFlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
-	                          unique_ptr<GlobalFileState> &file_state_ptr,
-	                          const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
-	                          unique_ptr<ColumnDataCollection> batch) const;
+	SinkResultType PrepareAndFlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
+	                                    unique_ptr<GlobalFileState> &file_state_ptr,
+	                                    const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+	                                    unique_ptr<ColumnDataCollection> batch) const;
 	pair<const CopyFunctionBatchAnalyzer, unique_ptr<PreparedBatchData>>
 	PrepareBatch(ClientContext &context, GlobalSinkState &gstate_p, unique_ptr<GlobalFileState> &file_state_ptr,
 	             const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
 	             unique_ptr<ColumnDataCollection> batch) const;
-	void FlushBatch(ClientContext &context, GlobalSinkState &gstate_p, unique_ptr<GlobalFileState> &file_state_ptr,
-	                const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
-	                const CopyFunctionBatchAnalyzer &batch_analyzer,
-	                unique_ptr<PreparedBatchData> prepared_batch) const;
+	SinkResultType FlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
+	                          unique_ptr<GlobalFileState> &file_state_ptr,
+	                          const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+	                          const CopyFunctionBatchAnalyzer &batch_analyzer,
+	                          unique_ptr<PreparedBatchData> prepared_batch) const;
 
 public:
 	//===--------------------------------------------------------------------===//
