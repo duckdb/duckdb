@@ -291,6 +291,10 @@ void QueryProfiler::TrackBytesWritten(const idx_t amount) {
 	query_metrics.UpdateBytesWritten(amount);
 }
 
+void QueryProfiler::TrackTotalMemoryAllocated(const idx_t amount) {
+	query_metrics.UpdateTotalMemoryAllocated(amount);
+}
+
 void QueryProfiler::AddToMetricCounter(const string &key, const idx_t amount) {
 	if (IsEnabled()) {
 		query_metrics.UpdateMetricCounter(key, amount);
@@ -725,9 +729,6 @@ string QueryProfiler::JSONSanitize(const std::string &text) {
 
 profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) const {
 	profiler_metrics_t result;
-	if (info.MetricIsTracked<MetricOperatorName>()) {
-		result["name"] = Value(name);
-	}
 	if (info.MetricIsTracked<MetricOperatorType>()) {
 		result["type"] = Value(EnumUtil::ToString(operator_type));
 	}
@@ -883,7 +884,6 @@ static LegacyCumulative LegacyOperatorToResultTree(const GatheredMetrics &info, 
 	};
 
 	emit_as("type", "operator_type");
-	emit_as("name", "operator_name");
 	emit_as("timing", "operator_timing");
 	emit_as("rows_scanned", "operator_rows_scanned");
 	emit_as("intermediate_rows", "operator_cardinality");

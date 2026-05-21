@@ -136,10 +136,6 @@
 			"description": "Intermediate size in bytes produced by the operator",
 			"unit": "bytes"
 		},
-		"name": {
-			"metric_type": "string",
-			"description": "Name of the operator"
-		},
 		"row_groups_scanned": {
 			"metric_type": "uint64",
 			"description": "Number of row groups scanned by the operator",

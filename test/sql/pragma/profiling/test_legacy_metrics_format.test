@@ -13,7 +13,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SET tracked_metrics = ['query.time', 'query.cpu_time', 'query.sql', 'query.total_intermediate_rows', 'query.total_rows_scanned', 'operator.name', 'operator.type', 'operator.timing', 'operator.intermediate_rows'];
+SET tracked_metrics = ['query.time', 'query.cpu_time', 'query.sql', 'query.total_intermediate_rows', 'query.total_rows_scanned', 'operator.type', 'operator.timing', 'operator.intermediate_rows'];
 
 statement ok
 SET legacy_metrics_format = true;
@@ -50,13 +50,7 @@ true
 
 # Operators use "operator_" prefixed keys.
 statement ok
-SELECT children[1].operator_name, children[1].operator_type, children[1].operator_timing FROM metrics_output;
-
-# Verify legacy format produces correct key renaming: operator_name not "name".
-query I
-SELECT list_contains(struct_keys(children[1]), 'name') FROM metrics_output;
-----
-false
+SELECT children[1].operator_type, children[1].operator_timing FROM metrics_output;
 
 # Test that switching back to non-legacy format works.
 
@@ -67,7 +61,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SET tracked_metrics = ['query.time', 'operator.name', 'operator.timing'];
+SET tracked_metrics = ['query.time', 'operator.type', 'operator.timing'];
 
 statement ok
 SET legacy_metrics_format = false;

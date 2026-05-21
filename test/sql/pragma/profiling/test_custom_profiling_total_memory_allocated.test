@@ -69,7 +69,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SET tracked_metrics = ['system.total_memory_allocated', 'operator.name', 'operator.type'];
+SET tracked_metrics = ['system.total_memory_allocated', 'operator.type'];
 
 statement ok
 SELECT * FROM test WHERE id < 1000 ORDER BY id;

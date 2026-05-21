@@ -26,7 +26,7 @@ struct MetricsTimer;
 // Top level query metrics
 struct QueryMetrics {
 public:
-	QueryMetrics() : bytes_read(0), bytes_written(0) {
+	QueryMetrics() : bytes_read(0), bytes_written(0), total_memory_allocated(0) {
 		Reset();
 	}
 	idx_t system_peak_buffer_memory;
@@ -38,6 +38,8 @@ public:
 	// Always-tracked byte counters (used by progress bar even when profiling is disabled)
 	atomic<idx_t> bytes_read;
 	atomic<idx_t> bytes_written;
+	// Thread-safe memory allocation counter (updated from allocator callbacks on any thread)
+	atomic<idx_t> total_memory_allocated;
 
 public:
 	void UpdateMetric(const string &key, idx_t addition) {
@@ -54,6 +56,10 @@ public:
 
 	void UpdateBytesWritten(idx_t n) {
 		bytes_written += n;
+	}
+
+	void UpdateTotalMemoryAllocated(idx_t n) {
+		total_memory_allocated += n;
 	}
 
 	double GetStringMetricInSeconds(const string &key) const {
@@ -80,6 +86,10 @@ public:
 		return bytes_written.load();
 	}
 
+	idx_t GetTotalMemoryAllocated() const {
+		return total_memory_allocated.load();
+	}
+
 	const unordered_map<string, idx_t> &GetMetricTimings() const {
 		return string_timings;
 	}
@@ -93,6 +103,7 @@ public:
 		string_counters.clear();
 		bytes_read = 0;
 		bytes_written = 0;
+		total_memory_allocated = 0;
 
 		latency_timer.reset();
 		query_sql = "";
@@ -113,6 +124,7 @@ public:
 		}
 		bytes_read += other.bytes_read.load();
 		bytes_written += other.bytes_written.load();
+		total_memory_allocated += other.total_memory_allocated.load();
 	}
 
 private:

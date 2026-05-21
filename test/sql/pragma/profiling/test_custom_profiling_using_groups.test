@@ -172,7 +172,6 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_ou
 
 statement ok
 SELECT intermediate_rows,
-	name,
 	timing,
 	type
 FROM (

@@ -205,13 +205,6 @@ struct MetricOperatorIntermediateSizeBytes {
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
-struct MetricOperatorName {
-	using METRIC_TYPE = string;
-	static constexpr const char *Name = "operator.name";
-	static constexpr const char *Description = "Name of the operator";
-	static constexpr const char *Unit = "";
-	static constexpr const char *TypeStr = "string";
-};
 struct MetricOperatorRowGroupsScanned {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "operator.row_groups_scanned";

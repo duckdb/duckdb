@@ -52,7 +52,6 @@ static const MetricDescriptor internal_metrics[] = {
 	DUCKDB_METRIC(MetricOperatorExtraInfo),
 	DUCKDB_METRIC(MetricOperatorIntermediateRows),
 	DUCKDB_METRIC(MetricOperatorIntermediateSizeBytes),
-	DUCKDB_METRIC(MetricOperatorName),
 	DUCKDB_METRIC(MetricOperatorRowGroupsScanned),
 	DUCKDB_METRIC(MetricOperatorRowsScanned),
 	DUCKDB_METRIC(MetricOperatorTiming),

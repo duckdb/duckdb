@@ -16,7 +16,7 @@ void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
 	info.SetMetric<MetricSystemBlockedThreadTime>(blocked_thread_time);
 	info.SetMetric<MetricSystemPeakBufferMemory>(system_peak_buffer_memory);
 	info.SetMetric<MetricSystemPeakTempDirSize>(system_peak_temp_dir_size);
-	info.SetMetric<MetricSystemTotalMemoryAllocated>(GetStringCounter(MetricSystemTotalMemoryAllocated::Name));
+	info.SetMetric<MetricSystemTotalMemoryAllocated>(GetTotalMemoryAllocated());
 }
 
 } // namespace duckdb
