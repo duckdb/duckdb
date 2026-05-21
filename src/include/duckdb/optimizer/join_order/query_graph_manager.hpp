@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/pair.hpp"
@@ -21,6 +22,7 @@
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
 #include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
 #include <functional>
@@ -64,6 +66,55 @@ public:
 
 	void SetLeftSet(optional_ptr<JoinRelationSet> left_set_new);
 	void SetRightSet(optional_ptr<JoinRelationSet> right_set_new);
+};
+
+enum class JoinPredicateClass { INNER_EQUALITY, INNER_NON_EQUALITY, LEFT_JOIN, SEMI_ANTI_JOIN, OTHER };
+
+struct JoinOrderUtil {
+	//! Return the comparison type when the predicate expression itself is a comparison.
+	static ExpressionType GetJoinPredicateComparisonType(const FilterInfo &filter) {
+		if (!filter.filter) {
+			return ExpressionType::INVALID;
+		}
+		if (!BoundComparisonExpression::IsComparison(*filter.filter)) {
+			return ExpressionType::INVALID;
+		}
+		return filter.filter->GetExpressionType();
+	}
+
+	//! Classify the predicate for equivalence closure, denominator assembly and cost-model use.
+	static JoinPredicateClass ClassifyJoinPredicate(const FilterInfo &filter) {
+		switch (filter.join_type) {
+		case JoinType::INNER: {
+			const auto comparison_type = GetJoinPredicateComparisonType(filter);
+			if (comparison_type == ExpressionType::COMPARE_EQUAL ||
+			    comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+				return JoinPredicateClass::INNER_EQUALITY;
+			}
+			return comparison_type == ExpressionType::INVALID ? JoinPredicateClass::OTHER
+			                                                  : JoinPredicateClass::INNER_NON_EQUALITY;
+		}
+		case JoinType::LEFT:
+			return JoinPredicateClass::LEFT_JOIN;
+		case JoinType::SEMI:
+		case JoinType::ANTI:
+			return JoinPredicateClass::SEMI_ANTI_JOIN;
+		default:
+			return JoinPredicateClass::OTHER;
+		}
+	}
+
+	//! INNER equality and IS NOT DISTINCT FROM predicates are the only predicates that form equivalence closures.
+	static bool IsEquivalenceJoinPredicate(const FilterInfo &filter) {
+		return ClassifyJoinPredicate(filter) == JoinPredicateClass::INNER_EQUALITY;
+	}
+
+	//! LEFT/SEMI/ANTI preserve one side's cardinality and need hidden input-work costing.
+	static bool IsCardinalityPreservingJoinPredicate(const FilterInfo &filter) {
+		const auto predicate_class = ClassifyJoinPredicate(filter);
+		return predicate_class == JoinPredicateClass::LEFT_JOIN ||
+		       predicate_class == JoinPredicateClass::SEMI_ANTI_JOIN;
+	}
 };
 
 //! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations

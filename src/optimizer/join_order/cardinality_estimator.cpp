@@ -5,7 +5,6 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -15,33 +14,11 @@
 namespace duckdb {
 
 ExpressionType FilterInfoWithTotalDomains::GetComparisonType() {
-	ExpressionType comparison_type = ExpressionType::INVALID;
-	ExpressionIterator::EnumerateExpression(filter_info->filter, [&](Expression &expr) {
-		if (BoundComparisonExpression::IsComparison(expr)) {
-			comparison_type = expr.GetExpressionType();
-		}
-	});
-	return comparison_type;
+	return JoinOrderUtil::GetJoinPredicateComparisonType(*filter_info);
 }
 
 bool FilterInfoWithTotalDomains::IsInnerEquality() {
-	if (filter_info->join_type != JoinType::INNER) {
-		return false;
-	}
-	const auto ctype = GetComparisonType();
-	return ctype == ExpressionType::COMPARE_EQUAL || ctype == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-}
-
-static bool IsEquivalenceJoinFilter(const FilterInfo &filter_info) {
-	if (filter_info.join_type != JoinType::INNER || !filter_info.filter) {
-		return false;
-	}
-	if (!BoundComparisonExpression::IsComparison(*filter_info.filter)) {
-		return false;
-	}
-	const auto comparison_type = filter_info.filter->GetExpressionType();
-	return comparison_type == ExpressionType::COMPARE_EQUAL ||
-	       comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
+	return JoinOrderUtil::IsEquivalenceJoinPredicate(*filter_info);
 }
 
 // The filter was made on top of a logical sample or other projection,
@@ -163,7 +140,7 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 		D_ASSERT(!filter->left_set->Empty());
 		D_ASSERT(!filter->right_set->Empty());
 
-		if (!IsEquivalenceJoinFilter(*filter)) {
+		if (!JoinOrderUtil::IsEquivalenceJoinPredicate(*filter)) {
 			continue;
 		}
 
@@ -175,7 +152,7 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 		    filter->filter->GetExpressionType() == ExpressionType::CONJUNCTION_OR && filter->set.get().count >= 2) {
 			continue;
 		}
-		if (SingleColumnFilter(*filter) || EmptyFilter(*filter) || IsEquivalenceJoinFilter(*filter)) {
+		if (SingleColumnFilter(*filter) || EmptyFilter(*filter) || JoinOrderUtil::IsEquivalenceJoinPredicate(*filter)) {
 			continue;
 		}
 		D_ASSERT(!filter->left_set->Empty());
@@ -436,14 +413,14 @@ static DenominatorEdgeKind ClassifyDenominatorEdge(FilterInfoWithTotalDomains &e
 	if (EquivalenceGroupApplied(edge, applied_groups)) {
 		return DenominatorEdgeKind::REDUNDANT_TRANSITIVE_EQUALITY;
 	}
-	switch (edge.filter_info->join_type) {
-	case JoinType::INNER:
-		return edge.IsInnerEquality() ? DenominatorEdgeKind::INNER_EQUIVALENCE
-		                              : DenominatorEdgeKind::NON_EQUALITY_SELECTIVITY;
-	case JoinType::LEFT:
+	switch (JoinOrderUtil::ClassifyJoinPredicate(*edge.filter_info)) {
+	case JoinPredicateClass::INNER_EQUALITY:
+		return DenominatorEdgeKind::INNER_EQUIVALENCE;
+	case JoinPredicateClass::INNER_NON_EQUALITY:
+		return DenominatorEdgeKind::NON_EQUALITY_SELECTIVITY;
+	case JoinPredicateClass::LEFT_JOIN:
 		return DenominatorEdgeKind::LEFT_JOIN;
-	case JoinType::SEMI:
-	case JoinType::ANTI:
+	case JoinPredicateClass::SEMI_ANTI_JOIN:
 		return DenominatorEdgeKind::SEMI_ANTI_JOIN;
 	default:
 		return DenominatorEdgeKind::OTHER;

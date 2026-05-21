@@ -21,18 +21,6 @@ static bool Disjoint(const unordered_set<T> &a, const unordered_set<T> &b) {
 	});
 }
 
-static bool IsInnerEqualityFilter(const FilterInfo &filter) {
-	if (filter.join_type != JoinType::INNER || !filter.filter) {
-		return false;
-	}
-	if (!BoundComparisonExpression::IsComparison(*filter.filter)) {
-		return false;
-	}
-	const auto comparison_type = filter.filter->GetExpressionType();
-	return comparison_type == ExpressionType::COMPARE_EQUAL ||
-	       comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-}
-
 void QueryGraphManager::MarkEdgeEquivalences() {
 	// Assign edge_equivalence_index to INNER equality join filters using union-find over column bindings.
 	// All filters in the same transitive equality closure receive the same index, regardless of the
@@ -64,7 +52,7 @@ void QueryGraphManager::MarkEdgeEquivalences() {
 	// because a later predicate can merge two previously separate components.
 	for (auto &filter : filters_and_bindings) {
 		filter->edge_equivalence_index = optional_idx();
-		if (!IsInnerEqualityFilter(*filter)) {
+		if (!JoinOrderUtil::IsEquivalenceJoinPredicate(*filter)) {
 			continue;
 		}
 		if (!filter->left_binding.table_index.IsValid() || !filter->right_binding.table_index.IsValid()) {
@@ -84,7 +72,7 @@ void QueryGraphManager::MarkEdgeEquivalences() {
 	// Then assign stable final ids to every equality edge using the final roots.
 	unordered_map<idx_t, idx_t> root_to_equivalence_id;
 	for (auto &filter : filters_and_bindings) {
-		if (!IsInnerEqualityFilter(*filter)) {
+		if (!JoinOrderUtil::IsEquivalenceJoinPredicate(*filter)) {
 			continue;
 		}
 		if (!filter->left_binding.table_index.IsValid() || !filter->right_binding.table_index.IsValid()) {

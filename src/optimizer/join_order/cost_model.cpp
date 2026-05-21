@@ -2,7 +2,6 @@
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/cost_model.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
 
@@ -37,26 +36,13 @@ static double GetLeftJoinInputCost(CardinalityEstimator &cardinality_estimator,
 	return cost;
 }
 
-static bool CostModelInnerEqualityFilter(const FilterInfo &filter) {
-	if (filter.join_type != JoinType::INNER || !filter.filter) {
-		return false;
-	}
-	if (!BoundComparisonExpression::IsComparison(*filter.filter)) {
-		return false;
-	}
-	auto comparison_type = filter.filter->GetExpressionType();
-	return comparison_type == ExpressionType::COMPARE_EQUAL ||
-	       comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-}
-
 static bool Contains(JoinRelationSet &super, optional_ptr<JoinRelationSet> sub) {
 	return sub && !sub->Empty() && JoinRelationSet::IsSubset(super, *sub);
 }
 
 static bool HasCardinalityPreservingJoin(QueryGraphManager &query_graph_manager) {
 	for (auto &filter : query_graph_manager.GetFilterBindings()) {
-		if (filter->join_type == JoinType::LEFT || filter->join_type == JoinType::SEMI ||
-		    filter->join_type == JoinType::ANTI) {
+		if (JoinOrderUtil::IsCardinalityPreservingJoinPredicate(*filter)) {
 			return true;
 		}
 	}
@@ -78,7 +64,7 @@ static double GetPendingSmallSidePenalty(QueryGraphManager &query_graph_manager,
 	double cost = 0;
 	unordered_set<string> seen_inside_sets;
 	for (auto &filter : query_graph_manager.GetFilterBindings()) {
-		if (!CostModelInnerEqualityFilter(*filter) || !filter->left_set || !filter->right_set) {
+		if (!JoinOrderUtil::IsEquivalenceJoinPredicate(*filter) || !filter->left_set || !filter->right_set) {
 			continue;
 		}
 		if (JoinRelationSet::IsSubset(combination, filter->set.get())) {
