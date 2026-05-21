@@ -262,14 +262,7 @@ Constraint:
     - TopLevelConstraintList
     - TopPrimaryKeyConstraint
     - TopUniqueConstraint
-    - CheckConstraint
     - TopForeignKeyConstraint
-
-ForeignKeyConstraint:
-  type: "unique_ptr<ForeignKeyConstraint>"
-  by_value: true
-  rules:
-    - ForeignKeyConstraint
 
 WindowExpression:
   type: "unique_ptr<WindowExpression>"
@@ -440,8 +433,6 @@ Expression:
     - NumericModType
     - CopyFileName
     - DatabasePath
-    - DefaultValue
-    - ColumnCollation
     - UsingExpression
     - IndexElement
     - RelOptionArgumentOpt
@@ -544,7 +535,7 @@ ResultModifierList:
 
 OrderByNodeList:
   type: "vector<OrderByNode>"
-  by_value: false
+  by_value: true
   rules:
     - OrderByClause
     - OrderByExpressions
@@ -812,6 +803,8 @@ String:
     - PrefixOperator
     - TableQualification
     - ReservedTableQualification
+    - CatalogQualification
+    - SchemaQualification
     - BaseWindowName
     - Framing
     - AtUnit
@@ -838,6 +831,7 @@ String:
     - ExplainOptionName
     - OperatorLiteral
     - DotIdentifier
+    - IdentifierDot
     - VacuumOption
     - OptAnalyze
     - OptFull
@@ -845,6 +839,8 @@ String:
     - OptVerbose
     - ExtensionAlias
     - ExplainOptionAnalyze
+    - DropNullability
+    - SetNullability
 
 Bool:
   type: "bool"
@@ -906,6 +902,26 @@ TransactionModifierType:
 # ---------------------------------------------------------------------------
 # Structs passed by value (contain move-only members like unique_ptr<T>)
 # ---------------------------------------------------------------------------
+
+AddColumnEntry:
+  type: "AddColumnEntry"
+  by_value: true
+  rules:
+    - AddColumnEntry
+
+ColumnConstraintEntry:
+  type: "ColumnConstraintEntry"
+  by_value: true
+  rules:
+    - ColumnConstraint
+    - NotNullConstraint
+    - UniqueConstraint
+    - PrimaryKeyConstraint
+    - DefaultValue
+    - CheckConstraint
+    - ForeignKeyConstraint
+    - ColumnCollation
+    - ColumnCompression
 
 AnalyzeTarget:
   type: "AnalyzeTarget"
@@ -986,12 +1002,7 @@ overrides:
   RelOptionList: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   Oids: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   # create_table.gram
-  AddColumnEntry: "AddColumnEntry"
   ColumnDefinition: "ConstraintColumnDefinition"
-  ColumnCompression: "CompressionType"
-  PrimaryKeyConstraint: "pair<bool, ConstraintType>"
-  UniqueConstraint: "pair<bool, ConstraintType>"
-  NotNullConstraint: "pair<bool, ConstraintType>"
   KeyActions: "KeyActions"
   GeneratedColumn: "GeneratedColumnDefinition"
   CreateTableAs: "CreateTableAs"
@@ -1114,7 +1125,6 @@ excluded_rules:
   - CopyOptionName
   - AtTimeZoneOperator
   - Generated
-  - ColumnConstraint
   - AlwaysOrByDefault
   - Lateral
   - ConstraintNameClause

@@ -146,43 +146,6 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 
 #define REGISTER_TRANSFORM(FUNCTION) Register(string(#FUNCTION).substr(9), &FUNCTION)
 
-void PEGTransformerFactory::RegisterAlter() {
-	// alter.gram
-	REGISTER_TRANSFORM(TransformAlterStatement);
-	REGISTER_TRANSFORM(TransformAlterOptions);
-	REGISTER_TRANSFORM(TransformAlterTableStmt);
-	REGISTER_TRANSFORM(TransformAlterViewStmt);
-	REGISTER_TRANSFORM(TransformAlterSchemaStmt);
-	REGISTER_TRANSFORM(TransformAlterDatabaseStmt);
-	REGISTER_TRANSFORM(TransformAlterSequenceStmt);
-	REGISTER_TRANSFORM(TransformAlterSequenceOptions);
-	REGISTER_TRANSFORM(TransformSetSequenceOption);
-	REGISTER_TRANSFORM(TransformAlterTableOptions);
-	REGISTER_TRANSFORM(TransformAddColumn);
-	REGISTER_TRANSFORM(TransformAddColumnEntry);
-	REGISTER_TRANSFORM(TransformDropColumn);
-	REGISTER_TRANSFORM(TransformSetPartitionedBy);
-	REGISTER_TRANSFORM(TransformResetPartitionedBy);
-	REGISTER_TRANSFORM(TransformAlterColumn);
-	REGISTER_TRANSFORM(TransformAlterColumnEntry);
-	REGISTER_TRANSFORM(TransformDropDefault);
-	REGISTER_TRANSFORM(TransformChangeNullability);
-	REGISTER_TRANSFORM(TransformAlterType);
-	REGISTER_TRANSFORM(TransformUsingExpression);
-	REGISTER_TRANSFORM(TransformDropOrSet);
-	REGISTER_TRANSFORM(TransformAddOrDropDefault);
-	REGISTER_TRANSFORM(TransformAddDefault);
-	REGISTER_TRANSFORM(TransformRenameColumn);
-	REGISTER_TRANSFORM(TransformRenameAlter);
-	REGISTER_TRANSFORM(TransformAddConstraint);
-	REGISTER_TRANSFORM(TransformQualifiedSequenceName);
-	REGISTER_TRANSFORM(TransformSequenceName);
-	REGISTER_TRANSFORM(TransformSetSortedBy);
-	REGISTER_TRANSFORM(TransformResetSortedBy);
-	REGISTER_TRANSFORM(TransformSetOptions);
-	REGISTER_TRANSFORM(TransformResetOptions);
-}
-
 void PEGTransformerFactory::RegisterComment() {
 	// comment.gram
 	REGISTER_TRANSFORM(TransformCommentValue);
@@ -314,6 +277,7 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformIdentifier);
 	REGISTER_TRANSFORM(TransformDottedIdentifier);
 	REGISTER_TRANSFORM(TransformColumnDefinition);
+	REGISTER_TRANSFORM(TransformColumnConstraint);
 	REGISTER_TRANSFORM(TransformTopLevelConstraint);
 	REGISTER_TRANSFORM(TransformTopLevelConstraintList);
 	REGISTER_TRANSFORM(TransformTopPrimaryKeyConstraint);
@@ -445,7 +409,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformAtTimeZoneExpression);
 	REGISTER_TRANSFORM(TransformPrefixExpression);
 
-	REGISTER_TRANSFORM(TransformNestedColumnName);
 	REGISTER_TRANSFORM(TransformColumnReference);
 	REGISTER_TRANSFORM(TransformCatalogReservedSchemaTableColumnName);
 	REGISTER_TRANSFORM(TransformSchemaReservedTableColumnName);
@@ -935,7 +898,6 @@ void PEGTransformerFactory::RegisterEnums() {
 PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterGenerated();
 	REGISTER_TRANSFORM(TransformStatement);
-	RegisterAlter();
 	RegisterComment();
 	RegisterCommon();
 	RegisterCopy();

@@ -134,22 +134,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 	return expr;
 }
 
-unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformNestedColumnName(PEGTransformer &transformer,
-                                                                                 ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<string> column_names;
-	auto &opt_identifiers = list_pr.Child<OptionalParseResult>(0);
-	if (opt_identifiers.HasResult()) {
-		auto &repeat_identifiers = opt_identifiers.GetResult().Cast<RepeatParseResult>();
-		for (auto &child : repeat_identifiers.GetChildren()) {
-			auto &repeat_list = child.get().Cast<ListParseResult>();
-			column_names.push_back(repeat_list.Child<IdentifierParseResult>(0).identifier);
-		}
-	}
-	column_names.push_back(list_pr.Child<IdentifierParseResult>(1).identifier);
-	return make_uniq<ColumnRefExpression>(std::move(column_names));
-}
-
 // ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName /
 // NestedColumnName
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnReference(PEGTransformer &transformer,

@@ -652,10 +652,24 @@ def classify_sequence_elements(children, rule_types, excluded_rules):
     Returns list of SeqElement, or None if any element cannot be classified.
     """
     elements = []
+    seen = {}  # var_name -> occurrence count, for deduplication
     for idx, child in enumerate(children):
         elem = classify_sequence_element(child, idx, rule_types, excluded_rules)
         if elem is None:
             return None
+        if not elem.skip:
+            count = seen.get(elem.var_name, 0)
+            seen[elem.var_name] = count + 1
+            if count > 0:
+                old_name = elem.var_name
+                new_name = f"{old_name}_{count}"
+                elem.extraction_lines = [line.replace(old_name, new_name) for line in elem.extraction_lines]
+                # For identifier rules the field access is always '.identifier'; restore it if renamed.
+                if old_name == "identifier":
+                    elem.extraction_lines = [
+                        line.replace(f".{new_name}", ".identifier") for line in elem.extraction_lines
+                    ]
+                elem.var_name = new_name
         elements.append(elem)
     return elements
 
@@ -1060,7 +1074,7 @@ def main():
     args = arg_parser.parse_args()
 
     gram_files_to_gen = [
-        # 'alter.gram'
+        'alter.gram',
         'analyze.gram',
         'attach.gram',
         'call.gram',
