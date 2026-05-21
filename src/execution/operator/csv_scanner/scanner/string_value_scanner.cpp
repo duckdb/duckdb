@@ -4,6 +4,7 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/bignum.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -362,6 +363,13 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 	}
 	case LogicalTypeId::BIGNUM: {
 		try {
+			while (size > 0 && StringUtil::CharacterIsSpace(*value_ptr)) {
+				value_ptr++;
+				size--;
+			}
+			while (size > 0 && StringUtil::CharacterIsSpace(value_ptr[size - 1])) {
+				size--;
+			}
 			auto bignum = Bignum::VarcharToBignum(string_t(value_ptr, NumericCast<uint32_t>(size)));
 			static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] =
 			    StringVector::AddStringOrBlob(parse_chunk.data[chunk_col_id], bignum.data(), bignum.size());
