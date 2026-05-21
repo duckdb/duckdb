@@ -48,14 +48,8 @@ static void RunPostBindExtensions(ClientContext &context, Binder &binder, BoundS
 void Planner::CreatePlan(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
 	profiler.StartPhase(MetricType::PLANNER);
-	StatementRewriter statement_rewriter(context);
-	auto new_statement = statement_rewriter.Rewrite(statement);
 	profiler.EndPhase();
-	if (new_statement) {
-		CreatePlanInternal(*new_statement);
-	} else {
-		CreatePlanInternal(statement);
-	}
+	CreatePlanInternal(statement);
 }
 
 void Planner::CreatePlanInternal(SQLStatement &statement) {
@@ -148,6 +142,8 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 
 void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement);
+	StatementRewriter statement_rewriter(*binder);
+	statement_rewriter.Rewrite(statement);
 	switch (statement->type) {
 	case StatementType::SELECT_STATEMENT:
 	case StatementType::INSERT_STATEMENT:
