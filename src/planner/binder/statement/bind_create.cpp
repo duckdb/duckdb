@@ -523,8 +523,18 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	if (create_trigger_info.for_each == TriggerForEach::ROW) {
 		throw NotImplementedException("FOR EACH ROW triggers are not yet supported");
 	}
+	if (!create_trigger_info.referencing_new_table.empty()) {
+		if (create_trigger_info.event_type == TriggerEventType::DELETE_EVENT) {
+			throw BinderException("REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers");
+		}
+	}
 	if (!create_trigger_info.referencing_old_table.empty()) {
-		throw NotImplementedException("REFERENCING OLD TABLE is not yet supported");
+		if (create_trigger_info.event_type == TriggerEventType::INSERT_EVENT) {
+			throw BinderException("REFERENCING OLD TABLE AS is not valid for AFTER INSERT triggers");
+		}
+		if (create_trigger_info.event_type == TriggerEventType::UPDATE_EVENT) {
+			throw NotImplementedException("REFERENCING OLD TABLE AS is not yet supported for AFTER UPDATE triggers");
+		}
 	}
 	if (!create_trigger_info.referencing_new_table.empty() &&
 	    create_trigger_info.event_type == TriggerEventType::DELETE_EVENT) {
@@ -556,9 +566,11 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.trigger_name;
 	auto body_copy = create_trigger_info.trigger_action->Copy();
 
-	if (!create_trigger_info.referencing_new_table.empty() &&
-	    body_copy->cte_map.map.find(create_trigger_info.referencing_new_table) == body_copy->cte_map.map.end()) {
-		body_copy->cte_map.map[create_trigger_info.referencing_new_table] = MakeTriggerValidationCTE(table);
+	for (const auto &alias :
+	     {create_trigger_info.referencing_new_table, create_trigger_info.referencing_old_table}) {
+		if (!alias.empty() && body_copy->cte_map.map.find(alias) == body_copy->cte_map.map.end()) {
+			body_copy->cte_map.map[alias] = MakeTriggerValidationCTE(table);
+		}
 	}
 	validation_binder->Bind(*body_copy);
 

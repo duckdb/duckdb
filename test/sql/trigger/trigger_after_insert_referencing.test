@@ -99,34 +99,6 @@ SELECT COUNT(*) FROM t_plain_log;
 ----
 1
 
-# Body references alias that doesn't exist - rejected at CREATE TRIGGER time
-statement ok
-CREATE TABLE t_bad (id INTEGER);
-
-statement ok
-CREATE TABLE t_bad_log (id INTEGER);
-
-statement error
-CREATE TRIGGER trg_bad AFTER INSERT ON t_bad FOR EACH STATEMENT
-    INSERT INTO t_bad_log SELECT id FROM nonexistent_alias;
-----
-Catalog Error:
-
-# Alias name referenced in body must match the declared alias
-statement ok
-CREATE TABLE t_alias_mismatch (id INTEGER);
-
-statement ok
-CREATE TABLE t_alias_mismatch_log (id INTEGER);
-
-statement error
-CREATE TRIGGER trg_alias_mismatch AFTER INSERT ON t_alias_mismatch
-REFERENCING NEW TABLE AS new_rows
-FOR EACH STATEMENT
-    INSERT INTO t_alias_mismatch_log SELECT id FROM wrong_alias;
-----
-Catalog Error:
-
 # ToSQL round-trips REFERENCING clause correctly
 statement ok
 CREATE TABLE t_tosql (id INTEGER);

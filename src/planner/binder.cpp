@@ -669,8 +669,10 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 	from_ref->table_name = base_cte_name;
 	outer->from_table = std::move(from_ref);
 	outer->cte_map.map[base_cte_name] = std::move(base_cte);
-	if (!trigger.referencing_new_table.empty()) {
-		outer->cte_map.map[trigger.referencing_new_table] = MakeTransitionTableAliasCTE(base_cte_name);
+	for (const auto &alias : {trigger.referencing_new_table, trigger.referencing_old_table}) {
+		if (!alias.empty()) {
+			outer->cte_map.map[alias] = MakeTransitionTableAliasCTE(base_cte_name);
+		}
 	}
 	outer->cte_map.map[body_cte_name] = std::move(trig_cte);
 

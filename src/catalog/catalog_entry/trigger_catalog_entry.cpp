@@ -66,6 +66,9 @@ string TriggerCatalogEntry::ToSQL() const {
 	if (!referencing_new_table.empty()) {
 		ss << " REFERENCING NEW TABLE AS " << SQLIdentifier(referencing_new_table);
 	}
+	if (!referencing_old_table.empty()) {
+		ss << " REFERENCING OLD TABLE AS " << SQLIdentifier(referencing_old_table);
+	}
 	ss << " FOR EACH " << EnumUtil::ToString(for_each);
 	ss << " " << trigger_action->ToString();
 	ss << ";";

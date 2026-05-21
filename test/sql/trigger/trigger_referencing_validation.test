@@ -1,0 +1,139 @@
+# name: test/sql/trigger/trigger_referencing_validation.test
+# description: Validate REFERENCING alias rules across event types and grammar forms
+# group: [trigger]
+
+require noforcestorage
+
+statement ok
+CREATE TABLE t (id INTEGER);
+
+# REFERENCING OLD TABLE AS is not valid for AFTER INSERT triggers
+statement error
+CREATE TRIGGER trg_old_on_insert AFTER INSERT ON t
+REFERENCING OLD TABLE AS old_rows
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Binder Error: REFERENCING OLD TABLE AS is not valid for AFTER INSERT triggers
+
+# REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers
+statement error
+CREATE TRIGGER trg_new_on_delete AFTER DELETE ON t
+REFERENCING NEW TABLE AS new_rows
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Binder Error: REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers
+
+# REFERENCING OLD TABLE AS is not yet supported for AFTER UPDATE triggers
+statement error
+CREATE TRIGGER trg_old_on_update AFTER UPDATE ON t
+REFERENCING OLD TABLE AS old_rows
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Not implemented Error: REFERENCING OLD TABLE AS is not yet supported for AFTER UPDATE triggers
+
+# Grammar supports both OLD TABLE and NEW TABLE in one REFERENCING clause,
+# but the binder rejects invalid event/alias combinations regardless of order
+statement error
+CREATE TRIGGER trg_both_del AFTER DELETE ON t
+REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Binder Error: REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers
+
+statement error
+CREATE TRIGGER trg_both_del2 AFTER DELETE ON t
+REFERENCING NEW TABLE AS new_rows OLD TABLE AS old_rows
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Binder Error: REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers
+
+statement error
+CREATE TRIGGER trg_both_ins AFTER INSERT ON t
+REFERENCING NEW TABLE AS new_rows OLD TABLE AS old_rows
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Binder Error: REFERENCING OLD TABLE AS is not valid for AFTER INSERT triggers
+
+statement error
+CREATE TRIGGER trg_both_ins2 AFTER INSERT ON t
+REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Binder Error: REFERENCING OLD TABLE AS is not valid for AFTER INSERT triggers
+
+statement error
+CREATE TRIGGER trg_both_upd AFTER UPDATE ON t
+REFERENCING NEW TABLE AS new_rows OLD TABLE AS old_rows
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Not implemented Error: REFERENCING OLD TABLE AS is not yet supported for AFTER UPDATE triggers
+
+statement error
+CREATE TRIGGER trg_both_upd2 AFTER UPDATE ON t
+REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Not implemented Error: REFERENCING OLD TABLE AS is not yet supported for AFTER UPDATE triggers
+
+# Specifying the same transition table type twice is rejected at parse time
+statement error
+CREATE TRIGGER trg_dup_old AFTER DELETE ON t
+REFERENCING OLD TABLE AS x OLD TABLE AS y
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Parser Error: OLD TABLE cannot be specified multiple times in REFERENCING clause
+
+statement error
+CREATE TRIGGER trg_dup_new AFTER INSERT ON t
+REFERENCING NEW TABLE AS x NEW TABLE AS y
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Parser Error: NEW TABLE cannot be specified multiple times in REFERENCING clause
+
+# Body validation: referencing an undeclared alias is rejected at CREATE TRIGGER time
+statement ok
+CREATE TABLE t_log (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_bad AFTER INSERT ON t FOR EACH STATEMENT
+    INSERT INTO t_log SELECT id FROM nonexistent_alias;
+----
+Catalog Error:
+
+# Alias name referenced in body must match the declared alias
+statement error
+CREATE TRIGGER trg_alias_mismatch AFTER INSERT ON t
+REFERENCING NEW TABLE AS new_rows
+FOR EACH STATEMENT
+    INSERT INTO t_log SELECT id FROM wrong_alias;
+----
+Catalog Error:
+
+# Internal CTE names are collision-proof (UUID suffix) - alias can use any name
+statement ok
+CREATE TABLE t_reserved_log (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_reserved_base AFTER INSERT ON t
+REFERENCING NEW TABLE AS __duckdb_trigger_base
+FOR EACH STATEMENT
+    INSERT INTO t_reserved_log SELECT id FROM __duckdb_trigger_base;
+
+statement ok
+INSERT INTO t VALUES (77);
+
+query I
+SELECT id FROM t_reserved_log;
+----
+77
