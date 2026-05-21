@@ -99,6 +99,11 @@ duckdb_state duckdb_appender_destroy(duckdb_appender *appender) {
 	auto state = duckdb_appender_close(*appender);
 	auto wrapper = reinterpret_cast<AppenderWrapper *>(*appender);
 	if (wrapper) {
+		// If flush/close previously failed, preserve that error even if close just succeeded with empty collection.
+		// (Non-fatal column-level errors do not set flush_failed, so those are not propagated here.)
+		if (wrapper->flush_failed) {
+			state = DuckDBError;
+		}
 		delete wrapper;
 	}
 	*appender = nullptr;
@@ -315,7 +320,14 @@ duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_
 }
 
 duckdb_state duckdb_appender_flush(duckdb_appender appender_p) {
-	return duckdb_appender_run_function(appender_p, [&](BaseAppender &appender) { appender.Flush(); });
+	auto state = duckdb_appender_run_function(appender_p, [&](BaseAppender &appender) { appender.Flush(); });
+	if (state == DuckDBError) {
+		auto wrapper = reinterpret_cast<AppenderWrapper *>(appender_p);
+		if (wrapper) {
+			wrapper->flush_failed = true;
+		}
+	}
+	return state;
 }
 
 duckdb_state duckdb_appender_clear(duckdb_appender appender_p) {
@@ -323,7 +335,14 @@ duckdb_state duckdb_appender_clear(duckdb_appender appender_p) {
 }
 
 duckdb_state duckdb_appender_close(duckdb_appender appender_p) {
-	return duckdb_appender_run_function(appender_p, [&](BaseAppender &appender) { appender.Close(); });
+	auto state = duckdb_appender_run_function(appender_p, [&](BaseAppender &appender) { appender.Close(); });
+	if (state == DuckDBError) {
+		auto wrapper = reinterpret_cast<AppenderWrapper *>(appender_p);
+		if (wrapper) {
+			wrapper->flush_failed = true;
+		}
+	}
+	return state;
 }
 
 idx_t duckdb_appender_column_count(duckdb_appender appender) {

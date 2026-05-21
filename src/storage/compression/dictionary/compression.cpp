@@ -112,7 +112,7 @@ void DictionaryCompressionCompressState::Flush(bool final) {
 
 idx_t DictionaryCompressionCompressState::Finalize() {
 	auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
-	auto handle = buffer_manager.Pin(current_segment->block);
+	auto handle = buffer_manager.Pin(current_segment->GetBlockHandle());
 	D_ASSERT(current_dictionary.end == info.GetBlockSize());
 
 	// calculate sizes

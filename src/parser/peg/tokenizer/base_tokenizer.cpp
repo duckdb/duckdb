@@ -204,7 +204,7 @@ bool BaseTokenizer::IsValidDollarTagCharacter(char c) {
 	if (c == '_') {
 		return true;
 	}
-	if (c >= '\200' && c <= '\377') {
+	if ((unsigned char)c >= (unsigned char)'\200') {
 		return true;
 	}
 	return false;

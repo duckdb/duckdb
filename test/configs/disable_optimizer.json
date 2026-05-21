@@ -4,6 +4,12 @@
   "skip_compiled": "true",
   "skip_tests": [
     {
+      "reason": "Zone map pruning requires filter pushdown from optimizer.",
+      "paths": [
+        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test"
+      ]
+    },
+    {
       "reason": "Unoptimized statement differs from original result (cross product, conversion, overflow, statistics).",
       "paths": [
         "test/fuzzer/duckfuzz/semi_join_has_correct_left_right_relations.test",

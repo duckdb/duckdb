@@ -119,6 +119,7 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
+#include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/execution/physical_table_scan_enum.hpp"
@@ -155,6 +156,7 @@
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
+#include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
@@ -1279,6 +1281,25 @@ const char* EnumUtil::ToChars<CompressedMaterializationDirection>(CompressedMate
 template<>
 CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializationDirection>(const char *value) {
 	return static_cast<CompressedMaterializationDirection>(StringUtil::StringToEnum(GetCompressedMaterializationDirectionValues(), 3, "CompressedMaterializationDirection", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCompressedMaterializationTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CompressedMaterializationType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(CompressedMaterializationType::FUNCTION), "FUNCTION" },
+		{ static_cast<uint32_t>(CompressedMaterializationType::CAST), "CAST" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CompressedMaterializationType>(CompressedMaterializationType value) {
+	return StringUtil::EnumToString(GetCompressedMaterializationTypeValues(), 3, "CompressedMaterializationType", static_cast<uint32_t>(value));
+}
+
+template<>
+CompressedMaterializationType EnumUtil::FromString<CompressedMaterializationType>(const char *value) {
+	return static_cast<CompressedMaterializationType>(StringUtil::StringToEnum(GetCompressedMaterializationTypeValues(), 3, "CompressedMaterializationType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCompressionTypeValues() {
@@ -2752,6 +2773,24 @@ InterruptMode EnumUtil::FromString<InterruptMode>(const char *value) {
 	return static_cast<InterruptMode>(StringUtil::StringToEnum(GetInterruptModeValues(), 3, "InterruptMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetJoinFilterPushdownModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION), "RECONSTRUCT_EXPRESSION" },
+		{ static_cast<uint32_t>(JoinFilterPushdownMode::STORAGE_ONLY), "STORAGE_ONLY" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<JoinFilterPushdownMode>(JoinFilterPushdownMode value) {
+	return StringUtil::EnumToString(GetJoinFilterPushdownModeValues(), 2, "JoinFilterPushdownMode", static_cast<uint32_t>(value));
+}
+
+template<>
+JoinFilterPushdownMode EnumUtil::FromString<JoinFilterPushdownMode>(const char *value) {
+	return static_cast<JoinFilterPushdownMode>(StringUtil::StringToEnum(GetJoinFilterPushdownModeValues(), 2, "JoinFilterPushdownMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetJoinRefTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(JoinRefType::REGULAR), "REGULAR" },
@@ -3330,6 +3369,8 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::CPU_TIME), "CPU_TIME" },
 		{ static_cast<uint32_t>(MetricType::CUMULATIVE_CARDINALITY), "CUMULATIVE_CARDINALITY" },
 		{ static_cast<uint32_t>(MetricType::CUMULATIVE_ROWS_SCANNED), "CUMULATIVE_ROWS_SCANNED" },
+		{ static_cast<uint32_t>(MetricType::CUMULATIVE_ROW_GROUPS_SCANNED), "CUMULATIVE_ROW_GROUPS_SCANNED" },
+		{ static_cast<uint32_t>(MetricType::CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN), "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN" },
 		{ static_cast<uint32_t>(MetricType::EXTRA_INFO), "EXTRA_INFO" },
 		{ static_cast<uint32_t>(MetricType::LATENCY), "LATENCY" },
 		{ static_cast<uint32_t>(MetricType::QUERY_NAME), "QUERY_NAME" },
@@ -3343,6 +3384,7 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::ATTACH_REPLAY_WAL_LATENCY), "ATTACH_REPLAY_WAL_LATENCY" },
 		{ static_cast<uint32_t>(MetricType::CHECKPOINT_LATENCY), "CHECKPOINT_LATENCY" },
 		{ static_cast<uint32_t>(MetricType::COMMIT_LOCAL_STORAGE_LATENCY), "COMMIT_LOCAL_STORAGE_LATENCY" },
+		{ static_cast<uint32_t>(MetricType::CUMULATIVE_VACUUM_TIME), "CUMULATIVE_VACUUM_TIME" },
 		{ static_cast<uint32_t>(MetricType::TOTAL_BYTES_READ), "TOTAL_BYTES_READ" },
 		{ static_cast<uint32_t>(MetricType::TOTAL_BYTES_WRITTEN), "TOTAL_BYTES_WRITTEN" },
 		{ static_cast<uint32_t>(MetricType::WAITING_TO_ATTACH_LATENCY), "WAITING_TO_ATTACH_LATENCY" },
@@ -3351,7 +3393,9 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::OPERATOR_CARDINALITY), "OPERATOR_CARDINALITY" },
 		{ static_cast<uint32_t>(MetricType::OPERATOR_NAME), "OPERATOR_NAME" },
 		{ static_cast<uint32_t>(MetricType::OPERATOR_ROWS_SCANNED), "OPERATOR_ROWS_SCANNED" },
+		{ static_cast<uint32_t>(MetricType::OPERATOR_ROW_GROUPS_SCANNED), "OPERATOR_ROW_GROUPS_SCANNED" },
 		{ static_cast<uint32_t>(MetricType::OPERATOR_TIMING), "OPERATOR_TIMING" },
+		{ static_cast<uint32_t>(MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN), "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN" },
 		{ static_cast<uint32_t>(MetricType::OPERATOR_TYPE), "OPERATOR_TYPE" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_EXPRESSION_REWRITER), "OPTIMIZER_EXPRESSION_REWRITER" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_FILTER_PULLUP), "OPTIMIZER_FILTER_PULLUP" },
@@ -3406,12 +3450,12 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricType>(MetricType value) {
-	return StringUtil::EnumToString(GetMetricTypeValues(), 73, "MetricType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricTypeValues(), 78, "MetricType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricType EnumUtil::FromString<MetricType>(const char *value) {
-	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 73, "MetricType", value));
+	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 78, "MetricType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMonotonicityValues() {

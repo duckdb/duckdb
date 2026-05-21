@@ -57,6 +57,7 @@ class TestRunnerConfig:
     rss_memory_threshold_mib: int | None
     runtime_threshold_seconds: int | None
     max_failures: int | None
+    fail_require_skip: bool
 
 
 @dataclass(frozen=True)
@@ -386,6 +387,7 @@ def run_batch(config: TestRunnerConfig, batch):
     stdout = ""
     stderr = ""
     message = None
+    allow_retry = True
     peak_rss_bytes = 0
 
     # On Windows the child process cannot reopen a NamedTemporaryFile while it
@@ -431,6 +433,12 @@ def run_batch(config: TestRunnerConfig, batch):
             if rss_bytes is not None:
                 peak_rss_bytes = max(peak_rss_bytes, rss_bytes)
             failed = proc.returncode != 0
+            if not failed and config.fail_require_skip:
+                require_skip_lines = find_require_skip_lines(stdout)
+                if require_skip_lines:
+                    failed = True
+                    message = "error: detected require-based skipped tests: " + require_skip_lines[0]
+                    allow_retry = False
     except OSError as exc:
         failed = True
         stderr = str(exc)
@@ -444,7 +452,14 @@ def run_batch(config: TestRunnerConfig, batch):
         "stderr": stderr,
         "message": message,
         "peak_rss_bytes": peak_rss_bytes,
+        "allow_retry": allow_retry,
     }
+
+
+def find_require_skip_lines(output: str):
+    ansi = r"(?:\x1b\[[0-9;]*m)*"
+    pattern = rf"^{ansi}(require\s+\S+:\s+\d+){ansi}\s*$"
+    return re.findall(pattern, output, flags=re.MULTILINE)
 
 
 def submit_batch(executor, config: TestRunnerConfig, batch, future_to_batch, batch_idx: int, attempt: int):
@@ -477,7 +492,7 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
         ),
     )
     ctx.progress.print_message("========================")
-    if ctx.state.can_retry(batch_info, ctx.config):
+    if result.get("allow_retry", True) and ctx.state.can_retry(batch_info, ctx.config):
         ctx.state.record_retry()
         next_attempt = batch_info["attempt"] + 1
         ctx.progress.print_message(
@@ -494,7 +509,7 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
         )
         return True
 
-    if batch_info["attempt"] < ctx.config.retry:
+    if result.get("allow_retry", True) and batch_info["attempt"] < ctx.config.retry:
         ctx.progress.print_message(
             f"not retrying failed test batch {batch_info['batch_idx']} after reaching {ctx.config.max_retries} retries"
         )
@@ -563,6 +578,11 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--max-retries", type=int, default=DEFAULT_MAX_RETRIES)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--batch-timeout", type=float, default=DEFAULT_BATCH_TIMEOUT_SECONDS)
+    parser.add_argument(
+        "--fail-require-skip",
+        action="store_true",
+        help="fail a batch if unittest output reports skipped tests for `require ...` reasons",
+    )
     # Accept options interleaved with positional patterns, e.g.:
     #   run_tests.py bin "[tag]" --fail-fast test/sql/foo.test
     return parser.parse_intermixed_args(argv)
@@ -580,6 +600,15 @@ class ConfigInvocation:
     label: str
     test_flags: str
     test_config: str | None
+
+
+@dataclass(frozen=True)
+class ConfigRunResult:
+    returncode: int
+    passed_tests: int
+    failed_tests: int
+    skipped_tests: int
+    elapsed_seconds: float
 
 
 def build_test_flags(base_flags: str, test_config: str | None):
@@ -621,10 +650,12 @@ def run_single_config(
     batch_size: int,
     test_list_files: list[Path],
     invocation: ConfigInvocation,
+    print_config_header: bool,
 ):
     if stop_requested():
-        return 130
-    print(f"=== config run: {invocation.label} ===")
+        return ConfigRunResult(returncode=130, passed_tests=0, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0)
+    if print_config_header:
+        print(f"=== config run: {invocation.label} ===")
     generated_test_list: Path | None = None
     try:
         if args.test_list is not None and len(test_list_files) == 1:
@@ -648,11 +679,12 @@ def run_single_config(
             rss_memory_threshold_mib=args.track_rss_memory,
             runtime_threshold_seconds=args.track_runtime,
             max_failures=max_failures,
+            fail_require_skip=args.fail_require_skip,
         )
 
         tests = load_tests(config.test_list)
         if stop_requested():
-            return 130
+            return ConfigRunResult(returncode=130, passed_tests=0, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0)
         if args.changed_tests is not None:
             merged_names = {test.name for test in tests}
             base_names = {test.name for test in load_tests(args.test_list)}
@@ -660,7 +692,6 @@ def run_single_config(
             print(f"added {added_test_count} tests from --changed-tests file to the smoke test run")
         computed_batch_size = compute_batch_size(len(tests), config)
 
-        print(f"found {len(tests)} tests")
         config_values = asdict(config)
         config_values["batch_size"] = computed_batch_size
         config_values.pop("test_list", None)
@@ -671,7 +702,7 @@ def run_single_config(
         print(f"config: {config_output}")
 
         batches = list(chunked(tests, computed_batch_size))
-        return run_tests(config, batches)
+        return run_tests(config, batches, len(tests))
     finally:
         if generated_test_list is not None:
             generated_test_list.unlink(missing_ok=True)
@@ -716,7 +747,6 @@ def main_impl(argv: list[str] | None = None):
     else:
         batch_size = args.batch_size
     failed_configs = []
-    keep_groups_open = False
     if len(config_invocations) > 1:
         print(f"running {len(config_invocations)} configs")
     for invocation in config_invocations:
@@ -727,8 +757,11 @@ def main_impl(argv: list[str] | None = None):
         if use_config_groups:
             print(f"::group::test config: {invocation.label}")
             group_open = True
+        print_config_header = not use_config_groups and not (
+            len(config_invocations) == 1 and invocation.label == "default"
+        )
         try:
-            returncode = run_single_config(
+            run_result = run_single_config(
                 args,
                 unittest_bin,
                 workers,
@@ -738,15 +771,29 @@ def main_impl(argv: list[str] | None = None):
                 batch_size,
                 test_list_files,
                 invocation,
+                print_config_header,
             )
         except Exception as exc:
             print(f"error: {exc}")
-            returncode = 1
-        failed = returncode not in (0, 130)
-        if failed:
-            keep_groups_open = True
-        if group_open and not keep_groups_open:
+            run_result = ConfigRunResult(
+                returncode=1, passed_tests=0, failed_tests=1, skipped_tests=0, elapsed_seconds=0.0
+            )
+        returncode = run_result.returncode
+        if group_open:
             print("::endgroup::")
+        if returncode in (0, 1):
+            if run_result.failed_tests > 0:
+                print(
+                    "❌ ran tests: "
+                    f"{run_result.passed_tests} passed, {run_result.failed_tests} failed, "
+                    f"{run_result.skipped_tests} skipped in {run_result.elapsed_seconds:.0f}s"
+                )
+            else:
+                print(
+                    "ran tests: "
+                    f"{run_result.passed_tests} passed, {run_result.skipped_tests} skipped "
+                    f"in {run_result.elapsed_seconds:.0f}s"
+                )
         if returncode == 130:
             print("interrupted")
             return 130
@@ -756,7 +803,8 @@ def main_impl(argv: list[str] | None = None):
     if failed_configs:
         print(f"error: {len(failed_configs)} config runs failed: {', '.join(failed_configs)}")
         return 1
-    print(f"all {len(config_invocations)} config runs passed")
+    if len(config_invocations) > 1:
+        print(f"all {len(config_invocations)} config runs passed")
     return 0
 
 
@@ -774,7 +822,7 @@ def invoke(argv: list[str], cwd: Path | None = None) -> InvocationResult:
     return InvocationResult(returncode=returncode, stdout=stdout_buffer.getvalue(), stderr=stderr_buffer.getvalue())
 
 
-def run_tests(config: TestRunnerConfig, batches):
+def run_tests(config: TestRunnerConfig, batches, total_tests: int):
     start = time.monotonic()
     state = BatchRunState()
     progress = DotProgressBar(len(batches))
@@ -820,11 +868,10 @@ def run_tests(config: TestRunnerConfig, batches):
                 if result["failed"]:
                     if handle_failed_batch(ctx, batch_info, result):
                         continue
-                else:
-                    skipped_count, skipped_reasons = extract_skipped_test_output(result["stdout"], result["stderr"])
-                    total_skipped_tests += skipped_count
-                    for reason, count in skipped_reasons.items():
-                        skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
+                skipped_count, skipped_reasons = extract_skipped_test_output(result["stdout"], result["stderr"])
+                total_skipped_tests += skipped_count
+                for reason, count in skipped_reasons.items():
+                    skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
                 progress.advance(next_batch_idx - len(future_to_batch))
 
             if not state.stop_launching and not stop_requested():
@@ -833,12 +880,12 @@ def run_tests(config: TestRunnerConfig, batches):
     progress.flush_line()
     elapsed = time.monotonic() - start
     if stop_requested():
-        return 130
+        return ConfigRunResult(returncode=130, passed_tests=0, failed_tests=0, skipped_tests=0, elapsed_seconds=elapsed)
+    exit_code = 0
     if state.failed_count:
         print(f"error: found {state.failed_count} test batch failures in {elapsed:.0f}s")
-        return 1
-
-    if total_skipped_tests > 0:
+        exit_code = 1
+    elif total_skipped_tests:
         print(f"all tests passed in {elapsed:.0f}s ({total_skipped_tests} skipped tests)")
     else:
         print(f"all tests passed in {elapsed:.0f}s")
@@ -847,7 +894,15 @@ def run_tests(config: TestRunnerConfig, batches):
         print("Skipped tests for the following reasons:")
         for reason in sorted(skipped_reason_counts):
             print(f"{reason}: {skipped_reason_counts[reason]}")
-    return 0
+    failed_tests = state.failed_count
+    passed_tests = max(0, total_tests - failed_tests - total_skipped_tests)
+    return ConfigRunResult(
+        returncode=exit_code,
+        passed_tests=passed_tests,
+        failed_tests=failed_tests,
+        skipped_tests=total_skipped_tests,
+        elapsed_seconds=elapsed,
+    )
 
 
 if __name__ == "__main__":

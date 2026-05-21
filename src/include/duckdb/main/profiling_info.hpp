@@ -23,17 +23,25 @@ struct yyjson_mut_val;
 } // namespace duckdb_yyjson
 
 namespace duckdb {
+
+struct QueryProfileResult;
 enum class ProfilingParameterNames : uint8_t { FORMAT, COVERAGE, SAVE_LOCATION, MODE, METRICS };
 
-class ProfilingInfo {
+class ProfilerSettings {
 public:
-	//! Enabling a metric adds it to this set.
-	profiler_settings_t settings;
-	//! This set contains the expanded to-be-collected metrics, which can differ from 'settings'.
-	profiler_settings_t expanded_settings;
-	//! Contains all enabled metrics.
-	profiler_metrics_t metrics;
+	ProfilerSettings() = default;
+	explicit ProfilerSettings(profiler_settings_t settings);
 
+	bool MetricIsEnabled(MetricType metric) const;
+	bool AnyMetricsEnabled() const {
+		return !settings.empty();
+	}
+
+private:
+	profiler_settings_t settings;
+};
+
+class ProfilingInfo {
 public:
 	ProfilingInfo() = default;
 	explicit ProfilingInfo(const profiler_settings_t &n_settings, const idx_t depth = 0);
@@ -43,14 +51,25 @@ public:
 public:
 	void ResetMetrics();
 	//! Returns true, if the query profiler must collect this metric.
-	static bool Enabled(const profiler_settings_t &settings, const MetricType metric);
+	bool EnabledForCollection(const MetricType metric) const;
+	//! Returns true, if the user requested this metric
+	bool Enabled(const MetricType metric) const;
 	//! Expand metrics depending on the collection of other metrics.
 	static void Expand(profiler_settings_t &settings, const MetricType metric);
+	void SetMetricValue(MetricType type, Value new_value);
+
+	const profiler_metrics_t &GetMetrics() const {
+		return metrics;
+	}
+	profiler_metrics_t &GetMetricsMutable() {
+		return metrics;
+	}
 
 public:
 	string GetMetricAsString(const MetricType metric) const;
-	void WriteMetricsToLog(ClientContext &context);
-	void WriteMetricsToJSON(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyjson::yyjson_mut_val *destination);
+	void WriteMetricsToLog(ClientContext &context) const;
+	//! Copy all enabled metrics into a QueryProfileResult node using lowercase string keys
+	void MetricsToProfileResult(QueryProfileResult &result) const;
 
 public:
 	template <class METRIC_TYPE>
@@ -102,6 +121,14 @@ public:
 		auto new_value = Value::CreateValue(value);
 		return MetricMax<METRIC_TYPE>(type, new_value);
 	}
+
+private:
+	//! Enabling a metric adds it to this set.
+	profiler_settings_t settings;
+	//! This set contains the expanded to-be-collected metrics, which can differ from 'settings'.
+	profiler_settings_t expanded_settings;
+	//! Contains all enabled metrics.
+	profiler_metrics_t metrics;
 };
 
 // Specialization for InsertionOrderPreservingMap<string>
