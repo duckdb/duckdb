@@ -76,12 +76,6 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::OptimizeInternal(unique_ptr
 	vector<ColumnBinding> left_orig_bindings = left_child->GetColumnBindings();
 	vector<ColumnBinding> right_orig_bindings = right_child->GetColumnBindings();
 
-	// fast path for inner join: union of joins without row-IDs
-	if (join.join_type == JoinType::INNER) {
-		return BuildInnerUnion(std::move(left_child), std::move(right_child), std::move(left_orig_bindings),
-		                       std::move(right_orig_bindings), orig_bindings, orig_types, branches);
-	}
-
 	auto left_base = InjectRowID(std::move(left_child), "left_rowid");
 	auto right_base = InjectRowID(std::move(right_child), "right_rowid");
 
@@ -98,13 +92,16 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::OptimizeInternal(unique_ptr
 
 	unique_ptr<LogicalOperator> epilogue;
 	switch (join.join_type) {
+	case JoinType::INNER:
+		epilogue = BuildInner(match_cte, left_cte, right_cte, left_base.rowid_col, right_base.rowid_col);
+		break;
 	case JoinType::LEFT:
 		epilogue = BuildLeft(match_cte, left_cte, right_cte, left_base.rowid_col, right_base.rowid_col);
 		break;
 	case JoinType::RIGHT:
 		epilogue = BuildRight(match_cte, left_cte, right_cte, left_base.rowid_col, right_base.rowid_col);
 		break;
-	case JoinType::OUTER: // OUTER in DuckDB maps to Full Outer Join
+	case JoinType::OUTER:
 		epilogue = BuildFull(match_cte, left_cte, right_cte, left_base.rowid_col, right_base.rowid_col);
 		break;
 	case JoinType::SEMI:
@@ -348,106 +345,6 @@ DisjunctiveJoinRewriter::BuildMatchCTE(const CTEInfo &left_cte, const CTEInfo &r
 	return result;
 }
 
-unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildInnerUnion(
-    unique_ptr<LogicalOperator> left_child, unique_ptr<LogicalOperator> right_child,
-    vector<ColumnBinding> left_orig_bindings, vector<ColumnBinding> right_orig_bindings,
-    const vector<ColumnBinding> &orig_bindings, const vector<LogicalType> &orig_types, const vector<Branch> &branches) {
-	TableIndex left_cte_idx = NewTableIndex();
-	TableIndex right_cte_idx = NewTableIndex();
-
-	CTEInfo left_cte {left_cte_idx, left_child->types, left_child->GetColumnBindings(), std::move(left_orig_bindings)};
-	CTEInfo right_cte {right_cte_idx, right_child->types, right_child->GetColumnBindings(),
-	                   std::move(right_orig_bindings)};
-
-	vector<unique_ptr<LogicalOperator>> union_children;
-	TableIndex union_tbl = NewTableIndex();
-
-	for (const auto &branch : branches) {
-		TableIndex left_ref_idx = NewTableIndex();
-		TableIndex right_ref_idx = NewTableIndex();
-		TableIndex proj_tbl = NewTableIndex();
-
-		auto left_scan = MakeCTERef(left_cte, left_ref_idx);
-		auto right_scan = MakeCTERef(right_cte, right_ref_idx);
-
-		auto left_expr = branch.left_expr->Copy();
-		auto right_expr = branch.right_expr->Copy();
-
-		// remap left expression to cte-ref bindings
-		ColumnBindingReplacer expr_replacer;
-		for (idx_t i = 0; i < left_cte.original_bindings.size(); i++) {
-			expr_replacer.replacement_bindings.emplace_back(left_cte.original_bindings[i],
-			                                                ColumnBinding(left_ref_idx, ProjectionIndex(i)),
-			                                                left_cte.output_types[i]);
-		}
-		expr_replacer.VisitExpression(&left_expr);
-
-		// remap right expression to cte-ref bindings
-		expr_replacer.replacement_bindings.clear();
-		for (idx_t i = 0; i < right_cte.original_bindings.size(); i++) {
-			expr_replacer.replacement_bindings.emplace_back(right_cte.original_bindings[i],
-			                                                ColumnBinding(right_ref_idx, ProjectionIndex(i)),
-			                                                right_cte.output_types[i]);
-		}
-		expr_replacer.VisitExpression(&right_expr);
-
-		// filter out nulls so is not null does not match
-		auto left_is_not_null =
-		    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-		left_is_not_null->children.push_back(left_expr->Copy());
-
-		auto right_is_not_null =
-		    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-		right_is_not_null->children.push_back(right_expr->Copy());
-
-		auto left_filter = make_uniq<LogicalFilter>();
-		left_filter->expressions.push_back(std::move(left_is_not_null));
-		left_filter->AddChild(std::move(left_scan));
-
-		auto right_filter = make_uniq<LogicalFilter>();
-		right_filter->expressions.push_back(std::move(right_is_not_null));
-		right_filter->AddChild(std::move(right_scan));
-
-		auto inner_join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-		inner_join->conditions.push_back(
-		    JoinCondition(std::move(left_expr), std::move(right_expr), ExpressionType::COMPARE_EQUAL));
-		inner_join->AddChild(std::move(left_filter));
-		inner_join->AddChild(std::move(right_filter));
-
-		vector<unique_ptr<Expression>> proj_exprs;
-		proj_exprs.reserve(orig_bindings.size());
-		for (idx_t i = 0; i < left_cte.output_types.size(); i++) {
-			proj_exprs.push_back(ColRef(ColumnBinding(left_ref_idx, ProjectionIndex(i)), orig_types[i]));
-		}
-		for (idx_t i = 0; i < right_cte.output_types.size(); i++) {
-			proj_exprs.push_back(
-			    ColRef(ColumnBinding(right_ref_idx, ProjectionIndex(i)), orig_types[left_cte.output_types.size() + i]));
-		}
-
-		auto branch_proj = make_uniq<LogicalProjection>(proj_tbl, std::move(proj_exprs));
-		branch_proj->AddChild(std::move(inner_join));
-
-		union_children.push_back(std::move(branch_proj));
-	}
-
-	auto native_union = make_uniq<LogicalSetOperation>(union_tbl, orig_bindings.size(), std::move(union_children),
-	                                                   LogicalOperatorType::LOGICAL_UNION, false, true);
-
-	auto result = NormaliseInnerUnionOutput(std::move(native_union), orig_bindings, orig_types,
-	                                        left_cte.output_types.size(), right_cte.output_types.size());
-
-	// wrap in CTEs
-	result = make_uniq<LogicalMaterializedCTE>("right_cte", right_cte_idx, right_cte.output_types.size(),
-	                                           std::move(right_child), std::move(result),
-	                                           CTEMaterialize::CTE_MATERIALIZE_NEVER);
-
-	result =
-	    make_uniq<LogicalMaterializedCTE>("left_cte", left_cte_idx, left_cte.output_types.size(), std::move(left_child),
-	                                      std::move(result), CTEMaterialize::CTE_MATERIALIZE_NEVER);
-
-	return result;
-}
-
 unique_ptr<LogicalOperator>
 DisjunctiveJoinRewriter::BuildTwoSidedJoin(const CTEInfo &match_cte, const CTEInfo &left_cte, const CTEInfo &right_cte,
                                            ColumnBinding left_rowid, ColumnBinding right_rowid,
@@ -530,6 +427,12 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildOneSidedJoin(const CTE
 	return std::move(single_join);
 }
 
+unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildInner(const CTEInfo &match_cte, const CTEInfo &left_cte,
+                                                                const CTEInfo &right_cte, ColumnBinding left_rowid,
+                                                                ColumnBinding right_rowid) {
+	return BuildTwoSidedJoin(match_cte, left_cte, right_cte, left_rowid, right_rowid, JoinType::INNER, JoinType::INNER);
+}
+
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildLeft(const CTEInfo &match_cte, const CTEInfo &left_cte,
                                                                const CTEInfo &right_cte, ColumnBinding left_rowid,
                                                                ColumnBinding right_rowid) {
@@ -557,34 +460,6 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildSemi(const CTEInfo &ma
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildAnti(const CTEInfo &match_cte, const CTEInfo &left_cte,
                                                                ColumnBinding left_rowid) {
 	return BuildOneSidedJoin(match_cte, left_cte, left_rowid, JoinType::ANTI);
-}
-
-unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::NormaliseInnerUnionOutput(
-    unique_ptr<LogicalOperator> epilogue, const vector<ColumnBinding> &orig_bindings,
-    const vector<LogicalType> &orig_types, idx_t left_col_count, idx_t right_col_count) {
-	auto epilogue_bindings = epilogue->GetColumnBindings();
-	vector<unique_ptr<Expression>> proj_exprs;
-	proj_exprs.reserve(orig_bindings.size());
-
-	for (idx_t i = 0; i < left_col_count; i++) {
-		proj_exprs.push_back(ColRef(epilogue_bindings[i], orig_types[i]));
-	}
-	for (idx_t i = 0; i < right_col_count; i++) {
-		proj_exprs.push_back(ColRef(epilogue_bindings[left_col_count + i], orig_types[left_col_count + i]));
-	}
-
-	D_ASSERT(proj_exprs.size() == orig_bindings.size());
-
-	TableIndex norm_tbl = NewTableIndex();
-	auto proj = make_uniq<LogicalProjection>(norm_tbl, std::move(proj_exprs));
-	proj->AddChild(std::move(epilogue));
-
-	for (idx_t i = 0; i < orig_bindings.size(); i++) {
-		replacer.replacement_bindings.emplace_back(orig_bindings[i], ColumnBinding(norm_tbl, ProjectionIndex(i)),
-		                                           orig_types[i]);
-	}
-
-	return std::move(proj);
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::NormaliseOutput(unique_ptr<LogicalOperator> epilogue,

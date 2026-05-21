@@ -69,13 +69,8 @@ private:
 	MatchCTEResult BuildMatchCTE(const CTEInfo &left_cte, const CTEInfo &right_cte, ColumnBinding left_rowid,
 	                             ColumnBinding right_rowid, const vector<Branch> &branches);
 
-	//! optimized inner join: union of joins without row-IDs
-	unique_ptr<LogicalOperator> BuildInnerUnion(unique_ptr<LogicalOperator> left_child,
-	                                            unique_ptr<LogicalOperator> right_child,
-	                                            vector<ColumnBinding> left_orig_bindings,
-	                                            vector<ColumnBinding> right_orig_bindings,
-	                                            const vector<ColumnBinding> &orig_bindings,
-	                                            const vector<LogicalType> &orig_types, const vector<Branch> &branches);
+	unique_ptr<LogicalOperator> BuildInner(const CTEInfo &match_cte, const CTEInfo &left_cte, const CTEInfo &right_cte,
+	                                       ColumnBinding left_rowid, ColumnBinding right_rowid);
 
 	unique_ptr<LogicalOperator> BuildLeft(const CTEInfo &match_cte, const CTEInfo &left_cte, const CTEInfo &right_cte,
 	                                      ColumnBinding left_rowid, ColumnBinding right_rowid);
@@ -97,12 +92,6 @@ private:
 
 	unique_ptr<LogicalOperator> BuildOneSidedJoin(const CTEInfo &match_cte, const CTEInfo &left_cte,
 	                                              ColumnBinding left_rowid, JoinType join_type);
-
-	//! normalizes inner union output to original binding order
-	unique_ptr<LogicalOperator> NormaliseInnerUnionOutput(unique_ptr<LogicalOperator> epilogue,
-	                                                      const vector<ColumnBinding> &orig_bindings,
-	                                                      const vector<LogicalType> &orig_types, idx_t left_col_count,
-	                                                      idx_t right_col_count);
 
 	//! normalizes full rewrite output to original binding order
 	unique_ptr<LogicalOperator> NormaliseOutput(unique_ptr<LogicalOperator> epilogue,
