@@ -135,7 +135,7 @@ const StorageVersionInfo *GetStorageVersionInfo() {
 }
 
 string GetStorageVersionNameInternal(const StorageVersion storage_version) {
-	if (StorageManager::IsPriorToVersion(StorageVersion::V0_10_3, storage_version)) {
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version)) {
 		return "v0.10.2";
 	}
 
