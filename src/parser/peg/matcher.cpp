@@ -457,6 +457,9 @@ public:
 		if (IsQuoted(text)) {
 			return true;
 		}
+		if (BaseTokenizer::CharacterIsInitialNumber(text[0])) {
+			return false;
+		}
 		return BaseTokenizer::CharacterIsKeyword(text[0]);
 	}
 
