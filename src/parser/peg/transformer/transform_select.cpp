@@ -698,6 +698,7 @@ void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> 
 }
 
 bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumnEntry &entry) {
+	auto initial_size = entry.values.size();
 	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
 		auto &colref = expr->Cast<ColumnRefExpression>();
@@ -714,6 +715,7 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 		}
 		for (auto &child : function.GetChildrenMutable()) {
 			if (!TransformPivotInList(child, entry)) {
+				entry.values.resize(initial_size);
 				return false;
 			}
 		}
@@ -728,6 +730,17 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 		return true;
 	}
 	}
+}
+
+static bool PivotEntryIsTuple(const PivotColumnEntry &entry) {
+	if (entry.values.size() > 1) {
+		return true;
+	}
+	if (!entry.expr || entry.expr->GetExpressionType() != ExpressionType::FUNCTION) {
+		return false;
+	}
+	auto &function = entry.expr->Cast<FunctionExpression>();
+	return function.FunctionName() == "row";
 }
 
 vector<PivotColumnEntry> PEGTransformerFactory::TransformUnpivotTargetList(PEGTransformer &transformer,
@@ -801,7 +814,7 @@ PivotColumn PEGTransformerFactory::TransformPivotValueList(PEGTransformer &trans
 	// so pivot_expressions.size() matches entry.values.size() (both 1).
 	bool has_tuple_entries = false;
 	for (auto &entry : result.entries) {
-		if (entry.values.size() > 1) {
+		if (PivotEntryIsTuple(entry)) {
 			has_tuple_entries = true;
 			break;
 		}

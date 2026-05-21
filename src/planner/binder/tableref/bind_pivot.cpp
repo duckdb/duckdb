@@ -511,6 +511,17 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 	return result_statement;
 }
 
+static void BindPivotConstantInList(unique_ptr<ParsedExpression> &expr, vector<Value> &values, Binder &binder) {
+	Value val;
+	ConstantBinder const_binder(binder, binder.context, "PIVOT IN list");
+	auto bound_expr = const_binder.Bind(expr);
+	if (!bound_expr->IsFoldable()) {
+		throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain constant expressions");
+	}
+	auto folded_value = ExpressionExecutor::EvaluateScalar(binder.context, *bound_expr);
+	values.push_back(folded_value);
+}
+
 static void BindPivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &values, Binder &binder) {
 	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
@@ -522,22 +533,16 @@ static void BindPivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &v
 	} break;
 	case ExpressionType::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
-		if (function.FunctionName() != "row") {
-			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain columns or lists of columns");
-		}
-		for (auto &child : function.GetChildrenMutable()) {
-			BindPivotInList(child, values, binder);
+		if (function.FunctionName() == "row") {
+			for (auto &child : function.GetChildrenMutable()) {
+				BindPivotInList(child, values, binder);
+			}
+		} else {
+			BindPivotConstantInList(expr, values, binder);
 		}
 	} break;
 	default: {
-		Value val;
-		ConstantBinder const_binder(binder, binder.context, "PIVOT IN list");
-		auto bound_expr = const_binder.Bind(expr);
-		if (!bound_expr->IsFoldable()) {
-			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain constant expressions");
-		}
-		auto folded_value = ExpressionExecutor::EvaluateScalar(binder.context, *bound_expr);
-		values.push_back(folded_value);
+		BindPivotConstantInList(expr, values, binder);
 	} break;
 	}
 }
