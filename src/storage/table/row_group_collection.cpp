@@ -1497,7 +1497,8 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 			auto next_row_count = state.row_group_counts[next_idx].GetIndex();
 			if (next_row_count == 0) {
 				if (!state.can_change_row_ids) {
-					// Do not merge across a dropped row group when indexes depend on stable rowids.
+					// This row group was dropped, leaving a rowid gap. Stable-rowid vacuum should not extend the
+					// current merge window across that gap.
 					break;
 				}
 				continue;
