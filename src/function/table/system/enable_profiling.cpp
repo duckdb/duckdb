@@ -52,7 +52,11 @@ static void EnableProfiling(ClientContext &context, TableFunctionInput &data, Da
 	}
 
 	if (!bind_data.metrics.IsNull()) {
-		TrackedMetricsSetting::SetLocal(context, bind_data.metrics);
+		Value metrics_value = bind_data.metrics;
+		if (metrics_value.type().id() == LogicalTypeId::VARCHAR) {
+			metrics_value = Value::LIST(LogicalType::VARCHAR, {metrics_value});
+		}
+		TrackedMetricsSetting::SetLocal(context, metrics_value);
 	}
 }
 

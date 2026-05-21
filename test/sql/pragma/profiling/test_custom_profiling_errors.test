@@ -26,7 +26,7 @@ SET configure_metrics = 'hello';
 
 # Verify tracked_metrics is the new way
 statement ok
-SET tracked_metrics = '*';
+SET tracked_metrics = ['*'];
 
 query I
 SELECT unnest(current_setting('tracked_metrics'));

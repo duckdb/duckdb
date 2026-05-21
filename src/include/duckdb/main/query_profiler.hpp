@@ -195,6 +195,7 @@ private:
 	void ToLogInternal() const;
 
 	unique_ptr<QueryProfileResult> ToResultTree() const;
+	unique_ptr<QueryProfileResult> ToLegacyResultTree() const;
 
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.

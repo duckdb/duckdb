@@ -1,0 +1,98 @@
+# name: test/sql/pragma/profiling/test_legacy_metrics_format.test
+# description: Test legacy_metrics_format setting produces the legacy flat JSON format.
+# group: [profiling]
+
+require json
+
+# Test that legacy_metrics_format produces flat root-level keys.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['query.time', 'query.cpu_time', 'query.sql', 'query.total_intermediate_rows', 'query.total_rows_scanned', 'operator.name', 'operator.type', 'operator.timing', 'operator.intermediate_rows'];
+
+statement ok
+SET legacy_metrics_format = true;
+
+statement ok
+SELECT 42;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+# Legacy format should have flat root-level keys.
+statement ok
+SELECT latency, cpu_time, query_name, cumulative_cardinality, cumulative_rows_scanned FROM metrics_output;
+
+# Legacy format should NOT have nested metric groups at root.
+query I
+SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='metrics_output' AND column_name='query');
+----
+false
+
+query I
+SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='metrics_output' AND column_name='operator_info');
+----
+false
+
+# The operator tree lives under "children" in legacy format.
+query I
+SELECT children IS NOT NULL FROM metrics_output;
+----
+true
+
+# Operators use "operator_" prefixed keys.
+statement ok
+SELECT children[1].operator_name, children[1].operator_type, children[1].operator_timing FROM metrics_output;
+
+# Verify legacy format produces correct key renaming: operator_name not "name".
+query I
+SELECT list_contains(struct_keys(children[1]), 'name') FROM metrics_output;
+----
+false
+
+# Test that switching back to non-legacy format works.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['query.time', 'operator.name', 'operator.timing'];
+
+statement ok
+SET legacy_metrics_format = false;
+
+statement ok
+SELECT 42;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+# Standard format should have nested metric groups.
+statement ok
+SELECT query.time FROM metrics_output;
+
+# Standard format should have operator_info.
+query I
+SELECT operator_info IS NOT NULL FROM metrics_output;
+----
+true
+
+# Standard format should NOT have flat "latency" key.
+query I
+SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='metrics_output' AND column_name='latency');
+----
+false

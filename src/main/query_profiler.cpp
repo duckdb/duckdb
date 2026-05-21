@@ -14,6 +14,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/profiling_utils.hpp"
 #include "duckdb/main/gathered_metrics.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "yyjson.hpp"
 #include "yyjson_utils.hpp"
@@ -864,16 +865,137 @@ static void OperatorToResultTree(const GatheredMetrics &settings, ProfilingNode 
 	}
 }
 
+struct LegacyCumulative {
+	double timing = 0;
+	uint64_t cardinality = 0;
+	uint64_t rows_scanned = 0;
+};
+
+static LegacyCumulative LegacyOperatorToResultTree(const GatheredMetrics &info, ProfilingNode &node,
+                                                   QueryProfileResult &result) {
+	auto operator_metrics = node.GetOperatorMetrics().GetMetrics(info);
+
+	auto emit_as = [&](const string &old_key, const string &new_key) {
+		auto it = operator_metrics.find(old_key);
+		if (it != operator_metrics.end()) {
+			result.AddValue(new_key, it->second);
+		}
+	};
+
+	emit_as("type", "operator_type");
+	emit_as("name", "operator_name");
+	emit_as("timing", "operator_timing");
+	emit_as("rows_scanned", "operator_rows_scanned");
+	emit_as("intermediate_rows", "operator_cardinality");
+	emit_as("intermediate_size_bytes", "result_set_size");
+
+	auto it_extra = operator_metrics.find("extra_info");
+	if (it_extra != operator_metrics.end()) {
+		result.AddValue("extra_info", it_extra->second);
+	}
+	result.AddValue("system_peak_buffer_memory", Value::UBIGINT(0));
+	result.AddValue("system_peak_temp_dir_size", Value::UBIGINT(0));
+
+	LegacyCumulative cumulative;
+	auto timing_it = operator_metrics.find("timing");
+	if (timing_it != operator_metrics.end()) {
+		cumulative.timing = timing_it->second.GetValue<double>();
+	}
+	auto card_it = operator_metrics.find("intermediate_rows");
+	if (card_it != operator_metrics.end()) {
+		cumulative.cardinality = card_it->second.GetValue<uint64_t>();
+	}
+	auto rows_it = operator_metrics.find("rows_scanned");
+	if (rows_it != operator_metrics.end()) {
+		cumulative.rows_scanned = rows_it->second.GetValue<uint64_t>();
+	}
+
+	if (node.GetChildCount() > 0) {
+		auto &children_list = result.AddList("children");
+		for (idx_t i = 0; i < node.GetChildCount(); i++) {
+			auto &child_result = children_list.AppendObject();
+			auto child_cum = LegacyOperatorToResultTree(info, *node.GetChild(i), child_result);
+			cumulative.timing += child_cum.timing;
+			cumulative.cardinality += child_cum.cardinality;
+			cumulative.rows_scanned += child_cum.rows_scanned;
+		}
+	}
+
+	result.AddValue("cpu_time", Value::DOUBLE(cumulative.timing));
+	result.AddValue("cumulative_cardinality", Value::UBIGINT(cumulative.cardinality));
+	result.AddValue("cumulative_rows_scanned", Value::UBIGINT(cumulative.rows_scanned));
+	return cumulative;
+}
+
+unique_ptr<QueryProfileResult> QueryProfiler::ToLegacyResultTree() const {
+	auto result = make_uniq<QueryProfileResult>();
+	if (!root) {
+		result->AddValue("result", Value(query_metrics.query_sql.empty() ? "empty" : "error"));
+		return result;
+	}
+
+	const auto &gathered = metrics->GetMetrics();
+
+	auto emit = [&](const string &new_key, const string &old_key) {
+		auto it = gathered.find(old_key);
+		if (it != gathered.end()) {
+			result->AddValue(new_key, it->second);
+		}
+	};
+
+	emit("total_memory_allocated", "system.total_memory_allocated");
+	emit("total_bytes_written", "io.total_bytes_written");
+	emit("total_bytes_read", "io.total_bytes_read");
+	emit("system_peak_temp_dir_size", "system.peak_temp_dir_size");
+	emit("system_peak_buffer_memory", "system.peak_buffer_memory");
+
+	// rows_returned = root operator's elements_returned (rows sent to client)
+	{
+		auto root_op_metrics = root->GetOperatorMetrics().GetMetrics(*metrics);
+		auto it = root_op_metrics.find("intermediate_rows");
+		if (it != root_op_metrics.end()) {
+			result->AddValue("rows_returned", it->second);
+		}
+	}
+
+	emit("result_set_size", "query.result_set_size");
+	emit("latency", "query.time");
+	emit("wal_replay_entry_count", "storage.wal_replay_entry_count");
+	result->AddValue("extra_info", Value::MAP(InsertionOrderPreservingMap<string>()));
+	emit("commit_local_storage_latency", "storage.commit_local_storage_latency");
+	emit("attach_load_storage_latency", "storage.attach_load_storage_latency");
+	emit("query_name", "query.sql");
+	emit("cpu_time", "query.cpu_time");
+	emit("checkpoint_latency", "storage.checkpoint_latency");
+	emit("cumulative_cardinality", "query.total_intermediate_rows");
+	emit("waiting_to_attach_latency", "storage.waiting_to_attach_latency");
+	emit("write_to_wal_latency", "storage.write_to_wal_latency");
+	emit("attach_replay_wal_latency", "storage.attach_replay_wal_latency");
+	emit("blocked_thread_time", "system.blocked_thread_time");
+	emit("cumulative_rows_scanned", "query.total_rows_scanned");
+	emit("total_vacuum_time", "storage.total_vacuum_time");
+
+	auto &children_list = result->AddList("children");
+	auto &root_node = children_list.AppendObject();
+	LegacyOperatorToResultTree(*metrics, *root, root_node);
+	return result;
+}
+
 unique_ptr<QueryProfileResult> QueryProfiler::ToResultTree() const {
+	if (Settings::Get<LegacyMetricsFormatSetting>(context)) {
+		return ToLegacyResultTree();
+	}
 	auto result = make_uniq<QueryProfileResult>();
 	if (!root) {
 		result->AddValue("result", Value(query_metrics.query_sql.empty() ? "empty" : "error"));
 		return result;
 	}
 	metrics->MetricsToProfileResult(*result);
-	auto &op_list = result->AddList("operator_info");
-	auto &op_node = op_list.AppendObject();
-	OperatorToResultTree(*metrics, *root, op_node);
+	if (metrics->AnyOperatorMetricTracked()) {
+		auto &op_list = result->AddList("operator_info");
+		auto &op_node = op_list.AppendObject();
+		OperatorToResultTree(*metrics, *root, op_node);
+	}
 	return result;
 }
 

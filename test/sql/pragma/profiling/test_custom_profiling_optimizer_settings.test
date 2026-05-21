@@ -14,7 +14,7 @@ statement ok
 SET profiling_mode='standard';
 
 statement ok
-SET tracked_metrics = 'optimizer.total_time';
+SET tracked_metrics = ['optimizer.total_time'];
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -47,7 +47,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SET tracked_metrics = 'optimizer.join_order';
+SET tracked_metrics = ['optimizer.join_order'];
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -78,7 +78,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SET tracked_metrics = 'optimizer.total_time';
+SET tracked_metrics = ['optimizer.total_time'];
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();

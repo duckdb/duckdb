@@ -50,6 +50,19 @@ public:
 		return MetricIsTracked(T::Name);
 	}
 
+	bool AnyOperatorMetricTracked() const {
+		static const string OPERATOR_PREFIX = "operator.";
+		if (MetricIsTracked(OPERATOR_PREFIX)) {
+			return true;
+		}
+		for (const auto &key : tracked_exact) {
+			if (key.size() > OPERATOR_PREFIX.size() && key.compare(0, OPERATOR_PREFIX.size(), OPERATOR_PREFIX) == 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	template <class T>
 	void SetMetric(const typename T::METRIC_TYPE &value) {
 		SetMetric(T::Name, value);

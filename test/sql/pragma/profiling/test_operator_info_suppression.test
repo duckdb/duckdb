@@ -1,0 +1,134 @@
+# name: test/sql/pragma/profiling/test_operator_info_suppression.test
+# description: Test that operator_info is suppressed when tracked_metrics does not match operator.*.
+# group: [profiling]
+
+require json
+
+# When tracked_metrics only matches query.*, operator_info should be absent.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['query.*'];
+
+statement ok
+SELECT 42;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+query I
+SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='metrics_output' AND column_name='operator_info');
+----
+false
+
+# Query metrics are still present.
+statement ok
+SELECT query.time FROM metrics_output;
+
+# When tracked_metrics matches operator.*, operator_info should be present.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['operator.*'];
+
+statement ok
+SELECT 42;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+query I
+SELECT operator_info IS NOT NULL FROM metrics_output;
+----
+true
+
+# When tracked_metrics is *, operator_info should be present.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['*'];
+
+statement ok
+SELECT 42;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+query I
+SELECT operator_info IS NOT NULL FROM metrics_output;
+----
+true
+
+# When tracked_metrics includes only system.*, operator_info should be absent.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['system.*'];
+
+statement ok
+SELECT 42;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+query I
+SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='metrics_output' AND column_name='operator_info');
+----
+false
+
+# When tracked_metrics includes a specific operator metric, operator_info should be present.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+SET tracked_metrics = ['operator.timing'];
+
+statement ok
+SELECT 42;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+query I
+SELECT operator_info IS NOT NULL FROM metrics_output;
+----
+true

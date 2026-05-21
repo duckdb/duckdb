@@ -17,7 +17,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SET tracked_metrics = 'system.blocked_thread_time';
+SET tracked_metrics = ['system.blocked_thread_time'];
 
 statement ok
 SELECT (SELECT COUNT(*) FROM bigdata WHERE col_a = 1) + (SELECT COUNT(*) FROM bigdata WHERE col_b = 1);

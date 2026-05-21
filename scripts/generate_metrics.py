@@ -146,9 +146,7 @@ def update_source(data: dict, source_path: str) -> None:
             break
 
     if start_idx is None or end_idx is None:
-        raise RuntimeError(
-            f"Could not find 'internal_metrics[]' / 'FINAL_METRIC' markers in {source_path}"
-        )
+        raise RuntimeError(f"Could not find 'internal_metrics[]' / 'FINAL_METRIC' markers in {source_path}")
 
     metric_lines = generate_metric_list(data)
     new_lines = lines[:start_idx] + metric_lines + lines[end_idx:]

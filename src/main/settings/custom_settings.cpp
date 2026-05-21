@@ -1553,23 +1553,8 @@ void TrackedMetricsSetting::SetLocal(ClientContext &context, const Value &input)
 		for (auto &child : ListValue::GetChildren(input)) {
 			config.tracked_metrics.push_back(child.GetValue<string>());
 		}
-	} else if (input.type().id() == LogicalTypeId::VARCHAR) {
-		auto str = input.GetValue<string>();
-		StringUtil::Trim(str);
-		if (str.size() >= 2 && str.front() == '[' && str.back() == ']') {
-			// DuckDB list literal stringified as "[item1, item2, ...]"
-			auto inner = str.substr(1, str.size() - 2);
-			for (auto part : StringUtil::Split(inner, ',')) {
-				StringUtil::Trim(part);
-				if (!part.empty()) {
-					config.tracked_metrics.push_back(part);
-				}
-			}
-		} else if (!str.empty()) {
-			config.tracked_metrics.push_back(str);
-		}
 	} else {
-		throw InvalidInputException("Invalid tracked_metrics type \"%s\", expected LIST(VARCHAR) or VARCHAR",
+		throw InvalidInputException("Invalid tracked_metrics type \"%s\", expected LIST(VARCHAR)",
 		                            input.type().ToString());
 	}
 }
