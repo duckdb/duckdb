@@ -4,6 +4,8 @@
 
 require json
 
+require no_vector_verification
+
 statement ok
 CREATE TABLE local_pruned(i BIGINT);
 
