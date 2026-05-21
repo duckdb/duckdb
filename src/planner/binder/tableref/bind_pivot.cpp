@@ -522,6 +522,30 @@ static void BindPivotConstantInList(unique_ptr<ParsedExpression> &expr, vector<V
 	values.push_back(folded_value);
 }
 
+static void BindUnpivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &values, Binder &binder) {
+	switch (expr->GetExpressionType()) {
+	case ExpressionType::COLUMN_REF: {
+		auto &colref = expr->Cast<ColumnRefExpression>();
+		if (colref.IsQualified()) {
+			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list cannot contain qualified column references");
+		}
+		values.emplace_back(colref.GetColumnName());
+	} break;
+	case ExpressionType::FUNCTION: {
+		auto &function = expr->Cast<FunctionExpression>();
+		if (function.function_name != "row") {
+			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain columns or lists of columns");
+		}
+		for (auto &child : function.children) {
+			BindUnpivotInList(child, values, binder);
+		}
+	} break;
+	default:
+		BindPivotConstantInList(expr, values, binder);
+		break;
+	}
+}
+
 static void BindPivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &values, Binder &binder) {
 	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
@@ -710,7 +734,7 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 	// Try to bind the entry expression as values
 	try {
 		auto expr_copy = entry.expr->Copy();
-		BindPivotInList(expr_copy, entry.values, child_binder);
+		BindUnpivotInList(expr_copy, entry.values, child_binder);
 		// successfully bound as values - clear the expression
 		entry.expr = nullptr;
 	} catch (...) {
