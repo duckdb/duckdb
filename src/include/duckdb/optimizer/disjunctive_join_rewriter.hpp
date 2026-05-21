@@ -11,7 +11,7 @@ public:
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
-	static unique_ptr<Expression> ColRef(ColumnBinding binding, LogicalType type, const string &alias = "");
+	static unique_ptr<Expression> ColRef(ColumnBinding binding, const LogicalType &type, const string &alias = "");
 
 private:
 	unique_ptr<LogicalOperator> OptimizeInternal(unique_ptr<LogicalOperator> op);

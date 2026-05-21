@@ -439,11 +439,11 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildInnerUnion(
 	// wrap in CTEs
 	result = make_uniq<LogicalMaterializedCTE>("right_cte", right_cte_idx, right_cte.output_types.size(),
 	                                           std::move(right_child), std::move(result),
-	                                           CTEMaterialize::CTE_MATERIALIZE_ALWAYS);
+	                                           CTEMaterialize::CTE_MATERIALIZE_NEVER);
 
 	result =
 	    make_uniq<LogicalMaterializedCTE>("left_cte", left_cte_idx, left_cte.output_types.size(), std::move(left_child),
-	                                      std::move(result), CTEMaterialize::CTE_MATERIALIZE_ALWAYS);
+	                                      std::move(result), CTEMaterialize::CTE_MATERIALIZE_NEVER);
 
 	return result;
 }
@@ -504,7 +504,7 @@ DisjunctiveJoinRewriter::BuildTwoSidedJoin(const CTEInfo &match_cte, const CTEIn
 	final_join->AddChild(std::move(first_join));
 	final_join->AddChild(std::move(second_scan));
 
-	return final_join;
+	return std::move(final_join);
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildOneSidedJoin(const CTEInfo &match_cte,
@@ -527,7 +527,7 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildOneSidedJoin(const CTE
 	single_join->AddChild(std::move(left_scan));
 	single_join->AddChild(std::move(match_scan));
 
-	return single_join;
+	return std::move(single_join);
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::BuildLeft(const CTEInfo &match_cte, const CTEInfo &left_cte,
@@ -584,7 +584,7 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::NormaliseInnerUnionOutput(
 		                                           orig_types[i]);
 	}
 
-	return proj;
+	return std::move(proj);
 }
 
 unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::NormaliseOutput(unique_ptr<LogicalOperator> epilogue,
@@ -638,10 +638,11 @@ unique_ptr<LogicalOperator> DisjunctiveJoinRewriter::NormaliseOutput(unique_ptr<
 		                                           orig_types[i]);
 	}
 
-	return proj;
+	return std::move(proj);
 }
 
-unique_ptr<Expression> DisjunctiveJoinRewriter::ColRef(ColumnBinding binding, LogicalType type, const string &alias) {
+unique_ptr<Expression> DisjunctiveJoinRewriter::ColRef(ColumnBinding binding, const LogicalType &type,
+                                                       const string &alias) {
 	return make_uniq<BoundColumnRefExpression>(alias, type, binding);
 }
 
