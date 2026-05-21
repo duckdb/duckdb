@@ -275,19 +275,25 @@ public:
 		}
 		idx_t lower = 0;
 		idx_t upper = nodes.size();
-		// binary search to find the node
+		// binary search to find the node. Searches using half-open interval [lower, upper).
 		while (lower < upper) {
 			idx_t index = lower + (upper - lower) / 2;
 			auto &entry = *nodes[index];
 			if (row_number < entry.GetRowStart()) {
+				// This node and all nodes to the right are excluded.
 				upper = index;
 			} else if (row_number >= entry.GetRowEnd()) {
+				// This node and all nodes to the left are excluded.
 				lower = index + 1;
 			} else {
+				// entry.GetRowStart() <= row_number < entry.GetRowEnd()
 				result = index;
 				return true;
 			}
 		}
+		D_ASSERT(lower == upper);
+		D_ASSERT(lower == 0 || row_number >= nodes[lower - 1]->GetRowEnd());
+		D_ASSERT(lower == nodes.size() || row_number < nodes[lower]->GetRowStart());
 		return false;
 	}
 
