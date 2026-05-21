@@ -181,6 +181,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 			}
 		}
 	}
+
 	D_ASSERT(next_row_id >= total_rows);
 	// Now begin the metadata as a unit
 	// Pointer to the table itself goes to the metadata stream.
