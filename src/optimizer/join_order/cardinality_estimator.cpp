@@ -388,7 +388,7 @@ bool CardinalityEstimator::ApplyJoinIncrement(double &target_denom, FilterInfoWi
 		auto &first_d = it->second;
 		if (cap > 0 && first_d != cap && first_d > 0) {
 			// Replace the first-edge D contribution with cap (FK/PK floor).
-			// target_denom = base × first_d  →  new = base × cap
+			// target_denom = base * first_d -> new = base * cap
 			target_denom = target_denom / first_d * cap;
 			first_d = cap;
 		}
@@ -399,7 +399,7 @@ bool CardinalityEstimator::ApplyJoinIncrement(double &target_denom, FilterInfoWi
 		const auto it = join_pair_accumulated.find(edge.filter_info->set.get());
 		if (it == join_pair_accumulated.end()) {
 			// No prior entry: the pair was already connected by other conditions before this
-			// LEFT condition was recorded. Return true to suppress the unused_edge_tdoms penalty —
+			// LEFT condition was recorded. Return true to suppress the unused_edge_tdoms penalty:
 			// LEFT join conditions are always bounded by |RHS| and are safe to ignore here.
 			return true;
 		}
@@ -415,6 +415,43 @@ bool CardinalityEstimator::ApplyJoinIncrement(double &target_denom, FilterInfoWi
 	}
 
 	return false;
+}
+
+enum class DenominatorEdgeKind : uint8_t {
+	INNER_EQUIVALENCE,
+	LEFT_JOIN,
+	SEMI_ANTI_JOIN,
+	NON_EQUALITY_SELECTIVITY,
+	REDUNDANT_TRANSITIVE_EQUALITY,
+	OTHER
+};
+
+static bool EquivalenceGroupApplied(FilterInfoWithTotalDomains &edge, const unordered_set<idx_t> &applied_groups) {
+	return edge.filter_info->edge_equivalence_index.IsValid() &&
+	       applied_groups.count(edge.filter_info->edge_equivalence_index.GetIndex()) > 0;
+}
+
+static DenominatorEdgeKind ClassifyDenominatorEdge(FilterInfoWithTotalDomains &edge,
+                                                   const unordered_set<idx_t> &applied_groups) {
+	if (EquivalenceGroupApplied(edge, applied_groups)) {
+		return DenominatorEdgeKind::REDUNDANT_TRANSITIVE_EQUALITY;
+	}
+	switch (edge.filter_info->join_type) {
+	case JoinType::INNER:
+		return edge.IsInnerEquality() ? DenominatorEdgeKind::INNER_EQUIVALENCE
+		                              : DenominatorEdgeKind::NON_EQUALITY_SELECTIVITY;
+	case JoinType::LEFT:
+		return DenominatorEdgeKind::LEFT_JOIN;
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+		return DenominatorEdgeKind::SEMI_ANTI_JOIN;
+	default:
+		return DenominatorEdgeKind::OTHER;
+	}
+}
+
+static bool CanIncrementExistingJoin(DenominatorEdgeKind kind) {
+	return kind == DenominatorEdgeKind::INNER_EQUIVALENCE || kind == DenominatorEdgeKind::LEFT_JOIN;
 }
 
 DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
@@ -441,22 +478,23 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	// we treat the composite key as a FK/PK relationship and enforce the FK/PK floor.
 	// For multi-condition LEFT joins (e.g. A LEFT JOIN B ON k1=k1 AND k2=k2),
 	// independent conditions on the same RHS should each contribute to the denominator
-	// — but their product must not exceed |RHS|.
+	// but their product must not exceed |RHS|.
 	// For a single equality condition, the standard denominator-based formula is used as-is.
 	reference_map_t<JoinRelationSet, double> join_pair_accumulated;
 
 	unordered_set<idx_t> unused_edge_tdoms;
 	auto edges = GetEdges(relation_set_stats, set);
 	for (auto &edge : edges) {
+		auto edge_kind = ClassifyDenominatorEdge(edge, applied_equivalence_groups);
 		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
 			// The subgraph already connects all desired relations
-			if (edge.filter_info->edge_equivalence_index.IsValid() &&
-			    applied_equivalence_groups.count(edge.filter_info->edge_equivalence_index.GetIndex())) {
+			if (edge_kind == DenominatorEdgeKind::REDUNDANT_TRANSITIVE_EQUALITY) {
 				// Transitively implied by equality conditions already used to build the subgraph, skip this denom
 				// skip the penalty entirely.
 				continue;
 			}
-			if (ApplyJoinIncrement(subgraphs.at(0).denom, edge, join_pair_accumulated)) {
+			if (CanIncrementExistingJoin(edge_kind) &&
+			    ApplyJoinIncrement(subgraphs.at(0).denom, edge, join_pair_accumulated)) {
 				// increment applied, skip unused_edge_tdoms penalty.
 				continue;
 			}
@@ -519,10 +557,9 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 
 			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *edge_left_set) &&
 			    JoinRelationSet::IsSubset(*left_subgraph->relations, *edge_right_set)) {
-				// Edge connects the same subgraph to itself — no new relation is added.
+				// Edge connects the same subgraph to itself; no new relation is added.
 				// Apply the incremental denominator contribution for LEFT or INNER multi-key joins.
-				if (!edge.filter_info->edge_equivalence_index.IsValid() ||
-				    !applied_equivalence_groups.count(edge.filter_info->edge_equivalence_index.GetIndex())) {
+				if (CanIncrementExistingJoin(edge_kind)) {
 					ApplyJoinIncrement(left_subgraph->denom, edge, join_pair_accumulated);
 				}
 				continue;
@@ -683,15 +720,16 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 				continue;
 			}
 			auto distinct_count = stats.column_distinct_count.at(i);
+			auto effective_distinct_count = distinct_count.GetEffectiveDistinctCount();
 			if (distinct_count.from_hll && relation_to_tdom.has_distinct_count_hll) {
 				relation_to_tdom.distinct_count_hll =
-				    MaxValue(relation_to_tdom.distinct_count_hll, distinct_count.distinct_count);
+				    MaxValue(relation_to_tdom.distinct_count_hll, effective_distinct_count);
 			} else if (distinct_count.from_hll && !relation_to_tdom.has_distinct_count_hll) {
 				relation_to_tdom.has_distinct_count_hll = true;
-				relation_to_tdom.distinct_count_hll = distinct_count.distinct_count;
+				relation_to_tdom.distinct_count_hll = effective_distinct_count;
 			} else {
 				relation_to_tdom.distinct_count_no_hll =
-				    MinValue(distinct_count.distinct_count, relation_to_tdom.distinct_count_no_hll);
+				    MinValue(effective_distinct_count, relation_to_tdom.distinct_count_no_hll);
 			}
 			break;
 		}

@@ -17,6 +17,12 @@ class CardinalityEstimator;
 struct DistinctCount {
 	idx_t distinct_count;
 	bool from_hll;
+	idx_t effective_distinct_count = 0;
+	bool has_effective_distinct_count = false;
+
+	idx_t GetEffectiveDistinctCount() const {
+		return has_effective_distinct_count ? effective_distinct_count : distinct_count;
+	}
 };
 
 struct ExpressionBinding {

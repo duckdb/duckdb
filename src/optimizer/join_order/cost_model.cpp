@@ -66,6 +66,9 @@ static bool HasCardinalityPreservingJoin(QueryGraphManager &query_graph_manager)
 static double GetPendingSmallSidePenalty(QueryGraphManager &query_graph_manager,
                                          CardinalityEstimator &cardinality_estimator, JoinRelationSet &combination,
                                          bool has_cardinality_preserving_join) {
+	// Cardinality-preserving joins can make it look cheap to build a huge intermediate before applying a selective
+	// equality edge to a tiny dimension. This is a narrow input-work proxy: penalize that shape only when a large
+	// pending side is several orders of magnitude larger than the relation it can still join to.
 	static constexpr double LARGE_PENDING_EQUALITY_CARDINALITY = 100000000;
 	static constexpr double SMALL_SIDE_RATIO = 1000;
 	if (!has_cardinality_preserving_join) {

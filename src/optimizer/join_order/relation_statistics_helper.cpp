@@ -173,7 +173,9 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			for (auto &distinct_count : return_stats.column_distinct_count) {
 				if (distinct_count.from_hll &&
 				    IsLikelyUniqueColumn(distinct_count.distinct_count, base_table_cardinality)) {
-					distinct_count.distinct_count = MinValue(distinct_count.distinct_count, cardinality_after_filters);
+					distinct_count.effective_distinct_count =
+					    MinValue(distinct_count.distinct_count, cardinality_after_filters);
+					distinct_count.has_effective_distinct_count = true;
 				}
 			}
 		}
