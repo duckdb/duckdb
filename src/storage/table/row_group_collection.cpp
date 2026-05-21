@@ -230,7 +230,7 @@ void RowGroupCollection::Verify() {
 		current_rowid_end = entry.GetRowStart() + row_group.count;
 	}
 	D_ASSERT(current_total_rows == total_rows.load());
-	D_ASSERT(row_groups->GetBaseRowId() + next_row_id.load() >= current_rowid_end);
+	D_ASSERT(row_groups->GetBaseRowId() + next_row_id.load() == current_rowid_end);
 #endif
 }
 
@@ -525,16 +525,14 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	if (!needs_new_row_group) {
 		auto last_row_group = state.row_groups->GetLastSegment(l);
 		auto append_start = state.row_groups->GetBaseRowId() + next_row_id;
-		needs_new_row_group = last_row_group->GetRowEnd() != append_start;
-	}
-	if (!needs_new_row_group) {
+		D_ASSERT(last_row_group->GetRowEnd() == append_start);
 		if (info->GetIndexes().Empty()) {
 			// We honor SUGGEST_NEW unless the table has indexes because there is no vacuuming for indexed tables...
 			needs_new_row_group = row_group_append_mode == RowGroupAppendMode::SUGGEST_NEW;
 		} else {
 			// ... and if it has indexes we will ignore row_group_append_mode and try to append, unless the last row
 			// group is full already.
-			needs_new_row_group = row_group_size < state.row_groups->GetLastSegment(l)->GetNode().count;
+			needs_new_row_group = row_group_size < last_row_group->GetNode().count;
 		}
 	}
 	if (needs_new_row_group) {
