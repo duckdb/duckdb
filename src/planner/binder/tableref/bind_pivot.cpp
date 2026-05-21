@@ -522,27 +522,37 @@ static void BindPivotConstantInList(unique_ptr<ParsedExpression> &expr, vector<V
 	values.push_back(folded_value);
 }
 
-static void BindUnpivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &values, Binder &binder) {
-	switch (expr->GetExpressionType()) {
+static bool TryExtractUnpivotList(ParsedExpression &expr, vector<string> &column_names) {
+	auto initial_size = column_names.size();
+	switch (expr.GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
-		auto &colref = expr->Cast<ColumnRefExpression>();
+		auto &colref = expr.Cast<ColumnRefExpression>();
 		if (colref.IsQualified()) {
-			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list cannot contain qualified column references");
+			return false;
 		}
-		values.emplace_back(colref.GetColumnName());
-	} break;
+		column_names.push_back(colref.GetColumnName());
+		return true;
+	}
+	case ExpressionType::VALUE_CONSTANT: {
+		auto &constant = expr.Cast<ConstantExpression>();
+		column_names.push_back(constant.GetValue().ToString());
+		return true;
+	}
 	case ExpressionType::FUNCTION: {
-		auto &function = expr->Cast<FunctionExpression>();
+		auto &function = expr.Cast<FunctionExpression>();
 		if (function.function_name != "row") {
-			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain columns or lists of columns");
+			return false;
 		}
 		for (auto &child : function.children) {
-			BindUnpivotInList(child, values, binder);
+			if (!TryExtractUnpivotList(*child, column_names)) {
+				column_names.resize(initial_size);
+				return false;
+			}
 		}
-	} break;
+		return true;
+	}
 	default:
-		BindPivotConstantInList(expr, values, binder);
-		break;
+		return false;
 	}
 }
 
@@ -731,17 +741,6 @@ struct UnpivotEntry {
 
 void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry,
                                    vector<UnpivotEntry> &unpivot_entries) {
-	// Try to bind the entry expression as values
-	try {
-		auto expr_copy = entry.expr->Copy();
-		BindUnpivotInList(expr_copy, entry.values, child_binder);
-		// successfully bound as values - clear the expression
-		entry.expr = nullptr;
-	} catch (...) {
-		// ignore binder exceptions here - we fall back to expression mode
-		entry.values.clear();
-	}
-
 	if (!entry.expr) {
 		// pivot entry without an expression - generate one
 		UnpivotEntry unpivot_entry;
@@ -756,6 +755,21 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 		unpivot_entries.push_back(std::move(unpivot_entry));
 		return;
 	}
+
+	vector<string> column_names;
+	if (TryExtractUnpivotList(*entry.expr, column_names)) {
+		UnpivotEntry unpivot_entry;
+		unpivot_entry.alias = entry.alias;
+		for (auto &column_name : column_names) {
+			if (column_name.empty()) {
+				throw BinderException("UNPIVOT - empty column name not supported");
+			}
+			unpivot_entry.expressions.push_back(make_uniq<ColumnRefExpression>(column_name));
+		}
+		unpivot_entries.push_back(std::move(unpivot_entry));
+		return;
+	}
+
 	D_ASSERT(entry.values.empty());
 	// expand star expressions (if any)
 	vector<unique_ptr<ParsedExpression>> star_columns;
