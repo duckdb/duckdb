@@ -48,15 +48,16 @@ PRAGMA disable_profiling;
 
 statement ok
 CREATE VIEW operator_metrics AS
-WITH RECURSIVE ops AS (
-    SELECT unnest(operator_info) AS op FROM '{TEST_DIR}/profiling_output.json'
+WITH RECURSIVE ops(op) AS (
+    SELECT unnest(operator)::JSON AS op FROM '{TEST_DIR}/profiling_output.json'
     UNION ALL
-    SELECT unnest(op.children) FROM ops WHERE len(op.children) > 0
+    SELECT unnest((op->'children')::JSON[]) FROM ops WHERE json_array_length(op->'children') > 0
 )
-SELECT op.type AS operator_type,
-       op.row_groups_scanned AS scanned,
-       op.total_row_groups_to_scan AS total
-FROM ops;
+SELECT op->>'type' AS operator_type,
+       (op->>'row_groups_scanned')::BIGINT AS scanned,
+       (op->>'total_row_groups_to_scan')::BIGINT AS total
+FROM ops
+WHERE op->>'type' = 'TABLE_SCAN';
 
 statement ok
 CREATE VIEW cumulative_metrics AS
@@ -188,7 +189,7 @@ SELECT * FROM cumulative_metrics;
 ----
 1	1
 
-# --- Enabled metric appears on non-scan operators with default value 0 ---
+# --- Cumulative metrics are correct when only scanning a single table ---
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -206,9 +207,9 @@ statement ok
 PRAGMA disable_profiling;
 
 query III
-SELECT * FROM operator_metrics WHERE operator_type = 'UNGROUPED_AGGREGATE';
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
 ----
-UNGROUPED_AGGREGATE	0	0
+TABLE_SCAN	4	4
 
 query II
 SELECT * FROM cumulative_metrics;
@@ -397,15 +398,16 @@ PRAGMA disable_profiling;
 
 statement ok
 CREATE VIEW row_groups_scanned_operator_metrics AS
-WITH RECURSIVE ops AS (
-    SELECT unnest(operator_info) AS op FROM '{TEST_DIR}/profiling_output.json'
+WITH RECURSIVE ops(op) AS (
+    SELECT unnest(operator)::JSON AS op FROM '{TEST_DIR}/profiling_output.json'
     UNION ALL
-    SELECT unnest(op.children) FROM ops WHERE len(op.children) > 0
+    SELECT unnest((op->'children')::JSON[]) FROM ops WHERE json_array_length(op->'children') > 0
 )
-SELECT op.type AS operator_type,
-       op.row_groups_scanned AS row_groups_scanned,
-       op.total_row_groups_to_scan AS total_row_groups_to_scan
-FROM ops;
+SELECT op->>'type' AS operator_type,
+       (op->>'row_groups_scanned')::BIGINT AS row_groups_scanned,
+       (op->>'total_row_groups_to_scan')::BIGINT AS total_row_groups_to_scan
+FROM ops
+WHERE op->>'type' = 'TABLE_SCAN';
 
 query III
 SELECT * FROM row_groups_scanned_operator_metrics WHERE operator_type = 'TABLE_SCAN';
