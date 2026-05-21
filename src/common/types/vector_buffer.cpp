@@ -90,6 +90,9 @@ void VectorBuffer::Verify(const LogicalType &type) const {
 }
 
 void VectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	if (count == 0) {
+		return;
+	}
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		SelectionVector owned_sel;
 		VerifyInternal(type, *ConstantVector::ZeroSelectionVector(1ULL, owned_sel), 1ULL);
