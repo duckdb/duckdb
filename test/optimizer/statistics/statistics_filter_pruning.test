@@ -1,0 +1,366 @@
+# name: test/optimizer/statistics/statistics_filter_pruning.test
+# description: Statistics-based filter pruning
+# group: [statistics]
+
+statement ok
+SET disabled_optimizers='expression_rewriter';
+
+statement ok
+CREATE TABLE stats_filter_prune_int AS
+SELECT (i - 150000)::INTEGER AS a
+FROM range(0, 300000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+# Verify expression statistics pruning reduces scanned rows.
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/statistics_filter_pruning_int_profile.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "EXTRA_INFO": "true"}';
+
+query I
+SELECT count(*) FROM stats_filter_prune_int WHERE a * 4 + 4 > 5;
+----
+149999
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT CASE
+	WHEN max(regexp_extract(json, 'cumulative_rows_scanned.: ([0-9]+)', 1)::BIGINT) < 300000 THEN 'true'
+	ELSE 'false'
+END
+FROM read_csv('{TEST_DIR}/statistics_filter_pruning_int_profile.json', columns={'json': 'VARCHAR'}, sep='🦆')
+WHERE json LIKE '%cumulative_rows_scanned%';
+----
+true
+
+query I
+SELECT CASE
+	WHEN max(regexp_extract(json, 'cumulative_cardinality.: ([0-9]+)', 1)::BIGINT) = 150000 THEN 'true'
+	ELSE 'false'
+END
+FROM read_csv('{TEST_DIR}/statistics_filter_pruning_int_profile.json', columns={'json': 'VARCHAR'}, sep='🦆')
+WHERE json LIKE '%cumulative_cardinality%';
+----
+true
+
+query I
+SELECT count(*) FROM stats_filter_prune_int WHERE a + 4 - 4 > 0;
+----
+149999
+
+query I
+SELECT count(*) FROM stats_filter_prune_int WHERE a * 4 - 4 > 5;
+----
+149997
+
+query I
+SELECT count(*) FROM stats_filter_prune_int WHERE (a + 4) * 4 - 4 > 5;
+----
+150001
+
+query I
+SELECT count(*) FROM stats_filter_prune_int WHERE a * 4 + 4 > 1000000;
+----
+0
+
+query II
+EXPLAIN SELECT count(*) FROM stats_filter_prune_int WHERE a * 4 + 4 > 1000000;
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT count(*) FROM stats_filter_prune_int WHERE a + 4 - 4 > 1000000;
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT count(*) FROM stats_filter_prune_int WHERE a * 4 - 4 > 1000000;
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT count(*) FROM stats_filter_prune_int WHERE (a + 4) * 4 - 4 > 1000000;
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+statement ok
+CREATE TABLE stats_filter_prune_double AS
+SELECT (i - 150000)::DOUBLE AS a
+FROM range(0, 300000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/statistics_filter_pruning_double_profile.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "EXTRA_INFO": "true"}';
+
+query I
+SELECT count(*) FROM stats_filter_prune_double WHERE a * 4e0 + 4e0 > 5e0;
+----
+149999
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT CASE
+	WHEN max(regexp_extract(json, 'cumulative_rows_scanned.: ([0-9]+)', 1)::BIGINT) < 300000 THEN 'true'
+	ELSE 'false'
+END
+FROM read_csv('{TEST_DIR}/statistics_filter_pruning_double_profile.json', columns={'json': 'VARCHAR'}, sep='🦆')
+WHERE json LIKE '%cumulative_rows_scanned%';
+----
+true
+
+query I
+SELECT count(*) FROM stats_filter_prune_double WHERE a + 4e0 - 4e0 > 0e0;
+----
+149999
+
+query I
+SELECT count(*) FROM stats_filter_prune_double WHERE a * 4e0 - 4e0 > 5e0;
+----
+149997
+
+query I
+SELECT count(*) FROM stats_filter_prune_double WHERE (a + 4e0) * 4e0 - 4e0 > 5e0;
+----
+150001
+
+query II
+EXPLAIN SELECT count(*) FROM stats_filter_prune_double WHERE (a + 4e0) * 4e0 - 4e0 > 1000000e0;
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+statement ok
+CREATE TABLE stats_filter_prune_struct AS
+SELECT struct_pack(b := (i - 150000)::INTEGER) AS a
+FROM range(0, 300000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/statistics_filter_pruning_struct_profile.json';
+
+query I
+SELECT count(*) FROM stats_filter_prune_struct WHERE a.b + 5 > 6;
+----
+149998
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT CASE
+	WHEN max(regexp_extract(json, 'cumulative_rows_scanned.: ([0-9]+)', 1)::BIGINT) < 300000 THEN 'true'
+	ELSE 'false'
+END
+FROM read_csv('{TEST_DIR}/statistics_filter_pruning_struct_profile.json', columns={'json': 'VARCHAR'}, sep='🦆')
+WHERE json LIKE '%cumulative_rows_scanned%';
+----
+true
+
+query II
+EXPLAIN SELECT count(*) FROM stats_filter_prune_struct WHERE a.b + 5 > 1000000;
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+query I
+SELECT count(*) FROM stats_filter_prune_struct WHERE struct_extract(a, 'b') + 5 > 6;
+----
+149998
+
+query II
+EXPLAIN SELECT count(*) FROM stats_filter_prune_struct WHERE struct_extract(a, 'b') + 5 > 1000000;
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/statistics_filter_pruning_struct_extract_at_profile.json';
+
+query I
+SELECT count(*) FROM stats_filter_prune_struct WHERE struct_extract_at(a, 1) + 5 > 6;
+----
+149998
+
+statement ok
+PRAGMA disable_profiling;
+
+query I
+SELECT CASE
+	WHEN max(regexp_extract(json, 'cumulative_rows_scanned.: ([0-9]+)', 1)::BIGINT) < 300000 THEN 'true'
+	ELSE 'false'
+END
+FROM read_csv('{TEST_DIR}/statistics_filter_pruning_struct_extract_at_profile.json', columns={'json': 'VARCHAR'}, sep='🦆')
+WHERE json LIKE '%cumulative_rows_scanned%';
+----
+true
+
+query II
+EXPLAIN SELECT count(*) FROM stats_filter_prune_struct WHERE struct_extract_at(a, 1) + 5 > 1000000;
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+statement ok
+RESET disabled_optimizers;
+
+# Verify nullable derived expression stats do not remove filter evaluation.
+statement ok
+CREATE TABLE stats_filter_nullable AS
+SELECT CASE WHEN i % 10 = 0 THEN NULL ELSE i::INTEGER END AS i
+FROM range(0, 10000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT count(*) FROM stats_filter_nullable;
+----
+10000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE i IS NULL;
+----
+1000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE i IS NOT NULL;
+----
+9000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE i * 0 = 0;
+----
+9000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE i * 0 != 1;
+----
+9000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE i * 0 = 1;
+----
+0
+
+# Constant on the left exercises comparison flipping.
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE 0 = i * 0;
+----
+9000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE 1 != i * 0;
+----
+9000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE 1 = i * 0;
+----
+0
+
+# Range comparisons over nullable expression stats.
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE i * 0 >= 0;
+----
+9000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE i * 0 > -1;
+----
+9000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE i * 0 <= 0;
+----
+9000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE i * 0 < 1;
+----
+9000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE i * 0 > 0;
+----
+0
+
+# IN filters use equality zonemap checks internally.
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE i * 0 IN (0, 2);
+----
+9000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE i * 0 IN (1, 2);
+----
+0
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE i * 0 IN (NULL, 0);
+----
+9000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE i * 0 IN (NULL);
+----
+0
+
+# NULL operators over derived expression stats.
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE (i * 0) IS NULL;
+----
+1000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE (i * 0) IS NOT NULL;
+----
+9000
+
+# Conjunctions preserve NULL semantics.
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE (i * 0 = 0) AND (i + 1 > 0);
+----
+9000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE (i * 0 = 0) AND (i + 1 < 0);
+----
+0
+
+# Disjunctions preserve NULL semantics.
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE (i * 0 = 0) OR (i + 1 < 0);
+----
+9000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE (i * 0 = 1) OR (i + 1 > 0);
+----
+9000
+
+query I
+SELECT count(*) FROM stats_filter_nullable WHERE (i * 0 = 0) OR ((i + 1) > 1000000);
+----
+9000

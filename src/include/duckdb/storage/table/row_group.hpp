@@ -56,6 +56,7 @@ class StorageCommitState;
 template <class T>
 struct SegmentNode;
 enum class ColumnDataType;
+class ClientContext;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
@@ -149,7 +150,7 @@ public:
 	bool InitializeScanWithOffset(CollectionScanState &state, SegmentNode<RowGroup> &node, idx_t vector_offset);
 	//! Checks the given set of table filters against the row-group statistics. Returns false if the entire row group
 	//! can be skipped.
-	bool CheckZonemap(ScanFilterInfo &filters);
+	bool CheckZonemap(optional_ptr<ClientContext> context, ScanFilterInfo &filters);
 	//! Checks the given set of table filters against the per-segment statistics. Returns false if any segments were
 	//! skipped.
 	bool CheckZonemapSegments(CollectionScanState &state);

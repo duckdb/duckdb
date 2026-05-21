@@ -1,3 +1,9 @@
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/checked_integer.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/settings.hpp"
 
 #include "duckdb/common/enum_util.hpp"
@@ -21,6 +27,10 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include <cmath>
+#include <limits>
 
 namespace duckdb {
 
@@ -80,6 +90,33 @@ static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 	}
 	return function;
 }
+
+template <class T>
+static bool WidenFloatingBounds(const LogicalType &type, Value &new_min, Value &new_max) {
+	auto min = new_min.GetValue<T>();
+	auto max = new_max.GetValue<T>();
+	if (!std::isfinite(min) || !std::isfinite(max)) {
+		return false;
+	}
+	min = std::nextafter(min, -std::numeric_limits<T>::infinity());
+	max = std::nextafter(max, std::numeric_limits<T>::infinity());
+
+	new_min = Value::CreateValue(min);
+	new_max = Value::CreateValue(max);
+	return true;
+}
+
+template <class BASEOP>
+struct FloatingTryOperator {
+	template <class T>
+	static bool Operation(T left, T right, T &result) {
+		if (!std::isfinite(left) || !std::isfinite(right)) {
+			return false;
+		}
+		result = BASEOP::template Operation<T, T, T>(left, right);
+		return std::isfinite(result);
+	}
+};
 
 //===--------------------------------------------------------------------===//
 // + [add]
@@ -184,6 +221,48 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 		expr.function.SetFunctionCallback(GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
 	}
 	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
+	NumericStats::SetMin(result, new_min);
+	NumericStats::SetMax(result, new_max);
+	result.CombineValidity(lstats, rstats);
+	return result.ToUnique();
+}
+
+template <class PROPAGATE, class BASEOP>
+unique_ptr<BaseStatistics> PropagateFloatingStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
+	D_ASSERT(child_stats.size() == 2);
+
+	auto &return_type = expr.GetReturnType();
+
+	auto &lstats = child_stats[0];
+	auto &rstats = child_stats[1];
+	if (!NumericStats::HasMinMax(lstats) || !NumericStats::HasMinMax(rstats)) {
+		return nullptr;
+	}
+
+	Value new_min, new_max;
+	bool failed;
+	switch (return_type.InternalType()) {
+	case PhysicalType::FLOAT:
+		failed = PROPAGATE::template Operation<float, FloatingTryOperator<BASEOP>>(return_type, lstats, rstats, new_min,
+		                                                                           new_max);
+		if (failed || !WidenFloatingBounds<float>(return_type, new_min, new_max)) {
+			return nullptr;
+		}
+		break;
+	case PhysicalType::DOUBLE:
+		failed = PROPAGATE::template Operation<double, FloatingTryOperator<BASEOP>>(return_type, lstats, rstats,
+		                                                                            new_min, new_max);
+		if (failed || !WidenFloatingBounds<double>(return_type, new_min, new_max)) {
+			return nullptr;
+		}
+		break;
+	default:
+		return nullptr;
+	}
+
+	auto result = NumericStats::CreateEmpty(return_type);
 	NumericStats::SetMin(result, new_min);
 	NumericStats::SetMax(result, new_max);
 	result.CombineValidity(lstats, rstats);
@@ -371,6 +450,13 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			                        PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
 			function.SetFallible();
 			function.SetArgProperties({inc, inc});
+			return function;
+		} else if (left_type.IsFloating()) {
+			ScalarFunction function("+", {left_type, right_type}, left_type,
+			                        GetScalarBinaryFunction<AddOperator>(left_type.InternalType()));
+			function.SetFallible();
+			function.SetArgProperties({inc, inc});
+			function.SetStatisticsCallback(PropagateFloatingStats<AddPropagateStatistics, AddOperator>);
 			return function;
 		} else {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
@@ -692,6 +778,13 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 
+		} else if (left_type.IsFloating()) {
+			ScalarFunction function("-", {left_type, right_type}, left_type,
+			                        GetScalarBinaryFunction<SubtractOperator>(left_type.InternalType()));
+			function.SetFallible();
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
+			function.SetStatisticsCallback(PropagateFloatingStats<SubtractPropagateStatistics, SubtractOperator>);
+			return function;
 		} else {
 			ScalarFunction function("-", {left_type, right_type}, left_type,
 			                        GetScalarBinaryFunction<SubtractOperator>(left_type.InternalType()));
@@ -947,6 +1040,10 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 			multiply.AddFunction(ScalarFunction(
 			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
 			    nullptr, PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>));
+		} else if (type.IsFloating()) {
+			multiply.AddFunction(ScalarFunction({type, type}, type,
+			                                    GetScalarBinaryFunction<MultiplyOperator>(type.InternalType()), nullptr,
+			                                    PropagateFloatingStats<MultiplyPropagateStatistics, MultiplyOperator>));
 		} else {
 			multiply.AddFunction(
 			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
