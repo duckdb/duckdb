@@ -1,0 +1,52 @@
+# name: test/tmp1.test
+# description: Temporary regression test for rowid lookups into a leading row-group gap
+# group: [test]
+
+# Future-facing test for rowid gaps.
+#
+# Once checkpoint/vacuum can physically drop the first row group while preserving
+# the original rowids, the first remaining row group can start after rowid 0.
+# Looking up rowid 0 then probes a leading gap before the first segment-tree node.
+# That lookup should return no rows, not throw an internal segment-tree error.
+#
+# Default row group size is 122880 rows.
+
+statement ok
+CREATE TABLE rowid_gap_lookup AS SELECT i FROM range(245760) tbl(i);
+
+statement ok
+DELETE FROM rowid_gap_lookup WHERE rowid < 122880;
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT min(rowid), count(*) FROM rowid_gap_lookup;
+----
+122880	122880
+
+query I
+SELECT count(*) FROM rowid_gap_lookup WHERE rowid = 0;
+----
+0
+
+query I
+SELECT count(*) FROM rowid_gap_lookup WHERE rowid BETWEEN 0 AND 10;
+----
+0
+
+query I
+SELECT i FROM rowid_gap_lookup WHERE rowid IN (0, 122880) ORDER BY rowid;
+----
+122880
+
+statement ok
+UPDATE rowid_gap_lookup SET i = i WHERE rowid = 0;
+
+statement ok
+DELETE FROM rowid_gap_lookup WHERE rowid = 0;
+
+query I
+SELECT count(*) FROM rowid_gap_lookup;
+----
+122880

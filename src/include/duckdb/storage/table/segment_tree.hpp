@@ -448,11 +448,11 @@ private:
 			return false;
 		}
 		auto result = LoadSegment();
-		if (!result) {
-			return false;
+		if (result) {
+			AppendSegmentInternal(l, std::move(result->segment), result->row_start);
+			return true;
 		}
-		AppendSegmentInternal(l, std::move(result->segment), result->row_start);
-		return true;
+		return false;
 	}
 
 	//! Load all segments, if there are any left to load
