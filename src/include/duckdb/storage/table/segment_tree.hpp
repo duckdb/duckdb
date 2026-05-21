@@ -293,7 +293,7 @@ public:
 		}
 		D_ASSERT(lower == upper);
 		D_ASSERT(lower == 0 || row_number >= nodes[lower - 1]->GetRowEnd());
-		D_ASSERT(lower == nodes.size() || row_number < nodes[lower]->GetRowStart());
+		D_ASSERT(upper == nodes.size() || row_number < nodes[upper]->GetRowStart());
 		return false;
 	}
 
