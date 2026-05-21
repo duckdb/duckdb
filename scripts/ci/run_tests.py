@@ -685,6 +685,9 @@ def run_single_config(
         tests = load_tests(config.test_list)
         if stop_requested():
             return ConfigRunResult(returncode=130, passed_tests=0, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0)
+        if len(tests) == 0:
+            print(f"error: no tests selected for config '{invocation.label}'")
+            return ConfigRunResult(returncode=1, passed_tests=0, failed_tests=1, skipped_tests=0, elapsed_seconds=0.0)
         if args.changed_tests is not None:
             merged_names = {test.name for test in tests}
             base_names = {test.name for test in load_tests(args.test_list)}
