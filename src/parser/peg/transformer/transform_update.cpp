@@ -17,19 +17,19 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUpdateStatement(
 	node.from_table = std::move(from_clause);
 	node.set_info->condition = std::move(where_clause);
 	node.returning_list = std::move(returning_clause);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableSet(PEGTransformer &transformer,
                                                                   unique_ptr<BaseTableRef> base_table_name) {
-	return base_table_name;
+	return std::move(base_table_name);
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableAliasSet(PEGTransformer &transformer,
                                                                        unique_ptr<BaseTableRef> base_table_name,
                                                                        const string &update_alias) {
 	base_table_name->alias = update_alias;
-	return base_table_name;
+	return std::move(base_table_name);
 }
 
 string PEGTransformerFactory::TransformUpdateAlias(PEGTransformer &transformer, const string &col_id) {

@@ -311,7 +311,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterType(PEGTransfor
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUsingExpression(PEGTransformer &transformer,
                                                                              unique_ptr<ParsedExpression> expression) {
-	return std::move(expression);
+	return expression;
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddDefault(PEGTransformer &transformer,
