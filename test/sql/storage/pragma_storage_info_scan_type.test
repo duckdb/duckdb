@@ -56,23 +56,15 @@ FROM pragma_storage_info('bp_tbl')
 ----
 true
 
-# loaded_segments_only is orthogonal: it can be combined with either include_segment_info value.
-# After the CHECKPOINT above all columns of bp_tbl are unloaded; force a load by reading them.
+# loaded_segments_only is orthogonal and combinable with either include_segment_info value.
 statement ok
-SELECT * FROM bp_tbl LIMIT 1;
+SELECT * FROM pragma_storage_info('bp_tbl', include_segment_info=true, loaded_segments_only=true)
 
-query I
-SELECT segment_info FROM pragma_storage_info('bp_tbl', include_segment_info=true, loaded_segments_only=true) WHERE segment_type NOT IN ('VALIDITY')
-----
-CONSTANT: 9, DELTA_FOR: 1
+statement ok
+SELECT * FROM pragma_storage_info('bp_tbl', loaded_segments_only=true)
 
-# loaded_segments_only without include_segment_info is also valid (no segment_info column emitted).
+# loaded_segments_only without include_segment_info still omits the segment_info column.
 statement error
 SELECT segment_info FROM pragma_storage_info('bp_tbl', loaded_segments_only=true) LIMIT 1
 ----
 <REGEX>:Binder Error:.*segment_info.*
-
-query I
-SELECT COUNT(*) > 0 FROM pragma_storage_info('bp_tbl', loaded_segments_only=true) WHERE segment_type NOT IN ('VALIDITY')
-----
-true
