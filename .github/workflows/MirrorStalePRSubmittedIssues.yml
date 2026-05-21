@@ -2,12 +2,12 @@ name: Mirror Stale PR Submitted Issues
 
 on:
   schedule:
-    - cron: "0 5 * * 1"  # run every Monday day at 5AM
+    - cron: "0 5 * * 1,4"  # run every Monday and Thursday at 5AM
   workflow_dispatch: {}  # allow running manually from the github ui
 
 env:
   GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
-  DAYS_BEFORE_MIRROR: 14
+  DAYS_BEFORE_MIRROR: 10
 
 jobs:
   create_or_label_mirror_issue:
