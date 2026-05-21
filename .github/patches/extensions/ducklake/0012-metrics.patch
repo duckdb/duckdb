@@ -52,19 +52,3 @@ index 797a54ed..e5fec1e1 100644
  
  	function.name = "ducklake_scan";
  	return function;
-diff --git a/test/sql/settings/max_retry_count.test b/test/sql/settings/max_retry_count.test
-index 964ff8da..ae706215 100644
---- a/test/sql/settings/max_retry_count.test
-+++ b/test/sql/settings/max_retry_count.test
-@@ -51,9 +51,9 @@ SELECT current_setting('ducklake_max_retry_count')
- statement ok
- INSERT INTO retry_test VALUES (2, 'test with retry count 7');
- 
--# Test 5: Test session scope
-+# Test 5: Set to 2
- statement ok
--SET SESSION ducklake_max_retry_count = 2;
-+SET ducklake_max_retry_count = 2;
- 
- query I
- SELECT current_setting('ducklake_max_retry_count')
