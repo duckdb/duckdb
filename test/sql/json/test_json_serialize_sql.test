@@ -101,7 +101,7 @@ select json_serialize_sql($$select '10'::blob$$);
 ----
 <!REGEX>:.*query_location:.*11
 
-# Missing empty/null properties in JSON SQL should deserialize using the C++ defaults
+# skip_null/skip_empty should still preserve required serialization properties
 query III
 SELECT * FROM json_execute_serialized_sql(json_serialize_sql('SELECT * FROM tbl2', skip_null := true, skip_empty := true));
 ----

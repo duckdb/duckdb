@@ -6,10 +6,8 @@ namespace duckdb {
 
 class JsonDeserializer : public Deserializer {
 public:
-	JsonDeserializer(yyjson_val *val, const yyjson_doc_ptr &doc, bool allow_missing_default_properties_p = false)
-	    : doc(doc.get()) {
+	JsonDeserializer(yyjson_val *val, const yyjson_doc_ptr &doc) : doc(doc.get()) {
 		deserialize_enum_from_string = true;
-		allow_missing_default_properties = allow_missing_default_properties_p;
 		stack.emplace_back(val);
 	}
 

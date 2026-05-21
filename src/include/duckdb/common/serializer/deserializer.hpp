@@ -24,7 +24,6 @@ namespace duckdb {
 class Deserializer {
 protected:
 	bool deserialize_enum_from_string = false;
-	bool allow_missing_default_properties = false;
 	SerializationData data;
 
 public:
@@ -59,12 +58,6 @@ public:
 	// Read into an existing value
 	template <typename T>
 	inline void ReadProperty(const field_id_t field_id, const char *tag, T &ret) {
-		if constexpr (has_serialization_default<T>::value) {
-			if (allow_missing_default_properties && !CanDeserializeProperty(field_id, tag)) {
-				ret = SerializationDefaultValue::GetDefault<T>();
-				return;
-			}
-		}
 		OnPropertyBegin(field_id, tag);
 		ret = Read<T>();
 		OnPropertyEnd();
@@ -73,11 +66,6 @@ public:
 	// Read and return a value
 	template <typename T>
 	inline T ReadProperty(const field_id_t field_id, const char *tag) {
-		if constexpr (has_serialization_default<T>::value) {
-			if (allow_missing_default_properties && !CanDeserializeProperty(field_id, tag)) {
-				return SerializationDefaultValue::GetDefault<T>();
-			}
-		}
 		OnPropertyBegin(field_id, tag);
 		auto ret = Read<T>();
 		OnPropertyEnd();
