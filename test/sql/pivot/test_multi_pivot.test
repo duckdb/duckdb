@@ -57,6 +57,18 @@ PIVOT (min(a) FOR (b, c) IN ((NULL, [1])));
 ----
 1
 
+query I
+SELECT *
+FROM (SELECT 1 a, 2 b, 3 c)
+PIVOT (min(a) FOR (b, c) IN ((NULL, [1])));
+----
+NULL
+
+query I
+SELECT (SELECT * FROM (SELECT 1 a, 2 b, 3 c) PIVOT (min(a) FOR (b, c) IN ((NULL, [1]))));
+----
+NULL
+
 statement ok
 SET pivot_limit=10000
 
