@@ -204,9 +204,9 @@ void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
 	D_ASSERT(state.current->GetNode().GetType() == type);
 }
 
-idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType options,
+idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type,
                              idx_t base_result_offset) {
-	if (options == ScanVectorType::SCAN_FLAT_VECTOR && result.GetVectorType() != VectorType::FLAT_VECTOR) {
+	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR && result.GetVectorType() != VectorType::FLAT_VECTOR) {
 		throw InternalException("ScanVector called with SCAN_FLAT_VECTOR but result is not a flat vector");
 	}
 	BeginScanVectorInternal(state);
@@ -225,7 +225,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 					                 result, result_offset + i);
 				}
 			} else {
-				current.Scan(state, scan_count, result, result_offset, options);
+				current.Scan(state, scan_count, result, result_offset, scan_type);
 			}
 
 			state.offset_in_column += scan_count;
@@ -319,9 +319,9 @@ void ColumnData::UpdateInternal(TransactionData transaction, DuckTableEntry &tab
 }
 
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                             idx_t target_scan, ScanVectorType options, UpdateScanType update_type) {
-	auto scan_count = ScanVector(state, result, target_scan, options);
-	if (options != ScanVectorType::SCAN_ENTIRE_VECTOR) {
+                             idx_t target_scan, ScanVectorType scan_type, UpdateScanType update_type) {
+	auto scan_count = ScanVector(state, result, target_scan, scan_type);
+	if (scan_type != ScanVectorType::SCAN_ENTIRE_VECTOR) {
 		// if we are scanning an entire vector we cannot have updates
 		FetchUpdates(transaction, vector_index, result, scan_count, update_type);
 	}
@@ -330,8 +330,8 @@ idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, Co
 
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                              idx_t target_scan, UpdateScanType update_type) {
-	auto options = GetVectorScanType(state, target_scan, result);
-	return ScanVector(transaction, vector_index, state, result, target_scan, options, update_type);
+	auto scan_type = GetVectorScanType(state, target_scan, result);
+	return ScanVector(transaction, vector_index, state, result, target_scan, scan_type, update_type);
 }
 
 idx_t ColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {

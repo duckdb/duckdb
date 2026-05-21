@@ -25,12 +25,12 @@ void StandardColumnData::SetDataType(ColumnDataType data_type) {
 
 ScanVectorType StandardColumnData::GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) {
 	// if either the current column data, or the validity column data requires flat vectors, we scan flat vectors
-	auto options = ColumnData::GetVectorScanType(state, scan_count, result);
-	if (options == ScanVectorType::SCAN_FLAT_VECTOR) {
+	auto scan_type = ColumnData::GetVectorScanType(state, scan_count, result);
+	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR) {
 		return ScanVectorType::SCAN_FLAT_VECTOR;
 	}
 	if (state.child_states.empty()) {
-		return options;
+		return scan_type;
 	}
 	return validity->GetVectorScanType(state.child_states[0], scan_count, result);
 }
@@ -59,10 +59,10 @@ void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                                idx_t target_count) {
 	D_ASSERT(state.offset_in_column == state.child_states[0].offset_in_column);
-	auto options = GetVectorScanType(state, target_count, result);
+	auto scan_type = GetVectorScanType(state, target_count, result);
 	auto scan_count =
-	    ScanVector(transaction, vector_index, state, result, target_count, options, state.update_scan_type);
-	validity->ScanVector(transaction, vector_index, state.child_states[0], result, target_count, options,
+	    ScanVector(transaction, vector_index, state, result, target_count, scan_type, state.update_scan_type);
+	validity->ScanVector(transaction, vector_index, state.child_states[0], result, target_count, scan_type,
 	                     state.update_scan_type);
 	return scan_count;
 }
@@ -83,8 +83,8 @@ void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index,
 	auto validity_compression = validity->GetCompressionFunction();
 	bool validity_has_filter = validity_compression && validity_compression->filter;
 	auto target_count = GetVectorCount(vector_index);
-	auto options = GetVectorScanType(state, target_count, result);
-	bool scan_entire_vector = options == ScanVectorType::SCAN_ENTIRE_VECTOR;
+	auto scan_type = GetVectorScanType(state, target_count, result);
+	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
 	bool verify_fetch_row = state.scan_options && state.scan_options->force_fetch_row;
 	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row) {
 		// we are not scanning an entire vector - this can have several causes (updates, etc)
@@ -104,8 +104,8 @@ void StandardColumnData::Select(TransactionData transaction, idx_t vector_index,
 	auto validity_compression = validity->GetCompressionFunction();
 	bool validity_has_select = validity_compression && validity_compression->select;
 	auto target_count = GetVectorCount(vector_index);
-	auto options = GetVectorScanType(state, target_count, result);
-	bool scan_entire_vector = options == ScanVectorType::SCAN_ENTIRE_VECTOR;
+	auto scan_type = GetVectorScanType(state, target_count, result);
+	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
 	if (!has_select || !validity_has_select || !scan_entire_vector) {
 		// we are not scanning an entire vector - this can have several causes (updates, etc)
 		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count);

@@ -280,9 +280,9 @@ void ColumnScanState::Initialize(const QueryContext &context_p, const LogicalTyp
 		if (!storage_index.IsPushdownExtract()) {
 			return;
 		}
-		auto &options = storage_index.GetScanType();
-		if (options.id() != LogicalTypeId::VARIANT) {
-			PushDownCast(type, options);
+		auto &scan_type = storage_index.GetScanType();
+		if (scan_type.id() != LogicalTypeId::VARIANT) {
+			PushDownCast(type, scan_type);
 		}
 		return;
 	}

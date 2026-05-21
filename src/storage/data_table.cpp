@@ -392,7 +392,7 @@ void DataTable::RebuildIndexes() {
 		scan_chunk.Initialize(Allocator::Get(db), scan_types);
 
 		CreateIndexScanState state;
-		auto options = TableScanType::TABLE_SCAN_COMMITTED_ROWS;
+		auto scan_type = TableScanType::TABLE_SCAN_COMMITTED_ROWS;
 		state.Initialize(scan_column_ids, nullptr);
 		QueryContext context;
 		row_groups->InitializeScan(context, state.table_state, scan_column_ids, nullptr);
@@ -403,7 +403,7 @@ void DataTable::RebuildIndexes() {
 
 		while (true) {
 			scan_chunk.Reset();
-			state.table_state.Scan(scan_chunk, options, state.segment_lock);
+			state.table_state.Scan(scan_chunk, scan_type, state.segment_lock);
 			if (scan_chunk.size() == 0) {
 				break;
 			}
