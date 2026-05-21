@@ -219,7 +219,7 @@ void RowGroupCollection::Verify() {
 #ifdef DEBUG
 	idx_t current_total_rows = 0;
 	auto row_groups = GetRowGroups();
-	row_groups->Verify(true);
+	row_groups->Verify(SegmentTreeVerifyMode::NON_OVERLAPPING);
 	idx_t current_rowid_end = row_groups->GetBaseRowId();
 	for (auto &entry : row_groups->SegmentNodes()) {
 		auto &row_group = entry.GetNode();

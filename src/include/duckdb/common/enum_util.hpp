@@ -426,6 +426,8 @@ enum class SecretPersistType : uint8_t;
 
 enum class SecretSerializationType : uint8_t;
 
+enum class SegmentTreeVerifyMode : uint8_t;
+
 enum class SelectivityOptionalFilterType : uint8_t;
 
 enum class SequenceInfo : uint8_t;
@@ -1137,6 +1139,9 @@ const char* EnumUtil::ToChars<SecretPersistType>(SecretPersistType value);
 
 template<>
 const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value);
+
+template<>
+const char* EnumUtil::ToChars<SegmentTreeVerifyMode>(SegmentTreeVerifyMode value);
 
 template<>
 const char* EnumUtil::ToChars<SelectivityOptionalFilterType>(SelectivityOptionalFilterType value);
@@ -1909,6 +1914,9 @@ SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value);
 
 template<>
 SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value);
+
+template<>
+SegmentTreeVerifyMode EnumUtil::FromString<SegmentTreeVerifyMode>(const char *value);
 
 template<>
 SelectivityOptionalFilterType EnumUtil::FromString<SelectivityOptionalFilterType>(const char *value);

@@ -93,6 +93,8 @@ struct LoadedSegment {
 	idx_t row_start;
 };
 
+enum class SegmentTreeVerifyMode : uint8_t { CONTIGUOUS, NON_OVERLAPPING };
+
 //! The SegmentTree maintains a list of all segments of a specific column in a table, and allows searching for a segment
 //! by row number
 // The const-ness of the SegmentTree is implemented in an odd manner due to the lazy loading
@@ -297,11 +299,11 @@ public:
 		return false;
 	}
 
-	void Verify(SegmentLock &, bool allow_gaps = false) const {
+	void Verify(SegmentLock &, SegmentTreeVerifyMode mode = SegmentTreeVerifyMode::CONTIGUOUS) const {
 #ifdef DEBUG
 		idx_t current_rowid_end = nodes.empty() ? 0 : nodes[0]->GetRowStart();
 		for (idx_t i = 0; i < nodes.size(); i++) {
-			if (allow_gaps) {
+			if (mode == SegmentTreeVerifyMode::NON_OVERLAPPING) {
 				D_ASSERT(nodes[i]->GetRowStart() >= current_rowid_end);
 			} else {
 				D_ASSERT(nodes[i]->GetRowStart() == current_rowid_end);
@@ -310,10 +312,10 @@ public:
 		}
 #endif
 	}
-	void Verify(bool allow_gaps = false) {
+	void Verify(SegmentTreeVerifyMode mode = SegmentTreeVerifyMode::CONTIGUOUS) {
 #ifdef DEBUG
 		auto l = Lock();
-		Verify(l, allow_gaps);
+		Verify(l, mode);
 #endif
 	}
 
