@@ -229,4 +229,24 @@ ON o.o_orderkey = l.l_orderkey
 ----
 physical_plan	<REGEX>:.*BLOCKWISE_NL_JOIN.*
 
+statement ok
+CREATE TABLE dups_a(x INT, y INT);
+
+statement ok
+CREATE TABLE dups_b(p INT, q INT);
+
+statement ok
+INSERT INTO dups_a VALUES (1, 1), (1, 1), (2, 2);
+
+statement ok
+INSERT INTO dups_b VALUES (1, 1), (1, 1), (3, 3);
+
+query IIII rowsort
+SELECT * FROM dups_a JOIN dups_b ON dups_a.x = dups_b.p OR dups_a.y = dups_b.q;
+----
+1	1	1	1
+1	1	1	1
+1	1	1	1
+1	1	1	1
+
 
