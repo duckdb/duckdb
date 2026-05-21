@@ -566,8 +566,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.trigger_name;
 	auto body_copy = create_trigger_info.trigger_action->Copy();
 
-	for (const auto &alias :
-	     {create_trigger_info.referencing_new_table, create_trigger_info.referencing_old_table}) {
+	for (const auto &alias : {create_trigger_info.referencing_new_table, create_trigger_info.referencing_old_table}) {
 		if (!alias.empty() && body_copy->cte_map.map.find(alias) == body_copy->cte_map.map.end()) {
 			body_copy->cte_map.map[alias] = MakeTriggerValidationCTE(table);
 		}
