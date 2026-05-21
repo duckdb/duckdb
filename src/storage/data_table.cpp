@@ -1324,7 +1324,8 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 		row_t row_data[STANDARD_VECTOR_SIZE];
 		Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_data), STANDARD_VECTOR_SIZE);
 		auto next_row_id = row_groups->GetNextRowId();
-		idx_t scan_count = start_row >= next_row_id ? 0 : MinValue<idx_t>(count, next_row_id - start_row);
+		D_ASSERT(start_row <= next_row_id);
+		idx_t scan_count = MinValue<idx_t>(count, next_row_id - start_row);
 		ScanTableSegment(transaction, start_row, scan_count, [&](DataChunk &chunk) {
 			auto row_id_writer = FlatVector::Writer<row_t>(row_identifiers, chunk.size());
 			for (idx_t i = 0; i < chunk.size(); i++) {
