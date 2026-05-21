@@ -110,7 +110,7 @@ bool CSVSniffer::CanYouCastBignum(const char *value_ptr, idx_t value_size) {
 		value_ptr++;
 		value_size--;
 	}
-	if (value_size == 0 || *value_ptr == '+') {
+	if (value_size == 0) {
 		return false;
 	}
 	auto trimmed_size = value_size;
@@ -120,7 +120,7 @@ bool CSVSniffer::CanYouCastBignum(const char *value_ptr, idx_t value_size) {
 	if (trimmed_size == 0) {
 		return false;
 	}
-	idx_t digit_pos = value_ptr[0] == '-' ? 1 : 0;
+	idx_t digit_pos = value_ptr[0] == '-' || value_ptr[0] == '+' ? 1 : 0;
 	if (digit_pos == trimmed_size) {
 		return false;
 	}

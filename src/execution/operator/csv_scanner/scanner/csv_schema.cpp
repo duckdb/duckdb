@@ -1,5 +1,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 
+#include "duckdb/common/array.hpp"
+
 namespace duckdb {
 
 struct TypeIdxPair {
@@ -54,9 +56,9 @@ bool CSVSchema::CanWeCastIt(LogicalTypeId source, LogicalTypeId destination) {
 
 void CSVSchema::MergeSchemas(CSVSchema &other, bool null_padding) {
 	// TODO: We could also merge names, maybe by giving preference to non-generated names?
-	const vector<LogicalType> candidates_by_specificity = {LogicalType::BOOLEAN, LogicalType::BIGINT,
-	                                                       LogicalType::HUGEINT, LogicalType::BIGNUM,
-	                                                       LogicalType::DOUBLE,  LogicalType::VARCHAR};
+	const array<LogicalType, 6> candidates_by_specificity = {LogicalType::BOOLEAN, LogicalType::BIGINT,
+	                                                         LogicalType::HUGEINT, LogicalType::BIGNUM,
+	                                                         LogicalType::DOUBLE,  LogicalType::VARCHAR};
 	for (idx_t i = 0; i < columns.size() && i < other.columns.size(); i++) {
 		auto this_type = columns[i].type.id();
 		auto other_type = other.columns[i].type.id();

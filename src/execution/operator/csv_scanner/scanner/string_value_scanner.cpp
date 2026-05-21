@@ -302,6 +302,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 	}
 	bool success = true;
 	string strip_thousands;
+	// Whether current type is logically numeric (BIGNUM is physically stored as VARCHAR instead of numerical value).
 	if ((LogicalType::IsNumeric(parse_types[chunk_col_id].type_id) ||
 	     parse_types[chunk_col_id].type_id == LogicalTypeId::BIGNUM) &&
 	    state_machine.options.thousands_separator != '\0') {

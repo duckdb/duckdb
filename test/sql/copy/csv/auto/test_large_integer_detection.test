@@ -34,6 +34,18 @@ BIGNUM
 
 statement ok
 COPY (SELECT * FROM (VALUES
+	('+340282366920938463463374607431768211456',
+	 '-340282366920938463463374607431768211456')
+) AS t(plus_value, negative_value, negative_leading_zero_value)) TO '{TEST_DIR}/csv_bignum_sign_detection.csv' (FORMAT CSV, HEADER);
+
+query TTT
+SELECT typeof(plus_value), typeof(negative_value),
+FROM read_csv_auto('{TEST_DIR}/csv_bignum_sign_detection.csv', auto_type_candidates = ['BIGNUM', 'VARCHAR']);
+----
+BIGNUM	BIGNUM
+
+statement ok
+COPY (SELECT * FROM (VALUES
 	('0012345678901234567890'),
 	('0001')
 ) AS t(value)) TO '{TEST_DIR}/csv_leading_zero_ids.csv' (FORMAT CSV, HEADER);
