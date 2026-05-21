@@ -13,7 +13,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SET tracked_metrics = ['query.time', 'query.cpu_time', 'query.sql', 'query.total_intermediate_rows', 'query.total_rows_scanned', 'operator.type', 'operator.timing', 'operator.intermediate_rows'];
+SET tracked_metrics = ['query.total_time', 'query.cpu_time', 'query.sql', 'query.total_intermediate_rows', 'query.total_rows_scanned', 'operator.type', 'operator.timing', 'operator.intermediate_rows'];
 
 statement ok
 SET legacy_metrics_format = true;
@@ -38,7 +38,7 @@ SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='metrics
 false
 
 query I
-SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='metrics_output' AND column_name='operator_info');
+SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='metrics_output' AND column_name='operator');
 ----
 false
 
@@ -61,7 +61,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SET tracked_metrics = ['query.time', 'operator.type', 'operator.timing'];
+SET tracked_metrics = ['query.total_time', 'operator.type', 'operator.timing'];
 
 statement ok
 SET legacy_metrics_format = false;
@@ -77,11 +77,11 @@ CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_ou
 
 # Standard format should have nested metric groups.
 statement ok
-SELECT query.time FROM metrics_output;
+SELECT query.total_time FROM metrics_output;
 
-# Standard format should have operator_info.
+# Standard format should have operator.
 query I
-SELECT operator_info IS NOT NULL FROM metrics_output;
+SELECT operator IS NOT NULL FROM metrics_output;
 ----
 true
 

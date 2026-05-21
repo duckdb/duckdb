@@ -34,7 +34,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/cp_noop.json';
 
 statement ok
-SET tracked_metrics = ['storage.checkpoint_latency', 'query.time'];
+SET tracked_metrics = ['storage.checkpoint_latency', 'query.total_time'];
 
 statement ok
 SET profiling_coverage='ALL';
@@ -47,7 +47,7 @@ PRAGMA disable_profiling;
 
 # A noop checkpoint emits no storage metrics at all — verify the profiling output is otherwise valid.
 query I
-SELECT query.time > 0 FROM '{TEST_DIR}/cp_noop.json';
+SELECT query.total_time > 0 FROM '{TEST_DIR}/cp_noop.json';
 ----
 true
 
@@ -133,7 +133,7 @@ PRAGMA disable_profiling;
 
 onlyif threadid=0
 query I
-SELECT query.time >= 0 FROM '{TEST_DIR}/cp_concurrent_{x}.json';
+SELECT query.total_time >= 0 FROM '{TEST_DIR}/cp_concurrent_{x}.json';
 ----
 true
 

@@ -23,7 +23,7 @@ struct OperatorMetrics {
 
 	double time;
 	idx_t elements_returned;
-	idx_t result_set_size;
+	idx_t intermediate_size_bytes;
 	idx_t system_peak_buffer_manager_memory;
 	idx_t system_peak_temp_directory_size;
 	idx_t rows_scanned;
@@ -34,7 +34,7 @@ struct OperatorMetrics {
 	void ResetMetrics() {
 		time = 0;
 		elements_returned = 0;
-		result_set_size = 0;
+		intermediate_size_bytes = 0;
 		system_peak_buffer_manager_memory = 0;
 		system_peak_temp_directory_size = 0;
 		rows_scanned = 0;

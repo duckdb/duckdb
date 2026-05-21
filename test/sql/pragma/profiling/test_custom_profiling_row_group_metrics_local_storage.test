@@ -45,15 +45,15 @@ PRAGMA disable_profiling;
 
 statement ok
 CREATE VIEW operator_metrics AS
-WITH RECURSIVE ops AS (
-    SELECT unnest(operator_info) AS op FROM '{TEST_DIR}/profiling_output.json'
-    UNION ALL
-    SELECT unnest(op.children) FROM ops WHERE len(op.children) > 0
-)
-SELECT op.type AS operator_type,
-       op.row_groups_scanned AS scanned,
-       op.total_row_groups_to_scan AS total
-FROM ops;
+SELECT t.type AS operator_type,
+       t.row_groups_scanned AS scanned,
+       t.total_row_groups_to_scan AS total
+FROM '{TEST_DIR}/profiling_output.json' prof,
+     LATERAL unnest(prof.operator) t0(op0),
+     LATERAL unnest(op0.children) t1(op1),
+     LATERAL unnest(op1.children) t2(op2),
+     LATERAL unnest(op2.children) t3(t)
+WHERE t.type = 'TABLE_SCAN';
 
 query III
 SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN' ORDER BY total;

@@ -42,7 +42,7 @@ TEST_CASE("Test query profiler, no query in the profiling output.", "[api]") {
 
 	// Disable `QUERY_SQL` in profiling output by only tracking other metrics.
 	REQUIRE_NO_FAIL(
-	    con.Query("SET tracked_metrics = ['query.cpu_time', 'query.time', 'operator.timing', 'operator.type']"));
+	    con.Query("SET tracked_metrics = ['query.cpu_time', 'query.total_time', 'operator.timing', 'operator.type']"));
 	string query = "SELECT * FROM (SELECT 42) tbl1, (SELECT 33) tbl2";
 	REQUIRE_NO_FAIL(con.Query(query));
 

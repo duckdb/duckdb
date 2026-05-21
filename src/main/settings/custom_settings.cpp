@@ -348,7 +348,7 @@ void ConfigureProfilingSetting::SetLocal(ClientContext &context, const Value &in
 	    "configure_profiling (and its aliases configure_metrics, custom_profiling_settings) is deprecated. "
 	    "Use SET tracked_metrics = '...' instead. "
 	    "For example: SET tracked_metrics = '*' to track all metrics, "
-	    "or SET tracked_metrics = ['query.time', 'operator.*'] to track specific metrics.");
+	    "or SET tracked_metrics = ['query.total_time', 'operator.*'] to track specific metrics.");
 }
 
 void ConfigureProfilingSetting::ResetLocal(ClientContext &context) {

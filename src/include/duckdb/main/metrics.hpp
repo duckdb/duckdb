@@ -22,13 +22,6 @@ struct MetricQueryCPUTime {
 	static constexpr const char *Unit = "seconds";
 	static constexpr const char *TypeStr = "double";
 };
-struct MetricQueryResultSetSize {
-	using METRIC_TYPE = uint64_t;
-	static constexpr const char *Name = "query.result_set_size";
-	static constexpr const char *Description = "The size of the result set";
-	static constexpr const char *Unit = "bytes";
-	static constexpr const char *TypeStr = "uint64";
-};
 struct MetricQuerySQL {
 	using METRIC_TYPE = string;
 	static constexpr const char *Name = "query.sql";
@@ -36,18 +29,18 @@ struct MetricQuerySQL {
 	static constexpr const char *Unit = "";
 	static constexpr const char *TypeStr = "string";
 };
-struct MetricQueryTime {
-	using METRIC_TYPE = double;
-	static constexpr const char *Name = "query.time";
-	static constexpr const char *Description = "Time spent executing the entire query";
-	static constexpr const char *Unit = "seconds";
-	static constexpr const char *TypeStr = "double";
-};
 struct MetricQueryTotalIntermediateRows {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "query.total_intermediate_rows";
 	static constexpr const char *Description = "Cumulative number of intermediate rows produced by the query";
 	static constexpr const char *Unit = "rows";
+	static constexpr const char *TypeStr = "uint64";
+};
+struct MetricQueryTotalIntermediateSizeBytes {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "query.total_intermediate_size_bytes";
+	static constexpr const char *Description = "Cumulative size in bytes of all intermediate results produced by the query";
+	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
 struct MetricQueryTotalRowGroupsScanned {
@@ -70,6 +63,13 @@ struct MetricQueryTotalRowsScanned {
 	static constexpr const char *Description = "Cumulative number of rows scanned by the query";
 	static constexpr const char *Unit = "rows";
 	static constexpr const char *TypeStr = "uint64";
+};
+struct MetricQueryTotalTime {
+	using METRIC_TYPE = double;
+	static constexpr const char *Name = "query.total_time";
+	static constexpr const char *Description = "Time spent executing the entire query";
+	static constexpr const char *Unit = "seconds";
+	static constexpr const char *TypeStr = "double";
 };
 
 // System metrics

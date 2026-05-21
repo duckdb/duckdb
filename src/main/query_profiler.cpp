@@ -158,7 +158,7 @@ void QueryProfiler::Start(const string &query) {
 	Reset();
 	running = true;
 	query_metrics.query_sql = query;
-	query_metrics.latency_timer = make_uniq<MetricsTimer>(StartTimer<MetricQueryTime>());
+	query_metrics.latency_timer = make_uniq<MetricsTimer>(StartTimer<MetricQueryTotalTime>());
 }
 
 void QueryProfiler::Reset() {
@@ -389,7 +389,7 @@ void OperatorMetrics::GatherMetrics(ClientContext &context, double elapsed_time,
 	time += elapsed_time;
 	if (chunk) {
 		elements_returned += chunk->size();
-		result_set_size += LossyNumericCast<idx_t>(chunk->GetDataSize());
+		intermediate_size_bytes += LossyNumericCast<idx_t>(chunk->GetDataSize());
 	}
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	auto used_memory = buffer_manager.GetBufferPool().GetUsedMemory(false);
@@ -405,7 +405,7 @@ void OperatorMetrics::GatherMetrics(ClientContext &context, double elapsed_time,
 void OperatorMetrics::MergeInternal(const OperatorMetrics &other) {
 	time += other.time;
 	elements_returned += other.elements_returned;
-	result_set_size += other.result_set_size;
+	intermediate_size_bytes += other.intermediate_size_bytes;
 	rows_scanned += other.rows_scanned;
 	row_groups_scanned += other.row_groups_scanned;
 	if (other.system_peak_buffer_manager_memory > system_peak_buffer_manager_memory) {
@@ -659,7 +659,7 @@ void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	constexpr idx_t TOTAL_BOX_WIDTH = 50;
 	ss << "┌────────────────────────────────────────────────┐\n";
 	ss << "│┌──────────────────────────────────────────────┐│\n";
-	string total_time = "Total Time: " + RenderTiming(query_metrics.GetStringMetricInSeconds("query.time"));
+	string total_time = "Total Time: " + RenderTiming(query_metrics.GetStringMetricInSeconds("query.total_time"));
 	ss << "││" + DrawPadded(total_time, TOTAL_BOX_WIDTH - 4) + "││\n";
 	ss << "│└──────────────────────────────────────────────┘│\n";
 	ss << "└────────────────────────────────────────────────┘\n";
@@ -739,15 +739,16 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 		result["intermediate_rows"] = Value::UBIGINT(elements_returned);
 	}
 	if (info.MetricIsTracked<MetricOperatorIntermediateSizeBytes>()) {
-		result["intermediate_size_bytes"] = Value::UBIGINT(result_set_size);
+		result["intermediate_size_bytes"] = Value::UBIGINT(intermediate_size_bytes);
 	}
 	if (info.MetricIsTracked<MetricOperatorRowsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["rows_scanned"] = Value::UBIGINT(rows_scanned);
 	}
-	if (info.MetricIsTracked<MetricOperatorRowGroupsScanned>()) {
+	if (info.MetricIsTracked<MetricOperatorRowGroupsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["row_groups_scanned"] = Value::UBIGINT(row_groups_scanned);
 	}
-	if (info.MetricIsTracked<MetricOperatorTotalRowGroupsToScan>()) {
+	if (info.MetricIsTracked<MetricOperatorTotalRowGroupsToScan>() &&
+	    operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["total_row_groups_to_scan"] = Value::UBIGINT(total_row_groups_to_scan);
 	}
 	if (info.MetricIsTracked<MetricOperatorExtraInfo>()) {
@@ -958,8 +959,8 @@ unique_ptr<QueryProfileResult> QueryProfiler::ToLegacyResultTree() const {
 		}
 	}
 
-	emit("result_set_size", "query.result_set_size");
-	emit("latency", "query.time");
+	emit("result_set_size", "query.total_intermediate_size_bytes");
+	emit("latency", "query.total_time");
 	emit("wal_replay_entry_count", "storage.wal_replay_entry_count");
 	result->AddValue("extra_info", Value::MAP(InsertionOrderPreservingMap<string>()));
 	emit("commit_local_storage_latency", "storage.commit_local_storage_latency");
@@ -992,7 +993,7 @@ unique_ptr<QueryProfileResult> QueryProfiler::ToResultTree() const {
 	}
 	metrics->MetricsToProfileResult(*result);
 	if (metrics->AnyOperatorMetricTracked()) {
-		auto &op_list = result->AddList("operator_info");
+		auto &op_list = result->AddList("operator");
 		auto &op_node = op_list.AppendObject();
 		OperatorToResultTree(*metrics, *root, op_node);
 	}
@@ -1148,7 +1149,7 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		metrics->SetMetric<MetricQueryCPUTime>(cumulative_metrics.time);
 		metrics->SetMetric<MetricQueryTotalIntermediateRows>(cumulative_metrics.elements_returned);
 		metrics->SetMetric<MetricQueryTotalRowsScanned>(cumulative_metrics.rows_scanned);
-		metrics->SetMetric<MetricQueryResultSetSize>(cumulative_metrics.result_set_size);
+		metrics->SetMetric<MetricQueryTotalIntermediateSizeBytes>(cumulative_metrics.intermediate_size_bytes);
 		metrics->SetMetric<MetricQueryTotalRowGroupsScanned>(cumulative_metrics.row_groups_scanned);
 		metrics->SetMetric<MetricQueryTotalRowGroupsToScan>(cumulative_metrics.total_row_groups_to_scan);
 	}

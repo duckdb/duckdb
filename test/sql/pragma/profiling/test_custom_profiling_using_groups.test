@@ -32,7 +32,7 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT operator_info[1].extra_info,
+SELECT operator[1].extra_info,
 	optimizer,
 	optimizer.total_time,
 	parser.total_time,
@@ -42,11 +42,11 @@ SELECT operator_info[1].extra_info,
 	physical_planner.total_time,
 	planner.binding_time,
 	planner.total_time,
-	operator_info[1].intermediate_size_bytes,
+	operator[1].intermediate_size_bytes,
 	query.cpu_time,
 	query.total_intermediate_rows,
 	query.total_rows_scanned,
-	query.time,
+	query.total_time,
 	query.sql,
 	system.blocked_thread_time,
 	system.peak_buffer_memory,
@@ -82,7 +82,7 @@ statement ok
 SELECT query.cpu_time,
 	query.total_intermediate_rows,
 	query.total_rows_scanned,
-	query.time,
+	query.total_time,
 	query.sql,
 FROM metrics_output;
 
@@ -142,7 +142,7 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 query I
-SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='metrics_output' AND column_name='operator_info');
+SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='metrics_output' AND column_name='operator');
 ----
 false
 
@@ -175,7 +175,7 @@ SELECT intermediate_rows,
 	timing,
 	type
 FROM (
-	SELECT unnest(operator_info, max_depth := 2)
+	SELECT unnest(operator, max_depth := 2)
 	FROM metrics_output
 )
 
@@ -274,12 +274,12 @@ statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SELECT operator_info[1].extra_info,
-	operator_info[1].intermediate_size_bytes,
+SELECT operator[1].extra_info,
+	operator[1].intermediate_size_bytes,
 	query.cpu_time,
 	query.total_intermediate_rows,
 	query.total_rows_scanned,
-	query.time,
+	query.total_time,
 	query.sql,
 	system.blocked_thread_time,
 	system.peak_buffer_memory,

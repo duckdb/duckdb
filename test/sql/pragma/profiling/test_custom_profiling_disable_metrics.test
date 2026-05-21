@@ -11,7 +11,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-SET tracked_metrics = ['operator.extra_info', 'operator.intermediate_rows', 'operator.timing', 'query.time'];
+SET tracked_metrics = ['operator.extra_info', 'operator.intermediate_rows', 'operator.timing', 'query.total_time'];
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -27,7 +27,7 @@ SELECT unnest(current_setting('tracked_metrics')) ORDER BY ALL;
 operator.extra_info
 operator.intermediate_rows
 operator.timing
-query.time
+query.total_time
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
@@ -38,7 +38,7 @@ SELECT query.cpu_time FROM metrics_output;
 <REGEX>:Binder Error.*
 
 statement ok
-SELECT operator_info[1].extra_info, query.time FROM metrics_output;
+SELECT operator[1].extra_info, query.total_time FROM metrics_output;
 
 # Re-enable the CPU TIME.
 

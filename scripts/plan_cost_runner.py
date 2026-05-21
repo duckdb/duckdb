@@ -86,9 +86,9 @@ def has_operator_cardinality(op) -> bool:
 
 
 def get_root_operator(data) -> dict:
-    # Old binary (main) uses 'children', new binary uses 'operator_info'
-    if 'operator_info' in data:
-        return data['operator_info'][0]
+    # New binary uses 'operator', old binary uses 'children'
+    if 'operator' in data:
+        return data['operator'][0]
     return data['children'][0]
 
 

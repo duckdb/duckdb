@@ -154,13 +154,13 @@ query.sql
 
 # Set metrics from LIST
 statement ok
-CALL enable_profiling(metrics = ['query.time', 'operator.intermediate_size_bytes']);
+CALL enable_profiling(metrics = ['query.total_time', 'operator.intermediate_size_bytes']);
 
 query I
 SELECT UNNEST(CURRENT_SETTING('tracked_metrics')) ORDER BY ALL;
 ----
 operator.intermediate_size_bytes
-query.time
+query.total_time
 
 # Set metrics from glob pattern string
 statement ok
@@ -201,13 +201,13 @@ SELECT UNNEST(CURRENT_SETTING('tracked_metrics')) ORDER BY ALL;
 
 # Set metrics straight into function
 statement ok
-CALL enable_profiling(['query.time', 'operator.intermediate_size_bytes']);
+CALL enable_profiling(['query.total_time', 'operator.intermediate_size_bytes']);
 
 query I
 SELECT UNNEST(CURRENT_SETTING('tracked_metrics')) ORDER BY ALL;
 ----
 operator.intermediate_size_bytes
-query.time
+query.total_time
 
 # Set metrics straight into function with other settings too
 statement ok
@@ -259,7 +259,7 @@ Invalid Input Error: EnableProfiling: the save_location must be a .txt file or m
 #########################################################################################################################
 
 statement ok
-CALL enable_profiling(format='query_tree', save_location='{TEST_DIR}/test.txt', coverage='select', mode='standard', metrics=['query.sql', 'query.time'])
+CALL enable_profiling(format='query_tree', save_location='{TEST_DIR}/test.txt', coverage='select', mode='standard', metrics=['query.sql', 'query.total_time'])
 
 query I
 SELECT CURRENT_SETTING('enable_profiling');
@@ -285,7 +285,7 @@ query I
 SELECT UNNEST(CURRENT_SETTING('tracked_metrics')) ORDER BY ALL;
 ----
 query.sql
-query.time
+query.total_time
 
 #########################################################################################################################
 #            Invalid input

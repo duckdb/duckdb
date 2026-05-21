@@ -92,7 +92,7 @@ true
 # Verify that children nodes don't have system.total_memory_allocated
 # We'll check by looking at the JSON structure - children should not have this field
 statement ok
-CREATE OR REPLACE TABLE metrics_children AS SELECT unnest(operator_info, recursive := true) FROM metrics_output;
+CREATE OR REPLACE TABLE metrics_children AS SELECT unnest(operator, recursive := true) FROM metrics_output;
 
 # Verify that system.total_memory_allocated field does not exist in children nodes
 statement error

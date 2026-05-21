@@ -61,7 +61,7 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 			// Prefixed names (like "query.sql") must not appear here.
 			REQUIRE(key_str != "query.sql");
 			REQUIRE(key_str != "system.blocked_thread_time");
-			REQUIRE(key_str != "query.time");
+			REQUIRE(key_str != "query.total_time");
 			REQUIRE(key_str != "query.rows_returned");
 		}
 
