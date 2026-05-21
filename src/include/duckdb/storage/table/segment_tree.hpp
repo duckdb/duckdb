@@ -297,19 +297,23 @@ public:
 		return false;
 	}
 
-	void Verify(SegmentLock &) const {
+	void Verify(SegmentLock &, bool allow_gaps = false) const {
 #ifdef DEBUG
-		idx_t base_start = nodes.empty() ? 0 : nodes[0]->GetRowStart();
+		idx_t current_rowid_end = nodes.empty() ? 0 : nodes[0]->GetRowStart();
 		for (idx_t i = 0; i < nodes.size(); i++) {
-			D_ASSERT(nodes[i]->GetRowStart() == base_start);
-			base_start += nodes[i]->GetCount();
+			if (allow_gaps) {
+				D_ASSERT(nodes[i]->GetRowStart() >= current_rowid_end);
+			} else {
+				D_ASSERT(nodes[i]->GetRowStart() == current_rowid_end);
+			}
+			current_rowid_end = nodes[i]->GetRowStart() + nodes[i]->GetCount();
 		}
 #endif
 	}
-	void Verify() {
+	void Verify(bool allow_gaps = false) {
 #ifdef DEBUG
 		auto l = Lock();
-		Verify(l);
+		Verify(l, allow_gaps);
 #endif
 	}
 

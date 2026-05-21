@@ -195,7 +195,8 @@ private:
 	const idx_t row_group_size;
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
-	//! Offset from the row group
+	//! Next rowid offset relative to the row group tree base rowid.
+	//! For main table storage the base is 0, so this is also the absolute next rowid.
 	atomic<idx_t> next_row_id;
 	//! The data table info
 	shared_ptr<DataTableInfo> info;
