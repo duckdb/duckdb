@@ -54,6 +54,19 @@
 
 namespace duckdb {
 
+static unique_ptr<CommonTableExpressionInfo> MakeTriggerValidationCTE(const TableCatalogEntry &table) {
+	auto alias_select = make_uniq<SelectNode>();
+	alias_select->select_list.push_back(make_uniq<StarExpression>());
+	auto alias_table_ref = make_uniq<BaseTableRef>();
+	alias_table_ref->table_name = table.name;
+	alias_table_ref->schema_name = table.schema.name;
+	alias_table_ref->catalog_name = table.catalog.GetName();
+	alias_select->from_table = std::move(alias_table_ref);
+	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
+	alias_cte->query_node = std::move(alias_select);
+	return alias_cte;
+}
+
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
 	auto &context = retriever.GetContext();
 	if (schema.empty()) {
@@ -545,16 +558,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto body_copy = create_trigger_info.trigger_action->Copy();
 
 	if (!create_trigger_info.referencing_new_table.empty()) {
-		auto alias_select = make_uniq<SelectNode>();
-		alias_select->select_list.push_back(make_uniq<StarExpression>());
-		auto alias_table_ref = make_uniq<BaseTableRef>();
-		alias_table_ref->table_name = table.name;
-		alias_table_ref->schema_name = table.schema.name;
-		alias_table_ref->catalog_name = table.catalog.GetName();
-		alias_select->from_table = std::move(alias_table_ref);
-		auto alias_cte = make_uniq<CommonTableExpressionInfo>();
-		alias_cte->query_node = std::move(alias_select);
-		body_copy->cte_map.map[create_trigger_info.referencing_new_table] = std::move(alias_cte);
+		body_copy->cte_map.map[create_trigger_info.referencing_new_table] = MakeTriggerValidationCTE(table);
 	}
 	validation_binder->Bind(*body_copy);
 

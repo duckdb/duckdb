@@ -617,6 +617,18 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, triggers));
 }
 
+static unique_ptr<CommonTableExpressionInfo> MakeTriggerBaseAliasCTE() {
+	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
+	auto alias_select = make_uniq<SelectNode>();
+	alias_select->select_list.push_back(make_uniq<StarExpression>());
+	auto alias_ref = make_uniq<BaseTableRef>();
+	alias_ref->table_name = TRIGGER_BASE_CTE_NAME;
+	alias_select->from_table = std::move(alias_ref);
+	alias_cte->query_node = std::move(alias_select);
+	alias_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+	return alias_cte;
+}
+
 BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
                                            const vector<const_reference<TriggerCatalogEntry>> &triggers) {
 	// multiple triggers per table are not yet supported
@@ -645,15 +657,7 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 	outer->from_table = std::move(from_ref);
 	outer->cte_map.map[TRIGGER_BASE_CTE_NAME] = std::move(base_cte);
 	if (!trigger.referencing_new_table.empty()) {
-		auto alias_cte = make_uniq<CommonTableExpressionInfo>();
-		auto alias_select = make_uniq<SelectNode>();
-		alias_select->select_list.push_back(make_uniq<StarExpression>());
-		auto alias_ref = make_uniq<BaseTableRef>();
-		alias_ref->table_name = TRIGGER_BASE_CTE_NAME;
-		alias_select->from_table = std::move(alias_ref);
-		alias_cte->query_node = std::move(alias_select);
-		alias_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
-		outer->cte_map.map[trigger.referencing_new_table] = std::move(alias_cte);
+		outer->cte_map.map[trigger.referencing_new_table] = MakeTriggerBaseAliasCTE();
 	}
 	outer->cte_map.map["__duckdb_trigger_1"] = std::move(trig_cte);
 
