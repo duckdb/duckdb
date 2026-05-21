@@ -450,16 +450,17 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	for (auto &edge : edges) {
 		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
 			// The subgraph already connects all desired relations
-			if (ApplyJoinIncrement(subgraphs.at(0).denom, edge, join_pair_accumulated)) {
-				// increment applied, skip unused_edge_tdoms penalty.
-				continue;
-			}
 			if (edge.filter_info->edge_equivalence_index.IsValid() &&
 			    applied_equivalence_groups.count(edge.filter_info->edge_equivalence_index.GetIndex())) {
 				// Transitively implied by equality conditions already used to build the subgraph, skip this denom
 				// skip the penalty entirely.
 				continue;
-			} else if (edge.has_distinct_count_hll) {
+			}
+			if (ApplyJoinIncrement(subgraphs.at(0).denom, edge, join_pair_accumulated)) {
+				// increment applied, skip unused_edge_tdoms penalty.
+				continue;
+			}
+			if (edge.has_distinct_count_hll) {
 				unused_edge_tdoms.insert(edge.distinct_count_hll);
 			}
 			continue;
@@ -520,7 +521,10 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			    JoinRelationSet::IsSubset(*left_subgraph->relations, *edge_right_set)) {
 				// Edge connects the same subgraph to itself — no new relation is added.
 				// Apply the incremental denominator contribution for LEFT or INNER multi-key joins.
-				ApplyJoinIncrement(left_subgraph->denom, edge, join_pair_accumulated);
+				if (!edge.filter_info->edge_equivalence_index.IsValid() ||
+				    !applied_equivalence_groups.count(edge.filter_info->edge_equivalence_index.GetIndex())) {
+					ApplyJoinIncrement(left_subgraph->denom, edge, join_pair_accumulated);
+				}
 				continue;
 			}
 			left_subgraph->numerator_relations = &UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
