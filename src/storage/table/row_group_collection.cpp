@@ -510,9 +510,9 @@ bool RowGroupCollection::IsEmpty() const {
 }
 
 void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppendState &state) {
-	auto next_row_id_offset = next_row_id.load();
-	D_ASSERT(next_row_id_offset >= total_rows.load());
-	state.row_start = UnsafeNumericCast<row_t>(next_row_id_offset);
+	auto next_row_id = this->next_row_id.load();
+	D_ASSERT(next_row_id >= total_rows.load());
+	state.row_start = UnsafeNumericCast<row_t>(next_row_id);
 	state.current_row = state.row_start;
 	state.total_append_count = 0;
 
@@ -524,7 +524,7 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	// Otherwise we evaluate the row_group_append_mode
 	if (!needs_new_row_group) {
 		auto last_row_group = state.row_groups->GetLastSegment(l);
-		auto append_start = state.row_groups->GetBaseRowId() + next_row_id_offset;
+		auto append_start = state.row_groups->GetBaseRowId() + next_row_id;
 		needs_new_row_group = last_row_group->GetRowEnd() != append_start;
 	}
 	if (!needs_new_row_group) {
@@ -538,10 +538,10 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 		}
 	}
 	if (needs_new_row_group) {
-		AppendRowGroup(l, state.row_groups->GetBaseRowId() + next_row_id_offset);
+		AppendRowGroup(l, state.row_groups->GetBaseRowId() + next_row_id);
 	}
 	state.start_row_group = state.row_groups->GetLastSegment(l);
-	D_ASSERT(state.row_groups->GetBaseRowId() + next_row_id_offset ==
+	D_ASSERT(state.row_groups->GetBaseRowId() + next_row_id ==
 	         state.start_row_group->GetRowStart() + state.start_row_group->GetNode().count);
 	state.start_row_group->GetNode().InitializeAppend(state.row_group_append_state);
 	state.transaction = transaction;
