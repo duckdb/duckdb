@@ -61,7 +61,7 @@
         "name": "dependencies",
         "type": "LogicalDependencyList",
         "default": "LogicalDependencyList()",
-        "version": "v1.2.0"
+        "version": "v0.10.3"
 	  },
       {
         "id": 110,

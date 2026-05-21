@@ -68,7 +68,6 @@ bool StorageCompatibility::Compare(StorageVersion property_version) const {
 }
 
 bool StorageCompatibility::CompareVersionString(const string &property_version) const {
-	// todo; fix this againx
 	auto property_version_val = GetSerializationVersionDeprecated(property_version.c_str());
 	auto deprecated_serialization_version = GetSerializationVersionDeprecated(duckdb_version.c_str());
 	return property_version_val <= deprecated_serialization_version;
