@@ -913,7 +913,7 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 }
 
 SerializationOptions::SerializationOptions(AttachedDatabase &db) {
-	serialization_compatibility = SerializationCompatibility::FromDatabase(db);
+	storage_compatibility = StorageCompatibility::FromDatabase(db);
 }
 
 void DBConfig::SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util) {

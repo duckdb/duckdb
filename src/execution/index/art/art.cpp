@@ -27,6 +27,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -117,12 +118,12 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 	auto it = info.options.find("storage_version");
 	if (it != info.options.end()) {
 		// If this is an existing index with a saved storage version, use it.
-		storage_version = it->second.GetValue<idx_t>();
+		storage_version = static_cast<StorageVersion>(it->second.GetValue<uint64_t>());
 	} else {
 		// Otherwise, this must be an existing index without a saved storage version.
 		// We started saving the storage version in v1.5.0, so if it is not present,
 		// we can not make any general assumptions about the exact storage version.
-		storage_version = optional_idx::Invalid();
+		storage_version = StorageVersion::INVALID;
 	}
 }
 
@@ -417,10 +418,10 @@ void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe
 	GenerateKeysInternal<true>(allocator, input, keys);
 }
 
-static bool KeyInputNeedConversion(const vector<LogicalType> &types, optional_idx storage_version) {
+static bool KeyInputNeedConversion(const vector<LogicalType> &types, StorageVersion storage_version) {
 	// We only started tracking the storage version of the index in v1.5.0.
 	// Old GEOMETRY columns (pre v1.5.0) had a different internal representation.
-	if (!storage_version.IsValid() || (storage_version.GetIndex() < 7)) {
+	if (storage_version == StorageVersion::INVALID || (storage_version < StorageVersion::V1_5_0)) {
 		for (auto &type : types) {
 			// ART does not support nested types, so we only need to check the top-level type.
 			if (type.id() == LogicalTypeId::GEOMETRY) {
@@ -1020,8 +1021,8 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 	info.options = options;
 
 	// It never hurts to serialize the storage version, even to older formats
-	if (storage_version.IsValid()) {
-		info.options["storage_version"] = Value::UBIGINT(storage_version.GetIndex());
+	if (storage_version != StorageVersion::INVALID) {
+		info.options["storage_version"] = Value::UBIGINT(static_cast<uint64_t>(storage_version));
 	}
 
 	for (auto &allocator : *allocators) {

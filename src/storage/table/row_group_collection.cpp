@@ -24,7 +24,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/common/serialization_compatibility.hpp"
+#include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
@@ -1983,11 +1983,11 @@ vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(const QueryCo
 }
 
 bool RowGroupCollection::SupportsPerColumnWrites() {
-	auto version = SerializationCompatibility::FromDatabase(GetAttached());
-	if (version.serialization_version >= SerializationCompatibility::FromString("v2.0.0").serialization_version) {
+	auto version = StorageCompatibility::FromDatabase(GetAttached());
+	if (version.storage_version >= StorageCompatibility::FromString("v2.0.0").storage_version) {
 		return true;
 	}
-	if (version.serialization_version >= SerializationCompatibility::FromString("v1.4.0").serialization_version) {
+	if (version.storage_version >= StorageCompatibility::FromString("v1.4.0").storage_version) {
 		return Settings::Get<ForceColumnMetadataReuseSetting>(GetAttached().GetDatabase());
 	}
 	return false;
