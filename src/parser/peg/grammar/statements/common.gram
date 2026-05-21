@@ -51,6 +51,7 @@ ReservedIdentifier <- Identifier
 ColumnName <- Identifier
 ReservedColumnName <- Identifier
 IndexName <- Identifier
+ReservedIndexName <- Identifier
 SettingName <- Identifier
 PragmaName <- Identifier
 FunctionName <- Identifier

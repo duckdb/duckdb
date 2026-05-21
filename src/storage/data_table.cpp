@@ -14,6 +14,8 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/profiling_utils.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/planner/constraints/list.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -1825,7 +1827,13 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	row_groups->Checkpoint(writer, global_stats);
 	row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	if (writer.GetRebuildIndexes()) {
+		ActiveTimer timer;
+		auto context = writer.TryGetClientContext();
+		if (context) {
+			timer = QueryProfiler::Get(*context).StartTimer(MetricType::CUMULATIVE_VACUUM_TIME);
+		}
 		RebuildIndexes();
+		timer.EndTimer();
 	}
 	// The row group payload data has been written. Now write:
 	//   sample
@@ -1855,6 +1863,19 @@ idx_t DataTable::GetTotalRows() const {
 
 void DataTable::CommitDropTable(CommitDropState &drop_state) {
 	row_groups->CommitDropTable(drop_state);
+}
+
+idx_t DataTable::GetRowGroupCount() const {
+	return row_groups->GetRowGroupCount();
+}
+
+idx_t DataTable::GetRowGroupCountWithLocalStorage(ClientContext &context) {
+	auto &local_storage = LocalStorage::Get(context, db);
+	auto storage = local_storage.GetStorage(*this);
+	if (!storage) {
+		return GetRowGroupCount();
+	}
+	return GetRowGroupCount() + storage->GetCollection().GetRowGroupCount();
 }
 
 //===--------------------------------------------------------------------===//

@@ -7,6 +7,8 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/profiling_utils.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
@@ -1217,9 +1219,16 @@ public:
 	}
 
 	void ExecuteTask() override {
+		ActiveTimer timer;
+		auto context = checkpoint_state.writer.TryGetClientContext();
+		if (context) {
+			timer = QueryProfiler::Get(*context).StartTimer(MetricType::CUMULATIVE_VACUUM_TIME);
+		}
+
 		auto &collection = checkpoint_state.collection;
 		const idx_t row_group_size = collection.GetRowGroupSize();
 		auto &types = collection.GetTypes();
+
 		// create the new set of target row groups (initially empty)
 		vector<unique_ptr<RowGroup>> new_row_groups;
 		vector<idx_t> append_counts;
@@ -1230,7 +1239,6 @@ public:
 			new_row_group->InitializeEmpty(types, ColumnDataType::MAIN_TABLE);
 			new_row_groups.push_back(std::move(new_row_group));
 			append_counts.push_back(0);
-
 			row_group_rows -= current_row_group_rows;
 		}
 
@@ -1319,6 +1327,10 @@ public:
 			    "Mismatch in row group count %d vs verify count %d in RowGroupCollection::Checkpoint", merge_rows,
 			    total_append_count);
 		}
+
+		// Explicitly end the timer for the vacuum tasks here.
+		timer.EndTimer();
+
 		// merging is complete - execute checkpoint tasks of the target row groups
 		for (idx_t i = 0; i < target_count; i++) {
 			auto checkpoint_task = collection.GetCheckpointTask(checkpoint_state, segment_idx + i);

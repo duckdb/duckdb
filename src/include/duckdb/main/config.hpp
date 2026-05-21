@@ -130,6 +130,8 @@ struct DBConfigOptions {
 	bool variant_legacy_encoding = false;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
+	//! HTTP proxy host (defaults to the HTTP_PROXY environment variable when unset)
+	string http_proxy;
 	//! The default block header size for new duckdb database files.
 	idx_t default_block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
@@ -144,6 +146,8 @@ struct DBConfigOptions {
 	LogConfig log_config = LogConfig();
 	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
 	idx_t block_allocator_size = 0;
+	//! Memory limit for the write buffer per row group (optional)
+	optional_idx write_buffer_row_group_memory_limit;
 	//! Whether to print bindings when printing the plan (debug mode only)
 	static bool debug_print_bindings; // NOLINT: debug setting
 	//! The global verification mode

@@ -121,12 +121,17 @@ private:
 	//! Partition info that is used by this executor
 	OperatorPartitionInfo required_partition_info;
 
+	//! Source operator indicated that there is no more output possible
+	bool exhausted_source = false;
 	//! Source or intermediate operator indicated that there is no more output possible
 	bool exhausted_pipeline = false;
 	//! Flushing of intermediate operators has started
 	bool started_flushing = false;
 	//! Flushing of caching operators is done
 	bool done_flushing = false;
+
+	//! Whether FinishSource has already been called (so FinalizeSource is skipped in PushFinalize)
+	bool source_profiling_finalized = false;
 
 	//! This flag is set when the pipeline gets interrupted by the Sink -> the final_chunk should be re-sink-ed.
 	bool remaining_sink_chunk = false;
