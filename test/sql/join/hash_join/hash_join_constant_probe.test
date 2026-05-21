@@ -1,0 +1,161 @@
+# name: test/sql/join/hash_join/hash_join_constant_probe.test
+# description: Test constant-vector hash-join probing (TryProbeConstant)
+# group: [hash_join]
+
+statement ok
+PRAGMA enable_verification
+
+# build side - small dimension table
+statement ok
+CREATE TABLE dim (k VARCHAR PRIMARY KEY, name VARCHAR)
+
+statement ok
+INSERT INTO dim VALUES ('EUR','Euro'), ('USD','Dollar'), ('GBP','Pound')
+
+statement ok
+CREATE TABLE fact (id INTEGER)
+
+statement ok
+INSERT INTO fact SELECT i FROM range(5000) t(i)
+
+# a literal projected into the probe key arrives as a CONSTANT_VECTOR - hit
+query I
+SELECT count(*) FROM (SELECT 'EUR' AS ccy, id FROM fact) t JOIN dim d ON t.ccy = d.k
+----
+5000
+
+# constant probe key - miss (value not in the build side)
+query I
+SELECT count(*) FROM (SELECT 'CHF' AS ccy, id FROM fact) t JOIN dim d ON t.ccy = d.k
+----
+0
+
+# numeric constant probe key from a constant-compressed storage column.
+# A numeric literal probe key is constant-folded into a build-side filter and picks a Perfect
+# Hash Join, so the key must instead come from a real constant-compressed column. Build keys
+# span a range wider than the Perfect Hash Join threshold (1 << 20) to stay on the probe path.
+
+# storage only constant-compresses checkpointed segments, so a persistent database is needed
+statement ok
+ATTACH '{TEST_DIR}/hash_join_constant_probe.db' AS cdb
+
+# build-side keys 0 and 2000000 span a range > 1 << 20 - too wide for a Perfect Hash Join
+statement ok
+CREATE OR REPLACE TABLE cdb.dim_i (k INTEGER PRIMARY KEY, name VARCHAR)
+
+statement ok
+INSERT INTO cdb.dim_i VALUES (0,'zero'), (2000000,'twomillion')
+
+# fact_num.k is physically clustered: each 122880-row group (the row group size) holds a
+# single value, so the segment is constant-compressed and scanned as a CONSTANT_VECTOR
+statement ok
+CREATE OR REPLACE TABLE cdb.fact_num (k INTEGER)
+
+statement ok
+INSERT INTO cdb.fact_num SELECT (i // 122880) * 2000000 FROM range(245760) t(i)
+
+# fact_num_miss.k is clustered to values that bracket the build keys but match none of them
+statement ok
+CREATE OR REPLACE TABLE cdb.fact_num_miss (k INTEGER)
+
+statement ok
+INSERT INTO cdb.fact_num_miss SELECT (i // 122880) * 2200000 - 100000 FROM range(245760) t(i)
+
+# flush to storage so the clustered segments are constant-compressed
+statement ok
+CHECKPOINT cdb
+
+# numeric constant probe key - hit (every row group's value is a build-side key)
+query I
+SELECT count(*) FROM cdb.fact_num f JOIN cdb.dim_i d ON f.k = d.k
+----
+245760
+
+# numeric constant probe key - miss (no row group's value is a build-side key); a LEFT
+# join keeps every probe row, so the constant keys still reach TryProbeConstant
+query I
+SELECT count(*) FROM cdb.fact_num_miss f LEFT JOIN cdb.dim_i d ON f.k = d.k WHERE d.k IS NULL
+----
+245760
+
+# constant NULL probe key under equality - NULL = anything is never true
+query I
+SELECT count(*) FROM (SELECT CAST(NULL AS VARCHAR) AS ccy, id FROM fact) t JOIN dim d ON t.ccy = d.k
+----
+0
+
+# constant NULL probe key under IS NOT DISTINCT FROM, build side has no NULL key - no match
+query I
+SELECT count(*) FROM (SELECT CAST(NULL AS VARCHAR) AS ccy, id FROM fact) t JOIN dim d ON t.ccy IS NOT DISTINCT FROM d.k
+----
+0
+
+# constant NULL probe key under IS NOT DISTINCT FROM, build side has a NULL key - matches it
+statement ok
+CREATE TABLE dim_nd (k VARCHAR, name VARCHAR)
+
+statement ok
+INSERT INTO dim_nd VALUES ('EUR','Euro'), (NULL,'Unknown')
+
+query I
+SELECT count(*) FROM (SELECT CAST(NULL AS VARCHAR) AS ccy, id FROM fact) t JOIN dim_nd d ON t.ccy IS NOT DISTINCT FROM d.k
+----
+5000
+
+# non-NULL constant key under IS NOT DISTINCT FROM
+query I
+SELECT count(*) FROM (SELECT 'EUR' AS ccy, id FROM fact) t JOIN dim_nd d ON t.ccy IS NOT DISTINCT FROM d.k
+----
+5000
+
+# LEFT join - non-INNER, every probe row is emitted; found_match must be reset
+query II
+SELECT d.name, count(*) FROM (SELECT 'EUR' AS ccy, id FROM fact) t LEFT JOIN dim d ON t.ccy = d.k GROUP BY d.name ORDER BY d.name
+----
+Euro	5000
+
+query I
+SELECT count(*) FROM (SELECT 'CHF' AS ccy, id FROM fact) t LEFT JOIN dim d ON t.ccy = d.k WHERE d.k IS NULL
+----
+5000
+
+# SEMI join (constant key hit / miss)
+query I
+SELECT count(*) FROM (SELECT 'USD' AS ccy, id FROM fact) t WHERE ccy IN (SELECT k FROM dim)
+----
+5000
+
+query I
+SELECT count(*) FROM (SELECT 'CHF' AS ccy, id FROM fact) t WHERE ccy IN (SELECT k FROM dim)
+----
+0
+
+# ANTI join
+query I
+SELECT count(*) FROM (SELECT 'CHF' AS ccy, id FROM fact) t WHERE ccy NOT IN (SELECT k FROM dim)
+----
+5000
+
+# MARK join - constant key feeds an IN expression projected as a column
+query I
+SELECT count(*) FROM (SELECT 'GBP' AS ccy, id FROM fact) t WHERE (ccy IN (SELECT k FROM dim))
+----
+5000
+
+# probe chunk of a single row - fast path declines, ordinary probe still correct
+query I
+SELECT count(*) FROM (SELECT 'EUR' AS ccy) t JOIN dim d ON t.ccy = d.k
+----
+1
+
+# a probe side mixing dictionary-encoded and constant chunks must stay correct
+statement ok
+CREATE TABLE fact_mixed (k VARCHAR)
+
+statement ok
+INSERT INTO fact_mixed SELECT CASE i%3 WHEN 0 THEN 'EUR' WHEN 1 THEN 'USD' ELSE 'GBP' END FROM range(3000) t(i)
+
+query I
+SELECT count(*) FROM (SELECT k FROM fact_mixed UNION ALL SELECT 'EUR' FROM range(3000)) t JOIN dim d ON t.k = d.k
+----
+6000
