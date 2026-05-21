@@ -24,7 +24,7 @@ def filter_stream(stream) -> None:
         current = int(match.group(1))
         message = match.group(3)
 
-        if should_filter_ninja_message(message) and current % 500 != 0:
+        if should_filter_ninja_message(message) and current % 50 != 0:
             continue
 
         print(line, flush=True)
