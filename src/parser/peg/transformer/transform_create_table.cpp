@@ -152,6 +152,14 @@ ColumnElements PEGTransformerFactory::TransformCreateColumnList(PEGTransformer &
 	return result;
 }
 
+bool PEGTransformerFactory::TransformOrReplace(PEGTransformer &transformer, ParseResult &parse_result) {
+	return true;
+}
+
+bool PEGTransformerFactory::TransformIfNotExists(PEGTransformer &transformer, ParseResult &parse_result) {
+	return true;
+}
+
 ColumnElements PEGTransformerFactory::TransformCreateTableColumnList(PEGTransformer &transformer,
                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();

@@ -155,6 +155,8 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 
 	//! Index of file currently up for scanning
 	atomic<idx_t> file_index;
+	//! Number of files that were actually opened by the scan
+	atomic<idx_t> files_opened = 0;
 	//! Index of the lowest file we know we have completely read
 	mutable idx_t completed_file_index = 0;
 	//! The current set of readers

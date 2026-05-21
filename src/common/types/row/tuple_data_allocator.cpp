@@ -335,6 +335,7 @@ void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDa
 
 	InitializeChunkStateInternal(pin_state, chunk_state, 0, true, init_heap, init_heap, chunk_state.chunk_parts,
 	                             sort_key_payload_state);
+	FlatVector::SetSize(chunk_state.row_locations, chunk.count);
 
 	chunk_state.chunk_lock = &chunk.lock.get();
 }
@@ -422,7 +423,8 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 
 		if (sort_key_payload_state) {
 			D_ASSERT(!layout.IsSortKeyLayout()); // This must be the payload collection
-			lock_guard<mutex> guard(part.lock);
+			// SortKeySetPayload() guards sort-key payload mutations with the sort-key chunk lock.
+			// Avoid nesting part.lock with that lock, which can introduce lock-order inversions.
 			SortKeySetPayload(row_locations, offset, next, *sort_key_payload_state);
 		}
 

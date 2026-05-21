@@ -370,7 +370,7 @@ struct VariantShreddedAppendInput {
 
 } // namespace
 
-void VariantColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
+void VariantColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		Vector append_vector(Vector::Ref(vector));
 		append_vector.Flatten();

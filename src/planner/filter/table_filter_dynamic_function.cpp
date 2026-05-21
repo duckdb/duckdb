@@ -42,7 +42,7 @@ bool DynamicFilterData::CompareValue(ExpressionType comparison_type, const Value
 	}
 }
 
-FilterPropagateResult DynamicFilterData::CheckStatistics(BaseStatistics &stats, ExpressionType comparison_type,
+FilterPropagateResult DynamicFilterData::CheckStatistics(const BaseStatistics &stats, ExpressionType comparison_type,
                                                          const Value &constant) {
 	switch (constant.type().InternalType()) {
 	case PhysicalType::UINT8:

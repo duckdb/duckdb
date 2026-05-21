@@ -136,6 +136,7 @@ static void ScanChild(ColumnScanState &state, Vector &result, const std::functio
 		target.Reset();
 		input.Reset();
 		auto scan_count = callback(input.data[0]);
+		FlatVector::SetSize(input.data[0], scan_count);
 		input.SetCardinality(scan_count);
 		executor.Execute(input, target);
 		result.Reference(target.data[0]);
@@ -224,7 +225,7 @@ void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 	}
 }
 
-void StructColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
+void StructColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		Vector append_vector(Vector::Ref(vector));
 		append_vector.Flatten();
@@ -243,11 +244,11 @@ void StructColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t co
 }
 
 void StructColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
-	validity->FinalizeAppend(finalize_state, state.child_appends[0]);
+	validity->FinalizeAppendLocked(finalize_state, state.child_appends[0]);
 
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		ColumnDataFinalizeAppendState child_finalize_state(finalize_state, LogicalTypeId::STRUCT, i);
-		sub_columns[i]->FinalizeAppend(child_finalize_state, state.child_appends[i + 1]);
+		sub_columns[i]->FinalizeAppendLocked(child_finalize_state, state.child_appends[i + 1]);
 	}
 }
 

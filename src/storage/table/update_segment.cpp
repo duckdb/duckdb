@@ -5,7 +5,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/update_info.hpp"
-#include "duckdb/storage/statistics/string_stats_writer.hpp"
+#include "duckdb/storage/statistics/stats_writer.hpp"
 
 #include <algorithm>
 
@@ -101,6 +101,33 @@ bool UpdateInfo::HasNext() const {
 
 idx_t UpdateInfo::GetAllocSize(idx_t type_size) {
 	return AlignValue<idx_t>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
+}
+
+idx_t UpdateInfo::GetAllocSize(idx_t type_size, idx_t capacity) {
+	return AlignValue<idx_t>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * capacity);
+}
+
+idx_t UpdateInfo::GetCompactCapacity(idx_t count) {
+	// Round up to next power of two, with a minimum of 8, capped at STANDARD_VECTOR_SIZE
+	if (count <= 8) {
+		return 8;
+	}
+	idx_t capacity = NextPowerOfTwo(count);
+	return MinValue<idx_t>(capacity, STANDARD_VECTOR_SIZE);
+}
+
+void UpdateInfo::Initialize(UpdateInfo &info, DuckTableEntry &table_entry, transaction_t transaction_id,
+                            idx_t row_group_start, idx_t capacity) {
+	info.max = UnsafeNumericCast<sel_t>(capacity);
+	info.row_group_start = row_group_start;
+	info.table = &table_entry;
+	info.column_index = COLUMN_IDENTIFIER_ROW_ID;
+	info.segment = nullptr;
+	info.vector_index = 0;
+	info.prev = UndoBufferPointer();
+	info.next = UndoBufferPointer();
+	info.N = 0;
+	info.version_number = transaction_id;
 }
 
 void UpdateInfo::Initialize(UpdateInfo &info, DuckTableEntry &table_entry, transaction_t transaction_id,
@@ -1052,7 +1079,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
 	auto update_data = update.GetData<string_t>(update);
 	auto &mask = update.validity;
 
-	StringStatsWriter stats_writer(stats.statistics.GetType());
+	StatsWriter<string_t> stats_writer(stats.statistics.GetType());
 	idx_t not_null_count = 0;
 	if (mask.CannotHaveNull()) {
 		stats.statistics.SetHasNoNullFast();
@@ -1282,6 +1309,39 @@ void UpdateSegment::InitializeUpdateInfo(idx_t vector_idx) {
 	}
 }
 
+void UpdateSegment::ReallocateRootInfoIfNeeded(UpdateInfo &current_info, idx_t update_count, idx_t vector_index) {
+	idx_t required_capacity = MinValue<idx_t>(idx_t(current_info.N) + update_count, STANDARD_VECTOR_SIZE);
+	if (required_capacity <= idx_t(current_info.max)) {
+		return;
+	}
+	idx_t new_capacity = UpdateInfo::GetCompactCapacity(required_capacity);
+	idx_t new_alloc_size = UpdateInfo::GetAllocSize(type_size, new_capacity);
+	auto new_handle = root->allocator.Allocate(new_alloc_size);
+	auto &new_info = UpdateInfo::Get(new_handle);
+
+	new_info.segment = current_info.segment;
+	new_info.table = current_info.table;
+	new_info.column_index = current_info.column_index;
+	new_info.row_group_start = current_info.row_group_start;
+	new_info.version_number.store(current_info.version_number.load());
+	new_info.vector_index = current_info.vector_index;
+	new_info.N = current_info.N;
+	new_info.max = UnsafeNumericCast<sel_t>(new_capacity);
+	new_info.prev = current_info.prev;
+	new_info.next = current_info.next;
+
+	memcpy(new_info.GetTuples(), current_info.GetTuples(), sizeof(sel_t) * current_info.N);
+	memcpy(new_info.GetValues(), current_info.GetValues(), type_size * current_info.N);
+
+	if (new_info.next.IsSet()) {
+		auto next_pin = new_info.next.Pin();
+		auto &next_info = UpdateInfo::Get(next_pin);
+		next_info.prev = new_handle.GetBufferPointer();
+	}
+
+	root->info[vector_index] = new_handle.GetBufferPointer();
+}
+
 void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                            Vector &update_p, row_t *ids, idx_t count, Vector &base_data, idx_t row_group_start) {
 	// obtain an exclusive lock
@@ -1345,11 +1405,15 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		// this transaction in the version chain
 		auto root_pointer = root->info[vector_index];
 		auto root_pin = root_pointer.Pin();
-		auto &base_info = UpdateInfo::Get(root_pin);
 
 		UndoBufferReference node_ref;
-		CheckForConflicts(base_info.next, transaction, ids, sel, count, UnsafeNumericCast<row_t>(vector_offset),
-		                  node_ref);
+		CheckForConflicts(UpdateInfo::Get(root_pin).next, transaction, ids, sel, count,
+		                  UnsafeNumericCast<row_t>(vector_offset), node_ref);
+
+		ReallocateRootInfoIfNeeded(UpdateInfo::Get(root_pin), count, vector_index);
+		root_pointer = root->info[vector_index];
+		root_pin = root_pointer.Pin();
+		auto &base_info = UpdateInfo::Get(root_pin);
 
 		// there are no conflicts - continue with the update
 		unsafe_unique_array<char> update_info_data;
@@ -1392,11 +1456,12 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		node->Verify();
 	} else {
 		// there is no version info yet: create the top level update info and fill it with the updates
-		// allocate space for the UpdateInfo in the allocator
-		idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
+		// allocate space for the UpdateInfo in the allocator (compact: sized to actual count)
+		idx_t compact_capacity = UpdateInfo::GetCompactCapacity(count);
+		idx_t alloc_size = UpdateInfo::GetAllocSize(type_size, compact_capacity);
 		auto handle = root->allocator.Allocate(alloc_size);
 		auto &update_info = UpdateInfo::Get(handle);
-		UpdateInfo::Initialize(update_info, table_entry, TRANSACTION_ID_START - 1, row_group_start);
+		UpdateInfo::Initialize(update_info, table_entry, TRANSACTION_ID_START - 1, row_group_start, compact_capacity);
 		update_info.column_index = column_index;
 
 		InitializeUpdateInfo(update_info, ids, sel, count, vector_index, vector_offset);

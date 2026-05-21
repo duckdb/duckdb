@@ -47,7 +47,7 @@ public:
 	                                                        ExpressionType expression_type);
 
 	//! Enhanced CheckStatistics that recognizes standard expression patterns
-	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr, BaseStatistics &stats);
+	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr, const BaseStatistics &stats);
 	//! Check if an expression tree contains an internal function with the given name
 	static bool ContainsInternalFunction(const Expression &expr, const string &func_name);
 	//! Check if an expression tree is entirely optional filter semantics
@@ -62,8 +62,9 @@ public:
 	//! return the shared dynamic filter state.
 	static shared_ptr<DynamicFilterData> GetRootOptionalDynamicFilterData(const TableFilter &filter);
 
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const;
+	FilterPropagateResult CheckStatistics(const BaseStatistics &stats) const;
 	string ToString(const string &column_name) const;
+	string DebugToString() const;
 	bool Equals(const ExpressionFilter &other) const;
 	unique_ptr<ExpressionFilter> Copy() const;
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
