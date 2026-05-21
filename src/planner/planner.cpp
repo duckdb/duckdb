@@ -19,6 +19,7 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/planner/planner_extension.hpp"
+#include "duckdb/planner/statement_rewriter.hpp"
 
 namespace duckdb {
 
@@ -43,7 +44,21 @@ static void RunPostBindExtensions(ClientContext &context, Binder &binder, BoundS
 	}
 }
 
+
 void Planner::CreatePlan(SQLStatement &statement) {
+	auto &profiler = QueryProfiler::Get(context);
+	profiler.StartPhase(MetricType::PLANNER);
+	StatementRewriter statement_rewriter(context);
+	auto new_statement = statement_rewriter.Rewrite(statement);
+	profiler.EndPhase();
+	if (new_statement) {
+		CreatePlanInternal(*new_statement);
+	} else {
+		CreatePlanInternal(statement);
+	}
+}
+
+void Planner::CreatePlanInternal(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
 	auto parameter_count = statement.named_param_map.size();
 

@@ -343,6 +343,11 @@ public:
 	}
 	virtual ErrorData SupportsCreateTable(BoundCreateTableInfo &info);
 
+	virtual bool IsRemoteCatalog() const {
+		return false;
+	}
+	virtual string GetRemoteExecuteFunction() const;
+
 	//! Whether or not this catalog should search a specific type with the standard priority
 	DUCKDB_API virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {
 		return CatalogLookupBehavior::STANDARD;

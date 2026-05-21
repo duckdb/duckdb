@@ -345,6 +345,10 @@ unique_ptr<LogicalOperator> Catalog::BindAlterAddIndex(Binder &binder, TableCata
 	throw NotImplementedException("BindAlterAddIndex not supported by this catalog");
 }
 
+string Catalog::GetRemoteExecuteFunction() const {
+	throw NotImplementedException("GetRemoteExecuteFunction not supported by this catalog");
+}
+
 //===--------------------------------------------------------------------===//
 // Lookup Structures
 //===--------------------------------------------------------------------===//
