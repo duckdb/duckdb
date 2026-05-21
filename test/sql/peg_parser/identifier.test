@@ -42,6 +42,16 @@ SELECT 1 abc123;
 ----
 1
 
+query I
+SELECT 1 a$c;
+----
+1
+
+query I
+SELECT 1 a$1;
+----
+1
+
 statement error
 SELECT 1 1abc;
 ----
