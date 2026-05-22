@@ -1087,13 +1087,21 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformSubqueryReference(PEGTransf
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableRef(PEGTransformer &transformer,
                                                                   ParseResult &parse_result) {
+	// BaseTableRef <- TableAliasColon? BaseTableName AtClause? TableAlias? AtClause? SampleClause?
+	// Two AtClause? slots: the FIRST wins for `tbl AT (...)` (alias-less, AT
+	// unreserved means it would otherwise be greedily consumed as alias);
+	// the SECOND covers the canonical `tbl alias AT (...)` shape.
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(1));
 	auto &table_alias_colon_opt = list_pr.Child<OptionalParseResult>(0);
 	if (table_alias_colon_opt.HasResult()) {
 		result->alias = transformer.Transform<string>(table_alias_colon_opt.GetResult());
 	}
-	auto &table_alias_opt = list_pr.Child<OptionalParseResult>(2);
+	auto &at_clause_first_opt = list_pr.Child<OptionalParseResult>(2);
+	if (at_clause_first_opt.HasResult()) {
+		result->at_clause = transformer.Transform<unique_ptr<AtClause>>(at_clause_first_opt.GetResult());
+	}
+	auto &table_alias_opt = list_pr.Child<OptionalParseResult>(3);
 	if (table_alias_opt.HasResult() && table_alias_colon_opt.HasResult()) {
 		throw ParserException("Table reference %s cannot have two aliases", result->ToString());
 	}
@@ -1102,8 +1110,14 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableRef(PEGTransformer
 		result->alias = table_alias.name;
 		result->column_name_alias = table_alias.column_name_alias;
 	}
-	transformer.TransformOptional<unique_ptr<AtClause>>(list_pr, 3, result->at_clause);
-	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 4, result->sample);
+	auto &at_clause_second_opt = list_pr.Child<OptionalParseResult>(4);
+	if (at_clause_second_opt.HasResult()) {
+		if (result->at_clause) {
+			throw ParserException("Table reference %s cannot have two AT clauses", result->ToString());
+		}
+		result->at_clause = transformer.Transform<unique_ptr<AtClause>>(at_clause_second_opt.GetResult());
+	}
+	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 5, result->sample);
 	return std::move(result);
 }
 
