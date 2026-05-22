@@ -155,6 +155,38 @@ select count(*) from local_tbl where local_col = (select min(i) - 100 from rpc.t
 ----
 1
 
+# --- Issue 4: DML with subqueries in WHERE, RETURNING, and FROM clauses are analyzed and pushed ---
+
+# DELETE with subquery in WHERE that references the same remote table - all remote, pushed
+# rpc.t1 has 100-109; delete where i > min(i)+6 → deletes 107,108,109
+statement ok
+delete from rpc.t1 where i > (select min(i) + 6 from rpc.t1)
+
+query I
+select count(*) from rpc.t1
+----
+7
+
+# INSERT with subquery source referencing remote - all remote, pushed
+statement ok
+insert into rpc.t1 select i + 7 from rpc.t1 where i < 103
+
+# Now rpc.t1 should have {100,101,102,103,104,105,106,107,108,109}
+# 100+7=107,101+7=108,102+7=109 → adds back 107,108,109 → 10 rows
+query I
+select count(*) from rpc.t1
+----
+10
+
+# UPDATE with FROM clause referencing the same remote table - all remote, pushed
+statement ok
+update rpc.t1 t1 set i = t1.i where t1.i in (select i from rpc.t1 where i >= 100)
+
+query I
+select count(*) from rpc.t1
+----
+10
+
 # --- Issue 3: GROUP BY and ORDER BY with catalog-qualified column refs are stripped before push ---
 
 # GROUP BY with catalog-qualified ref: rpc.t1.i stripped to t1.i in the pushed SQL
