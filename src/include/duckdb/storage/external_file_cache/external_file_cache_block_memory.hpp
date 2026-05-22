@@ -23,7 +23,6 @@ public:
 	~ExternalFileCacheBlockMemory() override;
 
 protected:
-	void OnLoad() override;
 	void OnUnload() override;
 
 private:

@@ -103,9 +103,6 @@ void BlockMemory::ResizeBuffer(BlockLock &l, idx_t block_size, idx_t block_heade
 	D_ASSERT(memory_usage == buffer->AllocSize());
 }
 
-void BlockMemory::OnLoad() {
-}
-
 void BlockMemory::OnUnload() {
 }
 

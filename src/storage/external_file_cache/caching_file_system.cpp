@@ -28,8 +28,8 @@ public:
 	               idx_t block_size_p, BufferHandle &result_pin_p)
 	    : BaseExecutorTask(executor), caching_file_handle(caching_file_handle_p), context(context_p),
 	      external_file_cache(external_file_cache_p), cached_file(std::move(cached_file_p)),
-	      buffer_manager(buffer_manager_p), block(std::move(block_p)), block_idx(block_idx_p),
-	      block_size(block_size_p), result_pin(result_pin_p) {
+	      buffer_manager(buffer_manager_p), block(std::move(block_p)), block_idx(block_idx_p), block_size(block_size_p),
+	      result_pin(result_pin_p) {
 	}
 
 	void ExecuteTask() override {
@@ -197,7 +197,7 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
 }
 
 CachingFileHandle::~CachingFileHandle() {
-	external_file_cache.ReleaseCachedFileHandle(cached_file);
+	external_file_cache.ReleaseCachedFileHandle(*cached_file);
 }
 
 FileHandle &CachingFileHandle::GetFileHandle() {
@@ -257,8 +257,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	TaskExecutor executor(scheduler);
 
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
-		executor.ScheduleTask(make_uniq<FetchBlockTask>(*this, executor, context,
-		                                                external_file_cache, cached_file,
+		executor.ScheduleTask(make_uniq<FetchBlockTask>(*this, executor, context, external_file_cache, cached_file,
 		                                                external_file_cache.GetBufferManager(), blocks[idx],
 		                                                first_block + idx, block_size, pins[idx]));
 	}

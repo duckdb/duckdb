@@ -66,9 +66,8 @@ void BufferManager::FreeReservedMemory(idx_t size) {
 	throw NotImplementedException("This type of BufferManager can not free reserved memory");
 }
 
-BufferHandle BufferManager::Allocate(MemoryTag tag, idx_t block_size, bool can_destroy, std::function<void()> on_load,
-                                     std::function<void()> on_unload) {
-	throw NotImplementedException("This type of BufferManager can not allocate block memory with callbacks");
+BufferHandle BufferManager::Allocate(MemoryTag tag, idx_t block_size, bool can_destroy, BlockMemoryFactory factory) {
+	throw NotImplementedException("This type of BufferManager can not allocate block memory with a custom factory");
 }
 
 void BufferManager::SetMemoryLimit(idx_t limit) {

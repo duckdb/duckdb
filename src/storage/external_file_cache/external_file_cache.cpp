@@ -10,6 +10,7 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache_block_memory.hpp"
 
 namespace duckdb {
 
@@ -21,7 +22,7 @@ idx_t ExternalFileCache::GetCacheBlockSize(const string &path) const {
 	return Settings::Get<ExternalFileCacheLocalBlockSizeSetting>(db);
 }
 
-void ExternalFileCache::ReindexCachedFileCore(const shared_ptr<CachedFile> &cached_file_p, idx_t file_size,
+void ExternalFileCache::ReindexCachedFileCore(shared_ptr<CachedFile> cached_file_p, idx_t file_size,
                                               idx_t old_block_size, idx_t new_block_size) {
 	D_ASSERT(old_block_size > 0);
 	D_ASSERT(new_block_size > 0);
@@ -115,7 +116,7 @@ void ExternalFileCache::ReindexCachedFileCore(const shared_ptr<CachedFile> &cach
 	cached_file.blocks = std::move(new_blocks);
 }
 
-vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(const shared_ptr<CachedFile> &cached_file_p,
+vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(shared_ptr<CachedFile> cached_file_p,
                                                                           idx_t current_block_size, idx_t first_block,
                                                                           idx_t num_blocks) {
 	D_ASSERT(current_block_size > 0);
@@ -217,8 +218,9 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 	vector<pair<string, shared_ptr<CachedFile>>> cached_file_snapshot;
 	{
 		unique_lock<mutex> files_guard(lock);
+		cached_file_snapshot.reserve(cached_files.size());
 		for (const auto &file : cached_files) {
-			cached_file_snapshot.push_back(make_pair(file.first, file.second.cached_file));
+			cached_file_snapshot.emplace_back(make_pair(file.first, file.second.cached_file));
 		}
 	}
 	vector<CachedFileInformation> result;
@@ -255,11 +257,17 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 	return buffer_manager;
 }
 
-BufferHandle ExternalFileCache::AllocateCacheBlock(const shared_ptr<CachedFile> &cached_file, idx_t block_size) {
+BufferHandle ExternalFileCache::AllocateCacheBlock(shared_ptr<CachedFile> cached_file, idx_t block_size) {
 	auto weak_file = weak_ptr<CachedFile>(cached_file);
-	return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, block_size, true,
-	                               [this, weak_file]() { RegisterLoadedBlock(weak_file); },
-	                               [this, weak_file]() { ReleaseLoadedBlock(weak_file); });
+	auto factory = [this, weak_file](BufferManager &buffer_manager, block_id_t block_id, MemoryTag tag,
+	                                 unique_ptr<FileBuffer> buffer, DestroyBufferUpon destroy_buffer_upon, idx_t size,
+	                                 BufferPoolReservation &&reservation) {
+		return make_shared_ptr<ExternalFileCacheBlockMemory>(
+		    buffer_manager, block_id, tag, std::move(buffer), destroy_buffer_upon, size, std::move(reservation),
+		    [this, weak_file]() { RegisterLoadedBlock(weak_file); },
+		    [this, weak_file]() { ReleaseLoadedBlock(weak_file); });
+	};
+	return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, block_size, true, std::move(factory));
 }
 
 shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFile(const string &path) {
@@ -272,17 +280,13 @@ shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFi
 	return entry.cached_file;
 }
 
-void ExternalFileCache::ReleaseCachedFileHandle(const shared_ptr<CachedFile> &cached_file) {
+void ExternalFileCache::ReleaseCachedFileHandle(CachedFile &cached_file) {
 	lock_guard<mutex> guard(lock);
-	D_ASSERT(cached_file);
-	if (!cached_file) {
-		return;
-	}
-	auto entry = cached_files.find(cached_file->path);
+	auto entry = cached_files.find(cached_file.path);
 	if (entry == cached_files.end()) {
 		return;
 	}
-	if (entry->second.cached_file.get() != cached_file.get()) {
+	if (entry->second.cached_file.get() != &cached_file) {
 		return;
 	}
 	D_ASSERT(entry->second.active_handle_count > 0);
@@ -325,28 +329,23 @@ void ExternalFileCache::ReleaseLoadedBlock(const weak_ptr<CachedFile> &cached_fi
 	if (entry->second.loaded_block_count > 0) {
 		entry->second.loaded_block_count--;
 	}
-	TryEraseFileLocked(locked_file);
+	TryEraseFileLocked(*locked_file);
 }
 
-void ExternalFileCache::TryEraseFile(const shared_ptr<CachedFile> &cached_file) {
+void ExternalFileCache::TryEraseFile(CachedFile &cached_file) {
 	lock_guard<mutex> guard(lock);
 	TryEraseFileLocked(cached_file);
 }
 
-void ExternalFileCache::TryEraseFileLocked(const shared_ptr<CachedFile> &cached_file) {
-	// TODO(hjiang): why do we need take a shared pointer.
-	D_ASSERT(cached_file);
-	if (!cached_file) {
-		return;
-	}
-	auto entry = cached_files.find(cached_file->path);
+void ExternalFileCache::TryEraseFileLocked(CachedFile &cached_file) {
+	auto entry = cached_files.find(cached_file.path);
 	if (entry == cached_files.end()) {
 		return;
 	}
 	// DuckDB doesn't invalidate external file cache entries on file write and deletion, which means it's possible that
 	// on old block unload, cache files entries store new cache blocks. so we need to validate whether they represent
 	// the same version of the file.
-	if (entry->second.cached_file.get() != cached_file.get()) {
+	if (entry->second.cached_file.get() != &cached_file) {
 		return;
 	}
 	if (entry->second.active_handle_count != 0 || entry->second.loaded_block_count != 0) {

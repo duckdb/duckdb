@@ -83,30 +83,29 @@ public:
 
 	//! Re-index to `current_block_size` if it differs from the cache block size.
 	//! Return the blocks cached for the given range.
-	vector<shared_ptr<CacheBlock>> ReindexAndAcquireBlocks(const shared_ptr<CachedFile> &cached_file,
-	                                                       idx_t current_block_size, idx_t first_block,
-	                                                       idx_t num_blocks);
+	vector<shared_ptr<CacheBlock>> ReindexAndAcquireBlocks(shared_ptr<CachedFile> cached_file, idx_t current_block_size,
+	                                                       idx_t first_block, idx_t num_blocks);
 
 	BufferManager &GetBufferManager() const;
 	//! Allocates a loaded external file cache block with cache-entry lifecycle accounting.
-	BufferHandle AllocateCacheBlock(const shared_ptr<CachedFile> &cached_file, idx_t block_size);
+	BufferHandle AllocateCacheBlock(shared_ptr<CachedFile> cached_file, idx_t block_size);
 	//! Gets the cached file, or creates it if is not yet present
 	shared_ptr<CachedFile> GetOrCreateCachedFile(const string &path);
 	//! Releases an active handle reference to a cached file.
-	void ReleaseCachedFileHandle(const shared_ptr<CachedFile> &cached_file);
+	void ReleaseCachedFileHandle(CachedFile &cached_file);
 	//! Try to erase the cached file if it is no longer needed.
-	void TryEraseFile(const shared_ptr<CachedFile> &cached_file);
+	void TryEraseFile(CachedFile &cached_file);
 
 	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
 	                               const string &current_version_tag, timestamp_t current_last_modified);
 
 private:
 	//! Re-index blocks of a single cached file.
-	void ReindexCachedFileCore(const shared_ptr<CachedFile> &cached_file, idx_t file_size, idx_t old_block_size,
+	void ReindexCachedFileCore(shared_ptr<CachedFile> cached_file, idx_t file_size, idx_t old_block_size,
 	                           idx_t new_block_size) DUCKDB_REQUIRES(cached_file->map_lock);
 
 	void RegisterLoadedBlock(const weak_ptr<CachedFile> &cached_file);
-	void TryEraseFileLocked(const shared_ptr<CachedFile> &cached_file);
+	void TryEraseFileLocked(CachedFile &cached_file);
 	void ReleaseLoadedBlock(const weak_ptr<CachedFile> &cached_file);
 
 	//! The BufferManager used to cache files
