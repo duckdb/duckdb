@@ -175,8 +175,12 @@ private:
 	Binder &binder;
 	//! The list of bindings in insertion order
 	vector<unique_ptr<Binding>> bindings_list;
-	//! The set of columns used in USING join conditions
-	case_insensitive_map_t<reference_set_t<UsingColumnSet>> using_columns;
+	//! The set of columns used in USING join conditions (order = USING clause order)
+	struct UsingColumnInfo {
+		reference_set_t<UsingColumnSet> bindings;
+		idx_t order = 0; //! insertion order for PG-compatible SELECT * output
+	};
+	case_insensitive_map_t<UsingColumnInfo> using_columns;
 	//! The set of CTE bindings
 	vector<unique_ptr<CTEBinding>> cte_bindings;
 };
