@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -20,12 +21,12 @@ public:
 
 public:
 	LogicalCreateIndex(unique_ptr<CreateIndexInfo> info_p, vector<unique_ptr<Expression>> expressions_p,
-	                   TableCatalogEntry &table_p, unique_ptr<AlterTableInfo> alter_table_info = nullptr);
+	                   CatalogEntry &target_p, unique_ptr<AlterTableInfo> alter_table_info = nullptr);
 
 	//! Index creation information.
 	unique_ptr<CreateIndexInfo> info;
-	//! The table to create the index for.
-	TableCatalogEntry &table;
+	//! Either a table or a view; catalog decides how to handle each.
+	CatalogEntry &table;
 	// Alter table information.
 	unique_ptr<AlterTableInfo> alter_table_info;
 	//! Unbound expressions of the indexed columns.
@@ -41,6 +42,6 @@ protected:
 private:
 	LogicalCreateIndex(ClientContext &context, unique_ptr<CreateInfo> info, vector<unique_ptr<Expression>> expressions,
 	                   unique_ptr<ParseInfo> alter_info);
-	TableCatalogEntry &BindTable(ClientContext &context, CreateIndexInfo &info_p);
+	CatalogEntry &BindTable(ClientContext &context, CreateIndexInfo &info_p);
 };
 } // namespace duckdb

@@ -533,12 +533,16 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	return schema;
 }
 
-unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
-                                                         TableCatalogEntry &table, unique_ptr<LogicalOperator> plan) {
+unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt, CatalogEntry &table,
+                                                         unique_ptr<LogicalOperator> plan) {
+	if (table.type != CatalogType::TABLE_ENTRY) {
+		throw BinderException("can only create an index on a base table");
+	}
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
 	auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(stmt.info));
 	IndexBinder index_binder(binder, binder.context);
-	return index_binder.BindCreateIndex(binder.context, std::move(create_index_info), table, std::move(plan), nullptr);
+	return index_binder.BindCreateIndex(binder.context, std::move(create_index_info), table.Cast<TableCatalogEntry>(),
+	                                    std::move(plan), nullptr);
 }
 
 BoundStatement Binder::Bind(CreateStatement &stmt) {
@@ -603,21 +607,25 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto table_ref = make_uniq<BaseTableRef>(table_description);
 		auto bound_table = Bind(*table_ref);
 		auto plan = std::move(bound_table.plan);
-		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
-			throw BinderException("can only create an index on a base table");
+		// Tables go through the LOGICAL_GET; otherwise resolve a view and let its catalog decide.
+		optional_ptr<TableCatalogEntry> table_ptr;
+		if (plan->type == LogicalOperatorType::LOGICAL_GET) {
+			auto &get = plan->Cast<LogicalGet>();
+			table_ptr = get.GetTable();
 		}
-		auto &get = plan->Cast<LogicalGet>();
-		auto table_ptr = get.GetTable();
-		if (!table_ptr) {
-			throw BinderException("can only create an index on a base table");
+		if (table_ptr) {
+			auto &table = *table_ptr;
+			if (table.temporary) {
+				stmt.info->temporary = true;
+			}
+			properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::CREATE_INDEX);
+			result.plan = table.catalog.BindCreateIndex(*this, stmt, table, std::move(plan));
+		} else {
+			auto &view = Catalog::GetEntry<ViewCatalogEntry>(context, create_index_info.catalog,
+			                                                 create_index_info.schema, create_index_info.table);
+			properties.RegisterDBModify(view.catalog, context, DatabaseModificationType::CREATE_INDEX);
+			result.plan = view.catalog.BindCreateIndex(*this, stmt, view, std::move(plan));
 		}
-
-		auto &table = *table_ptr;
-		if (table.temporary) {
-			stmt.info->temporary = true;
-		}
-		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::CREATE_INDEX);
-		result.plan = table.catalog.BindCreateIndex(*this, stmt, table, std::move(plan));
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {

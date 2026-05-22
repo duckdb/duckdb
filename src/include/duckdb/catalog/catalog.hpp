@@ -317,7 +317,7 @@ public:
 	virtual PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op);
 	virtual PhysicalOperator &PlanMergeInto(ClientContext &context, PhysicalPlanGenerator &planner,
 	                                        LogicalMergeInto &op, PhysicalOperator &plan);
-	virtual unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
+	virtual unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, CatalogEntry &table,
 	                                                    unique_ptr<LogicalOperator> plan);
 	virtual unique_ptr<LogicalOperator> BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,
 	                                                      unique_ptr<LogicalOperator> plan,

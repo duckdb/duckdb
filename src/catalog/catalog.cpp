@@ -330,12 +330,17 @@ optional_ptr<CatalogEntry> Catalog::CreateIndex(ClientContext &context, CreateIn
 	return CreateIndex(GetCatalogTransaction(context), info);
 }
 
-unique_ptr<LogicalOperator> Catalog::BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
+unique_ptr<LogicalOperator> Catalog::BindCreateIndex(Binder &binder, CreateStatement &stmt, CatalogEntry &table,
                                                      unique_ptr<LogicalOperator> plan) {
+	// Catalogs that support indexing views override this method.
+	if (table.type != CatalogType::TABLE_ENTRY) {
+		throw BinderException("can only create an index on a base table");
+	}
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
 	auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(stmt.info));
 	IndexBinder index_binder(binder, binder.context);
-	return index_binder.BindCreateIndex(binder.context, std::move(create_index_info), table, std::move(plan), nullptr);
+	return index_binder.BindCreateIndex(binder.context, std::move(create_index_info), table.Cast<TableCatalogEntry>(),
+	                                    std::move(plan), nullptr);
 }
 
 unique_ptr<LogicalOperator> Catalog::BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,

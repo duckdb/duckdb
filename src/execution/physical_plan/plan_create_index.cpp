@@ -17,9 +17,11 @@ namespace duckdb {
 
 static PhysicalOperator &AddCreateIndex(PhysicalPlanGenerator &plan, LogicalCreateIndex &op, PhysicalOperator &prev,
                                         const IndexType &index_type, unique_ptr<IndexBuildBindData> bind_data) {
-	auto &cindex = plan.Make<PhysicalCreateIndex>(op, op.table, op.info->column_ids, std::move(op.info),
-	                                              std::move(op.unbound_expressions), op.estimated_cardinality,
-	                                              index_type, std::move(bind_data), std::move(op.alter_table_info));
+	// Generic path: tables only; cast is safe.
+	auto &cindex =
+	    plan.Make<PhysicalCreateIndex>(op, op.table.Cast<TableCatalogEntry>(), op.info->column_ids, std::move(op.info),
+	                                   std::move(op.unbound_expressions), op.estimated_cardinality, index_type,
+	                                   std::move(bind_data), std::move(op.alter_table_info));
 
 	cindex.children.push_back(prev);
 	return cindex;
@@ -94,18 +96,14 @@ static PhysicalOperator &AddSort(PhysicalPlanGenerator &plan, LogicalCreateIndex
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
-	// Early-out, if the index already exists.
-	auto &schema = op.table.schema;
+	// op.table is either a table or a view; for views, index_type->create_plan must be set.
+	auto &schema = op.table.Cast<StandardEntry>().schema;
 	auto entry = schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, op.info->index_name);
 	if (entry) {
 		if (op.info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
 			throw CatalogException("Index with name \"%s\" already exists!", op.info->index_name);
 		}
 		return Make<PhysicalDummyScan>(op.types, op.estimated_cardinality);
-	}
-
-	if (!op.table.IsDuckTable()) {
-		throw BinderException("Indexes can only be created on DuckDB tables.");
 	}
 
 	// Ensure that all expressions contain valid scalar functions.
@@ -139,6 +137,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 
 	// Fall back to generic index creation plan
 	// SCAN -> PROJECTION -> [FILTER] -> [SORT] -> CREATE INDEX
+	if (op.table.type != CatalogType::TABLE_ENTRY) {
+		throw BinderException("CREATE INDEX with the default index type only supports base tables.");
+	}
 
 	// "Bind" the index and determine if we need a sort.
 	auto &duck_table = op.table.Cast<DuckTableEntry>();
