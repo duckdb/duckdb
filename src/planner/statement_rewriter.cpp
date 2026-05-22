@@ -1,9 +1,11 @@
 #include "duckdb/planner/statement_rewriter.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/entry_lookup_info.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -30,6 +32,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/function/table_function.hpp"
 
 namespace duckdb {
 
@@ -222,21 +225,62 @@ CatalogPushdownResult StatementRewriter::Rewrite(InsertQueryNode &node) {
 	if (node.select_statement) {
 		result = Merge(result, Rewrite(*node.select_statement->node));
 	}
+	if (node.on_conflict_info) {
+		if (node.on_conflict_info->condition) {
+			result = Merge(result, Rewrite(*node.on_conflict_info->condition));
+		}
+		if (node.on_conflict_info->set_info) {
+			if (node.on_conflict_info->set_info->condition) {
+				result = Merge(result, Rewrite(*node.on_conflict_info->set_info->condition));
+			}
+			for (auto &expr : node.on_conflict_info->set_info->expressions) {
+				result = Merge(result, Rewrite(*expr));
+			}
+		}
+	}
+	for (auto &expr : node.returning_list) {
+		result = Merge(result, Rewrite(*expr));
+	}
 	return result;
 }
 
 CatalogPushdownResult StatementRewriter::Rewrite(DeleteQueryNode &node) {
+	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	if (node.table) {
-		return Rewrite(node.table);
+		result = Merge(result, Rewrite(node.table));
 	}
-	return {};
+	if (node.condition) {
+		result = Merge(result, Rewrite(*node.condition));
+	}
+	for (auto &clause : node.using_clauses) {
+		result = Merge(result, Rewrite(clause));
+	}
+	for (auto &expr : node.returning_list) {
+		result = Merge(result, Rewrite(*expr));
+	}
+	return result;
 }
 
 CatalogPushdownResult StatementRewriter::Rewrite(UpdateQueryNode &node) {
+	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	if (node.table) {
-		return Rewrite(node.table);
+		result = Merge(result, Rewrite(node.table));
 	}
-	return {};
+	if (node.from_table) {
+		result = Merge(result, Rewrite(node.from_table));
+	}
+	if (node.set_info) {
+		if (node.set_info->condition) {
+			result = Merge(result, Rewrite(*node.set_info->condition));
+		}
+		for (auto &expr : node.set_info->expressions) {
+			result = Merge(result, Rewrite(*expr));
+		}
+	}
+	for (auto &expr : node.returning_list) {
+		result = Merge(result, Rewrite(*expr));
+	}
+	return result;
 }
 
 CatalogPushdownResult StatementRewriter::Rewrite(SetOperationNode &node) {
@@ -312,6 +356,8 @@ CatalogPushdownResult StatementRewriter::Rewrite(unique_ptr<TableRef> &ref) {
 		return Rewrite(ref->Cast<SubqueryRef>());
 	case TableReferenceType::EXPRESSION_LIST:
 		return Rewrite(ref->Cast<ExpressionListRef>());
+	case TableReferenceType::TABLE_FUNCTION:
+		return Rewrite(ref->Cast<TableFunctionRef>());
 	case TableReferenceType::EMPTY_FROM:
 	case TableReferenceType::COLUMN_DATA:
 		return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
@@ -336,6 +382,54 @@ CatalogPushdownResult StatementRewriter::Rewrite(SubqueryRef &ref) {
 		local_table_names.insert(ref.alias);
 	}
 	return result;
+}
+
+CatalogPushdownResult StatementRewriter::Rewrite(TableFunctionRef &ref) {
+	if (ref.function->GetExpressionClass() != ExpressionClass::FUNCTION) {
+		return {};
+	}
+	auto &func_expr = ref.function->Cast<FunctionExpression>();
+
+	// If the function has an explicit catalog prefix, check if it's remote
+	if (!func_expr.catalog.empty()) {
+		auto catalog = Catalog::GetCatalogEntry(binder.context, func_expr.catalog);
+		if (catalog && catalog->IsRemoteCatalog()) {
+			return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog, func_expr.schema};
+		}
+		return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+	}
+
+	// Determine whether the function is a SET_RETURNING_FUNCTION (like range(), generate_series())
+	// SET_RETURNING_FUNCTIONs are neutral: they don't belong to any catalog and can be pushed
+	FindRemoteCatalogsInSearchPath();
+	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, func_expr.function_name);
+	for (auto &local_entry : local_catalogs_in_search_path) {
+		const string &schema = func_expr.schema.empty() ? local_entry.schema : func_expr.schema;
+		auto entry =
+		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, func_lookup, OnEntryNotFound::RETURN_NULL);
+		if (entry && entry->type == CatalogType::TABLE_FUNCTION_ENTRY) {
+			auto &tf_entry = entry->Cast<TableFunctionCatalogEntry>();
+			bool is_set_returning = false;
+			for (auto &func : tf_entry.functions.functions) {
+				if (func.return_type == TableFunctionReturnType::SET_RETURNING_FUNCTION) {
+					is_set_returning = true;
+					break;
+				}
+			}
+			if (!is_set_returning) {
+				// TABLE_RETURNING_FUNCTION - blocks pushdown
+				return {};
+			}
+			// SET_RETURNING_FUNCTION: neutral, recurse into args
+			CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+			for (auto &arg : func_expr.children) {
+				result = Merge(result, Rewrite(*arg));
+			}
+			return result;
+		}
+	}
+	// Not found in local catalogs - unknown function, blocks pushdown
+	return {};
 }
 
 CatalogPushdownResult StatementRewriter::Rewrite(JoinRef &ref) {
@@ -363,6 +457,46 @@ void StatementRewriter::TrackLocalTable(const BaseTableRef &ref, optional_ptr<Ca
 			local_table_column_names.insert(col.Name());
 		}
 	}
+}
+
+bool StatementRewriter::IsLocalMacro(const FunctionExpression &func) {
+	// If explicitly qualified with a catalog, check whether that catalog is remote
+	if (!func.catalog.empty()) {
+		auto catalog = Catalog::GetCatalogEntry(binder.context, func.catalog);
+		if (catalog && catalog->IsRemoteCatalog()) {
+			return false;
+		}
+		// Local catalog - check if the function is a macro
+		const string &schema = func.schema.empty() ? DEFAULT_SCHEMA : func.schema;
+		EntryLookupInfo macro_lookup(CatalogType::MACRO_ENTRY, func.function_name);
+		auto entry = Catalog::GetEntry(binder.context, func.catalog, schema, macro_lookup, OnEntryNotFound::RETURN_NULL);
+		if (entry && entry->type == CatalogType::MACRO_ENTRY) {
+			return true;
+		}
+		EntryLookupInfo table_macro_lookup(CatalogType::TABLE_MACRO_ENTRY, func.function_name);
+		auto table_entry =
+		    Catalog::GetEntry(binder.context, func.catalog, schema, table_macro_lookup, OnEntryNotFound::RETURN_NULL);
+		return table_entry && table_entry->type == CatalogType::TABLE_MACRO_ENTRY;
+	}
+
+	// Unqualified function - search local catalogs for a macro with this name
+	FindRemoteCatalogsInSearchPath();
+	for (auto &local_entry : local_catalogs_in_search_path) {
+		const string &schema = func.schema.empty() ? local_entry.schema : func.schema;
+		EntryLookupInfo macro_lookup(CatalogType::MACRO_ENTRY, func.function_name);
+		auto entry =
+		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, macro_lookup, OnEntryNotFound::RETURN_NULL);
+		if (entry && entry->type == CatalogType::MACRO_ENTRY) {
+			return true;
+		}
+		EntryLookupInfo table_macro_lookup(CatalogType::TABLE_MACRO_ENTRY, func.function_name);
+		auto table_entry = Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_macro_lookup,
+		                                     OnEntryNotFound::RETURN_NULL);
+		if (table_entry && table_entry->type == CatalogType::TABLE_MACRO_ENTRY) {
+			return true;
+		}
+	}
+	return false;
 }
 
 CatalogPushdownResult StatementRewriter::Rewrite(BaseTableRef &ref) {
@@ -504,6 +638,13 @@ CatalogPushdownResult StatementRewriter::Rewrite(ParsedExpression &expr) {
 		result = Merge(result, subquery_result);
 		return result;
 	}
+	// Check if this is a function call to a local macro - local macros can't be pushed to remote
+	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &func = expr.Cast<FunctionExpression>();
+		if (IsLocalMacro(func)) {
+			return {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr, {}};
+		}
+	}
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](ParsedExpression &child) { result = Merge(result, Rewrite(child)); });
@@ -574,6 +715,14 @@ void StatementRewriter::StripCatalogName(TableRef &ref, const string &catalog_na
 }
 
 void StatementRewriter::StripCatalogName(ParsedExpression &expr, const string &catalog_name) {
+	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		auto &col_ref = expr.Cast<ColumnRefExpression>();
+		// Strip catalog prefix from qualified column references (e.g. catalog.schema.table.col -> schema.table.col)
+		if (!col_ref.column_names.empty() && StringUtil::CIEquals(col_ref.column_names[0], catalog_name)) {
+			col_ref.column_names.erase(col_ref.column_names.begin());
+		}
+		return;
+	}
 	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
 		auto &subq = expr.Cast<SubqueryExpression>();
 		StripCatalogName(*subq.subquery->node, catalog_name);
@@ -599,11 +748,22 @@ void StatementRewriter::StripCatalogName(QueryNode &node, const string &catalog_
 		if (select.where_clause) {
 			StripCatalogName(*select.where_clause, catalog_name);
 		}
+		for (auto &expr : select.groups.group_expressions) {
+			StripCatalogName(*expr, catalog_name);
+		}
 		if (select.having) {
 			StripCatalogName(*select.having, catalog_name);
 		}
 		if (select.qualify) {
 			StripCatalogName(*select.qualify, catalog_name);
+		}
+		for (auto &modifier : select.modifiers) {
+			if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
+				auto &order_mod = modifier->Cast<OrderModifier>();
+				for (auto &order : order_mod.orders) {
+					StripCatalogName(*order.expression, catalog_name);
+				}
+			}
 		}
 		break;
 	}
@@ -618,6 +778,22 @@ void StatementRewriter::StripCatalogName(QueryNode &node, const string &catalog_
 		if (insert.select_statement) {
 			StripCatalogName(*insert.select_statement->node, catalog_name);
 		}
+		if (insert.on_conflict_info) {
+			if (insert.on_conflict_info->condition) {
+				StripCatalogName(*insert.on_conflict_info->condition, catalog_name);
+			}
+			if (insert.on_conflict_info->set_info) {
+				if (insert.on_conflict_info->set_info->condition) {
+					StripCatalogName(*insert.on_conflict_info->set_info->condition, catalog_name);
+				}
+				for (auto &expr : insert.on_conflict_info->set_info->expressions) {
+					StripCatalogName(*expr, catalog_name);
+				}
+			}
+		}
+		for (auto &expr : insert.returning_list) {
+			StripCatalogName(*expr, catalog_name);
+		}
 		break;
 	}
 	case QueryNodeType::DELETE_QUERY_NODE: {
@@ -625,12 +801,35 @@ void StatementRewriter::StripCatalogName(QueryNode &node, const string &catalog_
 		if (del.table) {
 			StripCatalogName(*del.table, catalog_name);
 		}
+		if (del.condition) {
+			StripCatalogName(*del.condition, catalog_name);
+		}
+		for (auto &clause : del.using_clauses) {
+			StripCatalogName(*clause, catalog_name);
+		}
+		for (auto &expr : del.returning_list) {
+			StripCatalogName(*expr, catalog_name);
+		}
 		break;
 	}
 	case QueryNodeType::UPDATE_QUERY_NODE: {
 		auto &upd = node.Cast<UpdateQueryNode>();
 		if (upd.table) {
 			StripCatalogName(*upd.table, catalog_name);
+		}
+		if (upd.from_table) {
+			StripCatalogName(*upd.from_table, catalog_name);
+		}
+		if (upd.set_info) {
+			if (upd.set_info->condition) {
+				StripCatalogName(*upd.set_info->condition, catalog_name);
+			}
+			for (auto &expr : upd.set_info->expressions) {
+				StripCatalogName(*expr, catalog_name);
+			}
+		}
+		for (auto &expr : upd.returning_list) {
+			StripCatalogName(*expr, catalog_name);
 		}
 		break;
 	}

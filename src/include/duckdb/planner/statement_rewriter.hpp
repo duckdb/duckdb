@@ -18,8 +18,10 @@ class Binder;
 class Catalog;
 class CatalogEntry;
 class ExpressionListRef;
+class FunctionExpression;
 class JoinRef;
 class SubqueryRef;
+class TableFunctionRef;
 class TableRef;
 class QueryNode;
 class SetOperationNode;
@@ -54,6 +56,7 @@ private:
 	CatalogPushdownResult Rewrite(ExpressionListRef &ref);
 	CatalogPushdownResult Rewrite(JoinRef &ref);
 	CatalogPushdownResult Rewrite(SubqueryRef &ref);
+	CatalogPushdownResult Rewrite(TableFunctionRef &ref);
 	CatalogPushdownResult Rewrite(BaseTableRef &ref);
 	CatalogPushdownResult Rewrite(ParsedExpression &expr);
 	void PushdownSubqueries(unique_ptr<ParsedExpression> &expr);
@@ -64,6 +67,8 @@ private:
 	bool HasLocalTableReference(QueryNode &node);
 	//! Records a BaseTableRef's name, alias and columns as local for correlated subquery detection
 	void TrackLocalTable(const BaseTableRef &ref, optional_ptr<CatalogEntry> entry = nullptr);
+	//! Returns true if the function is defined as a macro in a local (non-remote) catalog
+	bool IsLocalMacro(const FunctionExpression &func);
 
 	void FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result);
 	void FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result);
