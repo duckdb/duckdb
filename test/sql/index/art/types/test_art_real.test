@@ -14,6 +14,9 @@ statement ok
 INSERT INTO numbers VALUES (CAST(-0 AS REAL))
 
 statement ok
+INSERT INTO numbers VALUES ('-inf'::REAL), (-2.5::REAL), (1.5::REAL), ('inf'::REAL), ('nan'::REAL)
+
+statement ok
 CREATE INDEX i_index ON numbers(i)
 
 # +0
@@ -28,3 +31,32 @@ SELECT COUNT(i) FROM numbers WHERE i = CAST(-0 AS REAL)
 ----
 2
 
+query I
+SELECT COUNT(i) FROM numbers WHERE i = '-inf'::REAL
+----
+1
+
+query I
+SELECT COUNT(i) FROM numbers WHERE i = 'inf'::REAL
+----
+1
+
+query I
+SELECT COUNT(i) FROM numbers WHERE i = 'nan'::REAL
+----
+1
+
+query I
+SELECT COUNT(i) FROM numbers WHERE i < '-inf'::REAL
+----
+0
+
+query I
+SELECT COUNT(i) FROM numbers WHERE i > 'inf'::REAL
+----
+1
+
+query I
+SELECT COUNT(i) FROM numbers WHERE i >= -2.5::REAL AND i <= 1.5::REAL
+----
+4
