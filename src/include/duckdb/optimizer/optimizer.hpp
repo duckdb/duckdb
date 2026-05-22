@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/optimizer/expression_rewriter.hpp"
+#include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
