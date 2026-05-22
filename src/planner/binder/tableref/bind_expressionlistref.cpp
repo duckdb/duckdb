@@ -23,7 +23,7 @@ BoundStatement Binder::Bind(ExpressionListRef &expr) {
 		if (result.names.empty()) {
 			// no names provided, generate them
 			for (idx_t val_idx = 0; val_idx < expression_list.size(); val_idx++) {
-				result.names.push_back("col" + to_string(val_idx));
+				result.names.push_back("column" + to_string(val_idx + 1));
 			}
 		}
 
