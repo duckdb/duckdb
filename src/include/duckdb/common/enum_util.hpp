@@ -328,6 +328,8 @@ enum class OperatorFinalizeResultType : uint8_t;
 
 enum class OperatorResultType : uint8_t;
 
+enum class OptimizerHookPosition : uint8_t;
+
 enum class OptimizerType : uint32_t;
 
 enum class OrderByColumnType : uint8_t;
@@ -497,6 +499,8 @@ enum class ThreadPinMode : uint8_t;
 enum class TimestampCastResult : uint8_t;
 
 enum class TransactionInvalidationPolicy : uint8_t;
+
+enum class TransactionIsolationLevel : uint8_t;
 
 enum class TransactionModifierType : uint8_t;
 
@@ -990,6 +994,9 @@ template<>
 const char* EnumUtil::ToChars<OperatorResultType>(OperatorResultType value);
 
 template<>
+const char* EnumUtil::ToChars<OptimizerHookPosition>(OptimizerHookPosition value);
+
+template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value);
 
 template<>
@@ -1243,6 +1250,9 @@ const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
 
 template<>
 const char* EnumUtil::ToChars<TransactionInvalidationPolicy>(TransactionInvalidationPolicy value);
+
+template<>
+const char* EnumUtil::ToChars<TransactionIsolationLevel>(TransactionIsolationLevel value);
 
 template<>
 const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value);
@@ -1759,6 +1769,9 @@ template<>
 OperatorResultType EnumUtil::FromString<OperatorResultType>(const char *value);
 
 template<>
+OptimizerHookPosition EnumUtil::FromString<OptimizerHookPosition>(const char *value);
+
+template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value);
 
 template<>
@@ -2012,6 +2025,9 @@ TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value)
 
 template<>
 TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value);
+
+template<>
+TransactionIsolationLevel EnumUtil::FromString<TransactionIsolationLevel>(const char *value);
 
 template<>
 TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value);

@@ -155,6 +155,7 @@
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
+#include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
@@ -472,19 +473,20 @@ AlterForeignKeyType EnumUtil::FromString<AlterForeignKeyType>(const char *value)
 const StringUtil::EnumStringLiteral *GetAlterScalarFunctionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(AlterScalarFunctionType::INVALID), "INVALID" },
-		{ static_cast<uint32_t>(AlterScalarFunctionType::ADD_FUNCTION_OVERLOADS), "ADD_FUNCTION_OVERLOADS" }
+		{ static_cast<uint32_t>(AlterScalarFunctionType::ADD_FUNCTION_OVERLOADS), "ADD_FUNCTION_OVERLOADS" },
+		{ static_cast<uint32_t>(AlterScalarFunctionType::RENAME_SCALAR_FUNCTION), "RENAME_SCALAR_FUNCTION" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<AlterScalarFunctionType>(AlterScalarFunctionType value) {
-	return StringUtil::EnumToString(GetAlterScalarFunctionTypeValues(), 2, "AlterScalarFunctionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetAlterScalarFunctionTypeValues(), 3, "AlterScalarFunctionType", static_cast<uint32_t>(value));
 }
 
 template<>
 AlterScalarFunctionType EnumUtil::FromString<AlterScalarFunctionType>(const char *value) {
-	return static_cast<AlterScalarFunctionType>(StringUtil::StringToEnum(GetAlterScalarFunctionTypeValues(), 2, "AlterScalarFunctionType", value));
+	return static_cast<AlterScalarFunctionType>(StringUtil::StringToEnum(GetAlterScalarFunctionTypeValues(), 3, "AlterScalarFunctionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterTableFunctionTypeValues() {
@@ -525,19 +527,21 @@ const StringUtil::EnumStringLiteral *GetAlterTableTypeValues() {
 		{ static_cast<uint32_t>(AlterTableType::REMOVE_FIELD), "REMOVE_FIELD" },
 		{ static_cast<uint32_t>(AlterTableType::RENAME_FIELD), "RENAME_FIELD" },
 		{ static_cast<uint32_t>(AlterTableType::SET_TABLE_OPTIONS), "SET_TABLE_OPTIONS" },
-		{ static_cast<uint32_t>(AlterTableType::RESET_TABLE_OPTIONS), "RESET_TABLE_OPTIONS" }
+		{ static_cast<uint32_t>(AlterTableType::RESET_TABLE_OPTIONS), "RESET_TABLE_OPTIONS" },
+		{ static_cast<uint32_t>(AlterTableType::DROP_CONSTRAINT), "DROP_CONSTRAINT" },
+		{ static_cast<uint32_t>(AlterTableType::RENAME_CONSTRAINT), "RENAME_CONSTRAINT" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<AlterTableType>(AlterTableType value) {
-	return StringUtil::EnumToString(GetAlterTableTypeValues(), 19, "AlterTableType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetAlterTableTypeValues(), 21, "AlterTableType", static_cast<uint32_t>(value));
 }
 
 template<>
 AlterTableType EnumUtil::FromString<AlterTableType>(const char *value) {
-	return static_cast<AlterTableType>(StringUtil::StringToEnum(GetAlterTableTypeValues(), 19, "AlterTableType", value));
+	return static_cast<AlterTableType>(StringUtil::StringToEnum(GetAlterTableTypeValues(), 21, "AlterTableType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterTypeValues() {
@@ -1793,6 +1797,7 @@ const StringUtil::EnumStringLiteral *GetExceptionFormatValueTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ExceptionFormatValueType::FORMAT_VALUE_TYPE_DOUBLE), "FORMAT_VALUE_TYPE_DOUBLE" },
 		{ static_cast<uint32_t>(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), "FORMAT_VALUE_TYPE_INTEGER" },
+		{ static_cast<uint32_t>(ExceptionFormatValueType::FORMAT_VALUE_TYPE_UINTEGER), "FORMAT_VALUE_TYPE_UINTEGER" },
 		{ static_cast<uint32_t>(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), "FORMAT_VALUE_TYPE_STRING" }
 	};
 	return values;
@@ -1800,12 +1805,12 @@ const StringUtil::EnumStringLiteral *GetExceptionFormatValueTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<ExceptionFormatValueType>(ExceptionFormatValueType value) {
-	return StringUtil::EnumToString(GetExceptionFormatValueTypeValues(), 3, "ExceptionFormatValueType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExceptionFormatValueTypeValues(), 4, "ExceptionFormatValueType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExceptionFormatValueType EnumUtil::FromString<ExceptionFormatValueType>(const char *value) {
-	return static_cast<ExceptionFormatValueType>(StringUtil::StringToEnum(GetExceptionFormatValueTypeValues(), 3, "ExceptionFormatValueType", value));
+	return static_cast<ExceptionFormatValueType>(StringUtil::StringToEnum(GetExceptionFormatValueTypeValues(), 4, "ExceptionFormatValueType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExceptionTypeValues() {
@@ -3559,6 +3564,24 @@ const char* EnumUtil::ToChars<OperatorResultType>(OperatorResultType value) {
 template<>
 OperatorResultType EnumUtil::FromString<OperatorResultType>(const char *value) {
 	return static_cast<OperatorResultType>(StringUtil::StringToEnum(GetOperatorResultTypeValues(), 4, "OperatorResultType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetOptimizerHookPositionValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(OptimizerHookPosition::Before), "Before" },
+		{ static_cast<uint32_t>(OptimizerHookPosition::After), "After" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<OptimizerHookPosition>(OptimizerHookPosition value) {
+	return StringUtil::EnumToString(GetOptimizerHookPositionValues(), 2, "OptimizerHookPosition", static_cast<uint32_t>(value));
+}
+
+template<>
+OptimizerHookPosition EnumUtil::FromString<OptimizerHookPosition>(const char *value) {
+	return static_cast<OptimizerHookPosition>(StringUtil::StringToEnum(GetOptimizerHookPositionValues(), 2, "OptimizerHookPosition", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
@@ -5357,19 +5380,20 @@ SuggestionState EnumUtil::FromString<SuggestionState>(const char *value) {
 const StringUtil::EnumStringLiteral *GetTableColumnTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TableColumnType::STANDARD), "STANDARD" },
-		{ static_cast<uint32_t>(TableColumnType::GENERATED), "GENERATED" }
+		{ static_cast<uint32_t>(TableColumnType::GENERATED_VIRTUAL), "GENERATED_VIRTUAL" },
+		{ static_cast<uint32_t>(TableColumnType::GENERATED_STORED), "GENERATED_STORED" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TableColumnType>(TableColumnType value) {
-	return StringUtil::EnumToString(GetTableColumnTypeValues(), 2, "TableColumnType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTableColumnTypeValues(), 3, "TableColumnType", static_cast<uint32_t>(value));
 }
 
 template<>
 TableColumnType EnumUtil::FromString<TableColumnType>(const char *value) {
-	return static_cast<TableColumnType>(StringUtil::StringToEnum(GetTableColumnTypeValues(), 2, "TableColumnType", value));
+	return static_cast<TableColumnType>(StringUtil::StringToEnum(GetTableColumnTypeValues(), 3, "TableColumnType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTableFilterTypeValues() {
@@ -5612,6 +5636,27 @@ const char* EnumUtil::ToChars<TransactionInvalidationPolicy>(TransactionInvalida
 template<>
 TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value) {
 	return static_cast<TransactionInvalidationPolicy>(StringUtil::StringToEnum(GetTransactionInvalidationPolicyValues(), 3, "TransactionInvalidationPolicy", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTransactionIsolationLevelValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TransactionIsolationLevel::TRANSACTION_DEFAULT_ISOLATION), "TRANSACTION_DEFAULT_ISOLATION" },
+		{ static_cast<uint32_t>(TransactionIsolationLevel::READ_UNCOMMITTED), "READ_UNCOMMITTED" },
+		{ static_cast<uint32_t>(TransactionIsolationLevel::READ_COMMITTED), "READ_COMMITTED" },
+		{ static_cast<uint32_t>(TransactionIsolationLevel::REPEATABLE_READ), "REPEATABLE_READ" },
+		{ static_cast<uint32_t>(TransactionIsolationLevel::SERIALIZABLE), "SERIALIZABLE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TransactionIsolationLevel>(TransactionIsolationLevel value) {
+	return StringUtil::EnumToString(GetTransactionIsolationLevelValues(), 5, "TransactionIsolationLevel", static_cast<uint32_t>(value));
+}
+
+template<>
+TransactionIsolationLevel EnumUtil::FromString<TransactionIsolationLevel>(const char *value) {
+	return static_cast<TransactionIsolationLevel>(StringUtil::StringToEnum(GetTransactionIsolationLevelValues(), 5, "TransactionIsolationLevel", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTransactionModifierTypeValues() {

@@ -577,7 +577,7 @@ static Value GetParameterNames(CatalogEntry &entry, idx_t function_idx, Function
 			if (param_idx < function_description.parameter_names.size()) {
 				parameter_names.emplace_back(function_description.parameter_names[param_idx]);
 			} else {
-				parameter_names.emplace_back("col" + to_string(param_idx));
+				parameter_names.emplace_back("column" + to_string(param_idx + 1));
 			}
 		}
 	} else {

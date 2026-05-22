@@ -87,31 +87,27 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSchemaStmt(PEGTransfo
 
 // AlterIndexStmt <- 'INDEX' IfExists? BaseTableName RenameAlter
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterIndexStmt(PEGTransformer &transformer,
-                                                                     ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(2));
-	auto alter_table_info = transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ListParseResult>(3));
-	auto rename_info = unique_ptr_cast<AlterTableInfo, RenameTableInfo>(std::move(alter_table_info));
+                                                                     const bool &if_exists,
+                                                                     unique_ptr<BaseTableRef> base_table_name,
+                                                                     unique_ptr<AlterTableInfo> rename_alter) {
+	auto rename_info = unique_ptr_cast<AlterTableInfo, RenameTableInfo>(std::move(rename_alter));
 	// ALTER INDEX <name> RENAME TO <new_name> uses the same catalog action as
 	// ALTER TABLE rename: the catalog resolves the entry by name across
 	// table/view/index.
 	auto result = make_uniq<RenameTableInfo>(AlterEntryData(), rename_info->new_table_name);
-	result->catalog = base_table->catalog_name;
-	result->schema = base_table->schema_name;
-	result->name = base_table->table_name;
+	result->catalog = base_table_name->catalog_name;
+	result->schema = base_table_name->schema_name;
+	result->name = base_table_name->table_name;
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	return std::move(result);
 }
 
 // AlterFunctionStmt <- 'FUNCTION' IfExists? QualifiedName RenameAlter
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterFunctionStmt(PEGTransformer &transformer,
-                                                                        ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
-	auto alter_table_info = transformer.Transform<unique_ptr<AlterTableInfo>>(list_pr.Child<ListParseResult>(3));
-	auto rename_info = unique_ptr_cast<AlterTableInfo, RenameTableInfo>(std::move(alter_table_info));
+                                                                        const bool &if_exists,
+                                                                        const QualifiedName &qualified_name,
+                                                                        unique_ptr<AlterTableInfo> rename_alter) {
+	auto rename_info = unique_ptr_cast<AlterTableInfo, RenameTableInfo>(std::move(rename_alter));
 	AlterEntryData data;
 	data.catalog = qualified_name.catalog;
 	data.schema = qualified_name.schema;
@@ -388,22 +384,17 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddConstraint(PEGTran
 
 // DropConstraint <- 'DROP' 'CONSTRAINT' IfExists? Identifier DropBehavior?
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformDropConstraint(PEGTransformer &transformer,
-                                                                          ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	bool if_exists = list_pr.Child<OptionalParseResult>(2).HasResult();
-	auto constraint_name = list_pr.Child<IdentifierParseResult>(3).identifier;
-	bool cascade = false;
-	transformer.TransformOptional<bool>(list_pr, 4, cascade);
-	return make_uniq<DropConstraintInfo>(AlterEntryData(), std::move(constraint_name), if_exists, cascade);
+                                                                          const bool &if_exists,
+                                                                          const string &identifier,
+                                                                          const bool &drop_behavior) {
+	return make_uniq<DropConstraintInfo>(AlterEntryData(), identifier, if_exists, drop_behavior);
 }
 
 // RenameConstraint <- 'RENAME' 'CONSTRAINT' Identifier 'TO' Identifier
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformRenameConstraint(PEGTransformer &transformer,
-                                                                            ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto old_name = list_pr.Child<IdentifierParseResult>(2).identifier;
-	auto new_name = list_pr.Child<IdentifierParseResult>(4).identifier;
-	return make_uniq<RenameConstraintInfo>(AlterEntryData(), std::move(old_name), std::move(new_name));
+                                                                            const string &identifier,
+                                                                            const string &identifier_1) {
+	return make_uniq<RenameConstraintInfo>(AlterEntryData(), identifier, identifier_1);
 }
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformSetSortedBy(PEGTransformer &transformer,

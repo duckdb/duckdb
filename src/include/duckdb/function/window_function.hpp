@@ -299,7 +299,7 @@ public:
 		function_info = std::move(info);
 	}
 	template <class T, class... ARGS>
-	auto SetExtraFunctionInfo(ARGS &&... args) -> void {
+	auto SetExtraFunctionInfo(ARGS &&...args) -> void {
 		function_info = make_shared_ptr<T>(std::forward<ARGS>(args)...);
 	}
 	auto GetFunctionInfo() const -> shared_ptr<WindowFunctionInfo> {
