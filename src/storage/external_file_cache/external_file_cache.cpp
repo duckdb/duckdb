@@ -331,11 +331,6 @@ void ExternalFileCache::ReleaseLoadedBlock(const weak_ptr<CachedFile> &cached_fi
 	TryEraseFileLocked(*locked_file);
 }
 
-void ExternalFileCache::TryEraseFile(CachedFile &cached_file) {
-	lock_guard<mutex> guard(lock);
-	TryEraseFileLocked(cached_file);
-}
-
 void ExternalFileCache::TryEraseFileLocked(CachedFile &cached_file) {
 	auto entry = cached_files.find(cached_file.path);
 	if (entry == cached_files.end()) {

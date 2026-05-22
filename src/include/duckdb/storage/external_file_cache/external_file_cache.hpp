@@ -93,8 +93,6 @@ public:
 	shared_ptr<CachedFile> GetOrCreateCachedFile(const string &path);
 	//! Releases an active handle reference to a cached file.
 	void ReleaseCachedFileHandle(CachedFile &cached_file);
-	//! Try to erase the cached file if it is no longer needed.
-	void TryEraseFile(CachedFile &cached_file);
 
 	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
 	                               const string &current_version_tag, timestamp_t current_last_modified);

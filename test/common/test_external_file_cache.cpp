@@ -2,11 +2,15 @@
 #include "caching_test_utils.hpp"
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 #include <chrono>
 
@@ -16,6 +20,9 @@ namespace {
 
 using EFCTestFileGuard = CachingTestFileGuard;
 using EFCTrackingFileSystem = SimpleTrackingFileSystem;
+
+// Exception postscript for buffer pool eviction.
+constexpr const char *EXCEPTION_POSTSCRIPT = "exception postscript";
 
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
 	OpenFileInfo info(path);
@@ -51,7 +58,85 @@ idx_t TotalCachedBytes(ExternalFileCache &cache) {
 	return total;
 }
 
+bool HasLoadedCachedBlocks(ExternalFileCache &cache) {
+	for (auto &info : cache.GetCachedFileInformation()) {
+		if (info.loaded) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void ForceExternalCacheBlockUnload(DatabaseInstance &db_instance, ExternalFileCache &cache, idx_t buffer_size) {
+	auto &buffer_manager = BufferManager::GetBufferManager(db_instance);
+	auto &buffer_pool = db_instance.GetBufferPool();
+	const auto initial_memory = buffer_pool.GetUsedMemory();
+	const auto alloc_size = BufferManager::GetAllocSize(buffer_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
+	buffer_pool.SetLimit(initial_memory + 2 * alloc_size, EXCEPTION_POSTSCRIPT);
+
+	vector<BufferHandle> pressure_handles;
+	for (idx_t i = 0; i < 16 && HasLoadedCachedBlocks(cache); i++) {
+		pressure_handles.push_back(buffer_manager.Allocate(MemoryTag::EXTENSION, buffer_size, true));
+	}
+}
+
 } // namespace
+
+TEST_CASE("External file cache removes data-backed entry after block unload", "[external_file_cache]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t block_size = db_instance.GetExternalFileCache().GetCacheBlockSize(TestDirectoryPath());
+	const auto content = MakeTestContent(block_size);
+	EFCTestFileGuard test_file("test_efc_data_backed_cleanup.bin", content);
+
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+	auto &cache = db_instance.GetExternalFileCache();
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content);
+		REQUIRE(CountCachedBlocks(cache) == 1);
+		REQUIRE(HasLoadedCachedBlocks(cache));
+	}
+
+	REQUIRE(CountCachedBlocks(cache) == 1);
+	ForceExternalCacheBlockUnload(db_instance, cache, block_size);
+	REQUIRE(CountCachedBlocks(cache) == 0);
+}
+
+TEST_CASE("External file cache active handle survives block unload and refetch", "[external_file_cache]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t block_size = db_instance.GetExternalFileCache().GetCacheBlockSize(TestDirectoryPath());
+	const auto content = MakeTestContent(block_size);
+	EFCTestFileGuard test_file("test_efc_active_handle_refetch.bin", content);
+
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+	auto &cache = db_instance.GetExternalFileCache();
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+
+	REQUIRE(ReadFull(*handle, block_size) == content);
+	REQUIRE(CountCachedBlocks(cache) == 1);
+	REQUIRE(HasLoadedCachedBlocks(cache));
+
+	ForceExternalCacheBlockUnload(db_instance, cache, block_size);
+	REQUIRE(CountCachedBlocks(cache) == 1);
+	REQUIRE(!HasLoadedCachedBlocks(cache));
+
+	REQUIRE(ReadFull(*handle, block_size) == content);
+	REQUIRE(CountCachedBlocks(cache) == 1);
+	REQUIRE(HasLoadedCachedBlocks(cache));
+
+	ForceExternalCacheBlockUnload(db_instance, cache, block_size);
+	REQUIRE(CountCachedBlocks(cache) == 1);
+	REQUIRE(!HasLoadedCachedBlocks(cache));
+
+	handle.reset();
+	REQUIRE(CountCachedBlocks(cache) == 0);
+}
 
 TEST_CASE("Lazy reindex splits large blocks on next read", "[external_file_cache]") {
 	DuckDB db(":memory:");
