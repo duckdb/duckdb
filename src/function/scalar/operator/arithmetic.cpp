@@ -92,17 +92,30 @@ static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 }
 
 template <class T>
+static Value NumericStatsValue(const LogicalType &type, T value) {
+	D_ASSERT(type.IsFloating());
+	switch (type.InternalType()) {
+	case PhysicalType::FLOAT:
+		return Value::FLOAT(value);
+	case PhysicalType::DOUBLE:
+		return Value::DOUBLE(value);
+	default:
+		return Value::Numeric(type, value);
+	}
+}
+
+template <class T>
 static bool WidenFloatingBounds(const LogicalType &type, Value &new_min, Value &new_max) {
 	auto min = new_min.GetValue<T>();
 	auto max = new_max.GetValue<T>();
-	if (!std::isfinite(min) || !std::isfinite(max)) {
+	if (!Value::IsFinite(min) || !Value::IsFinite(max)) {
 		return false;
 	}
 	min = std::nextafter(min, -std::numeric_limits<T>::infinity());
 	max = std::nextafter(max, std::numeric_limits<T>::infinity());
 
-	new_min = Value::CreateValue(min);
-	new_max = Value::CreateValue(max);
+	new_min = NumericStatsValue(type, min);
+	new_max = NumericStatsValue(type, max);
 	return true;
 }
 
@@ -110,11 +123,11 @@ template <class BASEOP>
 struct FloatingTryOperator {
 	template <class T>
 	static bool Operation(T left, T right, T &result) {
-		if (!std::isfinite(left) || !std::isfinite(right)) {
+		if (!Value::IsFinite(left) || !Value::IsFinite(right)) {
 			return false;
 		}
 		result = BASEOP::template Operation<T, T, T>(left, right);
-		return std::isfinite(result);
+		return Value::IsFinite(result);
 	}
 };
 
@@ -136,8 +149,9 @@ struct AddPropagateStatistics {
 		if (!OP::Operation(NumericStats::GetMax<T>(lstats), NumericStats::GetMax<T>(rstats), max)) {
 			return true;
 		}
-		new_min = Value::Numeric(type, min);
-		new_max = Value::Numeric(type, max);
+
+		new_min = NumericStatsValue(type, min);
+		new_max = NumericStatsValue(type, max);
 		return false;
 	}
 };
@@ -153,8 +167,8 @@ struct SubtractPropagateStatistics {
 		if (!OP::Operation(NumericStats::GetMax<T>(lstats), NumericStats::GetMin<T>(rstats), max)) {
 			return true;
 		}
-		new_min = Value::Numeric(type, min);
-		new_max = Value::Numeric(type, max);
+		new_min = NumericStatsValue(type, min);
+		new_max = NumericStatsValue(type, max);
 		return false;
 	}
 };
@@ -946,8 +960,8 @@ struct MultiplyPropagateStatistics {
 				}
 			}
 		}
-		new_min = Value::Numeric(type, min);
-		new_max = Value::Numeric(type, max);
+		new_min = NumericStatsValue(type, min);
+		new_max = NumericStatsValue(type, max);
 		return false;
 	}
 };

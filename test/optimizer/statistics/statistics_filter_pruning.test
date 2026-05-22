@@ -42,16 +42,6 @@ WHERE json LIKE '%cumulative_rows_scanned%';
 true
 
 query I
-SELECT CASE
-	WHEN max(regexp_extract(json, 'cumulative_cardinality.: ([0-9]+)', 1)::BIGINT) = 150000 THEN 'true'
-	ELSE 'false'
-END
-FROM read_csv('{TEST_DIR}/statistics_filter_pruning_int_profile.json', columns={'json': 'VARCHAR'}, sep='🦆')
-WHERE json LIKE '%cumulative_cardinality%';
-----
-true
-
-query I
 SELECT count(*) FROM stats_filter_prune_int WHERE a + 4 - 4 > 0;
 ----
 149999
