@@ -175,30 +175,17 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context
                                                           const string &extension_name) {
 	return AddExtensionInstallHintToErrorMsg(DatabaseInstance::GetDatabase(context), base_error, extension_name);
 }
-string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, const string &base_error,
-                                                          const string &extension_name) {
-	string install_hint;
-
-	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
-		install_hint = "Please try installing and loading the " + extension_name + " extension:\nINSTALL " +
-		               extension_name + ";\nLOAD " + extension_name + ";\n\n";
-	} else if (!Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
-		install_hint =
-		    "Please try installing and loading the " + extension_name + " extension by running:\nINSTALL " +
-		    extension_name + ";\nLOAD " + extension_name +
-		    ";\n\nAlternatively, consider enabling auto-install "
-		    "and auto-load by running:\nSET autoinstall_known_extensions=1;\nSET autoload_known_extensions=1;";
-	} else if (!Settings::Get<AutoinstallKnownExtensionsSetting>(db)) {
-		install_hint =
-		    "Please try installing the " + extension_name + " extension by running:\nINSTALL " + extension_name +
-		    ";\n\nAlternatively, consider enabling autoinstall by running:\nSET autoinstall_known_extensions=1;";
-	}
-
-	if (!install_hint.empty()) {
-		return base_error + "\n\n" + install_hint;
-	}
-
-	return base_error;
+string ExtensionHelper::AddExtensionInstallHintToErrorMsg([[maybe_unused]] DatabaseInstance &db,
+                                                          const string &base_error, const string &extension_name) {
+	// SereneDB compiles extensions in at build time and does not support
+	// the upstream DuckDB INSTALL/LOAD or autoinstall/autoload mechanisms.
+	// Telling users to "INSTALL <extension>" would be misleading -- those
+	// commands do not work in SereneDB. Surface the gap as a request to
+	// file an issue instead.
+	return base_error + "\n\nThis feature relies on the \"" + extension_name +
+	       "\" extension which is not built into this SereneDB binary. "
+	       "Please open an issue at https://github.com/serenedb/serenedb/issues "
+	       "if you need it.";
 }
 
 bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept {
