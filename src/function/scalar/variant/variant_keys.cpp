@@ -64,18 +64,6 @@ bool VariantKeysBindData::Equals(const FunctionData &other) const {
 	return true;
 }
 
-struct VariantKeysResult {
-	explicit VariantKeysResult(const idx_t count) {
-		key_ids.Initialize(VectorDataInitialization::UNINITIALIZED, count);
-		path_validity.Initialize(count);
-	}
-
-	//! By row found keys at the requested path in the VARIANT
-	Vector key_ids {LogicalType::LIST(LogicalType::UBIGINT)};
-	//! By row flag if the requested path exists in the VARIANT
-	ValidityMask path_validity;
-};
-
 struct VariantPathSelection {
 	explicit VariantPathSelection(const idx_t count) {
 		value_index_sel.Initialize(count);
@@ -123,33 +111,34 @@ static void TraverseVariantPath(const UnifiedVariantVectorData &variant, const v
 				continue;
 			}
 			if (lookup_validity.CanHaveNull() && !lookup_validity.RowIsValid(j)) {
-				//! No child could be extracted, set to NULL
 				validity.SetInvalid(j);
 			}
 		}
 	}
 }
 
-static void PrepareKeyListStorage(VariantKeysResult &result, const ValidityMask &object_validity,
+static void PrepareKeyListStorage(Vector& key_ids, const ValidityMask &object_validity,
                                   const VariantNestedData *nested_data, const idx_t count) {
+	const auto &list_validity = FlatVector::Validity(key_ids);
+
 	idx_t total_key_count = 0;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		if (!result.path_validity.RowIsValid(row_idx) || !object_validity.RowIsValid(row_idx)) {
+		if (!list_validity.RowIsValid(row_idx) || !object_validity.RowIsValid(row_idx)) {
 			continue;
 		}
 		total_key_count += nested_data[row_idx].child_count;
 	}
 
-	ListVector::Reserve(result.key_ids, total_key_count);
-	ListVector::SetListSize(result.key_ids, total_key_count);
+	ListVector::Reserve(key_ids, total_key_count);
+	ListVector::SetListSize(key_ids, total_key_count);
 }
 
-static void WriteKeyIdList(const UnifiedVariantVectorData &variant, VariantKeysResult &result,
+static void WriteKeyIdList(const UnifiedVariantVectorData &variant, Vector& key_ids,
                            VariantNestedData *nested_data, const ValidityMask &object_validity, const idx_t count) {
-	PrepareKeyListStorage(result, object_validity, nested_data, count);
+	PrepareKeyListStorage(key_ids, object_validity, nested_data, count);
 
-	const auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result.key_ids);
-	auto &key_id_child = ListVector::GetChildMutable(result.key_ids);
+	const auto list_entries = FlatVector::GetDataMutable<list_entry_t>(key_ids);
+	auto &key_id_child = ListVector::GetChildMutable(key_ids);
 	const auto key_ids_data = FlatVector::GetDataMutable<idx_t>(key_id_child);
 
 	idx_t current_offset = 0;
@@ -158,7 +147,8 @@ static void WriteKeyIdList(const UnifiedVariantVectorData &variant, VariantKeysR
 		entry.offset = current_offset;
 		entry.length = 0;
 
-		if (!result.path_validity.RowIsValid(row_idx) || !object_validity.RowIsValid(row_idx)) {
+		if (!object_validity.RowIsValid(row_idx)) {
+			// No keys to write: the row is either NULL or the target is not an object type
 			continue;
 		}
 
@@ -175,22 +165,25 @@ static void WriteKeyIdList(const UnifiedVariantVectorData &variant, VariantKeysR
 }
 
 // TODO: Currently collection will always happen on the unshredded variant, introduce a fast path for shredded variants.
-static VariantKeysResult CollectVariantKeys(const UnifiedVariantVectorData &variant,
+static Vector CollectVariantKeys(const UnifiedVariantVectorData &variant,
                                             const vector<VariantPathComponent> &components, const idx_t count) {
-	VariantKeysResult result(count);
+	// By row found keys at the requested path in the VARIANT
+	Vector key_ids(LogicalType::LIST(LogicalType::UBIGINT));
+	key_ids.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 	VariantPathSelection path_selection(count);
 
 	auto &allocator = Allocator::DefaultAllocator();
 	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
 	const auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
 
-	TraverseVariantPath(variant, components, count, nested_data, result.path_validity, path_selection);
+	auto &list_validity = FlatVector::ValidityMutable(key_ids);
+	TraverseVariantPath(variant, components, count, nested_data, list_validity, path_selection);
 
 	// For the final collection of nested_data we use an auxiliary validity vector so we can distinguish "path missing"
 	// from "path exists but not an object" (producing NULL and [] as output respectively).
 	ValidityMask object_validity(count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		if (!result.path_validity.RowIsValid(row_idx)) {
+		if (!list_validity.RowIsValid(row_idx)) {
 			object_validity.SetInvalid(row_idx);
 		}
 	}
@@ -199,9 +192,9 @@ static VariantKeysResult CollectVariantKeys(const UnifiedVariantVectorData &vari
 	(void)VariantUtils::CollectNestedData(variant, VariantLogicalType::OBJECT, final_indices, count, optional_idx(), 0,
 	                                      nested_data, object_validity);
 
-	WriteKeyIdList(variant, result, nested_data, object_validity, count);
+	WriteKeyIdList(variant, key_ids, nested_data, object_validity, count);
 
-	return result;
+	return key_ids;
 }
 
 static void UnaryVariantKeys(const Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
@@ -210,7 +203,8 @@ static void UnaryVariantKeys(const Vector &variant_vec, const vector<VariantPath
 	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
 	const UnifiedVariantVectorData variant(source_format);
 
-	const auto &[key_ids, path_validity] = CollectVariantKeys(variant, components, count);
+	auto key_ids = CollectVariantKeys(variant, components, count);
+	const auto &list_validity = FlatVector::Validity(key_ids);
 	const auto list_entries = FlatVector::GetData<const list_entry_t>(key_ids);
 	const auto &child = ListVector::GetChild(key_ids);
 	const auto key_ids_data = FlatVector::GetData<const idx_t>(child);
@@ -219,7 +213,7 @@ static void UnaryVariantKeys(const Vector &variant_vec, const vector<VariantPath
 	auto result_writer = FlatVector::Writer<VectorListType<string_t>>(result, count);
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		if (!path_validity.RowIsValid(row_idx)) {
+		if (!list_validity.RowIsValid(row_idx)) {
 			result_writer.WriteNull();
 			continue;
 		}
@@ -237,7 +231,7 @@ static void UnaryVariantKeys(const Vector &variant_vec, const vector<VariantPath
 
 static void ManyVariantKeys(const Vector &variant_vec, const vector<vector<VariantPathComponent>> &paths,
                             Vector &result, const idx_t count) {
-	vector<VariantKeysResult> keys_by_path;
+	vector<Vector> keys_by_path;
 	keys_by_path.reserve(paths.size());
 
 	RecursiveUnifiedVectorFormat source_format;
@@ -255,12 +249,13 @@ static void ManyVariantKeys(const Vector &variant_vec, const vector<vector<Varia
 		auto row_writer = result_writer.WriteList(paths.size());
 		idx_t path_idx = 0;
 		for (auto &path_keys_writer : row_writer) {
-			const auto &[key_ids, path_validity] = keys_by_path[path_idx];
+			const auto &key_ids = keys_by_path[path_idx];
+			const auto &list_validity = FlatVector::Validity(key_ids);
 			const auto list_entries = FlatVector::GetData<const list_entry_t>(key_ids);
 			const auto &child = ListVector::GetChild(key_ids);
 			const auto key_ids_data = FlatVector::GetData<const idx_t>(child);
 
-			if (!path_validity.RowIsValid(row_idx)) {
+			if (!list_validity.RowIsValid(row_idx)) {
 				path_keys_writer.WriteNull();
 				path_idx++;
 				continue;
