@@ -1,6 +1,6 @@
 CopyStatement <- 'COPY' (CopyTable / CopySelect / CopyFromDatabase)
 
-CopyTable <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyOptions?
+CopyTable <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyOptions? WhereClause?
 FromOrTo <- 'FROM' / 'TO'
 
 CopySelect <- Parens(SelectStatementInternal) 'TO' CopyFileName CopyOptions?
