@@ -75,7 +75,7 @@ public:
 	void ThrowException();
 
 	//! Work on tasks for this specific executor, until there are no tasks remaining
-	void WorkOnTasks();
+	bool WorkOnTasks();
 
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);

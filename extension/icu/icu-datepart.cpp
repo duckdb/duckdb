@@ -278,14 +278,14 @@ struct ICUDatePart : public ICUDateFunc {
 	static void UnaryTimestampFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		using BIND_TYPE = BindAdapterData<RESULT_TYPE>;
 		D_ASSERT(args.ColumnCount() == 1);
-		auto &date_arg = args.data[0];
+		const auto &date_arg = args.data[0];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<BIND_TYPE>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
-		UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(date_arg, result, args.size(),
+		UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(date_arg, result,
 		                                                [&](INPUT_TYPE input) -> optional<RESULT_TYPE> {
 			                                                if (input.IsFinite()) {
 				                                                const auto micros = SetTime(calendar, input);
@@ -300,8 +300,8 @@ struct ICUDatePart : public ICUDateFunc {
 	static void BinaryTimestampFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		using BIND_TYPE = BindAdapterData<int64_t>;
 		D_ASSERT(args.ColumnCount() == 2);
-		auto &part_arg = args.data[0];
-		auto &date_arg = args.data[1];
+		const auto &part_arg = args.data[0];
+		const auto &date_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<BIND_TYPE>();
@@ -309,8 +309,7 @@ struct ICUDatePart : public ICUDateFunc {
 		auto calendar = calendar_ptr.get();
 
 		BinaryExecutor::Execute<string_t, INPUT_TYPE, RESULT_TYPE>(
-		    part_arg, date_arg, result, args.size(),
-		    [&](string_t specifier, INPUT_TYPE input) -> optional<RESULT_TYPE> {
+		    part_arg, date_arg, result, [&](string_t specifier, INPUT_TYPE input) -> optional<RESULT_TYPE> {
 			    if (input.IsFinite()) {
 				    const auto micros = SetTime(calendar, input);
 				    auto adapter = PartCodeBigintFactory(GetDatePartSpecifier(specifier.GetString()));
@@ -376,7 +375,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 		D_ASSERT(args.ColumnCount() == 1);
 		const auto count = args.size();
-		Vector &input = args.data[0];
+		const Vector &input = args.data[0];
 		auto entries = input.Values<INPUT_TYPE>();
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);

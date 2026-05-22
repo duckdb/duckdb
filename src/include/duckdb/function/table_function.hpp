@@ -17,6 +17,7 @@
 #include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/function/partition_stats.hpp"
@@ -333,6 +334,10 @@ typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext
                                                                    const FunctionData *bind_data);
 typedef idx_t (*table_function_rows_scanned_t)(GlobalTableFunctionState &global_state,
                                                LocalTableFunctionState &local_state);
+typedef void (*table_function_get_metrics_t)(ClientContext &context, const FunctionData *bind_data,
+                                             GlobalTableFunctionState &global_state,
+                                             LocalTableFunctionState &local_state,
+                                             const profiler_settings_t &requested_metrics, profiler_metrics_t &metrics);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
@@ -362,8 +367,13 @@ typedef vector<column_t> (*table_function_get_row_id_columns)(ClientContext &con
 typedef void (*table_function_set_scan_order)(unique_ptr<RowGroupOrderOptions> order_options,
                                               optional_ptr<FunctionData> bind_data);
 
+typedef void (*table_function_set_partitions_to_scan_t)(vector<idx_t> partition_indices,
+                                                        optional_ptr<FunctionData> bind_data);
+
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
+
+enum class TableFunctionReturnType { TABLE_RETURNING_FUNCTION, SET_RETURNING_FUNCTION };
 
 class TableFunction : public SimpleNamedParameterFunction { // NOLINT: work-around bug in clang-tidy
 public:
@@ -449,6 +459,8 @@ public:
 	table_function_cardinality_t cardinality;
 	//! (Optional) returns the number of rows that have been scanned
 	table_function_rows_scanned_t rows_scanned;
+	//! (Optional) returns profiling metrics for this table scan operator
+	table_function_get_metrics_t get_metrics;
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
 	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan
 	table_function_pushdown_complex_filter_t pushdown_complex_filter;
@@ -482,6 +494,8 @@ public:
 	table_function_get_row_id_columns get_row_id_columns;
 	//! (Optional) sets the order to scan the row groups in
 	table_function_set_scan_order set_scan_order;
+	//! (Optional) restricts the scan to a specific subset of partitions (by index in get_partition_stats order)
+	table_function_set_partitions_to_scan_t set_partitions_to_scan = nullptr;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;
@@ -501,6 +515,7 @@ public:
 	bool sampling_pushdown;
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
+	TableFunctionReturnType return_type;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 	//! The order preservation type of the table function

@@ -4,7 +4,8 @@
 namespace duckdb {
 
 // UseStatement <- 'USE' UseTarget
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(const QualifiedName &use_target) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransformer &transformer,
+                                                                      const QualifiedName &use_target) {
 	string value_str;
 	if (IsInvalidSchema(use_target.schema)) {
 		value_str = SQLIdentifier::ToString(use_target.name);
@@ -17,17 +18,18 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(const Qual
 }
 
 // UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
-QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transformer, ParseResult &pr) {
-	if (pr.type == ParseResultType::IDENTIFIER) {
+QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transformer, ParseResult &choice_result) {
+	if (choice_result.type == ParseResultType::IDENTIFIER) {
 		QualifiedName result;
-		result.name = pr.Cast<IdentifierParseResult>().identifier;
+		result.name = choice_result.Cast<IdentifierParseResult>().identifier;
 		return result;
 	}
-	return transformer.Transform<QualifiedName>(pr);
+	return transformer.Transform<QualifiedName>(choice_result);
 }
 
 // UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
-QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchema(const string &catalog_name,
+QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchema(PEGTransformer &transformer,
+                                                                     const string &catalog_name,
                                                                      const string &reserved_schema_name,
                                                                      const vector<string> &dot_identifier) {
 	if (!dot_identifier.empty()) {
@@ -40,7 +42,7 @@ QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchema(const strin
 	return result;
 }
 
-string PEGTransformerFactory::TransformDotIdentifier(const string &identifier) {
+string PEGTransformerFactory::TransformDotIdentifier(PEGTransformer &transformer, const string &identifier) {
 	return identifier;
 }
 } // namespace duckdb

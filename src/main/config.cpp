@@ -119,6 +119,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(DefaultNullOrderSetting),
     DUCKDB_SETTING_CALLBACK(DefaultOrderSetting),
     DUCKDB_GLOBAL(DefaultSecretStorageSetting),
+    DUCKDB_SETTING_CALLBACK(DefaultTransactionInvalidationPolicySetting),
     DUCKDB_SETTING_CALLBACK(DeprecatedUsingKeySyntaxSetting),
     DUCKDB_SETTING_CALLBACK(DisableDatabaseInvalidationSetting),
     DUCKDB_SETTING(DisableTimestamptzCastsSetting),
@@ -152,13 +153,14 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(ExternalThreadsSetting),
     DUCKDB_SETTING(FileSearchPathSetting),
     DUCKDB_SETTING_CALLBACK(ForceBitpackingModeSetting),
+    DUCKDB_SETTING(ForceColumnMetadataReuseSetting),
     DUCKDB_SETTING_CALLBACK(ForceCompressionSetting),
     DUCKDB_GLOBAL(ForceMbedtlsUnsafeSetting),
     DUCKDB_GLOBAL(ForceVariantShredding),
     DUCKDB_SETTING(GeometryMinimumShreddingSize),
     DUCKDB_SETTING_CALLBACK(HomeDirectorySetting),
     DUCKDB_LOCAL(HTTPLoggingOutputSetting),
-    DUCKDB_SETTING(HTTPProxySetting),
+    DUCKDB_GLOBAL(HTTPProxySetting),
     DUCKDB_SETTING(HTTPProxyPasswordSetting),
     DUCKDB_SETTING(HTTPProxyUsernameSetting),
     DUCKDB_SETTING(IeeeFloatingPointOpsSetting),
@@ -220,17 +222,18 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(WalAutocheckpointEntriesSetting),
     DUCKDB_SETTING_CALLBACK(WarningsAsErrorsSetting),
     DUCKDB_SETTING(WriteBufferRowGroupCountSetting),
+    DUCKDB_GLOBAL(WriteBufferRowGroupMemoryLimitSetting),
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 27),
                                                      DUCKDB_SETTING_ALIAS("custom_profiling_settings", 27),
-                                                     DUCKDB_SETTING_ALIAS("memory_limit", 113),
+                                                     DUCKDB_SETTING_ALIAS("memory_limit", 115),
                                                      DUCKDB_SETTING_ALIAS("null_order", 52),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 134),
-                                                     DUCKDB_SETTING_ALIAS("user", 149),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 136),
+                                                     DUCKDB_SETTING_ALIAS("user", 151),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 26),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 148),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 150),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -910,7 +913,7 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 }
 
 SerializationOptions::SerializationOptions(AttachedDatabase &db) {
-	serialization_compatibility = SerializationCompatibility::FromDatabase(db);
+	storage_compatibility = StorageCompatibility::FromDatabase(db);
 }
 
 void DBConfig::SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util) {

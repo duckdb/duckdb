@@ -12,6 +12,7 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/compression/alp/algorithm/alp.hpp"
@@ -19,28 +20,24 @@
 #include "duckdb/storage/compression/patas/patas.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/statistics/stats_writer.hpp"
 
 namespace duckdb {
 
 template <class T>
-struct AlpCompressionState : public CompressionState {
+struct AlpCompressionState : public StandardCompressionState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	AlpCompressionState(ColumnDataCheckpointData &checkpoint_data, AlpAnalyzeState<T> *analyze_state)
-	    : CompressionState(analyze_state->info), checkpoint_data(checkpoint_data),
-	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
+	    : StandardCompressionState(checkpoint_data, CompressionType::COMPRESSION_ALP) {
 		CreateEmptySegment();
 
 		//! Combinations found on the analyze step are needed for compression
 		compression_data.best_k_combinations = analyze_state->compression_data.best_k_combinations;
 	}
 
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
-	unique_ptr<ColumnSegment> current_segment;
-	BufferHandle handle;
-
+	StatsWriter<T> stats_writer;
 	idx_t vector_idx = 0;
 	idx_t nulls_idx = 0;
 	idx_t vectors_flushed = 0;
@@ -76,15 +73,7 @@ public:
 	}
 
 	void CreateEmptySegment() {
-		auto &db = checkpoint_data.GetDatabase();
-		auto &type = checkpoint_data.GetType();
-
-		auto compressed_segment =
-		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
-		current_segment = std::move(compressed_segment);
-
-		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
-		handle = buffer_manager.Pin(current_segment->block);
+		CreateAndPinNewSegment();
 
 		// The pointer to the start of the compressed data.
 		data_ptr = handle.GetDataMutable() + current_segment->GetBlockOffset() + AlpConstants::HEADER_SIZE;
@@ -103,7 +92,8 @@ public:
 		const idx_t compressed_size = compression_data.RequiredSpace();
 
 		const auto storage_version = checkpoint_data.GetStorageManager().GetStorageVersion();
-		const bool should_compress = compressed_size < uncompressed_size || storage_version < 7;
+		const bool should_compress = compressed_size < uncompressed_size ||
+		                             StorageManager::IsPriorToVersion(StorageVersion::V1_5_0, storage_version);
 
 		const idx_t vector_size = should_compress ? compressed_size : uncompressed_size;
 
@@ -114,12 +104,12 @@ public:
 		}
 
 		if (nulls_idx) {
-			current_segment->stats.statistics.SetHasNullFast();
+			stats_writer.SetHasNull();
 		}
 		if (vector_idx != nulls_idx) { //! At least there is one valid value in the vector
-			current_segment->stats.statistics.SetHasNoNullFast();
+			stats_writer.SetHasValid();
 			for (idx_t i = 0; i < vector_idx; i++) {
-				current_segment->stats.statistics.UpdateNumericStats<T>(input_vector[i]);
+				stats_writer.UpdateMinMax(input_vector[i]);
 			}
 		}
 		current_segment->count += vector_idx;
@@ -205,7 +195,6 @@ public:
 	}
 
 	void FlushSegment() {
-		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
 		auto dataptr = handle.GetDataMutable();
 
 		idx_t metadata_offset = AlignValue(UsedSpace());
@@ -238,7 +227,7 @@ public:
 		// Store the offset to the end of metadata (to be used as a backwards pointer in decoding)
 		Store<uint32_t>(NumericCast<uint32_t>(total_segment_size), dataptr);
 
-		checkpoint_state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
+		FlushCurrentSegment(stats_writer, total_segment_size);
 		data_bytes_used = 0;
 		vectors_flushed = 0;
 	}
@@ -298,11 +287,11 @@ unique_ptr<CompressionState> AlpInitCompression(ColumnDataCheckpointData &checkp
 }
 
 template <class T>
-void AlpCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void AlpCompress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = (AlpCompressionState<T> &)state_p;
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(vdata);
-	state.Append(vdata, count);
+	state.Append(vdata, scan_vector.size());
 }
 
 template <class T>

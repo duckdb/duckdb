@@ -19,6 +19,7 @@
 namespace duckdb {
 
 struct GlobalFileState;
+struct BoundOrderByNode;
 
 struct CopyToFileInfo {
 	explicit CopyToFileInfo(string file_path_p) : file_path(std::move(file_path_p)) {
@@ -70,6 +71,9 @@ public:
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
+	//! Synchronously complete any pending partitioned-copy flush work after Finalize has been called.
+	//! Used by callers (e.g. DuckLakeUpdate) that drive Sink/Finalize/GetData manually outside a pipeline.
+	void FinalizePartitionedSync(ExecutionContext &execution_context, InterruptState &interrupt_state) const;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
@@ -138,6 +142,9 @@ public:
 	bool partition_output;
 	bool write_partition_columns;
 	bool hive_file_pattern;
+
+	//! If the data should be sorted
+	vector<BoundOrderByNode> order_columns;
 };
 
 } // namespace duckdb

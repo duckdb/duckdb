@@ -12,7 +12,7 @@ namespace duckdb {
 static void StructConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &result_cols = StructVector::GetEntries(result);
 	idx_t offset = 0;
-	for (auto &arg : args.data) {
+	for (const auto &arg : args.data) {
 		const auto &child_cols = StructVector::GetEntries(arg);
 		for (auto &child_col : child_cols) {
 			result_cols[offset++].Reference(child_col);

@@ -168,18 +168,19 @@ void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	// check if the storage version we are writing to supports roaring
 	const auto storage_version = col_data.GetStorageManager().GetStorageVersion();
-	if (storage_version < 4 || (type == PhysicalType::BOOL && storage_version < 7)) {
+	// before: serialization version 4 and ser version 7
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version) ||
+	    (type == PhysicalType::BOOL && StorageManager::IsPriorToVersion(StorageVersion::V1_5_0, storage_version))) {
 		// compatibility mode with old versions - disable roaring
 		return nullptr;
 	}
-	CompressionInfo info(col_data.GetBlockManager());
-	auto state = make_uniq<RoaringAnalyzeState>(info);
+	auto state = make_uniq<RoaringAnalyzeState>(col_data.GetBlockManager());
 	return std::move(state);
 }
 template <PhysicalType TYPE>
-bool RoaringAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
+bool RoaringAnalyze(AnalyzeState &state, const Vector &input) {
 	auto &analyze_state = state.Cast<RoaringAnalyzeState>();
-	analyze_state.Analyze<TYPE>(input, count);
+	analyze_state.Analyze<TYPE>(input);
 	return true;
 }
 
@@ -198,9 +199,9 @@ unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointData &ch
 }
 
 template <PhysicalType TYPE>
-void RoaringCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void RoaringCompress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = state_p.Cast<RoaringCompressState>();
-	state.Compress<TYPE>(scan_vector, count);
+	state.Compress<TYPE>(scan_vector);
 }
 
 void RoaringFinalizeCompress(CompressionState &state_p) {

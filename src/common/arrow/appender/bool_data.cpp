@@ -8,7 +8,7 @@ void ArrowBoolData::Initialize(ArrowAppendData &result, const LogicalType &type,
 	result.GetMainBuffer().reserve(byte_count);
 }
 
-void ArrowBoolData::Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+void ArrowBoolData::Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to, idx_t input_size) {
 	idx_t size = to - from;
 	auto &main_buffer = append_data.GetMainBuffer();
 	auto &validity_buffer = append_data.GetValidityBuffer();

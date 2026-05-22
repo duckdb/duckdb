@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/projection_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/column_binding.hpp"
@@ -24,11 +25,23 @@ class PerfectHashJoinExecutor;
 struct GlobalUngroupedAggregateState;
 struct LocalUngroupedAggregateState;
 
+enum class JoinFilterPushdownMode : uint8_t {
+	//! The pushed expression can be reconstructed on top of the raw scan value for BF/PRF/PHJ runtime filters
+	RECONSTRUCT_EXPRESSION,
+	//! Only storage-domain filters are safe; BF/PRF/PHJ reconstruction on raw scan values is not
+	STORAGE_ONLY
+};
+
 struct JoinFilterPushdownColumn {
 	//! The probe column index to which this filter should be applied
 	ColumnBinding probe_column_index;
 	//! The type of the value in storage (LogicalGet)
 	LogicalType storage_type;
+	//! Whether runtime filters can reconstruct the pushed expression, or whether only storage-domain filters are safe
+	JoinFilterPushdownMode mode = JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
+	//! The original type of the pushed probe expression before rewriting to the LogicalGet storage column. Only used
+	//! when the mode allows reconstruction of the probe expression for BF/PRF/PHJ runtime filters.
+	LogicalType runtime_filter_type;
 };
 
 struct JoinFilterGlobalState {
@@ -61,6 +74,11 @@ struct PushdownFilterTarget {
 	vector<JoinFilterPushdownColumn> columns;
 };
 
+struct JoinFilterPushdownUtil {
+	static bool PushdownJoinFilterExpression(const Expression &expr, JoinFilterPushdownColumn &filter);
+	static bool JoinTypeIsSupported(JoinType join_type);
+};
+
 struct JoinFilterPushdownInfo {
 	//! The join condition indexes for which we compute the min/max aggregates
 	vector<idx_t> join_condition;
@@ -90,13 +108,14 @@ private:
 	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
 	                  idx_t filter_idx, ProjectionIndex filter_col_idx) const;
 
-	void PushBloomFilter(const PhysicalOperator &op, JoinHashTable &ht, const JoinFilterPushdownFilter &info,
-	                     ProjectionIndex filter_col_idx) const;
-	void PushPerfectHashJoinFilter(const PhysicalOperator &op, PerfectHashJoinExecutor &perfect_join_executor,
-	                               const JoinFilterPushdownFilter &info, ProjectionIndex filter_col_idx) const;
+	void PushBloomFilter(ClientContext &context, const PhysicalOperator &op, JoinHashTable &ht,
+	                     const JoinFilterPushdownFilter &info, idx_t filter_idx, ProjectionIndex filter_col_idx) const;
+	void PushPerfectHashJoinFilter(ClientContext &context, const PhysicalOperator &op,
+	                               PerfectHashJoinExecutor &perfect_join_executor, const JoinFilterPushdownFilter &info,
+	                               idx_t filter_idx, ProjectionIndex filter_col_idx) const;
 	void RegisterPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context, JoinHashTable &ht,
-	                               const PhysicalOperator &op, ProjectionIndex filter_col_idx, const Value &min_val,
-	                               const Value &max_val) const;
+	                               const PhysicalOperator &op, idx_t filter_idx, ProjectionIndex filter_col_idx,
+	                               const Value &min_val, const Value &max_val) const;
 
 	bool CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
 	bool CanUseBloomFilter(const ClientContext &context, const PhysicalComparisonJoin &op, const ExpressionType &cmp,
