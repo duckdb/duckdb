@@ -189,6 +189,11 @@ public:
 	unsafe_vector<void *> vector_ptr;
 	unsafe_vector<ValidityMask *> validity_mask;
 
+	//! Repoint parse_chunk's vectors at `external_vectors` so subsequent
+	//! ParseValue writes land in their buffers. One entry per parse_chunk
+	//! column, in parse_chunk's column order.
+	void RebindParseChunkVectors(const vector<Vector *> &external_vectors);
+
 	//! Variables to iterate over the CSV buffers
 
 	const char *buffer_ptr;
@@ -331,6 +336,34 @@ public:
 
 	//! Flushes the result to the insert_chunk
 	void Flush(DataChunk &insert_chunk);
+
+	//! Reposition the scanner to scan a fresh boundary. Reuses the parse_chunk and all
+	//! per-instance state allocated at construction (state machine, validity masks,
+	//! null_str tables, etc.) -- only the cursor and per-batch counters are reset.
+	//! Used by CSVLookupReader to drive O(|offsets|) point lookups without allocating
+	//! a new StringValueScanner per pk.
+	void Reset(const CSVIterator &new_iterator);
+
+	//! Reposition the scanner to a new boundary WITHOUT resetting parse_chunk's
+	//! row count. The next ParseChunkAppend() call writes parsed rows starting
+	//! at slot `result.number_of_rows`. Used by the lookup TF to accumulate
+	//! many pks' rows into one parse_chunk for a single zero-copy Reinterpret
+	//! into the caller's output. Caller must reset parse_chunk (set
+	//! result.number_of_rows = 0) before the first append in a batch.
+	void ResetForAppend(const CSVIterator &new_iterator);
+
+	//! Parse next row(s) into parse_chunk starting at slot `result.number_of_rows`.
+	//! Unlike ParseChunk(), does NOT call result.Reset() first -- preserves any
+	//! already-parsed rows so the caller can accumulate across many ResetForAppend
+	//! calls and Reinterpret the whole parse_chunk at the end (zero-copy fan-out).
+	StringValueResult &ParseChunkAppend();
+
+	//! Direct access to the result (for the lookup-mode caller that drives the
+	//! scanner via ResetForAppend / ParseChunkAppend and needs to clear/inspect
+	//! parse_chunk between batches without going through Flush).
+	StringValueResult &GetStringValueResult() {
+		return result;
+	}
 
 	//! Function that creates and returns a non-boundary CSV Scanner, can be used for internal csv reading.
 	static unique_ptr<StringValueScanner> GetCSVScanner(ClientContext &context, CSVReaderOptions &options,

@@ -26,7 +26,7 @@ class JSONReader;
 struct JSONBufferHandle {
 public:
 	JSONBufferHandle(JSONReader &reader, idx_t buffer_index, idx_t readers, AllocatedData &&buffer, idx_t buffer_size,
-	                 idx_t buffer_start);
+	                 idx_t buffer_start, idx_t file_start = 0);
 
 public:
 	//! The reader this buffer comes from
@@ -40,8 +40,14 @@ public:
 	AllocatedData buffer;
 	//! The size of the data in the buffer (can be less than buffer.GetSize())
 	const idx_t buffer_size;
-	//! The start position in the buffer
+	//! Buffer-local position where the fresh (just-read) data begins. Bytes
+	//! before this position are reserved padding or copied remainder from the
+	//! previous buffer -- not part of this read.
 	idx_t buffer_start;
+	//! File-level byte offset that corresponds to `buffer_ptr + buffer_start`.
+	//! Used by ReadJSONFunction to translate a record pointer into a stable
+	//! file byte offset for the `file_row_number` virtual column.
+	idx_t file_start;
 };
 
 struct JSONFileHandle {
@@ -63,9 +69,15 @@ public:
 
 	FileHandle &GetHandle();
 
-	//! The next two functions return whether the read was successful
-	bool GetPositionAndSize(idx_t &position, idx_t &size, idx_t requested_size);
+	//! The next two functions return whether the read was successful.
+	//! `seek_to` makes the request random-access: the sequential cursor is
+	//! left alone, and EOF does not latch `last_read_requested`.
+	bool GetPositionAndSize(idx_t &position, idx_t &size, idx_t requested_size, optional_idx seek_to = optional_idx());
 	bool Read(char *pointer, idx_t &read_size, idx_t requested_size);
+	//! Current file position -- the next sequential Read() will begin at this offset.
+	idx_t GetReadPosition() const {
+		return read_position.load();
+	}
 	//! Read at position optionally allows passing a custom handle to read from, otherwise the default one is used
 	void ReadAtPosition(char *pointer, idx_t size, idx_t position, optional_ptr<FileHandle> override_handle = nullptr);
 
@@ -162,6 +174,12 @@ struct JSONReaderScanState {
 	//! For some filesystems (e.g. S3), using a filehandle per thread increases performance
 	unique_ptr<FileHandle> thread_local_filehandle;
 
+	//! File byte offset that the most recent physical read started at -- i.e.
+	//! the file position corresponding to `buffer_ptr + buffer_offset` after
+	//! FinalizeBuffer. The two Read functions set this before issuing the read;
+	//! FinalizeBufferInternal propagates it into JSONBufferHandle::file_start.
+	idx_t file_read_start = 0;
+
 public:
 	//! Reset for parsing the next batch of JSON from the current buffer
 	void ResetForNextParse();
@@ -214,6 +232,16 @@ public:
 	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 	double GetProgressInFile(ClientContext &context) override;
+	//! Accepts file_row_number as a virtual column and remembers the local
+	//! scan_chunk slot it lands in (column_ids.size() at this point, since
+	//! the framework pushes the local id immediately after this call).
+	void AddVirtualColumn(column_t virtual_column_id) override;
+
+	//! Local slot in scan_chunk for file_row_number when projected, else
+	//! INVALID_INDEX. This is the post-constant-drop position -- using the
+	//! global col_idx from column_indexes would overshoot in glob mode where
+	//! file_index is dropped as a constant from the local layout.
+	idx_t file_row_number_local_idx = DConstants::INVALID_INDEX;
 
 public:
 	//! Get a new buffer index (must hold the lock)
@@ -242,6 +270,16 @@ public:
 
 	void DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer, AllocatedData &buffer);
 
+	//! Read ONE record at `file_offset` into scan_state.units[0] /
+	//! scan_state.values[0]. Caller must consume slot 0 before the next call.
+	//! Returns false on read/parse failure or boundary-crossing record.
+	//! TODO: stitch boundary-crossing records with the next buffer.
+	bool FetchRow(JSONReaderScanState &scan_state, idx_t file_offset);
+
+	//! Drop FetchRow's cached buffers. Call between batches once the prior
+	//! batch's output has been consumed downstream.
+	void ClearLookupBuffers(JSONReaderScanState &scan_state);
+
 private:
 	void SkipOverArrayStart(JSONReaderScanState &scan_state);
 	void AutoDetect(Allocator &allocator, idx_t buffer_size);
@@ -253,6 +291,9 @@ private:
 	void ReadNextBufferSeek(JSONReaderScanState &scan_state);
 	bool ReadNextBufferNoSeek(JSONReaderScanState &scan_state);
 	void FinalizeBuffer(JSONReaderScanState &scan_state);
+	//! Random-access variant of PrepareBufferSeek: caller-supplied offset,
+	//! does not advance the sequential read cursor. False at EOF.
+	bool PrepareBufferSeekAt(JSONReaderScanState &scan_state, idx_t file_offset, idx_t request_size);
 
 	//! Insert/get/remove buffer (grabs the lock)
 	void InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer);

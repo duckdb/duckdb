@@ -1740,7 +1740,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 	auto define_ptr = (uint8_t *)state.define_buf.ptr;
 	auto repeat_ptr = (uint8_t *)state.repeat_buf.ptr;
 
-	if (filters || deletion_filter) {
+	if (filters || deletion_filter || !state.pk_lookups.empty()) {
 		idx_t filter_count = result.size();
 		D_ASSERT(filter_count == scan_count);
 		vector<bool> need_to_read(column_ids.size(), true);
@@ -1754,6 +1754,22 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			filter_count = deletion_filter->Filter(row_start, scan_count, state.sel);
 			//! FIXME: does this need to be set?
 			//! As part of 'DirectFilter' we also initialize reads of the child readers
+			is_first_filter = false;
+		}
+		// pk-lookup mode: narrow `state.sel` to rows whose file_row_number is
+		// in `state.pk_lookups`. Walk the sorted span via lower_bound on the
+		// chunk's row range [row_start, row_end) and emit the in-range offsets.
+		if (!state.pk_lookups.empty()) {
+			state.sel.Initialize(STANDARD_VECTOR_SIZE);
+			const int64_t row_start = UnsafeNumericCast<int64_t>(state.offset_in_group + state.group_offset);
+			const int64_t row_end = row_start + NumericCast<int64_t>(scan_count);
+			idx_t matched = 0;
+			auto it = std::lower_bound(state.pk_lookups.begin(), state.pk_lookups.end(), row_start);
+			while (it != state.pk_lookups.end() && *it < row_end) {
+				state.sel.set_index(matched++, UnsafeNumericCast<idx_t>(*it - row_start));
+				++it;
+			}
+			filter_count = matched;
 			is_first_filter = false;
 		}
 

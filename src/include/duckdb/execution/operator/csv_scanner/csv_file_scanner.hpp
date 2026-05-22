@@ -63,6 +63,10 @@ public:
 	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) override;
 	double GetProgressInFile(ClientContext &context) override;
+	//! Accepts file_row_number as a virtual column. The column mapper calls this right
+	//! before appending the virtual column's local id to column_ids; we record the local
+	//! slot so Flush can fill the output with byte offsets instead of parsed CSV fields.
+	void AddVirtualColumn(column_t virtual_column_id) override;
 
 public:
 	idx_t GetFileIndex() const {
@@ -109,6 +113,13 @@ public:
 	//! file has completed When the scheduling is finished we increment `finished_tasks` by one as well
 	atomic<idx_t> started_tasks {1};
 	atomic<idx_t> finished_tasks {0};
+
+	//! Local slot within column_ids that receives file_row_number values. Set by
+	//! AddVirtualColumn to the column_ids.size() at the moment the column mapper
+	//! registers the virtual column; DConstants::INVALID_INDEX when not projected.
+	//! StringValueScanner::Flush fills this output slot with the byte offset of each
+	//! row's start (taken from line_positions_per_row) rather than from parse_chunk.
+	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 
 private:
 	vector<string> names;

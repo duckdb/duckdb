@@ -5,11 +5,183 @@
 #include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/common/bind_helpers.hpp"
+#include "duckdb/common/multi_file/multi_file_function.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
 
+namespace {
+
+// Cached lookup-mode state for read_csv. Built ONCE per query in init_global,
+// reused across every per-batch CSVLookupScan call:
+//   - file_scan: the CSV file scan -- buffer manager, state machine, error
+//     handler, schema, projection. Holds the parsed CSV metadata.
+//   - scanner: a single StringValueScanner repositioned via ResetForAppend
+//     per pk. The scanner's internal result.parse_chunk accumulates all the
+//     batch's rows; one Reinterpret per output column at end -- ZERO data copy.
+//   - buffer_pin: pinned buffer-usage handle for the scanner's lifetime.
+//     Single-buffer CSVs only -- multi-buffer would need to update this
+//     when pks straddle buffer boundaries.
+//   - output_to_file_col: per-output-column index into result.parse_chunk
+//     (or DConstants::INVALID_INDEX for virtual slots), built at init from
+//     input.column_indexes.
+// pk_lookups itself is supplied per call via TableFunctionInput::pk_lookups.
+struct CSVLookupGlobalState : public GlobalTableFunctionState {
+	shared_ptr<CSVFileScan> file_scan;
+	unique_ptr<StringValueScanner> scanner;
+	shared_ptr<CSVBufferUsage> buffer_pin;
+	std::vector<idx_t> output_to_file_col;
+};
+
+// Builds the lookup gstate from a caller-bound MultiFileBindData. We only
+// touch the FIRST file in the list -- pk-lookup is a single-file operation.
+// Constructs the CSVFileScan (file open + state machine + schema setup) and
+// the reusable StringValueScanner pinned to the file's start_iterator;
+// per-pk CSVLookupScan repositions it via Reset(MakeTightIterator(...)).
+unique_ptr<GlobalTableFunctionState> CSVLookupInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
+	auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
+	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
+	auto state = make_uniq<CSVLookupGlobalState>();
+
+	const auto &file = bind_data.file_list->GetFirstFile();
+	auto options = csv_data.options;
+	options.auto_detect = false; // schema already known
+	state->file_scan = make_shared_ptr<CSVFileScan>(
+	    context, file, std::move(options), bind_data.file_options, bind_data.names, bind_data.types,
+	    csv_data.csv_schema, /*per_file_single_threaded=*/true, /*buffer_manager=*/nullptr, /*fixed_schema=*/true);
+
+	// Populate column_ids with the projected real columns BEFORE
+	// InitializeFileNamesTypes -- it derives file_types / projection_ids from
+	// column_ids. Order matters: column_ids must be sorted by file index for
+	// the projection_ids sort to keep parse_chunk slots aligned.
+	std::vector<idx_t> sorted_file_cols;
+	for (auto &col : input.column_indexes) {
+		if (!col.IsVirtualColumn()) {
+			sorted_file_cols.push_back(col.GetPrimaryIndex());
+		}
+	}
+	std::sort(sorted_file_cols.begin(), sorted_file_cols.end());
+	for (auto file_col : sorted_file_cols) {
+		state->file_scan->column_ids.push_back(MultiFileLocalColumnId(file_col));
+	}
+	state->file_scan->InitializeFileNamesTypes();
+
+	// output-slot -> result.parse_chunk source-slot map. parse_chunk slots
+	// are indexed by position in `sorted_file_cols`; build a reverse lookup
+	// from input.column_indexes.
+
+	state->output_to_file_col.reserve(input.column_indexes.size());
+	for (auto &col : input.column_indexes) {
+		if (col.IsVirtualColumn()) {
+			state->output_to_file_col.push_back(DConstants::INVALID_INDEX);
+			continue;
+		}
+		const auto file_col = col.GetPrimaryIndex();
+		auto it = std::find(sorted_file_cols.begin(), sorted_file_cols.end(), file_col);
+		D_ASSERT(it != sorted_file_cols.end());
+		state->output_to_file_col.push_back(NumericCast<idx_t>(it - sorted_file_cols.begin()));
+	}
+
+	// Build the reusable scanner (pinned to start_iterator's buffer). Per-pk
+	// Reset(iter) repositions it -- no per-pk allocation. Single-buffer CSVs
+	// only; multi-buffer would need buffer_pin updates per cross-buffer pk.
+	state->buffer_pin = make_shared_ptr<CSVBufferUsage>(*state->file_scan->buffer_manager,
+	                                                    state->file_scan->start_iterator.GetBufferIdx());
+	state->scanner = make_uniq<StringValueScanner>(
+	    /*scanner_idx=*/0, state->file_scan->buffer_manager, state->file_scan->state_machine,
+	    state->file_scan->error_handler, state->file_scan, /*sniffing=*/false, state->file_scan->start_iterator);
+	state->scanner->buffer_tracker = state->buffer_pin;
+
+	return std::move(state);
+}
+
+// Maps a global byte offset to (buffer_idx, buffer_pos) and returns a tight
+// CSVIterator pinned to that offset. SetExactBoundary marks first_one=true
+// so the scanner trusts the offset is a real row start (no SetStart).
+//
+// Quirk: the pk encoding for non-first rows points at the trailing newline of
+// the previous row (pre-existing upstream behavior of
+// line_positions_per_row.begin -- see StringValueResult::AddRowInternal).
+// Peek at the byte; if it's \r and/or \n, advance past it so the parser
+// starts at the actual row start. This lets each pk produce exactly one row
+// (no leading empty record) -- enabling zero-copy Reinterpret accumulation.
+CSVIterator MakeTightIterator(CSVFileScan &file_scan, idx_t global_offset, idx_t boundary_idx) {
+	const auto buf_size = file_scan.buffer_manager->GetBufferSize();
+	idx_t buf_idx = global_offset / buf_size;
+	idx_t buf_pos = global_offset % buf_size;
+	auto handle = file_scan.buffer_manager->GetBuffer(buf_idx);
+	if (handle) {
+		const auto *ptr = handle->Ptr();
+		const idx_t actual = handle->actual_size;
+		if (buf_pos < actual && ptr[buf_pos] == '\r') {
+			++buf_pos;
+		}
+		if (buf_pos < actual && ptr[buf_pos] == '\n') {
+			++buf_pos;
+		}
+	}
+	CSVIterator iter = file_scan.start_iterator;
+	iter.SetExactBoundary(buf_idx, buf_pos, buf_pos + 1, boundary_idx);
+	return iter;
+}
+
+// Rebind parse_chunk's vectors to `output`, then per pk set number_of_rows
+// to pk_output_positions[i] so AddRowInternal writes that pk's row directly
+// at the caller's output slot. Glob views reuse the same `output` across
+// per-file calls; disjoint slots per call -> no coordination needed.
+void CSVLookupScan(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+	auto &gstate = data.global_state->Cast<CSVLookupGlobalState>();
+	if (data.pk_lookups.empty()) {
+		return;
+	}
+	D_ASSERT(data.pk_output_positions.size() == data.pk_lookups.size());
+
+	auto &result = gstate.scanner->GetStringValueResult();
+
+	vector<Vector *> external_vectors(result.parse_chunk.data.size(), nullptr);
+	for (idx_t c = 0; c < gstate.output_to_file_col.size(); ++c) {
+		const auto pc = gstate.output_to_file_col[c];
+		if (pc == DConstants::INVALID_INDEX) {
+			continue;
+		}
+		D_ASSERT(pc < external_vectors.size());
+		external_vectors[pc] = &output.data[c];
+	}
+	result.RebindParseChunkVectors(external_vectors);
+
+	result.Reset();
+
+	const idx_t num_rows = data.pk_lookups.size();
+	for (idx_t i = 0; i < num_rows; ++i) {
+		const auto offset = NumericCast<idx_t>(data.pk_lookups[i]);
+		gstate.scanner->ResetForAppend(MakeTightIterator(*gstate.file_scan, offset, i));
+		result.number_of_rows = NumericCast<int64_t>(data.pk_output_positions[i]);
+		gstate.scanner->ParseChunkAppend();
+	}
+}
+
+} // namespace
+
+TableFunction MakeCSVLookupTableFunction() {
+	TableFunction fn;
+	fn.init_global = CSVLookupInitGlobal;
+	fn.function = CSVLookupScan;
+	return fn;
+}
+
 unique_ptr<MultiFileReaderInterface> CSVMultiFileInfo::CreateInterface(ClientContext &context) {
 	return make_uniq<CSVMultiFileInfo>();
+}
+
+void CSVMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {
+	// file_row_number for CSV = byte offset of the row's start in the file.
+	// Unique per row, stable across re-reads of the same file. When a
+	// `file_row_number IN (...)` filter is pushed down, CSVGlobalState extracts
+	// the offsets and dispatches per-offset seek-and-parse scanners via
+	// NextPkLookupScanner() -- O(|offsets|) IO instead of a full scan.
+	result.insert(make_pair(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER,
+	                        TableColumn("file_row_number", LogicalType::BIGINT)));
 }
 
 unique_ptr<BaseFileReaderOptions> CSVMultiFileInfo::InitializeOptions(ClientContext &context,

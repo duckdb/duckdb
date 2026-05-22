@@ -72,6 +72,11 @@ public:
 	vector<string> names;
 	vector<column_t> column_ids;
 	vector<ColumnIndex> column_indices;
+	//! Output-chunk slot that receives file_row_number (byte offset of row start
+	//! in the file). Set by InitializeGlobalState when the virtual column is
+	//! projected; DConstants::INVALID_INDEX otherwise. ReadJSONFunction fills
+	//! this slot with offsets computed from scan_state.units[].
+	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 
 	//! Buffer manager allocator
 	Allocator &allocator;

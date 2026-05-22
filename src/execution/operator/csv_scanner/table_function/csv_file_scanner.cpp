@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -11,7 +12,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSV
                          const vector<LogicalType> &types, CSVSchema &file_schema, bool per_file_single_threaded,
                          shared_ptr<CSVBufferManager> buffer_manager_p, bool fixed_schema)
     : BaseFileReader(file_p), buffer_manager(std::move(buffer_manager_p)),
-      error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
+      error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue(), options_p.rejects_limit)),
       options(std::move(options_p)) {
 	// Initialize Buffer Manager
 	if (!buffer_manager) {
@@ -51,7 +52,8 @@ CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, CSV
 
 CSVFileScan::CSVFileScan(ClientContext &context, const OpenFileInfo &file_p, const CSVReaderOptions &options_p,
                          const MultiFileOptions &file_options)
-    : BaseFileReader(file_p), error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
+    : BaseFileReader(file_p),
+      error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue(), options_p.rejects_limit)),
       options(options_p) {
 	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file);
 	// Initialize On Disk and Size of file
@@ -111,6 +113,13 @@ void CSVFileScan::InitializeFileNamesTypes() {
 	}
 
 	for (idx_t i = 0; i < column_ids.size(); i++) {
+		if (i == file_row_number_idx) {
+			// Virtual column: not present in the file's columns/types, so it has
+			// no file_types entry and does not participate in projection_ids.
+			// StringValueScanner::Flush fills its output slot with byte offsets
+			// after parse_chunk is drained.
+			continue;
+		}
 		auto col_idx = MultiFileLocalIndex(i);
 		auto column_id = column_ids[col_idx];
 		file_types.emplace_back(types[column_id.GetId()]);
@@ -124,12 +133,17 @@ void CSVFileScan::InitializeFileNamesTypes() {
 
 	// We need to be sure that our types are also following the cast_map
 	if (!cast_map.empty()) {
+		idx_t file_type_idx = 0;
 		for (idx_t i = 0; i < column_ids.size(); i++) {
+			if (i == file_row_number_idx) {
+				continue;
+			}
 			auto local_idx = MultiFileLocalIndex(i);
 			auto entry = cast_map.find(column_ids[local_idx].GetId());
 			if (entry != cast_map.end()) {
-				file_types[i] = entry->second;
+				file_types[file_type_idx] = entry->second;
 			}
+			++file_type_idx;
 		}
 	}
 
@@ -153,6 +167,17 @@ void CSVFileScan::InitializeProjection() {
 	for (idx_t i = 0; i < options.dialect_options.num_cols; i++) {
 		column_ids.push_back(MultiFileLocalColumnId(i));
 	}
+}
+
+void CSVFileScan::AddVirtualColumn(column_t virtual_column_id) {
+	if (virtual_column_id != MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER) {
+		throw InternalException("CSV reader only supports file_row_number as a virtual column (got id %d)",
+		                        virtual_column_id);
+	}
+	// Column mapper invokes AddVirtualColumn right before appending the virtual column's
+	// local id to column_ids, so column_ids.size() here is the slot this virtual column
+	// will occupy. StringValueScanner::Flush later writes byte offsets into this slot.
+	file_row_number_idx = column_ids.size();
 }
 
 void CSVFileScan::Finish() {

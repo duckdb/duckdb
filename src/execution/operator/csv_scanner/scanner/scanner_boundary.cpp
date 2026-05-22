@@ -129,6 +129,18 @@ void CSVIterator::SetEnd(idx_t pos) {
 	boundary.end_pos = pos;
 }
 
+void CSVIterator::SetExactBoundary(idx_t buf_idx, idx_t buf_pos, idx_t end_pos, idx_t boundary_id) {
+	boundary.buffer_idx = buf_idx;
+	boundary.buffer_pos = buf_pos;
+	boundary.end_pos = end_pos;
+	boundary.boundary_idx = boundary_id;
+	pos.buffer_idx = buf_idx;
+	pos.buffer_pos = buf_pos;
+	is_set = true;
+	done = false;
+	first_one = true; // caller vouches that buf_pos is a real row start
+}
+
 void CSVIterator::CheckIfDone() {
 	if (IsBoundarySet() && (pos.buffer_idx > boundary.buffer_idx || pos.buffer_pos > boundary.buffer_pos)) {
 		done = true;

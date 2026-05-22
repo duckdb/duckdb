@@ -501,6 +501,17 @@ DataChunk &StringValueResult::ToChunk() {
 	return parse_chunk;
 }
 
+void StringValueResult::RebindParseChunkVectors(const vector<Vector *> &external_vectors) {
+	D_ASSERT(external_vectors.size() == parse_chunk.data.size());
+	for (idx_t c = 0; c < parse_chunk.data.size(); ++c) {
+		D_ASSERT(external_vectors[c] != nullptr);
+		D_ASSERT(external_vectors[c]->GetType().InternalType() == parse_chunk.data[c].GetType().InternalType());
+		parse_chunk.data[c].Reference(*external_vectors[c]);
+		vector_ptr[c] = FlatVector::GetDataMutable(parse_chunk.data[c]);
+		validity_mask[c] = &FlatVector::ValidityMutable(parse_chunk.data[c]);
+	}
+}
+
 void StringValueResult::Reset() {
 	if (number_of_rows == 0) {
 		return;
@@ -1029,6 +1040,94 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
 	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
 }
 
+void StringValueScanner::Reset(const CSVIterator &new_iterator) {
+	// Reposition to the new boundary. Caller must have set new_iterator.first_one
+	// (typically via CSVIterator::SetExactBoundary) so SetStart is skipped --
+	// we trust the offset is a real row boundary.
+	iterator = new_iterator;
+	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
+
+	// Reset the parse state machine and per-batch flags.
+	states = CSVStates {};
+	ever_quoted = false;
+	ever_escaped = false;
+	used_unstrictness = false;
+	previous_buffer_handle = nullptr;
+	start_pos = 0;
+	lines_read = 0;
+	bytes_read = 0;
+
+	// Force result.Reset() to do its work even if number_of_rows == 0
+	// (the early-exit path leaves stale buffer_handles / validity from the
+	// previous batch). Bumping number_of_rows to 1 makes Reset re-anchor
+	// the result to `iterator`'s new buffer_idx and clear per-batch state.
+	if (result.number_of_rows == 0) {
+		result.number_of_rows = 1; // sentinel so Reset() does its work
+	}
+	result.Reset();
+
+	// Reload the buffer for the new boundary's buffer_idx (Reset cached the
+	// previous iter's buffer; we just updated iterator so re-fetch).
+	cur_buffer_handle = buffer_manager->GetBuffer(iterator.GetBufferIdx());
+	buffer_handle_ptr = cur_buffer_handle ? cur_buffer_handle->Ptr() : nullptr;
+	if (cur_buffer_handle) {
+		result.buffer_ptr = cur_buffer_handle->Ptr();
+		result.buffer_size = cur_buffer_handle->actual_size;
+		result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, cur_buffer_handle->actual_size};
+		result.current_line_position.begin = result.last_position;
+		result.current_line_position.end = result.current_line_position.begin;
+		result.buffer_handles[cur_buffer_handle->buffer_idx] = cur_buffer_handle;
+	}
+
+	Initialize();
+}
+
+void StringValueScanner::ResetForAppend(const CSVIterator &new_iterator) {
+	// Reposition iterator. Caller must vouch new_iterator.first_one == true
+	// (set by SetExactBoundary) so SetStart skips its line-start search.
+	iterator = new_iterator;
+	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
+
+	// Per-row state-machine reset; matches Reset() for everything except we
+	// DO NOT touch result.number_of_rows / parse_chunk content / validity_mask.
+	states = CSVStates {};
+	ever_quoted = false;
+	ever_escaped = false;
+	used_unstrictness = false;
+	previous_buffer_handle = nullptr;
+	start_pos = 0;
+	bytes_read = 0;
+
+	// Per-row parse counters: each row starts at column 0.
+	result.cur_col_id = 0;
+	result.chunk_col_id = 0;
+	result.current_errors.Reset();
+
+	// Reload buffer for the new offset; re-anchor row-position to it (without
+	// touching number_of_rows or already-anchored positions of prior rows --
+	// those live in line_positions_per_row[i] for i < number_of_rows).
+	cur_buffer_handle = buffer_manager->GetBuffer(iterator.GetBufferIdx());
+	buffer_handle_ptr = cur_buffer_handle ? cur_buffer_handle->Ptr() : nullptr;
+	if (cur_buffer_handle) {
+		result.buffer_ptr = cur_buffer_handle->Ptr();
+		result.buffer_size = cur_buffer_handle->actual_size;
+		result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, cur_buffer_handle->actual_size};
+		result.current_line_position.begin = result.last_position;
+		result.current_line_position.end = result.current_line_position.begin;
+		result.buffer_handles[cur_buffer_handle->buffer_idx] = cur_buffer_handle;
+	}
+
+	Initialize();
+}
+
+StringValueResult &StringValueScanner::ParseChunkAppend() {
+	// Skip the usual result.Reset() so number_of_rows + parse_chunk's already-
+	// written rows are preserved. The parser writes the next row into slot
+	// `result.number_of_rows` (its internal counter) and increments it.
+	ParseChunkInternal(result);
+	return result;
+}
+
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options,
                                                                  const MultiFileOptions &file_options) {
 	auto state_machine = make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options,
@@ -1078,8 +1177,14 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 		D_ASSERT(csv_file_scan);
 
 		auto &names = csv_file_scan->GetNames();
-		// Now Do the cast-aroo
+		// Now Do the cast-aroo. The file_row_number virtual column (if projected) is
+		// skipped here -- it has no parse_chunk entry -- and filled with byte offsets
+		// after the loop.
+		const idx_t row_number_idx = csv_file_scan->file_row_number_idx;
 		for (idx_t i = 0; i < csv_file_scan->column_ids.size(); i++) {
+			if (i == row_number_idx) {
+				continue;
+			}
 			idx_t result_idx = i;
 			if (!csv_file_scan->projection_ids.empty()) {
 				result_idx = csv_file_scan->projection_ids[i].second;
@@ -1174,6 +1279,20 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				}
 			}
 		}
+		// Fill file_row_number virtual column with byte offsets. Done before the
+		// borked-rows Slice so the offsets are sliced along with the real columns
+		// and stay aligned with the emitted rows.
+		if (row_number_idx != DConstants::INVALID_INDEX) {
+			auto &result_vector = insert_chunk.data[row_number_idx];
+			auto *data = FlatVector::GetDataMutable<int64_t>(result_vector);
+			for (idx_t row = 0; row < parse_chunk.size(); ++row) {
+				bool first_nl = false;
+				auto global_pos =
+				    result.line_positions_per_row[row].begin.GetGlobalPosition(result.result_size, first_nl);
+				data[row] = static_cast<int64_t>(global_pos);
+			}
+		}
+
 		if (!result.borked_rows.empty()) {
 			// We must remove the borked lines from our chunk
 			SelectionVector successful_rows(parse_chunk.size());

@@ -91,4 +91,11 @@ public:
 	static TableFunctionSet GetFunctionSet();
 };
 
+//! Builds a standalone lookup-mode TableFunction for parquet. Shares
+//! MultiFileBindData shape with read_parquet (caller passes a pre-bound
+//! parquet bind_data via TableFunctionInput::bind_data). Its `function`
+//! reads pk_bytes from TableFunctionInput::pk_bytes per batch and emits
+//! rows whose file_row_number matches.
+TableFunction MakeParquetLookupTableFunction();
+
 } // namespace duckdb
