@@ -899,20 +899,12 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	return make_uniq<NodeStatistics>(estimated_cardinality, estimated_cardinality);
 }
 
-void TableScanGetMetrics(ClientContext &, const FunctionData *, GlobalTableFunctionState &gstate_p,
-                         LocalTableFunctionState &local_state, const profiler_settings_t &requested_metrics,
-                         profiler_metrics_t &metrics) {
-	auto &gstate = gstate_p.Cast<TableScanGlobalState>();
-	if (requested_metrics.find(MetricType::OPERATOR_ROWS_SCANNED) != requested_metrics.end()) {
-		metrics[MetricType::OPERATOR_ROWS_SCANNED] = Value::UBIGINT(gstate.TableScanRowsScanned(local_state));
-	}
-	if (requested_metrics.find(MetricType::OPERATOR_ROW_GROUPS_SCANNED) != requested_metrics.end()) {
-		metrics[MetricType::OPERATOR_ROW_GROUPS_SCANNED] =
-		    Value::UBIGINT(gstate.TableScanRowGroupsScanned(local_state));
-	}
-	if (requested_metrics.find(MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN) != requested_metrics.end()) {
-		metrics[MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN] = Value::UBIGINT(gstate.total_row_groups_to_scan);
-	}
+void TableScanGetMetrics(TableFunctionGetMetricsInput &input) {
+	auto &gstate = input.global_state->Cast<TableScanGlobalState>();
+	auto &local_state = *input.local_state;
+	input.operator_metrics.rows_scanned = gstate.TableScanRowsScanned(local_state);
+	input.operator_metrics.row_groups_scanned = gstate.TableScanRowGroupsScanned(local_state);
+	input.operator_metrics.total_row_groups_to_scan = gstate.total_row_groups_to_scan;
 }
 
 InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput &input) {

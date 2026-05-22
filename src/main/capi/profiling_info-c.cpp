@@ -7,28 +7,42 @@ using duckdb::Connection;
 using duckdb::QueryProfileResult;
 using duckdb::QueryProfileResultKind;
 
-// Returns the total number of items across all LIST children of a node.
-static idx_t CountListChildren(const QueryProfileResult &node) {
+// Returns the total number of navigable children of a node:
+// items across all LIST children (flattened) followed by direct OBJECT children.
+static idx_t CountChildren(const QueryProfileResult &node) {
 	idx_t count = 0;
 	for (auto &child : node.children) {
 		if (child->kind == QueryProfileResultKind::LIST) {
 			count += child->children.size();
+		} else if (child->kind == QueryProfileResultKind::OBJECT) {
+			count++;
 		}
 	}
 	return count;
 }
 
-// Returns the i-th item across all LIST children of a node (flattening the lists).
-static QueryProfileResult *GetListChild(const QueryProfileResult &node, idx_t index) {
-	idx_t offset = 0;
+// Returns the i-th navigable child of a node.
+// LIST items come first (flattened across all LIST children), then direct OBJECT children.
+static QueryProfileResult *GetChild(const QueryProfileResult &node, idx_t index) {
+	// LIST items first (preserves backward-compatible indices for operator nodes)
 	for (auto &child : node.children) {
 		if (child->kind != QueryProfileResultKind::LIST) {
 			continue;
 		}
-		if (index < offset + child->children.size()) {
-			return child->children[index - offset].get();
+		if (index < child->children.size()) {
+			return child->children[index].get();
 		}
-		offset += child->children.size();
+		index -= child->children.size();
+	}
+	// Then direct OBJECT children (e.g. metric-group sub-objects like "query", "system")
+	for (auto &child : node.children) {
+		if (child->kind != QueryProfileResultKind::OBJECT) {
+			continue;
+		}
+		if (index == 0) {
+			return child.get();
+		}
+		index--;
 	}
 	return nullptr;
 }
@@ -54,11 +68,12 @@ duckdb_value duckdb_profiling_info_get_value(duckdb_profiling_info info, const c
 		return nullptr;
 	}
 	auto &node = *reinterpret_cast<QueryProfileResult *>(info);
+	duckdb::string key_str(key);
 	for (auto &child : node.children) {
 		if (child->kind != QueryProfileResultKind::VALUE) {
 			continue;
 		}
-		if (duckdb::StringUtil::CIEquals(child->key, key)) {
+		if (duckdb::StringUtil::CIEquals(child->key, key_str)) {
 			return reinterpret_cast<duckdb_value>(new duckdb::Value(child->value));
 		}
 	}
@@ -72,11 +87,9 @@ duckdb_value duckdb_profiling_info_get_metrics(duckdb_profiling_info info) {
 	auto &node = *reinterpret_cast<QueryProfileResult *>(info);
 	duckdb::InsertionOrderPreservingMap<duckdb::string> metrics_map;
 	for (auto &child : node.children) {
-		if (child->kind != QueryProfileResultKind::VALUE) {
-			continue;
+		if (child->kind == QueryProfileResultKind::VALUE) {
+			metrics_map.insert(child->key, child->value.ToString());
 		}
-		auto key = duckdb::StringUtil::Upper(child->key);
-		metrics_map.insert(key, child->value.ToString());
 	}
 	auto map = duckdb::Value::MAP(metrics_map);
 	return reinterpret_cast<duckdb_value>(new duckdb::Value(map));
@@ -87,7 +100,7 @@ idx_t duckdb_profiling_info_get_child_count(duckdb_profiling_info info) {
 		return 0;
 	}
 	auto &node = *reinterpret_cast<QueryProfileResult *>(info);
-	return CountListChildren(node);
+	return CountChildren(node);
 }
 
 duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info, idx_t index) {
@@ -95,5 +108,5 @@ duckdb_profiling_info duckdb_profiling_info_get_child(duckdb_profiling_info info
 		return nullptr;
 	}
 	auto &node = *reinterpret_cast<QueryProfileResult *>(info);
-	return reinterpret_cast<duckdb_profiling_info>(GetListChild(node, index));
+	return reinterpret_cast<duckdb_profiling_info>(GetChild(node, index));
 }

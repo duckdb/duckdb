@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/extension_helper.hpp"
@@ -147,7 +148,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 
 	if (requires_tracking_attaches) {
 		// Start timing the ATTACH-delay step.
-		auto timer = context.client_data->profiler->StartTimer(MetricType::WAITING_TO_ATTACH_LATENCY);
+		auto timer = context.client_data->profiler->StartTimer<MetricStorageWaitingToAttachLatency>();
 		// Start trying to attach.
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists

@@ -132,8 +132,6 @@ enum class ColumnDataScanProperties : uint8_t;
 
 enum class ColumnIndexType : uint8_t;
 
-enum class ColumnSegmentInfoScanType : uint8_t;
-
 enum class ColumnSegmentType : uint8_t;
 
 enum class CompressedMaterializationDirection : uint8_t;
@@ -307,10 +305,6 @@ enum class MergeActionCondition : uint8_t;
 enum class MergeActionType : uint8_t;
 
 enum class MetaPipelineType : uint8_t;
-
-enum class MetricGroup : uint8_t;
-
-enum class MetricType : uint8_t;
 
 enum class Monotonicity : uint8_t;
 
@@ -704,9 +698,6 @@ template<>
 const char* EnumUtil::ToChars<ColumnIndexType>(ColumnIndexType value);
 
 template<>
-const char* EnumUtil::ToChars<ColumnSegmentInfoScanType>(ColumnSegmentInfoScanType value);
-
-template<>
 const char* EnumUtil::ToChars<ColumnSegmentType>(ColumnSegmentType value);
 
 template<>
@@ -966,12 +957,6 @@ const char* EnumUtil::ToChars<MergeActionType>(MergeActionType value);
 
 template<>
 const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
-
-template<>
-const char* EnumUtil::ToChars<MetricGroup>(MetricGroup value);
-
-template<>
-const char* EnumUtil::ToChars<MetricType>(MetricType value);
 
 template<>
 const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
@@ -1485,9 +1470,6 @@ template<>
 ColumnIndexType EnumUtil::FromString<ColumnIndexType>(const char *value);
 
 template<>
-ColumnSegmentInfoScanType EnumUtil::FromString<ColumnSegmentInfoScanType>(const char *value);
-
-template<>
 ColumnSegmentType EnumUtil::FromString<ColumnSegmentType>(const char *value);
 
 template<>
@@ -1747,12 +1729,6 @@ MergeActionType EnumUtil::FromString<MergeActionType>(const char *value);
 
 template<>
 MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
-
-template<>
-MetricGroup EnumUtil::FromString<MetricGroup>(const char *value);
-
-template<>
-MetricType EnumUtil::FromString<MetricType>(const char *value);
 
 template<>
 Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);
