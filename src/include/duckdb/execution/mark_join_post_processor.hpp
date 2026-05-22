@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
-#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 
@@ -20,7 +20,6 @@ namespace duckdb {
 
 class BufferManager;
 class ClientContext;
-enum class JoinType : uint8_t;
 
 enum class MarkNullStrategy : uint8_t { NONE, SIMPLE_HAS_NULL, CORRELATED_COUNTS, NULL_REMAINDER };
 
@@ -38,7 +37,6 @@ public:
 	                const vector<LogicalType> &condition_types);
 	void InitializeCorrelatedCounts(const vector<LogicalType> &correlated_types);
 
-	MarkNullStrategy Strategy() const;
 	bool UsesCorrelatedCounts() const;
 	bool UsesNullRemainder() const;
 	bool CanTreatNullAsFalse() const;

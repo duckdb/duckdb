@@ -20,10 +20,12 @@
 
 namespace duckdb {
 
+namespace {
+
 using MarkJoinNullRemainder = MarkJoinPostProcessor::MarkJoinNullRemainder;
 
-static void InitializeMarkJoinNullRemainder(MarkJoinNullRemainder &remainder, BufferManager &buffer_manager,
-                                            const vector<LogicalType> &key_types) {
+void InitializeMarkJoinNullRemainder(MarkJoinNullRemainder &remainder, BufferManager &buffer_manager,
+                                     const vector<LogicalType> &key_types) {
 	if (remainder.data) {
 		return;
 	}
@@ -34,8 +36,8 @@ static void InitializeMarkJoinNullRemainder(MarkJoinNullRemainder &remainder, Bu
 	remainder.data->InitializeAppend(remainder.append_state);
 }
 
-static idx_t BuildUnresolvedSelection(const bool *found_match, ValidityMask &mask, idx_t count,
-                                      SelectionVector &unresolved_sel) {
+idx_t BuildUnresolvedSelection(const bool *found_match, ValidityMask &mask, idx_t count,
+                               SelectionVector &unresolved_sel) {
 	idx_t unresolved_count = 0;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		if (!found_match[row_idx] && mask.RowIsValid(row_idx)) {
@@ -45,15 +47,15 @@ static idx_t BuildUnresolvedSelection(const bool *found_match, ValidityMask &mas
 	return unresolved_count;
 }
 
-static void InvalidateSelection(ValidityMask &mask, const SelectionVector &sel, idx_t count) {
+void InvalidateSelection(ValidityMask &mask, const SelectionVector &sel, idx_t count) {
 	for (idx_t i = 0; i < count; i++) {
 		mask.SetInvalid(sel.get_index(i));
 	}
 }
 
-static idx_t CompactUnresolvedSelection(const SelectionVector &unresolved_sel, idx_t unresolved_count,
-                                        const SelectionVector &matched_sel, idx_t matched_count,
-                                        SelectionVector &remaining_sel) {
+idx_t CompactUnresolvedSelection(const SelectionVector &unresolved_sel, idx_t unresolved_count,
+                                 const SelectionVector &matched_sel, idx_t matched_count,
+                                 SelectionVector &remaining_sel) {
 	idx_t matched_idx = 0;
 	idx_t remaining_count = 0;
 	for (idx_t i = 0; i < unresolved_count; i++) {
@@ -96,10 +98,9 @@ struct MarkJoinNullMatchState {
 	}
 };
 
-static idx_t FilterCandidatesForColumnComparison(Vector &lhs_column, Vector &rhs_column, Vector &rhs_value,
-                                                 idx_t rhs_row, idx_t rhs_count, const SelectionVector &candidate_sel,
-                                                 idx_t candidate_count, MarkJoinNullMatchState &state,
-                                                 SelectionVector &remaining_sel) {
+idx_t FilterCandidatesForColumnComparison(Vector &lhs_column, Vector &rhs_column, Vector &rhs_value, idx_t rhs_row,
+                                          idx_t rhs_count, const SelectionVector &candidate_sel, idx_t candidate_count,
+                                          MarkJoinNullMatchState &state, SelectionVector &remaining_sel) {
 	ConstantVector::Reference(rhs_value, count_t(candidate_count), rhs_column, rhs_row, rhs_count);
 	Vector lhs_slice(lhs_column, candidate_sel, candidate_count);
 
@@ -121,10 +122,9 @@ static idx_t FilterCandidatesForColumnComparison(Vector &lhs_column, Vector &rhs
 	return remaining_count;
 }
 
-static idx_t MatchRemainderRow(DataChunk &join_keys, DataChunk &scan_chunk, idx_t scan_row,
-                               const vector<VectorValidityIterator> &rhs_validities,
-                               const SelectionVector &unresolved_sel, idx_t unresolved_count,
-                               MarkJoinNullMatchState &state) {
+idx_t MatchRemainderRow(DataChunk &join_keys, DataChunk &scan_chunk, idx_t scan_row,
+                        const vector<VectorValidityIterator> &rhs_validities, const SelectionVector &unresolved_sel,
+                        idx_t unresolved_count, MarkJoinNullMatchState &state) {
 	const SelectionVector *candidate_sel = &unresolved_sel;
 	idx_t candidate_count = unresolved_count;
 	bool use_a = true;
@@ -150,9 +150,8 @@ static idx_t MatchRemainderRow(DataChunk &join_keys, DataChunk &scan_chunk, idx_
 	return candidate_count;
 }
 
-static idx_t MatchNullRemainderChunk(DataChunk &join_keys, const SelectionVector &unresolved_sel,
-                                     idx_t unresolved_count, DataChunk &scan_chunk, SelectionVector &matched_sel,
-                                     MarkJoinNullMatchState &state) {
+idx_t MatchNullRemainderChunk(DataChunk &join_keys, const SelectionVector &unresolved_sel, idx_t unresolved_count,
+                              DataChunk &scan_chunk, SelectionVector &matched_sel, MarkJoinNullMatchState &state) {
 	state.ResetMatchedMask();
 	vector<VectorValidityIterator> rhs_validities;
 	rhs_validities.reserve(scan_chunk.ColumnCount());
@@ -177,6 +176,8 @@ static idx_t MatchNullRemainderChunk(DataChunk &join_keys, const SelectionVector
 	}
 	return matched_count;
 }
+
+} // namespace
 
 void MarkJoinPostProcessor::Initialize(ClientContext &context_p, BufferManager &buffer_manager_p, JoinType join_type_p,
                                        bool mark_nulls_are_false_p, idx_t condition_count_p,
@@ -206,10 +207,6 @@ MarkNullStrategy MarkJoinPostProcessor::ChooseStrategy() const {
 		}
 	}
 	return MarkNullStrategy::NULL_REMAINDER;
-}
-
-MarkNullStrategy MarkJoinPostProcessor::Strategy() const {
-	return state.strategy;
 }
 
 bool MarkJoinPostProcessor::UsesCorrelatedCounts() const {

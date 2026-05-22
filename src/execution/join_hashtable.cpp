@@ -147,14 +147,6 @@ bool JoinHashTable::UsesCorrelatedMarkCounts() const {
 	return mark_join_post_processor.UsesCorrelatedCounts();
 }
 
-bool JoinHashTable::UseMarkJoinNullRemainder() const {
-	return mark_join_post_processor.UsesNullRemainder();
-}
-
-bool JoinHashTable::CanTreatMarkNullAsFalse() const {
-	return mark_join_post_processor.CanTreatNullAsFalse();
-}
-
 void JoinHashTable::InitializeCorrelatedMarkJoin(const vector<LogicalType> &correlated_types) {
 	mark_join_post_processor.InitializeCorrelatedCounts(correlated_types);
 }
