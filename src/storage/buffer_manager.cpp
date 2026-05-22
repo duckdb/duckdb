@@ -5,6 +5,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 
@@ -63,6 +64,11 @@ void BufferManager::ReserveMemory(idx_t size) {
 
 void BufferManager::FreeReservedMemory(idx_t size) {
 	throw NotImplementedException("This type of BufferManager can not free reserved memory");
+}
+
+BufferHandle BufferManager::Allocate(MemoryTag tag, idx_t block_size, bool can_destroy, std::function<void()> on_load,
+                                     std::function<void()> on_unload) {
+	throw NotImplementedException("This type of BufferManager can not allocate block memory with callbacks");
 }
 
 void BufferManager::SetMemoryLimit(idx_t limit) {

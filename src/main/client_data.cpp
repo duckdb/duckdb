@@ -68,6 +68,15 @@ public:
 		}
 		return result;
 	}
+	BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy, std::function<void()> on_load,
+	                      std::function<void()> on_unload) override {
+		auto result = buffer_manager.Allocate(tag, block_size, can_destroy, std::move(on_load), std::move(on_unload));
+		// Track allocation based on actual allocated size from the handle
+		if (result.GetBlockHandle()) {
+			TrackMemoryAllocation(result.GetBlockHandle()->GetMemory().GetMemoryUsage());
+		}
+		return result;
+	}
 	BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) override {
 		auto result = buffer_manager.Allocate(tag, block_manager, can_destroy);
 		// Track allocation based on actual allocated size from the handle

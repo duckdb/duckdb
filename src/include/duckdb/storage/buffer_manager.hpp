@@ -13,6 +13,8 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 
+#include <functional>
+
 namespace duckdb {
 class BlockMemory;
 class Allocator;
@@ -52,6 +54,9 @@ public:
 	                                               bool can_destroy = true) = 0;
 	//! Allocate (temporary) memory of size block_size, and pin it.
 	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) = 0;
+	//! Allocate temporary memory with custom block memory lifecycle callbacks.
+	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy, std::function<void()> on_load,
+	                              std::function<void()> on_unload);
 	//! Allocate block-based memory and pin it.
 	virtual BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) = 0;
 	//! Pin a block handle.

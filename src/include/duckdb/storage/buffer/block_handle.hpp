@@ -18,8 +18,6 @@
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
-#include <functional>
-
 namespace duckdb {
 
 // Forward declaration.
@@ -36,7 +34,7 @@ public:
 	BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, MemoryTag tag_p, idx_t block_alloc_size);
 	BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, MemoryTag tag_p, unique_ptr<FileBuffer> buffer_p,
 	            DestroyBufferUpon destroy_buffer_upon_p, idx_t size_p, BufferPoolReservation &&reservation);
-	~BlockMemory();
+	virtual ~BlockMemory();
 
 public:
 	//! Returns a const reference to the buffer manager.
@@ -184,11 +182,6 @@ public:
 	idx_t GetEvictionQueueIndex() const {
 		return eviction_queue_idx;
 	}
-	//! Sets the callback invoked when this memory transitions from loaded to unloaded.
-	void SetUnloadCallback(std::function<void()> callback) {
-		unload_callback = std::move(callback);
-	}
-
 public:
 	void ChangeMemoryUsage(BlockLock &l, int64_t delta);
 	void ConvertToPersistent(BlockLock &l, BlockHandle &new_block, unique_ptr<FileBuffer> new_buffer);
@@ -199,6 +192,10 @@ public:
 	bool CanUnload() const;
 	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &l);
 	void Unload(BlockLock &l);
+
+protected:
+	virtual void OnLoad();
+	virtual void OnUnload();
 
 private:
 	//! A reference to the buffer manager.
@@ -232,8 +229,6 @@ private:
 	const char *unswizzled;
 	//! The eviction queue index, currently only FileBufferType::MANAGED_BUFFER.
 	atomic<idx_t> eviction_queue_idx;
-	//! Callback invoked when this memory transitions from loaded to unloaded.
-	std::function<void()> unload_callback;
 };
 
 class BlockHandle : public enable_shared_from_this<BlockHandle> {
@@ -241,6 +236,7 @@ public:
 	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag);
 	BlockHandle(BlockManager &block_manager, block_id_t block_id, MemoryTag tag, unique_ptr<FileBuffer> buffer,
 	            DestroyBufferUpon destroy_buffer_upon, idx_t size, BufferPoolReservation &&reservation);
+	BlockHandle(BlockManager &block_manager, block_id_t block_id, shared_ptr<BlockMemory> memory);
 	~BlockHandle();
 
 public:

@@ -16,6 +16,8 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
+#include <functional>
+
 namespace duckdb {
 
 class BlockManager;
@@ -65,6 +67,8 @@ public:
 	DUCKDB_API shared_ptr<BlockHandle> AllocateMemory(MemoryTag tag, BlockManager *block_manager,
 	                                                  bool can_destroy = true) final;
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) final;
+	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy, std::function<void()> on_load,
+	                                 std::function<void()> on_unload) final;
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) final;
 
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final;
@@ -125,7 +129,9 @@ protected:
 	//! The resulting buffer will already be allocated, but needs to be pinned in order to be used.
 	//! This needs to be private to prevent creating blocks without ever pinning them:
 	//! blocks that are never pinned are never added to the eviction queue
-	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size, bool can_destroy);
+	shared_ptr<BlockHandle> RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size, bool can_destroy,
+	                                       std::function<void()> on_load = nullptr,
+	                                       std::function<void()> on_unload = nullptr);
 
 	//! Get allocated size for a block
 	idx_t GetBlockAllocSize(idx_t block_size) const;

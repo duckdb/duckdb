@@ -77,7 +77,7 @@ void ExternalFileCache::ReindexCachedFileCore(const shared_ptr<CachedFile> &cach
 			}
 			const idx_t new_size = new_end - new_start;
 
-			auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, new_size);
+			auto buf = AllocateCacheBlock(cached_file_p, new_size);
 
 			// Copy from each contributing old block in the run.
 			const idx_t contrib_first = new_start / old_block_size;
@@ -96,11 +96,9 @@ void ExternalFileCache::ReindexCachedFileCore(const shared_ptr<CachedFile> &cach
 
 			auto new_block = make_shared_ptr<CacheBlock>();
 			auto block_handle = buf.GetBlockHandle();
-			auto cleanup = RegisterLoadedBlock(cached_file_p, block_handle);
 			{
 				const annotated_lock_guard<annotated_mutex> block_guard(new_block->mtx);
 				new_block->block_handle = std::move(block_handle);
-				new_block->cleanup = std::move(cleanup);
 				new_block->nr_bytes = new_size;
 				new_block->state = CacheBlockState::LOADED;
 #ifdef DEBUG
@@ -257,6 +255,13 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 	return buffer_manager;
 }
 
+BufferHandle ExternalFileCache::AllocateCacheBlock(const shared_ptr<CachedFile> &cached_file, idx_t block_size) {
+	auto weak_file = weak_ptr<CachedFile>(cached_file);
+	return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, block_size, true,
+	                               [this, weak_file]() { RegisterLoadedBlock(weak_file); },
+	                               [this, weak_file]() { ReleaseLoadedBlock(weak_file); });
+}
+
 shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFile(const string &path) {
 	lock_guard<mutex> guard(lock);
 	auto &entry = cached_files[path];
@@ -287,34 +292,20 @@ void ExternalFileCache::ReleaseCachedFileHandle(const shared_ptr<CachedFile> &ca
 	TryEraseFileLocked(cached_file);
 }
 
-std::function<void()> ExternalFileCache::RegisterLoadedBlock(const shared_ptr<CachedFile> &cached_file,
-                                                             const shared_ptr<BlockHandle> &block_handle) {
-	D_ASSERT(cached_file);
-	D_ASSERT(block_handle);
-	if (!cached_file || !block_handle) {
-		return nullptr;
+void ExternalFileCache::RegisterLoadedBlock(const weak_ptr<CachedFile> &cached_file) {
+	auto locked_file = cached_file.lock();
+	if (!locked_file) {
+		return;
 	}
-	bool registered = false;
-	{
-		lock_guard<mutex> guard(lock);
-		auto entry = cached_files.find(cached_file->path);
-		if (entry != cached_files.end() && entry->second.cached_file.get() == cached_file.get()) {
-			entry->second.loaded_block_count++;
-			registered = true;
-		}
+	lock_guard<mutex> guard(lock);
+	auto entry = cached_files.find(locked_file->path);
+	if (entry == cached_files.end()) {
+		return;
 	}
-	if (!registered) {
-		return nullptr;
+	if (entry->second.cached_file.get() != locked_file.get()) {
+		return;
 	}
-	auto completed = make_shared_ptr<atomic<bool>>(false);
-	auto cleanup = [this, cached_file = weak_ptr<CachedFile>(cached_file), completed]() {
-		if (completed->exchange(true)) {
-			return;
-		}
-		ReleaseLoadedBlock(cached_file);
-	};
-	block_handle->GetMemory().SetUnloadCallback(cleanup);
-	return cleanup;
+	entry->second.loaded_block_count++;
 }
 
 void ExternalFileCache::ReleaseLoadedBlock(const weak_ptr<CachedFile> &cached_file) {

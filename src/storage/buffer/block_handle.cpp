@@ -16,7 +16,7 @@ BlockMemory::BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, M
       buffer_type(FileBufferType::BLOCK), buffer(nullptr), eviction_seq_num(0), lru_timestamp_msec(),
       destroy_buffer_upon(DestroyBufferUpon::BLOCK), memory_usage(block_alloc_size_p),
       memory_charge(tag, buffer_manager.GetBufferPool()), unswizzled(nullptr),
-      eviction_queue_idx(DConstants::INVALID_INDEX), unload_callback(nullptr) {
+      eviction_queue_idx(DConstants::INVALID_INDEX) {
 }
 
 BlockMemory::BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, MemoryTag tag_p,
@@ -26,7 +26,7 @@ BlockMemory::BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, M
       buffer_type(buffer_p->GetBufferType()), buffer(std::move(buffer_p)), eviction_seq_num(0), lru_timestamp_msec(),
       destroy_buffer_upon(destroy_buffer_upon_p), memory_usage(size_p),
       memory_charge(tag, buffer_manager.GetBufferPool()), unswizzled(nullptr),
-      eviction_queue_idx(DConstants::INVALID_INDEX), unload_callback(nullptr) {
+      eviction_queue_idx(DConstants::INVALID_INDEX) {
 	memory_charge = std::move(reservation); // Moved to constructor body due to tidy check.
 }
 
@@ -45,9 +45,6 @@ BlockMemory::~BlockMemory() { // NOLINT: allow internal exceptions
 		D_ASSERT(GetMemoryCharge().size > 0);
 		SetBuffer(nullptr);
 		GetMemoryCharge().Resize(0);
-		if (unload_callback) {
-			unload_callback();
-		}
 	} else {
 		D_ASSERT(GetMemoryCharge().size == 0);
 	}
@@ -106,6 +103,12 @@ void BlockMemory::ResizeBuffer(BlockLock &l, idx_t block_size, idx_t block_heade
 	D_ASSERT(memory_usage == buffer->AllocSize());
 }
 
+void BlockMemory::OnLoad() {
+}
+
+void BlockMemory::OnUnload() {
+}
+
 bool BlockMemory::CanUnload() const {
 	if (GetState() == BlockState::BLOCK_UNLOADED) {
 		// The block has already been unloaded.
@@ -143,12 +146,9 @@ unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l) {
 	auto result = std::move(GetBuffer());
 	memory_charge.Resize(0);
 	SetState(BlockState::BLOCK_UNLOADED);
-	auto callback = unload_callback;
-	if (callback) {
-		l.unlock();
-		callback();
-		l.lock();
-	}
+	l.unlock();
+	OnUnload();
+	l.lock();
 	return result;
 }
 
@@ -172,6 +172,13 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, Mem
       memory_p(make_shared_ptr<BlockMemory>(block_manager.GetBufferManager(), block_id_p, tag_p, std::move(buffer_p),
                                             destroy_buffer_upon_p, size_p, std::move(reservation))),
       memory(*memory_p) {
+}
+
+BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, shared_ptr<BlockMemory> memory_p)
+    : block_manager(block_manager), block_alloc_size(block_manager.GetBlockAllocSize()),
+      block_header_size(block_manager.GetBlockHeaderSize()), block_id(block_id_p), memory_p(std::move(memory_p)),
+      memory(*this->memory_p) {
+	D_ASSERT(this->memory_p);
 }
 
 BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions

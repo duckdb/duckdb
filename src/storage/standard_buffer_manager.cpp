@@ -8,6 +8,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache_block_memory.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/storage/block_allocator.hpp"
@@ -162,7 +163,8 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size,
-                                                              bool can_destroy) {
+                                                              bool can_destroy, std::function<void()> on_load,
+                                                              std::function<void()> on_unload) {
 	auto alloc_size = GetAllocSize(block_size + block_header_size);
 
 	// Evict blocks until there is enough memory to store the buffer.
@@ -175,6 +177,13 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 	    tag == MemoryTag::EXTERNAL_FILE_CACHE ? FileBufferType::EXTERNAL_FILE : FileBufferType::MANAGED_BUFFER;
 	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer), file_buffer_type);
 	const auto destroy_buffer_upon = can_destroy ? DestroyBufferUpon::EVICTION : DestroyBufferUpon::BLOCK;
+	if (on_load || on_unload) {
+		const auto block_id = ++temporary_id;
+		auto memory = make_shared_ptr<ExternalFileCacheBlockMemory>(*this, block_id, tag, std::move(buffer),
+		                                                            destroy_buffer_upon, alloc_size, std::move(res),
+		                                                            std::move(on_load), std::move(on_unload));
+		return make_shared_ptr<BlockHandle>(*temp_block_manager, block_id, std::move(memory));
+	}
 	return make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer),
 	                                    destroy_buffer_upon, alloc_size, std::move(res));
 }
@@ -201,6 +210,18 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, BlockManager *block_
 
 BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bool can_destroy) {
 	auto block = AllocateTemporaryMemory(tag, block_size, can_destroy);
+
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
+	// Initialize the memory with garbage data
+	WriteGarbageIntoBuffer(*block);
+#endif
+	return Pin(block);
+}
+
+BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bool can_destroy,
+                                             std::function<void()> on_load, std::function<void()> on_unload) {
+	auto block = RegisterMemory(tag, block_size, Storage::DEFAULT_BLOCK_HEADER_SIZE, can_destroy, std::move(on_load),
+	                            std::move(on_unload));
 
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data

@@ -67,14 +67,12 @@ public:
 						return;
 					}
 					const idx_t to_read = MinValue(block_size, file_size - offset);
-					auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, to_read);
+					auto buf = external_file_cache.AllocateCacheBlock(cached_file, to_read);
 					file_handle.Read(context, buf.GetDataMutable(), to_read, offset);
 					auto block_handle = buf.GetBlockHandle();
-					auto cleanup = external_file_cache.RegisterLoadedBlock(cached_file, block_handle);
 
 					lk.lock();
 					block->block_handle = std::move(block_handle);
-					block->cleanup = std::move(cleanup);
 					block->nr_bytes = to_read;
 					block->state = CacheBlockState::LOADED;
 #ifdef DEBUG
