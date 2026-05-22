@@ -264,10 +264,14 @@ def classify_choice_alternatives(alternatives, rule_types):
     for ref in alternatives:
         assert isinstance(ref, ReferenceNode)
         name = ref.name
-        if name in rule_types:
-            transformer_alts.append(name)
-        elif name in IDENTIFIER_OVERRIDE_RULES:
+        # IDENTIFIER_OVERRIDE_RULES are matcher overrides that produce an
+        # IdentifierParseResult with empty .name -- the transformer dispatcher
+        # can't look these up by name even if they're listed in rule_types, so
+        # check this set first.
+        if name in IDENTIFIER_OVERRIDE_RULES:
             identifier_alts.append(name)
+        elif name in rule_types:
+            transformer_alts.append(name)
         else:
             unknown_alts.append(name)
     return transformer_alts, identifier_alts, unknown_alts
