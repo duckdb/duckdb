@@ -7,6 +7,7 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/planner/expression_binder/having_binder.hpp"
+#include "duckdb/planner/planner_extension.hpp"
 
 namespace duckdb {
 
@@ -45,7 +46,14 @@ string GetSQLValueFunctionName(const string &column_name) {
 	return string();
 }
 
-unique_ptr<ParsedExpression> ColumnQualifier::GetSQLValueFunction(const string &column_name) {
+unique_ptr<ParsedExpression> Binder::GetSQLValueFunction(const string &column_name) {
+	for (auto &ext : PlannerExtension::Iterate(context)) {
+		if (ext.get_sql_value_function) {
+			PlannerExtensionInput input {context, *this, ext.planner_info.get()};
+			return ext.get_sql_value_function(input, column_name);
+		}
+	}
+
 	auto value_function = GetSQLValueFunctionName(column_name);
 	if (value_function.empty()) {
 		return nullptr;

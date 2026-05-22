@@ -32,6 +32,10 @@ struct PlannerExtensionInput {
 //! The post_bind function runs after binding succeeds, allowing modification of the bound statement
 typedef void (*post_bind_function_t)(PlannerExtensionInput &input, BoundStatement &statement);
 
+typedef unique_ptr<ParsedExpression> (*get_sql_value_function_t)(PlannerExtensionInput &input,
+                                                                 const string &column_name);
+typedef string (*get_expression_name_t)(PlannerExtensionInput &input, const ParsedExpression &expr);
+
 class PlannerExtension {
 public:
 	//! The post-bind function of the planner extension.
@@ -39,6 +43,12 @@ public:
 	//! This runs after the binder has successfully bound the statement,
 	//! allowing modification of the plan and result types.
 	post_bind_function_t post_bind_function = nullptr;
+
+	//! Override that allows registering a different callback for SQL value functions
+	get_sql_value_function_t get_sql_value_function = nullptr;
+
+	//! Callback for getting a name of an unnamed expression
+	get_expression_name_t get_expression_name = nullptr;
 
 	//! Additional planner info passed to the functions
 	shared_ptr<PlannerExtensionInfo> planner_info;
