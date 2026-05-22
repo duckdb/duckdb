@@ -183,7 +183,7 @@ def generate_member_comparison(member, indent='\t'):
         ]
     elif type_str == 'Value':
         return [
-            f'{indent}if (ValueOperations::DistinctFrom({field_name}, other_p.{field_name})) {{',
+            f'{indent}if ({field_name}.type() != other_p.{field_name}.type() || ValueOperations::DistinctFrom({field_name}, other_p.{field_name})) {{',
             f'{indent}\treturn false;',
             f'{indent}}}',
         ]

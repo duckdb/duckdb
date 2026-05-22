@@ -571,7 +571,7 @@ bool ConstantExpression::Equals(const ParsedExpression &other) const {
 		return false;
 	}
 	auto &other_p = other.Cast<ConstantExpression>();
-	if (ValueOperations::DistinctFrom(value, other_p.value)) {
+	if (value.type() != other_p.value.type() || ValueOperations::DistinctFrom(value, other_p.value)) {
 		return false;
 	}
 	return true;
