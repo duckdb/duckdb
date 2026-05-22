@@ -352,7 +352,7 @@ struct IntervalToStringCast {
 		// append the name together with a potential "s" (for plurals)
 		memcpy(buffer + length, name, name_len);
 		length += name_len;
-		if (value != 1 && value != -1) {
+		if (value != 1) { // PG: only value==1 is singular, -1 is plural
 			buffer[length++] = 's';
 		}
 	}
@@ -372,7 +372,7 @@ struct IntervalToStringCast {
 			int32_t months = interval.months - years * 12;
 			// format the years and months
 			FormatIntervalValue(years, buffer, length, " year", 5);
-			FormatIntervalValue(months, buffer, length, " month", 6);
+			FormatIntervalValue(months, buffer, length, " mon", 4);
 		}
 		if (interval.days != 0) {
 			// format the days
@@ -388,6 +388,12 @@ struct IntervalToStringCast {
 				// negative time: append negative sign
 				buffer[length++] = '-';
 			} else {
+				// PG-compatible: explicit '+' for mixed-sign intervals
+				// (e.g. "-3 days +05:00:00")
+				bool mixed_sign = (interval.months < 0) || (interval.days < 0);
+				if (mixed_sign) {
+					buffer[length++] = '+';
+				}
 				micros = -micros;
 			}
 			int64_t hour = -(micros / Interval::MICROS_PER_HOUR);
