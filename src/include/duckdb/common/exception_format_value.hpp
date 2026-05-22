@@ -25,6 +25,7 @@ struct LogicalType;
 enum class ExceptionFormatValueType : uint8_t {
 	FORMAT_VALUE_TYPE_DOUBLE,
 	FORMAT_VALUE_TYPE_INTEGER,
+	FORMAT_VALUE_TYPE_UINTEGER,
 	FORMAT_VALUE_TYPE_STRING
 };
 
@@ -40,7 +41,8 @@ struct ExceptionFormatValue {
 	ExceptionFormatValueType type;
 
 	double dbl_val = 0;
-	hugeint_t int_val = 0;
+	int64_t int_val = 0;
+	uint64_t uint_val = 0;
 	string str_val;
 
 public:
@@ -76,6 +78,8 @@ template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *const &value);
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *const &value);
+template <>
+DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const std::string_view &value);
 template <>
 DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const idx_t &value);
 template <>

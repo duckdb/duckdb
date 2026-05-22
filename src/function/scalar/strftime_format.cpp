@@ -198,10 +198,8 @@ char *StrfTimeFormat::Write2(char *target, uint8_t value) const {
 // write a value in the range of 0..99 padded to 2 digits
 char *StrfTimeFormat::WritePadded2(char *target, uint32_t value) const {
 	D_ASSERT(value < 100);
-	auto index = static_cast<unsigned>(value * 2);
-	*target++ = duckdb_fmt::internal::data::digits[index];
-	*target++ = duckdb_fmt::internal::data::digits[index + 1];
-	return target;
+	memcpy(target, fmt::detail::digits2(value), 2);
+	return target + 2;
 }
 
 // write a value in the range of 0..999 padded

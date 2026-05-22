@@ -46,18 +46,17 @@ public:
 			// Integer division is slow so do it for a group of two digits instead
 			// of for every digit. The idea comes from the talk by Alexandrescu
 			// "Three Optimization Tips for C++".
-			auto index = NumericCast<unsigned>((value % 100) * 2);
+			auto rem = NumericCast<size_t>(value % 100);
 			value /= 100;
-			*--ptr = duckdb_fmt::internal::data::digits[index + 1];
-			*--ptr = duckdb_fmt::internal::data::digits[index];
+			ptr -= 2;
+			memcpy(ptr, fmt::detail::digits2(rem), 2);
 		}
 		if (value < 10) {
 			*--ptr = NumericCast<char>('0' + value);
 			return ptr;
 		}
-		auto index = NumericCast<unsigned>(value * 2);
-		*--ptr = duckdb_fmt::internal::data::digits[index + 1];
-		*--ptr = duckdb_fmt::internal::data::digits[index];
+		ptr -= 2;
+		memcpy(ptr, fmt::detail::digits2(NumericCast<size_t>(value)), 2);
 		return ptr;
 	}
 
@@ -221,14 +220,7 @@ struct DateToStringCast {
 
 	static void FormatComponent(char *&ptr, int32_t number) {
 		ptr[0] = '-';
-		if (number < 10) {
-			ptr[1] = '0';
-			ptr[2] = UnsafeNumericCast<char>('0' + number);
-		} else {
-			auto index = UnsafeNumericCast<idx_t>(number * 2);
-			ptr[1] = duckdb_fmt::internal::data::digits[index];
-			ptr[2] = duckdb_fmt::internal::data::digits[index + 1];
-		}
+		memcpy(ptr + 1, fmt::detail::digits2(UnsafeNumericCast<size_t>(number)), 2);
 		ptr += 3;
 	}
 
@@ -308,14 +300,7 @@ struct TimeToStringCast {
 
 	static void FormatTwoDigits(char *ptr, int32_t value) {
 		D_ASSERT(value >= 0 && value <= 99);
-		if (value < 10) {
-			ptr[0] = '0';
-			ptr[1] = UnsafeNumericCast<char>('0' + value);
-		} else {
-			auto index = UnsafeNumericCast<unsigned>(value * 2);
-			ptr[0] = duckdb_fmt::internal::data::digits[index];
-			ptr[1] = duckdb_fmt::internal::data::digits[index + 1];
-		}
+		memcpy(ptr, fmt::detail::digits2(UnsafeNumericCast<size_t>(value)), 2);
 	}
 
 	static void Format(char *data, idx_t length, int32_t hour, int32_t minute, int32_t second, int32_t unused,

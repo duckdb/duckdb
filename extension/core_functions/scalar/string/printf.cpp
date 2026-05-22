@@ -1,8 +1,37 @@
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "fmt/format.h"
 #include "fmt/printf.h"
+
+namespace duckdb_fmt {
+template <>
+struct formatter<duckdb::hugeint_t> {
+	template <typename ParseContext>
+	constexpr auto parse(ParseContext &ctx) {
+		return ctx.begin();
+	}
+	template <typename FormatContext>
+	auto format(const duckdb::hugeint_t &value, FormatContext &ctx) const {
+		auto s = duckdb::Hugeint::ToString(value);
+		return std::copy(s.begin(), s.end(), ctx.out());
+	}
+};
+template <>
+struct formatter<duckdb::uhugeint_t> {
+	template <typename ParseContext>
+	constexpr auto parse(ParseContext &ctx) {
+		return ctx.begin();
+	}
+	template <typename FormatContext>
+	auto format(const duckdb::uhugeint_t &value, FormatContext &ctx) const {
+		auto s = duckdb::Uhugeint::ToString(value);
+		return std::copy(s.begin(), s.end(), ctx.out());
+	}
+};
+} // namespace duckdb_fmt
 
 namespace duckdb {
 
@@ -10,7 +39,8 @@ struct FMTPrintf {
 	template <class CTX>
 	static string OP(const char *format_str, vector<duckdb_fmt::basic_format_arg<CTX>> &format_args) {
 		return duckdb_fmt::vsprintf(
-		    format_str, duckdb_fmt::basic_format_args<CTX>(format_args.data(), static_cast<int>(format_args.size())));
+		    duckdb_fmt::basic_string_view<char>(format_str),
+		    duckdb_fmt::basic_format_args<CTX>(format_args.data(), static_cast<int>(format_args.size())));
 	}
 };
 
@@ -18,7 +48,8 @@ struct FMTFormat {
 	template <class CTX>
 	static string OP(const char *format_str, vector<duckdb_fmt::basic_format_arg<CTX>> &format_args) {
 		return duckdb_fmt::vformat(
-		    format_str, duckdb_fmt::basic_format_args<CTX>(format_args.data(), static_cast<int>(format_args.size())));
+		    duckdb_fmt::basic_string_view<char>(format_str),
+		    duckdb_fmt::basic_format_args<CTX>(format_args.data(), static_cast<int>(format_args.size())));
 	}
 };
 
@@ -75,7 +106,7 @@ static unique_ptr<FunctionData> BindPrintfFunction(BindScalarFunctionInput &inpu
 struct StandardConstructArgument {
 	template <class T, class CTX>
 	static void ConstructArgument(const T &input, vector<duckdb_fmt::basic_format_arg<CTX>> &result) {
-		result.emplace_back(duckdb_fmt::internal::make_arg<CTX>(input));
+		result.emplace_back(duckdb_fmt::basic_format_arg<CTX>(input));
 	}
 };
 
@@ -83,7 +114,7 @@ struct StringConstructArgument {
 	template <class T, class CTX>
 	static void ConstructArgument(const T &input, vector<duckdb_fmt::basic_format_arg<CTX>> &result) {
 		auto string_view = duckdb_fmt::basic_string_view<char>(input.GetData(), input.GetSize());
-		result.emplace_back(duckdb_fmt::internal::make_arg<CTX>(string_view));
+		result.emplace_back(duckdb_fmt::basic_format_arg<CTX>(string_view));
 	}
 };
 
