@@ -155,6 +155,29 @@ select count(*) from local_tbl where local_col = (select min(i) - 100 from rpc.t
 ----
 1
 
+# --- Issue 3: GROUP BY and ORDER BY with catalog-qualified column refs are stripped before push ---
+
+# GROUP BY with catalog-qualified ref: rpc.t1.i stripped to t1.i in the pushed SQL
+query II
+explain select rpc.t1.i, count(*) from rpc.t1 group by rpc.t1.i order by rpc.t1.i
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# Functional: correct aggregate result after pushdown
+query II
+select rpc.t1.i, count(*) from rpc.t1 where rpc.t1.i >= 108 group by rpc.t1.i order by rpc.t1.i
+----
+108	1
+109	1
+
+# ORDER BY using catalog-qualified reference, whole query pushed
+query I
+select rpc.t1.i from rpc.t1 where rpc.t1.i <= 102 order by rpc.t1.i desc
+----
+102
+101
+100
+
 # --- Issue 1 & 2: schema-qualified table refs and catalog-qualified column refs ---
 
 # Schema-qualified: rpc.main.t1 is pushed (rpc is identified as remote, main is the schema)
