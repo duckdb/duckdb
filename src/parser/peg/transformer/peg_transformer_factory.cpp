@@ -757,6 +757,9 @@ void PEGTransformerFactory::RegisterSet() {
 	REGISTER_TRANSFORM(TransformSetSetting);
 	REGISTER_TRANSFORM(TransformSetStatement);
 	REGISTER_TRANSFORM(TransformSetTimeZone);
+	REGISTER_TRANSFORM(TransformSetTransactionIsolation);
+	REGISTER_TRANSFORM(TransformSetSessionCharacteristics);
+	REGISTER_TRANSFORM(TransformIsolationLevel);
 	REGISTER_TRANSFORM(TransformSetVariable);
 	REGISTER_TRANSFORM(TransformStandardAssignment);
 	REGISTER_TRANSFORM(TransformVariableList);

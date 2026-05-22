@@ -1,6 +1,6 @@
 TransactionStatement <- BeginTransaction / RollbackTransaction / CommitTransaction
 
-BeginTransaction <- StartOrBegin Transaction? ReadOrWrite?
+BeginTransaction <- StartOrBegin Transaction? IsolationLevelClause? ReadOrWrite?
 RollbackTransaction <- AbortOrRollback Transaction?
 CommitTransaction <- CommitOrEnd Transaction?
 
@@ -10,5 +10,7 @@ ReadOrWrite <- 'READ' ReadOnlyOrReadWrite
 ReadOnlyOrReadWrite <- ReadOnly / ReadWrite
 ReadOnly <- 'ONLY'
 ReadWrite <- 'WRITE'
+IsolationLevelClause <- 'ISOLATION' 'LEVEL' IsolationLevel
+IsolationLevel <- ('READ' 'COMMITTED') / ('READ' 'UNCOMMITTED') / ('REPEATABLE' 'READ') / 'SERIALIZABLE'
 AbortOrRollback <- 'ABORT' / 'ROLLBACK'
 CommitOrEnd <- 'COMMIT' / 'END'

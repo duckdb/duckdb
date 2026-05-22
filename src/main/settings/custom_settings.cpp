@@ -1647,4 +1647,36 @@ void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &inf
 	info.context->transaction.SetInvalidationPolicy(
 	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
 }
+//===----------------------------------------------------------------------===//
+// Default Transaction Isolation
+//===----------------------------------------------------------------------===//
+void DefaultTransactionIsolationSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	auto level = EnumUtil::FromString<TransactionIsolationLevel>(StringValue::Get(parameter));
+	if (info.context && info.context->transaction.IsAutoCommit()) {
+		info.context->transaction.SetIsolationLevel(level);
+	}
+}
+
+//===----------------------------------------------------------------------===//
+// Transaction Isolation
+//===----------------------------------------------------------------------===//
+void TransactionIsolationSetting::SetLocal(ClientContext &context, const Value &input) {
+	if (context.transaction.IsAutoCommit()) {
+		// SET transaction_isolation outside a transaction has no effect;
+		// emit a PG-style warning if a handler is installed.
+		context.EmitWarning("SET TRANSACTION can only be used in transaction blocks");
+		return;
+	}
+	auto level = EnumUtil::FromString<TransactionIsolationLevel>(StringValue::Get(input));
+	context.transaction.SetIsolationLevel(level);
+}
+
+void TransactionIsolationSetting::ResetLocal(ClientContext &context) {
+	throw InvalidInputException("parameter \"transaction_isolation\" cannot be reset");
+}
+
+Value TransactionIsolationSetting::GetSetting(const ClientContext &context) {
+	return Value(EnumUtil::ToChars(context.transaction.GetIsolationLevel()));
+}
+
 } // namespace duckdb

@@ -1,7 +1,9 @@
-SetStatement <- 'SET' (StandardAssignment / SetTimeZone)
+SetStatement <- 'SET' (SetSessionCharacteristics / SetTransactionIsolation / StandardAssignment / SetTimeZone)
 
 StandardAssignment <- (SetVariable / SetSetting) SetAssignment
 SetTimeZone <- 'TIME' 'ZONE' ZoneValue
+SetTransactionIsolation <- 'TRANSACTION' 'ISOLATION' 'LEVEL' IsolationLevel
+SetSessionCharacteristics <- 'SESSION' 'CHARACTERISTICS' 'AS' 'TRANSACTION' 'ISOLATION' 'LEVEL' IsolationLevel
 
 ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / 'LOCAL' / 'DEFAULT' / StringLiteral / Identifier / NumberLiteral
 ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?

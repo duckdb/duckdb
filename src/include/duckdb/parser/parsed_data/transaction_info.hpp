@@ -20,6 +20,14 @@ enum class TransactionModifierType : uint8_t {
 	TRANSACTION_READ_WRITE
 };
 
+enum class TransactionIsolationLevel : uint8_t {
+	TRANSACTION_DEFAULT_ISOLATION,
+	READ_UNCOMMITTED,
+	READ_COMMITTED,
+	REPEATABLE_READ,
+	SERIALIZABLE
+};
+
 enum class TransactionInvalidationPolicy : uint8_t {
 	STANDARD_POLICY,
 	SYNTACTIC_ERRORS_DO_NOT_INVALIDATE,
@@ -44,6 +52,8 @@ public:
 	TransactionInvalidationPolicy invalidation_policy;
 	//! If transaction fails, automatically do a ROLLBACK;
 	bool auto_rollback;
+	//! Isolation level from BEGIN/START TRANSACTION ISOLATION LEVEL
+	TransactionIsolationLevel isolation_level = TransactionIsolationLevel::TRANSACTION_DEFAULT_ISOLATION;
 
 public:
 	void Serialize(Serializer &serializer) const override;

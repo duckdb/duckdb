@@ -312,6 +312,17 @@ private:
 	static unique_ptr<SQLStatement> TransformConnectStatement(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<OrderByNode> TransformGenericCopyOptionParenthesizedExpressionList(PEGTransformer &transformer,
 	                                                                                 ParseResult &parse_result);
+	// delete.gram — TRUNCATE rules use List(TruncateTarget) which the generator
+	// cannot auto-extract; hand-write the entry points.
+	static unique_ptr<SQLStatement> TransformTruncateStatement(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<BaseTableRef> TransformTruncateTarget(PEGTransformer &transformer, ParseResult &parse_result);
+	static bool TransformTruncateOnly(PEGTransformer &transformer, ParseResult &parse_result);
+	static bool TransformTruncateStar(PEGTransformer &transformer, ParseResult &parse_result);
+	static bool TransformTruncateIdentityClause(PEGTransformer &transformer, ParseResult &parse_result);
+	static bool TransformTruncateRestart(PEGTransformer &transformer, ParseResult &parse_result);
+	static bool TransformTruncateContinue(PEGTransformer &transformer, ParseResult &parse_result);
+	// transaction.gram — IsolationLevel is a complex choice that the generator skips.
+	static TransactionIsolationLevel TransformIsolationLevel(PEGTransformer &transformer, ParseResult &parse_result);
 	// comment.gram
 	static Value TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result);
 
@@ -1059,6 +1070,10 @@ private:
 	                                                                   ParseResult &parse_result);
 	static SettingInfo TransformSetSetting(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformSetStatement(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SetStatement> TransformSetTransactionIsolation(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
+	static unique_ptr<SetStatement> TransformSetSessionCharacteristics(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
 	static unique_ptr<SetStatement> TransformSetTimeZone(PEGTransformer &transformer, ParseResult &parse_result);
 	static SettingInfo TransformSetVariable(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformZoneValue(PEGTransformer &transformer, ParseResult &parse_result);
