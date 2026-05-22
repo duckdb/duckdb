@@ -83,7 +83,8 @@
         "parameters": "arg",
         "description": "Returns TRUE if every input value is TRUE, otherwise FALSE.",
         "example": "bool_and(A)",
-        "type": "aggregate_function"
+        "type": "aggregate_function",
+        "aliases": ["every"]
     },
     {
         "name": "bool_or",

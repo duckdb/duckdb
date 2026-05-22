@@ -149,8 +149,7 @@
         "description": "Computes the cosine distance between two same-sized lists.",
         "example": "list_cosine_distance([1, 2, 3], [1, 2, 3])",
         "categories": ["list"],
-        "type": "scalar_function_set",
-        "aliases": ["<=>"]
+        "type": "scalar_function_set"
     },
     {
         "name": "list_cosine_similarity",
@@ -166,8 +165,7 @@
         "description": "Calculates the Euclidean distance between two points with coordinates given in two inputs lists of equal length.",
         "example": "list_distance([1, 2, 3], [1, 2, 5])",
         "categories": ["list"],
-        "type": "scalar_function_set",
-        "aliases": ["<->"]
+        "type": "scalar_function_set"
     },
     {
         "name": "list_inner_product",
