@@ -16,6 +16,7 @@
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/type_expression.hpp"
+#include "duckdb/catalog/default/default_types.hpp"
 
 namespace duckdb {
 
@@ -317,7 +318,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 						throw InternalException("Expected a type expression");
 					}
 					auto &type_expr = expr->Cast<TypeExpression>();
-					if (!StringUtil::CIEquals(type_expr.GetTypeName(), "VARCHAR")) {
+					if (DefaultTypeGenerator::GetDefaultType(type_expr.GetTypeName()) != LogicalTypeId::VARCHAR) {
 						throw ParserException("Only VARCHAR columns can have collations!");
 					}
 				} else {
