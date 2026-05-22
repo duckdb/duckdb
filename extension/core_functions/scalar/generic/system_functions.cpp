@@ -20,9 +20,25 @@ void CurrentQueryFunction(DataChunk &input, ExpressionState &state, Vector &resu
 }
 
 // current_schema
+// PG-compliant: returns the first schema in the search path that actually
+// exists, or NULL if none of them do.
 void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	Value val(ClientData::Get(state.GetContext()).catalog_search_path->GetDefault().schema);
-	result.Reference(val, count_t(input.size()));
+	auto &context = state.GetContext();
+	auto &current_catalog = DatabaseManager::GetDefaultDatabase(context);
+	// Only user-set entries, with "$user" resolved — no implicit/temp/system.
+	auto entries = ClientData::Get(context).catalog_search_path->GetResolvedSetPaths();
+	for (auto &entry : entries) {
+		if (entry.catalog != current_catalog) {
+			continue;
+		}
+		auto schema_entry = Catalog::GetSchema(context, entry.catalog, entry.schema, OnEntryNotFound::RETURN_NULL);
+		if (schema_entry) {
+			result.Reference(Value(entry.schema), count_t(input.size()));
+			return;
+		}
+	}
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	ConstantVector::SetNull(result, true);
 }
 
 // current_database
@@ -65,9 +81,42 @@ unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 		auto implicit_schemas = BooleanValue::Get(schema_value);
 		vector<Value> schema_list;
 		auto &catalog_search_path = ClientData::Get(context).catalog_search_path;
-		auto &search_path = implicit_schemas ? catalog_search_path->Get() : catalog_search_path->GetSetPaths();
-		std::transform(search_path.begin(), search_path.end(), std::back_inserter(schema_list),
-		               [](const CatalogSearchEntry &s) -> Value { return Value(s.schema); });
+		auto &current_catalog = DatabaseManager::GetDefaultDatabase(context);
+		// PG-compliant implicit prefix: pg_temp (if the session has any temp
+		// objects), then pg_catalog. Then user-set schemas in the current DB.
+		if (implicit_schemas) {
+			auto temp_db = DatabaseManager::Get(context).GetDatabase(context, TEMP_CATALOG);
+			if (temp_db) {
+				// Sentinel exception to abort Scan on the first hit. SchemaCatalogEntry::Scan
+				// has no early-exit callback, so throw/catch is the cheapest way to bail out.
+				struct FoundTempObject : std::exception {};
+				bool has_temp_objects = false;
+				try {
+					for (auto &schema_ref : temp_db->GetCatalog().GetSchemas(context)) {
+						schema_ref.get().Scan(context, CatalogType::TABLE_ENTRY,
+						                      [](CatalogEntry &) { throw FoundTempObject {}; });
+					}
+				} catch (FoundTempObject &) {
+					has_temp_objects = true;
+				}
+				if (has_temp_objects) {
+					schema_list.emplace_back("pg_temp");
+				}
+			}
+			schema_list.emplace_back("pg_catalog");
+		}
+		// PG-compliant: only include user-set schemas that actually exist,
+		// with "$user" resolved via the current session user.
+		for (auto &entry : catalog_search_path->GetResolvedSetPaths()) {
+			if (entry.catalog != current_catalog) {
+				continue;
+			}
+			auto schema_entry = Catalog::GetSchema(context, entry.catalog, entry.schema, OnEntryNotFound::RETURN_NULL);
+			if (!schema_entry) {
+				continue;
+			}
+			schema_list.emplace_back(entry.schema);
+		}
 		result_val = Value::LIST(LogicalType::VARCHAR, schema_list);
 	}
 	return make_uniq<CurrentSchemasBindData>(std::move(result_val));

@@ -48,12 +48,23 @@ public:
 	DUCKDB_API void Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type);
 	DUCKDB_API void Reset();
 	DUCKDB_API void RefreshSetPaths();
+	//! Record a connection-level default restored on Reset() (RESET search_path,
+	//! RESET ALL). Entries must be fully qualified.
+	DUCKDB_API void SetDefaultPaths(vector<CatalogSearchEntry> new_defaults);
 
 	DUCKDB_API vector<CatalogSearchEntry> Get() const;
 	const vector<CatalogSearchEntry> &GetSetPaths() const {
 		return set_paths;
 	}
+	//! Like GetSetPaths() but with the "$user" placeholder resolved via the
+	//! session_user. Entries that fail to resolve are dropped.
+	DUCKDB_API vector<CatalogSearchEntry> GetResolvedSetPaths() const;
+	//! Cheap: returns the first user-set entry as stored (schema may be the
+	//! literal "$user"). Use when only `.catalog` is needed.
 	DUCKDB_API const CatalogSearchEntry &GetDefault() const;
+	//! Returns the first user-set entry whose schema resolves (skips "$user"
+	//! if no session user); falls back to GetDefault() if none resolve.
+	DUCKDB_API CatalogSearchEntry GetResolvedDefault() const;
 	//! FIXME: this method is deprecated
 	DUCKDB_API string GetDefaultSchema(const string &catalog) const;
 	DUCKDB_API string GetDefaultSchema(ClientContext &context, const string &catalog) const;
@@ -75,6 +86,8 @@ private:
 	vector<CatalogSearchEntry> paths;
 	//! Only the paths that were explicitly set (minus the always included paths)
 	vector<CatalogSearchEntry> set_paths;
+	//! Connection-level defaults restored by Reset() (RESET search_path / RESET ALL).
+	vector<CatalogSearchEntry> default_paths;
 };
 
 } // namespace duckdb

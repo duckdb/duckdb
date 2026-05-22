@@ -1,6 +1,7 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/default_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 
@@ -30,6 +31,60 @@ string ExtractIsolationLevelString(ParseResult &parse_result) {
 	auto &first = inner_list.Child<KeywordParseResult>(0).keyword;
 	auto &second = inner_list.Child<KeywordParseResult>(1).keyword;
 	return StringUtil::Lower(first) + " " + StringUtil::Lower(second);
+}
+
+// PG-compat for serenedb: SET search_path = a, "b,c", cat.s  -> normalize to
+// one comma-joined PG-quoted string so ParseList(...) treats each entry as one
+// atomic name. Mirrors the original libpg_query path.
+unique_ptr<SetStatement> TransformSetSearchPath(const string &name, SetScope scope,
+                                                vector<unique_ptr<ParsedExpression>> values) {
+	auto make_set = [&](string value) {
+		return make_uniq<SetVariableStatement>(name, make_uniq<ConstantExpression>(Value(std::move(value))), scope);
+	};
+	auto serialize = [&](ParsedExpression &expr) -> string {
+		if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
+			// ColumnRefExpression::ToString applies PG quoting so names with
+			// commas/dots survive ParseList as one atomic entry.
+			return expr.ToString();
+		}
+		if (expr.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+			return expr.Cast<ConstantExpression>().GetValue().ToString();
+		}
+		throw ParserException("SET search_path: expected identifier or string literal");
+	};
+	if (values.empty()) {
+		return make_set("");
+	}
+	if (values.size() == 1) {
+		auto &expr = *values[0];
+		if (expr.GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
+			return make_uniq<ResetVariableStatement>(name, scope);
+		}
+		// Single string literal: wrap in double quotes so commas in the literal
+		// are not treated as separators by ParseList. Empty literal stays empty.
+		if (expr.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+			auto &const_expr = expr.Cast<ConstantExpression>();
+			auto val = const_expr.GetValue();
+			if (val.type().id() == LogicalTypeId::VARCHAR) {
+				string raw = val.GetValue<string>();
+				if (raw.empty()) {
+					return make_set(raw);
+				}
+				string wrapped = "\"" + StringUtil::Replace(raw, "\"", "\"\"") + "\"";
+				return make_set(std::move(wrapped));
+			}
+		}
+		return make_set(serialize(expr));
+	}
+	// Multi-arg: comma-join each PG-quoted element.
+	string joined;
+	for (auto &value : values) {
+		if (!joined.empty()) {
+			joined += ",";
+		}
+		joined += serialize(*value);
+	}
+	return make_set(std::move(joined));
 }
 
 } // namespace
@@ -177,6 +232,12 @@ unique_ptr<SetStatement> PEGTransformerFactory::TransformStandardAssignment(PEGT
 	}
 	auto &set_assignment_pr = list_pr.Child<ListParseResult>(1);
 	auto values = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(set_assignment_pr);
+	// PG-compat for serenedb: SET search_path accepts comma-separated lists
+	// and unquoted/string-literal/DEFAULT shapes. Normalize into a single
+	// already-PG-quoted string before producing the SetVariableStatement.
+	if (StringUtil::CIEquals(setting_info.name, "search_path")) {
+		return TransformSetSearchPath(setting_info.name, setting_info.scope, std::move(values));
+	}
 	if (values.size() > 1) {
 		throw ParserException("SET can only contain a single value");
 	}
