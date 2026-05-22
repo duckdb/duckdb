@@ -26,7 +26,6 @@ protected:
 	void OnUnload() override;
 
 private:
-	std::function<void()> on_load;
 	std::function<void()> on_unload;
 };
 

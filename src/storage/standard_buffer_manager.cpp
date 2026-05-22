@@ -161,6 +161,21 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag
 	return result;
 }
 
+shared_ptr<BlockMemory> StandardBufferManager::CreateBlockMemory(block_id_t block_id, MemoryTag tag,
+                                                                 unique_ptr<FileBuffer> buffer,
+                                                                 DestroyBufferUpon destroy_buffer_upon,
+                                                                 idx_t alloc_size, BufferPoolReservation &&reservation,
+                                                                 BlockMemoryFactory factory) {
+	if (factory) {
+		auto memory =
+		    factory(*this, block_id, tag, std::move(buffer), destroy_buffer_upon, alloc_size, std::move(reservation));
+		D_ASSERT(memory);
+		return memory;
+	}
+	return make_shared_ptr<BlockMemory>(*this, block_id, tag, std::move(buffer), destroy_buffer_upon, alloc_size,
+	                                    std::move(reservation));
+}
+
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size,
                                                               bool can_destroy, BlockMemoryFactory factory) {
 	auto alloc_size = GetAllocSize(block_size + block_header_size);
@@ -175,14 +190,10 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 	    tag == MemoryTag::EXTERNAL_FILE_CACHE ? FileBufferType::EXTERNAL_FILE : FileBufferType::MANAGED_BUFFER;
 	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer), file_buffer_type);
 	const auto destroy_buffer_upon = can_destroy ? DestroyBufferUpon::EVICTION : DestroyBufferUpon::BLOCK;
-	if (factory) {
-		const auto block_id = ++temporary_id;
-		auto memory = factory(*this, block_id, tag, std::move(buffer), destroy_buffer_upon, alloc_size, std::move(res));
-		D_ASSERT(memory);
-		return make_shared_ptr<BlockHandle>(*temp_block_manager, block_id, std::move(memory));
-	}
-	return make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer),
-	                                    destroy_buffer_upon, alloc_size, std::move(res));
+	const auto block_id = ++temporary_id;
+	auto memory = CreateBlockMemory(block_id, tag, std::move(buffer), destroy_buffer_upon, alloc_size, std::move(res),
+	                                std::move(factory));
+	return make_shared_ptr<BlockHandle>(*temp_block_manager, block_id, std::move(memory));
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::AllocateTemporaryMemory(MemoryTag tag, idx_t block_size,

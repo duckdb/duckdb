@@ -22,14 +22,14 @@ idx_t ExternalFileCache::GetCacheBlockSize(const string &path) const {
 	return Settings::Get<ExternalFileCacheLocalBlockSizeSetting>(db);
 }
 
-void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, shared_ptr<CachedFile> cached_file_ref,
+void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file_entry, shared_ptr<CachedFile> cached_file,
                                               idx_t file_size, idx_t old_block_size, idx_t new_block_size) {
 	D_ASSERT(old_block_size > 0);
 	D_ASSERT(new_block_size > 0);
 
 	// Phase 1: Pin all LOADED old blocks, sorted by block index.
 	map<idx_t, pair<BufferHandle, idx_t>> pinned;
-	for (auto &block_entry : cached_file.blocks) {
+	for (auto &block_entry : cached_file_entry.blocks) {
 		const idx_t old_idx = block_entry.first;
 		auto &block = *block_entry.second;
 		const annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
@@ -43,7 +43,7 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, shared_pt
 	}
 
 	if (pinned.empty()) {
-		cached_file.blocks.clear();
+		cached_file_entry.blocks.clear();
 		return;
 	}
 
@@ -77,7 +77,7 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, shared_pt
 			}
 			const idx_t new_size = new_end - new_start;
 
-			auto buf = AllocateCacheBlock(cached_file_ref, new_size);
+			auto buf = AllocateCacheBlock(cached_file, new_size);
 
 			// Copy from each contributing old block in the run.
 			const idx_t contrib_first = new_start / old_block_size;
@@ -112,7 +112,7 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, shared_pt
 	}
 
 	// Phase 3: Replace old blocks with new blocks.
-	cached_file.blocks = std::move(new_blocks);
+	cached_file_entry.blocks = std::move(new_blocks);
 }
 
 vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(shared_ptr<CachedFile> cached_file_p,
@@ -266,7 +266,8 @@ BufferHandle ExternalFileCache::AllocateCacheBlock(shared_ptr<CachedFile> cached
 		    [this, weak_file]() { RegisterLoadedBlock(weak_file); },
 		    [this, weak_file]() { ReleaseLoadedBlock(weak_file); });
 	};
-	return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, block_size, true, std::move(factory));
+	return buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, block_size, /*can_destroy=*/true,
+	                               std::move(factory));
 }
 
 shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFile(const string &path) {

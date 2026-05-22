@@ -99,12 +99,14 @@ public:
 
 private:
 	//! Re-index blocks of a single cached file.
-	void ReindexCachedFileCore(CachedFile &cached_file, shared_ptr<CachedFile> cached_file_ref, idx_t file_size,
-	                           idx_t old_block_size, idx_t new_block_size) DUCKDB_REQUIRES(cached_file.map_lock);
+	void ReindexCachedFileCore(CachedFile &cached_file_entry, shared_ptr<CachedFile> cached_file, idx_t file_size,
+	                           idx_t old_block_size, idx_t new_block_size) DUCKDB_REQUIRES(cached_file_entry.map_lock);
 
+	// Block load callback.
 	void RegisterLoadedBlock(const weak_ptr<CachedFile> &cached_file);
-	void TryEraseFileLocked(CachedFile &cached_file);
+	// Block unload callback.
 	void ReleaseLoadedBlock(const weak_ptr<CachedFile> &cached_file);
+	void TryEraseFileLocked(CachedFile &cached_file);
 
 	//! The BufferManager used to cache files
 	BufferManager &buffer_manager;

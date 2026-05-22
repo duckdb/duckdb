@@ -9,9 +9,9 @@ ExternalFileCacheBlockMemory::ExternalFileCacheBlockMemory(BufferManager &buffer
                                                            std::function<void()> on_load_p,
                                                            std::function<void()> on_unload_p)
     : BlockMemory(buffer_manager, block_id, tag, std::move(buffer), destroy_buffer_upon, size, std::move(reservation)),
-      on_load(std::move(on_load_p)), on_unload(std::move(on_unload_p)) {
-	if (on_load) {
-		on_load();
+      on_unload(std::move(on_unload_p)) {
+	if (on_load_p) {
+		on_load_p();
 	}
 }
 
