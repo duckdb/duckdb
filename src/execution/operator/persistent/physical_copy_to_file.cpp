@@ -998,8 +998,8 @@ unique_ptr<const SortStrategy> PartitionedCopy::ConstructSortStrategy() const {
 	}
 	vector<unique_ptr<BaseStatistics>> partition_stats;
 
-	return SortStrategy::Factory(context, partition_bys, op.order_columns, op.children[0].get().GetTypes(),
-	                             partition_stats, op.children[0].get().estimated_cardinality);
+	return SortStrategy::Factory(context, partition_bys, op.order_columns, op.expected_types, partition_stats,
+	                             op.children.empty() ? 0 : op.children[0].get().estimated_cardinality);
 }
 
 void PartitionedCopy::CreateNextState() {
