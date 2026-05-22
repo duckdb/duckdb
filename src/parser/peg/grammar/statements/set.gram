@@ -23,4 +23,7 @@ SetAssignment <- VariableAssign VariableList
 VariableAssign <- '=' / 'TO'
 VariableList <- List(Expression)
 
-ResetStatement <- 'RESET' (SetVariable / SetSetting)
+ResetStatement <- 'RESET' (ResetAll / SetVariable / SetSetting)
+# PG-compat: RESET ALL and RESET LOCAL ALL both reset every user-set option.
+# The LOCAL variant only differs at execution time (transaction-bound).
+ResetAll <- ('LOCAL' 'ALL') / 'ALL'

@@ -758,6 +758,7 @@ void PEGTransformerFactory::RegisterSelect() {
 void PEGTransformerFactory::RegisterSet() {
 	// set.gram
 	REGISTER_TRANSFORM(TransformResetStatement);
+	REGISTER_TRANSFORM(TransformResetAll);
 	REGISTER_TRANSFORM(TransformSetAssignment);
 	REGISTER_TRANSFORM(TransformSetSetting);
 	REGISTER_TRANSFORM(TransformSetStatement);

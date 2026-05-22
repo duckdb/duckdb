@@ -101,6 +101,7 @@ struct ConfigurationAlias {
 };
 
 typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);
+typedef void (*reset_option_callback_t)(ClientContext &context, SetScope scope);
 
 struct ExtensionOption {
 	ExtensionOption() : set_function(nullptr), default_scope(SetScope::AUTOMATIC) {
@@ -115,6 +116,7 @@ struct ExtensionOption {
 	string description;
 	LogicalType type;
 	set_option_callback_t set_function;
+	reset_option_callback_t reset_function = nullptr;
 	Value default_value;
 	SetScope default_scope;
 	optional_idx setting_index;

@@ -1071,6 +1071,7 @@ private:
 
 	// set.gram
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer, ParseResult &parse_result);
+	static SettingInfo TransformResetAll(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformSetAssignment(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static SettingInfo TransformSetSetting(PEGTransformer &transformer, ParseResult &parse_result);

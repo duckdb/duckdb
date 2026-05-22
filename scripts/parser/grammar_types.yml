@@ -758,6 +758,7 @@ SettingInfo:
   rules:
     - SetSetting
     - SetVariable
+    - ResetAll
 
 PartitionSortedOptions:
   type: "PartitionSortedOptions"
