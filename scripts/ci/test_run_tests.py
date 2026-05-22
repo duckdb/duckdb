@@ -588,8 +588,9 @@ require windows: 2
         failing_helper = create_temp_file(
             """
             #!/bin/sh
-            if [ "$1" = "--test-config" ] && [ "$2" = "test/configs/fail.json" ] && [ "$3" = "--list-tests" ]; then
-              exit 1
+            if [ "$1" = "--test-config" ] && [ "$2" = "test/configs/empty.json" ] && [ "$3" = "--list-tests" ]; then
+              echo "name\tgroup"
+              exit 0
             fi
             if [ "$1" = "--test-config" ] && [ "$3" = "--list-tests" ]; then
               echo "name\tgroup"
@@ -612,7 +613,7 @@ require windows: 2
                     "--test-config",
                     "test/configs/pass.json",
                     "--test-config",
-                    "test/configs/fail.json",
+                    "test/configs/empty.json",
                     str(failing_helper),
                     "ignored-pattern",
                 ]
@@ -621,7 +622,8 @@ require windows: 2
             failing_helper.unlink(missing_ok=True)
 
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
-        self.assertIn("error: 1 config runs failed: test/configs/fail.json", proc.stdout)
+        self.assertIn("error: no tests selected for config 'test/configs/empty.json'", proc.stdout)
+        self.assertIn("error: 1 config runs failed: test/configs/empty.json", proc.stdout)
 
     def test_ci_groups_close_when_all_configs_pass(self):
         listed_tests_path = create_temp_file(

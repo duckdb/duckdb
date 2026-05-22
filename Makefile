@@ -561,7 +561,7 @@ test_release_tag:
 	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/$(UNITTEST_BINARY) $(T)
 
 unittest_relassert:
-	$(PYTHON) scripts/ci/run_tests.py build/relassert/$(UNITTEST_BINARY) $(T)
+	$(PYTHON) scripts/ci/run_tests.py build/relassert/$(UNITTEST_BINARY) $(UNITTEST_SLOW_FLAGS) $(T)
 
 smoke:
 	$(PYTHON) scripts/ci/run_tests.py --batch-timeout 120 --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
