@@ -9,6 +9,9 @@ statement ok
 CREATE TABLE rowid_gap_append_latest.t AS SELECT i FROM range(6144) tbl(i);
 
 statement ok
+CREATE UNIQUE INDEX idx_i ON rowid_gap_append_latest.t(i);
+
+statement ok
 CHECKPOINT rowid_gap_append_latest;
 
 statement ok
@@ -35,6 +38,42 @@ query II
 SELECT rowid, i FROM rowid_gap_append_latest.t WHERE i = 999999;
 ----
 6144	999999
+
+statement ok
+CHECKPOINT rowid_gap_append_latest;
+
+statement ok
+DETACH rowid_gap_append_latest;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_append_latest.db' AS rowid_gap_append_latest;
+
+query II
+SELECT rowid, i FROM rowid_gap_append_latest.t WHERE i = 999999;
+----
+6144	999999
+
+statement ok
+DROP INDEX rowid_gap_append_latest.idx_i;
+
+statement ok
+CHECKPOINT rowid_gap_append_latest;
+
+statement ok
+DETACH rowid_gap_append_latest;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_append_latest.db' AS rowid_gap_append_latest;
+
+query II
+SELECT rowid, i FROM rowid_gap_append_latest.t WHERE i = 999999;
+----
+4096	999999
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_append_latest.t;
+----
+0	4096	4097
 
 statement ok
 DETACH rowid_gap_append_latest;
