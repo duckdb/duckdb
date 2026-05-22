@@ -270,6 +270,53 @@ idx_t MatchConditionScanRow(DataChunk &join_keys, DataChunk &scan_chunk, idx_t s
 	return matched_count;
 }
 
+struct MarkJoinResultData {
+	bool *bool_result;
+	ValidityMask *mask;
+};
+
+MarkJoinResultData InitializeMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
+                                            const vector<idx_t> &lhs_output_columns,
+                                            const vector<bool> &null_values_are_equal) {
+	result.SetCardinality(probe_data.size());
+	for (idx_t i = 0; i < lhs_output_columns.size(); i++) {
+		result.data[i].Reference(probe_data.data[lhs_output_columns[i]]);
+	}
+
+	auto &result_vector = result.data.back();
+	result_vector.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::SetSize(result_vector, count_t(probe_data.size()));
+	auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
+	auto &mask = FlatVector::ValidityMutable(result_vector);
+	for (idx_t i = 0; i < probe_data.size(); i++) {
+		bool_result[i] = false;
+	}
+
+	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
+		if (null_values_are_equal[col_idx]) {
+			continue;
+		}
+		UnifiedVectorFormat jdata;
+		join_keys.data[col_idx].ToUnifiedFormat(jdata);
+		if (jdata.validity.CanHaveNull()) {
+			for (idx_t i = 0; i < join_keys.size(); i++) {
+				auto jidx = jdata.sel->get_index(i);
+				if (!jdata.validity.RowIsValidUnsafe(jidx)) {
+					mask.SetInvalid(i);
+				}
+			}
+		}
+	}
+	return {bool_result, &mask};
+}
+
+void InitializeFoundMatchResult(MarkJoinResultData &result_data, DataChunk &probe_data, const bool *found_match) {
+	D_ASSERT(found_match);
+	for (idx_t i = 0; i < probe_data.size(); i++) {
+		result_data.bool_result[i] = found_match[i];
+	}
+}
+
 } // namespace
 
 void MarkJoinPostProcessor::Initialize(ClientContext &context_p, BufferManager &buffer_manager_p, JoinType join_type_p,
@@ -515,67 +562,34 @@ void MarkJoinPostProcessor::ConstructResult(DataChunk &join_keys, DataChunk &pro
                                             const vector<idx_t> &lhs_output_columns,
                                             const vector<bool> &null_values_are_equal, const bool *found_match,
                                             bool has_null) {
-	result.SetCardinality(probe_data.size());
-	for (idx_t i = 0; i < lhs_output_columns.size(); i++) {
-		result.data[i].Reference(probe_data.data[lhs_output_columns[i]]);
-	}
-
-	auto &result_vector = result.data.back();
-	result_vector.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::SetSize(result_vector, count_t(probe_data.size()));
-	auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
-	auto &mask = FlatVector::ValidityMutable(result_vector);
-
-	ApplyJoinKeyNullMask(join_keys, null_values_are_equal, mask);
-	D_ASSERT(found_match);
-	for (idx_t i = 0; i < probe_data.size(); i++) {
-		bool_result[i] = found_match[i];
-	}
-	RefineUnmatchedRows(join_keys, mask, bool_result, has_null);
+	auto result_data =
+	    InitializeMarkJoinResult(join_keys, probe_data, result, lhs_output_columns, null_values_are_equal);
+	InitializeFoundMatchResult(result_data, probe_data, found_match);
+	RefineUnmatchedRows(join_keys, *result_data.mask, result_data.bool_result, has_null);
 }
 
 void MarkJoinPostProcessor::ConstructEmptyResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
                                                  const vector<idx_t> &lhs_output_columns,
                                                  const vector<bool> &null_values_are_equal, bool has_null) {
-	result.SetCardinality(probe_data.size());
-	for (idx_t i = 0; i < lhs_output_columns.size(); i++) {
-		result.data[i].Reference(probe_data.data[lhs_output_columns[i]]);
-	}
-
-	auto &result_vector = result.data.back();
-	result_vector.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::SetSize(result_vector, count_t(probe_data.size()));
-	auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
-	auto &mask = FlatVector::ValidityMutable(result_vector);
-
-	ApplyJoinKeyNullMask(join_keys, null_values_are_equal, mask);
-	for (idx_t i = 0; i < probe_data.size(); i++) {
-		bool_result[i] = false;
-	}
-	RefineUnmatchedRows(join_keys, mask, bool_result, has_null);
+	auto result_data =
+	    InitializeMarkJoinResult(join_keys, probe_data, result, lhs_output_columns, null_values_are_equal);
+	RefineUnmatchedRows(join_keys, *result_data.mask, result_data.bool_result, has_null);
 }
 
 void MarkJoinPostProcessor::ConstructResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
                                             const vector<bool> &null_values_are_equal, const bool *found_match,
                                             ColumnDataCollection &rhs_condition_data,
                                             const vector<JoinCondition> &conditions, bool has_null) {
-	result.SetCardinality(probe_data);
+	vector<idx_t> lhs_output_columns;
+	lhs_output_columns.reserve(probe_data.ColumnCount());
 	for (idx_t i = 0; i < probe_data.ColumnCount(); i++) {
-		result.data[i].Reference(probe_data.data[i]);
+		lhs_output_columns.push_back(i);
 	}
-
-	auto &result_vector = result.data.back();
-	result_vector.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::SetSize(result_vector, count_t(probe_data.size()));
-	auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
-	auto &mask = FlatVector::ValidityMutable(result_vector);
-
-	ApplyJoinKeyNullMask(join_keys, null_values_are_equal, mask);
-	D_ASSERT(found_match);
-	for (idx_t i = 0; i < probe_data.size(); i++) {
-		bool_result[i] = found_match[i];
-	}
-	ProbeConditionScanRows(join_keys, mask, bool_result, rhs_condition_data, conditions, has_null);
+	auto result_data =
+	    InitializeMarkJoinResult(join_keys, probe_data, result, lhs_output_columns, null_values_are_equal);
+	InitializeFoundMatchResult(result_data, probe_data, found_match);
+	ProbeConditionScanRows(join_keys, *result_data.mask, result_data.bool_result, rhs_condition_data, conditions,
+	                       has_null);
 }
 
 void MarkJoinPostProcessor::RefineUnmatchedRows(DataChunk &join_keys, ValidityMask &mask, const bool *found_match,
