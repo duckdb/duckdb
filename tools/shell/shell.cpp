@@ -1192,7 +1192,9 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 			}
 		}
 		auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
-		client_config.display_create_func = CreateProgressBar;
+		if (stdout_is_console) {
+			client_config.display_create_func = CreateProgressBar;
+		}
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
