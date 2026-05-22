@@ -50,7 +50,11 @@ unique_ptr<ParsedExpression> Binder::GetSQLValueFunction(const string &column_na
 	for (auto &ext : PlannerExtension::Iterate(context)) {
 		if (ext.get_sql_value_function) {
 			PlannerExtensionInput input {context, *this, ext.planner_info.get()};
-			return ext.get_sql_value_function(input, column_name);
+			unique_ptr<ParsedExpression> result;
+			auto result_type = ext.get_sql_value_function(input, column_name, result);
+			if (result_type == GetSQLValueFunctionReturnType::FINISH_BINDING || result) {
+				return result;
+			}
 		}
 	}
 
