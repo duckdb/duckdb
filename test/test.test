@@ -100,5 +100,52 @@ select count(*) from ((select * from rpc.t1 limit 5) union all select * from loc
 ----
 15
 
+# Subquery expression pushdown: fully remote (both outer and subquery use rpc.t1)
+# The whole SELECT including the IN subquery should be pushed to the remote
+query II
+explain select * from rpc.t1 where i in (select i from rpc.t1)
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from rpc.t1 where i in (select i from rpc.t1)
+----
+10
+
+# Subquery expression pushdown: mixed - local outer, remote subquery
+# Only the inner subquery is pushed; outer SELECT stays local
+# local_tbl has 0-9, rpc.t1 has 100-109 → no overlap → 0 results
+query I
+select count(*) from local_tbl where i in (select i from rpc.t1)
+----
+0
+
+# correlated subquery that refers to local tbl
+query I
+select count(*) from local_tbl where i in (select local_tbl.i from rpc.t1)
+----
+0
+
+# Scalar subquery: no FROM clause, fully pushed (scalar subquery is the only reference)
+query I
+select (select count(*) from rpc.t1)
+----
+10
+
+# Scalar subquery: fully remote - pushed along with the outer SELECT
+# rpc.t1 has 100-109; min(i) = 100, so WHERE i = 100 → 1 row
+query I
+select count(*) from rpc.t1 where i = (select min(i) from rpc.t1)
+----
+1
+
+# Scalar subquery: mixed - local outer table, remote scalar subquery in WHERE
+# Only the scalar subquery is pushed; outer SELECT stays local
+# min(i) from rpc.t1 = 100; 100 - 100 = 0; local_tbl has 0-9 → WHERE i = 0 → 1 row
+query I
+select count(*) from local_tbl where i = (select min(i) - 100 from rpc.t1)
+----
+1
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

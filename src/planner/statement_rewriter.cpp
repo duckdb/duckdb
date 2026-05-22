@@ -26,6 +26,7 @@
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
@@ -190,6 +191,19 @@ CatalogPushdownResult StatementRewriter::Rewrite(SelectNode &node) {
 	// Otherwise, push down only the from_table component if possible
 	if (node.from_table) {
 		FinishPushdown(node.from_table, from_result);
+	}
+	// Push down any subquery expressions in WHERE/HAVING/QUALIFY/SELECT list
+	if (node.where_clause) {
+		PushdownSubqueries(node.where_clause);
+	}
+	if (node.having) {
+		PushdownSubqueries(node.having);
+	}
+	if (node.qualify) {
+		PushdownSubqueries(node.qualify);
+	}
+	for (auto &expr : node.select_list) {
+		PushdownSubqueries(expr);
 	}
 	return result;
 }
@@ -371,15 +385,38 @@ CatalogPushdownResult StatementRewriter::Rewrite(BaseTableRef &ref) {
 
 CatalogPushdownResult StatementRewriter::Rewrite(ParsedExpression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
-		return {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr, {}};
+		auto &subquery_expr = expr.Cast<SubqueryExpression>();
+		CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+		// EnumerateChildren for SUBQUERY only visits `child` (e.g., left side of IN), not subquery->node
+		if (subquery_expr.child) {
+			result = Merge(result, Rewrite(*subquery_expr.child));
+		}
+		result = Merge(result, Rewrite(*subquery_expr.subquery->node));
+		return result;
 	}
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child) {
-		if (result.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
-			result = Rewrite(child);
-		}
+		result = Merge(result, Rewrite(child));
 	});
 	return result;
+}
+
+void StatementRewriter::PushdownSubqueries(unique_ptr<ParsedExpression> &expr) {
+	if (!expr) {
+		return;
+	}
+	if (expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		auto &subquery_expr = expr->Cast<SubqueryExpression>();
+		if (subquery_expr.child) {
+			PushdownSubqueries(subquery_expr.child);
+		}
+		auto result = Rewrite(*subquery_expr.subquery->node);
+		FinishPushdown(subquery_expr.subquery->node, result);
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
+		PushdownSubqueries(child);
+	});
 }
 
 unique_ptr<TableFunctionRef> StatementRewriter::CreateRemoteFunctionRef(CatalogPushdownResult &result,
@@ -421,12 +458,38 @@ void StatementRewriter::StripCatalogName(TableRef &ref, const string &catalog_na
 	}
 }
 
+void StatementRewriter::StripCatalogName(ParsedExpression &expr, const string &catalog_name) {
+	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		auto &subq = expr.Cast<SubqueryExpression>();
+		StripCatalogName(*subq.subquery->node, catalog_name);
+		if (subq.child) {
+			StripCatalogName(*subq.child, catalog_name);
+		}
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child) {
+		StripCatalogName(child, catalog_name);
+	});
+}
+
 void StatementRewriter::StripCatalogName(QueryNode &node, const string &catalog_name) {
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE: {
 		auto &select = node.Cast<SelectNode>();
 		if (select.from_table) {
 			StripCatalogName(*select.from_table, catalog_name);
+		}
+		for (auto &expr : select.select_list) {
+			StripCatalogName(*expr, catalog_name);
+		}
+		if (select.where_clause) {
+			StripCatalogName(*select.where_clause, catalog_name);
+		}
+		if (select.having) {
+			StripCatalogName(*select.having, catalog_name);
+		}
+		if (select.qualify) {
+			StripCatalogName(*select.qualify, catalog_name);
 		}
 		break;
 	}

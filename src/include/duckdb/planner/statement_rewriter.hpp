@@ -55,6 +55,7 @@ private:
 	CatalogPushdownResult Rewrite(SubqueryRef &ref);
 	CatalogPushdownResult Rewrite(BaseTableRef &ref);
 	CatalogPushdownResult Rewrite(ParsedExpression &expr);
+	void PushdownSubqueries(unique_ptr<ParsedExpression> &expr);
 
 	void FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result);
 	void FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result);
@@ -65,6 +66,7 @@ private:
 	static void StripCatalogName(SQLStatement &statement, const string &catalog_name);
 	static void StripCatalogName(QueryNode &node, const string &catalog_name);
 	static void StripCatalogName(TableRef &ref, const string &catalog_name);
+	static void StripCatalogName(ParsedExpression &expr, const string &catalog_name);
 
 private:
 	Binder &binder;
