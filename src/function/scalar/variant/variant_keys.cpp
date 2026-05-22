@@ -168,8 +168,7 @@ static void WriteKeyIdList(const UnifiedVariantVectorData &variant, Vector &key_
 static Vector CollectVariantKeys(const UnifiedVariantVectorData &variant,
                                  const vector<VariantPathComponent> &components, const idx_t count) {
 	// By row found keys at the requested path in the VARIANT
-	Vector key_ids(LogicalType::LIST(LogicalType::UBIGINT));
-	key_ids.Initialize(VectorDataInitialization::UNINITIALIZED, count);
+	Vector key_ids(LogicalType::LIST(LogicalType::UBIGINT), count);
 	VariantPathSelection path_selection(count);
 
 	auto &allocator = Allocator::DefaultAllocator();
