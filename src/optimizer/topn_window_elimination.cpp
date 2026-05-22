@@ -917,7 +917,7 @@ bool TopNWindowElimination::CanUseLateMaterialization(const LogicalWindow &windo
 				if (projection_idx >= projection.expressions.size()) {
 					return false;
 				}
-				if (!ExtractSingleBinding(&projection.expressions[projection_idx], projections[i])) {
+				if (!ExtractSingleBinding(&projection.expressions[projection_idx], projections[i], true)) {
 					return false;
 				}
 			}
