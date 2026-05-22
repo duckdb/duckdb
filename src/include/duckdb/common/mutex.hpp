@@ -100,10 +100,10 @@ public:
 };
 
 // Unannotated mutex type, which is alias for STL ones.
-using mutex = std::mutex;
-template <typename M = std::mutex>
+using mutex = absl::Mutex;
+template <typename M = mutex>
 using lock_guard = std::lock_guard<M>;
-template <typename M = std::mutex>
+template <typename M = mutex>
 using unique_lock = std::unique_lock<M>;
 
 } // namespace duckdb

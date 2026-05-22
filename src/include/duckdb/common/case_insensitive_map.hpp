@@ -18,13 +18,17 @@
 namespace duckdb {
 
 struct CaseInsensitiveStringHashFunction {
-	uint64_t operator()(const string &str) const {
+	using is_transparent = void;
+
+	uint64_t operator()(std::string_view str) const {
 		return StringUtil::CIHash(str);
 	}
 };
 
 struct CaseInsensitiveStringEquality {
-	bool operator()(const string &a, const string &b) const {
+	using is_transparent = void;
+
+	bool operator()(std::string_view a, std::string_view b) const {
 		return StringUtil::CIEquals(a, b);
 	}
 };
@@ -36,7 +40,9 @@ using case_insensitive_map_t =
 using case_insensitive_set_t = unordered_set<string, CaseInsensitiveStringHashFunction, CaseInsensitiveStringEquality>;
 
 struct CaseInsensitiveStringCompare {
-	bool operator()(const string &s1, const string &s2) const {
+	using is_transparent = void;
+
+	bool operator()(std::string_view s1, std::string_view s2) const {
 		return StringUtil::CILessThan(s1, s2);
 	}
 };
