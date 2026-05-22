@@ -21,10 +21,11 @@ idx_t ExternalFileCache::GetCacheBlockSize(const string &path) const {
 	return Settings::Get<ExternalFileCacheLocalBlockSizeSetting>(db);
 }
 
-void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size,
-                                              idx_t new_block_size) {
+void ExternalFileCache::ReindexCachedFileCore(const shared_ptr<CachedFile> &cached_file_p, idx_t file_size,
+                                              idx_t old_block_size, idx_t new_block_size) {
 	D_ASSERT(old_block_size > 0);
 	D_ASSERT(new_block_size > 0);
+	auto &cached_file = *cached_file_p;
 
 	// Phase 1: Pin all LOADED old blocks, sorted by block index.
 	map<idx_t, pair<BufferHandle, idx_t>> pinned;
@@ -94,9 +95,12 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 			}
 
 			auto new_block = make_shared_ptr<CacheBlock>();
+			auto block_handle = buf.GetBlockHandle();
+			auto cleanup = RegisterLoadedBlock(cached_file_p, block_handle);
 			{
 				const annotated_lock_guard<annotated_mutex> block_guard(new_block->mtx);
-				new_block->block_handle = buf.GetBlockHandle();
+				new_block->block_handle = std::move(block_handle);
+				new_block->cleanup = std::move(cleanup);
 				new_block->nr_bytes = new_size;
 				new_block->state = CacheBlockState::LOADED;
 #ifdef DEBUG
@@ -113,10 +117,11 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 	cached_file.blocks = std::move(new_blocks);
 }
 
-vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(CachedFile &cached_file,
+vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(const shared_ptr<CachedFile> &cached_file_p,
                                                                           idx_t current_block_size, idx_t first_block,
                                                                           idx_t num_blocks) {
 	D_ASSERT(current_block_size > 0);
+	auto &cached_file = *cached_file_p;
 
 	idx_t file_size = 0;
 	{
@@ -129,7 +134,7 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(Cached
 	if (cached_file.cached_block_size.IsValid() && cached_file.cached_block_size.GetIndex() != current_block_size) {
 		const idx_t old_block_size = cached_file.cached_block_size.GetIndex();
 		if (file_size > 0) {
-			ReindexCachedFileCore(cached_file, file_size, old_block_size, current_block_size);
+			ReindexCachedFileCore(cached_file_p, file_size, old_block_size, current_block_size);
 		}
 	}
 	cached_file.cached_block_size = current_block_size;
@@ -200,18 +205,27 @@ bool ExternalFileCache::IsEnabled() const {
 }
 
 void ExternalFileCache::SetEnabled(bool enable_p) {
-	lock_guard<mutex> guard(lock);
-	enable = enable_p;
-	if (!enable) {
-		cached_files.clear();
+	unordered_map<string, CachedFileWithRefCount> cached_files_to_destroy;
+	{
+		lock_guard<mutex> guard(lock);
+		enable = enable_p;
+		if (!enable) {
+			cached_files_to_destroy = std::move(cached_files);
+		}
 	}
 }
 
 vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() const {
-	unique_lock<mutex> files_guard(lock);
+	vector<pair<string, shared_ptr<CachedFile>>> cached_file_snapshot;
+	{
+		unique_lock<mutex> files_guard(lock);
+		for (const auto &file : cached_files) {
+			cached_file_snapshot.push_back(make_pair(file.first, file.second.cached_file));
+		}
+	}
 	vector<CachedFileInformation> result;
-	for (const auto &file : cached_files) {
-		auto &cached_file = *file.second.cached_file;
+	for (const auto &file : cached_file_snapshot) {
+		auto &cached_file = *file.second;
 		const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
 		const idx_t block_size = cached_file.cached_block_size.IsValid() ? cached_file.cached_block_size.GetIndex()
 		                                                                 : GetCacheBlockSize(file.first);
@@ -273,6 +287,56 @@ void ExternalFileCache::ReleaseCachedFileHandle(const shared_ptr<CachedFile> &ca
 	TryEraseFileLocked(cached_file);
 }
 
+std::function<void()> ExternalFileCache::RegisterLoadedBlock(const shared_ptr<CachedFile> &cached_file,
+                                                             const shared_ptr<BlockHandle> &block_handle) {
+	D_ASSERT(cached_file);
+	D_ASSERT(block_handle);
+	if (!cached_file || !block_handle) {
+		return nullptr;
+	}
+	bool registered = false;
+	{
+		lock_guard<mutex> guard(lock);
+		auto entry = cached_files.find(cached_file->path);
+		if (entry != cached_files.end() && entry->second.cached_file.get() == cached_file.get()) {
+			entry->second.loaded_block_count++;
+			registered = true;
+		}
+	}
+	if (!registered) {
+		return nullptr;
+	}
+	auto completed = make_shared_ptr<atomic<bool>>(false);
+	auto cleanup = [this, cached_file = weak_ptr<CachedFile>(cached_file), completed]() {
+		if (completed->exchange(true)) {
+			return;
+		}
+		ReleaseLoadedBlock(cached_file);
+	};
+	block_handle->GetMemory().SetUnloadCallback(cleanup);
+	return cleanup;
+}
+
+void ExternalFileCache::ReleaseLoadedBlock(const weak_ptr<CachedFile> &cached_file) {
+	auto locked_file = cached_file.lock();
+	if (!locked_file) {
+		return;
+	}
+	lock_guard<mutex> guard(lock);
+	auto entry = cached_files.find(locked_file->path);
+	if (entry == cached_files.end()) {
+		return;
+	}
+	if (entry->second.cached_file.get() != locked_file.get()) {
+		return;
+	}
+	D_ASSERT(entry->second.loaded_block_count > 0);
+	if (entry->second.loaded_block_count > 0) {
+		entry->second.loaded_block_count--;
+	}
+	TryEraseFileLocked(locked_file);
+}
+
 void ExternalFileCache::TryEraseFile(const shared_ptr<CachedFile> &cached_file) {
 	lock_guard<mutex> guard(lock);
 	TryEraseFileLocked(cached_file);
@@ -295,10 +359,6 @@ void ExternalFileCache::TryEraseFileLocked(const shared_ptr<CachedFile> &cached_
 		return;
 	}
 	if (entry->second.active_handle_count != 0 || entry->second.loaded_block_count != 0) {
-		return;
-	}
-	annotated_lock_guard<annotated_mutex> map_guard(cached_file->map_lock);
-	if (!cached_file->blocks.empty()) {
 		return;
 	}
 	cached_files.erase(entry);

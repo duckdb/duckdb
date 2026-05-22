@@ -22,12 +22,15 @@
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache_block.hpp"
 
+#include <functional>
+
 namespace duckdb {
 
 // Forward declaration.
 class ClientContext;
 class DatabaseInstance;
 class BufferManager;
+class BlockHandle;
 
 class ExternalFileCache {
 public:
@@ -81,14 +84,18 @@ public:
 
 	//! Re-index to `current_block_size` if it differs from the cache block size.
 	//! Return the blocks cached for the given range.
-	vector<shared_ptr<CacheBlock>> ReindexAndAcquireBlocks(CachedFile &cached_file, idx_t current_block_size,
-	                                                       idx_t first_block, idx_t num_blocks);
+	vector<shared_ptr<CacheBlock>> ReindexAndAcquireBlocks(const shared_ptr<CachedFile> &cached_file,
+	                                                       idx_t current_block_size, idx_t first_block,
+	                                                       idx_t num_blocks);
 
 	BufferManager &GetBufferManager() const;
 	//! Gets the cached file, or creates it if is not yet present
 	shared_ptr<CachedFile> GetOrCreateCachedFile(const string &path);
 	//! Releases an active handle reference to a cached file.
 	void ReleaseCachedFileHandle(const shared_ptr<CachedFile> &cached_file);
+	//! Registers a loaded cache block and releases it when BufferManager unloads the block.
+	std::function<void()> RegisterLoadedBlock(const shared_ptr<CachedFile> &cached_file,
+	                                          const shared_ptr<BlockHandle> &block_handle);
 	//! Try to erase the cached file if it is no longer needed.
 	void TryEraseFile(const shared_ptr<CachedFile> &cached_file);
 
@@ -97,10 +104,11 @@ public:
 
 private:
 	//! Re-index blocks of a single cached file.
-	void ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size, idx_t new_block_size)
-	    DUCKDB_REQUIRES(cached_file.map_lock);
+	void ReindexCachedFileCore(const shared_ptr<CachedFile> &cached_file, idx_t file_size, idx_t old_block_size,
+	                           idx_t new_block_size) DUCKDB_REQUIRES(cached_file->map_lock);
 
 	void TryEraseFileLocked(const shared_ptr<CachedFile> &cached_file);
+	void ReleaseLoadedBlock(const weak_ptr<CachedFile> &cached_file);
 
 	//! The BufferManager used to cache files
 	BufferManager &buffer_manager;

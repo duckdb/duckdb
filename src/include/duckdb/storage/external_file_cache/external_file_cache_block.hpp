@@ -15,6 +15,7 @@
 #include "duckdb/storage/external_file_cache/external_file_cache_block_state.hpp"
 
 #include <condition_variable>
+#include <functional>
 
 namespace duckdb {
 
@@ -26,6 +27,8 @@ struct CacheBlock {
 	mutable std::condition_variable cv DUCKDB_GUARDED_BY(mtx);
 	CacheBlockState state DUCKDB_GUARDED_BY(mtx) = CacheBlockState::EMPTY;
 	shared_ptr<BlockHandle> block_handle DUCKDB_GUARDED_BY(mtx);
+	//! Cleanup for the loaded block accounting.
+	std::function<void()> cleanup DUCKDB_GUARDED_BY(mtx);
 	//! Number of valid bytes that were read into this block
 	idx_t nr_bytes DUCKDB_GUARDED_BY(mtx) = 0;
 #ifdef DEBUG

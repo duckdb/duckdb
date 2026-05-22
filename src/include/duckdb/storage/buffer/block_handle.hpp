@@ -18,6 +18,8 @@
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
+#include <functional>
+
 namespace duckdb {
 
 // Forward declaration.
@@ -182,6 +184,10 @@ public:
 	idx_t GetEvictionQueueIndex() const {
 		return eviction_queue_idx;
 	}
+	//! Sets the callback invoked when this memory transitions from loaded to unloaded.
+	void SetUnloadCallback(std::function<void()> callback) {
+		unload_callback = std::move(callback);
+	}
 
 public:
 	void ChangeMemoryUsage(BlockLock &l, int64_t delta);
@@ -226,6 +232,8 @@ private:
 	const char *unswizzled;
 	//! The eviction queue index, currently only FileBufferType::MANAGED_BUFFER.
 	atomic<idx_t> eviction_queue_idx;
+	//! Callback invoked when this memory transitions from loaded to unloaded.
+	std::function<void()> unload_callback;
 };
 
 class BlockHandle : public enable_shared_from_this<BlockHandle> {
