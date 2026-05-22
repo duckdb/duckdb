@@ -247,3 +247,32 @@ group by
 order by all;
 ----
 physical_plan	<REGEX>:.*Join Type: INNER.*
+
+# Issue #22791: nested partitioned window with a non-aggregate window function
+# (e.g. LAG) between two aggregate windows previously triggered
+# `unordered_map::at: key not found` because the inner-window rewrite left
+# stale BoundColumnRef bindings in the LAG operator, which were then carried
+# into the DeepCopy of the outer-window's LHS.
+statement ok
+CREATE TABLE t22791(id INTEGER, x DOUBLE);
+
+statement ok
+INSERT INTO t22791 VALUES (1, 10.0), (1, 20.0), (2, 30.0);
+
+query II
+SELECT id, outer_sum
+FROM (
+  SELECT id, SUM(x) OVER (PARTITION BY id) AS outer_sum
+  FROM (
+    SELECT id, x, LAG(total, 1, 0) OVER (PARTITION BY id) AS prev_total
+    FROM (
+      SELECT id, x, COUNT(*) OVER (PARTITION BY id) AS total
+      FROM t22791
+    ) AS a
+  ) AS b
+)
+ORDER BY id, outer_sum;
+----
+1	30.0
+1	30.0
+2	30.0

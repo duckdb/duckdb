@@ -122,8 +122,18 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 	if (op->type == LogicalOperatorType::LOGICAL_WINDOW) {
 		auto &window = op->Cast<LogicalWindow>();
 
-		// Check recursively
-		window.children[0] = OptimizeInternal(std::move(window.children[0]), replacer);
+		// Check recursively using a local replacer so that any deferred binding replacements
+		// produced by an inner-window rewrite are flushed into this window before we proceed.
+		// Without this, a non-optimizable window sitting between two optimizable windows
+		// would carry stale BoundColumnRef bindings into DeepCopy, leaving references that
+		// point at operators outside the cloned subtree (issue #22791).
+		ColumnBindingReplacer local;
+		window.children[0] = OptimizeInternal(std::move(window.children[0]), local);
+		if (!local.replacement_bindings.empty()) {
+			local.VisitOperator(*op);
+			replacer.replacement_bindings.insert(replacer.replacement_bindings.end(),
+			                                     local.replacement_bindings.begin(), local.replacement_bindings.end());
+		}
 
 		auto &w_expr0 = window.expressions[0]->Cast<BoundWindowExpression>();
 		for (auto &expr : window.expressions) {
