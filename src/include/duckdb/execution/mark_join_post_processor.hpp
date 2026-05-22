@@ -32,29 +32,44 @@ public:
 		TupleDataAppendState append_state;
 	};
 
+	//! Initialize the MARK post-processing strategy for this hash table
 	void Initialize(ClientContext &context, BufferManager &buffer_manager, JoinType join_type,
 	                bool mark_nulls_are_false, idx_t condition_count, const vector<ExpressionType> &equality_predicates,
 	                const vector<LogicalType> &condition_types);
+	//! Initialize the correlated MARK count state
 	void InitializeCorrelatedCounts(const vector<LogicalType> &correlated_types);
 
+	//! Returns true if the correlated count-based MARK path is active
 	bool UsesCorrelatedCounts() const;
+	//! Returns true if the row-valued null remainder path is active
 	bool UsesNullRemainder() const;
+	//! Returns true if MARK NULLs can be collapsed to FALSE
 	bool CanTreatNullAsFalse() const;
 
+	//! Register build-side key state needed for MARK post-processing
 	void SinkBuildKeys(DataChunk &keys);
+	//! Merge sink-local MARK post-processing state into the global state
 	void Merge(MarkJoinPostProcessor &other, bool &has_null);
+	//! Reset MARK post-processing state for recursive reuse
 	void Reset();
 
+	//! Marks probe rows NULL when the join key itself forces an unknown MARK result
 	void ApplyJoinKeyNullMask(DataChunk &join_keys, const vector<bool> &null_values_are_equal,
 	                          ValidityMask &mask) const;
+	//! Refines unmatched MARK rows from FALSE to NULL based on build-side null state
 	void RefineUnmatchedRows(DataChunk &join_keys, ValidityMask &mask, const bool *found_match, bool has_null);
+	//! Constructs the correlated MARK result using the per-group count state
 	void ConstructCorrelatedMarkResult(DataChunk &keys, DataChunk &probe_data, DataChunk &result,
 	                                   const vector<idx_t> &lhs_output_in_probe, const bool *found_match);
 
 private:
+	//! Registers null-bearing build rows for row-valued MARK refinement
 	void RegisterNullRemainderRows(DataChunk &keys);
+	//! Merges row-valued null remainder state
 	void MergeNullRemainderRows(MarkJoinPostProcessor &other, bool &has_null);
+	//! Refines unmatched rows by scanning null-bearing remainder rows
 	void ProbeNullRemainderRows(DataChunk &join_keys, ValidityMask &mask, const bool *found_match);
+	//! Chooses the MARK post-processing strategy
 	MarkNullStrategy ChooseStrategy() const;
 
 private:
