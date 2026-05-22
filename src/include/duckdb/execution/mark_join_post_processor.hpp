@@ -11,17 +11,19 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 
 namespace duckdb {
 
 class BufferManager;
 class ClientContext;
 
-enum class MarkNullStrategy : uint8_t { NONE, SIMPLE_HAS_NULL, CORRELATED_COUNTS, NULL_REMAINDER };
+enum class MarkNullStrategy : uint8_t { NONE, SIMPLE_HAS_NULL, CORRELATED_COUNTS, NULL_REMAINDER, FULL_SCAN };
 
 class MarkJoinPostProcessor {
 public:
@@ -43,6 +45,8 @@ public:
 	bool UsesCorrelatedCounts() const;
 	//! Returns true if the row-valued null remainder path is active
 	bool UsesNullRemainder() const;
+	//! Returns true if the condition-scan null refinement path is active
+	bool UsesConditionScan() const;
 	//! Returns true if MARK NULLs can be collapsed to FALSE
 	bool CanTreatNullAsFalse() const;
 
@@ -52,6 +56,19 @@ public:
 	void Merge(MarkJoinPostProcessor &other, bool &has_null);
 	//! Reset MARK post-processing state for recursive reuse
 	void Reset();
+	//! Constructs an uncorrelated MARK result for an empty build side
+	void ConstructEmptyResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
+	                          const vector<idx_t> &lhs_output_columns, const vector<bool> &null_values_are_equal,
+	                          bool has_null);
+	//! Constructs an uncorrelated MARK result using the configured hash-style refinement
+	void ConstructResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
+	                     const vector<idx_t> &lhs_output_columns, const vector<bool> &null_values_are_equal,
+	                     const bool *found_match, bool has_null);
+	//! Constructs a MARK result by rescanning RHS condition rows for unresolved probe rows
+	void ConstructResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
+	                     const vector<bool> &null_values_are_equal, const bool *found_match,
+	                     ColumnDataCollection &rhs_condition_data, const vector<JoinCondition> &conditions,
+	                     bool has_null);
 
 	//! Marks probe rows NULL when the join key itself forces an unknown MARK result
 	void ApplyJoinKeyNullMask(DataChunk &join_keys, const vector<bool> &null_values_are_equal,
@@ -69,6 +86,10 @@ private:
 	void MergeNullRemainderRows(MarkJoinPostProcessor &other, bool &has_null);
 	//! Refines unmatched rows by scanning null-bearing remainder rows
 	void ProbeNullRemainderRows(DataChunk &join_keys, ValidityMask &mask, const bool *found_match);
+	//! Refines unmatched rows by rescanning RHS condition rows
+	void ProbeConditionScanRows(DataChunk &join_keys, ValidityMask &mask, const bool *found_match,
+	                            ColumnDataCollection &rhs_condition_data, const vector<JoinCondition> &conditions,
+	                            bool has_null);
 	//! Chooses the MARK post-processing strategy
 	MarkNullStrategy ChooseStrategy() const;
 

@@ -911,23 +911,8 @@ void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleD
 void JoinHashTable::ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) {
 	D_ASSERT(join_type == JoinType::MARK);
 	D_ASSERT(result.ColumnCount() == probe_data.ColumnCount() + 1);
-
-	result.SetCardinality(probe_data);
-	for (idx_t i = 0; i < probe_data.ColumnCount(); i++) {
-		result.data[i].Reference(probe_data.data[i]);
-	}
-
-	auto &result_vector = result.data.back();
-	result_vector.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::SetSize(result_vector, count_t(probe_data.size()));
-	auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
-	auto &mask = FlatVector::ValidityMutable(result_vector);
-	for (idx_t i = 0; i < probe_data.size(); i++) {
-		bool_result[i] = false;
-	}
-
-	mark_join_post_processor.ApplyJoinKeyNullMask(join_keys, null_values_are_equal, mask);
-	mark_join_post_processor.RefineUnmatchedRows(join_keys, mask, bool_result, has_null);
+	mark_join_post_processor.ConstructEmptyResult(join_keys, probe_data, result, lhs_output_in_probe,
+	                                              null_values_are_equal, has_null);
 }
 
 bool JoinHashTable::TryProbeDictionary(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
@@ -1626,31 +1611,8 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_da
 }
 
 void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) {
-	// extract OUTPUT columns from probe_data
-	result.SetCardinality(probe_data.size());
-	for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
-		idx_t probe_col_idx = ht.lhs_output_in_probe[i];
-		result.data[i].Reference(probe_data.data[probe_col_idx]);
-	}
-
-	auto &mark_vector = result.data.back();
-	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::SetSize(mark_vector, count_t(probe_data.size()));
-
-	// first we set the NULL values from the join keys
-	// if there is any NULL in the keys, the result is NULL
-	auto bool_result = FlatVector::GetDataMutable<bool>(mark_vector);
-	auto &mask = FlatVector::ValidityMutable(mark_vector);
-	ht.mark_join_post_processor.ApplyJoinKeyNullMask(join_keys, ht.null_values_are_equal, mask);
-
-	// now set the remaining entries to either true or false based on whether a match was found
-	D_ASSERT(found_match);
-	for (idx_t i = 0; i < probe_data.size(); i++) {
-		bool_result[i] = found_match[i];
-	}
-
-	// if the right side contains NULL values, the result of any FALSE becomes NULL
-	ht.mark_join_post_processor.RefineUnmatchedRows(join_keys, mask, bool_result, ht.has_null);
+	ht.mark_join_post_processor.ConstructResult(join_keys, probe_data, result, ht.lhs_output_in_probe,
+	                                            ht.null_values_are_equal, found_match.get(), ht.has_null);
 }
 
 void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {

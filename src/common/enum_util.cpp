@@ -3255,19 +3255,20 @@ const StringUtil::EnumStringLiteral *GetMarkNullStrategyValues() {
 		{ static_cast<uint32_t>(MarkNullStrategy::NONE), "NONE" },
 		{ static_cast<uint32_t>(MarkNullStrategy::SIMPLE_HAS_NULL), "SIMPLE_HAS_NULL" },
 		{ static_cast<uint32_t>(MarkNullStrategy::CORRELATED_COUNTS), "CORRELATED_COUNTS" },
-		{ static_cast<uint32_t>(MarkNullStrategy::NULL_REMAINDER), "NULL_REMAINDER" }
+		{ static_cast<uint32_t>(MarkNullStrategy::NULL_REMAINDER), "NULL_REMAINDER" },
+		{ static_cast<uint32_t>(MarkNullStrategy::FULL_SCAN), "FULL_SCAN" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<MarkNullStrategy>(MarkNullStrategy value) {
-	return StringUtil::EnumToString(GetMarkNullStrategyValues(), 4, "MarkNullStrategy", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMarkNullStrategyValues(), 5, "MarkNullStrategy", static_cast<uint32_t>(value));
 }
 
 template<>
 MarkNullStrategy EnumUtil::FromString<MarkNullStrategy>(const char *value) {
-	return static_cast<MarkNullStrategy>(StringUtil::StringToEnum(GetMarkNullStrategyValues(), 4, "MarkNullStrategy", value));
+	return static_cast<MarkNullStrategy>(StringUtil::StringToEnum(GetMarkNullStrategyValues(), 5, "MarkNullStrategy", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMemoryTagValues() {

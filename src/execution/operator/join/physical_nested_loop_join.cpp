@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
+#include "duckdb/execution/mark_join_post_processor.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/nested_loop_join.hpp"
@@ -321,20 +322,31 @@ public:
 	                            const vector<JoinCondition> &conditions)
 	    : lhs_executor(context), left_outer(IsLeftOuterJoin(op.join_type)), pred_executor(context) {
 		vector<LogicalType> condition_types;
+		vector<ExpressionType> comparison_types;
+		mark_null_values_are_equal.reserve(conditions.size());
 		for (auto &cond : conditions) {
 			lhs_executor.AddExpression(cond.GetLHS());
 			condition_types.push_back(cond.GetLHS().GetReturnType());
+			comparison_types.push_back(cond.GetComparisonType());
+			mark_null_values_are_equal.push_back(cond.GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM ||
+			                                     cond.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 		}
 		auto &allocator = Allocator::Get(context);
 		left_condition.Initialize(allocator, condition_types);
 		right_condition.Initialize(allocator, condition_types);
 		right_payload.Initialize(allocator, op.children[1].get().GetTypes());
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
+		lhs_output_columns.reserve(op.children[0].get().GetTypes().size());
+		for (idx_t i = 0; i < op.children[0].get().GetTypes().size(); i++) {
+			lhs_output_columns.push_back(i);
+		}
 
 		if (op.predicate) {
 			pred_executor.AddExpression(*op.predicate);
 			pred_matches.Initialize();
 		}
+		mark_join_post_processor.Initialize(context, BufferManager::GetBufferManager(context), op.join_type, false,
+		                                    conditions.size(), comparison_types, condition_types);
 		ResetState();
 	}
 
@@ -343,6 +355,9 @@ public:
 	DataChunk left_condition;
 	//! The executor of the LHS condition
 	ExpressionExecutor lhs_executor;
+	MarkJoinPostProcessor mark_join_post_processor;
+	vector<bool> mark_null_values_are_equal;
+	vector<idx_t> lhs_output_columns;
 
 	ColumnDataScanState condition_scan_state;
 	ColumnDataScanState payload_scan_state;
@@ -437,7 +452,15 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 	switch (join_type) {
 	case JoinType::MARK:
 		// now construct the mark join result from the found matches
-		PhysicalJoin::ConstructMarkJoinResult(state.left_condition, input, chunk, found_match, gstate.has_null);
+		if (state.mark_join_post_processor.UsesConditionScan()) {
+			state.mark_join_post_processor.ConstructResult(state.left_condition, input, chunk,
+			                                               state.mark_null_values_are_equal, found_match,
+			                                               gstate.right_condition_data, conditions, gstate.has_null);
+		} else {
+			state.mark_join_post_processor.ConstructResult(state.left_condition, input, chunk, state.lhs_output_columns,
+			                                               state.mark_null_values_are_equal, found_match,
+			                                               gstate.has_null);
+		}
 		break;
 	case JoinType::SEMI:
 		// construct the semi join result from the found matches

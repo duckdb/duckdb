@@ -177,6 +177,99 @@ idx_t MatchNullRemainderChunk(DataChunk &join_keys, const SelectionVector &unres
 	return matched_count;
 }
 
+bool ComparisonPropagatesNull(ExpressionType comparison_type) {
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return false;
+	default:
+		return true;
+	}
+}
+
+idx_t SelectComparison(ExpressionType comparison_type, const Vector &left, const Vector &right,
+                       optional_ptr<const SelectionVector> sel, idx_t count, optional_ptr<SelectionVector> true_sel,
+                       optional_ptr<SelectionVector> false_sel, optional_ptr<ValidityMask> null_mask) {
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+		return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel, null_mask);
+	case ExpressionType::COMPARE_NOTEQUAL:
+		return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel, null_mask);
+	case ExpressionType::COMPARE_LESSTHAN:
+		return VectorOperations::LessThan(left, right, sel, count, true_sel, false_sel, null_mask);
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel, null_mask);
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, false_sel, null_mask);
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel, null_mask);
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		return VectorOperations::DistinctFrom(left, right, sel, count, true_sel, false_sel);
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return VectorOperations::NotDistinctFrom(left, right, sel, count, true_sel, false_sel);
+	default:
+		throw InternalException("Unsupported comparison type for MARK null refinement");
+	}
+}
+
+idx_t FilterCandidatesForConditionComparison(Vector &lhs_column, Vector &rhs_column, Vector &rhs_value, idx_t rhs_row,
+                                             idx_t rhs_count, const SelectionVector &candidate_sel,
+                                             idx_t candidate_count, ExpressionType comparison_type,
+                                             MarkJoinNullMatchState &state, SelectionVector &remaining_sel) {
+	ConstantVector::Reference(rhs_value, count_t(candidate_count), rhs_column, rhs_row, rhs_count);
+	Vector lhs_slice(lhs_column, candidate_sel, candidate_count);
+
+	state.null_mask.SetAllValid(candidate_count);
+	const idx_t true_count = SelectComparison(comparison_type, lhs_slice, rhs_value, nullptr, candidate_count,
+	                                          &state.equal_sel, &state.unequal_sel, &state.null_mask);
+
+	idx_t remaining_count = 0;
+	for (idx_t i = 0; i < true_count; i++) {
+		auto local_idx = state.equal_sel.get_index(i);
+		remaining_sel.set_index(remaining_count++, candidate_sel.get_index(local_idx));
+	}
+	for (idx_t i = 0; i < candidate_count - true_count; i++) {
+		const auto local_idx = state.unequal_sel.get_index(i);
+		if (!state.null_mask.RowIsValid(local_idx)) {
+			const auto row_idx = candidate_sel.get_index(local_idx);
+			remaining_sel.set_index(remaining_count++, row_idx);
+			state.matched_mask.SetValid(row_idx);
+		}
+	}
+	return remaining_count;
+}
+
+idx_t MatchConditionScanRow(DataChunk &join_keys, DataChunk &scan_chunk, idx_t scan_row,
+                            const SelectionVector &unresolved_sel, idx_t unresolved_count,
+                            const vector<JoinCondition> &conditions, MarkJoinNullMatchState &state) {
+	const SelectionVector *candidate_sel = &unresolved_sel;
+	idx_t candidate_count = unresolved_count;
+	bool use_a = true;
+
+	state.ResetMatchedMask();
+	for (idx_t cond_idx = 0; cond_idx < conditions.size(); cond_idx++) {
+		auto &remaining_sel = use_a ? state.candidate_sel_a : state.candidate_sel_b;
+		candidate_count = FilterCandidatesForConditionComparison(
+		    join_keys.data[cond_idx], scan_chunk.data[cond_idx], state.rhs_constant_values[cond_idx], scan_row,
+		    scan_chunk.size(), *candidate_sel, candidate_count, conditions[cond_idx].GetComparisonType(), state,
+		    remaining_sel);
+		candidate_sel = &remaining_sel;
+		use_a = !use_a;
+		if (candidate_count == 0) {
+			break;
+		}
+	}
+
+	idx_t matched_count = 0;
+	for (idx_t i = 0; i < candidate_count; i++) {
+		const auto row_idx = candidate_sel->get_index(i);
+		if (state.matched_mask.RowIsValid(row_idx)) {
+			state.row_match_sel.set_index(matched_count++, row_idx);
+		}
+	}
+	return matched_count;
+}
+
 } // namespace
 
 void MarkJoinPostProcessor::Initialize(ClientContext &context_p, BufferManager &buffer_manager_p, JoinType join_type_p,
@@ -198,12 +291,22 @@ MarkNullStrategy MarkJoinPostProcessor::ChooseStrategy() const {
 	if (join_type != JoinType::MARK || mark_nulls_are_false) {
 		return MarkNullStrategy::NONE;
 	}
+	bool has_null_sensitive_condition = false;
+	for (auto predicate : equality_predicates) {
+		if (ComparisonPropagatesNull(predicate)) {
+			has_null_sensitive_condition = true;
+			break;
+		}
+	}
+	if (!has_null_sensitive_condition) {
+		return MarkNullStrategy::NONE;
+	}
 	if (condition_count <= 1 || equality_predicates.size() != condition_count) {
 		return MarkNullStrategy::SIMPLE_HAS_NULL;
 	}
 	for (auto predicate : equality_predicates) {
 		if (predicate != ExpressionType::COMPARE_EQUAL) {
-			return MarkNullStrategy::SIMPLE_HAS_NULL;
+			return MarkNullStrategy::FULL_SCAN;
 		}
 	}
 	return MarkNullStrategy::NULL_REMAINDER;
@@ -215,6 +318,10 @@ bool MarkJoinPostProcessor::UsesCorrelatedCounts() const {
 
 bool MarkJoinPostProcessor::UsesNullRemainder() const {
 	return state.strategy == MarkNullStrategy::NULL_REMAINDER;
+}
+
+bool MarkJoinPostProcessor::UsesConditionScan() const {
+	return state.strategy == MarkNullStrategy::FULL_SCAN;
 }
 
 bool MarkJoinPostProcessor::CanTreatNullAsFalse() const {
@@ -404,6 +511,73 @@ void MarkJoinPostProcessor::ApplyJoinKeyNullMask(DataChunk &join_keys, const vec
 	}
 }
 
+void MarkJoinPostProcessor::ConstructResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
+                                            const vector<idx_t> &lhs_output_columns,
+                                            const vector<bool> &null_values_are_equal, const bool *found_match,
+                                            bool has_null) {
+	result.SetCardinality(probe_data.size());
+	for (idx_t i = 0; i < lhs_output_columns.size(); i++) {
+		result.data[i].Reference(probe_data.data[lhs_output_columns[i]]);
+	}
+
+	auto &result_vector = result.data.back();
+	result_vector.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::SetSize(result_vector, count_t(probe_data.size()));
+	auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
+	auto &mask = FlatVector::ValidityMutable(result_vector);
+
+	ApplyJoinKeyNullMask(join_keys, null_values_are_equal, mask);
+	D_ASSERT(found_match);
+	for (idx_t i = 0; i < probe_data.size(); i++) {
+		bool_result[i] = found_match[i];
+	}
+	RefineUnmatchedRows(join_keys, mask, bool_result, has_null);
+}
+
+void MarkJoinPostProcessor::ConstructEmptyResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
+                                                 const vector<idx_t> &lhs_output_columns,
+                                                 const vector<bool> &null_values_are_equal, bool has_null) {
+	result.SetCardinality(probe_data.size());
+	for (idx_t i = 0; i < lhs_output_columns.size(); i++) {
+		result.data[i].Reference(probe_data.data[lhs_output_columns[i]]);
+	}
+
+	auto &result_vector = result.data.back();
+	result_vector.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::SetSize(result_vector, count_t(probe_data.size()));
+	auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
+	auto &mask = FlatVector::ValidityMutable(result_vector);
+
+	ApplyJoinKeyNullMask(join_keys, null_values_are_equal, mask);
+	for (idx_t i = 0; i < probe_data.size(); i++) {
+		bool_result[i] = false;
+	}
+	RefineUnmatchedRows(join_keys, mask, bool_result, has_null);
+}
+
+void MarkJoinPostProcessor::ConstructResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
+                                            const vector<bool> &null_values_are_equal, const bool *found_match,
+                                            ColumnDataCollection &rhs_condition_data,
+                                            const vector<JoinCondition> &conditions, bool has_null) {
+	result.SetCardinality(probe_data);
+	for (idx_t i = 0; i < probe_data.ColumnCount(); i++) {
+		result.data[i].Reference(probe_data.data[i]);
+	}
+
+	auto &result_vector = result.data.back();
+	result_vector.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::SetSize(result_vector, count_t(probe_data.size()));
+	auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
+	auto &mask = FlatVector::ValidityMutable(result_vector);
+
+	ApplyJoinKeyNullMask(join_keys, null_values_are_equal, mask);
+	D_ASSERT(found_match);
+	for (idx_t i = 0; i < probe_data.size(); i++) {
+		bool_result[i] = found_match[i];
+	}
+	ProbeConditionScanRows(join_keys, mask, bool_result, rhs_condition_data, conditions, has_null);
+}
+
 void MarkJoinPostProcessor::RefineUnmatchedRows(DataChunk &join_keys, ValidityMask &mask, const bool *found_match,
                                                 bool has_null) {
 	if (UsesNullRemainder()) {
@@ -412,6 +586,45 @@ void MarkJoinPostProcessor::RefineUnmatchedRows(DataChunk &join_keys, ValidityMa
 		for (idx_t i = 0; i < join_keys.size(); i++) {
 			if (!found_match[i]) {
 				mask.SetInvalid(i);
+			}
+		}
+	}
+}
+
+void MarkJoinPostProcessor::ProbeConditionScanRows(DataChunk &join_keys, ValidityMask &mask, const bool *found_match,
+                                                   ColumnDataCollection &rhs_condition_data,
+                                                   const vector<JoinCondition> &conditions, bool has_null) {
+	D_ASSERT(UsesConditionScan());
+	if (!has_null || CanTreatNullAsFalse()) {
+		return;
+	}
+
+	SelectionVector unresolved_sel(STANDARD_VECTOR_SIZE);
+	idx_t unresolved_count = BuildUnresolvedSelection(found_match, mask, join_keys.size(), unresolved_sel);
+	if (unresolved_count == 0) {
+		return;
+	}
+
+	ColumnDataScanState scan_state;
+	rhs_condition_data.InitializeScan(scan_state);
+	DataChunk scan_chunk;
+	rhs_condition_data.InitializeScanChunk(scan_chunk);
+	SelectionVector matched_sel(STANDARD_VECTOR_SIZE);
+	SelectionVector remaining_sel(STANDARD_VECTOR_SIZE);
+	MarkJoinNullMatchState match_state(join_keys.size(), condition_types);
+
+	while (unresolved_count > 0 && rhs_condition_data.Scan(scan_state, scan_chunk)) {
+		for (idx_t scan_row = 0; scan_row < scan_chunk.size() && unresolved_count > 0; scan_row++) {
+			const idx_t matched_count = MatchConditionScanRow(join_keys, scan_chunk, scan_row, unresolved_sel,
+			                                                  unresolved_count, conditions, match_state);
+			if (matched_count == 0) {
+				continue;
+			}
+			InvalidateSelection(mask, match_state.row_match_sel, matched_count);
+			unresolved_count = CompactUnresolvedSelection(unresolved_sel, unresolved_count, match_state.row_match_sel,
+			                                              matched_count, remaining_sel);
+			for (idx_t i = 0; i < unresolved_count; i++) {
+				unresolved_sel.set_index(i, remaining_sel.get_index(i));
 			}
 		}
 	}
