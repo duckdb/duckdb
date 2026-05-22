@@ -21,6 +21,10 @@ struct VacuumOptions {
 
 	bool vacuum;
 	bool analyze;
+	//! Serenedb-specific pragma option: "update_indexes" or "sync_stats" lowers
+	//! VACUUM to `PRAGMA serenedb_vacuum(<this>, table, [schema])` instead of
+	//! producing a VacuumStatement.
+	string serenedb_pragma_option;
 
 	void Serialize(Serializer &serializer) const;
 	static VacuumOptions Deserialize(Deserializer &deserializer);
