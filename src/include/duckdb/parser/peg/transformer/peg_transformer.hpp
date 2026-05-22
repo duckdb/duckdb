@@ -525,6 +525,7 @@ private:
 	static unique_ptr<QueryNode> TransformShowSelect(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<QueryNode> TransformShowTables(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<QueryNode> TransformShowAllTables(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<QueryNode> TransformShowAllSettings(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<QueryNode> TransformShowQualifiedName(PEGTransformer &transformer, ParseResult &parse_result);
 	static ShowType TransformShowOrDescribeOrSummarize(PEGTransformer &transformer, ParseResult &parse_result);
 	static ShowType TransformShowOrDescribe(PEGTransformer &transformer, ParseResult &parse_result);

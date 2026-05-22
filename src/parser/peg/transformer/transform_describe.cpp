@@ -1,5 +1,13 @@
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
 
@@ -59,12 +67,43 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransform
 	return std::move(select_node);
 }
 
+// SHOW ALL -> SELECT name, setting, short_desc AS description FROM pg_settings
+unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllSettings(PEGTransformer &transformer,
+                                                                      ParseResult &parse_result) {
+	auto result = make_uniq<SelectNode>();
+	result->select_list.emplace_back(make_uniq<ColumnRefExpression>("name"));
+	result->select_list.emplace_back(make_uniq<ColumnRefExpression>("setting"));
+	auto desc_col = make_uniq<ColumnRefExpression>("short_desc");
+	desc_col->SetAlias("description");
+	result->select_list.emplace_back(std::move(desc_col));
+	auto tableref = make_uniq<BaseTableRef>();
+	tableref->table_name = "pg_settings";
+	result->from_table = std::move(tableref);
+	return std::move(result);
+}
+
+// Walk into ShowOrDescribeOrSummarize to find the original keyword (`SHOW`,
+// `DESCRIBE`, `DESC`, `SUMMARIZE`). We use this to distinguish PG `SHOW
+// varname` (-> current_setting) from DuckDB `DESC <table>` (-> describe).
+static string ExtractShowKeyword(ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	// ShowOrDescribeOrSummarize <- ShowOrDescribe / Summarize
+	auto &outer_choice = list_pr.Child<ChoiceParseResult>(0).GetResult();
+	if (outer_choice.name == "ShowOrDescribe") {
+		// ShowOrDescribe <- ShowRule / DescribeRule
+		auto &inner_choice = outer_choice.Cast<ListParseResult>().Child<ChoiceParseResult>(0).GetResult();
+		return inner_choice.name;
+	}
+	return outer_choice.name;
+}
+
 unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTransformer &transformer,
                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto showref = make_uniq<ShowRef>();
 
 	showref->show_type = transformer.Transform<ShowType>(list_pr.Child<ListParseResult>(0));
+	auto keyword = ExtractShowKeyword(list_pr.Child<ListParseResult>(0));
 
 	auto &opt_table_name_parens = list_pr.Child<OptionalParseResult>(1);
 	if (opt_table_name_parens.HasResult()) {
@@ -93,6 +132,17 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 				    table_name == "variables") {
 					showref->table_name = "\"" + table_name + "\"";
 					showref->show_type = ShowType::SHOW_UNQUALIFIED;
+				} else if (keyword == "ShowRule") {
+					// PG-compat: SHOW <unqualified_name> -> SELECT current_setting('name') AS "name"
+					// DESC/DESCRIBE still goes through the table-description path below.
+					auto result = make_uniq<SelectNode>();
+					vector<unique_ptr<ParsedExpression>> args;
+					args.push_back(make_uniq<ConstantExpression>(Value(base_table->table_name)));
+					auto func_expr = make_uniq<FunctionExpression>("current_setting", std::move(args));
+					func_expr->SetAlias(base_table->table_name);
+					result->select_list.push_back(std::move(func_expr));
+					result->from_table = make_uniq<EmptyTableRef>();
+					return std::move(result);
 				}
 			}
 		}

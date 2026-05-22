@@ -124,6 +124,7 @@ QueryNode:
     - ShowSelect
     - ShowTables
     - ShowAllTables
+    - ShowAllSettings
     - ShowQualifiedName
 
 SelectNode:
