@@ -128,7 +128,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		LogicalOperatorDeepCopy deep_copy(optimizer.binder, nullptr);
 		try {
 			copy_child = deep_copy.DeepCopy(window.children[0]);
-		} catch (NotImplementedException &ex) {
+		} catch (std::exception &ex) {
 			// failed to copy the LHS - cannot run this optimizer
 			return op;
 		}
