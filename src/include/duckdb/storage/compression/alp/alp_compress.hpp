@@ -91,7 +91,7 @@ public:
 		const idx_t uncompressed_size = AlpConstants::EXPONENT_SIZE + sizeof(T) * vector_idx;
 		const idx_t compressed_size = compression_data.RequiredSpace();
 
-		const auto storage_version = checkpoint_data.GetStorageManager().GetStorageVersion();
+		const auto storage_version = checkpoint_data.GetStorageVersion();
 		const bool should_compress = compressed_size < uncompressed_size ||
 		                             StorageManager::IsPriorToVersion(StorageVersion::V1_5_0, storage_version);
 

@@ -307,10 +307,9 @@ struct BitpackingAnalyzeState : public AnalyzeState {
 };
 
 template <class T>
-unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	auto state = make_uniq<BitpackingAnalyzeState<T>>(col_data.GetBlockManager());
-	state->state.mode = Settings::Get<ForceBitpackingModeSetting>(col_data.GetDatabase());
-
+unique_ptr<AnalyzeState> BitpackingInitAnalyze(CompressionAnalyzeContext &ctx, PhysicalType type) {
+	auto state = make_uniq<BitpackingAnalyzeState<T>>(ctx.block_manager);
+	state->state.mode = Settings::Get<ForceBitpackingModeSetting>(ctx.db);
 	return std::move(state);
 }
 

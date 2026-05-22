@@ -8,9 +8,12 @@
 
 #pragma once
 
+#include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
+
+#include <functional>
 
 namespace duckdb {
 struct TableScanOptions;
@@ -21,27 +24,57 @@ public:
 	//! Default constructor used when column data does not need to be checkpointed
 	ColumnDataCheckpointData() {
 	}
-	ColumnDataCheckpointData(ColumnCheckpointState &checkpoint_state, ColumnData &col_data, DatabaseInstance &db,
-	                         const RowGroup &row_group, StorageManager &storage_manager)
-	    : checkpoint_state(checkpoint_state), col_data(col_data), db(db), row_group(row_group),
-	      storage_manager(storage_manager) {
+	ColumnDataCheckpointData(ColumnCheckpointState &checkpoint_state, LogicalType type, DatabaseInstance &db,
+	                         StorageManager &storage_manager)
+	    : checkpoint_state(checkpoint_state), type(std::move(type)), db(db), storage_manager(storage_manager),
+	      storage_version(storage_manager.GetStorageVersion()) {
 	}
 
 public:
+	using OverflowStringWriterFactory = std::function<unique_ptr<OverflowStringWriter>()>;
+	using FlushSegmentFn = std::function<void(unique_ptr<ColumnSegment>, BufferHandle, idx_t)>;
+	using FlushSegmentInternalFn = std::function<void(unique_ptr<ColumnSegment>, idx_t)>;
+
+	ColumnDataCheckpointData(LogicalType type, DatabaseInstance &db, StorageVersion storage_version,
+	                         OverflowStringWriterFactory overflow_writer_factory, FlushSegmentFn flush_segment_fn,
+	                         FlushSegmentInternalFn flush_segment_internal_fn, BlockManager &block_manager)
+	    : type(std::move(type)), db(db), storage_version(storage_version),
+	      overflow_writer_factory(std::move(overflow_writer_factory)), flush_segment_fn(std::move(flush_segment_fn)),
+	      flush_segment_internal_fn(std::move(flush_segment_internal_fn)), block_manager(block_manager) {
+	}
+
 	const CompressionFunction &GetCompressionFunction(CompressionType type);
 	const LogicalType &GetType() const;
-	ColumnData &GetColumnData();
-	const RowGroup &GetRowGroup();
 	ColumnCheckpointState &GetCheckpointState();
 	DatabaseInstance &GetDatabase();
 	StorageManager &GetStorageManager();
+	bool HasStorageManager() const noexcept {
+		return static_cast<bool>(storage_manager);
+	}
+	StorageVersion GetStorageVersion() const {
+		return storage_version;
+	}
+	bool HasOverflowStringWriterFactory() const noexcept {
+		return static_cast<bool>(overflow_writer_factory);
+	}
+	unique_ptr<OverflowStringWriter> MakeOverflowStringWriter() const {
+		return overflow_writer_factory();
+	}
+	void FlushSegment(unique_ptr<ColumnSegment> segment, BufferHandle handle, idx_t segment_size);
+	void FlushSegmentInternal(unique_ptr<ColumnSegment> segment, idx_t segment_size);
+	BlockManager &GetBlockManager();
+	block_id_t GetFreeBlockId();
 
 private:
 	optional_ptr<ColumnCheckpointState> checkpoint_state;
-	optional_ptr<ColumnData> col_data;
+	LogicalType type;
 	optional_ptr<DatabaseInstance> db;
-	optional_ptr<const RowGroup> row_group;
 	optional_ptr<StorageManager> storage_manager;
+	StorageVersion storage_version;
+	OverflowStringWriterFactory overflow_writer_factory;
+	FlushSegmentFn flush_segment_fn;
+	FlushSegmentInternalFn flush_segment_internal_fn;
+	optional_ptr<BlockManager> block_manager;
 };
 
 struct CheckpointAnalyzeResult {

@@ -19,7 +19,7 @@ template <class T>
 struct PatasAnalyzeState : public AnalyzeState {};
 
 template <class T>
-unique_ptr<AnalyzeState> PatasInitAnalyze(ColumnData &col_data, PhysicalType type) {
+unique_ptr<AnalyzeState> PatasInitAnalyze(CompressionAnalyzeContext &ctx, PhysicalType type) {
 	// This compression type is deprecated
 	return nullptr;
 }

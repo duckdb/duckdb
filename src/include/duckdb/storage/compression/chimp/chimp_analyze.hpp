@@ -19,7 +19,7 @@ template <class T>
 struct ChimpAnalyzeState : public AnalyzeState {};
 
 template <class T>
-unique_ptr<AnalyzeState> ChimpInitAnalyze(ColumnData &col_data, PhysicalType type) {
+unique_ptr<AnalyzeState> ChimpInitAnalyze(CompressionAnalyzeContext &ctx, PhysicalType type) {
 	// This compression type is deprecated
 	return nullptr;
 }

@@ -32,8 +32,9 @@ struct StringAnalyzeState : public AnalyzeState {
 	idx_t overflow_strings;
 };
 
-unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_uniq<StringAnalyzeState>(col_data.GetBlockManager());
+unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(CompressionAnalyzeContext &ctx,
+                                                                      PhysicalType type) {
+	return make_uniq<StringAnalyzeState>(ctx.block_manager);
 }
 
 bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {
@@ -374,6 +375,10 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 
 	D_ASSERT(block != INVALID_BLOCK);
 	D_ASSERT(offset < NumericCast<int32_t>(segment.GetBlockSize()));
+
+	if (state.overflow_reader) {
+		return state.overflow_reader->ReadString(result, block, offset);
+	}
 
 	if (block < MAXIMUM_BLOCK) {
 		// read the overflow string from disk

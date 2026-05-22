@@ -47,7 +47,7 @@ namespace duckdb {
 namespace dict_fsst {
 
 struct DictFSSTCompressionStorage {
-	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
+	static unique_ptr<AnalyzeState> StringInitAnalyze(CompressionAnalyzeContext &ctx, PhysicalType type);
 	static bool StringAnalyze(AnalyzeState &state_p, const Vector &input);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
@@ -68,14 +68,14 @@ struct DictFSSTCompressionStorage {
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
-unique_ptr<AnalyzeState> DictFSSTCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	auto &storage_manager = col_data.GetStorageManager();
-	if (StorageManager::IsPriorToVersion(StorageVersion::V1_3_0, storage_manager.GetStorageVersion())) {
+unique_ptr<AnalyzeState> DictFSSTCompressionStorage::StringInitAnalyze(CompressionAnalyzeContext &ctx,
+                                                                       PhysicalType type) {
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_3_0, ctx.storage_version)) {
 		// dict_fsst not introduced yet, disable it
 		return nullptr;
 	}
 
-	return make_uniq<DictFSSTAnalyzeState>(col_data.GetBlockManager());
+	return make_uniq<DictFSSTAnalyzeState>(ctx.block_manager);
 }
 
 bool DictFSSTCompressionStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {

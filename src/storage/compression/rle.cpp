@@ -91,8 +91,8 @@ struct RLEAnalyzeState : public AnalyzeState {
 };
 
 template <class T>
-unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_uniq<RLEAnalyzeState<T>>(col_data.GetBlockManager());
+unique_ptr<AnalyzeState> RLEInitAnalyze(CompressionAnalyzeContext &ctx, PhysicalType type) {
+	return make_uniq<RLEAnalyzeState<T>>(ctx.block_manager);
 }
 
 template <class T>

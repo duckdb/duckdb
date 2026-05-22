@@ -165,16 +165,15 @@ void SetInvalidRange(ValidityMask &result, idx_t start, idx_t end) {
 #endif
 }
 
-unique_ptr<AnalyzeState> RoaringInitAnalyze(ColumnData &col_data, PhysicalType type) {
+unique_ptr<AnalyzeState> RoaringInitAnalyze(CompressionAnalyzeContext &ctx, PhysicalType type) {
 	// check if the storage version we are writing to supports roaring
-	const auto storage_version = col_data.GetStorageManager().GetStorageVersion();
 	// before: serialization version 4 and ser version 7
-	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version) ||
-	    (type == PhysicalType::BOOL && StorageManager::IsPriorToVersion(StorageVersion::V1_5_0, storage_version))) {
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, ctx.storage_version) ||
+	    (type == PhysicalType::BOOL && StorageManager::IsPriorToVersion(StorageVersion::V1_5_0, ctx.storage_version))) {
 		// compatibility mode with old versions - disable roaring
 		return nullptr;
 	}
-	auto state = make_uniq<RoaringAnalyzeState>(col_data.GetBlockManager());
+	auto state = make_uniq<RoaringAnalyzeState>(ctx.block_manager);
 	return std::move(state);
 }
 template <PhysicalType TYPE>

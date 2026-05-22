@@ -26,6 +26,12 @@ public:
 	virtual void Flush() = 0;
 };
 
+class OverflowStringReader {
+public:
+	virtual ~OverflowStringReader() = default;
+	virtual string_t ReadString(Vector &result, block_id_t block, int32_t offset) = 0;
+};
+
 struct StringBlock {
 	shared_ptr<BlockHandle> block;
 	idx_t offset;
@@ -43,6 +49,7 @@ struct UncompressedStringSegmentState : public CompressedSegmentState {
 	unordered_map<block_id_t, reference<StringBlock>> overflow_blocks;
 	//! Overflow string writer (if any), if not set overflow strings will be written to memory blocks
 	unique_ptr<OverflowStringWriter> overflow_writer;
+	unique_ptr<OverflowStringReader> overflow_reader;
 	//! The block manager with which to write
 	optional_ptr<BlockManager> block_manager;
 	//! The set of overflow blocks written to disk (if any)

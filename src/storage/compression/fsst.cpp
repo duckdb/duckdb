@@ -37,7 +37,7 @@ struct FSSTStorage {
 	static constexpr double MINIMUM_COMPRESSION_RATIO = 1.2;
 	static constexpr double ANALYSIS_SAMPLE_SIZE = 0.25;
 
-	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
+	static unique_ptr<AnalyzeState> StringInitAnalyze(CompressionAnalyzeContext &ctx, PhysicalType type);
 	static bool StringAnalyze(AnalyzeState &state_p, const Vector &input);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
@@ -95,14 +95,13 @@ struct FSSTAnalyzeState : public AnalyzeState {
 	idx_t empty_strings;
 };
 
-unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	auto &storage_manager = col_data.GetStorageManager();
-	if (StorageManager::TargetAtLeastVersion(StorageVersion::V1_3_0, storage_manager.GetStorageVersion())) {
+unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(CompressionAnalyzeContext &ctx, PhysicalType type) {
+	if (StorageManager::TargetAtLeastVersion(StorageVersion::V1_3_0, ctx.storage_version)) {
 		// dict_fsst introduced - disable fsst
 		return nullptr;
 	}
 
-	return make_uniq<FSSTAnalyzeState>(col_data.GetBlockManager());
+	return make_uniq<FSSTAnalyzeState>(ctx.block_manager);
 }
 
 bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {

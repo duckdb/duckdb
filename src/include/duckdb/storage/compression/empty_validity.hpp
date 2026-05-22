@@ -69,8 +69,7 @@ public:
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 		auto handle = buffer_manager.Pin(compressed_segment->GetBlockHandle());
 
-		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
-		checkpoint_state.FlushSegment(std::move(compressed_segment), std::move(handle), 0);
+		checkpoint_data.FlushSegment(std::move(compressed_segment), std::move(handle), 0);
 	}
 	static unique_ptr<SegmentScanState> InitScan(const QueryContext &context, ColumnSegment &segment) {
 		return make_uniq<EmptyValiditySegmentScanState>();

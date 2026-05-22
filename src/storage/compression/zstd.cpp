@@ -68,7 +68,7 @@ static idx_t GetVectorMetadataSize(idx_t vector_count) {
 }
 
 struct ZSTDStorage {
-	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
+	static unique_ptr<AnalyzeState> StringInitAnalyze(CompressionAnalyzeContext &ctx, PhysicalType type);
 	static bool StringAnalyze(AnalyzeState &state_p, const Vector &input);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
@@ -136,23 +136,18 @@ public:
 	idx_t values_in_vector = 0;
 };
 
-unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	// check if the storage version we are writing to supports sztd
-	auto &storage = col_data.GetStorageManager();
-	auto &block_manager = col_data.GetBlockManager();
-	if (block_manager.InMemory()) {
+unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(CompressionAnalyzeContext &ctx, PhysicalType type) {
+	// check if the storage version we are writing to supports zstd
+	if (ctx.block_manager.InMemory()) {
 		//! Can't use ZSTD in in-memory environment
 		return nullptr;
 	}
-	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage.GetStorageVersion())) {
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, ctx.storage_version)) {
 		// compatibility mode with old versions - disable zstd
 		return nullptr;
 	}
-	auto &data_table_info = col_data.info;
-	auto &attached_db = data_table_info.GetDB();
-	auto &config = DBConfig::Get(attached_db);
-
-	return make_uniq<ZSTDAnalyzeState>(col_data.GetBlockManager(), config);
+	auto &config = DBConfig::GetConfig(ctx.db);
+	return make_uniq<ZSTDAnalyzeState>(ctx.block_manager, config);
 }
 
 bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, const Vector &input) {
@@ -233,11 +228,9 @@ public:
 	explicit ZSTDCompressionState(ColumnDataCheckpointData &checkpoint_data,
 	                              unique_ptr<ZSTDAnalyzeState> &&analyze_state_p)
 	    : CompressionState(checkpoint_data, CompressionType::COMPRESSION_ZSTD),
-	      analyze_state(std::move(analyze_state_p)),
-	      partial_block_manager(checkpoint_data.GetCheckpointState().GetPartialBlockManager()),
-	      stats_writer(checkpoint_data.GetType()), total_tuple_count(analyze_state->count),
-	      total_vector_count(GetVectorCount(total_tuple_count)), total_segment_count(analyze_state->segment_count),
-	      vectors_per_segment(analyze_state->vectors_per_segment) {
+	      analyze_state(std::move(analyze_state_p)), stats_writer(checkpoint_data.GetType()),
+	      total_tuple_count(analyze_state->count), total_vector_count(GetVectorCount(total_tuple_count)),
+	      total_segment_count(analyze_state->segment_count), vectors_per_segment(analyze_state->vectors_per_segment) {
 		segment_count = 0;
 		vector_count = 0;
 		vector_state.tuple_count = 0;
@@ -270,7 +263,6 @@ public:
 	}
 
 	void GetExtraPageBuffer(block_id_t current_block_id) {
-		auto &block_manager = partial_block_manager.GetBlockManager();
 		auto &buffer_manager = block_manager.buffer_manager;
 
 		auto &current_buffer_state = buffer_collection.GetCurrentBufferState();
@@ -448,8 +440,7 @@ public:
 	}
 
 	block_id_t FinalizePage() {
-		auto &block_manager = partial_block_manager.GetBlockManager();
-		auto new_id = partial_block_manager.GetFreeBlockId();
+		auto new_id = checkpoint_data.GetFreeBlockId();
 
 		auto &state = buffer_collection.segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.RegisterBlock(block_manager, new_id);
@@ -469,7 +460,6 @@ public:
 		}
 
 		// Write the current page to disk
-		auto &block_manager = partial_block_manager.GetBlockManager();
 		block_manager.Write(QueryContext(), buffer.GetFileBuffer(), block_id);
 	}
 
@@ -579,10 +569,8 @@ public:
 			}
 		}
 
-		auto &state = checkpoint_data.GetCheckpointState();
-		stats_writer.Merge(buffer_collection.segment->GetStatsMutable());
-		state.FlushSegment(std::move(buffer_collection.segment), std::move(buffer_collection.segment_handle),
-		                   segment_block_size);
+		checkpoint_data.FlushSegment(std::move(buffer_collection.segment), std::move(buffer_collection.segment_handle),
+		                             segment_block_size);
 		segment_buffer_state.flags.Clear();
 		segment_buffer_state.full = true;
 		segment_buffer_state.offset = 0;
@@ -603,7 +591,6 @@ public:
 
 public:
 	unique_ptr<ZSTDAnalyzeState> analyze_state;
-	PartialBlockManager &partial_block_manager;
 	StatsWriter<string_t> stats_writer;
 
 	//! --- Analyzed Data ---

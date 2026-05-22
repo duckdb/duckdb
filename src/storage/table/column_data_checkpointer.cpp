@@ -16,26 +16,16 @@ namespace duckdb {
 //! ColumnDataCheckpointData
 
 const CompressionFunction &ColumnDataCheckpointData::GetCompressionFunction(CompressionType compression_type) {
-	auto &db = col_data->GetDatabase();
-	auto &column_type = col_data->type;
-	auto &config = DBConfig::GetConfig(db);
-	return config.GetCompressionFunction(compression_type, column_type.InternalType());
+	auto &config = DBConfig::GetConfig(*db);
+	return config.GetCompressionFunction(compression_type, type.InternalType());
 }
 
 DatabaseInstance &ColumnDataCheckpointData::GetDatabase() {
-	return col_data->GetDatabase();
+	return *db;
 }
 
 const LogicalType &ColumnDataCheckpointData::GetType() const {
-	return col_data->type;
-}
-
-ColumnData &ColumnDataCheckpointData::GetColumnData() {
-	return *col_data;
-}
-
-const RowGroup &ColumnDataCheckpointData::GetRowGroup() {
-	return *row_group;
+	return type;
 }
 
 ColumnCheckpointState &ColumnDataCheckpointData::GetCheckpointState() {
@@ -44,6 +34,37 @@ ColumnCheckpointState &ColumnDataCheckpointData::GetCheckpointState() {
 
 StorageManager &ColumnDataCheckpointData::GetStorageManager() {
 	return *storage_manager;
+}
+
+void ColumnDataCheckpointData::FlushSegment(unique_ptr<ColumnSegment> segment, BufferHandle handle,
+                                            idx_t segment_size) {
+	if (flush_segment_fn) {
+		flush_segment_fn(std::move(segment), std::move(handle), segment_size);
+		return;
+	}
+	checkpoint_state->FlushSegment(std::move(segment), std::move(handle), segment_size);
+}
+
+void ColumnDataCheckpointData::FlushSegmentInternal(unique_ptr<ColumnSegment> segment, idx_t segment_size) {
+	if (flush_segment_internal_fn) {
+		flush_segment_internal_fn(std::move(segment), segment_size);
+		return;
+	}
+	checkpoint_state->FlushSegmentInternal(std::move(segment), segment_size);
+}
+
+BlockManager &ColumnDataCheckpointData::GetBlockManager() {
+	if (block_manager) {
+		return *block_manager;
+	}
+	return checkpoint_state->GetPartialBlockManager().GetBlockManager();
+}
+
+block_id_t ColumnDataCheckpointData::GetFreeBlockId() {
+	if (block_manager) {
+		return block_manager->GetFreeBlockId();
+	}
+	return checkpoint_state->GetPartialBlockManager().GetFreeBlockId();
 }
 
 //! ColumnDataCheckpointer
@@ -159,12 +180,14 @@ void ColumnDataCheckpointer::InitAnalyze() {
 		auto &checkpoint_state = checkpoint_states[i];
 		auto &coldata = checkpoint_state.get().GetResultColumn();
 		states.resize(functions.size());
+		CompressionAnalyzeContext ctx(coldata.GetBlockManager(), coldata.GetDatabase(),
+		                              coldata.GetStorageManager().GetStorageVersion());
 		for (idx_t j = 0; j < functions.size(); j++) {
 			auto &func = functions[j];
 			if (!func) {
 				continue;
 			}
-			states[j] = func->init_analyze(coldata, coldata.type.InternalType());
+			states[j] = func->init_analyze(ctx, coldata.type.InternalType());
 		}
 	}
 }
@@ -308,8 +331,8 @@ bool ColumnDataCheckpointer::ValidityCoveredByBasedata(vector<CheckpointAnalyzeR
 	return base.function->validity == CompressionValidity::NO_VALIDITY_REQUIRED;
 }
 
-void ColumnDataCheckpointer::WriteToDisk() { // Analyze the candidate functions to select one of them to use for
-	                                         // compression
+void ColumnDataCheckpointer::WriteToDisk() {
+	// Analyze the candidate functions to select one of them to use for compression
 	auto analyze_result = DetectBestCompressionMethod();
 	if (ValidityCoveredByBasedata(analyze_result)) {
 		D_ASSERT(analyze_result.size() == 2);
@@ -333,7 +356,7 @@ void ColumnDataCheckpointer::WriteToDisk() { // Analyze the candidate functions 
 		auto &col_data = checkpoint_state.get().GetResultColumn();
 
 		checkpoint_data[i] =
-		    ColumnDataCheckpointData(checkpoint_state, col_data, col_data.GetDatabase(), row_group, storage_manager);
+		    ColumnDataCheckpointData(checkpoint_state, col_data.type, col_data.GetDatabase(), storage_manager);
 		compression_states[i] = function->init_compression(checkpoint_data[i], std::move(analyze_state));
 	}
 
