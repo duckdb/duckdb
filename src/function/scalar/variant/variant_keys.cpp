@@ -117,50 +117,30 @@ static void TraverseVariantPath(const UnifiedVariantVectorData &variant, const v
 	}
 }
 
-static void PrepareKeyListStorage(Vector &key_ids, const ValidityMask &object_validity,
-                                  const VariantNestedData *nested_data, const idx_t count) {
-	const auto &list_validity = FlatVector::Validity(key_ids);
-
-	idx_t total_key_count = 0;
-	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		if (!list_validity.RowIsValid(row_idx) || !object_validity.RowIsValid(row_idx)) {
-			continue;
-		}
-		total_key_count += nested_data[row_idx].child_count;
-	}
-
-	ListVector::Reserve(key_ids, total_key_count);
-	ListVector::SetListSize(key_ids, total_key_count);
-}
-
 static void WriteKeyIdList(const UnifiedVariantVectorData &variant, Vector &key_ids, VariantNestedData *nested_data,
                            const ValidityMask &object_validity, const idx_t count) {
-	PrepareKeyListStorage(key_ids, object_validity, nested_data, count);
+	auto writer = FlatVector::Writer<VectorListType<idx_t>>(key_ids, count);
+	const auto &list_validity = FlatVector::Validity(key_ids);
 
-	const auto list_entries = FlatVector::GetDataMutable<list_entry_t>(key_ids);
-	auto &key_id_child = ListVector::GetChildMutable(key_ids);
-	const auto key_ids_data = FlatVector::GetDataMutable<idx_t>(key_id_child);
-
-	idx_t current_offset = 0;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		auto &entry = list_entries[row_idx];
-		entry.offset = current_offset;
-		entry.length = 0;
-
+		if (!list_validity.RowIsValid(row_idx)) {
+			writer.WriteNull();
+			continue;
+		}
 		if (!object_validity.RowIsValid(row_idx)) {
-			// No keys to write: the row is either NULL or the target is not an object type
+			writer.WriteList(0);
 			continue;
 		}
 
 		const auto &[child_count, children_idx] = nested_data[row_idx];
-		entry.length = child_count;
+		auto row_writer = writer.WriteList(child_count);
 
-		for (idx_t child_idx = 0; child_idx < child_count; child_idx++) {
+		idx_t child_idx = 0;
+		for (auto &key_id_writer : row_writer) {
 			const auto key_id = variant.GetKeysIndex(row_idx, children_idx + child_idx);
-			key_ids_data[current_offset + child_idx] = key_id;
+			key_id_writer.WriteValue(key_id);
+			child_idx++;
 		}
-
-		current_offset += entry.length;
 	}
 }
 
