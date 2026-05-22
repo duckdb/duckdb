@@ -543,12 +543,10 @@ void TupleDataCollection::Reset() {
 		allocator = segments[0]->allocator;
 		segments[0]->Reset();
 		allocator->Reset();
-#ifdef D_ASSERT_IS_ENABLED
 		D_ASSERT(segments[0]->allocator.get() == allocator.get());
 		D_ASSERT(segments[0]->count == 0);
 		D_ASSERT(segments[0]->chunks.empty());
 		D_ASSERT(segments[0]->chunk_parts.empty());
-#endif
 	} else {
 		// All segments were null (moved out by Combine).  The old allocator is still shared by
 		// those moved-out segments and must keep its row_blocks intact.  Create a fresh allocator.
