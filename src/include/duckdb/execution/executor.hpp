@@ -185,7 +185,7 @@ private:
 	//! Task that have been descheduled
 	unordered_map<Task *, shared_ptr<Task>> to_be_rescheduled_tasks;
 	//! The semaphore to signal task rescheduling
-	std::condition_variable task_reschedule;
+	absl::CondVar task_reschedule;
 
 	//! Currently alive executor tasks
 	atomic<idx_t> executor_tasks;

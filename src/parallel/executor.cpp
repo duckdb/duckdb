@@ -493,7 +493,7 @@ void Executor::WaitForTask() {
 	}
 
 	blocked_thread_time += ms + WAIT_TIME_MS.count();
-	task_reschedule.wait_for(l, WAIT_TIME_MS);
+	task_reschedule.WaitWithTimeout(l.mutex(), absl::FromChrono(WAIT_TIME_MS));
 #endif
 }
 

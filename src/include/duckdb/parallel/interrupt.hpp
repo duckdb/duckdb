@@ -34,9 +34,8 @@ struct InterruptDoneSignalState {
 	//! Await the callback signalling the interrupt is over
 	void Await();
 
-protected:
-	annotated_mutex lock;
-	std::condition_variable cv;
+private:
+	absl::Mutex lock;
 	bool done = false;
 };
 
