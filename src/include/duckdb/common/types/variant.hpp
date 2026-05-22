@@ -12,6 +12,7 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb_yyjson {
 struct yyjson_mut_doc;
@@ -29,7 +30,7 @@ enum class VariantChildLookupMode : uint8_t { INVALID, BY_KEY, BY_INDEX };
 
 struct Variant {
 public:
-	static constexpr idx_t VERSION_ADDED = 7; // Added to core in DuckDB v1.5.0
+	static constexpr StorageVersion VERSION_ADDED = StorageVersion::V1_5_0; // Added to core in DuckDB v1.5.0
 };
 
 struct VariantPathComponent {

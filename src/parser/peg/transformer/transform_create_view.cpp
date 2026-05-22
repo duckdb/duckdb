@@ -93,7 +93,7 @@ unique_ptr<CreateStatement>
 PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, const bool &create_recursive,
                                                const bool &if_not_exists, const QualifiedName &qualified_name,
                                                const vector<string> &insert_column_list,
-                                               const case_insensitive_map_t<unique_ptr<ParsedExpression>> &with_list,
+                                               case_insensitive_map_t<unique_ptr<ParsedExpression>> with_list,
                                                unique_ptr<SelectStatement> select_statement_internal) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateViewInfo>();

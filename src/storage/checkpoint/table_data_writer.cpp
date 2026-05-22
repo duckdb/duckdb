@@ -22,9 +22,8 @@ TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, QueryContext contex
     : table(table_p.Cast<DuckTableEntry>()), context(context.GetClientContext()) {
 	D_ASSERT(table_p.IsDuckTable());
 
-	auto serialization_version = SerializationCompatibility::FromDatabase(table_p.ParentCatalog().GetAttached());
-	if (serialization_version.serialization_version <
-	    SerializationCompatibility::FromString("v1.4.4").serialization_version) {
+	auto storage_version = StorageCompatibility::FromDatabase(table_p.ParentCatalog().GetAttached());
+	if (storage_version.storage_version < StorageCompatibility::FromString("v1.4.4").storage_version) {
 		// older storage versions require legacy start row to be written
 		require_legacy_start_row = true;
 	}
@@ -188,7 +187,9 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	auto v1_0_0_storage = serializer.GetOptions().serialization_compatibility.serialization_version < 3;
+	// prior: ser version 3
+	auto v1_0_0_storage = StorageManager::IsPriorToVersion(
+	    StorageVersion::V1_2_0, serializer.GetOptions().storage_compatibility.storage_version);
 	IndexSerializationInfo serialization_info;
 	if (!v1_0_0_storage) {
 		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
