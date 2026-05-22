@@ -3436,6 +3436,7 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_ROW_NUMBER_REWRITER), "OPTIMIZER_ROW_NUMBER_REWRITER" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_PARTITIONED_EXECUTION), "OPTIMIZER_PARTITIONED_EXECUTION" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN), "OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN" },
+		{ static_cast<uint32_t>(MetricType::OPTIMIZER_DISJUNCTIVE_JOIN_REWRITER), "OPTIMIZER_DISJUNCTIVE_JOIN_REWRITER" },
 		{ static_cast<uint32_t>(MetricType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
 		{ static_cast<uint32_t>(MetricType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
 		{ static_cast<uint32_t>(MetricType::PARSER), "PARSER" },
@@ -3451,12 +3452,12 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricType>(MetricType value) {
-	return StringUtil::EnumToString(GetMetricTypeValues(), 78, "MetricType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricTypeValues(), 79, "MetricType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricType EnumUtil::FromString<MetricType>(const char *value) {
-	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 78, "MetricType", value));
+	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 79, "MetricType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMonotonicityValues() {
@@ -3740,19 +3741,20 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::OUTER_JOIN_SIMPLIFICATION), "OUTER_JOIN_SIMPLIFICATION" },
 		{ static_cast<uint32_t>(OptimizerType::ROW_NUMBER_REWRITER), "ROW_NUMBER_REWRITER" },
 		{ static_cast<uint32_t>(OptimizerType::PARTITIONED_EXECUTION), "PARTITIONED_EXECUTION" },
-		{ static_cast<uint32_t>(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN), "PARTIAL_AGGREGATE_PUSHDOWN" }
+		{ static_cast<uint32_t>(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN), "PARTIAL_AGGREGATE_PUSHDOWN" },
+		{ static_cast<uint32_t>(OptimizerType::DISJUNCTIVE_JOIN_REWRITER), "DISJUNCTIVE_JOIN_REWRITER" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 39, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 40, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 39, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 40, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByColumnTypeValues() {

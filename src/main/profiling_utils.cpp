@@ -46,6 +46,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::OPTIMIZER_CTE_FILTER_PUSHER:
 	case MetricType::OPTIMIZER_CTE_INLINING:
 	case MetricType::OPTIMIZER_DELIMINATOR:
+	case MetricType::OPTIMIZER_DISJUNCTIVE_JOIN_REWRITER:
 	case MetricType::OPTIMIZER_DUPLICATE_GROUPS:
 	case MetricType::OPTIMIZER_EMPTY_RESULT_PULLUP:
 	case MetricType::OPTIMIZER_EXPRESSION_REWRITER:

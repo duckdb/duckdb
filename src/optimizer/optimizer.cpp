@@ -38,6 +38,7 @@
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
+#include "duckdb/optimizer/disjunctive_join_rewriter.hpp"
 #include "duckdb/optimizer/partitioned_execution.hpp"
 #include "duckdb/optimizer/window_self_join.hpp"
 #include "duckdb/optimizer/row_number_rewriter.hpp"
@@ -242,6 +243,11 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::OUTER_JOIN_SIMPLIFICATION, [&]() {
 		OuterJoinSimplification outer_join_simplification;
 		outer_join_simplification.VisitOperator(*plan);
+	});
+
+	RunOptimizer(OptimizerType::DISJUNCTIVE_JOIN_REWRITER, [&]() {
+		DisjunctiveJoinRewriter disjunctive_join_rewriter(context, binder);
+		plan = disjunctive_join_rewriter.Optimize(std::move(plan));
 	});
 
 	// then we perform the join ordering optimization

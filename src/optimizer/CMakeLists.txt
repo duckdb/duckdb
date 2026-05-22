@@ -47,7 +47,8 @@ add_library_unity(
   window_self_join.cpp
   row_number_rewriter.cpp
   sampling_pushdown.cpp
-  projection_pullup.cpp)
+  projection_pullup.cpp
+  disjunctive_join_rewriter.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>
     PARENT_SCOPE)
