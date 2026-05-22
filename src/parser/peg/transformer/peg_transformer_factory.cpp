@@ -637,6 +637,7 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformFromSelectClause);
 	REGISTER_TRANSFORM(TransformFromClause);
 	REGISTER_TRANSFORM(TransformSelectClause);
+	REGISTER_TRANSFORM(TransformSelectIntoClause);
 	REGISTER_TRANSFORM(TransformDistinctClause);
 	REGISTER_TRANSFORM(TransformDistinctOn);
 	REGISTER_TRANSFORM(TransformDistinctOnTargets);

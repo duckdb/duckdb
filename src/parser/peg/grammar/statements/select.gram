@@ -33,7 +33,8 @@ UsingKey <- 'USING' 'KEY' Parens(TargetList)
 Materialized <- 'NOT'? 'MATERIALIZED'
 WithClause <- 'WITH' Recursive? List(WithStatement)
 Recursive <- 'RECURSIVE'
-SelectClause <- 'SELECT' DistinctClause? TargetList?
+SelectClause <- 'SELECT' DistinctClause? TargetList? SelectIntoClause?
+SelectIntoClause <- 'INTO' BaseTableName
 TargetList <- List(AliasedExpression)
 ColumnAliases <- Parens(List(ColIdOrString))
 

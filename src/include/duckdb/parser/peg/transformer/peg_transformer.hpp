@@ -191,6 +191,12 @@ public:
 	vector<unique_ptr<CreatePivotEntry>> pivot_entries;
 	vector<reference<CommonTableExpressionMap>> stored_cte_map;
 
+	//! When parsing a top-level SELECT ... INTO target, captures the target table
+	//! and depth where it was found. Cleared once consumed at the top-level
+	//! statement boundary, and rejected if found at non-zero select_depth.
+	unique_ptr<BaseTableRef> select_into_target;
+	idx_t select_depth = 0;
+
 	bool in_window_definition = false;
 
 	friend class StackChecker<PEGTransformer>;
@@ -916,6 +922,7 @@ private:
 	static unique_ptr<SelectNode> TransformFromSelectClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformFromClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<SelectNode> TransformSelectClause(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<BaseTableRef> TransformSelectIntoClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static DistinctClause TransformDistinctClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static DistinctClause TransformDistinctOn(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformDistinctOnTargets(PEGTransformer &transformer,

@@ -493,6 +493,7 @@ BaseTableRef:
     - CatalogReservedSchemaTable
     - TargetOptAlias
     - InsertTarget
+    - SelectIntoClause
 
 # ---------------------------------------------------------------------------
 # vector<T> categories
