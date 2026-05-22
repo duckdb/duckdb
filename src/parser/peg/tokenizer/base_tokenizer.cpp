@@ -383,6 +383,27 @@ bool BaseTokenizer::TokenizeInput() {
 			    StringUtil::CharacterIsHex(c)) {
 				break;
 			}
+			// A second '.' inside the same token, or a '.' that would be followed by an identifier
+			// character (e.g. `$1.x`, `tbl.col`, `1.method()`), is not part of the number.
+			// Stop here so the '.' becomes a separate DotOperator token.
+			if (c == '.') {
+				bool already_has_dot = false;
+				for (idx_t j = last_pos; j < i; j++) {
+					if (sql[j] == '.') {
+						already_has_dot = true;
+						break;
+					}
+				}
+				bool next_is_digit = i + 1 < sql.size() && StringUtil::CharacterIsDigit(sql[i + 1]);
+				if (already_has_dot || !next_is_digit) {
+					PushToken(last_pos, i, TokenType::NUMBER_LITERAL);
+					state = TokenizeState::STANDARD;
+					last_pos = i;
+					i--;
+					break;
+				}
+				break; // Decimal point inside a number like `1.5`.
+			}
 			// Check for "always allowed" numeric characters
 			if (CharacterIsInitialNumber(c)) {
 				break; // Continue tokenizing
