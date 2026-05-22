@@ -117,7 +117,7 @@ static void TraverseVariantPath(const UnifiedVariantVectorData &variant, const v
 	}
 }
 
-static void PrepareKeyListStorage(Vector& key_ids, const ValidityMask &object_validity,
+static void PrepareKeyListStorage(Vector &key_ids, const ValidityMask &object_validity,
                                   const VariantNestedData *nested_data, const idx_t count) {
 	const auto &list_validity = FlatVector::Validity(key_ids);
 
@@ -133,8 +133,8 @@ static void PrepareKeyListStorage(Vector& key_ids, const ValidityMask &object_va
 	ListVector::SetListSize(key_ids, total_key_count);
 }
 
-static void WriteKeyIdList(const UnifiedVariantVectorData &variant, Vector& key_ids,
-                           VariantNestedData *nested_data, const ValidityMask &object_validity, const idx_t count) {
+static void WriteKeyIdList(const UnifiedVariantVectorData &variant, Vector &key_ids, VariantNestedData *nested_data,
+                           const ValidityMask &object_validity, const idx_t count) {
 	PrepareKeyListStorage(key_ids, object_validity, nested_data, count);
 
 	const auto list_entries = FlatVector::GetDataMutable<list_entry_t>(key_ids);
@@ -166,7 +166,7 @@ static void WriteKeyIdList(const UnifiedVariantVectorData &variant, Vector& key_
 
 // TODO: Currently collection will always happen on the unshredded variant, introduce a fast path for shredded variants.
 static Vector CollectVariantKeys(const UnifiedVariantVectorData &variant,
-                                            const vector<VariantPathComponent> &components, const idx_t count) {
+                                 const vector<VariantPathComponent> &components, const idx_t count) {
 	// By row found keys at the requested path in the VARIANT
 	Vector key_ids(LogicalType::LIST(LogicalType::UBIGINT));
 	key_ids.Initialize(VectorDataInitialization::UNINITIALIZED, count);
