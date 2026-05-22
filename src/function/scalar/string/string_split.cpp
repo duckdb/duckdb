@@ -8,6 +8,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -105,8 +106,28 @@ void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result
 		auto delim_entry = delim_entries[i];
 		auto list = list_writer.WriteDynamicList();
 		if (!delim_entry.IsValid()) {
-			// delim is NULL: copy the complete entry
-			list.WriteElement().WriteStringRef(input_entry.GetValue());
+			// PG compat: NULL delim splits the input into individual UTF-8 characters.
+			// Use list.WriteElement() to match upstream's list writer interface.
+			auto input_data = input_entry.GetValue().GetData();
+			auto input_size = input_entry.GetValue().GetSize();
+			idx_t pos = 0;
+			while (pos < input_size) {
+				int char_len = 0;
+				Utf8Proc::UTF8ToCodepoint(input_data + pos, char_len);
+				if (char_len <= 0 || pos + static_cast<idx_t>(char_len) > input_size) {
+					char_len = 1; // fallback for invalid UTF-8
+				}
+				list.WriteElement().WriteStringRef(string_t(input_data + pos, UnsafeNumericCast<uint32_t>(char_len)));
+				pos += static_cast<idx_t>(char_len);
+			}
+			continue;
+		}
+		// PG compat: empty delimiter returns the input as a single-element list
+		// (or empty list if input is also empty), not a per-character split.
+		if (delim_entry.GetValue().GetSize() == 0) {
+			if (input_entry.GetValue().GetSize() > 0) {
+				list.WriteElement().WriteStringRef(input_entry.GetValue());
+			}
 			continue;
 		}
 		StringSplitter::Split<OP>(
