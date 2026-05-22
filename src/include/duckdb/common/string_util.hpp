@@ -212,11 +212,11 @@ public:
 	DUCKDB_API static bool IsUpper(const string &str);
 
 	//! Case insensitive hash
-	DUCKDB_API static uint64_t CIHash(const string &str);
+	DUCKDB_API static uint64_t CIHash(std::string_view str);
 	DUCKDB_API static uint64_t CIHash(const char *str, idx_t size);
 
 	//! Case insensitive equals
-	DUCKDB_API static bool CIEquals(const string &l1, const string &l2);
+	DUCKDB_API static bool CIEquals(std::string_view l1, std::string_view l2);
 
 	//! Case insensitive equals (null-terminated strings)
 	DUCKDB_API static bool CIEquals(const char *l1, idx_t l1_size, const char *l2, idx_t l2_size);
@@ -225,10 +225,10 @@ public:
 	DUCKDB_API static bool CIStartsWith(const string &str, const string &prefix);
 
 	//! Case insensitive compare
-	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);
+	DUCKDB_API static bool CILessThan(std::string_view l1, std::string_view l2);
 
 	//! Case insensitive find, returns DConstants::INVALID_INDEX if not found
-	DUCKDB_API static idx_t CIFind(vector<string> &vec, const string &str);
+	DUCKDB_API static idx_t CIFind(const vector<string> &vec, const string &str);
 
 	//! Format a string using printf semantics
 	template <typename... ARGS>

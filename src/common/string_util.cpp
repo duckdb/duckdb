@@ -14,6 +14,10 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
+#include <absl/strings/ascii.h>
+#include <absl/strings/internal/memutil.h>
+#include <absl/strings/match.h>
+#include <absl/strings/str_split.h>
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -139,17 +143,11 @@ void StringUtil::Trim(string &str) {
 }
 
 bool StringUtil::StartsWith(const string &str, const string &prefix) {
-	if (prefix.size() > str.size()) {
-		return false;
-	}
-	return equal(prefix.begin(), prefix.end(), str.begin());
+	return str.starts_with(prefix);
 }
 
 bool StringUtil::EndsWith(const string &str, const string &suffix) {
-	if (suffix.size() > str.size()) {
-		return false;
-	}
-	return equal(suffix.rbegin(), suffix.rend(), str.rbegin());
+	return str.ends_with(suffix);
 }
 
 string StringUtil::Repeat(const string &str, idx_t n) {
@@ -386,16 +384,11 @@ idx_t StringUtil::ParseFormattedBytes(const string &arg) {
 }
 
 string StringUtil::Upper(const string &str) {
-	string copy(str);
-	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return std::toupper(c); });
-	return (copy);
+	return absl::AsciiStrToUpper(str);
 }
 
 string StringUtil::Lower(const string &str) {
-	string copy(str);
-	transform(copy.begin(), copy.end(), copy.begin(),
-	          [](unsigned char c) { return StringUtil::CharacterToLower(static_cast<char>(c)); });
-	return (copy);
+	return absl::AsciiStrToLower(str);
 }
 
 string StringUtil::Title(const string &str) {
@@ -427,8 +420,8 @@ bool StringUtil::IsUpper(const string &str) {
 }
 
 // Jenkins hash function: https://en.wikipedia.org/wiki/Jenkins_hash_function
-uint64_t StringUtil::CIHash(const string &str) {
-	return StringUtil::CIHash(str.c_str(), str.size());
+uint64_t StringUtil::CIHash(std::string_view str) {
+	return StringUtil::CIHash(str.data(), str.size());
 }
 
 uint64_t StringUtil::CIHash(const char *str, idx_t size) {
@@ -445,47 +438,24 @@ uint64_t StringUtil::CIHash(const char *str, idx_t size) {
 }
 
 bool StringUtil::CIEquals(const char *l1, idx_t l1_size, const char *l2, idx_t l2_size) {
-	if (l1_size != l2_size) {
-		return false;
-	}
-	const auto charmap = ASCII_TO_LOWER_MAP;
-	for (idx_t c = 0; c < l1_size; c++) {
-		if (charmap[(uint8_t)l1[c]] != charmap[(uint8_t)l2[c]]) {
-			return false;
-		}
-	}
-	return true;
+	return absl::EqualsIgnoreCase({l1, l1_size}, {l2, l2_size});
 }
 
-bool StringUtil::CIEquals(const string &l1, const string &l2) {
-	return CIEquals(l1.c_str(), l1.size(), l2.c_str(), l2.size());
+bool StringUtil::CIEquals(std::string_view l1, std::string_view l2) {
+	return CIEquals(l1.data(), l1.size(), l2.data(), l2.size());
 }
 
 bool StringUtil::CIStartsWith(const string &str, const string &prefix) {
-	if (prefix.size() > str.size()) {
-		return false;
-	}
-	return CIEquals(str.c_str(), prefix.size(), prefix.c_str(), prefix.size());
+	return absl::StartsWithIgnoreCase(str, prefix);
 }
 
-bool StringUtil::CILessThan(const string &s1, const string &s2) {
-	const auto charmap = ASCII_TO_UPPER_MAP;
-
-	unsigned char u1 {}, u2 {};
-
-	idx_t length = MinValue<idx_t>(s1.length(), s2.length());
-	length += s1.length() != s2.length();
-	for (idx_t i = 0; i < length; i++) {
-		u1 = (unsigned char)s1[i];
-		u2 = (unsigned char)s2[i];
-		if (charmap[u1] != charmap[u2]) {
-			break;
-		}
-	}
-	return (charmap[u1] - charmap[u2]) < 0;
+bool StringUtil::CILessThan(std::string_view s1, std::string_view s2) {
+	const auto size = std::min(s1.size(), s2.size());
+	const auto r = absl::strings_internal::memcasecmp(s1.data(), s2.data(), size);
+	return r != 0 ? r < 0 : s1.size() < s2.size();
 }
 
-idx_t StringUtil::CIFind(vector<string> &vector, const string &search_string) {
+idx_t StringUtil::CIFind(const vector<string> &vector, const string &search_string) {
 	for (idx_t i = 0; i < vector.size(); i++) {
 		const auto &string = vector[i];
 		if (CIEquals(string, search_string)) {
@@ -496,38 +466,11 @@ idx_t StringUtil::CIFind(vector<string> &vector, const string &search_string) {
 }
 
 vector<string> StringUtil::Split(const string &str, char delimiter) {
-	duckdb::stringstream ss(str);
-	vector<string> lines;
-	string temp;
-	while (getline(ss, temp, delimiter)) {
-		lines.push_back(temp);
-	}
-	return (lines);
+	return absl::StrSplit(str, delimiter);
 }
 
 vector<string> StringUtil::Split(const string &input, const string &split) {
-	vector<string> splits;
-
-	idx_t last = 0;
-	idx_t input_len = input.size();
-	idx_t split_len = split.size();
-	while (last <= input_len) {
-		idx_t next = input.find(split, last);
-		if (next == string::npos) {
-			next = input_len;
-		}
-
-		// Push the substring [last, next) on to splits
-		string substr = input.substr(last, next - last);
-		if (!substr.empty()) {
-			splits.push_back(substr);
-		}
-		last = next + split_len;
-	}
-	if (splits.empty()) {
-		splits.push_back(input);
-	}
-	return splits;
+	return absl::StrSplit(input, split);
 }
 
 string StringUtil::Replace(string source, const string &from, const string &to) {
