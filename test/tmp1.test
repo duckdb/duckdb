@@ -2,7 +2,6 @@
 # description: rowid lookups into a leading row-group gap
 # group: [test]
 
-
 statement ok
 CREATE TABLE rowid_gap_lookup AS SELECT i FROM range(245760) tbl(i);
 
