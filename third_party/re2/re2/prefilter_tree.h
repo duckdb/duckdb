@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "duckdb/common/map.hpp"
 #include "util/util.h"
 #include "re2/prefilter.h"
 #include "re2/sparse_array.h"
@@ -59,9 +60,9 @@ class PrefilterTree {
 
  private:
   typedef SparseArray<int> IntMap;
-  // TODO(junyer): Use std::unordered_set<Prefilter*> instead?
+  // TODO(junyer): Use duckdb::unordered_set<Prefilter*> instead?
   // It should be trivial to get rid of the stringification...
-  typedef std::map<std::string, Prefilter*> NodeMap;
+  typedef duckdb::map<std::string, Prefilter*> NodeMap;
 
   // Each unique node has a corresponding Entry that helps in
   // passing the matching trigger information along the tree.

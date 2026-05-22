@@ -36,6 +36,8 @@
 #include <utility>
 #include <vector>
 
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "util/logging.h"
 #include "util/mix.h"
 #include "util/mutex.h"
@@ -159,7 +161,7 @@ class DFA {
     }
   };
 
-  typedef std::unordered_set<State*, StateHash, StateEqual> StateSet;
+  typedef duckdb::unordered_set<State*, StateHash, StateEqual> StateSet;
 
  private:
   // Make it easier to swap in a scalable reader-writer mutex.
@@ -1869,7 +1871,7 @@ int DFA::BuildAllStates(const Prog::DFAStateCallback& cb) {
   // Add start state to work queue.
   // Note that any State* that we handle here must point into the cache,
   // so we can simply depend on pointer-as-a-number hashing and equality.
-  std::unordered_map<State*, int> m;
+  duckdb::unordered_map<State*, int> m;
   std::deque<State*> q;
   m.emplace(params.start, static_cast<int>(m.size()));
   q.push_back(params.start);
@@ -1943,7 +1945,7 @@ bool DFA::PossibleMatchRange(std::string* min, std::string* max, int maxlen) {
   // Also note that previously_visited_states[UnseenStatePtr] will, in the STL
   // tradition, implicitly insert a '0' value at first use. We take advantage
   // of that property below.
-  std::unordered_map<State*, int> previously_visited_states;
+  duckdb::unordered_map<State*, int> previously_visited_states;
 
   // Pick out start state for anchored search at beginning of text.
   RWLocker l(&cache_mutex_);

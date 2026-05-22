@@ -17,6 +17,7 @@
 // You can contact the authors via the FSST source repository : https://github.com/cwida/fsst
 #include "libfsst.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace libfsst {
 Symbol concat(Symbol a, Symbol b) {
@@ -161,13 +162,13 @@ SymbolTable *buildSymbolTable(Counters& counters, std::vector<const u8*> line, c
 
 	auto makeTable = [&](SymbolTable *st, Counters &counters) {
 		// hashmap of c (needed because we can generate duplicate candidates)
-		std::unordered_set<QSymbol> cands;
+		duckdb::unordered_set<QSymbol> cands;
 
 		// artificially make terminater the most frequent symbol so it gets included
 		u16 terminator = st->nSymbols?FSST_CODE_BASE:st->terminator;
 		counters.count1Set(terminator,65535);
 
-		auto addOrInc = [&](std::unordered_set<QSymbol> &cands, Symbol s, u64 count) {
+		auto addOrInc = [&](duckdb::unordered_set<QSymbol> &cands, Symbol s, u64 count) {
 			if (count < (5*sampleFrac)/128) return; // improves both compression speed (less candidates), but also quality!!
 			QSymbol q;
 			q.symbol = s;
