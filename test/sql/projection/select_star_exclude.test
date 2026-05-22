@@ -9,7 +9,7 @@ statement ok
 INSERT INTO integers VALUES (1, 2, 3)
 
 query II
-SELECT * EXCLUDE i FROM integers
+SELECT * EXCLUDE (i) FROM integers
 ----
 2	3
 
@@ -92,7 +92,7 @@ SELECT * EXCLUDE (i) FROM integers i1 JOIN integers i2 USING (i)
 
 # qualified exclude entries
 query II
-SELECT * EXCLUDE integers.i FROM integers
+SELECT * EXCLUDE (integers.i) FROM integers
 ----
 2	3
 

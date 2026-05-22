@@ -39,7 +39,7 @@ statement ok
 INSERT INTO test_df_b VALUES(7076,'2017-07-31',1);
 
 query II
-with t as (select * from test_df_a UNION select * from test_df_b) select * exclude rn from t order by all;
+with t as (select * from test_df_a UNION select * from test_df_b) select * exclude (rn) from t order by all;
 ----
 7012	2015-07-31
 7058	2015-07-31
