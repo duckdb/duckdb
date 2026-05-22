@@ -394,6 +394,7 @@ private:
 	static unique_ptr<CreateStatement> TransformCreateIndexStmt(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformIndexType(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformIndexElement(PEGTransformer &transformer, ParseResult &parse_result);
+	static string TransformIndexOpclass(PEGTransformer &transformer, ParseResult &parse_result);
 	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformWithList(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
 	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformRelOptionOrOids(PEGTransformer &transformer,

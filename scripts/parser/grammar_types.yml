@@ -1110,6 +1110,10 @@ excluded_rules:
   - FunctionType
   - DropFunctionItem
   - DropFunctionArgs
+  - IncludeClause
+  - IncludedColumn
+  - IndexOpclassOptions
+  - IndexOpclassOption
   - Database
   - AbortOrRollback
   - CommitOrEnd
