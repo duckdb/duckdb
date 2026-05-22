@@ -223,15 +223,8 @@ int DecimalToString::DecimalLength(hugeint_t value, uint8_t width, uint8_t scale
 		// scale is 0: regular number
 		return NumericHelper::UnsignedLength(value) + negative;
 	}
-	// length is max of either:
-	// scale + 2 OR
-	// integer length + 1
-	// scale + 2 happens when the number is in the range of (-1, 1)
-	// in that case we print "0.XXX", which is the scale, plus "0." (2 chars)
-	// integer length + 1 happens when the number is outside of that range
-	// in that case we print the integer number, but with one extra character ('.')
-	auto extra_numbers = width > scale ? 2 : 1;
-	return MaxValue(scale + extra_numbers, NumericHelper::UnsignedLength(value) + 1) + negative;
+	// PG-compatible: always print leading zero for values in (-1, 1).
+	return MaxValue(scale + 2, NumericHelper::UnsignedLength(value) + 1) + negative;
 }
 
 template <>
@@ -303,11 +296,8 @@ void DecimalToString::FormatDecimal(hugeint_t value, uint8_t width, uint8_t scal
 		*--dst = '0';
 	}
 	*--dst = '.';
-	// now write the part before the decimal
-	D_ASSERT(width > scale || major == 0);
-	if (width > scale) {
-		dst = NumericHelper::FormatUnsigned(major, dst);
-	}
+	// PG-compatible: always write the integer part (at least "0").
+	dst = NumericHelper::FormatUnsigned(major, dst);
 }
 
 } // namespace duckdb
