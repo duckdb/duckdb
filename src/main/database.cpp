@@ -206,7 +206,7 @@ void DatabaseInstance::CreateMainDatabase() {
 
 	Connection con(*this);
 	con.BeginTransaction();
-	AttachOptions options(config);
+	AttachOptions options(config.options);
 	options.is_main_database = true;
 	db_manager->AttachDatabase(*con.context, info, options);
 	con.Commit();

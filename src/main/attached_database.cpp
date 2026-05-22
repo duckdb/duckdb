@@ -32,12 +32,8 @@ void StoredDatabasePath::OnDetach() {
 //===--------------------------------------------------------------------===//
 // Attach Options
 //===--------------------------------------------------------------------===//
-AttachOptions::AttachOptions(const DBConfig &config)
-    : access_mode(config.options.access_mode), db_type(config.options.database_type) {
-	auto threshold = Settings::Get<VacuumRebuildIndexesSetting>(config);
-	if (threshold > 0) {
-		vacuum_rebuild_indexes_threshold = threshold;
-	}
+AttachOptions::AttachOptions(const DBConfigOptions &options)
+    : access_mode(options.access_mode), db_type(options.database_type) {
 }
 
 AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options, const AccessMode default_access_mode)
@@ -92,7 +88,14 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 		}
 
 		if (entry.first == "vacuum_rebuild_indexes") {
-			vacuum_rebuild_indexes_threshold = UBigIntValue::Get(entry.second.DefaultCastAs(LogicalType::UBIGINT));
+			const auto threshold = UBigIntValue::Get(entry.second.DefaultCastAs(LogicalType::UBIGINT));
+			try {
+				vacuum_rebuild_indexes_threshold = threshold;
+			} catch (InternalException &e) {
+				throw InvalidInputException("Invalid setting for vacuum_rebuild_indexes: %d (valid range is 0 - %d)",
+				                            threshold,
+				                            UBigIntValue::Get(Value::MaximumValue(LogicalType::UBIGINT)) - 1);
+			}
 			continue;
 		}
 		options.emplace(entry.first, entry.second);
@@ -195,6 +198,17 @@ bool AttachedDatabase::IsReadOnly() const {
 
 bool AttachedDatabase::NameIsReserved(const string &name) {
 	return name == DEFAULT_SCHEMA || name == TEMP_CATALOG || name == SYSTEM_CATALOG;
+}
+
+idx_t AttachedDatabase::GetVacuumRebuildIndexThreshold() const {
+	if (vacuum_rebuild_threshold.IsValid()) {
+		return vacuum_rebuild_threshold.GetIndex();
+	}
+	return Settings::Get<VacuumRebuildIndexesSetting>(db);
+}
+
+void AttachedDatabase::SetVacuumRebuildIndexThreshold(idx_t threshold) {
+	vacuum_rebuild_threshold = threshold;
 }
 
 string AttachedDatabase::StoredPath() const {

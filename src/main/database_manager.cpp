@@ -134,6 +134,11 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 			if (!options.default_table.name.empty()) {
 				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
 			}
+			if (!options.vacuum_rebuild_indexes_threshold.IsValid()) {
+				existing_db->SetVacuumRebuildIndexThreshold(Settings::Get<VacuumRebuildIndexesSetting>(db));
+			} else {
+				existing_db->SetVacuumRebuildIndexThreshold(options.vacuum_rebuild_indexes_threshold.GetIndex());
+			}
 			if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 				// allow custom catalogs to override this behavior
 				if (!existing_db->GetCatalog().HasConflictingAttachOptions(info.path, options)) {

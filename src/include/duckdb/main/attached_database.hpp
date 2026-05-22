@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/main/settings.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 
@@ -58,7 +57,7 @@ struct StoredDatabasePath {
 //! they have to apply to any database file type (duckdb, sqlite, etc.).
 struct AttachOptions {
 	//! Constructor for databases we attach outside of the ATTACH DATABASE statement.
-	explicit AttachOptions(const DBConfig &config);
+	explicit AttachOptions(const DBConfigOptions &options);
 	//! Constructor for databases we attach when using ATTACH DATABASE.
 	AttachOptions(const unordered_map<string, Value> &options, const AccessMode default_access_mode);
 
@@ -136,12 +135,8 @@ public:
 	}
 	//! vacuum_rebuild_indexes threshold for this attached database.
 	//! Falls back to the global VacuumRebuildIndexesSetting if not overridden.
-	idx_t GetVacuumRebuildIndexThreshold() const {
-		if (vacuum_rebuild_threshold.IsValid()) {
-			return vacuum_rebuild_threshold.GetIndex();
-		}
-		return Settings::Get<VacuumRebuildIndexesSetting>(db);
-	}
+	idx_t GetVacuumRebuildIndexThreshold() const;
+	void SetVacuumRebuildIndexThreshold(idx_t threshold);
 	const unordered_map<string, Value> &GetAttachOptions() const {
 		return attach_options;
 	}
