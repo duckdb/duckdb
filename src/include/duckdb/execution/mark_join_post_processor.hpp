@@ -33,8 +33,8 @@ public:
 		TupleDataAppendState append_state;
 	};
 
-	void Initialize(ClientContext &context, BufferManager &buffer_manager, JoinType join_type, bool mark_nulls_are_false,
-	                idx_t condition_count, const vector<ExpressionType> &equality_predicates,
+	void Initialize(ClientContext &context, BufferManager &buffer_manager, JoinType join_type,
+	                bool mark_nulls_are_false, idx_t condition_count, const vector<ExpressionType> &equality_predicates,
 	                const vector<LogicalType> &condition_types);
 	void InitializeCorrelatedCounts(const vector<LogicalType> &correlated_types);
 
@@ -47,7 +47,8 @@ public:
 	void Merge(MarkJoinPostProcessor &other, bool &has_null);
 	void Reset();
 
-	void ApplyJoinKeyNullMask(DataChunk &join_keys, const vector<bool> &null_values_are_equal, ValidityMask &mask) const;
+	void ApplyJoinKeyNullMask(DataChunk &join_keys, const vector<bool> &null_values_are_equal,
+	                          ValidityMask &mask) const;
 	void RefineUnmatchedRows(DataChunk &join_keys, ValidityMask &mask, const bool *found_match, bool has_null);
 	void ConstructCorrelatedMarkResult(DataChunk &keys, DataChunk &probe_data, DataChunk &result,
 	                                   const vector<idx_t> &lhs_output_in_probe, const bool *found_match);
