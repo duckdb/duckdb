@@ -61,6 +61,8 @@ public:
 	DUCKDB_API Value(string val); // NOLINT: Allow implicit conversion from `string`
 	//! Create a VARCHAR value
 	DUCKDB_API Value(String val); // NOLINT: Allow implicit conversion from `string`
+	//! Create a VARCHAR value
+	DUCKDB_API Value(std::string_view val); // NOLINT: Allow implicit conversion from `string`
 	//! Copy constructor
 	DUCKDB_API Value(const Value &other);
 	//! Move constructor
@@ -360,6 +362,12 @@ private:
 	template <class T>
 	T GetValueInternal() const;
 };
+
+// Abseil hash support: delegates to Value::Hash(). Found via ADL.
+template <typename H>
+H AbslHashValue(H h, const Value &v) {
+	return H::combine(std::move(h), v.Hash());
+}
 
 //===--------------------------------------------------------------------===//
 // Type-specific getters
