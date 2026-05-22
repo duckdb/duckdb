@@ -26,6 +26,11 @@ public:
 	bool return_chunk;
 	vector<idx_t> return_columns;
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	//! True iff this LogicalDelete originated from a TRUNCATE TABLE statement.
+	//! Catalogs may dispatch to a fast-path truncate operator instead of the
+	//! per-row delete path. TRUNCATE has different transactional semantics
+	//! than DELETE and must remain distinguishable through planning.
+	bool is_truncate = false;
 
 public:
 	void Serialize(Serializer &serializer) const override;

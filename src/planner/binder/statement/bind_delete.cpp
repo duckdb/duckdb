@@ -74,6 +74,7 @@ BoundStatement Binder::BindNode(DeleteQueryNode &node) {
 	// create the delete node
 	auto del = make_uniq<LogicalDelete>(table, GenerateTableIndex());
 	del->bound_constraints = BindConstraints(table);
+	del->is_truncate = node.is_truncate;
 
 	// Add columns to the scan to avoid fetching by row ID in PhysicalDelete:
 	// - If RETURNING: add all physical columns (for RETURNING projection)

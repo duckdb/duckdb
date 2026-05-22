@@ -1,4 +1,10 @@
 DeleteStatement <- WithClause? 'DELETE' 'FROM' TargetOptAlias DeleteUsingClause? WhereClause? ReturningClause?
-TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName
+TruncateStatement <- 'TRUNCATE' 'TABLE'? List(TruncateTarget) TruncateIdentityClause? DropBehavior?
+TruncateTarget <- TruncateOnly? BaseTableName TruncateStar?
+TruncateOnly <- 'ONLY'
+TruncateStar <- '*'
+TruncateIdentityClause <- TruncateRestart / TruncateContinue
+TruncateRestart <- 'RESTART' 'IDENTITY'
+TruncateContinue <- 'CONTINUE' 'IDENTITY'
 TargetOptAlias <- BaseTableName 'AS'? ColId?
 DeleteUsingClause <- 'USING' List(TableRef)

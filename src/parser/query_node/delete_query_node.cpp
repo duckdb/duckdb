@@ -48,6 +48,9 @@ bool DeleteQueryNode::Equals(const QueryNode *other_p) const {
 		return false;
 	}
 	auto &other = other_p->Cast<DeleteQueryNode>();
+	if (is_truncate != other.is_truncate) {
+		return false;
+	}
 	if (!TableRef::Equals(table, other.table)) {
 		return false;
 	}
@@ -85,6 +88,7 @@ unique_ptr<QueryNode> DeleteQueryNode::Copy() const {
 	for (auto &expr : returning_list) {
 		result->returning_list.push_back(expr->Copy());
 	}
+	result->is_truncate = is_truncate;
 	CopyProperties(*result);
 	return std::move(result);
 }

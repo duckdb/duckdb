@@ -321,8 +321,6 @@ private:
 	static bool TransformTruncateIdentityClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformTruncateRestart(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformTruncateContinue(PEGTransformer &transformer, ParseResult &parse_result);
-	// transaction.gram — IsolationLevel is a complex choice that the generator skips.
-	static TransactionIsolationLevel TransformIsolationLevel(PEGTransformer &transformer, ParseResult &parse_result);
 	// comment.gram
 	static Value TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result);
 
