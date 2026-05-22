@@ -1,3 +1,5 @@
+#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -81,6 +83,94 @@ static unique_ptr<ParsedExpression> RestructureArrowChain(LambdaExpression &expr
 	return std::move(restructured);
 }
 
+// Returns true if there is a `->>` (json-string) operator on the leftmost
+// descendant chain of `expr`. The PEG grammar puts `->` at LambdaArrow
+// precedence (very low) while `->>` is at OtherOperator (high). For PG
+// semantics, both should be at the same level (left-associative). If a `->>`
+// appears nested as the LEFT operand of higher-precedence operators (e.g.
+// comparisons, AND/OR), the surrounding LambdaExpression is actually a JSON
+// `->` op that needs to be pushed down to wrap around the `->>` chain.
+static bool LeftmostChainHasDoubleArrow(const ParsedExpression &expr) {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::FUNCTION: {
+		auto &f = expr.Cast<FunctionExpression>();
+		if (f.is_operator && f.function_name == "->>" && f.children.size() == 2) {
+			return true;
+		}
+		if (f.is_operator && f.children.size() >= 1) {
+			return LeftmostChainHasDoubleArrow(*f.children[0]);
+		}
+		return false;
+	}
+	case ExpressionClass::COMPARISON: {
+		auto &c = expr.Cast<ComparisonExpression>();
+		return c.left && LeftmostChainHasDoubleArrow(*c.left);
+	}
+	case ExpressionClass::CONJUNCTION: {
+		auto &c = expr.Cast<ConjunctionExpression>();
+		if (!c.children.empty() && c.children[0]) {
+			return LeftmostChainHasDoubleArrow(*c.children[0]);
+		}
+		return false;
+	}
+	case ExpressionClass::OPERATOR: {
+		auto &o = expr.Cast<OperatorExpression>();
+		if (!o.children.empty() && o.children[0]) {
+			return LeftmostChainHasDoubleArrow(*o.children[0]);
+		}
+		return false;
+	}
+	default:
+		return false;
+	}
+}
+
+// Push a LambdaExpression(lhs, ...) down into the leftmost descendant of
+// `node` until we either reach a `->>` Function (where the lambda wraps the
+// `->>`'s LHS) or run out of leftmost children (where the lambda wraps the
+// node itself). Caller must have verified `LeftmostChainHasDoubleArrow(node)`.
+static unique_ptr<ParsedExpression> PushArrowDown(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> node,
+                                                  LambdaSyntaxType syntax) {
+	switch (node->GetExpressionClass()) {
+	case ExpressionClass::FUNCTION: {
+		auto &f = node->Cast<FunctionExpression>();
+		if (f.is_operator && f.function_name == "->>" && f.children.size() == 2) {
+			// Wrap the LHS of `->>` with the lambda, mirroring RestructureArrowChain.
+			auto inner_lambda = make_uniq<LambdaExpression>(std::move(lhs), std::move(f.children[0]));
+			inner_lambda->syntax_type = syntax;
+			f.children[0] = std::move(inner_lambda);
+			return node;
+		}
+		if (f.is_operator && f.children.size() >= 1) {
+			f.children[0] = PushArrowDown(std::move(lhs), std::move(f.children[0]), syntax);
+			return node;
+		}
+		break;
+	}
+	case ExpressionClass::COMPARISON: {
+		auto &c = node->Cast<ComparisonExpression>();
+		c.left = PushArrowDown(std::move(lhs), std::move(c.left), syntax);
+		return node;
+	}
+	case ExpressionClass::CONJUNCTION: {
+		auto &c = node->Cast<ConjunctionExpression>();
+		c.children[0] = PushArrowDown(std::move(lhs), std::move(c.children[0]), syntax);
+		return node;
+	}
+	case ExpressionClass::OPERATOR: {
+		auto &o = node->Cast<OperatorExpression>();
+		o.children[0] = PushArrowDown(std::move(lhs), std::move(o.children[0]), syntax);
+		return node;
+	}
+	default:
+		break;
+	}
+	// Unreachable when caller checked LeftmostChainHasDoubleArrow.
+	auto fallback = make_uniq<LambdaExpression>(std::move(lhs), std::move(node));
+	fallback->syntax_type = syntax;
+	return std::move(fallback);
+}
+
 BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
                                             const vector<LogicalType> &function_child_types,
                                             optional_ptr<bind_lambda_function_t> bind_lambda_function,
@@ -94,6 +184,14 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		// Restructure to match standard behavior before binding.
 		if (IsDoubleArrowRHS(*expr.expr)) {
 			unique_ptr<ParsedExpression> restructured = RestructureArrowChain(expr);
+			return BindExpression(restructured, depth);
+		}
+		// Generalised case: `col -> 'a' ->> 'b' = 'x'` parses as
+		// `LambdaExpression(col, Comparison(F('->>', ['a', 'b']), '=', 'x'))`.
+		// Push the lambda down so PG-style `(col -> 'a' ->> 'b') = 'x'` binding succeeds.
+		if (LeftmostChainHasDoubleArrow(*expr.expr)) {
+			unique_ptr<ParsedExpression> restructured =
+			    PushArrowDown(std::move(expr.lhs), std::move(expr.expr), expr.syntax_type);
 			return BindExpression(restructured, depth);
 		}
 
