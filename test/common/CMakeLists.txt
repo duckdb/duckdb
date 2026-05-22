@@ -14,7 +14,8 @@ add_library_unity(
   test_allocator_debug_info.cpp
   test_storage_fuzz.cpp
   test_strftime.cpp
-  test_string_util.cpp)
+  test_string_util.cpp
+  test_value_to_sql_string.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_common>
