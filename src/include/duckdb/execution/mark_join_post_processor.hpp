@@ -80,6 +80,10 @@ public:
 	                                   const vector<idx_t> &lhs_output_in_probe, const bool *found_match);
 
 private:
+	//! Initializes a MARK result using either the provided probe projection or the full probe chunk
+	void InitializeMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result,
+	                              const vector<bool> &null_values_are_equal, bool *&bool_result, ValidityMask *&mask,
+	                              optional_ptr<const vector<idx_t>> lhs_output_columns = nullptr) const;
 	//! Registers null-bearing build rows for row-valued MARK refinement
 	void RegisterNullRemainderRows(DataChunk &keys);
 	//! Merges row-valued null remainder state
