@@ -142,10 +142,13 @@ ColumnElements PEGTransformerFactory::TransformCreateColumnList(PEGTransformer &
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &create_table_column_list =
 	    ExtractResultFromParens(list_pr.Child<ListParseResult>(0)).Cast<OptionalParseResult>();
-	if (!create_table_column_list.HasResult()) {
-		throw ParserException("Table must have at least one column!");
+	ColumnElements result;
+	// PG-compat: allow `CREATE TABLE t()` with no columns. Indexes /
+	// constraints can attach later; the binder's "at least one physical
+	// column" check is also relaxed.
+	if (create_table_column_list.HasResult()) {
+		result = transformer.Transform<ColumnElements>(create_table_column_list.GetResult());
 	}
-	auto result = transformer.Transform<ColumnElements>(create_table_column_list.GetResult());
 	PartitionSortedOptions pso;
 	transformer.TransformOptional<PartitionSortedOptions>(list_pr, 1, pso);
 	result.partition_keys = std::move(pso.partition_keys);
