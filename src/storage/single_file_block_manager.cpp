@@ -30,11 +30,6 @@ const char MainHeader::MAGIC_BYTES[] = "DUCK";
 const char MainHeader::CANARY[] = "DUCKKEY";
 static constexpr idx_t ENCRYPTION_METADATA_LEN = 8;
 
-static mutex &CanaryCryptoLock() {
-	static mutex lock;
-	return lock;
-}
-
 void SerializeVersionNumber(WriteStream &ser, const string &version_str) {
 	data_t version[MainHeader::MAX_VERSION_SIZE];
 	memset(version, 0, MainHeader::MAX_VERSION_SIZE);
@@ -105,7 +100,6 @@ void GenerateDBIdentifier(uint8_t *db_identifier) {
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    const_data_ptr_t derived_key) {
-	lock_guard<mutex> canary_lock(CanaryCryptoLock());
 	EncryptionCanary canary;
 	EncryptionNonce nonce(EncryptionTypes::CipherType::GCM, encryption_state->metadata->GetVersion());
 	memset(nonce.data(), 0, nonce.size());
@@ -138,7 +132,6 @@ void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 
 bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    data_ptr_t derived_key) {
-	lock_guard<mutex> canary_lock(CanaryCryptoLock());
 	auto encryption_version = encryption_state->metadata->GetVersion();
 	EncryptionNonce nonce(EncryptionTypes::CipherType::GCM, encryption_version);
 	EncryptionTag tag;
