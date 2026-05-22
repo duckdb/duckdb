@@ -15,6 +15,16 @@
 
 namespace duckdb {
 
+struct VariantExistsFun {
+	static constexpr const char *Name = "variant_exists";
+	static constexpr const char *Parameters = "input_variant::VARIANT,path::VARCHAR\001input_variant::VARIANT,path::VARCHAR[]";
+	static constexpr const char *Description = "Returns true if the specified path exists in the variant, false otherwise.\001Returns a list of booleans, true if the path exists and false otherwise, for each specified path.";
+	static constexpr const char *Example = "variant_exists({'a': { 'a': 1, 'b': 2}}::VARIANT, 'a')\001variant_exists({'a': { 'a': 1, 'b': 2}, 'b': {'c': 3}}::VARIANT, ['a', 'b'])";
+	static constexpr const char *Categories = "variant\001variant";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct VariantExtractFun {
 	static constexpr const char *Name = "variant_extract";
 	static constexpr const char *Parameters = "input_variant::VARIANT,field::VARCHAR\001input_variant::VARIANT,index::UINTEGER";
