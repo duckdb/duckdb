@@ -8,6 +8,8 @@ struct GeneratedColumnDefinition {
 	unique_ptr<ParsedExpression> expr;
 	bool virtual_column = false;
 	bool default_column = false;
+	//! True when the column was declared as STORED, false for VIRTUAL (default).
+	bool stored = false;
 };
 
 struct ConstraintColumnDefinition {

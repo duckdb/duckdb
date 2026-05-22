@@ -329,7 +329,14 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 
 	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;
-		if (column.HasDefaultValue()) {
+		if (column.Category() == TableColumnType::GENERATED_STORED) {
+			// Stored generated column: bind the generated expression as the default
+			physical_index_set_t bound_columns;
+			CheckBinder gen_binder(*default_binder, context, "", columns, bound_columns);
+			gen_binder.target_type = column.Type();
+			auto expr_copy = column.GeneratedExpression().Copy();
+			bound_default = gen_binder.Bind(expr_copy);
+		} else if (column.HasDefaultValue()) {
 			// we bind a copy of the DEFAULT value because binding is destructive
 			// and we want to keep the original expression around for serialization
 			auto default_copy = column.DefaultValue().Copy();
@@ -375,7 +382,7 @@ static void ExpressionContainsGeneratedColumn(const ParsedExpression &root_expr,
 static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) {
 	unordered_set<string> generated_columns;
 	for (auto &col : table_info.columns.Logical()) {
-		if (!col.Generated()) {
+		if (col.Category() != TableColumnType::GENERATED_VIRTUAL) {
 			continue;
 		}
 		generated_columns.insert(col.Name());
@@ -686,7 +693,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		BindCreateTableConstraints(base, entry_retriever, schema);
 
 		if (AnyConstraintReferencesGeneratedColumn(base)) {
-			throw BinderException("Constraints on generated columns are not supported yet");
+			throw BinderException("Constraints on virtual generated columns are not supported");
 		}
 		bound_constraints = BindNewConstraints(base.constraints, base.table, base.columns);
 		if (bind_mode != AlterBindMode::SKIP_BINDING) {

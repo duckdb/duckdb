@@ -17,7 +17,7 @@ ColumnList::ColumnList(vector<ColumnDefinition> columns, bool allow_duplicate_na
 
 void ColumnList::AddColumn(ColumnDefinition column) {
 	auto oid = columns.size();
-	if (!column.Generated()) {
+	if (column.Category() != TableColumnType::GENERATED_VIRTUAL) {
 		column.SetStorageOid(physical_columns.size());
 		physical_columns.push_back(oid);
 	} else {

@@ -83,7 +83,7 @@ public:
 
 	ParsedExpression &GeneratedExpressionMutable();
 	const ParsedExpression &GeneratedExpression() const;
-	void SetGeneratedExpression(unique_ptr<ParsedExpression> expression);
+	void SetGeneratedExpression(unique_ptr<ParsedExpression> expression, TableColumnType type);
 	void ChangeGeneratedExpressionType(const LogicalType &type);
 	void GetListOfDependencies(vector<string> &dependencies) const;
 

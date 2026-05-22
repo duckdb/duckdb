@@ -124,7 +124,7 @@ const TableColumnType &ColumnDefinition::Category() const {
 }
 
 bool ColumnDefinition::Generated() const {
-	return category == TableColumnType::GENERATED;
+	return category == TableColumnType::GENERATED_VIRTUAL || category == TableColumnType::GENERATED_STORED;
 }
 
 string ColumnDefinition::ToSQLString() const {
@@ -208,8 +208,8 @@ LogicalType ColumnDefinition::GetType() const {
 	return type;
 }
 
-void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> new_expr) {
-	category = TableColumnType::GENERATED;
+void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> new_expr, TableColumnType col_type) {
+	category = col_type;
 
 	if (new_expr->HasSubquery()) {
 		throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed", name);
