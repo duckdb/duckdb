@@ -378,6 +378,11 @@ CatalogPushdownResult StatementRewriter::Rewrite(ExpressionListRef &ref) {
 
 CatalogPushdownResult StatementRewriter::Rewrite(SubqueryRef &ref) {
 	auto result = Rewrite(*ref.subquery->node);
+	// If the subquery references outer local tables (e.g., a lateral join), block pushdown
+	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+	    HasLocalTableReference(*ref.subquery->node)) {
+		result = {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr, {}};
+	}
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG && !ref.alias.empty()) {
 		local_table_names.insert(ref.alias);
 	}
