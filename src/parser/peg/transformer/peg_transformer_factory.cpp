@@ -513,6 +513,7 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformSubstringArguments);
 	REGISTER_TRANSFORM(TransformSubstringExpressionList);
 	REGISTER_TRANSFORM(TransformSubstringParameters);
+	REGISTER_TRANSFORM(TransformSubstringSimilar);
 	REGISTER_TRANSFORM(TransformTrimExpression);
 	REGISTER_TRANSFORM(TransformTrimDirection);
 	REGISTER_TRANSFORM(TransformTrimSource);
@@ -841,6 +842,7 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("MinusPrefixOperator", "-");
 	RegisterEnum<string>("PlusPrefixOperator", "+");
 	RegisterEnum<string>("TildePrefixOperator", "~");
+	RegisterEnum<string>("DoubleNotPrefixOperator", "!!");
 
 	RegisterEnum<ShowType>("SummarizeRule", ShowType::SUMMARY);
 	RegisterEnum<ShowType>("ShowRule", ShowType::DESCRIBE);
@@ -878,7 +880,14 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("LikeToken", "~~");
 	RegisterEnum<string>("ILikeToken", "~~*");
 	RegisterEnum<string>("GlobToken", "~~~");
-	RegisterEnum<string>("SimilarToToken", "regexp_full_match");
+	// PG compat: SIMILAR TO uses SQL wildcards (%, _) that get rewritten to a
+	// real regex via similar_to_escape in TransformLikeClause. The `~` operator
+	// stays a raw regex match. `~*` / `!~*` are case-insensitive variants:
+	// TransformLikeClause appends an "i" flag arg for them.
+	RegisterEnum<string>("SimilarToToken", "regexp_full_match_similar");
+	RegisterEnum<string>("RegexMatchToken", "regexp_full_match");
+	RegisterEnum<string>("IRegexMatchToken", "regexp_full_match_i");
+	RegisterEnum<string>("NotIRegexMatchOp", "!~*");
 	RegisterEnum<string>("NotILikeOp", "!~~*");
 	RegisterEnum<string>("NotLikeOp", "!~~");
 	RegisterEnum<string>("NotSimilarToOp", "!~");

@@ -163,20 +163,24 @@ BetweenInLikeOp <- 'NOT'? (BetweenClause / InClause / LikeClause)
 LikeClause <- LikeVariations OtherOperatorExpression EscapeClause?
 EscapeClause <- 'ESCAPE' ComparisonExpression
 
-LikeVariations <- SimilarToToken / ILikeToken / LikeToken / GlobToken / NotILikeOp / NotLikeOp / NotSimilarToOp
-LikeToken      <- 'LIKE' / '~~'
-ILikeToken     <- 'ILIKE' / '~~*'
-GlobToken      <- 'GLOB' / '~~~'
-SimilarToToken <- ('SIMILAR' 'TO') / '~'
-NotILikeOp     <- '!~~*'
-NotLikeOp      <- '!~~'
-NotSimilarToOp <- '!~'
+LikeVariations <- SimilarToToken / IRegexMatchToken / NotIRegexMatchOp / RegexMatchToken / ILikeToken / LikeToken / GlobToken / NotILikeOp / NotLikeOp / NotSimilarToOp
+LikeToken          <- 'LIKE' / '~~'
+ILikeToken         <- 'ILIKE' / '~~*'
+GlobToken          <- 'GLOB' / '~~~'
+SimilarToToken     <- 'SIMILAR' 'TO'
+RegexMatchToken    <- '~'
+IRegexMatchToken   <- '~*'
+NotILikeOp         <- '!~~*'
+NotLikeOp          <- '!~~'
+NotSimilarToOp     <- '!~'
+NotIRegexMatchOp   <- '!~*'
 
 InClause <- 'IN' InExpression
 InExpression <- InExpressionList / InSelectStatement / OtherOperatorExpression
 InExpressionList <- Parens(List(Expression))
 InSelectStatement <- Parens(SelectStatementInternal)
-BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
+BetweenClause <- 'BETWEEN' BetweenSymmetry? OtherOperatorExpression 'AND' OtherOperatorExpression
+BetweenSymmetry <- 'SYMMETRIC' / 'ASYMMETRIC'
 # LEVEL 8
 OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
 OtherOperator <-
@@ -187,7 +191,7 @@ AnyOrAll <- SubqueryAny / SubqueryAll
 SubqueryAny <- 'ANY'
 SubqueryAll <- 'ALL'
 InetOperator <- '>>=' / '<<='
-JsonOperator <- '->>'
+JsonOperator <- '->>' / '#>>' / '#>'
 ListOperator <- '&&' / '@>' / '<@'
 StringOperator <- '^@' / '||'
 QualifiedOperator <- 'OPERATOR' Parens(AnyOp)
@@ -212,10 +216,11 @@ AtTimeZoneExpression <- PrefixExpression (AtTimeZoneOperator PrefixExpression)*
 AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
 # LEVEL 15
 PrefixExpression <- PrefixOperator* BaseExpression
-PrefixOperator <- QualifiedOperator / MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
+PrefixOperator <- QualifiedOperator / MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator / DoubleNotPrefixOperator
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'
+DoubleNotPrefixOperator <- '!!'
 # LEVEL 16 (Highest)
 BaseExpression <- SingleExpression Indirection*
 
@@ -241,9 +246,10 @@ NullIfExpression <- 'NULLIF' Parens(Expression ',' Expression)
 PositionExpression <- 'POSITION' Parens(SingleExpression 'IN' SingleExpression)
 RowExpression <- 'ROW' Parens(List(Expression)?)
 SubstringExpression <- 'SUBSTRING' Parens(SubstringArguments)
-SubstringArguments <- SubstringParameters / SubstringExpressionList
+SubstringArguments <- SubstringSimilar / SubstringParameters / SubstringExpressionList
 SubstringExpressionList <- List(Expression)
-SubstringParameters <- Expression FromExpression ForExpression
+SubstringParameters <- Expression FromExpression ForExpression?
+SubstringSimilar <- Expression 'SIMILAR' Expression 'ESCAPE' Expression
 TrimExpression <- 'TRIM' Parens(TrimDirection? TrimSource? List(Expression))
 TrimDirection <- TrimBoth / TrimLeading / TrimTrailing
 TrimBoth <- 'BOTH'
