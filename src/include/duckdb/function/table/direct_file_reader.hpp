@@ -27,6 +27,8 @@ public:
 	                 LocalTableFunctionState &local_state, DataChunk &chunk) override;
 	void FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) override;
 
+	void AddVirtualColumn(column_t virtual_column_id) override;
+
 	string GetReaderType() const override {
 		return "File";
 	};

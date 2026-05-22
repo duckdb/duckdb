@@ -88,6 +88,13 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 		if (proj_idx == COLUMN_IDENTIFIER_ROW_ID) {
 			continue;
 		}
+		if (proj_idx == MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER) {
+			FlatVector::GetDataMutable<int64_t>(output.data[col_idx])[out_idx] = 0;
+			continue;
+		}
+		if (IsVirtualColumn(proj_idx)) {
+			continue;
+		}
 		try {
 			switch (proj_idx) {
 			case ReadFileBindData::FILE_NAME_COLUMN: {
@@ -184,6 +191,13 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 
 void DirectFileReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate) {
 	return;
+}
+
+void DirectFileReader::AddVirtualColumn(column_t virtual_column_id) {
+	if (virtual_column_id != MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER) {
+		throw InternalException("read_text/read_blob only supports file_row_number as a virtual column (got id %llu)",
+		                        static_cast<uint64_t>(virtual_column_id));
+	}
 }
 
 } // namespace duckdb
