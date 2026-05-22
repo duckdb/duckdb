@@ -1,6 +1,6 @@
-# name: test/tmp3.test
-# description: stable-rowid vacuum merging dense live row groups
-# group: [test]
+# name: test/sql/storage/rowid_gaps/indexed_dense_vacuum_merge.test
+# description: stable-rowid vacuum merges dense live row groups
+# group: [rowid_gaps]
 
 # Even when indexes require stable rowids, vacuum can still merge row groups
 # that already form a dense live rowid interval. No rowids are remapped because

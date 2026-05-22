@@ -1,6 +1,6 @@
-# name: test/tmp2.test
-# description: checkpoint vacuum preserving indexed rowid gaps
-# group: [test]
+# name: test/sql/storage/rowid_gaps/indexed_checkpoint_drop_row_group.test
+# description: checkpoint vacuum preserves indexed rowid gaps
+# group: [rowid_gaps]
 
 # With indexes, checkpoint/vacuum may drop a fully deleted row group, but it
 # must not merge live row groups across the gap because that would remap the

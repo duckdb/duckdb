@@ -1431,9 +1431,19 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		auto &row_group = entry.GetNode();
 		auto row_group_count = row_group.GetCommittedRowCount();
 		if (row_group_count == 0) {
+
+			if (!checkpoint_state.writer.CanLeaveGapsInRowIds()) {
+				// Older storage versions cannot represent rowid gaps, so dropping the row group requires rewriting
+				// rowids to be contiguous.
+				if (!state.can_change_row_ids) {
+					// If we are not allowed to change rowids, then we skip vacuuming for this row group.
+					state.row_group_counts.emplace_back();
+					continue;
+				}
+				state.row_ids_changed = true;
+			}
 			// empty row group - we can drop it entirely.
-			// Dropping the whole row group does not remap row IDs since we preserve row_starts, i.e we allow for gaps
-			// in the (still ordered) rowid space.
+			// Newer storage versions preserve row starts, leaving a gap in rowid numbering.
 			row_group.CommitDrop();
 			checkpoint_state.DropSegment(entry.GetIndex());
 			state.row_group_counts.push_back(row_group_count);
@@ -1684,6 +1694,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	idx_t new_total_rows = 0;
 	idx_t new_next_row_id = 0;
 	auto base_row_id = row_groups->GetBaseRowId();
+	auto can_leave_gaps = writer.CanLeaveGapsInRowIds();
 	unordered_set<idx_t> columns_with_incomplete_stats;
 	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 		auto entry = checkpoint_state.GetSegment(segment_idx);
@@ -1694,10 +1705,16 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		}
 		auto &existing_row_group = entry->GetNode();
 		auto &row_group_writer = checkpoint_state.writers[segment_idx];
-		auto row_start = entry->GetRowStart();
-		D_ASSERT(row_start >= base_row_id);
+		auto source_row_start = entry->GetRowStart();
+		auto row_start = source_row_start;
+		if (!can_leave_gaps) {
+			// Older storage versions do not serialize next_row_id, so the checkpointed row groups must have
+			// contiguous numbering for rowids.
+			row_start = base_row_id + new_total_rows;
+		}
 		if (!row_group_writer) {
 			// row group was not checkpointed - this can happen if compressing is disabled for in-memory tables
+			D_ASSERT(row_start == source_row_start);
 			new_row_groups->AppendSegment(l, entry->ReferenceNode(), row_start);
 			new_total_rows += existing_row_group.count;
 			new_next_row_id = MaxValue<idx_t>(new_next_row_id, row_start + existing_row_group.count - base_row_id);

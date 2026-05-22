@@ -22,11 +22,12 @@ TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, QueryContext contex
     : table(table_p.Cast<DuckTableEntry>()), context(context.GetClientContext()) {
 	D_ASSERT(table_p.IsDuckTable());
 
-	auto storage_version = StorageCompatibility::FromDatabase(table_p.ParentCatalog().GetAttached());
-	if (storage_version.storage_version < StorageCompatibility::FromString("v1.4.4").storage_version) {
+	auto storage_compatibility = StorageCompatibility::FromDatabase(table_p.ParentCatalog().GetAttached());
+	if (storage_compatibility.storage_version < StorageVersion::V1_4_4) {
 		// older storage versions require legacy start row to be written
 		require_legacy_start_row = true;
 	}
+	can_leave_gaps_in_row_ids = storage_compatibility.storage_version >= StorageVersion::V2_0_0;
 }
 
 TableDataWriter::~TableDataWriter() {
@@ -214,7 +215,11 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteList(
 	    104, "index_storage_infos", index_storage_infos.ordered_infos.size(),
 	    [&](Serializer::List &list, idx_t i) { list.WriteElement(index_storage_infos.ordered_infos[i].get()); });
-	serializer.WriteProperty(105, "next_row_id", next_row_id);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WriteProperty(105, "next_row_id", next_row_id);
+	}
+	// ¬serializer.ShouldSerialize(StorageVersion::V2_0_0) ==> (next_row_id == total_rows)
+	D_ASSERT(serializer.ShouldSerialize(StorageVersion::V2_0_0) || (next_row_id == total_rows));
 }
 
 } // namespace duckdb
