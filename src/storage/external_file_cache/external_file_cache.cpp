@@ -22,11 +22,10 @@ idx_t ExternalFileCache::GetCacheBlockSize(const string &path) const {
 	return Settings::Get<ExternalFileCacheLocalBlockSizeSetting>(db);
 }
 
-void ExternalFileCache::ReindexCachedFileCore(shared_ptr<CachedFile> cached_file_p, idx_t file_size,
-                                              idx_t old_block_size, idx_t new_block_size) {
+void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, shared_ptr<CachedFile> cached_file_ref,
+                                              idx_t file_size, idx_t old_block_size, idx_t new_block_size) {
 	D_ASSERT(old_block_size > 0);
 	D_ASSERT(new_block_size > 0);
-	auto &cached_file = *cached_file_p;
 
 	// Phase 1: Pin all LOADED old blocks, sorted by block index.
 	map<idx_t, pair<BufferHandle, idx_t>> pinned;
@@ -78,7 +77,7 @@ void ExternalFileCache::ReindexCachedFileCore(shared_ptr<CachedFile> cached_file
 			}
 			const idx_t new_size = new_end - new_start;
 
-			auto buf = AllocateCacheBlock(cached_file_p, new_size);
+			auto buf = AllocateCacheBlock(cached_file_ref, new_size);
 
 			// Copy from each contributing old block in the run.
 			const idx_t contrib_first = new_start / old_block_size;
@@ -133,7 +132,7 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(shared
 	if (cached_file.cached_block_size.IsValid() && cached_file.cached_block_size.GetIndex() != current_block_size) {
 		const idx_t old_block_size = cached_file.cached_block_size.GetIndex();
 		if (file_size > 0) {
-			ReindexCachedFileCore(cached_file_p, file_size, old_block_size, current_block_size);
+			ReindexCachedFileCore(cached_file, cached_file_p, file_size, old_block_size, current_block_size);
 		}
 	}
 	cached_file.cached_block_size = current_block_size;
