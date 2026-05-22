@@ -298,8 +298,8 @@ optional_ptr<StandardEntry> TableBinding::GetStandardEntry() {
 }
 
 ErrorData TableBinding::ColumnNotFoundError(const string &column_name) const {
-	auto candidate_message = StringUtil::CandidatesErrorMessage(names, column_name, "Candidate bindings: ");
-	return ErrorData(ExceptionType::BINDER, StringUtil::Format("Table \"%s\" does not have a column named \"%s\"\n%s",
+	auto candidate_message = StringUtil::CandidatesErrorMessage(names, column_name, "Candidate bindings");
+	return ErrorData(ExceptionType::BINDER, StringUtil::Format("Table \"%s\" does not have a column named \"%s\"%s",
 	                                                           alias.GetAlias(), column_name, candidate_message));
 }
 
