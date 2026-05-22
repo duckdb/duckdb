@@ -155,5 +155,43 @@ select count(*) from local_tbl where local_col = (select min(i) - 100 from rpc.t
 ----
 1
 
+# --- Issue 1 & 2: schema-qualified table refs and catalog-qualified column refs ---
+
+# Schema-qualified: rpc.main.t1 is pushed (rpc is identified as remote, main is the schema)
+query II
+explain select * from rpc.main.t1
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from rpc.main.t1
+----
+10
+
+# Catalog-qualified column reference: rpc.t1.i → stripped to t1.i before sending to remote
+query I
+select count(*) from rpc.t1 where rpc.t1.i > 105
+----
+4
+
+# Schema + table column: rpc.main.t1.i → stripped to t1.i
+query I
+select count(*) from rpc.main.t1 where rpc.main.t1.i > 105
+----
+4
+
+# Fully qualified column reference in ORDER BY: rpc.t1.i stripped to t1.i, all pushed
+query II
+explain select rpc.t1.i from rpc.t1 order by rpc.t1.i
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select rpc.t1.i from rpc.t1 order by rpc.t1.i limit 3
+----
+100
+101
+102
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
