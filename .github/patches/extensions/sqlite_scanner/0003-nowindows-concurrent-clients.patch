@@ -2,10 +2,11 @@ diff --git a/test/sql/storage/attach_concurrent_clients.test b/test/sql/storage/
 index 1234567..abcdefg 100644
 --- a/test/sql/storage/attach_concurrent_clients.test
 +++ b/test/sql/storage/attach_concurrent_clients.test
-@@ -3,6 +3,7 @@
+@@ -3,6 +3,8 @@
  # group: [sqlite_storage]
 
  require sqlite_scanner
++
 +require nowindows
 
  statement ok
