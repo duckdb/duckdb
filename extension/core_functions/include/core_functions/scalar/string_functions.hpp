@@ -104,7 +104,7 @@ struct FormatBytesFun {
 	static constexpr const char *Example = "format_bytes(16_000)";
 	static constexpr const char *Categories = "string,numeric";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct FormatreadablesizeFun {
@@ -130,7 +130,7 @@ struct FormatreadabledecimalsizeFun {
 	static constexpr const char *Example = "formatReadableDecimalSize(16_000)";
 	static constexpr const char *Categories = "string,numeric";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct HammingFun {
