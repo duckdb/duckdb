@@ -116,11 +116,15 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	if (inside_try) {
 		throw BinderException("aggregates are not allowed inside the TRY expression");
 	}
-	if (inside_aggregate_filter) {
-		throw BinderException(aggr, "aggregate functions are not allowed in FILTER");
-	}
+	// PG-compat: report "nested" before the FILTER-specific message. The
+	// canonical PG error for `COUNT(x) FILTER (WHERE SUM(y) > 5)` is
+	// "aggregate function calls cannot be nested", not the FILTER-specific
+	// variant DuckDB introduced.
 	if (inside_aggregate) {
 		throw BinderException(aggr, "aggregate function calls cannot be nested");
+	}
+	if (inside_aggregate_filter) {
+		throw BinderException(aggr, "aggregate functions are not allowed in FILTER");
 	}
 	// first bind the child of the aggregate expression (if any)
 	this->bound_aggregate = true;
