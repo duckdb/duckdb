@@ -34,7 +34,6 @@ typedef void (*post_bind_function_t)(PlannerExtensionInput &input, BoundStatemen
 
 typedef unique_ptr<ParsedExpression> (*get_sql_value_function_t)(PlannerExtensionInput &input,
                                                                  const string &column_name);
-typedef string (*get_expression_name_t)(PlannerExtensionInput &input, const ParsedExpression &expr);
 
 class PlannerExtension {
 public:
@@ -46,9 +45,6 @@ public:
 
 	//! Override that allows registering a different callback for SQL value functions
 	get_sql_value_function_t get_sql_value_function = nullptr;
-
-	//! Callback for getting a name of an unnamed expression
-	get_expression_name_t get_expression_name = nullptr;
 
 	//! Additional planner info passed to the functions
 	shared_ptr<PlannerExtensionInfo> planner_info;

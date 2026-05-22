@@ -31,7 +31,6 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
-#include "duckdb/planner/planner_extension.hpp"
 
 namespace duckdb {
 
@@ -426,12 +425,6 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 string Binder::GetExpressionName(const ParsedExpression &expr) {
 	if (!expr.GetAlias().empty()) {
 		return expr.GetAlias();
-	}
-	for (auto &ext : PlannerExtension::Iterate(context)) {
-		if (ext.get_expression_name) {
-			PlannerExtensionInput input {context, *this, ext.planner_info.get()};
-			return ext.get_expression_name(input, expr);
-		}
 	}
 	return expr.GetName();
 }
