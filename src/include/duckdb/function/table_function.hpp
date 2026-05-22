@@ -210,6 +210,12 @@ struct TableFunctionToStringInput {
 	}
 	const TableFunction &table_function;
 	optional_ptr<const FunctionData> bind_data;
+
+	optional_ptr<const vector<ColumnIndex>> projected_column_ids;
+	optional_ptr<const vector<idx_t>> projection_ids;
+	optional_ptr<const vector<string>> projected_names;
+	optional_ptr<const vector<LogicalType>> projected_types;
+	bool projected_filter_prune = false;
 };
 
 struct TableFunctionGetPartitionInput {
