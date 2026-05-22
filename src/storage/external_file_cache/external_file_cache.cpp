@@ -249,7 +249,28 @@ shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFi
 	if (!entry.cached_file) {
 		entry.cached_file = make_shared_ptr<CachedFile>(path);
 	}
+	entry.active_handle_count++;
 	return entry.cached_file;
+}
+
+void ExternalFileCache::ReleaseCachedFileHandle(const shared_ptr<CachedFile> &cached_file) {
+	lock_guard<mutex> guard(lock);
+	D_ASSERT(cached_file);
+	if (!cached_file) {
+		return;
+	}
+	auto entry = cached_files.find(cached_file->path);
+	if (entry == cached_files.end()) {
+		return;
+	}
+	if (entry->second.cached_file.get() != cached_file.get()) {
+		return;
+	}
+	D_ASSERT(entry->second.active_handle_count > 0);
+	if (entry->second.active_handle_count > 0) {
+		entry->second.active_handle_count--;
+	}
+	TryEraseFileLocked(cached_file);
 }
 
 void ExternalFileCache::TryEraseFile(const shared_ptr<CachedFile> &cached_file) {
@@ -264,7 +285,9 @@ void ExternalFileCache::TryEraseFileLocked(const shared_ptr<CachedFile> &cached_
 		return;
 	}
 	auto entry = cached_files.find(cached_file->path);
-	ALWAYS_ASSERT(entry != cached_files.end());
+	if (entry == cached_files.end()) {
+		return;
+	}
 	// DuckDB doesn't invalidate external file cache entries on file write and deletion, which means it's possible that
 	// on old block unload, cache files entries store new cache blocks. so we need to validate whether they represent
 	// the same version of the file.
@@ -272,6 +295,10 @@ void ExternalFileCache::TryEraseFileLocked(const shared_ptr<CachedFile> &cached_
 		return;
 	}
 	if (entry->second.active_handle_count != 0 || entry->second.loaded_block_count != 0) {
+		return;
+	}
+	annotated_lock_guard<annotated_mutex> map_guard(cached_file->map_lock);
+	if (!cached_file->blocks.empty()) {
 		return;
 	}
 	cached_files.erase(entry);

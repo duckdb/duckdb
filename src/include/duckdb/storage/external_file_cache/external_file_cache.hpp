@@ -87,6 +87,8 @@ public:
 	BufferManager &GetBufferManager() const;
 	//! Gets the cached file, or creates it if is not yet present
 	shared_ptr<CachedFile> GetOrCreateCachedFile(const string &path);
+	//! Releases an active handle reference to a cached file.
+	void ReleaseCachedFileHandle(const shared_ptr<CachedFile> &cached_file);
 	//! Try to erase the cached file if it is no longer needed.
 	void TryEraseFile(const shared_ptr<CachedFile> &cached_file);
 

@@ -165,6 +165,7 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
 }
 
 CachingFileHandle::~CachingFileHandle() {
+	external_file_cache.ReleaseCachedFileHandle(cached_file);
 }
 
 FileHandle &CachingFileHandle::GetFileHandle() {
