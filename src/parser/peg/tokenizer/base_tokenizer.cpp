@@ -374,6 +374,15 @@ bool BaseTokenizer::TokenizeInput() {
 			last_pos = i;
 			break;
 		case TokenizeState::NUMERIC:
+			// Hex literal `0x...`/`0X...` and binary `0b...`/`0B...`: after a leading `0`, allow the
+			// prefix character and treat subsequent hex/bin digits as part of the same number token.
+			if (i == last_pos + 1 && sql[last_pos] == '0' && (c == 'x' || c == 'X' || c == 'b' || c == 'B')) {
+				break; // consume the prefix; remaining hex/bin digits handled below
+			}
+			if (i > last_pos + 1 && sql[last_pos] == '0' && (sql[last_pos + 1] == 'x' || sql[last_pos + 1] == 'X') &&
+			    StringUtil::CharacterIsHex(c)) {
+				break;
+			}
 			// Check for "always allowed" numeric characters
 			if (CharacterIsInitialNumber(c)) {
 				break; // Continue tokenizing
@@ -408,8 +417,17 @@ bool BaseTokenizer::TokenizeInput() {
 			// --- End of number ---
 			// The character 'c' is not a valid part of the number.
 			// Stop tokenizing and backtrack as per your original logic.
-			while (!CharacterIsInitialNumber(sql[i - 1])) {
-				i--;
+			// Hex/binary tokens keep all consumed chars; the decimal-number backtrack
+			// would otherwise trim through the hex/bin digits and discard them.
+			{
+				bool is_hex_or_bin = i > last_pos + 1 && sql[last_pos] == '0' &&
+				                     (sql[last_pos + 1] == 'x' || sql[last_pos + 1] == 'X' ||
+				                      sql[last_pos + 1] == 'b' || sql[last_pos + 1] == 'B');
+				if (!is_hex_or_bin) {
+					while (!CharacterIsInitialNumber(sql[i - 1])) {
+						i--;
+					}
+				}
 			}
 			PushToken(last_pos, i, TokenType::NUMBER_LITERAL);
 			state = TokenizeState::STANDARD;

@@ -802,6 +802,26 @@ private:
 		if (token_text.size() == 1 && token_text[0] == '.') {
 			return false;
 		}
+		// Hex literal `0x...`/`0X...`: accept hex digits after the prefix. Binary `0b...`/`0B...` accepts 0/1.
+		if (token_text.size() >= 2 && token_text[0] == '0' &&
+		    (token_text[1] == 'x' || token_text[1] == 'X' || token_text[1] == 'b' || token_text[1] == 'B')) {
+			bool is_hex = token_text[1] == 'x' || token_text[1] == 'X';
+			for (idx_t i = 2; i < token_text.size(); i++) {
+				char ch = token_text[i];
+				if (is_hex) {
+					if (!StringUtil::CharacterIsHex(ch)) {
+						return false;
+					}
+				} else {
+					if (ch != '0' && ch != '1') {
+						return false;
+					}
+				}
+			}
+			state.token_index++;
+			state.UpdateMaxTokenIndex();
+			return true;
+		}
 		bool scientific_notation = false;
 		for (idx_t i = 1; i < token_text.size(); i++) {
 			if (BaseTokenizer::CharacterIsScientific(token_text[i])) {
