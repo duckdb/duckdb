@@ -281,7 +281,7 @@ shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFi
 }
 
 void ExternalFileCache::ReleaseCachedFileHandle(CachedFile &cached_file) {
-	lock_guard<mutex> guard(lock);
+	const lock_guard<mutex> guard(lock);
 	auto entry = cached_files.find(cached_file.path);
 	if (entry == cached_files.end()) {
 		return;
@@ -289,10 +289,8 @@ void ExternalFileCache::ReleaseCachedFileHandle(CachedFile &cached_file) {
 	if (entry->second.cached_file.get() != &cached_file) {
 		return;
 	}
-	D_ASSERT(entry->second.active_handle_count > 0);
-	if (entry->second.active_handle_count > 0) {
-		entry->second.active_handle_count--;
-	}
+	ALWAYS_ASSERT(entry->second.active_handle_count > 0);
+	entry->second.active_handle_count--;
 	TryEraseFileLocked(cached_file);
 }
 
@@ -317,7 +315,7 @@ void ExternalFileCache::ReleaseLoadedBlock(const weak_ptr<CachedFile> &cached_fi
 	if (!locked_file) {
 		return;
 	}
-	lock_guard<mutex> guard(lock);
+	const lock_guard<mutex> guard(lock);
 	auto entry = cached_files.find(locked_file->path);
 	if (entry == cached_files.end()) {
 		return;
@@ -325,10 +323,8 @@ void ExternalFileCache::ReleaseLoadedBlock(const weak_ptr<CachedFile> &cached_fi
 	if (entry->second.cached_file.get() != locked_file.get()) {
 		return;
 	}
-	D_ASSERT(entry->second.loaded_block_count > 0);
-	if (entry->second.loaded_block_count > 0) {
-		entry->second.loaded_block_count--;
-	}
+	ALWAYS_ASSERT(entry->second.loaded_block_count > 0);
+	entry->second.loaded_block_count--;
 	TryEraseFileLocked(*locked_file);
 }
 
