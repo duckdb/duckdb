@@ -87,6 +87,8 @@ enum class AlterTableType : uint8_t {
 	RENAME_FIELD = 16,
 	SET_TABLE_OPTIONS = 17,
 	RESET_TABLE_OPTIONS = 18,
+	DROP_CONSTRAINT = 19,
+	RENAME_CONSTRAINT = 20,
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -453,6 +455,50 @@ public:
 
 private:
 	AddConstraintInfo();
+};
+
+//===--------------------------------------------------------------------===//
+// DropConstraintInfo
+//===--------------------------------------------------------------------===//
+struct DropConstraintInfo : public AlterTableInfo {
+	DropConstraintInfo(AlterEntryData data, string constraint_name, bool if_constraint_not_found, bool cascade);
+	~DropConstraintInfo() override;
+
+	//! The constraint to drop
+	string constraint_name;
+	//! Whether or not an error should be thrown if the constraint does not exist
+	bool if_constraint_not_found;
+	//! Whether or not to cascade
+	bool cascade;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
+
+private:
+	DropConstraintInfo();
+};
+
+//===--------------------------------------------------------------------===//
+// RenameConstraintInfo
+//===--------------------------------------------------------------------===//
+struct RenameConstraintInfo : public AlterTableInfo {
+	RenameConstraintInfo(AlterEntryData data, string old_name, string new_name);
+	~RenameConstraintInfo() override;
+
+	//! Constraint old name
+	string old_name;
+	//! Constraint new name
+	string new_name;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
+
+private:
+	RenameConstraintInfo();
 };
 
 //===--------------------------------------------------------------------===//

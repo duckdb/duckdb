@@ -598,6 +598,70 @@ string AddConstraintInfo::ToString() const {
 }
 
 //===--------------------------------------------------------------------===//
+// DropConstraintInfo
+//===--------------------------------------------------------------------===//
+DropConstraintInfo::DropConstraintInfo() : AlterTableInfo(AlterTableType::DROP_CONSTRAINT) {
+}
+
+DropConstraintInfo::DropConstraintInfo(AlterEntryData data, string constraint_name_p, bool if_constraint_not_found_p,
+                                       bool cascade_p)
+    : AlterTableInfo(AlterTableType::DROP_CONSTRAINT, std::move(data)), constraint_name(std::move(constraint_name_p)),
+      if_constraint_not_found(if_constraint_not_found_p), cascade(cascade_p) {
+}
+
+DropConstraintInfo::~DropConstraintInfo() {
+}
+
+unique_ptr<AlterInfo> DropConstraintInfo::Copy() const {
+	return make_uniq_base<AlterInfo, DropConstraintInfo>(GetAlterEntryData(), constraint_name, if_constraint_not_found,
+	                                                     cascade);
+}
+
+string DropConstraintInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	result += " DROP CONSTRAINT ";
+	if (if_constraint_not_found) {
+		result += "IF EXISTS ";
+	}
+	result += KeywordHelper::WriteOptionallyQuoted(constraint_name);
+	if (cascade) {
+		result += " CASCADE";
+	}
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// RenameConstraintInfo
+//===--------------------------------------------------------------------===//
+RenameConstraintInfo::RenameConstraintInfo() : AlterTableInfo(AlterTableType::RENAME_CONSTRAINT) {
+}
+
+RenameConstraintInfo::RenameConstraintInfo(AlterEntryData data, string old_name_p, string new_name_p)
+    : AlterTableInfo(AlterTableType::RENAME_CONSTRAINT, std::move(data)), old_name(std::move(old_name_p)),
+      new_name(std::move(new_name_p)) {
+}
+
+RenameConstraintInfo::~RenameConstraintInfo() {
+}
+
+unique_ptr<AlterInfo> RenameConstraintInfo::Copy() const {
+	return make_uniq_base<AlterInfo, RenameConstraintInfo>(GetAlterEntryData(), old_name, new_name);
+}
+
+string RenameConstraintInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	result += " RENAME CONSTRAINT ";
+	result += KeywordHelper::WriteOptionallyQuoted(old_name);
+	result += " TO ";
+	result += KeywordHelper::WriteOptionallyQuoted(new_name);
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
 // SetPartitionedByInfo
 //===--------------------------------------------------------------------===//
 SetPartitionedByInfo::SetPartitionedByInfo() : AlterTableInfo(AlterTableType::SET_PARTITIONED_BY) {

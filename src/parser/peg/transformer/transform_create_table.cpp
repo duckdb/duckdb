@@ -278,6 +278,11 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 		                      qualified_name.ToString());
 	}
 	transformer.TransformOptional<LogicalType>(list_pr, 1, type);
+	// ConstraintNameClause? at child 3 -- `CONSTRAINT <name> CHECK (...)` applies
+	// to the following column constraint. We capture the name here and apply it
+	// to the next constraint we build.
+	string pending_constraint_name;
+	transformer.TransformOptional<string>(list_pr, 3, pending_constraint_name);
 	auto &constraints_opt = list_pr.Child<OptionalParseResult>(4);
 	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
 	ColumnConstraint column_constraint;
@@ -328,6 +333,10 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 				type_children.push_back(std::move(cc_entry.expression));
 				type = LogicalType::UNBOUND(make_uniq<TypeExpression>("VARCHAR", std::move(type_children)));
 			} else {
+				if (!pending_constraint_name.empty()) {
+					cc_entry.constraint->constraint_name = pending_constraint_name;
+					pending_constraint_name.clear();
+				}
 				column_constraint.constraints.push_back(std::move(cc_entry.constraint));
 			}
 		}
@@ -393,8 +402,22 @@ ColumnConstraintEntry PEGTransformerFactory::TransformDefaultValue(PEGTransforme
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopLevelConstraint(PEGTransformer &transformer,
                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	// TopLevelConstraint <- ConstraintNameClause? TopLevelConstraintList
+	// Capture the optional `CONSTRAINT <name>` clause so the resulting Constraint
+	// carries the user-supplied name (PG surfaces it in error messages).
+	string constraint_name;
+	transformer.TransformOptional<string>(list_pr, 0, constraint_name);
 	auto result = transformer.Transform<unique_ptr<Constraint>>(list_pr.Child<ListParseResult>(1));
+	if (!constraint_name.empty()) {
+		result->constraint_name = std::move(constraint_name);
+	}
 	return result;
+}
+
+// ConstraintNameClause <- 'CONSTRAINT' Identifier
+string PEGTransformerFactory::TransformConstraintNameClause(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return list_pr.Child<IdentifierParseResult>(1).identifier;
 }
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopLevelConstraintList(PEGTransformer &transformer,
