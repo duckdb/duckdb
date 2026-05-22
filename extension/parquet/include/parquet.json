@@ -109,6 +109,13 @@
         "type": "bool",
         "default": "false",
         "property": "parquet_options.can_have_nan"
+      },
+      {
+        "id": 108,
+        "name": "prefetch_strategy",
+        "type": "ParquetPrefetchStrategyOption",
+        "default": "ParquetPrefetchStrategyOption::AUTO",
+        "property": "parquet_options.prefetch_strategy"
       }
     ],
     "pointer_type": "none"
