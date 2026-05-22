@@ -93,7 +93,7 @@ static scalar_function_t GetScalarBinaryFunction(PhysicalType type) {
 
 template <class T>
 static Value NumericStatsValue(const LogicalType &type, T value) {
-	D_ASSERT(type.IsFloating());
+	D_ASSERT(type.IsNumeric());
 	switch (type.InternalType()) {
 	case PhysicalType::FLOAT:
 		return Value::FLOAT(value);
