@@ -32,6 +32,8 @@ Statement <-
 	UpdateExtensionsStatement /
 	AnalyzeStatement /
 	MergeIntoStatement /
+	ConnectStatement /
+	DisconnectStatement /
 	ExpressionStatement
 
 ExpressionStatement <- List(ExpressionAlias)
@@ -49,6 +51,7 @@ ReservedIdentifier <- Identifier
 ColumnName <- Identifier
 ReservedColumnName <- Identifier
 IndexName <- Identifier
+ReservedIndexName <- Identifier
 SettingName <- Identifier
 PragmaName <- Identifier
 FunctionName <- Identifier
@@ -59,7 +62,6 @@ SequenceName <- Identifier
 TriggerName <- Identifier
 CollationName <- Identifier
 CopyOptionName <- ColLabel
-SecretName <- ColId
 
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''

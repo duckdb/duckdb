@@ -135,7 +135,10 @@ public:
 	void CommitDropTable();
 
 	vector<PartitionStatistics> GetPartitionStats() const;
-	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
+	vector<ColumnSegmentInfo>
+	GetColumnSegmentInfo(const QueryContext &context,
+	                     ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL) const;
+	bool SupportsPerColumnWrites();
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
@@ -175,11 +178,13 @@ public:
 	//! Returns the total amount of segments - use sparingly, as this forces all segments to be loaded
 	idx_t GetSegmentCount();
 
+	//! Get a ptr to the raw segment tree. This can be useful for some extensions to have directly exposed.
+	shared_ptr<RowGroupSegmentTree> GetRowGroups() const;
+
 private:
 	optional_ptr<SegmentNode<RowGroup>> NextUpdateRowGroup(RowGroupSegmentTree &row_groups, row_t *ids, idx_t &pos,
 	                                                       idx_t count) const;
 
-	shared_ptr<RowGroupSegmentTree> GetRowGroups() const;
 	void SetRowGroups(shared_ptr<RowGroupSegmentTree> row_groups);
 
 private:

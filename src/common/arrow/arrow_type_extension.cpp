@@ -542,7 +542,7 @@ struct ArrowGeometry {
 	}
 
 	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
-		Geometry::ToBinary(source, result, count);
+		Geometry::ToBinary(source, result);
 	}
 };
 

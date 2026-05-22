@@ -1,0 +1,17 @@
+# name: test/sql/limit/test_batch_limit_filters.test
+# description: Verify batch limit is used with filters
+# group: [limit]
+
+statement ok
+CREATE TABLE tbl AS SELECT concat('thisisastring', i) s FROM range(1_000_000) t(i)
+
+query I
+FROM tbl WHERE s LIKE '%string999999%' LIMIT 5
+----
+thisisastring999999
+
+# this should use the batch limit
+query II
+EXPLAIN FROM tbl WHERE s LIKE '%string999999%' LIMIT 5
+----
+physical_plan	<!REGEX>:.*STREAMING_LIMIT.*

@@ -147,6 +147,29 @@ unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, 
 // CachingFileHandle
 //===----------------------------------------------------------------------===//
 
+bool CachingFileHandle::StripForceFullDownloadIfPresent() {
+	auto &extended_info_p = path.extended_info;
+	if (!extended_info_p) {
+		return false;
+	}
+
+	auto &extended_info = *extended_info_p;
+	const bool contains_force_full_download = extended_info.options.count("force_full_download");
+	if (!contains_force_full_download) {
+		return false;
+	}
+
+	//! We do have 'force_full_download' - strip it
+	auto new_extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	*new_extended_info = extended_info;
+	new_extended_info->options.erase("force_full_download");
+	if (!new_extended_info->options.count("file_size")) {
+		new_extended_info->options["file_size"] = Value::UBIGINT(GetFileSize());
+	}
+	path.extended_info = new_extended_info;
+	return true;
+}
+
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
                                      const OpenFileInfo &path_p, FileOpenFlags flags_p,
                                      optional_ptr<FileOpener> opener_p, shared_ptr<CachedFile> cached_file_p)
@@ -168,6 +191,10 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
 	}
 	if (needs_open) {
 		GetFileHandle();
+	}
+	auto needs_full_download = StripForceFullDownloadIfPresent();
+	if (needs_full_download) {
+		Read(GetFileSize(), 0);
 	}
 }
 

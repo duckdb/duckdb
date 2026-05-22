@@ -129,7 +129,7 @@ void StandardColumnData::AppendData(ColumnAppendState &state, UnifiedVectorForma
 
 void StandardColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
 	ColumnData::FinalizeAppend(finalize_state, state);
-	validity->FinalizeAppend(finalize_state, state.child_appends[0]);
+	validity->FinalizeAppendLocked(finalize_state, state.child_appends[0]);
 }
 
 void StandardColumnData::RevertAppend(row_t new_count) {
@@ -217,6 +217,11 @@ void StandardColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity
 	}
 	validity_p->SetParent(this);
 	this->validity = std::move(validity_p);
+}
+
+ValidityColumnData &StandardColumnData::GetValidityData() {
+	D_ASSERT(validity);
+	return *validity;
 }
 
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
