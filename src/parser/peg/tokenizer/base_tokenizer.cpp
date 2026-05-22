@@ -24,6 +24,23 @@ bool BaseTokenizer::IsSpecialOperator(idx_t pos, idx_t &op_len) const {
 		if (OperatorEquals(op_start, "->>", 3, op_len)) {
 			return true;
 		}
+		// Serenedb pgvector-compat distance operators: l2_distance, inner_product,
+		// cosine_distance. These have to be lexed as a single token because `-` and
+		// `#` are single-byte operators that otherwise split inside the operator
+		// state.
+		if (OperatorEquals(op_start, "<->", 3, op_len)) {
+			return true;
+		}
+		if (OperatorEquals(op_start, "<=>", 3, op_len)) {
+			return true;
+		}
+		if (OperatorEquals(op_start, "<#>", 3, op_len)) {
+			return true;
+		}
+		// PG JSON path operators (#>>, #>).
+		if (OperatorEquals(op_start, "#>>", 3, op_len)) {
+			return true;
+		}
 	}
 	if (pos + 1 >= sql.size()) {
 		// 2-byte operators are out-of-bounds
@@ -42,6 +59,15 @@ bool BaseTokenizer::IsSpecialOperator(idx_t pos, idx_t &op_len) const {
 		return true;
 	}
 	if (OperatorEquals(op_start, "//", 2, op_len)) {
+		return true;
+	}
+	if (OperatorEquals(op_start, "#>", 2, op_len)) {
+		return true;
+	}
+	// PG-compat: serenedb tsquery phrase composition operator. `#` is a
+	// single-byte operator (so `##` would otherwise tokenize as two `#`
+	// tokens), wire it up as a multi-byte special operator instead.
+	if (OperatorEquals(op_start, "##", 2, op_len)) {
 		return true;
 	}
 	return false;
