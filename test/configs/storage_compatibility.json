@@ -41,12 +41,6 @@
       ]
     },
     {
-      "reason": "Requires v2.0.0 rowid gap storage.",
-      "paths": [
-        "test/sql/storage/rowid_gaps/leading_gap_lookup.test"
-      ]
-    },
-    {
       "reason": "Time (NS) not supported (new type).",
       "paths": [
         "test/fuzzer/duckfuzz/arg_minmax_by_decimal.test",

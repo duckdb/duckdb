@@ -1431,7 +1431,6 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		auto &row_group = entry.GetNode();
 		auto row_group_count = row_group.GetCommittedRowCount();
 		if (row_group_count == 0) {
-
 			if (!checkpoint_state.writer.CanLeaveGapsInRowIds()) {
 				// Older storage versions cannot represent rowid gaps, so dropping the row group requires rewriting
 				// rowids to be contiguous.

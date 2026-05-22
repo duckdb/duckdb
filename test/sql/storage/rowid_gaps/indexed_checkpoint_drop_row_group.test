@@ -7,7 +7,7 @@
 # rowids stored in the index.
 
 statement ok
-ATTACH '{TEST_DIR}/rowid_gap_vacuum_indexed.db' AS rowid_gap_vacuum_idx (ROW_GROUP_SIZE 2048);
+ATTACH '{TEST_DIR}/rowid_gap_vacuum_indexed.db' AS rowid_gap_vacuum_idx (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
 
 statement ok
 CREATE TABLE rowid_gap_vacuum_idx.t AS SELECT i FROM range(6144) tbl(i);
