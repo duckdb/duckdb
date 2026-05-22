@@ -26,11 +26,7 @@ class InsertQueryNode;
 class DeleteQueryNode;
 class UpdateQueryNode;
 
-enum class CatalogReferenceType {
-	NO_CATALOG_REFERENCED,
-	SINGLE_REMOTE_CATALOG,
-	UNKNOWN_CATALOG_REFERENCE
-};
+enum class CatalogReferenceType { NO_CATALOG_REFERENCED, SINGLE_REMOTE_CATALOG, UNKNOWN_CATALOG_REFERENCE };
 
 struct CatalogPushdownResult {
 	CatalogReferenceType reference_type = CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE;
@@ -61,6 +57,7 @@ private:
 	CatalogPushdownResult Rewrite(ParsedExpression &expr);
 
 	void FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result);
+	void FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result);
 	void FinishPushdown(unique_ptr<TableRef> &ref, CatalogPushdownResult result);
 
 	static CatalogPushdownResult Merge(CatalogPushdownResult a, CatalogPushdownResult b);

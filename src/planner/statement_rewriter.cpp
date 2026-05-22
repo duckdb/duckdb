@@ -195,10 +195,18 @@ CatalogPushdownResult StatementRewriter::Rewrite(SelectNode &node) {
 }
 
 CatalogPushdownResult StatementRewriter::Rewrite(InsertQueryNode &node) {
-	if (node.table_ref) {
-		return Rewrite(node.table_ref);
+	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+	// InsertQueryNode stores the target table in catalog/schema/table string fields, not in table_ref
+	// (table_ref is only set for ON CONFLICT cases and is an alias ref)
+	BaseTableRef target_ref;
+	target_ref.catalog_name = node.catalog;
+	target_ref.schema_name = node.schema;
+	target_ref.table_name = node.table;
+	result = Merge(result, Rewrite(target_ref));
+	if (node.select_statement) {
+		result = Merge(result, Rewrite(*node.select_statement->node));
 	}
-	return {};
+	return result;
 }
 
 CatalogPushdownResult StatementRewriter::Rewrite(DeleteQueryNode &node) {
@@ -216,9 +224,63 @@ CatalogPushdownResult StatementRewriter::Rewrite(UpdateQueryNode &node) {
 }
 
 CatalogPushdownResult StatementRewriter::Rewrite(SetOperationNode &node) {
+	// Rewrite each child independently so we can push down individual children if needed
+	vector<CatalogPushdownResult> child_results;
+	child_results.reserve(node.children.size());
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	for (auto &child : node.children) {
-		result = Merge(result, Rewrite(*child));
+		auto child_result = Rewrite(*child);
+		result = Merge(result, child_result);
+		child_results.push_back(child_result);
+	}
+	// Check result modifiers (ORDER BY / LIMIT on the set operation itself)
+	for (auto &modifier : node.modifiers) {
+		switch (modifier->type) {
+		case ResultModifierType::ORDER_MODIFIER: {
+			auto &order_mod = modifier->Cast<OrderModifier>();
+			for (auto &order : order_mod.orders) {
+				result = Merge(result, Rewrite(*order.expression));
+			}
+			break;
+		}
+		case ResultModifierType::LIMIT_MODIFIER: {
+			auto &limit_mod = modifier->Cast<LimitModifier>();
+			if (limit_mod.limit) {
+				result = Merge(result, Rewrite(*limit_mod.limit));
+			}
+			if (limit_mod.offset) {
+				result = Merge(result, Rewrite(*limit_mod.offset));
+			}
+			break;
+		}
+		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+			auto &limit_mod = modifier->Cast<LimitPercentModifier>();
+			if (limit_mod.limit) {
+				result = Merge(result, Rewrite(*limit_mod.limit));
+			}
+			if (limit_mod.offset) {
+				result = Merge(result, Rewrite(*limit_mod.offset));
+			}
+			break;
+		}
+		case ResultModifierType::DISTINCT_MODIFIER: {
+			auto &distinct_mod = modifier->Cast<DistinctModifier>();
+			for (auto &expr : distinct_mod.distinct_on_targets) {
+				result = Merge(result, Rewrite(*expr));
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+	// If the whole set operation resolves to a single remote catalog, propagate upward
+	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		return result;
+	}
+	// Otherwise push down individual children that can be pushed
+	for (idx_t i = 0; i < node.children.size(); i++) {
+		FinishPushdown(node.children[i], child_results[i]);
 	}
 	return result;
 }
@@ -297,7 +359,8 @@ CatalogPushdownResult StatementRewriter::Rewrite(BaseTableRef &ref) {
 	for (auto &local_entry : local_catalogs_in_search_path) {
 		// If the ref specifies a schema, use it; otherwise use the search path schema
 		const auto &schema = schema_name.empty() ? local_entry.schema : schema_name;
-		if (Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_lookup, OnEntryNotFound::RETURN_NULL)) {
+		if (Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_lookup,
+		                      OnEntryNotFound::RETURN_NULL)) {
 			return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 		}
 	}
@@ -320,7 +383,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(ParsedExpression &expr) {
 }
 
 unique_ptr<TableFunctionRef> StatementRewriter::CreateRemoteFunctionRef(CatalogPushdownResult &result,
-                                                                         string remote_sql) {
+                                                                        string remote_sql) {
 	D_ASSERT(result.catalog);
 	vector<unique_ptr<ParsedExpression>> args;
 	args.push_back(make_uniq<ConstantExpression>(Value(result.catalog->GetName())));
@@ -369,8 +432,14 @@ void StatementRewriter::StripCatalogName(QueryNode &node, const string &catalog_
 	}
 	case QueryNodeType::INSERT_QUERY_NODE: {
 		auto &insert = node.Cast<InsertQueryNode>();
-		if (insert.table_ref) {
-			StripCatalogName(*insert.table_ref, catalog_name);
+		// Strip from the target table's catalog/schema fields (these are what ToString() serializes)
+		if (insert.catalog == catalog_name) {
+			insert.catalog = "";
+		} else if (insert.catalog.empty() && insert.schema == catalog_name) {
+			insert.schema = "";
+		}
+		if (insert.select_statement) {
+			StripCatalogName(*insert.select_statement->node, catalog_name);
 		}
 		break;
 	}
@@ -434,11 +503,24 @@ void StatementRewriter::FinishPushdown(unique_ptr<SQLStatement> &statement, Cata
 	statement = std::move(select_stmt);
 }
 
+void StatementRewriter::FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result) {
+	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		return;
+	}
+	StripCatalogName(*node, result.catalog->GetName());
+	string remote_sql = node->ToString();
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = CreateRemoteFunctionRef(result, std::move(remote_sql));
+	node = std::move(select_node);
+}
+
 void StatementRewriter::FinishPushdown(unique_ptr<TableRef> &ref, CatalogPushdownResult result) {
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		return;
 	}
 	string alias = ref->alias;
+	StripCatalogName(*ref, result.catalog->GetName());
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	select_node->from_table = std::move(ref);
