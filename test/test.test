@@ -1,0 +1,98 @@
+# name: test/sql/attach.test
+# description: test rpc extension
+# group: [sql]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+# we can attach with a straight token
+statement ok con2
+attach 'quack:localhost' as rpc (token 'asdf')
+
+# this is pushed down into quack_query
+query II con2
+explain select * from rpc.t1 LIMIT 5;
+----
+physical_plan	<!REGEX>:.*LIMIT.*
+
+# this is pushed down into quack_query
+query II con2
+explain select count(*) from rpc.t1 join rpc.t1 using (i)
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# subquery is pushed down into quack_query
+query II con2
+explain select * from (select i from rpc.t1) subq
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# UNION ALL of two remote tables is pushed down into quack_query
+query II con2
+explain select * from rpc.t1 union all select * from rpc.t1
+----
+physical_plan	<!REGEX>:.*UNION.*
+
+# INSERT INTO remote table from remote source is pushed down
+statement ok con2
+insert into rpc.t1 select * from rpc.t1
+
+query I con2
+select count(*) from rpc.t1
+----
+20
+
+# DELETE from remote table is pushed down
+statement ok con2
+delete from rpc.t1 where i >= 10
+
+query I con2
+select count(*) from rpc.t1
+----
+10
+
+# UPDATE on remote table is pushed down
+statement ok con2
+update rpc.t1 set i = i + 100
+
+query I con2
+select min(i), max(i) from rpc.t1
+----
+100	109
+
+# Mixed: (remote LIMIT) UNION ALL local - LIMIT is part of pushed child, no LIMIT in local plan
+query II con2
+explain (select * from rpc.t1 limit 5) union all select * from t1;
+----
+physical_plan	<!REGEX>:.*LIMIT.*
+
+# Mixed UNION ALL - verify UNION stays in local plan (not fully pushed)
+query II con2
+explain (select * from rpc.t1 limit 5) union all select * from t1;
+----
+physical_plan	<REGEX>:.*UNION.*
+
+# Mixed: remote-local JOIN stays local but remote side is individually pushed
+query II con2
+explain select * from rpc.t1 join t1 using (i);
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# Functional: mixed UNION ALL returns correct row count (5 from remote + 10 from local)
+query I con2
+select count(*) from ((select * from rpc.t1 limit 5) union all select * from t1);
+----
+15
+
+statement ok db1:con1
+call quack_stop('quack:localhost')

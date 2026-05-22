@@ -44,6 +44,11 @@ public:
 	unordered_map<string, CachedLabelData> map;
 };
 
+struct NewDatabaseConnection {
+	unique_ptr<DuckDB> db;
+	unique_ptr<Connection> con;
+};
+
 class SQLLogicTestRunner {
 public:
 	explicit SQLLogicTestRunner(string dbpath);
@@ -56,6 +61,7 @@ public:
 	duckdb::unique_ptr<Connection> con;
 	duckdb::unique_ptr<DBConfig> config;
 	unordered_set<string> extensions;
+	unordered_map<string, duckdb::unique_ptr<DuckDB>> named_db;
 	unordered_map<string, duckdb::unique_ptr<Connection>> named_connection_map;
 	bool output_hash_mode = false;
 	bool output_result_mode = false;
@@ -99,6 +105,8 @@ public:
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 	void SkipTest(const string &reason);
 	static string GetSkipReasonSummary();
+	NewDatabaseConnection CreateDatabase(const string &db_path, bool load_database);
+	unique_ptr<Connection> ConnectToDatabase(DuckDB &db_ref);
 
 private:
 	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);
