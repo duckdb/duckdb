@@ -71,14 +71,14 @@ jobs:
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     outputs:
       git_sha: ${{ steps.resolve_git_sha.outputs.git_sha }}
-      runner_linux_small: ${{ steps.config.outputs.runner_linux_small }}
-      runner_linux_x64: ${{ steps.config.outputs.runner_linux_x64 }}
-      runner_linux_22_x64: ${{ steps.config.outputs.runner_linux_22_x64 }}
-      runner_linux_arm64: ${{ steps.config.outputs.runner_linux_arm64 }}
-      runner_windows_2022_x64: ${{ steps.config.outputs.runner_windows_2022_x64 }}
-      runner_macos_arm64: ${{ steps.config.outputs.runner_macos_arm64 }}
-      runner_macos_14_arm64: ${{ steps.config.outputs.runner_macos_14_arm64 }}
-      runners: ${{ steps.config.outputs.runners }}
+      runner_linux_small: ${{ steps.runners.outputs.runner_linux_small }}
+      runner_linux_x64: ${{ steps.runners.outputs.runner_linux_x64 }}
+      runner_linux_22_x64: ${{ steps.runners.outputs.runner_linux_22_x64 }}
+      runner_linux_arm64: ${{ steps.runners.outputs.runner_linux_arm64 }}
+      runner_windows_2022_x64: ${{ steps.runners.outputs.runner_windows_2022_x64 }}
+      runner_macos_arm64: ${{ steps.runners.outputs.runner_macos_arm64 }}
+      runner_macos_14_arm64: ${{ steps.runners.outputs.runner_macos_14_arm64 }}
+      runners: ${{ steps.runners.outputs.runners }}
       linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
       linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
       static_libs_linux_matrix: ${{ steps.config.outputs.static_libs_linux_matrix }}
@@ -89,11 +89,15 @@ jobs:
       extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
       enabled_jobs: ${{ steps.config.outputs.enabled_jobs }}
       save_cache: ${{ steps.config.outputs.save_cache }}
-      runner_provider: ${{ steps.config.outputs.runner_provider }}
+      runner_provider: ${{ steps.runners.outputs.runner_provider }}
       skip_tests: ${{ steps.config.outputs.skip_tests }}
     env:
       GEN: ninja
     steps:
+      - name: Detect runners
+        id: runners
+        uses: duckdb/duckdb-ci/detect-runners@main
+
       - name: Resolve git sha
         id: resolve_git_sha
         shell: bash
@@ -109,7 +113,7 @@ jobs:
       - name: "Checkout"
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
+          runner_provider: ${{ steps.runners.outputs.runner_provider }}
           fetch_depth: 0
           ref: ${{ steps.resolve_git_sha.outputs.git_sha }}
 
@@ -172,53 +176,8 @@ jobs:
           skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
           echo "skip_tests=$skip_tests" >> "$GITHUB_OUTPUT"
 
-          # Fall back to GitHub-native runners for forks.
-          if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
-            runner_provider=namespace
-            runner_linux_small=namespace-profile-linux-small
-            runner_linux_x64=namespace-profile-linux-x64
-            runner_linux_22_x64=namespace-profile-linux-22-x64
-            runner_linux_arm64=namespace-profile-linux-arm64
-            runner_windows_2022_x64=namespace-profile-windows-x64
-            runner_macos_arm64=namespace-profile-macos-arm64
-            runner_macos_14_arm64=namespace-profile-macos-14-arm64
-          else
-            runner_provider=github
-            runner_linux_small=ubuntu-latest
-            runner_linux_x64=ubuntu-latest
-            runner_linux_22_x64=ubuntu-22.04
-            runner_linux_arm64=ubuntu-24.04-arm
-            runner_windows_2022_x64=windows-2022
-            runner_macos_arm64=macos-14
-            runner_macos_14_arm64=macos-14
-          fi
-
-          {
-            echo "runner_provider=$runner_provider"
-            echo "runner_linux_small=$runner_linux_small"
-            echo "runner_linux_x64=$runner_linux_x64"
-            echo "runner_linux_22_x64=$runner_linux_22_x64"
-            echo "runner_linux_arm64=$runner_linux_arm64"
-            echo "runner_windows_2022_x64=$runner_windows_2022_x64"
-            echo "runner_macos_arm64=$runner_macos_arm64"
-            echo "runner_macos_14_arm64=$runner_macos_14_arm64"
-          } >> "$GITHUB_OUTPUT"
-
-          {
-            echo "runners<<EOF"
-            cat <<EOF
-          {
-            "linux_x64": "$runner_linux_x64",
-            "linux_22_x64": "$runner_linux_22_x64",
-            "linux_arm64": "$runner_linux_arm64",
-            "windows_2022_x64": "$runner_windows_2022_x64",
-            "windows_x64": "$runner_windows_2022_x64",
-            "macos_arm64": "$runner_macos_arm64",
-            "macos_14_arm64": "$runner_macos_14_arm64"
-          }
-          EOF
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          runner_linux_x64="${{ steps.runners.outputs.runner_linux_x64 }}"
+          runner_linux_arm64="${{ steps.runners.outputs.runner_linux_arm64 }}"
 
           linux_cli_matrix=$(
             jq -nc --arg runner "$runner_linux_x64" \
@@ -504,8 +463,6 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
-    env:
-      GEN: ninja
 
     steps:
     - name: "Checkout"
@@ -1147,13 +1104,8 @@ jobs:
       - prepare
       - linux-relassert
     env:
-      GEN: ninja
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-      DISABLE_STRING_INLINE: 1
-      DESTROY_UNPINNED_BLOCKS: 1
-      ALTERNATIVE_VERIFY: 1
-      DISABLE_POINTER_SALT: 1
-      DISABLE_GCC_FUNCTION_SECTIONS: 1
+      CC: clang-20
+      CXX: clang++-20
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
@@ -1171,7 +1123,26 @@ jobs:
           save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
       - name: Build
-        run: python3 scripts/ci/retry.py -- make relassert
+        uses: duckdb/duckdb-ci/build-duckdb@main
+        env:
+          CRASH_ON_ASSERT: 1
+          FORCE_DEBUG: 1
+          FORCE_ASSERT: 1
+          EXPORT_DYNAMIC_SYMBOLS: 1
+          REDUCE_SYMBOLS: 1
+          EXTENSION_STATIC_BUILD: 0
+          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+          DISABLE_STRING_INLINE: 1
+          DESTROY_UNPINNED_BLOCKS: 1
+          ALTERNATIVE_VERIFY: 1
+          DISABLE_POINTER_SALT: 1
+          DISABLE_GCC_FUNCTION_SECTIONS: 1
+        with:
+          build-type: relassert
+          build: python3 scripts/ci/retry.py -- make relassert
+          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          cache-suffix: no_string_inline
+          save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
       - name: Test
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -1264,9 +1235,6 @@ jobs:
     env:
       CC: clang-20
       CXX: clang++-20
-      GEN: ninja
-      BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer-20
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
@@ -1283,8 +1251,18 @@ jobs:
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
-    - name: Build
-      run: THREADSAN=1 make reldebug
+    - name: Build threadsan
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        BUILD_JEMALLOC: 1
+        THREADSAN: 1
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+      with:
+        build-type: reldebug
+        build: python3 scripts/ci/retry.py -- make reldebug
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        cache-suffix: threadsan
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Test
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
