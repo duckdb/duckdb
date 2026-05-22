@@ -582,8 +582,9 @@ idx_t GeoColumnData::GetMaxEntry() {
 }
 
 void GeoColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                         vector<ColumnSegmentInfo> &result) {
-	return base_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+                                         vector<ColumnSegmentInfo> &result,
+                                         const ColumnSegmentInfoScanOptions &options) {
+	return base_column->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 }
 
 void GeoColumnData::Verify(RowGroup &parent) {
