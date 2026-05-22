@@ -198,6 +198,15 @@ ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)
     : buffer_manager(BufferManager::GetBufferManager(db)), enable(enable_p) {
 }
 
+ExternalFileCache::~ExternalFileCache() {
+	// Move `cached_files` out under the lock and let the local destroy it after we release `lock`.
+	unordered_map<string, CachedFileWithRefCount> cached_files_to_destroy;
+	{
+		const lock_guard<mutex> guard(lock);
+		cached_files_to_destroy = std::move(cached_files);
+	}
+}
+
 bool ExternalFileCache::IsEnabled() const {
 	return enable;
 }
