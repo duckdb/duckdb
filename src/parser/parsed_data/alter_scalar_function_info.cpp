@@ -1,5 +1,6 @@
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 namespace duckdb {
 
@@ -38,6 +39,37 @@ unique_ptr<AlterInfo> AddScalarFunctionOverloadInfo::Copy() const {
 
 string AddScalarFunctionOverloadInfo::ToString() const {
 	throw NotImplementedException("NOT PARSABLE CURRENTLY");
+}
+
+//===--------------------------------------------------------------------===//
+// RenameScalarFunctionInfo
+//===--------------------------------------------------------------------===//
+RenameScalarFunctionInfo::RenameScalarFunctionInfo()
+    : AlterScalarFunctionInfo(AlterScalarFunctionType::RENAME_SCALAR_FUNCTION, AlterEntryData()) {
+}
+
+RenameScalarFunctionInfo::RenameScalarFunctionInfo(AlterEntryData data, string new_name_p)
+    : AlterScalarFunctionInfo(AlterScalarFunctionType::RENAME_SCALAR_FUNCTION, std::move(data)),
+      new_name(std::move(new_name_p)) {
+}
+
+RenameScalarFunctionInfo::~RenameScalarFunctionInfo() {
+}
+
+unique_ptr<AlterInfo> RenameScalarFunctionInfo::Copy() const {
+	return make_uniq_base<AlterInfo, RenameScalarFunctionInfo>(GetAlterEntryData(), new_name);
+}
+
+string RenameScalarFunctionInfo::ToString() const {
+	string result = "ALTER FUNCTION ";
+	if (!schema.empty()) {
+		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+	}
+	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += " RENAME TO ";
+	result += KeywordHelper::WriteOptionallyQuoted(new_name);
+	result += ";";
+	return result;
 }
 
 } // namespace duckdb
