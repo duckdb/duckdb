@@ -16,8 +16,12 @@
 namespace duckdb {
 class Binder;
 class Catalog;
+class ExpressionListRef;
+class JoinRef;
+class SubqueryRef;
 class TableRef;
 class QueryNode;
+class SetOperationNode;
 class InsertQueryNode;
 class DeleteQueryNode;
 class UpdateQueryNode;
@@ -45,10 +49,14 @@ private:
 	void FindRemoteCatalogsInSearchPath();
 	CatalogPushdownResult Rewrite(QueryNode &node);
 	CatalogPushdownResult Rewrite(SelectNode &node);
+	CatalogPushdownResult Rewrite(SetOperationNode &node);
 	CatalogPushdownResult Rewrite(InsertQueryNode &node);
 	CatalogPushdownResult Rewrite(DeleteQueryNode &node);
 	CatalogPushdownResult Rewrite(UpdateQueryNode &node);
 	CatalogPushdownResult Rewrite(unique_ptr<TableRef> &ref);
+	CatalogPushdownResult Rewrite(ExpressionListRef &ref);
+	CatalogPushdownResult Rewrite(JoinRef &ref);
+	CatalogPushdownResult Rewrite(SubqueryRef &ref);
 	CatalogPushdownResult Rewrite(BaseTableRef &ref);
 	CatalogPushdownResult Rewrite(ParsedExpression &expr);
 

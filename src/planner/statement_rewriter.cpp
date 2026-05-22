@@ -14,6 +14,7 @@
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
@@ -22,6 +23,7 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -104,6 +106,8 @@ CatalogPushdownResult StatementRewriter::Rewrite(QueryNode &node) {
 		return Rewrite(node.Cast<DeleteQueryNode>());
 	case QueryNodeType::UPDATE_QUERY_NODE:
 		return Rewrite(node.Cast<UpdateQueryNode>());
+	case QueryNodeType::SET_OPERATION_NODE:
+		return Rewrite(node.Cast<SetOperationNode>());
 	default:
 		return {};
 	}
@@ -211,14 +215,60 @@ CatalogPushdownResult StatementRewriter::Rewrite(UpdateQueryNode &node) {
 	return {};
 }
 
+CatalogPushdownResult StatementRewriter::Rewrite(SetOperationNode &node) {
+	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+	for (auto &child : node.children) {
+		result = Merge(result, Rewrite(*child));
+	}
+	return result;
+}
+
 CatalogPushdownResult StatementRewriter::Rewrite(unique_ptr<TableRef> &ref) {
 	switch (ref->type) {
 	case TableReferenceType::BASE_TABLE:
 		// Propagate the detection result up - BaseTableRef is never pushed down individually
 		return Rewrite(ref->Cast<BaseTableRef>());
+	case TableReferenceType::JOIN:
+		return Rewrite(ref->Cast<JoinRef>());
+	case TableReferenceType::SUBQUERY:
+		return Rewrite(ref->Cast<SubqueryRef>());
+	case TableReferenceType::EXPRESSION_LIST:
+		return Rewrite(ref->Cast<ExpressionListRef>());
+	case TableReferenceType::EMPTY_FROM:
+	case TableReferenceType::COLUMN_DATA:
+		return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	default:
 		return {};
 	}
+}
+
+CatalogPushdownResult StatementRewriter::Rewrite(ExpressionListRef &ref) {
+	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+	for (auto &row : ref.values) {
+		for (auto &expr : row) {
+			result = Merge(result, Rewrite(*expr));
+		}
+	}
+	return result;
+}
+
+CatalogPushdownResult StatementRewriter::Rewrite(SubqueryRef &ref) {
+	return Rewrite(*ref.subquery->node);
+}
+
+CatalogPushdownResult StatementRewriter::Rewrite(JoinRef &ref) {
+	// Rewrite both sides independently, tracking their individual results
+	auto left_result = Rewrite(ref.left);
+	auto right_result = Rewrite(ref.right);
+	auto result = Merge(left_result, right_result);
+	// If both sides resolve to the same remote catalog, propagate upward
+	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		return result;
+	}
+	// Otherwise push down each side individually
+	FinishPushdown(ref.left, left_result);
+	FinishPushdown(ref.right, right_result);
+	return result;
 }
 
 CatalogPushdownResult StatementRewriter::Rewrite(BaseTableRef &ref) {
@@ -286,6 +336,9 @@ void StatementRewriter::StripCatalogName(TableRef &ref, const string &catalog_na
 		auto &base = ref.Cast<BaseTableRef>();
 		if (base.catalog_name == catalog_name) {
 			base.catalog_name = "";
+		} else if (base.catalog_name.empty() && base.schema_name == catalog_name) {
+			// 2-part name (schema.table) where the schema is actually the catalog being pushed to
+			base.schema_name = "";
 		}
 		break;
 	}
@@ -332,6 +385,13 @@ void StatementRewriter::StripCatalogName(QueryNode &node, const string &catalog_
 		auto &upd = node.Cast<UpdateQueryNode>();
 		if (upd.table) {
 			StripCatalogName(*upd.table, catalog_name);
+		}
+		break;
+	}
+	case QueryNodeType::SET_OPERATION_NODE: {
+		auto &setop = node.Cast<SetOperationNode>();
+		for (auto &child : setop.children) {
+			StripCatalogName(*child, catalog_name);
 		}
 		break;
 	}
