@@ -859,6 +859,161 @@ struct MultiplyPropagateStatistics {
 	}
 };
 
+struct DecimalDivBindData : public FunctionData {
+	// Exponent for the scale factor applied to the numerator before dividing:
+	//   result_int = (a_int * 10^scale_exp) / b_int
+	// where scale_exp = s2 + result_scale - s1
+	uint8_t scale_exp;
+
+	explicit DecimalDivBindData(uint8_t scale_exp) : scale_exp(scale_exp) {
+	}
+
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<DecimalDivBindData>(scale_exp);
+	}
+
+	bool Equals(const FunctionData &other) const override {
+		return scale_exp == other.Cast<DecimalDivBindData>().scale_exp;
+	}
+};
+
+template <class INPUT_TYPE, class RESULT_TYPE>
+static void DecimalDivExecute(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &bind_data = func_expr.bind_info->Cast<DecimalDivBindData>();
+
+	hugeint_t scale_factor = Hugeint::POWERS_OF_TEN[bind_data.scale_exp];
+
+	BinaryExecutor::Execute<INPUT_TYPE, INPUT_TYPE, RESULT_TYPE>(
+	    args.data[0], args.data[1], result, args.size(), [&](INPUT_TYPE a, INPUT_TYPE b) -> RESULT_TYPE {
+		    if (b == INPUT_TYPE(0)) {
+			    throw InvalidInputException("decimal_div: division by zero");
+		    }
+
+		    hugeint_t numerator = hugeint_t(a) * scale_factor;
+		    hugeint_t divisor = hugeint_t(b);
+
+		    // Work with absolute values so the rounding logic is sign-agnostic.
+		    bool negative = (numerator.upper < 0) != (divisor.upper < 0);
+		    hugeint_t abs_num = numerator.upper < 0 ? -numerator : numerator;
+		    hugeint_t abs_div = divisor.upper < 0 ? -divisor : divisor;
+
+		    hugeint_t q, r;
+		    if (abs_div.upper == 0) {
+			    uint64_t r64;
+			    q = Hugeint::DivModPositive(abs_num, abs_div.lower, r64);
+			    r.upper = 0;
+			    r.lower = r64;
+		    } else {
+			    q = Hugeint::DivMod(abs_num, abs_div, r);
+		    }
+
+		    hugeint_t dist = abs_div - r;
+		    hugeint_t final_val = negative ? -q : q;
+		    RESULT_TYPE out;
+		    if (!Hugeint::TryCast(final_val, out)) {
+			    throw OutOfRangeException("decimal_div: result out of range for result type");
+		    }
+		    return out;
+	    });
+}
+
+template <class INPUT_TYPE>
+static scalar_function_t GetDecimalDivExecuteFunction(PhysicalType result_physical) {
+	switch (result_physical) {
+	case PhysicalType::INT16:
+		return DecimalDivExecute<INPUT_TYPE, int16_t>;
+	case PhysicalType::INT32:
+		return DecimalDivExecute<INPUT_TYPE, int32_t>;
+	case PhysicalType::INT64:
+		return DecimalDivExecute<INPUT_TYPE, int64_t>;
+	default:
+		return DecimalDivExecute<INPUT_TYPE, hugeint_t>;
+	}
+}
+
+unique_ptr<FunctionData> DecimalDivBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	uint8_t p1, s1, p2, s2;
+	if (!arguments[0]->GetReturnType().GetDecimalProperties(p1, s1) ||
+	    !arguments[1]->GetReturnType().GetDecimalProperties(p2, s2)) {
+		throw InvalidInputException("decimal_div: both arguments must be DECIMAL");
+	}
+
+	uint8_t result_scale = MaxValue<uint8_t>(6, s1 + p2 + 1);
+	uint8_t result_width = p1 - s1 + s2 + result_scale;
+
+	// Cap to the maximum representable decimal width (38). When the
+	// formula yields a width above 38 we reduce the scale by the same
+	// amount so the integer part is preserved, then floor scale at 6.
+	if (result_width > Decimal::MAX_WIDTH_DECIMAL) {
+		uint8_t excess = result_width - Decimal::MAX_WIDTH_DECIMAL;
+
+		// Guard against uint8_t underflow: excess can be larger than
+		// result_scale (e.g. p1=38,s1=0,s2=5 gives excess=26, scale=21).
+		// In that case clamp to 0 before applying the minimum-scale floor.
+		if (excess <= result_scale) {
+			result_scale -= excess;
+		} else {
+			result_scale = 0;
+		}
+		result_scale = MaxValue<uint8_t>(6, result_scale);
+		result_width = Decimal::MAX_WIDTH_DECIMAL;
+	}
+
+	// Determine the result physical type from result_width so the result
+	// vector uses the smallest sufficient storage type.
+	PhysicalType result_physical;
+	if (result_width <= Decimal::MAX_WIDTH_INT16) {
+		result_physical = PhysicalType::INT16;
+	} else if (result_width <= Decimal::MAX_WIDTH_INT32) {
+		result_physical = PhysicalType::INT32;
+	} else if (result_width <= Decimal::MAX_WIDTH_INT64) {
+		result_physical = PhysicalType::INT64;
+	} else {
+		result_physical = PhysicalType::INT128;
+	}
+
+	bound_function.SetReturnType(LogicalType::DECIMAL(result_width, result_scale));
+
+	// Normalise both operands to the wider physical type so the execute
+	// function sees consistent physical types.  The max-width value for
+	// each physical tier is used as the representative width; scale is
+	// preserved so no numeric value is lost during the cast.
+	auto lhs_physical = arguments[0]->GetReturnType().InternalType();
+	auto rhs_physical = arguments[1]->GetReturnType().InternalType();
+	auto wider = MaxValue<PhysicalType>(lhs_physical, rhs_physical);
+
+	switch (wider) {
+	case PhysicalType::INT16:
+		bound_function.GetArguments()[0] = LogicalType::DECIMAL(4, s1);
+		bound_function.GetArguments()[1] = LogicalType::DECIMAL(4, s2);
+		bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int16_t>(result_physical));
+		break;
+	case PhysicalType::INT32:
+		bound_function.GetArguments()[0] = LogicalType::DECIMAL(9, s1);
+		bound_function.GetArguments()[1] = LogicalType::DECIMAL(9, s2);
+		bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int32_t>(result_physical));
+		break;
+	case PhysicalType::INT64:
+		bound_function.GetArguments()[0] = LogicalType::DECIMAL(18, s1);
+		bound_function.GetArguments()[1] = LogicalType::DECIMAL(18, s2);
+		bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<int64_t>(result_physical));
+		break;
+	case PhysicalType::INT128:
+		bound_function.GetArguments()[0] = LogicalType::DECIMAL(38, s1);
+		bound_function.GetArguments()[1] = LogicalType::DECIMAL(38, s2);
+		bound_function.SetFunctionCallback(GetDecimalDivExecuteFunction<hugeint_t>(result_physical));
+		break;
+	default:
+		throw InternalException("decimal_div: unexpected physical type");
+	}
+
+	uint8_t scale_exp = s2 + result_scale - s1;
+	return make_uniq<DecimalDivBindData>(scale_exp);
+}
+
 unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
@@ -1116,6 +1271,8 @@ ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	                                     BindBinaryFloatingPoint<DivideOperator>));
 	fp_divide.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
 	                                     BindBinaryFloatingPoint<DivideOperator>));
+	fp_divide.AddFunction(ScalarFunction({LogicalTypeId::DECIMAL, LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL,
+	                                     nullptr, DecimalDivBind));
 	fp_divide.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::DOUBLE}, LogicalType::INTERVAL,
 	                   BinaryScalarFunctionIgnoreZero<interval_t, double, interval_t, DivideOperator>));
