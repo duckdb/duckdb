@@ -132,6 +132,9 @@ public:
 	bool HasFunction() const {
 		return function;
 	}
+	cast_function_t GetFunction() const {
+		return function;
+	}
 	bool IsNopCast() const;
 	void SetFunction(cast_function_t new_function) {
 		function = new_function;
