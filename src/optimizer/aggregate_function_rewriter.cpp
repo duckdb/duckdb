@@ -88,10 +88,12 @@ public:
 		return count_arg;
 	}
 
-	unique_ptr<Expression> CreateProjectionExpression(const LogicalType &, unique_ptr<Expression> aggr_ref,
+	unique_ptr<Expression> CreateProjectionExpression(const LogicalType &return_type, unique_ptr<Expression> aggr_ref,
 	                                                  vector<unique_ptr<Expression>> additional_expressions) override {
-		// SUM(x) / COUNT(x): additional_expressions[0] is the COUNT(x) ref
-		return optimizer.BindScalarFunction("/", std::move(aggr_ref), std::move(additional_expressions[0]));
+		auto cast_sum = BoundCastExpression::AddCastToType(optimizer.context, std::move(aggr_ref), return_type);
+		auto cast_count =
+		    BoundCastExpression::AddCastToType(optimizer.context, std::move(additional_expressions[0]), return_type);
+		return optimizer.BindScalarFunction("/", std::move(cast_sum), std::move(cast_count));
 	}
 };
 
@@ -263,6 +265,7 @@ public:
 private:
 	struct RewriteInfo {
 		idx_t count_idx;
+		LogicalType return_type;
 		vector<unique_ptr<Expression>> additional_expressions;
 	};
 
@@ -325,6 +328,7 @@ private:
 			}
 
 			RewriteInfo rewrite_info;
+			rewrite_info.return_type = expr->GetReturnType();
 			auto count_arg = rule.Rewrite(expr, bindings, rewrite_info.additional_expressions);
 
 			// Add COUNT([x]) to the aggregate list
@@ -379,7 +383,7 @@ private:
 			    aggr.expressions[rewrite_info.count_idx]->GetReturnType(), count_binding);
 
 			rewrite_info.additional_expressions.push_back(std::move(count_ref));
-			auto final_result = rule.CreateProjectionExpression(aggr_type, std::move(aggr_ref),
+			auto final_result = rule.CreateProjectionExpression(rewrite_info.return_type, std::move(aggr_ref),
 			                                                    std::move(rewrite_info.additional_expressions));
 			projection_expressions.push_back(std::move(final_result));
 		}
