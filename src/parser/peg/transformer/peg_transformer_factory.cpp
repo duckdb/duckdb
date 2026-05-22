@@ -157,6 +157,7 @@ void PEGTransformerFactory::RegisterCommon() {
 	REGISTER_TRANSFORM(TransformStringLiteral);
 	REGISTER_TRANSFORM(TransformType);
 	REGISTER_TRANSFORM(TransformArrayBounds);
+	REGISTER_TRANSFORM(TransformArrayKeywordBound);
 	REGISTER_TRANSFORM(TransformSquareBracketsArray);
 	REGISTER_TRANSFORM(TransformTimeType);
 	REGISTER_TRANSFORM(TransformTimeZone);

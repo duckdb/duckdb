@@ -329,6 +329,7 @@ private:
 	static string TransformStringLiteral(PEGTransformer &transformer, ParseResult &parse_result);
 	static LogicalType TransformType(PEGTransformer &transformer, ParseResult &parse_result);
 	static int64_t TransformArrayBounds(PEGTransformer &transformer, ParseResult &parse_result);
+	static int64_t TransformArrayKeywordBound(PEGTransformer &transformer, ParseResult &parse_result);
 	static int64_t TransformSquareBracketsArray(PEGTransformer &transformer, ParseResult &parse_result);
 
 	static unique_ptr<ParsedExpression> TransformTimeType(PEGTransformer &transformer, ParseResult &parse_result);

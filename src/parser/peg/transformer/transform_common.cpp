@@ -81,6 +81,18 @@ int64_t PEGTransformerFactory::TransformArrayBounds(PEGTransformer &transformer,
 	return transformer.Transform<int64_t>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
+int64_t PEGTransformerFactory::TransformArrayKeywordBound(PEGTransformer &transformer, ParseResult &parse_result) {
+	// 'ARRAY' alone is a variable-size list bound (-1). 'ARRAY' followed by '[N]'
+	// is a SINGLE fixed-size array bound of size N (PG-compat: `REAL ARRAY[2]`
+	// is one fixed dimension, not REAL[] dimensioned to 2).
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &opt_brackets = list_pr.Child<OptionalParseResult>(1);
+	if (!opt_brackets.HasResult()) {
+		return -1;
+	}
+	return transformer.Transform<int64_t>(opt_brackets.GetResult());
+}
+
 int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &opt_array_size = list_pr.Child<OptionalParseResult>(1);
