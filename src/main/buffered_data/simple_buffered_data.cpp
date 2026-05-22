@@ -66,7 +66,7 @@ StreamExecutionResult SimpleBufferedData::ExecuteTaskInternal(StreamQueryResult 
 	}
 	UnblockSinks();
 	// Let the executor run until the buffer is no longer empty
-	auto execution_result = cc->ExecuteTaskInternal(context_lock, result);
+	auto execution_result = cc->ExecuteTaskInternal(context_lock, result, {}, false);
 	if (buffered_count >= BufferSize()) {
 		return StreamExecutionResult::CHUNK_READY;
 	}

@@ -687,12 +687,12 @@ bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
 }
 
 PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &lock, BaseQueryResult &result,
-                                                          bool dry_run) {
+                                                          std::function<void()> on_reschedule_arg, bool dry_run) {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(result));
 	bool invalidate_transaction = true;
 	try {
-		auto query_result = active_query->executor->ExecuteTask(dry_run);
+		auto query_result = active_query->executor->ExecuteTask(std::move(on_reschedule_arg), dry_run);
 		if (active_query->progress_bar) {
 			auto is_finished = PendingQueryResult::IsResultReady(query_result);
 			active_query->progress_bar->Update(is_finished);

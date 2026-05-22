@@ -40,7 +40,7 @@ public:
 	//! If this returns NO_TASKS_AVAILABLE, this means currently no meaningful work can be done by the current executor,
 	//!	    but tasks may become available in the future.
 	//! The error message can be obtained by calling GetError() on the PendingQueryResult.
-	DUCKDB_API PendingExecutionResult ExecuteTask();
+	DUCKDB_API PendingExecutionResult ExecuteTask(std::function<void()> on_reschedule_arg = {});
 	DUCKDB_API PendingExecutionResult CheckPulse();
 	//! Halt execution of the thread until a Task is ready to be executed (use with caution)
 	void WaitForTask();
@@ -62,7 +62,7 @@ private:
 private:
 	void CheckExecutableInternal(ClientContextLock &lock);
 
-	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock);
+	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, std::function<void()> on_reschedule_arg);
 	unique_ptr<QueryResult> ExecuteInternal(ClientContextLock &lock);
 	unique_ptr<ClientContextLock> LockContext();
 };

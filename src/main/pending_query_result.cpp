@@ -48,31 +48,32 @@ void PendingQueryResult::WaitForTask() {
 	context->WaitForTask(*lock, *this);
 }
 
-PendingExecutionResult PendingQueryResult::ExecuteTask() {
+PendingExecutionResult PendingQueryResult::ExecuteTask(std::function<void()> on_reschedule_arg) {
 	auto lock = LockContext();
-	return ExecuteTaskInternal(*lock);
+	return ExecuteTaskInternal(*lock, std::move(on_reschedule_arg));
 }
 
 PendingExecutionResult PendingQueryResult::CheckPulse() {
 	auto lock = LockContext();
 	CheckExecutableInternal(*lock);
-	return context->ExecuteTaskInternal(*lock, *this, true);
+	return context->ExecuteTaskInternal(*lock, *this, {}, true);
 }
 
 bool PendingQueryResult::AllowStreamResult() const {
 	return allow_stream_result;
 }
 
-PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock &lock) {
+PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock &lock,
+                                                               std::function<void()> on_reschedule_arg) {
 	CheckExecutableInternal(lock);
-	return context->ExecuteTaskInternal(lock, *this, false);
+	return context->ExecuteTaskInternal(lock, *this, std::move(on_reschedule_arg), false);
 }
 
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
 
 	PendingExecutionResult execution_result;
-	while (!IsResultReady(execution_result = ExecuteTaskInternal(lock))) {
+	while (!IsResultReady(execution_result = ExecuteTaskInternal(lock, {}))) {
 		if (execution_result == PendingExecutionResult::BLOCKED) {
 			CheckExecutableInternal(lock);
 			context->WaitForTask(lock, *this);
