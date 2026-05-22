@@ -908,7 +908,6 @@ static void DecimalDivExecute(DataChunk &args, ExpressionState &state, Vector &r
 			    q = Hugeint::DivMod(abs_num, abs_div, r);
 		    }
 
-		    hugeint_t dist = abs_div - r;
 		    hugeint_t final_val = negative ? -q : q;
 		    RESULT_TYPE out;
 		    if (!Hugeint::TryCast(final_val, out)) {
@@ -936,10 +935,8 @@ unique_ptr<FunctionData> DecimalDivBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	uint8_t p1, s1, p2, s2;
-	if (!arguments[0]->GetReturnType().GetDecimalProperties(p1, s1) ||
-	    !arguments[1]->GetReturnType().GetDecimalProperties(p2, s2)) {
-		throw InvalidInputException("decimal_div: both arguments must be DECIMAL");
-	}
+	arguments[0]->GetReturnType().GetDecimalProperties(p1, s1);
+	arguments[1]->GetReturnType().GetDecimalProperties(p2, s2);
 
 	uint8_t result_scale = MaxValue<uint8_t>(6, s1 + p2 + 1);
 	uint8_t result_width = p1 - s1 + s2 + result_scale;
