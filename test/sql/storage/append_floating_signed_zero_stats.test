@@ -1,0 +1,68 @@
+# name: test/sql/storage/append_floating_signed_zero_stats.test
+# description: Signed-zero canonicalization for floating-point append stats
+# group: [storage]
+
+load {TEST_DIR}/append_floating_signed_zero_stats.db
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+# Floating-point append stats canonicalize -0.0 and +0.0 to +0.0. The
+# CHECKPOINT/restart plus stats() query makes the test observe persisted segment
+# statistics rather than the physical row values.
+statement ok
+CREATE TABLE append_contiguous_negative_zero_float(f FLOAT)
+
+statement ok
+INSERT INTO append_contiguous_negative_zero_float SELECT '-0.0'::FLOAT FROM range(2)
+
+statement ok
+CREATE TABLE append_contiguous_mixed_zero_float(f FLOAT)
+
+statement ok
+INSERT INTO append_contiguous_mixed_zero_float
+SELECT CASE WHEN i = 0 THEN '-0.0'::FLOAT ELSE '0.0'::FLOAT END
+FROM range(2) tbl(i)
+
+statement ok
+CREATE TABLE append_contiguous_negative_zero_double(d DOUBLE)
+
+statement ok
+INSERT INTO append_contiguous_negative_zero_double SELECT '-0.0'::DOUBLE FROM range(2)
+
+statement ok
+CREATE TABLE append_contiguous_mixed_zero_double(d DOUBLE)
+
+statement ok
+INSERT INTO append_contiguous_mixed_zero_double
+SELECT CASE WHEN i = 0 THEN '-0.0'::DOUBLE ELSE '0.0'::DOUBLE END
+FROM range(2) tbl(i)
+
+statement ok
+CHECKPOINT
+
+restart
+
+query TTTT
+SELECT s.min, s.max, signbit(s.min), signbit(s.max)
+FROM (SELECT stats(f) s FROM append_contiguous_negative_zero_float LIMIT 1)
+----
+0.0	0.0	false	false
+
+query TTTT
+SELECT s.min, s.max, signbit(s.min), signbit(s.max)
+FROM (SELECT stats(f) s FROM append_contiguous_mixed_zero_float LIMIT 1)
+----
+0.0	0.0	false	false
+
+query TTTT
+SELECT s.min, s.max, signbit(s.min), signbit(s.max)
+FROM (SELECT stats(d) s FROM append_contiguous_negative_zero_double LIMIT 1)
+----
+0.0	0.0	false	false
+
+query TTTT
+SELECT s.min, s.max, signbit(s.min), signbit(s.max)
+FROM (SELECT stats(d) s FROM append_contiguous_mixed_zero_double LIMIT 1)
+----
+0.0	0.0	false	false
