@@ -278,6 +278,8 @@ public:
 	void RegisterExpression();
 	void RegisterInsert();
 	void RegisterConnect();
+	void RegisterDelete();
+	void RegisterCreateTextSearchDictionary();
 	void RegisterMergeInto();
 	void RegisterPivot();
 	void RegisterSelect();
@@ -327,6 +329,14 @@ private:
 	static bool TransformTruncateIdentityClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformTruncateRestart(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformTruncateContinue(PEGTransformer &transformer, ParseResult &parse_result);
+	// transaction.gram — IsolationLevel is a complex choice that the generator skips.
+	static TransactionIsolationLevel TransformIsolationLevel(PEGTransformer &transformer, ParseResult &parse_result);
+	// create_text_search_dictionary.gram — both rules walk Parens(List(...)) bodies that the
+	// generator cannot auto-extract; hand-write the entry points.
+	static unique_ptr<SQLStatement> TransformCreateTSDictionaryStatement(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformDropTSDictionaryStatement(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
 	// comment.gram
 	static Value TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result);
 

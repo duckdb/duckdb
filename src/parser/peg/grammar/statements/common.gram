@@ -3,6 +3,8 @@ Program <- Statement? (';'+ Statement)* ';'*
 Statement <-
 	CreateDatabaseStatement /
 	DropDatabaseStatement /
+	CreateTSDictionaryStatement /
+	DropTSDictionaryStatement /
 	CreateStatement /
 	SelectStatement /
 	SetStatement /

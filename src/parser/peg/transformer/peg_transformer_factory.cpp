@@ -576,6 +576,24 @@ void PEGTransformerFactory::RegisterConnect() {
 	REGISTER_TRANSFORM(TransformConnectStatement);
 }
 
+void PEGTransformerFactory::RegisterDelete() {
+	// delete.gram — TruncateStatement uses List(TruncateTarget) which the generator
+	// cannot auto-extract; register the manual transformer plus per-keyword helpers.
+	REGISTER_TRANSFORM(TransformTruncateStatement);
+	REGISTER_TRANSFORM(TransformTruncateTarget);
+	REGISTER_TRANSFORM(TransformTruncateOnly);
+	REGISTER_TRANSFORM(TransformTruncateStar);
+	REGISTER_TRANSFORM(TransformTruncateIdentityClause);
+	REGISTER_TRANSFORM(TransformTruncateRestart);
+	REGISTER_TRANSFORM(TransformTruncateContinue);
+}
+
+void PEGTransformerFactory::RegisterCreateTextSearchDictionary() {
+	// create_text_search_dictionary.gram — Parens(List(...)) bodies are not auto-extractable.
+	REGISTER_TRANSFORM(TransformCreateTSDictionaryStatement);
+	REGISTER_TRANSFORM(TransformDropTSDictionaryStatement);
+}
+
 void PEGTransformerFactory::RegisterMergeInto() {
 	// merge_into.gram
 	REGISTER_TRANSFORM(TransformMergeIntoStatement);
@@ -935,6 +953,8 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterExpression();
 	RegisterInsert();
 	RegisterConnect();
+	RegisterDelete();
+	RegisterCreateTextSearchDictionary();
 	RegisterMergeInto();
 	RegisterPivot();
 	RegisterSelect();

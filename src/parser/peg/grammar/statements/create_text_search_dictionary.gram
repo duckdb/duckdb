@@ -1,0 +1,6 @@
+CreateTSDictionaryStatement <- 'CREATE' 'TEXT' 'SEARCH' 'DICTIONARY' IfNotExists? QualifiedName TSDictionaryDefinition
+DropTSDictionaryStatement <- 'DROP' 'TEXT' 'SEARCH' 'DICTIONARY' IfExists? QualifiedName
+
+TSDictionaryDefinition <- Parens(List(TSDictionaryDefElement))
+TSDictionaryDefElement <- ColLabel TSDictionaryDefArg?
+TSDictionaryDefArg <- '=' DefArg

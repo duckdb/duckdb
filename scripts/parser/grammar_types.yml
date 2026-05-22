@@ -44,6 +44,8 @@ SQLStatement:
     - AttachStatement
     - CreateDatabaseStatement
     - DropDatabaseStatement
+    - CreateTSDictionaryStatement
+    - DropTSDictionaryStatement
     - CallStatement
     - CheckpointStatement
     - CommentStatement
