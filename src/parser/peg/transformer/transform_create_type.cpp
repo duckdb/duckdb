@@ -1,3 +1,4 @@
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
@@ -29,6 +30,19 @@ unique_ptr<CreateTypeInfo> PEGTransformerFactory::TransformCreateType(PEGTransfo
 	if (choice_pr.GetResult().name == "EnumSelectType") {
 		result->query = transformer.Transform<unique_ptr<SelectStatement>>(choice_pr.GetResult());
 		result->type = LogicalType::INVALID;
+	} else if (choice_pr.GetResult().name == "ColIdTypeList") {
+		// PG-compat: `CREATE TYPE foo AS (col type, ...)` is shorthand for
+		// `CREATE TYPE foo AS STRUCT(col type, ...)`. PG rejects composite
+		// types with duplicate column names — enforce that here, since
+		// LogicalType::STRUCT happily accepts duplicates.
+		auto cols = transformer.Transform<child_list_t<LogicalType>>(choice_pr.GetResult());
+		case_insensitive_set_t seen;
+		for (auto &col : cols) {
+			if (!seen.insert(col.first).second) {
+				throw ParserException("column \"%s\" specified more than once", col.first);
+			}
+		}
+		result->type = LogicalType::STRUCT(cols);
 	} else {
 		result->type = transformer.Transform<LogicalType>(choice_pr.GetResult());
 	}
