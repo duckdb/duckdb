@@ -155,6 +155,32 @@ select count(*) from local_tbl where local_col = (select min(i) - 100 from rpc.t
 ----
 1
 
+# --- Issue 7: SET_RETURNING_FUNCTION (range, generate_series) is neutral for pushdown ---
+
+# range() is a SET_RETURNING_FUNCTION: neutral, does not block pushdown of adjacent remote refs
+# rpc.t1 has 100-109; range(100,110) = [100..109]; JOIN on i=n → 10 matches
+query II
+explain select count(*) from rpc.t1, range(100, 110) r(n) where i = n
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from rpc.t1, range(100, 110) r(n) where i = n
+----
+10
+
+# generate_series() is also neutral: joined with remote, whole query pushed
+query I
+select count(*) from rpc.t1, generate_series(100, 109) gs(n) where i = n
+----
+10
+
+# range() with local table: local table blocks full pushdown (remote side still individually pushed)
+query II
+explain (select * from rpc.t1 limit 5) union all select * from range(0, 5) r(i);
+----
+physical_plan	<REGEX>:.*UNION.*
+
 # --- Issue 6: Local macros must not be pushed to remote ---
 
 statement ok
