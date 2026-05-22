@@ -21,6 +21,7 @@ DEFAULT_WORKERS = 12
 DEFAULT_BUDGET_SECONDS = 30.0
 DEFAULT_SIGNIFICANCE_PERCENTAGE_POINTS = 0.1
 DEFAULT_TEST_RETRY = 2
+DEFAULT_COVERAGE_RUNS = 3
 RUNTIME_PATTERN = re.compile(r"^(?P<name>.+) took (?P<seconds>\d+(?:\.\d+)?)s$")
 TEST_FILE_SUFFIXES = (".test", ".test_slow", ".test_coverage")
 LLVM_COV_EXPORT_FLAGS = [
@@ -39,6 +40,7 @@ def parse_args():
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument("--coverage-workers", type=int)
     parser.add_argument("--retry", type=int, default=DEFAULT_TEST_RETRY)
+    parser.add_argument("--coverage-runs", type=int, default=DEFAULT_COVERAGE_RUNS)
     parser.add_argument("--budget-seconds", type=float, default=DEFAULT_BUDGET_SECONDS)
     parser.add_argument("--significance-pp", type=float, default=DEFAULT_SIGNIFICANCE_PERCENTAGE_POINTS)
     parser.add_argument("--binary", type=Path, default=DEFAULT_BINARY)
@@ -158,6 +160,39 @@ def run_profiled_tests(binary: Path, test_list: Path, profile_root: Path, retry:
     # the runner still executes many tests in parallel.
     runtimes = normalize_runtimes(parse_runtimes(result.stdout))
     return runtimes, result.stdout
+
+
+def merge_runtime_maps(runtime_maps):
+    if not runtime_maps:
+        return {}
+    common_tests = set(runtime_maps[0].keys())
+    for runtimes in runtime_maps[1:]:
+        common_tests &= set(runtimes.keys())
+    if not common_tests:
+        return {}
+    averaged = {}
+    for test_name in common_tests:
+        averaged[test_name] = sum(runtimes[test_name] for runtimes in runtime_maps) / len(runtime_maps)
+    return averaged
+
+
+def intersect_coverage_runs(coverage_runs):
+    if not coverage_runs:
+        return {}
+    common_tests = set(coverage_runs[0].keys())
+    for coverages in coverage_runs[1:]:
+        common_tests &= set(coverages.keys())
+    intersected = {}
+    for test_name in common_tests:
+        first_info = coverage_runs[0][test_name]
+        covered_atoms = set(first_info["covered_atoms"])
+        for coverages in coverage_runs[1:]:
+            covered_atoms &= coverages[test_name]["covered_atoms"]
+        intersected[test_name] = {
+            "runtime_seconds": first_info["runtime_seconds"],
+            "covered_atoms": covered_atoms,
+        }
+    return intersected
 
 
 def relativize_path(filename: str):
@@ -433,6 +468,7 @@ def write_outputs(
     covered_atom_count,
     runtimes,
     workers: int,
+    coverage_runs: int,
 ):
     output_path.write_text("".join(test + "\n" for test in sorted(ordered_tests)), encoding="utf8")
     summary = {
@@ -441,6 +477,9 @@ def write_outputs(
         "covered_atom_count": covered_atom_count,
         "coverage_fraction": 0.0 if total_atom_count == 0 else covered_atom_count / total_atom_count,
         "estimated_makespan_seconds": estimate_makespan(list(runtimes.values()), workers),
+        "coverage_runs": coverage_runs,
+        "coverage_merge_strategy": "intersection",
+        "runtime_merge_strategy": "average",
         "selected_tests": selected,
     }
     summary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -452,8 +491,11 @@ def main():
     llvm_profdata = ensure_tool("llvm-profdata")
     llvm_cov = ensure_tool("llvm-cov")
     coverage_workers = args.coverage_workers or min(os.cpu_count() or 1, 8)
+    if args.coverage_runs < 1:
+        raise ValueError("--coverage-runs must be >= 1")
     if args.profile_root.exists():
         shutil.rmtree(args.profile_root)
+    args.profile_root.mkdir(parents=True, exist_ok=True)
     build_codecov_binary(args.make_generator)
     if not args.binary.exists():
         raise FileNotFoundError(f"codecov binary not found: {args.binary}")
@@ -463,18 +505,44 @@ def main():
         test_list_path = tmpdir_path / "all_non_hidden_tests.list"
         tests = generate_non_hidden_test_list(args.binary, test_list_path)
         print(f"profiling {len(tests)} non-hidden tests")
-        runtimes, runner_output = run_profiled_tests(
-            args.binary,
-            test_list_path,
-            args.profile_root,
-            args.retry,
-        )
-        missing_runtimes = [test for test in tests if test not in runtimes]
-        if missing_runtimes:
-            raise RuntimeError(f"missing runtime measurements for {len(missing_runtimes)} tests")
         total_atom_count = load_total_atom_count(args.binary, llvm_cov)
-        profile_summaries = load_profile_summaries(args.profile_root, llvm_profdata, runtimes, coverage_workers)
-        coverages = load_test_coverage(args.binary, profile_summaries, llvm_cov, coverage_workers)
+        run_outputs = []
+        runtime_runs = []
+        coverage_runs = []
+        for run_idx in range(args.coverage_runs):
+            run_profile_root = args.profile_root / f"run_{run_idx + 1}"
+            print(f"profiling pass {run_idx + 1}/{args.coverage_runs}")
+            runtimes, runner_output = run_profiled_tests(
+                args.binary,
+                test_list_path,
+                run_profile_root,
+                args.retry,
+            )
+            missing_runtimes = [test for test in tests if test not in runtimes]
+            if missing_runtimes:
+                raise RuntimeError(
+                    f"missing runtime measurements for {len(missing_runtimes)} tests in pass {run_idx + 1}"
+                )
+            profile_summaries = load_profile_summaries(run_profile_root, llvm_profdata, runtimes, coverage_workers)
+            coverages = load_test_coverage(args.binary, profile_summaries, llvm_cov, coverage_workers)
+            missing_coverages = [test for test in tests if test not in coverages]
+            if missing_coverages:
+                raise RuntimeError(
+                    f"missing coverage measurements for {len(missing_coverages)} tests in pass {run_idx + 1}"
+                )
+            run_outputs.append(runner_output)
+            runtime_runs.append(runtimes)
+            coverage_runs.append(coverages)
+        runtimes = merge_runtime_maps(runtime_runs)
+        if len(runtimes) != len(tests):
+            raise RuntimeError(
+                f"inconsistent runtime measurements across passes: expected {len(tests)} tests, got {len(runtimes)}"
+            )
+        coverages = intersect_coverage_runs(coverage_runs)
+        if len(coverages) != len(tests):
+            raise RuntimeError(
+                f"inconsistent coverage measurements across passes: expected {len(tests)} tests, got {len(coverages)}"
+            )
         selected, significance_threshold, covered_atoms = select_tests(
             coverages,
             total_atom_count,
@@ -494,10 +562,12 @@ def main():
             len(covered_atoms),
             selected_runtimes,
             args.workers,
+            args.coverage_runs,
         )
-        print(runner_output, end="")
+        for runner_output in run_outputs:
+            print(runner_output, end="")
         print(f"significance threshold: {significance_threshold} atoms")
-        print(f"used llvm-cov export on {len(coverages)} tests")
+        print(f"used llvm-cov export on {len(coverages)} tests across {args.coverage_runs} passes (intersection)")
         print(
             f"selected {len(ordered_tests)} tests covering "
             f"{len(covered_atoms)}/{total_atom_count} atoms ({coverage_percentage:.2f}%)"
