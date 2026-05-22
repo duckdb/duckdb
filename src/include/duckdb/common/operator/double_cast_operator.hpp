@@ -38,7 +38,8 @@ static bool TryDoubleCast(const char *buf, idx_t len, T &result, bool strict, ch
 		}
 	}
 	auto endptr = buf + len;
-	auto parse_result = duckdb_fast_float::from_chars(buf, buf + len, result, strict, decimal_separator);
+	duckdb_fast_float::parse_options opts(duckdb_fast_float::chars_format::general, decimal_separator);
+	auto parse_result = duckdb_fast_float::from_chars_advanced(buf, endptr, result, opts);
 	if (parse_result.ec != std::errc()) {
 		return false;
 	}
