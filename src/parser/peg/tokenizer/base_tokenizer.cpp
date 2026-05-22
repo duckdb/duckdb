@@ -190,6 +190,8 @@ TokenType BaseTokenizer::TokenizeStateToType(TokenizeState state) {
 		return TokenType::IDENTIFIER;
 	case TokenizeState::STRING_LITERAL:
 		return TokenType::STRING_LITERAL;
+	case TokenizeState::ESCAPED_STRING_LITERAL:
+		return TokenType::STRING_LITERAL;
 	case TokenizeState::KEYWORD:
 		return TokenType::KEYWORD;
 	case TokenizeState::NUMERIC:
@@ -239,6 +241,7 @@ bool BaseTokenizer::IsValidDollarTagCharacter(char c) {
 bool BaseTokenizer::IsUnterminatedState(TokenizeState state) {
 	switch (state) {
 	case TokenizeState::STRING_LITERAL:
+	case TokenizeState::ESCAPED_STRING_LITERAL:
 	case TokenizeState::QUOTED_IDENTIFIER:
 	case TokenizeState::DOLLAR_QUOTED_STRING:
 		return true;
@@ -349,7 +352,14 @@ bool BaseTokenizer::TokenizeInput() {
 			if (CharacterIsSpecialStringCharacter(c)) {
 				// Look ahead to see if a quote follows
 				if (i + 1 < sql.size() && sql[i + 1] == '\'') {
-					state = TokenizeState::STRING_LITERAL;
+					// E'...' / e'...' are PG escape-string literals: `\\`, `\'` etc. are
+					// backslash escapes. Use a separate state so `\'` does not terminate
+					// the string. Other prefixes (N, X, B) keep the standard rules.
+					if (c == 'E' || c == 'e') {
+						state = TokenizeState::ESCAPED_STRING_LITERAL;
+					} else {
+						state = TokenizeState::STRING_LITERAL;
+					}
 					last_pos = i;
 					i++;
 					break;
@@ -453,6 +463,23 @@ bool BaseTokenizer::TokenizeInput() {
 			if (c == '\'') {
 				if (i + 1 < sql.size() && sql[i + 1] == '\'') {
 					// escaped - skip escape
+					i++;
+				} else {
+					PushToken(last_pos, i + 1, TokenType::STRING_LITERAL);
+					last_pos = i + 1;
+					state = TokenizeState::STANDARD;
+				}
+			}
+			break;
+		case TokenizeState::ESCAPED_STRING_LITERAL:
+			// PG E'...' literal: `\<anything>` is an escape that consumes the next char,
+			// `''` is the SQL doubled-quote escape, and a bare `'` terminates the string.
+			if (c == '\\' && i + 1 < sql.size()) {
+				i++;
+				break;
+			}
+			if (c == '\'') {
+				if (i + 1 < sql.size() && sql[i + 1] == '\'') {
 					i++;
 				} else {
 					PushToken(last_pos, i + 1, TokenType::STRING_LITERAL);
