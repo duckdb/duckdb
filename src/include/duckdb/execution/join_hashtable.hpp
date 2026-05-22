@@ -22,6 +22,7 @@
 #include "duckdb/common/row_operations/row_matcher.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
+#include "duckdb/execution/mark_join_post_processor.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 
 namespace duckdb {
@@ -65,13 +66,6 @@ private:
 class JoinHashTable {
 public:
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
-
-	struct MarkJoinNullRemainder {
-		vector<LogicalType> key_types;
-		shared_ptr<TupleDataLayout> layout;
-		unique_ptr<TupleDataCollection> data;
-		TupleDataAppendState append_state;
-	};
 
 	struct ResidualPredicateProbeState {
 		//! Evaluation chunk
@@ -232,6 +226,7 @@ public:
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
 	void ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result);
+	void InitializeCorrelatedMarkJoin(const vector<LogicalType> &correlated_types);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;
 
@@ -370,40 +365,15 @@ public:
 	//! Returns true iff small-build-side dictionary emission should activate
 	bool CanUseDictionaryEmission(const PhysicalHashJoin &op, bool external, idx_t probe_cardinality) const;
 
-	struct {
-		mutex mj_lock;
-		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening
-		//! ANY()/ALL() expressions
-		vector<LogicalType> correlated_types;
-		//! The aggregate expression nodes used by the HT
-		vector<unique_ptr<Expression>> correlated_aggregates;
-		//! The HT that holds the group counts for every correlated column
-		unique_ptr<GroupedAggregateHashTable> correlated_counts;
-		//! Group chunk used for aggregating into correlated_counts
-		DataChunk group_chunk;
-		//! Payload chunk used for aggregating into correlated_counts
-		DataChunk correlated_payload;
-		//! Result chunk used for aggregating into correlated_counts
-		DataChunk result_chunk;
-	} correlated_mark_join_info;
-
-	struct {
-		mutex lock;
-		bool enabled = false;
-		bool has_null_rows = false;
-		bool has_all_null = false;
-		MarkJoinNullRemainder remainder;
-	} mark_join_null_info;
+	MarkJoinPostProcessor mark_join_post_processor;
 
 private:
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                             const SelectionVector *&current_sel);
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
+	bool UsesCorrelatedMarkCounts() const;
 	bool UseMarkJoinNullRemainder() const;
 	bool CanTreatMarkNullAsFalse() const;
-	void RegisterMarkJoinNullRows(DataChunk &keys);
-	void MergeMarkJoinNullRows(JoinHashTable &other);
-	void ProbeMarkJoinNullRows(DataChunk &join_keys, ValidityMask &mask, const bool *found_match);
 
 	bool UseSalt() const;
 

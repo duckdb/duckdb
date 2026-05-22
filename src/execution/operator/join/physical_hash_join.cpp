@@ -430,38 +430,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			// we need these to correctly deal with the cases of either:
 			// - (1) the group being empty [in which case the result is always false, even if the comparison is NULL]
 			// - (2) the group containing a NULL value [in which case FALSE becomes NULL]
-			auto &info = result->correlated_mark_join_info;
-
-			vector<LogicalType> delim_payload_types;
-			vector<BoundAggregateExpression *> correlated_aggregates;
-			unique_ptr<BoundAggregateExpression> aggr;
-
-			// jury-rigging the GroupedAggregateHashTable
-			// we need a count_star and a count to get counts with and without NULLs
-
-			FunctionBinder function_binder(context);
-			aggr = function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr,
-			                                             AggregateType::NON_DISTINCT);
-			correlated_aggregates.push_back(&*aggr);
-			delim_payload_types.push_back(aggr->GetReturnType());
-			info.correlated_aggregates.push_back(std::move(aggr));
-
-			auto count_fun = CountFunctionBase::GetFunction();
-			vector<unique_ptr<Expression>> children;
-			// this is a dummy but we need it to make the hash table understand whats going on
-			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun.GetReturnType(), 0U));
-			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr,
-			                                             AggregateType::NON_DISTINCT);
-			correlated_aggregates.push_back(&*aggr);
-			delim_payload_types.push_back(aggr->GetReturnType());
-			info.correlated_aggregates.push_back(std::move(aggr));
-
-			auto &allocator = BufferAllocator::Get(context);
-			info.correlated_counts = make_uniq<GroupedAggregateHashTable>(context, allocator, delim_types,
-			                                                              delim_payload_types, correlated_aggregates);
-			info.correlated_types = delim_types;
-			info.group_chunk.Initialize(allocator, delim_types);
-			info.result_chunk.Initialize(allocator, delim_payload_types);
+			result->InitializeCorrelatedMarkJoin(delim_types);
 		}
 	}
 	return result;

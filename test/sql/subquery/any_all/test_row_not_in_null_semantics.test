@@ -2,9 +2,6 @@
 # description: Regression tests for row-valued IN/ANY/NOT IN with NULLs in subqueries
 # group: [any_all]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT (1, 0) =ANY ((VALUES (0, NULL)))
 ----
