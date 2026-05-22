@@ -1,0 +1,3 @@
+CreateDatabaseStatement <- 'CREATE' 'DATABASE' IfNotExists? CatalogName
+DropDatabaseStatement <- 'DROP' 'DATABASE' IfExists? CatalogName DropDatabaseForce?
+DropDatabaseForce <- '(' 'FORCE' ')'

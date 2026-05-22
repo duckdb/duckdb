@@ -42,6 +42,8 @@ SQLStatement:
     - AlterStatement
     - AnalyzeStatement
     - AttachStatement
+    - CreateDatabaseStatement
+    - DropDatabaseStatement
     - CallStatement
     - CheckpointStatement
     - CommentStatement
@@ -874,6 +876,7 @@ Bool:
     - DeallocatePrepare
     - CreateRecursive
     - ExplainAnalyze
+    - DropDatabaseForce
 
 
 Int64:

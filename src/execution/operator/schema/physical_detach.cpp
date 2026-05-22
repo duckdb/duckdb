@@ -31,7 +31,11 @@ SourceResultType PhysicalDetach::GetDataInternal(ExecutionContext &context, Data
 		}
 	}
 
-	db_manager.DetachDatabase(context.client, info->name, info->if_not_found);
+	if (info->is_drop) {
+		db_manager.DropDatabase(context.client, info->name, info->if_not_found);
+	} else {
+		db_manager.DetachDatabase(context.client, info->name, info->if_not_found);
+	}
 
 	return SourceResultType::FINISHED;
 }

@@ -265,6 +265,24 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	AttachedDatabase::InvokeCloseIfLastReference(attached_db, context);
 }
 
+void DatabaseManager::DropDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
+	optional_ptr<StorageExtension> ext;
+	bool found_db = false;
+	if (auto db = GetDatabase(context, name)) {
+		found_db = true;
+		ext = db->GetStorageExtension();
+	}
+	if (ext && ext->drop_database) {
+		// Drop from the extension's catalog first, then detach to free the name.
+		ext->drop_database(context, name, if_not_found);
+		DetachInternal(name);
+	} else if (found_db) {
+		throw BinderException("Database \"%s\" does not support DROP DATABASE", name);
+	} else if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+		throw BinderException("database \"%s\" does not exist", name);
+	}
+}
+
 void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
 	auto &db_info = info.Cast<AlterDatabaseInfo>();
 

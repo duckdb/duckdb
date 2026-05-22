@@ -1,6 +1,8 @@
 Program <- Statement? (';'+ Statement)* ';'*
 
 Statement <-
+	CreateDatabaseStatement /
+	DropDatabaseStatement /
 	CreateStatement /
 	SelectStatement /
 	SetStatement /
