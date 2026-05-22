@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/statistics/numeric_stats_traits.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
@@ -48,6 +49,16 @@ struct BaseStatsWriter {
 		}
 	}
 
+	//! Merge validity state into another writer without touching BaseStatistics.
+	void MergeBase(BaseStatsWriter &other) const {
+		if (has_null) {
+			other.SetHasNull();
+		}
+		if (has_valid) {
+			other.SetHasValid();
+		}
+	}
+
 private:
 	bool has_null = false;
 	bool has_valid = false;
@@ -55,14 +66,18 @@ private:
 
 template <class T>
 struct StatsWriter : public BaseStatsWriter {
+	using OPERATIONS = NumericStatsTraits<T>;
+	using INPUT = typename OPERATIONS::INPUT;
+	using KEY = typename OPERATIONS::KEY;
+
 	explicit StatsWriter() {
 		Clear();
 	}
 
 	inline void Clear() {
 		ClearBase();
-		min = NumericLimits<T>::Maximum();
-		max = NumericLimits<T>::Minimum();
+		min = OPERATIONS::MinInitialValue();
+		max = OPERATIONS::MaxInitialValue();
 	}
 
 	void Update(T new_value) {
@@ -71,21 +86,68 @@ struct StatsWriter : public BaseStatsWriter {
 	}
 
 	void UpdateMinMax(T new_value) {
-		min = LessThan::Operation(new_value, min) ? new_value : min;
-		max = GreaterThan::Operation(new_value, max) ? new_value : max;
+		UpdateMinMaxFromInput(OPERATIONS::LoadInput(&new_value));
+	}
+
+	//! Updates only min/max from an already-loaded NumericStatsTraits<T>::INPUT value.
+	//! Callers must mark validity separately with SetHasValid() when at least one input is valid.
+	void UpdateMinMaxFromInput(INPUT input) {
+		UpdateKey(OPERATIONS::EncodeInput(input));
 	}
 
 	void Merge(BaseStatistics &target) const {
+		const auto target_had_valid = target.CanHaveNoNull();
 		MergeBase(target);
 		if (AnyValid()) {
-			target.UpdateNumericStats<T>(min);
-			target.UpdateNumericStats<T>(max);
+			if (!target_had_valid) {
+				NumericStats::SetMin<T>(target, OPERATIONS::Decode(min));
+				NumericStats::SetMax<T>(target, OPERATIONS::Decode(max));
+				return;
+			}
+
+			// StatsWriter merges into initialized segment stats.
+			// Existing valid values mean there are existing numeric bounds.
+			D_ASSERT(NumericStats::HasMin(target));
+			D_ASSERT(NumericStats::HasMax(target));
+
+			auto merged_min = min;
+			auto merged_max = max;
+			const auto target_min = EncodeValue(NumericStats::GetMin<T>(target));
+			const auto target_max = EncodeValue(NumericStats::GetMax<T>(target));
+			merged_min = OPERATIONS::LessThan(target_min, merged_min) ? target_min : merged_min;
+			merged_max = OPERATIONS::GreaterThan(target_max, merged_max) ? target_max : merged_max;
+			NumericStats::SetMin<T>(target, OPERATIONS::Decode(merged_min));
+			NumericStats::SetMax<T>(target, OPERATIONS::Decode(merged_max));
+		}
+	}
+
+	//! Merge numeric min/max state into another writer without decoding the stored keys.
+	void Merge(StatsWriter<T> &target) const {
+		const auto target_had_valid = target.AnyValid();
+		MergeBase(target);
+		if (AnyValid()) {
+			if (!target_had_valid) {
+				target.min = min;
+				target.max = max;
+				return;
+			}
+			target.min = OPERATIONS::LessThan(min, target.min) ? min : target.min;
+			target.max = OPERATIONS::GreaterThan(max, target.max) ? max : target.max;
 		}
 	}
 
 private:
-	T min;
-	T max;
+	static inline KEY EncodeValue(T value) {
+		return OPERATIONS::EncodeInput(OPERATIONS::LoadInput(&value));
+	}
+
+	inline void UpdateKey(KEY key) {
+		min = OPERATIONS::LessThan(key, min) ? key : min;
+		max = OPERATIONS::GreaterThan(key, max) ? key : max;
+	}
+
+	KEY min = OPERATIONS::MinInitialValue();
+	KEY max = OPERATIONS::MaxInitialValue();
 };
 
 template <>
