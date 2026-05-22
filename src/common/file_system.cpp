@@ -64,7 +64,8 @@ constexpr FileOpenFlags FileFlags::FILE_FLAGS_DISABLE_LOGGING;
 constexpr FileOpenFlags FileFlags::FILE_FLAGS_ENABLE_EXTENSION_INSTALL;
 
 void FileOpenFlags::Verify() {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	bool is_read = flags & FileOpenFlags::FILE_FLAGS_READ;
 	bool is_write = flags & FileOpenFlags::FILE_FLAGS_WRITE;
 	bool is_create =

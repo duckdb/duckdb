@@ -246,6 +246,8 @@ unordered_set<TableIndex> ColumnBindingResolver::VerifyInternal(LogicalOperator 
 }
 
 void ColumnBindingResolver::Verify(ClientContext &context, LogicalOperator &op) {
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	if (!Settings::Get<DebugVerifyColumnBindingsSetting>(context)) {
 		return;
 	}
@@ -253,6 +255,7 @@ void ColumnBindingResolver::Verify(ClientContext &context, LogicalOperator &op) 
 	ColumnBindingResolver resolver(true);
 	resolver.VisitOperator(op);
 	VerifyInternal(op);
+#endif
 }
 
 } // namespace duckdb

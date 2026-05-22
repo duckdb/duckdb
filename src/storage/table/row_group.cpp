@@ -1878,7 +1878,8 @@ idx_t RowGroup::Delete(TransactionData transaction, DuckTableEntry &table_entry,
 }
 
 void RowGroup::Verify() {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	for (idx_t c = 0; c < columns.size(); c++) {
 		if (!ColumnIsLoaded(c)) {
 			continue;

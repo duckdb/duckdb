@@ -512,7 +512,8 @@ void Bit::BitwiseNot(const bitstring_t &input, bitstring_t &result) {
 }
 
 void Bit::Verify(const bitstring_t &input) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	// bit strings require all padding bits to be set to 1
 	auto padding = GetBitPadding(input);
 	for (idx_t i = 0; i < padding; i++) {

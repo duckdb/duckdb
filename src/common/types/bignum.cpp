@@ -8,7 +8,8 @@
 namespace duckdb {
 
 void Bignum::Verify(const bignum_t &input) {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	// Size must be >= 4
 	idx_t bignum_bytes = input.data.GetSize();
 	if (bignum_bytes < 4) {

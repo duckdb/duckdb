@@ -285,7 +285,8 @@ bool PhysicalOperator::AllSourcesSupportBatchIndex() const {
 }
 
 void PhysicalOperator::Verify() {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	auto sources = GetSources();
 	D_ASSERT(!sources.empty());
 	for (auto &child : children) {

@@ -196,6 +196,8 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 }
 
 void ColumnLifetimeAnalyzer::Verify(LogicalOperator &op) {
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	if (!Settings::Get<DebugVerificationProjectionSetting>(optimizer.context)) {
 		return;
 	}
@@ -218,6 +220,7 @@ void ColumnLifetimeAnalyzer::Verify(LogicalOperator &op) {
 	default:
 		break;
 	}
+#endif
 }
 
 void ColumnLifetimeAnalyzer::AddVerificationProjection(unique_ptr<LogicalOperator> &child) {

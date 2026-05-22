@@ -99,7 +99,8 @@ void RunContainerScanState::Skip(idx_t to_skip) {
 }
 
 void RunContainerScanState::Verify() const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	uint16_t index = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto run = reinterpret_cast<RunContainerRLEPair *>(data)[i];
@@ -143,7 +144,8 @@ void CompressedRunContainerScanState::LoadNextRun() {
 }
 
 void CompressedRunContainerScanState::Verify() const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	uint16_t index = 0;
 	ContainerSegmentScan verify_segment(segments);
 	for (idx_t i = 0; i < count; i++) {

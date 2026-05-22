@@ -59,7 +59,8 @@ idx_t SelectionVector::SliceInPlace(const SelectionVector &source, idx_t count) 
 }
 
 void SelectionVector::Verify(idx_t count, idx_t vector_size) const {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	D_ASSERT(vector_size >= 1);
 	for (idx_t i = 0; i < count; i++) {
 		auto index = get_index(i);

@@ -783,7 +783,8 @@ void ReservoirSample::AddToReservoir(DataChunk &chunk) {
 }
 
 void ReservoirSample::Verify() {
-#ifdef DEBUG
+#ifdef D_ASSERT_IS_ENABLED
+	DUCKDB_DEBUG_VERIFY_GUARD();
 	if (destroyed) {
 		return;
 	}
