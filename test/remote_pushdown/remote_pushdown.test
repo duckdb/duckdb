@@ -155,6 +155,20 @@ select count(*) from local_tbl where local_col = (select min(i) - 100 from rpc.t
 ----
 1
 
+# --- Issue 5: Lateral join with local outer table must not be pushed to remote ---
+# local_tbl has 0-9, rpc.t1 has 100-109 → WHERE i = local_col never matches → count = 0
+# If incorrectly pushed, remote would fail because it has no local_tbl
+query I
+select count(*) from local_tbl, lateral (select * from rpc.t1 where i = local_col) sub
+----
+0
+
+# Lateral join where inner query is fully remote - outer is also remote, whole query pushed
+query II
+explain select t1a.i from rpc.t1 t1a, lateral (select * from rpc.t1 t1b where t1b.i = t1a.i) sub
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
 # --- Issue 4: DML with subqueries in WHERE, RETURNING, and FROM clauses are analyzed and pushed ---
 
 # DELETE with subquery in WHERE that references the same remote table - all remote, pushed
