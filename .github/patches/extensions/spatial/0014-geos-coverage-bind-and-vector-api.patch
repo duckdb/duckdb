@@ -1,0 +1,15 @@
+diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
+index 7f4ccdd01d..bc2b2e3394 100644
+--- a/src/spatial/modules/geos/geos_module.cpp
++++ b/src/spatial/modules/geos/geos_module.cpp
+@@ -1128,8 +1128,8 @@ struct ST_CoverageUnion {
+ 		UnifiedVectorFormat format;
+ 
+ 		auto &list_vec = args.data[0];
+-		auto &item_vec = ListVector::GetEntry(list_vec);
+-		item_vec.ToUnifiedFormat(ListVector::GetListSize(list_vec), format);
++		auto &item_vec = ListVector::GetChild(list_vec);
++		item_vec.ToUnifiedFormat(format);
+ 
+ 		UnaryExecutor::Execute<list_entry_t, string_t>(list_vec, result, args.size(), [&](const list_entry_t &list) {
+ 			// Reset the collection

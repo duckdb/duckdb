@@ -1385,7 +1385,26 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 	}
 
 	bool MinMaxIsExact(const BaseStatistics &, const StorageIndex &storage_index) override {
-		return true;
+		const idx_t primary_index = storage_index.GetPrimaryIndex();
+		D_ASSERT(metadata.row_groups.size() > row_group_idx);
+		D_ASSERT(root_schema->children.size() > primary_index);
+
+		// Special handle generated columns.
+		const auto &column_schema = root_schema->children[primary_index];
+		if (column_schema.schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
+			return true;
+		}
+
+		const auto &row_group = metadata.row_groups[row_group_idx];
+		const auto &column_chunk = row_group.columns[primary_index];
+
+		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics &&
+		    column_chunk.meta_data.statistics.__isset.is_min_value_exact &&
+		    column_chunk.meta_data.statistics.__isset.is_max_value_exact) {
+			const auto &stats = column_chunk.meta_data.statistics;
+			return stats.is_min_value_exact && stats.is_max_value_exact;
+		}
+		return false;
 	}
 };
 

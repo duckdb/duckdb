@@ -214,8 +214,9 @@ jobs:
               "${extra_args[@]}"; then
               status=1
               echo "::error title=Regression suite failed::$(basename "$benchmark" .csv) in ${{ matrix.name }}"
+            else
+              echo "::endgroup::"
             fi
-            echo "::endgroup::"
           done
 
           exit $status

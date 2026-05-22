@@ -29,7 +29,7 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/main/settings.hpp"
 
-#include "duckdb/common/serialization_compatibility.hpp"
+#include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
@@ -166,6 +166,14 @@ ColumnData &RowGroup::GetColumn(storage_t c) const {
 		return *row_number_column_data;
 	}
 	return *columns[c];
+}
+
+ColumnData &RowGroup::GetRawColumnData(const StorageIndex &c) const {
+	return GetColumn(c);
+}
+
+ColumnData &RowGroup::GetRawColumnData(storage_t c) const {
+	return GetColumn(c);
 }
 
 void RowGroup::LoadColumn(storage_t c) const {
@@ -770,6 +778,8 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			NextVector(state);
 			continue;
 		}
+		state.rows_scanned += count;
+
 		auto &block_manager = GetBlockManager();
 		if (block_manager.Prefetch()) {
 			PrefetchState prefetch_state;
@@ -1731,14 +1741,15 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer, bool 
 	serializer.WriteProperty(101, "tuple_count", pointer.tuple_count);
 	serializer.WriteProperty(102, "data_pointers", pointer.data_pointers);
 	serializer.WriteProperty(103, "delete_pointers", pointer.deletes_pointers);
-	if (serializer.ShouldSerialize(6) && !supports_per_column_writes) {
+	if (serializer.ShouldSerialize(StorageVersion::V1_4_0) && !supports_per_column_writes) {
 		serializer.WriteProperty(104, "has_metadata_blocks", pointer.has_metadata_blocks);
 		serializer.WritePropertyWithDefault(105, "extra_metadata_blocks", pointer.extra_metadata_blocks);
 	}
 	if (supports_per_column_writes) {
-		D_ASSERT(serializer.ShouldSerialize(6));
-		if (!serializer.ShouldSerialize(8)) {
+		D_ASSERT(serializer.ShouldSerialize(StorageVersion::V1_4_0));
+		if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 			// also write legacy metadata blocks for v1.4 and v1.5
+			// TODO; serialiaztion version was 8, which points to v2.0, but comment implies v1.5
 			serializer.WriteProperty(104, "has_metadata_blocks", pointer.has_per_column_metadata_blocks);
 			vector<idx_t> extra_metadata_block_ids;
 			pointer.per_column_metadata_blocks.ForEachBlock(

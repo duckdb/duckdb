@@ -96,6 +96,9 @@ public:
 	static void AppendSelectTagSet(const Value &tag_set);
 	static void AppendSkipTagSet(const Value &tag_set);
 
+	string GetLocalExtensionRepository() const;
+	void SetLocalExtensionRepository(const string &repo);
+
 private:
 	//! Give preference to settings from loaded configs
 	bool test_env_from_config_loaded = false;
@@ -110,6 +113,8 @@ private:
 
 	vector<unordered_set<string>> select_tag_sets;
 	vector<unordered_set<string>> skip_tag_sets;
+
+	string local_extension_repo;
 
 private:
 	template <class T, class VAL_T = T>

@@ -524,8 +524,11 @@ private:
 	static unique_ptr<DropStatement> TransformDropFunction(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropSchema(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName TransformQualifiedSchemaName(PEGTransformer &transformer, ParseResult &parse_result);
+	static QualifiedName TransformCatalogReservedSchema(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropIndex(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName TransformQualifiedIndexName(PEGTransformer &transformer, ParseResult &parse_result);
+	static QualifiedName TransformSchemaReservedIndex(PEGTransformer &transformer, ParseResult &parse_result);
+	static QualifiedName TransformCatalogReservedSchemaIndex(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropSequence(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformCollationName(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropCollation(PEGTransformer &transformer, ParseResult &parse_result);

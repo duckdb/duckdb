@@ -476,7 +476,7 @@ void Vector::Serialize(Serializer &serializer, bool compressed_serialization) {
 	UnifiedVectorFormat vdata;
 
 	// serialize compressed vectors to save space, but skip this if serializing into older versions
-	if (!serializer.ShouldSerialize(5)) {
+	if (!serializer.ShouldSerialize(StorageVersion::V1_3_0)) {
 		compressed_serialization = false;
 	}
 	if (compressed_serialization) {
@@ -557,7 +557,7 @@ void Vector::Serialize(Serializer &serializer, bool compressed_serialization) {
 		auto geoms = UnifiedVectorFormat::GetData<string_t>(vdata);
 
 		// Are we targeting an older serialization version?
-		if (!serializer.ShouldSerialize(7)) {
+		if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 			// Serialize data as old-style SPATIAL format
 			string blob;
 			serializer.WriteList(102, "data", count, [&](Serializer::List &list, idx_t i) {
@@ -582,7 +582,7 @@ void Vector::Serialize(Serializer &serializer, bool compressed_serialization) {
 		case PhysicalType::VARCHAR: {
 			auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
 			// new way to serialize strings, two blobs, first lengths, then string bytes
-			if (serializer.ShouldSerialize(8)) {
+			if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 				// we write all the lengths whether the string is null or not. lets not pull a parquet.
 				auto length_data_length = sizeof(uint32_t) * count;
 				auto length_data = make_unsafe_uniq_array_uninitialized<data_t>(length_data_length);
