@@ -1,0 +1,12 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_nullable_integer_nulls_random_50.benchmark
+# description: Benchmark SQL append while computing INTEGER zonemap statistics with pseudorandom 50 percent NULLs
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats_nullable.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_nullable_integer_nulls_random_50.benchmark
+DESCRIPTION=Benchmark SQL append while computing INTEGER zonemap statistics with pseudorandom 50 percent NULLs
+TYPE_NAME=INTEGER
+TYPE=INTEGER
+VALUE_MODULUS=1000000000
+SHAPE_NAME=random 50 percent nulls
+NULL_EXPR=(hash(i) % 100) < 50

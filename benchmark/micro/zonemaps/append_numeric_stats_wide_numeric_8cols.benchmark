@@ -1,0 +1,51 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_wide_numeric_8cols.benchmark
+# description: Benchmark wide numeric append while computing zonemap statistics
+# group: [zonemaps]
+
+argument rows 50_000_000
+
+name Append Wide Numeric 8 Column Zonemap Stats
+group zonemaps
+subgroup append_numeric_stats
+storage transient
+
+load
+SET threads=1;
+PRAGMA force_compression='uncompressed';
+CREATE TABLE source AS
+	SELECT
+		((i % 1000000000) - 500000000)::INTEGER AS i0,
+		((i % 1000000000) - 250000000)::INTEGER AS i1,
+		((i % 1000000000))::INTEGER AS i2,
+		((i % 1000000000) // 2)::INTEGER AS i3,
+		(((i % 1000000) - 500000)::FLOAT) AS f0,
+		(((i % 1000000) - 250000)::FLOAT) AS f1,
+		((i % 1000000)::FLOAT) AS f2,
+		(((i % 1000000)::FLOAT) / 2.0) AS f3
+	FROM range(${rows}) tbl(i);
+CREATE TABLE target(
+	i0 INTEGER,
+	i1 INTEGER,
+	i2 INTEGER,
+	i3 INTEGER,
+	f0 FLOAT,
+	f1 FLOAT,
+	f2 FLOAT,
+	f3 FLOAT
+);
+
+run
+INSERT INTO target SELECT * FROM source;
+
+cleanup
+DROP TABLE target;
+CREATE TABLE target(
+	i0 INTEGER,
+	i1 INTEGER,
+	i2 INTEGER,
+	i3 INTEGER,
+	f0 FLOAT,
+	f1 FLOAT,
+	f2 FLOAT,
+	f3 FLOAT
+);

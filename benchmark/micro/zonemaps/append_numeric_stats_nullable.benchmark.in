@@ -1,0 +1,27 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [zonemaps]
+#
+# NULL_EXPR is evaluated over the generated row id i. Rows where it is true are NULL.
+
+argument rows 50_000_000
+
+name Append ${TYPE_NAME} Nullable ${SHAPE_NAME} Zonemap Stats
+group zonemaps
+subgroup append_numeric_stats_nullable
+storage transient
+
+load
+SET threads=1;
+PRAGMA force_compression='uncompressed';
+CREATE TABLE source AS
+	SELECT CASE WHEN ${NULL_EXPR} THEN NULL ELSE ((i % ${VALUE_MODULUS})::${TYPE}) END AS value
+	FROM range(${rows}) tbl(i);
+CREATE TABLE target(value ${TYPE});
+
+run
+INSERT INTO target SELECT value FROM source;
+
+cleanup
+DROP TABLE target;
+CREATE TABLE target(value ${TYPE});

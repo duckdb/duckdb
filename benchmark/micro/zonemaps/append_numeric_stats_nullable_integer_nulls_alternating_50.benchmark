@@ -1,0 +1,12 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_nullable_integer_nulls_alternating_50.benchmark
+# description: Benchmark SQL append while computing INTEGER zonemap statistics with alternating NULLs
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats_nullable.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_nullable_integer_nulls_alternating_50.benchmark
+DESCRIPTION=Benchmark SQL append while computing INTEGER zonemap statistics with alternating NULLs
+TYPE_NAME=INTEGER
+TYPE=INTEGER
+VALUE_MODULUS=1000000000
+SHAPE_NAME=alternating 50 percent nulls
+NULL_EXPR=(i % 2) < 1
