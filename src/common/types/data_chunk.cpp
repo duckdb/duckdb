@@ -23,7 +23,7 @@
 
 namespace duckdb {
 
-DataChunk::DataChunk() : count(0) {
+DataChunk::DataChunk() {
 }
 
 DataChunk::~DataChunk() {
@@ -127,12 +127,16 @@ bool DataChunk::AllConstant() const {
 	return true;
 }
 
-void DataChunk::SetCardinality(idx_t count_p) {
-	this->count = count_p;
+void DataChunk::CheckCardinality(idx_t count_p) const {
+	for (auto &v : data) {
+		if (v.size() != count_p) {
+			throw InternalException("DataChunk::CheckCardinality - vector has size %d but expected size %d", v.size(), count_p);
+		}
+	}
 }
 
+
 void DataChunk::SetChildCardinality(idx_t count_p) {
-	this->count = count_p;
 	for (auto &v : data) {
 		FlatVector::SetSize(v, count_p);
 	}
@@ -143,11 +147,9 @@ void DataChunk::Reference(DataChunk &chunk) {
 	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
 		data[i].Reference(chunk.data[i]);
 	}
-	SetCardinality(chunk);
 }
 
 void DataChunk::Move(DataChunk &chunk) {
-	SetCardinality(chunk);
 	data = std::move(chunk.data);
 	vector_caches = std::move(chunk.vector_caches);
 
@@ -192,7 +194,6 @@ void DataChunk::Split(DataChunk &other, idx_t split_idx) {
 		data.pop_back();
 		vector_caches.pop_back();
 	}
-	other.SetCardinality(*this);
 }
 
 void DataChunk::Fuse(DataChunk &other) {
@@ -214,7 +215,6 @@ void DataChunk::ReferenceColumns(DataChunk &other, const vector<column_t> &colum
 		D_ASSERT(other_col.GetType() == this_col.GetType());
 		this_col.Reference(other_col);
 	}
-	SetCardinality(other.size());
 }
 
 void DataChunk::Append(const DataChunk &other, VectorAppendMode append_mode) {
@@ -239,7 +239,6 @@ void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t
 			data[i].Append(other.data[i], other.size(), append_mode);
 		}
 	}
-	SetCardinality(new_size);
 }
 
 void DataChunk::Flatten() {
@@ -311,7 +310,6 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 }
 
 void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
-	this->count = count_p;
 	SelCache merge_cache;
 	for (idx_t c = 0; c < ColumnCount(); c++) {
 		data[c].Slice(sel_vector, count_p, merge_cache);
@@ -325,12 +323,10 @@ void DataChunk::Slice(const DataChunk &other, idx_t offset, idx_t end) {
 	for (idx_t c = 0; c < other.ColumnCount(); c++) {
 		data[c].Slice(other.data[c], offset, end);
 	}
-	SetCardinality(end - offset);
 }
 
 void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
 	D_ASSERT(other.ColumnCount() <= col_offset + ColumnCount());
-	this->count = count_p;
 	SelCache merge_cache;
 	for (idx_t c = 0; c < other.ColumnCount(); c++) {
 		if (other.data[c].GetVectorType() == VectorType::DICTIONARY_VECTOR) {

@@ -53,14 +53,20 @@ public:
 
 public:
 	inline idx_t size() const { // NOLINT
-		return count;
+		return data[0].size();
 	}
 	inline idx_t ColumnCount() const {
 		return data.size();
 	}
-	void SetCardinality(idx_t count_p);
+	//! Verify all
+	void CheckCardinality(idx_t count_p) const;
+	[[deprecated("DataChunk::SetCardinality should no longer be used - use CheckCardinality (verifies all child vectors have the correct size) or SetChildCardinality (set sizes of all child vectors) instead)")]]
+	void SetCardinality(idx_t count_p) {
+		SetChildCardinality(count_p);
+	}
+	[[deprecated("DataChunk::SetCardinality should no longer be used - use CheckCardinality (verifies all child vectors have the correct size) or SetChildCardinality (set sizes of all child vectors) instead)")]]
 	inline void SetCardinality(const DataChunk &other) {
-		SetCardinality(other.size());
+		SetChildCardinality(other.size());
 	}
 	//! Sets the cardinality of all child vectors of this chunk
 	void SetChildCardinality(idx_t count_p);
@@ -169,8 +175,6 @@ public:
 	DUCKDB_API void Verify();
 
 private:
-	//! The amount of tuples stored in the data chunk
-	idx_t count;
 	//! Vector caches, used to store data when ::Initialize is called
 	vector<VectorCache> vector_caches;
 
