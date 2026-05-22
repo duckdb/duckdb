@@ -1,6 +1,7 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
@@ -151,7 +152,7 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 		auto &entry = data.settings[data.offset++];
 
 		name.Append(Value(entry.name));
-		value.Append(entry.value.CastAs(context, LogicalType::VARCHAR));
+		value.Append(Settings::FormatDisplayValue(context, entry.value));
 		description.Append(Value(entry.description));
 		input_type.Append(Value(entry.input_type));
 		scope.Append(Value(entry.scope));

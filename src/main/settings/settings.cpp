@@ -17,4 +17,11 @@ bool Settings::TryGetSettingInternal(const DatabaseInstance &db, idx_t setting_i
 	return TryGetSettingInternal(DBConfig::GetConfig(db), setting_index, result);
 }
 
+Value Settings::FormatDisplayValue(ClientContext &context, const Value &value) {
+	if (!value.IsNull() && value.type().id() == LogicalTypeId::BOOLEAN) {
+		return Value(BooleanValue::Get(value) ? "on" : "off");
+	}
+	return value.CastAs(context, LogicalType::VARCHAR);
+}
+
 } // namespace duckdb
