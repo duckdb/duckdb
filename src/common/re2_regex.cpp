@@ -40,7 +40,7 @@ bool RegexSearchInternal(const char *input_data, size_t input_size, Match &match
 	}
 	for (auto &group : target_groups) {
 		GroupMatch group_match;
-		group_match.text = group.ToString();
+		group_match.text = group;
 		group_match.position = group.data() != nullptr ? duckdb::NumericCast<uint32_t>(group.data() - input_data) : 0;
 		match.groups.emplace_back(group_match);
 	}
