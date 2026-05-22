@@ -9,13 +9,14 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/common/common.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/parser/tokens.hpp"
 
 namespace duckdb {
 class Binder;
 class Catalog;
+class CatalogEntry;
 class ExpressionListRef;
 class JoinRef;
 class SubqueryRef;
@@ -57,6 +58,13 @@ private:
 	CatalogPushdownResult Rewrite(ParsedExpression &expr);
 	void PushdownSubqueries(unique_ptr<ParsedExpression> &expr);
 
+	//! Returns true if expr (or any descendant) contains a qualified column reference to a local table.
+	//! Used to detect correlated subqueries that reference outer local tables.
+	bool HasLocalTableReference(ParsedExpression &expr);
+	bool HasLocalTableReference(QueryNode &node);
+	//! Records a BaseTableRef's name, alias and columns as local for correlated subquery detection
+	void TrackLocalTable(const BaseTableRef &ref, optional_ptr<CatalogEntry> entry = nullptr);
+
 	void FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result);
 	void FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result);
 	void FinishPushdown(unique_ptr<TableRef> &ref, CatalogPushdownResult result);
@@ -73,5 +81,9 @@ private:
 	bool search_path_initialized = false;
 	vector<reference<Catalog>> remote_catalogs_in_search_path;
 	vector<CatalogSearchEntry> local_catalogs_in_search_path;
+	//! Names/aliases of non-remote tables seen in the current FROM scope, used to detect correlated subqueries
+	case_insensitive_set_t local_table_names;
+	//! Column names of all tracked local tables - used to detect unqualified correlated column references
+	case_insensitive_set_t local_table_column_names;
 };
 } // namespace duckdb

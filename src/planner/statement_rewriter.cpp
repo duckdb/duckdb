@@ -26,6 +26,8 @@
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
@@ -329,7 +331,11 @@ CatalogPushdownResult StatementRewriter::Rewrite(ExpressionListRef &ref) {
 }
 
 CatalogPushdownResult StatementRewriter::Rewrite(SubqueryRef &ref) {
-	return Rewrite(*ref.subquery->node);
+	auto result = Rewrite(*ref.subquery->node);
+	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG && !ref.alias.empty()) {
+		local_table_names.insert(ref.alias);
+	}
+	return result;
 }
 
 CatalogPushdownResult StatementRewriter::Rewrite(JoinRef &ref) {
@@ -347,6 +353,18 @@ CatalogPushdownResult StatementRewriter::Rewrite(JoinRef &ref) {
 	return result;
 }
 
+void StatementRewriter::TrackLocalTable(const BaseTableRef &ref, optional_ptr<CatalogEntry> entry) {
+	local_table_names.insert(ref.table_name);
+	if (!ref.alias.empty()) {
+		local_table_names.insert(ref.alias);
+	}
+	if (entry && entry->type == CatalogType::TABLE_ENTRY) {
+		for (auto &col : entry->Cast<TableCatalogEntry>().GetColumns().Logical()) {
+			local_table_column_names.insert(col.Name());
+		}
+	}
+}
+
 CatalogPushdownResult StatementRewriter::Rewrite(BaseTableRef &ref) {
 	// Resolve schema_name-as-catalog ambiguity using the binder's own resolution logic
 	string catalog_name = ref.catalog_name;
@@ -359,28 +377,109 @@ CatalogPushdownResult StatementRewriter::Rewrite(BaseTableRef &ref) {
 		if (catalog && catalog->IsRemoteCatalog()) {
 			return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog, schema_name};
 		}
+		TrackLocalTable(ref);
 		return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	}
 
 	// Case 2: no explicit catalog - lazily populate search path catalogs on first use
 	FindRemoteCatalogsInSearchPath();
-	if (remote_catalogs_in_search_path.size() != 1) {
-		return {};
-	}
 
 	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name);
+
+	if (remote_catalogs_in_search_path.size() != 1) {
+		// Can't determine remote catalog; try to get column info from local catalogs for correlated subquery detection
+		optional_ptr<CatalogEntry> found_entry;
+		for (auto &local_entry : local_catalogs_in_search_path) {
+			const auto &schema = schema_name.empty() ? local_entry.schema : schema_name;
+			found_entry = Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_lookup,
+			                                OnEntryNotFound::RETURN_NULL);
+			if (found_entry) {
+				break;
+			}
+		}
+		TrackLocalTable(ref, found_entry);
+		return {};
+	}
 
 	for (auto &local_entry : local_catalogs_in_search_path) {
 		// If the ref specifies a schema, use it; otherwise use the search path schema
 		const auto &schema = schema_name.empty() ? local_entry.schema : schema_name;
-		if (Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_lookup,
-		                      OnEntryNotFound::RETURN_NULL)) {
+		auto entry =
+		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_lookup, OnEntryNotFound::RETURN_NULL);
+		if (entry) {
+			TrackLocalTable(ref, entry);
 			return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 		}
 	}
 
 	// Not found in any local catalog - push to the single remote catalog in the search path
 	return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, remote_catalogs_in_search_path.front().get(), schema_name};
+}
+
+bool StatementRewriter::HasLocalTableReference(ParsedExpression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		auto &col_ref = expr.Cast<ColumnRefExpression>();
+		if (col_ref.column_names.size() >= 2) {
+			// The second-to-last entry is the table qualifier (e.g. "tbl" in "tbl.col" or "cat.schema.tbl.col")
+			const auto &table_name = col_ref.column_names[col_ref.column_names.size() - 2];
+			return local_table_names.count(table_name) > 0;
+		}
+		// Unqualified column: correlated if the name matches a column of any outer local table
+		return local_table_column_names.count(col_ref.column_names[0]) > 0;
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		auto &subq = expr.Cast<SubqueryExpression>();
+		if (subq.child && HasLocalTableReference(*subq.child)) {
+			return true;
+		}
+		return HasLocalTableReference(*subq.subquery->node);
+	}
+	bool found = false;
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child) {
+		if (!found) {
+			found = HasLocalTableReference(child);
+		}
+	});
+	return found;
+}
+
+bool StatementRewriter::HasLocalTableReference(QueryNode &node) {
+	switch (node.type) {
+	case QueryNodeType::SELECT_NODE: {
+		auto &select = node.Cast<SelectNode>();
+		for (auto &expr : select.select_list) {
+			if (HasLocalTableReference(*expr)) {
+				return true;
+			}
+		}
+		if (select.where_clause && HasLocalTableReference(*select.where_clause)) {
+			return true;
+		}
+		if (select.having && HasLocalTableReference(*select.having)) {
+			return true;
+		}
+		if (select.qualify && HasLocalTableReference(*select.qualify)) {
+			return true;
+		}
+		for (auto &expr : select.groups.group_expressions) {
+			if (HasLocalTableReference(*expr)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	case QueryNodeType::SET_OPERATION_NODE: {
+		auto &setop = node.Cast<SetOperationNode>();
+		for (auto &child : setop.children) {
+			if (HasLocalTableReference(*child)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	default:
+		return false;
+	}
 }
 
 CatalogPushdownResult StatementRewriter::Rewrite(ParsedExpression &expr) {
@@ -391,13 +490,23 @@ CatalogPushdownResult StatementRewriter::Rewrite(ParsedExpression &expr) {
 		if (subquery_expr.child) {
 			result = Merge(result, Rewrite(*subquery_expr.child));
 		}
-		result = Merge(result, Rewrite(*subquery_expr.subquery->node));
+		// Save outer scope: Rewrite(*subquery->node) may add the subquery's own local tables/columns
+		auto saved_local_table_names = local_table_names;
+		auto saved_local_table_column_names = local_table_column_names;
+		auto subquery_result = Rewrite(*subquery_expr.subquery->node);
+		// A SINGLE_REMOTE result is only valid if the subquery has no correlated references to outer local tables
+		if (subquery_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+		    HasLocalTableReference(*subquery_expr.subquery->node)) {
+			subquery_result = {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr, {}};
+		}
+		local_table_names = std::move(saved_local_table_names);
+		local_table_column_names = std::move(saved_local_table_column_names);
+		result = Merge(result, subquery_result);
 		return result;
 	}
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child) {
-		result = Merge(result, Rewrite(child));
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](ParsedExpression &child) { result = Merge(result, Rewrite(child)); });
 	return result;
 }
 
@@ -410,13 +519,19 @@ void StatementRewriter::PushdownSubqueries(unique_ptr<ParsedExpression> &expr) {
 		if (subquery_expr.child) {
 			PushdownSubqueries(subquery_expr.child);
 		}
+		auto saved_local_table_names = local_table_names;
+		auto saved_local_table_column_names = local_table_column_names;
 		auto result = Rewrite(*subquery_expr.subquery->node);
-		FinishPushdown(subquery_expr.subquery->node, result);
+		bool has_correlated_ref = HasLocalTableReference(*subquery_expr.subquery->node);
+		local_table_names = std::move(saved_local_table_names);
+		local_table_column_names = std::move(saved_local_table_column_names);
+		if (!has_correlated_ref) {
+			FinishPushdown(subquery_expr.subquery->node, result);
+		}
 		return;
 	}
-	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		PushdownSubqueries(child);
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { PushdownSubqueries(child); });
 }
 
 unique_ptr<TableFunctionRef> StatementRewriter::CreateRemoteFunctionRef(CatalogPushdownResult &result,
@@ -467,9 +582,8 @@ void StatementRewriter::StripCatalogName(ParsedExpression &expr, const string &c
 		}
 		return;
 	}
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child) {
-		StripCatalogName(child, catalog_name);
-	});
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](ParsedExpression &child) { StripCatalogName(child, catalog_name); });
 }
 
 void StatementRewriter::StripCatalogName(QueryNode &node, const string &catalog_name) {

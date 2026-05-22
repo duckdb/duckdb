@@ -1,6 +1,6 @@
-# name: test/sql/attach.test
-# description: test rpc extension
-# group: [sql]
+# name: test/remote_pushdown/remote_pushdown.test
+# description: test pushdown into quack
+# group: [remote_pushdown]
 
 require quack
 
@@ -71,7 +71,7 @@ select min(i), max(i) from rpc.t1
 100	109
 
 statement ok
-create table local_tbl(i int);
+create table local_tbl(local_col int);
 
 statement ok
 insert into local_tbl from range(10);
@@ -90,7 +90,7 @@ physical_plan	<REGEX>:.*UNION.*
 
 # Mixed: remote-local JOIN stays local but remote side is individually pushed
 query II
-explain select * from rpc.t1 join local_tbl using (i);
+explain select * from rpc.t1 join local_tbl on (i=local_col);
 ----
 physical_plan	<REGEX>:.*JOIN.*
 
@@ -116,15 +116,23 @@ select count(*) from rpc.t1 where i in (select i from rpc.t1)
 # Only the inner subquery is pushed; outer SELECT stays local
 # local_tbl has 0-9, rpc.t1 has 100-109 → no overlap → 0 results
 query I
-select count(*) from local_tbl where i in (select i from rpc.t1)
+select count(*) from local_tbl where local_col in (select i from rpc.t1)
 ----
 0
 
-# correlated subquery that refers to local tbl
+# correlated subquery that refers to local tbl - must NOT be pushed to remote
+# (the remote has no local_tbl; if incorrectly pushed, the server returns an error)
+# semantics: for each local_tbl row, the subquery returns that row's i value repeated for each rpc.t1 row
+# so WHERE i IN (...) is trivially true for all 10 local rows → count = 10
 query I
-select count(*) from local_tbl where i in (select local_tbl.i from rpc.t1)
+select count(*) from local_tbl where local_col in (select local_tbl.local_col from rpc.t1)
 ----
-0
+10
+
+query I
+select count(*) from local_tbl where local_col in (select local_col from rpc.t1)
+----
+10
 
 # Scalar subquery: no FROM clause, fully pushed (scalar subquery is the only reference)
 query I
@@ -143,7 +151,7 @@ select count(*) from rpc.t1 where i = (select min(i) from rpc.t1)
 # Only the scalar subquery is pushed; outer SELECT stays local
 # min(i) from rpc.t1 = 100; 100 - 100 = 0; local_tbl has 0-9 → WHERE i = 0 → 1 row
 query I
-select count(*) from local_tbl where i = (select min(i) - 100 from rpc.t1)
+select count(*) from local_tbl where local_col = (select min(i) - 100 from rpc.t1)
 ----
 1
 
