@@ -55,7 +55,7 @@ DBInstanceCache::~DBInstanceCache() {
 }
 
 shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, const DBConfig &config,
-                                                        std::unique_lock<std::mutex> &db_instances_lock) {
+                                                        std::unique_lock<mutex> &db_instances_lock) {
 	D_ASSERT(db_instances_lock.owns_lock());
 	auto cache_key = GetCacheKey(database, config);
 	auto entry = db_instances.find(cache_key);
@@ -106,7 +106,7 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &database, const DB
 
 shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &database, DBConfig &config,
                                                            const bool cache_instance,
-                                                           std::unique_lock<std::mutex> db_instances_lock,
+                                                           std::unique_lock<mutex> db_instances_lock,
                                                            const std::function<void(DuckDB &)> &on_create) {
 	D_ASSERT(db_instances_lock.owns_lock());
 	string abs_database_path;

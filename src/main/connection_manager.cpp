@@ -38,15 +38,14 @@ void ConnectionManager::AssignConnectionId(Connection &connection) {
 vector<shared_ptr<ClientContext>> ConnectionManager::GetConnectionList() {
 	lock_guard<mutex> lock(connections_lock);
 	vector<shared_ptr<ClientContext>> result;
-	for (auto it = connections.begin(); it != connections.end();) {
-		auto connection = it->second.lock();
+	erase_if(connections, [&](auto &entry) {
+		auto connection = entry.second.lock();
 		if (!connection) {
-			it = connections.erase(it);
-		} else {
-			result.push_back(std::move(connection));
-			++it;
+			return true;
 		}
-	}
+		result.push_back(std::move(connection));
+		return false;
+	});
 	connection_count = connections.size();
 	return result;
 }

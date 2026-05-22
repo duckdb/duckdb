@@ -232,7 +232,7 @@ struct ParserCache {
 	void Invalidate();
 
 private:
-	std::mutex mutex;
+	mutex mutex;
 	shared_ptr<PEGMatcher> matcher;
 	shared_ptr<PEGTransformerFactory> transformer_factory;
 };

@@ -8,7 +8,7 @@ void PEGParser::AddRule(string_t rule_name, PEGRule rule) {
 	if (entry != rules.end()) {
 		throw InternalException("Failed to parse grammar - duplicate rule name %s", rule_name.GetString());
 	}
-	rules.insert(make_pair(rule_name, std::move(rule)));
+	rules.insert(make_pair(rule_name.GetString(), std::move(rule)));
 }
 
 void PEGParser::ParseRules(const char *grammar) {

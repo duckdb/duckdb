@@ -101,26 +101,25 @@ static column_binding_map_t<vector<reference<Expression>>> GetDisjunctedPredicat
 		ExtractDisjunctedPredicates(child, child_binding_map);
 
 		// Bindings must appear in both maps to be considered for predicate factoring
-		for (auto it = remaining_binding_map.begin(); it != remaining_binding_map.end();) {
-			auto child_it = child_binding_map.find(it->first);
+		erase_if(remaining_binding_map, [&](auto &entry) {
+			auto child_it = child_binding_map.find(entry.first);
 			if (child_it == child_binding_map.end()) {
-				it = remaining_binding_map.erase(it);
-			} else {
-				for (auto &new_predicate : child_it->second) {
-					bool found = false;
-					for (auto &existing_predicate : it->second) {
-						if (new_predicate.get().Equals(existing_predicate.get())) {
-							found = true;
-							break;
-						}
-					}
-					if (!found) {
-						it->second.push_back(new_predicate.get());
+				return true;
+			}
+			for (auto &new_predicate : child_it->second) {
+				bool found = false;
+				for (auto &existing_predicate : entry.second) {
+					if (new_predicate.get().Equals(existing_predicate.get())) {
+						found = true;
+						break;
 					}
 				}
-				it++;
+				if (!found) {
+					entry.second.push_back(new_predicate.get());
+				}
 			}
-		}
+			return false;
+		});
 	}
 
 	return remaining_binding_map;

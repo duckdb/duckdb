@@ -43,7 +43,7 @@ private:
 
 private:
 	Binder &binder;
-	std::unordered_map<TableIndex, TableIndex> table_idx_replacements;
+	unordered_map<TableIndex, TableIndex> table_idx_replacements;
 	optional_ptr<bound_parameter_map_t> parameter_data;
 };
 

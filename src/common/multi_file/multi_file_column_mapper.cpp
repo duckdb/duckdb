@@ -282,7 +282,7 @@ static ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColu
 
 	if (child_map.column_index) {
 		child_indexes.push_back(std::move(*child_map.column_index));
-		mapping->child_mapping.insert(make_pair(0, std::move(child_map.mapping)));
+		mapping->child_mapping.emplace(0, std::move(child_map.mapping));
 	}
 	if (!child_map.column_map.IsNull()) {
 		// found a column mapping for this child - emplace it
@@ -386,7 +386,7 @@ static ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColum
 		                                        global_component, local_key_value);
 		if (map_result.column_index) {
 			child_indexes.push_back(std::move(*map_result.column_index));
-			mapping->child_mapping.insert(make_pair(i, std::move(map_result.mapping)));
+			mapping->child_mapping.emplace(i, std::move(map_result.mapping));
 		}
 		if (!map_result.column_map.IsNull()) {
 			// found a column mapping for the component - emplace it
@@ -488,7 +488,7 @@ static ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileCo
 
 		if (child_map.column_index) {
 			child_indexes.push_back(std::move(*child_map.column_index));
-			mapping->child_mapping.insert(make_pair(i, std::move(child_map.mapping)));
+			mapping->child_mapping.emplace(i, std::move(child_map.mapping));
 		}
 		if (!child_map.column_map.IsNull()) {
 			// found a column mapping for this child - emplace it

@@ -296,7 +296,7 @@ private:
 	unique_ptr<BufferedFileWriter> writer;
 	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::FileMetaData file_meta_data;
-	std::mutex lock;
+	mutex lock;
 
 	vector<unique_ptr<ColumnWriter>> column_writers;
 

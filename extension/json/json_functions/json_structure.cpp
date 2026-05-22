@@ -424,10 +424,10 @@ static void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &node, con
 		if (!ignore_errors && !insert_result.second) { // Exact match
 			JSONCommon::ThrowValFormatError("Duplicate key \"" + obj_key + "\" in object %s", obj);
 		}
-		insert_result = ci_obj_keys.insert(obj_key);
-		if (!ignore_errors && !insert_result.second) { // Case-insensitive match
+		auto ci_insert_result = ci_obj_keys.insert(obj_key);
+		if (!ignore_errors && !ci_insert_result.second) { // Case-insensitive match
 			JSONCommon::ThrowValFormatError("Duplicate key (different case) \"" + obj_key + "\" and \"" +
-			                                    *insert_result.first + "\" in object %s",
+			                                    *ci_insert_result.first + "\" in object %s",
 			                                obj);
 		}
 		description.GetOrCreateChild(key, val, ignore_errors);
@@ -657,9 +657,9 @@ static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalTy
 		const auto &merged_child_types = StructType::GetChildTypes(merged);
 		const auto &type_child_types = StructType::GetChildTypes(type);
 
-		unordered_map<string, const LogicalType &> merged_child_types_map;
+		unordered_map<string, const LogicalType *> merged_child_types_map;
 		for (const auto &merged_child : merged_child_types) {
-			merged_child_types_map.emplace(merged_child.first, merged_child.second);
+			merged_child_types_map.emplace(merged_child.first, &merged_child.second);
 		}
 
 		double total_similarity = 0;
@@ -668,7 +668,7 @@ static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalTy
 			if (it == merged_child_types_map.end()) {
 				return -1;
 			}
-			const auto similarity = CalculateTypeSimilarity(it->second, type_child_type.second, max_depth, depth + 1);
+			const auto similarity = CalculateTypeSimilarity(*it->second, type_child_type.second, max_depth, depth + 1);
 			if (similarity < 0) {
 				return similarity;
 			}

@@ -120,7 +120,7 @@ private:
 	//! Pipelines (other than the base pipeline) that need their own PipelineFinishEvent (e.g., for IEJoin)
 	reference_set_t<Pipeline> finish_pipelines;
 	//! Mapping from pipeline (e.g., child or union) to finish pipeline
-	reference_map_t<Pipeline, Pipeline &> finish_map;
+	reference_map_t<Pipeline, Pipeline *> finish_map;
 };
 
 } // namespace duckdb

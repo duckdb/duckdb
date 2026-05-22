@@ -140,7 +140,7 @@ struct HashTypeInfo {
 struct ArrowTypeExtensionSet {
 	ArrowTypeExtensionSet() {};
 	static void Initialize(const DBConfig &config);
-	std::mutex lock;
+	mutex lock;
 	unordered_map<ArrowExtensionMetadata, ArrowTypeExtension, HashArrowTypeExtension> type_extensions;
 	unordered_map<TypeInfo, vector<ArrowExtensionMetadata>, HashTypeInfo> type_to_info;
 };

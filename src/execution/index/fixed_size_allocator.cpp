@@ -381,15 +381,13 @@ idx_t FixedSizeAllocator::GetAvailableBufferId() const {
 }
 
 void FixedSizeAllocator::RemoveEmptyBuffers() {
-	auto buffer_it = buffers.begin();
-	while (buffer_it != buffers.end()) {
-		if (buffer_it->second->segment_count != 0) {
-			++buffer_it;
-			continue;
+	erase_if(buffers, [&](const auto &entry) {
+		if (entry.second->segment_count != 0) {
+			return false;
 		}
-		buffers_with_free_space.erase(buffer_it->first);
-		buffer_it = buffers.erase(buffer_it);
-	}
+		buffers_with_free_space.erase(entry.first);
+		return true;
+	});
 	NextBufferWithFreeSpace();
 }
 

@@ -84,7 +84,7 @@ public:
 
 private:
 	mutable mutex lock;
-	std::unordered_map<std::string, EncryptionKey> derived_keys;
+	unordered_map<std::string, EncryptionKey> derived_keys;
 };
 
 } // namespace duckdb

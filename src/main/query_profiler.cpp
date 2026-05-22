@@ -172,7 +172,7 @@ void QueryProfiler::Reset() {
 }
 
 void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, bool start_at_optimizer) {
-	lock_guard<std::mutex> guard(lock);
+	lock_guard<mutex> guard(lock);
 	// Always reset byte counters at the start of each query so the progress bar shows per-query values
 	query_metrics.bytes_read = 0;
 	query_metrics.bytes_written = 0;
@@ -243,7 +243,7 @@ void QueryProfiler::StartExplainAnalyze() {
 }
 
 void QueryProfiler::EndQuery() {
-	unique_lock<std::mutex> guard(lock);
+	unique_lock<mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -279,7 +279,7 @@ void QueryProfiler::EndQuery() {
 }
 
 void QueryProfiler::FinalizeMetrics() {
-	lock_guard<std::mutex> guard(lock);
+	lock_guard<mutex> guard(lock);
 	FinalizeMetricsInternal();
 }
 
@@ -346,7 +346,7 @@ string QueryProfiler::ToString(ProfilerPrintFormat format) const {
 	case ProfilerPrintFormat::HTML:
 	case ProfilerPrintFormat::GRAPHVIZ:
 	case ProfilerPrintFormat::MERMAID: {
-		lock_guard<std::mutex> guard(lock);
+		lock_guard<mutex> guard(lock);
 		// checking the tree to ensure the query is really empty
 		// the query string is empty when a logical plan is deserialized
 		if (query_metrics.query_sql.empty() || !root) {
@@ -488,7 +488,7 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
-	lock_guard<std::mutex> guard(lock);
+	lock_guard<mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -517,7 +517,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 }
 
 void QueryProfiler::SetBlockedTime(const double &blocked_thread_time) {
-	lock_guard<std::mutex> guard(lock);
+	lock_guard<mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}
@@ -632,7 +632,7 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const GatheredMetrics &info, id
 }
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
-	lock_guard<std::mutex> guard(lock);
+	lock_guard<mutex> guard(lock);
 
 	bool show_query_name = false;
 	if (root) {
@@ -849,7 +849,7 @@ void QueryProfiler::ToLogInternal() const {
 }
 
 void QueryProfiler::ToLog() const {
-	lock_guard<std::mutex> guard(lock);
+	lock_guard<mutex> guard(lock);
 	ToLogInternal();
 }
 
@@ -1001,7 +1001,7 @@ unique_ptr<QueryProfileResult> QueryProfiler::ToResultTree() const {
 }
 
 QueryProfileResult &QueryProfiler::GetResult() {
-	lock_guard<std::mutex> guard(lock);
+	lock_guard<mutex> guard(lock);
 	if (!result_tree) {
 		result_tree = ToResultTree();
 	}
@@ -1013,7 +1013,7 @@ bool QueryProfiler::HasRoot() const {
 }
 
 string QueryProfiler::ToJSON() const {
-	lock_guard<std::mutex> guard(lock);
+	lock_guard<mutex> guard(lock);
 	ConvertedJSONHolder json_holder;
 	json_holder.doc = yyjson_mut_doc_new(nullptr);
 	auto result = ToResultTree();
@@ -1095,7 +1095,7 @@ Use 'PRAGMA enable_profiling;' to enable profiling!`"]
 }
 
 void QueryProfiler::Initialize(const PhysicalOperator &root_op) {
-	lock_guard<std::mutex> guard(lock);
+	lock_guard<mutex> guard(lock);
 	if (!IsEnabled() || !running) {
 		return;
 	}

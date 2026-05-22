@@ -1475,7 +1475,7 @@ shared_ptr<PEGMatcher> PEGMatcher::Get(DatabaseInstance &db) {
 
 shared_ptr<PEGMatcher> ParserCache::GetMatcher() {
 	{
-		std::unique_lock<std::mutex> lock(mutex);
+		std::unique_lock<duckdb::mutex> lock(mutex);
 		if (matcher) {
 			return matcher;
 		}
@@ -1492,7 +1492,7 @@ shared_ptr<PEGMatcher> ParserCache::GetMatcher() {
 #else
 	new_matcher->root = factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Program");
 #endif
-	std::unique_lock<std::mutex> lock(mutex);
+	std::unique_lock<duckdb::mutex> lock(mutex);
 	if (!matcher) {
 		matcher = std::move(new_matcher);
 	}
@@ -1501,13 +1501,13 @@ shared_ptr<PEGMatcher> ParserCache::GetMatcher() {
 
 shared_ptr<PEGTransformerFactory> ParserCache::GetTransformerFactory() {
 	{
-		std::unique_lock<std::mutex> lock(mutex);
+		std::unique_lock<duckdb::mutex> lock(mutex);
 		if (transformer_factory) {
 			return transformer_factory;
 		}
 	}
 	auto new_factory = make_shared_ptr<PEGTransformerFactory>();
-	std::unique_lock<std::mutex> lock(mutex);
+	std::unique_lock<duckdb::mutex> lock(mutex);
 	if (!transformer_factory) {
 		transformer_factory = std::move(new_factory);
 	}
@@ -1515,7 +1515,7 @@ shared_ptr<PEGTransformerFactory> ParserCache::GetTransformerFactory() {
 }
 
 void ParserCache::Invalidate() {
-	std::unique_lock<std::mutex> lock(mutex);
+	std::unique_lock<duckdb::mutex> lock(mutex);
 	matcher = nullptr;
 	transformer_factory = nullptr;
 }
