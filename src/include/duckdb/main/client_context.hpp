@@ -61,6 +61,11 @@ struct PendingQueryParameters {
 	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
 	//! Whether a stream/buffer-managed result should be allowed
 	QueryParameters query_parameters;
+	// caller-supplied per-parameter type hints (e.g. PG OIDs from
+	// the Parse message). Type-only -- does not constant-fold the parameter,
+	// so the slot survives for re-bind at execute. Consulted by the binder
+	// only when the identifier is absent from `parameters`.
+	optional_ptr<const case_insensitive_map_t<LogicalType>> parameter_type_hints;
 };
 
 //! Interrupt state for the client context
@@ -182,8 +187,14 @@ public:
 	                                                       QueryParameters query_parameters);
 	DUCKDB_API unique_ptr<QueryResult> Execute(const shared_ptr<Relation> &relation);
 
-	//! Prepare a query
-	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
+	//! Prepare a query. Optional `parameter_type_hints` declares
+	//! per-parameter bind types (e.g. PG protocol Parse OIDs) without supplying
+	//! a value -- the slot remains a real parameter and is re-bound at Execute.
+	//! Identifiers use the same scheme as named_param_map (positional "1",
+	//! "2", ... or named).
+	DUCKDB_API unique_ptr<PreparedStatement>
+	Prepare(const string &query,
+	        optional_ptr<const case_insensitive_map_t<LogicalType>> parameter_type_hints = nullptr);
 	//! Directly prepare a SQL statement
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
 
@@ -302,7 +313,9 @@ private:
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
 	                                             unique_ptr<SQLStatement> statement,
 	                                             const PendingQueryParameters &parameters, bool verify = true);
-	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
+	unique_ptr<PreparedStatement>
+	PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
+	                optional_ptr<const case_insensitive_map_t<LogicalType>> parameter_type_hints = nullptr);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 
 	unique_ptr<QueryResult> FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending);

@@ -22,7 +22,12 @@ using bound_parameter_map_t = case_insensitive_map_t<shared_ptr<BoundParameterDa
 
 struct BoundParameterMap {
 public:
-	explicit BoundParameterMap(case_insensitive_map_t<BoundParameterData> &parameter_data);
+	// parameter_type_hints carries client-supplied per-parameter
+	// LogicalTypes (e.g. PG protocol Parse OIDs). Unlike parameter_data, hints
+	// only declare a type -- they do not trigger constant-folding -- so the
+	// parameter survives as a real bound parameter for re-bind at execute.
+	explicit BoundParameterMap(case_insensitive_map_t<BoundParameterData> &parameter_data,
+	                           optional_ptr<const case_insensitive_map_t<LogicalType>> parameter_type_hints = nullptr);
 
 public:
 	LogicalType GetReturnType(const string &identifier);
@@ -46,6 +51,8 @@ private:
 	bound_parameter_map_t parameters;
 	// Pre-provided parameter data if populated
 	case_insensitive_map_t<BoundParameterData> &parameter_data;
+	// Type-only hints, consulted by GetReturnType when parameter_data lacks the entry.
+	optional_ptr<const case_insensitive_map_t<LogicalType>> parameter_type_hints;
 };
 
 } // namespace duckdb

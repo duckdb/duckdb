@@ -47,7 +47,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
 	auto parameter_count = statement.named_param_map.size();
 
-	BoundParameterMap bound_parameters(parameter_data);
+	BoundParameterMap bound_parameters(parameter_data, &parameter_type_hints);
 
 	// first bind the tables and columns to the catalog
 	bool parameters_resolved = true;

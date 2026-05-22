@@ -30,6 +30,9 @@ public:
 	vector<string> names;
 	vector<LogicalType> types;
 	case_insensitive_map_t<BoundParameterData> parameter_data;
+	// per-identifier type hints for parameter binding (e.g. PG OIDs
+	// from the Parse message). Type-only -- does not constant-fold.
+	case_insensitive_map_t<LogicalType> parameter_type_hints;
 
 	shared_ptr<Binder> binder;
 	ClientContext &context;

@@ -4,17 +4,25 @@
 
 namespace duckdb {
 
-BoundParameterMap::BoundParameterMap(case_insensitive_map_t<BoundParameterData> &parameter_data)
-    : parameter_data(parameter_data) {
+BoundParameterMap::BoundParameterMap(case_insensitive_map_t<BoundParameterData> &parameter_data,
+                                     optional_ptr<const case_insensitive_map_t<LogicalType>> parameter_type_hints)
+    : parameter_data(parameter_data), parameter_type_hints(parameter_type_hints) {
 }
 
 LogicalType BoundParameterMap::GetReturnType(const string &identifier) {
 	D_ASSERT(!identifier.empty());
 	auto it = parameter_data.find(identifier);
-	if (it == parameter_data.end()) {
-		return LogicalTypeId::UNKNOWN;
+	if (it != parameter_data.end()) {
+		return it->second.return_type;
 	}
-	return it->second.return_type;
+	// fall back to caller-supplied type hint (e.g. PG OID at Parse).
+	if (parameter_type_hints) {
+		auto hint_it = parameter_type_hints->find(identifier);
+		if (hint_it != parameter_type_hints->end()) {
+			return hint_it->second;
+		}
+	}
+	return LogicalTypeId::UNKNOWN;
 }
 
 bound_parameter_map_t *BoundParameterMap::GetParametersPtr() {

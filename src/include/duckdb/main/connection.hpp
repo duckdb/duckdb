@@ -118,8 +118,12 @@ public:
 	PendingQuery(unique_ptr<SQLStatement> statement, vector<Value> &values,
 	             QueryParameters query_parameters = QueryResultOutputType::FORCE_MATERIALIZED);
 
-	//! Prepare the specified query, returning a prepared statement object
-	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);
+	//! Prepare the specified query, returning a prepared statement object.
+	//! Optional `parameter_type_hints` pins per-parameter bind types
+	//! (e.g. PG protocol Parse OIDs). See ClientContext::Prepare for semantics.
+	DUCKDB_API unique_ptr<PreparedStatement>
+	Prepare(const string &query,
+	        optional_ptr<const case_insensitive_map_t<LogicalType>> parameter_type_hints = nullptr);
 	//! Prepare the specified statement, returning a prepared statement object
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(unique_ptr<SQLStatement> statement);
 
