@@ -529,19 +529,26 @@ void TupleDataCollection::Reset() {
 	for (idx_t i = 0; i < segments.size(); i++) {
 		if (segments[i]) {
 			live_idx = i;
-			segments[i]->Reset();
 			break;
 		}
 	}
 
 	if (live_idx < segments.size()) {
-		// At least one live segment found: reset in-place to avoid per-iteration mutex create/destroy.
-		// We own all the blocks, so it is safe to clear the allocator's block list directly.
+		// At least one live segment found. Keep exactly one live segment and make the collection-level allocator
+		// match that segment allocator before resetting to preserve segment/allocator consistency.
 		if (live_idx > 0) {
 			segments[0] = std::move(segments[live_idx]);
 		}
 		segments.resize(1);
+		allocator = segments[0]->allocator;
+		segments[0]->Reset();
 		allocator->Reset();
+#ifdef D_ASSERT_IS_ENABLED
+		D_ASSERT(segments[0]->allocator.get() == allocator.get());
+		D_ASSERT(segments[0]->count == 0);
+		D_ASSERT(segments[0]->chunks.empty());
+		D_ASSERT(segments[0]->chunk_parts.empty());
+#endif
 	} else {
 		// All segments were null (moved out by Combine).  The old allocator is still shared by
 		// those moved-out segments and must keep its row_blocks intact.  Create a fresh allocator.
