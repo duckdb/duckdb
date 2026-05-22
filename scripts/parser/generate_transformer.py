@@ -36,7 +36,7 @@ class GrammarTypeInfo:
     """Per-rule type metadata loaded from grammar_types.yml."""
 
     cpp_type: str
-    by_value: bool = False  # True for unique_ptr<T>, vector<unique_ptr<T>>, bool, int64_t
+    by_value: bool = False  # True for unique_ptr<T>, vector<unique_ptr<T>> (non-copyable)
 
 
 def load_grammar_types(types_file):
@@ -74,11 +74,16 @@ def load_grammar_types(types_file):
             rule_types[name] = GrammarTypeInfo(cpp_type=str(cpp_type), by_value=by_value)
             rule_to_source[name] = source
 
-    # Top-level overrides: flat RuleName -> "type" map (no by_value annotation)
+    # Top-level overrides: RuleName -> "type" string OR {type, by_value} dict
     overrides = data.get("overrides", {})
     if isinstance(overrides, dict):
-        for name, cpp_type in overrides.items():
-            register(name, cpp_type, False, "overrides")
+        for name, value in overrides.items():
+            if isinstance(value, str):
+                register(name, value, False, "overrides")
+            elif isinstance(value, dict):
+                cpp_type = value.get("type", "")
+                by_value = bool(value.get("by_value", False))
+                register(name, cpp_type, by_value, "overrides")
 
     # Category entries: CategoryName -> {type: "...", by_value: bool, rules: [...]}
     for key, value in data.items():

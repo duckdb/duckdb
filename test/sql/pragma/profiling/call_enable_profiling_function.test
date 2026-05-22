@@ -134,9 +134,7 @@ statement ok
 CALL enable_profiling(metrics = {"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"})
 
 query I
-SELECT column_name
-FROM (DESCRIBE SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')))
-ORDER BY column_name;
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings'))
 ----
 CUMULATIVE_CARDINALITY
 CUMULATIVE_ROWS_SCANNED
@@ -148,9 +146,7 @@ statement ok
 CALL enable_profiling(metrics = {'QUERY_NAME': true, 'EXTRA_INFO': true, 'OPERATOR_ROWS_SCANNED': false})
 
 query I
-SELECT column_name
-FROM (DESCRIBE SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')))
-ORDER BY column_name;
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings'))
 ----
 EXTRA_INFO
 QUERY_NAME
@@ -170,7 +166,7 @@ statement ok
 CALL enable_profiling(metrics = '{"CPU_TIME": "true", "BLOCKED_THREAD_TIME": "true"}');
 
 query I
-SELECT UNNEST(JSON_KEYS(CURRENT_SETTING('custom_profiling_settings'))) ORDER BY ALL;
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
 BLOCKED_THREAD_TIME
 CPU_TIME
@@ -190,7 +186,7 @@ statement ok
 RESET custom_profiling_settings;
 
 query I
-SELECT UNNEST(JSON_KEYS(CURRENT_SETTING('custom_profiling_settings'))) ORDER BY ALL;
+SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
 ----
 ATTACH_LOAD_STORAGE_LATENCY
 ATTACH_REPLAY_WAL_LATENCY

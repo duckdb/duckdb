@@ -17,8 +17,6 @@ static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &res
 	const auto &expr = lstate.expr.Cast<BoundFunctionExpression>();
 	const auto &func_name = expr.function.GetName();
 
-	auto count = args.size();
-
 	auto &lhs_vec = args.data[0];
 	auto &rhs_vec = args.data[1];
 
@@ -46,7 +44,7 @@ static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &res
 	auto rhs_data = FlatVector::GetData<TYPE>(rhs_child);
 
 	BinaryExecutor::Execute<list_entry_t, list_entry_t, TYPE>(
-	    lhs_vec, rhs_vec, result, count, [&](const list_entry_t &left, const list_entry_t &right) -> optional<TYPE> {
+	    lhs_vec, rhs_vec, result, [&](const list_entry_t &left, const list_entry_t &right) -> optional<TYPE> {
 		    if (left.length != right.length) {
 			    throw InvalidInputException(
 			        "%s: list dimensions must be equal, got left length '%d' and right length '%d'", func_name,

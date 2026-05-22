@@ -8,7 +8,8 @@
       "paths": [
         "test/sql/error/lineitem_errors.test",
         "test/sql/subquery/scalar/array_order_subquery.test",
-        "test/fuzzer/duckfuzz/list_try_cast.test"
+        "test/fuzzer/duckfuzz/list_try_cast.test",
+        "test/fuzzer/duckfuzz/vector_size_out_of_range.test"
       ]
     },
     {

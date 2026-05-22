@@ -32,6 +32,8 @@ Statement <-
 	UpdateExtensionsStatement /
 	AnalyzeStatement /
 	MergeIntoStatement /
+	ConnectStatement /
+	DisconnectStatement /
 	ExpressionStatement
 
 ExpressionStatement <- List(ExpressionAlias)
@@ -49,6 +51,7 @@ ReservedIdentifier <- Identifier
 ColumnName <- Identifier
 ReservedColumnName <- Identifier
 IndexName <- Identifier
+ReservedIndexName <- Identifier
 SettingName <- Identifier
 PragmaName <- Identifier
 FunctionName <- Identifier
@@ -59,7 +62,6 @@ SequenceName <- Identifier
 TriggerName <- Identifier
 CollationName <- Identifier
 CopyOptionName <- ColLabel
-SecretName <- ColId
 
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
@@ -201,6 +203,7 @@ UnreservedKeyword <- 'ABORT' /
 'COMPRESSION' /
 'CONFIGURATION' /
 'CONFLICT' /
+'CONNECT' /
 'CONNECTION' /
 'CONSTRAINTS' /
 'CONTENT' /
@@ -232,6 +235,7 @@ UnreservedKeyword <- 'ABORT' /
 'DICTIONARY' /
 'DISABLE' /
 'DISCARD' /
+'DISCONNECT' /
 'DOCUMENT' /
 'DOMAIN' /
 'DOUBLE' /
@@ -939,7 +943,7 @@ StepSliceBound <- ':' Expression?
 PostfixOperator <- '!'
 
 
-SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / TryExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
+SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / TryExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression / OverlayExpression
 CoalesceExpression <- 'COALESCE' Parens(List(Expression))
 UnpackExpression <- 'UNPACK' Parens(Expression)
 TryExpression <- 'TRY' Parens(Expression)
@@ -952,13 +956,19 @@ RowExpression <- 'ROW' Parens(List(Expression)?)
 SubstringExpression <- 'SUBSTRING' Parens(SubstringArguments)
 SubstringArguments <- SubstringParameters / SubstringExpressionList
 SubstringExpressionList <- List(Expression)
-SubstringParameters <- Expression 'FROM' Expression 'FOR' Expression
+SubstringParameters <- Expression FromExpression ForExpression
 TrimExpression <- 'TRIM' Parens(TrimDirection? TrimSource? List(Expression))
 TrimDirection <- TrimBoth / TrimLeading / TrimTrailing
 TrimBoth <- 'BOTH'
 TrimLeading <- 'LEADING'
 TrimTrailing <- 'TRAILING'
 TrimSource <- Expression? 'FROM'
+OverlayExpression <- 'OVERLAY' Parens(OverlayArguments)
+OverlayArguments <- OverlayParameters / OverlayExpressionList
+OverlayParameters <- Expression 'PLACING' Expression FromExpression ForExpression?
+FromExpression <- 'FROM' Expression
+ForExpression <- 'FOR' Expression
+OverlayExpressionList <- List(Expression)
 
 ExtractArgument <-
     YearKeyword / MonthKeyword / DayKeyword / HourKeyword / MinuteKeyword / SecondKeyword /
@@ -969,8 +979,10 @@ ExecuteStatement <- 'EXECUTE' Identifier TableFunctionArguments?
 CreateSecretStmt <- 'SECRET' IfNotExists? SecretName? SecretStorageSpecifier? GenericCopyOptionList
 
 SecretStorageSpecifier <- 'IN' Identifier
+SecretName <- ColId
 
-CreateViewStmt <- 'RECURSIVE'? 'VIEW' IfNotExists? QualifiedName InsertColumnList? WithList? 'AS' SelectStatementInternal
+CreateViewStmt <- CreateRecursive? 'VIEW' IfNotExists? QualifiedName InsertColumnList? WithList? 'AS' SelectStatementInternal
+CreateRecursive <- 'RECURSIVE'
 
 DescribeStatement <- ShowTables / ShowSelect / ShowAllTables / ShowQualifiedName
 
@@ -1031,7 +1043,8 @@ PragmaAssign <- SettingName '=' VariableList
 PragmaFunction <- PragmaName PragmaParameters?
 PragmaParameters <- Parens(List(Expression))
 
-DeallocateStatement <- 'DEALLOCATE' 'PREPARE'? Identifier
+DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? Identifier
+DeallocatePrepare <- 'PREPARE'
 
 PrepareStatement <- 'PREPARE' Identifier TypeList? 'AS' Statement
 
@@ -1162,7 +1175,9 @@ DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
 DropFunction <- FunctionType IfExists? List(FunctionIdentifier)
 DropSchema <- 'SCHEMA' IfExists? List(QualifiedSchemaName)
 DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
-QualifiedIndexName <- CatalogQualification? SchemaQualification? IndexName
+QualifiedIndexName <- CatalogReservedSchemaIndex / SchemaReservedIndex / IndexName
+SchemaReservedIndex <- SchemaQualification ReservedIndexName
+CatalogReservedSchemaIndex <- CatalogQualification ReservedSchemaQualification ReservedIndexName
 DropSequence <- 'SEQUENCE' IfExists? List(QualifiedSequenceName)
 DropCollation <- 'COLLATION' IfExists? List(CollationName)
 DropType <- 'TYPE' IfExists? List(QualifiedTypeName)
@@ -1175,7 +1190,8 @@ FunctionType <- 'MACRO' / 'FUNCTION'
 DropBehavior <- 'CASCADE' / 'RESTRICT'
 
 IfExists <- 'IF' 'EXISTS'
-QualifiedSchemaName <- CatalogQualification? SchemaName
+QualifiedSchemaName <- CatalogReservedSchema / SchemaName
+CatalogReservedSchema <- CatalogQualification ReservedSchemaName
 
 DropSecretStorage <- 'FROM' Identifier
 UpdateStatement <- WithClause? 'UPDATE' UpdateTarget UpdateSetClause FromClause? WhereClause? ReturningClause?
@@ -1414,6 +1430,10 @@ TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName
 TargetOptAlias <- BaseTableName 'AS'? ColId?
 DeleteUsingClause <- 'USING' List(TableRef)
 
+ConnectStatement <- 'CONNECT' SessionTarget?
+DisconnectStatement <- 'DISCONNECT'
+SessionTarget <- 'LOCAL' / StringLiteral / CatalogName
+
 CreateTypeStmt <- 'TYPE' IfNotExists? QualifiedName 'AS' CreateType
 CreateType <- EnumSelectType / EnumStringLiteralList / Type
 EnumSelectType <- 'ENUM' Parens(SelectStatementInternal)
@@ -1448,7 +1468,8 @@ ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOp
 ExportSource <- CatalogName 'TO'
 ImportStatement <- 'IMPORT' 'DATABASE' StringLiteral
 
-CheckpointStatement <- 'FORCE'? 'CHECKPOINT' CatalogName?
+CheckpointStatement <- CheckpointForce? 'CHECKPOINT' CatalogName?
+CheckpointForce <- 'FORCE'
 
 CopyStatement <- 'COPY' (CopyTable / CopySelect / CopyFromDatabase)
 
@@ -1587,8 +1608,9 @@ ExplainableStatements <-
     VacuumStatement /
     SetStatement /
     ResetStatement
-AnalyzeStatement <- 'ANALYZE' 'VERBOSE'? AnalyzeTarget?
+AnalyzeStatement <- 'ANALYZE' AnalyzeVerbose? AnalyzeTarget?
 AnalyzeTarget <- BaseTableName NameList?
+AnalyzeVerbose <- 'VERBOSE'
 CreateMacroStmt <- MacroOrFunction IfNotExists? QualifiedName List(MacroDefinition)
 
 MacroOrFunction <- 'MACRO' / 'FUNCTION'
@@ -1657,3 +1679,4 @@ UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
 DotIdentifier <- '.' Identifier
 
 CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments
+

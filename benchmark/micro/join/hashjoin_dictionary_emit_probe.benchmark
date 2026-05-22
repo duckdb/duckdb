@@ -1,0 +1,28 @@
+# name: benchmark/micro/join/hashjoin_dictionary_emit_probe.benchmark
+# description: Hash join chain combining dictionary emission (build side) and dictionary probing (probe side)
+# group: [join]
+
+name Hash Join Dictionary Emit + Probe
+group join
+storage persistent
+
+# join1: small build side triggers operator-created dictionary emission for d.code
+# join2: d.code arrives as a dictionary vector, triggering dictionary probing
+load
+CREATE TABLE dim AS SELECT 'K' || i AS dim_key, 'C' || (i % 10) AS code FROM range(50) t(i);
+CREATE TABLE dim2 AS SELECT 'C' || i AS code, 'label_' || i AS label FROM range(10) t(i);
+CREATE TABLE fact AS SELECT 'K' || (i % 50) AS dim_key, i AS amount FROM range(500000) t(i);
+
+# single thread keeps the dictionary path deterministic; no join reordering
+init
+SET threads TO 1;
+SET disabled_optimizers TO 'join_order';
+
+run
+SELECT count(*), count(d2.label), min(d2.label), max(d2.label)
+FROM fact f
+JOIN dim d ON f.dim_key = d.dim_key
+JOIN dim2 d2 ON d.code = d2.code
+
+result IIII
+500000	500000	label_0	label_9

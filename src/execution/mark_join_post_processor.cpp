@@ -337,6 +337,37 @@ void MarkJoinPostProcessor::Merge(MarkJoinPostProcessor &other, bool &has_null) 
 	MergeNullRemainderRows(other, has_null);
 }
 
+void MarkJoinPostProcessor::Reset() {
+	if (UsesCorrelatedCounts()) {
+		auto &info = state.correlated_counts;
+		vector<BoundAggregateExpression *> correlated_aggregates;
+		vector<LogicalType> payload_types;
+		correlated_aggregates.reserve(info.correlated_aggregates.size());
+		payload_types.reserve(info.correlated_aggregates.size());
+		for (auto &expr : info.correlated_aggregates) {
+			auto &aggr = expr->Cast<BoundAggregateExpression>();
+			correlated_aggregates.push_back(&aggr);
+			payload_types.push_back(aggr.GetReturnType());
+		}
+		auto &allocator = BufferAllocator::Get(*context);
+		info.correlated_counts = make_uniq<GroupedAggregateHashTable>(*context, allocator, info.correlated_types,
+		                                                              payload_types, correlated_aggregates);
+		info.group_chunk.Reset();
+		info.correlated_payload.Reset();
+		info.result_chunk.Reset();
+	}
+	if (state.null_remainder.enabled) {
+		auto &null_info = state.null_remainder;
+		null_info.has_null_rows = false;
+		null_info.has_all_null = false;
+		if (null_info.remainder.layout) {
+			null_info.remainder.data =
+			    make_uniq<TupleDataCollection>(*buffer_manager, null_info.remainder.layout, MemoryTag::HASH_TABLE);
+			null_info.remainder.data->InitializeAppend(null_info.remainder.append_state);
+		}
+	}
+}
+
 void MarkJoinPostProcessor::MergeNullRemainderRows(MarkJoinPostProcessor &other, bool &has_null) {
 	if (!UsesNullRemainder() || !other.state.null_remainder.enabled) {
 		return;

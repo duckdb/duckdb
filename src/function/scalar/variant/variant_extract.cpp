@@ -103,8 +103,8 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 	}
 }
 
-static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathComponent> &components, Vector &result,
-                                        idx_t count, idx_t path_index = 0) {
+static bool TryShreddedExtractRecursive(const Vector &input, const vector<VariantPathComponent> &components,
+                                        Vector &result, idx_t count, idx_t path_index = 0) {
 	if (path_index >= components.size()) {
 		// reached the end of the path - shred
 		if (input.GetType().IsNested()) {
@@ -151,8 +151,8 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 	return false;
 }
 
-static bool TryFromShreddedExtract(Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
-                                   idx_t count) {
+static bool TryFromShreddedExtract(const Vector &variant_vec, const vector<VariantPathComponent> &components,
+                                   Vector &result, idx_t count) {
 	if (variant_vec.GetVectorType() != VectorType::SHREDDED_VECTOR) {
 		// input vector is not shredded
 		return false;
@@ -165,8 +165,8 @@ static bool TryFromShreddedExtract(Vector &variant_vec, const vector<VariantPath
 	return TryShreddedExtractRecursive(shredded_vec, components, result, count);
 }
 
-void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
-                                  idx_t count) {
+void VariantUtils::VariantExtract(const Vector &variant_vec, const vector<VariantPathComponent> &components,
+                                  Vector &result, idx_t count) {
 	if (TryFromShreddedExtract(variant_vec, components, result, count)) {
 		return;
 	}
@@ -294,10 +294,10 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	auto count = input.size();
 
 	D_ASSERT(input.ColumnCount() == 2);
-	auto &variant_vec = input.data[0];
+	const auto &variant_vec = input.data[0];
 	D_ASSERT(variant_vec.GetType() == LogicalType::VARIANT());
 
-	auto &path = input.data[1];
+	const auto &path = input.data[1];
 	D_ASSERT(path.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	(void)path;
 

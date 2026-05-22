@@ -43,6 +43,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		result = LogicalComparisonJoin::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_CONNECT:
+		result = LogicalSimple::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
 		result = LogicalCopyDatabase::Deserialize(deserializer);
 		break;
@@ -89,6 +92,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		result = LogicalComparisonJoin::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_DETACH:
+		result = LogicalSimple::Deserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_DISCONNECT:
 		result = LogicalSimple::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:

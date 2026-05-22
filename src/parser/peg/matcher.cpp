@@ -1023,7 +1023,7 @@ private:
 	Matcher &ReservedScalarFunctionName() const;
 	Matcher &ReservedVariable() const;
 
-	void AddKeywordOverride(const char *name, uint32_t score, char extra_char = ' ');
+	void AddKeywordOverride(const char *name, int32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
 	void SuppressSuggestions(const char *name);
 	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name);
@@ -1403,7 +1403,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 	return matcher;
 }
 
-void MatcherFactory::AddKeywordOverride(const char *name, uint32_t score, char extra_char) {
+void MatcherFactory::AddKeywordOverride(const char *name, int32_t score, char extra_char) {
 	auto &keyword_matcher = allocator.Allocate(make_uniq<KeywordMatcher>(name, score, extra_char));
 	keyword_overrides.insert(make_pair(name, reference<Matcher>(keyword_matcher)));
 }
@@ -1437,6 +1437,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("ColumnName", ColumnName());
 	AddRuleOverride("ReservedColumnName", ReservedColumnName());
 	AddRuleOverride("IndexName", Variable());
+	AddRuleOverride("ReservedIndexName", ReservedVariable());
 	AddRuleOverride("SequenceName", Variable());
 
 	AddRuleOverride("FunctionName", ScalarFunctionName());

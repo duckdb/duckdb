@@ -62,7 +62,7 @@ RETURN_TYPE RadixBitsSwitch(const idx_t radix_bits, ARGS &&... args) {
 
 struct SelectFunctor {
 	template <idx_t radix_bits>
-	static idx_t Operation(Vector &hashes, const SelectionVector *sel, const idx_t count,
+	static idx_t Operation(const Vector &hashes, const SelectionVector *sel, const idx_t count,
 	                       const ValidityMask &partition_mask, SelectionVector *true_sel, SelectionVector *false_sel) {
 		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
 		return UnaryExecutor::Select<hash_t>(
@@ -75,15 +75,15 @@ struct SelectFunctor {
 	}
 };
 
-idx_t RadixPartitioning::Select(Vector &hashes, const SelectionVector *sel, const idx_t count, const idx_t radix_bits,
-                                const ValidityMask &partition_mask, SelectionVector *true_sel,
+idx_t RadixPartitioning::Select(const Vector &hashes, const SelectionVector *sel, const idx_t count,
+                                const idx_t radix_bits, const ValidityMask &partition_mask, SelectionVector *true_sel,
                                 SelectionVector *false_sel) {
 	return RadixBitsSwitch<SelectFunctor, idx_t>(radix_bits, hashes, sel, count, partition_mask, true_sel, false_sel);
 }
 
 struct ComputePartitionIndicesFunctor {
 	template <idx_t radix_bits>
-	static void Operation(Vector &hashes, Vector &partition_indices, const idx_t original_count,
+	static void Operation(const Vector &hashes, Vector &partition_indices, const idx_t original_count,
 	                      const SelectionVector &append_sel, const idx_t append_count) {
 		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
 		if (!append_sel.IsSet() || hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -181,6 +181,48 @@ void RadixPartitionedTupleData::Initialize() {
 	for (idx_t i = 0; i < num_partitions; i++) {
 		partitions.emplace_back(CreatePartitionCollection());
 		partitions.back()->SetPartitionIndex(i);
+	}
+}
+
+void RadixPartitionedTupleData::ResetAppendState(PartitionedTupleDataAppendState &state,
+                                                 const TupleDataPinProperties properties) const {
+	if (!state.partition_sel.data()) {
+		state.partition_sel.Initialize();
+	}
+	if (!state.reverse_partition_sel.data()) {
+		state.reverse_partition_sel.Initialize();
+	}
+
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	if (state.partition_pin_states.size() != num_partitions) {
+		state.partition_pin_states.clear();
+		state.partition_pin_states.reserve(num_partitions);
+		for (idx_t i = 0; i < num_partitions; i++) {
+			state.partition_pin_states.emplace_back();
+		}
+	}
+	for (idx_t i = 0; i < num_partitions; i++) {
+		auto &pin_state = state.partition_pin_states[i];
+		pin_state.row_handles.clear();
+		pin_state.heap_handles.clear();
+		partitions[i]->InitializeAppend(pin_state, properties);
+	}
+
+	if (state.chunk_state.column_ids.empty()) {
+		auto column_count = layout.ColumnCount();
+		vector<column_t> column_ids;
+		column_ids.reserve(column_count);
+		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+			column_ids.emplace_back(col_idx);
+		}
+		partitions[0]->InitializeChunkState(state.chunk_state, std::move(column_ids));
+	}
+	state.chunk_state.chunk_lock = nullptr;
+	state.chunk_state.chunk_parts.clear();
+	state.chunk_state.chunk_part_indices.clear();
+
+	if (state.fixed_partition_entries.size() != num_partitions) {
+		state.fixed_partition_entries.resize(num_partitions);
 	}
 }
 

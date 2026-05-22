@@ -45,6 +45,7 @@ public:
 
 	void SinkBuildKeys(DataChunk &keys);
 	void Merge(MarkJoinPostProcessor &other, bool &has_null);
+	void Reset();
 
 	void ApplyJoinKeyNullMask(DataChunk &join_keys, const vector<bool> &null_values_are_equal, ValidityMask &mask) const;
 	void RefineUnmatchedRows(DataChunk &join_keys, ValidityMask &mask, const bool *found_match, bool has_null);
