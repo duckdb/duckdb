@@ -100,11 +100,10 @@ static unique_ptr<RenderTreeNode> CreateNode(const PipelineRenderNode &op) {
 }
 
 static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
-	auto &info = op.GetOperatorInfo();
-	auto &extra_info = info.extra_info;
+	auto &info = op.GetOperatorMetrics();
 
 	auto &node_name = info.name;
-	auto result = make_uniq<RenderTreeNode>(node_name, extra_info);
+	auto result = make_uniq<RenderTreeNode>(node_name, info.GetExtraInfo());
 	result->extra_text[RenderTreeNode::CARDINALITY] = to_string(info.elements_returned);
 	string timing = StringUtil::Format("%.2f", info.time);
 	result->extra_text[RenderTreeNode::TIMING] = timing + "s";

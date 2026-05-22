@@ -20,8 +20,6 @@ class PhysicalOperator;
 class AttachedDatabase;
 class RowGroup;
 struct DataTableInfo;
-enum class MetricType : uint8_t;
-
 //! Log types provide some structure to the formats that the different log messages can have
 //! For now, this holds a type that the VARCHAR value will be auto-cast into.
 class LogType {
@@ -120,7 +118,7 @@ public:
 
 	static LogicalType GetLogType();
 
-	static string ConstructLogMessage(const MetricType &type, const Value &value);
+	static string ConstructLogMessage(const string &metric, const Value &value);
 };
 
 class CheckpointLogType : public LogType {
