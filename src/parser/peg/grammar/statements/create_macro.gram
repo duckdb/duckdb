@@ -1,8 +1,12 @@
 CreateMacroStmt <- MacroOrFunction IfNotExists? QualifiedName List(MacroDefinition)
 
-MacroOrFunction <- 'MACRO' / 'FUNCTION'
+MacroOrFunction <- 'MACRO' / 'FUNCTION' / 'PROCEDURE'
 
-MacroDefinition <- Parens(MacroParameters?) 'AS' (TableMacroDefinition / ScalarMacroDefinition)
+MacroDefinition <- Parens(MacroParameters?) FunctionDecorator* (AsMacroBody / AtomicMacroBody / ReturnMacroBody) FunctionDecorator*
+
+AsMacroBody <- 'AS' (TableMacroDefinition / ScalarMacroDefinition)
+AtomicMacroBody <- 'BEGIN' 'ATOMIC' SelectStatementInternal ';'? 'END'
+ReturnMacroBody <- 'RETURN' Expression
 
 MacroParameters <- List(MacroParameter)
 MacroParameter <- NamedParameter / SimpleParameter
@@ -10,3 +14,17 @@ SimpleParameter <- TypeFuncName Type?
 
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE' SelectStatementInternal
+
+FunctionDecorator <- ReturnsClause / VolatilityKeyword / StrictClause / LanguageClause / SecurityClause / CostClause / RowsClause / ParallelClause / LeakproofClause
+
+ReturnsClause <- 'RETURNS' (ReturnsTable / ReturnsNull / Type)
+ReturnsTable <- 'TABLE' Parens(List(ColIdType))
+ReturnsNull <- 'NULL' 'ON' 'NULL' 'INPUT'
+VolatilityKeyword <- 'IMMUTABLE' / 'STABLE' / 'VOLATILE'
+StrictClause <- 'STRICT' / ('CALLED' 'ON' 'NULL' 'INPUT')
+LanguageClause <- 'LANGUAGE' Identifier
+SecurityClause <- 'EXTERNAL'? 'SECURITY' ('DEFINER' / 'INVOKER')
+CostClause <- 'COST' NumberLiteral
+RowsClause <- 'ROWS' NumberLiteral
+ParallelClause <- 'PARALLEL' Identifier
+LeakproofClause <- 'NOT'? 'LEAKPROOF'

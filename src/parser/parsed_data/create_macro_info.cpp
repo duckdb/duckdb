@@ -35,6 +35,7 @@ unique_ptr<CreateInfo> CreateMacroInfo::Copy() const {
 		result->macros.push_back(macro->Copy());
 	}
 	result->name = name;
+	result->is_procedure = is_procedure;
 	CopyFunctionProperties(*result);
 	return std::move(result);
 }

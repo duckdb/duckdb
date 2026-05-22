@@ -16,7 +16,9 @@ DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
 
 DropTable <- TableOrView IfExists? List(BaseTableName)
 DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
-DropFunction <- FunctionType IfExists? List(FunctionIdentifier)
+DropFunction <- FunctionType IfExists? List(DropFunctionItem)
+DropFunctionItem <- FunctionIdentifier DropFunctionArgs?
+DropFunctionArgs <- '(' List(Type)? ')'
 DropSchema <- 'SCHEMA' IfExists? List(QualifiedSchemaName)
 DropIndex <- 'INDEX' IfExists? List(QualifiedIndexName)
 QualifiedIndexName <- CatalogReservedSchemaIndex / SchemaReservedIndex / IndexName
@@ -29,7 +31,7 @@ DropSecret <- Temporary? 'SECRET' IfExists? SecretName DropSecretStorage?
 
 TableOrView <- CommentTable / CommentView / MaterializedViewEntry
 MaterializedViewEntry <- 'MATERIALIZED' 'VIEW'
-FunctionType <- 'MACRO' / 'FUNCTION'
+FunctionType <- 'MACRO' / 'FUNCTION' / 'PROCEDURE'
 
 DropBehavior <- 'CASCADE' / 'RESTRICT'
 

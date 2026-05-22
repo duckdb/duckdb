@@ -284,6 +284,9 @@ void MacroFunction::CopyProperties(MacroFunction &other) const {
 		other.default_parameters[kv.first] = kv.second->Copy();
 	}
 	other.types = types;
+	other.return_types = return_types;
+	other.return_names = return_names;
+	other.is_procedure = is_procedure;
 }
 
 vector<unique_ptr<ParsedExpression>>

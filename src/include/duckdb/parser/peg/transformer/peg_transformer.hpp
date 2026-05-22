@@ -418,6 +418,9 @@ private:
 	                                                               ParseResult &parse_result);
 	static unique_ptr<MacroFunction> TransformScalarMacroDefinition(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
+	static unique_ptr<MacroFunction> TransformAsMacroBody(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<MacroFunction> TransformAtomicMacroBody(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<MacroFunction> TransformReturnMacroBody(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<MacroParameter> TransformMacroParameters(PEGTransformer &transformer, ParseResult &parse_result);
 	static MacroParameter TransformMacroParameter(PEGTransformer &transformer, ParseResult &parse_result);
 	static MacroParameter TransformSimpleParameter(PEGTransformer &transformer, ParseResult &parse_result);

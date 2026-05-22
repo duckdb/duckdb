@@ -74,15 +74,39 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropFunction(PEGTransf
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
 	auto catalog_type = CatalogType::MACRO_ENTRY;
+	// FunctionType is excluded (no transformer), so we have to inspect the raw
+	// keyword to detect `PROCEDURE` vs `FUNCTION` vs `MACRO`.
+	auto &func_type_pr = list_pr.Child<ListParseResult>(0);
+	auto &func_type_choice = func_type_pr.Child<ChoiceParseResult>(0).GetResult();
+	auto func_type_keyword = func_type_choice.Cast<KeywordParseResult>().keyword;
+	if (StringUtil::CIEquals(func_type_keyword, "PROCEDURE")) {
+		info->is_procedure = true;
+	}
 	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto function_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
 	if (function_list.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	auto function = transformer.Transform<QualifiedName>(function_list[0]);
+	// DropFunctionItem <- FunctionIdentifier DropFunctionArgs?
+	auto &item_pr = function_list[0].get().Cast<ListParseResult>();
+	auto function = transformer.Transform<QualifiedName>(item_pr.Child<ListParseResult>(0));
 	info->catalog = function.catalog.empty() ? INVALID_CATALOG : function.catalog;
 	info->schema = function.schema;
 	info->name = function.name;
+	// DropFunctionArgs <- '(' List(Type)? ')'
+	auto &args_opt = item_pr.Child<OptionalParseResult>(1);
+	if (args_opt.HasResult()) {
+		info->has_func_args = true;
+		auto &args_list = args_opt.GetResult().Cast<ListParseResult>();
+		// args_list children: '(', List(Type)?, ')'
+		auto &inner_opt = args_list.Child<OptionalParseResult>(1);
+		if (inner_opt.HasResult()) {
+			auto type_results = ExtractParseResultsFromList(inner_opt.GetResult());
+			for (auto type_ref : type_results) {
+				info->func_parameters.push_back(transformer.Transform<LogicalType>(type_ref));
+			}
+		}
+	}
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	info->type = catalog_type;
 	result->info = std::move(info);

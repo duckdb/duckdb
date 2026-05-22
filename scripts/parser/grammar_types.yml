@@ -1100,6 +1100,8 @@ excluded_rules:
   - CommentValue
   - Program
   - FunctionType
+  - DropFunctionItem
+  - DropFunctionArgs
   - Database
   - AbortOrRollback
   - CommitOrEnd

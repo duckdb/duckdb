@@ -43,6 +43,16 @@ public:
 	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> default_parameters;
 	//! The types of the parameters
 	vector<LogicalType> types;
+	//! Declared return type(s) from RETURNS clause.
+	//! For scalar RETURNS <type>: single entry.
+	//! For RETURNS TABLE(col type, ...): one entry per column.
+	//! Empty when no RETURNS was specified.
+	vector<LogicalType> return_types;
+	//! Declared column names for RETURNS TABLE(name type, ...). Parallel to
+	//! return_types (one entry per column). Empty for scalar RETURNS.
+	vector<string> return_names;
+	//! Whether this overload is a procedure (CALL only, not usable in SELECT/FROM)
+	bool is_procedure = false;
 
 public:
 	virtual ~MacroFunction() {

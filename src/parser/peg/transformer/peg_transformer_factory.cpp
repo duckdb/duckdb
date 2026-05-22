@@ -236,6 +236,9 @@ void PEGTransformerFactory::RegisterCreateMacro() {
 	REGISTER_TRANSFORM(TransformMacroDefinition);
 	REGISTER_TRANSFORM(TransformTableMacroDefinition);
 	REGISTER_TRANSFORM(TransformScalarMacroDefinition);
+	REGISTER_TRANSFORM(TransformAsMacroBody);
+	REGISTER_TRANSFORM(TransformAtomicMacroBody);
+	REGISTER_TRANSFORM(TransformReturnMacroBody);
 	REGISTER_TRANSFORM(TransformMacroParameters);
 	REGISTER_TRANSFORM(TransformMacroParameter);
 	REGISTER_TRANSFORM(TransformSimpleParameter);

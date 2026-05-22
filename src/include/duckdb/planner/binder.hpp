@@ -48,6 +48,7 @@ class OrderBinder;
 class TableCatalogEntry;
 class ViewCatalogEntry;
 class TableMacroCatalogEntry;
+class MacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
 class LogicalVacuum;
@@ -362,6 +363,8 @@ private:
 	bool is_outside_flattened = true;
 	//! Whether or not the binder can contain NULLs as the root of expressions
 	bool can_contain_nulls = false;
+	//! Whether procedure calls are allowed (set by CALL statement binding)
+	bool allow_procedure_call = false;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Used to retrieve CatalogEntry's
@@ -449,7 +452,7 @@ private:
 	                             unique_ptr<LogicalOperator> child_operator,
 	                             virtual_column_map_t virtual_columns = virtual_column_map_t());
 
-	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func, idx_t depth);
+	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, MacroCatalogEntry &macro_func, idx_t depth);
 
 	BoundStatement BindCTE(const string &ctename, CommonTableExpressionInfo &info);
 

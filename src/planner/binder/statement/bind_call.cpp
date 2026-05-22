@@ -15,6 +15,7 @@ BoundStatement Binder::Bind(CallStatement &stmt) {
 	select_node->from_table = std::move(table_function);
 	select_statement.node = std::move(select_node);
 
+	allow_procedure_call = true;
 	auto result = Bind(select_statement);
 	auto &properties = GetStatementProperties();
 	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;

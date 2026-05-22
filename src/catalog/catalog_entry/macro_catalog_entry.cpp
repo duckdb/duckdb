@@ -8,7 +8,7 @@ MacroCatalogEntry::MacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
     : FunctionEntry(
           (info.macros[0]->type == MacroType::SCALAR_MACRO ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY),
           catalog, schema, info),
-      macros(std::move(info.macros)) {
+      macros(std::move(info.macros)), is_procedure(info.is_procedure) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
 	this->extension_name = info.extension_name;
@@ -47,6 +47,7 @@ unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	for (auto &function : macros) {
 		info->macros.push_back(function->Copy());
 	}
+	info->is_procedure = is_procedure;
 	info->extension_name = extension_name;
 	info->dependencies = dependencies;
 	info->comment = comment;
