@@ -59,7 +59,6 @@ ReservedFunctionName <- Identifier
 TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier
-TriggerName <- Identifier
 CollationName <- Identifier
 CopyOptionName <- ColLabel
 
@@ -1037,7 +1036,8 @@ ByTarget <- 'BY' 'TARGET'
 
 
 
-PragmaStatement <- 'PRAGMA' (PragmaAssign / PragmaFunction)
+PragmaStatement <- 'PRAGMA' PragmaAssignOrFunction
+PragmaAssignOrFunction <- PragmaAssign / PragmaFunction
 
 PragmaAssign <- SettingName '=' VariableList
 PragmaFunction <- PragmaName PragmaParameters?
@@ -1152,7 +1152,9 @@ LoadStatement <- 'LOAD' ColIdOrString ExtensionAlias?
 ExtensionAlias <- 'AS' Identifier
 InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
 UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
-FromSource <- 'FROM' (Identifier / StringLiteral)
+FromSource <- FromSourceIdentifier / FromSourceString
+FromSourceIdentifier <- 'FROM' Identifier
+FromSourceString <- 'FROM' StringLiteral
 VersionNumber <- 'VERSION' IdentifierOrStringLiteral
 DropStatement <- 'DROP' DropEntries DropBehavior?
 
@@ -1204,7 +1206,7 @@ UpdateSetClause <- UpdateSetElementList / UpdateSetTuple
 UpdateSetTuple <- Parens(List(ColumnName)) '=' Expression
 UpdateSetElementList <- List(UpdateSetElement)
 UpdateSetElement <- UpdateSetColumnTarget '=' Expression
-UpdateSetColumnTarget <- ColumnName ('.' Identifier)*
+UpdateSetColumnTarget <- ColumnName DotIdentifier*
 
 InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
 
@@ -1528,7 +1530,8 @@ AddColumnEntry <- DottedIdentifier Type? GeneratedColumn? ColumnConstraint*
 DropColumn <- 'DROP' 'COLUMN'? IfExists? NestedColumnName DropBehavior?
 AlterColumn <- 'ALTER' 'COLUMN'? NestedColumnName AlterColumnEntry
 RenameColumn <- 'RENAME' 'COLUMN'? NestedColumnName 'TO' Identifier
-NestedColumnName <- (Identifier '.')* ColumnName
+NestedColumnName <- IdentifierDot* ColumnName
+IdentifierDot <- Identifier '.'
 RenameAlter <- 'RENAME' 'TO' Identifier
 SetPartitionedBy <- 'SET' 'PARTITIONED' 'BY' Parens(List(Expression))
 ResetPartitionedBy <- 'RESET' 'PARTITIONED' 'BY'
@@ -1544,7 +1547,9 @@ AddDefault <- 'SET' 'DEFAULT' Expression
 DropDefault <- 'DROP' 'DEFAULT'
 
 ChangeNullability <- DropOrSet 'NOT' 'NULL'
-DropOrSet <- 'DROP' / 'SET'
+DropOrSet <- DropNullability / SetNullability
+DropNullability <- 'DROP'
+SetNullability <- 'SET'
 
 AlterType <- SetData? 'TYPE' Type? UsingExpression?
 SetData <- 'SET' 'DATA'?
@@ -1581,10 +1586,13 @@ SeqOwnedBy <- 'OWNED' 'BY' QualifiedName
 SeqMinOrMax <- MinValue / MaxValue
 MinValue <- 'MINVALUE'
 MaxValue <- 'MAXVALUE'
-ExplainStatement <- 'EXPLAIN' 'ANALYZE'? ExplainOptionList? ExplainableStatements
+ExplainStatement <- 'EXPLAIN' ExplainAnalyze? ExplainOptionList? ExplainableStatements
+ExplainAnalyze <- 'ANALYZE'
 ExplainOptionList <- Parens(List(ExplainOption))
 ExplainOption <- ExplainOptionName Expression?
 ExplainOptionName <- 'ANALYZE' / 'ANALYSE' / ColId / FuncNameKeyword / TypeNameKeyword
+
+ExplainSelectStatement <- SelectStatementInternal
 
 ExplainableStatements <-
     AlterStatement /
@@ -1602,7 +1610,7 @@ ExplainableStatements <-
     MergeIntoStatement /
     PragmaStatement /
     PrepareStatement /
-    SelectStatementInternal /
+    ExplainSelectStatement /
     TransactionStatement /
     UpdateStatement /
     VacuumStatement /
@@ -1641,10 +1649,11 @@ CommentSchema <- 'SCHEMA'
 CommentType <- 'TYPE'
 CommentColumn <- 'COLUMN'
 
-CommentValue <- 'NULL' / StringLiteral
+CommentValue <- NullLiteral / StringLiteral
 CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody
 
 TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
+TriggerName <- Identifier
 
 TriggerTiming <- TriggerBefore / TriggerAfter / TriggerInsteadOf
 TriggerBefore <- 'BEFORE'
