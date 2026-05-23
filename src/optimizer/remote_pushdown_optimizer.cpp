@@ -800,6 +800,50 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 				return true;
 			}
 		}
+		// Also check modifiers: ORDER BY, DISTINCT ON, and LIMIT expressions can carry
+		// correlated references to outer local tables (e.g. LATERAL ... ORDER BY outer_col).
+		for (auto &modifier : select.modifiers) {
+			switch (modifier->type) {
+			case ResultModifierType::ORDER_MODIFIER: {
+				for (auto &order : modifier->Cast<OrderModifier>().orders) {
+					if (HasLocalTableReference(*order.expression)) {
+						return true;
+					}
+				}
+				break;
+			}
+			case ResultModifierType::DISTINCT_MODIFIER: {
+				for (auto &expr : modifier->Cast<DistinctModifier>().distinct_on_targets) {
+					if (HasLocalTableReference(*expr)) {
+						return true;
+					}
+				}
+				break;
+			}
+			case ResultModifierType::LIMIT_MODIFIER: {
+				auto &lm = modifier->Cast<LimitModifier>();
+				if (lm.limit && HasLocalTableReference(*lm.limit)) {
+					return true;
+				}
+				if (lm.offset && HasLocalTableReference(*lm.offset)) {
+					return true;
+				}
+				break;
+			}
+			case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+				auto &lm = modifier->Cast<LimitPercentModifier>();
+				if (lm.limit && HasLocalTableReference(*lm.limit)) {
+					return true;
+				}
+				if (lm.offset && HasLocalTableReference(*lm.offset)) {
+					return true;
+				}
+				break;
+			}
+			default:
+				break;
+			}
+		}
 		return false;
 	}
 	case QueryNodeType::SET_OPERATION_NODE: {

@@ -149,6 +149,16 @@ select count(*) from local_t, lateral (select * from rpc.t1 where i = local_col 
 ----
 0
 
+# Correlated ORDER BY in lateral subquery: outer local_col reference in ORDER BY must block push.
+# Without the fix, HasLocalTableReference missed modifiers and the subquery was pushed to the
+# remote, which then failed because local_col is not a column on the remote server.
+# With the fix, the correlation is detected and the lateral executes locally:
+# 10 outer rows (local_t) x 1 inner row (LIMIT 1 from rpc.t1) = 10 rows
+query I
+select count(*) from local_t, lateral (select i from rpc.t1 order by local_col limit 1) sub
+----
+10
+
 # Lateral: all remote outer + remote inner -> pushed (no SEQ_SCAN)
 query II
 explain select t1a.i from rpc.t1 t1a, lateral (select * from rpc.t1 t1b where t1b.i = t1a.i) sub
