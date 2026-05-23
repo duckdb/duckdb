@@ -41,7 +41,6 @@
 #include "duckdb/common/enums/copy_option_mode.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
-#include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -899,67 +898,16 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 	return {};
 }
 
-//===--------------------------------------------------------------------===//
-// Read Parquet Fallback
-//===--------------------------------------------------------------------===//
-static bool IsParquetFallbackFileNotFound(const string &error) {
-	return StringUtil::Contains(error, "No files found that match the pattern") ||
-	       StringUtil::Contains(error, "read_parquet_fallback needs at least one file to read") ||
-	       StringUtil::Contains(error, "Request returned HTTP 404");
-}
-
-static unique_ptr<TableRef> QueryReplacement(const string &query) {
-	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ConstantExpression>(Value(query)));
-
-	auto result = make_uniq<TableFunctionRef>();
-	result->function = make_uniq<FunctionExpression>("query", std::move(children));
-	return unique_ptr_cast<TableFunctionRef, TableRef>(std::move(result));
-}
-
-static unique_ptr<TableRef> ParquetFallbackBindReplace(ClientContext &context, TableFunctionBindInput &input) {
-	auto fallback_entry = input.named_parameters.find("fallback_query");
-	if (fallback_entry == input.named_parameters.end()) {
-		throw BinderException("read_parquet_fallback requires the fallback_query parameter");
-	}
-	if (fallback_entry->second.IsNull()) {
-		throw BinderException("Cannot use NULL as argument for \"fallback_query\"");
-	}
-	auto fallback_query = StringValue::Get(fallback_entry->second);
-	input.named_parameters.erase("fallback_query");
-
-	vector<LogicalType> return_types;
-	vector<string> names;
-	try {
-		input.table_function.bind(context, input, return_types, names);
-		return nullptr;
-	} catch (IOException &ex) {
-		if (!IsParquetFallbackFileNotFound(ex.what())) {
-			throw;
-		}
-	} catch (HTTPException &ex) {
-		if (!IsParquetFallbackFileNotFound(ex.what())) {
-			throw;
-		}
-	}
-	return QueryReplacement(fallback_query);
-}
-
 static void LoadInternal(ExtensionLoader &loader) {
 	auto &db_instance = loader.GetDatabaseInstance();
 	auto &fs = db_instance.GetFileSystem();
 	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_uniq<ZStdFileSystem>());
 
 	auto scan_fun = ParquetScanFunction::GetFunctionSet();
-	auto fallback_fun = scan_fun.functions[1];
-	fallback_fun.name = "read_parquet_fallback";
-	fallback_fun.bind_replace = ParquetFallbackBindReplace;
-	fallback_fun.named_parameters["fallback_query"] = LogicalType::VARCHAR;
 	scan_fun.name = "read_parquet";
 	loader.RegisterFunction(scan_fun);
 	scan_fun.name = "parquet_scan";
 	loader.RegisterFunction(scan_fun);
-	loader.RegisterFunction(fallback_fun);
 
 	// parquet_metadata
 	ParquetMetaDataFunction meta_fun;

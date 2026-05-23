@@ -697,7 +697,7 @@ unique_ptr<MultiFileList> FileSystem::GlobFileList(const string &pattern, const 
 				return result;
 			}
 		}
-		if (input.behavior == FileGlobOptions::FALLBACK_GLOB || input.behavior == FileGlobOptions::DISALLOW_EMPTY) {
+		if (!input.AllowsEmpty()) {
 			throw IOException("No files found that match the pattern \"%s\"", pattern);
 		}
 	}
