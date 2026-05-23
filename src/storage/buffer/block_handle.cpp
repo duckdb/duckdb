@@ -143,9 +143,7 @@ unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l) {
 	auto result = std::move(GetBuffer());
 	memory_charge.Resize(0);
 	SetState(BlockState::BLOCK_UNLOADED);
-	l.unlock();
 	OnUnload();
-	l.lock();
 	return result;
 }
 
