@@ -319,6 +319,156 @@ TEST_CASE("Lazy reindex: only touched file is reindexed", "[external_file_cache]
 	REQUIRE(blocks_b == 8); // untouched: still 8 x 4KiB
 }
 
+TEST_CASE("External file cache survives database destruction with loaded blocks", "[external_file_cache]") {
+	auto db = make_uniq<DuckDB>(":memory:");
+	auto &db_instance = *db->instance;
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t block_size = db_instance.GetExternalFileCache().GetCacheBlockSize(TestDirectoryPath());
+	const auto content = MakeTestContent(block_size);
+	EFCTestFileGuard test_file("test_efc_db_shutdown_loaded.bin", content);
+
+	{
+		CachingFileSystem cfs(*tracking_fs, db_instance);
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content);
+		// Handle dropped here. The block remains BLOCK_LOADED in the cache, so the entry keeps there.
+	}
+	REQUIRE(CountCachedBlocks(db_instance.GetExternalFileCache()) == 1);
+	REQUIRE(HasLoadedCachedBlocks(db_instance.GetExternalFileCache()));
+
+	// Destroy the database while a LOADED block is still in the cache.
+	db.reset();
+}
+
+TEST_CASE("Disable external file cache drains entries even when blocks are loaded", "[external_file_cache]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t block_size = db_instance.GetExternalFileCache().GetCacheBlockSize(TestDirectoryPath());
+	const auto content = MakeTestContent(block_size);
+	EFCTestFileGuard test_file("test_efc_set_enabled.bin", content);
+
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+	auto &cache = db_instance.GetExternalFileCache();
+
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content);
+		REQUIRE(CountCachedBlocks(cache) == 1);
+		REQUIRE(HasLoadedCachedBlocks(cache));
+	}
+	REQUIRE(CountCachedBlocks(cache) == 1);
+
+	// Disable the cache while a LOADED block is still present.
+	cache.SetEnabled(false);
+	REQUIRE(!cache.IsEnabled());
+	REQUIRE(CountCachedBlocks(cache) == 0);
+
+	// Re-enabling the cache must yield an empty cache.
+	cache.SetEnabled(true);
+	REQUIRE(cache.IsEnabled());
+	REQUIRE(CountCachedBlocks(cache) == 0);
+
+	// And caching must work again after re-enable.
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content);
+		REQUIRE(CountCachedBlocks(cache) == 1);
+	}
+}
+
+TEST_CASE("External file cache reopens cleanly after entry erased", "[external_file_cache]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t block_size = db_instance.GetExternalFileCache().GetCacheBlockSize(TestDirectoryPath());
+	const auto content = MakeTestContent(block_size);
+	EFCTestFileGuard test_file("test_efc_reopen_after_erase.bin", content);
+
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+	auto &cache = db_instance.GetExternalFileCache();
+
+	// Lifecycle 1: open, read, close, force eviction. Both refcounts hit 0, entry erased.
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content);
+		REQUIRE(CountCachedBlocks(cache) == 1);
+	}
+	REQUIRE(CountCachedBlocks(cache) == 1); // active=0, loaded=1 -> entry kept
+	ForceExternalCacheBlockUnload(db_instance, cache, block_size);
+	REQUIRE(CountCachedBlocks(cache) == 0); // entry erased
+
+	// Lifecycle 2: open the same path again. Must succeed and read the correct data via a
+	// freshly-created CachedFile (not a stale one).
+	{
+		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+		REQUIRE(ReadFull(*handle, block_size) == content);
+		REQUIRE(CountCachedBlocks(cache) == 1);
+		REQUIRE(HasLoadedCachedBlocks(cache));
+	}
+	REQUIRE(CountCachedBlocks(cache) == 1);
+	ForceExternalCacheBlockUnload(db_instance, cache, block_size);
+	REQUIRE(CountCachedBlocks(cache) == 0);
+}
+
+TEST_CASE("Concurrent open/close/read keeps cache lifecycle accounting consistent", "[external_file_cache]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+
+	constexpr idx_t FILE_COUNT = 4;
+	constexpr idx_t FILE_SIZE = 16 * 1024 + 71;
+	constexpr idx_t WORKER_COUNT = 6;
+
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+
+	vector<unique_ptr<EFCTestFileGuard>> files;
+	vector<string> contents;
+	files.reserve(FILE_COUNT);
+	contents.reserve(FILE_COUNT);
+	for (idx_t i = 0; i < FILE_COUNT; i++) {
+		contents.push_back(MakeTestContent(FILE_SIZE));
+		files.push_back(make_uniq<EFCTestFileGuard>(StringUtil::Format("test_efc_concurrent_lifecycle_%llu.bin", i),
+		                                            contents.back()));
+	}
+
+	atomic<bool> stop {false};
+	atomic<idx_t> mismatches {0};
+
+	vector<std::thread> workers;
+	workers.reserve(WORKER_COUNT);
+	for (idx_t w = 0; w < WORKER_COUNT; w++) {
+		workers.emplace_back([&, w]() {
+			idx_t i = w;
+			while (!stop.load()) {
+				const idx_t f = i % FILE_COUNT;
+				auto handle = cfs.OpenFile(MakeTestOpenFileInfo(files[f]->GetPath()), FileFlags::FILE_FLAGS_READ);
+				if (ReadFull(*handle, FILE_SIZE) != contents[f]) {
+					mismatches.fetch_add(1);
+				}
+				// Drop the handle each iteration so active_handle_count flutters between 0..N.
+				i++;
+			}
+		});
+	}
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(500));
+	stop.store(true);
+	for (auto &t : workers) {
+		t.join();
+	}
+	REQUIRE(mismatches.load() == 0);
+
+	// Cache must be in a self-consistent state after the workers exit: SetEnabled(false) must
+	// drain it without tripping any internal ALWAYS_ASSERT on negative refcounts.
+	auto &cache = db_instance.GetExternalFileCache();
+	cache.SetEnabled(false);
+	REQUIRE(CountCachedBlocks(cache) == 0);
+}
+
 TEST_CASE("Concurrent SET and Read do not corrupt data or cache state", "[external_file_cache]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
