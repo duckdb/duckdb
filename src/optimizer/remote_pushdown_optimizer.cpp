@@ -85,15 +85,66 @@ void RemotePushdownOptimizer::Rewrite(unique_ptr<SQLStatement> &statement) {
 	case StatementType::SELECT_STATEMENT:
 		result = Rewrite(*statement->Cast<SelectStatement>().node);
 		break;
-	case StatementType::INSERT_STATEMENT:
-		result = Rewrite(*statement->Cast<InsertStatement>().node);
+	case StatementType::INSERT_STATEMENT: {
+		auto &dml_node = *statement->Cast<InsertStatement>().node;
+		auto saved_returning = std::move(dml_node.returning_list);
+		result = Rewrite(dml_node);
+		dml_node.returning_list = std::move(saved_returning);
+		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+		    !dml_node.returning_list.empty()) {
+			CatalogPushdownResult ret_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+			for (auto &expr : dml_node.returning_list) {
+				ret_result = Merge(ret_result, Rewrite(*expr));
+			}
+			auto combined = Merge(result, ret_result);
+			if (combined.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+				TryPushDMLWithLocalReturning(statement, result);
+				return;
+			}
+			result = combined;
+		}
 		break;
-	case StatementType::DELETE_STATEMENT:
-		result = Rewrite(*statement->Cast<DeleteStatement>().node);
+	}
+	case StatementType::DELETE_STATEMENT: {
+		auto &dml_node = *statement->Cast<DeleteStatement>().node;
+		auto saved_returning = std::move(dml_node.returning_list);
+		result = Rewrite(dml_node);
+		dml_node.returning_list = std::move(saved_returning);
+		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+		    !dml_node.returning_list.empty()) {
+			CatalogPushdownResult ret_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+			for (auto &expr : dml_node.returning_list) {
+				ret_result = Merge(ret_result, Rewrite(*expr));
+			}
+			auto combined = Merge(result, ret_result);
+			if (combined.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+				TryPushDMLWithLocalReturning(statement, result);
+				return;
+			}
+			result = combined;
+		}
 		break;
-	case StatementType::UPDATE_STATEMENT:
-		result = Rewrite(*statement->Cast<UpdateStatement>().node);
+	}
+	case StatementType::UPDATE_STATEMENT: {
+		auto &dml_node = *statement->Cast<UpdateStatement>().node;
+		auto saved_returning = std::move(dml_node.returning_list);
+		result = Rewrite(dml_node);
+		dml_node.returning_list = std::move(saved_returning);
+		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+		    !dml_node.returning_list.empty()) {
+			CatalogPushdownResult ret_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+			for (auto &expr : dml_node.returning_list) {
+				ret_result = Merge(ret_result, Rewrite(*expr));
+			}
+			auto combined = Merge(result, ret_result);
+			if (combined.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+				TryPushDMLWithLocalReturning(statement, result);
+				return;
+			}
+			result = combined;
+		}
 		break;
+	}
 	case StatementType::EXPLAIN_STATEMENT:
 		Rewrite(statement->Cast<ExplainStatement>().stmt);
 		return;
@@ -1066,6 +1117,94 @@ void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const st
 	default:
 		break;
 	}
+}
+
+static void CollectColumnNames(ParsedExpression &expr, vector<string> &col_names) {
+	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		const string &col = expr.Cast<ColumnRefExpression>().column_names.back();
+		for (auto &existing : col_names) {
+			if (StringUtil::CIEquals(existing, col)) {
+				return;
+			}
+		}
+		col_names.push_back(col);
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](ParsedExpression &child) { CollectColumnNames(child, col_names); });
+}
+
+static void StripAllTableQualifiers(ParsedExpression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		auto &col_ref = expr.Cast<ColumnRefExpression>();
+		if (col_ref.column_names.size() > 1) {
+			col_ref.column_names = {col_ref.column_names.back()};
+		}
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](ParsedExpression &child) { StripAllTableQualifiers(child); });
+}
+
+void RemotePushdownOptimizer::TryPushDMLWithLocalReturning(unique_ptr<SQLStatement> &statement,
+                                                            CatalogPushdownResult body_result) {
+	vector<unique_ptr<ParsedExpression>> *returning_list = nullptr;
+	switch (statement->type) {
+	case StatementType::INSERT_STATEMENT:
+		returning_list = &statement->Cast<InsertStatement>().node->returning_list;
+		break;
+	case StatementType::DELETE_STATEMENT:
+		returning_list = &statement->Cast<DeleteStatement>().node->returning_list;
+		break;
+	case StatementType::UPDATE_STATEMENT:
+		returning_list = &statement->Cast<UpdateStatement>().node->returning_list;
+		break;
+	default:
+		return;
+	}
+	D_ASSERT(returning_list && !returning_list->empty());
+
+	// Collect unique column names referenced in the RETURNING expressions
+	vector<string> col_names;
+	for (auto &expr : *returning_list) {
+		CollectColumnNames(*expr, col_names);
+	}
+	if (col_names.empty()) {
+		// No column refs found - cannot build a remote RETURNING list; leave unpushed
+		return;
+	}
+
+	// Build outer SELECT list: copies of RETURNING expressions with table/catalog qualifiers stripped
+	vector<unique_ptr<ParsedExpression>> outer_select_list;
+	for (auto &expr : *returning_list) {
+		auto outer_expr = expr->Copy();
+		StripAllTableQualifiers(*outer_expr);
+		outer_select_list.push_back(std::move(outer_expr));
+	}
+
+	// Replace RETURNING with simplified column refs for remote execution
+	returning_list->clear();
+	for (auto &col : col_names) {
+		returning_list->push_back(make_uniq<ColumnRefExpression>(col));
+	}
+
+	// Strip catalog name from the whole statement and serialize as remote SQL
+	StripCatalogName(*statement, body_result.catalog->GetName());
+	string remote_sql = statement->ToString();
+
+	// Build: SELECT <outer_exprs> FROM (SELECT * FROM quack_query_by_name(...)) returning_sub
+	auto inner_select_node = make_uniq<SelectNode>();
+	inner_select_node->select_list.push_back(make_uniq<StarExpression>());
+	inner_select_node->from_table = CreateRemoteFunctionRef(body_result, std::move(remote_sql));
+	auto inner_stmt = make_uniq<SelectStatement>();
+	inner_stmt->node = std::move(inner_select_node);
+
+	auto outer_select_node = make_uniq<SelectNode>();
+	outer_select_node->select_list = std::move(outer_select_list);
+	outer_select_node->from_table = make_uniq<SubqueryRef>(std::move(inner_stmt), "returning_sub");
+	auto outer_stmt = make_uniq<SelectStatement>();
+	outer_stmt->node = std::move(outer_select_node);
+	statement = std::move(outer_stmt);
 }
 
 void RemotePushdownOptimizer::FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result) {

@@ -200,5 +200,39 @@ select min(i), max(i) from rpc.t1
 ----
 0	9
 
+# ============================================================
+# RETURNING with local macro: body pushed to remote,
+# macro expression evaluated locally on returned rows.
+# Previously crashed with "Mismatch in input vector sizes".
+# ============================================================
+
+statement ok
+create macro double_it(x) as x * 2;
+
+# INSERT RETURNING with local macro: remote executes INSERT RETURNING i,
+# local SELECT applies double_it(i) = 50*2 = 100
+query I
+insert into rpc.t1 values (50) returning double_it(i)
+----
+100
+
+statement ok
+delete from rpc.t1 where i = 50
+
+# UPDATE RETURNING with local macro
+statement ok
+insert into rpc.t1 values (99);
+
+query I
+update rpc.t1 set i = i + 1 where i = 99 returning double_it(i)
+----
+200
+
+statement ok
+delete from rpc.t1 where i = 100
+
+statement ok
+drop macro double_it;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
