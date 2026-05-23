@@ -248,11 +248,36 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 				PushdownSubqueries(expr);
 			}
 			for (auto &modifier : node.modifiers) {
-				if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
+				switch (modifier->type) {
+				case ResultModifierType::ORDER_MODIFIER: {
 					auto &order_mod = modifier->Cast<OrderModifier>();
 					for (auto &order : order_mod.orders) {
 						PushdownSubqueries(order.expression);
 					}
+					break;
+				}
+				case ResultModifierType::LIMIT_MODIFIER: {
+					auto &limit_mod = modifier->Cast<LimitModifier>();
+					if (limit_mod.limit) {
+						PushdownSubqueries(limit_mod.limit);
+					}
+					if (limit_mod.offset) {
+						PushdownSubqueries(limit_mod.offset);
+					}
+					break;
+				}
+				case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+					auto &limit_mod = modifier->Cast<LimitPercentModifier>();
+					if (limit_mod.limit) {
+						PushdownSubqueries(limit_mod.limit);
+					}
+					if (limit_mod.offset) {
+						PushdownSubqueries(limit_mod.offset);
+					}
+					break;
+				}
+				default:
+					break;
 				}
 			}
 		}
@@ -855,11 +880,43 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 			StripCatalogName(*select.qualify, catalog_name);
 		}
 		for (auto &modifier : select.modifiers) {
-			if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
+			switch (modifier->type) {
+			case ResultModifierType::ORDER_MODIFIER: {
 				auto &order_mod = modifier->Cast<OrderModifier>();
 				for (auto &order : order_mod.orders) {
 					StripCatalogName(*order.expression, catalog_name);
 				}
+				break;
+			}
+			case ResultModifierType::LIMIT_MODIFIER: {
+				auto &limit_mod = modifier->Cast<LimitModifier>();
+				if (limit_mod.limit) {
+					StripCatalogName(*limit_mod.limit, catalog_name);
+				}
+				if (limit_mod.offset) {
+					StripCatalogName(*limit_mod.offset, catalog_name);
+				}
+				break;
+			}
+			case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+				auto &limit_mod = modifier->Cast<LimitPercentModifier>();
+				if (limit_mod.limit) {
+					StripCatalogName(*limit_mod.limit, catalog_name);
+				}
+				if (limit_mod.offset) {
+					StripCatalogName(*limit_mod.offset, catalog_name);
+				}
+				break;
+			}
+			case ResultModifierType::DISTINCT_MODIFIER: {
+				auto &distinct_mod = modifier->Cast<DistinctModifier>();
+				for (auto &expr : distinct_mod.distinct_on_targets) {
+					StripCatalogName(*expr, catalog_name);
+				}
+				break;
+			}
+			default:
+				break;
 			}
 		}
 		break;
@@ -936,11 +993,43 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 			StripCatalogName(*child, catalog_name);
 		}
 		for (auto &modifier : setop.modifiers) {
-			if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
+			switch (modifier->type) {
+			case ResultModifierType::ORDER_MODIFIER: {
 				auto &order_mod = modifier->Cast<OrderModifier>();
 				for (auto &order : order_mod.orders) {
 					StripCatalogName(*order.expression, catalog_name);
 				}
+				break;
+			}
+			case ResultModifierType::LIMIT_MODIFIER: {
+				auto &limit_mod = modifier->Cast<LimitModifier>();
+				if (limit_mod.limit) {
+					StripCatalogName(*limit_mod.limit, catalog_name);
+				}
+				if (limit_mod.offset) {
+					StripCatalogName(*limit_mod.offset, catalog_name);
+				}
+				break;
+			}
+			case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+				auto &limit_mod = modifier->Cast<LimitPercentModifier>();
+				if (limit_mod.limit) {
+					StripCatalogName(*limit_mod.limit, catalog_name);
+				}
+				if (limit_mod.offset) {
+					StripCatalogName(*limit_mod.offset, catalog_name);
+				}
+				break;
+			}
+			case ResultModifierType::DISTINCT_MODIFIER: {
+				auto &distinct_mod = modifier->Cast<DistinctModifier>();
+				for (auto &expr : distinct_mod.distinct_on_targets) {
+					StripCatalogName(*expr, catalog_name);
+				}
+				break;
+			}
+			default:
+				break;
 			}
 		}
 		break;
