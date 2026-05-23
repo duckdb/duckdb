@@ -366,11 +366,43 @@ with cte as (select * from local_tbl) select count(*) from cte join rpc.t1 on (l
 ----
 0
 
-# Recursive CTE: blocked from pushdown - physical plan has REC_CTE node (stays local)
+# Recursive CTE with no remote refs: stays local (base case is a constant, no catalog)
 query II
 explain with recursive r(n) as (select 1 union all select n+1 from r where n < 5) select count(*) from r
 ----
 physical_plan	<REGEX>:.*REC_CTE.*
+
+# Recursive CTE with remote base case: base references rpc.t1, so whole CTE is pushed
+# chain starts at i=100, increments until depth=3 → values 100,101,102,103 → 4 rows
+query II
+explain with recursive chain(n, depth) as (
+    select i, 0 from rpc.t1 where i = 100
+    union all
+    select n+1, depth+1 from chain where depth < 3
+) select count(*) from chain
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+with recursive chain(n, depth) as (
+    select i, 0 from rpc.t1 where i = 100
+    union all
+    select n+1, depth+1 from chain where depth < 3
+) select count(*) from chain
+----
+4
+
+# Recursive CTE referencing remote in recursive arm: pushed
+# base: single row (val=0); recursive: join against rpc.t1 adds i each step until 3 steps
+# base gives {0}, step1: {0+100,...} - simpler: just verify pushed via explain
+query II
+explain with recursive acc(val) as (
+    select 0
+    union all
+    select val + 1 from acc, rpc.t1 where acc.val < 3 and rpc.t1.i = 100 + acc.val
+) select count(*) from acc
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
 
 statement ok db1:con1
 call quack_stop('quack:localhost')
