@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
+#include "duckdb/parser/parsed_data/create_feature_info.hpp"
 
 namespace duckdb {
 
@@ -48,6 +49,9 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {
+	case CatalogType::FEATURE_ENTRY:
+		result = CreateFeatureInfo::Deserialize(deserializer);
+		break;
 	case CatalogType::INDEX_ENTRY:
 		result = CreateIndexInfo::Deserialize(deserializer);
 		break;
@@ -90,6 +94,33 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	result->dependencies = dependencies;
 	result->extension_name = std::move(extension_name);
 	return result;
+}
+
+void CreateFeatureInfo::Serialize(Serializer &serializer) const {
+	CreateInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "feature_name", feature_name);
+	serializer.WritePropertyWithDefault<string>(201, "source_table", source_table);
+	serializer.WritePropertyWithDefault<string>(202, "entity_column", entity_column);
+	serializer.WritePropertyWithDefault<string>(203, "timestamp_column", timestamp_column);
+	serializer.WriteProperty<FeatureGranularity>(204, "granularity", granularity);
+	serializer.WritePropertyWithDefault<int64_t>(205, "window_size", window_size);
+	serializer.WriteProperty<FeatureRefreshMode>(206, "refresh_mode", refresh_mode);
+	serializer.WritePropertyWithDefault<int64_t>(207, "retain_versions", retain_versions);
+	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(208, "query", query);
+}
+
+unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CreateFeatureInfo>(new CreateFeatureInfo());
+	deserializer.ReadPropertyWithDefault<string>(200, "feature_name", result->feature_name);
+	deserializer.ReadPropertyWithDefault<string>(201, "source_table", result->source_table);
+	deserializer.ReadPropertyWithDefault<string>(202, "entity_column", result->entity_column);
+	deserializer.ReadPropertyWithDefault<string>(203, "timestamp_column", result->timestamp_column);
+	deserializer.ReadProperty<FeatureGranularity>(204, "granularity", result->granularity);
+	deserializer.ReadPropertyWithDefault<int64_t>(205, "window_size", result->window_size);
+	deserializer.ReadProperty<FeatureRefreshMode>(206, "refresh_mode", result->refresh_mode);
+	deserializer.ReadPropertyWithDefault<int64_t>(207, "retain_versions", result->retain_versions);
+	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(208, "query", result->query);
+	return std::move(result);
 }
 
 void CreateIndexInfo::Serialize(Serializer &serializer) const {

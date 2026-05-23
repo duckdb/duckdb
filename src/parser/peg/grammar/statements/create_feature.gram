@@ -1,0 +1,10 @@
+CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral 'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral 'GRANULARITY' FeatureGranularity 'WINDOW' NumberLiteral 'REFRESH' FeatureRefreshMode 'RETAIN' NumberLiteral 'AS' Parens(SelectStatementInternal)
+
+FeatureGranularity <- FeatureGranularityDay / FeatureGranularityHour / FeatureGranularityMinute
+FeatureGranularityDay <- 'DAY'
+FeatureGranularityHour <- 'HOUR'
+FeatureGranularityMinute <- 'MINUTE'
+
+FeatureRefreshMode <- FeatureRefreshFull / FeatureRefreshIncremental
+FeatureRefreshFull <- 'FULL'
+FeatureRefreshIncremental <- 'INCREMENTAL'

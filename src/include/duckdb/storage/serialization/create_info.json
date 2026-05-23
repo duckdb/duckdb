@@ -2,12 +2,8 @@
   {
     "class": "CreateInfo",
     "class_type": "type",
-    "set_parameters": [
-      "type"
-    ],
-    "includes": [
-      "duckdb/parser/parsed_data/create_info.hpp"
-    ],
+    "set_parameters": ["type"],
+    "includes": ["duckdb/parser/parsed_data/create_info.hpp"],
     "members": [
       {
         "id": 100,
@@ -50,7 +46,7 @@
         "type": "Value",
         "default": "Value()"
       },
-	  {
+      {
         "id": 108,
         "name": "tags",
         "type": "InsertionOrderPreservingMap<string>",
@@ -62,7 +58,7 @@
         "type": "LogicalDependencyList",
         "default": "LogicalDependencyList()",
         "version": "v0.10.3"
-	  },
+      },
       {
         "id": 110,
         "name": "extension_name",
@@ -74,9 +70,7 @@
     "class": "CreateIndexInfo",
     "base": "CreateInfo",
     "enum": "INDEX_ENTRY",
-    "includes": [
-      "duckdb/parser/parsed_data/create_index_info.hpp"
-    ],
+    "includes": ["duckdb/parser/parsed_data/create_index_info.hpp"],
     "members": [
       {
         "id": 200,
@@ -137,9 +131,7 @@
     "class": "CreateTableInfo",
     "base": "CreateInfo",
     "enum": "TABLE_ENTRY",
-    "includes": [
-      "duckdb/parser/parsed_data/create_table_info.hpp"
-    ],
+    "includes": ["duckdb/parser/parsed_data/create_table_info.hpp"],
     "members": [
       {
         "id": 200,
@@ -182,19 +174,14 @@
     "class": "CreateSchemaInfo",
     "base": "CreateInfo",
     "enum": "SCHEMA_ENTRY",
-    "includes": [
-      "duckdb/parser/parsed_data/create_schema_info.hpp"
-    ],
-    "members": [
-    ]
+    "includes": ["duckdb/parser/parsed_data/create_schema_info.hpp"],
+    "members": []
   },
   {
     "class": "CreateViewInfo",
     "base": "CreateInfo",
     "enum": "VIEW_ENTRY",
-    "includes": [
-      "duckdb/parser/parsed_data/create_view_info.hpp"
-    ],
+    "includes": ["duckdb/parser/parsed_data/create_view_info.hpp"],
     "members": [
       {
         "id": 200,
@@ -243,9 +230,7 @@
     "class": "CreateTypeInfo",
     "base": "CreateInfo",
     "enum": "TYPE_ENTRY",
-    "includes": [
-      "duckdb/parser/parsed_data/create_type_info.hpp"
-    ],
+    "includes": ["duckdb/parser/parsed_data/create_type_info.hpp"],
     "members": [
       {
         "id": 200,
@@ -264,9 +249,7 @@
     "class": "CreateMacroInfo",
     "base": "CreateInfo",
     "enum": ["MACRO_ENTRY", "TABLE_MACRO_ENTRY"],
-    "includes": [
-      "duckdb/parser/parsed_data/create_macro_info.hpp"
-    ],
+    "includes": ["duckdb/parser/parsed_data/create_macro_info.hpp"],
     "members": [
       {
         "id": 200,
@@ -292,9 +275,7 @@
     "class": "CreateSequenceInfo",
     "base": "CreateInfo",
     "enum": "SEQUENCE_ENTRY",
-    "includes": [
-      "duckdb/parser/parsed_data/create_sequence_info.hpp"
-    ],
+    "includes": ["duckdb/parser/parsed_data/create_sequence_info.hpp"],
     "members": [
       {
         "id": 200,
@@ -343,9 +324,7 @@
     "class": "CreateTriggerInfo",
     "base": "CreateInfo",
     "enum": "TRIGGER_ENTRY",
-    "includes": [
-      "duckdb/parser/parsed_data/create_trigger_info.hpp"
-    ],
+    "includes": ["duckdb/parser/parsed_data/create_trigger_info.hpp"],
     "members": [
       {
         "id": 200,
@@ -382,6 +361,59 @@
         "id": 208,
         "name": "trigger_action",
         "type": "QueryNode*"
+      }
+    ]
+  },
+  {
+    "class": "CreateFeatureInfo",
+    "base": "CreateInfo",
+    "enum": "FEATURE_ENTRY",
+    "includes": ["duckdb/parser/parsed_data/create_feature_info.hpp"],
+    "members": [
+      {
+        "id": 200,
+        "name": "feature_name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "source_table",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "entity_column",
+        "type": "string"
+      },
+      {
+        "id": 203,
+        "name": "timestamp_column",
+        "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "granularity",
+        "type": "FeatureGranularity"
+      },
+      {
+        "id": 205,
+        "name": "window_size",
+        "type": "int64_t"
+      },
+      {
+        "id": 206,
+        "name": "refresh_mode",
+        "type": "FeatureRefreshMode"
+      },
+      {
+        "id": 207,
+        "name": "retain_versions",
+        "type": "int64_t"
+      },
+      {
+        "id": 208,
+        "name": "query",
+        "type": "SelectStatement*"
       }
     ]
   }

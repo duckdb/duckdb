@@ -9,6 +9,7 @@ add_library_unity(
   physical_create_sequence.cpp
   physical_create_table.cpp
   physical_create_trigger.cpp
+  physical_create_feature.cpp
   physical_create_view.cpp
   physical_create_function.cpp
   physical_detach.cpp

@@ -150,6 +150,7 @@ CreateStatement:
     - CreateTypeStmt
     - CreateViewStmt
     - CreateTriggerStmt
+    - CreateFeatureStmt
 
 DropStatement:
   type: "unique_ptr<DropStatement>"
@@ -870,7 +871,6 @@ Bool:
     - DeallocatePrepare
     - CreateRecursive
 
-
 Int64:
   type: "int64_t"
   by_value: false
@@ -941,6 +941,9 @@ overrides:
   # create_trigger.gram
   ForEachClause: "TriggerForEach"
   TriggerTiming: "TriggerTiming"
+  # create_feature.gram
+  FeatureGranularity: "FeatureGranularity"
+  FeatureRefreshMode: "FeatureRefreshMode"
   # create_type.gram (EnumSelectType is already in SelectStatement category)
   # describe.gram
   ShowOrDescribeOrSummarize: "ShowType"

@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+#include "duckdb/parser/parsed_data/create_feature_info.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/common/to_string.hpp"
@@ -369,6 +370,12 @@ void PEGTransformerFactory::RegisterCreateTrigger() {
 	REGISTER_TRANSFORM(TransformTriggerEventUpdateOf);
 	REGISTER_TRANSFORM(TransformTriggerColumnList);
 	REGISTER_TRANSFORM(TransformTriggerBody);
+}
+
+void PEGTransformerFactory::RegisterCreateFeature() {
+	REGISTER_TRANSFORM(TransformCreateFeatureStmt);
+	REGISTER_TRANSFORM(TransformFeatureGranularity);
+	REGISTER_TRANSFORM(TransformFeatureRefreshMode);
 }
 
 void PEGTransformerFactory::RegisterDelete() {
@@ -945,6 +952,12 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<TriggerForEach>("ForEachRow", TriggerForEach::ROW);
 	RegisterEnum<TriggerForEach>("ForEachStatement", TriggerForEach::STATEMENT);
 
+	RegisterEnum<FeatureGranularity>("FeatureGranularityDay", FeatureGranularity::DAY);
+	RegisterEnum<FeatureGranularity>("FeatureGranularityHour", FeatureGranularity::HOUR);
+	RegisterEnum<FeatureGranularity>("FeatureGranularityMinute", FeatureGranularity::MINUTE);
+	RegisterEnum<FeatureRefreshMode>("FeatureRefreshFull", FeatureRefreshMode::FULL);
+	RegisterEnum<FeatureRefreshMode>("FeatureRefreshIncremental", FeatureRefreshMode::INCREMENTAL);
+
 	RegisterEnum<string>("MinValue", "minvalue");
 	RegisterEnum<string>("MaxValue", "maxvalue");
 
@@ -1033,6 +1046,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCreateTable();
 	RegisterCreateType();
 	RegisterCreateTrigger();
+	RegisterCreateFeature();
 	RegisterDelete();
 	RegisterDescribe();
 	RegisterDrop();

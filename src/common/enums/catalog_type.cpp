@@ -45,6 +45,8 @@ string CatalogTypeToString(CatalogType type) {
 		return "Sequence";
 	case CatalogType::TRIGGER_ENTRY:
 		return "Trigger";
+	case CatalogType::FEATURE_ENTRY:
+		return "Feature";
 	case CatalogType::SECRET_ENTRY:
 		return "Secret";
 	case CatalogType::SECRET_TYPE_ENTRY:

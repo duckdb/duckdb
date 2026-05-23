@@ -166,6 +166,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("enable");
 	unreserved_keyword_map.insert("encoding");
 	unreserved_keyword_map.insert("encrypted");
+	unreserved_keyword_map.insert("entity");
 	unreserved_keyword_map.insert("enum");
 	unreserved_keyword_map.insert("error");
 	unreserved_keyword_map.insert("escape");
@@ -181,6 +182,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("extensions");
 	unreserved_keyword_map.insert("external");
 	unreserved_keyword_map.insert("family");
+	unreserved_keyword_map.insert("feature");
 	unreserved_keyword_map.insert("filter");
 	unreserved_keyword_map.insert("first");
 	unreserved_keyword_map.insert("following");
@@ -191,6 +193,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("global");
 	unreserved_keyword_map.insert("grant");
 	unreserved_keyword_map.insert("granted");
+	unreserved_keyword_map.insert("granularity");
 	unreserved_keyword_map.insert("groups");
 	unreserved_keyword_map.insert("handler");
 	unreserved_keyword_map.insert("header");
@@ -207,6 +210,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("include");
 	unreserved_keyword_map.insert("including");
 	unreserved_keyword_map.insert("increment");
+	unreserved_keyword_map.insert("incremental");
 	unreserved_keyword_map.insert("index");
 	unreserved_keyword_map.insert("indexes");
 	unreserved_keyword_map.insert("inherit");
@@ -322,6 +326,7 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("respect");
 	unreserved_keyword_map.insert("restart");
 	unreserved_keyword_map.insert("restrict");
+	unreserved_keyword_map.insert("retain");
 	unreserved_keyword_map.insert("returns");
 	unreserved_keyword_map.insert("revoke");
 	unreserved_keyword_map.insert("role");

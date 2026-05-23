@@ -22,6 +22,7 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
+#include "duckdb/parser/parsed_data/create_feature_info.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -756,6 +757,12 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &schema = BindCreateTriggerInfo(create_trigger_info);
 		result.plan =
 		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TRIGGER, std::move(stmt.info), &schema);
+		break;
+	}
+	case CatalogType::FEATURE_ENTRY: {
+		auto &schema = BindCreateSchema(*stmt.info);
+		result.plan =
+		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_FEATURE, std::move(stmt.info), &schema);
 		break;
 	}
 	default:
