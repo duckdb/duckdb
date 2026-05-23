@@ -853,6 +853,48 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 				return true;
 			}
 		}
+		for (auto &modifier : setop.modifiers) {
+			switch (modifier->type) {
+			case ResultModifierType::ORDER_MODIFIER: {
+				for (auto &order : modifier->Cast<OrderModifier>().orders) {
+					if (HasLocalTableReference(*order.expression)) {
+						return true;
+					}
+				}
+				break;
+			}
+			case ResultModifierType::DISTINCT_MODIFIER: {
+				for (auto &expr : modifier->Cast<DistinctModifier>().distinct_on_targets) {
+					if (HasLocalTableReference(*expr)) {
+						return true;
+					}
+				}
+				break;
+			}
+			case ResultModifierType::LIMIT_MODIFIER: {
+				auto &lm = modifier->Cast<LimitModifier>();
+				if (lm.limit && HasLocalTableReference(*lm.limit)) {
+					return true;
+				}
+				if (lm.offset && HasLocalTableReference(*lm.offset)) {
+					return true;
+				}
+				break;
+			}
+			case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+				auto &lm = modifier->Cast<LimitPercentModifier>();
+				if (lm.limit && HasLocalTableReference(*lm.limit)) {
+					return true;
+				}
+				if (lm.offset && HasLocalTableReference(*lm.offset)) {
+					return true;
+				}
+				break;
+			}
+			default:
+				break;
+			}
+		}
 		return false;
 	}
 	case QueryNodeType::RECURSIVE_CTE_NODE: {
@@ -965,6 +1007,15 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &cata
 		auto &tf = ref.Cast<TableFunctionRef>();
 		if (tf.function) {
 			StripCatalogName(*tf.function, catalog_name);
+		}
+		break;
+	}
+	case TableReferenceType::EXPRESSION_LIST: {
+		auto &el = ref.Cast<ExpressionListRef>();
+		for (auto &row : el.values) {
+			for (auto &expr : row) {
+				StripCatalogName(*expr, catalog_name);
+			}
 		}
 		break;
 	}
