@@ -950,6 +950,17 @@ bool RemotePushdownOptimizer::HasLocalTableReference(TableRef &ref) {
 		}
 		return join.condition && HasLocalTableReference(*join.condition);
 	}
+	case TableReferenceType::EXPRESSION_LIST: {
+		auto &el = ref.Cast<ExpressionListRef>();
+		for (auto &row : el.values) {
+			for (auto &expr : row) {
+				if (HasLocalTableReference(*expr)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
 	default:
 		return false;
 	}
