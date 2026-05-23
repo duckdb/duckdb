@@ -157,6 +157,7 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		case CatalogType::SECRET_ENTRY:
 		case CatalogType::SECRET_TYPE_ENTRY:
 		case CatalogType::SECRET_FUNCTION_ENTRY:
+		case CatalogType::FEATURE_ENTRY:
 			// do nothing, prepared statements and scalar functions aren't persisted to disk
 			break;
 		default:
@@ -175,6 +176,7 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	case CatalogType::SECRET_ENTRY:
 	case CatalogType::SECRET_TYPE_ENTRY:
 	case CatalogType::SECRET_FUNCTION_ENTRY:
+	case CatalogType::FEATURE_ENTRY:
 		// do nothing, these entries are not persisted to disk
 		break;
 	default:

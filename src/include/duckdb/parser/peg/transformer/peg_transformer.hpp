@@ -615,6 +615,7 @@ private:
 	static unique_ptr<DropStatement> TransformDropSecret(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformDropSecretStorage(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropTrigger(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<DropStatement> TransformDropFeature(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// explain.gram
 	static unique_ptr<SQLStatement> TransformExplainStatement(PEGTransformer &transformer, ParseResult &parse_result);

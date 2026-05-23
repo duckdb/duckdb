@@ -1,5 +1,6 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
@@ -316,6 +317,27 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTrigger(PEGTransfo
 	extra_info->base_table = std::move(base_table);
 	info->extra_drop_info = std::move(extra_info);
 
+	result->info = std::move(info);
+	return result;
+}
+
+unique_ptr<DropStatement> PEGTransformerFactory::TransformDropFeature(PEGTransformer &transformer,
+                                                                      ParseResult &parse_result) {
+	// DropFeature <- 'FEATURE' IfExists? IdentifierOrStringLiteral
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto result = make_uniq<DropStatement>();
+	auto info = make_uniq<DropInfo>();
+	info->type = CatalogType::FEATURE_ENTRY;
+	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
+	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	auto feature_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
+	if (feature_name.schema.empty()) {
+		info->schema = feature_name.catalog;
+	} else {
+		info->catalog = feature_name.catalog;
+		info->schema = feature_name.schema;
+	}
+	info->name = feature_name.name;
 	result->info = std::move(info);
 	return result;
 }

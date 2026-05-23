@@ -167,6 +167,7 @@ DropStatement:
     - DropType
     - DropSecret
     - DropTrigger
+    - DropFeature
 
 AlterInfo:
   type: "unique_ptr<AlterInfo>"

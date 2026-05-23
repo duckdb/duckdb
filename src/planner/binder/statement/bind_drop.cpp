@@ -55,7 +55,8 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::TABLE_MACRO_ENTRY:
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::TABLE_ENTRY:
-	case CatalogType::TYPE_ENTRY: {
+	case CatalogType::TYPE_ENTRY:
+	case CatalogType::FEATURE_ENTRY: {
 		BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
 		auto catalog = Catalog::GetCatalogEntry(context, stmt.info->catalog);
 		if (catalog) {

@@ -1393,9 +1393,12 @@ DropEntries <-
 	DropCollation /
 	DropType /
 	DropSecret /
-	DropTrigger
+	DropTrigger /
+	DropFeature
 
 DropTrigger <- 'TRIGGER' IfExists? TriggerName 'ON' BaseTableName
+
+DropFeature <- 'FEATURE' IfExists? IdentifierOrStringLiteral
 
 DropTable <- TableOrView IfExists? List(BaseTableName)
 DropTableFunction <- CommentMacroTable IfExists? List(TableFunctionName)
