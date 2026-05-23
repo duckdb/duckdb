@@ -5641,10 +5641,10 @@ TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy
 const StringUtil::EnumStringLiteral *GetTransactionIsolationLevelValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(TransactionIsolationLevel::TRANSACTION_DEFAULT_ISOLATION), "TRANSACTION_DEFAULT_ISOLATION" },
-		{ static_cast<uint32_t>(TransactionIsolationLevel::READ_UNCOMMITTED), "READ_UNCOMMITTED" },
-		{ static_cast<uint32_t>(TransactionIsolationLevel::READ_COMMITTED), "READ_COMMITTED" },
-		{ static_cast<uint32_t>(TransactionIsolationLevel::REPEATABLE_READ), "REPEATABLE_READ" },
-		{ static_cast<uint32_t>(TransactionIsolationLevel::SERIALIZABLE), "SERIALIZABLE" }
+		{ static_cast<uint32_t>(TransactionIsolationLevel::READ_UNCOMMITTED), "read uncommitted" },
+		{ static_cast<uint32_t>(TransactionIsolationLevel::READ_COMMITTED), "read committed" },
+		{ static_cast<uint32_t>(TransactionIsolationLevel::REPEATABLE_READ), "repeatable read" },
+		{ static_cast<uint32_t>(TransactionIsolationLevel::SERIALIZABLE), "serializable" }
 	};
 	return values;
 }
@@ -6187,4 +6187,3 @@ WindowMergeSortStage EnumUtil::FromString<WindowMergeSortStage>(const char *valu
 }
 
 }
-
