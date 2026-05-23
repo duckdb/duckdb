@@ -55,6 +55,13 @@ BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTable
 		if (!replacement_function) {
 			continue;
 		}
+		if (!ref.alias.empty()) {
+			// user-provided alias overrides the default alias
+			replacement_function->alias = ref.alias;
+		} else if (replacement_function->alias.empty()) {
+			// if the replacement scan itself did not provide an alias we use the table name
+			replacement_function->alias = ref.table_name;
+		}
 		if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
 			auto &table_function = replacement_function->Cast<TableFunctionRef>();
 			table_function.column_name_alias = ref.column_name_alias;
@@ -62,23 +69,18 @@ BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTable
 			auto &subquery = replacement_function->Cast<SubqueryRef>();
 			subquery.column_name_alias = ref.column_name_alias;
 		} else {
+			// carry the alias to the wrapping SubqueryRef so qualified references
+			// like `SELECT d.x FROM _ AS d` can resolve against the outer ref
+			auto inner_alias = replacement_function->alias;
 			auto select_node = make_uniq<SelectNode>();
 			select_node->select_list.push_back(make_uniq<StarExpression>());
 			select_node->from_table = std::move(replacement_function);
 			auto select_stmt = make_uniq<SelectStatement>();
 			select_stmt->node = std::move(select_node);
 			auto subquery = make_uniq<SubqueryRef>(std::move(select_stmt));
+			subquery->alias = std::move(inner_alias);
 			subquery->column_name_alias = ref.column_name_alias;
 			replacement_function = std::move(subquery);
-		}
-		// Apply the user-provided alias to the outermost ref so it survives
-		// the wrap above. If the replacement scan itself supplied a default
-		// alias (e.g. the extracted basename of a parquet/csv path), preserve
-		// it when the user did not specify one.
-		if (!ref.alias.empty()) {
-			replacement_function->alias = ref.alias;
-		} else if (replacement_function->alias.empty()) {
-			replacement_function->alias = ref.table_name;
 		}
 		if (GetBindingMode() == BindingMode::EXTRACT_REPLACEMENT_SCANS) {
 			AddReplacementScan(ref.table_name, replacement_function->Copy());
