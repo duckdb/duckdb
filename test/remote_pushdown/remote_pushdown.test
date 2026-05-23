@@ -323,5 +323,54 @@ select rpc.t1.i from rpc.t1 order by rpc.t1.i limit 3
 101
 102
 
+# --- Non-recursive CTE pushdown ---
+
+# Simple CTE: fully remote - pushed along with the whole WITH...SELECT
+query II
+explain with cte as (select * from rpc.t1) select * from cte
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# Functional: CTE filters remote data correctly (rpc.t1 has 100-109)
+query I
+with cte as (select * from rpc.t1 where i > 105) select count(*) from cte
+----
+4
+
+# Chained CTEs: c2 references c1 - whole chain is pushed
+query II
+explain with c1 as (select * from rpc.t1), c2 as (select i * 2 as val from c1) select count(*) from c2
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+with c1 as (select * from rpc.t1), c2 as (select i * 2 as val from c1) select count(*) from c2
+----
+10
+
+# CTE with aggregate: GROUP BY inside CTE body, all remote
+query I
+with agg as (select i % 2 as parity, count(*) as cnt from rpc.t1 group by parity) select sum(cnt) from agg
+----
+10
+
+# Mixed CTE: CTE body uses local table - full pushdown blocked, JOIN stays local
+query II
+explain with cte as (select * from local_tbl) select * from cte join rpc.t1 on (local_col = i)
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# Functional: local CTE + remote table join - no overlap (local=0-9, remote=100-109)
+query I
+with cte as (select * from local_tbl) select count(*) from cte join rpc.t1 on (local_col = i)
+----
+0
+
+# Recursive CTE: blocked from pushdown - physical plan has REC_CTE node (stays local)
+query II
+explain with recursive r(n) as (select 1 union all select n+1 from r where n < 5) select count(*) from r
+----
+physical_plan	<REGEX>:.*REC_CTE.*
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
