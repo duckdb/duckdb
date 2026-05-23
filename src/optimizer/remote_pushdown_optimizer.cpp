@@ -327,6 +327,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 					}
 					break;
 				}
+				case ResultModifierType::DISTINCT_MODIFIER: {
+					auto &distinct_mod = modifier->Cast<DistinctModifier>();
+					for (auto &expr : distinct_mod.distinct_on_targets) {
+						PushdownSubqueries(expr);
+					}
+					break;
+				}
 				default:
 					break;
 				}
@@ -1288,6 +1295,14 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<QueryNode> &node, Catalo
 
 void RemotePushdownOptimizer::FinishPushdown(unique_ptr<TableRef> &ref, CatalogPushdownResult result) {
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		return;
+	}
+	// A JoinRef cannot be atomically wrapped in SELECT * FROM quack_fn(...): the wrapper
+	// loses all table aliases so outer column refs like "a.i" become unresolvable, and
+	// self-joins would expose duplicate column names. Skip the pushdown; each table in
+	// the join is accessed via native remote scanning, which hits the "Multiple streaming
+	// scans" documented limitation if more than one quack connection is needed.
+	if (ref->type == TableReferenceType::JOIN) {
 		return;
 	}
 	string alias = ref->alias;

@@ -188,14 +188,36 @@ select a.i as ai, b.i as bi from rpc.t1 a join rpc.t1 b on a.i + 1 = b.i where a
 2	3
 
 # ============================================================
-# Bug 5: PushdownSubqueries was not called for GROUP BY
-# expressions and ORDER BY modifiers when the whole query
-# could not be pushed.
+# Bug 6: FinishPushdown(TableRef&) with a JoinRef loses table aliases.
 #
-# When a query mixes local and remote, any remote subqueries
-# in GROUP BY or ORDER BY should still be pushed to the remote
-# individually for efficiency.
-# ============================================================ PushdownSubqueries was not called for GROUP BY
+# When the FROM clause is an all-remote join but the SELECT list
+# has a local expression (e.g. a local macro), the optimizer used
+# to wrap the JoinRef in SELECT * FROM quack_query_by_name(...)
+# and put the local expression in an outer SELECT. The wrapping
+# strips all table aliases, so "a.i" in the outer SELECT could not
+# be resolved, crashing with an internal "table not found" error.
+#
+# The fix: skip JoinRef pushdown in FinishPushdown(TableRef&);
+# the join falls back to native remote scanning which hits
+# "Multiple streaming scans" (the documented limitation) instead
+# of an unexpected internal error.
+# ============================================================
+
+statement ok
+create macro double_it(x) as x * 2;
+
+# Local macro in SELECT over a 2-table remote join: must produce
+# "Multiple streaming scans", NOT an internal "table a not found"
+statement error
+select double_it(a.i) from rpc.t1 a join rpc.t2 b on a.i = b.i
+----
+Multiple streaming scans
+
+statement ok
+drop macro double_it;
+
+# ============================================================
+# Bug 5: PushdownSubqueries was not called for GROUP BY
 # expressions and ORDER BY modifiers when the whole query
 # could not be pushed.
 #
