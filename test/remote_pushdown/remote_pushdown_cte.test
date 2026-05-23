@@ -1,0 +1,241 @@
+# name: test/remote_pushdown/remote_pushdown_cte.test
+# description: CTE (non-recursive and recursive) pushdown for remote catalogs
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+statement ok
+create table local_t(i int);
+
+statement ok
+insert into local_t from range(10);
+
+# --- Non-recursive CTE: all remote -> pushed ---
+
+# Simple CTE referencing remote table
+query II
+explain with cte as (select * from rpc.t1) select * from cte
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+with cte as (select * from rpc.t1 where i > 5) select count(*) from cte
+----
+4
+
+# CTE with filter and aggregate
+query I
+with cte as (select i from rpc.t1 where i < 5) select sum(i) from cte
+----
+10
+
+# CTE with LIMIT
+query II
+explain with cte as (select * from rpc.t1 limit 5) select count(*) from cte
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+with cte as (select * from rpc.t1 order by i limit 5) select count(*) from cte
+----
+5
+
+# CTE used twice via self-join: all remote -> pushed
+query II
+explain with cte as (select i from rpc.t1 where i < 5)
+select count(*) from cte a join cte b on a.i = b.i
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# Self-join of {0..4}: 5 matching pairs
+query I
+with cte as (select i from rpc.t1 where i < 5)
+select count(*) from cte a join cte b on a.i = b.i
+----
+5
+
+# CTE referenced in WHERE subquery: all remote -> pushed
+query II
+explain with cte as (select i from rpc.t1 where i > 7)
+select count(*) from rpc.t1 where i in (select i from cte)
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# cte = {8,9}; t1 WHERE i in {8,9} = 2 rows
+query I
+with cte as (select i from rpc.t1 where i > 7)
+select count(*) from rpc.t1 where i in (select i from cte)
+----
+2
+
+# --- Chained CTEs: all remote -> pushed ---
+
+query II
+explain with c1 as (select * from rpc.t1), c2 as (select i * 2 as val from c1)
+select count(*) from c2
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# c1={0..9}, c2={0,2,4,6,8,10,12,14,16,18}, count=10
+query I
+with c1 as (select * from rpc.t1), c2 as (select i * 2 as val from c1)
+select count(*) from c2
+----
+10
+
+# c1={0..9}, c2={0,2,4,...,18}, sum=90
+query I
+with c1 as (select i from rpc.t1 where i < 5), c2 as (select i * 2 as v from c1)
+select sum(v) from c2
+----
+20
+
+# Chained CTE with aggregate inside: all remote -> pushed
+query I
+with agg as (select i % 2 as parity, count(*) as cnt from rpc.t1 group by parity)
+select sum(cnt) from agg
+----
+10
+
+# --- Mixed CTE (CTE body references local table -> pushdown blocked) ---
+
+# CTE with local table body: JOIN stays in local plan
+query II
+explain with cte as (select * from local_t)
+select * from cte c join rpc.t1 r on c.i = r.i
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# local_t={0..9}, rpc.t1={0..9}: all 10 values match -> 10 rows
+query I
+with cte as (select * from local_t)
+select count(*) from cte c join rpc.t1 r on c.i = r.i
+----
+10
+
+# CTE with local table: count via subquery
+query I
+with cte as (select i from local_t where i >= 5)
+select count(*) from rpc.t1 where i in (select i from cte)
+----
+5
+
+# --- Recursive CTEs ---
+
+# Pure arithmetic recursive CTE: no remote refs -> stays local (REC_CTE in plan)
+query II
+explain with recursive r(n) as (
+  select 1 union all select n+1 from r where n < 5
+) select count(*) from r
+----
+physical_plan	<REGEX>:.*REC_CTE.*
+
+# Functional: {1,2,3,4,5} -> count = 5
+query I
+with recursive r(n) as (
+  select 1 union all select n+1 from r where n < 5
+) select count(*) from r
+----
+5
+
+# Recursive CTE with remote base case: whole CTE pushed (no SEQ_SCAN)
+query II
+explain with recursive chain(n, depth) as (
+  select i, 0 from rpc.t1 where i = 0
+  union all
+  select n+1, depth+1 from chain where depth < 4
+) select count(*) from chain
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# base (0,0) + steps 1..4 => (1,1),(2,2),(3,3),(4,4) -> 5 rows
+query I
+with recursive chain(n, depth) as (
+  select i, 0 from rpc.t1 where i = 0
+  union all
+  select n+1, depth+1 from chain where depth < 4
+) select count(*) from chain
+----
+5
+
+# Recursive CTE with remote reference in recursive arm: pushed
+# Use JOIN form to avoid compound AND in WHERE (quack thread has limited stack for PEG parsing)
+query II
+explain with recursive acc(val) as (
+  select 0
+  union all
+  select val + 1 from acc join rpc.t1 on rpc.t1.i = acc.val where acc.val < 3
+) select count(*) from acc
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# base {0}; steps: val=0->1, val=1->2, val=2->3; val=3 stops; count = 4
+query I
+with recursive acc(val) as (
+  select 0
+  union all
+  select val + 1 from acc join rpc.t1 on rpc.t1.i = acc.val where acc.val < 3
+) select count(*) from acc
+----
+4
+
+# Recursive CTE with remote in both arms: pushed
+query II
+explain with recursive r(n) as (
+  select min(i) from rpc.t1
+  union all
+  select n + 1 from r join rpc.t1 on rpc.t1.i = n + 1 where n < 3
+) select count(*) from r
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# base: min(t1.i)=0; steps: n=0->1 (t1.i=1 exists), n=1->2 (t1.i=2 exists), n=2->3 (t1.i=3 exists), n=3 stop
+query I
+with recursive r(n) as (
+  select min(i) from rpc.t1
+  union all
+  select n + 1 from r join rpc.t1 on rpc.t1.i = n + 1 where n < 3
+) select count(*) from r
+----
+4
+
+# Mixed recursive CTE (local base, pure arithmetic recursive arm): NOT pushed -> stays local
+# A local base case forces the entire CTE to stay in the local plan (REC_CTE operator)
+query II
+explain with recursive r(n) as (
+  select i from local_t where i = 0
+  union all
+  select n + 1 from r where r.n < 3
+) select count(*) from r
+----
+physical_plan	<REGEX>:.*REC_CTE.*
+
+# base {0}, steps give {1,2,3} -> 4 rows total
+query I
+with recursive r(n) as (
+  select i from local_t where i = 0
+  union all
+  select n + 1 from r where r.n < 3
+) select count(*) from r
+----
+4
+
+statement ok
+drop table local_t
+
+statement ok db1:con1
+call quack_stop('quack:localhost')

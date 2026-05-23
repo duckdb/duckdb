@@ -1,0 +1,208 @@
+# name: test/remote_pushdown/remote_pushdown_bugfix.test
+# description: Regression tests for specific bugs in RemotePushdownOptimizer
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok db1:con1
+create table t2(i int);
+
+statement ok db1:con1
+insert into t2 values (5), (6), (7), (8), (9), (10), (11), (12), (13), (14);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# ============================================================
+# Bug 1: StripCatalogName(SetOperationNode) did not strip
+# modifiers (ORDER BY expressions).
+#
+# A fully-remote UNION/INTERSECT/EXCEPT with ORDER BY using
+# catalog-qualified column refs (e.g. rpc.t1.i) must have the
+# catalog prefix stripped before the SQL is sent to the remote
+# server. Without the fix the remote fails with
+# "Catalog 'rpc' does not exist".
+# ============================================================
+
+# UNION ALL with catalog-qualified ORDER BY: pushed and produces correct order
+query II
+explain select i from rpc.t1 union all select i from rpc.t1 order by rpc.t1.i
+----
+physical_plan	<!REGEX>:.*UNION.*
+
+query I
+select i from rpc.t1 union all select i from rpc.t1 order by rpc.t1.i limit 4
+----
+0
+0
+1
+1
+
+# UNION (dedup) with catalog-qualified ORDER BY DESC
+query I
+select i from rpc.t1 union select i from rpc.t1 order by rpc.t1.i desc limit 3
+----
+9
+8
+7
+
+# INTERSECT with catalog-qualified ORDER BY
+# t1 ∩ t2 = {5..9}; ascending order
+query I
+select i from rpc.t1 intersect select i from rpc.t2 order by rpc.t1.i
+----
+5
+6
+7
+8
+9
+
+# EXCEPT with catalog-qualified ORDER BY
+# t1 - t2 = {0..4}; ascending order
+query I
+select i from rpc.t1 except select i from rpc.t2 order by rpc.t1.i
+----
+0
+1
+2
+3
+4
+
+# ============================================================
+# Bug 2: StripCatalogName(JoinRef) did not strip the JOIN ON
+# condition expressions.
+#
+# A JOIN ON condition with catalog-qualified column refs (e.g.
+# rpc.t1.i = t2.i) must have the catalog prefix stripped
+# before the SQL is sent to the remote server.
+# ============================================================
+
+# JOIN ON with catalog-qualified left column: rpc.t1.i stripped to t1.i
+query II
+explain select count(*) from rpc.t1 join rpc.t1 t2 on rpc.t1.i = t2.i
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query I
+select count(*) from rpc.t1 join rpc.t1 t2 on rpc.t1.i = t2.i
+----
+10
+
+# JOIN ON with both sides catalog-qualified: rpc.t1.i and rpc.t2.i both stripped
+# t1={0..9}, t2={5..14}: join on equal values gives {5,6,7,8,9} -> 5 rows
+query II
+explain select count(*) from rpc.t1 join rpc.t2 on rpc.t1.i = rpc.t2.i
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query I
+select count(*) from rpc.t1 join rpc.t2 on rpc.t1.i = rpc.t2.i
+----
+5
+
+# JOIN ON with catalog-qualified filter: rpc.t1.i < 5 and rpc.t1.i = t2.i
+# t1 rows where i < 5: {0,1,2,3,4}; t2 has i in {5..14}: no overlap -> 0 rows
+query I
+select count(*) from rpc.t1 join rpc.t2 on rpc.t1.i = rpc.t2.i and rpc.t1.i < 5
+----
+0
+
+# ============================================================
+# Bug 3: Rewrite(JoinRef) did not analyze the JOIN ON condition.
+#
+# A local macro in a JOIN ON condition must block pushdown of
+# the join so that the macro executes locally.
+# Without the fix the whole join is pushed to remote where the
+# macro doesn't exist, causing an error.
+# ============================================================
+
+statement ok
+create macro double_it(x) as x * 2;
+
+# Local macro in JOIN ON blocks full pushdown; but two separately-scanned remote tables
+# hit the "multiple streaming scans" limitation, so the query errors rather than returning results
+statement error
+select count(*) from rpc.t1 a join rpc.t2 b on double_it(a.i) = b.i
+----
+Multiple streaming scans
+
+# Functional: local macro in WHERE on single remote table (avoids multiple-streaming-scan limitation)
+# double_it(i) > 10 -> i > 5 -> {6,7,8,9} = 4 rows
+query I
+select count(*) from rpc.t1 where double_it(i) > 10
+----
+4
+
+# Local macro with compound filter: double_it(i) in [10,14] -> i in {5,6,7} = 3 rows
+query I
+select count(*) from rpc.t1 where double_it(i) >= 10 and double_it(i) <= 14
+----
+3
+
+statement ok
+drop macro double_it;
+
+# ============================================================
+# Bug 4: PushdownSubqueries was not called for GROUP BY
+# expressions and ORDER BY modifiers when the whole query
+# could not be pushed.
+#
+# When a query mixes local and remote, any remote subqueries
+# in GROUP BY or ORDER BY should still be pushed to the remote
+# individually for efficiency.
+# ============================================================
+
+# Scalar subquery in ORDER BY: query is mixed (local_t + remote subquery in ORDER BY)
+# local_t has {0..9}; order by (max(rpc.t1.i) - local_col) = (9 - local_col) ASC
+# smallest sort key first: local_col=9 → key=0 (first), local_col=8 → key=1, local_col=7 → key=2
+query I
+select local_col from local_t
+order by (select max(i) from rpc.t1) - local_col
+limit 3
+----
+9
+8
+7
+
+# Scalar subquery in ORDER BY ascending
+query I
+select local_col from local_t
+order by local_col - (select min(i) from rpc.t1)
+limit 3
+----
+0
+1
+2
+
+# Scalar subquery in GROUP BY: mixed query with remote scalar in GROUP BY expression
+# local_t has {0..9}; group by (local_col % (select max(i) from rpc.t1))
+# max(i) = 9; local_col % 9 for {0..9}: {0,1,2,3,4,5,6,7,8,0} -> 9 distinct buckets (0..8)
+query I
+select count(distinct bucket) from (
+  select local_col % (select max(i) from rpc.t1) as bucket from local_t
+) sub
+----
+9
+
+statement ok
+drop table local_t
+
+statement ok db1:con1
+call quack_stop('quack:localhost')

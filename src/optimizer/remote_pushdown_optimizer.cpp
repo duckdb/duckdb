@@ -231,7 +231,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			if (node.from_table) {
 				FinishPushdown(node.from_table, from_result);
 			}
-			// Push down any subquery expressions in WHERE/HAVING/QUALIFY/SELECT list
+			// Push down any subquery expressions in WHERE/HAVING/QUALIFY/SELECT list/GROUP BY/ORDER BY
 			if (node.where_clause) {
 				PushdownSubqueries(node.where_clause);
 			}
@@ -243,6 +243,17 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			}
 			for (auto &expr : node.select_list) {
 				PushdownSubqueries(expr);
+			}
+			for (auto &expr : node.groups.group_expressions) {
+				PushdownSubqueries(expr);
+			}
+			for (auto &modifier : node.modifiers) {
+				if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
+					auto &order_mod = modifier->Cast<OrderModifier>();
+					for (auto &order : order_mod.orders) {
+						PushdownSubqueries(order.expression);
+					}
+				}
 			}
 		}
 	}
@@ -489,7 +500,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	auto left_result = Rewrite(ref.left);
 	auto right_result = Rewrite(ref.right);
 	auto result = Merge(left_result, right_result);
-	// If both sides resolve to the same remote catalog, propagate upward
+	// Also analyze the join condition - it may contain subqueries or local macro calls
+	// that affect whether the join can be pushed as a whole
+	if (ref.condition) {
+		result = Merge(result, Rewrite(*ref.condition));
+	}
+	// If both sides (and the condition) resolve to the same remote catalog, propagate upward
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		return result;
 	}
@@ -774,6 +790,9 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &cata
 		auto &join = ref.Cast<JoinRef>();
 		StripCatalogName(*join.left, catalog_name);
 		StripCatalogName(*join.right, catalog_name);
+		if (join.condition) {
+			StripCatalogName(*join.condition, catalog_name);
+		}
 		break;
 	}
 	case TableReferenceType::SUBQUERY: {
@@ -915,6 +934,14 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 		auto &setop = node.Cast<SetOperationNode>();
 		for (auto &child : setop.children) {
 			StripCatalogName(*child, catalog_name);
+		}
+		for (auto &modifier : setop.modifiers) {
+			if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
+				auto &order_mod = modifier->Cast<OrderModifier>();
+				for (auto &order : order_mod.orders) {
+					StripCatalogName(*order.expression, catalog_name);
+				}
+			}
 		}
 		break;
 	}

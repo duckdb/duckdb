@@ -1,0 +1,180 @@
+# name: test/remote_pushdown/remote_pushdown_subquery.test
+# description: Subquery pushdown scenarios (IN, NOT IN, EXISTS, scalar subqueries)
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+# t2 overlaps with t1 in {5..9}
+statement ok db1:con1
+create table t2(j int);
+
+statement ok db1:con1
+insert into t2 values (5), (6), (7), (8), (9), (10), (11), (12), (13), (14);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+# local_t overlaps with t1 in {5..9} and extends beyond t1 with {10..14}
+statement ok
+create table local_t(i int);
+
+statement ok
+insert into local_t values (5), (6), (7), (8), (9), (10), (11), (12), (13), (14);
+
+# --- IN subquery ---
+
+# IN: all remote -> pushed (no SEQ_SCAN in local plan)
+query II
+explain select * from rpc.t1 where i in (select j from rpc.t2)
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# t1={0..9} IN t2={5..14} -> i in {5,6,7,8,9} -> 5 rows
+query I
+select count(*) from rpc.t1 where i in (select j from rpc.t2)
+----
+5
+
+# IN: mixed (local outer, remote subquery) -> outer stays local
+# local_t={5..14} IN t1={0..9} -> {5,6,7,8,9} -> 5 rows
+query I
+select count(*) from local_t where i in (select i from rpc.t1)
+----
+5
+
+# --- NOT IN subquery ---
+
+# NOT IN: all remote -> pushed
+query II
+explain select * from rpc.t1 where i not in (select j from rpc.t2)
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# t1={0..9} NOT IN t2={5..14} -> i not in {5..14} -> {0,1,2,3,4} -> 5 rows
+query I
+select count(*) from rpc.t1 where i not in (select j from rpc.t2)
+----
+5
+
+# NOT IN: mixed (local outer, remote subquery) -> outer stays local
+# local_t={5..14} NOT IN t1={0..9} -> {10,11,12,13,14} -> 5 rows
+query I
+select count(*) from local_t where i not in (select i from rpc.t1)
+----
+5
+
+# --- EXISTS subquery ---
+
+# EXISTS: all remote -> pushed
+query II
+explain select * from rpc.t1 where exists (select 1 from rpc.t2 where j = rpc.t1.i)
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# t1={0..9}: rows with matching j in t2={5..14} -> {5,6,7,8,9} -> 5 rows
+query I
+select count(*) from rpc.t1 where exists (select 1 from rpc.t2 where j = rpc.t1.i)
+----
+5
+
+# EXISTS: mixed (local outer, non-correlated remote subquery) -> outer stays local
+# exists(select 1 from rpc.t1 where i < 1) is TRUE (i=0 exists) -> all 10 local rows pass
+query I
+select count(*) from local_t where exists (select 1 from rpc.t1 where i < 1)
+----
+10
+
+# --- NOT EXISTS subquery ---
+
+# NOT EXISTS: all remote -> pushed
+query II
+explain select * from rpc.t1 where not exists (select 1 from rpc.t2 where j = rpc.t1.i)
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# t1={0..9}: rows with NO match in t2={5..14} -> {0,1,2,3,4} -> 5 rows
+query I
+select count(*) from rpc.t1 where not exists (select 1 from rpc.t2 where j = rpc.t1.i)
+----
+5
+
+# NOT EXISTS: mixed (local outer, non-correlated remote subquery)
+# not exists(select 1 from rpc.t1 where i > 100) -> t1 has no i>100 -> EXISTS=false -> NOT EXISTS=true
+# -> all 10 local rows pass -> count = 10
+query I
+select count(*) from local_t where not exists (select 1 from rpc.t1 where i > 100)
+----
+10
+
+# --- Correlated subqueries that must NOT be pushed ---
+
+# Correlated: outer is local, subquery references outer local column
+# local_t.i in (select local_t.i from rpc.t1) -> always true for each row -> 10 rows
+query I
+select count(*) from local_t where i in (select local_t.i from rpc.t1)
+----
+10
+
+# --- Scalar subqueries ---
+
+# Scalar: no FROM clause, remote subquery only
+query II
+explain select (select count(*) from rpc.t1)
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select (select count(*) from rpc.t1)
+----
+10
+
+# Scalar: all remote in WHERE -> pushed
+query II
+explain select * from rpc.t1 where i = (select min(i) from rpc.t1)
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# Only the row with min(i)=0 matches
+query I
+select count(*) from rpc.t1 where i = (select min(i) from rpc.t1)
+----
+1
+
+# Scalar: scalar subquery in comparison with filter -> pushed
+# min(j) from t2={5..14} = 5; t1 rows with i >= 5: {5,6,7,8,9} -> 5 rows
+query I
+select count(*) from rpc.t1 where i >= (select min(j) from rpc.t2)
+----
+5
+
+# Scalar: in SELECT list -> pushed
+query I
+select (select count(*) from rpc.t1) + (select count(*) from rpc.t2)
+----
+20
+
+# Scalar: mixed (local outer, remote scalar in WHERE) -> outer stays local
+# min(i) from t1 = 0; local_t={5..14} WHERE i = 0 -> 0 rows
+query I
+select count(*) from local_t where i = (select min(i) from rpc.t1)
+----
+0
+
+# Subquery in FROM (derived table): all remote -> pushed (verified in basic test via explain)
+
+statement ok
+drop table local_t
+
+statement ok db1:con1
+call quack_stop('quack:localhost')

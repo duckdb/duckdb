@@ -1,0 +1,181 @@
+# name: test/remote_pushdown/remote_pushdown_mixed.test
+# description: Mixed local/remote scenarios, lateral joins, SET_RETURNING_FUNCTION neutrality
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# --- Mixed UNION ALL ---
+
+# Mixed: UNION operator stays in local plan
+query II
+explain (select * from rpc.t1 limit 5) union all select * from local_t
+----
+physical_plan	<REGEX>:.*UNION.*
+
+# The pushed remote side (LIMIT 5) is not visible as a LIMIT in the local plan
+query II
+explain (select * from rpc.t1 limit 5) union all select * from local_t
+----
+physical_plan	<!REGEX>:.*LIMIT.*
+
+# Functional: 5 from remote + 10 from local = 15 rows
+query I
+select count(*) from ((select * from rpc.t1 limit 5) union all select * from local_t)
+----
+15
+
+# --- Mixed JOIN ---
+
+# Mixed JOIN: stays in local plan (JOIN operator visible)
+query II
+explain select * from rpc.t1 join local_t on (i = local_col)
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# local_t={0..9}, rpc.t1={0..9}: all 10 values match -> 10 rows
+query I
+select count(*) from rpc.t1 join local_t on (i = local_col)
+----
+10
+
+# --- SET_RETURNING_FUNCTION neutrality ---
+
+# range() is neutral: doesn't block pushdown of adjacent remote refs
+query II
+explain select count(*) from rpc.t1, range(0, 10) r(n) where i = n
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# t1={0..9}, range(0,10)={0..9}: all 10 match
+query I
+select count(*) from rpc.t1, range(0, 10) r(n) where i = n
+----
+10
+
+# generate_series() is also neutral: whole query pushed
+query II
+explain select count(*) from rpc.t1, generate_series(0, 9) gs(n) where i = n
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from rpc.t1, generate_series(0, 9) gs(n) where i = n
+----
+10
+
+# range() with local table: local table blocks full pushdown; local scan visible
+query II
+explain select count(*) from local_t, range(0, 10) r(n) where local_col = n
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*
+
+# Local range scan still produces correct result
+query I
+select count(*) from local_t, range(0, 10) r(n) where local_col = n
+----
+10
+
+# range() in UNION with local: UNION stays local
+query II
+explain (select * from rpc.t1 limit 3) union all select * from range(0, 3) r(i)
+----
+physical_plan	<REGEX>:.*UNION.*
+
+# --- Local macros ---
+
+statement ok
+create macro my_add(x, y) as x + y;
+
+# Local macro used on remote table: macro stays local, remote scan is pushed individually
+# rpc.t1={0..9}; my_add(i,0) > 5 -> i > 5 -> {6,7,8,9} -> 4 rows
+query I
+select count(*) from rpc.t1 where my_add(i, 0) > 5
+----
+4
+
+# Scalar macro result is correct via local evaluation
+query I
+select my_add(10, 5)
+----
+15
+
+statement ok
+drop macro my_add;
+
+# After dropping macro, built-in expressions are pushed again
+query II
+explain select i + 1 from rpc.t1 where i > 5
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from rpc.t1 where i + 1 > 6
+----
+4
+
+# --- Lateral joins ---
+
+# Lateral: local outer table + remote inner -> NOT pushed (outer must stay local)
+# local_t={0..9}, rpc.t1={0..9}: i = local_col always matches -> 10 rows
+query I
+select count(*) from local_t, lateral (select * from rpc.t1 where i = local_col) sub
+----
+10
+
+# Lateral: local outer with no matching remote rows
+# local_col+100 won't be in t1={0..9} -> 0 rows
+query I
+select count(*) from local_t, lateral (select * from rpc.t1 where i = local_col + 100) sub
+----
+0
+
+# Lateral: all remote outer + remote inner -> pushed (no SEQ_SCAN)
+query II
+explain select t1a.i from rpc.t1 t1a, lateral (select * from rpc.t1 t1b where t1b.i = t1a.i) sub
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# Each of the 10 rows in t1 has exactly 1 match via lateral -> 10 rows
+query I
+select count(*) from rpc.t1 t1a, lateral (select * from rpc.t1 t1b where t1b.i = t1a.i) sub
+----
+10
+
+# --- Subquery wrapping remote (nested levels) ---
+
+# Double-wrapped subquery: all remote -> pushed
+query II
+explain select count(*) from (select * from (select i from rpc.t1 where i > 5) sub1) sub2
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from (select * from (select i from rpc.t1 where i > 5) sub1) sub2
+----
+4
+
+statement ok
+drop table local_t
+
+statement ok db1:con1
+call quack_stop('quack:localhost')
