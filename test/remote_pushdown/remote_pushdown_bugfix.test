@@ -330,6 +330,44 @@ select count(*) from local_t where local_col >= 100
 statement ok
 delete from local_t where local_col >= 100
 
+# ============================================================
+# Bug 8: Rewrite(BaseTableRef) returned NO_CATALOG_REFERENCED
+# for local tables with an explicit catalog prefix.
+#
+# Merge(NO_CATALOG, SINGLE_REMOTE) = SINGLE_REMOTE, so a query
+# like `SELECT * FROM memory.main.local_t WHERE local_col IN
+# (SELECT i FROM rpc.t1)` was misclassified as all-remote and
+# pushed to the remote server where memory.main.local_t does
+# not exist (crash / "table not found").
+#
+# The fix: local BaseTableRefs in Case 1 (explicit catalog) now
+# return UNKNOWN_CATALOG_REFERENCE so Merge correctly produces
+# UNKNOWN instead of SINGLE_REMOTE.
+# ============================================================
+
+# Reset local_t to a known state
+statement ok
+drop table local_t
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# Scalar subquery in WHERE with explicit local catalog: must NOT push
+# local_t = {0..9}; local_col IN {0..4} -> 5 rows
+query I
+select count(*) from memory.main.local_t where local_col in (select i from rpc.t1 where i < 5)
+----
+5
+
+# Result sanity: count with explicit-catalog subquery produces same result as unqualified
+query I
+select count(*) from local_t where local_col >= (select min(i) from rpc.t1)
+----
+10
+
 statement ok
 drop table local_t
 

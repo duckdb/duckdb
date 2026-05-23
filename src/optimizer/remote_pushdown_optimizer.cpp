@@ -772,7 +772,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 		} else {
 			TrackLocalTable(ref);
 		}
-		return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+		// A local table always blocks pushdown of any query that contains it.
+		// Returning UNKNOWN (not NO_CATALOG) ensures Merge(SINGLE_REMOTE, UNKNOWN) = UNKNOWN
+		// rather than the otherwise-neutral SINGLE_REMOTE.
+		return {};
 	}
 
 	// Case 2: no explicit catalog - lazily populate search path catalogs on first use
@@ -802,7 +805,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_lookup, OnEntryNotFound::RETURN_NULL);
 		if (entry) {
 			TrackLocalTable(ref, entry);
-			return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+			// Same as Case 1: local table → UNKNOWN to prevent Merge from treating it as neutral.
+			return {};
 		}
 	}
 
