@@ -449,7 +449,7 @@ TEST_CASE("Concurrent open/close/read keeps cache lifecycle accounting consisten
 				if (ReadFull(*handle, FILE_SIZE) != contents[f]) {
 					mismatches.fetch_add(1);
 				}
-				// Drop the handle each iteration so active_handle_count flutters between 0..N.
+				// Drop the handle each iteration so active handle count flutters between 0..N.
 				i++;
 			}
 		});
@@ -462,8 +462,7 @@ TEST_CASE("Concurrent open/close/read keeps cache lifecycle accounting consisten
 	}
 	REQUIRE(mismatches.load() == 0);
 
-	// Cache must be in a self-consistent state after the workers exit: SetEnabled(false) must
-	// drain it without tripping any internal ALWAYS_ASSERT on negative refcounts.
+	// Disable the cache and drain it.
 	auto &cache = db_instance.GetExternalFileCache();
 	cache.SetEnabled(false);
 	REQUIRE(CountCachedBlocks(cache) == 0);

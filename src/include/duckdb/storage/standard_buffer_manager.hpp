@@ -169,11 +169,6 @@ protected:
 
 	bool EncryptTemporaryFiles();
 
-private:
-	shared_ptr<BlockMemory> CreateBlockMemory(block_id_t block_id, MemoryTag tag, unique_ptr<FileBuffer> buffer,
-	                                          DestroyBufferUpon destroy_buffer_upon, idx_t alloc_size,
-	                                          BufferPoolReservation &&reservation, BlockMemoryFactory factory);
-
 protected:
 	// These are stored here because temp_directory creation is lazy
 	// so we need to store information related to the temporary directory before it's created

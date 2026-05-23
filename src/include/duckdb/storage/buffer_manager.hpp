@@ -25,8 +25,7 @@ class AttachedDatabase;
 class BlockManager;
 class DatabaseInstance;
 
-//! Constructs a BlockMemory (or a subclass thereof) from the parameters that the buffer manager
-//! has prepared for it.
+//! Used to construct a BlockMemory.
 using BlockMemoryFactory =
     std::function<shared_ptr<BlockMemory>(BufferManager &, block_id_t, MemoryTag, unique_ptr<FileBuffer>,
                                           DestroyBufferUpon, idx_t /*allocated size*/, BufferPoolReservation &&)>;

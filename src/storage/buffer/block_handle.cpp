@@ -141,11 +141,10 @@ unique_ptr<FileBuffer> BlockMemory::UnloadAndTakeBlock(BlockLock &l) {
 		buffer_manager.WriteTemporaryBuffer(GetMemoryTag(), BlockId(), *GetBuffer());
 	}
 	eviction_seq_num = 0;
-	auto result = std::move(GetBuffer());
 	memory_charge.Resize(0);
 	SetState(BlockState::BLOCK_UNLOADED);
 	OnUnload();
-	return result;
+	return std::move(GetBuffer());
 }
 
 void BlockMemory::Unload(BlockLock &l) {
@@ -174,7 +173,7 @@ BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, sha
     : block_manager(block_manager), block_alloc_size(block_manager.GetBlockAllocSize()),
       block_header_size(block_manager.GetBlockHeaderSize()), block_id(block_id_p), memory_p(std::move(memory_p)),
       memory(*this->memory_p) {
-	D_ASSERT(this->memory_p);
+	ALWAYS_ASSERT(this->memory_p);
 }
 
 BlockHandle::~BlockHandle() { // NOLINT: allow internal exceptions

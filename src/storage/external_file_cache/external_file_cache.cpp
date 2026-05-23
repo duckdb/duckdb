@@ -96,10 +96,9 @@ void ExternalFileCache::ReindexCachedFileCore(const shared_ptr<CachedFile> &cach
 			}
 
 			auto new_block = make_shared_ptr<CacheBlock>();
-			auto block_handle = buf.GetBlockHandle();
 			{
 				const annotated_lock_guard<annotated_mutex> block_guard(new_block->mtx);
-				new_block->block_handle = std::move(block_handle);
+				new_block->block_handle = buf.GetBlockHandle();
 				new_block->nr_bytes = new_size;
 				new_block->state = CacheBlockState::LOADED;
 #ifdef DEBUG

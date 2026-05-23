@@ -28,8 +28,6 @@ namespace duckdb {
 class ClientContext;
 class DatabaseInstance;
 class BufferManager;
-class BufferHandle;
-class BlockHandle;
 
 class ExternalFileCache {
 public:
@@ -108,6 +106,7 @@ private:
 	void RegisterLoadedBlock(const weak_ptr<CachedFile> &cached_file);
 	// Block unload callback.
 	void ReleaseLoadedBlock(const weak_ptr<CachedFile> &cached_file);
+	// Attempt to erase the cached file if it is no longer needed.
 	void TryEraseFileLocked(const CachedFile &cached_file);
 
 	//! The BufferManager used to cache files
