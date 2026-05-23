@@ -178,6 +178,22 @@ select count(*) from local_t,
 ----
 Multiple streaming scans
 
+# Correlated SubqueryRef inside JoinRef in lateral: HasLocalTableReference(TableRef&) must
+# recurse into SubqueryRef children of a JoinRef, not just into JOIN conditions. Without the
+# fix, the SubqueryRef case fell through to default (return false), so the correlated
+# local_col ref inside the nested subquery was missed and the lateral was incorrectly pushed
+# to the remote where it failed with a "column not found" error.
+# With the fix, the correlation is detected and the query falls back to local execution,
+# which hits the documented "Multiple streaming scans" limitation.
+statement error
+select count(*) from local_t,
+    lateral (
+        select a.i from rpc.t1 a
+        join (select * from rpc.t1 where i = local_col) sq on a.i = sq.i
+    ) sub
+----
+Multiple streaming scans
+
 # Lateral: all remote outer + remote inner -> pushed (no SEQ_SCAN)
 query II
 explain select t1a.i from rpc.t1 t1a, lateral (select * from rpc.t1 t1b where t1b.i = t1a.i) sub

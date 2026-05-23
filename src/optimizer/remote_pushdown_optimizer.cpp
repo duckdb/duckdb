@@ -994,6 +994,14 @@ bool RemotePushdownOptimizer::HasLocalTableReference(TableRef &ref) {
 		auto &tf = ref.Cast<TableFunctionRef>();
 		return tf.function && HasLocalTableReference(*tf.function);
 	}
+	case TableReferenceType::SUBQUERY: {
+		// A SubqueryRef in a FROM clause (e.g. inside a JoinRef's left/right) may contain
+		// correlated references to outer local tables in its body. Without this case the JoinRef
+		// handler recurses into SubqueryRef via HasLocalTableReference(TableRef&) and hits the
+		// default (return false), silently missing the correlated ref and allowing incorrect pushdown.
+		auto &sq = ref.Cast<SubqueryRef>();
+		return sq.subquery && HasLocalTableReference(*sq.subquery->node);
+	}
 	case TableReferenceType::JOIN: {
 		auto &join = ref.Cast<JoinRef>();
 		if (HasLocalTableReference(*join.left)) {
