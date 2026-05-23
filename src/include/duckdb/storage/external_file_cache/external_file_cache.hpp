@@ -83,8 +83,9 @@ public:
 	BufferHandle AllocateCacheBlock(shared_ptr<CachedFile> cached_file, idx_t block_size);
 	//! Gets the cached file, or creates it if is not yet present
 	shared_ptr<CachedFile> GetOrCreateCachedFile(const string &path);
-	//! Releases an active handle reference to a cached file.
-	void ReleaseCachedFileHandle(CachedFile &cached_file);
+	//! Releases an active handle reference to a cached file. The file is identified by pointer
+	//! identity (not by path), so a re-created entry for the same path is not affected.
+	void ReleaseCachedFileHandle(const CachedFile &cached_file);
 
 	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
 	                               const string &current_version_tag, timestamp_t current_last_modified);
@@ -100,14 +101,14 @@ private:
 	};
 
 	//! Re-index blocks of a single cached file.
-	void ReindexCachedFileCore(CachedFile &cached_file_entry, shared_ptr<CachedFile> cached_file, idx_t file_size,
-	                           idx_t old_block_size, idx_t new_block_size) DUCKDB_REQUIRES(cached_file_entry.map_lock);
+	void ReindexCachedFileCore(const shared_ptr<CachedFile> &cached_file, idx_t file_size, idx_t old_block_size,
+	                           idx_t new_block_size) DUCKDB_REQUIRES(cached_file->map_lock);
 
 	// Block load callback.
 	void RegisterLoadedBlock(const weak_ptr<CachedFile> &cached_file);
 	// Block unload callback.
 	void ReleaseLoadedBlock(const weak_ptr<CachedFile> &cached_file);
-	void TryEraseFileLocked(CachedFile &cached_file);
+	void TryEraseFileLocked(const CachedFile &cached_file);
 
 	//! The BufferManager used to cache files
 	BufferManager &buffer_manager;

@@ -22,14 +22,15 @@ idx_t ExternalFileCache::GetCacheBlockSize(const string &path) const {
 	return Settings::Get<ExternalFileCacheLocalBlockSizeSetting>(db);
 }
 
-void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file_entry, shared_ptr<CachedFile> cached_file,
-                                              idx_t file_size, idx_t old_block_size, idx_t new_block_size) {
+void ExternalFileCache::ReindexCachedFileCore(const shared_ptr<CachedFile> &cached_file, idx_t file_size,
+                                              idx_t old_block_size, idx_t new_block_size) {
 	D_ASSERT(old_block_size > 0);
 	D_ASSERT(new_block_size > 0);
+	D_ASSERT(cached_file);
 
 	// Phase 1: Pin all LOADED old blocks, sorted by block index.
 	map<idx_t, pair<BufferHandle, idx_t>> pinned;
-	for (auto &block_entry : cached_file_entry.blocks) {
+	for (auto &block_entry : cached_file->blocks) {
 		const idx_t old_idx = block_entry.first;
 		auto &block = *block_entry.second;
 		const annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
@@ -43,7 +44,7 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file_entry, sha
 	}
 
 	if (pinned.empty()) {
-		cached_file_entry.blocks.clear();
+		cached_file->blocks.clear();
 		return;
 	}
 
@@ -112,35 +113,35 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file_entry, sha
 	}
 
 	// Phase 3: Replace old blocks with new blocks.
-	cached_file_entry.blocks = std::move(new_blocks);
+	cached_file->blocks = std::move(new_blocks);
 }
 
-vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(shared_ptr<CachedFile> cached_file_p,
+vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(shared_ptr<CachedFile> cached_file,
                                                                           idx_t current_block_size, idx_t first_block,
                                                                           idx_t num_blocks) {
 	D_ASSERT(current_block_size > 0);
-	auto &cached_file = *cached_file_p;
+	D_ASSERT(cached_file);
 
 	idx_t file_size = 0;
 	{
-		const annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
-		file_size = cached_file.file_size;
+		const annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
+		file_size = cached_file->file_size;
 	}
 
-	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
+	const annotated_lock_guard<annotated_mutex> map_guard(cached_file->map_lock);
 
-	if (cached_file.cached_block_size.IsValid() && cached_file.cached_block_size.GetIndex() != current_block_size) {
-		const idx_t old_block_size = cached_file.cached_block_size.GetIndex();
+	if (cached_file->cached_block_size.IsValid() && cached_file->cached_block_size.GetIndex() != current_block_size) {
+		const idx_t old_block_size = cached_file->cached_block_size.GetIndex();
 		if (file_size > 0) {
-			ReindexCachedFileCore(cached_file, cached_file_p, file_size, old_block_size, current_block_size);
+			ReindexCachedFileCore(cached_file, file_size, old_block_size, current_block_size);
 		}
 	}
-	cached_file.cached_block_size = current_block_size;
+	cached_file->cached_block_size = current_block_size;
 
 	vector<shared_ptr<CacheBlock>> blocks(num_blocks);
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
 		const idx_t block_idx = first_block + idx;
-		auto &entry = cached_file.blocks[block_idx];
+		auto &entry = cached_file->blocks[block_idx];
 		if (!entry) {
 			entry = make_shared_ptr<CacheBlock>();
 		}
@@ -289,7 +290,7 @@ shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFi
 	return entry.cached_file;
 }
 
-void ExternalFileCache::ReleaseCachedFileHandle(CachedFile &cached_file) {
+void ExternalFileCache::ReleaseCachedFileHandle(const CachedFile &cached_file) {
 	const lock_guard<mutex> guard(lock);
 	auto entry = cached_files.find(cached_file.path);
 	if (entry == cached_files.end()) {
@@ -337,7 +338,7 @@ void ExternalFileCache::ReleaseLoadedBlock(const weak_ptr<CachedFile> &cached_fi
 	TryEraseFileLocked(*locked_file);
 }
 
-void ExternalFileCache::TryEraseFileLocked(CachedFile &cached_file) {
+void ExternalFileCache::TryEraseFileLocked(const CachedFile &cached_file) {
 	auto entry = cached_files.find(cached_file.path);
 	if (entry == cached_files.end()) {
 		return;

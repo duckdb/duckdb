@@ -18,8 +18,6 @@
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
-#include <functional>
-
 namespace duckdb {
 
 // Forward declaration.
@@ -30,11 +28,6 @@ class DatabaseInstance;
 class BlockHandle;
 
 using BlockLock = unique_lock<mutex>;
-
-class BlockMemory;
-using BlockMemoryFactory =
-    std::function<shared_ptr<BlockMemory>(BufferManager &, block_id_t, MemoryTag, unique_ptr<FileBuffer>,
-                                          DestroyBufferUpon, idx_t /*allocated size*/, BufferPoolReservation &&)>;
 
 class BlockMemory : public enable_shared_from_this<BlockMemory> {
 public:

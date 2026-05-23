@@ -16,8 +16,6 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
-#include <functional>
-
 namespace duckdb {
 
 class BlockManager;

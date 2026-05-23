@@ -15,7 +15,6 @@ void CacheBlock::Reinit() {
 		checksum = 0;
 #endif
 	}
-	old_block_handle.reset();
 }
 
 } // namespace duckdb
