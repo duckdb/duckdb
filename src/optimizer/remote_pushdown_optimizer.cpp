@@ -483,6 +483,40 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	for (idx_t i = 0; i < node.children.size(); i++) {
 		FinishPushdown(node.children[i], child_results[i]);
 	}
+	// Also push any remote scalar subqueries in the set operation's own modifiers
+	for (auto &modifier : node.modifiers) {
+		switch (modifier->type) {
+		case ResultModifierType::ORDER_MODIFIER: {
+			auto &order_mod = modifier->Cast<OrderModifier>();
+			for (auto &order : order_mod.orders) {
+				PushdownSubqueries(order.expression);
+			}
+			break;
+		}
+		case ResultModifierType::LIMIT_MODIFIER: {
+			auto &limit_mod = modifier->Cast<LimitModifier>();
+			if (limit_mod.limit) {
+				PushdownSubqueries(limit_mod.limit);
+			}
+			if (limit_mod.offset) {
+				PushdownSubqueries(limit_mod.offset);
+			}
+			break;
+		}
+		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+			auto &limit_mod = modifier->Cast<LimitPercentModifier>();
+			if (limit_mod.limit) {
+				PushdownSubqueries(limit_mod.limit);
+			}
+			if (limit_mod.offset) {
+				PushdownSubqueries(limit_mod.offset);
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
 	return result;
 }
 
@@ -883,6 +917,13 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &cata
 		StripCatalogName(*sq.subquery->node, catalog_name);
 		break;
 	}
+	case TableReferenceType::TABLE_FUNCTION: {
+		auto &tf = ref.Cast<TableFunctionRef>();
+		if (tf.function) {
+			StripCatalogName(*tf.function, catalog_name);
+		}
+		break;
+	}
 	default:
 		break;
 	}
@@ -904,6 +945,14 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 			StripCatalogName(*subq.child, catalog_name);
 		}
 		return;
+	}
+	// Strip catalog prefix from explicitly-qualified function calls (e.g. rpc.my_func(...) → my_func(...))
+	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &func = expr.Cast<FunctionExpression>();
+		if (StringUtil::CIEquals(func.catalog, catalog_name)) {
+			func.catalog = "";
+		}
+		// Fall through to EnumerateChildren to also strip catalog refs inside arguments
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](ParsedExpression &child) { StripCatalogName(child, catalog_name); });
