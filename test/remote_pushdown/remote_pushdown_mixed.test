@@ -142,6 +142,13 @@ select count(*) from local_t, lateral (select * from rpc.t1 where i = local_col)
 ----
 10
 
+# Same with explicit catalog prefix on local table: column names must still be tracked
+# (Rewrite(BaseTableRef) Case 1 now does a catalog lookup to populate column names)
+query I
+select count(*) from memory.main.local_t, lateral (select * from rpc.t1 where i = local_col) sub
+----
+10
+
 # Lateral: local outer with no matching remote rows
 # local_col+100 won't be in t1={0..9} -> 0 rows
 query I

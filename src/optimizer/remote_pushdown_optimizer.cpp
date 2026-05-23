@@ -716,7 +716,16 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 		if (catalog && catalog->IsRemoteCatalog()) {
 			return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog, schema_name};
 		}
-		TrackLocalTable(ref);
+		// Local catalog: look up the entry to populate column names for correlated ref detection
+		if (catalog) {
+			const string &schema = schema_name.empty() ? DEFAULT_SCHEMA : schema_name;
+			EntryLookupInfo explicit_table_lookup(CatalogType::TABLE_ENTRY, ref.table_name);
+			auto found_entry = Catalog::GetEntry(binder.context, catalog_name, schema, explicit_table_lookup,
+			                                     OnEntryNotFound::RETURN_NULL);
+			TrackLocalTable(ref, found_entry);
+		} else {
+			TrackLocalTable(ref);
+		}
 		return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	}
 
