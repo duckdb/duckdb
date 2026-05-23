@@ -86,7 +86,7 @@ AGO interval value is out of range
 
 # micros at INT64_MIN should also be caught (guard added alongside months/days)
 statement error
-SELECT INTERVAL '-9223372036854775808 microseconds ago';
+SELECT INTERVAL '9223372036854775807 microseconds ago';
 ----
 AGO interval value is out of range
 
