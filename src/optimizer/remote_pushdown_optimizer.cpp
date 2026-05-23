@@ -1207,8 +1207,57 @@ void RemotePushdownOptimizer::TryPushDMLWithLocalReturning(unique_ptr<SQLStateme
 	statement = std::move(outer_stmt);
 }
 
+// Returns true when pushing this SelectNode would produce duplicate column names in the
+// SELECT * wrapper that FinishPushdown generates around quack_query_by_name.
+// The binder has no schema information about a table function's output until after
+// materialization, so it cannot resolve duplicate column names from a join result.
+//
+// FIXME: If remote-execute table functions could advertise their output schema (column
+// names and types) before rows are materialized, DuckDB could disambiguate duplicate
+// column names and the entire join could be pushed as a single remote SQL string.
+// Until then, queries whose SELECT list exposes duplicate names over a join (e.g.
+// "SELECT a.i, b.i FROM t JOIN t") cannot be pushed; they fall back to native remote
+// scanning which, for multi-table joins in quack, results in "Multiple streaming scans".
+static bool JoinSelectHasDuplicateOutputNames(const SelectNode &select) {
+	if (!select.from_table || select.from_table->type != TableReferenceType::JOIN) {
+		return false;
+	}
+	case_insensitive_set_t seen;
+	for (auto &expr : select.select_list) {
+		// STAR expressions expand to the joined table schemas at bind time; without
+		// knowing those schemas here we cannot determine if there are duplicates.
+		// Leave SELECT * queries to the existing behavior (may fail at bind time
+		// if the joined tables share column names, which is the pre-existing limitation).
+		if (expr->GetExpressionClass() == ExpressionClass::STAR) {
+			continue;
+		}
+		string name;
+		if (!expr->GetAlias().empty()) {
+			name = expr->GetAlias();
+		} else if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+			name = expr->Cast<ColumnRefExpression>().column_names.back();
+		} else {
+			// Aggregates, scalars etc. produce auto-generated unique names; safe to skip
+			continue;
+		}
+		if (!seen.insert(name).second) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool QueryNodeWouldProduceDuplicateNames(const QueryNode &node) {
+	return node.type == QueryNodeType::SELECT_NODE &&
+	       JoinSelectHasDuplicateOutputNames(node.Cast<SelectNode>());
+}
+
 void RemotePushdownOptimizer::FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result) {
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		return;
+	}
+	if (statement->type == StatementType::SELECT_STATEMENT &&
+	    QueryNodeWouldProduceDuplicateNames(*statement->Cast<SelectStatement>().node)) {
 		return;
 	}
 	// Strip the catalog name so the remote server doesn't recursively re-push
@@ -1224,6 +1273,9 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<SQLStatement> &statement
 
 void RemotePushdownOptimizer::FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result) {
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		return;
+	}
+	if (QueryNodeWouldProduceDuplicateNames(*node)) {
 		return;
 	}
 	StripCatalogName(*node, result.catalog->GetName());

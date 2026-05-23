@@ -160,7 +160,42 @@ statement ok
 drop macro double_it;
 
 # ============================================================
-# Bug 4: PushdownSubqueries was not called for GROUP BY
+# Bug 4 (join duplicate column names):
+# Pushing a SELECT with a JOIN in FROM whose output column list
+# contains two items with the same name (e.g. a.i and b.i both
+# resolve to "i") previously crashed with an internal
+# "duplicate column name" binding error inside quack_query_by_name.
+#
+# The fix: FinishPushdown detects that the SELECT list would
+# expose duplicate names and skips the pushdown.  The query then
+# falls back to native remote scanning, which in quack results in
+# the documented "Multiple streaming scans" limitation rather than
+# an unexpected internal error.
+# ============================================================
+
+# Explicit duplicate output names from a self-join: skip pushdown, fail gracefully
+statement error
+select a.i, b.i from rpc.t1 a join rpc.t1 b on a.i + 1 = b.i
+----
+Multiple streaming scans
+
+# Verify that the alias-based workaround still works correctly
+query II
+select a.i as ai, b.i as bi from rpc.t1 a join rpc.t1 b on a.i + 1 = b.i where a.i < 3 order by ai
+----
+0	1
+1	2
+2	3
+
+# ============================================================
+# Bug 5: PushdownSubqueries was not called for GROUP BY
+# expressions and ORDER BY modifiers when the whole query
+# could not be pushed.
+#
+# When a query mixes local and remote, any remote subqueries
+# in GROUP BY or ORDER BY should still be pushed to the remote
+# individually for efficiency.
+# ============================================================ PushdownSubqueries was not called for GROUP BY
 # expressions and ORDER BY modifiers when the whole query
 # could not be pushed.
 #
