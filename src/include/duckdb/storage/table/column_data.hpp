@@ -155,11 +155,13 @@ public:
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
-	virtual void Append(ColumnAppendState &state, Vector &vector, idx_t count);
+	virtual void Append(ColumnAppendState &state, const Vector &vector, idx_t count);
 	virtual void AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count);
 	//! Finalize appending
 	virtual void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state);
 	void FinalizeAppend(optional_ptr<BaseStatistics> table_stats, ColumnAppendState &state);
+	//! Finalize appending while holding stats_lock (for use by child column calls)
+	void FinalizeAppendLocked(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state);
 	//! Revert a set of appends to the ColumnData
 	virtual void RevertAppend(row_t new_count);
 
@@ -198,7 +200,7 @@ public:
 	                                          ReadStream &source, const LogicalType &type);
 
 	virtual void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-	                                  vector<ColumnSegmentInfo> &result);
+	                                  vector<ColumnSegmentInfo> &result, const ColumnSegmentInfoScanOptions &options);
 	virtual void Verify(RowGroup &parent);
 
 	FilterPropagateResult CheckZonemap(const StorageIndex &index, TableFilter &filter);

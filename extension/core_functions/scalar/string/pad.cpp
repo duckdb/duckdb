@@ -118,14 +118,14 @@ struct RightPadOperator {
 
 template <class OP>
 static void PadFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &str_vector = args.data[0];
-	auto &len_vector = args.data[1];
-	auto &pad_vector = args.data[2];
+	const auto &str_vector = args.data[0];
+	const auto &len_vector = args.data[1];
+	const auto &pad_vector = args.data[2];
 
 	vector<char> buffer;
 	auto &heap = StringVector::GetStringHeap(result);
 	TernaryExecutor::Execute<string_t, int32_t, string_t, string_t>(
-	    str_vector, len_vector, pad_vector, result, args.size(), [&](string_t str, int32_t len, string_t pad) {
+	    str_vector, len_vector, pad_vector, result, [&](string_t str, int32_t len, string_t pad) {
 		    len = MaxValue<int32_t>(len, 0);
 		    return heap.AddString(OP::Operation(str, len, pad, buffer));
 	    });

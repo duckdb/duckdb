@@ -5,7 +5,7 @@
 require parquet
 
 statement ok
-SET storage_compatibility_version='v1.1.0'
+SET storage_compatibility_version='v1.2.0'
 
 statement ok
 CREATE TABLE integers(i INTEGER);

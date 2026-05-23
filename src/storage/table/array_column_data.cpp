@@ -190,7 +190,7 @@ void ArrayColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.child_appends.push_back(std::move(child_append));
 }
 
-void ArrayColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
+void ArrayColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		Vector append_vector(Vector::Ref(vector));
 		append_vector.Flatten();
@@ -202,17 +202,17 @@ void ArrayColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t cou
 	validity->Append(state.child_appends[0], vector, count);
 	// Append child column
 	auto array_size = ArrayType::GetSize(type);
-	auto &child_vec = ArrayVector::GetChildMutable(vector);
+	const auto &child_vec = ArrayVector::GetChild(vector);
 	child_column->Append(state.child_appends[1], child_vec, count * array_size);
 
 	this->count += count;
 }
 
 void ArrayColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
-	validity->FinalizeAppend(finalize_state, state.child_appends[0]);
+	validity->FinalizeAppendLocked(finalize_state, state.child_appends[0]);
 
 	ColumnDataFinalizeAppendState child_finalize_state(finalize_state, LogicalTypeId::ARRAY);
-	child_column->FinalizeAppend(child_finalize_state, state.child_appends[1]);
+	child_column->FinalizeAppendLocked(child_finalize_state, state.child_appends[1]);
 }
 
 void ArrayColumnData::RevertAppend(row_t new_count) {
@@ -383,11 +383,12 @@ void ArrayColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSt
 }
 
 void ArrayColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                           vector<ColumnSegmentInfo> &result) {
+                                           vector<ColumnSegmentInfo> &result,
+                                           const ColumnSegmentInfoScanOptions &options) {
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	col_path.back() = 1;
-	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 }
 
 void ArrayColumnData::Verify(RowGroup &parent) {

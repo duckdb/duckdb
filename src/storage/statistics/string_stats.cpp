@@ -10,7 +10,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/blob.hpp"
-#include "duckdb/storage/statistics/string_stats_writer.hpp"
+#include "duckdb/storage/statistics/stats_writer.hpp"
 
 namespace duckdb {
 
@@ -397,7 +397,7 @@ void TruncateStatsIfRequired(idx_t &len, StringStatsType &type) {
 
 void StringStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
 	auto &string_data = GetDataUnsafe(stats);
-	if (!serializer.ShouldSerialize(8)) {
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		// targeting old storage: use legacy serialize
 		data_t min_data[StringStatsData::LEGACY_MAX_STRING_MINMAX_SIZE];
 		data_t max_data[StringStatsData::LEGACY_MAX_STRING_MINMAX_SIZE];
@@ -512,7 +512,7 @@ void StringStats::FromConstant(BaseStatistics &stats, string_t value) {
 	static constexpr const idx_t CONSTANT_STATS_BOUND = 100000;
 
 	// use the string stats writer for setting stats
-	StringStatsWriter writer(stats.GetType());
+	StatsWriter<string_t> writer(stats.GetType());
 	writer.Update(value);
 	writer.Merge(stats);
 
@@ -677,8 +677,8 @@ string_t ReadWriterStats(const data_t data[], idx_t size, StringStatsType &type)
 	return string_t(const_char_ptr_cast(data), StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
 }
 
-void StringStats::Merge(BaseStatistics &stats, const StringStatsWriter &stats_writer) {
-	if (!stats_writer.HasStats()) {
+void StringStats::Merge(BaseStatistics &stats, const StatsWriter<string_t> &stats_writer) {
+	if (!stats_writer.AnyValid()) {
 		return;
 	}
 	// construct string stats data from the writer
@@ -785,7 +785,7 @@ child_list_t<Value> StringStats::ToStruct(const BaseStatistics &stats) {
 	return result;
 }
 
-void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void StringStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
 	auto &string_data = GetDataUnsafe(stats);
 
 	auto entries = vector.Values<string_t>();

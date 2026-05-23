@@ -112,7 +112,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		Allocator allocator;
 		MemoryStream stream(allocator);
 		SerializationOptions options;
-		options.serialization_compatibility = SerializationCompatibility::FromString("latest");
+		options.storage_compatibility = StorageCompatibility::FromString("latest");
 		optional_ptr<SelectStatement> to_serialize_stmt;
 		optional_ptr<QueryNode> to_serialize_node;
 		switch (statement->type) {
@@ -244,6 +244,14 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		}
 		auto explain_q = "EXPLAIN " + query;
 		auto explain_stmt = make_uniq<ExplainStatement>(statement->Copy());
+		// Disable the profiler during the verification EXPLAIN to prevent it from consuming the profiler context
+		// (which would lose parser timing captured before StatementVerification was called) and from
+		// overwriting the profiling output file with the EXPLAIN's profiling data.
+		auto &client_config = ClientConfig::GetConfig(*this);
+		bool saved_profiler = client_config.enable_profiler;
+		ScopedConfigSetting suppress_profiling(
+		    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
+		    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
 		auto explain_result = RunStatementInternal(lock, explain_q, std::move(explain_stmt), query_parameters);
 		if (explain_result->HasError()) {
 			explain_result->ThrowError();

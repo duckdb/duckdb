@@ -94,7 +94,7 @@ bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
 bool ColumnData::HasChanges() const {
 	for (auto &segment_node : data.SegmentNodes()) {
 		auto &segment = segment_node.GetNode();
-		if (segment.segment_type == ColumnSegmentType::TRANSIENT) {
+		if (segment.GetSegmentType() == ColumnSegmentType::TRANSIENT) {
 			// transient segment: always need to write to disk
 			return true;
 		}
@@ -201,7 +201,7 @@ void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
 		auto &current = state.current->GetNode();
 		current.Skip(state);
 	}
-	D_ASSERT(state.current->GetNode().type == type);
+	D_ASSERT(state.current->GetNode().GetType() == type);
 }
 
 idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type,
@@ -392,7 +392,7 @@ void ColumnData::Skip(ColumnScanState &state, idx_t s_count) {
 	state.Next(s_count);
 }
 
-void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t append_count) {
+void ColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t append_count) {
 	UnifiedVectorFormat vdata;
 	vector.ToUnifiedFormat(vdata);
 	AppendData(state, vdata, append_count);
@@ -412,6 +412,11 @@ void ColumnData::FinalizeAppend(optional_ptr<BaseStatistics> table_stats, Column
 	if (table_stats) {
 		finalize_state.global_stats.emplace_back(*table_stats);
 	}
+	FinalizeAppend(finalize_state, state);
+}
+
+void ColumnData::FinalizeAppendLocked(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	lock_guard<mutex> l(stats_lock);
 	FinalizeAppend(finalize_state, state);
 }
 
@@ -570,7 +575,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	}
 	auto segment = data.GetLastSegment(l);
 	auto &last_segment = segment->GetNode();
-	if (last_segment.segment_type == ColumnSegmentType::PERSISTENT ||
+	if (last_segment.GetSegmentType() == ColumnSegmentType::PERSISTENT ||
 	    !last_segment.GetCompressionFunction().init_append) {
 		// we cannot append to this segment - append a new segment
 		auto total_rows = segment->GetRowStart() + last_segment.count;
@@ -581,7 +586,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	}
 	state.InitializeStats(GetType());
 	auto &append_segment = state.current->GetNode();
-	D_ASSERT(append_segment.segment_type == ColumnSegmentType::TRANSIENT);
+	D_ASSERT(append_segment.GetSegmentType() == ColumnSegmentType::TRANSIENT);
 	append_segment.InitializeAppend(state);
 	D_ASSERT(append_segment.GetCompressionFunction().append);
 }
@@ -649,7 +654,7 @@ void ColumnData::RevertAppend(row_t new_count_p) {
 		data.EraseSegments(l, segment_index + 1);
 
 		auto &transient = segment->GetNode();
-		D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
+		D_ASSERT(transient.GetSegmentType() == ColumnSegmentType::TRANSIENT);
 		segment->SetNext(nullptr);
 		transient.RevertAppend(new_count - segment->GetRowStart());
 	}
@@ -716,7 +721,7 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row, optiona
 	auto &config = DBConfig::GetConfig(db);
 
 	idx_t segment_size;
-	if (!prev_segment) {
+	if (!prev_segment || prev_segment->GetSegmentType() == ColumnSegmentType::PERSISTENT) {
 		// We start with the `initial_bytes` setting, but we ensure that we have enough space for at least one row.
 		const auto initial_bytes = Settings::Get<InitialColumnSegmentSizeSetting>(config);
 		segment_size = MaxValue<idx_t>(GetTypeIdSize(type.InternalType()), initial_bytes);
@@ -847,7 +852,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 
 		// create a persistent segment
 		auto segment = ColumnSegment::CreatePersistentSegment(
-		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type,
+		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset,
 		    data_pointer.tuple_count, data_pointer.compression_type, std::move(data_pointer.statistics),
 		    std::move(data_pointer.segment_state));
 
@@ -858,7 +863,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 
 bool ColumnData::IsPersistent() {
 	for (auto &segment : data.Segments()) {
-		if (segment.segment_type != ColumnSegmentType::PERSISTENT) {
+		if (segment.GetSegmentType() != ColumnSegmentType::PERSISTENT) {
 			return false;
 		}
 	}
@@ -1226,7 +1231,7 @@ struct ListBlockIds : public BlockIdVisitor {
 };
 
 void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                      vector<ColumnSegmentInfo> &result) {
+                                      vector<ColumnSegmentInfo> &result, const ColumnSegmentInfoScanOptions &options) {
 	D_ASSERT(!col_path.empty());
 
 	// convert the column path to a string
@@ -1260,7 +1265,7 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 		// persistent
 		// block_id
 		// block_offset
-		if (segment.segment_type == ColumnSegmentType::PERSISTENT) {
+		if (segment.GetSegmentType() == ColumnSegmentType::PERSISTENT) {
 			column_info.persistent = true;
 			column_info.block_id = segment.GetBlockId();
 			column_info.block_offset = segment.GetBlockOffset();
@@ -1278,7 +1283,9 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 				compression_function.visit_block_ids(segment, list_block_ids);
 			}
 		}
-		if (compression_function.get_segment_info) {
+		// get_segment_info can be expensive (e.g. for bitpacked segments it reads each block to
+		// gather per-segment compression mode counts). Skip it unless EXTENDED info is requested.
+		if (options.include_segment_info && compression_function.get_segment_info) {
 			auto segment_info = compression_function.get_segment_info(context, segment);
 			vector<string> sinfo;
 			for (auto &item : segment_info) {

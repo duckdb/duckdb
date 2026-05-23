@@ -1379,7 +1379,7 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 
 void LogicalType::Serialize(Serializer &serializer) const {
 	// Serialize geometry as old extension geometry type if required
-	if (id_ == LogicalTypeId::GEOMETRY && !serializer.ShouldSerialize(7)) {
+	if (id_ == LogicalTypeId::GEOMETRY && !serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		// This will drop the CRS information, but that's better than throwing an error.
 		auto legacy_geom = Geometry::GetSpatialGeometryType();
 		legacy_geom.Serialize(serializer);
@@ -1390,7 +1390,7 @@ void LogicalType::Serialize(Serializer &serializer) const {
 	// 1. try to default-bind into a concrete logical type, and serialize that
 	// 2. if that fails, serialize normally, in which case the UNBOUND_TYPE_INFO will try to
 	//    write itself as an old-style USER type.
-	if (id_ == LogicalTypeId::UNBOUND && !serializer.ShouldSerialize(7)) {
+	if (id_ == LogicalTypeId::UNBOUND && !serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		try {
 			auto bound_type = UnboundType::TryDefaultBind(*this);
 			if (bound_type.id() != LogicalTypeId::INVALID && bound_type.id() != LogicalTypeId::UNBOUND) {
@@ -1766,11 +1766,11 @@ LogicalType LogicalType::TYPE() {
 //===--------------------------------------------------------------------===//
 // Enum Type
 //===--------------------------------------------------------------------===//
-LogicalType LogicalType::ENUM(Vector &ordered_data, idx_t size) {
+LogicalType LogicalType::ENUM(const Vector &ordered_data, idx_t size) {
 	return EnumTypeInfo::CreateType(ordered_data, size);
 }
 
-LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx_t size) {
+LogicalType LogicalType::ENUM(const string &enum_name, const Vector &ordered_data, idx_t size) {
 	return LogicalType::ENUM(ordered_data, size);
 }
 

@@ -370,7 +370,7 @@ struct VariantShreddedAppendInput {
 
 } // namespace
 
-void VariantColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t count) {
+void VariantColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
 		Vector append_vector(Vector::Ref(vector));
 		append_vector.Flatten();
@@ -845,12 +845,13 @@ void VariantColumnData::InitializeColumn(PersistentColumnData &column_data, Base
 }
 
 void VariantColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                             vector<ColumnSegmentInfo> &result) {
+                                             vector<ColumnSegmentInfo> &result,
+                                             const ColumnSegmentInfoScanOptions &options) {
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		col_path.back() = i + 1;
-		sub_columns[i]->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+		sub_columns[i]->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	}
 }
 

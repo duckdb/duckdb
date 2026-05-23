@@ -176,12 +176,34 @@ public:
 		SelectionVector keys_no_match_sel;
 	};
 
+	//! Mirrors GroupedAggregateHashTable::AggregateDictionaryState for the join probe path
+	struct ProbeDictionaryState {
+		ProbeDictionaryState();
+
+		//! The current dictionary vector id (if any)
+		string dictionary_id;
+		DataChunk unique_values;
+		TupleDataChunkState unique_key_state;
+		Vector hashes;
+		Vector new_dictionary_pointers;
+		SelectionVector unique_entries;
+		//! Per-slot head-of-chain pointer cache; nullptr marks a miss
+		unique_ptr<Vector> dictionary_pointers;
+		unsafe_unique_array<bool> found_entry;
+		idx_t capacity = 0;
+		SelectionVector match_sel;
+		//! Number of dict slots already resolved; the unique-entries walk is skipped once it reaches dict_size
+		idx_t resolved_count = 0;
+	};
+
 	struct ProbeState : SharedState {
 		ProbeState();
 
 		Vector ht_offsets_and_salts_v;
 		Vector hashes_dense_v;
 		SelectionVector non_empty_sel;
+		//! Allocated only when the operator gates the compressed-probe paths on; null otherwise
+		unique_ptr<ProbeDictionaryState> dict_state;
 	};
 
 	struct InsertState : SharedState {
@@ -380,6 +402,13 @@ private:
 	                             optional_ptr<const SelectionVector> &current_sel);
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 
+	//! Dictionary-aware variant of Probe. Returns false if the LHS keys are not dictionary-eligible.
+	bool TryProbeDictionary(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
+	                        ProbeState &probe_state);
+	//! Constant-vector variant of Probe. Returns false if the LHS keys are not a constant vector.
+	bool TryProbeConstant(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
+	                      ProbeState &probe_state);
+
 	bool UseSalt() const;
 
 	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the
@@ -390,8 +419,7 @@ private:
 
 private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
-	void InsertHashes(Vector &hashes_v, idx_t count, TupleDataChunkState &chunk_state, InsertState &insert_statebool,
-	                  bool parallel);
+	void InsertHashes(Vector &hashes_v, TupleDataChunkState &chunk_state, InsertState &insert_state, bool parallel);
 	//! Prepares keys by filtering NULLs
 	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data,
 	                  optional_ptr<const SelectionVector> &current_sel, SelectionVector &sel, bool build_side);
@@ -506,6 +534,7 @@ public:
 	void SetBuildBloomFilter(const bool should_build) {
 		this->should_build_bloom_filter = should_build;
 	}
+	void PrepareBuildBloomFilter(idx_t estimated_row_count);
 
 	BloomFilter &GetBloomFilter() {
 		return bloom_filter;

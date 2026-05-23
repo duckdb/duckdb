@@ -105,7 +105,7 @@ void GeoColumnData::Skip(ColumnScanState &state, idx_t count) {
 void GeoColumnData::InitializeAppend(ColumnAppendState &state) {
 	base_column->InitializeAppend(state);
 }
-void GeoColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t add_count) {
+void GeoColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t add_count) {
 	base_column->Append(state, vector, add_count);
 	count += add_count;
 }
@@ -357,7 +357,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 	}
 
 	// Old storage version, write as old type
-	if (GetStorageManager().GetStorageVersion() < 7) {
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_5_0, GetStorageManager().GetStorageVersion())) {
 		auto legacy_type = Geometry::GetSpatialGeometryType();
 		auto new_column =
 		    CreateColumn(block_manager, this->info, base_column->column_index, legacy_type, GetDataType(), this);
@@ -582,8 +582,9 @@ idx_t GeoColumnData::GetMaxEntry() {
 }
 
 void GeoColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                         vector<ColumnSegmentInfo> &result) {
-	return base_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+                                         vector<ColumnSegmentInfo> &result,
+                                         const ColumnSegmentInfoScanOptions &options) {
+	return base_column->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 }
 
 void GeoColumnData::Verify(RowGroup &parent) {
@@ -597,11 +598,11 @@ void GeoColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
 //----------------------------------------------------------------------------------------------------------------------
 // Specialize
 //----------------------------------------------------------------------------------------------------------------------
-void GeoColumnData::Specialize(Vector &source, Vector &target, idx_t count, GeometryStorageType type) {
+void GeoColumnData::Specialize(const Vector &source, Vector &target, idx_t count, GeometryStorageType type) {
 	Geometry::ToVectorizedFormat(source, target, count, type);
 }
 
-void GeoColumnData::Reassemble(Vector &source, Vector &target, idx_t count, GeometryStorageType type,
+void GeoColumnData::Reassemble(const Vector &source, Vector &target, idx_t count, GeometryStorageType type,
                                idx_t result_offset) {
 	Geometry::FromVectorizedFormat(source, target, count, type, result_offset);
 }

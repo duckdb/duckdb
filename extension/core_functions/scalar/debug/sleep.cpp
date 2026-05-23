@@ -17,7 +17,7 @@ struct NullResultType {
 
 static void SleepFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	input.Flatten();
-	GenericExecutor::ExecuteUnary<PrimitiveType<int64_t>, NullResultType>(input.data[0], result, input.size(),
+	GenericExecutor::ExecuteUnary<PrimitiveType<int64_t>, NullResultType>(input.data[0], result,
 	                                                                      [](PrimitiveType<int64_t> input) {
 		                                                                      // Sleep for the specified number of
 		                                                                      // milliseconds (clamp negative values to
