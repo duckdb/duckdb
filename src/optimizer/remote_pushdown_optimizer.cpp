@@ -574,7 +574,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	if (!func_expr.catalog.empty()) {
 		auto catalog = Catalog::GetCatalogEntry(binder.context, func_expr.catalog);
 		if (catalog && catalog->IsRemoteCatalog()) {
-			return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog, func_expr.schema};
+			// Check args: a local macro or UNKNOWN expression in args blocks pushdown
+			CatalogPushdownResult result {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog, func_expr.schema};
+			for (auto &arg : func_expr.children) {
+				result = Merge(result, Rewrite(*arg));
+			}
+			return result;
 		}
 		return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	}
@@ -800,6 +805,11 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 				return true;
 			}
 		}
+		// Also check from_table: table function args and join conditions can carry correlated
+		// references (e.g. LATERAL (SELECT * FROM rpc.fn(outer_col)) or ON outer_col = t.i).
+		if (select.from_table && HasLocalTableReference(*select.from_table)) {
+			return true;
+		}
 		// Also check modifiers: ORDER BY, DISTINCT ON, and LIMIT expressions can carry
 		// correlated references to outer local tables (e.g. LATERAL ... ORDER BY outer_col).
 		for (auto &modifier : select.modifiers) {
@@ -901,6 +911,27 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 		auto &rec = node.Cast<RecursiveCTENode>();
 		return (rec.left && HasLocalTableReference(*rec.left)) ||
 		       (rec.right && HasLocalTableReference(*rec.right));
+	}
+	default:
+		return false;
+	}
+}
+
+bool RemotePushdownOptimizer::HasLocalTableReference(TableRef &ref) {
+	switch (ref.type) {
+	case TableReferenceType::TABLE_FUNCTION: {
+		auto &tf = ref.Cast<TableFunctionRef>();
+		return tf.function && HasLocalTableReference(*tf.function);
+	}
+	case TableReferenceType::JOIN: {
+		auto &join = ref.Cast<JoinRef>();
+		if (HasLocalTableReference(*join.left)) {
+			return true;
+		}
+		if (HasLocalTableReference(*join.right)) {
+			return true;
+		}
+		return join.condition && HasLocalTableReference(*join.condition);
 	}
 	default:
 		return false;

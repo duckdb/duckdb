@@ -159,6 +159,18 @@ select count(*) from local_t, lateral (select i from rpc.t1 order by local_col l
 ----
 10
 
+# Correlated JOIN ON in lateral from_table: HasLocalTableReference must check from_table
+# expressions (join condition and table function args). Without the fix, local_col in
+# the ON clause is missed and the lateral is pushed to remote where it fails with a
+# "column not found" error. With the fix the correlation is detected, pushdown is blocked,
+# and the query falls back to local execution — which hits the documented "Multiple streaming
+# scans" limitation because the inner 2-table join needs two simultaneous quack connections.
+statement error
+select count(*) from local_t,
+    lateral (select a.i from rpc.t1 a join rpc.t1 b on a.i = local_col and b.i = local_col) sub
+----
+Multiple streaming scans
+
 # Lateral: all remote outer + remote inner -> pushed (no SEQ_SCAN)
 query II
 explain select t1a.i from rpc.t1 t1a, lateral (select * from rpc.t1 t1b where t1b.i = t1a.i) sub

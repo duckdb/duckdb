@@ -67,6 +67,7 @@ private:
 	//! Used to detect correlated subqueries that reference outer local tables.
 	bool HasLocalTableReference(ParsedExpression &expr);
 	bool HasLocalTableReference(QueryNode &node);
+	bool HasLocalTableReference(TableRef &ref);
 	//! Records a BaseTableRef's name, alias and columns as local for correlated subquery detection
 	void TrackLocalTable(const BaseTableRef &ref, optional_ptr<CatalogEntry> entry = nullptr);
 	//! Returns true if the function is defined as a macro in a local (non-remote) catalog
