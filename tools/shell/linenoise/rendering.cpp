@@ -790,7 +790,7 @@ void Linenoise::RefreshMultiLine() {
 	int new_cursor_row, new_cursor_x;
 	PositionToColAndRow(pos, new_cursor_row, new_cursor_x, rows, cols);
 	int col; /* column position, zero-based. */
-	int old_rows = maxrows ? maxrows : 1;
+	idx_t old_rows = maxrows ? maxrows : 1;
 	int fd = ofd;
 	std::string highlight_buffer;
 	auto render_buf = this->buf;
@@ -908,14 +908,15 @@ void Linenoise::RefreshMultiLine() {
 	/* First step: clear all the lines used before. To do so start by
 	 * going to the last row. */
 	AppendBuffer append_buffer;
-	if (old_rows - old_cursor_rows > 0) {
-		Linenoise::Log("go down %d\n", old_rows - old_cursor_rows);
-		snprintf(seq, 64, "\x1b[%dB", old_rows - int(old_cursor_rows));
+	if (old_rows > old_cursor_rows) {
+		int extra_rows = old_rows - old_cursor_rows;
+		Linenoise::Log("go down %d\n", extra_rows);
+		snprintf(seq, 64, "\x1b[%dB", extra_rows);
 		append_buffer.Append(seq);
 	}
 
 	/* Now for every row clear it, go up. */
-	for (int j = 0; j < old_rows - 1; j++) {
+	for (idx_t j = 0; j + 1 < old_rows; j++) {
 		Linenoise::Log("clear+up\n");
 		append_buffer.Append("\r\x1b[0K\x1b[1A");
 	}

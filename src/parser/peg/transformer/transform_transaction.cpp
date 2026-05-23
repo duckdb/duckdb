@@ -17,12 +17,6 @@ PEGTransformerFactory::TransformReadOrWrite(PEGTransformer &transformer,
 	return read_only_or_read_write;
 }
 
-TransactionModifierType PEGTransformerFactory::TransformReadOnlyOrReadWrite(PEGTransformer &transformer,
-                                                                            ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.TransformEnum<TransactionModifierType>(list_pr.Child<ChoiceParseResult>(0).GetResult());
-}
-
 TransactionModifierType PEGTransformerFactory::TransformReadOnly(PEGTransformer &transformer) {
 	return TransactionModifierType::TRANSACTION_READ_ONLY;
 }

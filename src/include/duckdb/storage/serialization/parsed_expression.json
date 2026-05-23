@@ -484,7 +484,7 @@
         "id": 217,
         "name": "has_ignore_nulls",
         "type": "bool",
-        "version": "8"
+        "version": "v2.0.0"
       }
     ],
     "constructor": ["type", "children", "offset_expr", "default_expr"]

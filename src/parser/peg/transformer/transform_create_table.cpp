@@ -1,3 +1,4 @@
+#include "duckdb/parser/peg/ast/column_constraint_entry.hpp"
 #include "duckdb/parser/peg/ast/column_constraints.hpp"
 #include "duckdb/parser/peg/ast/column_elements.hpp"
 #include "duckdb/parser/peg/ast/create_table_as.hpp"
@@ -15,6 +16,7 @@
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/type_expression.hpp"
+#include "duckdb/catalog/default/default_types.hpp"
 
 namespace duckdb {
 
@@ -255,6 +257,13 @@ vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &
 	return parts;
 }
 
+ColumnConstraintEntry PEGTransformerFactory::TransformColumnConstraint(PEGTransformer &transformer,
+                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	return transformer.Transform<ColumnConstraintEntry>(choice_pr.GetResult());
+}
+
 ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGTransformer &transformer,
                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -275,29 +284,28 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 	if (constraints_opt.HasResult()) {
 		auto &constraints_repeat = constraints_opt.GetResult().Cast<RepeatParseResult>();
 		for (auto &constraint_entry : constraints_repeat.GetChildren()) {
-			auto &constraint_list = constraint_entry.get().Cast<ListParseResult>();
-			auto &constraint = constraint_list.Child<ChoiceParseResult>(0).GetResult();
-			if (constraint.name == "DefaultValue") {
+			auto cc_entry = TransformColumnConstraint(transformer, constraint_entry.get());
+			if (cc_entry.constraint_name == "DefaultValue") {
 				if (column_constraint.default_value) {
 					throw ParserException("Cannot define a default value twice");
 				}
-				column_constraint.default_value = transformer.Transform<unique_ptr<ParsedExpression>>(constraint);
-			} else if (constraint.name == "NotNullConstraint" || constraint.name == "UniqueConstraint" ||
-			           constraint.name == "PrimaryKeyConstraint") {
-				column_constraint.constraint_types.push_back(
-				    transformer.Transform<pair<bool, ConstraintType>>(constraint));
-			} else if (constraint.name == "ColumnCompression") {
-				compression_type = transformer.Transform<CompressionType>(constraint);
+				column_constraint.default_value = std::move(cc_entry.expression);
+			} else if (cc_entry.constraint_name == "NotNullConstraint" ||
+			           cc_entry.constraint_name == "UniqueConstraint" ||
+			           cc_entry.constraint_name == "PrimaryKeyConstraint") {
+				column_constraint.constraint_types.push_back(cc_entry.constraint_type_info);
+			} else if (cc_entry.constraint_name == "ColumnCompression") {
+				compression_type = cc_entry.compression_type;
 				if (compression_type == CompressionType::COMPRESSION_AUTO) {
 					throw ParserException(
 					    "Unrecognized option for column compression, expected none, uncompressed, rle, "
 					    "dictionary, pfor, bitpacking, fsst, chimp, patas, zstd, alp, alprd or roaring");
 				}
-			} else if (constraint.name == "ForeignKeyConstraint") {
-				auto fk_constraint = transformer.Transform<unique_ptr<ForeignKeyConstraint>>(constraint);
-				fk_constraint->fk_columns.push_back(qualified_name.name);
-				column_constraint.constraints.push_back(std::move(fk_constraint));
-			} else if (constraint.name == "ColumnCollation") {
+			} else if (cc_entry.constraint_name == "ForeignKeyConstraint") {
+				auto &fk_constraint = cc_entry.constraint->Cast<ForeignKeyConstraint>();
+				fk_constraint.fk_columns.push_back(qualified_name.name);
+				column_constraint.constraints.push_back(std::move(cc_entry.constraint));
+			} else if (cc_entry.constraint_name == "ColumnCollation") {
 				if (generated_opt.HasResult()) {
 					throw ParserException("Collations are not supported on generated columns");
 				}
@@ -310,18 +318,17 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 						throw InternalException("Expected a type expression");
 					}
 					auto &type_expr = expr->Cast<TypeExpression>();
-					if (!StringUtil::CIEquals(type_expr.GetTypeName(), "VARCHAR")) {
+					if (DefaultTypeGenerator::GetDefaultType(type_expr.GetTypeName()) != LogicalTypeId::VARCHAR) {
 						throw ParserException("Only VARCHAR columns can have collations!");
 					}
 				} else {
 					throw InternalException("Expected only unbound types here");
 				}
-				auto collation = transformer.Transform<unique_ptr<ParsedExpression>>(constraint);
 				vector<unique_ptr<ParsedExpression>> type_children;
-				type_children.push_back(std::move(collation));
+				type_children.push_back(std::move(cc_entry.expression));
 				type = LogicalType::UNBOUND(make_uniq<TypeExpression>("VARCHAR", std::move(type_children)));
 			} else {
-				column_constraint.constraints.push_back(transformer.Transform<unique_ptr<Constraint>>(constraint));
+				column_constraint.constraints.push_back(std::move(cc_entry.constraint));
 			}
 		}
 	}
@@ -374,10 +381,13 @@ GeneratedColumnDefinition PEGTransformerFactory::TransformGeneratedColumn(PEGTra
 	return generated;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDefaultValue(PEGTransformer &transformer,
-                                                                          ParseResult &parse_result) {
+ColumnConstraintEntry PEGTransformerFactory::TransformDefaultValue(PEGTransformer &transformer,
+                                                                   ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+	ColumnConstraintEntry entry;
+	entry.constraint_name = "DefaultValue";
+	entry.expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(1));
+	return entry;
 }
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopLevelConstraint(PEGTransformer &transformer,
@@ -390,7 +400,12 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopLevelConstraint(PEGTra
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopLevelConstraintList(PEGTransformer &transformer,
                                                                               ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<Constraint>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+	auto &choice_result = list_pr.Child<ChoiceParseResult>(0).GetResult();
+	if (choice_result.name == "CheckConstraint") {
+		auto cc_entry = transformer.Transform<ColumnConstraintEntry>(choice_result);
+		return std::move(cc_entry.constraint);
+	}
+	return transformer.Transform<unique_ptr<Constraint>>(choice_result);
 }
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopPrimaryKeyConstraint(PEGTransformer &transformer,
@@ -408,16 +423,18 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopUniqueConstraint(PEGTr
 	return make_uniq<UniqueConstraint>(column_list, false);
 }
 
-unique_ptr<Constraint> PEGTransformerFactory::TransformCheckConstraint(PEGTransformer &transformer,
-                                                                       ParseResult &parse_result) {
+ColumnConstraintEntry PEGTransformerFactory::TransformCheckConstraint(PEGTransformer &transformer,
+                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto check_expr = transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens);
 	if (check_expr->HasSubquery()) {
 		throw ParserException("subqueries prohibited in CHECK constraints");
 	}
-	auto result = make_uniq<CheckConstraint>(std::move(check_expr));
-	return std::move(result);
+	ColumnConstraintEntry entry;
+	entry.constraint_name = "CheckConstraint";
+	entry.constraint = make_uniq<CheckConstraint>(std::move(check_expr));
+	return entry;
 }
 
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopForeignKeyConstraint(PEGTransformer &transformer,
@@ -425,12 +442,13 @@ unique_ptr<Constraint> PEGTransformerFactory::TransformTopForeignKeyConstraint(P
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto pk_list = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(2));
 
-	auto fk_constraint = transformer.Transform<unique_ptr<ForeignKeyConstraint>>(list_pr.Child<ListParseResult>(3));
-	fk_constraint->fk_columns = pk_list;
-	if (!fk_constraint->pk_columns.empty() && fk_constraint->fk_columns.size() != fk_constraint->pk_columns.size()) {
+	auto cc_entry = transformer.Transform<ColumnConstraintEntry>(list_pr.Child<ListParseResult>(3));
+	auto &fk_constraint = cc_entry.constraint->Cast<ForeignKeyConstraint>();
+	fk_constraint.fk_columns = pk_list;
+	if (!fk_constraint.pk_columns.empty() && fk_constraint.fk_columns.size() != fk_constraint.pk_columns.size()) {
 		throw ParserException("The number of referencing and referenced columns for foreign keys must be the same");
 	}
-	return std::move(fk_constraint);
+	return std::move(cc_entry.constraint);
 }
 
 vector<string> PEGTransformerFactory::TransformColumnIdList(PEGTransformer &transformer, ParseResult &parse_result) {
@@ -453,15 +471,18 @@ string PEGTransformerFactory::TransformTypeFuncName(PEGTransformer &transformer,
 	return transformer.Transform<string>(choice_pr);
 }
 
-CompressionType PEGTransformerFactory::TransformColumnCompression(PEGTransformer &transformer,
-                                                                  ParseResult &parse_result) {
+ColumnConstraintEntry PEGTransformerFactory::TransformColumnCompression(PEGTransformer &transformer,
+                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto compression_string = transformer.Transform<string>(list_pr.Child<ListParseResult>(2));
-	return EnumUtil::FromString<CompressionType>(StringUtil::Lower(compression_string));
+	ColumnConstraintEntry entry;
+	entry.constraint_name = "ColumnCompression";
+	entry.compression_type = EnumUtil::FromString<CompressionType>(StringUtil::Lower(compression_string));
+	return entry;
 }
 
-unique_ptr<ForeignKeyConstraint> PEGTransformerFactory::TransformForeignKeyConstraint(PEGTransformer &transformer,
-                                                                                      ParseResult &parse_result) {
+ColumnConstraintEntry PEGTransformerFactory::TransformForeignKeyConstraint(PEGTransformer &transformer,
+                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	ForeignKeyInfo fk_info;
 	auto base_table = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(1));
@@ -476,7 +497,10 @@ unique_ptr<ForeignKeyConstraint> PEGTransformerFactory::TransformForeignKeyConst
 	}
 	auto key_actions = transformer.Transform<KeyActions>(list_pr.Child<ListParseResult>(3));
 
-	return make_uniq<ForeignKeyConstraint>(pk_list, vector<string>(), fk_info);
+	ColumnConstraintEntry entry;
+	entry.constraint_name = "ForeignKeyConstraint";
+	entry.constraint = make_uniq<ForeignKeyConstraint>(pk_list, vector<string>(), fk_info);
+	return entry;
 }
 
 KeyActions PEGTransformerFactory::TransformKeyActions(PEGTransformer &transformer, ParseResult &parse_result) {
@@ -522,34 +546,43 @@ string PEGTransformerFactory::TransformSetDefaultKeyAction(PEGTransformer &trans
 	throw ParserException("FOREIGN KEY constraints cannot use CASCADE, SET NULL or SET DEFAULT");
 }
 
-pair<bool, ConstraintType> PEGTransformerFactory::TransformPrimaryKeyConstraint(PEGTransformer &transformer,
-                                                                                ParseResult &parse_result) {
-	return make_pair(true, ConstraintType::UNIQUE);
+ColumnConstraintEntry PEGTransformerFactory::TransformPrimaryKeyConstraint(PEGTransformer &transformer,
+                                                                           ParseResult &parse_result) {
+	ColumnConstraintEntry entry;
+	entry.constraint_name = "PrimaryKeyConstraint";
+	entry.constraint_type_info = make_pair(true, ConstraintType::UNIQUE);
+	return entry;
 }
 
-pair<bool, ConstraintType> PEGTransformerFactory::TransformUniqueConstraint(PEGTransformer &transformer,
-                                                                            ParseResult &parse_result) {
-	return make_pair(false, ConstraintType::UNIQUE);
+ColumnConstraintEntry PEGTransformerFactory::TransformUniqueConstraint(PEGTransformer &transformer,
+                                                                       ParseResult &parse_result) {
+	ColumnConstraintEntry entry;
+	entry.constraint_name = "UniqueConstraint";
+	entry.constraint_type_info = make_pair(false, ConstraintType::UNIQUE);
+	return entry;
 }
 
-pair<bool, ConstraintType> PEGTransformerFactory::TransformNotNullConstraint(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
+ColumnConstraintEntry PEGTransformerFactory::TransformNotNullConstraint(PEGTransformer &transformer,
+                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto not_null = list_pr.Child<OptionalParseResult>(0).HasResult();
-	if (not_null) {
-		return make_pair(false, ConstraintType::NOT_NULL);
-	}
-	return make_pair(false, ConstraintType::INVALID);
+	ColumnConstraintEntry entry;
+	entry.constraint_name = "NotNullConstraint";
+	entry.constraint_type_info = make_pair(false, not_null ? ConstraintType::NOT_NULL : ConstraintType::INVALID);
+	return entry;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnCollation(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
+ColumnConstraintEntry PEGTransformerFactory::TransformColumnCollation(PEGTransformer &transformer,
+                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(1));
 	string collation = StringUtil::Join(dotted_identifier, ".");
 	auto expr = make_uniq<ConstantExpression>(Value(collation));
 	expr->SetAlias("collation");
-	return std::move(expr);
+	ColumnConstraintEntry entry;
+	entry.constraint_name = "ColumnCollation";
+	entry.expression = std::move(expr);
+	return entry;
 }
 
 bool PEGTransformerFactory::TransformWithData(PEGTransformer &transformer, ParseResult &parse_result) {

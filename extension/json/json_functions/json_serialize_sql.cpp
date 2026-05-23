@@ -110,8 +110,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 				auto &select = statement->Cast<SelectStatement>();
 
 				auto options = make_uniq<SerializationOptions>();
-				options->serialization_compatibility =
-				    state.GetContext().db->config.options.serialization_compatibility;
+				options->storage_compatibility = state.GetContext().db->config.options.storage_compatibility;
 				auto json = JsonSerializer::Serialize(select, doc, info.skip_if_null, info.skip_if_empty,
 				                                      info.skip_if_default, *options);
 

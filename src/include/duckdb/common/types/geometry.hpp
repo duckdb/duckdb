@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include <limits>
 #include <cmath>
 
@@ -247,7 +248,7 @@ enum class GeometryStorageType : uint8_t {
 class Geometry {
 public:
 	static constexpr idx_t MAX_RECURSION_DEPTH = 16;
-	static constexpr idx_t VERSION_ADDED = 7; // Added to core in DuckDB v1.5.0
+	static constexpr StorageVersion VERSION_ADDED = StorageVersion::V1_5_0; // Added to core in DuckDB v1.5.0
 
 	//! Check for legayc geometry type (pre v1.5)
 	static bool IsSpatialGeometryType(const LogicalType &type);

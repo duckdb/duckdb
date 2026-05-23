@@ -17,6 +17,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
@@ -213,11 +214,11 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 		commit_state = storage_manager.GenStorageCommitState(*wal);
 
 		auto &profiler = *context.client_data->profiler;
-
-		auto commit_timer = profiler.StartTimer(MetricType::COMMIT_LOCAL_STORAGE_LATENCY);
+		auto commit_timer = profiler.StartTimer<MetricStorageCommitLocalStorageLatency>();
 		storage->Commit(commit_state.get());
+		commit_timer.EndTimer();
 
-		auto wal_timer = profiler.StartTimer(MetricType::WRITE_TO_WAL_LATENCY);
+		auto wal_timer = profiler.StartTimer<MetricStorageWriteToWALLatency>();
 		undo_buffer.WriteToWAL(*wal, commit_state.get());
 		if (commit_state->HasRowGroupData()) {
 			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
@@ -225,6 +226,8 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 			// hence we need to ensure those optimistically written blocks are persisted
 			storage_manager.GetBlockManager().FileSync();
 		}
+		wal_timer.EndTimer();
+
 	} catch (std::exception &ex) {
 		// Call RevertCommit() outside this try-catch as it itself may throw
 		error_data = ErrorData(ex);

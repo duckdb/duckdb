@@ -51,6 +51,7 @@ ReservedIdentifier <- Identifier
 ColumnName <- Identifier
 ReservedColumnName <- Identifier
 IndexName <- Identifier
+ReservedIndexName <- Identifier
 SettingName <- Identifier
 PragmaName <- Identifier
 FunctionName <- Identifier
@@ -58,7 +59,6 @@ ReservedFunctionName <- Identifier
 TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier
-TriggerName <- Identifier
 CollationName <- Identifier
 CopyOptionName <- ColLabel
 

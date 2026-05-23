@@ -87,6 +87,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"extension_directory", {"test"}},
 	    {"extension_directories", {"[test]"}},
 	    {"max_expression_depth", {50}},
+	    {"write_buffer_row_group_memory_limit", {"4.0 GiB"}},
 	    {"max_memory", {"4.0 GiB"}},
 	    {"max_temp_directory_size", {"10.0 GiB"}},
 	    {"merge_join_threshold", {73}},
@@ -209,6 +210,8 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "progress_bar_time",
 	    "index_scan_max_count",
 	    "profiling_mode",
+	    "worker_threads",
+	    "tracked_metrics",
 	    "debug_verification_mode",
 	    "warnings_as_errors",      // requires logging to be enabled
 	    "block_allocator_memory"}; // cant reduce

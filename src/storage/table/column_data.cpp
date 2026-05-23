@@ -436,8 +436,8 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 		lock_guard<mutex> l(stats_lock);
 		auto &segment_stats =
 		    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
-		        ? state.child_states[0].current->GetNode().GetStats()
-		        : state.current->GetNode().GetStats();
+		        ? state.child_states[0].current->GetNode().GetStatsMutable()
+		        : state.current->GetNode().GetStatsMutable();
 		prune_result = expr_filter.CheckStatistics(segment_stats);
 		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -1231,7 +1231,7 @@ struct ListBlockIds : public BlockIdVisitor {
 };
 
 void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                      vector<ColumnSegmentInfo> &result) {
+                                      vector<ColumnSegmentInfo> &result, const ColumnSegmentInfoScanOptions &options) {
 	D_ASSERT(!col_path.empty());
 
 	// convert the column path to a string
@@ -1283,7 +1283,9 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 				compression_function.visit_block_ids(segment, list_block_ids);
 			}
 		}
-		if (compression_function.get_segment_info) {
+		// get_segment_info can be expensive (e.g. for bitpacked segments it reads each block to
+		// gather per-segment compression mode counts). Skip it unless EXTENDED info is requested.
+		if (options.include_segment_info && compression_function.get_segment_info) {
 			auto segment_info = compression_function.get_segment_info(context, segment);
 			vector<string> sinfo;
 			for (auto &item : segment_info) {

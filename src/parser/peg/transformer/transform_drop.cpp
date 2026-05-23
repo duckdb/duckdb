@@ -45,7 +45,7 @@ CatalogType PEGTransformerFactory::TransformTableOrView(PEGTransformer &transfor
 	if (choice_pr.name == "MaterializedViewEntry") {
 		throw NotImplementedException("Cannot drop MATERIALIZED VIEW yet");
 	}
-	return transformer.TransformEnum<CatalogType>(choice_pr);
+	return transformer.Transform<CatalogType>(choice_pr);
 }
 
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTableFunction(PEGTransformer &transformer,
@@ -53,7 +53,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropTableFunction(PEGT
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = make_uniq<DropStatement>();
 	auto info = make_uniq<DropInfo>();
-	auto catalog_type = transformer.TransformEnum<CatalogType>(list_pr.Child<ListParseResult>(0));
+	auto catalog_type = transformer.Transform<CatalogType>(list_pr.Child<ListParseResult>(0));
 	bool if_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto table_function_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
 	if (table_function_list.size() > 1) {
@@ -110,11 +110,24 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSchema(PEGTransfor
 
 QualifiedName PEGTransformerFactory::TransformQualifiedSchemaName(PEGTransformer &transformer,
                                                                   ParseResult &parse_result) {
+	// QualifiedSchemaName <- CatalogReservedSchema / SchemaName
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	QualifiedName result;
+	result.catalog = INVALID_CATALOG;
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		result.schema = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier;
+		return result;
+	}
+	return transformer.Transform<QualifiedName>(choice_pr.GetResult());
+}
+
+QualifiedName PEGTransformerFactory::TransformCatalogReservedSchema(PEGTransformer &transformer,
+                                                                    ParseResult &parse_result) {
+	// CatalogReservedSchema <- CatalogQualification ReservedSchemaName
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	QualifiedName result;
-	string catalog = INVALID_CATALOG;
-	transformer.TransformOptional<string>(list_pr, 0, catalog);
-	result.catalog = catalog;
+	result.catalog = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	result.schema = list_pr.Child<IdentifierParseResult>(1).identifier;
 	return result;
 }
@@ -141,12 +154,37 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransform
 
 QualifiedName PEGTransformerFactory::TransformQualifiedIndexName(PEGTransformer &transformer,
                                                                  ParseResult &parse_result) {
+	// QualifiedIndexName <- CatalogReservedSchemaIndex / SchemaReservedIndex / IndexName
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	QualifiedName result;
 	result.catalog = INVALID_CATALOG;
 	result.schema = INVALID_SCHEMA;
-	transformer.TransformOptional<string>(list_pr, 0, result.catalog);
-	transformer.TransformOptional<string>(list_pr, 1, result.schema);
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		result.name = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier;
+		return result;
+	}
+	return transformer.Transform<QualifiedName>(choice_pr.GetResult());
+}
+
+QualifiedName PEGTransformerFactory::TransformSchemaReservedIndex(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
+	// SchemaReservedIndex <- SchemaQualification ReservedIndexName
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	QualifiedName result;
+	result.catalog = INVALID_CATALOG;
+	result.schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	result.name = list_pr.Child<IdentifierParseResult>(1).identifier;
+	return result;
+}
+
+QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaIndex(PEGTransformer &transformer,
+                                                                         ParseResult &parse_result) {
+	// CatalogReservedSchemaIndex <- CatalogQualification ReservedSchemaQualification ReservedIndexName
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	QualifiedName result;
+	result.catalog = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	result.schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
 	result.name = list_pr.Child<IdentifierParseResult>(2).identifier;
 	return result;
 }

@@ -211,7 +211,7 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(const StorageIndex &column_idx) const;
 
 	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result,
-	                          ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL);
+	                          const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {});
 	static PartitionStatistics GetPartitionStats(SegmentNode<RowGroup> &row_group);
 
 	idx_t GetAllocationSize() const {
@@ -235,6 +235,10 @@ public:
 	idx_t GetColumnCount() const;
 
 	vector<MetaBlockPointer> CheckpointDeletes(RowGroupWriter &writer);
+
+	//! Direct accessors, fall outside of general use but can be useful to some extensions
+	ColumnData &GetRawColumnData(const StorageIndex &c) const;
+	ColumnData &GetRawColumnData(storage_t c) const;
 
 private:
 	optional_ptr<RowVersionManager> GetVersionInfo();
