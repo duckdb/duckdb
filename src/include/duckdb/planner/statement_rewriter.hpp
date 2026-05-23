@@ -54,6 +54,7 @@ private:
 	CatalogPushdownResult Rewrite(UpdateQueryNode &node);
 	CatalogPushdownResult Rewrite(unique_ptr<TableRef> &ref);
 	CatalogPushdownResult Rewrite(ExpressionListRef &ref);
+	CatalogPushdownResult Rewrite(RecursiveCTENode &node);
 	CatalogPushdownResult Rewrite(JoinRef &ref);
 	CatalogPushdownResult Rewrite(SubqueryRef &ref);
 	CatalogPushdownResult Rewrite(TableFunctionRef &ref);

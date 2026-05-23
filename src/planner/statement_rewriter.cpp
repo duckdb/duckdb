@@ -33,6 +33,7 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/query_node/recursive_cte_node.hpp"
 
 namespace duckdb {
 
@@ -114,9 +115,26 @@ CatalogPushdownResult StatementRewriter::Rewrite(QueryNode &node) {
 		return Rewrite(node.Cast<UpdateQueryNode>());
 	case QueryNodeType::SET_OPERATION_NODE:
 		return Rewrite(node.Cast<SetOperationNode>());
+	case QueryNodeType::RECURSIVE_CTE_NODE:
+		return Rewrite(node.Cast<RecursiveCTENode>());
 	default:
 		return {};
 	}
+}
+
+CatalogPushdownResult StatementRewriter::Rewrite(RecursiveCTENode &node) {
+	// Register the CTE's own name as neutral so the self-reference in the recursive arm
+	// is treated as NO_CATALOG_REFERENCED rather than triggering an unknown catalog lookup.
+	// The caller (Rewrite(SelectNode)) will overwrite this with the final result afterwards.
+	cte_results[node.ctename] = {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+
+	CatalogPushdownResult left_result = Rewrite(*node.left);
+	CatalogPushdownResult right_result = Rewrite(*node.right);
+
+	// Remove the placeholder so the caller's assignment is the authoritative entry
+	cte_results.erase(node.ctename);
+
+	return Merge(left_result, right_result);
 }
 
 CatalogPushdownResult StatementRewriter::Rewrite(SelectNode &node) {
@@ -131,11 +149,8 @@ CatalogPushdownResult StatementRewriter::Rewrite(SelectNode &node) {
 		if (it != cte_results.end()) {
 			outer_cte_results[cte_name] = it->second;
 		}
-		// Recursive CTEs cannot be analyzed for pushdown
 		CatalogPushdownResult cte_result;
-		if (cte_info.query_node && cte_info.query_node->type == QueryNodeType::RECURSIVE_CTE_NODE) {
-			cte_result = {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr, {}};
-		} else if (cte_info.query_node) {
+		if (cte_info.query_node) {
 			cte_result = Rewrite(*cte_info.query_node);
 		} else {
 			cte_result = {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr, {}};
@@ -663,6 +678,11 @@ bool StatementRewriter::HasLocalTableReference(QueryNode &node) {
 		}
 		return false;
 	}
+	case QueryNodeType::RECURSIVE_CTE_NODE: {
+		auto &rec = node.Cast<RecursiveCTENode>();
+		return (rec.left && HasLocalTableReference(*rec.left)) ||
+		       (rec.right && HasLocalTableReference(*rec.right));
+	}
 	default:
 		return false;
 	}
@@ -895,6 +915,16 @@ void StatementRewriter::StripCatalogName(QueryNode &node, const string &catalog_
 		auto &setop = node.Cast<SetOperationNode>();
 		for (auto &child : setop.children) {
 			StripCatalogName(*child, catalog_name);
+		}
+		break;
+	}
+	case QueryNodeType::RECURSIVE_CTE_NODE: {
+		auto &rec = node.Cast<RecursiveCTENode>();
+		if (rec.left) {
+			StripCatalogName(*rec.left, catalog_name);
+		}
+		if (rec.right) {
+			StripCatalogName(*rec.right, catalog_name);
 		}
 		break;
 	}
