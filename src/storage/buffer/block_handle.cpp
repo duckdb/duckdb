@@ -91,6 +91,7 @@ void BlockMemory::ConvertToPersistent(BlockLock &l, BlockHandle &new_block, uniq
 	buffer.reset();
 	SetState(BlockState::BLOCK_UNLOADED);
 	memory_usage = 0;
+	OnUnload();
 }
 
 void BlockMemory::ResizeBuffer(BlockLock &l, idx_t block_size, idx_t block_header_size, int64_t memory_delta) {
