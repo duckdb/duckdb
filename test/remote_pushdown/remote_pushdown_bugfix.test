@@ -258,6 +258,78 @@ select count(distinct bucket) from (
 ----
 9
 
+# ============================================================
+# Bug 7: Rewrite(DML) did not guard on target-table locality.
+#
+# When the DML target table is LOCAL but the condition or source
+# contains a remote subquery, Merge(NO_CATALOG, SINGLE_REMOTE)
+# previously returned SINGLE_REMOTE, causing the optimizer to push
+# the whole DML to the remote server where the local table does not
+# exist (resulting in "table not found" or similar errors).
+#
+# The fix: check the target table result first; if not remote,
+# return UNKNOWN immediately and push only individual remote
+# subqueries inside condition/FROM for efficiency.
+# ============================================================
+
+# DELETE FROM local table with remote scalar subquery in WHERE:
+# Optimizer must NOT push the DELETE, but the subquery should be
+# pushed individually. local_t = {0..9}; max(rpc.t1.i) = 9;
+# delete where local_col > 9 -> deletes 0 rows; count stays 10.
+query I
+select count(*) from local_t
+----
+10
+
+statement ok
+delete from local_t where local_col > (select max(i) from rpc.t1)
+
+query I
+select count(*) from local_t
+----
+10
+
+# Deleting rows that DO exist: local_col IN (SELECT ... FROM rpc.t1)
+# t1={0..9}; delete local_col in {0,1,2} -> 3 rows removed; 7 remain
+statement ok
+delete from local_t where local_col in (select i from rpc.t1 where i < 3)
+
+query I
+select count(*) from local_t
+----
+7
+
+statement ok
+insert into local_t from range(3)
+
+# UPDATE local table with remote scalar subquery in SET:
+# local_t={0..9}; set local_col = local_col + max(rpc.t1.i)
+# max = 9; so all values increase by 9; first 3 become {9,10,11}
+statement ok
+update local_t set local_col = local_col + (select max(i) from rpc.t1) where local_col < 3
+
+query I
+select count(*) from local_t where local_col >= 9
+----
+4
+
+# Restore
+statement ok
+update local_t set local_col = local_col - (select max(i) from rpc.t1) where local_col >= 9 and local_col <= 11
+
+# INSERT into local table from remote SELECT:
+# INSERT INTO local_t SELECT i+100 FROM rpc.t1 WHERE i < 3 -> 3 rows {100,101,102}
+statement ok
+insert into local_t select i + 100 from rpc.t1 where i < 3
+
+query I
+select count(*) from local_t where local_col >= 100
+----
+3
+
+statement ok
+delete from local_t where local_col >= 100
+
 statement ok
 drop table local_t
 

@@ -355,14 +355,23 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
-	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	// InsertQueryNode stores the target table in catalog/schema/table string fields, not in table_ref
 	// (table_ref is only set for ON CONFLICT cases and is an alias ref)
 	BaseTableRef target_ref;
 	target_ref.catalog_name = node.catalog;
 	target_ref.schema_name = node.schema;
 	target_ref.table_name = node.table;
-	result = Merge(result, Rewrite(target_ref));
+	CatalogPushdownResult result = Rewrite(target_ref);
+	// Target table must be remote for the whole INSERT to be pushed to the remote.
+	// If it is local, push the SELECT source subquery individually if all-remote so that
+	// DuckDB can execute: INSERT INTO local_t SELECT * FROM quack_query_by_name(...).
+	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		if (node.select_statement) {
+			auto select_result = Rewrite(*node.select_statement->node);
+			FinishPushdown(node.select_statement->node, select_result);
+		}
+		return {};
+	}
 	if (node.select_statement) {
 		result = Merge(result, Rewrite(*node.select_statement->node));
 	}
@@ -388,7 +397,19 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	if (node.table) {
-		result = Merge(result, Rewrite(node.table));
+		result = Rewrite(node.table);
+	}
+	// Target table must be remote for the whole DELETE to be pushed to the remote.
+	// If it is local, still push individual remote subqueries in condition/USING for efficiency.
+	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		if (node.condition) {
+			PushdownSubqueries(node.condition);
+		}
+		for (auto &clause : node.using_clauses) {
+			auto clause_result = Rewrite(clause);
+			FinishPushdown(clause, clause_result);
+		}
+		return {};
 	}
 	if (node.condition) {
 		result = Merge(result, Rewrite(*node.condition));
@@ -405,7 +426,24 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	if (node.table) {
-		result = Merge(result, Rewrite(node.table));
+		result = Rewrite(node.table);
+	}
+	// Target table must be remote for the whole UPDATE to be pushed to the remote.
+	// If it is local, still push individual remote subqueries in FROM/SET for efficiency.
+	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		if (node.from_table) {
+			auto from_result = Rewrite(node.from_table);
+			FinishPushdown(node.from_table, from_result);
+		}
+		if (node.set_info) {
+			if (node.set_info->condition) {
+				PushdownSubqueries(node.set_info->condition);
+			}
+			for (auto &expr : node.set_info->expressions) {
+				PushdownSubqueries(expr);
+			}
+		}
+		return {};
 	}
 	if (node.from_table) {
 		result = Merge(result, Rewrite(node.from_table));
