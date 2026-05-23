@@ -61,15 +61,6 @@ public:
 		bool on_disk_file DUCKDB_GUARDED_BY(meta_lock) = false;
 	};
 
-	// Cached file with its state.
-	struct CachedFileWithRefCount {
-		shared_ptr<CachedFile> cached_file;
-		// Number of active reader accessing the cached file.
-		idx_t active_handle_count = 0;
-		// Number of loaded blocks for the cached file.
-		idx_t loaded_block_count = 0;
-	};
-
 public:
 	ExternalFileCache(DatabaseInstance &db, bool enable);
 	~ExternalFileCache();
@@ -99,6 +90,15 @@ public:
 	                               const string &current_version_tag, timestamp_t current_last_modified);
 
 private:
+	//! Internal entry stored in `cached_files`: the cached file plus its lifecycle refcounts.
+	struct CachedFileWithRefCount {
+		shared_ptr<CachedFile> cached_file;
+		//! Number of active CachingFileHandles referencing the cached file.
+		idx_t active_handle_count = 0;
+		//! Number of currently-loaded cache blocks for the cached file.
+		idx_t loaded_block_count = 0;
+	};
+
 	//! Re-index blocks of a single cached file.
 	void ReindexCachedFileCore(CachedFile &cached_file_entry, shared_ptr<CachedFile> cached_file, idx_t file_size,
 	                           idx_t old_block_size, idx_t new_block_size) DUCKDB_REQUIRES(cached_file_entry.map_lock);
