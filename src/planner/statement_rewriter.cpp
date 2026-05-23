@@ -120,9 +120,27 @@ CatalogPushdownResult StatementRewriter::Rewrite(QueryNode &node) {
 }
 
 CatalogPushdownResult StatementRewriter::Rewrite(SelectNode &node) {
-	// A SELECT with CTEs is too complex to analyze for pushdown
-	if (!node.cte_map.map.empty()) {
-		return {};
+	// Analyze CTE definitions and register their catalog results for reference lookup.
+	// CTEs are processed in order so later CTEs can reference earlier ones.
+	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
+	for (auto &cte_pair : node.cte_map.map) {
+		const string &cte_name = cte_pair.first;
+		auto &cte_info = *cte_pair.second;
+		// Save any outer CTE entry with the same name (shadowing)
+		auto it = cte_results.find(cte_name);
+		if (it != cte_results.end()) {
+			outer_cte_results[cte_name] = it->second;
+		}
+		// Recursive CTEs cannot be analyzed for pushdown
+		CatalogPushdownResult cte_result;
+		if (cte_info.query_node && cte_info.query_node->type == QueryNodeType::RECURSIVE_CTE_NODE) {
+			cte_result = {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr, {}};
+		} else if (cte_info.query_node) {
+			cte_result = Rewrite(*cte_info.query_node);
+		} else {
+			cte_result = {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr, {}};
+		}
+		cte_results[cte_name] = cte_result;
 	}
 
 	// Rewrite from_table first - its result is tracked separately for potential individual pushdown
@@ -190,26 +208,40 @@ CatalogPushdownResult StatementRewriter::Rewrite(SelectNode &node) {
 	}
 
 	// If the whole SELECT points to a single remote catalog, propagate upward
-	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		return result;
+	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		// When CTEs are present, do not push individual children: a CTE-referencing FROM clause
+		// cannot be sent to the remote without its CTE definition.
+		if (node.cte_map.map.empty()) {
+			// Otherwise, push down only the from_table component if possible
+			if (node.from_table) {
+				FinishPushdown(node.from_table, from_result);
+			}
+			// Push down any subquery expressions in WHERE/HAVING/QUALIFY/SELECT list
+			if (node.where_clause) {
+				PushdownSubqueries(node.where_clause);
+			}
+			if (node.having) {
+				PushdownSubqueries(node.having);
+			}
+			if (node.qualify) {
+				PushdownSubqueries(node.qualify);
+			}
+			for (auto &expr : node.select_list) {
+				PushdownSubqueries(expr);
+			}
+		}
 	}
-	// Otherwise, push down only the from_table component if possible
-	if (node.from_table) {
-		FinishPushdown(node.from_table, from_result);
+
+	// Restore shadowed outer CTE entries (inner CTEs go out of scope)
+	for (auto &cte_pair : node.cte_map.map) {
+		auto it = outer_cte_results.find(cte_pair.first);
+		if (it != outer_cte_results.end()) {
+			cte_results[cte_pair.first] = it->second;
+		} else {
+			cte_results.erase(cte_pair.first);
+		}
 	}
-	// Push down any subquery expressions in WHERE/HAVING/QUALIFY/SELECT list
-	if (node.where_clause) {
-		PushdownSubqueries(node.where_clause);
-	}
-	if (node.having) {
-		PushdownSubqueries(node.having);
-	}
-	if (node.qualify) {
-		PushdownSubqueries(node.qualify);
-	}
-	for (auto &expr : node.select_list) {
-		PushdownSubqueries(expr);
-	}
+
 	return result;
 }
 
@@ -510,6 +542,21 @@ CatalogPushdownResult StatementRewriter::Rewrite(BaseTableRef &ref) {
 	string schema_name = ref.schema_name;
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
+	// Case 0: check if this is a CTE reference (must have no explicit catalog/schema)
+	if (catalog_name.empty() && schema_name.empty()) {
+		auto cte_it = cte_results.find(ref.table_name);
+		if (cte_it != cte_results.end()) {
+			if (cte_it->second.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+				// Local/unknown CTE - track as local for correlated subquery detection
+				local_table_names.insert(ref.table_name);
+				if (!ref.alias.empty()) {
+					local_table_names.insert(ref.alias);
+				}
+			}
+			return cte_it->second;
+		}
+	}
+
 	// Case 1: catalog is explicitly specified - check if it's a remote catalog
 	if (!catalog_name.empty()) {
 		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
@@ -744,6 +791,12 @@ void StatementRewriter::StripCatalogName(QueryNode &node, const string &catalog_
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE: {
 		auto &select = node.Cast<SelectNode>();
+		// Strip within CTE definitions so the remote receives catalog-free SQL
+		for (auto &cte_pair : select.cte_map.map) {
+			if (cte_pair.second->query_node) {
+				StripCatalogName(*cte_pair.second->query_node, catalog_name);
+			}
+		}
 		if (select.from_table) {
 			StripCatalogName(*select.from_table, catalog_name);
 		}

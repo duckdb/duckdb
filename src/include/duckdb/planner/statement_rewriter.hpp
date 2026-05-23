@@ -90,5 +90,7 @@ private:
 	case_insensitive_set_t local_table_names;
 	//! Column names of all tracked local tables - used to detect unqualified correlated column references
 	case_insensitive_set_t local_table_column_names;
+	//! CTE name → catalog pushdown result, populated as CTEs are analyzed (inner scopes restore on exit)
+	case_insensitive_map_t<CatalogPushdownResult> cte_results;
 };
 } // namespace duckdb
