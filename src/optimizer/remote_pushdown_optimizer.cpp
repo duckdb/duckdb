@@ -602,7 +602,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 				}
 			}
 			if (!is_set_returning) {
-				// TABLE_RETURNING_FUNCTION - blocks pushdown
+				// TABLE_RETURNING_FUNCTION - blocks pushdown; track alias so correlated
+				// refs from nested lateral subqueries are detected
+				if (!ref.alias.empty()) {
+					local_table_names.insert(ref.alias);
+				}
 				return {};
 			}
 			// SET_RETURNING_FUNCTION: neutral, recurse into args
@@ -613,7 +617,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 			return result;
 		}
 	}
-	// Not found in local catalogs - unknown function, blocks pushdown
+	// Not found in local catalogs - unknown function, blocks pushdown; track alias
+	// so any lateral subquery that references this function's output is detected
+	if (!ref.alias.empty()) {
+		local_table_names.insert(ref.alias);
+	}
 	return {};
 }
 
