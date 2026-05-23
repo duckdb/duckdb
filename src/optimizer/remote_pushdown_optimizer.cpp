@@ -1,4 +1,4 @@
-#include "duckdb/planner/statement_rewriter.hpp"
+#include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
@@ -37,10 +37,10 @@
 
 namespace duckdb {
 
-StatementRewriter::StatementRewriter(Binder &binder) : binder(binder) {
+RemotePushdownOptimizer::RemotePushdownOptimizer(Binder &binder) : binder(binder) {
 }
 
-void StatementRewriter::FindRemoteCatalogsInSearchPath() {
+void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 	if (search_path_initialized) {
 		return;
 	}
@@ -61,7 +61,7 @@ void StatementRewriter::FindRemoteCatalogsInSearchPath() {
 	}
 }
 
-CatalogPushdownResult StatementRewriter::Merge(CatalogPushdownResult a, CatalogPushdownResult b) {
+CatalogPushdownResult RemotePushdownOptimizer::Merge(CatalogPushdownResult a, CatalogPushdownResult b) {
 	if (a.reference_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
 		return b;
 	}
@@ -79,7 +79,7 @@ CatalogPushdownResult StatementRewriter::Merge(CatalogPushdownResult a, CatalogP
 	return {};
 }
 
-void StatementRewriter::Rewrite(unique_ptr<SQLStatement> &statement) {
+void RemotePushdownOptimizer::Rewrite(unique_ptr<SQLStatement> &statement) {
 	CatalogPushdownResult result;
 	switch (statement->type) {
 	case StatementType::SELECT_STATEMENT:
@@ -103,7 +103,7 @@ void StatementRewriter::Rewrite(unique_ptr<SQLStatement> &statement) {
 	FinishPushdown(statement, result);
 }
 
-CatalogPushdownResult StatementRewriter::Rewrite(QueryNode &node) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
 		return Rewrite(node.Cast<SelectNode>());
@@ -122,7 +122,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(QueryNode &node) {
 	}
 }
 
-CatalogPushdownResult StatementRewriter::Rewrite(RecursiveCTENode &node) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	// Register the CTE's own name as neutral so the self-reference in the recursive arm
 	// is treated as NO_CATALOG_REFERENCED rather than triggering an unknown catalog lookup.
 	// The caller (Rewrite(SelectNode)) will overwrite this with the final result afterwards.
@@ -137,7 +137,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(RecursiveCTENode &node) {
 	return Merge(left_result, right_result);
 }
 
-CatalogPushdownResult StatementRewriter::Rewrite(SelectNode &node) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 	// Analyze CTE definitions and register their catalog results for reference lookup.
 	// CTEs are processed in order so later CTEs can reference earlier ones.
 	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
@@ -260,7 +260,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(SelectNode &node) {
 	return result;
 }
 
-CatalogPushdownResult StatementRewriter::Rewrite(InsertQueryNode &node) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	// InsertQueryNode stores the target table in catalog/schema/table string fields, not in table_ref
 	// (table_ref is only set for ON CONFLICT cases and is an alias ref)
@@ -291,7 +291,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(InsertQueryNode &node) {
 	return result;
 }
 
-CatalogPushdownResult StatementRewriter::Rewrite(DeleteQueryNode &node) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	if (node.table) {
 		result = Merge(result, Rewrite(node.table));
@@ -308,7 +308,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(DeleteQueryNode &node) {
 	return result;
 }
 
-CatalogPushdownResult StatementRewriter::Rewrite(UpdateQueryNode &node) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	if (node.table) {
 		result = Merge(result, Rewrite(node.table));
@@ -330,7 +330,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(UpdateQueryNode &node) {
 	return result;
 }
 
-CatalogPushdownResult StatementRewriter::Rewrite(SetOperationNode &node) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	// Rewrite each child independently so we can push down individual children if needed
 	vector<CatalogPushdownResult> child_results;
 	child_results.reserve(node.children.size());
@@ -392,7 +392,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(SetOperationNode &node) {
 	return result;
 }
 
-CatalogPushdownResult StatementRewriter::Rewrite(unique_ptr<TableRef> &ref) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<TableRef> &ref) {
 	switch (ref->type) {
 	case TableReferenceType::BASE_TABLE:
 		// Propagate the detection result up - BaseTableRef is never pushed down individually
@@ -413,7 +413,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(unique_ptr<TableRef> &ref) {
 	}
 }
 
-CatalogPushdownResult StatementRewriter::Rewrite(ExpressionListRef &ref) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ExpressionListRef &ref) {
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	for (auto &row : ref.values) {
 		for (auto &expr : row) {
@@ -423,7 +423,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(ExpressionListRef &ref) {
 	return result;
 }
 
-CatalogPushdownResult StatementRewriter::Rewrite(SubqueryRef &ref) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SubqueryRef &ref) {
 	auto result = Rewrite(*ref.subquery->node);
 	// If the subquery references outer local tables (e.g., a lateral join), block pushdown
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
@@ -436,7 +436,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(SubqueryRef &ref) {
 	return result;
 }
 
-CatalogPushdownResult StatementRewriter::Rewrite(TableFunctionRef &ref) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	if (ref.function->GetExpressionClass() != ExpressionClass::FUNCTION) {
 		return {};
 	}
@@ -484,7 +484,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(TableFunctionRef &ref) {
 	return {};
 }
 
-CatalogPushdownResult StatementRewriter::Rewrite(JoinRef &ref) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	// Rewrite both sides independently, tracking their individual results
 	auto left_result = Rewrite(ref.left);
 	auto right_result = Rewrite(ref.right);
@@ -499,7 +499,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(JoinRef &ref) {
 	return result;
 }
 
-void StatementRewriter::TrackLocalTable(const BaseTableRef &ref, optional_ptr<CatalogEntry> entry) {
+void RemotePushdownOptimizer::TrackLocalTable(const BaseTableRef &ref, optional_ptr<CatalogEntry> entry) {
 	local_table_names.insert(ref.table_name);
 	if (!ref.alias.empty()) {
 		local_table_names.insert(ref.alias);
@@ -511,7 +511,7 @@ void StatementRewriter::TrackLocalTable(const BaseTableRef &ref, optional_ptr<Ca
 	}
 }
 
-bool StatementRewriter::IsLocalMacro(const FunctionExpression &func) {
+bool RemotePushdownOptimizer::IsLocalMacro(const FunctionExpression &func) {
 	// If explicitly qualified with a catalog, check whether that catalog is remote
 	if (!func.catalog.empty()) {
 		auto catalog = Catalog::GetCatalogEntry(binder.context, func.catalog);
@@ -551,7 +551,7 @@ bool StatementRewriter::IsLocalMacro(const FunctionExpression &func) {
 	return false;
 }
 
-CatalogPushdownResult StatementRewriter::Rewrite(BaseTableRef &ref) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// Resolve schema_name-as-catalog ambiguity using the binder's own resolution logic
 	string catalog_name = ref.catalog_name;
 	string schema_name = ref.schema_name;
@@ -617,7 +617,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(BaseTableRef &ref) {
 	return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, remote_catalogs_in_search_path.front().get(), schema_name};
 }
 
-bool StatementRewriter::HasLocalTableReference(ParsedExpression &expr) {
+bool RemotePushdownOptimizer::HasLocalTableReference(ParsedExpression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
 		if (col_ref.column_names.size() >= 2) {
@@ -644,7 +644,7 @@ bool StatementRewriter::HasLocalTableReference(ParsedExpression &expr) {
 	return found;
 }
 
-bool StatementRewriter::HasLocalTableReference(QueryNode &node) {
+bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE: {
 		auto &select = node.Cast<SelectNode>();
@@ -688,7 +688,7 @@ bool StatementRewriter::HasLocalTableReference(QueryNode &node) {
 	}
 }
 
-CatalogPushdownResult StatementRewriter::Rewrite(ParsedExpression &expr) {
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
 		auto &subquery_expr = expr.Cast<SubqueryExpression>();
 		CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
@@ -723,7 +723,7 @@ CatalogPushdownResult StatementRewriter::Rewrite(ParsedExpression &expr) {
 	return result;
 }
 
-void StatementRewriter::PushdownSubqueries(unique_ptr<ParsedExpression> &expr) {
+void RemotePushdownOptimizer::PushdownSubqueries(unique_ptr<ParsedExpression> &expr) {
 	if (!expr) {
 		return;
 	}
@@ -747,7 +747,7 @@ void StatementRewriter::PushdownSubqueries(unique_ptr<ParsedExpression> &expr) {
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { PushdownSubqueries(child); });
 }
 
-unique_ptr<TableFunctionRef> StatementRewriter::CreateRemoteFunctionRef(CatalogPushdownResult &result,
+unique_ptr<TableFunctionRef> RemotePushdownOptimizer::CreateRemoteFunctionRef(CatalogPushdownResult &result,
                                                                         string remote_sql) {
 	D_ASSERT(result.catalog);
 	vector<unique_ptr<ParsedExpression>> args;
@@ -758,7 +758,7 @@ unique_ptr<TableFunctionRef> StatementRewriter::CreateRemoteFunctionRef(CatalogP
 	return func_ref;
 }
 
-void StatementRewriter::StripCatalogName(TableRef &ref, const string &catalog_name) {
+void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &catalog_name) {
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE: {
 		auto &base = ref.Cast<BaseTableRef>();
@@ -786,7 +786,7 @@ void StatementRewriter::StripCatalogName(TableRef &ref, const string &catalog_na
 	}
 }
 
-void StatementRewriter::StripCatalogName(ParsedExpression &expr, const string &catalog_name) {
+void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const string &catalog_name) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
 		// Strip catalog prefix from qualified column references (e.g. catalog.schema.table.col -> schema.table.col)
@@ -807,7 +807,7 @@ void StatementRewriter::StripCatalogName(ParsedExpression &expr, const string &c
 	    expr, [&](ParsedExpression &child) { StripCatalogName(child, catalog_name); });
 }
 
-void StatementRewriter::StripCatalogName(QueryNode &node, const string &catalog_name) {
+void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &catalog_name) {
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE: {
 		auto &select = node.Cast<SelectNode>();
@@ -933,7 +933,7 @@ void StatementRewriter::StripCatalogName(QueryNode &node, const string &catalog_
 	}
 }
 
-void StatementRewriter::StripCatalogName(SQLStatement &statement, const string &catalog_name) {
+void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const string &catalog_name) {
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		StripCatalogName(*statement.Cast<SelectStatement>().node, catalog_name);
@@ -952,7 +952,7 @@ void StatementRewriter::StripCatalogName(SQLStatement &statement, const string &
 	}
 }
 
-void StatementRewriter::FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result) {
+void RemotePushdownOptimizer::FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result) {
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		return;
 	}
@@ -967,7 +967,7 @@ void StatementRewriter::FinishPushdown(unique_ptr<SQLStatement> &statement, Cata
 	statement = std::move(select_stmt);
 }
 
-void StatementRewriter::FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result) {
+void RemotePushdownOptimizer::FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result) {
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		return;
 	}
@@ -979,7 +979,7 @@ void StatementRewriter::FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushd
 	node = std::move(select_node);
 }
 
-void StatementRewriter::FinishPushdown(unique_ptr<TableRef> &ref, CatalogPushdownResult result) {
+void RemotePushdownOptimizer::FinishPushdown(unique_ptr<TableRef> &ref, CatalogPushdownResult result) {
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		return;
 	}

@@ -49,6 +49,7 @@
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
 
 namespace duckdb {
 
@@ -143,6 +144,20 @@ static bool CTEContainsDML(const LogicalOperator &op) {
 		}
 	}
 	return false;
+}
+
+void Optimizer::OptimizeStatement(ClientContext &context, Binder &binder, unique_ptr<SQLStatement> &statement) {
+	if (context.IsInterrupted()) {
+		throw InterruptException();
+	}
+	if (OptimizerDisabled(context, OptimizerType::REMOTE_PUSHDOWN)) {
+		return;
+	}
+	auto &profiler = QueryProfiler::Get(context);
+	profiler.StartPhase(MetricsUtils::GetOptimizerMetricByType(OptimizerType::REMOTE_PUSHDOWN));
+	RemotePushdownOptimizer optimizer(binder);
+	optimizer.Rewrite(statement);
+	profiler.EndPhase();
 }
 
 void Optimizer::RunBuiltInOptimizers() {

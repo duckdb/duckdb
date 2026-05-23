@@ -64,6 +64,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::OPTIMIZER_PARTITIONED_EXECUTION:
 	case MetricType::OPTIMIZER_PROJECTION_PULLUP:
 	case MetricType::OPTIMIZER_REGEX_RANGE:
+	case MetricType::OPTIMIZER_REMOTE_PUSHDOWN:
 	case MetricType::OPTIMIZER_REORDER_FILTER:
 	case MetricType::OPTIMIZER_ROW_GROUP_PRUNER:
 	case MetricType::OPTIMIZER_ROW_NUMBER_REWRITER:

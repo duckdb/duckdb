@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/statement_preprocessor.hpp
+// duckdb/optimizer/remote_pushdown_optimizer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -24,6 +24,7 @@ class SubqueryRef;
 class TableFunctionRef;
 class TableRef;
 class QueryNode;
+class RecursiveCTENode;
 class SetOperationNode;
 class InsertQueryNode;
 class DeleteQueryNode;
@@ -38,9 +39,9 @@ struct CatalogPushdownResult {
 	string schema_name;
 };
 
-class StatementRewriter {
+class RemotePushdownOptimizer {
 public:
-	explicit StatementRewriter(Binder &binder);
+	explicit RemotePushdownOptimizer(Binder &binder);
 
 	void Rewrite(unique_ptr<SQLStatement> &statement);
 
