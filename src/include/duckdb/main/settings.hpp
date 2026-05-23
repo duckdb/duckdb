@@ -1244,14 +1244,13 @@ struct LateMaterializationMaxRowsSetting {
 };
 
 struct LegacyMetricsFormatSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "legacy_metrics_format";
-	static constexpr const char *Description =
-	    "When enabled, profiling output uses the legacy flat format instead of the current grouped format";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+    using RETURN_TYPE = bool;
+    static constexpr const char *Name = "legacy_metrics_format";
+    static constexpr const char *Description = "When enabled, profiling output uses the legacy flat format instead of the current grouped format";
+    static constexpr const char *InputType = "BOOLEAN";
+    static constexpr const char *DefaultValue = "false";
+    static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+    static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct LockConfigurationSetting {
@@ -1696,6 +1695,16 @@ struct ThreadsSetting {
     static Value GetSetting(const ClientContext &context);
 };
 
+struct TrackedMetricsSetting {
+    using RETURN_TYPE = vector<string>;
+    static constexpr const char *Name = "tracked_metrics";
+    static constexpr const char *Description = "A list of metric glob patterns to enable for collection (e.g. ['query.*', 'optimizer.*'])";
+    static constexpr const char *InputType = "VARCHAR[]";
+    static void SetLocal(ClientContext &context, const Value &parameter);
+    static void ResetLocal(ClientContext &context);
+    static Value GetSetting(const ClientContext &context);
+};
+
 struct TransactionIsolationSetting {
     using RETURN_TYPE = TransactionIsolationLevel;
     static constexpr const char *Name = "transaction_isolation";
@@ -1704,17 +1713,6 @@ struct TransactionIsolationSetting {
     static void SetLocal(ClientContext &context, const Value &parameter);
     static void ResetLocal(ClientContext &context);
     static Value GetSetting(const ClientContext &context);
-};
-
-struct TrackedMetricsSetting {
-	using RETURN_TYPE = vector<string>;
-	static constexpr const char *Name = "tracked_metrics";
-	static constexpr const char *Description =
-	    "A list of metric glob patterns to enable for collection (e.g. ['query.*', 'optimizer.*'])";
-	static constexpr const char *InputType = "VARCHAR[]";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
 };
 
 struct UsernameSetting {

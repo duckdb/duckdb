@@ -86,8 +86,7 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSchemaStmt(PEGTransfo
 }
 
 // AlterIndexStmt <- 'INDEX' IfExists? BaseTableName RenameAlter
-unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterIndexStmt(PEGTransformer &transformer,
-                                                                     const bool &if_exists,
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterIndexStmt(PEGTransformer &transformer, const bool &if_exists,
                                                                      unique_ptr<BaseTableRef> base_table_name,
                                                                      unique_ptr<AlterTableInfo> rename_alter) {
 	auto rename_info = unique_ptr_cast<AlterTableInfo, RenameTableInfo>(std::move(rename_alter));
