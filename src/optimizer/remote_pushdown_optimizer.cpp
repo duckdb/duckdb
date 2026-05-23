@@ -643,7 +643,17 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 			}
 			return result;
 		}
-		return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+		// Local catalog (explicitly qualified): StripCatalogName only strips the remote
+		// catalog's name. An explicit local qualifier like "memory.main.range(0,10)" would
+		// survive stripping and appear in the pushed SQL, which the remote cannot resolve.
+		// Block pushdown for ALL explicitly-catalogued local functions regardless of whether
+		// they are SET_RETURNING (which is neutral when used unqualified) or TABLE_RETURNING.
+		// Returning NO_CATALOG_REFERENCED here would cause Merge(NO_CATALOG, SINGLE_REMOTE)
+		// = SINGLE_REMOTE, incorrectly classifying a mixed query as all-remote.
+		if (!ref.alias.empty()) {
+			local_table_names.insert(ref.alias);
+		}
+		return {};
 	}
 
 	// Determine whether the function is a SET_RETURNING_FUNCTION (like range(), generate_series())
