@@ -760,7 +760,35 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::FEATURE_ENTRY: {
+		auto &feature_info = stmt.info->Cast<CreateFeatureInfo>();
 		auto &schema = BindCreateSchema(*stmt.info);
+
+		// Validate source table exists
+		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, feature_info.catalog, feature_info.schema,
+		                                                         feature_info.source_table);
+
+		// Validate entity column exists
+		if (!table_entry.ColumnExists(feature_info.entity_column)) {
+			throw BinderException("Entity column \"%s\" does not exist in table \"%s\"", feature_info.entity_column,
+			                      feature_info.source_table);
+		}
+
+		// Validate timestamp column exists
+		if (!table_entry.ColumnExists(feature_info.timestamp_column)) {
+			throw BinderException("Timestamp column \"%s\" does not exist in table \"%s\"",
+			                      feature_info.timestamp_column, feature_info.source_table);
+		}
+
+		// Validate timestamp column has a temporal type
+		auto &ts_col = table_entry.GetColumn(feature_info.timestamp_column);
+		auto &ts_type = ts_col.Type();
+		if (ts_type.id() != LogicalTypeId::TIMESTAMP && ts_type.id() != LogicalTypeId::TIMESTAMP_TZ &&
+		    ts_type.id() != LogicalTypeId::DATE && ts_type.id() != LogicalTypeId::TIMESTAMP_NS &&
+		    ts_type.id() != LogicalTypeId::TIMESTAMP_MS && ts_type.id() != LogicalTypeId::TIMESTAMP_SEC) {
+			throw BinderException("Timestamp column \"%s\" must be a temporal type (TIMESTAMP, DATE), got %s",
+			                      feature_info.timestamp_column, ts_type.ToString());
+		}
+
 		result.plan =
 		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_FEATURE, std::move(stmt.info), &schema);
 		break;
