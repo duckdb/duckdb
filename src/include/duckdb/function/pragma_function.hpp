@@ -48,6 +48,12 @@ public:
 	pragma_query_t query;
 	pragma_function_t function;
 	named_parameter_type_map_t named_parameters;
+	//! When true, BindPragma skips the kwarg name/type validation in
+	//! BindNamedParameters and forwards every kwarg through to the catalog
+	//! handler verbatim. Used by tokenizer-style PRAGMAs whose kwarg set is
+	//! determined at runtime by the registered tokenizer rather than declared
+	//! up-front on the PragmaFunction.
+	bool accept_arbitrary_named_parameters = false;
 
 private:
 	PragmaFunction(string name, PragmaType pragma_type, pragma_query_t query, pragma_function_t function,

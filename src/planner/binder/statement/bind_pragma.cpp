@@ -55,8 +55,12 @@ unique_ptr<BoundPragmaInfo> Binder::BindPragma(PragmaInfo &info, QueryErrorConte
 		error.Throw();
 	}
 	auto bound_function = entry->functions.GetFunctionByOffset(bound_idx.GetIndex());
-	// bind and check named params
-	BindNamedParameters(bound_function.named_parameters, named_parameters, error_context, bound_function.name);
+	// bind and check named params -- unless the PragmaFunction opts out, e.g.
+	// tokenizer-style PRAGMAs whose kwarg set is determined at runtime by the
+	// registered tokenizer and so cannot be declared up-front.
+	if (!bound_function.accept_arbitrary_named_parameters) {
+		BindNamedParameters(bound_function.named_parameters, named_parameters, error_context, bound_function.name);
+	}
 	return make_uniq<BoundPragmaInfo>(std::move(bound_function), std::move(params), std::move(named_parameters));
 }
 
