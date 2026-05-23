@@ -134,6 +134,22 @@ select count(*) from rpc.t1 where i in (select i from cte)
 ----
 5
 
+# Unreferenced local CTE: must NOT push the whole query even though the outer SELECT
+# only uses the remote CTE. Without the fix, cte2 (local body) is not merged into
+# the pushdown result because it is never referenced in FROM. The query appears
+# all-remote and is pushed, but the serialized SQL includes
+# "cte2 AS (SELECT * FROM local_t)" which fails on the remote server with
+# "Table local_t not found". With the fix the results of all CTEs in the cte_map
+# are merged into the outer result, so cte2 (UNKNOWN) prevents the push and the
+# query falls back to local execution.
+# cte1={0..4} from rpc.t1; outer selects count(*) from cte1 = 5.
+query I
+with cte1 as (select * from rpc.t1 where i < 5),
+     cte2 as (select * from local_t)
+select count(*) from cte1
+----
+5
+
 # --- Recursive CTEs ---
 
 # Pure arithmetic recursive CTE: no remote refs -> stays local (REC_CTE in plan)

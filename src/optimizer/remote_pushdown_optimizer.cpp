@@ -273,6 +273,18 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 		}
 	}
 
+	// Merge results of all CTEs defined in this scope: even unreferenced CTEs are serialized
+	// into the SQL string when the whole query is pushed. A local CTE body (UNKNOWN) or a
+	// CTE from a different remote catalog would fail on the target remote server. Including
+	// all CTE results here ensures they are considered even when the outer query does not
+	// explicitly reference them.
+	for (auto &cte_pair : node.cte_map.map) {
+		auto it = cte_results.find(cte_pair.first);
+		if (it != cte_results.end()) {
+			result = Merge(result, it->second);
+		}
+	}
+
 	// If the whole SELECT points to a single remote catalog, propagate upward
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		// When CTEs are present, do not push individual children: a CTE-referencing FROM clause
