@@ -55,13 +55,6 @@ BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTable
 		if (!replacement_function) {
 			continue;
 		}
-		if (!ref.alias.empty()) {
-			// user-provided alias overrides the default alias
-			replacement_function->alias = ref.alias;
-		} else if (replacement_function->alias.empty()) {
-			// if the replacement scan itself did not provide an alias we use the table name
-			replacement_function->alias = ref.table_name;
-		}
 		if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
 			auto &table_function = replacement_function->Cast<TableFunctionRef>();
 			table_function.column_name_alias = ref.column_name_alias;
@@ -77,6 +70,15 @@ BoundStatement Binder::BindWithReplacementScan(ClientContext &context, BaseTable
 			auto subquery = make_uniq<SubqueryRef>(std::move(select_stmt));
 			subquery->column_name_alias = ref.column_name_alias;
 			replacement_function = std::move(subquery);
+		}
+		// Apply the user-provided alias to the outermost ref so it survives
+		// the wrap above. If the replacement scan itself supplied a default
+		// alias (e.g. the extracted basename of a parquet/csv path), preserve
+		// it when the user did not specify one.
+		if (!ref.alias.empty()) {
+			replacement_function->alias = ref.alias;
+		} else if (replacement_function->alias.empty()) {
+			replacement_function->alias = ref.table_name;
 		}
 		if (GetBindingMode() == BindingMode::EXTRACT_REPLACEMENT_SCANS) {
 			AddReplacementScan(ref.table_name, replacement_function->Copy());
