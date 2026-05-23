@@ -371,5 +371,49 @@ select count(*) from local_t where local_col >= (select min(i) from rpc.t1)
 statement ok
 drop table local_t
 
+# ============================================================
+# Bug 9: Rewrite(SubqueryRef) did not save/restore
+# local_table_names / local_table_column_names, so column names
+# of inner local tables leaked into the outer scope.
+#
+# Symptom: a WHERE scalar subquery that is purely remote was
+# blocked from pushdown when a preceding FROM-clause subquery
+# contained a local table whose column names matched an
+# unqualified column ref inside the scalar subquery.
+# HasLocalTableReference would find the leaked name in
+# local_table_column_names and (incorrectly) report the
+# scalar subquery as correlated, preventing its pushdown.
+# Correctness was preserved but performance degraded.
+#
+# The fix: save/restore the tracking sets around the inner
+# Rewrite call in Rewrite(SubqueryRef&), mirroring the same
+# pattern used in Rewrite(ParsedExpression&) for SUBQUERY.
+# ============================================================
+
+# Create a local table whose column name ('i') collides with the remote table's column.
+# After the fix the FROM-clause subquery's inner 'i' no longer leaks into the outer scope.
+statement ok
+create table local_i(i int);
+
+statement ok
+insert into local_i from range(5);
+
+# FROM clause has a local SubqueryRef (wrapping local_i with column 'i').
+# WHERE has a purely-remote IN subquery that also uses unqualified 'i'.
+# With the bug: processing (select * from local_i) sq adds 'i' to local_table_column_names,
+# which leaks into the outer scope; HasLocalTableReference then incorrectly reports the IN
+# subquery as correlated, preventing its individual pushdown.
+# With the fix: save/restore clears the leaked 'i' after processing sq, so the IN subquery
+# is correctly identified as uncorrelated and pushed to the remote.
+# local_i={0..4}; IN filter keeps i in {0,1,2} → 3 rows; count(*) = 3.
+query I
+select count(*) from (select * from local_i) sq
+where sq.i in (select i from rpc.t1 where i < 3)
+----
+3
+
+statement ok
+drop table local_i
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

@@ -590,12 +590,24 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ExpressionListRef &ref) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SubqueryRef &ref) {
+	// Save outer scope so inner table/column names from the subquery body don't leak out.
+	// A FROM-clause subquery creates its own binding scope: tables and columns defined inside
+	// are not visible in the outer query (only the alias is). Without save/restore, column
+	// names of local tables inside the subquery pollute local_table_column_names, causing
+	// false-positive correlated-ref detections for later unqualified column refs.
+	auto saved_local_table_names = local_table_names;
+	auto saved_local_table_column_names = local_table_column_names;
 	auto result = Rewrite(*ref.subquery->node);
-	// If the subquery references outer local tables (e.g., a lateral join), block pushdown
+	// If the subquery references outer local tables (e.g., a lateral join), block pushdown.
+	// HasLocalTableReference is called before restoring so it can see the saved outer tables
+	// (for SINGLE_REMOTE results the inner Rewrite adds no local entries, so the sets are
+	// identical to the saved state at this point).
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
 	    HasLocalTableReference(*ref.subquery->node)) {
 		result = {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr, {}};
 	}
+	local_table_names = std::move(saved_local_table_names);
+	local_table_column_names = std::move(saved_local_table_column_names);
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG && !ref.alias.empty()) {
 		local_table_names.insert(ref.alias);
 	}
