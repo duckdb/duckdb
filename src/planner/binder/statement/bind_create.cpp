@@ -527,12 +527,6 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	if (!create_trigger_info.referencing_old_table.empty()) {
 		throw NotImplementedException("REFERENCING OLD TABLE is not yet supported");
 	}
-	if (!create_trigger_info.referencing_new_table.empty() &&
-	    StringUtil::StartsWith(create_trigger_info.referencing_new_table, TRIGGER_INTERNAL_CTE_PREFIX)) {
-		throw BinderException("REFERENCING alias cannot use reserved internal name \"%s\"",
-		                      create_trigger_info.referencing_new_table);
-	}
-
 	if (create_trigger_info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
 		table.ScanTriggers(table.ParentCatalog().GetCatalogTransaction(context), [&](CatalogEntry &entry) {
 			auto &t = entry.Cast<TriggerCatalogEntry>();
@@ -546,12 +540,6 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	// Set up trigger_expanded_tables to match runtime behavior.
 	// Set up trigger_creation_table to detect recursive triggers during the validation.
 	auto validation_binder = Binder::CreateBinder(context);
-	validation_binder->SetCatalogLookupCallback([](CatalogEntry &entry) {
-		if (entry.type == CatalogType::TABLE_ENTRY && StringUtil::StartsWith(entry.name, TRIGGER_INTERNAL_CTE_PREFIX)) {
-			throw BinderException("Trigger body cannot reference table \"%s\" - name is reserved for internal use",
-			                      entry.name);
-		}
-	});
 	validation_binder->global_binder_state->trigger_expanded_tables.insert(table);
 	validation_binder->global_binder_state->trigger_creation_table = &table;
 	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.trigger_name;
