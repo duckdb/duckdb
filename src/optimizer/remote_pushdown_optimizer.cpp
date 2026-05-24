@@ -367,6 +367,27 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
+	// Process CTE definitions attached to this DML node so that any CTE reference in
+	// the source SELECT or ON CONFLICT clause is correctly classified.
+	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
+	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+	for (auto &cte_pair : node.cte_map.map) {
+		const string &cte_name = cte_pair.first;
+		auto &cte_info = *cte_pair.second;
+		auto it = cte_results.find(cte_name);
+		if (it != cte_results.end()) {
+			outer_cte_results[cte_name] = it->second;
+		}
+		CatalogPushdownResult cte_result;
+		if (cte_info.query_node) {
+			cte_result = Rewrite(*cte_info.query_node);
+		} else {
+			cte_result = {};
+		}
+		cte_results[cte_name] = cte_result;
+		cte_combined = Merge(cte_combined, cte_result);
+	}
+
 	// InsertQueryNode stores the target table in catalog/schema/table string fields, not in table_ref
 	// (table_ref is only set for ON CONFLICT cases and is an alias ref)
 	BaseTableRef target_ref;
@@ -374,13 +395,26 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 	target_ref.schema_name = node.schema;
 	target_ref.table_name = node.table;
 	CatalogPushdownResult result = Rewrite(target_ref);
+
+	// Merge CTE results: even unreferenced CTEs are serialized when the DML is pushed.
+	result = Merge(result, cte_combined);
+
 	// Target table must be remote for the whole INSERT to be pushed to the remote.
 	// If it is local, push the SELECT source subquery individually if all-remote so that
 	// DuckDB can execute: INSERT INTO local_t SELECT * FROM quack_query_by_name(...).
+	// Skip individual pushdown when CTEs are present: the source may reference a local CTE.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		if (node.select_statement) {
+		if (node.cte_map.map.empty() && node.select_statement) {
 			auto select_result = Rewrite(*node.select_statement->node);
 			FinishPushdown(node.select_statement->node, select_result);
+		}
+		for (auto &cte_pair : node.cte_map.map) {
+			auto it = outer_cte_results.find(cte_pair.first);
+			if (it != outer_cte_results.end()) {
+				cte_results[cte_pair.first] = it->second;
+			} else {
+				cte_results.erase(cte_pair.first);
+			}
 		}
 		return {};
 	}
@@ -403,23 +437,67 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 	for (auto &expr : node.returning_list) {
 		result = Merge(result, Rewrite(*expr));
 	}
+	for (auto &cte_pair : node.cte_map.map) {
+		auto it = outer_cte_results.find(cte_pair.first);
+		if (it != outer_cte_results.end()) {
+			cte_results[cte_pair.first] = it->second;
+		} else {
+			cte_results.erase(cte_pair.first);
+		}
+	}
 	return result;
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
+	// Process CTE definitions attached to this DML node so that CTE references in the
+	// WHERE condition or USING clauses are correctly classified.
+	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
+	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+	for (auto &cte_pair : node.cte_map.map) {
+		const string &cte_name = cte_pair.first;
+		auto &cte_info = *cte_pair.second;
+		auto it = cte_results.find(cte_name);
+		if (it != cte_results.end()) {
+			outer_cte_results[cte_name] = it->second;
+		}
+		CatalogPushdownResult cte_result;
+		if (cte_info.query_node) {
+			cte_result = Rewrite(*cte_info.query_node);
+		} else {
+			cte_result = {};
+		}
+		cte_results[cte_name] = cte_result;
+		cte_combined = Merge(cte_combined, cte_result);
+	}
+
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	if (node.table) {
 		result = Rewrite(node.table);
 	}
+
+	// Merge CTE results: even unreferenced CTEs are serialized when the DML is pushed.
+	result = Merge(result, cte_combined);
+
 	// Target table must be remote for the whole DELETE to be pushed to the remote.
-	// If it is local, still push individual remote subqueries in condition/USING for efficiency.
+	// If it is local, still push individual remote subqueries in condition/USING for efficiency,
+	// but only when no CTEs are present: a CTE-referencing subquery cannot be pushed individually.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		if (node.condition) {
-			PushdownSubqueries(node.condition);
+		if (node.cte_map.map.empty()) {
+			if (node.condition) {
+				PushdownSubqueries(node.condition);
+			}
+			for (auto &clause : node.using_clauses) {
+				auto clause_result = Rewrite(clause);
+				FinishPushdown(clause, clause_result);
+			}
 		}
-		for (auto &clause : node.using_clauses) {
-			auto clause_result = Rewrite(clause);
-			FinishPushdown(clause, clause_result);
+		for (auto &cte_pair : node.cte_map.map) {
+			auto it = outer_cte_results.find(cte_pair.first);
+			if (it != outer_cte_results.end()) {
+				cte_results[cte_pair.first] = it->second;
+			} else {
+				cte_results.erase(cte_pair.first);
+			}
 		}
 		return {};
 	}
@@ -432,27 +510,71 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 	for (auto &expr : node.returning_list) {
 		result = Merge(result, Rewrite(*expr));
 	}
+	for (auto &cte_pair : node.cte_map.map) {
+		auto it = outer_cte_results.find(cte_pair.first);
+		if (it != outer_cte_results.end()) {
+			cte_results[cte_pair.first] = it->second;
+		} else {
+			cte_results.erase(cte_pair.first);
+		}
+	}
 	return result;
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
+	// Process CTE definitions attached to this DML node so that CTE references in the
+	// FROM clause or SET expressions are correctly classified.
+	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
+	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+	for (auto &cte_pair : node.cte_map.map) {
+		const string &cte_name = cte_pair.first;
+		auto &cte_info = *cte_pair.second;
+		auto it = cte_results.find(cte_name);
+		if (it != cte_results.end()) {
+			outer_cte_results[cte_name] = it->second;
+		}
+		CatalogPushdownResult cte_result;
+		if (cte_info.query_node) {
+			cte_result = Rewrite(*cte_info.query_node);
+		} else {
+			cte_result = {};
+		}
+		cte_results[cte_name] = cte_result;
+		cte_combined = Merge(cte_combined, cte_result);
+	}
+
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	if (node.table) {
 		result = Rewrite(node.table);
 	}
+
+	// Merge CTE results: even unreferenced CTEs are serialized when the DML is pushed.
+	result = Merge(result, cte_combined);
+
 	// Target table must be remote for the whole UPDATE to be pushed to the remote.
-	// If it is local, still push individual remote subqueries in FROM/SET for efficiency.
+	// If it is local, still push individual remote subqueries in FROM/SET for efficiency,
+	// but only when no CTEs are present: a CTE-referencing subquery cannot be pushed individually.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		if (node.from_table) {
-			auto from_result = Rewrite(node.from_table);
-			FinishPushdown(node.from_table, from_result);
-		}
-		if (node.set_info) {
-			if (node.set_info->condition) {
-				PushdownSubqueries(node.set_info->condition);
+		if (node.cte_map.map.empty()) {
+			if (node.from_table) {
+				auto from_result = Rewrite(node.from_table);
+				FinishPushdown(node.from_table, from_result);
 			}
-			for (auto &expr : node.set_info->expressions) {
-				PushdownSubqueries(expr);
+			if (node.set_info) {
+				if (node.set_info->condition) {
+					PushdownSubqueries(node.set_info->condition);
+				}
+				for (auto &expr : node.set_info->expressions) {
+					PushdownSubqueries(expr);
+				}
+			}
+		}
+		for (auto &cte_pair : node.cte_map.map) {
+			auto it = outer_cte_results.find(cte_pair.first);
+			if (it != outer_cte_results.end()) {
+				cte_results[cte_pair.first] = it->second;
+			} else {
+				cte_results.erase(cte_pair.first);
 			}
 		}
 		return {};
@@ -470,6 +592,14 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	}
 	for (auto &expr : node.returning_list) {
 		result = Merge(result, Rewrite(*expr));
+	}
+	for (auto &cte_pair : node.cte_map.map) {
+		auto it = outer_cte_results.find(cte_pair.first);
+		if (it != outer_cte_results.end()) {
+			cte_results[cte_pair.first] = it->second;
+		} else {
+			cte_results.erase(cte_pair.first);
+		}
 	}
 	return result;
 }
@@ -1275,6 +1405,11 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 	}
 	case QueryNodeType::INSERT_QUERY_NODE: {
 		auto &insert = node.Cast<InsertQueryNode>();
+		for (auto &cte_pair : insert.cte_map.map) {
+			if (cte_pair.second->query_node) {
+				StripCatalogName(*cte_pair.second->query_node, catalog_name);
+			}
+		}
 		// Strip from the target table's catalog/schema fields (these are what ToString() serializes)
 		if (insert.catalog == catalog_name) {
 			insert.catalog = "";
@@ -1304,6 +1439,11 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 	}
 	case QueryNodeType::DELETE_QUERY_NODE: {
 		auto &del = node.Cast<DeleteQueryNode>();
+		for (auto &cte_pair : del.cte_map.map) {
+			if (cte_pair.second->query_node) {
+				StripCatalogName(*cte_pair.second->query_node, catalog_name);
+			}
+		}
 		if (del.table) {
 			StripCatalogName(*del.table, catalog_name);
 		}
@@ -1320,6 +1460,11 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 	}
 	case QueryNodeType::UPDATE_QUERY_NODE: {
 		auto &upd = node.Cast<UpdateQueryNode>();
+		for (auto &cte_pair : upd.cte_map.map) {
+			if (cte_pair.second->query_node) {
+				StripCatalogName(*cte_pair.second->query_node, catalog_name);
+			}
+		}
 		if (upd.table) {
 			StripCatalogName(*upd.table, catalog_name);
 		}

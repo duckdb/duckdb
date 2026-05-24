@@ -415,5 +415,95 @@ where sq.i in (select i from rpc.t1 where i < 3)
 statement ok
 drop table local_i
 
+# ============================================================
+# Bug 10: Rewrite/StripCatalogName for DML (INSERT/DELETE/UPDATE)
+# did not process the node's own cte_map.
+#
+# When a DML statement has a WITH clause (e.g. WITH cte AS (...) DELETE ...),
+# the CTE body was invisible to the optimizer. A CTE whose body references a
+# local table was not detected as local, so a CTE name not found in any local
+# catalog would be misclassified as SINGLE_REMOTE (when exactly one remote is
+# in the search path). The whole DML was then pushed to the remote, which
+# failed with "table <local_t> not found" when the CTE body referenced it.
+#
+# Similarly, StripCatalogName did not strip catalog names from CTE bodies in
+# DML statements, so catalog-qualified refs inside the CTE were sent verbatim
+# to the remote server, causing "Catalog 'rpc' does not exist" errors.
+# ============================================================
+
+# Restore local_t for DML CTE tests
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# DELETE with all-remote CTE: CTE body from rpc.t1, should be pushed.
+# t1={0..9}; cte = rows where i > 7 = {8,9}; delete local_col in {8,9} -> 2 removed; 8 remain.
+statement ok
+with remote_cte as (select i from rpc.t1 where i > 7)
+delete from local_t where local_col in (select i from remote_cte)
+
+query I
+select count(*) from local_t
+----
+8
+
+statement ok
+insert into local_t values (8), (9)
+
+# DELETE with local CTE: must NOT be pushed to remote.
+# cte body references local_t2 (local); delete local_col in {0,1,2} -> 3 removed; 7 remain.
+statement ok
+create table local_t2(v int);
+
+statement ok
+insert into local_t2 values (0), (1), (2);
+
+statement ok
+with local_cte as (select v from local_t2)
+delete from local_t where local_col in (select v from local_cte)
+
+query I
+select count(*) from local_t
+----
+7
+
+statement ok
+insert into local_t values (0), (1), (2)
+
+# INSERT with all-remote CTE: CTE body from rpc.t1, source SELECT from CTE.
+# cte = {0..4}; insert {100,101,102,103,104} into local_t -> 5 new rows added.
+statement ok
+with remote_cte as (select i from rpc.t1 where i < 5)
+insert into local_t select local_col + 100 from (select i as local_col from remote_cte) sub
+
+query I
+select count(*) from local_t where local_col >= 100
+----
+5
+
+statement ok
+delete from local_t where local_col >= 100
+
+# UPDATE with all-remote CTE: CTE provides max value from remote, applied to local table.
+# max(rpc.t1.i) = 9; update local_t set local_col = local_col + 9 where local_col < 3
+# -> local_col {0,1,2} become {9,10,11}; count of local_col >= 9 was 1 (the 9 already there)
+# now becomes 4 ({9,9,10,11})
+statement ok
+with remote_max as (select max(i) as m from rpc.t1)
+update local_t set local_col = local_col + (select m from remote_max) where local_col < 3
+
+query I
+select count(*) from local_t where local_col >= 9
+----
+4
+
+statement ok
+drop table local_t
+
+statement ok
+drop table local_t2
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
