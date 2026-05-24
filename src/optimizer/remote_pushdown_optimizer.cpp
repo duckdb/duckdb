@@ -410,9 +410,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			// correlated refs to the pushed alias and does not push them to the remote independently.
 			// Also register aliases of any JoinRef children that were individually pushed, so that
 			// correlated WHERE/HAVING subqueries referencing those aliases are correctly detected.
+			// Check whether FinishPushdown actually created a quack wrapper (TABLE_FUNCTION): for a
+			// JoinRef, FinishPushdown is intentionally a no-op, so from_result == SINGLE_REMOTE does
+			// not imply a quack streaming slot is occupied.
+			bool from_table_actually_pushed =
+			    node.from_table && node.from_table->type == TableReferenceType::TABLE_FUNCTION;
 			string pushed_from_alias;
-			if (from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && node.from_table &&
-			    !node.from_table->alias.empty()) {
+			if (from_table_actually_pushed && !node.from_table->alias.empty()) {
 				pushed_from_alias = node.from_table->alias;
 				local_table_names.insert(pushed_from_alias);
 			}
@@ -422,15 +426,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			for (auto &alias : join_pushed_aliases) {
 				local_table_names.insert(alias);
 			}
-			// When the from_table was individually pushed (SINGLE_REMOTE) OR when JoinRef children
-			// were individually pushed (had_join_child_pushdowns), any WHERE/HAVING subquery that is
-			// also pushed would create a second concurrent quack_query_by_name call. Remote catalog
-			// implementations typically support only one active streaming connection per DuckDB
-			// connection, so a second call returns 0 rows. Skip subquery pushdown in those cases.
-			// Only attempt subquery pushdown when neither the from_table nor any JoinRef child has
-			// already occupied the single quack streaming slot.
-			if (from_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-			    !had_join_child_pushdowns) {
+			// Only skip subquery pushdown when a quack streaming connection is actually occupied:
+			// either because the from_table was wrapped in a quack table-function ref, or because
+			// JoinRef children were individually pushed. An all-remote JoinRef that FinishPushdown
+			// skipped does NOT occupy a streaming slot, so subquery pushdown is safe there.
+			if (!from_table_actually_pushed && !had_join_child_pushdowns) {
 				// Push down any subquery expressions in WHERE/HAVING/QUALIFY/SELECT list/GROUP BY/ORDER BY
 				if (node.where_clause) {
 					PushdownSubqueries(node.where_clause);
