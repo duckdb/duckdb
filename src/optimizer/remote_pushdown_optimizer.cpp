@@ -1619,8 +1619,10 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &cata
 void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const string &catalog_name) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
-		// Strip catalog prefix from qualified column references (e.g. catalog.schema.table.col -> schema.table.col)
-		if (!col_ref.column_names.empty() && StringUtil::CIEquals(col_ref.column_names[0], catalog_name)) {
+		// Strip catalog prefix from qualified column references (e.g. catalog.schema.table.col -> schema.table.col).
+		// Require at least 2 names: stripping an unqualified single-name ref that happens to match the catalog
+		// name (e.g. a column literally called "rpc") would leave an empty column_names vector.
+		if (col_ref.column_names.size() >= 2 && StringUtil::CIEquals(col_ref.column_names[0], catalog_name)) {
 			col_ref.column_names.erase(col_ref.column_names.begin());
 		}
 		return;

@@ -537,5 +537,37 @@ select count(*) from rpc.t1 AS ft where id_macro(ft.i) >= 5
 statement ok
 drop macro id_macro;
 
+# ============================================================
+# Bug 12: StripCatalogName(ParsedExpression) stripped unqualified
+# column refs whose single name matched the catalog name.
+#
+# When a remote table was individually pushed and StripCatalogName
+# was applied to outer SELECT/WHERE expressions, a ColumnRefExpression
+# with column_names = ["rpc"] (an unqualified column literally named
+# "rpc") had its only element erased, leaving column_names = [] and
+# causing a binder crash. The fix requires at least 2 elements before
+# stripping (a genuine catalog prefix always has schema/table/col after it).
+# ============================================================
+
+statement ok
+create table local_rpc(rpc int);
+
+statement ok
+insert into local_rpc values (3), (5), (7);
+
+# Mixed join: local_rpc (local) + rpc.t1 (remote).
+# rpc.t1 is individually pushed; StripCatalogName is then called on outer
+# SELECT expressions. The "rpc" column ref must survive stripping intact.
+# local_rpc={3,5,7}; rpc.t1={0..9}: inner join matches {3,5,7} -> 3 rows.
+query I
+select rpc from local_rpc join rpc.t1 on local_rpc.rpc = rpc.t1.i order by rpc
+----
+3
+5
+7
+
+statement ok
+drop table local_rpc
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
