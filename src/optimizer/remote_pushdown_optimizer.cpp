@@ -1084,6 +1084,15 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 		if (select.from_table && HasLocalTableReference(*select.from_table)) {
 			return true;
 		}
+		// Also check CTE bodies: a CTE defined inside a lateral subquery may reference outer
+		// local table columns (e.g. WITH cte AS (SELECT i FROM rpc.t1 WHERE i = outer_col)).
+		// Without this check, the correlated ref hidden in the CTE body is missed and the
+		// lateral is incorrectly classified as fully-remote and pushed to the remote server.
+		for (auto &cte_pair : select.cte_map.map) {
+			if (cte_pair.second->query_node && HasLocalTableReference(*cte_pair.second->query_node)) {
+				return true;
+			}
+		}
 		// Also check modifiers: ORDER BY, DISTINCT ON, and LIMIT expressions can carry
 		// correlated references to outer local tables (e.g. LATERAL ... ORDER BY outer_col).
 		for (auto &modifier : select.modifiers) {
@@ -1132,6 +1141,11 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 	}
 	case QueryNodeType::SET_OPERATION_NODE: {
 		auto &setop = node.Cast<SetOperationNode>();
+		for (auto &cte_pair : setop.cte_map.map) {
+			if (cte_pair.second->query_node && HasLocalTableReference(*cte_pair.second->query_node)) {
+				return true;
+			}
+		}
 		for (auto &child : setop.children) {
 			if (HasLocalTableReference(*child)) {
 				return true;
