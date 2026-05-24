@@ -90,8 +90,7 @@ void RemotePushdownOptimizer::Rewrite(unique_ptr<SQLStatement> &statement) {
 		auto saved_returning = std::move(dml_node.returning_list);
 		result = Rewrite(dml_node);
 		dml_node.returning_list = std::move(saved_returning);
-		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-		    !dml_node.returning_list.empty()) {
+		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && !dml_node.returning_list.empty()) {
 			CatalogPushdownResult ret_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 			for (auto &expr : dml_node.returning_list) {
 				ret_result = Merge(ret_result, Rewrite(*expr));
@@ -110,8 +109,7 @@ void RemotePushdownOptimizer::Rewrite(unique_ptr<SQLStatement> &statement) {
 		auto saved_returning = std::move(dml_node.returning_list);
 		result = Rewrite(dml_node);
 		dml_node.returning_list = std::move(saved_returning);
-		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-		    !dml_node.returning_list.empty()) {
+		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && !dml_node.returning_list.empty()) {
 			CatalogPushdownResult ret_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 			for (auto &expr : dml_node.returning_list) {
 				ret_result = Merge(ret_result, Rewrite(*expr));
@@ -130,8 +128,7 @@ void RemotePushdownOptimizer::Rewrite(unique_ptr<SQLStatement> &statement) {
 		auto saved_returning = std::move(dml_node.returning_list);
 		result = Rewrite(dml_node);
 		dml_node.returning_list = std::move(saved_returning);
-		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-		    !dml_node.returning_list.empty()) {
+		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && !dml_node.returning_list.empty()) {
 			CatalogPushdownResult ret_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 			for (auto &expr : dml_node.returning_list) {
 				ret_result = Merge(ret_result, Rewrite(*expr));
@@ -844,7 +841,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	}
 
 	// Determine whether the function is a SET_RETURNING_FUNCTION (like range(), generate_series())
-	// SET_RETURNING_FUNCTIONs are neutral: they don't belong to any catalog and can be pushed
+	// SET_RETURNING_FUNCTION entries are neutral: they don't belong to any catalog and can be pushed
 	FindRemoteCatalogsInSearchPath();
 	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, func_expr.function_name);
 	for (auto &local_entry : local_catalogs_in_search_path) {
@@ -926,7 +923,8 @@ bool RemotePushdownOptimizer::IsLocalMacro(const FunctionExpression &func) {
 		// Local catalog - check if the function is a macro
 		const string &schema = func.schema.empty() ? DEFAULT_SCHEMA : func.schema;
 		EntryLookupInfo macro_lookup(CatalogType::MACRO_ENTRY, func.function_name);
-		auto entry = Catalog::GetEntry(binder.context, func.catalog, schema, macro_lookup, OnEntryNotFound::RETURN_NULL);
+		auto entry =
+		    Catalog::GetEntry(binder.context, func.catalog, schema, macro_lookup, OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::MACRO_ENTRY) {
 			return true;
 		}
@@ -1203,8 +1201,7 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 	}
 	case QueryNodeType::RECURSIVE_CTE_NODE: {
 		auto &rec = node.Cast<RecursiveCTENode>();
-		return (rec.left && HasLocalTableReference(*rec.left)) ||
-		       (rec.right && HasLocalTableReference(*rec.right));
+		return (rec.left && HasLocalTableReference(*rec.left)) || (rec.right && HasLocalTableReference(*rec.right));
 	}
 	default:
 		return false;
@@ -1311,7 +1308,7 @@ void RemotePushdownOptimizer::PushdownSubqueries(unique_ptr<ParsedExpression> &e
 }
 
 unique_ptr<TableFunctionRef> RemotePushdownOptimizer::CreateRemoteFunctionRef(CatalogPushdownResult &result,
-                                                                        string remote_sql) {
+                                                                              string remote_sql) {
 	D_ASSERT(result.catalog);
 	vector<unique_ptr<ParsedExpression>> args;
 	args.push_back(make_uniq<ConstantExpression>(Value(result.catalog->GetName())));
@@ -1649,8 +1646,8 @@ static void CollectColumnNames(ParsedExpression &expr, vector<string> &col_names
 		col_names.push_back(col);
 		return;
 	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](ParsedExpression &child) { CollectColumnNames(child, col_names); });
+	ParsedExpressionIterator::EnumerateChildren(expr,
+	                                            [&](ParsedExpression &child) { CollectColumnNames(child, col_names); });
 }
 
 static void StripAllTableQualifiers(ParsedExpression &expr) {
@@ -1661,12 +1658,11 @@ static void StripAllTableQualifiers(ParsedExpression &expr) {
 		}
 		return;
 	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](ParsedExpression &child) { StripAllTableQualifiers(child); });
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child) { StripAllTableQualifiers(child); });
 }
 
 void RemotePushdownOptimizer::TryPushDMLWithLocalReturning(unique_ptr<SQLStatement> &statement,
-                                                            CatalogPushdownResult body_result) {
+                                                           CatalogPushdownResult body_result) {
 	vector<unique_ptr<ParsedExpression>> *returning_list = nullptr;
 	switch (statement->type) {
 	case StatementType::INSERT_STATEMENT:
@@ -1767,8 +1763,7 @@ static bool JoinSelectHasDuplicateOutputNames(const SelectNode &select) {
 }
 
 static bool QueryNodeWouldProduceDuplicateNames(const QueryNode &node) {
-	return node.type == QueryNodeType::SELECT_NODE &&
-	       JoinSelectHasDuplicateOutputNames(node.Cast<SelectNode>());
+	return node.type == QueryNodeType::SELECT_NODE && JoinSelectHasDuplicateOutputNames(node.Cast<SelectNode>());
 }
 
 void RemotePushdownOptimizer::FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result) {

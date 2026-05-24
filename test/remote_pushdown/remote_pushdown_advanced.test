@@ -1,8 +1,9 @@
 # name: test/remote_pushdown/remote_pushdown_advanced.test
 # description: Advanced edge cases - window functions, QUALIFY, HAVING, DISTINCT ON,
+# group: [remote_pushdown]
+
 #              LIMIT with subquery, EXCEPT ALL, INTERSECT ALL, INSERT ON CONFLICT,
 #              and correctness/pushdown probes for harder-to-reach code paths.
-# group: [remote_pushdown]
 
 require quack
 
