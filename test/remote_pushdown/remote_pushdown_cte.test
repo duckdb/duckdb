@@ -284,6 +284,27 @@ with recursive r(n) as (
 ----
 4
 
+# --- SubqueryRef referencing an outer CTE inside a JoinRef with a local table ---
+
+# A SubqueryRef "(SELECT * FROM cte)" alongside a local table in a JOIN. Without the fix,
+# FinishPushdown would wrap the SubqueryRef individually as
+# "quack_query_by_name('rpc', 'SELECT * FROM (SELECT * FROM cte)')" which fails on the
+# remote because cte_name is not a real table there.
+
+# cte={0..4} from rpc.t1, local_t join on i → 5 rows
+query I
+with cte as (select * from rpc.t1 where i < 5)
+select count(*) from local_t join (select * from cte) sub on local_t.i = sub.i
+----
+5
+
+# Reversed: SubqueryRef on left side
+query I
+with cte as (select * from rpc.t1 where i >= 7)
+select count(*) from (select * from cte) sub join local_t on sub.i = local_t.i
+----
+3
+
 # --- CTE reference inside a JoinRef with a local table ---
 
 # When a remote CTE appears as one side of a JOIN alongside a local table, the JoinRef

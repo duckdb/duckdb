@@ -2505,6 +2505,21 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<TableRef> &ref, CatalogP
 			return;
 		}
 	}
+	// Do not individually push a SubqueryRef when there are outer SINGLE_REMOTE CTEs in scope.
+	// The SubqueryRef body may reference one of those CTEs. Pushing the body standalone
+	// (without its WITH clause) would produce SQL like "SELECT * FROM (SELECT * FROM cte_name)"
+	// that fails on the remote because cte_name is not a real table there.
+	// We check for SINGLE_REMOTE CTEs specifically: if all outer CTEs are UNKNOWN (local), the
+	// SubqueryRef's Rewrite result would already be UNKNOWN (since it references a local CTE),
+	// so FinishPushdown would be a no-op. Only a SINGLE_REMOTE CTE could make a
+	// SubqueryRef appear SINGLE_REMOTE while actually depending on an outer CTE definition.
+	if (ref->type == TableReferenceType::SUBQUERY) {
+		for (auto &cte_entry : cte_results) {
+			if (cte_entry.second.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+				return;
+			}
+		}
+	}
 	string alias = ref->alias;
 	// For a BaseTableRef with no explicit alias the table name is the implicit alias
 	// (e.g. "rpc.t1" is referenced as "t1" in column refs like "t1.i" in WHERE).
