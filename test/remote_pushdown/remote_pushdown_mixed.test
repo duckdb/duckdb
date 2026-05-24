@@ -58,6 +58,26 @@ select count(*) from rpc.t1 join local_t on (i = local_col)
 ----
 10
 
+# Catalog-qualified column ref in mixed JOIN condition: "rpc.t1.i" must be stripped to "t1.i"
+# after rpc.t1 is replaced by quack_query_by_name(...) AS t1 in FROM, otherwise the binder
+# fails with "Referenced table rpc.t1 not found".
+query I
+select count(*) from rpc.t1 join local_t on (rpc.t1.i = local_t.local_col)
+----
+10
+
+# Catalog-qualified ref in WHERE clause with mixed join: "rpc.t1.i" must be stripped too
+query I
+select count(*) from rpc.t1 join local_t on (i = local_col) where rpc.t1.i > 5
+----
+4
+
+# Catalog-qualified ref in SELECT list with mixed join
+query I
+select count(rpc.t1.i) from rpc.t1 join local_t on (i = local_col)
+----
+10
+
 # --- SET_RETURNING_FUNCTION neutrality ---
 
 # range() is neutral: doesn't block pushdown of adjacent remote refs
