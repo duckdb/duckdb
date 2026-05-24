@@ -483,7 +483,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 	// but only when no CTEs are present: a CTE-referencing subquery cannot be pushed individually.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		if (node.cte_map.map.empty()) {
-			if (node.condition) {
+			// Push subqueries in the condition only when there are no USING clauses.
+			// USING clause tables create outer-scope bindings: a subquery correlated with a
+			// remote USING alias (e.g. WHERE i IN (SELECT j FROM rpc.t2 WHERE t2.k = rt.col))
+			// must NOT be pushed independently. HasLocalTableReference only tracks local table
+			// names, so remote USING aliases go undetected. Skipping pushdown when USING is
+			// present is conservative but correct.
+			if (node.condition && node.using_clauses.empty()) {
 				PushdownSubqueries(node.condition);
 			}
 			for (auto &clause : node.using_clauses) {
