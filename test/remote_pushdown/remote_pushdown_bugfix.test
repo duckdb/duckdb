@@ -505,5 +505,37 @@ drop table local_t
 statement ok
 drop table local_t2
 
+# ============================================================
+# Bug 11: Correlated WHERE/SET subquery pushed independently
+# when the outer from_table was individually pushed to remote.
+#
+# When the overall SELECT result is UNKNOWN (e.g. because a local
+# macro appears in the SELECT list) but the from_table is all-remote,
+# the optimizer pushes the from_table individually and then calls
+# PushdownSubqueries on the WHERE clause. A WHERE IN subquery that
+# is all-remote but correlated with the pushed from_table alias was
+# not detected as correlated (the alias was not in local_table_names),
+# causing it to be pushed to the remote independently where the outer
+# alias is not in scope, leading to a "column not found" error.
+# ============================================================
+
+statement ok
+create macro id_macro(x) as x;
+
+# id_macro(ft.i) forces the overall query result to UNKNOWN so the SELECT is in the
+# local path. from_table (rpc.t1 AS ft) is individually pushed via FinishPushdown.
+# With an explicit AS alias the alias must be stripped from the remote SQL and preserved
+# only on the outer table-function wrapper; otherwise remote servers with limited parsers
+# reject "SELECT * FROM t1 AS ft". The alias is then applied to the table-function ref
+# so that column refs like ft.i continue to resolve in the outer query.
+# t1={0..9}; id_macro(ft.i) expands to ft.i; ft.i>=5 -> {5,6,7,8,9} -> count=5.
+query I
+select count(*) from rpc.t1 AS ft where id_macro(ft.i) >= 5
+----
+5
+
+statement ok
+drop macro id_macro;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

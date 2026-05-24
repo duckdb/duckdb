@@ -291,61 +291,82 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			if (node.from_table) {
 				FinishPushdown(node.from_table, from_result);
 			}
-			// Push down any subquery expressions in WHERE/HAVING/QUALIFY/SELECT list/GROUP BY/ORDER BY
-			if (node.where_clause) {
-				PushdownSubqueries(node.where_clause);
+			// After FinishPushdown the from_table may have been replaced by a table-function ref.
+			// Its alias is now the entry point for outer column refs inside subqueries. Track it
+			// in local_table_names so HasLocalTableReference inside PushdownSubqueries detects
+			// correlated refs to the pushed alias and does not push them to the remote independently.
+			string pushed_from_alias;
+			if (from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && node.from_table &&
+			    !node.from_table->alias.empty()) {
+				pushed_from_alias = node.from_table->alias;
+				local_table_names.insert(pushed_from_alias);
 			}
-			if (node.having) {
-				PushdownSubqueries(node.having);
-			}
-			if (node.qualify) {
-				PushdownSubqueries(node.qualify);
-			}
-			for (auto &expr : node.select_list) {
-				PushdownSubqueries(expr);
-			}
-			for (auto &expr : node.groups.group_expressions) {
-				PushdownSubqueries(expr);
-			}
-			for (auto &modifier : node.modifiers) {
-				switch (modifier->type) {
-				case ResultModifierType::ORDER_MODIFIER: {
-					auto &order_mod = modifier->Cast<OrderModifier>();
-					for (auto &order : order_mod.orders) {
-						PushdownSubqueries(order.expression);
-					}
-					break;
+			// When the from_table was individually pushed (SINGLE_REMOTE), any WHERE/HAVING subquery
+			// that is also pushed would create a second concurrent quack_query_by_name call. Remote
+			// catalog implementations typically support only one active streaming connection per
+			// DuckDB connection, so a second call returns 0 rows. Skip subquery pushdown in that case.
+			// When from_result is not SINGLE_REMOTE the from_table was not pushed, so subquery
+			// pushdown creates the only remote stream and is safe.
+			if (from_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+				// Push down any subquery expressions in WHERE/HAVING/QUALIFY/SELECT list/GROUP BY/ORDER BY
+				if (node.where_clause) {
+					PushdownSubqueries(node.where_clause);
 				}
-				case ResultModifierType::LIMIT_MODIFIER: {
-					auto &limit_mod = modifier->Cast<LimitModifier>();
-					if (limit_mod.limit) {
-						PushdownSubqueries(limit_mod.limit);
-					}
-					if (limit_mod.offset) {
-						PushdownSubqueries(limit_mod.offset);
-					}
-					break;
+				if (node.having) {
+					PushdownSubqueries(node.having);
 				}
-				case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-					auto &limit_mod = modifier->Cast<LimitPercentModifier>();
-					if (limit_mod.limit) {
-						PushdownSubqueries(limit_mod.limit);
-					}
-					if (limit_mod.offset) {
-						PushdownSubqueries(limit_mod.offset);
-					}
-					break;
+				if (node.qualify) {
+					PushdownSubqueries(node.qualify);
 				}
-				case ResultModifierType::DISTINCT_MODIFIER: {
-					auto &distinct_mod = modifier->Cast<DistinctModifier>();
-					for (auto &expr : distinct_mod.distinct_on_targets) {
-						PushdownSubqueries(expr);
+				for (auto &expr : node.select_list) {
+					PushdownSubqueries(expr);
+				}
+				for (auto &expr : node.groups.group_expressions) {
+					PushdownSubqueries(expr);
+				}
+				for (auto &modifier : node.modifiers) {
+					switch (modifier->type) {
+					case ResultModifierType::ORDER_MODIFIER: {
+						auto &order_mod = modifier->Cast<OrderModifier>();
+						for (auto &order : order_mod.orders) {
+							PushdownSubqueries(order.expression);
+						}
+						break;
 					}
-					break;
+					case ResultModifierType::LIMIT_MODIFIER: {
+						auto &limit_mod = modifier->Cast<LimitModifier>();
+						if (limit_mod.limit) {
+							PushdownSubqueries(limit_mod.limit);
+						}
+						if (limit_mod.offset) {
+							PushdownSubqueries(limit_mod.offset);
+						}
+						break;
+					}
+					case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+						auto &limit_mod = modifier->Cast<LimitPercentModifier>();
+						if (limit_mod.limit) {
+							PushdownSubqueries(limit_mod.limit);
+						}
+						if (limit_mod.offset) {
+							PushdownSubqueries(limit_mod.offset);
+						}
+						break;
+					}
+					case ResultModifierType::DISTINCT_MODIFIER: {
+						auto &distinct_mod = modifier->Cast<DistinctModifier>();
+						for (auto &expr : distinct_mod.distinct_on_targets) {
+							PushdownSubqueries(expr);
+						}
+						break;
+					}
+					default:
+						break;
+					}
 				}
-				default:
-					break;
-				}
+			} // end if (from_result != SINGLE_REMOTE_CATALOG)
+			if (!pushed_from_alias.empty()) {
+				local_table_names.erase(pushed_from_alias);
 			}
 		}
 	}
@@ -559,9 +580,17 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	// but only when no CTEs are present: a CTE-referencing subquery cannot be pushed individually.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		if (node.cte_map.map.empty()) {
+			string pushed_from_alias;
 			if (node.from_table) {
 				auto from_result = Rewrite(node.from_table);
 				FinishPushdown(node.from_table, from_result);
+				// Track alias of a pushed remote FROM table so correlated refs in SET expressions
+				// are correctly detected and not pushed to the remote independently.
+				if (from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+				    !node.from_table->alias.empty()) {
+					pushed_from_alias = node.from_table->alias;
+					local_table_names.insert(pushed_from_alias);
+				}
 			}
 			if (node.set_info) {
 				if (node.set_info->condition) {
@@ -570,6 +599,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 				for (auto &expr : node.set_info->expressions) {
 					PushdownSubqueries(expr);
 				}
+			}
+			if (!pushed_from_alias.empty()) {
+				local_table_names.erase(pushed_from_alias);
 			}
 		}
 		for (auto &cte_pair : node.cte_map.map) {
@@ -1821,6 +1853,14 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<TableRef> &ref, CatalogP
 		alias = ref->Cast<BaseTableRef>().table_name;
 	}
 	StripCatalogName(*ref, result.catalog->GetName());
+	// For BaseTableRef, clear the alias before serializing: the alias is forwarded to the outer
+	// table-function wrapper (func_ref->alias) and must NOT appear in the remote SQL. Including
+	// it (e.g. "SELECT * FROM t1 AS ft") is redundant and may cause parse errors on remote
+	// servers with limited SQL parsers. SubqueryRef aliases are intentionally left intact because
+	// SQL requires subqueries in FROM to carry an alias ("SELECT * FROM (...) AS sub").
+	if (ref->type == TableReferenceType::BASE_TABLE) {
+		ref->alias = "";
+	}
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	select_node->from_table = std::move(ref);
