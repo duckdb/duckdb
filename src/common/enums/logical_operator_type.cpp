@@ -112,6 +112,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "DETACH";
 	case LogicalOperatorType::LOGICAL_CREATE_TRIGGER:
 		return "CREATE_TRIGGER";
+	case LogicalOperatorType::LOGICAL_CREATE_FEATURE:
+		return "CREATE_FEATURE";
 	case LogicalOperatorType::LOGICAL_DROP:
 		return "DROP";
 	case LogicalOperatorType::LOGICAL_PRAGMA:
