@@ -1745,6 +1745,13 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<TableRef> &ref, CatalogP
 		return;
 	}
 	string alias = ref->alias;
+	// For a BaseTableRef with no explicit alias the table name is the implicit alias
+	// (e.g. "rpc.t1" is referenced as "t1" in column refs like "t1.i" in WHERE).
+	// Preserve it so that table-qualified column refs in the outer query remain
+	// resolvable after the FROM is replaced by an anonymous table function ref.
+	if (alias.empty() && ref->type == TableReferenceType::BASE_TABLE) {
+		alias = ref->Cast<BaseTableRef>().table_name;
+	}
 	StripCatalogName(*ref, result.catalog->GetName());
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
