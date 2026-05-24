@@ -1406,13 +1406,28 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	// HAVING, etc.). Without this, catalog-qualified refs like "rpc.t1.i" in the join condition
 	// or outer expressions become unresolvable after "rpc.t1" is replaced by
 	// "quack_query_by_name(...) AS t1" in the FROM clause.
-	for (auto &pushed_result : {left_result, right_result}) {
-		if (pushed_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+	// Only record a child's catalog in from_pushed_catalog_names when FinishPushdown actually
+	// replaced the child with a TABLE_FUNCTION ref (i.e. a quack streaming slot is now occupied).
+	// When FinishPushdown is skipped (JoinRef child, CTE ref, SubqueryRef with outer CTEs),
+	// the child stays in the FROM tree and no streaming slot is opened. Recording it anyway
+	// would set had_join_child_pushdowns=true in the enclosing SelectNode, incorrectly blocking
+	// PushdownSubqueries for WHERE/HAVING subqueries that could safely be pushed.
+	for (idx_t ci = 0; ci < 2; ci++) {
+		auto &child_result = (ci == 0) ? left_result : right_result;
+		auto &child_ref = (ci == 0) ? ref.left : ref.right;
+		if (child_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 			continue;
 		}
-		const string &cat_name = pushed_result.catalog->GetName();
+		const string &cat_name = child_result.catalog->GetName();
+		// Always strip from the join condition regardless of whether the child was pushed.
+		// Catalog-qualified column refs are resolvable via the table name alone once the
+		// catalog prefix is removed, so stripping is safe even for unpushed children.
 		if (ref.condition) {
 			StripCatalogName(*ref.condition, cat_name, false);
+		}
+		// Only track as an active streaming slot when FinishPushdown actually replaced the child.
+		if (child_ref->type != TableReferenceType::TABLE_FUNCTION) {
+			continue;
 		}
 		bool already_tracked = false;
 		for (auto &existing : from_pushed_catalog_names) {
@@ -1425,12 +1440,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 			from_pushed_catalog_names.push_back(cat_name);
 		}
 	}
-	// Track aliases of individually pushed remote children so that HasLocalTableReference inside
-	// PushdownSubqueries correctly detects correlated WHERE/HAVING subqueries that reference
-	// the pushed child by alias (e.g. "t1.col" after "rpc.t1 AS t1" → "quack(...) AS t1").
-	// Use the per-child pushdown result (not child_ref->type) to determine whether the child
-	// was actually pushed: a pre-existing local TABLE_FUNCTION (e.g. range() AS r) would have
-	// type == TABLE_FUNCTION even when its result is NO_CATALOG_REFERENCED and it was never pushed.
+	// Track aliases of individually-pushed remote children (and CTE/SubqueryRef children that were
+	// skipped by FinishPushdown but whose aliases could be correlated-to by outer subqueries) so
+	// that HasLocalTableReference inside PushdownSubqueries correctly detects correlated
+	// WHERE/HAVING subqueries. We check the result type (SINGLE_REMOTE) rather than the post-push
+	// ref type (TABLE_FUNCTION): for CTE refs and SubqueryRef-with-outer-CTEs that FinishPushdown
+	// skips, the alias is still worth tracking to block pushdown of subqueries that reference it
+	// (they would depend on the CTE definition unavailable on the remote).
 	for (idx_t ci = 0; ci < 2; ci++) {
 		auto &child_pushed_result = (ci == 0) ? left_result : right_result;
 		if (child_pushed_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
