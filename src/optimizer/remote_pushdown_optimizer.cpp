@@ -774,6 +774,22 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	return result;
 }
 
+static void UnqualifyColumnRefs(ParsedExpression &expr, const string &catalog_name) {
+	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		auto &col_ref = expr.Cast<ColumnRefExpression>();
+		// In UNION/INTERSECT/EXCEPT ORDER BY, the output has no table associations.
+		// Strip ALL qualifiers to just the column name when the leading qualifier matches the
+		// pushed catalog (e.g. "rpc.t1.i" → "i", "rpc.i" → "i").
+		if (col_ref.column_names.size() > 1 && StringUtil::CIEquals(col_ref.column_names[0], catalog_name)) {
+			string col_name = col_ref.column_names.back();
+			col_ref.column_names = {std::move(col_name)};
+		}
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](ParsedExpression &child) { UnqualifyColumnRefs(child, catalog_name); });
+}
+
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	// Process CTE definitions attached to this set operation so that CTE references inside
 	// the children are correctly classified (e.g. WITH cte AS (...) SELECT * FROM cte UNION ALL ...).
@@ -867,6 +883,38 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	if (node.cte_map.map.empty()) {
 		for (idx_t i = 0; i < node.children.size(); i++) {
 			FinishPushdown(node.children[i], child_results[i]);
+		}
+		// Strip catalog names from ORDER BY / DISTINCT ON expressions on the set operation itself.
+		// When a child is individually pushed (e.g., rpc.t1 → quack_query_by_name(...) AS t1),
+		// ORDER BY expressions like "rpc.t1.i" must become just "i": the UNION output has no
+		// table associations, so even "t1.i" would fail. Any qualifier whose leading part matches
+		// the pushed catalog is stripped entirely — only the final column name is preserved.
+		for (idx_t i = 0; i < child_results.size(); i++) {
+			if (child_results[i].reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG ||
+			    !child_results[i].catalog) {
+				continue;
+			}
+			const string &cat_name = child_results[i].catalog->GetName();
+			for (auto &modifier : node.modifiers) {
+				switch (modifier->type) {
+				case ResultModifierType::ORDER_MODIFIER: {
+					auto &order_mod = modifier->Cast<OrderModifier>();
+					for (auto &order : order_mod.orders) {
+						UnqualifyColumnRefs(*order.expression, cat_name);
+					}
+					break;
+				}
+				case ResultModifierType::DISTINCT_MODIFIER: {
+					auto &distinct_mod = modifier->Cast<DistinctModifier>();
+					for (auto &expr : distinct_mod.distinct_on_targets) {
+						UnqualifyColumnRefs(*expr, cat_name);
+					}
+					break;
+				}
+				default:
+					break;
+				}
+			}
 		}
 		// Also push any remote scalar subqueries in the set operation's own modifiers
 		for (auto &modifier : node.modifiers) {

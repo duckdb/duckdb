@@ -200,6 +200,29 @@ select count(*) from (select i from local_t except select i from rpc.t1)
 ----
 0
 
+# Catalog-qualified ORDER BY directly on mixed UNION: "rpc.t1.i" must be reduced to "i"
+# (not "t1.i") because after individual child pushdown the UNION output has no table
+# associations — even a 2-part qualifier would fail to bind.
+# local_t={0..4}, rpc.t1={0..9} -> UNION ALL sorted = {0,0,1,1,2,2,3,3,4,4,5,6,7,8,9}
+query I
+(select i from rpc.t1) union all (select i from local_t) order by rpc.t1.i
+----
+0
+0
+1
+1
+2
+2
+3
+3
+4
+4
+5
+6
+7
+8
+9
+
 statement ok
 drop table local_t
 
