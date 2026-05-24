@@ -774,22 +774,29 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 		}
 		return {};
 	}
-	if (node.condition) {
-		result = Merge(result, Rewrite(*node.condition));
-	}
-	// Rewrite(JoinRef) has a side effect: it wraps remote children in quack_query_by_name
-	// even when the overall result is UNKNOWN.  Save the USING clauses and restore them if
-	// the full-push analysis fails so the DELETE can be executed natively without stale
-	// quack wrappers causing "Multiple streaming scans" errors.
-	vector<unique_ptr<TableRef>> saved_using;
-	for (auto &clause : node.using_clauses) {
-		saved_using.push_back(clause->Copy());
-	}
-	for (auto &clause : node.using_clauses) {
-		result = Merge(result, Rewrite(clause));
-	}
-	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		node.using_clauses = std::move(saved_using);
+	// Save condition and USING clauses together. Rewrite(ParsedExpression) on a condition
+	// containing scalar subqueries can push their inner JoinRef children; if USING clauses
+	// later make result UNKNOWN, both must be restored so native DELETE does not encounter
+	// stale quack wrappers causing "Multiple streaming scans" errors.
+	{
+		unique_ptr<ParsedExpression> saved_condition;
+		if (node.condition) {
+			saved_condition = node.condition->Copy();
+			result = Merge(result, Rewrite(*node.condition));
+		}
+		vector<unique_ptr<TableRef>> saved_using;
+		for (auto &clause : node.using_clauses) {
+			saved_using.push_back(clause->Copy());
+		}
+		for (auto &clause : node.using_clauses) {
+			result = Merge(result, Rewrite(clause));
+		}
+		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			node.using_clauses = std::move(saved_using);
+			if (saved_condition) {
+				node.condition = std::move(saved_condition);
+			}
+		}
 	}
 	for (auto &expr : node.returning_list) {
 		result = Merge(result, Rewrite(*expr));
@@ -931,23 +938,26 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 		}
 		return {};
 	}
-	if (node.from_table) {
-		// Rewrite(JoinRef) has a side effect: it wraps remote children in quack_query_by_name
-		// even when the overall result is UNKNOWN.  Save the from_table and restore it if the
-		// full-push analysis fails so the UPDATE can still be executed natively without stale
-		// quack wrappers causing "Multiple streaming scans" errors.
-		auto saved_from = node.from_table->Copy();
-		result = Merge(result, Rewrite(node.from_table));
-		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+	{
+		// Save from_table before both from_table and set_info rewrites. Rewrite(JoinRef) wraps
+		// remote children even when the overall result is UNKNOWN; if set_info later makes result
+		// UNKNOWN, from_table must be restored so native UPDATE does not encounter stale quack
+		// wrappers causing "Multiple streaming scans" errors.
+		unique_ptr<TableRef> saved_from;
+		if (node.from_table) {
+			saved_from = node.from_table->Copy();
+			result = Merge(result, Rewrite(node.from_table));
+		}
+		if (node.set_info) {
+			if (node.set_info->condition) {
+				result = Merge(result, Rewrite(*node.set_info->condition));
+			}
+			for (auto &expr : node.set_info->expressions) {
+				result = Merge(result, Rewrite(*expr));
+			}
+		}
+		if (saved_from && result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 			node.from_table = std::move(saved_from);
-		}
-	}
-	if (node.set_info) {
-		if (node.set_info->condition) {
-			result = Merge(result, Rewrite(*node.set_info->condition));
-		}
-		for (auto &expr : node.set_info->expressions) {
-			result = Merge(result, Rewrite(*expr));
 		}
 	}
 	for (auto &expr : node.returning_list) {
