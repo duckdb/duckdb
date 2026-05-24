@@ -845,11 +845,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 						update_pushed_cats.push_back(cat_name);
 					}
 				}
-				// Track whether a streaming quack connection is already active for the FROM table
-				// so PushdownSubqueries is skipped (avoids a second concurrent quack connection).
-				update_has_streaming_from =
-				    (from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) ||
-				    had_join_child_pushdowns;
+				// Track whether a streaming quack connection is actually occupied by the FROM table.
+				// FinishPushdown replaces pushed refs with a TABLE_FUNCTION wrapper; if it was
+				// skipped (e.g. for a JoinRef or SubqueryRef with outer SINGLE_REMOTE CTEs),
+				// no streaming slot is open. Use type==TABLE_FUNCTION as the definitive signal,
+				// guarded by SINGLE_REMOTE to exclude pre-existing local table-function refs.
+				bool from_actually_pushed = from_result.reference_type ==
+				                                CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+				                            node.from_table->type == TableReferenceType::TABLE_FUNCTION;
+				update_has_streaming_from = from_actually_pushed || had_join_child_pushdowns;
 			}
 			if (node.set_info) {
 				// Strip pushed catalog names so "rpc.from_t.col" refs remain resolvable
