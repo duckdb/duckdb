@@ -207,9 +207,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 	}
 
 	// Rewrite from_table first - its result is tracked separately for potential individual pushdown.
-	// Reset from_pushed_catalog_names so that catalog names pushed by JoinRef children during this
-	// from_table processing are cleanly collected (CTE body processing above may have left stale entries).
+	// Reset from_pushed_catalog_names / from_pushed_table_aliases so that entries pushed by
+	// JoinRef children during from_table processing are cleanly collected.
 	from_pushed_catalog_names.clear();
+	from_pushed_table_aliases.clear();
 	CatalogPushdownResult from_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 	if (node.from_table) {
 		from_result = Rewrite(node.from_table);
@@ -317,54 +318,58 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 					}
 				}
 				for (auto &cat_name : pushed_cats) {
+					// In the partial-pushdown context (individual JoinRef children pushed) we must NOT
+					// recurse into subquery bodies: those subqueries were not pushed and still contain
+					// their original remote table refs (e.g. "rpc.t2"). Stripping those refs would
+					// produce an unqualified "t2" that fails to bind locally.
 					for (auto &expr : node.select_list) {
-						StripCatalogName(*expr, cat_name);
+						StripCatalogName(*expr, cat_name, false);
 					}
 					if (node.where_clause) {
-						StripCatalogName(*node.where_clause, cat_name);
+						StripCatalogName(*node.where_clause, cat_name, false);
 					}
 					if (node.having) {
-						StripCatalogName(*node.having, cat_name);
+						StripCatalogName(*node.having, cat_name, false);
 					}
 					if (node.qualify) {
-						StripCatalogName(*node.qualify, cat_name);
+						StripCatalogName(*node.qualify, cat_name, false);
 					}
 					for (auto &expr : node.groups.group_expressions) {
-						StripCatalogName(*expr, cat_name);
+						StripCatalogName(*expr, cat_name, false);
 					}
 					for (auto &modifier : node.modifiers) {
 						switch (modifier->type) {
 						case ResultModifierType::ORDER_MODIFIER: {
 							auto &order_mod = modifier->Cast<OrderModifier>();
 							for (auto &order : order_mod.orders) {
-								StripCatalogName(*order.expression, cat_name);
+								StripCatalogName(*order.expression, cat_name, false);
 							}
 							break;
 						}
 						case ResultModifierType::LIMIT_MODIFIER: {
 							auto &limit_mod = modifier->Cast<LimitModifier>();
 							if (limit_mod.limit) {
-								StripCatalogName(*limit_mod.limit, cat_name);
+								StripCatalogName(*limit_mod.limit, cat_name, false);
 							}
 							if (limit_mod.offset) {
-								StripCatalogName(*limit_mod.offset, cat_name);
+								StripCatalogName(*limit_mod.offset, cat_name, false);
 							}
 							break;
 						}
 						case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
 							auto &limit_mod = modifier->Cast<LimitPercentModifier>();
 							if (limit_mod.limit) {
-								StripCatalogName(*limit_mod.limit, cat_name);
+								StripCatalogName(*limit_mod.limit, cat_name, false);
 							}
 							if (limit_mod.offset) {
-								StripCatalogName(*limit_mod.offset, cat_name);
+								StripCatalogName(*limit_mod.offset, cat_name, false);
 							}
 							break;
 						}
 						case ResultModifierType::DISTINCT_MODIFIER: {
 							auto &distinct_mod = modifier->Cast<DistinctModifier>();
 							for (auto &expr : distinct_mod.distinct_on_targets) {
-								StripCatalogName(*expr, cat_name);
+								StripCatalogName(*expr, cat_name, false);
 							}
 							break;
 						}
@@ -378,11 +383,19 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			// Its alias is now the entry point for outer column refs inside subqueries. Track it
 			// in local_table_names so HasLocalTableReference inside PushdownSubqueries detects
 			// correlated refs to the pushed alias and does not push them to the remote independently.
+			// Also register aliases of any JoinRef children that were individually pushed, so that
+			// correlated WHERE/HAVING subqueries referencing those aliases are correctly detected.
 			string pushed_from_alias;
 			if (from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && node.from_table &&
 			    !node.from_table->alias.empty()) {
 				pushed_from_alias = node.from_table->alias;
 				local_table_names.insert(pushed_from_alias);
+			}
+			// Consume the JoinRef-pushed aliases collected during from_table processing.
+			vector<string> join_pushed_aliases = std::move(from_pushed_table_aliases);
+			from_pushed_table_aliases.clear();
+			for (auto &alias : join_pushed_aliases) {
+				local_table_names.insert(alias);
 			}
 			// When the from_table was individually pushed (SINGLE_REMOTE), any WHERE/HAVING subquery
 			// that is also pushed would create a second concurrent quack_query_by_name call. Remote
@@ -450,6 +463,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			} // end if (from_result != SINGLE_REMOTE_CATALOG)
 			if (!pushed_from_alias.empty()) {
 				local_table_names.erase(pushed_from_alias);
+			}
+			for (auto &alias : join_pushed_aliases) {
+				local_table_names.erase(alias);
 			}
 		}
 	}
@@ -617,7 +633,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 			}
 			if (node.condition) {
 				for (auto &cat_name : from_pushed_catalog_names) {
-					StripCatalogName(*node.condition, cat_name);
+					StripCatalogName(*node.condition, cat_name, false);
 				}
 			}
 			from_pushed_catalog_names.clear();
@@ -720,12 +736,14 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 			if (node.set_info) {
 				// Strip pushed catalog names so "rpc.from_t.col" refs remain resolvable
 				// after "rpc.from_t" becomes "quack_query_by_name(...) AS from_t".
+				// Do not recurse into subquery bodies (false): those subqueries were not
+				// pushed and still contain remote table refs that must remain qualified.
 				for (auto &cat_name : update_pushed_cats) {
 					if (node.set_info->condition) {
-						StripCatalogName(*node.set_info->condition, cat_name);
+						StripCatalogName(*node.set_info->condition, cat_name, false);
 					}
 					for (auto &expr : node.set_info->expressions) {
-						StripCatalogName(*expr, cat_name);
+						StripCatalogName(*expr, cat_name, false);
 					}
 				}
 				if (node.set_info->condition) {
@@ -1006,14 +1024,18 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SubqueryRef &ref) {
 	// are not visible in the outer query (only the alias is). Without save/restore, column
 	// names of local tables inside the subquery pollute local_table_column_names, causing
 	// false-positive correlated-ref detections for later unqualified column refs.
-	// Also save/restore from_pushed_catalog_names: the inner subquery's JoinRef pushes
-	// are scoped to the subquery and must not appear in the outer SelectNode's pushed set.
+	// Also save/restore from_pushed_catalog_names / from_pushed_table_aliases: the inner
+	// subquery's JoinRef pushes are scoped to the subquery and must not appear in the outer
+	// SelectNode's pushed set.
 	auto saved_local_table_names = local_table_names;
 	auto saved_local_table_column_names = local_table_column_names;
 	auto saved_from_pushed_catalog_names = std::move(from_pushed_catalog_names);
+	auto saved_from_pushed_table_aliases = std::move(from_pushed_table_aliases);
 	from_pushed_catalog_names.clear();
+	from_pushed_table_aliases.clear();
 	auto result = Rewrite(*ref.subquery->node);
 	from_pushed_catalog_names = std::move(saved_from_pushed_catalog_names);
+	from_pushed_table_aliases = std::move(saved_from_pushed_table_aliases);
 	// If the subquery references outer local tables (e.g., a lateral join), block pushdown.
 	// HasLocalTableReference is called before restoring so it can see the saved outer tables
 	// (for SINGLE_REMOTE results the inner Rewrite adds no local entries, so the sets are
@@ -1129,7 +1151,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 		}
 		const string &cat_name = pushed_result.catalog->GetName();
 		if (ref.condition) {
-			StripCatalogName(*ref.condition, cat_name);
+			StripCatalogName(*ref.condition, cat_name, false);
 		}
 		bool already_tracked = false;
 		for (auto &existing : from_pushed_catalog_names) {
@@ -1140,6 +1162,28 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 		}
 		if (!already_tracked) {
 			from_pushed_catalog_names.push_back(cat_name);
+		}
+	}
+	// Track aliases of individually pushed children so that HasLocalTableReference inside
+	// PushdownSubqueries correctly detects correlated WHERE/HAVING subqueries that reference
+	// the pushed child by alias (e.g. "t1.col" after "rpc.t1 AS t1" → "quack(...) AS t1").
+	for (auto *child_ref : {ref.left.get(), ref.right.get()}) {
+		if (!child_ref || child_ref->alias.empty()) {
+			continue;
+		}
+		// Only track children that were actually pushed (TableFunctionRef = quack wrapper).
+		if (child_ref->type != TableReferenceType::TABLE_FUNCTION) {
+			continue;
+		}
+		bool already_tracked = false;
+		for (auto &existing : from_pushed_table_aliases) {
+			if (StringUtil::CIEquals(existing, child_ref->alias)) {
+				already_tracked = true;
+				break;
+			}
+		}
+		if (!already_tracked) {
+			from_pushed_table_aliases.push_back(child_ref->alias);
 		}
 	}
 	return result;
@@ -1501,11 +1545,14 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 			result = Merge(result, Rewrite(*subquery_expr.child));
 		}
 		// Save outer scope: Rewrite(*subquery->node) may add the subquery's own local tables/columns,
-		// and its JoinRef pushes must not appear in the outer SelectNode's from_pushed_catalog_names.
+		// and its JoinRef pushes must not appear in the outer SelectNode's from_pushed_catalog_names
+		// or from_pushed_table_aliases.
 		auto saved_local_table_names = local_table_names;
 		auto saved_local_table_column_names = local_table_column_names;
 		auto saved_from_pushed = std::move(from_pushed_catalog_names);
+		auto saved_from_pushed_aliases = std::move(from_pushed_table_aliases);
 		from_pushed_catalog_names.clear();
+		from_pushed_table_aliases.clear();
 		auto subquery_result = Rewrite(*subquery_expr.subquery->node);
 		// A SINGLE_REMOTE result is only valid if the subquery has no correlated references to outer local tables
 		if (subquery_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
@@ -1515,6 +1562,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 		local_table_names = std::move(saved_local_table_names);
 		local_table_column_names = std::move(saved_local_table_column_names);
 		from_pushed_catalog_names = std::move(saved_from_pushed);
+		from_pushed_table_aliases = std::move(saved_from_pushed_aliases);
 		result = Merge(result, subquery_result);
 		return result;
 	}
@@ -1543,12 +1591,15 @@ void RemotePushdownOptimizer::PushdownSubqueries(unique_ptr<ParsedExpression> &e
 		auto saved_local_table_names = local_table_names;
 		auto saved_local_table_column_names = local_table_column_names;
 		auto saved_from_pushed = std::move(from_pushed_catalog_names);
+		auto saved_from_pushed_aliases = std::move(from_pushed_table_aliases);
 		from_pushed_catalog_names.clear();
+		from_pushed_table_aliases.clear();
 		auto result = Rewrite(*subquery_expr.subquery->node);
 		bool has_correlated_ref = HasLocalTableReference(*subquery_expr.subquery->node);
 		local_table_names = std::move(saved_local_table_names);
 		local_table_column_names = std::move(saved_local_table_column_names);
 		from_pushed_catalog_names = std::move(saved_from_pushed);
+		from_pushed_table_aliases = std::move(saved_from_pushed_aliases);
 		if (!has_correlated_ref) {
 			FinishPushdown(subquery_expr.subquery->node, result);
 		}
@@ -1616,7 +1667,8 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &cata
 	}
 }
 
-void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const string &catalog_name) {
+void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const string &catalog_name,
+                                               bool strip_subquery_bodies) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
 		// Strip catalog prefix from qualified column references (e.g. catalog.schema.table.col -> schema.table.col).
@@ -1629,9 +1681,18 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
 		auto &subq = expr.Cast<SubqueryExpression>();
-		StripCatalogName(*subq.subquery->node, catalog_name);
+		// When strip_subquery_bodies is false (partial-pushdown context: individual JoinRef children pushed),
+		// do NOT recurse into the subquery body. The subquery was not pushed, so its FROM clause still
+		// contains the original remote table refs (e.g. "rpc.t2"). Stripping them would produce an
+		// unqualified "t2" that cannot be resolved locally when the subquery is executed locally.
+		// The child expression (e.g. left side of IN) still needs stripping because it is an outer-scope
+		// column ref (e.g. "rpc.t1.i" that should become "t1.i"). When strip_subquery_bodies is true
+		// (full-pushdown context) the entire subquery is being serialized as remote SQL and must be stripped.
+		if (strip_subquery_bodies) {
+			StripCatalogName(*subq.subquery->node, catalog_name);
+		}
 		if (subq.child) {
-			StripCatalogName(*subq.child, catalog_name);
+			StripCatalogName(*subq.child, catalog_name, strip_subquery_bodies);
 		}
 		return;
 	}
@@ -1648,7 +1709,7 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 		// Fall through to EnumerateChildren to also strip catalog refs inside arguments
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](ParsedExpression &child) { StripCatalogName(child, catalog_name); });
+	    expr, [&](ParsedExpression &child) { StripCatalogName(child, catalog_name, strip_subquery_bodies); });
 }
 
 void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &catalog_name) {

@@ -569,5 +569,51 @@ select rpc from local_rpc join rpc.t1 on local_rpc.rpc = rpc.t1.i order by rpc
 statement ok
 drop table local_rpc
 
+# ============================================================
+# Bug 13: Two bugs in combination:
+#
+# (a) StripCatalogName in the partial-pushdown branch (individual
+#     JoinRef children pushed) incorrectly recursed into unpushed
+#     subquery bodies, stripping "rpc" from "rpc.t2" in an EXISTS
+#     WHERE — leaving a bare "t2" that the local binder cannot find.
+#     Fix: pass strip_subquery_bodies=false in partial-pushdown calls
+#     to StripCatalogName so only outer column refs are touched.
+#
+# (b) HasLocalTableReference missed aliases of individually pushed
+#     JoinRef children, so a correlated EXISTS (referencing the pushed
+#     "t1" alias) was classified as uncorrelated and pushed to remote,
+#     failing with "table 't1' not found" on the remote server.
+#     Fix: Rewrite(JoinRef&) populates from_pushed_table_aliases;
+#     Rewrite(SelectNode&) inserts those aliases into local_table_names
+#     before calling PushdownSubqueries so the correlation is detected.
+#
+# With both fixes the EXISTS stays local and the query correctly hits
+# the "Multiple streaming scans" limitation (two quack connections:
+# one for the outer quack_query_by_name and one for native rpc.t2
+# access in the inner subquery).
+# ============================================================
+
+statement ok
+create table local_k(k int);
+
+statement ok
+insert into local_k values (2), (5), (8);
+
+# Mixed join: rpc.t1 (individually pushed as "t1") + local_k (local).
+# WHERE has a correlated EXISTS referencing t1 (from the pushed JoinRef child).
+# The EXISTS subquery uses "t2.i" (unqualified alias) because DuckDB's binder
+# does not support catalog-qualified column refs (e.g. "rpc.t2.i") when the
+# table is bound with the implicit alias "t2" in local execution context.
+# The fix ensures this correlated subquery is NOT stripped of catalog names and
+# NOT pushed; it falls back to native rpc.t2 scanning while rpc.t1 is streaming.
+statement error
+select count(*) from rpc.t1 t1 join local_k on t1.i = local_k.k
+where exists (select 1 from rpc.t2 where t2.i = t1.i)
+----
+Multiple streaming scans
+
+statement ok
+drop table local_k
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

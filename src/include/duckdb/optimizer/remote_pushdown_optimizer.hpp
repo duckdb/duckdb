@@ -86,7 +86,7 @@ private:
 	static void StripCatalogName(SQLStatement &statement, const string &catalog_name);
 	static void StripCatalogName(QueryNode &node, const string &catalog_name);
 	static void StripCatalogName(TableRef &ref, const string &catalog_name);
-	static void StripCatalogName(ParsedExpression &expr, const string &catalog_name);
+	static void StripCatalogName(ParsedExpression &expr, const string &catalog_name, bool strip_subquery_bodies = true);
 
 private:
 	Binder &binder;
@@ -105,5 +105,10 @@ private:
 	//! expressions so that catalog-qualified refs like "rpc.t1.i" remain resolvable after "rpc.t1" becomes
 	//! "quack_query_by_name(...) AS t1". Saved/restored at subquery boundaries to prevent scope leakage.
 	vector<string> from_pushed_catalog_names;
+	//! Aliases of remote tables individually pushed by Rewrite(JoinRef&). Consumed and cleared by
+	//! Rewrite(SelectNode&) to temporarily register them in local_table_names so HasLocalTableReference
+	//! detects correlated WHERE subqueries that reference a pushed alias (e.g. "t1.col" after "rpc.t1 AS t1"
+	//! was pushed to "quack_query_by_name(...) AS t1"). Saved/restored at subquery boundaries.
+	vector<string> from_pushed_table_aliases;
 };
 } // namespace duckdb
