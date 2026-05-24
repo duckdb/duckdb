@@ -643,6 +643,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 				}
 			}
 			from_pushed_catalog_names.clear();
+			from_pushed_table_aliases.clear();
 		}
 		for (auto &cte_pair : node.cte_map.map) {
 			auto it = outer_cte_results.find(cte_pair.first);
@@ -711,9 +712,14 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 		if (node.cte_map.map.empty()) {
 			string pushed_from_alias;
 			vector<string> update_pushed_cats;
+			bool update_has_streaming_from = false;
 			from_pushed_catalog_names.clear();
+			from_pushed_table_aliases.clear();
 			if (node.from_table) {
 				auto from_result = Rewrite(node.from_table);
+				// Track whether any JoinRef children were individually pushed as quack streams
+				// (before from_pushed_catalog_names is moved into update_pushed_cats).
+				bool had_join_child_pushdowns = !from_pushed_catalog_names.empty();
 				FinishPushdown(node.from_table, from_result);
 				// Track alias of a pushed remote FROM table so correlated refs in SET expressions
 				// are correctly detected and not pushed to the remote independently.
@@ -721,6 +727,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 				    !node.from_table->alias.empty()) {
 					pushed_from_alias = node.from_table->alias;
 					local_table_names.insert(pushed_from_alias);
+				}
+				// Register JoinRef-pushed aliases in local_table_names so HasLocalTableReference
+				// inside PushdownSubqueries correctly detects correlated SET-expression subqueries
+				// that reference a pushed JoinRef child by alias.
+				for (auto &alias : from_pushed_table_aliases) {
+					local_table_names.insert(alias);
 				}
 				// Collect pushed catalog names (direct + JoinRef children) to strip from SET exprs.
 				update_pushed_cats = std::move(from_pushed_catalog_names);
@@ -738,6 +750,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 						update_pushed_cats.push_back(cat_name);
 					}
 				}
+				// Track whether a streaming quack connection is already active for the FROM table
+				// so PushdownSubqueries is skipped (avoids a second concurrent quack connection).
+				update_has_streaming_from =
+				    (from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) ||
+				    had_join_child_pushdowns;
 			}
 			if (node.set_info) {
 				// Strip pushed catalog names so "rpc.from_t.col" refs remain resolvable
@@ -752,16 +769,23 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 						StripCatalogName(*expr, cat_name, false);
 					}
 				}
-				if (node.set_info->condition) {
-					PushdownSubqueries(node.set_info->condition);
-				}
-				for (auto &expr : node.set_info->expressions) {
-					PushdownSubqueries(expr);
+				// Only push SET-expression subqueries when the FROM is not already streaming.
+				if (!update_has_streaming_from) {
+					if (node.set_info->condition) {
+						PushdownSubqueries(node.set_info->condition);
+					}
+					for (auto &expr : node.set_info->expressions) {
+						PushdownSubqueries(expr);
+					}
 				}
 			}
 			if (!pushed_from_alias.empty()) {
 				local_table_names.erase(pushed_from_alias);
 			}
+			for (auto &alias : from_pushed_table_aliases) {
+				local_table_names.erase(alias);
+			}
+			from_pushed_table_aliases.clear();
 		}
 		for (auto &cte_pair : node.cte_map.map) {
 			auto it = outer_cte_results.find(cte_pair.first);
