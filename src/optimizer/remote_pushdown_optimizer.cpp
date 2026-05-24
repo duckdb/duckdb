@@ -27,6 +27,7 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -1060,6 +1061,21 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<TableRef> &ref
 	case TableReferenceType::EMPTY_FROM:
 	case TableReferenceType::COLUMN_DATA:
 		return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+	case TableReferenceType::PIVOT: {
+		// PIVOT/UNPIVOT is never pushed to remote.  However, we must still Rewrite the source
+		// so that its local table names and column names are populated in local_table_names /
+		// local_table_column_names.  Without this, a correlated WHERE subquery referencing
+		// a column from the PIVOT source is incorrectly classified as non-correlated and
+		// pushed to the remote where the source table does not exist.
+		auto &piv = ref->Cast<PivotRef>();
+		if (piv.source) {
+			Rewrite(piv.source);
+		}
+		if (!ref->alias.empty()) {
+			local_table_names.insert(ref->alias);
+		}
+		return {};
+	}
 	default:
 		return {};
 	}
@@ -1582,6 +1598,30 @@ bool RemotePushdownOptimizer::HasLocalTableReference(TableRef &ref) {
 		for (auto &row : el.values) {
 			for (auto &expr : row) {
 				if (HasLocalTableReference(*expr)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	case TableReferenceType::PIVOT: {
+		auto &piv = ref.Cast<PivotRef>();
+		if (piv.source && HasLocalTableReference(*piv.source)) {
+			return true;
+		}
+		for (auto &agg : piv.aggregates) {
+			if (HasLocalTableReference(*agg)) {
+				return true;
+			}
+		}
+		for (auto &pivot_col : piv.pivots) {
+			for (auto &expr : pivot_col.pivot_expressions) {
+				if (HasLocalTableReference(*expr)) {
+					return true;
+				}
+			}
+			for (auto &entry : pivot_col.entries) {
+				if (entry.expr && HasLocalTableReference(*entry.expr)) {
 					return true;
 				}
 			}
