@@ -75,12 +75,14 @@ ClientContext &Pipeline::GetClientContext() {
 }
 
 ProgressData Pipeline::GetProgressInternal(ClientContext &context, ProgressData &progress) {
-	auto &create_index = sink->Cast<PhysicalCreateIndex>();
-	// Check if index provides custom progress logic
-	if (create_index.index_type.build_sink_progress) {
-		auto &g_sink_state = sink->sink_state->Cast<CreateIndexGlobalSinkState>();
-		IndexBuildProgressInput input {context, *g_sink_state.gstate, progress};
-		return create_index.index_type.build_sink_progress(input);
+	if (sink->type == PhysicalOperatorType::CREATE_INDEX) {
+		auto &create_index = sink->Cast<PhysicalCreateIndex>();
+		// Check if index provides custom progress logic
+		if (create_index.index_type.build_sink_progress) {
+			auto &g_sink_state = sink->sink_state->Cast<CreateIndexGlobalSinkState>();
+			IndexBuildProgressInput input {context, *g_sink_state.gstate, progress};
+			return create_index.index_type.build_sink_progress(input);
+		}
 	}
 	// Fallback
 	return sink->GetSinkProgress(context, *sink->sink_state, progress);
