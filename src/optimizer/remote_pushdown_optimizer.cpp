@@ -542,7 +542,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 		return {};
 	}
 	if (node.select_statement) {
+		// Rewrite(SelectNode) has a side effect: it individually pushes remote JoinRef children
+		// even when the SelectNode itself is UNKNOWN.  Save the source query and restore it if
+		// the full-push analysis fails so the INSERT can still be executed natively without
+		// stale quack wrappers causing "Multiple streaming scans" errors.
+		auto saved_select = node.select_statement->node->Copy();
 		result = Merge(result, Rewrite(*node.select_statement->node));
+		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			node.select_statement->node = std::move(saved_select);
+		}
 	}
 	if (node.on_conflict_info) {
 		if (node.on_conflict_info->condition) {
