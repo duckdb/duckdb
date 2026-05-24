@@ -992,45 +992,57 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 				}
 			}
 		}
-		// Also push any remote scalar subqueries in the set operation's own modifiers
-		for (auto &modifier : node.modifiers) {
-			switch (modifier->type) {
-			case ResultModifierType::ORDER_MODIFIER: {
-				auto &order_mod = modifier->Cast<OrderModifier>();
-				for (auto &order : order_mod.orders) {
-					PushdownSubqueries(order.expression);
-				}
+		// Push remote scalar subqueries in the set operation's own modifiers, but only when
+		// no child was individually pushed. An individually-pushed child holds an active
+		// quack streaming connection; a second quack_query_by_name from a modifier subquery
+		// would open a concurrent streaming connection that quack cannot serve (returns 0 rows).
+		bool any_child_pushed = false;
+		for (auto &cr : child_results) {
+			if (cr.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+				any_child_pushed = true;
 				break;
 			}
-			case ResultModifierType::LIMIT_MODIFIER: {
-				auto &limit_mod = modifier->Cast<LimitModifier>();
-				if (limit_mod.limit) {
-					PushdownSubqueries(limit_mod.limit);
+		}
+		if (!any_child_pushed) {
+			for (auto &modifier : node.modifiers) {
+				switch (modifier->type) {
+				case ResultModifierType::ORDER_MODIFIER: {
+					auto &order_mod = modifier->Cast<OrderModifier>();
+					for (auto &order : order_mod.orders) {
+						PushdownSubqueries(order.expression);
+					}
+					break;
 				}
-				if (limit_mod.offset) {
-					PushdownSubqueries(limit_mod.offset);
+				case ResultModifierType::LIMIT_MODIFIER: {
+					auto &limit_mod = modifier->Cast<LimitModifier>();
+					if (limit_mod.limit) {
+						PushdownSubqueries(limit_mod.limit);
+					}
+					if (limit_mod.offset) {
+						PushdownSubqueries(limit_mod.offset);
+					}
+					break;
 				}
-				break;
-			}
-			case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-				auto &limit_mod = modifier->Cast<LimitPercentModifier>();
-				if (limit_mod.limit) {
-					PushdownSubqueries(limit_mod.limit);
+				case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+					auto &limit_mod = modifier->Cast<LimitPercentModifier>();
+					if (limit_mod.limit) {
+						PushdownSubqueries(limit_mod.limit);
+					}
+					if (limit_mod.offset) {
+						PushdownSubqueries(limit_mod.offset);
+					}
+					break;
 				}
-				if (limit_mod.offset) {
-					PushdownSubqueries(limit_mod.offset);
+				case ResultModifierType::DISTINCT_MODIFIER: {
+					auto &distinct_mod = modifier->Cast<DistinctModifier>();
+					for (auto &expr : distinct_mod.distinct_on_targets) {
+						PushdownSubqueries(expr);
+					}
+					break;
 				}
-				break;
-			}
-			case ResultModifierType::DISTINCT_MODIFIER: {
-				auto &distinct_mod = modifier->Cast<DistinctModifier>();
-				for (auto &expr : distinct_mod.distinct_on_targets) {
-					PushdownSubqueries(expr);
+				default:
+					break;
 				}
-				break;
-			}
-			default:
-				break;
 			}
 		}
 	}
