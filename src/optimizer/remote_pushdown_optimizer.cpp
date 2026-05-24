@@ -193,6 +193,27 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
+	// Process any nested CTEs attached to this recursive CTE node (inherits cte_map from QueryNode).
+	// These CTEs are serialized in ToString() and must be analyzed and restored correctly.
+	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
+	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	for (auto &cte_pair : node.cte_map.map) {
+		const string &cte_name = cte_pair.first;
+		auto &cte_info = *cte_pair.second;
+		auto it = cte_results.find(cte_name);
+		if (it != cte_results.end()) {
+			outer_cte_results[cte_name] = it->second;
+		}
+		CatalogPushdownResult cte_result;
+		if (cte_info.query_node) {
+			cte_result = Rewrite(*cte_info.query_node);
+		} else {
+			cte_result = {};
+		}
+		cte_results[cte_name] = cte_result;
+		cte_combined = Merge(cte_combined, cte_result);
+	}
+
 	// Register the CTE's own name as neutral so the self-reference in the recursive arm
 	// is treated as NO_CATALOG_REFERENCED rather than triggering an unknown catalog lookup.
 	// The caller (Rewrite(SelectNode)) will overwrite this with the final result afterwards.
@@ -201,10 +222,21 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	CatalogPushdownResult left_result = Rewrite(*node.left);
 	CatalogPushdownResult right_result = Rewrite(*node.right);
 
-	// Remove the placeholder so the caller's assignment is the authoritative entry
+	// Remove the self-reference placeholder so the caller's assignment is authoritative
 	cte_results.erase(node.ctename);
 
-	return Merge(left_result, right_result);
+	// Restore shadowed outer CTE entries
+	for (auto &cte_pair : node.cte_map.map) {
+		auto it = outer_cte_results.find(cte_pair.first);
+		if (it != outer_cte_results.end()) {
+			cte_results[cte_pair.first] = it->second;
+		} else {
+			cte_results.erase(cte_pair.first);
+		}
+	}
+
+	auto result = Merge(left_result, right_result);
+	return Merge(result, cte_combined);
 }
 
 // Recursively collect the table name and alias from every BaseTableRef in a TableRef tree.
@@ -2279,6 +2311,11 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 	}
 	case QueryNodeType::RECURSIVE_CTE_NODE: {
 		auto &rec = node.Cast<RecursiveCTENode>();
+		for (auto &cte_pair : rec.cte_map.map) {
+			if (cte_pair.second->query_node) {
+				StripCatalogName(*cte_pair.second->query_node, catalog_name);
+			}
+		}
 		if (rec.left) {
 			StripCatalogName(*rec.left, catalog_name);
 		}
