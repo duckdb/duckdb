@@ -101,6 +101,15 @@ FOR EACH STATEMENT
 ----
 Parser Error: NEW TABLE cannot be specified multiple times in REFERENCING clause
 
+# NEW and OLD aliases must be distinct
+statement error
+CREATE TRIGGER trg_same_alias AFTER UPDATE ON t
+REFERENCING NEW TABLE AS x OLD TABLE AS x
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Parser Error: REFERENCING aliases must be distinct
+
 # Body validation: referencing an undeclared alias is rejected at CREATE TRIGGER time
 statement ok
 CREATE TABLE t_log (id INTEGER);
