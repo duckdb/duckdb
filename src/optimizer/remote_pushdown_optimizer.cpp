@@ -410,11 +410,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			// correlated refs to the pushed alias and does not push them to the remote independently.
 			// Also register aliases of any JoinRef children that were individually pushed, so that
 			// correlated WHERE/HAVING subqueries referencing those aliases are correctly detected.
-			// Check whether FinishPushdown actually created a quack wrapper (TABLE_FUNCTION): for a
-			// JoinRef, FinishPushdown is intentionally a no-op, so from_result == SINGLE_REMOTE does
-			// not imply a quack streaming slot is occupied.
-			bool from_table_actually_pushed =
-			    node.from_table && node.from_table->type == TableReferenceType::TABLE_FUNCTION;
+			// FinishPushdown creates a quack wrapper for all TableRef types EXCEPT JoinRef (which it
+			// intentionally skips). A SINGLE_REMOTE JoinRef did not occupy a quack streaming slot.
+			bool from_table_actually_pushed = from_result.reference_type ==
+			                                      CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+			                                  node.from_table &&
+			                                  node.from_table->type != TableReferenceType::JOIN;
 			string pushed_from_alias;
 			if (from_table_actually_pushed && !node.from_table->alias.empty()) {
 				pushed_from_alias = node.from_table->alias;
