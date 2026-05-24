@@ -1800,9 +1800,26 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 		result = Merge(result, subquery_result);
 		return result;
 	}
-	// Check if this is a function call to a local macro - local macros can't be pushed to remote
+	// Handle function expressions: resolve catalog qualifiers and block local-catalog functions.
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func = expr.Cast<FunctionExpression>();
+		// Resolve schema-as-catalog ambiguity: "rpc.fn()" is parsed as schema="rpc", catalog="".
+		string catalog_name = func.catalog;
+		string schema_name = func.schema;
+		Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
+		if (!catalog_name.empty()) {
+			auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
+			if (catalog && catalog->IsRemoteCatalog()) {
+				// Explicitly remote-catalog function: merge result with children.
+				CatalogPushdownResult result {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
+				ParsedExpressionIterator::EnumerateChildren(
+				    expr, [&](ParsedExpression &child) { result = Merge(result, Rewrite(child)); });
+				return result;
+			}
+			// Explicitly local-catalog function (e.g. memory.main.fn()): block pushdown.
+			return {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
+		}
+		// Unqualified function: local macros can't be pushed to remote.
 		if (IsLocalMacro(func)) {
 			return {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
 		}
