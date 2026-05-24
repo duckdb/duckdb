@@ -198,8 +198,8 @@ public:
 
 } // namespace
 
-unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
-                                                          bool write) {
+unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, 
+														  bool write, const FileCompressionOptions &) {
 	auto path = handle->path;
 	return make_uniq<ZStdFile>(context, std::move(handle), path, write);
 }
