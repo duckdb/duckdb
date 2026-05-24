@@ -171,6 +171,9 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
       validate(
           ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetClientContext(), caching_file_system_p.db)),
       cached_file(cached_file_p), position(0) {
+	// ref_count is incremented by ExternalFileCache::GetOrCreateCachedFile while
+	// the cache lock is held, to prevent a concurrent prune from evicting this
+	// entry between its lookup and our construction. We decrement in the dtor.
 	if (!external_file_cache.IsEnabled() || Validate()) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();
@@ -192,6 +195,7 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
 }
 
 CachingFileHandle::~CachingFileHandle() {
+	--cached_file.ref_count;
 }
 
 FileHandle &CachingFileHandle::GetFileHandle() {
