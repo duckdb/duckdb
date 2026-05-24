@@ -1261,9 +1261,16 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	}
 	auto &func_expr = ref.function->Cast<FunctionExpression>();
 
+	// Resolve schema-as-catalog ambiguity: "rpc.my_tvf()" is parsed as schema="rpc", catalog="",
+	// but "rpc" is a catalog name.  Apply the same resolution that BaseTableRef uses so that
+	// catalog-qualified TVF calls are correctly recognized as remote.
+	string catalog_name = func_expr.catalog;
+	string schema_name = func_expr.schema;
+	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
+
 	// If the function has an explicit catalog prefix, check if it's remote
-	if (!func_expr.catalog.empty()) {
-		auto catalog = Catalog::GetCatalogEntry(binder.context, func_expr.catalog);
+	if (!catalog_name.empty()) {
+		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
 		if (catalog && catalog->IsRemoteCatalog()) {
 			// Check args: a local macro or UNKNOWN expression in args blocks pushdown
 			CatalogPushdownResult result {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
@@ -1290,7 +1297,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	FindRemoteCatalogsInSearchPath();
 	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, func_expr.function_name);
 	for (auto &local_entry : local_catalogs_in_search_path) {
-		const string &schema = func_expr.schema.empty() ? local_entry.schema : func_expr.schema;
+		const string &schema = schema_name.empty() ? local_entry.schema : schema_name;
 		auto entry =
 		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, func_lookup, OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::TABLE_FUNCTION_ENTRY) {
