@@ -300,6 +300,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			// catalog-qualified column refs like "rpc.t1.i" that can no longer bind because "rpc.t1"
 			// is now "quack_query_by_name(...) AS t1" in FROM. Strip those catalog prefixes so the
 			// binder resolves them via the table alias.
+			// Track whether any JoinRef children were individually pushed (and are therefore
+			// already using a streaming quack connection). This must be captured before the
+			// scoped block below moves from_pushed_catalog_names into pushed_cats.
+			bool had_join_child_pushdowns = !from_pushed_catalog_names.empty();
 			{
 				// Collect catalogs pushed by JoinRef children (from_pushed_catalog_names) and
 				// the directly-pushed from_table catalog (from from_result).
@@ -397,13 +401,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			for (auto &alias : join_pushed_aliases) {
 				local_table_names.insert(alias);
 			}
-			// When the from_table was individually pushed (SINGLE_REMOTE), any WHERE/HAVING subquery
-			// that is also pushed would create a second concurrent quack_query_by_name call. Remote
-			// catalog implementations typically support only one active streaming connection per
-			// DuckDB connection, so a second call returns 0 rows. Skip subquery pushdown in that case.
-			// When from_result is not SINGLE_REMOTE the from_table was not pushed, so subquery
-			// pushdown creates the only remote stream and is safe.
-			if (from_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			// When the from_table was individually pushed (SINGLE_REMOTE) OR when JoinRef children
+			// were individually pushed (had_join_child_pushdowns), any WHERE/HAVING subquery that is
+			// also pushed would create a second concurrent quack_query_by_name call. Remote catalog
+			// implementations typically support only one active streaming connection per DuckDB
+			// connection, so a second call returns 0 rows. Skip subquery pushdown in those cases.
+			// Only attempt subquery pushdown when neither the from_table nor any JoinRef child has
+			// already occupied the single quack streaming slot.
+			if (from_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+			    !had_join_child_pushdowns) {
 				// Push down any subquery expressions in WHERE/HAVING/QUALIFY/SELECT list/GROUP BY/ORDER BY
 				if (node.where_clause) {
 					PushdownSubqueries(node.where_clause);

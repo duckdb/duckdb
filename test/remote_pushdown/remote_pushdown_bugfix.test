@@ -615,5 +615,48 @@ Multiple streaming scans
 statement ok
 drop table local_k
 
+# ============================================================
+# Bug 14: PushdownSubqueries incorrectly called when JoinRef
+# children are already occupying the quack streaming slot.
+#
+# When a mixed JOIN has one remote child individually pushed to
+# quack_query_by_name(...) (occupying the single quack streaming
+# connection), the code then called PushdownSubqueries on the
+# outer WHERE/HAVING/SELECT-list. A WHERE scalar subquery that
+# is all-remote would be pushed to a second quack_query_by_name
+# call, creating a second concurrent streaming connection and
+# triggering "Multiple streaming scans" (or returning wrong 0-row
+# results from the second connection).
+#
+# The fix: capture had_join_child_pushdowns before the
+# from_pushed_catalog_names are consumed, and skip
+# PushdownSubqueries when that flag is true — same as the
+# existing skip for a directly-pushed from_table.
+#
+# Both before and after the fix, queries in this shape fail with
+# "Multiple streaming scans" (the native rpc.t2 scan + the outer
+# quack_query_by_name still conflict). The fix avoids wrapping
+# the failing subquery in an extra quack_query_by_name layer.
+# ============================================================
+
+statement ok
+create table local_m(m int);
+
+statement ok
+insert into local_m values (1), (3), (5);
+
+# Mixed join (rpc.t1 + local_m): rpc.t1 is individually pushed.
+# Non-correlated WHERE scalar subquery referencing rpc.t2.
+# Both old and new code produce "Multiple streaming scans" because
+# the outer quack stream conflicts with the inner rpc.t2 scan.
+statement error
+select t1.i from rpc.t1 join local_m on t1.i = local_m.m
+where t1.i < (select max(i) from rpc.t2)
+----
+Multiple streaming scans
+
+statement ok
+drop table local_m
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
