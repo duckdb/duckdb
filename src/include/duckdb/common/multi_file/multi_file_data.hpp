@@ -114,7 +114,7 @@ public:
 			throw NotImplementedException("Default expression that isn't constant is not supported yet");
 		}
 		auto &constant_expr = default_expression->Cast<ConstantExpression>();
-		return constant_expr.value;
+		return constant_expr.GetValue();
 	}
 
 public:

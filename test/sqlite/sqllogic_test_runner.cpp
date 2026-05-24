@@ -20,6 +20,9 @@
 
 namespace duckdb {
 
+mutex SQLLogicTestRunner::skip_reason_lock;
+map<string, idx_t> SQLLogicTestRunner::skip_reason_counts;
+
 SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
 	config->SetOptionByName("allow_unredacted_secrets", true);
@@ -51,14 +54,16 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	}
 	}
 
+	auto repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
 	if (env_var) {
 		local_extension_repo = env_var;
 		autoload_known_extensions = true;
 		autoinstall_known_extensions = true;
 	} else if (autoload_known_extensions) {
-		local_extension_repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
+		local_extension_repo = repo;
 	}
+	test_config.SetLocalExtensionRepository(repo);
 	config->SetOptionByName("autoinstall_known_extensions", autoinstall_known_extensions);
 	config->SetOptionByName("autoload_known_extensions", autoload_known_extensions);
 	for (auto &entry : test_config.GetConfigSettings()) {
@@ -80,6 +85,28 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 		}
 		DeleteDatabase(loaded_path);
 	}
+}
+
+void SQLLogicTestRunner::AddSkipReason(const string &reason) {
+	lock_guard<mutex> guard(skip_reason_lock);
+	skip_reason_counts[reason]++;
+}
+
+void SQLLogicTestRunner::SkipTest(const string &reason) {
+	AddSkipReason(reason);
+	SKIP_TEST(reason);
+}
+
+string SQLLogicTestRunner::GetSkipReasonSummary() {
+	lock_guard<mutex> guard(skip_reason_lock);
+	if (skip_reason_counts.empty()) {
+		return string();
+	}
+	std::ostringstream oss;
+	for (auto &entry : skip_reason_counts) {
+		oss << entry.first << ": " << entry.second << "\n";
+	}
+	return oss.str();
 }
 
 void SQLLogicTestRunner::ExecuteCommand(duckdb::unique_ptr<Command> command) {
@@ -120,16 +147,32 @@ void SQLLogicTestRunner::EndLoop() {
 }
 
 ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::string &extension) {
-	auto &test_config = TestConfiguration::Get();
-	if (test_config.GetExtensionAutoLoadingMode() != TestConfiguration::ExtensionAutoLoadingMode::NONE) {
-		// try LOAD extension
-		Connection con(db);
-		auto result = con.Query("LOAD " + extension);
-		if (!result->HasError()) {
-			return ExtensionLoadResult::LOADED_EXTENSION;
-		}
+	if (db.ExtensionIsLoaded(extension)) {
+		return ExtensionLoadResult::LOADED_EXTENSION;
 	}
-	return ExtensionHelper::LoadExtension(db, extension);
+
+	// Prefer built-in/static extension loading first. Otherwise we can end up loading the same extension
+	// from the local extension repo as well, which causes duplicate symbols in sanitizer builds.
+	auto linked_result = ExtensionHelper::LoadExtension(db, extension);
+	if (linked_result == ExtensionLoadResult::LOADED_EXTENSION) {
+		return linked_result;
+	}
+
+	auto &test_config = TestConfiguration::Get();
+	Connection con(db);
+	if (test_config.GetExtensionAutoLoadingMode() == TestConfiguration::ExtensionAutoLoadingMode::NONE) {
+		// try INSTALL extension
+		auto repo = test_config.GetLocalExtensionRepository();
+		con.Query("INSTALL " + extension + " FROM '" + repo + "'");
+	}
+
+	// try LOAD extension
+	auto result = con.Query("LOAD " + extension);
+	if (!result->HasError()) {
+		return ExtensionLoadResult::LOADED_EXTENSION;
+	}
+
+	return linked_result;
 }
 
 void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
@@ -262,129 +305,6 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 	}
 
 	return input;
-}
-
-bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<string> &result) {
-	if (parameter.empty()) {
-		return true;
-	}
-	auto token_name = StringUtil::Lower(parameter);
-	StringUtil::Trim(token_name);
-	bool collection = false;
-	bool is_compression = token_name == "<compression>";
-	bool is_all = token_name == "<alltypes>";
-	bool is_numeric = is_all || token_name == "<numeric>";
-	bool is_integral = is_numeric || token_name == "<integral>";
-	bool is_signed = is_integral || token_name == "<signed>";
-	bool is_unsigned = is_integral || token_name == "<unsigned>";
-	bool is_all_types_column = token_name == "<all_types_columns>";
-	if (token_name[0] == '!') {
-		// !token tries to remove the token from the list of tokens
-		auto entry = std::find(result.begin(), result.end(), parameter.substr(1));
-		if (entry == result.end()) {
-			// not found - insert as-is
-			return false;
-		}
-		// found - erase the entry
-		result.erase(entry);
-		collection = true;
-	}
-	if (is_signed) {
-		result.push_back("tinyint");
-		result.push_back("smallint");
-		result.push_back("integer");
-		result.push_back("bigint");
-		result.push_back("hugeint");
-		collection = true;
-	}
-	if (is_unsigned) {
-		result.push_back("utinyint");
-		result.push_back("usmallint");
-		result.push_back("uinteger");
-		result.push_back("ubigint");
-		result.push_back("uhugeint");
-		collection = true;
-	}
-	if (is_numeric) {
-		result.push_back("float");
-		result.push_back("double");
-		collection = true;
-	}
-	if (is_all) {
-		result.push_back("bool");
-		result.push_back("interval");
-		result.push_back("varchar");
-		collection = true;
-	}
-	if (is_compression) {
-		result.push_back("none");
-		result.push_back("uncompressed");
-		result.push_back("rle");
-		result.push_back("bitpacking");
-		result.push_back("dictionary");
-		result.push_back("fsst");
-		result.push_back("dict_fsst");
-		result.push_back("alp");
-		result.push_back("alprd");
-		collection = true;
-	}
-	if (is_all_types_column) {
-		result.push_back("bool");
-		result.push_back("tinyint");
-		result.push_back("smallint");
-		result.push_back("int");
-		result.push_back("bigint");
-		result.push_back("hugeint");
-		result.push_back("uhugeint");
-		result.push_back("utinyint");
-		result.push_back("usmallint");
-		result.push_back("uint");
-		result.push_back("ubigint");
-		result.push_back("date");
-		result.push_back("time");
-		result.push_back("timestamp");
-		result.push_back("timestamp_s");
-		result.push_back("timestamp_ms");
-		result.push_back("timestamp_ns");
-		result.push_back("time_tz");
-		result.push_back("timestamp_tz");
-		result.push_back("float");
-		result.push_back("double");
-		result.push_back("dec_4_1");
-		result.push_back("dec_9_4");
-		result.push_back("dec_18_6");
-		result.push_back("dec38_10");
-		result.push_back("uuid");
-		result.push_back("interval");
-		result.push_back("varchar");
-		result.push_back("blob");
-		result.push_back("bit");
-		result.push_back("small_enum");
-		result.push_back("medium_enum");
-		result.push_back("large_enum");
-		result.push_back("int_array");
-		result.push_back("double_array");
-		result.push_back("date_array");
-		result.push_back("timestamp_array");
-		result.push_back("timestamptz_array");
-		result.push_back("varchar_array");
-		result.push_back("nested_int_array");
-		result.push_back("struct");
-		result.push_back("struct_of_arrays");
-		result.push_back("array_of_structs");
-		result.push_back("map");
-		result.push_back("union");
-		result.push_back("fixed_int_array");
-		result.push_back("fixed_varchar_array");
-		result.push_back("fixed_nested_int_array");
-		result.push_back("fixed_nested_varchar_array");
-		result.push_back("fixed_struct_array");
-		result.push_back("struct_of_fixed_array");
-		result.push_back("fixed_array_of_int_list");
-		result.push_back("list_of_fixed_int_array");
-		collection = true;
-	}
-	return collection;
 }
 
 static string ParseExplanation(SQLLogicParser &parser, const vector<string> &params, size_t &index) {
@@ -748,7 +668,7 @@ void add_env_tag(vector<string> &tags, const string &name, const string *value =
 void SQLLogicTestRunner::ExecuteFile(string script) {
 	auto &test_config = TestConfiguration::Get();
 	if (test_config.ShouldSkipTest(script)) {
-		SKIP_TEST("config skip_tests");
+		SkipTest("config skip_tests");
 		return;
 	}
 
@@ -807,7 +727,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		// Check tags first time we hit test statements, since all explicit & implicit tags now present
 		if (parser.IsTestCommand(token.type) && !test_expr_executed) {
 			if (test_config.GetPolicyForTagSet(file_tags) == TestConfiguration::SelectPolicy::SKIP) {
-				SKIP_TEST("select tag-set");
+				SkipTest("select tag-set");
 				return;
 			}
 			test_expr_executed = true;
@@ -974,11 +894,19 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_HALT) {
 			break;
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_MODE) {
-			if (token.parameters.size() != 1) {
-				parser.Fail("mode requires one parameter");
+			if (token.parameters.empty()) {
+				parser.Fail("mode requires at least one parameter");
 			}
 			string parameter = token.parameters[0];
 			if (parameter == "skip") {
+				string reason = "unspecified";
+				if (token.parameters.size() > 1) {
+					reason = token.parameters[1];
+					for (idx_t i = 2; i < token.parameters.size(); i++) {
+						reason += " " + token.parameters[i];
+					}
+				}
+				AddSkipReason("mode skip " + reason);
 				skip_level++;
 			} else if (parameter == "unskip") {
 				skip_level--;
@@ -1080,9 +1008,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			def.loop_iterator_name = token.parameters[0];
 			for (idx_t i = 1; i < token.parameters.size(); i++) {
 				D_ASSERT(!token.parameters[i].empty());
-				if (!ForEachTokenReplace(token.parameters[i], def.tokens)) {
-					def.tokens.push_back(token.parameters[i]);
-				}
+				def.tokens.push_back(token.parameters[i]);
 			}
 			def.loop_idx = 0;
 			def.loop_start = 0;
@@ -1099,7 +1025,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					// This extension / setting was explicitly required
 					parser.Fail(StringUtil::Format("require %s: FAILED", param));
 				}
-				SKIP_TEST("require " + token.parameters[0]);
+				SkipTest("require " + token.parameters[0]);
 				return;
 			}
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_TEST_ENV) {
@@ -1143,7 +1069,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			if (env_actual == nullptr) {
 				// Environment variable was not found, this test should not be run
-				SKIP_TEST("require-env " + token.parameters[0]);
+				SkipTest("require-env " + token.parameters[0]);
 				return;
 			}
 
@@ -1152,7 +1078,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				auto env_value = token.parameters[1];
 				if (std::strcmp(env_actual, env_value.c_str()) != 0) {
 					// It's not, check the test
-					SKIP_TEST("require-env " + token.parameters[0] + " " + token.parameters[1]);
+					SkipTest("require-env " + token.parameters[0] + " " + token.parameters[1]);
 					return;
 				}
 
@@ -1168,7 +1094,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
 			auto &test_config = TestConfiguration::Get();
 			if (test_config.OnLoadCommand() == "skip") {
-				SKIP_TEST("config on_load skip");
+				SkipTest("config on_load skip");
 				return;
 			}
 			bool is_read_only = false;

@@ -167,11 +167,11 @@ AggregateFunctionSet StringAggFun::GetFunctions() {
 	    AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggFunction>,
 	    AggregateFunction::StateCombine<StringAggState, StringAggFunction>,
 	    AggregateFunction::StateFinalize<StringAggState, string_t, StringAggFunction>,
-	    AggregateFunction::UnaryUpdate<StringAggState, string_t, StringAggFunction>, StringAggBind);
+	    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), StringAggBind);
 	string_agg_param.SetSerializeCallback(StringAggSerialize);
 	string_agg_param.SetDeserializeCallback(StringAggDeserialize);
 	string_agg.AddFunction(string_agg_param);
-	string_agg_param.GetArguments().emplace_back(LogicalType::VARCHAR);
+	string_agg_param.GetSignature().AddParameter(LogicalType::VARCHAR);
 	string_agg.AddFunction(string_agg_param);
 	return string_agg;
 }

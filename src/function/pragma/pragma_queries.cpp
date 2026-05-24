@@ -1,3 +1,4 @@
+#include "duckdb/common/assert.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/file_system.hpp"

@@ -23,7 +23,7 @@ public:
 
 private:
 	void AddExpressionSet(Expression &expr, expression_set_t &set);
-	unique_ptr<Expression> ExtractExpression(BoundConjunctionExpression &conj, idx_t idx, Expression &expr);
+	unique_ptr<Expression> ExtractExpression(BoundConjunctionExpression &conj, idx_t idx, const Expression &expr);
 };
 
 } // namespace duckdb

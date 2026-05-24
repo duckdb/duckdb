@@ -78,6 +78,15 @@ public:
 
 	//! Registers the task in the interrupt_state to allow Source/Sink operators to block the task
 	void SetTaskForInterrupts(weak_ptr<Task> current_task);
+	//! Replaces the interrupt state used by source/sink/finalize calls
+	void SetInterruptState(InterruptState interrupt_state_p);
+
+	//! Resets the executor for re-execution while reusing allocated intermediate buffers.
+	//! Reuses local source/sink/operator states where operators provide explicit reset hooks,
+	//! and falls back to recreation otherwise.
+	void Reset();
+	//! Prepare the executor for another execution, skipping Reset() on the very first run.
+	void PrepareForExecution();
 
 private:
 	//! The pipeline to process
@@ -112,12 +121,17 @@ private:
 	//! Partition info that is used by this executor
 	OperatorPartitionInfo required_partition_info;
 
+	//! Source operator indicated that there is no more output possible
+	bool exhausted_source = false;
 	//! Source or intermediate operator indicated that there is no more output possible
 	bool exhausted_pipeline = false;
 	//! Flushing of intermediate operators has started
 	bool started_flushing = false;
 	//! Flushing of caching operators is done
 	bool done_flushing = false;
+
+	//! Whether FinishSource has already been called (so FinalizeSource is skipped in PushFinalize)
+	bool source_profiling_finalized = false;
 
 	//! This flag is set when the pipeline gets interrupted by the Sink -> the final_chunk should be re-sink-ed.
 	bool remaining_sink_chunk = false;
@@ -130,6 +144,8 @@ private:
 	idx_t flushing_idx;
 	//! Whether the current flushing_idx should be flushed: this needs to be stored to make flushing code re-entrant
 	bool should_flush_current_idx = true;
+	//! Whether this executor has already run at least once
+	bool has_executed = false;
 
 private:
 	void StartOperator(PhysicalOperator &op);

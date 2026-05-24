@@ -239,16 +239,18 @@ private:
 		using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 		BLOCK_ITERATOR itr(block_state, chunk_idx, 0);
 
-		const auto sort_keys = FlatVector::GetDataMutable<SORT_KEY *>(sort_key_pointers);
 		const auto result_count = NextSize();
-		for (idx_t i = 0; i < result_count; ++i) {
-			const auto idx = block_state.GetIndex(chunk_idx, i);
-			sort_keys[i] = &itr[idx];
+		{
+			auto writer = FlatVector::Writer<SORT_KEY *>(sort_key_pointers, result_count);
+			for (idx_t i = 0; i < result_count; ++i) {
+				const auto idx = block_state.GetIndex(chunk_idx, i);
+				writer.WriteValue(&itr[idx]);
+			}
 		}
 
 		// Scan
 		scan_chunk.Reset();
-		scan_state.Scan(sorted_run, sort_key_pointers, result_count, scan_chunk);
+		scan_state.Scan(sorted_run, sort_key_pointers, scan_chunk);
 		return scan_chunk.size() > 0;
 	}
 
@@ -1020,23 +1022,20 @@ void AsOfProbeBuffer::ScanLeft() {
 	//	Compute the join keys
 	lhs_keys.Reset();
 	lhs_executor.Execute(lhs_payload, lhs_keys);
-	lhs_keys.Flatten();
 
-	//	Combine the NULLs
+	// Combine the NULLs
 	const auto count = lhs_payload.size();
 	lhs_valid_mask.Reset();
 	for (auto col_idx : op.null_sensitive) {
-		auto &col = lhs_keys.data[col_idx];
-		UnifiedVectorFormat unified;
-		col.ToUnifiedFormat(count, unified);
-		lhs_valid_mask.Combine(unified.validity, count);
+		const auto &col = lhs_keys.data[col_idx];
+		lhs_valid_mask.Combine(col, count);
 	}
 
 	// Filter out NULL matches
 	if (lhs_valid_mask.CanHaveNull()) {
-		const auto count = lhs_match_count;
+		const auto match_count = lhs_match_count;
 		lhs_match_count = 0;
-		for (idx_t i = 0; i < count; ++i) {
+		for (idx_t i = 0; i < match_count; ++i) {
 			const auto idx = lhs_match_sel.get_index(i);
 			if (lhs_valid_mask.RowIsValidUnsafe(idx)) {
 				lhs_match_sel.set_index(lhs_match_count++, idx);
@@ -1199,7 +1198,7 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 	//	Reference the projected right payload into the result
 	for (column_t col_idx = 0; col_idx < op.right_projection_map.size(); ++col_idx) {
 		const auto rhs_idx = op.right_projection_map[col_idx];
-		auto &source = rhs_input.data[rhs_idx];
+		const auto &source = rhs_input.data[rhs_idx];
 		auto &target = chunk.data[lhs_payload.ColumnCount() + col_idx];
 		target.Reference(source);
 	}

@@ -36,9 +36,9 @@ public:
 		result.child_data.push_back(std::move(internal_struct));
 	}
 
-	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+	static void Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(input_size, format);
+		input.ToUnifiedFormat(format);
 		idx_t size = to - from;
 		append_data.AppendValidity(format, from, to);
 		vector<sel_t> child_indices;

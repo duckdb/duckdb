@@ -22,16 +22,14 @@ struct DateSub {
 	}
 
 	template <class TA, class TB, class TR, class OP>
-	static inline void BinaryExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
-		BinaryExecutor::ExecuteWithNulls<TA, TB, TR>(
-		    left, right, result, count, [&](TA startdate, TB enddate, ValidityMask &mask, idx_t idx) {
-			    if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
-				    return OP::template Operation<TA, TB, TR>(startdate, enddate);
-			    } else {
-				    mask.SetInvalid(idx);
-				    return TR();
-			    }
-		    });
+	static inline void BinaryExecute(const Vector &left, const Vector &right, Vector &result) {
+		BinaryExecutor::Execute<TA, TB, TR>(left, right, result, [&](TA startdate, TB enddate) -> optional<TR> {
+			if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
+				return OP::template Operation<TA, TB, TR>(startdate, enddate);
+			} else {
+				return nullopt;
+			}
+		});
 	}
 
 	struct MonthOperator {
@@ -354,64 +352,63 @@ int64_t SubtractDateParts(DatePartSpecifier type, TA startdate, TB enddate) {
 
 struct DateSubTernaryOperator {
 	template <typename TS, typename TA, typename TB, typename TR>
-	static inline TR Operation(TS part, TA startdate, TB enddate, ValidityMask &mask, idx_t idx) {
+	static inline optional<TR> Operation(TS part, TA startdate, TB enddate) {
 		if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
 			return SubtractDateParts<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
 		} else {
-			mask.SetInvalid(idx);
-			return TR();
+			return nullopt;
 		}
 	}
 };
 
 template <typename TA, typename TB, typename TR>
-void DateSubBinaryExecutor(DatePartSpecifier type, Vector &left, Vector &right, Vector &result, idx_t count) {
+void DateSubBinaryExecutor(DatePartSpecifier type, const Vector &left, const Vector &right, Vector &result) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
 	case DatePartSpecifier::ISOYEAR:
-		DateSub::BinaryExecute<TA, TB, TR, DateSub::YearOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::YearOperator>(left, right, result);
 		break;
 	case DatePartSpecifier::MONTH:
-		DateSub::BinaryExecute<TA, TB, TR, DateSub::MonthOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::MonthOperator>(left, right, result);
 		break;
 	case DatePartSpecifier::DAY:
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
 	case DatePartSpecifier::JULIAN_DAY:
-		DateSub::BinaryExecute<TA, TB, TR, DateSub::DayOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::DayOperator>(left, right, result);
 		break;
 	case DatePartSpecifier::DECADE:
-		DateSub::BinaryExecute<TA, TB, TR, DateSub::DecadeOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::DecadeOperator>(left, right, result);
 		break;
 	case DatePartSpecifier::CENTURY:
-		DateSub::BinaryExecute<TA, TB, TR, DateSub::CenturyOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::CenturyOperator>(left, right, result);
 		break;
 	case DatePartSpecifier::MILLENNIUM:
-		DateSub::BinaryExecute<TA, TB, TR, DateSub::MilleniumOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::MilleniumOperator>(left, right, result);
 		break;
 	case DatePartSpecifier::QUARTER:
-		DateSub::BinaryExecute<TA, TB, TR, DateSub::QuarterOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::QuarterOperator>(left, right, result);
 		break;
 	case DatePartSpecifier::WEEK:
 	case DatePartSpecifier::YEARWEEK:
-		DateSub::BinaryExecute<TA, TB, TR, DateSub::WeekOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::WeekOperator>(left, right, result);
 		break;
 	case DatePartSpecifier::MICROSECONDS:
-		DateSub::BinaryExecute<TA, TB, TR, DateSub::MicrosecondsOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::MicrosecondsOperator>(left, right, result);
 		break;
 	case DatePartSpecifier::MILLISECONDS:
-		DateSub::BinaryExecute<TA, TB, TR, DateSub::MillisecondsOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::MillisecondsOperator>(left, right, result);
 		break;
 	case DatePartSpecifier::SECOND:
 	case DatePartSpecifier::EPOCH:
-		DateSub::BinaryExecute<TA, TB, TR, DateSub::SecondsOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::SecondsOperator>(left, right, result);
 		break;
 	case DatePartSpecifier::MINUTE:
-		DateSub::BinaryExecute<TA, TB, TR, DateSub::MinutesOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::MinutesOperator>(left, right, result);
 		break;
 	case DatePartSpecifier::HOUR:
-		DateSub::BinaryExecute<TA, TB, TR, DateSub::HoursOperator>(left, right, result, count);
+		DateSub::BinaryExecute<TA, TB, TR, DateSub::HoursOperator>(left, right, result);
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented for DATESUB");
@@ -421,9 +418,9 @@ void DateSubBinaryExecutor(DatePartSpecifier type, Vector &left, Vector &right, 
 template <typename T>
 void DateSubFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 3);
-	auto &part_arg = args.data[0];
-	auto &start_arg = args.data[1];
-	auto &end_arg = args.data[2];
+	const auto &part_arg = args.data[0];
+	const auto &start_arg = args.data[1];
+	const auto &end_arg = args.data[2];
 
 	if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// Common case of constant part.
@@ -431,11 +428,10 @@ void DateSubFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 			throw InternalException("DateSub called with constant NULL part");
 		}
 		const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
-		DateSubBinaryExecutor<T, T, int64_t>(type, start_arg, end_arg, result, args.size());
+		DateSubBinaryExecutor<T, T, int64_t>(type, start_arg, end_arg, result);
 	} else {
-		TernaryExecutor::ExecuteWithNulls<string_t, T, T, int64_t>(
-		    part_arg, start_arg, end_arg, result, args.size(),
-		    DateSubTernaryOperator::Operation<string_t, T, T, int64_t>);
+		TernaryExecutor::Execute<string_t, T, T, int64_t>(part_arg, start_arg, end_arg, result,
+		                                                  DateSubTernaryOperator::Operation<string_t, T, T, int64_t>);
 	}
 }
 
@@ -449,6 +445,8 @@ ScalarFunctionSet DateSubFun::GetFunctions() {
 	                                    LogicalType::BIGINT, DateSubFunction<timestamp_t>));
 	date_sub.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME, LogicalType::TIME},
 	                                    LogicalType::BIGINT, DateSubFunction<dtime_t>));
+	date_sub.SetArgProperties(1, ArgProperties().NonIncreasing());
+	date_sub.SetArgProperties(2, ArgProperties().NonDecreasing());
 	return date_sub;
 }
 

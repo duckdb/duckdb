@@ -58,7 +58,14 @@ public:
 
 public:
 	bool ShouldSkip(const LogicalAggregate &aggr) const override {
-		return !aggr.grouping_functions.empty() || aggr.grouping_sets.size() > 1;
+		// AVG -> SUM/COUNT is correct under any grouping (both ignore NULLs
+		// identically), so ROLLUP/CUBE/GROUPING SETS are safe to rewrite.
+		// Decomposing here is also the prerequisite for partial-aggregate
+		// pushdown to fire on AVG queries. The remaining guard is for
+		// grouping_functions: their per-row grouping-set bitmasks reference
+		// the original AVG column directly, and the rewrite has no way to
+		// translate those references.
+		return !aggr.grouping_functions.empty();
 	}
 
 	unique_ptr<Expression> Rewrite(unique_ptr<Expression> &expr, vector<reference<Expression>> &bindings,
@@ -71,7 +78,7 @@ public:
 
 		// Replace AVG(x) with SUM(x)
 		auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, DEFAULT_SCHEMA, "sum");
-		const auto sum_fun =
+		const auto &sum_fun =
 		    sum_entry.functions.GetFunctionByArguments(optimizer.context, {avg_child->GetReturnType()});
 		vector<unique_ptr<Expression>> args;
 		args.push_back(std::move(avg_child));
@@ -173,7 +180,7 @@ public:
 			return false;
 		}
 		auto &expr = expr_p.Cast<BoundAggregateExpression>();
-		if (!FunctionMatcher::Match(function, expr.function.name)) {
+		if (!FunctionMatcher::Match(function, expr.function.GetName())) {
 			return false;
 		}
 		if (!SetMatcher::Match(matchers, expr.children, bindings, policy)) {

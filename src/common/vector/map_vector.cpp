@@ -23,17 +23,16 @@ const Vector &MapVector::GetValues(const Vector &vector) {
 	return GetValues((Vector &)vector);
 }
 
-MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel) {
+MapInvalidReason MapVector::CheckMapValidity(const Vector &map, idx_t count, const SelectionVector &sel) {
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
 
 	// unify the MAP vector, which is a physical LIST vector
-	auto map_entries = map.Values<list_entry_t>(count);
-	auto maps_length = ListVector::GetListSize(map);
+	auto map_entries = map.Values<list_entry_t>();
 
 	// unify the child vector containing the keys
 	auto &keys = MapVector::GetKeys(map);
 
-	auto key_validity = keys.Validity(maps_length);
+	auto key_validity = keys.Validity();
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto mapped_row = sel.get_index(row_idx);
 		auto map_entry = map_entries[mapped_row];
@@ -62,7 +61,7 @@ MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const Sel
 	return MapInvalidReason::VALID;
 }
 
-void MapVector::MapConversionVerify(Vector &vector, idx_t count) {
+void MapVector::MapConversionVerify(const Vector &vector, idx_t count) {
 	auto reason = MapVector::CheckMapValidity(vector, count);
 	EvalMapInvalidReason(reason);
 }

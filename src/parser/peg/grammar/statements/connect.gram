@@ -1,0 +1,3 @@
+ConnectStatement <- 'CONNECT' SessionTarget?
+DisconnectStatement <- 'DISCONNECT'
+SessionTarget <- 'LOCAL' / StringLiteral / CatalogName

@@ -74,8 +74,8 @@ static void MergePatchDiffFunction(DataChunk &args, ExpressionState &state, Vect
 	const auto count = args.size();
 
 	UnifiedVectorFormat old_data, new_data;
-	args.data[0].ToUnifiedFormat(count, old_data);
-	args.data[1].ToUnifiedFormat(count, new_data);
+	args.data[0].ToUnifiedFormat(old_data);
+	args.data[1].ToUnifiedFormat(new_data);
 	auto old_inputs = UnifiedVectorFormat::GetData<string_t>(old_data);
 	auto new_inputs = UnifiedVectorFormat::GetData<string_t>(new_data);
 

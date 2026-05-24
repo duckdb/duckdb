@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
@@ -758,7 +759,8 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 		ColumnBinding filter_binding(get.table_index, filter_idx);
 		auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
 		//! Convert the filter to an expression, so we can visit it
-		auto filter_expr = filter.ToExpression(*column_ref);
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RemoveUnusedColumns::VisitGet");
+		auto filter_expr = expr_filter.ToExpression(*column_ref);
 		if (filter_expr->IsScalar()) {
 			filter_expr = std::move(column_ref);
 		}
@@ -1020,8 +1022,8 @@ bool BaseColumnPruner::HandleExtractRecursive(unique_ptr<Expression> &expr_p,
 		return false;
 	}
 	auto &function = expr.Cast<BoundFunctionExpression>();
-	if (function.function.name != "struct_extract_at" && function.function.name != "struct_extract" &&
-	    function.function.name != "array_extract" && function.function.name != "variant_extract") {
+	if (function.function.GetName() != "struct_extract_at" && function.function.GetName() != "struct_extract" &&
+	    function.function.GetName() != "array_extract" && function.function.GetName() != "variant_extract") {
 		return false;
 	}
 	if (!function.bind_info) {

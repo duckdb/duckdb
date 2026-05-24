@@ -391,7 +391,7 @@ struct CeilDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input <= 0) {
 				// below 0 we floor the number (e.g. -10.5 -> -10)
 				return UnsafeNumericCast<T>(input / power_of_ten);
@@ -428,6 +428,7 @@ ScalarFunctionSet CeilFun::GetFunctions() {
 		}
 		ceil.AddFunction(ScalarFunction({type}, type, func, bind_func));
 	}
+	ceil.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return ceil;
 }
 
@@ -446,7 +447,7 @@ struct FloorDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input < 0) {
 				// below 0 we ceil the number (e.g. -10.5 -> -11)
 				return UnsafeNumericCast<T>(((input + 1) / power_of_ten) - 1);
@@ -483,6 +484,7 @@ ScalarFunctionSet FloorFun::GetFunctions() {
 		}
 		floor.AddFunction(ScalarFunction({type}, type, func, bind_func));
 	}
+	floor.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return floor;
 }
 
@@ -521,7 +523,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	auto fname = StringUtil::Upper(bound_function.name);
+	auto fname = StringUtil::Upper(bound_function.GetName());
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
 	}
@@ -615,7 +617,7 @@ struct TruncDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale]);
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			//	Always floor
 			return UnsafeNumericCast<T>((input / power_of_ten));
 		});
@@ -639,7 +641,7 @@ struct TruncDecimalNegativePrecisionOperator {
 		    UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale]);
 		T multiply_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale]);
 
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			return UnsafeNumericCast<T>(input / divide_power_of_ten * multiply_power_of_ten);
 		});
 	}
@@ -652,7 +654,7 @@ struct TruncDecimalPositivePrecisionOperator {
 		auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
 		auto source_scale = DecimalType::GetScale(func_expr.children[0]->GetReturnType());
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale]);
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(),
+		UnaryExecutor::Execute<T, T>(input.data[0], result,
 		                             [&](T input) { return UnsafeNumericCast<T>(input / power_of_ten); });
 	}
 };
@@ -751,6 +753,7 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 		trunc.AddFunction(ScalarFunction({type}, type, trunc_func, bind_func));
 		trunc.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, trunc_prec_func, bind_prec_func));
 	}
+	trunc.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return trunc;
 }
 
@@ -802,7 +805,7 @@ struct RoundDecimalOperator {
 		// and then flooring the number
 		// e.g. 10.5 + 0.5 = 11, floor(11) = 11
 		//      10.4 + 0.5 = 10.9, floor(10.9) = 10
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input < 0) {
 				input -= addition;
 			} else {
@@ -861,7 +864,7 @@ struct DecimalRoundNegativePrecisionOperator {
 		T multiply_power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale]);
 		T addition = divide_power_of_ten / 2;
 
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input < 0) {
 				input -= addition;
 			} else {
@@ -880,7 +883,7 @@ struct DecimalRoundPositivePrecisionOperator {
 		auto source_scale = DecimalType::GetScale(func_expr.children[0]->GetReturnType());
 		T power_of_ten = UnsafeNumericCast<T>(POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale]);
 		T addition = power_of_ten / 2;
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, [&](T input) {
 			if (input < 0) {
 				input -= addition;
 			} else {
@@ -942,6 +945,7 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 		round.AddFunction(ScalarFunction({type}, type, round_func, bind_func));
 		round.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, round_prec_func, bind_prec_func));
 	}
+	round.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return round;
 }
 
@@ -960,8 +964,10 @@ struct ExpOperator {
 } // namespace
 
 ScalarFunction ExpFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, ExpOperator>);
+	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                    ScalarFunction::UnaryFunction<double, double, ExpOperator>);
+	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	return func;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1026,8 +1032,10 @@ struct CbRtOperator {
 } // namespace
 
 ScalarFunction CbrtFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, CbRtOperator>);
+	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                    ScalarFunction::UnaryFunction<double, double, CbRtOperator>);
+	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	return func;
 }
 
 //===--------------------------------------------------------------------===//

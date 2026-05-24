@@ -27,7 +27,7 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(106, "sql", sql);
 	serializer.WritePropertyWithDefault<Value>(107, "comment", comment, Value());
 	serializer.WritePropertyWithDefault<InsertionOrderPreservingMap<string>>(108, "tags", tags, InsertionOrderPreservingMap<string>());
-	if (serializer.ShouldSerialize(2)) {
+	if (serializer.ShouldSerialize(StorageVersion::V0_10_3)) {
 		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
 	}
 	serializer.WritePropertyWithDefault<string>(110, "extension_name", extension_name);
@@ -155,7 +155,7 @@ void CreateSequenceInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<int64_t>(204, "max_value", max_value);
 	serializer.WritePropertyWithDefault<int64_t>(205, "start_value", start_value);
 	serializer.WritePropertyWithDefault<bool>(206, "cycle", cycle);
-	if (serializer.ShouldSerialize(8)) {
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<optional<int64_t>>(207, "last_value", last_value);
 	}
 }
@@ -244,10 +244,10 @@ void CreateViewInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(202, "types", types);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", query);
 	serializer.WritePropertyWithDefault<vector<string>>(204, "names", names);
-	if (!serializer.ShouldSerialize(7)) {
+	if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		serializer.WritePropertyWithDefault<vector<Value>>(205, "column_comments", GetColumnCommentsList());
 	}
-	if (serializer.ShouldSerialize(7)) {
+	if (serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		serializer.WritePropertyWithDefault<unordered_map<string, Value>>(206, "column_comments_map", column_comments_map, unordered_map<string, Value>());
 	}
 }

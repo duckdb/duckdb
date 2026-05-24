@@ -543,6 +543,8 @@ function get_conversion_function(logical_type::LogicalType)::Function
         return convert_timestamp_ms
     elseif type == DUCKDB_TYPE_TIMESTAMP_NS
         return convert_timestamp_ns
+    elseif type == DUCKDB_TYPE_TIMESTAMP_TZ_NS
+        return convert_timestamp_ns
     elseif type == DUCKDB_TYPE_INTERVAL
         return convert_interval
     elseif type == DUCKDB_TYPE_HUGEINT

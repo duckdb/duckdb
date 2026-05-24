@@ -219,7 +219,7 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	if (count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-	result.Verify(count);
+	result.Verify();
 }
 
 } // namespace

@@ -8,6 +8,7 @@
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -399,8 +400,8 @@ void FlattenDependentJoins::AddCorrelatedJoinConditions(LogicalJoin &join, const
 			comp_join.conditions.push_back(std::move(cond));
 		} else {
 			auto &logical_any_join = join.Cast<LogicalAnyJoin>();
-			auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-			                                                       std::move(left), std::move(right));
+			auto comparison = BoundComparisonExpression::Create(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+			                                                    std::move(left), std::move(right));
 			auto conjunction = make_uniq<BoundConjunctionExpression>(
 			    ExpressionType::CONJUNCTION_AND, std::move(comparison), std::move(logical_any_join.condition));
 			logical_any_join.condition = std::move(conjunction);
@@ -484,7 +485,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownCorrelatedNode(unique_ptr<L
 		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
 		RewriteCountAggregates::Rewrite(*plan, replacement_map);
 	}
-	ColumnBindingResolver::Verify(*plan);
+	ColumnBindingResolver::Verify(binder.context, *plan);
 	return state;
 }
 
@@ -520,8 +521,10 @@ void FlattenDependentJoins::AddCorrelatedFirstAggregates(LogicalAggregate &aggr,
 		auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state[i]);
 		vector<unique_ptr<Expression>> aggr_children;
 		aggr_children.push_back(std::move(colref));
-		auto first_fun = make_uniq<BoundAggregateExpression>(std::move(first_aggregate), std::move(aggr_children),
-		                                                     nullptr, nullptr, AggregateType::NON_DISTINCT);
+
+		BoundAggregateFunction bound_func(first_aggregate);
+		auto first_fun = make_uniq<BoundAggregateExpression>(std::move(bound_func), std::move(aggr_children), nullptr,
+		                                                     nullptr, AggregateType::NON_DISTINCT);
 		aggr.expressions.push_back(std::move(first_fun));
 	}
 }
@@ -538,7 +541,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownProjection(unique_ptr<Logic
 	AppendCorrelatedColumns(plan->expressions, state, true);
 	auto &proj = plan->Cast<LogicalProjection>();
 	auto correlated_offset = plan->expressions.size() - correlated_columns.size();
-	ColumnBindingResolver::Verify(*plan);
+	ColumnBindingResolver::Verify(binder.context, *plan);
 	return CreateContiguousState(ColumnBinding(proj.table_index, ProjectionIndex(correlated_offset)));
 }
 
@@ -603,8 +606,18 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownAggregate(unique_ptr<Logica
 	}
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 		D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-		auto &bound = aggr.expressions[i]->Cast<BoundAggregateExpression>();
-		if (bound.function == CountFunctionBase::GetFunction() || bound.function == CountStarFun::GetFunction()) {
+		auto &bound_func = aggr.expressions[i]->Cast<BoundAggregateExpression>().function;
+
+		auto count_fun = CountFunctionBase::GetFunction();
+		auto count_star_fun = CountStarFun::GetFunction();
+
+		const auto is_count_func =
+		    bound_func.GetName() == count_fun.name && bound_func.GetCallbacks() == count_fun.GetCallbacks();
+
+		const auto is_count_star_func =
+		    bound_func.GetName() == count_star_fun.name && bound_func.GetCallbacks() == count_star_fun.GetCallbacks();
+
+		if (is_count_func || is_count_star_func) {
 			replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = i;
 		}
 	}
@@ -735,14 +748,14 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownLimit(unique_ptr<LogicalOpe
 			TryAddOperator::Operation(limit_val, limit.offset_val.GetConstantValue(), limit_val);
 		}
 		auto upper_bound = make_uniq<BoundConstantExpression>(int64_t(limit_val));
-		condition = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, row_num_ref->Copy(),
-		                                                 std::move(upper_bound));
+		condition = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHANOREQUALTO, row_num_ref->Copy(),
+		                                              std::move(upper_bound));
 	}
 
 	if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
 		auto lower_bound = make_uniq<BoundConstantExpression>(int64_t(limit.offset_val.GetConstantValue()));
-		auto lower_comp = make_uniq_base<Expression, BoundComparisonExpression>(
-		    ExpressionType::COMPARE_GREATERTHAN, row_num_ref->Copy(), std::move(lower_bound));
+		auto lower_comp = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHAN, row_num_ref->Copy(),
+		                                                    std::move(lower_bound));
 
 		// Stitch together with AND if both bounds exist
 		condition = condition ? make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,

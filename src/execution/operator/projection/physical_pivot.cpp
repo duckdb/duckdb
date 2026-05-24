@@ -50,7 +50,7 @@ OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &
 	idx_t aggregate = 0;
 	for (idx_t c = bound_pivot.group_count; c < chunk.ColumnCount(); c++) {
 		chunk.data[c].Reference(empty_aggregates[aggregate], count_t(input.size()));
-		chunk.data[c].Flatten(input.size());
+		chunk.data[c].Flatten();
 		aggregate++;
 		if (aggregate >= empty_aggregates.size()) {
 			aggregate = 0;

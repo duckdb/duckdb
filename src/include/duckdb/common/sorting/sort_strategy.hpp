@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+class ParallelHyperLogLogLocalState;
+
 class SortStrategy {
 public:
 	using Types = vector<LogicalType>;
@@ -68,6 +70,8 @@ public:
 	};
 	using ChunkRows = vector<ChunkRow>;
 	virtual const ChunkRows &GetHashGroups(GlobalSourceState &global_state) const = 0;
+
+	virtual void RegisterHyperLogLog(LocalSinkState &local_state, ParallelHyperLogLogLocalState &hll_state) const;
 
 public:
 	//! The inserted data schema

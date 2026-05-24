@@ -17,6 +17,7 @@
 #include "duckdb/main/extension_manager.hpp"
 
 namespace duckdb {
+class LocalDatabaseFileSystem;
 
 class BufferManager;
 class DatabaseManager;
@@ -33,6 +34,7 @@ struct AttachOptions;
 class DatabaseFileSystem;
 struct DatabaseCacheEntry;
 class LogManager;
+class MetricsManager;
 class ExternalFileCache;
 class ResultSetManager;
 struct ParserCache;
@@ -53,6 +55,7 @@ public:
 	DUCKDB_API const BufferManager &GetBufferManager() const;
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API FileSystem &GetFileSystem();
+	DUCKDB_API FileSystem &GetLocalFileSystem();
 	DUCKDB_API ExternalFileCache &GetExternalFileCache();
 	DUCKDB_API ResultSetManager &GetResultSetManager();
 	DUCKDB_API TaskScheduler &GetScheduler();
@@ -61,6 +64,7 @@ public:
 	DUCKDB_API ExtensionManager &GetExtensionManager();
 	DUCKDB_API ValidChecker &GetValidChecker();
 	DUCKDB_API LogManager &GetLogManager() const;
+	DUCKDB_API MetricsManager &GetMetricsManager();
 	DUCKDB_API ParserCache &GetParserCache();
 
 	DUCKDB_API const duckdb_ext_api_v1 GetExtensionAPIV1();
@@ -96,7 +100,9 @@ private:
 	unique_ptr<ExtensionManager> extension_manager;
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
+	unique_ptr<LocalDatabaseFileSystem> local_db_file_system;
 	unique_ptr<LogManager> log_manager;
+	unique_ptr<MetricsManager> metrics_manager;
 	unique_ptr<ExternalFileCache> external_file_cache;
 	unique_ptr<ResultSetManager> result_set_manager;
 	unique_ptr<ParserCache> parser_cache;
@@ -123,7 +129,7 @@ public:
 	void LoadStaticExtension() {
 		T extension;
 		auto &manager = ExtensionManager::Get(*instance);
-		auto load_info = manager.BeginLoad(extension.Name());
+		auto load_info = manager.BeginLoad({extension.Name()});
 		if (!load_info) {
 			// already loaded - return
 			return;

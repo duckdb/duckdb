@@ -29,7 +29,7 @@ public:
 	BoundCastInfo bound_cast;
 
 public:
-	LogicalType source_type() { // NOLINT: allow casing for legacy reasons
+	LogicalType source_type() const { // NOLINT: allow casing for legacy reasons
 		D_ASSERT(child->GetReturnType().IsValid());
 		return child->GetReturnType();
 	}

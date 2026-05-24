@@ -15,7 +15,7 @@ statement ok
 INSERT INTO test VALUES (42, 88, 'hello');
 
 # FIXME - (unique) indexes aren't copied currently
-mode skip
+mode skip instable
 
 statement ok
 CREATE UNIQUE INDEX i_unique ON test(a);
@@ -75,7 +75,7 @@ SELECT * FROM v1;
 42	88	hello
 
 # FIXME - unique indexes aren't copied currently
-mode skip
+mode skip instable
 
 statement error
 INSERT INTO test VALUES (42, 88, 'hello');

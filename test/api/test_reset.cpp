@@ -87,6 +87,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"extension_directory", {"test"}},
 	    {"extension_directories", {"[test]"}},
 	    {"max_expression_depth", {50}},
+	    {"write_buffer_row_group_memory_limit", {"4.0 GiB"}},
 	    {"max_memory", {"4.0 GiB"}},
 	    {"max_temp_directory_size", {"10.0 GiB"}},
 	    {"merge_join_threshold", {73}},
@@ -127,16 +128,20 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
 	    {"arrow_output_version", {"1.5"}},
 	    {"enable_external_file_cache", {false}},
+	    {"external_file_cache_local_block_size", {Value::UBIGINT(4096)}},
+	    {"external_file_cache_remote_block_size", {Value::UBIGINT(4096)}},
 	    {"validate_external_file_cache", {"NO_VALIDATION"}},
 	    {"experimental_metadata_reuse", {false}},
 	    {"storage_block_prefetch", {"always_prefetch"}},
 	    {"operator_memory_limit", {"4.0 GiB"}},
 	    {"pin_threads", {"off"}},
-	    {"current_transaction_invalidation_policy", {"ALL_ERRORS_INVALIDATE_TRANSACTION"}},
+	    {"current_transaction_invalidation_policy", {"SYNTACTIC_ERRORS_DO_NOT_INVALIDATE"}},
+	    {"default_transaction_invalidation_policy", {"SYNTACTIC_ERRORS_DO_NOT_INVALIDATE"}},
 	    {"checkpoint_on_detach", {"ENABLED"}},
-	    {"current_transaction_invalidation_policy", {"ALL_ERRORS_INVALIDATE_TRANSACTION"}},
 	    {"debug_verify_statement", {"copy_statement"}},
-	    {"enable_caching_operators", {false}}};
+	    {"enable_caching_operators", {false}},
+	    {"parallelize_sequential_sources", {false}},
+	    {"initial_column_segment_size", {4096}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {
@@ -205,6 +210,9 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "progress_bar_time",
 	    "index_scan_max_count",
 	    "profiling_mode",
+	    "worker_threads",
+	    "tracked_metrics",
+	    "debug_verification_mode",
 	    "warnings_as_errors",      // requires logging to be enabled
 	    "block_allocator_memory"}; // cant reduce
 	return excluded_options.count(name) == 1;

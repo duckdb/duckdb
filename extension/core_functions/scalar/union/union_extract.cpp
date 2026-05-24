@@ -33,13 +33,13 @@ void UnionExtractFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	auto &info = func_expr.bind_info->Cast<UnionExtractBindData>();
 
 	// this should be guaranteed by the binder
-	auto &vec = args.data[0];
-	vec.Verify(args.size());
+	const auto &vec = args.data[0];
+	vec.Verify();
 
 	D_ASSERT(info.index < UnionType::GetMemberCount(vec.GetType()));
 	auto &member = UnionVector::GetMember(vec, info.index);
 	result.Reference(member);
-	result.Verify(args.size());
+	result.Verify();
 }
 
 unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {

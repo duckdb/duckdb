@@ -43,7 +43,7 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 	bool has_standard_table_function = false;
 	bool has_table_parameter = false;
 	for (idx_t function_idx = 0; function_idx < table_function.functions.Size(); function_idx++) {
-		const auto &function = table_function.functions.GetFunctionReferenceByOffset(function_idx);
+		const auto &function = table_function.functions.GetFunctionByOffset(function_idx);
 		for (auto &arg : function.GetArguments()) {
 			if (arg.id() == LogicalTypeId::TABLE) {
 				has_table_parameter = true;
@@ -119,11 +119,11 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		if (bind_type == TableFunctionBindType::TABLE_PARAMETER_FUNCTION &&
 		    child->GetExpressionType() == ExpressionType::SUBQUERY) {
 			D_ASSERT(table_function.functions.Size() == 1);
-			auto fun = table_function.functions.GetFunctionByOffset(0);
+			const auto &fun = table_function.functions.GetFunctionByOffset(0);
 			if (table_function.functions.Size() != 1 || fun.GetArguments().empty()) {
 				throw BinderException(
 				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
-				    fun.name);
+				    fun.GetName());
 			}
 			if (seen_subquery) {
 				error = ErrorData("Table function can have at most one subquery parameter");
@@ -177,6 +177,15 @@ static string GetAlias(const TableFunctionRef &ref) {
 	return string();
 }
 
+static void ApplyPostgresSetofAliasCompatibility(const TableFunction &table_function, const TableFunctionRef &ref,
+                                                 vector<string> &return_names) {
+	if (table_function.return_type != TableFunctionReturnType::SET_RETURNING_FUNCTION || ref.alias.empty() ||
+	    !ref.column_name_alias.empty() || return_names.size() != 1) {
+		return;
+	}
+	return_names[0] = ref.alias;
+}
+
 BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
                                                  vector<Value> parameters, named_parameter_map_t named_parameters,
                                                  vector<LogicalType> input_table_types,
@@ -210,6 +219,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 						    table_function.name);
 					}
 				}
+				ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
 				BoundStatement result;
 				bind_context.AddGenericBinding(bind_index, function_name, return_names, new_plan->types);
 				result.names = return_names;
@@ -270,6 +280,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
 		                        table_function.name);
 	}
+	ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
 	// overwrite the names with any supplied aliases
 	for (idx_t i = 0; i < column_name_alias.size() && i < return_names.size(); i++) {
 		return_names[i] = column_name_alias[i];

@@ -442,7 +442,7 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	// Only committed row IDs (< MAX_ROW_ID) belong in the delete indexes.
 	// Local row IDs (>= MAX_ROW_ID) live in transaction-local storage and are
 	// handled directly by LocalStorage::Delete.
-	row_ids.Flatten(delete_chunk.size());
+	row_ids.Flatten();
 	auto flat_row_ids = FlatVector::GetData<row_t>(row_ids);
 	idx_t committed_count = 0;
 	SelectionVector committed_sel(delete_chunk.size());
@@ -461,7 +461,7 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	committed_chunk.Slice(delete_chunk, committed_sel, committed_count);
 
 	Vector committed_row_ids(row_ids, committed_sel, committed_count);
-	committed_row_ids.Flatten(committed_count);
+	committed_row_ids.Flatten();
 
 	for (auto &index : delete_indexes.Indexes()) {
 		D_ASSERT(index.IsBound());

@@ -7,7 +7,6 @@
 #include "duckdb/planner/expression/bound_expanded_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression/bound_unnest_expression.hpp"
@@ -72,7 +71,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	if (function.children.empty()) {
 		return BindResult(BinderException(function, "UNNEST() requires at lease one argument"));
 	}
-	if (inside_window) {
+	if (inside_window || inside_aggregate || inside_try) {
 		return BindResult(BinderException(function, UnsupportedUnnestMessage()));
 	}
 
@@ -246,7 +245,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 						for (auto &entry : child_types) {
 							vector<string> current_key_path;
 							// During recursive expansion, not all expressions are BoundFunctionExpression
-							if (keep_parent_names && expr->GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
+							if (keep_parent_names && expr->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 								current_key_path.push_back(expr->GetAlias());
 							}
 							current_key_path.push_back(entry.first);

@@ -25,7 +25,7 @@ string_t CompressedStringScanState::FetchStringFromDict(int32_t dict_offset, uin
 }
 
 void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initialize_dictionary) {
-	baseptr = handle->Ptr() + segment.GetBlockOffset();
+	baseptr = handle->GetDataMutable() + segment.GetBlockOffset();
 
 	// Load header values
 	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
@@ -48,7 +48,7 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 		return;
 	}
 
-	dictionary = DictionaryVector::CreateReusableDictionary(segment.type, index_buffer_count);
+	dictionary = DictionaryVector::CreateReusableDictionary(segment.GetType(), index_buffer_count);
 	dictionary_size = index_buffer_count;
 	auto dict_child_data = FlatVector::Writer<string_t>(dictionary->data, index_buffer_count);
 	dict_child_data.WriteNull();

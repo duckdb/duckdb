@@ -357,6 +357,12 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 			throw BinderException("Unsupported parameter for REJECTS_LIMIT: cannot be negative");
 		}
 		rejects_limit = NumericCast<idx_t>(limit);
+	} else if (loption == "rejects_line_size_limit") {
+		auto limit = ParseInteger(value, loption);
+		if (limit < 0) {
+			throw BinderException("Unsupported parameter for REJECTS_LINE_SIZE_LIMIT: cannot be negative");
+		}
+		rejects_line_size_limit = NumericCast<idx_t>(limit);
 	} else if (loption == "encoding") {
 		encoding = ParseString(value, loption);
 	} else if (loption == "thousands") {

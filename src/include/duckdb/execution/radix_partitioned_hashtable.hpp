@@ -40,6 +40,8 @@ public:
 	//! Sink Interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
+	void ResetGlobalSinkState(ClientContext &context, GlobalSinkState &gstate) const;
+	void ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const;
 
 	void Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input, DataChunk &aggregate_input_chunk,
 	          const unsafe_vector<idx_t> &filter) const;
@@ -50,6 +52,8 @@ public:
 	//! Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context) const;
+	void ResetGlobalSourceState(ClientContext &context, GlobalSourceState &gstate) const;
+	void ResetLocalSourceState(ExecutionContext &context, LocalSourceState &lstate) const;
 
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink,
 	                         OperatorSourceInput &input) const;

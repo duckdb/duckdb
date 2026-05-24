@@ -1,6 +1,7 @@
 CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ReferencingNewTableAs? ForEachClause? TriggerBody
 
 TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
+TriggerName <- Identifier
 
 ReferencingNewTableAs <- 'REFERENCING' 'NEW' 'TABLE' 'AS' ColId
 

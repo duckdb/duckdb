@@ -132,9 +132,8 @@ struct TestVectorFlat {
 				for (idx_t i = 0; i < cardinality; i++) {
 					result->data[c].Append(result_values.GetValue(cur_row + i, c));
 				}
-				FlatVector::SetSize(result->data[c], count_t(cardinality));
 			}
-			result->SetCardinality(cardinality);
+			result->SetChildCardinality(cardinality);
 			info.entries.push_back(std::move(result));
 		}
 	}
@@ -171,7 +170,7 @@ struct TestVectorSequence {
 		case LogicalTypeId::UBIGINT:
 			result.Sequence(3, 2, 3);
 #if STANDARD_VECTOR_SIZE <= 2
-			result.Flatten(3);
+			result.Flatten();
 #endif
 			return;
 		default:
@@ -222,9 +221,8 @@ struct TestVectorSequence {
 				return;
 			}
 			GenerateVector(info, info.types[c], result->data[c]);
-			FlatVector::SetSize(result->data[c], count_t(SEQ_CARDINALITY));
 		}
-		result->SetCardinality(SEQ_CARDINALITY);
+		result->SetChildCardinality(SEQ_CARDINALITY);
 #if STANDARD_VECTOR_SIZE > 2
 		info.entries.push_back(std::move(result));
 #else
@@ -309,12 +307,12 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 	TestVectorDictionary::Generate(info);
 	TestVectorSequence::Generate(info);
 	for (auto &entry : result->entries) {
-		entry->Verify(context.db);
+		entry->Verify(context);
 	}
 	if (bind_data.all_flat) {
 		for (auto &entry : result->entries) {
 			entry->Flatten();
-			entry->Verify(context.db);
+			entry->Verify(context);
 		}
 	}
 	return std::move(result);

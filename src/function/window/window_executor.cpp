@@ -41,7 +41,7 @@ void WindowExecutor::Evaluate(ExecutionContext &context, idx_t row_idx, DataChun
 	EvaluateInternal(context, eval_chunk, lbstate.state.bounds, result, row_idx, sink);
 
 	FlatVector::SetSize(result, count_t(eval_chunk.size()));
-	result.Verify(eval_chunk.size());
+	result.Verify();
 }
 
 WindowExecutorGlobalState::WindowExecutorGlobalState(ClientContext &client, const WindowExecutor &executor,

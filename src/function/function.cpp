@@ -13,6 +13,10 @@ bool FunctionProperties::operator==(const FunctionProperties &rhs) const {
 	       collation_handling == rhs.collation_handling;
 }
 
+bool FunctionProperties::operator!=(const FunctionProperties &rhs) const {
+	return !(*this == rhs);
+}
+
 FunctionData::~FunctionData() {
 }
 
@@ -48,19 +52,42 @@ Function::~Function() {
 
 SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type,
                                LogicalType varargs_p)
-    : Function(std::move(name_p)), arguments(std::move(arguments_p)), varargs(std::move(varargs_p)),
-      return_type(std::move(return_type)) {
+    : Function(std::move(name_p)), signature(std::move(arguments_p), std::move(varargs_p), std::move(return_type)) {
 }
 
 SimpleFunction::~SimpleFunction() {
 }
 
-string SimpleFunction::ToString() const {
-	return Function::CallToString(catalog_name, schema_name, name, arguments, varargs, return_type);
+static bool RequiresCatalogAndSchemaNamePrefix(const string &catalog_name, const string &schema_name) {
+	return !catalog_name.empty() && catalog_name != SYSTEM_CATALOG && !schema_name.empty() &&
+	       schema_name != DEFAULT_SCHEMA;
 }
 
-bool SimpleFunction::HasVarArgs() const {
-	return varargs.id() != LogicalTypeId::INVALID;
+string FunctionParameter::ToString() const {
+	return StringUtil::Format("%s %s", name, type.ToString());
+}
+
+string FunctionSignature::ToString() const {
+	vector<string> params;
+	params.reserve(parameters.size());
+	for (auto &param : parameters) {
+		params.push_back(param.ToString());
+	}
+	if (varargs.IsValid()) {
+		params.push_back("[" + varargs.ToString() + "...]");
+	}
+	auto head = StringUtil::Format("(%s)", StringUtil::Join(params, ", "));
+	if (return_type.IsValid()) {
+		return head + " -> " + return_type.ToString();
+	}
+	return head;
+}
+
+string SimpleFunction::ToString() const {
+	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
+		return StringUtil::Format("%s.%s.%s%s", catalog_name, schema_name, name, signature.ToString());
+	}
+	return name + signature.ToString();
 }
 
 SimpleNamedParameterFunction::SimpleNamedParameterFunction(string name_p, vector<LogicalType> arguments_p,
@@ -99,17 +126,16 @@ void BuiltinFunctions::Initialize() {
 	RegisterExtensionOverloads();
 }
 
-hash_t SimpleFunction::Hash() const {
+hash_t FunctionSignature::Hash() const {
 	hash_t hash = return_type.Hash();
-	for (auto &arg : arguments) {
-		hash = duckdb::CombineHash(hash, arg.Hash());
+	for (auto &param : parameters) {
+		hash = duckdb::CombineHash(hash, param.GetType().Hash());
 	}
 	return hash;
 }
 
-static bool RequiresCatalogAndSchemaNamePrefix(const string &catalog_name, const string &schema_name) {
-	return !catalog_name.empty() && catalog_name != SYSTEM_CATALOG && !schema_name.empty() &&
-	       schema_name != DEFAULT_SCHEMA;
+hash_t SimpleFunction::Hash() const {
+	return signature.Hash();
 }
 
 string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,
@@ -156,7 +182,7 @@ string Function::CallToString(const string &catalog_name, const string &schema_n
 	return StringUtil::Format("%s%s(%s)", prefix, name, StringUtil::Join(input_arguments, ", "));
 }
 
-void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
+void Function::EraseArgument(BoundSimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
                              idx_t argument_index) {
 	if (bound_function.GetOriginalArguments().empty()) {
 		bound_function.GetOriginalArguments() = bound_function.GetArguments();
@@ -165,6 +191,52 @@ void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<E
 	D_ASSERT(argument_index < arguments.size());
 	arguments.erase_at(argument_index);
 	bound_function.GetArguments().erase_at(argument_index);
+}
+
+hash_t BoundSimpleFunction::Hash() const {
+	hash_t hash = return_type.Hash();
+	for (auto &arg : arguments) {
+		hash = duckdb::CombineHash(hash, arg.Hash());
+	}
+	return hash;
+}
+
+string BoundSimpleFunction::ToString() const {
+	return Function::CallToString(catalog_name, schema_name, name, arguments, LogicalTypeId::INVALID, return_type);
+}
+
+bool FunctionParameter::operator==(const FunctionParameter &other) const {
+	return type == other.type && StringUtil::CIEquals(name, other.name);
+}
+
+bool FunctionParameter::operator!=(const FunctionParameter &other) const {
+	return !(*this == other);
+}
+
+bool FunctionSignature::operator==(const FunctionSignature &other) const {
+	return parameters == other.parameters && varargs == other.varargs && return_type == other.return_type;
+}
+
+bool FunctionSignature::operator!=(const FunctionSignature &other) const {
+	return !(*this == other);
+}
+
+bool FunctionSignature::Equal(const FunctionSignature &other) const {
+	if (parameters.size() != other.parameters.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < parameters.size(); i++) {
+		if (parameters[i].GetType() != other.parameters[i].GetType()) {
+			return false;
+		}
+	}
+	if (varargs != other.varargs) {
+		return false;
+	}
+	if (return_type != other.return_type) {
+		return false;
+	}
+	return true;
 }
 
 } // namespace duckdb

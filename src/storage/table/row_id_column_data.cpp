@@ -96,7 +96,7 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 
 	// Now apply the filter
 	UnifiedVectorFormat vdata;
-	result.ToUnifiedFormat(count, vdata);
+	result.ToUnifiedFormat(vdata);
 	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, count, count);
 }
 
@@ -132,12 +132,11 @@ void RowIdColumnData::InitializeAppend(ColumnAppendState &state) {
 	throw InternalException("RowIdColumnData cannot be appended to");
 }
 
-void RowIdColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
+void RowIdColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
 	throw InternalException("RowIdColumnData cannot be appended to");
 }
 
-void RowIdColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
-                                 idx_t count) {
+void RowIdColumnData::AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
 	throw InternalException("RowIdColumnData cannot be appended to");
 }
 

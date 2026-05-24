@@ -90,7 +90,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &l_state = input.local_state.Cast<DeleteLocalState>();
 
 	auto &row_ids = chunk.data[row_id_index];
-	row_ids.Flatten(chunk.size());
+	row_ids.Flatten();
 
 	// Fast path: no RETURNING and no unique indexes
 	if (!return_chunk && !g_state.has_unique_indexes) {

@@ -40,10 +40,10 @@ public:
 			D_ASSERT(wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE);
 			auto &aggregate = *wexpr.aggregate;
 			bind_data = wexpr.bind_info.get();
-			dtor = aggregate.GetStateDestructorCallback();
-			state.resize(aggregate.GetStateSizeCallback()(aggregate));
+			dtor = aggregate.GetCallbacks().GetStateDestructorCallback();
+			state.resize(aggregate.GetCallbacks().GetStateSizeCallback()(aggregate));
 			state_ptr = state.data();
-			aggregate.GetStateInitCallback()(aggregate, state.data());
+			aggregate.GetCallbacks().GetStateInitCallback()(aggregate, state.data());
 			for (auto &child : wexpr.children) {
 				arg_types.push_back(child->GetReturnType());
 				executor.AddExpression(*child);
@@ -148,7 +148,7 @@ public:
 		initialized = true;
 	}
 
-	static inline void Reset(DataChunk &chunk) {
+	static inline void ResetChunk(DataChunk &chunk) {
 		chunk.Reset();
 	}
 
@@ -277,7 +277,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	// is not copied to the children when you slice
 	vector<column_t> structs;
 	for (column_t col_idx = 0; col_idx < arg_chunk.ColumnCount(); ++col_idx) {
-		auto &col_vec = arg_cursor.data[col_idx];
+		const auto &col_vec = arg_cursor.data[col_idx];
 		if (col_vec.GetType().InternalType() == PhysicalType::STRUCT) {
 			structs.emplace_back(col_idx);
 		} else {
@@ -359,10 +359,10 @@ void PhysicalStreamingWindow::ExecuteShifted(ExecutionContext &context, DataChun
 	idx_t delay = delayed.size();
 	D_ASSERT(out <= delay);
 
-	state.Reset(shifted);
+	state.ResetChunk(shifted);
 	// shifted = delayed
 	delayed.Copy(shifted);
-	state.Reset(delayed);
+	state.ResetChunk(delayed);
 	const idx_t new_delayed_count = delay - out + in;
 	for (idx_t col_idx = 0; col_idx < delayed.data.size(); ++col_idx) {
 		// output[0:out] = delayed[0:out]
@@ -403,7 +403,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	auto &delayed = state.delayed;
 	// We can Reset delayed now that no one can be referencing it.
 	if (!delayed.size()) {
-		state.Reset(delayed);
+		state.ResetChunk(delayed);
 	}
 	if (delayed.size() < state.lead_count) {
 		//	If we don't have enough to produce a single row,
@@ -442,7 +442,7 @@ OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContex
 		auto &delayed = state.delayed;
 		//	There are no more input rows
 		auto &input = state.shifted;
-		state.Reset(input);
+		state.ResetChunk(input);
 
 		if (delayed.size() > STANDARD_VECTOR_SIZE) {
 			//	More than one output buffer was delayed, so shift in what we can

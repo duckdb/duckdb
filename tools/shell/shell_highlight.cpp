@@ -222,7 +222,7 @@ void ShellHighlight::PrintError(string error_msg) {
 		}
 		idx_t start = tokens[i].start;
 		idx_t end = i + 1 == tokens.size() ? error_msg.size() : tokens[i + 1].start;
-		if (end - start > 0) {
+		if (end > start) {
 			string error_print = error_msg.substr(tokens[i].start, end - start);
 			PrintText(error_print, PrintOutput::STDERR, element_type);
 		}

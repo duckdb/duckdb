@@ -74,6 +74,7 @@ struct ArrowResultWrapper {
 struct AppenderWrapper {
 	unique_ptr<BaseAppender> appender;
 	ErrorData error_data;
+	bool flush_failed = false;
 };
 
 struct TableDescriptionWrapper {

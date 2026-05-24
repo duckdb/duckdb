@@ -18,6 +18,7 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -53,6 +54,13 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  # Run only specific jobs in CI (separated by whitespace) and skip the rest.
+  #
+  # Add the CI job's `needs:` list here as well. Otherwise, those are skipped
+  # and the dependent job is also skipped.
+  #
+  # For example, to run only "extensions", use:
+  # OVERRIDE_JOBS: linux-relassert linux-release extensions
 
 jobs:
  prepare:
@@ -63,14 +71,14 @@ jobs:
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     outputs:
       git_sha: ${{ steps.resolve_git_sha.outputs.git_sha }}
-      runner_linux_small: ${{ steps.config.outputs.runner_linux_small }}
-      runner_linux_x64: ${{ steps.config.outputs.runner_linux_x64 }}
-      runner_linux_22_x64: ${{ steps.config.outputs.runner_linux_22_x64 }}
-      runner_linux_arm64: ${{ steps.config.outputs.runner_linux_arm64 }}
-      runner_windows_2022_x64: ${{ steps.config.outputs.runner_windows_2022_x64 }}
-      runner_macos_arm64: ${{ steps.config.outputs.runner_macos_arm64 }}
-      runner_macos_14_arm64: ${{ steps.config.outputs.runner_macos_14_arm64 }}
-      runners: ${{ steps.config.outputs.runners }}
+      runner_linux_small: ${{ steps.runners.outputs.runner_linux_small }}
+      runner_linux_x64: ${{ steps.runners.outputs.runner_linux_x64 }}
+      runner_linux_22_x64: ${{ steps.runners.outputs.runner_linux_22_x64 }}
+      runner_linux_arm64: ${{ steps.runners.outputs.runner_linux_arm64 }}
+      runner_windows_2022_x64: ${{ steps.runners.outputs.runner_windows_2022_x64 }}
+      runner_macos_arm64: ${{ steps.runners.outputs.runner_macos_arm64 }}
+      runner_macos_14_arm64: ${{ steps.runners.outputs.runner_macos_14_arm64 }}
+      runners: ${{ steps.runners.outputs.runners }}
       linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
       linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
       static_libs_linux_matrix: ${{ steps.config.outputs.static_libs_linux_matrix }}
@@ -81,11 +89,15 @@ jobs:
       extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
       enabled_jobs: ${{ steps.config.outputs.enabled_jobs }}
       save_cache: ${{ steps.config.outputs.save_cache }}
-      runner_provider: ${{ steps.config.outputs.runner_provider }}
+      runner_provider: ${{ steps.runners.outputs.runner_provider }}
       skip_tests: ${{ steps.config.outputs.skip_tests }}
     env:
       GEN: ninja
     steps:
+      - name: Detect runners
+        id: runners
+        uses: duckdb/duckdb-ci/detect-runners@main
+
       - name: Resolve git sha
         id: resolve_git_sha
         shell: bash
@@ -101,7 +113,7 @@ jobs:
       - name: "Checkout"
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
+          runner_provider: ${{ steps.runners.outputs.runner_provider }}
           fetch_depth: 0
           ref: ${{ steps.resolve_git_sha.outputs.git_sha }}
 
@@ -121,10 +133,16 @@ jobs:
             tests_slow:
               - test/**/*.cpp
               - test/**/*.test_slow
+            capi:
+              - src/include/duckdb.h
+              - src/common/types.cpp
+              - src/include/duckdb/common/types.hpp
+              - src/function/table/system/test_all_types.cpp
             julia:
               - tools/juliapkg/**
 
       - name: Check CI
+        timeout-minutes: 10
         if: steps.changed.outputs.github_any_changed == 'true'
         run: |
           echo "::add-matcher::.github/actionlint-matcher.json"
@@ -158,53 +176,8 @@ jobs:
           skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
           echo "skip_tests=$skip_tests" >> "$GITHUB_OUTPUT"
 
-          # Fall back to GitHub-native runners for forks.
-          if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
-            runner_provider=namespace
-            runner_linux_small=namespace-profile-linux-small
-            runner_linux_x64=namespace-profile-linux-x64
-            runner_linux_22_x64=namespace-profile-linux-22-x64
-            runner_linux_arm64=namespace-profile-linux-arm64
-            runner_windows_2022_x64=namespace-profile-windows-x64
-            runner_macos_arm64=namespace-profile-macos-arm64
-            runner_macos_14_arm64=namespace-profile-macos-14-arm64
-          else
-            runner_provider=github
-            runner_linux_small=ubuntu-latest
-            runner_linux_x64=ubuntu-latest
-            runner_linux_22_x64=ubuntu-22.04
-            runner_linux_arm64=ubuntu-24.04-arm
-            runner_windows_2022_x64=windows-2022
-            runner_macos_arm64=macos-14
-            runner_macos_14_arm64=macos-14
-          fi
-
-          {
-            echo "runner_provider=$runner_provider"
-            echo "runner_linux_small=$runner_linux_small"
-            echo "runner_linux_x64=$runner_linux_x64"
-            echo "runner_linux_22_x64=$runner_linux_22_x64"
-            echo "runner_linux_arm64=$runner_linux_arm64"
-            echo "runner_windows_2022_x64=$runner_windows_2022_x64"
-            echo "runner_macos_arm64=$runner_macos_arm64"
-            echo "runner_macos_14_arm64=$runner_macos_14_arm64"
-          } >> "$GITHUB_OUTPUT"
-
-          {
-            echo "runners<<EOF"
-            cat <<EOF
-          {
-            "linux_x64": "$runner_linux_x64",
-            "linux_22_x64": "$runner_linux_22_x64",
-            "linux_arm64": "$runner_linux_arm64",
-            "windows_2022_x64": "$runner_windows_2022_x64",
-            "windows_x64": "$runner_windows_2022_x64",
-            "macos_arm64": "$runner_macos_arm64",
-            "macos_14_arm64": "$runner_macos_14_arm64"
-          }
-          EOF
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          runner_linux_x64="${{ steps.runners.outputs.runner_linux_x64 }}"
+          runner_linux_arm64="${{ steps.runners.outputs.runner_linux_arm64 }}"
 
           linux_cli_matrix=$(
             jq -nc --arg runner "$runner_linux_x64" \
@@ -254,12 +227,9 @@ jobs:
             echo "static_libs_linux_matrix=$static_libs_linux_matrix"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: ./.github/actions/ccache-action
-        with:
-          save: ${{ fromJson(steps.config.outputs.save_cache) }}
-
       - name: Install tools
-        run: python3 scripts/ci/retry.py -- make -j4 format_tools
+        timeout-minutes: 10
+        run: python3 scripts/ci/retry.py --timeout 2m -- make -j4 format_tools
 
       - name: Check format
         run: |
@@ -285,7 +255,7 @@ jobs:
       FORCE_ASSERT: 1
       EXPORT_DYNAMIC_SYMBOLS: 1
       REDUCE_SYMBOLS: 1
-      EXTENSIONS_STATIC_BUILD: 0
+      EXTENSION_STATIC_BUILD: 0
 
     steps:
     - name: "Checkout"
@@ -299,7 +269,8 @@ jobs:
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
     - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
+      timeout-minutes: 10
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Fix ASan runtime
       shell: bash
@@ -347,7 +318,8 @@ jobs:
       with:
         ref: ${{ needs.prepare.outputs.git_sha }}
     - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
+      timeout-minutes: 10
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Download relassert build artifact
       uses: actions/download-artifact@v8
@@ -390,11 +362,12 @@ jobs:
     name: Tidy Check
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'tidy-check') }}
     needs: prepare
-    runs-on: ubuntu-24.04
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       CC: gcc
       CXX: g++
       GEN: ninja
+      CLANGD_BINARY: clangd-20
 
     steps:
     - uses: actions/checkout@v6
@@ -403,62 +376,39 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
+      timeout-minutes: 10
       run: |
         python3 scripts/ci/retry.py -- make toolsci
         python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
 
-    - uses: ./.github/actions/ccache-action
-      with:
-        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
-
-    - name: Download clang-tidy-cache
-      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
-      run: |
-        set -e
-        curl -Lo /tmp/clang-tidy-cache https://github.com/ejfitzgerald/clang-tidy-cache/releases/download/v0.4.0/clang-tidy-cache-linux-amd64
-        md5sum /tmp/clang-tidy-cache | grep 880b290d7bbe7c1fb2a4f591f9a86cc1
-        chmod +x /tmp/clang-tidy-cache
-
-    - name: Tidy Check
-      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
-      run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
-
     - name: Tidy Check Diff
-      if: ${{ github.ref_name != 'main' && github.ref_name != 'feature' }}
+      if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
       run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
- check-clangd-tidy:
-   name: Tidy Check (clangd)
-   if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'check-clangd-tidy') }}
-   needs: prepare
-   runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
-   env:
-     CLANGD_BINARY: clangd-20
+    - name: Clean
+      run: make clean
 
-   steps:
-     - name: "Checkout"
-       uses: duckdb/duckdb-ci/.github/actions/checkout@main
-       with:
-         runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
-         fetch_depth: 0
-         ref: ${{ needs.prepare.outputs.git_sha }}
+    - name: Install clangd-tidy
+      run: python3 scripts/ci/retry.py -- make install-clangd-tidy
 
-     - name: Install
-       run: |
-         python3 scripts/ci/retry.py -- make toolsci
-         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
-         python3 scripts/ci/retry.py -- make install-clangd-tidy
+    - name: Tidy Check (clangd)
+      run: |
+        mkdir -p ~/.config/clangd
+        cat > ~/.config/clangd/config.yaml <<'EOF'
+        Diagnostics:
+          UnusedIncludes: None
+        EOF
+        make tidy-check-clangd CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*
 
-     - name: Tidy Check
-       run: |
-         mkdir -p ~/.config/clangd
-         cat > ~/.config/clangd/config.yaml <<'EOF'
-         Diagnostics:
-           UnusedIncludes: None
-         EOF
-         make tidy-check-clangd CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*
+    - name: Upload clangd-tidy logs
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: clangd-tidy-logs
+        path: build/tidy/clangd-tidy-logs
+        if-no-files-found: ignore
 
  extensions:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions') }}
@@ -498,7 +448,8 @@ jobs:
         version: latest
 
     - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
+      timeout-minutes: 10
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -512,8 +463,6 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
-    env:
-      GEN: ninja
 
     steps:
     - name: "Checkout"
@@ -524,7 +473,8 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
+      timeout-minutes: 10
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -539,7 +489,7 @@ jobs:
       env:
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: 1
-        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
         DISABLE_SANITIZER: 1
         SMOKE_UNITTEST: build/release/test/unittest
       with:
@@ -588,7 +538,8 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
+      timeout-minutes: 10
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
@@ -622,9 +573,11 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
+      timeout-minutes: 10
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Install pytest
+      timeout-minutes: 10
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: |
         python3 scripts/ci/retry.py -- pip install --break-system-packages pytest
@@ -656,6 +609,7 @@ jobs:
           dnf install -y \
             ccache       \
             ninja-build  \
+            python3.12   \
             perl-IPC-Cmd
           git config --global --add safe.directory \"$PWD\"
           make -C \"$PWD\"
@@ -721,7 +675,8 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
-      run: python3 scripts/ci/retry.py -- make toolsci
+      timeout-minutes: 10
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/cleanup_runner
 
@@ -754,6 +709,7 @@ jobs:
             g++     \
             git     \
             make    \
+            python3 \
             samurai
           git config --global --add safe.directory \"$PWD\"
           make -C \"$PWD\"
@@ -894,7 +850,7 @@ jobs:
     with:
       override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
       git_ref: ${{ needs.prepare.outputs.git_sha }}
-      runner_windows_2022_x64: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
+      runners: ${{ needs.prepare.outputs.runners }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
 
@@ -936,9 +892,10 @@ jobs:
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install dependencies
+        timeout-minutes: 10
         shell: bash
         run: |
-          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache ninja-build zip python3-pip
+          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache python3.12 ninja-build zip python3-pip
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -1013,6 +970,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Ninja
+        timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- brew install ninja
 
       - uses: ./.github/actions/ccache-action
@@ -1069,6 +1027,7 @@ jobs:
           python-version: '3.12'
 
       - name: Dependencies
+        timeout-minutes: 10
         shell: bash
         run: |
           python scripts/ci/retry.py -- choco install \
@@ -1145,13 +1104,8 @@ jobs:
       - prepare
       - linux-relassert
     env:
-      GEN: ninja
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-      DISABLE_STRING_INLINE: 1
-      DESTROY_UNPINNED_BLOCKS: 1
-      ALTERNATIVE_VERIFY: 1
-      DISABLE_POINTER_SALT: 1
-      DISABLE_GCC_FUNCTION_SECTIONS: 1
+      CC: clang-20
+      CXX: clang++-20
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
       DUCKDB_TEST_DESCRIPTION: 'Compiled with ALTERNATIVE_VERIFY=1 DISABLE_STRING_INLINE=1 DESTROY_UNPINNED_BLOCKS=1 DISABLE_POINTER_SALT=1. Use require no_alternative_verify to skip.'
 
@@ -1161,6 +1115,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
+        timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
@@ -1168,7 +1123,26 @@ jobs:
           save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
       - name: Build
-        run: python3 scripts/ci/retry.py -- make relassert
+        uses: duckdb/duckdb-ci/build-duckdb@main
+        env:
+          CRASH_ON_ASSERT: 1
+          FORCE_DEBUG: 1
+          FORCE_ASSERT: 1
+          EXPORT_DYNAMIC_SYMBOLS: 1
+          REDUCE_SYMBOLS: 1
+          EXTENSION_STATIC_BUILD: 0
+          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+          DISABLE_STRING_INLINE: 1
+          DESTROY_UNPINNED_BLOCKS: 1
+          ALTERNATIVE_VERIFY: 1
+          DISABLE_POINTER_SALT: 1
+          DISABLE_GCC_FUNCTION_SECTIONS: 1
+        with:
+          build-type: relassert
+          build: python3 scripts/ci/retry.py -- make relassert
+          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          cache-suffix: no_string_inline
+          save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
       - name: Test
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -1193,6 +1167,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
+        timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
@@ -1227,6 +1202,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
+      timeout-minutes: 10
       shell: bash
       run: |
         python3 scripts/ci/retry.py -- make toolsci
@@ -1259,9 +1235,6 @@ jobs:
     env:
       CC: clang-20
       CXX: clang++-20
-      GEN: ninja
-      BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer-20
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
@@ -1271,14 +1244,25 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
-    - name: Build
-      run: THREADSAN=1 make reldebug
+    - name: Build threadsan
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        BUILD_JEMALLOC: 1
+        THREADSAN: 1
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+      with:
+        build-type: reldebug
+        build: python3 scripts/ci/retry.py -- make reldebug
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        cache-suffix: threadsan
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Test
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -1308,7 +1292,7 @@ jobs:
         python-version: '3.12'
 
     - name: Install
-      shell: bash
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
@@ -1318,208 +1302,29 @@ jobs:
         path: build
 
     - name: Extract linux release artifact
-      shell: bash
       run: |
         rm -rf build/release
         tar -xzf build/release-artifact.tar.gz -C build
 
-    - name: test/configs/verify_statement_copy.json
+    - name: Test Configurations
       if: success() || failure()
-      shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_copy.json ./build/release/test/unittest
+        make test_configs
 
-    - name: test/configs/verify_statement_to_string.json
+    - name: Test Vector Verification
       if: success() || failure()
-      shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_to_string.json ./build/release/test/unittest
+        make test_vector
 
-    - name: test/configs/verify_statement_explain.json
+    - name: Test Synchronous Table Scan
       if: success() || failure()
-      shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_explain.json ./build/release/test/unittest
+        make test_table_scan
 
-    - name: test/configs/verify_statement_prepare.json
+    - name: Test Storage Compatibility
       if: success() || failure()
-      shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_prepare.json ./build/release/test/unittest
-
-    - name: test/configs/verify_serializer.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_serializer.json ./build/release/test/unittest
-
-    - name: test/configs/verify_stats.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_stats.json ./build/release/test/unittest
-
-    - name: test/configs/verify_serialization.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_serialization.json ./build/release/test/unittest
-
-    - name: test/configs/force_storage.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/force_storage.json ./build/release/test/unittest
-
-    - name: test/configs/force_storage_restart.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/force_storage_restart.json ./build/release/test/unittest
-
-    - name: test/configs/latest_storage.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/latest_storage.json ./build/release/test/unittest
-
-    - name: test/configs/block_verification.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/block_verification.json ./build/release/test/unittest
-
-    - name: test/configs/disable_optimizer.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/disable_optimizer.json ./build/release/test/unittest
-
-    - name: test/configs/force_external.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/force_external.json ./build/release/test/unittest
-
-    - name: test/configs/verify_fetch_row.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_fetch_row.json ./build/release/test/unittest
-
-    - name: test/configs/disable_caching_operators.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/disable_caching_operators.json ./build/release/test/unittest
-
-    - name: test/configs/wal_verification.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/wal_verification.json ./build/release/test/unittest
-
-    - name: test/configs/vacuum_rebuild_indexes_force_storage.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/vacuum_rebuild_indexes_force_storage.json ./build/release/test/unittest
-
-    - name: test/configs/prefetch_all_parquet_files.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/prefetch_all_parquet_files.json ./build/release/test/unittest
-
-    - name: test/configs/no_local_filesystem.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/no_local_filesystem.json ./build/release/test/unittest
-
-    - name: test/configs/block_size_16kB.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/block_size_16kB.json ./build/release/test/unittest
-
-    - name: test/configs/latest_storage_block_size_16kB.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/latest_storage_block_size_16kB.json ./build/release/test/unittest
-
-    - name: test/configs/block_allocator_100mib.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/block_allocator_100mib.json ./build/release/test/unittest
-
-    - name: Test dictionary_expression
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector dictionary_expression --skip-compiled" ./build/release/test/unittest
-
-    - name: Test dictionary_operator
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector dictionary_operator --skip-compiled" ./build/release/test/unittest
-
-    - name: Test constant_operator
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector constant_operator --skip-compiled" ./build/release/test/unittest
-
-    - name: Test sequence_operator
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector sequence_operator --skip-compiled" ./build/release/test/unittest
-
-    - name: Test nested_shuffle
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags="--verify-vector nested_shuffle --skip-compiled" ./build/release/test/unittest
-
-    - name: Test variant_vector
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/variant_vector.json ./build/release/test/unittest
-
-    - name: Test compressed in memory
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/compressed_in_memory.json ./build/release/test/unittest
-
-    - name: Test sycnronous table scan implementation
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-flags='--on-init "SET debug_physical_table_scan_execution_strategy=SYNCHRONOUS;"' ./build/release/test/unittest
-
-    - name: Test block prefetching
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/prefetch_all_storage.json ./build/release/test/unittest
-
-    - name: Forwards compatibility tests
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2|1.4.3" --new-unittest build/release/test/unittest
-
-    - name: test/configs/encryption.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/encryption.json ./build/release/test/unittest
+        make test_storage
 
  summary:
     name: Summary
@@ -1531,7 +1336,6 @@ jobs:
       - linux-relassert-tests
       - regression
       - tidy-check
-      - check-clangd-tidy
       - extensions
       - wasm-eh
       - linux-release

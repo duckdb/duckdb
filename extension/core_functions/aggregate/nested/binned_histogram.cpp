@@ -42,10 +42,10 @@ struct HistogramBinState {
 	}
 
 	template <class OP>
-	void InitializeBins(Vector &bin_vector, idx_t count, idx_t pos, AggregateInputData &aggr_input) {
+	void InitializeBins(Vector &bin_vector, idx_t pos, AggregateInputData &aggr_input) {
 		bin_boundaries = new unsafe_vector<T>();
 		counts = new unsafe_vector<idx_t>();
-		auto bin_counts = bin_vector.Values<list_entry_t>(count);
+		auto bin_counts = bin_vector.Values<list_entry_t>();
 		auto bin_entry = bin_counts[pos];
 		if (!bin_entry.IsValid()) {
 			throw BinderException("Histogram bin list cannot be NULL");
@@ -53,10 +53,9 @@ struct HistogramBinState {
 		auto bin_list = bin_entry.GetValue();
 
 		auto &bin_child = ListVector::GetChildMutable(bin_vector);
-		auto bin_count = ListVector::GetListSize(bin_vector);
 		UnifiedVectorFormat bin_child_data;
-		auto extra_state = OP::CreateExtraState(bin_count);
-		OP::PrepareData(bin_child, bin_count, extra_state, bin_child_data);
+		auto extra_state = OP::CreateExtraState();
+		OP::PrepareData(bin_child, extra_state, bin_child_data);
 
 		bin_boundaries->reserve(bin_list.length);
 		for (idx_t i = 0; i < bin_list.length; i++) {
@@ -155,11 +154,11 @@ void HistogramBinUpdateFunction(Vector inputs[], AggregateInputData &aggr_input,
 	auto &input = inputs[0];
 	auto &bin_vector = inputs[1];
 
-	auto extra_state = OP::CreateExtraState(count);
+	auto extra_state = OP::CreateExtraState();
 	UnifiedVectorFormat input_data;
-	OP::PrepareData(input, count, extra_state, input_data);
+	OP::PrepareData(input, extra_state, input_data);
 
-	auto states = state_vector.Values<HistogramBinState<T> *>(count);
+	auto states = state_vector.Values<HistogramBinState<T> *>();
 	auto data = UnifiedVectorFormat::GetData<T>(input_data);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
@@ -168,7 +167,7 @@ void HistogramBinUpdateFunction(Vector inputs[], AggregateInputData &aggr_input,
 		}
 		auto &state = *states[i].GetValue();
 		if (!state.IsSet()) {
-			state.template InitializeBins<OP>(bin_vector, count, i, aggr_input);
+			state.template InitializeBins<OP>(bin_vector, i, aggr_input);
 		}
 		auto bin_entry = HIST::template GetBin<T>(data[idx], *state.bin_boundaries);
 		++(*state.counts)[bin_entry];
@@ -198,6 +197,7 @@ bool SupportsOtherBucket(const LogicalType &type) {
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -229,6 +229,7 @@ Value OtherBucketValue(const LogicalType &type) {
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -263,11 +264,11 @@ void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector
 	}
 	auto v = OtherBucketValue(input_type);
 	Vector ref(v, count_t(args.size()));
-	VectorOperations::NotDistinctFrom(args.data[0], ref, result, args.size());
+	VectorOperations::NotDistinctFrom(args.data[0], ref, result);
 
 	// Set NULL if input is NULL.
 	UnifiedVectorFormat input_data;
-	args.data[0].ToUnifiedFormat(args.size(), input_data);
+	args.data[0].ToUnifiedFormat(input_data);
 	if (!input_data.validity.CannotHaveNull()) {
 		auto &result_validity = FlatVector::ValidityMutable(result);
 		for (idx_t idx = 0; idx < args.size(); ++idx) {
@@ -282,7 +283,7 @@ void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector
 template <class OP, class T>
 void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
                                   idx_t offset) {
-	auto states = state_vector.Values<HistogramBinState<T> *>(count);
+	auto states = state_vector.Values<HistogramBinState<T> *>();
 
 	auto &mask = FlatVector::ValidityMutable(result);
 	auto old_len = ListVector::GetListSize(result);
@@ -334,7 +335,7 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
 	}
 	D_ASSERT(current_offset == old_len + new_entries);
 	ListVector::SetListSize(result, current_offset);
-	result.Verify(count);
+	result.Verify();
 }
 
 template <class OP, class T, class HIST>
@@ -398,7 +399,7 @@ unique_ptr<FunctionData> HistogramBinBindFunction(BindAggregateFunctionInput &in
 		}
 	}
 
-	function = GetHistogramBinFunction<HIST>(arguments[0]->GetReturnType());
+	function.ReplaceImplementation(GetHistogramBinFunction<HIST>(arguments[0]->GetReturnType()));
 	return nullptr;
 }
 

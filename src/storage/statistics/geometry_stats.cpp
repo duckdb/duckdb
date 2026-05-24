@@ -79,7 +79,7 @@ BaseStatistics GeometryStats::CreateEmpty(LogicalType type) {
 void GeometryStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
 	// Should we serialize as old extension geometry type for backwards compatibility?
 	// (in that case, write unknown string stats)
-	if (!serializer.ShouldSerialize(7)) {
+	if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		auto string_stats = StringStats::CreateUnknown(LogicalType::VARCHAR);
 		StringStats::Serialize(string_stats, serializer);
 		return;
@@ -195,7 +195,7 @@ void GeometryStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	target.Merge(source);
 }
 
-void GeometryStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
+void GeometryStats::Verify(const BaseStatistics &stats, const Vector &vector, const SelectionVector &sel, idx_t count) {
 	// TODO: Verify stats
 }
 
@@ -266,7 +266,7 @@ static FilterPropagateResult CheckIntersectionFilter(const GeometryStatsData &da
 }
 
 FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, const unique_ptr<Expression> &expr) {
-	if (expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
+	if (expr->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	if (expr->GetReturnType() != LogicalType::BOOLEAN) {
@@ -287,7 +287,7 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 
 	auto found = false;
 	for (const auto &name : geometry_predicates) {
-		if (StringUtil::CIEquals(func.function.name.c_str(), name)) {
+		if (StringUtil::CIEquals(func.function.GetName().c_str(), name)) {
 			found = true;
 			break;
 		}

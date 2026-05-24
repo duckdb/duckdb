@@ -30,11 +30,11 @@ public:
 	idx_t GetAllocationSize() const override;
 	string ToString(const LogicalType &type, idx_t count) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
-	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 protected:
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
+	void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 private:
 	unique_ptr<Vector> shredded_data;
@@ -64,7 +64,7 @@ struct ShreddedVector {
 	DUCKDB_API static void Unshred(const Vector &vec, const SelectionVector &sel, idx_t count);
 
 	//! Returns whether or not the vector is fully shredded
-	DUCKDB_API static bool IsFullyShredded(Vector &vec);
+	DUCKDB_API static bool IsFullyShredded(const Vector &vec);
 };
 
 } // namespace duckdb

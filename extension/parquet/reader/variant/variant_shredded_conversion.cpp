@@ -110,11 +110,11 @@ template <>
 VariantValue ConvertShreddedValue<timestamp_tz_t>::Convert(timestamp_tz_t val) {
 	return VariantValue(Value::TIMESTAMPTZ(val));
 }
-////! timestamptz(9)
-// template <>
-// VariantValue ConvertShreddedValue<timestamp_ns_tz_t>::Convert(timestamp_ns_tz_t val) {
-//	return VariantValue(Value::TIMESTAMPNS_TZ(val));
-//}
+//! timestamptz(9)
+template <>
+VariantValue ConvertShreddedValue<timestamp_tz_ns_t>::Convert(timestamp_tz_ns_t val) {
+	return VariantValue(Value::TIMESTAMPTZNS(val));
+}
 //! timestampntz(6)
 template <>
 VariantValue ConvertShreddedValue<timestamp_t>::Convert(timestamp_t val) {
@@ -148,15 +148,15 @@ template <class T, class OP, LogicalTypeId TYPE_ID>
 vector<VariantValue> ConvertTypedValues(Vector &vec, Vector &metadata, Vector &blob, idx_t offset, idx_t length,
                                         idx_t total_size) {
 	UnifiedVectorFormat metadata_format;
-	metadata.ToUnifiedFormat(length, metadata_format);
+	metadata.ToUnifiedFormat(metadata_format);
 	auto metadata_data = metadata_format.GetData<string_t>(metadata_format);
 
 	UnifiedVectorFormat typed_format;
-	vec.ToUnifiedFormat(total_size, typed_format);
+	vec.ToUnifiedFormat(typed_format);
 	auto data = typed_format.GetData<T>(typed_format);
 
 	UnifiedVectorFormat value_format;
-	blob.ToUnifiedFormat(total_size, value_format);
+	blob.ToUnifiedFormat(value_format);
 	auto value_data = value_format.GetData<string_t>(value_format);
 
 	auto &validity = typed_format.validity;
@@ -291,10 +291,16 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedLeaf(Vector &meta
 		return ConvertTypedValues<dtime_t, ConvertShreddedValue<dtime_t>, LogicalTypeId::TIME>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-	//! timestamptz(6) (timestamptz(9) not implemented in DuckDB)
+	//! timestamptz(6)
 	case LogicalTypeId::TIMESTAMP_TZ: {
 		return ConvertTypedValues<timestamp_tz_t, ConvertShreddedValue<timestamp_tz_t>, LogicalTypeId::TIMESTAMP_TZ>(
 		    typed_value, metadata, value, offset, length, total_size);
+	}
+	//! timestamptz(9)
+	case LogicalTypeId::TIMESTAMP_TZ_NS: {
+		return ConvertTypedValues<timestamp_tz_ns_t, ConvertShreddedValue<timestamp_tz_ns_t>,
+		                          LogicalTypeId::TIMESTAMP_TZ_NS>(typed_value, metadata, value, offset, length,
+		                                                          total_size);
 	}
 	//! timestampntz(6)
 	case LogicalTypeId::TIMESTAMP: {
@@ -344,12 +350,12 @@ public:
 static vector<VariantValue> ConvertBinaryEncoding(Vector &metadata, Vector &value, idx_t offset, idx_t length,
                                                   idx_t total_size) {
 	UnifiedVectorFormat value_format;
-	value.ToUnifiedFormat(total_size, value_format);
+	value.ToUnifiedFormat(value_format);
 	auto value_data = value_format.GetData<string_t>(value_format);
 	auto &validity = value_format.validity;
 
 	UnifiedVectorFormat metadata_format;
-	metadata.ToUnifiedFormat(length, metadata_format);
+	metadata.ToUnifiedFormat(metadata_format);
 	auto metadata_data = metadata_format.GetData<string_t>(metadata_format);
 	auto metadata_validity = metadata_format.validity;
 
@@ -410,19 +416,19 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &me
 
 	//! 'value'
 	UnifiedVectorFormat value_format;
-	value.ToUnifiedFormat(total_size, value_format);
+	value.ToUnifiedFormat(value_format);
 	auto value_data = value_format.GetData<string_t>(value_format);
 	auto &validity = value_format.validity;
 	(void)validity;
 
 	//! 'metadata'
 	UnifiedVectorFormat metadata_format;
-	metadata.ToUnifiedFormat(length, metadata_format);
+	metadata.ToUnifiedFormat(metadata_format);
 	auto metadata_data = metadata_format.GetData<string_t>(metadata_format);
 
 	//! 'typed_value'
 	UnifiedVectorFormat typed_format;
-	typed_value.ToUnifiedFormat(total_size, typed_format);
+	typed_value.ToUnifiedFormat(typed_format);
 	auto &typed_validity = typed_format.validity;
 
 	//! Process all fields to get the shredded field values
@@ -478,17 +484,17 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &met
 
 	//! 'value'
 	UnifiedVectorFormat value_format;
-	value.ToUnifiedFormat(total_size, value_format);
+	value.ToUnifiedFormat(value_format);
 	auto value_data = value_format.GetData<string_t>(value_format);
 
 	//! 'metadata'
 	UnifiedVectorFormat metadata_format;
-	metadata.ToUnifiedFormat(length, metadata_format);
+	metadata.ToUnifiedFormat(metadata_format);
 	auto metadata_data = metadata_format.GetData<string_t>(metadata_format);
 
 	//! 'typed_value'
 	UnifiedVectorFormat list_format;
-	typed_value.ToUnifiedFormat(total_size, list_format);
+	typed_value.ToUnifiedFormat(list_format);
 	auto list_data = list_format.GetData<list_entry_t>(list_format);
 	auto &validity = list_format.validity;
 	auto &value_validity = value_format.validity;
@@ -499,7 +505,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &met
 		for (idx_t i = 0; i < length; i++) {
 			auto typed_index = list_format.sel->get_index(i + offset);
 			auto entry = list_data[typed_index];
-			Vector child_metadata(metadata.GetValue(i), count_t(1));
+			Vector child_metadata(metadata.GetValue(i), count_t(entry.length));
 			ret[i] = VariantValue(VariantValueType::ARRAY);
 			ret[i].SetItems(Convert(child_metadata, child, entry.offset, entry.length, list_size));
 		}
@@ -509,7 +515,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &met
 			auto value_index = value_format.sel->get_index(i + offset);
 			if (validity.RowIsValid(typed_index)) {
 				auto entry = list_data[typed_index];
-				Vector child_metadata(metadata.GetValue(i), count_t(1));
+				Vector child_metadata(metadata.GetValue(i), count_t(entry.length));
 				ret[i] = VariantValue(VariantValueType::ARRAY);
 				ret[i].SetItems(Convert(child_metadata, child, entry.offset, entry.length, list_size));
 			} else {

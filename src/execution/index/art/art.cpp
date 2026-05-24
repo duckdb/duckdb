@@ -20,12 +20,14 @@
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -116,12 +118,12 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 	auto it = info.options.find("storage_version");
 	if (it != info.options.end()) {
 		// If this is an existing index with a saved storage version, use it.
-		storage_version = it->second.GetValue<idx_t>();
+		storage_version = static_cast<StorageVersion>(it->second.GetValue<uint64_t>());
 	} else {
 		// Otherwise, this must be an existing index without a saved storage version.
 		// We started saving the storage version in v1.5.0, so if it is not present,
 		// we can not make any general assumptions about the exact storage version.
-		storage_version = optional_idx::Invalid();
+		storage_version = StorageVersion::INVALID;
 	}
 }
 
@@ -172,11 +174,12 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 		// 		bindings[0] = the expression
 		// 		bindings[1] = the index expression
 		// 		bindings[2] = the constant
-		auto &comparison = bindings[0].get().Cast<BoundComparisonExpression>();
+		auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
 		auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
 		auto comparison_type = comparison.GetExpressionType();
 
-		if (comparison.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		auto &left = BoundComparisonExpression::Left(comparison);
+		if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 			// The expression is on the right side, we flip the comparison expression.
 			comparison_type = FlipComparisonExpression(comparison_type);
 		}
@@ -195,24 +198,29 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 			high_comparison_type = comparison_type;
 		}
 	} else if (filter_expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
-		auto &between = filter_expr.Cast<BoundBetweenExpression>();
-		if (!between.input->Equals(expr)) {
+		auto &between = filter_expr.Cast<BoundFunctionExpression>();
+		auto &input = BoundBetweenExpression::Input(between);
+		if (!input.Equals(expr)) {
 			// The expression does not match the index expression.
 			return nullptr;
 		}
+		auto &lower_bound = BoundBetweenExpression::LowerBound(between);
+		auto &upper_bound = BoundBetweenExpression::UpperBound(between);
 
-		if (between.lower->GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
-		    between.upper->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+		if (lower_bound.GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
+		    upper_bound.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			// Not a constant expression.
 			return nullptr;
 		}
 
-		low_value = between.lower->Cast<BoundConstantExpression>().value;
-		low_comparison_type = between.lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
-		                                              : ExpressionType::COMPARE_GREATERTHAN;
-		high_value = (between.upper->Cast<BoundConstantExpression>()).value;
+		auto lower_inclusive = BoundBetweenExpression::LowerInclusive(between);
+		auto upper_inclusive = BoundBetweenExpression::UpperInclusive(between);
+		low_value = lower_bound.Cast<BoundConstantExpression>().value;
+		low_comparison_type =
+		    lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
+		high_value = (upper_bound.Cast<BoundConstantExpression>()).value;
 		high_comparison_type =
-		    between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
+		    upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
 	}
 	// FIXME: add another if...else... to match rewritten BETWEEN,
 	// i.e., WHERE i BETWEEN 50 AND 1502 is rewritten to CONJUNCTION_AND.
@@ -247,11 +255,12 @@ unique_ptr<IndexScanState> ART::InitializeFullScan() {
 //===--------------------------------------------------------------------===//
 
 template <class T, bool IS_NOT_NULL>
-static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, unsafe_vector<ARTKey> &keys) {
+static void TemplatedGenerateKeys(ArenaAllocator &allocator, const Vector &input, unsafe_vector<ARTKey> &keys) {
+	const idx_t count = input.size();
 	D_ASSERT(keys.size() >= count);
 
 	UnifiedVectorFormat data;
-	input.ToUnifiedFormat(count, data);
+	input.ToUnifiedFormat(data);
 	auto input_data = UnifiedVectorFormat::GetData<T>(data);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -267,9 +276,10 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 }
 
 template <class T, bool IS_NOT_NULL>
-static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, unsafe_vector<ARTKey> &keys) {
+static void ConcatenateKeys(ArenaAllocator &allocator, const Vector &input, unsafe_vector<ARTKey> &keys) {
+	const idx_t count = input.size();
 	UnifiedVectorFormat data;
-	input.ToUnifiedFormat(count, data);
+	input.ToUnifiedFormat(data);
 	auto input_data = UnifiedVectorFormat::GetData<T>(data);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -302,46 +312,46 @@ template <bool IS_NOT_NULL>
 void GenerateKeysInternal(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
 	switch (input.data[0].GetType().InternalType()) {
 	case PhysicalType::BOOL:
-		TemplatedGenerateKeys<bool, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<bool, IS_NOT_NULL>(allocator, input.data[0], keys);
 		break;
 	case PhysicalType::INT8:
-		TemplatedGenerateKeys<int8_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<int8_t, IS_NOT_NULL>(allocator, input.data[0], keys);
 		break;
 	case PhysicalType::INT16:
-		TemplatedGenerateKeys<int16_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<int16_t, IS_NOT_NULL>(allocator, input.data[0], keys);
 		break;
 	case PhysicalType::INT32:
-		TemplatedGenerateKeys<int32_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<int32_t, IS_NOT_NULL>(allocator, input.data[0], keys);
 		break;
 	case PhysicalType::INT64:
-		TemplatedGenerateKeys<int64_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<int64_t, IS_NOT_NULL>(allocator, input.data[0], keys);
 		break;
 	case PhysicalType::INT128:
-		TemplatedGenerateKeys<hugeint_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<hugeint_t, IS_NOT_NULL>(allocator, input.data[0], keys);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedGenerateKeys<uint8_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<uint8_t, IS_NOT_NULL>(allocator, input.data[0], keys);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedGenerateKeys<uint16_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<uint16_t, IS_NOT_NULL>(allocator, input.data[0], keys);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedGenerateKeys<uint32_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<uint32_t, IS_NOT_NULL>(allocator, input.data[0], keys);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedGenerateKeys<uint64_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<uint64_t, IS_NOT_NULL>(allocator, input.data[0], keys);
 		break;
 	case PhysicalType::UINT128:
-		TemplatedGenerateKeys<uhugeint_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<uhugeint_t, IS_NOT_NULL>(allocator, input.data[0], keys);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedGenerateKeys<float, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<float, IS_NOT_NULL>(allocator, input.data[0], keys);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedGenerateKeys<double, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<double, IS_NOT_NULL>(allocator, input.data[0], keys);
 		break;
 	case PhysicalType::VARCHAR:
-		TemplatedGenerateKeys<string_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
+		TemplatedGenerateKeys<string_t, IS_NOT_NULL>(allocator, input.data[0], keys);
 		break;
 	default:
 		throw InternalException("Invalid type for index");
@@ -351,46 +361,46 @@ void GenerateKeysInternal(ArenaAllocator &allocator, DataChunk &input, unsafe_ve
 	for (idx_t i = 1; i < input.ColumnCount(); i++) {
 		switch (input.data[i].GetType().InternalType()) {
 		case PhysicalType::BOOL:
-			ConcatenateKeys<bool, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<bool, IS_NOT_NULL>(allocator, input.data[i], keys);
 			break;
 		case PhysicalType::INT8:
-			ConcatenateKeys<int8_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<int8_t, IS_NOT_NULL>(allocator, input.data[i], keys);
 			break;
 		case PhysicalType::INT16:
-			ConcatenateKeys<int16_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<int16_t, IS_NOT_NULL>(allocator, input.data[i], keys);
 			break;
 		case PhysicalType::INT32:
-			ConcatenateKeys<int32_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<int32_t, IS_NOT_NULL>(allocator, input.data[i], keys);
 			break;
 		case PhysicalType::INT64:
-			ConcatenateKeys<int64_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<int64_t, IS_NOT_NULL>(allocator, input.data[i], keys);
 			break;
 		case PhysicalType::INT128:
-			ConcatenateKeys<hugeint_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<hugeint_t, IS_NOT_NULL>(allocator, input.data[i], keys);
 			break;
 		case PhysicalType::UINT8:
-			ConcatenateKeys<uint8_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<uint8_t, IS_NOT_NULL>(allocator, input.data[i], keys);
 			break;
 		case PhysicalType::UINT16:
-			ConcatenateKeys<uint16_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<uint16_t, IS_NOT_NULL>(allocator, input.data[i], keys);
 			break;
 		case PhysicalType::UINT32:
-			ConcatenateKeys<uint32_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<uint32_t, IS_NOT_NULL>(allocator, input.data[i], keys);
 			break;
 		case PhysicalType::UINT64:
-			ConcatenateKeys<uint64_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<uint64_t, IS_NOT_NULL>(allocator, input.data[i], keys);
 			break;
 		case PhysicalType::UINT128:
-			ConcatenateKeys<uhugeint_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<uhugeint_t, IS_NOT_NULL>(allocator, input.data[i], keys);
 			break;
 		case PhysicalType::FLOAT:
-			ConcatenateKeys<float, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<float, IS_NOT_NULL>(allocator, input.data[i], keys);
 			break;
 		case PhysicalType::DOUBLE:
-			ConcatenateKeys<double, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<double, IS_NOT_NULL>(allocator, input.data[i], keys);
 			break;
 		case PhysicalType::VARCHAR:
-			ConcatenateKeys<string_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
+			ConcatenateKeys<string_t, IS_NOT_NULL>(allocator, input.data[i], keys);
 			break;
 		default:
 			throw InternalException("Invalid type for index");
@@ -408,10 +418,10 @@ void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe
 	GenerateKeysInternal<true>(allocator, input, keys);
 }
 
-static bool KeyInputNeedConversion(const vector<LogicalType> &types, optional_idx storage_version) {
+static bool KeyInputNeedConversion(const vector<LogicalType> &types, StorageVersion storage_version) {
 	// We only started tracking the storage version of the index in v1.5.0.
 	// Old GEOMETRY columns (pre v1.5.0) had a different internal representation.
-	if (!storage_version.IsValid() || (storage_version.GetIndex() < 7)) {
+	if (storage_version == StorageVersion::INVALID || (storage_version < StorageVersion::V1_5_0)) {
 		for (auto &type : types) {
 			// ART does not support nested types, so we only need to check the top-level type.
 			if (type.id() == LogicalTypeId::GEOMETRY) {
@@ -449,8 +459,8 @@ static void ConvertKeyInput(DataChunk &input, DataChunk &result) {
 	result.SetCardinality(input.size());
 }
 
-void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
-                             unsafe_vector<ARTKey> &row_id_keys) {
+void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
+                             unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys) {
 	auto key_input = &input;
 
 	DataChunk converted_chunk;
@@ -1011,8 +1021,8 @@ IndexStorageInfo ART::PrepareSerialize(const case_insensitive_map_t<Value> &opti
 	info.options = options;
 
 	// It never hurts to serialize the storage version, even to older formats
-	if (storage_version.IsValid()) {
-		info.options["storage_version"] = Value::UBIGINT(storage_version.GetIndex());
+	if (storage_version != StorageVersion::INVALID) {
+		info.options["storage_version"] = Value::UBIGINT(static_cast<uint64_t>(storage_version));
 	}
 
 	for (auto &allocator : *allocators) {

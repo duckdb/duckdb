@@ -448,7 +448,7 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 		                   const auto count = MinValue<idx_t>(prev.size(), curr.size());
 
 		                   // The input index has probably been sliced.
-		                   auto input_idx = curr.data.back().Values<idx_t>(count);
+		                   auto input_idx = curr.data.back().Values<idx_t>();
 
 		                   const auto nmatch = count - ndistinct;
 		                   //	9:	if sorted[i].first == sorted[i-1].first then
@@ -638,7 +638,7 @@ void WindowDistinctAggregatorLocalState::FlushStates() {
 
 	const auto &aggr = gdstate.aggr;
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	statel.Verify(flush_count);
+	statel.Verify();
 	aggr.function.GetStateCombineCallback()(statel, statep, aggr_input_data, flush_count);
 
 	flush_count = 0;

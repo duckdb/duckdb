@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-AggregateObject::AggregateObject(AggregateFunction function, FunctionData *bind_data, idx_t child_count,
+AggregateObject::AggregateObject(BoundAggregateFunction function, FunctionData *bind_data, idx_t child_count,
                                  idx_t payload_size, AggregateType aggr_type, PhysicalType return_type,
                                  Expression *filter)
     : function(std::move(function)),
@@ -14,10 +14,13 @@ AggregateObject::AggregateObject(AggregateFunction function, FunctionData *bind_
       filter(filter) {
 }
 
-AggregateObject::AggregateObject(BoundAggregateExpression *aggr)
-    : AggregateObject(aggr->function, aggr->bind_info.get(), aggr->children.size(),
-                      AlignValue(aggr->function.GetStateSizeCallback()(aggr->function)), aggr->aggr_type,
-                      aggr->GetReturnType().InternalType(), aggr->filter.get()) {
+AggregateObject::AggregateObject(BoundAggregateExpression &aggr)
+    : AggregateObject(aggr.function, aggr.bind_info.get(), aggr.children.size(),
+                      AlignValue(aggr.function.GetStateSizeCallback()(aggr.function)), aggr.aggr_type,
+                      aggr.GetReturnType().InternalType(), aggr.filter.get()) {
+}
+
+AggregateObject::AggregateObject(BoundAggregateExpression *aggr) : AggregateObject(*aggr) {
 }
 
 AggregateObject::AggregateObject(const BoundWindowExpression &window)

@@ -11,35 +11,21 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/table_filter_state.hpp"
 
 namespace duckdb {
 
 class PerfectHashJoinExecutor;
 
-class PerfectHashJoinFilter final : public TableFilter {
+//! DEPRECATED - only preserved for backwards-compatible expression conversion
+class LegacyPerfectHashJoinFilter final : public TableFilter {
 public:
-	static constexpr auto TYPE = TableFilterType::PERFECT_HASH_JOIN_FILTER;
-
-public:
-	PerfectHashJoinFilter(optional_ptr<const PerfectHashJoinExecutor> perfect_join_executor,
-	                      const string &key_column_name, const LogicalType &key_type_p);
+	static constexpr auto TYPE = TableFilterType::LEGACY_PERFECT_HASH_JOIN_FILTER;
 
 public:
-	const LogicalType &GetKeyType() const {
-		return key_type;
-	}
-
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
-	string ToString(const string &column_name) const override;
-
-	idx_t Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count,
-	             JoinFilterTableFilterState &state) const;
-	bool FilterValue(const Value &value) const;
+	LegacyPerfectHashJoinFilter(optional_ptr<const PerfectHashJoinExecutor> perfect_join_executor,
+	                            const string &key_column_name, const LogicalType &key_type_p);
 
 private:
-	bool Equals(const TableFilter &other) const override;
-	unique_ptr<TableFilter> Copy() const override;
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
 
 	void Serialize(Serializer &serializer) const override;

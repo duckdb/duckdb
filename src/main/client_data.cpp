@@ -207,10 +207,7 @@ public:
 private:
 	void TrackMemoryAllocation(idx_t size) const {
 		if (size > 0) {
-			auto &profiler = QueryProfiler::Get(context);
-			// Track allocations even if profiler isn't running yet - they'll be included when the query starts
-			// AddToCounter already checks IsEnabled(), so we don't need to check here
-			profiler.AddToCounter(MetricType::TOTAL_MEMORY_ALLOCATED, size);
+			QueryProfiler::Get(context).TrackTotalMemoryAllocated(size);
 		}
 	}
 
