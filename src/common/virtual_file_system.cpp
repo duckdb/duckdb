@@ -131,7 +131,8 @@ FileSystem &VirtualFileSystem::GetDefaultFileSystem() {
 
 unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
                                                            optional_ptr<FileOpener> opener) {
-	auto compression = flags.Compression();
+	auto compression_options = flags.CompressionOptions();
+	auto compression = compression_options.type;
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto-detect compression settings based on file name
 		auto lower_path = StringUtil::Lower(file.path);
@@ -146,6 +147,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 		} else {
 			compression = FileCompressionType::UNCOMPRESSED;
 		}
+		compression_options.type = compression;
 	}
 
 	// open the base file handle in UNCOMPRESSED mode
@@ -186,7 +188,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 			    "Attempting to open a compressed file, but the compression type is not supported");
 		}
 		auto &compressed_fs = *entry->second->file_system;
-		file_handle = compressed_fs.OpenCompressedFile(context, std::move(file_handle), flags.OpenForWriting());
+		file_handle = compressed_fs.OpenCompressedFile(context, std::move(file_handle), flags.OpenForWriting(), compression_options);
 	}
 	return file_handle;
 }

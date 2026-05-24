@@ -431,7 +431,7 @@ string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
 }
 
 unique_ptr<FileHandle> GZipFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
-                                                          bool write) {
+														  bool write, const FileCompressionOptions &) {
 	auto path = handle->path;
 	return make_uniq<GZipFile>(context, std::move(handle), path, write);
 }

@@ -16,6 +16,20 @@ namespace duckdb {
 
 enum class FileLockType : uint8_t { NO_LOCK = 0, READ_LOCK = 1, WRITE_LOCK = 2 };
 
+struct FileCompressionOptions {
+	constexpr FileCompressionOptions() = default;
+	constexpr FileCompressionOptions(FileCompressionType type) // NOLINT: allow implicit conversion
+	    : type(type) {
+	}
+	constexpr FileCompressionOptions(FileCompressionType type, int64_t compression_level)
+	    : type(type), compression_level(compression_level), has_compression_level(true) {
+	}
+
+	FileCompressionType type = FileCompressionType::UNCOMPRESSED;
+	int64_t compression_level = 0;
+	bool has_compression_level = false;
+};
+
 class FileOpenFlags {
 public:
 	static constexpr idx_t FILE_FLAGS_READ = idx_t(1 << 0);
@@ -40,18 +54,21 @@ public:
 	constexpr FileOpenFlags(FileLockType lock) : lock(lock) { // NOLINT: allow implicit conversion
 	}
 	constexpr FileOpenFlags(FileCompressionType compression) // NOLINT: allow implicit conversion
-	    : compression(compression) {
+	    : compression_options(compression) {
 	}
-	constexpr FileOpenFlags(idx_t flags, FileLockType lock, FileCompressionType compression)
-	    : flags(flags), lock(lock), compression(compression) {
+	constexpr FileOpenFlags(FileCompressionOptions compression_options) // NOLINT: allow implicit conversion
+	    : compression_options(compression_options) {
+	}
+	constexpr FileOpenFlags(idx_t flags, FileLockType lock, FileCompressionOptions compression_options)
+	    : flags(flags), lock(lock), compression_options(compression_options) {
 	}
 
 	static constexpr FileLockType MergeLock(FileLockType a, FileLockType b) {
 		return a == FileLockType::NO_LOCK ? b : a;
 	}
 
-	static constexpr FileCompressionType MergeCompression(FileCompressionType a, FileCompressionType b) {
-		return a == FileCompressionType::UNCOMPRESSED ? b : a;
+	static constexpr FileCompressionOptions MergeCompression(FileCompressionOptions a, FileCompressionOptions b) {
+		return a.type == FileCompressionType::UNCOMPRESSED ? b : a;
 	}
 
 	static constexpr CachingMode MergeCachingMode(CachingMode a, CachingMode b) {
@@ -59,12 +76,12 @@ public:
 	}
 
 	inline constexpr FileOpenFlags operator|(FileOpenFlags b) const {
-		return FileOpenFlags(flags | b.flags, MergeLock(lock, b.lock), MergeCompression(compression, b.compression));
+		return FileOpenFlags(flags | b.flags, MergeLock(lock, b.lock), MergeCompression(compression_options, b.compression_options));
 	}
 	inline FileOpenFlags &operator|=(FileOpenFlags b) {
 		flags |= b.flags;
 		lock = MergeLock(lock, b.lock);
-		compression = MergeCompression(compression, b.compression);
+		compression_options = MergeCompression(compression_options, b.compression_options);
 		caching_mode = MergeCachingMode(caching_mode, b.caching_mode);
 		return *this;
 	}
@@ -74,11 +91,22 @@ public:
 	}
 
 	FileCompressionType Compression() {
-		return compression;
+		return compression_options.type;
+	}
+
+	FileCompressionOptions CompressionOptions() {
+		return compression_options;
 	}
 
 	void SetCompression(FileCompressionType new_compression) {
-		compression = new_compression;
+		compression_options.type = new_compression;
+		if (new_compression == FileCompressionType::UNCOMPRESSED) {
+			compression_options.has_compression_level = false;
+		}
+	}
+
+	void SetCompressionOptions(FileCompressionOptions new_compression_options) {
+		compression_options = new_compression_options;
 	}
 
 	CachingMode GetCachingMode() {
@@ -140,7 +168,7 @@ private:
 	idx_t flags = 0;
 	FileLockType lock = FileLockType::NO_LOCK;
 	CachingMode caching_mode = CachingMode::NO_CACHING;
-	FileCompressionType compression = FileCompressionType::UNCOMPRESSED;
+	FileCompressionOptions compression_options;
 };
 
 class FileFlags {
