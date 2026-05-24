@@ -128,8 +128,8 @@ class IndexConstructTask final : public ExecutorTask {
 public:
 	IndexConstructTask(shared_ptr<Event> event_p, ClientContext &context, CreateIndexGlobalSinkState &gstate_p,
 	                   size_t thread_id_p, const PhysicalCreateIndex &op_p)
-	    : ExecutorTask(context, std::move(event_p), op_p), gstate(gstate_p), thread_id(thread_id_p),
-	      local_scan_state(), index_op(op_p) {
+	    : ExecutorTask(context, std::move(event_p), op_p), gstate(gstate_p), thread_id(thread_id_p), local_scan_state(),
+	      index_op(op_p) {
 	}
 
 public:
