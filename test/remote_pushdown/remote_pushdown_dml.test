@@ -151,5 +151,48 @@ select count(*) from rpc.t1 where i = 7
 ----
 2
 
+# --- Mixed DML: local target with remote USING / FROM ---
+
+# Reset t1 to {0..9} for the mixed DML tests below
+statement ok db1:con1
+delete from t1 where true
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok
+create table local_t(i int);
+
+statement ok
+insert into local_t from range(10);
+
+# DELETE USING with 3-part catalog-qualified ref in WHERE: "rpc.t1.i" must be stripped to
+# "t1.i" after rpc.t1 is replaced by quack_query_by_name(...) AS t1 in USING, otherwise
+# the binder fails with "Referenced table rpc.t1 not found".
+statement ok
+delete from local_t using rpc.t1 where local_t.i = rpc.t1.i and rpc.t1.i > 5
+
+# rows 6-9 deleted; local_t = {0..5}, count = 6
+query I
+select count(*) from local_t
+----
+6
+
+statement ok
+insert into local_t from range(6, 10);
+
+# UPDATE FROM with 3-part catalog-qualified ref in SET expression: "rpc.t1.i" stripped
+statement ok
+update local_t set i = rpc.t1.i * 2 from rpc.t1 where local_t.i = rpc.t1.i
+
+# local_t becomes {0,2,4,6,8,10,12,14,16,18}; rows > 10: {12,14,16,18} = 4
+query I
+select count(*) from local_t where i > 10
+----
+4
+
+statement ok
+drop table local_t
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

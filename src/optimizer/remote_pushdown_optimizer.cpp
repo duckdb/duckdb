@@ -593,10 +593,34 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 			if (node.condition && node.using_clauses.empty()) {
 				PushdownSubqueries(node.condition);
 			}
+			// Push individual remote USING clauses and collect the catalog names pushed,
+			// so that catalog-qualified column refs like "rpc.t1.i" in the WHERE condition
+			// can be stripped to "t1.i" before binding (the alias on the pushed wrapper is "t1").
+			from_pushed_catalog_names.clear();
 			for (auto &clause : node.using_clauses) {
 				auto clause_result = Rewrite(clause);
 				FinishPushdown(clause, clause_result);
+				if (clause_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+				    clause_result.catalog) {
+					const string &cat_name = clause_result.catalog->GetName();
+					bool found = false;
+					for (auto &existing : from_pushed_catalog_names) {
+						if (StringUtil::CIEquals(existing, cat_name)) {
+							found = true;
+							break;
+						}
+					}
+					if (!found) {
+						from_pushed_catalog_names.push_back(cat_name);
+					}
+				}
 			}
+			if (node.condition) {
+				for (auto &cat_name : from_pushed_catalog_names) {
+					StripCatalogName(*node.condition, cat_name);
+				}
+			}
+			from_pushed_catalog_names.clear();
 		}
 		for (auto &cte_pair : node.cte_map.map) {
 			auto it = outer_cte_results.find(cte_pair.first);
@@ -664,6 +688,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		if (node.cte_map.map.empty()) {
 			string pushed_from_alias;
+			vector<string> update_pushed_cats;
+			from_pushed_catalog_names.clear();
 			if (node.from_table) {
 				auto from_result = Rewrite(node.from_table);
 				FinishPushdown(node.from_table, from_result);
@@ -674,8 +700,34 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 					pushed_from_alias = node.from_table->alias;
 					local_table_names.insert(pushed_from_alias);
 				}
+				// Collect pushed catalog names (direct + JoinRef children) to strip from SET exprs.
+				update_pushed_cats = std::move(from_pushed_catalog_names);
+				from_pushed_catalog_names.clear();
+				if (from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && from_result.catalog) {
+					const string &cat_name = from_result.catalog->GetName();
+					bool found = false;
+					for (auto &e : update_pushed_cats) {
+						if (StringUtil::CIEquals(e, cat_name)) {
+							found = true;
+							break;
+						}
+					}
+					if (!found) {
+						update_pushed_cats.push_back(cat_name);
+					}
+				}
 			}
 			if (node.set_info) {
+				// Strip pushed catalog names so "rpc.from_t.col" refs remain resolvable
+				// after "rpc.from_t" becomes "quack_query_by_name(...) AS from_t".
+				for (auto &cat_name : update_pushed_cats) {
+					if (node.set_info->condition) {
+						StripCatalogName(*node.set_info->condition, cat_name);
+					}
+					for (auto &expr : node.set_info->expressions) {
+						StripCatalogName(*expr, cat_name);
+					}
+				}
 				if (node.set_info->condition) {
 					PushdownSubqueries(node.set_info->condition);
 				}
