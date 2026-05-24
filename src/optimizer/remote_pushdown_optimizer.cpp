@@ -1379,11 +1379,15 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 		}
 		return;
 	}
-	// Strip catalog prefix from explicitly-qualified function calls (e.g. rpc.my_func(...) → my_func(...))
+	// Strip catalog prefix from explicitly-qualified function calls (e.g. rpc.my_func(...) → my_func(...)).
+	// Also handle 2-part names (schema.func) where the schema is actually the remote catalog name
+	// (e.g. "rpc.my_func()" parsed as schema="rpc", catalog="").
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func = expr.Cast<FunctionExpression>();
 		if (StringUtil::CIEquals(func.catalog, catalog_name)) {
 			func.catalog = "";
+		} else if (func.catalog.empty() && StringUtil::CIEquals(func.schema, catalog_name)) {
+			func.schema = "";
 		}
 		// Fall through to EnumerateChildren to also strip catalog refs inside arguments
 	}
