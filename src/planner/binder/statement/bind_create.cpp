@@ -23,6 +23,9 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/parser/parsed_data/create_feature_info.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -792,8 +795,65 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// Register dependency on the source table so DROP TABLE blocks without CASCADE
 		feature_info.dependencies.AddDependency(table_entry);
 
-		result.plan =
+		// Build PIT query string from the feature definition
+		string gran;
+		switch (feature_info.granularity) {
+		case FeatureGranularity::DAY: gran = "day"; break;
+		case FeatureGranularity::HOUR: gran = "hour"; break;
+		case FeatureGranularity::MINUTE: gran = "minute"; break;
+		default: gran = "day"; break;
+		}
+
+		auto &select_node = feature_info.query->node->Cast<SelectNode>();
+		string agg_exprs;
+		for (auto &expr : select_node.select_list) {
+			if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+				auto &col_ref = expr->Cast<ColumnRefExpression>();
+				if (col_ref.GetColumnName() == feature_info.entity_column) {
+					continue;
+				}
+			}
+			if (!agg_exprs.empty()) {
+				agg_exprs += ", ";
+			}
+			agg_exprs += expr->ToString();
+		}
+
+		auto &entity = feature_info.entity_column;
+		auto &ts = feature_info.timestamp_column;
+		auto &table = feature_info.source_table;
+		auto window_interval = StringUtil::Format("%d %s", feature_info.window_size, gran);
+
+		string pit_sql = StringUtil::Format(
+		    "SELECT spine.%s, spine.bucket AS feature_timestamp, %s "
+		    "FROM (SELECT DISTINCT %s, DATE_TRUNC('%s', %s) AS bucket FROM %s) AS spine "
+		    "JOIN %s ON %s.%s = spine.%s "
+		    "AND DATE_TRUNC('%s', %s.%s) <= spine.bucket "
+		    "AND DATE_TRUNC('%s', %s.%s) > spine.bucket - INTERVAL '%s' "
+		    "GROUP BY spine.%s, spine.bucket "
+		    "ORDER BY spine.%s, spine.bucket",
+		    entity, agg_exprs,             // outer SELECT
+		    entity, gran, ts, table,       // spine subquery
+		    table, table, entity, entity,  // JOIN
+		    gran, table, ts,               // AND <=
+		    gran, table, ts, window_interval, // AND >
+		    entity, entity);               // GROUP BY, ORDER BY
+
+		// Parse and bind the PIT query
+		Parser parser(context.GetParserOptions());
+		parser.ParseQuery(pit_sql);
+		auto &pit_select = parser.statements[0]->Cast<SelectStatement>();
+		auto query_binder = Binder::CreateBinder(context, this);
+		auto query_obj = query_binder->Bind(pit_select);
+
+		// Store result schema in feature info for table creation
+		feature_info.result_names = query_obj.names;
+		feature_info.result_types = query_obj.types;
+
+		auto create_node =
 		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_FEATURE, std::move(stmt.info), &schema);
+		create_node->children.push_back(std::move(query_obj.plan));
+		result.plan = std::move(create_node);
 		break;
 	}
 	default:

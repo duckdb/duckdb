@@ -1,0 +1,91 @@
+# name: test/sql/feature/test_feature_materialize.test
+# description: Test feature materialization with PIT-correct windowed query
+# group: [feature]
+
+statement ok
+CREATE TABLE transactions (user_id INTEGER, amount DOUBLE, ts TIMESTAMP);
+
+statement ok
+INSERT INTO transactions VALUES
+    (1, 100.0, '2024-01-01'),
+    (1, 200.0, '2024-01-02'),
+    (2, 50.0, '2024-01-01'),
+    (2, 75.0, '2024-01-03'),
+    (3, 300.0, '2024-01-02');
+
+# Create a feature — system generates PIT-correct windowed query
+# For each (entity, time_bucket) in the source, compute SUM(amount) over
+# transactions within the 7-day lookback window ending at that bucket.
+# No future data leakage.
+# The backing table is named after the feature — query it directly.
+statement ok
+CREATE FEATURE total_spend ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, SUM(amount) AS total FROM transactions GROUP BY user_id);
+
+# PIT-correct results queried directly by feature name:
+# user 1 @ 2024-01-01: only 100.0 (the 200.0 on Jan 2 is future data)
+# user 1 @ 2024-01-02: 100.0 + 200.0 = 300.0
+# user 2 @ 2024-01-01: only 50.0
+# user 2 @ 2024-01-03: 50.0 + 75.0 = 125.0
+# user 3 @ 2024-01-02: 300.0
+query ITR rowsort
+SELECT * FROM total_spend;
+----
+1	2024-01-01 00:00:00	100.0
+1	2024-01-02 00:00:00	300.0
+2	2024-01-01 00:00:00	50.0
+2	2024-01-03 00:00:00	125.0
+3	2024-01-02 00:00:00	300.0
+
+# Verify the feature metadata still works
+query I
+SELECT feature_name FROM duckdb_features();
+----
+total_spend
+
+# Create a second feature with AVG
+statement ok
+CREATE FEATURE avg_spend ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
+
+# PIT-correct AVG queried directly:
+query ITR rowsort
+SELECT * FROM avg_spend;
+----
+1	2024-01-01 00:00:00	100.0
+1	2024-01-02 00:00:00	150.0
+2	2024-01-01 00:00:00	50.0
+2	2024-01-03 00:00:00	62.5
+3	2024-01-02 00:00:00	300.0
+
+# DROP FEATURE should also drop the backing table
+statement ok
+DROP FEATURE total_spend;
+
+# Backing table should be gone
+statement error
+SELECT * FROM total_spend;
+----
+<REGEX>:.*does not exist.*
+
+# Other feature still works
+query ITR rowsort
+SELECT * FROM avg_spend;
+----
+1	2024-01-01 00:00:00	100.0
+1	2024-01-02 00:00:00	150.0
+2	2024-01-01 00:00:00	50.0
+2	2024-01-03 00:00:00	62.5
+3	2024-01-02 00:00:00	300.0
+
+# DROP TABLE CASCADE should drop the feature AND its backing table
+statement ok
+DROP TABLE transactions CASCADE;
+
+statement error
+SELECT * FROM avg_spend;
+----
+<REGEX>:.*does not exist.*
+
+query I
+SELECT COUNT(*) FROM duckdb_features();
+----
+0
