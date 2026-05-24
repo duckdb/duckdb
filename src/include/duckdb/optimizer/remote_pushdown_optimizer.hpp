@@ -36,8 +36,6 @@ enum class CatalogReferenceType { NO_CATALOG_REFERENCED, SINGLE_REMOTE_CATALOG, 
 struct CatalogPushdownResult {
 	CatalogReferenceType reference_type = CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE;
 	optional_ptr<Catalog> catalog;
-	//! The schema within the remote catalog (after schema-as-catalog disambiguation)
-	string schema_name;
 };
 
 class RemotePushdownOptimizer {
