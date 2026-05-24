@@ -10,7 +10,7 @@ SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE MA') LIMIT 1;
 MACRO 	7
 
 query II
-SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE F') LIMIT 1;
+SELECT suggestion, suggestion_start FROM sql_auto_complete('CREATE FU') LIMIT 1;
 ----
 FUNCTION 	7
 

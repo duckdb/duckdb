@@ -220,13 +220,12 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 
 			// Step 3: Compute affected bucket range
 			// A new row at bucket T affects buckets [T, T + WINDOW).
-			// So affected range = [watermark, latest_new + WINDOW).
-			// We include watermark itself because that bucket might be incomplete.
+			// So affected range = [earliest_new, latest_new + WINDOW).
 			auto window_interval = StringUtil::Format("%d %s", feat.window_size, gran);
 			string upper_bound = "'" + latest_new + "'::TIMESTAMP + INTERVAL '" + window_interval + "'";
 
 			// Step 4: Delete affected buckets from backing table
-			auto del_sql = "DELETE FROM " + table_id + " WHERE feature_timestamp >= '" + watermark +
+			auto del_sql = "DELETE FROM " + table_id + " WHERE feature_timestamp >= '" + earliest_new +
 			               "'::TIMESTAMP"
 			               " AND feature_timestamp < " +
 			               upper_bound;
@@ -237,7 +236,7 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			}
 
 			// Step 5: Recompute — filter spine to affected range
-			string filter = " WHERE DATE_TRUNC('" + gran + "', " + ts_col + ") >= '" + watermark +
+			string filter = " WHERE DATE_TRUNC('" + gran + "', " + ts_col + ") >= '" + earliest_new +
 			                "'::TIMESTAMP"
 			                " AND DATE_TRUNC('" +
 			                gran + "', " + ts_col + ") < " + upper_bound;
