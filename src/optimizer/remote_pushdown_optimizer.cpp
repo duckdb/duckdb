@@ -1823,6 +1823,11 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 	}
 	case QueryNodeType::RECURSIVE_CTE_NODE: {
 		auto &rec = node.Cast<RecursiveCTENode>();
+		for (auto &cte_pair : rec.cte_map.map) {
+			if (cte_pair.second->query_node && HasLocalTableReference(*cte_pair.second->query_node)) {
+				return true;
+			}
+		}
 		return (rec.left && HasLocalTableReference(*rec.left)) || (rec.right && HasLocalTableReference(*rec.right));
 	}
 	default:
