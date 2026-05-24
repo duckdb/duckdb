@@ -563,6 +563,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 			}
 			break;
 		}
+		case ResultModifierType::DISTINCT_MODIFIER: {
+			auto &distinct_mod = modifier->Cast<DistinctModifier>();
+			for (auto &expr : distinct_mod.distinct_on_targets) {
+				PushdownSubqueries(expr);
+			}
+			break;
+		}
 		default:
 			break;
 		}
