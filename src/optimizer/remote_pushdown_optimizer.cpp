@@ -628,6 +628,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 			// so that catalog-qualified column refs like "rpc.t1.i" in the WHERE condition
 			// can be stripped to "t1.i" before binding (the alias on the pushed wrapper is "t1").
 			from_pushed_catalog_names.clear();
+			from_pushed_table_aliases.clear();
 			for (auto &clause : node.using_clauses) {
 				auto clause_result = Rewrite(clause);
 				FinishPushdown(clause, clause_result);
