@@ -32,6 +32,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
@@ -1801,28 +1802,39 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 		result = Merge(result, subquery_result);
 		return result;
 	}
-	// Handle function expressions: resolve catalog qualifiers and block local-catalog functions.
-	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
-		auto &func = expr.Cast<FunctionExpression>();
-		// Resolve schema-as-catalog ambiguity: "rpc.fn()" is parsed as schema="rpc", catalog="".
-		string catalog_name = func.catalog;
-		string schema_name = func.schema;
+	// Handle function and window expressions: resolve catalog qualifiers.
+	auto check_catalog_qualified_expr = [&](const string &raw_catalog, const string &raw_schema) -> CatalogPushdownResult {
+		string catalog_name = raw_catalog;
+		string schema_name = raw_schema;
 		Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 		if (!catalog_name.empty()) {
 			auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
 			if (catalog && catalog->IsRemoteCatalog()) {
-				// Explicitly remote-catalog function: merge result with children.
 				CatalogPushdownResult result {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
 				ParsedExpressionIterator::EnumerateChildren(
 				    expr, [&](ParsedExpression &child) { result = Merge(result, Rewrite(child)); });
 				return result;
 			}
-			// Explicitly local-catalog function (e.g. memory.main.fn()): block pushdown.
+			// Explicitly local-catalog: block pushdown.
 			return {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
+		}
+		return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	};
+	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &func = expr.Cast<FunctionExpression>();
+		auto cat_result = check_catalog_qualified_expr(func.catalog, func.schema);
+		if (cat_result.reference_type != CatalogReferenceType::NO_CATALOG_REFERENCED) {
+			return cat_result;
 		}
 		// Unqualified function: local macros can't be pushed to remote.
 		if (IsLocalMacro(func)) {
 			return {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
+		}
+	} else if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
+		auto &win = expr.Cast<WindowExpression>();
+		auto cat_result = check_catalog_qualified_expr(win.catalog, win.schema);
+		if (cat_result.reference_type != CatalogReferenceType::NO_CATALOG_REFERENCED) {
+			return cat_result;
 		}
 	}
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
@@ -1948,7 +1960,7 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 		}
 		return;
 	}
-	// Strip catalog prefix from explicitly-qualified function calls (e.g. rpc.my_func(...) → my_func(...)).
+	// Strip catalog prefix from explicitly-qualified function/window calls.
 	// Also handle 2-part names (schema.func) where the schema is actually the remote catalog name
 	// (e.g. "rpc.my_func()" parsed as schema="rpc", catalog="").
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
@@ -1959,6 +1971,14 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 			func.schema = "";
 		}
 		// Fall through to EnumerateChildren to also strip catalog refs inside arguments
+	} else if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
+		auto &win = expr.Cast<WindowExpression>();
+		if (StringUtil::CIEquals(win.catalog, catalog_name)) {
+			win.catalog = "";
+		} else if (win.catalog.empty() && StringUtil::CIEquals(win.schema, catalog_name)) {
+			win.schema = "";
+		}
+		// Fall through to EnumerateChildren to strip catalog refs inside partitions/orders/children
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](ParsedExpression &child) { StripCatalogName(child, catalog_name, strip_subquery_bodies); });
