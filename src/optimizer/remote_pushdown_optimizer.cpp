@@ -207,6 +207,38 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	return Merge(left_result, right_result);
 }
 
+// Recursively collect the table name and alias from every BaseTableRef in a TableRef tree.
+// Used to register remote-table names as "locally visible" when an all-remote JoinRef was
+// NOT individually pushed to quack, so HasLocalTableReference can detect correlated subquery
+// references to those tables and prevent them from being pushed independently.
+static void CollectTableAliases(const TableRef &ref, case_insensitive_set_t &out) {
+	switch (ref.type) {
+	case TableReferenceType::BASE_TABLE: {
+		auto &base = ref.Cast<BaseTableRef>();
+		out.insert(base.table_name);
+		if (!base.alias.empty()) {
+			out.insert(base.alias);
+		}
+		break;
+	}
+	case TableReferenceType::JOIN: {
+		auto &join = ref.Cast<JoinRef>();
+		if (join.left) {
+			CollectTableAliases(*join.left, out);
+		}
+		if (join.right) {
+			CollectTableAliases(*join.right, out);
+		}
+		break;
+	}
+	default:
+		if (!ref.alias.empty()) {
+			out.insert(ref.alias);
+		}
+		break;
+	}
+}
+
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 	// Analyze CTE definitions and register their catalog results for reference lookup.
 	// CTEs are processed in order so later CTEs can reference earlier ones.
@@ -432,6 +464,20 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			// either because the from_table was wrapped in a quack table-function ref, or because
 			// JoinRef children were individually pushed. An all-remote JoinRef that FinishPushdown
 			// skipped does NOT occupy a streaming slot, so subquery pushdown is safe there.
+			// When the from_table is an all-remote JoinRef that was NOT pushed (SINGLE_REMOTE but
+			// type==JOIN), we must temporarily register its table names in local_table_names so
+			// HasLocalTableReference can detect correlated subquery refs to those remote tables.
+			// Without this, a subquery referencing t1.i from an outer "rpc.t1 JOIN rpc.t2" would
+			// be incorrectly classified as non-correlated and pushed to the remote, where the
+			// reference to t1 fails because t1 is not in that subquery's FROM clause.
+			case_insensitive_set_t remote_join_table_aliases;
+			if (!from_table_actually_pushed && !had_join_child_pushdowns && node.from_table &&
+			    from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+				CollectTableAliases(*node.from_table, remote_join_table_aliases);
+				for (auto &alias : remote_join_table_aliases) {
+					local_table_names.insert(alias);
+				}
+			}
 			if (!from_table_actually_pushed && !had_join_child_pushdowns) {
 				// Push down any subquery expressions in WHERE/HAVING/QUALIFY/SELECT list/GROUP BY/ORDER BY
 				if (node.where_clause) {
@@ -489,7 +535,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 						break;
 					}
 				}
-			} // end if (from_result != SINGLE_REMOTE_CATALOG)
+			} // end if (from_table_actually_pushed || had_join_child_pushdowns)
+			for (auto &alias : remote_join_table_aliases) {
+				local_table_names.erase(alias);
+			}
 			if (!pushed_from_alias.empty()) {
 				local_table_names.erase(pushed_from_alias);
 			}
