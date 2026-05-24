@@ -63,11 +63,14 @@ string TriggerCatalogEntry::ToSQL() const {
 	}
 	ss << " ON ";
 	ss << ParseInfo::QualifierToString(base_table->catalog_name, base_table->schema_name, base_table->table_name);
-	if (!referencing_new_table.empty()) {
-		ss << " REFERENCING NEW TABLE AS " << SQLIdentifier(referencing_new_table);
-	}
-	if (!referencing_old_table.empty()) {
-		ss << " REFERENCING OLD TABLE AS " << SQLIdentifier(referencing_old_table);
+	if (!referencing_new_table.empty() || !referencing_old_table.empty()) {
+		ss << " REFERENCING";
+		if (!referencing_new_table.empty()) {
+			ss << " NEW TABLE AS " << SQLIdentifier(referencing_new_table);
+		}
+		if (!referencing_old_table.empty()) {
+			ss << " OLD TABLE AS " << SQLIdentifier(referencing_old_table);
+		}
 	}
 	ss << " FOR EACH " << EnumUtil::ToString(for_each);
 	ss << " " << trigger_action->ToString();
