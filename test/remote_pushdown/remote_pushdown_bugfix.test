@@ -658,5 +658,46 @@ Multiple streaming scans
 statement ok
 drop table local_m
 
+# ============================================================
+# Bug 15: FinishPushdown(QueryNode) would push a UNION ALL child
+# standalone when an outer SINGLE_REMOTE CTE was in scope.
+#
+# When an outer SelectNode defines a SINGLE_REMOTE CTE and an inner
+# SetOperationNode (inside a subquery) is UNKNOWN (mixed arms), the
+# individual-pushdown block calls FinishPushdown(QueryNode) for each
+# SINGLE_REMOTE child. If that child references the outer CTE by name,
+# it is serialized as "SELECT * FROM cte_name" without the WITH definition.
+# The remote server cannot resolve cte_name → "Table cte_name not found".
+#
+# The fix: FinishPushdown(QueryNode) checks cte_results for any outer
+# SINGLE_REMOTE CTE and skips the push, mirroring the guard already in
+# place for SubqueryRef in FinishPushdown(TableRef).
+# ============================================================
+
+statement ok
+create table local_bugfix15(i int);
+
+statement ok
+insert into local_bugfix15 from range(5, 10);
+
+# Outer CTE (SINGLE_REMOTE from rpc.t1) + inner UNION ALL with one arm referencing
+# the outer CTE (SINGLE_REMOTE) and one arm referencing local_bugfix15 (UNKNOWN).
+# Without fix: child 1 ("SELECT i FROM outer_cte") is pushed standalone to remote,
+# failing with "Table outer_cte not found". With fix: child 1 executes locally via
+# the CTE definition and child 2 runs locally from local_bugfix15.
+# outer_cte = {0..4}, local_bugfix15 = {5..9} -> total 10 rows.
+query I
+with outer_cte as (select i from rpc.t1 where i < 5)
+select count(*) from (
+    select i from outer_cte
+    union all
+    select i from local_bugfix15
+)
+----
+10
+
+statement ok
+drop table local_bugfix15
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

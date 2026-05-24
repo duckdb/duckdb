@@ -2496,6 +2496,16 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<QueryNode> &node, Catalo
 	if (QueryNodeWouldProduceDuplicateNames(*node)) {
 		return;
 	}
+	// If any outer SINGLE_REMOTE CTE is in scope, this node may reference it by name.
+	// Pushing the node standalone (without its WITH definition) would serialize
+	// "SELECT * FROM cte_name" which fails on the remote because cte_name is not a real
+	// table there. Skip pushdown; the node will execute locally against the CTE definition.
+	// This mirrors the SubqueryRef guard in FinishPushdown(TableRef).
+	for (auto &cte_entry : cte_results) {
+		if (cte_entry.second.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			return;
+		}
+	}
 	StripCatalogName(*node, result.catalog->GetName());
 	string remote_sql = node->ToString();
 	auto select_node = make_uniq<SelectNode>();
