@@ -155,12 +155,9 @@ TRY_GET_DESERIALIZE_PARAMETER_FORMAT = 'deserializer.TryGet<{property_type}>()'
 
 SWITCH_HEADER_FORMAT = '\tcase {enum_type}::{enum_value}:\n'
 
-SWITCH_STATEMENT_FORMAT = (
-    SWITCH_HEADER_FORMAT
-    + '''\t\tresult = {class_deserialize}::Deserialize(deserializer);
+SWITCH_STATEMENT_FORMAT = SWITCH_HEADER_FORMAT + '''\t\tresult = {class_deserialize}::Deserialize(deserializer);
 \t\tbreak;
 '''
-)
 
 DESERIALIZE_ELEMENT_FORMAT = '\tauto {property_name} = deserializer.ReadProperty<{property_type}>({property_id}, "{property_key}"{property_default});\n'
 DESERIALIZE_ELEMENT_BASE_FORMAT = '\tauto {property_name} = deserializer.ReadProperty<unique_ptr<{base_property}>>({property_id}, "{property_key}"{property_default});\n'

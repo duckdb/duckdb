@@ -1,0 +1,203 @@
+# name: test/sql/feature/test_feature_refresh.test
+# description: Test REFRESH FEATURE statement — FULL and INCREMENTAL (watermark + window)
+# group: [feature]
+
+# ============================================================
+# FULL refresh: delete everything, recompute from scratch
+# ============================================================
+statement ok
+CREATE TABLE transactions (
+    user_id VARCHAR,
+    amount DECIMAL(10,2),
+    ts TIMESTAMP
+);
+
+statement ok
+INSERT INTO transactions VALUES
+    ('alice', 100.00, '2024-01-01 10:00:00'),
+    ('alice', 200.00, '2024-01-01 14:00:00'),
+    ('bob',   50.00,  '2024-01-01 09:00:00'),
+    ('bob',   75.00,  '2024-01-02 11:00:00');
+
+statement ok
+CREATE FEATURE total_spend ON transactions
+    ENTITY user_id
+    TIMESTAMP ts
+    GRANULARITY DAY
+    WINDOW 7
+    REFRESH FULL
+    RETAIN 1
+    AS (SELECT user_id, SUM(amount) AS total_amount, COUNT(*) AS tx_count);
+
+# Initial state: 3 rows (alice@01-01, bob@01-01, bob@01-02)
+query I
+SELECT COUNT(*) FROM total_spend;
+----
+3
+
+# Add new data to source
+statement ok
+INSERT INTO transactions VALUES
+    ('alice',   300.00, '2024-01-03 08:00:00'),
+    ('charlie',  25.00, '2024-01-01 12:00:00');
+
+# FULL refresh picks up everything
+query I
+REFRESH FEATURE total_spend;
+----
+5
+
+query I
+SELECT COUNT(*) FROM total_spend;
+----
+5
+
+# New entity charlie exists
+query I
+SELECT COUNT(*) FROM total_spend WHERE user_id = 'charlie';
+----
+1
+
+# Alice's 01-03 bucket: 100+200+300 = 600 (all within 7-day window)
+query R
+SELECT total_amount FROM total_spend WHERE user_id = 'alice' AND feature_timestamp = '2024-01-03'::TIMESTAMP;
+----
+600.00
+
+# Idempotent: running FULL refresh again gives same results
+query I
+REFRESH FEATURE total_spend;
+----
+5
+
+statement ok
+DROP FEATURE total_spend;
+
+statement ok
+DROP TABLE transactions;
+
+# ============================================================
+# INCREMENTAL refresh: watermark + window approach
+# ============================================================
+statement ok
+CREATE TABLE events (
+    customer VARCHAR,
+    value INTEGER,
+    event_time TIMESTAMP
+);
+
+statement ok
+INSERT INTO events VALUES
+    ('x', 10, '2024-01-01 08:00:00'),
+    ('x', 20, '2024-01-02 08:00:00'),
+    ('y', 30, '2024-01-01 12:00:00');
+
+statement ok
+CREATE FEATURE event_sum ON events
+    ENTITY customer
+    TIMESTAMP event_time
+    GRANULARITY DAY
+    WINDOW 7
+    REFRESH INCREMENTAL
+    RETAIN 1
+    AS (SELECT customer, SUM(value) AS total_value);
+
+# Initial: 3 rows
+# x @ 01-01: 10
+# x @ 01-02: 10+20 = 30
+# y @ 01-01: 30
+query I
+SELECT COUNT(*) FROM event_sum;
+----
+3
+
+query II rowsort
+SELECT customer, total_value FROM event_sum;
+----
+x	10
+x	30
+y	30
+
+# ---- Scenario 1: Append new data beyond watermark ----
+statement ok
+INSERT INTO events VALUES
+    ('x', 40, '2024-01-03 09:00:00'),
+    ('y', 50, '2024-01-03 10:00:00');
+
+# Watermark = MAX(feature_timestamp) = 01-02
+# New data: buckets at 01-03 (both > watermark)
+# Affected range: [01-02, 01-03 + 7 days) = [01-02, 01-10)
+# Deletes 01-02, recomputes 01-02 and 01-03
+query I
+REFRESH FEATURE event_sum;
+----
+5
+
+# 01-01 untouched (below watermark)
+query II
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-01'::TIMESTAMP ORDER BY customer;
+----
+x	10
+y	30
+
+# 01-02 recomputed (same value — no new data in its range)
+query II
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-02'::TIMESTAMP ORDER BY customer;
+----
+x	30
+
+# 01-03 new bucket: x sees 10+20+40=70, y sees 30+50=80 (7-day window lookback)
+query II
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-03'::TIMESTAMP ORDER BY customer;
+----
+x	70
+y	80
+
+# ---- Scenario 2: No new data — refresh is a no-op ----
+query I
+REFRESH FEATURE event_sum;
+----
+5
+
+# ---- Scenario 3: Add more data, verify watermark advances ----
+statement ok
+INSERT INTO events VALUES
+    ('x', 100, '2024-01-05 12:00:00');
+
+# New watermark should be 01-03, new data at 01-05
+# Affected range: [01-03, 01-05 + 7) = [01-03, 01-12)
+query I
+REFRESH FEATURE event_sum;
+----
+6
+
+# 01-05 bucket: x sees 10+20+40+100 = 170 (all within 7-day lookback from 01-05)
+query II
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-05'::TIMESTAMP ORDER BY customer;
+----
+x	170
+
+# 01-01 and 01-02 still untouched from original
+query II
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-01'::TIMESTAMP AND customer = 'x';
+----
+x	10
+
+# ============================================================
+# Error cases
+# ============================================================
+
+# Non-existent feature
+statement error
+REFRESH FEATURE nonexistent;
+----
+Feature "nonexistent" does not exist
+
+# ============================================================
+# Cleanup
+# ============================================================
+statement ok
+DROP FEATURE event_sum;
+
+statement ok
+DROP TABLE events;

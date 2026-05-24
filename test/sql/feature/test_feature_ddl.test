@@ -1,0 +1,174 @@
+# name: test/sql/feature/test_feature_ddl.test
+# description: Test CREATE/DROP FEATURE DDL, metadata, validation, and dependencies
+# group: [feature]
+
+# ============================================================
+# Setup
+# ============================================================
+statement ok
+CREATE TABLE transactions (card_no VARCHAR, amount DECIMAL(10,2), event_time TIMESTAMP);
+
+statement ok
+CREATE TABLE events (id INTEGER, name VARCHAR);
+
+# ============================================================
+# Parser validation
+# ============================================================
+
+# Missing TIMESTAMP keyword
+statement error
+CREATE FEATURE bad ON transactions ENTITY card_no GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT 1);
+----
+syntax error
+
+# Missing GRANULARITY keyword
+statement error
+CREATE FEATURE bad ON transactions ENTITY card_no TIMESTAMP event_time WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT 1);
+----
+syntax error
+
+# ============================================================
+# Binder validation
+# ============================================================
+
+# Non-existent source table
+statement error
+CREATE FEATURE bad ON nonexistent ENTITY col1 TIMESTAMP col2 GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT 1);
+----
+Table with name nonexistent does not exist
+
+# Non-existent entity column
+statement error
+CREATE FEATURE bad ON transactions ENTITY bad_col TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT 1);
+----
+Entity column "bad_col" does not exist
+
+# Non-existent timestamp column
+statement error
+CREATE FEATURE bad ON transactions ENTITY card_no TIMESTAMP bad_col GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT 1);
+----
+Timestamp column "bad_col" does not exist
+
+# Timestamp column with wrong type (VARCHAR)
+statement error
+CREATE FEATURE bad ON events ENTITY id TIMESTAMP name GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT 1);
+----
+must be a temporal type
+
+# ============================================================
+# CREATE FEATURE basic
+# ============================================================
+statement ok
+CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+
+# Feature appears in duckdb_features()
+query IIIII
+SELECT feature_name, source_table, entity_column, granularity, window_size FROM duckdb_features();
+----
+daily_txn	transactions	card_no	DAY	7
+
+# Duplicate fails
+statement error
+CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+----
+already exists
+
+# IF NOT EXISTS succeeds silently
+statement ok
+CREATE FEATURE IF NOT EXISTS daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT card_no, SUM(amount) FROM transactions GROUP BY card_no);
+
+# Different granularities work
+statement ok
+CREATE FEATURE hourly_stats ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY HOUR WINDOW 24 REFRESH INCREMENTAL RETAIN 5 AS (SELECT card_no, AVG(amount) FROM transactions GROUP BY card_no);
+
+query I
+SELECT COUNT(*) FROM duckdb_features();
+----
+2
+
+# ============================================================
+# DROP FEATURE
+# ============================================================
+statement ok
+DROP FEATURE hourly_stats;
+
+query I
+SELECT COUNT(*) FROM duckdb_features();
+----
+1
+
+# DROP IF EXISTS on non-existent: no error
+statement ok
+DROP FEATURE IF EXISTS nonexistent_feature;
+
+# DROP non-existent: error
+statement error
+DROP FEATURE nonexistent_feature;
+----
+does not exist
+
+# ============================================================
+# Dependencies: DROP TABLE blocked, CASCADE removes feature
+# ============================================================
+
+# DROP TABLE blocked by feature dependency
+statement error
+DROP TABLE transactions;
+----
+there are entries that depend on it
+
+# CASCADE removes feature AND its backing table
+statement ok
+DROP TABLE transactions CASCADE;
+
+query I
+SELECT COUNT(*) FROM duckdb_features();
+----
+0
+
+# Backing table gone too
+statement error
+SELECT * FROM daily_txn;
+----
+<REGEX>:.*does not exist.*
+
+# ============================================================
+# Cascade chains: multiple features on different tables
+# ============================================================
+statement ok
+CREATE TABLE t1 (entity_id VARCHAR, val DECIMAL, ts TIMESTAMP);
+
+statement ok
+CREATE TABLE t2 (entity_id VARCHAR, score INTEGER, ts TIMESTAMP);
+
+statement ok
+CREATE FEATURE feat_t1 ON t1 ENTITY entity_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT entity_id, SUM(val) FROM t1 GROUP BY entity_id);
+
+statement ok
+CREATE FEATURE feat_t2 ON t2 ENTITY entity_id TIMESTAMP ts GRANULARITY HOUR WINDOW 24 REFRESH FULL RETAIN 3 AS (SELECT entity_id, AVG(score) FROM t2 GROUP BY entity_id);
+
+query I
+SELECT COUNT(*) FROM duckdb_features();
+----
+2
+
+# Drop t1 CASCADE only removes feat_t1
+statement ok
+DROP TABLE t1 CASCADE;
+
+query II
+SELECT feature_name, source_table FROM duckdb_features();
+----
+feat_t2	t2
+
+# Drop t2 CASCADE removes feat_t2
+statement ok
+DROP TABLE t2 CASCADE;
+
+query I
+SELECT COUNT(*) FROM duckdb_features();
+----
+0
+
+statement ok
+DROP TABLE events;

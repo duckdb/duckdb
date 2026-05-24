@@ -34,6 +34,7 @@ Statement <-
 	MergeIntoStatement /
 	ConnectStatement /
 	DisconnectStatement /
+	RefreshFeatureStatement /
 	ExpressionStatement
 
 ExpressionStatement <- List(ExpressionAlias)
@@ -1101,6 +1102,8 @@ FeatureGranularityMinute <- 'MINUTE'
 FeatureRefreshMode <- FeatureRefreshFull / FeatureRefreshIncremental
 FeatureRefreshFull <- 'FULL'
 FeatureRefreshIncremental <- 'INCREMENTAL'
+
+RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral
 
 ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName / NestedColumnName
 CatalogReservedSchemaTableColumnName <- CatalogQualification ReservedSchemaQualification ReservedTableQualification ReservedColumnName

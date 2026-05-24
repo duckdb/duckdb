@@ -51,6 +51,9 @@ static unique_ptr<FunctionData> DuckDBFeaturesBind(ClientContext &context, Table
 	names.emplace_back("sql");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("last_refresh_timestamp");
+	return_types.emplace_back(LogicalType::TIMESTAMP);
+
 	return nullptr;
 }
 
@@ -122,6 +125,8 @@ static void DuckDBFeaturesFunction(ClientContext &context, TableFunctionInput &d
 		output.data[9].Append(Value::BIGINT(feat.retain_versions));
 		// sql
 		output.data[10].Append(Value(feat.ToSQL()));
+		// last_refresh_timestamp
+		output.data[11].Append(Value::TIMESTAMP(feat.last_refresh_timestamp));
 
 		count++;
 	}

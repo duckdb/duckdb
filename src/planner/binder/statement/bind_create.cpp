@@ -825,6 +825,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				agg_exprs += ", ";
 			}
 			agg_exprs += expr->ToString();
+			if (expr->HasAlias()) {
+				agg_exprs += " AS " + expr->GetAlias();
+			}
 		}
 
 		auto &entity = feature_info.entity_column;

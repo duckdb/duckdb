@@ -200,13 +200,11 @@ for i in range(NUMBER_REPETITIONS):
     regression_list: List[BenchmarkResult] = []
     if len(benchmark_list) == 0:
         break
-    print(
-        f'''====================================================
+    print(f'''====================================================
 ==============      ITERATION {i}        =============
 ==============      REMAINING {len(benchmark_list)}        =============
 ====================================================
-'''
-    )
+''')
 
     old_results, old_failures = old_runner.run_benchmarks(benchmark_list)
     new_results, new_failures = new_runner.run_benchmarks(benchmark_list)
@@ -234,12 +232,10 @@ regression_list.extend(error_list)
 summary = []
 if len(regression_list) > 0:
     exit_code = 1
-    print(
-        '''====================================================
+    print('''====================================================
 ==============  REGRESSIONS DETECTED   =============
 ====================================================
-'''
-    )
+''')
     summary_lines = [
         f"## Regression Suite: `{suite_name()}`",
         "",
@@ -249,19 +245,15 @@ if len(regression_list) > 0:
     for regression in regression_list:
         report_regression(regression, summary, summary_lines)
     append_step_summary(summary_lines + [""])
-    print(
-        '''====================================================
+    print('''====================================================
 ==============     OTHER TIMINGS       =============
 ====================================================
-'''
-    )
+''')
 else:
-    print(
-        '''====================================================
+    print('''====================================================
 ============== NO REGRESSIONS DETECTED  =============
 ====================================================
-'''
-    )
+''')
 
 other_results.sort(key=lambda x: x.benchmark)
 for res in other_results:
@@ -294,12 +286,10 @@ if not keep_benchmark_data:
         shutil.rmtree('duckdb_benchmark_data')
 
 if summary and not no_summary:
-    print(
-        '''\n\n====================================================
+    print('''\n\n====================================================
 ================  FAILURES SUMMARY  ================
 ====================================================
-'''
-    )
+''')
     # check the value is "true" otherwise you'll see the prefix in local run outputs
     prefix = "::error::" if in_ci() else ""
     for i, failure_message in enumerate(summary, start=1):

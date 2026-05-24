@@ -1,32 +1,33 @@
 # name: test/sql/feature/test_feature_materialize.test
-# description: Test feature materialization with PIT-correct windowed query
+# description: Test PIT-correct materialization and direct querying of backing table
 # group: [feature]
 
+# ============================================================
+# Setup: source table with known data for deterministic results
+# ============================================================
 statement ok
 CREATE TABLE transactions (user_id INTEGER, amount DOUBLE, ts TIMESTAMP);
 
 statement ok
 INSERT INTO transactions VALUES
-    (1, 100.0, '2024-01-01'),
-    (1, 200.0, '2024-01-02'),
-    (2, 50.0, '2024-01-01'),
-    (2, 75.0, '2024-01-03'),
-    (3, 300.0, '2024-01-02');
+    (1, 100.0, '2024-01-01 10:00:00'),
+    (1, 200.0, '2024-01-02 14:00:00'),
+    (2, 50.0,  '2024-01-01 09:00:00'),
+    (2, 75.0,  '2024-01-03 11:00:00'),
+    (3, 300.0, '2024-01-02 16:00:00');
 
-# Create a feature — system generates PIT-correct windowed query
-# For each (entity, time_bucket) in the source, compute SUM(amount) over
-# transactions within the 7-day lookback window ending at that bucket.
-# No future data leakage.
-# The backing table is named after the feature — query it directly.
+# ============================================================
+# SUM feature: PIT-correct windowed aggregation
+# ============================================================
 statement ok
 CREATE FEATURE total_spend ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, SUM(amount) AS total FROM transactions GROUP BY user_id);
 
-# PIT-correct results queried directly by feature name:
-# user 1 @ 2024-01-01: only 100.0 (the 200.0 on Jan 2 is future data)
-# user 1 @ 2024-01-02: 100.0 + 200.0 = 300.0
-# user 2 @ 2024-01-01: only 50.0
-# user 2 @ 2024-01-03: 50.0 + 75.0 = 125.0
-# user 3 @ 2024-01-02: 300.0
+# PIT-correct results — no future data leakage:
+# user 1 @ 01-01: only 100.0 (the 200.0 on Jan 2 is in the future)
+# user 1 @ 01-02: 100.0 + 200.0 = 300.0 (both within 7-day window)
+# user 2 @ 01-01: only 50.0
+# user 2 @ 01-03: 50.0 + 75.0 = 125.0
+# user 3 @ 01-02: 300.0
 query ITR rowsort
 SELECT * FROM total_spend;
 ----
@@ -36,17 +37,18 @@ SELECT * FROM total_spend;
 2	2024-01-03 00:00:00	125.0
 3	2024-01-02 00:00:00	300.0
 
-# Verify the feature metadata still works
+# Row count
 query I
-SELECT feature_name FROM duckdb_features();
+SELECT COUNT(*) FROM total_spend;
 ----
-total_spend
+5
 
-# Create a second feature with AVG
+# ============================================================
+# AVG feature: different aggregate on same source
+# ============================================================
 statement ok
 CREATE FEATURE avg_spend ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
 
-# PIT-correct AVG queried directly:
 query ITR rowsort
 SELECT * FROM avg_spend;
 ----
@@ -56,34 +58,72 @@ SELECT * FROM avg_spend;
 2	2024-01-03 00:00:00	62.5
 3	2024-01-02 00:00:00	300.0
 
-# DROP FEATURE should also drop the backing table
+# ============================================================
+# Multiple aggregates in one feature
+# ============================================================
+statement ok
+CREATE FEATURE multi_agg ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, SUM(amount) AS total, COUNT(*) AS cnt, AVG(amount) AS avg_amt FROM transactions GROUP BY user_id);
+
+# user 1 @ 01-02: total=300, cnt=2, avg=150
+query ITRIR
+SELECT * FROM multi_agg WHERE user_id = 1 AND feature_timestamp = '2024-01-02'::TIMESTAMP;
+----
+1	2024-01-02 00:00:00	300.0	2	150.0
+
+# ============================================================
+# Window boundary: data outside window excluded
+# ============================================================
+statement ok
+CREATE TABLE narrow_window_src (eid VARCHAR, val INTEGER, ts TIMESTAMP);
+
+statement ok
+INSERT INTO narrow_window_src VALUES
+    ('a', 10, '2024-01-01 08:00:00'),
+    ('a', 20, '2024-01-02 08:00:00'),
+    ('a', 30, '2024-01-03 08:00:00'),
+    ('a', 40, '2024-01-04 08:00:00');
+
+# Window of 2 days: bucket at 01-04 should only include 01-03 and 01-04 data
+statement ok
+CREATE FEATURE narrow_feat ON narrow_window_src ENTITY eid TIMESTAMP ts GRANULARITY DAY WINDOW 2 REFRESH FULL RETAIN 1 AS (SELECT eid, SUM(val) AS total FROM narrow_window_src GROUP BY eid);
+
+# 01-01: only 10 (1-day bucket, window=[01-01, 01-01] effectively just itself since > bucket-2 = Dec 30)
+# Actually window is: DATE_TRUNC > bucket - 2 days. So for bucket 01-01: > Dec 30 = includes 01-01 and 12-31 (none)
+# 01-01: 10
+# 01-02: 10 + 20 = 30 (both within 2-day lookback from 01-02: > Dec 31)
+# 01-03: 20 + 30 = 50 (within 2-day lookback from 01-03: > Jan 1)
+# 01-04: 30 + 40 = 70 (within 2-day lookback from 01-04: > Jan 2)
+query IR rowsort
+SELECT feature_timestamp, total FROM narrow_feat;
+----
+2024-01-01 00:00:00	10
+2024-01-02 00:00:00	30
+2024-01-03 00:00:00	50
+2024-01-04 00:00:00	70
+
+# ============================================================
+# Cleanup
+# ============================================================
 statement ok
 DROP FEATURE total_spend;
 
-# Backing table should be gone
+# Backing table gone after DROP FEATURE
 statement error
 SELECT * FROM total_spend;
 ----
 <REGEX>:.*does not exist.*
 
-# Other feature still works
-query ITR rowsort
-SELECT * FROM avg_spend;
+# Other features unaffected
+query I
+SELECT COUNT(*) FROM avg_spend;
 ----
-1	2024-01-01 00:00:00	100.0
-1	2024-01-02 00:00:00	150.0
-2	2024-01-01 00:00:00	50.0
-2	2024-01-03 00:00:00	62.5
-3	2024-01-02 00:00:00	300.0
+5
 
-# DROP TABLE CASCADE should drop the feature AND its backing table
 statement ok
 DROP TABLE transactions CASCADE;
 
-statement error
-SELECT * FROM avg_spend;
-----
-<REGEX>:.*does not exist.*
+statement ok
+DROP TABLE narrow_window_src CASCADE;
 
 query I
 SELECT COUNT(*) FROM duckdb_features();

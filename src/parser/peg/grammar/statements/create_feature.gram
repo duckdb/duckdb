@@ -8,3 +8,5 @@ FeatureGranularityMinute <- 'MINUTE'
 FeatureRefreshMode <- FeatureRefreshFull / FeatureRefreshIncremental
 FeatureRefreshFull <- 'FULL'
 FeatureRefreshIncremental <- 'INCREMENTAL'
+
+RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral

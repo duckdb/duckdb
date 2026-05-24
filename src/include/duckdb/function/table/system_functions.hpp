@@ -143,6 +143,10 @@ struct DuckDBFeaturesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct RefreshFeatureFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBSettingsFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

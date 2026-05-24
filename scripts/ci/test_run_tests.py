@@ -262,16 +262,13 @@ require windows: 2
         self.assertNotIn("require windows: 7", summary_block)
 
     def test_generate_list(self):
-        listed_tests_path = create_temp_file(
-            """
+        listed_tests_path = create_temp_file("""
             name\tgroup
             test/sql/slow.test\t[.][slow]
             test/sql/fast.test\t[fast]
-            """
-        )
+            """)
 
-        list_helper_path = create_temp_file(
-            """
+        list_helper_path = create_temp_file("""
             #!/bin/sh
             # run_tests.py calls: <helper> --list-tests <pattern>
             if [ "$1" != "--list-tests" ]; then
@@ -279,8 +276,7 @@ require windows: 2
             fi
             cat "$2"
             exit 2
-            """
-        )
+            """)
 
         os.chmod(list_helper_path, 0o755)
 
@@ -337,21 +333,16 @@ require windows: 2
         self.assertNotIn("all 1 config runs passed", proc.stdout)
 
     def test_changed_tests_flag_uses_second_list_file(self):
-        base_test_list_path = create_temp_file(
-            """
+        base_test_list_path = create_temp_file("""
             test/sql/a.test
             test/sql/b.test
-            """
-        )
-        changed_test_list_path = create_temp_file(
-            """
+            """)
+        changed_test_list_path = create_temp_file("""
             test/sql/b.test
             test/sql/c.test
-            """
-        )
+            """)
 
-        list_helper_path = create_temp_file(
-            """
+        list_helper_path = create_temp_file("""
             #!/bin/sh
             if [ "$1" != "--list-tests" ]; then
               exit 2
@@ -365,8 +356,7 @@ require windows: 2
               shift
             done
             exit 0
-            """
-        )
+            """)
 
         os.chmod(list_helper_path, 0o755)
 
@@ -493,15 +483,12 @@ require windows: 2
         self.assertIn("ran tests: ", proc.stdout)
 
     def test_multiple_test_configs_run_independently(self):
-        listed_tests_path = create_temp_file(
-            """
+        listed_tests_path = create_temp_file("""
             name\tgroup
             test/sql/fast.test\t[fast]
-            """
-        )
+            """)
 
-        list_helper_path = create_temp_file(
-            """
+        list_helper_path = create_temp_file("""
             #!/bin/sh
             if [ "$1" = "--test-config" ] && [ "$2" = "test/configs/a.json" ] && [ "$3" = "--list-tests" ]; then
               echo "name\tgroup"
@@ -514,8 +501,7 @@ require windows: 2
               exit 0
             fi
             exit 2
-            """
-        )
+            """)
         os.chmod(list_helper_path, 0o755)
 
         try:
@@ -545,8 +531,7 @@ require windows: 2
         self.assertIn("all 2 config runs passed", proc.stdout)
 
     def test_multiple_test_configs_aggregate_failure(self):
-        failing_helper = create_temp_file(
-            """
+        failing_helper = create_temp_file("""
             #!/bin/sh
             if [ "$1" = "--test-config" ] && [ "$2" = "test/configs/fail.json" ] && [ "$3" = "--list-tests" ]; then
               exit 1
@@ -557,8 +542,7 @@ require windows: 2
               exit 0
             fi
             exit 2
-            """
-        )
+            """)
         os.chmod(failing_helper, 0o755)
         try:
             proc = start_runner(
@@ -584,14 +568,11 @@ require windows: 2
         self.assertIn("error: 1 config runs failed: test/configs/fail.json", proc.stdout)
 
     def test_ci_groups_close_when_all_configs_pass(self):
-        listed_tests_path = create_temp_file(
-            """
+        listed_tests_path = create_temp_file("""
             name\tgroup
             test/sql/fast.test\t[fast]
-            """
-        )
-        list_helper_path = create_temp_file(
-            """
+            """)
+        list_helper_path = create_temp_file("""
             #!/bin/sh
             if [ "$1" = "--test-config" ] && [ "$3" = "--list-tests" ]; then
               echo "name\tgroup"
@@ -599,8 +580,7 @@ require windows: 2
               exit 0
             fi
             exit 2
-            """
-        )
+            """)
         os.chmod(list_helper_path, 0o755)
         try:
             with mock.patch.dict(os.environ, {"CI": "1"}, clear=False):
@@ -633,8 +613,7 @@ require windows: 2
         self.assertGreaterEqual(proc.stdout.count("ran tests: "), 2)
 
     def test_ci_groups_stay_open_after_first_failed_config(self):
-        failing_helper = create_temp_file(
-            """
+        failing_helper = create_temp_file("""
             #!/bin/sh
             if [ "$1" = "--test-config" ] && [ "$2" = "test/configs/fail.json" ] && [ "$3" = "--list-tests" ]; then
               exit 1
@@ -645,8 +624,7 @@ require windows: 2
               exit 0
             fi
             exit 2
-            """
-        )
+            """)
         os.chmod(failing_helper, 0o755)
         try:
             with mock.patch.dict(os.environ, {"CI": "1"}, clear=False):

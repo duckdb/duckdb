@@ -1,6 +1,9 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/parsed_data/create_feature_info.hpp"
 #include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/statement/call_statement.hpp"
 
 namespace duckdb {
 
@@ -62,6 +65,23 @@ FeatureRefreshMode PEGTransformerFactory::TransformFeatureRefreshMode(PEGTransfo
                                                                       ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return transformer.TransformEnum<FeatureRefreshMode>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+}
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformRefreshFeatureStatement(PEGTransformer &transformer,
+                                                                                 ParseResult &parse_result) {
+	// RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	// index 0: 'REFRESH' keyword
+	// index 1: 'FEATURE' keyword
+	auto feature_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2)).name;
+
+	// Rewrite to: CALL refresh_feature('feature_name')
+	auto result = make_uniq<CallStatement>();
+	vector<unique_ptr<ParsedExpression>> args;
+	args.push_back(make_uniq<ConstantExpression>(Value(feature_name)));
+	auto function_expression = make_uniq<FunctionExpression>("refresh_feature", std::move(args));
+	result->function = std::move(function_expression);
+	return std::move(result);
 }
 
 } // namespace duckdb
