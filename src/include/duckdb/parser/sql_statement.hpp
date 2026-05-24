@@ -34,6 +34,8 @@ public:
 	idx_t stmt_length = 0;
 	//! The map of named parameter to param index
 	case_insensitive_map_t<idx_t> named_param_map;
+	//! Whether the statement contains any anonymous (? or $N) parameters
+	bool has_anonymous_parameters = false;
 	//! The query text that corresponds to this SQL statement
 	string query;
 
