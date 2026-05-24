@@ -616,28 +616,31 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 		}
 		return {};
 	}
-	if (node.select_statement) {
-		// Rewrite(SelectNode) has a side effect: it individually pushes remote JoinRef children
-		// even when the SelectNode itself is UNKNOWN.  Save the source query and restore it if
-		// the full-push analysis fails so the INSERT can still be executed natively without
-		// stale quack wrappers causing "Multiple streaming scans" errors.
-		auto saved_select = node.select_statement->node->Copy();
-		result = Merge(result, Rewrite(*node.select_statement->node));
-		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+	{
+		// Save before both select_statement and on_conflict_info rewrites. Rewrite(SelectNode)
+		// has a side effect of pushing remote JoinRef children even when the overall result is
+		// UNKNOWN; if on_conflict_info later makes the result UNKNOWN, select_statement must be
+		// restored so native INSERT execution does not encounter stale quack wrappers.
+		unique_ptr<QueryNode> saved_select;
+		if (node.select_statement) {
+			saved_select = node.select_statement->node->Copy();
+			result = Merge(result, Rewrite(*node.select_statement->node));
+		}
+		if (node.on_conflict_info) {
+			if (node.on_conflict_info->condition) {
+				result = Merge(result, Rewrite(*node.on_conflict_info->condition));
+			}
+			if (node.on_conflict_info->set_info) {
+				if (node.on_conflict_info->set_info->condition) {
+					result = Merge(result, Rewrite(*node.on_conflict_info->set_info->condition));
+				}
+				for (auto &expr : node.on_conflict_info->set_info->expressions) {
+					result = Merge(result, Rewrite(*expr));
+				}
+			}
+		}
+		if (saved_select && result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 			node.select_statement->node = std::move(saved_select);
-		}
-	}
-	if (node.on_conflict_info) {
-		if (node.on_conflict_info->condition) {
-			result = Merge(result, Rewrite(*node.on_conflict_info->condition));
-		}
-		if (node.on_conflict_info->set_info) {
-			if (node.on_conflict_info->set_info->condition) {
-				result = Merge(result, Rewrite(*node.on_conflict_info->set_info->condition));
-			}
-			for (auto &expr : node.on_conflict_info->set_info->expressions) {
-				result = Merge(result, Rewrite(*expr));
-			}
 		}
 	}
 	for (auto &expr : node.returning_list) {
@@ -1172,9 +1175,20 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 		// no child was individually pushed. An individually-pushed child holds an active
 		// quack streaming connection; a second quack_query_by_name from a modifier subquery
 		// would open a concurrent streaming connection that quack cannot serve (returns 0 rows).
+		// Use the TABLE_FUNCTION type check as the definitive signal — same pattern as
+		// from_table_actually_pushed in SelectNode — to avoid counting children that
+		// FinishPushdown(QueryNode) skipped (e.g. outer-CTE guard: result is SINGLE_REMOTE
+		// but no streaming slot was opened).
 		bool any_child_pushed = false;
-		for (auto &cr : child_results) {
-			if (cr.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		for (idx_t i = 0; i < node.children.size(); i++) {
+			if (child_results[i].reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+				continue;
+			}
+			if (node.children[i]->type != QueryNodeType::SELECT_NODE) {
+				continue;
+			}
+			auto &pushed_sel = node.children[i]->Cast<SelectNode>();
+			if (pushed_sel.from_table && pushed_sel.from_table->type == TableReferenceType::TABLE_FUNCTION) {
 				any_child_pushed = true;
 				break;
 			}
