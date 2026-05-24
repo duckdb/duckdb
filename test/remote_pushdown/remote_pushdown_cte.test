@@ -150,6 +150,40 @@ select count(*) from cte1
 ----
 5
 
+# --- CTE attached to UNION (SetOperationNode) ---
+
+# All-remote CTE on a UNION: the WITH clause is attached to the SetOperationNode; both the
+# CTE body and the UNION arms reference only rpc.t1 -> whole query pushed (no SEQ_SCAN).
+# Without the StripCatalogName fix for SET_OPERATION_NODE's cte_map the catalog prefix
+# is not stripped from the serialized CTE body, causing a parse error on the remote.
+query II
+explain with cte as (select i from rpc.t1 where i < 5)
+select * from cte union all select * from rpc.t1 where i >= 5
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# cte={0,1,2,3,4}, second arm={5,6,7,8,9} -> 10 rows total
+query I
+with cte as (select i from rpc.t1 where i < 5)
+select count(*) from (select * from cte union all select * from rpc.t1 where i >= 5)
+----
+10
+
+# Mixed: CTE body references local table -> whole UNION stays local
+# The CTE is attached to the SetOperationNode's cte_map; the local body must block pushdown.
+query II
+explain with cte as (select i from local_t where i < 5)
+select * from cte union all select * from rpc.t1 where i >= 5
+----
+physical_plan	<REGEX>:.*UNION.*
+
+# cte={0,1,2,3,4} from local_t, second arm={5,6,7,8,9} from rpc.t1 -> 10 rows
+query I
+with cte as (select i from local_t where i < 5)
+select count(*) from (select * from cte union all select * from rpc.t1 where i >= 5)
+----
+10
+
 # --- Recursive CTEs ---
 
 # Pure arithmetic recursive CTE: no remote refs -> stays local (REC_CTE in plan)

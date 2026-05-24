@@ -605,6 +605,27 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
+	// Process CTE definitions attached to this set operation so that CTE references inside
+	// the children are correctly classified (e.g. WITH cte AS (...) SELECT * FROM cte UNION ALL ...).
+	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
+	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+	for (auto &cte_pair : node.cte_map.map) {
+		const string &cte_name = cte_pair.first;
+		auto &cte_info = *cte_pair.second;
+		auto it = cte_results.find(cte_name);
+		if (it != cte_results.end()) {
+			outer_cte_results[cte_name] = it->second;
+		}
+		CatalogPushdownResult cte_result;
+		if (cte_info.query_node) {
+			cte_result = Rewrite(*cte_info.query_node);
+		} else {
+			cte_result = {};
+		}
+		cte_results[cte_name] = cte_result;
+		cte_combined = Merge(cte_combined, cte_result);
+	}
+
 	// Rewrite each child independently so we can push down individual children if needed
 	vector<CatalogPushdownResult> child_results;
 	child_results.reserve(node.children.size());
@@ -614,6 +635,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 		result = Merge(result, child_result);
 		child_results.push_back(child_result);
 	}
+
+	// Merge CTE results: even unreferenced CTEs are serialized when the set operation is pushed.
+	result = Merge(result, cte_combined);
 	// Check result modifiers (ORDER BY / LIMIT on the set operation itself)
 	for (auto &modifier : node.modifiers) {
 		switch (modifier->type) {
@@ -657,51 +681,71 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	}
 	// If the whole set operation resolves to a single remote catalog, propagate upward
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		for (auto &cte_pair : node.cte_map.map) {
+			auto it = outer_cte_results.find(cte_pair.first);
+			if (it != outer_cte_results.end()) {
+				cte_results[cte_pair.first] = it->second;
+			} else {
+				cte_results.erase(cte_pair.first);
+			}
+		}
 		return result;
 	}
-	// Otherwise push down individual children that can be pushed
-	for (idx_t i = 0; i < node.children.size(); i++) {
-		FinishPushdown(node.children[i], child_results[i]);
+	// Otherwise push down individual children that can be pushed, but only when no CTEs
+	// are present: a CTE-referencing child cannot be pushed individually because the CTE
+	// definition lives in the set operation scope and is not available on the remote.
+	if (node.cte_map.map.empty()) {
+		for (idx_t i = 0; i < node.children.size(); i++) {
+			FinishPushdown(node.children[i], child_results[i]);
+		}
+		// Also push any remote scalar subqueries in the set operation's own modifiers
+		for (auto &modifier : node.modifiers) {
+			switch (modifier->type) {
+			case ResultModifierType::ORDER_MODIFIER: {
+				auto &order_mod = modifier->Cast<OrderModifier>();
+				for (auto &order : order_mod.orders) {
+					PushdownSubqueries(order.expression);
+				}
+				break;
+			}
+			case ResultModifierType::LIMIT_MODIFIER: {
+				auto &limit_mod = modifier->Cast<LimitModifier>();
+				if (limit_mod.limit) {
+					PushdownSubqueries(limit_mod.limit);
+				}
+				if (limit_mod.offset) {
+					PushdownSubqueries(limit_mod.offset);
+				}
+				break;
+			}
+			case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+				auto &limit_mod = modifier->Cast<LimitPercentModifier>();
+				if (limit_mod.limit) {
+					PushdownSubqueries(limit_mod.limit);
+				}
+				if (limit_mod.offset) {
+					PushdownSubqueries(limit_mod.offset);
+				}
+				break;
+			}
+			case ResultModifierType::DISTINCT_MODIFIER: {
+				auto &distinct_mod = modifier->Cast<DistinctModifier>();
+				for (auto &expr : distinct_mod.distinct_on_targets) {
+					PushdownSubqueries(expr);
+				}
+				break;
+			}
+			default:
+				break;
+			}
+		}
 	}
-	// Also push any remote scalar subqueries in the set operation's own modifiers
-	for (auto &modifier : node.modifiers) {
-		switch (modifier->type) {
-		case ResultModifierType::ORDER_MODIFIER: {
-			auto &order_mod = modifier->Cast<OrderModifier>();
-			for (auto &order : order_mod.orders) {
-				PushdownSubqueries(order.expression);
-			}
-			break;
-		}
-		case ResultModifierType::LIMIT_MODIFIER: {
-			auto &limit_mod = modifier->Cast<LimitModifier>();
-			if (limit_mod.limit) {
-				PushdownSubqueries(limit_mod.limit);
-			}
-			if (limit_mod.offset) {
-				PushdownSubqueries(limit_mod.offset);
-			}
-			break;
-		}
-		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-			auto &limit_mod = modifier->Cast<LimitPercentModifier>();
-			if (limit_mod.limit) {
-				PushdownSubqueries(limit_mod.limit);
-			}
-			if (limit_mod.offset) {
-				PushdownSubqueries(limit_mod.offset);
-			}
-			break;
-		}
-		case ResultModifierType::DISTINCT_MODIFIER: {
-			auto &distinct_mod = modifier->Cast<DistinctModifier>();
-			for (auto &expr : distinct_mod.distinct_on_targets) {
-				PushdownSubqueries(expr);
-			}
-			break;
-		}
-		default:
-			break;
+	for (auto &cte_pair : node.cte_map.map) {
+		auto it = outer_cte_results.find(cte_pair.first);
+		if (it != outer_cte_results.end()) {
+			cte_results[cte_pair.first] = it->second;
+		} else {
+			cte_results.erase(cte_pair.first);
 		}
 	}
 	return result;
@@ -1486,6 +1530,11 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 	}
 	case QueryNodeType::SET_OPERATION_NODE: {
 		auto &setop = node.Cast<SetOperationNode>();
+		for (auto &cte_pair : setop.cte_map.map) {
+			if (cte_pair.second->query_node) {
+				StripCatalogName(*cte_pair.second->query_node, catalog_name);
+			}
+		}
 		for (auto &child : setop.children) {
 			StripCatalogName(*child, catalog_name);
 		}
