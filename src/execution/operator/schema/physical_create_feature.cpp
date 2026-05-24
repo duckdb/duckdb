@@ -16,7 +16,7 @@ SourceResultType PhysicalCreateFeature::GetDataInternal(ExecutionContext &contex
 	auto entry = make_uniq<FeatureCatalogEntry>(catalog, schema, *info);
 	auto entry_name = entry->name;
 	auto &set = schema.Cast<DuckSchemaEntry>().GetCatalogSet(CatalogType::FEATURE_ENTRY);
-	LogicalDependencyList dependencies;
+	auto &dependencies = info->dependencies;
 	if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		auto old_entry = set.GetEntry(transaction, entry_name);
 		if (old_entry) {

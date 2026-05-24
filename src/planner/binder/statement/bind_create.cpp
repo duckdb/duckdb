@@ -789,6 +789,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			                      feature_info.timestamp_column, ts_type.ToString());
 		}
 
+		// Register dependency on the source table so DROP TABLE blocks without CASCADE
+		feature_info.dependencies.AddDependency(table_entry);
+
 		result.plan =
 		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_FEATURE, std::move(stmt.info), &schema);
 		break;

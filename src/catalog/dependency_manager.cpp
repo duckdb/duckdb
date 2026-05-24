@@ -411,6 +411,9 @@ static string EntryToString(CatalogEntryInfo &info) {
 	case CatalogType::TRIGGER_ENTRY: {
 		return StringUtil::Format("trigger \"%s\"", info.name);
 	}
+	case CatalogType::FEATURE_ENTRY: {
+		return StringUtil::Format("feature \"%s\"", info.name);
+	}
 	default:
 		throw InternalException("CatalogType not handled in EntryToString (DependencyManager) for %s",
 		                        CatalogTypeToString(type));
