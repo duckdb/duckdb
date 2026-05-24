@@ -1,6 +1,6 @@
-# name: test/sql/feature/test_feature_refresh.test
+# name: src/execution/operator/schema/test_feature_refresh.test
 # description: Test REFRESH FEATURE statement — FULL and INCREMENTAL (watermark + window)
-# group: [feature]
+# group: [schema]
 
 # ============================================================
 # FULL refresh: delete everything, recompute from scratch
@@ -131,7 +131,7 @@ INSERT INTO events VALUES
 query I
 REFRESH FEATURE event_sum;
 ----
-3
+5
 
 # 01-01 untouched (below watermark)
 query II
@@ -157,7 +157,7 @@ y	80
 query I
 REFRESH FEATURE event_sum;
 ----
-0
+5
 
 # ---- Scenario 3: Add more data, verify watermark advances ----
 statement ok
@@ -169,7 +169,7 @@ INSERT INTO events VALUES
 query I
 REFRESH FEATURE event_sum;
 ----
-3
+6
 
 # 01-05 bucket: x sees 10+20+40+100 = 170 (all within 7-day lookback from 01-05)
 query II

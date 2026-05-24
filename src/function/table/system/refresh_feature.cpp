@@ -152,8 +152,7 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			throw InternalException("Failed to refresh feature '%s': %s", feature_name, ins_result->GetError());
 		}
 
-		auto count_result = con.Query("SELECT COUNT(*) FROM " + table_id);
-		state.rows_affected = count_result->GetValue(0, 0).GetValue<idx_t>();
+		state.rows_affected = ins_result->GetValue(0, 0).GetValue<idx_t>();
 
 	} else {
 		// INCREMENTAL refresh using watermark + window expansion.
@@ -186,6 +185,7 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			if (ins_result->HasError()) {
 				throw InternalException("Failed to refresh feature '%s': %s", feature_name, ins_result->GetError());
 			}
+			state.rows_affected = ins_result->GetValue(0, 0).GetValue<idx_t>();
 		} else {
 			// Step 2: Find the range of new source data (buckets > watermark)
 			auto range_sql = "SELECT MIN(DATE_TRUNC('" + gran + "', " + ts_col +
@@ -212,10 +212,9 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 
 			if (earliest_new.empty()) {
 				// No new source data — nothing to do
-				auto count_result = con.Query("SELECT COUNT(*) FROM " + table_id);
-				state.rows_affected = count_result->GetValue(0, 0).GetValue<idx_t>();
+				state.rows_affected = 0;
 				output.SetCardinality(1);
-				output.data[0].Append(Value::BIGINT(NumericCast<int64_t>(state.rows_affected)));
+				output.data[0].Append(Value::BIGINT(0));
 				return;
 			}
 
@@ -249,10 +248,8 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 				throw InternalException("Failed to incrementally refresh feature '%s': %s", feature_name,
 				                        ins_result->GetError());
 			}
+			state.rows_affected = ins_result->GetValue(0, 0).GetValue<idx_t>();
 		}
-
-		auto count_result = con.Query("SELECT COUNT(*) FROM " + table_id);
-		state.rows_affected = count_result->GetValue(0, 0).GetValue<idx_t>();
 	}
 
 	output.SetCardinality(1);
