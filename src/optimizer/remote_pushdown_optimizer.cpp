@@ -1019,44 +1019,51 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(MergeIntoStatement &stmt)
 
 	// Analyze the source. Rewrite(JoinRef) has a side effect of wrapping remote children in
 	// quack_query_by_name even when the overall result is UNKNOWN. Save the source and restore
-	// it if the full-push analysis fails so MERGE INTO can still execute natively.
-	auto saved_source = stmt.source->Copy();
-	result = Merge(result, Rewrite(stmt.source));
-	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		stmt.source = std::move(saved_source);
-		for (auto &cte_pair : stmt.cte_map.map) {
-			auto it = outer_cte_results.find(cte_pair.first);
-			if (it != outer_cte_results.end()) {
-				cte_results[cte_pair.first] = it->second;
-			} else {
-				cte_results.erase(cte_pair.first);
-			}
-		}
-		return {};
-	}
-
-	// Analyze ON join condition
-	if (stmt.join_condition) {
-		result = Merge(result, Rewrite(*stmt.join_condition));
-	}
-
-	// Analyze WHEN MATCHED/NOT MATCHED action conditions and SET/INSERT expressions
-	for (auto &entry : stmt.actions) {
-		for (auto &action : entry.second) {
-			if (action->condition) {
-				result = Merge(result, Rewrite(*action->condition));
-			}
-			if (action->update_info) {
-				if (action->update_info->condition) {
-					result = Merge(result, Rewrite(*action->update_info->condition));
+	// it if the full-push analysis fails (either from source itself, or from join_condition /
+	// actions processing below) so MERGE INTO can still execute natively without stale wrappers.
+	{
+		auto saved_source = stmt.source->Copy();
+		result = Merge(result, Rewrite(stmt.source));
+		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			stmt.source = std::move(saved_source);
+			for (auto &cte_pair : stmt.cte_map.map) {
+				auto it = outer_cte_results.find(cte_pair.first);
+				if (it != outer_cte_results.end()) {
+					cte_results[cte_pair.first] = it->second;
+				} else {
+					cte_results.erase(cte_pair.first);
 				}
-				for (auto &expr : action->update_info->expressions) {
+			}
+			return {};
+		}
+
+		// Analyze ON join condition
+		if (stmt.join_condition) {
+			result = Merge(result, Rewrite(*stmt.join_condition));
+		}
+
+		// Analyze WHEN MATCHED/NOT MATCHED action conditions and SET/INSERT expressions
+		for (auto &entry : stmt.actions) {
+			for (auto &action : entry.second) {
+				if (action->condition) {
+					result = Merge(result, Rewrite(*action->condition));
+				}
+				if (action->update_info) {
+					if (action->update_info->condition) {
+						result = Merge(result, Rewrite(*action->update_info->condition));
+					}
+					for (auto &expr : action->update_info->expressions) {
+						result = Merge(result, Rewrite(*expr));
+					}
+				}
+				for (auto &expr : action->expressions) {
 					result = Merge(result, Rewrite(*expr));
 				}
 			}
-			for (auto &expr : action->expressions) {
-				result = Merge(result, Rewrite(*expr));
-			}
+		}
+
+		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			stmt.source = std::move(saved_source);
 		}
 	}
 
