@@ -200,15 +200,49 @@ bool ExternalFileCache::IsEnabled() const {
 }
 
 void ExternalFileCache::SetEnabled(bool enable_p) {
-	lock_guard<mutex> guard(lock);
+	annotated_lock_guard<annotated_mutex> guard(lock);
 	enable = enable_p;
 	if (!enable) {
 		cached_files.clear();
 	}
 }
 
+bool ExternalFileCache::IsStale(const CachedFile &file) {
+	if (file.ref_count.load() != 0) {
+		return false;
+	}
+	// The BufferManager owns CacheBlock buffers and is not aware of the file cache.
+	// An entry becomes stale when all its blocks have been evicted from the buffer
+	// pool: the skeleton CachedFile remains but holds no resident content.
+	annotated_lock_guard<annotated_mutex> map_guard(file.map_lock);
+	if (file.blocks.empty()) {
+		return true;
+	}
+	for (const auto &block_entry : file.blocks) {
+		const auto &block = *block_entry.second;
+		annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
+		if (block.state != CacheBlockState::LOADED || !block.block_handle) {
+			continue;
+		}
+		if (!block.block_handle->GetMemory().IsUnloaded()) {
+			return false; // still holds resident content
+		}
+	}
+	return true;
+}
+
+void ExternalFileCache::PruneStaleEntries() {
+	for (auto it = cached_files.begin(); it != cached_files.end();) {
+		if (IsStale(*it->second)) {
+			it = cached_files.erase(it);
+		} else {
+			++it;
+		}
+	}
+}
+
 vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() const {
-	unique_lock<mutex> files_guard(lock);
+	annotated_unique_lock<annotated_mutex> files_guard(lock);
 	vector<CachedFileInformation> result;
 	for (const auto &file : cached_files) {
 		annotated_lock_guard<annotated_mutex> map_guard(file.second->map_lock);
@@ -243,12 +277,20 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 }
 
 ExternalFileCache::CachedFile &ExternalFileCache::GetOrCreateCachedFile(const string &path) {
-	lock_guard<mutex> guard(lock);
-	auto &entry = cached_files[path];
-	if (!entry) {
-		entry = make_uniq<CachedFile>(path);
+	annotated_lock_guard<annotated_mutex> guard(lock);
+	auto existing = cached_files.find(path);
+	if (existing != cached_files.end()) {
+		// Pin the entry before returning so a concurrent prune cannot evict it
+		// between this call and CachingFileHandle's constructor.
+		++existing->second->ref_count;
+		return *existing->second;
 	}
-	return *entry;
+	// Opportunistic cleanup: drop entries whose content has been released by the
+	// BufferManager and that have no live handle. Amortizes O(N) over inserts.
+	PruneStaleEntries();
+	auto inserted = cached_files.emplace(path, make_uniq<CachedFile>(path)).first;
+	++inserted->second->ref_count;
+	return *inserted->second;
 }
 
 } // namespace duckdb

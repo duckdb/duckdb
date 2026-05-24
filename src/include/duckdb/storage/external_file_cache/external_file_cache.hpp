@@ -58,6 +58,10 @@ public:
 		string version_tag DUCKDB_GUARDED_BY(meta_lock);
 		bool can_seek DUCKDB_GUARDED_BY(meta_lock) = false;
 		bool on_disk_file DUCKDB_GUARDED_BY(meta_lock) = false;
+
+		//! Number of live CachingFileHandles referencing this CachedFile.
+		//! Used by ExternalFileCache to skip pruning of in-use entries.
+		atomic<idx_t> ref_count {0};
 	};
 
 public:
@@ -88,14 +92,21 @@ private:
 	void ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size, idx_t new_block_size)
 	    DUCKDB_REQUIRES(cached_file.map_lock);
 
+	//! Erase entries that have no live CachingFileHandle and whose cached content
+	//! has already been released by the BufferManager.
+	void PruneStaleEntries() DUCKDB_REQUIRES(lock);
+
+	//! Return true if `file` has no live handle and no resident cached content.
+	static bool IsStale(const CachedFile &file);
+
 	//! The BufferManager used to cache files
 	BufferManager &buffer_manager;
 	//! Whether or not file caching is enabled
 	atomic<bool> enable;
+	//! Lock for accessing cached_files.
+	mutable annotated_mutex lock;
 	//! Mapping from file path to cached file with cached blocks
-	unordered_map<string, unique_ptr<CachedFile>> cached_files;
-	//! Lock for accessing the cached files
-	mutable mutex lock;
+	unordered_map<string, unique_ptr<CachedFile>> cached_files DUCKDB_GUARDED_BY(lock);
 };
 
 } // namespace duckdb
