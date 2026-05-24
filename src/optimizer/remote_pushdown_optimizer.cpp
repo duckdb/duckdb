@@ -1425,15 +1425,19 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 			from_pushed_catalog_names.push_back(cat_name);
 		}
 	}
-	// Track aliases of individually pushed children so that HasLocalTableReference inside
+	// Track aliases of individually pushed remote children so that HasLocalTableReference inside
 	// PushdownSubqueries correctly detects correlated WHERE/HAVING subqueries that reference
 	// the pushed child by alias (e.g. "t1.col" after "rpc.t1 AS t1" → "quack(...) AS t1").
-	for (auto *child_ref : {ref.left.get(), ref.right.get()}) {
-		if (!child_ref || child_ref->alias.empty()) {
+	// Use the per-child pushdown result (not child_ref->type) to determine whether the child
+	// was actually pushed: a pre-existing local TABLE_FUNCTION (e.g. range() AS r) would have
+	// type == TABLE_FUNCTION even when its result is NO_CATALOG_REFERENCED and it was never pushed.
+	for (idx_t ci = 0; ci < 2; ci++) {
+		auto &child_pushed_result = (ci == 0) ? left_result : right_result;
+		if (child_pushed_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 			continue;
 		}
-		// Only track children that were actually pushed (TableFunctionRef = quack wrapper).
-		if (child_ref->type != TableReferenceType::TABLE_FUNCTION) {
+		auto *child_ref = (ci == 0) ? ref.left.get() : ref.right.get();
+		if (!child_ref || child_ref->alias.empty()) {
 			continue;
 		}
 		bool already_tracked = false;
