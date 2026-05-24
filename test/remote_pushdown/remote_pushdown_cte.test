@@ -284,6 +284,28 @@ with recursive r(n) as (
 ----
 4
 
+# --- CTE reference inside a JoinRef with a local table ---
+
+# When a remote CTE appears as one side of a JOIN alongside a local table, the JoinRef
+# result is UNKNOWN (local side blocks full pushdown). Previously, FinishPushdown would
+# try to push the CTE reference individually as "SELECT * FROM cte_name" without its
+# WITH definition, which fails on the remote. The fix prevents individual pushdown of
+# CTE-named BaseTableRefs so the query falls back to correct local execution.
+
+# cte={0,1,2,3,4}, local_t={0..9}, join on cte.i=local_t.i -> 5 rows
+query I
+with cte as (select * from rpc.t1 where i < 5)
+select count(*) from cte join local_t on cte.i = local_t.i
+----
+5
+
+# Same with remote CTE on the right side
+query I
+with cte as (select * from rpc.t1 where i >= 7)
+select count(*) from local_t join cte on local_t.i = cte.i
+----
+3
+
 statement ok
 drop table local_t
 

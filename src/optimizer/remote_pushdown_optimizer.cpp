@@ -2493,6 +2493,18 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<TableRef> &ref, CatalogP
 	if (ref->type == TableReferenceType::JOIN) {
 		return;
 	}
+	// Do not individually push a CTE reference. The CTE body lives in the enclosing
+	// SelectNode's WITH clause and is only serialized when the entire query is pushed as
+	// a unit. Pushing the bare reference ("SELECT * FROM cte_name") without the WITH
+	// definition would fail on the remote server because the CTE name is not a real table.
+	// This situation arises when Rewrite(JoinRef) tries to push one child of a join that
+	// contains a remote CTE reference alongside a local table.
+	if (ref->type == TableReferenceType::BASE_TABLE) {
+		auto &base = ref->Cast<BaseTableRef>();
+		if (base.catalog_name.empty() && base.schema_name.empty() && cte_results.count(base.table_name) > 0) {
+			return;
+		}
+	}
 	string alias = ref->alias;
 	// For a BaseTableRef with no explicit alias the table name is the implicit alias
 	// (e.g. "rpc.t1" is referenced as "t1" in column refs like "t1.i" in WHERE).
