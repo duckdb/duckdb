@@ -29,6 +29,7 @@ class SetOperationNode;
 class InsertQueryNode;
 class DeleteQueryNode;
 class UpdateQueryNode;
+class MergeIntoStatement;
 
 enum class CatalogReferenceType { NO_CATALOG_REFERENCED, SINGLE_REMOTE_CATALOG, UNKNOWN_CATALOG_REFERENCE };
 
@@ -53,6 +54,7 @@ private:
 	CatalogPushdownResult Rewrite(InsertQueryNode &node);
 	CatalogPushdownResult Rewrite(DeleteQueryNode &node);
 	CatalogPushdownResult Rewrite(UpdateQueryNode &node);
+	CatalogPushdownResult Rewrite(MergeIntoStatement &stmt);
 	CatalogPushdownResult Rewrite(unique_ptr<TableRef> &ref);
 	CatalogPushdownResult Rewrite(ExpressionListRef &ref);
 	CatalogPushdownResult Rewrite(RecursiveCTENode &node);

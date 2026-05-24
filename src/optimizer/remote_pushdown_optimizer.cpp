@@ -35,6 +35,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
 
 namespace duckdb {
 
@@ -132,6 +133,25 @@ void RemotePushdownOptimizer::Rewrite(unique_ptr<SQLStatement> &statement) {
 		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && !dml_node.returning_list.empty()) {
 			CatalogPushdownResult ret_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
 			for (auto &expr : dml_node.returning_list) {
+				ret_result = Merge(ret_result, Rewrite(*expr));
+			}
+			auto combined = Merge(result, ret_result);
+			if (combined.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+				TryPushDMLWithLocalReturning(statement, result);
+				return;
+			}
+			result = combined;
+		}
+		break;
+	}
+	case StatementType::MERGE_INTO_STATEMENT: {
+		auto &merge = statement->Cast<MergeIntoStatement>();
+		auto saved_returning = std::move(merge.returning_list);
+		result = Rewrite(merge);
+		merge.returning_list = std::move(saved_returning);
+		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && !merge.returning_list.empty()) {
+			CatalogPushdownResult ret_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+			for (auto &expr : merge.returning_list) {
 				ret_result = Merge(ret_result, Rewrite(*expr));
 			}
 			auto combined = Merge(result, ret_result);
@@ -841,6 +861,103 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 		result = Merge(result, Rewrite(*expr));
 	}
 	for (auto &cte_pair : node.cte_map.map) {
+		auto it = outer_cte_results.find(cte_pair.first);
+		if (it != outer_cte_results.end()) {
+			cte_results[cte_pair.first] = it->second;
+		} else {
+			cte_results.erase(cte_pair.first);
+		}
+	}
+	return result;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(MergeIntoStatement &stmt) {
+	// Process CTE definitions attached to this MERGE INTO statement
+	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
+	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+	for (auto &cte_pair : stmt.cte_map.map) {
+		const string &cte_name = cte_pair.first;
+		auto &cte_info = *cte_pair.second;
+		auto it = cte_results.find(cte_name);
+		if (it != cte_results.end()) {
+			outer_cte_results[cte_name] = it->second;
+		}
+		CatalogPushdownResult cte_result;
+		if (cte_info.query_node) {
+			cte_result = Rewrite(*cte_info.query_node);
+		} else {
+			cte_result = {};
+		}
+		cte_results[cte_name] = cte_result;
+		cte_combined = Merge(cte_combined, cte_result);
+	}
+
+	// Analyze the target table - must be remote for full pushdown
+	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr, {}};
+	if (stmt.target) {
+		result = Rewrite(stmt.target);
+	}
+
+	// Merge CTE results: even unreferenced CTEs are serialized when the DML is pushed.
+	result = Merge(result, cte_combined);
+
+	// Target must be remote; MERGE INTO cannot partially push with a local target.
+	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		for (auto &cte_pair : stmt.cte_map.map) {
+			auto it = outer_cte_results.find(cte_pair.first);
+			if (it != outer_cte_results.end()) {
+				cte_results[cte_pair.first] = it->second;
+			} else {
+				cte_results.erase(cte_pair.first);
+			}
+		}
+		return {};
+	}
+
+	// Analyze the source. Rewrite(JoinRef) has a side effect of wrapping remote children in
+	// quack_query_by_name even when the overall result is UNKNOWN. Save the source and restore
+	// it if the full-push analysis fails so MERGE INTO can still execute natively.
+	auto saved_source = stmt.source->Copy();
+	result = Merge(result, Rewrite(stmt.source));
+	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		stmt.source = std::move(saved_source);
+		for (auto &cte_pair : stmt.cte_map.map) {
+			auto it = outer_cte_results.find(cte_pair.first);
+			if (it != outer_cte_results.end()) {
+				cte_results[cte_pair.first] = it->second;
+			} else {
+				cte_results.erase(cte_pair.first);
+			}
+		}
+		return {};
+	}
+
+	// Analyze ON join condition
+	if (stmt.join_condition) {
+		result = Merge(result, Rewrite(*stmt.join_condition));
+	}
+
+	// Analyze WHEN MATCHED/NOT MATCHED action conditions and SET/INSERT expressions
+	for (auto &entry : stmt.actions) {
+		for (auto &action : entry.second) {
+			if (action->condition) {
+				result = Merge(result, Rewrite(*action->condition));
+			}
+			if (action->update_info) {
+				if (action->update_info->condition) {
+					result = Merge(result, Rewrite(*action->update_info->condition));
+				}
+				for (auto &expr : action->update_info->expressions) {
+					result = Merge(result, Rewrite(*expr));
+				}
+			}
+			for (auto &expr : action->expressions) {
+				result = Merge(result, Rewrite(*expr));
+			}
+		}
+	}
+
+	for (auto &cte_pair : stmt.cte_map.map) {
 		auto it = outer_cte_results.find(cte_pair.first);
 		if (it != outer_cte_results.end()) {
 			cte_results[cte_pair.first] = it->second;
@@ -2054,6 +2171,45 @@ void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const st
 	case StatementType::UPDATE_STATEMENT:
 		StripCatalogName(*statement.Cast<UpdateStatement>().node, catalog_name);
 		break;
+	case StatementType::MERGE_INTO_STATEMENT: {
+		auto &merge = statement.Cast<MergeIntoStatement>();
+		for (auto &cte_pair : merge.cte_map.map) {
+			if (cte_pair.second->query_node) {
+				StripCatalogName(*cte_pair.second->query_node, catalog_name);
+			}
+		}
+		if (merge.target) {
+			StripCatalogName(*merge.target, catalog_name);
+		}
+		if (merge.source) {
+			StripCatalogName(*merge.source, catalog_name);
+		}
+		if (merge.join_condition) {
+			StripCatalogName(*merge.join_condition, catalog_name, true);
+		}
+		for (auto &entry : merge.actions) {
+			for (auto &action : entry.second) {
+				if (action->condition) {
+					StripCatalogName(*action->condition, catalog_name, true);
+				}
+				if (action->update_info) {
+					if (action->update_info->condition) {
+						StripCatalogName(*action->update_info->condition, catalog_name, true);
+					}
+					for (auto &expr : action->update_info->expressions) {
+						StripCatalogName(*expr, catalog_name, true);
+					}
+				}
+				for (auto &expr : action->expressions) {
+					StripCatalogName(*expr, catalog_name, true);
+				}
+			}
+		}
+		for (auto &expr : merge.returning_list) {
+			StripCatalogName(*expr, catalog_name, true);
+		}
+		break;
+	}
 	default:
 		break;
 	}
@@ -2097,6 +2253,9 @@ void RemotePushdownOptimizer::TryPushDMLWithLocalReturning(unique_ptr<SQLStateme
 		break;
 	case StatementType::UPDATE_STATEMENT:
 		returning_list = &statement->Cast<UpdateStatement>().node->returning_list;
+		break;
+	case StatementType::MERGE_INTO_STATEMENT:
+		returning_list = &statement->Cast<MergeIntoStatement>().returning_list;
 		break;
 	default:
 		return;
