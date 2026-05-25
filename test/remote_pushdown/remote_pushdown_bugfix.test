@@ -21,6 +21,12 @@ create table t2(i int);
 statement ok db1:con1
 insert into t2 values (5), (6), (7), (8), (9), (10), (11), (12), (13), (14);
 
+statement ok db1:con1
+create table t3(i int, j int);
+
+statement ok db1:con1
+insert into t3 values (1, 10), (2, 20), (3, 30);
+
 statement ok
 attach 'quack:localhost' as rpc (token 'asdf')
 
@@ -853,6 +859,69 @@ DELETE FROM rpc.t1 WHERE i = 88 RETURNING i, local_double(i) AS doubled
 # Verify the row is gone from the remote.
 query I
 SELECT count(*) FROM rpc.t1 WHERE i = 88
+----
+0
+
+# UPDATE on remote table with a mixed RETURNING.
+# Insert a row server-side first so there is something to update.
+statement ok db1:con1
+INSERT INTO t1 VALUES (99);
+
+# The remote executes "UPDATE t1 SET i = i + 1 WHERE i = 99 RETURNING i" and returns i=100.
+# The local outer SELECT then applies local_double(100)=200.
+query II
+UPDATE rpc.t1 SET i = i + 1 WHERE i = 99 RETURNING i, local_double(i) AS doubled
+----
+100	200
+
+# Verify the update actually modified the row.
+query I
+SELECT i FROM rpc.t1 WHERE i = 100
+----
+100
+
+# Clean up the updated row.
+statement ok
+DELETE FROM rpc.t1 WHERE i = 100
+
+# Clean up the local macro.
+statement ok
+DROP MACRO local_double;
+
+# ============================================================
+# Bug 19: TryPushDMLWithLocalReturning with RETURNING * — when the
+# RETURNING clause contains a bare star (*) alongside a local macro,
+# the remote RETURNING must use RETURNING * so all table columns are
+# returned, not just the column refs found inside the local macro args.
+#
+# Without the fix: remote RETURNING = "RETURNING i" (only macro args),
+# outer SELECT * expands to only {i}, silently dropping the j column.
+# With the fix: remote RETURNING = "RETURNING *" (all columns),
+# outer SELECT * expands to {i, j}, producing the correct three-column result.
+# ============================================================
+
+statement ok
+CREATE OR REPLACE MACRO local_double(x) AS (x * 2);
+
+# INSERT into multi-column remote table with RETURNING * + local macro.
+# Remote executes "INSERT INTO t3 VALUES (77, 770) RETURNING *" → returns (77, 770).
+# Local outer evaluates "SELECT *, local_double(i) FROM returning_sub" → (77, 770, 154).
+query III
+INSERT INTO rpc.t3 VALUES (77, 770) RETURNING *, local_double(i) AS doubled
+----
+77	770	154
+
+# DELETE from multi-column remote table with RETURNING * + local macro.
+# Remote executes "DELETE FROM t3 WHERE i = 77 RETURNING *" → returns (77, 770).
+# Local outer evaluates "SELECT *, local_double(i) FROM returning_sub" → (77, 770, 154).
+query III
+DELETE FROM rpc.t3 WHERE i = 77 RETURNING *, local_double(i) AS doubled
+----
+77	770	154
+
+# Verify the row is gone.
+query I
+SELECT count(*) FROM rpc.t3 WHERE i = 77
 ----
 0
 

@@ -261,8 +261,7 @@ static bool HasTableFunctionInTree(const TableRef &ref) {
 		return true;
 	case TableReferenceType::JOIN: {
 		auto &join = ref.Cast<JoinRef>();
-		return (join.left && HasTableFunctionInTree(*join.left)) ||
-		       (join.right && HasTableFunctionInTree(*join.right));
+		return (join.left && HasTableFunctionInTree(*join.left)) || (join.right && HasTableFunctionInTree(*join.right));
 	}
 	default:
 		return false;
@@ -2612,14 +2611,28 @@ void RemotePushdownOptimizer::TryPushDMLWithLocalReturning(unique_ptr<SQLStateme
 	}
 	D_ASSERT(returning_list && !returning_list->empty());
 
-	// Collect unique column names referenced in the RETURNING expressions
-	vector<string> col_names;
+	// If any RETURNING expression is a star (*, t.*, * REPLACE (...), etc.) we cannot enumerate
+	// the expanded column set at rewrite time (that requires schema knowledge available only after
+	// binding).  Use RETURNING * for the remote so all columns are returned, which lets the outer
+	// SELECT correctly evaluate star expansions and other expressions against the full row.
+	bool has_star_expr = false;
 	for (auto &expr : *returning_list) {
-		CollectColumnNames(*expr, col_names);
+		if (expr->GetExpressionClass() == ExpressionClass::STAR) {
+			has_star_expr = true;
+			break;
+		}
 	}
-	if (col_names.empty()) {
-		// No column refs found - cannot build a remote RETURNING list; leave unpushed
-		return;
+
+	// Collect unique column names referenced in the RETURNING expressions (only needed without stars)
+	vector<string> col_names;
+	if (!has_star_expr) {
+		for (auto &expr : *returning_list) {
+			CollectColumnNames(*expr, col_names);
+		}
+		if (col_names.empty()) {
+			// No column refs found - cannot build a remote RETURNING list; leave unpushed
+			return;
+		}
 	}
 
 	// Build outer SELECT list: copies of RETURNING expressions with table/catalog qualifiers stripped
@@ -2630,10 +2643,16 @@ void RemotePushdownOptimizer::TryPushDMLWithLocalReturning(unique_ptr<SQLStateme
 		outer_select_list.push_back(std::move(outer_expr));
 	}
 
-	// Replace RETURNING with simplified column refs for remote execution
+	// Replace RETURNING with simplified expression(s) for remote execution:
+	// - Star present: use a bare * so the remote returns all columns and outer star expansions work.
+	// - No star: use explicit column refs extracted above.
 	returning_list->clear();
-	for (auto &col : col_names) {
-		returning_list->push_back(make_uniq<ColumnRefExpression>(col));
+	if (has_star_expr) {
+		returning_list->push_back(make_uniq<StarExpression>());
+	} else {
+		for (auto &col : col_names) {
+			returning_list->push_back(make_uniq<ColumnRefExpression>(col));
+		}
 	}
 
 	// Strip catalog name from the whole statement and serialize as remote SQL
