@@ -11,6 +11,7 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
 
@@ -47,7 +48,7 @@ static string GranularityToSQL(FeatureGranularity gran) {
 }
 
 static string QuoteIdent(const string &name) {
-	return KeywordHelper::WriteOptionallyQuoted(name);
+	return SQLIdentifier::ToString(name);
 }
 
 static string BuildPITQuery(const FeatureCatalogEntry &feat, const string &spine_filter) {
@@ -121,8 +122,8 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 	optional_ptr<FeatureCatalogEntry> feature_entry;
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		auto entry =
-		    schema.get().GetEntry(schema.get().GetCatalogTransaction(context), CatalogType::FEATURE_ENTRY, feature_name);
+		auto entry = schema.get().GetEntry(schema.get().GetCatalogTransaction(context), CatalogType::FEATURE_ENTRY,
+		                                   feature_name);
 		if (entry) {
 			feature_entry = &entry->Cast<FeatureCatalogEntry>();
 			break;
@@ -147,8 +148,7 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			// FULL refresh: delete all rows and re-insert from full PIT query
 			auto del_result = con.Query("DELETE FROM " + table_id);
 			if (del_result->HasError()) {
-				throw InternalException("Failed to clear feature table '%s': %s", feature_name,
-				                        del_result->GetError());
+				throw InternalException("Failed to clear feature table '%s': %s", feature_name, del_result->GetError());
 			}
 
 			auto pit_sql = BuildPITQuery(feat, "");
@@ -184,8 +184,7 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 				auto insert_sql = "INSERT INTO " + table_id + " " + pit_sql;
 				auto ins_result = con.Query(insert_sql);
 				if (ins_result->HasError()) {
-					throw InternalException("Failed to refresh feature '%s': %s", feature_name,
-					                        ins_result->GetError());
+					throw InternalException("Failed to refresh feature '%s': %s", feature_name, ins_result->GetError());
 				}
 				if (ins_result->RowCount() > 0) {
 					state.rows_affected = ins_result->GetValue(0, 0).GetValue<idx_t>();
@@ -222,8 +221,7 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 					// A new row at bucket T affects buckets [T, T + WINDOW).
 					// So affected range = [earliest_new, latest_new + WINDOW).
 					auto window_interval = StringUtil::Format("%d %s", feat.window_size, gran);
-					string upper_bound =
-					    "'" + latest_new + "'::TIMESTAMP + INTERVAL '" + window_interval + "'";
+					string upper_bound = "'" + latest_new + "'::TIMESTAMP + INTERVAL '" + window_interval + "'";
 
 					// Step 4: Delete affected buckets from backing table
 					auto del_sql = "DELETE FROM " + table_id + " WHERE feature_timestamp >= '" + earliest_new +

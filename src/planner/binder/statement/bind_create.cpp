@@ -28,6 +28,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
@@ -827,13 +828,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			}
 			agg_exprs += expr->ToString();
 			if (expr->HasAlias()) {
-				agg_exprs += " AS " + KeywordHelper::WriteOptionallyQuoted(expr->GetAlias());
+				agg_exprs += " AS " + SQLIdentifier::ToString(expr->GetAlias());
 			}
 		}
 
-		auto entity = KeywordHelper::WriteOptionallyQuoted(feature_info.entity_column);
-		auto ts = KeywordHelper::WriteOptionallyQuoted(feature_info.timestamp_column);
-		auto table = KeywordHelper::WriteOptionallyQuoted(feature_info.source_table);
+		auto entity = SQLIdentifier::ToString(feature_info.entity_column);
+		auto ts = SQLIdentifier::ToString(feature_info.timestamp_column);
+		auto table = SQLIdentifier::ToString(feature_info.source_table);
 		auto window_interval = StringUtil::Format("%d %s", feature_info.window_size, gran);
 
 		string pit_sql =
