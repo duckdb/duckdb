@@ -929,5 +929,37 @@ SELECT count(*) FROM rpc.t3 WHERE i = 77
 statement ok
 DROP MACRO local_double;
 
+# ============================================================
+# Bug 20: TryPushDMLWithLocalReturning with a table-qualified star (t.*)
+# in RETURNING alongside a local macro.  StripAllTableQualifiers must
+# clear StarExpression::relation_name so "t3.*" becomes "*" in the outer
+# SELECT; otherwise the binder cannot find table "t3" (only "returning_sub"
+# is in scope) and raises a binding error.
+# ============================================================
+
+statement ok
+CREATE OR REPLACE MACRO local_double(x) AS (x * 2);
+
+# INSERT with table-qualified star — remote executes "INSERT ... RETURNING *",
+# outer SELECT strips "t3.*" → "*" and evaluates the local macro.
+query III
+INSERT INTO rpc.t3 VALUES (88, 880) RETURNING t3.*, local_double(i) AS doubled
+----
+88	880	176
+
+# DELETE with table-qualified star.
+query III
+DELETE FROM rpc.t3 WHERE i = 88 RETURNING t3.*, local_double(i) AS doubled
+----
+88	880	176
+
+query I
+SELECT count(*) FROM rpc.t3 WHERE i = 88
+----
+0
+
+statement ok
+DROP MACRO local_double;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

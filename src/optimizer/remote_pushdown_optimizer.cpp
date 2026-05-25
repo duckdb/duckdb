@@ -2605,6 +2605,11 @@ static void StripAllTableQualifiers(ParsedExpression &expr) {
 		}
 		return;
 	}
+	if (expr.GetExpressionClass() == ExpressionClass::STAR) {
+		// "t.*" → "*": clear the table qualifier so the outer SELECT binds against the
+		// returning_sub alias rather than looking for the now-absent table "t".
+		expr.Cast<StarExpression>().relation_name = "";
+	}
 	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child) { StripAllTableQualifiers(child); });
 }
 
