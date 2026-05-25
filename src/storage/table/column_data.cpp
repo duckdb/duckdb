@@ -692,9 +692,7 @@ void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, 
 void ColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
                            const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count, Vector &result,
                            idx_t result_offset) {
-	// Default safe fallback: per-row FetchRow. Subclasses with no per-row side effects (Standard / Validity)
-	// override to call the optimized FetchRowsAtSegmentLevel instead. Complex subclasses (Struct/List/Array/
-	// Variant/Geo/RowNumber/RowId) inherit this fallback so they keep working unchanged.
+	// Default safe fallback: per-row FetchRow.
 	for (idx_t i = 0; i < fetch_count; i++) {
 		const idx_t offset = offsets[sel.get_index(i)];
 		FetchRow(transaction, state, storage_index, NumericCast<row_t>(offset), result, result_offset + i);
@@ -707,27 +705,16 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 	if (fetch_count == 0) {
 		return;
 	}
-	// Hoist the sel pointer once so the per-row branch becomes a single load+select rather than a
-	// SelectionVector::get_index call (which does the null-check inline). When the caller passes the
-	// identity SelectionVector (sel_data == nullptr) the per-row offset reduces to `offsets[i]`.
+
 	const sel_t *sel_data = sel.data();
-	// Run-detect at the column-data segment level: cache the current segment pointer and only re-resolve
-	// (which acquires the segment-tree's internal lock) when the next offset falls outside the cached
-	// segment's [row_start, row_start + count) range. This collapses N segment-tree lookups + N tree-locks
-	// to ~one per run for clustered offsets, which is the common case for indexed point-fetches on tables
-	// whose row-id order matches the index's sort order.
-	//
-	// Caching the raw segment pointer across loop iterations is safe because the column-data segment
-	// tree is only mutated during checkpoint/vacuum/alter operations, which do not run concurrently
-	// with a snapshot-isolated fetch. If that invariant ever changes, this cache must be revisited
-	// (or the entire bulk fetch must hold `data.Lock()` for its duration).
 	optional_ptr<SegmentNode<ColumnSegment>> current_segment;
 	idx_t segment_start = 0;
 	idx_t segment_end = 0;
-	for (idx_t i = 0; i < fetch_count; i++) {
-		const idx_t offset = offsets[sel_data ? sel_data[i] : i];
+	for (idx_t idx = 0; idx < fetch_count; idx++) {
+		const idx_t offset = offsets[sel_data ? sel_data[idx] : idx];
 		if (offset > count) {
-			throw InternalException("ColumnData::FetchRowsAtSegmentLevel - row_id out of range");
+			throw InternalException("ColumnData::FetchRowsAtSegmentLevel - row_id %lld out of range for count %lld",
+			                        offset, count);
 		}
 		if (!current_segment || offset < segment_start || offset >= segment_end) {
 			current_segment = data.GetSegment(offset);
@@ -735,19 +722,14 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 			segment_end = segment_start + current_segment->GetNode().count;
 		}
 		const idx_t index_in_segment = offset - segment_start;
-		current_segment->GetNode().FetchRow(state, NumericCast<row_t>(index_in_segment), result, result_offset + i);
+		current_segment->GetNode().FetchRow(state, NumericCast<row_t>(index_in_segment), result, result_offset + idx);
 	}
-	// Apply update overlay with one update_lock acquisition for the whole batch instead of one per row.
-	// The fast path (no updates ever applied) becomes a single uncontended lock + null check.
-	// NOTE: per-row `updates->FetchRow` still acquires its own internal shared lock + buffer pin per row
-	// (see UpdateSegment::FetchRow). For workloads with frequent UPDATEs on the same column this is the
-	// next bottleneck and would be addressed by adding a bulk `UpdateSegment::FetchRows` API.
 	{
-		lock_guard<mutex> update_guard(update_lock);
+		const lock_guard<mutex> update_guard(update_lock);
 		if (updates) {
-			for (idx_t i = 0; i < fetch_count; i++) {
-				const idx_t offset = offsets[sel_data ? sel_data[i] : i];
-				updates->FetchRow(transaction, NumericCast<idx_t>(offset), result, result_offset + i);
+			for (idx_t idx = 0; idx < fetch_count; idx++) {
+				const idx_t offset = offsets[sel_data ? sel_data[idx] : idx];
+				updates->FetchRow(transaction, NumericCast<idx_t>(offset), result, result_offset + idx);
 			}
 		}
 	}

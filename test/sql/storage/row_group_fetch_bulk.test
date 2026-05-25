@@ -2,7 +2,7 @@
 # description: Check correctness for fetch rows in batches.
 # group: [storage]
 
-# Force the planner to use the ART index path, which routes through RowGroupCollection::Fetch.
+# Force the planner to use the ART index path, and group fetch candicate rows with index.
 statement ok
 SET index_scan_percentage = 1.0;
 

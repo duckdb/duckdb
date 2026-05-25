@@ -170,22 +170,11 @@ public:
 	//! Fetch a specific row id and append it to the vector
 	virtual void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
 	                      row_t row_id, Vector &result, idx_t result_idx);
-	//! Bulk variant of FetchRow. For each i in [0, count), fetches the row at offsets[sel.get_index(i)]
-	//! into result[result_offset + i]. The default implementation is a safe per-row loop over FetchRow,
-	//! suitable for any subclass. Leaf columns (StandardColumnData, ValidityColumnData) override to use
-	//! the optimized FetchRowsAtSegmentLevel helper, which detects runs of consecutive offsets that fall
-	//! in the same column-data segment so the segment-tree lock is acquired ~once per run rather than
-	//! once per row, and applies the update overlay with a single update_lock acquisition for the whole
-	//! batch. Complex columns (Struct/List/Array/Variant/Geo/RowNumber/RowId) need to override to also
-	//! fetch their children/validity/etc., or fall back to this default.
+	//! Bulk variant of FetchRow.
 	virtual void FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
 	                       const idx_t *offsets, const SelectionVector &sel, idx_t count, Vector &result,
 	                       idx_t result_offset);
-	//! Optimized run-detected bulk fetch for "leaf" columns (no child columns to also fetch). Handles
-	//! the column-data segment lookup + update overlay; safe to call from subclass FetchRows overrides
-	//! when the subclass has no per-row side effects beyond what the base ColumnData::FetchRow does.
-	//! Public (rather than protected) so a parent leaf column can drive bulk fetches of its sibling
-	//! validity column directly.
+	//! Fetches a batch of row offsets for leaf columns.
 	void FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetchState &state, const idx_t *offsets,
 	                             const SelectionVector &sel, idx_t count, Vector &result, idx_t result_offset);
 

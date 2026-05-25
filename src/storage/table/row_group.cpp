@@ -1015,7 +1015,7 @@ idx_t RowGroup::Fetch(TransactionData transaction, const idx_t *offsets, idx_t f
 		// is responsible for treating "returned == fetch_count" as the all-visible / identity case.
 		return fetch_count;
 	}
-	return vinfo->Fetch(transaction, offsets, fetch_count, visible_sel);
+	return vinfo->GetVisibleRows(transaction, offsets, fetch_count, visible_sel);
 }
 
 void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<StorageIndex> &column_ids,
@@ -1046,10 +1046,6 @@ void RowGroup::FetchRows(TransactionData transaction, ColumnFetchState &state, c
 		auto &result_vector = result.data[col_idx];
 		D_ASSERT(result_vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		auto &col_data = GetColumn(column);
-		// Delegate to the column's bulk fetch. For leaf columns (Standard/Validity) this collapses
-		// per-row segment-tree lookups + per-row update_lock acquisitions to ~one per run; for complex
-		// columns (Struct/List/Array/Variant/Geo/RowNumber/RowId) the default ColumnData::FetchRows is
-		// a safe per-row loop that preserves the original behavior.
 		col_data.FetchRows(transaction, state, column, offsets, visible_sel, visible_count, result_vector,
 		                   result_offset);
 	}

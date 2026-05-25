@@ -28,12 +28,8 @@ public:
 
 	idx_t GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 	bool Fetch(TransactionData transaction, idx_t row);
-	//! Bulk visibility check. For each offset in [0, count), writes the input index `i` into
-	//! `visible_sel[visible_count++]` if `offsets[i]` is visible to `transaction`. Returns the number
-	//! of visible rows. Acquires `version_lock` once for the entire batch and groups consecutive
-	//! offsets by their containing vector_idx so `GetChunkInfo` is called once per vector_idx group
-	//! rather than once per row.
-	idx_t Fetch(TransactionData transaction, const idx_t *offsets, idx_t count, SelectionVector &visible_sel);
+	//! Bulk visibility check. Returns the number of visible rows.
+	idx_t GetVisibleRows(TransactionData transaction, const idx_t *offsets, idx_t count, SelectionVector &visible_sel);
 
 	void AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end);
 	void CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count);
