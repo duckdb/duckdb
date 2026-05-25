@@ -1287,6 +1287,8 @@ private:
 	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer, const bool &deallocate_prepare, const string &identifier);
 	static unique_ptr<TransformResultValue> TransformDeallocatePrepareInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformDeallocatePrepare(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformDiscardStatementInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformDiscardStatement(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformDeleteStatementInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformDeleteStatement(PEGTransformer &transformer, CommonTableExpressionMap with_clause, unique_ptr<BaseTableRef> target_opt_alias, vector<unique_ptr<TableRef>> delete_using_clause, unique_ptr<ParsedExpression> where_clause, vector<unique_ptr<ParsedExpression>> returning_clause);
 	static unique_ptr<TransformResultValue> TransformTargetOptAliasInternal(PEGTransformer &transformer, ParseResult &parse_result);

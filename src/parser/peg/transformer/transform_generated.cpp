@@ -803,6 +803,12 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDeallocatePrepa
 	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDiscardStatementInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
+	auto result = TransformDiscardStatement(transformer);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDeleteStatementInternal(
     PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -1492,6 +1498,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 		{"CreateRecursive", &PEGTransformerFactory::TransformCreateRecursiveInternal},
 		{"DeallocateStatement", &PEGTransformerFactory::TransformDeallocateStatementInternal},
 		{"DeallocatePrepare", &PEGTransformerFactory::TransformDeallocatePrepareInternal},
+		{"DiscardStatement", &PEGTransformerFactory::TransformDiscardStatementInternal},
 		{"DeleteStatement", &PEGTransformerFactory::TransformDeleteStatementInternal},
 		{"TargetOptAlias", &PEGTransformerFactory::TransformTargetOptAliasInternal},
 		{"DeleteUsingClause", &PEGTransformerFactory::TransformDeleteUsingClauseInternal},
