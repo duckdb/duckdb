@@ -106,7 +106,7 @@ vector<string> PEGTransformerFactory::TransformTriggerColumnList(PEGTransformer 
 }
 
 TriggerTableReferencingInfo PEGTransformerFactory::TransformReferencingNewTableAs(PEGTransformer &transformer,
-                                                                                 const string &col_id) {
+                                                                                  const string &col_id) {
 	TriggerTableReferencingInfo info;
 	info.new_table = col_id;
 	return info;
@@ -119,9 +119,10 @@ TriggerTableReferencingInfo PEGTransformerFactory::TransformReferencingOldTableA
 	return info;
 }
 
-TriggerTableReferencingInfo PEGTransformerFactory::TransformReferencingClause(
-    PEGTransformer &transformer, const TriggerTableReferencingInfo &referencing_item,
-    const TriggerTableReferencingInfo &referencing_item_1) {
+TriggerTableReferencingInfo
+PEGTransformerFactory::TransformReferencingClause(PEGTransformer &transformer,
+                                                  const TriggerTableReferencingInfo &referencing_item,
+                                                  const TriggerTableReferencingInfo &referencing_item_1) {
 	auto result = referencing_item;
 	if (!referencing_item_1.new_table.empty()) {
 		if (!result.new_table.empty()) {
