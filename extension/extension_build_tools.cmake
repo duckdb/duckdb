@@ -98,6 +98,10 @@ if (NOT ${EXTENSION_CONFIG_BUILD} AND NOT ${EXTENSION_TESTS_ONLY} AND NOT CLANG_
 endif()
 
 function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTENSION_VERSION CAPI_VERSION PARAMETERS)
+    if(DUCKDB_SKIP_LOADABLE_EXTENSIONS)
+        add_library(${NAME}_loadable_extension OBJECT)
+        return()
+    endif()
     set(TARGET_NAME ${NAME}_loadable_extension)
     if (LOCAL_EXTENSION_REPO)
         add_dependencies(duckdb_local_extension_repo ${NAME}_loadable_extension)
