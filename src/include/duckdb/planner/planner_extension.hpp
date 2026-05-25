@@ -23,6 +23,8 @@ struct PlannerExtensionInfo {
 	}
 };
 
+enum class GetSQLValueFunctionReturnType { CONTINUE_BINDING, FINISH_BINDING };
+
 struct PlannerExtensionInput {
 	ClientContext &context;
 	Binder &binder;
@@ -32,6 +34,10 @@ struct PlannerExtensionInput {
 //! The post_bind function runs after binding succeeds, allowing modification of the bound statement
 typedef void (*post_bind_function_t)(PlannerExtensionInput &input, BoundStatement &statement);
 
+typedef GetSQLValueFunctionReturnType (*get_sql_value_function_t)(PlannerExtensionInput &input,
+                                                                  const string &column_name,
+                                                                  unique_ptr<ParsedExpression> &result);
+
 class PlannerExtension {
 public:
 	//! The post-bind function of the planner extension.
@@ -39,6 +45,9 @@ public:
 	//! This runs after the binder has successfully bound the statement,
 	//! allowing modification of the plan and result types.
 	post_bind_function_t post_bind_function = nullptr;
+
+	//! Override that allows registering a different callback for SQL value functions
+	get_sql_value_function_t get_sql_value_function = nullptr;
 
 	//! Additional planner info passed to the functions
 	shared_ptr<PlannerExtensionInfo> planner_info;

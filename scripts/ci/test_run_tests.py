@@ -261,6 +261,46 @@ require windows: 2
         self.assertIn("require windows: 2", summary_block)
         self.assertNotIn("require windows: 7", summary_block)
 
+    def test_fail_require_skip_enabled_fails(self):
+        test_list_path = create_temp_file("test/sql/a.test\n")
+        helper_path = create_temp_file(
+            """
+            #!/bin/sh
+            cat <<'EOF'
+            Skipped tests for the following reasons:
+            require mysql_scanner: 56
+            require postgres_scanner: 2
+            require spatial: 124
+            EOF
+            exit 0
+            """
+        )
+        os.chmod(helper_path, 0o755)
+
+        try:
+            proc = start_runner(
+                [
+                    "--workers",
+                    "1",
+                    "--batch-size",
+                    "1",
+                    "--fail-require-skip",
+                    "--test-list",
+                    str(test_list_path),
+                    "--test-command",
+                    f"{helper_path} {{test_list}}",
+                    "unused-binary",
+                ]
+            )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+            helper_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("require mysql_scanner: 56", proc.stdout)
+        self.assertIn("require postgres_scanner: 2", proc.stdout)
+        self.assertIn("require spatial: 124", proc.stdout)
+
     def test_generate_list(self):
         listed_tests_path = create_temp_file(
             """
@@ -548,8 +588,9 @@ require windows: 2
         failing_helper = create_temp_file(
             """
             #!/bin/sh
-            if [ "$1" = "--test-config" ] && [ "$2" = "test/configs/fail.json" ] && [ "$3" = "--list-tests" ]; then
-              exit 1
+            if [ "$1" = "--test-config" ] && [ "$2" = "test/configs/empty.json" ] && [ "$3" = "--list-tests" ]; then
+              echo "name\tgroup"
+              exit 0
             fi
             if [ "$1" = "--test-config" ] && [ "$3" = "--list-tests" ]; then
               echo "name\tgroup"
@@ -572,7 +613,7 @@ require windows: 2
                     "--test-config",
                     "test/configs/pass.json",
                     "--test-config",
-                    "test/configs/fail.json",
+                    "test/configs/empty.json",
                     str(failing_helper),
                     "ignored-pattern",
                 ]
@@ -581,7 +622,8 @@ require windows: 2
             failing_helper.unlink(missing_ok=True)
 
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
-        self.assertIn("error: 1 config runs failed: test/configs/fail.json", proc.stdout)
+        self.assertIn("error: no tests selected for config 'test/configs/empty.json'", proc.stdout)
+        self.assertIn("error: 1 config runs failed: test/configs/empty.json", proc.stdout)
 
     def test_ci_groups_close_when_all_configs_pass(self):
         listed_tests_path = create_temp_file(

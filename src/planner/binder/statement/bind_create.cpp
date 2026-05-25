@@ -255,7 +255,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	if (attached.HasStorageManager()) {
 		// If DuckDB is used as a storage, we must check the version.
 		auto &storage_manager = attached.GetStorageManager();
-		const auto since = SerializationCompatibility::FromString("v1.4.0").serialization_version;
+		const auto since = StorageCompatibility::FromString("v1.4.0").storage_version;
 		store_types = info.temporary || attached.IsTemporary() || storage_manager.InMemory() ||
 		              storage_manager.GetStorageVersion() >= since;
 	}
@@ -487,7 +487,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto &attached = catalog.GetAttached();
 	if (attached.HasStorageManager()) {
 		auto &storage_manager = attached.GetStorageManager();
-		const auto since = SerializationCompatibility::FromString("v2.0.0").serialization_version;
+		const auto since = StorageVersion::V2_0_0;
 		if (!create_trigger_info.temporary && !attached.IsTemporary() && !storage_manager.InMemory() &&
 		    storage_manager.GetStorageVersion() < since) {
 			string msg = "CREATE TRIGGER is only supported for storage versions v2.0.0 and higher.\n";

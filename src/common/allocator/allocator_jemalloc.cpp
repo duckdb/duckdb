@@ -18,7 +18,7 @@ extern "C" {
 
 unsigned duckdb_malloc_ncpus() {
 #ifdef DUCKDB_NO_THREADS
-	return 1
+	return 1;
 #else
 	unsigned concurrency = duckdb::NumericCast<unsigned>(std::thread::hardware_concurrency());
 	return std::max(concurrency, 1u);

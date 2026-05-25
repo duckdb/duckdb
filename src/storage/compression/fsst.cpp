@@ -97,7 +97,7 @@ struct FSSTAnalyzeState : public AnalyzeState {
 
 unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	auto &storage_manager = col_data.GetStorageManager();
-	if (storage_manager.GetStorageVersion() >= 5) {
+	if (StorageManager::TargetAtLeastVersion(StorageVersion::V1_3_0, storage_manager.GetStorageVersion())) {
 		// dict_fsst introduced - disable fsst
 		return nullptr;
 	}
