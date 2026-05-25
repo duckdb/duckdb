@@ -63,8 +63,7 @@ public:
 
 	//! Create a CSVWriter that writes to a file
 	CSVWriter(CSVReaderOptions &options, FileSystem &fs, const string &file_path,
-	          FileCompressionOptions compression_options,
-	          bool shared = true);
+	          FileCompressionOptions compression_options, bool shared = true);
 
 	//! Writes header and prefix if necessary
 	void Initialize(bool force = false);
