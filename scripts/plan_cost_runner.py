@@ -6,6 +6,7 @@ import subprocess
 import sys
 from tqdm import tqdm
 
+
 OLD_DB_NAME = "old.duckdb"
 NEW_DB_NAME = "new.duckdb"
 PROFILE_FILENAME = "duckdb_profile.json"
@@ -70,16 +71,10 @@ def get_operator_name(op) -> str:
 
 
 def get_root_operator(data) -> dict:
-    # New format uses 'operator_info', older formats may use 'children'
+    # Old binary (main) uses 'children', new binary uses 'operator_info'
     if 'operator_info' in data:
         return data['operator_info'][0]
-    if 'children' in data:
-        return data['children'][0]
-    # Fallback: search for the first list-valued key containing operator dicts
-    for key, val in data.items():
-        if isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict):
-            return val[0]
-    raise KeyError(f"Cannot find root operator in profiling output. Keys present: {list(data.keys())}")
+    return data['children'][0]
 
 
 def is_measured_join(op) -> bool:
