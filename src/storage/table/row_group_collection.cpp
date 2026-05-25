@@ -439,7 +439,7 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 	// All current callers pass at most STANDARD_VECTOR_SIZE row-ids per call. The stack buffers
 	// below assume this; if a future caller passes more, the run-detection loop would overflow
 	// `offsets[]` / `visible_sel_buffer[]`. Catch that during debug builds.
-	D_ASSERT(fetch_count <= STANDARD_VECTOR_SIZE);
+	ALWAYS_ASSERT(fetch_count <= STANDARD_VECTOR_SIZE);
 
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 	auto row_groups = GetRowGroups();
@@ -1034,7 +1034,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 
 	// If we are in WAL replay, delete data will be buffered, and so we sort the column_ids
 	// since the sorted form will be the mapping used to get back physical IDs from the buffered index chunk.
-	vector<StorageIndex> column_ids{indexed_column_id_set.begin(), indexed_column_id_set.end()};
+	vector<StorageIndex> column_ids {indexed_column_id_set.begin(), indexed_column_id_set.end()};
 	sort(column_ids.begin(), column_ids.end());
 
 	vector<LogicalType> column_types;
