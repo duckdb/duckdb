@@ -866,6 +866,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 			string pushed_from_alias;
 			vector<string> update_pushed_cats;
 			bool update_has_streaming_from = false;
+			case_insensitive_set_t remote_from_join_aliases;
 			from_pushed_catalog_names.clear();
 			from_pushed_table_aliases.clear();
 			if (node.from_table) {
@@ -911,6 +912,20 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 				bool from_actually_pushed = from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
 				                            node.from_table->type == TableReferenceType::TABLE_FUNCTION;
 				update_has_streaming_from = from_actually_pushed || had_join_child_pushdowns;
+				// When the FROM table is an all-remote JoinRef that FinishPushdown skips, its
+				// individual table names are absent from local_table_names. Without them,
+				// HasLocalTableReference inside PushdownSubqueries cannot detect SET-expression
+				// subqueries correlated to those outer FROM tables
+				// (e.g. SET col = (SELECT j FROM rpc.t3 WHERE t3.k = from_t1.k) FROM rpc.t1 JOIN rpc.t2).
+				// Collect and temporarily register them, mirroring the remote_join_table_aliases
+				// pattern used in Rewrite(SelectNode).
+				if (!update_has_streaming_from &&
+				    from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+					CollectTableAliases(*node.from_table, remote_from_join_aliases);
+					for (auto &alias : remote_from_join_aliases) {
+						local_table_names.insert(alias);
+					}
+				}
 			}
 			if (node.set_info) {
 				// Strip pushed catalog names so "rpc.from_t.col" refs remain resolvable
@@ -934,6 +949,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 						PushdownSubqueries(expr);
 					}
 				}
+			}
+			for (auto &alias : remote_from_join_aliases) {
+				local_table_names.erase(alias);
 			}
 			if (!pushed_from_alias.empty()) {
 				local_table_names.erase(pushed_from_alias);
