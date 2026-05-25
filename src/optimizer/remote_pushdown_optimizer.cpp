@@ -221,6 +221,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 		} else {
 			cte_result = {};
 		}
+		for (auto &key : cte_info.key_targets) {
+			cte_result = Merge(cte_result, Rewrite(*key));
+		}
 		cte_results[cte_name] = cte_result;
 		cte_combined = Merge(cte_combined, cte_result);
 	}
@@ -351,6 +354,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			cte_result = Rewrite(*cte_info.query_node);
 		} else {
 			cte_result = {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
+		}
+		for (auto &key : cte_info.key_targets) {
+			cte_result = Merge(cte_result, Rewrite(*key));
 		}
 		cte_results[cte_name] = cte_result;
 	}
@@ -676,6 +682,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 		} else {
 			cte_result = {};
 		}
+		for (auto &key : cte_info.key_targets) {
+			cte_result = Merge(cte_result, Rewrite(*key));
+		}
 		cte_results[cte_name] = cte_result;
 		cte_combined = Merge(cte_combined, cte_result);
 	}
@@ -802,6 +811,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 			cte_result = Rewrite(*cte_info.query_node);
 		} else {
 			cte_result = {};
+		}
+		for (auto &key : cte_info.key_targets) {
+			cte_result = Merge(cte_result, Rewrite(*key));
 		}
 		cte_results[cte_name] = cte_result;
 		cte_combined = Merge(cte_combined, cte_result);
@@ -933,6 +945,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 			cte_result = Rewrite(*cte_info.query_node);
 		} else {
 			cte_result = {};
+		}
+		for (auto &key : cte_info.key_targets) {
+			cte_result = Merge(cte_result, Rewrite(*key));
 		}
 		cte_results[cte_name] = cte_result;
 		cte_combined = Merge(cte_combined, cte_result);
@@ -1129,6 +1144,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(MergeIntoStatement &stmt)
 		} else {
 			cte_result = {};
 		}
+		for (auto &key : cte_info.key_targets) {
+			cte_result = Merge(cte_result, Rewrite(*key));
+		}
 		cte_results[cte_name] = cte_result;
 		cte_combined = Merge(cte_combined, cte_result);
 	}
@@ -1271,6 +1289,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 			cte_result = Rewrite(*cte_info.query_node);
 		} else {
 			cte_result = {};
+		}
+		for (auto &key : cte_info.key_targets) {
+			cte_result = Merge(cte_result, Rewrite(*key));
 		}
 		cte_results[cte_name] = cte_result;
 		cte_combined = Merge(cte_combined, cte_result);
