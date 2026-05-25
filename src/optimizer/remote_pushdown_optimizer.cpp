@@ -1984,6 +1984,11 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 			if (cte_pair.second->query_node && HasLocalTableReference(*cte_pair.second->query_node)) {
 				return true;
 			}
+			for (auto &key : cte_pair.second->key_targets) {
+				if (HasLocalTableReference(*key)) {
+					return true;
+				}
+			}
 		}
 		// Also check modifiers: ORDER BY, DISTINCT ON, and LIMIT expressions can carry
 		// correlated references to outer local tables (e.g. LATERAL ... ORDER BY outer_col).
@@ -2036,6 +2041,11 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 		for (auto &cte_pair : setop.cte_map.map) {
 			if (cte_pair.second->query_node && HasLocalTableReference(*cte_pair.second->query_node)) {
 				return true;
+			}
+			for (auto &key : cte_pair.second->key_targets) {
+				if (HasLocalTableReference(*key)) {
+					return true;
+				}
 			}
 		}
 		for (auto &child : setop.children) {
@@ -2093,6 +2103,11 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 			if (cte_pair.second->query_node && HasLocalTableReference(*cte_pair.second->query_node)) {
 				return true;
 			}
+			for (auto &key : cte_pair.second->key_targets) {
+				if (HasLocalTableReference(*key)) {
+					return true;
+				}
+			}
 		}
 		return (rec.left && HasLocalTableReference(*rec.left)) || (rec.right && HasLocalTableReference(*rec.right));
 	}
@@ -2106,6 +2121,11 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 		for (auto &cte_pair : insert.cte_map.map) {
 			if (cte_pair.second->query_node && HasLocalTableReference(*cte_pair.second->query_node)) {
 				return true;
+			}
+			for (auto &key : cte_pair.second->key_targets) {
+				if (HasLocalTableReference(*key)) {
+					return true;
+				}
 			}
 		}
 		if (insert.select_statement && HasLocalTableReference(*insert.select_statement->node)) {
@@ -2140,6 +2160,11 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 			if (cte_pair.second->query_node && HasLocalTableReference(*cte_pair.second->query_node)) {
 				return true;
 			}
+			for (auto &key : cte_pair.second->key_targets) {
+				if (HasLocalTableReference(*key)) {
+					return true;
+				}
+			}
 		}
 		if (del.condition && HasLocalTableReference(*del.condition)) {
 			return true;
@@ -2161,6 +2186,11 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 		for (auto &cte_pair : upd.cte_map.map) {
 			if (cte_pair.second->query_node && HasLocalTableReference(*cte_pair.second->query_node)) {
 				return true;
+			}
+			for (auto &key : cte_pair.second->key_targets) {
+				if (HasLocalTableReference(*key)) {
+					return true;
+				}
 			}
 		}
 		if (upd.from_table && HasLocalTableReference(*upd.from_table)) {
