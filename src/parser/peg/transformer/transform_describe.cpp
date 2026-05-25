@@ -139,7 +139,18 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 					vector<unique_ptr<ParsedExpression>> args;
 					args.push_back(make_uniq<ConstantExpression>(Value(base_table->table_name)));
 					auto func_expr = make_uniq<FunctionExpression>("current_setting", std::move(args));
-					func_expr->SetAlias(base_table->table_name);
+					// PG-compat: PG returns these three GUCs with their CamelCase canonical names as the
+					// column header regardless of how the caller cased the identifier; drivers
+					// compare case-sensitively (pgjdbc parameter_status, Npgsql cache keys).
+					auto alias = base_table->table_name;
+					if (StringUtil::CIEquals(alias, "timezone")) {
+						alias = "TimeZone";
+					} else if (StringUtil::CIEquals(alias, "datestyle")) {
+						alias = "DateStyle";
+					} else if (StringUtil::CIEquals(alias, "intervalstyle")) {
+						alias = "IntervalStyle";
+					}
+					func_expr->SetAlias(alias);
 					result->select_list.push_back(std::move(func_expr));
 					result->from_table = make_uniq<EmptyTableRef>();
 					return std::move(result);
@@ -188,13 +199,16 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAliasedSetting(PEGTran
 	auto &alts = choice_pr.GetResult().Cast<ListParseResult>();
 	auto &first_kw = alts.Child<KeywordParseResult>(0).keyword;
 
+	// PG-compat: PG-canonical GUC names. transaction_isolation / session_authorization are lowercase
+	// in PG; timezone is the rare CamelCase outlier (TimeZone). Drivers compare the
+	// result column header case-sensitively, so emit the canonical case verbatim.
 	string setting_name;
 	if (StringUtil::CIEquals(first_kw, "TRANSACTION")) {
 		setting_name = "transaction_isolation";
 	} else if (StringUtil::CIEquals(first_kw, "SESSION")) {
 		setting_name = "session_authorization";
 	} else {
-		setting_name = "timezone";
+		setting_name = "TimeZone";
 	}
 
 	auto result = make_uniq<SelectNode>();
