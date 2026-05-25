@@ -2587,7 +2587,20 @@ static bool JoinSelectHasDuplicateOutputNames(const SelectNode &select) {
 }
 
 static bool QueryNodeWouldProduceDuplicateNames(const QueryNode &node) {
-	return node.type == QueryNodeType::SELECT_NODE && JoinSelectHasDuplicateOutputNames(node.Cast<SelectNode>());
+	if (node.type == QueryNodeType::SELECT_NODE) {
+		return JoinSelectHasDuplicateOutputNames(node.Cast<SelectNode>());
+	}
+	// For set operations, the output schema is taken from the first child. If the first child
+	// would produce duplicate names (e.g. "SELECT a.i, b.i FROM t JOIN t UNION ALL ..."), the
+	// pushed quack_query_by_name wrapper would expose those duplicates to the local binder, which
+	// cannot resolve them without schema information.
+	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
+		auto &setop = node.Cast<SetOperationNode>();
+		if (!setop.children.empty()) {
+			return QueryNodeWouldProduceDuplicateNames(*setop.children[0]);
+		}
+	}
+	return false;
 }
 
 void RemotePushdownOptimizer::FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result) {
