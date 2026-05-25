@@ -243,6 +243,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	}
 	cte_results[node.ctename] = {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
 
+	// Save left and right before analysis. Rewrite(SelectNode) calls Rewrite(JoinRef) which pushes
+	// individual SINGLE_REMOTE children in-place via FinishPushdown even when the JoinRef result is
+	// UNKNOWN (mixed join). If the overall RecursiveCTENode result is UNKNOWN, those stale quack
+	// wrappers must be rolled back: the CTE body executes natively, and if the outer query also has
+	// a quack streaming slot open (e.g. an individually-pushed remote FROM), the stale wrapper inside
+	// the CTE arm would open a concurrent second streaming connection → "Multiple streaming scans".
+	auto saved_left = node.left->Copy();
+	auto saved_right = node.right->Copy();
+
 	CatalogPushdownResult left_result = Rewrite(*node.left);
 	CatalogPushdownResult right_result = Rewrite(*node.right);
 
@@ -265,7 +274,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	}
 
 	auto result = Merge(left_result, right_result);
-	return Merge(result, cte_combined);
+	result = Merge(result, cte_combined);
+	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		node.left = std::move(saved_left);
+		node.right = std::move(saved_right);
+	}
+	return result;
 }
 
 // Returns true if ref or any descendant in a JoinRef tree is a TABLE_FUNCTION ref.

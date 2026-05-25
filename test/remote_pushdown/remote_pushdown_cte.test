@@ -327,6 +327,45 @@ select count(*) from local_t join cte on local_t.i = cte.i
 ----
 3
 
+# --- Recursive CTE with mixed JoinRef in base case: save/restore fix ---
+#
+# Bug fix: Rewrite(RecursiveCTENode) previously did not save/restore node.left and node.right.
+# When the base case has a mixed JoinRef (e.g. rpc.t1 JOIN local_t), Rewrite(JoinRef) pushes
+# the remote child in-place even though the overall JoinRef result is UNKNOWN. Without the fix,
+# those stale quack wrappers remain in the CTE arms after the CTE result is classified as UNKNOWN.
+# With the fix, node.left and node.right are restored to their original state so the CTE executes
+# via native remote scanning rather than the quack streaming protocol, preventing potential
+# "Multiple streaming scans" errors when the outer query also opens a quack streaming slot.
+#
+# local_t = {0..9}, rpc.t1 = {0..9}
+# recursive CTE base: rpc.t1 JOIN local_t on i=i where i < 3 -> {0, 1, 2}
+# recursive arm: adds 10 to each row until >= 15 -> adds {10, 11, 12}
+# outer SELECT: count(*) from CTE -> 6 rows
+
+query I
+with recursive r(n) as (
+  select t1.i from rpc.t1 t1 join local_t on t1.i = local_t.i where t1.i < 3
+  union all
+  select n + 10 from r where r.n < 5
+) select count(*) from r
+----
+6
+
+# Verify correct values
+query I
+with recursive r(n) as (
+  select t1.i from rpc.t1 t1 join local_t on t1.i = local_t.i where t1.i < 3
+  union all
+  select n + 10 from r where r.n < 5
+) select n from r order by n
+----
+0
+1
+2
+10
+11
+12
+
 statement ok
 drop table local_t
 
