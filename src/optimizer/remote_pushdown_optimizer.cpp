@@ -480,10 +480,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			// SINGLE_REMOTE CTEs are in scope — those cases must not be counted as streaming slots.
 			// Pre-existing TABLE_FUNCTION refs with non-SINGLE_REMOTE results are excluded via the
 			// from_result guard (FinishPushdown is a no-op for non-SINGLE_REMOTE results).
-			bool from_table_actually_pushed = from_result.reference_type ==
-			                                      CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-			                                  node.from_table &&
-			                                  node.from_table->type == TableReferenceType::TABLE_FUNCTION;
+			bool from_table_actually_pushed =
+			    from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && node.from_table &&
+			    node.from_table->type == TableReferenceType::TABLE_FUNCTION;
 			string pushed_from_alias;
 			if (from_table_actually_pushed && !node.from_table->alias.empty()) {
 				pushed_from_alias = node.from_table->alias;
@@ -892,8 +891,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 				// skipped (e.g. for a JoinRef or SubqueryRef with outer SINGLE_REMOTE CTEs),
 				// no streaming slot is open. Use type==TABLE_FUNCTION as the definitive signal,
 				// guarded by SINGLE_REMOTE to exclude pre-existing local table-function refs.
-				bool from_actually_pushed = from_result.reference_type ==
-				                                CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+				bool from_actually_pushed = from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
 				                            node.from_table->type == TableReferenceType::TABLE_FUNCTION;
 				update_has_streaming_from = from_actually_pushed || had_join_child_pushdowns;
 			}
@@ -1947,7 +1945,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 		return result;
 	}
 	// Handle function and window expressions: resolve catalog qualifiers.
-	auto check_catalog_qualified_expr = [&](const string &raw_catalog, const string &raw_schema) -> CatalogPushdownResult {
+	auto check_catalog_qualified_expr = [&](const string &raw_catalog,
+	                                        const string &raw_schema) -> CatalogPushdownResult {
 		string catalog_name = raw_catalog;
 		string schema_name = raw_schema;
 		Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);

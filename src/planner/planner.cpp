@@ -46,13 +46,6 @@ static void RunPostBindExtensions(ClientContext &context, Binder &binder, BoundS
 
 void Planner::CreatePlan(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
-	profiler.StartPhase(MetricType::PLANNER);
-	profiler.EndPhase();
-	CreatePlanInternal(statement);
-}
-
-void Planner::CreatePlanInternal(SQLStatement &statement) {
-	auto &profiler = QueryProfiler::Get(context);
 	auto parameter_count = statement.named_param_map.size();
 
 	BoundParameterMap bound_parameters(parameter_data);
@@ -141,7 +134,9 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 
 void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement);
-	Optimizer::OptimizeStatement(context, *binder, statement);
+	Optimizer optimizer(*binder, context);
+	optimizer.OptimizeStatement(statement);
+
 	switch (statement->type) {
 	case StatementType::SELECT_STATEMENT:
 	case StatementType::INSERT_STATEMENT:

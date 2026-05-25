@@ -31,9 +31,8 @@ public:
 	bool OptimizerDisabled(OptimizerType type);
 	static bool OptimizerDisabled(ClientContext &context, OptimizerType type);
 
-	//! Pre-binder statement-level optimization pass (remote pushdown rewriting).
-	//! Runs before the statement is bound, so it receives a parsed SQLStatement.
-	static void OptimizeStatement(ClientContext &context, Binder &binder, unique_ptr<SQLStatement> &statement);
+	//! Pre-binder statement-level optimization pass
+	void OptimizeStatement(unique_ptr<SQLStatement> &statement);
 
 public:
 	ClientContext &context;
