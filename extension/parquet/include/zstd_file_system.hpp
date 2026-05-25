@@ -22,6 +22,9 @@ namespace duckdb {
 
 class ZStdFileSystem : public CompressedFileSystem {
 public:
+	ZStdFileSystem();
+	explicit ZStdFileSystem(int64_t compression_level);
+
 	unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, bool write,
 	                                          const FileCompressionOptions &compression_options) override;
 
@@ -36,6 +39,9 @@ public:
 	static int64_t DefaultCompressionLevel();
 	static int64_t MinimumCompressionLevel();
 	static int64_t MaximumCompressionLevel();
+
+private:
+	int64_t compression_level;
 };
 
 } // namespace duckdb

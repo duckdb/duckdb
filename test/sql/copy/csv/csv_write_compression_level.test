@@ -1,0 +1,73 @@
+# name: test/sql/copy/csv/csv_write_compression_level.test
+# description: Test zstd compression levels for CSV COPY TO
+# group: [csv]
+
+require parquet
+
+require no_extension_autoloading "FIXME: Autoloading on zstd compression (parquet) not yet there"
+
+# Binder accepts COMPRESSION_LEVEL for CSV zstd writes and creates the file
+statement ok
+COPY (SELECT 1)
+TO '{TEST_DIR}/result.csv.zst'
+WITH (
+    COMPRESSION zstd,
+    COMPRESSION_LEVEL 19
+);
+
+query I
+SELECT size > 0 FROM read_blob('{TEST_DIR}/result.csv.zst');
+----
+true
+
+# COMPRESSION_LEVEL only applies to zstd
+statement error
+COPY (SELECT 1)
+TO '{TEST_DIR}/bad.csv.gz'
+WITH (
+    COMPRESSION gzip,
+    COMPRESSION_LEVEL 19
+);
+----
+Compression level is only supported for the ZSTD compression codec
+
+# Validate zstd compression level bounds
+statement error
+COPY (SELECT 1)
+TO '{TEST_DIR}/bad.csv.zst'
+WITH (
+    COMPRESSION zstd,
+    COMPRESSION_LEVEL 999999
+);
+----
+Compression level must be between
+
+# The selected level reaches ZSTD_CCtx_setParameter
+statement ok
+COPY (
+    SELECT repeat('aaaaaaaaaaaaaaaaaaaaaaaa', 1000) AS s
+    FROM range(200)
+)
+TO '{TEST_DIR}/level1.csv.zst'
+WITH (
+    COMPRESSION zstd,
+    COMPRESSION_LEVEL 1
+);
+
+statement ok
+COPY (
+    SELECT repeat('aaaaaaaaaaaaaaaaaaaaaaaa', 1000) AS s
+    FROM range(200)
+)
+TO '{TEST_DIR}/level19.csv.zst'
+WITH (
+    COMPRESSION zstd,
+    COMPRESSION_LEVEL 19
+);
+
+query I
+SELECT level19.size < level1.size
+FROM read_blob('{TEST_DIR}/level1.csv.zst') level1,
+     read_blob('{TEST_DIR}/level19.csv.zst') level19;
+----
+true

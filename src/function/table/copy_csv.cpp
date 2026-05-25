@@ -182,6 +182,9 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 		auto &set = option.second;
 		bind_data->options.SetWriteOption(loption, ConvertVectorToValue(set));
 	}
+	if (bind_data->options.compression_level_set && bind_data->options.compression != FileCompressionType::ZSTD) {
+		throw BinderException("Compression level is only supported for the ZSTD compression codec");
+	}
 	// verify the parsed options
 	if (bind_data->options.force_quote.empty()) {
 		// no FORCE_QUOTE specified: initialize to false
@@ -251,6 +254,7 @@ static void CSVListCopyOptions(ClientContext &context, CopyOptionsInput &input) 
 	copy_options["nullstr"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_WRITE);
 	copy_options["null"] = CopyOption(LogicalType::ANY, CopyOptionMode::READ_WRITE);
 	copy_options["compression"] = CopyOption(LogicalType::VARCHAR, CopyOptionMode::READ_WRITE);
+	copy_options["compression_level"] = CopyOption(LogicalType::BIGINT, CopyOptionMode::WRITE_ONLY);
 	copy_options["strict_mode"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::READ_WRITE);
 }
 
@@ -274,8 +278,8 @@ public:
 
 struct GlobalWriteCSVData : public GlobalFunctionData {
 	GlobalWriteCSVData(CSVReaderOptions &options, FileSystem &fs, const string &file_path,
-	                   FileCompressionType compression)
-	    : writer(options, fs, file_path, compression) {
+	                   FileCompressionOptions compression_options)
+	    : writer(options, fs, file_path, compression_options) {
 	}
 
 	idx_t FileSize() {
@@ -325,8 +329,12 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
                                                                const string &file_path) {
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
+	FileCompressionOptions compression_options(options.compression);
+	if (options.compression_level_set) {
+		compression_options = FileCompressionOptions(options.compression, options.compression_level);
+	}
 	auto global_data =
-	    make_uniq<GlobalWriteCSVData>(options, FileSystem::GetFileSystem(context), file_path, options.compression);
+	    make_uniq<GlobalWriteCSVData>(options, FileSystem::GetFileSystem(context), file_path, compression_options);
 
 	global_data->writer.Initialize();
 
