@@ -30,6 +30,7 @@ Statement <-
 	ImportStatement /
 	CommentStatement /
 	DeallocateStatement /
+	DiscardStatement /
 	TruncateStatement /
 	LoadStatement /
 	InstallStatement /

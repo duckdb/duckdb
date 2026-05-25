@@ -1,2 +1,9 @@
 DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? Identifier
 DeallocatePrepare <- 'PREPARE'
+
+# PG-compat alias for pooled drivers (Npgsql, pgjdbc, psycopg). Every variant
+# collapses to DEALLOCATE ALL semantically: SereneDB has no temp tables /
+# session sequences, so the only observable effect is clearing the prepared
+# statement cache.
+DiscardStatement <- 'DISCARD' DiscardTarget
+DiscardTarget <- 'ALL' / 'PLANS' / 'SEQUENCES' / 'TEMPORARY' / 'TEMP'

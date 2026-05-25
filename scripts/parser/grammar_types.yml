@@ -56,6 +56,7 @@ SQLStatement:
     - CopyTable
     - CreateStatement
     - DeallocateStatement
+    - DiscardStatement
     - DeleteStatement
     - TruncateStatement
     - DetachStatement
@@ -126,6 +127,7 @@ QueryNode:
     - ShowSelect
     - ShowTables
     - ShowAllTables
+    - ShowAliasedSetting
     - ShowAllSettings
     - ShowQualifiedName
 
@@ -1174,3 +1176,5 @@ excluded_rules:
   - CTEBodyContent
   - SingleArrowPair
   - OperatorLiteral
+  - DiscardTarget
+  - ShowSettingAlias

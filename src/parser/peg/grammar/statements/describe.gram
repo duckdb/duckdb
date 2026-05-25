@@ -1,10 +1,18 @@
-DescribeStatement <- ShowTables / ShowSelect / ShowAllTables / ShowAllSettings / ShowQualifiedName
+DescribeStatement <- ShowTables / ShowSelect / ShowAllTables / ShowAliasedSetting / ShowAllSettings / ShowQualifiedName
 
 ShowSelect <- ShowOrDescribeOrSummarize SelectStatementInternal
 ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'
 ShowAllSettings <- ShowOrDescribe 'ALL'
 ShowQualifiedName <- ShowOrDescribeOrSummarize (BaseTableName / StringLiteral)?
 ShowTables <- ShowOrDescribe 'TABLES' 'FROM' QualifiedName
+
+# PG-compat aliases for parameter-status style settings. Each form is a fixed
+# multi-keyword shape (TRANSACTION ISOLATION LEVEL / SESSION AUTHORIZATION /
+# TIME ZONE) that PG accepts as syntactic sugar for SHOW <varname>. Tried
+# before ShowAllSettings/ShowQualifiedName so that the keywords aren't grabbed
+# as identifiers.
+ShowAliasedSetting <- ShowOrDescribe ShowSettingAlias
+ShowSettingAlias <- ('TRANSACTION' 'ISOLATION' 'LEVEL') / ('SESSION' 'AUTHORIZATION') / ('TIME' 'ZONE')
 
 ShowOrDescribeOrSummarize <- ShowOrDescribe / Summarize
 Summarize <- SummarizeRule

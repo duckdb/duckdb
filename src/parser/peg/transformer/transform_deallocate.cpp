@@ -16,4 +16,16 @@ bool PEGTransformerFactory::TransformDeallocatePrepare(PEGTransformer &transform
 	return true;
 }
 
+// DiscardStatement <- 'DISCARD' DiscardTarget
+// DiscardTarget    <- 'ALL' / 'PLANS' / 'SEQUENCES' / 'TEMPORARY' / 'TEMP'
+// PG-compat: SereneDB has no temp tables / session sequences, so every DISCARD
+// variant collapses to DEALLOCATE ALL (clear prepared statement cache).
+// Mirrors the v2026.05.18 libpg_query path (deallocate.y).
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformDiscardStatement(PEGTransformer &transformer) {
+	auto result = make_uniq<DropStatement>();
+	result->info->type = CatalogType::PREPARED_STATEMENT;
+	result->info->name = "";
+	return std::move(result);
+}
+
 } // namespace duckdb
