@@ -660,12 +660,16 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 		// has a side effect of pushing remote JoinRef children even when the overall result is
 		// UNKNOWN; if on_conflict_info later makes the result UNKNOWN, select_statement must be
 		// restored so native INSERT execution does not encounter stale quack wrappers.
+		// Save on_conflict_info for the same reason: its expressions may contain subqueries
+		// whose JoinRef children get partially pushed in-place during Rewrite.
 		unique_ptr<QueryNode> saved_select;
 		if (node.select_statement) {
 			saved_select = node.select_statement->node->Copy();
 			result = Merge(result, Rewrite(*node.select_statement->node));
 		}
+		unique_ptr<OnConflictInfo> saved_conflict_info;
 		if (node.on_conflict_info) {
+			saved_conflict_info = node.on_conflict_info->Copy();
 			if (node.on_conflict_info->condition) {
 				result = Merge(result, Rewrite(*node.on_conflict_info->condition));
 			}
@@ -678,8 +682,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 				}
 			}
 		}
-		if (saved_select && result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-			node.select_statement->node = std::move(saved_select);
+		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			if (saved_select) {
+				node.select_statement->node = std::move(saved_select);
+			}
+			if (saved_conflict_info) {
+				node.on_conflict_info = std::move(saved_conflict_info);
+			}
 		}
 	}
 	for (auto &expr : node.returning_list) {
@@ -949,12 +958,16 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 		// remote children even when the overall result is UNKNOWN; if set_info later makes result
 		// UNKNOWN, from_table must be restored so native UPDATE does not encounter stale quack
 		// wrappers causing "Multiple streaming scans" errors.
+		// Save set_info for the same reason: its expressions may contain subqueries whose JoinRef
+		// children get partially pushed in-place during Rewrite.
 		unique_ptr<TableRef> saved_from;
 		if (node.from_table) {
 			saved_from = node.from_table->Copy();
 			result = Merge(result, Rewrite(node.from_table));
 		}
+		unique_ptr<UpdateSetInfo> saved_set_info;
 		if (node.set_info) {
+			saved_set_info = node.set_info->Copy();
 			if (node.set_info->condition) {
 				result = Merge(result, Rewrite(*node.set_info->condition));
 			}
@@ -962,8 +975,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 				result = Merge(result, Rewrite(*expr));
 			}
 		}
-		if (saved_from && result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-			node.from_table = std::move(saved_from);
+		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			if (saved_from) {
+				node.from_table = std::move(saved_from);
+			}
+			if (saved_set_info) {
+				node.set_info = std::move(saved_set_info);
+			}
 		}
 	}
 	for (auto &expr : node.returning_list) {
@@ -1043,6 +1061,24 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(MergeIntoStatement &stmt)
 			return {};
 		}
 
+		// Save join_condition and actions before analysis. Rewrite(ParsedExpression) on a
+		// subquery that contains a mixed JoinRef (some SINGLE_REMOTE children, some local)
+		// will push the remote JoinRef children to quack wrappers in-place. If join_condition
+		// or actions later make the overall result UNKNOWN, those stale wrappers must be
+		// rolled back so native MERGE INTO execution does not encounter concurrent quack
+		// streaming connections from both the source scan and the modified expressions.
+		unique_ptr<ParsedExpression> saved_join_condition;
+		if (stmt.join_condition) {
+			saved_join_condition = stmt.join_condition->Copy();
+		}
+		map<MergeActionCondition, vector<unique_ptr<MergeIntoAction>>> saved_actions;
+		for (auto &entry : stmt.actions) {
+			auto &vec = saved_actions[entry.first];
+			for (auto &action : entry.second) {
+				vec.push_back(action->Copy());
+			}
+		}
+
 		// Analyze ON join condition
 		if (stmt.join_condition) {
 			result = Merge(result, Rewrite(*stmt.join_condition));
@@ -1070,6 +1106,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(MergeIntoStatement &stmt)
 
 		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 			stmt.source = std::move(saved_source);
+			if (saved_join_condition) {
+				stmt.join_condition = std::move(saved_join_condition);
+			}
+			stmt.actions = std::move(saved_actions);
 		}
 	}
 
