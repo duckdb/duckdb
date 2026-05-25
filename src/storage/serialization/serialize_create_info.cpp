@@ -107,6 +107,8 @@ void CreateFeatureInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<FeatureRefreshMode>(206, "refresh_mode", refresh_mode);
 	serializer.WritePropertyWithDefault<int64_t>(207, "retain_versions", retain_versions);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(208, "query", query);
+	serializer.WritePropertyWithDefault<vector<string>>(209, "result_names", result_names);
+	serializer.WritePropertyWithDefault<vector<LogicalType>>(210, "result_types", result_types);
 }
 
 unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer) {
@@ -120,6 +122,8 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Deserialize(Deserializer &deserializer
 	deserializer.ReadProperty<FeatureRefreshMode>(206, "refresh_mode", result->refresh_mode);
 	deserializer.ReadPropertyWithDefault<int64_t>(207, "retain_versions", result->retain_versions);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(208, "query", result->query);
+	deserializer.ReadPropertyWithDefault<vector<string>>(209, "result_names", result->result_names);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(210, "result_types", result->result_types);
 	return std::move(result);
 }
 

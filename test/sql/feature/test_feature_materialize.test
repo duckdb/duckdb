@@ -2,6 +2,10 @@
 # description: Test PIT-correct materialization and direct querying of backing table
 # group: [feature]
 
+require noforcestorage
+
+require skip_reload
+
 # ============================================================
 # Setup: source table with known data for deterministic results
 # ============================================================

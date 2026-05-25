@@ -29,7 +29,13 @@ string ShowRef::ToString() const {
 		result += query->ToString();
 		result += ")";
 	} else if (table_name != "__show_tables_expanded") {
-		result += table_name;
+		// Check for special __describe_feature: prefix used by DESCRIBE FEATURE
+		const string feature_prefix = "__describe_feature:";
+		if (table_name.rfind(feature_prefix, 0) == 0) {
+			result += "FEATURE " + table_name.substr(feature_prefix.size());
+		} else {
+			result += table_name;
+		}
 	}
 	return result;
 }

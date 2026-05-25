@@ -2,6 +2,10 @@
 # description: Test REFRESH FEATURE statement — FULL and INCREMENTAL (watermark + window)
 # group: [feature]
 
+require noforcestorage
+
+require skip_reload
+
 # ============================================================
 # FULL refresh: delete everything, recompute from scratch
 # ============================================================

@@ -2,6 +2,10 @@
 # description: Test CREATE/DROP FEATURE DDL, metadata, validation, and dependencies
 # group: [feature]
 
+require noforcestorage
+
+require skip_reload
+
 # ============================================================
 # Setup
 # ============================================================
