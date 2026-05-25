@@ -961,5 +961,41 @@ SELECT count(*) FROM rpc.t3 WHERE i = 88
 statement ok
 DROP MACRO local_double;
 
+# ============================================================
+# Bug 21: Rewrite(JoinRef) analyzed the right side without the left remote
+# table's aliases in local_table_names.  A LATERAL right-side SubqueryRef
+# correlated to the left remote table was classified SINGLE_REMOTE (the
+# correlation went undetected), then independently pushed — the remote SQL
+# would reference a table not in its own FROM scope and fail.
+# Fix: left aliases are temporarily added to local_table_names before the
+# right side is analyzed, so HasLocalTableReference detects the correlation
+# and classifies the right SubqueryRef as UNKNOWN (not independently pushed).
+#
+# Note: quack supports only one simultaneous streaming connection, so a
+# correlated lateral join between two remote tables always hits the
+# "Multiple streaming scans" limit here.  Without the fix the error occurs
+# when FinishPushdown attempts the second streaming slot for the pushed right
+# SubqueryRef; with the fix it occurs later (during lateral execution of
+# rpc.t2).  On a remote server that supports multiple concurrent connections
+# the fix produces the correct result (5 matching rows) instead of a
+# "table not found" error from the incorrectly-pushed subquery SQL.
+# ============================================================
+
+statement ok
+CREATE OR REPLACE MACRO local_double(x) AS (x * 2);
+
+# Both with and without the fix, quack rejects this query due to its single-
+# stream limit.  The important invariant: the error is about streaming
+# concurrency, not an undefined-table-reference from incorrect pushed SQL.
+statement error
+SELECT t1.i, sub.i AS sub_i
+FROM rpc.t1 JOIN (SELECT i FROM rpc.t2 WHERE i = t1.i) sub ON local_double(sub.i) > 0
+ORDER BY t1.i
+----
+<REGEX>:.*Multiple streaming scans.*
+
+statement ok
+DROP MACRO local_double;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

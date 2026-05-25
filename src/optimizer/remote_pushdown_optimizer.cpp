@@ -1590,7 +1590,26 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	// Rewrite both sides independently, tracking their individual results
 	auto left_result = Rewrite(ref.left);
+	// Register the left side's table aliases in local_table_names before analyzing the right side
+	// so that a LATERAL right-side SubqueryRef correlated to a left-side remote table is correctly
+	// detected as such by HasLocalTableReference inside Rewrite(SubqueryRef). Without this,
+	// "t1.i" in the right's WHERE (where t1 is the left remote table) would go undetected and the
+	// right SubqueryRef would be classified SINGLE_REMOTE, then independently pushed — breaking
+	// the lateral dependency on the left table's output columns at execution time.
+	case_insensitive_set_t left_aliases;
+	CollectTableAliases(*ref.left, left_aliases);
+	// Only track aliases that are not already in local_table_names so we don't erase
+	// a pre-existing entry (e.g., a local SubqueryRef alias) after the right is analyzed.
+	case_insensitive_set_t newly_added;
+	for (auto &alias : left_aliases) {
+		if (local_table_names.insert(alias).second) {
+			newly_added.insert(alias);
+		}
+	}
 	auto right_result = Rewrite(ref.right);
+	for (auto &alias : newly_added) {
+		local_table_names.erase(alias);
+	}
 	auto result = Merge(left_result, right_result);
 	// Also analyze the join condition - it may contain subqueries or local macro calls
 	// that affect whether the join can be pushed as a whole
