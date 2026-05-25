@@ -1295,7 +1295,7 @@ private:
 	static unique_ptr<TransformResultValue> TransformCreateRecursiveInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformCreateRecursive(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformDeallocateStatementInternal(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer, const bool &deallocate_prepare, const string &identifier);
+	static unique_ptr<SQLStatement> TransformDeallocateStatement(PEGTransformer &transformer, const bool &deallocate_prepare, const string &deallocate_target);
 	static unique_ptr<TransformResultValue> TransformDeallocatePrepareInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformDeallocatePrepare(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformDiscardStatementInternal(PEGTransformer &transformer, ParseResult &parse_result);

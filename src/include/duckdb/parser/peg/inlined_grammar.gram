@@ -798,8 +798,12 @@ SetSequenceOption <- SequenceOption+
 
 AlterDatabaseStmt <- 'DATABASE' IfExists? Identifier 'SET' 'ALIAS' 'TO' Identifier
 
-DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? Identifier
+DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? DeallocateTarget
 DeallocatePrepare <- 'PREPARE'
+# PG accepts both DEALLOCATE <name> and DEALLOCATE [PREPARE] ALL.
+# The ALL form drops every prepared statement on the session.
+DeallocateTarget <- DeallocateAll / Identifier
+DeallocateAll <- 'ALL'
 
 # PG-compat alias for pooled drivers (Npgsql, pgjdbc, psycopg). Every variant
 # collapses to DEALLOCATE ALL semantically: SereneDB has no temp tables /
@@ -1158,12 +1162,16 @@ DatabasePath <- Expression
 AttachAlias <- 'AS' ColId
 AttachOptions <- GenericCopyOptionList
 
-SetStatement <- 'SET' (SetSessionCharacteristics / SetTransactionIsolation / StandardAssignment / SetTimeZone)
+SetStatement <- 'SET' (SetSessionCharacteristics / SetSessionAuthorization / SetTransactionIsolation / SetRole / StandardAssignment / SetTimeZone)
 
 StandardAssignment <- (SetVariable / SetSetting) SetAssignment
 SetTimeZone <- 'TIME' 'ZONE' ZoneValue
 SetTransactionIsolation <- 'TRANSACTION' 'ISOLATION' 'LEVEL' IsolationLevel
 SetSessionCharacteristics <- 'SESSION' 'CHARACTERISTICS' 'AS' 'TRANSACTION' 'ISOLATION' 'LEVEL' IsolationLevel
+# PG: SET ROLE / SESSION AUTHORIZATION accept NonReservedWord_or_Sconst or DEFAULT.
+SetRole <- 'ROLE' RoleSpec
+SetSessionAuthorization <- 'SESSION' 'AUTHORIZATION' RoleSpec
+RoleSpec <- 'DEFAULT' / StringLiteral / Identifier
 
 ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / 'LOCAL' / 'DEFAULT' / StringLiteral / Identifier / NumberLiteral
 ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?
@@ -1183,10 +1191,16 @@ SetAssignment <- VariableAssign VariableList
 VariableAssign <- '=' / 'TO'
 VariableList <- List(Expression)
 
-ResetStatement <- 'RESET' (ResetAll / SetVariable / SetSetting)
+ResetStatement <- 'RESET' (ResetAll / ResetAliasedSetting / SetVariable / SetSetting)
 # PG-compat: RESET ALL and RESET LOCAL ALL both reset every user-set option.
 # The LOCAL variant only differs at execution time (transaction-bound).
 ResetAll <- ('LOCAL' 'ALL') / 'ALL'
+
+# PG-compat: RESET takes the same multi-word aliases as SHOW. Tried before
+# the generic identifier-style branches so the keywords aren't snatched by
+# SetSetting / SetVariable.
+ResetAliasedSetting <- ResetSettingAlias
+ResetSettingAlias <- ('TRANSACTION' 'ISOLATION' 'LEVEL') / ('SESSION' 'AUTHORIZATION') / ('TIME' 'ZONE')
 
 CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments
 
@@ -1468,9 +1482,9 @@ DeleteUsingClause <- 'USING' List(TableRef)
 
 TransactionStatement <- BeginTransaction / RollbackTransaction / CommitTransaction
 
-BeginTransaction <- StartOrBegin Transaction? IsolationLevelClause? ReadOrWrite?
-RollbackTransaction <- AbortOrRollback Transaction?
-CommitTransaction <- CommitOrEnd Transaction?
+BeginTransaction <- StartOrBegin Transaction? IsolationLevelClause? ReadOrWrite? DeferrableClause?
+RollbackTransaction <- AbortOrRollback Transaction? ChainClause?
+CommitTransaction <- CommitOrEnd Transaction? ChainClause?
 
 StartOrBegin <- 'START' / 'BEGIN'
 Transaction <- 'WORK' / 'TRANSACTION'
@@ -1482,6 +1496,19 @@ IsolationLevelClause <- 'ISOLATION' 'LEVEL' IsolationLevel
 IsolationLevel <- ('READ' 'COMMITTED') / ('READ' 'UNCOMMITTED') / ('REPEATABLE' 'READ') / 'SERIALIZABLE'
 AbortOrRollback <- 'ABORT' / 'ROLLBACK'
 CommitOrEnd <- 'COMMIT' / 'END'
+# PG: COMMIT/ROLLBACK [WORK | TRANSACTION] AND [NO] CHAIN. AND CHAIN should
+# immediately re-enter a new transaction with the same characteristics. We
+# parse-accept the keywords -- serenedb commits/rollbacks happily without
+# re-opening; the subsequent commit/rollback on the empty session merely
+# warns "no transaction is active" (matches PG semantics for callers that
+# don't rely on the chained txn).
+ChainClause <- 'AND' NoChain? 'CHAIN'
+NoChain <- 'NO'
+# PG: [NOT] DEFERRABLE transaction mode (only meaningful for SERIALIZABLE
+# READ ONLY, which serenedb rejects upfront, so this is a parse-only no-op).
+DeferrableClause <- NotDeferrable / Deferrable
+Deferrable <- 'DEFERRABLE'
+NotDeferrable <- 'NOT' 'DEFERRABLE'
 CreateTSDictionaryStatement <- 'CREATE' 'TEXT' 'SEARCH' 'DICTIONARY' IfNotExists? QualifiedName TSDictionaryDefinition
 DropTSDictionaryStatement <- 'DROP' 'TEXT' 'SEARCH' 'DICTIONARY' IfExists? QualifiedName
 

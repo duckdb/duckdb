@@ -792,8 +792,8 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDeallocateState
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	bool deallocate_prepare {};
 	transformer.TransformOptional(list_pr, 1, deallocate_prepare);
-	auto identifier = list_pr.Child<IdentifierParseResult>(2).identifier;
-	auto result = TransformDeallocateStatement(transformer, deallocate_prepare, identifier);
+	auto deallocate_target = transformer.Transform<string>(list_pr, 2);
+	auto result = TransformDeallocateStatement(transformer, deallocate_prepare, deallocate_target);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
