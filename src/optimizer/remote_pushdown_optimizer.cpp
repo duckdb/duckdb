@@ -268,6 +268,25 @@ static bool HasTableFunctionInTree(const TableRef &ref) {
 	}
 }
 
+// Returns true if any SELECT descendant of a QueryNode tree has a quack streaming slot open
+// (i.e., a TABLE_FUNCTION in its from_table). Needed in Rewrite(SetOperationNode) to detect
+// streaming slots hidden inside nested set operations (e.g. an inner UNION with mixed children
+// where one was individually pushed) — those are missed by the direct SELECT_NODE child check.
+static bool QueryNodeHasTableFunctionPush(const QueryNode &node) {
+	if (node.type == QueryNodeType::SELECT_NODE) {
+		auto &sel = node.Cast<SelectNode>();
+		return sel.from_table && HasTableFunctionInTree(*sel.from_table);
+	}
+	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
+		for (auto &child : node.Cast<SetOperationNode>().children) {
+			if (child && QueryNodeHasTableFunctionPush(*child)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 // Recursively collect the table name and alias from every BaseTableRef in a TableRef tree.
 // Used to register remote-table names as "locally visible" when an all-remote JoinRef was
 // NOT individually pushed to quack, so HasLocalTableReference can detect correlated subquery
@@ -1346,13 +1365,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 		//       though child_result is UNKNOWN.
 		// HasTableFunctionInTree detects all three: TABLE_FUNCTION at the from_table root (cases a/b)
 		// or anywhere in the JoinRef subtree (case c).
+		// QueryNodeHasTableFunctionPush extends the check to nested set operations so that streaming
+		// slots hidden inside a child SetOperationNode (e.g., inner UNION with one side pushed) are
+		// correctly detected — those would be missed by checking only direct SELECT_NODE children.
 		bool any_child_pushed = false;
-		for (idx_t i = 0; i < node.children.size(); i++) {
-			if (node.children[i]->type != QueryNodeType::SELECT_NODE) {
-				continue;
-			}
-			auto &sel = node.children[i]->Cast<SelectNode>();
-			if (sel.from_table && HasTableFunctionInTree(*sel.from_table)) {
+		for (auto &child : node.children) {
+			if (child && QueryNodeHasTableFunctionPush(*child)) {
 				any_child_pushed = true;
 				break;
 			}
