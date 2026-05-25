@@ -1,0 +1,184 @@
+# name: test/remote_pushdown/remote_pushdown_merge.test
+# description: MERGE INTO pushdown for remote catalogs
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table target(id int, val int);
+
+statement ok db1:con1
+insert into target values (1, 10), (2, 20), (3, 30);
+
+statement ok db1:con1
+create table source(id int, val int);
+
+statement ok db1:con1
+insert into source values (2, 200), (3, 300), (4, 400);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+# --- Full pushdown: target and source both remote (same catalog) ---
+
+# MERGE WHEN MATCHED UPDATE, WHEN NOT MATCHED INSERT: all remote -> pushed (no SEQ_SCAN)
+query II
+explain merge into rpc.target t
+using rpc.source s on t.id = s.id
+when matched then update set val = s.val
+when not matched then insert (id, val) values (s.id, s.val)
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# Functional result: matched rows (2,3) get updated; unmatched row (4) gets inserted
+statement ok
+merge into rpc.target t
+using rpc.source s on t.id = s.id
+when matched then update set val = s.val
+when not matched then insert (id, val) values (s.id, s.val)
+
+# target now: (1,10), (2,200), (3,300), (4,400) -- 4 rows
+query I
+select count(*) from rpc.target
+----
+4
+
+query II
+select id, val from rpc.target order by id
+----
+1	10
+2	200
+3	300
+4	400
+
+# --- MERGE with WHEN MATCHED AND condition: condition is pushed ---
+
+# Reset target
+statement ok db1:con1
+delete from target where true
+
+statement ok db1:con1
+insert into target values (1, 10), (2, 20), (3, 30), (4, 40);
+
+statement ok db1:con1
+delete from source where true
+
+statement ok db1:con1
+insert into source values (2, 200), (3, 300), (4, 400);
+
+# WHEN MATCHED AND condition filters which matched rows to update
+statement ok
+merge into rpc.target t
+using rpc.source s on t.id = s.id
+when matched and t.val < 25 then update set val = s.val
+
+# Only id=2 (val=20 < 25) is updated; id=3 (val=30) and id=4 (val=40) are not
+query II
+select id, val from rpc.target order by id
+----
+1	10
+2	200
+3	30
+4	40
+
+# --- MERGE WHEN NOT MATCHED BY SOURCE DELETE ---
+
+# Reset
+statement ok db1:con1
+delete from target where true
+
+statement ok db1:con1
+insert into target values (1, 10), (2, 20), (3, 30);
+
+# source only has id=2; ids 1 and 3 are not matched by source
+statement ok db1:con1
+delete from source where true
+
+statement ok db1:con1
+insert into source values (2, 200);
+
+statement ok
+merge into rpc.target t
+using rpc.source s on t.id = s.id
+when matched then update set val = s.val
+when not matched by source then delete
+
+# Only id=2 remains (updated); ids 1 and 3 were deleted
+query I
+select count(*) from rpc.target
+----
+1
+
+query II
+select id, val from rpc.target
+----
+2	200
+
+# --- MERGE with subquery source: all remote -> pushed ---
+
+# Reset
+statement ok db1:con1
+delete from target where true
+
+statement ok db1:con1
+insert into target values (1, 10), (2, 20), (3, 30);
+
+statement ok db1:con1
+delete from source where true
+
+statement ok db1:con1
+insert into source values (2, 200), (5, 500);
+
+# Subquery source in USING clause: still all-remote -> pushed
+query II
+explain merge into rpc.target t
+using (select id, val from rpc.source where val > 100) s on t.id = s.id
+when matched then update set val = s.val
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+statement ok
+merge into rpc.target t
+using (select id, val from rpc.source where val > 100) s on t.id = s.id
+when matched then update set val = s.val
+
+query II
+select id, val from rpc.target order by id
+----
+1	10
+2	200
+3	30
+
+# --- MERGE with RETURNING ---
+
+# Reset
+statement ok db1:con1
+delete from target where true
+
+statement ok db1:con1
+insert into target values (1, 10), (2, 20), (3, 30);
+
+statement ok db1:con1
+delete from source where true
+
+statement ok db1:con1
+insert into source values (2, 200), (4, 400);
+
+# RETURNING from a fully-remote MERGE: pushed and returning values streamed back
+query II
+merge into rpc.target t
+using rpc.source s on t.id = s.id
+when matched then update set val = s.val
+when not matched then insert (id, val) values (s.id, s.val)
+returning id, val
+----
+2	200
+4	400
+
+statement ok db1:con1
+call quack_stop('quack:localhost')

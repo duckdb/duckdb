@@ -1,0 +1,482 @@
+# name: test/remote_pushdown/remote_pushdown_advanced.test
+# description: Advanced edge cases - window functions, QUALIFY, HAVING, DISTINCT ON,
+# group: [remote_pushdown]
+
+#              LIMIT with subquery, EXCEPT ALL, INTERSECT ALL, INSERT ON CONFLICT,
+#              and correctness/pushdown probes for harder-to-reach code paths.
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+# t1 = {0..9}, t2 = {5..14}
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok db1:con1
+create table t2(i int);
+
+statement ok db1:con1
+insert into t2 values (5), (6), (7), (8), (9), (10), (11), (12), (13), (14);
+
+# t3: table with a primary key for ON CONFLICT tests
+statement ok db1:con1
+create table t3(i int primary key, v int);
+
+statement ok db1:con1
+insert into t3 values (1, 10), (2, 20), (3, 30);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+statement ok
+create table local_t(i int);
+
+statement ok
+insert into local_t from range(10);
+
+# ============================================================
+# Window functions: all remote → pushed
+# ============================================================
+
+# Running sum pushed to remote (no SEQ_SCAN in local plan)
+query II
+explain select i, sum(i) over (order by i) from rpc.t1 where i < 5
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# Verify running sum values: 0, 0+1=1, 1+2=3, 3+3=6, 6+4=10
+query II
+select i, sum(i) over (order by i) as running_sum
+from rpc.t1 where i < 5
+order by i
+----
+0	0
+1	1
+2	3
+3	6
+4	10
+
+# row_number() pushed: each row gets unique rank
+query II
+select i, row_number() over (order by i) as rn
+from rpc.t1 where i >= 7
+order by i
+----
+7	1
+8	2
+9	3
+
+# Catalog-qualified column refs inside window spec: all stripped before push
+query II
+explain select rpc.t1.i, rank() over (order by rpc.t1.i) from rpc.t1 where rpc.t1.i < 5
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query II
+select rpc.t1.i, rank() over (order by rpc.t1.i) as rnk
+from rpc.t1 where rpc.t1.i < 5
+order by rpc.t1.i
+----
+0	1
+1	2
+2	3
+3	4
+4	5
+
+# PARTITION BY in window function
+query III
+select i % 2 as parity, i, row_number() over (partition by i % 2 order by i) as rn
+from rpc.t1
+where i < 6
+order by i
+----
+0	0	1
+1	1	1
+0	2	2
+1	3	2
+0	4	3
+1	5	3
+
+# ============================================================
+# QUALIFY clause: all remote → pushed
+# ============================================================
+
+# QUALIFY to keep only the row with max i per parity group
+query II
+explain select i, row_number() over (partition by i % 2 order by i desc) as rn
+from rpc.t1
+qualify rn = 1
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# Even parity max=8, odd parity max=9
+query I
+select i from rpc.t1
+qualify row_number() over (partition by i % 2 order by i desc) = 1
+order by i
+----
+8
+9
+
+# QUALIFY with catalog-qualified column ref: rpc.t1.i stripped before push
+query I
+select rpc.t1.i from rpc.t1
+qualify row_number() over (order by rpc.t1.i) <= 3
+order by rpc.t1.i
+----
+0
+1
+2
+
+# ============================================================
+# HAVING with catalog-qualified column refs
+# ============================================================
+
+# GROUP BY + HAVING: all remote → pushed
+query II
+explain select i % 3 as bucket, count(*) from rpc.t1 group by bucket having count(*) > 3
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# {0..9} mod 3: bucket 0→{0,3,6,9}=4, bucket 1→{1,4,7}=3, bucket 2→{2,5,8}=3
+# Only bucket 0 has count > 3
+query II
+select i % 3 as bucket, count(*) as cnt
+from rpc.t1
+group by bucket
+having count(*) > 3
+order by bucket
+----
+0	4
+
+# HAVING with catalog-qualified ref
+query II
+select rpc.t1.i % 2 as parity, count(*)
+from rpc.t1
+group by parity
+having count(*) >= 5
+order by parity
+----
+0	5
+1	5
+
+# ============================================================
+# DISTINCT ON with catalog-qualified column refs
+# Bug: StripCatalogName did not strip DISTINCT modifier expressions
+# rpc.t1.i in DISTINCT ON must be stripped to i before push
+# ============================================================
+
+query II
+explain select distinct on (rpc.t1.i) rpc.t1.i from rpc.t1 order by rpc.t1.i
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# DISTINCT ON (i): each distinct value of i kept once; t1={0..9} -> 10 rows
+query I
+select count(*) from (
+  select distinct on (rpc.t1.i) rpc.t1.i from rpc.t1
+) sub
+----
+10
+
+# DISTINCT ON with filter and ORDER BY
+query I
+select distinct on (rpc.t1.i % 3) rpc.t1.i
+from rpc.t1
+order by rpc.t1.i % 3, rpc.t1.i
+----
+0
+1
+2
+
+# ============================================================
+# LIMIT with scalar subquery containing catalog-qualified col ref
+# Bug: StripCatalogName did not strip LIMIT modifier expressions
+# rpc.t1.i in the LIMIT subquery must be stripped before push
+# ============================================================
+
+# LIMIT value = count of t1 rows where i < 3 = 3; returns first 3 rows
+query I
+select i from rpc.t1
+order by i
+limit (select count(*) from rpc.t1 where rpc.t1.i < 3)
+----
+0
+1
+2
+
+# LIMIT with catalog-qualified ref in subquery filter
+query I
+select count(*) from (
+  select i from rpc.t1
+  order by i desc
+  limit (select max(rpc.t1.i) from rpc.t1 where rpc.t1.i < 5)
+) sub
+----
+4
+
+# OFFSET with catalog-qualified ref in subquery
+query I
+select i from rpc.t1
+order by i
+limit 3 offset (select min(rpc.t1.i) from rpc.t1 where rpc.t1.i > 2)
+----
+3
+4
+5
+
+# ============================================================
+# EXCEPT ALL / INTERSECT ALL (set operations preserving duplicates)
+# ============================================================
+
+# INTERSECT ALL: all remote → pushed (no INTERSECT operator in local plan)
+query II
+explain select i from rpc.t1 intersect all select i from rpc.t2
+----
+physical_plan	<!REGEX>:.*INTERSECT.*
+
+# t1∩t2 (with duplicates, but each set has unique values) = {5,6,7,8,9} → 5 rows
+query I
+select count(*) from (select i from rpc.t1 intersect all select i from rpc.t2)
+----
+5
+
+# EXCEPT ALL: all remote → pushed
+query II
+explain select i from rpc.t1 except all select i from rpc.t2
+----
+physical_plan	<!REGEX>:.*EXCEPT.*
+
+# t1 - t2 = {0,1,2,3,4} → 5 rows
+query I
+select count(*) from (select i from rpc.t1 except all select i from rpc.t2)
+----
+5
+
+query I
+select sum(i) from (select i from rpc.t1 except all select i from rpc.t2)
+----
+10
+
+# ============================================================
+# INSERT ON CONFLICT (UPSERT) pushed to remote
+# ============================================================
+
+# t3 = {(1,10),(2,20),(3,30)}; conflict on i=1 → update v
+statement ok
+insert into rpc.t3 values (1, 999) on conflict (i) do update set v = excluded.v
+
+query II
+select i, v from rpc.t3 where i = 1
+----
+1	999
+
+# Restore
+statement ok
+update rpc.t3 set v = 10 where i = 1
+
+# ON CONFLICT DO NOTHING: duplicate i=2 is silently ignored
+statement ok
+insert into rpc.t3 values (2, 999) on conflict (i) do nothing
+
+query II
+select i, v from rpc.t3 where i = 2
+----
+2	20
+
+# Insert new row (no conflict): i=4 is new
+statement ok
+insert into rpc.t3 values (4, 40) on conflict (i) do nothing
+
+query I
+select count(*) from rpc.t3
+----
+4
+
+statement ok
+delete from rpc.t3 where i = 4
+
+# ============================================================
+# Correlated subquery in SELECT list: all remote → pushed
+# ============================================================
+
+query II
+explain select i, (select count(*) from rpc.t2 where rpc.t2.i > rpc.t1.i) as cnt from rpc.t1 where i >= 8
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# For i=8: t2 rows where j>8 = {9,10,11,12,13,14} = 6 rows
+# For i=9: t2 rows where j>9 = {10,11,12,13,14} = 5 rows
+query II
+select i, (select count(*) from rpc.t2 where rpc.t2.i > rpc.t1.i) as cnt
+from rpc.t1
+where i >= 8
+order by i
+----
+8	6
+9	5
+
+# ============================================================
+# Mixed: remote subquery in LIMIT of a mixed (local+remote) query
+# PushdownSubqueries should push the LIMIT subquery individually
+# ============================================================
+
+# Mixed outer (local_t) with remote scalar subquery in LIMIT
+# local_t = {0..9}; LIMIT = count of t1 rows where i < 4 = 4
+query I
+select count(*) from (
+  select i from local_t order by i
+  limit (select count(*) from rpc.t1 where i < 4)
+) sub
+----
+4
+
+# ============================================================
+# VALUES list in FROM clause: all remote → pushed
+# ============================================================
+
+query II
+explain select * from rpc.t1 where i in (values (3), (7), (9))
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select i from rpc.t1 where i in (values (3), (7), (9)) order by i
+----
+3
+7
+9
+
+# ============================================================
+# Multiple aggregates and complex GROUP BY: correctness
+# ============================================================
+
+query III
+select i % 3 as bucket, min(i), max(i)
+from rpc.t1
+group by bucket
+order by bucket
+----
+0	0	9
+1	1	7
+2	2	8
+
+# ============================================================
+# Subquery in FROM with alias used in outer WHERE
+# ============================================================
+
+query I
+select count(*) from (select i * 2 as doubled from rpc.t1) sub where doubled > 10
+----
+4
+
+# ============================================================
+# Self-join with filter: all remote → pushed
+# ============================================================
+
+query II
+explain select count(*) from rpc.t1 a join rpc.t1 b on a.i + 1 = b.i where a.i < 5
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# a.i∈{0..4}, b.i=a.i+1∈{1..5}: 5 pairs
+query I
+select count(*) from rpc.t1 a join rpc.t1 b on a.i + 1 = b.i where a.i < 5
+----
+5
+
+# Self-join with aliased select list: pushed (alias avoids duplicate column name)
+query II
+select a.i as ai, b.i as bi from rpc.t1 a join rpc.t1 b on a.i + 1 = b.i where a.i < 3 order by ai
+----
+0	1
+1	2
+2	3
+
+# ============================================================
+# Three-table JOIN: all remote → pushed
+# ============================================================
+
+query II
+explain
+select count(*) from rpc.t1 a
+join rpc.t1 b on a.i = b.i
+join rpc.t2 c on b.i = c.i
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# a=b (always), then b∈t2∩t1={5..9} → 5 rows
+query I
+select count(*) from rpc.t1 a
+join rpc.t1 b on a.i = b.i
+join rpc.t2 c on b.i = c.i
+----
+5
+
+# ============================================================
+# CROSS JOIN: all remote → pushed
+# ============================================================
+
+query I
+select count(*) from rpc.t1 cross join (select 1 as x) v
+----
+10
+
+# ============================================================
+# NULL handling in remote queries
+# ============================================================
+
+statement ok db1:con1
+create table nulls(i int);
+
+statement ok db1:con1
+insert into nulls values (1), (NULL), (3), (NULL), (5);
+
+# COUNT(*) vs COUNT(i): pushed, nulls handled correctly
+query II
+select count(*), count(i) from rpc.nulls
+----
+5	3
+
+# COALESCE pushed
+query I
+select sum(coalesce(i, 0)) from rpc.nulls
+----
+9
+
+statement ok db1:con1
+drop table nulls
+
+# ============================================================
+# Aggregate without GROUP BY: pushed as a whole
+# ============================================================
+
+query IIII
+select min(i), max(i), sum(i), count(*) from rpc.t1
+----
+0	9	45	10
+
+# ============================================================
+# FILTER clause on aggregate: pushed
+# ============================================================
+
+query II
+select
+  count(*) filter (where i < 5) as below_5,
+  count(*) filter (where i >= 5) as above_eq_5
+from rpc.t1
+----
+5	5
+
+statement ok
+drop table local_t
+
+statement ok db1:con1
+call quack_stop('quack:localhost')

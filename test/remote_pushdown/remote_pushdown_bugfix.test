@@ -1,0 +1,703 @@
+# name: test/remote_pushdown/remote_pushdown_bugfix.test
+# description: Regression tests for specific bugs in RemotePushdownOptimizer
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok db1:con1
+create table t2(i int);
+
+statement ok db1:con1
+insert into t2 values (5), (6), (7), (8), (9), (10), (11), (12), (13), (14);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# ============================================================
+# Bug 1: StripCatalogName(SetOperationNode) did not strip
+# modifiers (ORDER BY expressions).
+#
+# A fully-remote UNION/INTERSECT/EXCEPT with ORDER BY using
+# catalog-qualified column refs (e.g. rpc.t1.i) must have the
+# catalog prefix stripped before the SQL is sent to the remote
+# server. Without the fix the remote fails with
+# "Catalog 'rpc' does not exist".
+# ============================================================
+
+# UNION ALL with catalog-qualified ORDER BY: pushed and produces correct order
+query II
+explain select i from rpc.t1 union all select i from rpc.t1 order by rpc.t1.i
+----
+physical_plan	<!REGEX>:.*UNION.*
+
+query I
+select i from rpc.t1 union all select i from rpc.t1 order by rpc.t1.i limit 4
+----
+0
+0
+1
+1
+
+# UNION (dedup) with catalog-qualified ORDER BY DESC
+query I
+select i from rpc.t1 union select i from rpc.t1 order by rpc.t1.i desc limit 3
+----
+9
+8
+7
+
+# INTERSECT with catalog-qualified ORDER BY
+# t1 ∩ t2 = {5..9}; ascending order
+query I
+select i from rpc.t1 intersect select i from rpc.t2 order by rpc.t1.i
+----
+5
+6
+7
+8
+9
+
+# EXCEPT with catalog-qualified ORDER BY
+# t1 - t2 = {0..4}; ascending order
+query I
+select i from rpc.t1 except select i from rpc.t2 order by rpc.t1.i
+----
+0
+1
+2
+3
+4
+
+# ============================================================
+# Bug 2: StripCatalogName(JoinRef) did not strip the JOIN ON
+# condition expressions.
+#
+# A JOIN ON condition with catalog-qualified column refs (e.g.
+# rpc.t1.i = t2.i) must have the catalog prefix stripped
+# before the SQL is sent to the remote server.
+# ============================================================
+
+# JOIN ON with catalog-qualified left column: rpc.t1.i stripped to t1.i
+query II
+explain select count(*) from rpc.t1 join rpc.t1 t2 on rpc.t1.i = t2.i
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query I
+select count(*) from rpc.t1 join rpc.t1 t2 on rpc.t1.i = t2.i
+----
+10
+
+# JOIN ON with both sides catalog-qualified: rpc.t1.i and rpc.t2.i both stripped
+# t1={0..9}, t2={5..14}: join on equal values gives {5,6,7,8,9} -> 5 rows
+query II
+explain select count(*) from rpc.t1 join rpc.t2 on rpc.t1.i = rpc.t2.i
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query I
+select count(*) from rpc.t1 join rpc.t2 on rpc.t1.i = rpc.t2.i
+----
+5
+
+# JOIN ON with catalog-qualified filter: rpc.t1.i < 5 and rpc.t1.i = t2.i
+# t1 rows where i < 5: {0,1,2,3,4}; t2 has i in {5..14}: no overlap -> 0 rows
+query I
+select count(*) from rpc.t1 join rpc.t2 on rpc.t1.i = rpc.t2.i and rpc.t1.i < 5
+----
+0
+
+# ============================================================
+# Bug 3: Rewrite(JoinRef) did not analyze the JOIN ON condition.
+#
+# A local macro in a JOIN ON condition must block pushdown of
+# the join so that the macro executes locally.
+# Without the fix the whole join is pushed to remote where the
+# macro doesn't exist, causing an error.
+# ============================================================
+
+statement ok
+create macro double_it(x) as x * 2;
+
+# Local macro in JOIN ON blocks full pushdown; but two separately-scanned remote tables
+# hit the "multiple streaming scans" limitation, so the query errors rather than returning results
+statement error
+select count(*) from rpc.t1 a join rpc.t2 b on double_it(a.i) = b.i
+----
+Multiple streaming scans
+
+# Functional: local macro in WHERE on single remote table (avoids multiple-streaming-scan limitation)
+# double_it(i) > 10 -> i > 5 -> {6,7,8,9} = 4 rows
+query I
+select count(*) from rpc.t1 where double_it(i) > 10
+----
+4
+
+# Local macro with compound filter: double_it(i) in [10,14] -> i in {5,6,7} = 3 rows
+query I
+select count(*) from rpc.t1 where double_it(i) >= 10 and double_it(i) <= 14
+----
+3
+
+statement ok
+drop macro double_it;
+
+# ============================================================
+# Bug 4 (join duplicate column names):
+# Pushing a SELECT with a JOIN in FROM whose output column list
+# contains two items with the same name (e.g. a.i and b.i both
+# resolve to "i") previously crashed with an internal
+# "duplicate column name" binding error inside quack_query_by_name.
+#
+# The fix: FinishPushdown detects that the SELECT list would
+# expose duplicate names and skips the pushdown.  The query then
+# falls back to native remote scanning, which in quack results in
+# the documented "Multiple streaming scans" limitation rather than
+# an unexpected internal error.
+# ============================================================
+
+# Explicit duplicate output names from a self-join: skip pushdown, fail gracefully
+statement error
+select a.i, b.i from rpc.t1 a join rpc.t1 b on a.i + 1 = b.i
+----
+Multiple streaming scans
+
+# Verify that the alias-based workaround still works correctly
+query II
+select a.i as ai, b.i as bi from rpc.t1 a join rpc.t1 b on a.i + 1 = b.i where a.i < 3 order by ai
+----
+0	1
+1	2
+2	3
+
+# ============================================================
+# Bug 6: FinishPushdown(TableRef&) with a JoinRef loses table aliases.
+#
+# When the FROM clause is an all-remote join but the SELECT list
+# has a local expression (e.g. a local macro), the optimizer used
+# to wrap the JoinRef in SELECT * FROM quack_query_by_name(...)
+# and put the local expression in an outer SELECT. The wrapping
+# strips all table aliases, so "a.i" in the outer SELECT could not
+# be resolved, crashing with an internal "table not found" error.
+#
+# The fix: skip JoinRef pushdown in FinishPushdown(TableRef&);
+# the join falls back to native remote scanning which hits
+# "Multiple streaming scans" (the documented limitation) instead
+# of an unexpected internal error.
+# ============================================================
+
+statement ok
+create macro double_it(x) as x * 2;
+
+# Local macro in SELECT over a 2-table remote join: must produce
+# "Multiple streaming scans", NOT an internal "table a not found"
+statement error
+select double_it(a.i) from rpc.t1 a join rpc.t2 b on a.i = b.i
+----
+Multiple streaming scans
+
+statement ok
+drop macro double_it;
+
+# ============================================================
+# Bug 5: PushdownSubqueries was not called for GROUP BY
+# expressions and ORDER BY modifiers when the whole query
+# could not be pushed.
+#
+# When a query mixes local and remote, any remote subqueries
+# in GROUP BY or ORDER BY should still be pushed to the remote
+# individually for efficiency.
+# ============================================================
+
+# Scalar subquery in ORDER BY: query is mixed (local_t + remote subquery in ORDER BY)
+# local_t has {0..9}; order by (max(rpc.t1.i) - local_col) = (9 - local_col) ASC
+# smallest sort key first: local_col=9 → key=0 (first), local_col=8 → key=1, local_col=7 → key=2
+query I
+select local_col from local_t
+order by (select max(i) from rpc.t1) - local_col
+limit 3
+----
+9
+8
+7
+
+# Scalar subquery in ORDER BY ascending
+query I
+select local_col from local_t
+order by local_col - (select min(i) from rpc.t1)
+limit 3
+----
+0
+1
+2
+
+# Scalar subquery in GROUP BY: mixed query with remote scalar in GROUP BY expression
+# local_t has {0..9}; group by (local_col % (select max(i) from rpc.t1))
+# max(i) = 9; local_col % 9 for {0..9}: {0,1,2,3,4,5,6,7,8,0} -> 9 distinct buckets (0..8)
+query I
+select count(distinct bucket) from (
+  select local_col % (select max(i) from rpc.t1) as bucket from local_t
+) sub
+----
+9
+
+# ============================================================
+# Bug 7: Rewrite(DML) did not guard on target-table locality.
+#
+# When the DML target table is LOCAL but the condition or source
+# contains a remote subquery, Merge(NO_CATALOG, SINGLE_REMOTE)
+# previously returned SINGLE_REMOTE, causing the optimizer to push
+# the whole DML to the remote server where the local table does not
+# exist (resulting in "table not found" or similar errors).
+#
+# The fix: check the target table result first; if not remote,
+# return UNKNOWN immediately and push only individual remote
+# subqueries inside condition/FROM for efficiency.
+# ============================================================
+
+# DELETE FROM local table with remote scalar subquery in WHERE:
+# Optimizer must NOT push the DELETE, but the subquery should be
+# pushed individually. local_t = {0..9}; max(rpc.t1.i) = 9;
+# delete where local_col > 9 -> deletes 0 rows; count stays 10.
+query I
+select count(*) from local_t
+----
+10
+
+statement ok
+delete from local_t where local_col > (select max(i) from rpc.t1)
+
+query I
+select count(*) from local_t
+----
+10
+
+# Deleting rows that DO exist: local_col IN (SELECT ... FROM rpc.t1)
+# t1={0..9}; delete local_col in {0,1,2} -> 3 rows removed; 7 remain
+statement ok
+delete from local_t where local_col in (select i from rpc.t1 where i < 3)
+
+query I
+select count(*) from local_t
+----
+7
+
+statement ok
+insert into local_t from range(3)
+
+# UPDATE local table with remote scalar subquery in SET:
+# local_t={0..9}; set local_col = local_col + max(rpc.t1.i)
+# max = 9; so all values increase by 9; first 3 become {9,10,11}
+statement ok
+update local_t set local_col = local_col + (select max(i) from rpc.t1) where local_col < 3
+
+query I
+select count(*) from local_t where local_col >= 9
+----
+4
+
+# Restore
+statement ok
+update local_t set local_col = local_col - (select max(i) from rpc.t1) where local_col >= 9 and local_col <= 11
+
+# INSERT into local table from remote SELECT:
+# INSERT INTO local_t SELECT i+100 FROM rpc.t1 WHERE i < 3 -> 3 rows {100,101,102}
+statement ok
+insert into local_t select i + 100 from rpc.t1 where i < 3
+
+query I
+select count(*) from local_t where local_col >= 100
+----
+3
+
+statement ok
+delete from local_t where local_col >= 100
+
+# ============================================================
+# Bug 8: Rewrite(BaseTableRef) returned NO_CATALOG_REFERENCED
+# for local tables with an explicit catalog prefix.
+#
+# Merge(NO_CATALOG, SINGLE_REMOTE) = SINGLE_REMOTE, so a query
+# like `SELECT * FROM memory.main.local_t WHERE local_col IN
+# (SELECT i FROM rpc.t1)` was misclassified as all-remote and
+# pushed to the remote server where memory.main.local_t does
+# not exist (crash / "table not found").
+#
+# The fix: local BaseTableRefs in Case 1 (explicit catalog) now
+# return UNKNOWN_CATALOG_REFERENCE so Merge correctly produces
+# UNKNOWN instead of SINGLE_REMOTE.
+# ============================================================
+
+# Reset local_t to a known state
+statement ok
+drop table local_t
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# Scalar subquery in WHERE with explicit local catalog: must NOT push
+# local_t = {0..9}; local_col IN {0..4} -> 5 rows
+query I
+select count(*) from memory.main.local_t where local_col in (select i from rpc.t1 where i < 5)
+----
+5
+
+# Result sanity: count with explicit-catalog subquery produces same result as unqualified
+query I
+select count(*) from local_t where local_col >= (select min(i) from rpc.t1)
+----
+10
+
+statement ok
+drop table local_t
+
+# ============================================================
+# Bug 9: Rewrite(SubqueryRef) did not save/restore
+# local_table_names / local_table_column_names, so column names
+# of inner local tables leaked into the outer scope.
+#
+# Symptom: a WHERE scalar subquery that is purely remote was
+# blocked from pushdown when a preceding FROM-clause subquery
+# contained a local table whose column names matched an
+# unqualified column ref inside the scalar subquery.
+# HasLocalTableReference would find the leaked name in
+# local_table_column_names and (incorrectly) report the
+# scalar subquery as correlated, preventing its pushdown.
+# Correctness was preserved but performance degraded.
+#
+# The fix: save/restore the tracking sets around the inner
+# Rewrite call in Rewrite(SubqueryRef&), mirroring the same
+# pattern used in Rewrite(ParsedExpression&) for SUBQUERY.
+# ============================================================
+
+# Create a local table whose column name ('i') collides with the remote table's column.
+# After the fix the FROM-clause subquery's inner 'i' no longer leaks into the outer scope.
+statement ok
+create table local_i(i int);
+
+statement ok
+insert into local_i from range(5);
+
+# FROM clause has a local SubqueryRef (wrapping local_i with column 'i').
+# WHERE has a purely-remote IN subquery that also uses unqualified 'i'.
+# With the bug: processing (select * from local_i) sq adds 'i' to local_table_column_names,
+# which leaks into the outer scope; HasLocalTableReference then incorrectly reports the IN
+# subquery as correlated, preventing its individual pushdown.
+# With the fix: save/restore clears the leaked 'i' after processing sq, so the IN subquery
+# is correctly identified as uncorrelated and pushed to the remote.
+# local_i={0..4}; IN filter keeps i in {0,1,2} → 3 rows; count(*) = 3.
+query I
+select count(*) from (select * from local_i) sq
+where sq.i in (select i from rpc.t1 where i < 3)
+----
+3
+
+statement ok
+drop table local_i
+
+# ============================================================
+# Bug 10: Rewrite/StripCatalogName for DML (INSERT/DELETE/UPDATE)
+# did not process the node's own cte_map.
+#
+# When a DML statement has a WITH clause (e.g. WITH cte AS (...) DELETE ...),
+# the CTE body was invisible to the optimizer. A CTE whose body references a
+# local table was not detected as local, so a CTE name not found in any local
+# catalog would be misclassified as SINGLE_REMOTE (when exactly one remote is
+# in the search path). The whole DML was then pushed to the remote, which
+# failed with "table <local_t> not found" when the CTE body referenced it.
+#
+# Similarly, StripCatalogName did not strip catalog names from CTE bodies in
+# DML statements, so catalog-qualified refs inside the CTE were sent verbatim
+# to the remote server, causing "Catalog 'rpc' does not exist" errors.
+# ============================================================
+
+# Restore local_t for DML CTE tests
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# DELETE with all-remote CTE: CTE body from rpc.t1, should be pushed.
+# t1={0..9}; cte = rows where i > 7 = {8,9}; delete local_col in {8,9} -> 2 removed; 8 remain.
+statement ok
+with remote_cte as (select i from rpc.t1 where i > 7)
+delete from local_t where local_col in (select i from remote_cte)
+
+query I
+select count(*) from local_t
+----
+8
+
+statement ok
+insert into local_t values (8), (9)
+
+# DELETE with local CTE: must NOT be pushed to remote.
+# cte body references local_t2 (local); delete local_col in {0,1,2} -> 3 removed; 7 remain.
+statement ok
+create table local_t2(v int);
+
+statement ok
+insert into local_t2 values (0), (1), (2);
+
+statement ok
+with local_cte as (select v from local_t2)
+delete from local_t where local_col in (select v from local_cte)
+
+query I
+select count(*) from local_t
+----
+7
+
+statement ok
+insert into local_t values (0), (1), (2)
+
+# INSERT with all-remote CTE: CTE body from rpc.t1, source SELECT from CTE.
+# cte = {0..4}; insert {100,101,102,103,104} into local_t -> 5 new rows added.
+statement ok
+with remote_cte as (select i from rpc.t1 where i < 5)
+insert into local_t select local_col + 100 from (select i as local_col from remote_cte) sub
+
+query I
+select count(*) from local_t where local_col >= 100
+----
+5
+
+statement ok
+delete from local_t where local_col >= 100
+
+# UPDATE with all-remote CTE: CTE provides max value from remote, applied to local table.
+# max(rpc.t1.i) = 9; update local_t set local_col = local_col + 9 where local_col < 3
+# -> local_col {0,1,2} become {9,10,11}; count of local_col >= 9 was 1 (the 9 already there)
+# now becomes 4 ({9,9,10,11})
+statement ok
+with remote_max as (select max(i) as m from rpc.t1)
+update local_t set local_col = local_col + (select m from remote_max) where local_col < 3
+
+query I
+select count(*) from local_t where local_col >= 9
+----
+4
+
+statement ok
+drop table local_t
+
+statement ok
+drop table local_t2
+
+# ============================================================
+# Bug 11: Correlated WHERE/SET subquery pushed independently
+# when the outer from_table was individually pushed to remote.
+#
+# When the overall SELECT result is UNKNOWN (e.g. because a local
+# macro appears in the SELECT list) but the from_table is all-remote,
+# the optimizer pushes the from_table individually and then calls
+# PushdownSubqueries on the WHERE clause. A WHERE IN subquery that
+# is all-remote but correlated with the pushed from_table alias was
+# not detected as correlated (the alias was not in local_table_names),
+# causing it to be pushed to the remote independently where the outer
+# alias is not in scope, leading to a "column not found" error.
+# ============================================================
+
+statement ok
+create macro id_macro(x) as x;
+
+# id_macro(ft.i) forces the overall query result to UNKNOWN so the SELECT is in the
+# local path. from_table (rpc.t1 AS ft) is individually pushed via FinishPushdown.
+# With an explicit AS alias the alias must be stripped from the remote SQL and preserved
+# only on the outer table-function wrapper; otherwise remote servers with limited parsers
+# reject "SELECT * FROM t1 AS ft". The alias is then applied to the table-function ref
+# so that column refs like ft.i continue to resolve in the outer query.
+# t1={0..9}; id_macro(ft.i) expands to ft.i; ft.i>=5 -> {5,6,7,8,9} -> count=5.
+query I
+select count(*) from rpc.t1 AS ft where id_macro(ft.i) >= 5
+----
+5
+
+statement ok
+drop macro id_macro;
+
+# ============================================================
+# Bug 12: StripCatalogName(ParsedExpression) stripped unqualified
+# column refs whose single name matched the catalog name.
+#
+# When a remote table was individually pushed and StripCatalogName
+# was applied to outer SELECT/WHERE expressions, a ColumnRefExpression
+# with column_names = ["rpc"] (an unqualified column literally named
+# "rpc") had its only element erased, leaving column_names = [] and
+# causing a binder crash. The fix requires at least 2 elements before
+# stripping (a genuine catalog prefix always has schema/table/col after it).
+# ============================================================
+
+statement ok
+create table local_rpc(rpc int);
+
+statement ok
+insert into local_rpc values (3), (5), (7);
+
+# Mixed join: local_rpc (local) + rpc.t1 (remote).
+# rpc.t1 is individually pushed; StripCatalogName is then called on outer
+# SELECT expressions. The "rpc" column ref must survive stripping intact.
+# local_rpc={3,5,7}; rpc.t1={0..9}: inner join matches {3,5,7} -> 3 rows.
+query I
+select rpc from local_rpc join rpc.t1 on local_rpc.rpc = rpc.t1.i order by rpc
+----
+3
+5
+7
+
+statement ok
+drop table local_rpc
+
+# ============================================================
+# Bug 13: Two bugs in combination:
+#
+# (a) StripCatalogName in the partial-pushdown branch (individual
+#     JoinRef children pushed) incorrectly recursed into unpushed
+#     subquery bodies, stripping "rpc" from "rpc.t2" in an EXISTS
+#     WHERE — leaving a bare "t2" that the local binder cannot find.
+#     Fix: pass strip_subquery_bodies=false in partial-pushdown calls
+#     to StripCatalogName so only outer column refs are touched.
+#
+# (b) HasLocalTableReference missed aliases of individually pushed
+#     JoinRef children, so a correlated EXISTS (referencing the pushed
+#     "t1" alias) was classified as uncorrelated and pushed to remote,
+#     failing with "table 't1' not found" on the remote server.
+#     Fix: Rewrite(JoinRef&) populates from_pushed_table_aliases;
+#     Rewrite(SelectNode&) inserts those aliases into local_table_names
+#     before calling PushdownSubqueries so the correlation is detected.
+#
+# With both fixes the EXISTS stays local and the query correctly hits
+# the "Multiple streaming scans" limitation (two quack connections:
+# one for the outer quack_query_by_name and one for native rpc.t2
+# access in the inner subquery).
+# ============================================================
+
+statement ok
+create table local_k(k int);
+
+statement ok
+insert into local_k values (2), (5), (8);
+
+# Mixed join: rpc.t1 (individually pushed as "t1") + local_k (local).
+# WHERE has a correlated EXISTS referencing t1 (from the pushed JoinRef child).
+# The EXISTS subquery uses "t2.i" (unqualified alias) because DuckDB's binder
+# does not support catalog-qualified column refs (e.g. "rpc.t2.i") when the
+# table is bound with the implicit alias "t2" in local execution context.
+# The fix ensures this correlated subquery is NOT stripped of catalog names and
+# NOT pushed; it falls back to native rpc.t2 scanning while rpc.t1 is streaming.
+statement error
+select count(*) from rpc.t1 t1 join local_k on t1.i = local_k.k
+where exists (select 1 from rpc.t2 where t2.i = t1.i)
+----
+Multiple streaming scans
+
+statement ok
+drop table local_k
+
+# ============================================================
+# Bug 14: PushdownSubqueries incorrectly called when JoinRef
+# children are already occupying the quack streaming slot.
+#
+# When a mixed JOIN has one remote child individually pushed to
+# quack_query_by_name(...) (occupying the single quack streaming
+# connection), the code then called PushdownSubqueries on the
+# outer WHERE/HAVING/SELECT-list. A WHERE scalar subquery that
+# is all-remote would be pushed to a second quack_query_by_name
+# call, creating a second concurrent streaming connection and
+# triggering "Multiple streaming scans" (or returning wrong 0-row
+# results from the second connection).
+#
+# The fix: capture had_join_child_pushdowns before the
+# from_pushed_catalog_names are consumed, and skip
+# PushdownSubqueries when that flag is true — same as the
+# existing skip for a directly-pushed from_table.
+#
+# Both before and after the fix, queries in this shape fail with
+# "Multiple streaming scans" (the native rpc.t2 scan + the outer
+# quack_query_by_name still conflict). The fix avoids wrapping
+# the failing subquery in an extra quack_query_by_name layer.
+# ============================================================
+
+statement ok
+create table local_m(m int);
+
+statement ok
+insert into local_m values (1), (3), (5);
+
+# Mixed join (rpc.t1 + local_m): rpc.t1 is individually pushed.
+# Non-correlated WHERE scalar subquery referencing rpc.t2.
+# Both old and new code produce "Multiple streaming scans" because
+# the outer quack stream conflicts with the inner rpc.t2 scan.
+statement error
+select t1.i from rpc.t1 join local_m on t1.i = local_m.m
+where t1.i < (select max(i) from rpc.t2)
+----
+Multiple streaming scans
+
+statement ok
+drop table local_m
+
+# ============================================================
+# Bug 15: FinishPushdown(QueryNode) would push a UNION ALL child
+# standalone when an outer SINGLE_REMOTE CTE was in scope.
+#
+# When an outer SelectNode defines a SINGLE_REMOTE CTE and an inner
+# SetOperationNode (inside a subquery) is UNKNOWN (mixed arms), the
+# individual-pushdown block calls FinishPushdown(QueryNode) for each
+# SINGLE_REMOTE child. If that child references the outer CTE by name,
+# it is serialized as "SELECT * FROM cte_name" without the WITH definition.
+# The remote server cannot resolve cte_name → "Table cte_name not found".
+#
+# The fix: FinishPushdown(QueryNode) checks cte_results for any outer
+# SINGLE_REMOTE CTE and skips the push, mirroring the guard already in
+# place for SubqueryRef in FinishPushdown(TableRef).
+# ============================================================
+
+statement ok
+create table local_bugfix15(i int);
+
+statement ok
+insert into local_bugfix15 from range(5, 10);
+
+# Outer CTE (SINGLE_REMOTE from rpc.t1) + inner UNION ALL with one arm referencing
+# the outer CTE (SINGLE_REMOTE) and one arm referencing local_bugfix15 (UNKNOWN).
+# Without fix: child 1 ("SELECT i FROM outer_cte") is pushed standalone to remote,
+# failing with "Table outer_cte not found". With fix: child 1 executes locally via
+# the CTE definition and child 2 runs locally from local_bugfix15.
+# outer_cte = {0..4}, local_bugfix15 = {5..9} -> total 10 rows.
+query I
+with outer_cte as (select i from rpc.t1 where i < 5)
+select count(*) from (
+    select i from outer_cte
+    union all
+    select i from local_bugfix15
+)
+----
+10
+
+statement ok
+drop table local_bugfix15
+
+statement ok db1:con1
+call quack_stop('quack:localhost')

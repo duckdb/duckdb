@@ -47,7 +47,38 @@ static Connection &GetConnection(SQLLogicTestRunner &runner, DuckDB &db,
 		named_connection_map[con_name] = std::move(con);
 		return res;
 	}
+	if (!RefersToSameObject(*entry->second->context->db, *db.instance)) {
+		FAIL("Named connection has been started with different target databases");
+	}
 	return *entry->second;
+}
+static Connection &GetConnection(SQLLogicTestRunner &runner,
+                                 unordered_map<string, duckdb::unique_ptr<Connection>> &named_connection_map,
+                                 const string &con_name) {
+	if (StringUtil::Contains(con_name, ":")) {
+		auto splits = StringUtil::Split(con_name, ":");
+		if (splits.size() != 2) {
+			FAIL("Expected either connection name or database:connection");
+		}
+		auto &db_name = splits[0];
+		auto &con_name = splits[1];
+		auto db_map = runner.named_db.find(db_name);
+		if (db_map != runner.named_db.end()) {
+			// we already have a database - connect to it
+			return GetConnection(runner, *db_map->second, named_connection_map, con_name);
+		}
+		// no database - create it
+		if (runner.named_connection_map.find(con_name) != runner.named_connection_map.end()) {
+			FAIL("Database did not exist, but named connection already existed");
+		}
+		auto result = runner.CreateDatabase(":memory:", true);
+		auto &result_con = *result.con;
+		runner.named_db[db_name] = std::move(result.db);
+		runner.named_connection_map[con_name] = std::move(result.con);
+		return result_con;
+	} else {
+		return GetConnection(runner, *runner.db, named_connection_map, con_name);
+	}
 }
 
 Command::Command(SQLLogicTestRunner &runner) : runner(runner) {
@@ -84,7 +115,7 @@ Connection &Command::CommandConnection(ExecuteContext &context) const {
 		if (context.is_parallel) {
 			throw std::runtime_error("Named connections not supported in parallel loop");
 		}
-		return GetConnection(runner, *runner.db, runner.named_connection_map, connection_name);
+		return GetConnection(runner, runner.named_connection_map, connection_name);
 	}
 }
 

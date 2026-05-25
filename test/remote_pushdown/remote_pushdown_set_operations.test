@@ -1,0 +1,230 @@
+# name: test/remote_pushdown/remote_pushdown_set_operations.test
+# description: UNION/INTERSECT/EXCEPT pushdown for remote catalogs
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+# t1 = {0..9}, t2 = {5..14}; overlap = {5..9}
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok db1:con1
+create table t2(i int);
+
+statement ok db1:con1
+insert into t2 values (5), (6), (7), (8), (9), (10), (11), (12), (13), (14);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+# local table with values {0..4} (subset of t1, no overlap with t2 extension)
+statement ok
+create table local_t(i int);
+
+statement ok
+insert into local_t values (0), (1), (2), (3), (4);
+
+# --- UNION ALL (all remote) ---
+
+query II
+explain select i from rpc.t1 union all select i from rpc.t2
+----
+physical_plan	<!REGEX>:.*UNION.*
+
+# t1 (10 rows) + t2 (10 rows) = 20 rows
+query I
+select count(*) from (select i from rpc.t1 union all select i from rpc.t2)
+----
+20
+
+# sum of all values: sum(0..9) + sum(5..14) = 45 + 95 = 140
+query I
+select sum(i) from (select i from rpc.t1 union all select i from rpc.t2)
+----
+140
+
+# --- UNION (dedup, all remote) ---
+
+query II
+explain select i from rpc.t1 union select i from rpc.t2
+----
+physical_plan	<!REGEX>:.*UNION.*
+
+# unique values in t1 ∪ t2 = {0..14} = 15
+query I
+select count(*) from (select i from rpc.t1 union select i from rpc.t2)
+----
+15
+
+# UNION of t1 with itself: deduplication leaves 10 rows
+query I
+select count(*) from (select i from rpc.t1 union select i from rpc.t1)
+----
+10
+
+# --- INTERSECT (all remote) ---
+
+query II
+explain select i from rpc.t1 intersect select i from rpc.t2
+----
+physical_plan	<!REGEX>:.*INTERSECT.*
+
+# t1 ∩ t2 = {5,6,7,8,9} = 5 rows
+query I
+select count(*) from (select i from rpc.t1 intersect select i from rpc.t2)
+----
+5
+
+# Functional: correct values in intersection
+query I
+select min(i) from (select i from rpc.t1 intersect select i from rpc.t2)
+----
+5
+
+query I
+select max(i) from (select i from rpc.t1 intersect select i from rpc.t2)
+----
+9
+
+# --- EXCEPT (all remote) ---
+
+query II
+explain select i from rpc.t1 except select i from rpc.t2
+----
+physical_plan	<!REGEX>:.*EXCEPT.*
+
+# t1 - t2 = {0,1,2,3,4} = 5 rows
+query I
+select count(*) from (select i from rpc.t1 except select i from rpc.t2)
+----
+5
+
+query I
+select sum(i) from (select i from rpc.t1 except select i from rpc.t2)
+----
+10
+
+# t2 - t1 = {10,11,12,13,14} = 5 rows
+query I
+select count(*) from (select i from rpc.t2 except select i from rpc.t1)
+----
+5
+
+# --- Set operations with ORDER BY / LIMIT (all remote) ---
+
+# UNION ALL with ORDER BY: whole query pushed
+query II
+explain select i from rpc.t1 union all select i from rpc.t2 order by i
+----
+physical_plan	<!REGEX>:.*UNION.*
+
+query I
+select i from rpc.t1 union all select i from rpc.t1 order by i desc limit 3
+----
+9
+9
+8
+
+# UNION with outer aggregation
+query I
+select sum(i) from (select i from rpc.t1 union all select i from rpc.t1)
+----
+90
+
+# --- Nested set operations (all remote) ---
+
+# Three-way UNION ALL: all remote -> pushed
+# t1 where i<5 = 5 rows, t1 where i>=5 = 5 rows, t2 where i>=10 = 5 rows -> 15
+query I
+select count(*) from (
+  select i from rpc.t1 where i < 5
+  union all
+  select i from rpc.t1 where i >= 5
+  union all
+  select i from rpc.t2 where i >= 10
+)
+----
+15
+
+# UNION then filtered: all remote -> pushed
+query I
+select count(*) from (
+  select i from rpc.t1 union select i from rpc.t2
+) sub where i < 5
+----
+5
+
+# --- Mixed (local + remote): pushdown blocked ---
+
+# Mixed UNION ALL: UNION stays in local plan
+query II
+explain select i from rpc.t1 union all select i from local_t
+----
+physical_plan	<REGEX>:.*UNION.*
+
+# Functional: 10 + 5 = 15 rows
+query I
+select count(*) from (select i from rpc.t1 union all select i from local_t)
+----
+15
+
+# Mixed UNION: dedup of t1={0..9} and local_t={0..4} -> {0..9} = 10
+query I
+select count(*) from (select i from rpc.t1 union select i from local_t)
+----
+10
+
+# Mixed INTERSECT: t1={0..9} ∩ local_t={0..4} = {0..4} = 5 rows
+query I
+select count(*) from (select i from rpc.t1 intersect select i from local_t)
+----
+5
+
+# Mixed EXCEPT (t1 - local_t): {5,6,7,8,9} = 5 rows
+query I
+select count(*) from (select i from rpc.t1 except select i from local_t)
+----
+5
+
+# Mixed EXCEPT (local_t - t1): all local values are in t1 -> 0 rows
+query I
+select count(*) from (select i from local_t except select i from rpc.t1)
+----
+0
+
+# Catalog-qualified ORDER BY directly on mixed UNION: "rpc.t1.i" must be reduced to "i"
+# (not "t1.i") because after individual child pushdown the UNION output has no table
+# associations — even a 2-part qualifier would fail to bind.
+# local_t={0..4}, rpc.t1={0..9} -> UNION ALL sorted = {0,0,1,1,2,2,3,3,4,4,5,6,7,8,9}
+query I
+(select i from rpc.t1) union all (select i from local_t) order by rpc.t1.i
+----
+0
+0
+1
+1
+2
+2
+3
+3
+4
+4
+5
+6
+7
+8
+9
+
+statement ok
+drop table local_t
+
+statement ok db1:con1
+call quack_stop('quack:localhost')

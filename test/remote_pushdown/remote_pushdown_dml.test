@@ -1,0 +1,198 @@
+# name: test/remote_pushdown/remote_pushdown_dml.test
+# description: INSERT/UPDATE/DELETE pushdown for remote catalogs
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+# Initial state: t1 = {0..9}, count = 10
+query I
+select count(*) from rpc.t1
+----
+10
+
+# --- INSERT ---
+
+# INSERT from remote SELECT is pushed (verify with functional result)
+statement ok
+insert into rpc.t1 select i + 10 from rpc.t1
+
+# t1 now has {0..19}
+query I
+select count(*) from rpc.t1
+----
+20
+
+query II
+select min(i), max(i) from rpc.t1
+----
+0	19
+
+# INSERT with WHERE filter from remote is pushed
+statement ok
+insert into rpc.t1 select i + 100 from rpc.t1 where i < 5
+
+# adds {100,101,102,103,104} -> total 25 rows
+query I
+select count(*) from rpc.t1
+----
+25
+
+query I
+select count(*) from rpc.t1 where i >= 100
+----
+5
+
+# INSERT from subquery wrapping remote SELECT is pushed
+statement ok
+insert into rpc.t1 select i + 200 from (select i from rpc.t1 where i >= 100) sub
+
+# adds {300,301,302,303,304} -> total 30 rows
+query I
+select count(*) from rpc.t1
+----
+30
+
+# --- DELETE ---
+
+# DELETE simple is pushed
+statement ok
+delete from rpc.t1 where i >= 200
+
+query I
+select count(*) from rpc.t1
+----
+25
+
+statement ok
+delete from rpc.t1 where i >= 100
+
+# t1 = {0..19}, count = 20
+query I
+select count(*) from rpc.t1
+----
+20
+
+# DELETE with subquery referencing same remote table is pushed
+# max(i) where i < 15 = 14, so delete where i > 14 removes {15..19}
+statement ok
+delete from rpc.t1 where i > (select max(i) from rpc.t1 where i < 15)
+
+query I
+select count(*) from rpc.t1
+----
+15
+
+# DELETE with IN subquery referencing same remote table is pushed
+statement ok
+delete from rpc.t1 where i in (select i from rpc.t1 where i >= 10)
+
+# removes {10,11,12,13,14} -> t1 = {0..9}, count = 10
+query I
+select count(*) from rpc.t1
+----
+10
+
+query II
+select min(i), max(i) from rpc.t1
+----
+0	9
+
+# --- UPDATE ---
+
+# UPDATE simple is pushed
+statement ok
+update rpc.t1 set i = i + 100
+
+# t1 = {100..109}
+query II
+select min(i), max(i) from rpc.t1
+----
+100	109
+
+# UPDATE with FROM subquery referencing same remote table is pushed
+statement ok
+update rpc.t1 t1 set i = t1.i where t1.i in (select i from rpc.t1 where i >= 105)
+
+query I
+select count(*) from rpc.t1 where i >= 105
+----
+5
+
+# Restore: update back
+statement ok
+update rpc.t1 set i = i - 100
+
+query II
+select min(i), max(i) from rpc.t1
+----
+0	9
+
+# UPDATE with expression in SET
+statement ok
+update rpc.t1 set i = i * 2 + 1 where i = 3
+
+# i=3 -> 7; now t1 has two rows where i=7
+query I
+select count(*) from rpc.t1 where i = 7
+----
+2
+
+# --- Mixed DML: local target with remote USING / FROM ---
+
+# Reset t1 to {0..9} for the mixed DML tests below
+statement ok db1:con1
+delete from t1 where true
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok
+create table local_t(i int);
+
+statement ok
+insert into local_t from range(10);
+
+# DELETE USING with 3-part catalog-qualified ref in WHERE: "rpc.t1.i" must be stripped to
+# "t1.i" after rpc.t1 is replaced by quack_query_by_name(...) AS t1 in USING, otherwise
+# the binder fails with "Referenced table rpc.t1 not found".
+statement ok
+delete from local_t using rpc.t1 where local_t.i = rpc.t1.i and rpc.t1.i > 5
+
+# rows 6-9 deleted; local_t = {0..5}, count = 6
+query I
+select count(*) from local_t
+----
+6
+
+statement ok
+insert into local_t from range(6, 10);
+
+# UPDATE FROM with 3-part catalog-qualified ref in SET expression: "rpc.t1.i" stripped
+statement ok
+update local_t set i = rpc.t1.i * 2 from rpc.t1 where local_t.i = rpc.t1.i
+
+# local_t becomes {0,2,4,6,8,10,12,14,16,18}; rows > 10: {12,14,16,18} = 4
+query I
+select count(*) from local_t where i > 10
+----
+4
+
+statement ok
+drop table local_t
+
+statement ok db1:con1
+call quack_stop('quack:localhost')

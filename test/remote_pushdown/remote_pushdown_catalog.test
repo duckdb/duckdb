@@ -1,0 +1,178 @@
+# name: test/remote_pushdown/remote_pushdown_catalog.test
+# description: Catalog/schema qualification and optimizer control for remote pushdown
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+# --- Schema-qualified table references ---
+
+# rpc.main.t1 is pushed (rpc=catalog, main=schema, t1=table)
+query II
+explain select * from rpc.main.t1
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from rpc.main.t1
+----
+10
+
+# Schema-qualified in filter
+query I
+select count(*) from rpc.main.t1 where i > 5
+----
+4
+
+# Schema-qualified in aggregate
+query I
+select sum(i) from rpc.main.t1
+----
+45
+
+# --- Catalog-qualified column references ---
+
+# rpc.t1.i in WHERE clause: catalog prefix stripped before sending to remote
+query II
+explain select * from rpc.t1 where rpc.t1.i > 5
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from rpc.t1 where rpc.t1.i > 5
+----
+4
+
+# Schema + table qualified column: rpc.main.t1.i stripped to t1.i
+query I
+select count(*) from rpc.main.t1 where rpc.main.t1.i > 5
+----
+4
+
+# Catalog-qualified column in ORDER BY: stripped before push
+query II
+explain select rpc.t1.i from rpc.t1 order by rpc.t1.i
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select rpc.t1.i from rpc.t1 order by rpc.t1.i limit 3
+----
+0
+1
+2
+
+# Catalog-qualified column in ORDER BY DESC
+query I
+select rpc.t1.i from rpc.t1 where rpc.t1.i <= 2 order by rpc.t1.i desc
+----
+2
+1
+0
+
+# --- GROUP BY with catalog-qualified column refs ---
+
+# GROUP BY with catalog-qualified ref: stripped to unqualified in pushed SQL
+query II
+explain select rpc.t1.i, count(*) from rpc.t1 group by rpc.t1.i order by rpc.t1.i
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# Verify correct aggregation result with qualified refs
+query II
+select rpc.t1.i, count(*) from rpc.t1 where rpc.t1.i >= 8 group by rpc.t1.i order by rpc.t1.i
+----
+8	1
+9	1
+
+# GROUP BY with schema-qualified ref
+query I
+select count(*) from (
+  select rpc.main.t1.i % 2 as parity from rpc.main.t1 group by parity
+)
+----
+2
+
+# --- DML with schema-qualified table ---
+
+# INSERT targeting schema-qualified remote table
+statement ok
+insert into rpc.main.t1 values (100), (101), (102)
+
+query I
+select count(*) from rpc.t1 where i >= 100
+----
+3
+
+# DELETE from schema-qualified remote table
+statement ok
+delete from rpc.main.t1 where i >= 100
+
+query I
+select count(*) from rpc.t1 where i >= 100
+----
+0
+
+# UPDATE on schema-qualified remote table
+statement ok
+update rpc.main.t1 set i = i + 1 where i = 0
+
+query I
+select count(*) from rpc.t1 where i = 0
+----
+0
+
+query I
+select count(*) from rpc.t1 where i = 1
+----
+2
+
+# Restore: remove both rows with i=1 then insert originals back
+statement ok
+delete from rpc.main.t1 where i = 1
+
+statement ok
+insert into rpc.main.t1 values (0), (1)
+
+# --- Optimizer control ---
+
+# Verify remote pushdown can be disabled via disabled_optimizers
+statement ok
+SET disabled_optimizers = 'remote_pushdown'
+
+# With pushdown disabled, query still routes through quack transport (QUACK_QUERY)
+query II
+explain select * from rpc.t1
+----
+physical_plan	<REGEX>:.*QUACK_QUERY.*
+
+# Functional: query still works correctly even without pushdown
+query I
+select count(*) from rpc.t1
+----
+10
+
+statement ok
+RESET disabled_optimizers
+
+# After re-enabling, pushdown is active again
+query II
+explain select * from rpc.t1
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+statement ok db1:con1
+call quack_stop('quack:localhost')

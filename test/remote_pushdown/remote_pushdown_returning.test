@@ -1,0 +1,238 @@
+# name: test/remote_pushdown/remote_pushdown_returning.test
+# description: RETURNING clause for INSERT/UPDATE/DELETE with remote pushdown
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+# Initial state: t1 = {0..9}
+
+# ============================================================
+# INSERT RETURNING
+# ============================================================
+
+# Basic INSERT RETURNING: pushed, returns inserted value
+query I
+insert into rpc.t1 values (42) returning i
+----
+42
+
+query I
+select count(*) from rpc.t1 where i = 42
+----
+1
+
+# Catalog-qualified column ref in RETURNING: rpc.t1.i stripped before push
+query I
+insert into rpc.t1 values (43) returning rpc.t1.i
+----
+43
+
+# RETURNING with expression
+query I
+insert into rpc.t1 values (44) returning i * 2
+----
+88
+
+# INSERT from remote SELECT with RETURNING: all remote → pushed
+# Insert i+100 for i in {0,1,2}; returns 3 rows in some order
+statement ok
+insert into rpc.t1 select i + 100 from rpc.t1 where i < 3 returning i
+
+# Verify rows landed
+query I
+select count(*) from rpc.t1 where i >= 100 and i < 103
+----
+3
+
+# Cleanup extra rows
+statement ok
+delete from rpc.t1 where i >= 42
+
+query II
+select min(i), max(i) from rpc.t1
+----
+0	9
+
+# ============================================================
+# UPDATE RETURNING
+# ============================================================
+
+# Basic UPDATE RETURNING: pushed, returns new value
+query I
+update rpc.t1 set i = i + 1 where i = 5 returning i
+----
+6
+
+# Now have two rows with i=6; restore
+statement ok
+delete from rpc.t1 where i = 6
+
+statement ok
+insert into rpc.t1 values (5), (6)
+
+# Catalog-qualified column ref in RETURNING for UPDATE
+query I
+update rpc.t1 set i = i - 1 where i = 1 returning rpc.t1.i
+----
+0
+
+# Now have two rows with i=0 (original 0 + updated 1), original 1 gone; restore both
+statement ok
+delete from rpc.t1 where i = 0
+
+statement ok
+insert into rpc.t1 values (0), (1)
+
+# UPDATE RETURNING with expression
+query I
+update rpc.t1 set i = i + 10 where i = 9 returning i - 10
+----
+9
+
+# Restore (i was set to 19)
+statement ok
+update rpc.t1 set i = i - 10 where i = 19
+
+# UPDATE RETURNING: verify correct row was modified
+query I
+select count(*) from rpc.t1 where i = 7
+----
+1
+
+statement ok
+update rpc.t1 set i = i + 1 where i = 7 returning i
+
+query I
+select count(*) from rpc.t1 where i = 8
+----
+2
+
+statement ok
+delete from rpc.t1 where i = 8
+
+statement ok
+insert into rpc.t1 values (7), (8)
+
+# ============================================================
+# DELETE RETURNING
+# ============================================================
+
+# Basic DELETE RETURNING: pushed, returns deleted value
+query I
+delete from rpc.t1 where i = 9 returning i
+----
+9
+
+query I
+select count(*) from rpc.t1 where i = 9
+----
+0
+
+statement ok
+insert into rpc.t1 values (9)
+
+# Catalog-qualified column ref in RETURNING for DELETE
+query I
+delete from rpc.t1 where i = 8 returning rpc.t1.i
+----
+8
+
+statement ok
+insert into rpc.t1 values (8)
+
+# DELETE RETURNING with expression
+query I
+delete from rpc.t1 where i = 0 returning i + 100
+----
+100
+
+statement ok
+insert into rpc.t1 values (0)
+
+# DELETE multiple rows RETURNING: verify deletion happened correctly
+statement ok
+delete from rpc.t1 where i >= 7 returning i
+
+query I
+select count(*) from rpc.t1 where i >= 7
+----
+0
+
+statement ok
+insert into rpc.t1 values (7), (8), (9)
+
+# ============================================================
+# INSERT RETURNING: scalar aggregate over remote data
+# ============================================================
+
+# Insert max+1 into t1, return the inserted value
+query I
+insert into rpc.t1 select max(i) + 1 from rpc.t1 returning i
+----
+10
+
+# Verify it was inserted
+query I
+select count(*) from rpc.t1 where i = 10
+----
+1
+
+statement ok
+delete from rpc.t1 where i = 10
+
+# Final state: t1 = {0..9}
+query II
+select min(i), max(i) from rpc.t1
+----
+0	9
+
+# ============================================================
+# RETURNING with local macro: body pushed to remote,
+# macro expression evaluated locally on returned rows.
+# Previously crashed with "Mismatch in input vector sizes".
+# ============================================================
+
+statement ok
+create macro double_it(x) as x * 2;
+
+# INSERT RETURNING with local macro: remote executes INSERT RETURNING i,
+# local SELECT applies double_it(i) = 50*2 = 100
+query I
+insert into rpc.t1 values (50) returning double_it(i)
+----
+100
+
+statement ok
+delete from rpc.t1 where i = 50
+
+# UPDATE RETURNING with local macro
+statement ok
+insert into rpc.t1 values (99);
+
+query I
+update rpc.t1 set i = i + 1 where i = 99 returning double_it(i)
+----
+200
+
+statement ok
+delete from rpc.t1 where i = 100
+
+statement ok
+drop macro double_it;
+
+statement ok db1:con1
+call quack_stop('quack:localhost')
