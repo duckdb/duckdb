@@ -1,9 +1,13 @@
-SetStatement <- 'SET' (SetSessionCharacteristics / SetTransactionIsolation / StandardAssignment / SetTimeZone)
+SetStatement <- 'SET' (SetSessionCharacteristics / SetSessionAuthorization / SetTransactionIsolation / SetRole / StandardAssignment / SetTimeZone)
 
 StandardAssignment <- (SetVariable / SetSetting) SetAssignment
 SetTimeZone <- 'TIME' 'ZONE' ZoneValue
 SetTransactionIsolation <- 'TRANSACTION' 'ISOLATION' 'LEVEL' IsolationLevel
 SetSessionCharacteristics <- 'SESSION' 'CHARACTERISTICS' 'AS' 'TRANSACTION' 'ISOLATION' 'LEVEL' IsolationLevel
+# PG: SET ROLE / SESSION AUTHORIZATION accept NonReservedWord_or_Sconst or DEFAULT.
+SetRole <- 'ROLE' RoleSpec
+SetSessionAuthorization <- 'SESSION' 'AUTHORIZATION' RoleSpec
+RoleSpec <- 'DEFAULT' / StringLiteral / Identifier
 
 ZoneValue <- ZoneIntervalWithPrecision / ZoneIntervalWithInterval / 'LOCAL' / 'DEFAULT' / StringLiteral / Identifier / NumberLiteral
 ZoneIntervalWithInterval <- 'INTERVAL' StringLiteral Interval?
@@ -23,7 +27,13 @@ SetAssignment <- VariableAssign VariableList
 VariableAssign <- '=' / 'TO'
 VariableList <- List(Expression)
 
-ResetStatement <- 'RESET' (ResetAll / SetVariable / SetSetting)
+ResetStatement <- 'RESET' (ResetAll / ResetAliasedSetting / SetVariable / SetSetting)
 # PG-compat: RESET ALL and RESET LOCAL ALL both reset every user-set option.
 # The LOCAL variant only differs at execution time (transaction-bound).
 ResetAll <- ('LOCAL' 'ALL') / 'ALL'
+
+# PG-compat: RESET takes the same multi-word aliases as SHOW. Tried before
+# the generic identifier-style branches so the keywords aren't snatched by
+# SetSetting / SetVariable.
+ResetAliasedSetting <- ResetSettingAlias
+ResetSettingAlias <- ('TRANSACTION' 'ISOLATION' 'LEVEL') / ('SESSION' 'AUTHORIZATION') / ('TIME' 'ZONE')

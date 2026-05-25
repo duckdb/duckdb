@@ -784,6 +784,10 @@ void PEGTransformerFactory::RegisterSet() {
 	// set.gram
 	REGISTER_TRANSFORM(TransformResetStatement);
 	REGISTER_TRANSFORM(TransformResetAll);
+	REGISTER_TRANSFORM(TransformResetAliasedSetting);
+	REGISTER_TRANSFORM(TransformRoleSpec);
+	REGISTER_TRANSFORM(TransformSetRole);
+	REGISTER_TRANSFORM(TransformSetSessionAuthorization);
 	REGISTER_TRANSFORM(TransformSetAssignment);
 	REGISTER_TRANSFORM(TransformSetSetting);
 	REGISTER_TRANSFORM(TransformSetStatement);
@@ -800,6 +804,9 @@ void PEGTransformerFactory::RegisterSet() {
 }
 
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
+	// deallocate.gram: DeallocateTarget choice is hand-written because one
+	// alternative is keyword-only (DeallocateAll).
+	REGISTER_TRANSFORM(TransformDeallocateTarget);
 	Register("PragmaName", &TransformIdentifierOrKeyword);
 	Register("TypeName", &TransformIdentifierOrKeyword);
 	Register("ColLabel", &TransformIdentifierOrKeyword);

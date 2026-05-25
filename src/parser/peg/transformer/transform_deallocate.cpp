@@ -3,12 +3,29 @@
 
 namespace duckdb {
 
+// DeallocateTarget <- DeallocateAll / Identifier
+// Returns "" when DeallocateAll matched (-> drop every prepared statement),
+// otherwise the identifier verbatim.
+string PEGTransformerFactory::TransformDeallocateTarget(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &result = choice_pr.GetResult();
+	if (result.name == "DeallocateAll") {
+		return "";
+	}
+	return result.Cast<IdentifierParseResult>().identifier;
+}
+
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformDeallocateStatement(PEGTransformer &transformer,
                                                                              const bool &deallocate_prepare,
-                                                                             const string &identifier) {
+                                                                             const string &deallocate_target) {
 	auto result = make_uniq<DropStatement>();
 	result->info->type = CatalogType::PREPARED_STATEMENT;
-	result->info->name = identifier;
+	result->info->name = deallocate_target;
+	// Empty name == DEALLOCATE ALL: succeed even if there's nothing to clear.
+	// Named DEALLOCATE: PG-shape error when the name doesn't exist.
+	result->info->if_not_found =
+	    deallocate_target.empty() ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	return std::move(result);
 }
 
@@ -25,6 +42,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformDiscardStatement(PEGTra
 	auto result = make_uniq<DropStatement>();
 	result->info->type = CatalogType::PREPARED_STATEMENT;
 	result->info->name = "";
+	result->info->if_not_found = OnEntryNotFound::RETURN_NULL;
 	return std::move(result);
 }
 

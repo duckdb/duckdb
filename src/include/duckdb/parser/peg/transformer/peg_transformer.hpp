@@ -1092,6 +1092,11 @@ private:
 	// set.gram
 	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer, ParseResult &parse_result);
 	static SettingInfo TransformResetAll(PEGTransformer &transformer, ParseResult &parse_result);
+	static SettingInfo TransformResetAliasedSetting(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformRoleSpec(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SetStatement> TransformSetRole(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SetStatement> TransformSetSessionAuthorization(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformSetAssignment(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static SettingInfo TransformSetSetting(PEGTransformer &transformer, ParseResult &parse_result);
@@ -1112,6 +1117,12 @@ private:
 	                                                                  ParseResult &parse_result);
 
 	static string TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result);
+
+	// DeallocateTarget <- DeallocateAll / Identifier
+	// Hand-written choice transform: the auto-generator skips this rule because
+	// one alternative (DeallocateAll) is keyword-only and excluded from the
+	// type registry.
+	static string TransformDeallocateTarget(PEGTransformer &transformer, ParseResult &parse_result);
 
 	//===--------------------------------------------------------------------===//
 	// START GENERATED RULES

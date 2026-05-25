@@ -1,8 +1,8 @@
 TransactionStatement <- BeginTransaction / RollbackTransaction / CommitTransaction
 
-BeginTransaction <- StartOrBegin Transaction? IsolationLevelClause? ReadOrWrite?
-RollbackTransaction <- AbortOrRollback Transaction?
-CommitTransaction <- CommitOrEnd Transaction?
+BeginTransaction <- StartOrBegin Transaction? IsolationLevelClause? ReadOrWrite? DeferrableClause?
+RollbackTransaction <- AbortOrRollback Transaction? ChainClause?
+CommitTransaction <- CommitOrEnd Transaction? ChainClause?
 
 StartOrBegin <- 'START' / 'BEGIN'
 Transaction <- 'WORK' / 'TRANSACTION'
@@ -14,3 +14,16 @@ IsolationLevelClause <- 'ISOLATION' 'LEVEL' IsolationLevel
 IsolationLevel <- ('READ' 'COMMITTED') / ('READ' 'UNCOMMITTED') / ('REPEATABLE' 'READ') / 'SERIALIZABLE'
 AbortOrRollback <- 'ABORT' / 'ROLLBACK'
 CommitOrEnd <- 'COMMIT' / 'END'
+# PG: COMMIT/ROLLBACK [WORK | TRANSACTION] AND [NO] CHAIN. AND CHAIN should
+# immediately re-enter a new transaction with the same characteristics. We
+# parse-accept the keywords -- serenedb commits/rollbacks happily without
+# re-opening; the subsequent commit/rollback on the empty session merely
+# warns "no transaction is active" (matches PG semantics for callers that
+# don't rely on the chained txn).
+ChainClause <- 'AND' NoChain? 'CHAIN'
+NoChain <- 'NO'
+# PG: [NOT] DEFERRABLE transaction mode (only meaningful for SERIALIZABLE
+# READ ONLY, which serenedb rejects upfront, so this is a parse-only no-op).
+DeferrableClause <- NotDeferrable / Deferrable
+Deferrable <- 'DEFERRABLE'
+NotDeferrable <- 'NOT' 'DEFERRABLE'

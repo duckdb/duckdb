@@ -1,5 +1,9 @@
-DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? Identifier
+DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? DeallocateTarget
 DeallocatePrepare <- 'PREPARE'
+# PG accepts both DEALLOCATE <name> and DEALLOCATE [PREPARE] ALL.
+# The ALL form drops every prepared statement on the session.
+DeallocateTarget <- DeallocateAll / Identifier
+DeallocateAll <- 'ALL'
 
 # PG-compat alias for pooled drivers (Npgsql, pgjdbc, psycopg). Every variant
 # collapses to DEALLOCATE ALL semantically: SereneDB has no temp tables /

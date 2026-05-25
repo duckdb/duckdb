@@ -119,6 +119,8 @@ SetStatement:
     - StandardAssignment
     - SetTransactionIsolation
     - SetSessionCharacteristics
+    - SetRole
+    - SetSessionAuthorization
 
 QueryNode:
   type: "unique_ptr<QueryNode>"
@@ -423,6 +425,7 @@ Expression:
     - ZoneValue
     - ZoneIntervalWithInterval
     - ZoneIntervalWithPrecision
+    - RoleSpec
     - NumberLiteral
     - TimeType
     - NumericType
@@ -764,6 +767,7 @@ SettingInfo:
     - SetSetting
     - SetVariable
     - ResetAll
+    - ResetAliasedSetting
 
 PartitionSortedOptions:
   type: "PartitionSortedOptions"
@@ -789,6 +793,7 @@ String:
   by_value: false
   rules:
     - AttachAlias
+    - DeallocateTarget
     - StringLiteral
     - DropOrSet
     - SequenceName
@@ -1178,3 +1183,10 @@ excluded_rules:
   - OperatorLiteral
   - DiscardTarget
   - ShowSettingAlias
+  - DeallocateAll
+  - ResetSettingAlias
+  - ChainClause
+  - NoChain
+  - DeferrableClause
+  - Deferrable
+  - NotDeferrable
