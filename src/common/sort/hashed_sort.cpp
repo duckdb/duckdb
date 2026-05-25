@@ -346,12 +346,12 @@ void HashedSort::Synchronize(const GlobalSinkState &source, GlobalSinkState &tar
 }
 
 void HashedSortLocalSinkState::Hash(DataChunk &input_chunk, Vector &hash_vector) {
-	const auto count = input_chunk.size();
 	D_ASSERT(group_chunk.ColumnCount() > 0);
 
 	// OVER(PARTITION BY...) (hash grouping)
 	group_chunk.Reset();
 	hash_exec.Execute(input_chunk, group_chunk);
+	const idx_t count = group_chunk.size();
 	VectorOperations::Hash(group_chunk.data[0], hash_vector, count);
 	for (idx_t prt_idx = 1; prt_idx < group_chunk.ColumnCount(); ++prt_idx) {
 		VectorOperations::CombineHash(hash_vector, group_chunk.data[prt_idx], count);

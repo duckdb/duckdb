@@ -436,7 +436,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		auto client_context = context.GetClientContext();
 		if (client_context) {
 			auto &profiler = *client_context->client_data->profiler;
-			profiler.AddToCounter(MetricType::WAL_REPLAY_ENTRY_COUNT, replay_entry_count);
+			profiler.AddToMetricCounter(MetricStorageWALReplayEntryCount::Name, replay_entry_count);
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		ErrorData error(ex);
@@ -1164,11 +1164,11 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 			column_ids.emplace_back(col.StorageOid());
 		}
 		Vector row_id_vector(LogicalType::ROW_TYPE, STANDARD_VECTOR_SIZE);
-		auto row_ids = FlatVector::GetDataMutable<row_t>(row_id_vector);
 		auto current_row_id = storage.GetTotalRows();
 		for (auto &chunk : new_row_groups.Chunks(transaction, column_ids)) {
+			auto row_id_writer = FlatVector::Writer<row_t>(row_id_vector, chunk.size());
 			for (idx_t r = 0; r < chunk.size(); r++) {
-				row_ids[r] = NumericCast<row_t>(current_row_id + r);
+				row_id_writer.WriteValue(NumericCast<row_t>(current_row_id + r));
 			}
 			current_row_id += chunk.size();
 			for (auto &index : indexes.Indexes()) {

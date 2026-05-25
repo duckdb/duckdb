@@ -23,7 +23,7 @@ MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJ_DIR := $(dir $(MKFILE_PATH))
 
 PYTHON ?= python3
-FORMAT_VENV ?= build/format-venv
+FORMAT_VENV ?= .cache/format-venv
 FORMAT_PYTHON := $(FORMAT_VENV)/bin/python
 FORMAT_SETUP_DEPS := format_venv
 
@@ -33,8 +33,8 @@ EXE_SUFFIX := .exe
 endif
 UNITTEST_BINARY ?= test/unittest$(EXE_SUFFIX)
 SMOKE_UNITTEST ?= build/relassert/$(UNITTEST_BINARY)
-UNITTEST_SLOW_FLAGS ?= --batch-timeout=1800 --track-runtime=300
-UNITTEST_HUGE_FLAGS ?= --batch-size=1 --workers=50% $(UNITTEST_SLOW_FLAGS)
+UNITTEST_SLOW_FLAGS ?= --batch-size=5 --batch-timeout=300 --track-runtime=100
+UNITTEST_HUGE_FLAGS ?= --workers=50% $(UNITTEST_SLOW_FLAGS)
 
 # Allow setting extra unit test parameters using `make smoke T=...`.
 T ?=
@@ -195,8 +195,8 @@ endif
 ifeq (${BUILD_JSON}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};json
 endif
-ifeq (${BUILD_JEMALLOC}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};jemalloc
+ifdef BUILD_JEMALLOC
+	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_JEMALLOC=${BUILD_JEMALLOC}
 endif
 ifdef CORE_EXTENSIONS
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};${CORE_EXTENSIONS}
@@ -496,13 +496,62 @@ unittest: debug
 	$(PYTHON) scripts/ci/run_tests.py build/debug/$(UNITTEST_BINARY) $(T)
 
 unittest_reldebug:
-	$(PYTHON) scripts/ci/run_tests.py build/reldebug/$(UNITTEST_BINARY) $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_SLOW_FLAGS) build/reldebug/$(UNITTEST_BINARY) $(T)
 
 ifneq ($(SKIP_BUILD),1)
 unittest_release: release
 endif
 unittest_release:
 	$(PYTHON) scripts/ci/run_tests.py build/release/$(UNITTEST_BINARY) $(T)
+
+TEST_CONFIGS := \
+	test/configs/verify_statement_copy.json \
+	test/configs/verify_statement_to_string.json \
+	test/configs/verify_statement_explain.json \
+	test/configs/verify_statement_prepare.json \
+	test/configs/verify_serializer.json \
+	test/configs/verify_stats.json \
+	test/configs/verify_statement_serialization.json \
+	test/configs/force_storage.json \
+	test/configs/force_storage_restart.json \
+	test/configs/latest_storage.json \
+	test/configs/block_verification.json \
+	test/configs/block_verification_latest.json \
+	test/configs/disable_optimizer.json \
+	test/configs/internal_vector_serialization.json \
+	test/configs/internal_vector_verification.json \
+	test/configs/force_external.json \
+	test/configs/verify_fetch_row.json \
+	test/configs/disable_caching_operators.json \
+	test/configs/wal_verification.json \
+	test/configs/vacuum_rebuild_indexes_force_storage.json \
+	test/configs/prefetch_all_parquet_files.json \
+	test/configs/verification_projection.json \
+	test/configs/verify_column_bindings.json \
+	test/configs/no_local_filesystem.json \
+	test/configs/block_size_16kB.json \
+	test/configs/latest_storage_block_size_16kB.json \
+	test/configs/block_allocator_100mib.json \
+	test/configs/variant_vector.json \
+	test/configs/compressed_in_memory.json \
+	test/configs/prefetch_all_storage.json \
+	test/configs/encryption.json
+
+test_configs:
+	$(PYTHON) scripts/ci/run_tests.py $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg)) ./build/release/$(UNITTEST_BINARY)
+
+test_vector:
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector dictionary_expression --skip-compiled" ./build/release/$(UNITTEST_BINARY)
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector dictionary_operator --skip-compiled" ./build/release/$(UNITTEST_BINARY)
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector constant_operator --skip-compiled" ./build/release/$(UNITTEST_BINARY)
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector sequence_operator --skip-compiled" ./build/release/$(UNITTEST_BINARY)
+	$(PYTHON) scripts/ci/run_tests.py --test-flags="--verify-vector nested_shuffle --skip-compiled" ./build/release/$(UNITTEST_BINARY)
+
+test_table_scan:
+	$(PYTHON) scripts/ci/run_tests.py --test-flags='--on-init "SET debug_physical_table_scan_execution_strategy=SYNCHRONOUS;"' ./build/release/$(UNITTEST_BINARY)
+
+test_storage:
+	$(PYTHON) scripts/test_storage_compatibility.py --versions "1.2.1|1.3.2|1.4.3" --new-unittest build/release/$(UNITTEST_BINARY)
 
 .PHONY: alltest_release_tag test_release_tag
 alltest_release_tag:
@@ -512,7 +561,7 @@ test_release_tag:
 	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/$(UNITTEST_BINARY) $(T)
 
 unittest_relassert:
-	$(PYTHON) scripts/ci/run_tests.py build/relassert/$(UNITTEST_BINARY) $(T)
+	$(PYTHON) scripts/ci/run_tests.py build/relassert/$(UNITTEST_BINARY) $(UNITTEST_SLOW_FLAGS) $(T)
 
 smoke:
 	$(PYTHON) scripts/ci/run_tests.py --batch-timeout 120 --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
@@ -534,7 +583,7 @@ unittest_threadsan: unittest_reldebug
 .PHONY: unittest_threadsan_extra
 unittest_threadsan_extra: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
 unittest_threadsan_extra: unittest_reldebug
-	$(PYTHON) scripts/ci/run_tests.py --batch-size=1 --workers=50% --batch-timeout=1800 --track-runtime=300 --test-flags="--force-storage" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
 
 docs:
 	mkdir -p ./build/docs && \
@@ -772,10 +821,10 @@ generate-files-deps:
 generate-files:
 	$(PYTHON) scripts/generate_c_api.py
 	$(PYTHON) scripts/generate_functions.py
+	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py
 	$(PYTHON) scripts/generate_serialization.py
 	$(PYTHON) scripts/generate_storage_info.py
-	$(PYTHON) scripts/generate_metric_enums.py
 	$(PYTHON) scripts/generate_enum_util.py
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main

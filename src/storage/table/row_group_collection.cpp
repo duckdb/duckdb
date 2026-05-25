@@ -7,6 +7,8 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/profiling_utils.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
@@ -22,6 +24,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
@@ -267,7 +270,7 @@ bool RowGroupCollection::InitializeScanInRowGroup(ClientContext &context, Collec
 void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &state) {
 	state.collection = this;
 	state.row_groups = GetRowGroups();
-	state.current_row_group = state.GetRootSegment(*state.row_groups);
+	state.AssignRowGroup(state.GetRootSegment(*state.row_groups));
 	state.vector_index = 0;
 	state.max_row = state.row_groups->GetBaseRowId() + total_rows;
 	state.batch_index = 0;
@@ -303,14 +306,14 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 				D_ASSERT(vector_index * STANDARD_VECTOR_SIZE < current_row_group.count);
 				state.vector_index++;
 				if (state.vector_index * STANDARD_VECTOR_SIZE >= current_row_group.count) {
-					state.current_row_group = state.GetNextRowGroup(*state.row_groups, *row_group).get();
+					state.AssignRowGroup(state.GetNextRowGroup(*state.row_groups, *row_group).get());
 					state.vector_index = 0;
 				}
 			} else {
 				state.processed_rows += current_row_group.count;
 				vector_index = 0;
 				max_row = row_start + current_row_group.count;
-				state.current_row_group = state.GetNextRowGroup(*state.row_groups, *row_group).get();
+				state.AssignRowGroup(state.GetNextRowGroup(*state.row_groups, *row_group).get());
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);
 			scan_state.batch_index = ++state.batch_index;
@@ -596,21 +599,21 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 	idx_t remaining = chunk.size();
 	state.total_append_count += total_append_count;
 	while (true) {
-		auto current_row_group = state.row_group_append_state.row_group;
+		auto &current_row_group = *state.row_group_append_state.row_group;
 		// check how much we can fit into the current row_group
 		idx_t append_count =
 		    MinValue<idx_t>(remaining, row_group_size - state.row_group_append_state.offset_in_row_group);
 		if (append_count > 0) {
-			auto previous_allocation_size = current_row_group->GetAllocationSize();
-			current_row_group->Append(state.row_group_append_state, chunk, append_count);
-			allocation_size += current_row_group->GetAllocationSize() - previous_allocation_size;
-			// merge the stats
-			current_row_group->MergeIntoStatistics(stats);
+			auto previous_allocation_size = current_row_group.GetAllocationSize();
+			current_row_group.Append(state.row_group_append_state, chunk, append_count);
+			allocation_size += current_row_group.GetAllocationSize() - previous_allocation_size;
 		}
 		remaining -= append_count;
 		if (remaining == 0) {
 			break;
 		}
+		// finalize the append state for the current row group
+		current_row_group.FinalizeAppend(state.row_group_append_state);
 		// we expect max 1 iteration of this loop (i.e. a single chunk should never overflow more than one
 		// row_group)
 		D_ASSERT(chunk.size() == remaining + append_count);
@@ -642,6 +645,11 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 }
 
 void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppendState &state) {
+	// first finalize the append of the final row group we appended to
+	auto &last_row_group = *state.row_group_append_state.row_group;
+	last_row_group.FinalizeAppend(state.row_group_append_state);
+
+	// now push version info into all row groups
 	auto remaining = state.total_append_count;
 	auto row_group = state.start_row_group;
 	while (remaining > 0) {
@@ -660,14 +668,8 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 	auto global_stats_lock = stats.GetLock();
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		auto &global_stats = stats.GetStats(*global_stats_lock, col_idx);
-		if (!global_stats.HasDistinctStats()) {
-			continue;
-		}
 		auto &local_stats = state.stats.GetStats(*local_stats_lock, col_idx);
-		if (!local_stats.HasDistinctStats()) {
-			continue;
-		}
-		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
+		global_stats.Merge(local_stats);
 	}
 
 	Verify();
@@ -895,7 +897,11 @@ void RowGroupCollection::Update(TransactionData transaction, DuckTableEntry &tab
 		auto l = stats.GetLock();
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto column_id = column_ids[i];
-			stats.MergeStats(*l, column_id.index, *current_row_group.GetStatistics(column_id.index));
+			// Use EXPAND_BOUNDS here: the row group stats include original data already counted in collection stats,
+			// so additive stats (like total_string_length) cannot be maintained correctly here. EXPAND_BOUNDS
+			// correctly expands min/max bounds while invalidating total_string_length until the next checkpoint.
+			stats.MergeStats(*l, column_id.index, *current_row_group.GetStatistics(column_id.index),
+			                 StatsMergeType::EXPAND_BOUNDS);
 		}
 	} while (pos < updates.size());
 }
@@ -1262,9 +1268,16 @@ public:
 	}
 
 	void ExecuteTask() override {
+		MetricsTimer timer;
+		auto context = checkpoint_state.writer.TryGetClientContext();
+		if (context) {
+			timer = QueryProfiler::Get(*context).StartTimer<MetricStorageTotalVacuumTime>();
+		}
+
 		auto &collection = checkpoint_state.collection;
 		const idx_t row_group_size = collection.GetRowGroupSize();
 		auto &types = collection.GetTypes();
+
 		// create the new set of target row groups (initially empty)
 		vector<unique_ptr<RowGroup>> new_row_groups;
 		vector<idx_t> append_counts;
@@ -1275,7 +1288,6 @@ public:
 			new_row_group->InitializeEmpty(types, ColumnDataType::MAIN_TABLE);
 			new_row_groups.push_back(std::move(new_row_group));
 			append_counts.push_back(0);
-
 			row_group_rows -= current_row_group_rows;
 		}
 
@@ -1331,6 +1343,9 @@ public:
 					const bool row_group_full = append_counts[current_append_idx] == row_group_size;
 					const bool last_row_group = current_append_idx + 1 >= new_row_groups.size();
 					if (remaining > 0 || (row_group_full && !last_row_group)) {
+						// finalize the last append
+						new_row_groups[current_append_idx]->FinalizeAppend(append_state.row_group_append_state);
+
 						// move to the next row group
 						current_append_idx++;
 						new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
@@ -1343,6 +1358,9 @@ public:
 			current_row_group.CommitDrop();
 			checkpoint_state.DropSegment(c_idx);
 		}
+		// finalize the final append
+		new_row_groups[current_append_idx]->FinalizeAppend(append_state.row_group_append_state);
+
 		idx_t total_append_count = 0;
 		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
 			auto &row_group = new_row_groups[target_idx];
@@ -1358,6 +1376,10 @@ public:
 			    "Mismatch in row group count %d vs verify count %d in RowGroupCollection::Checkpoint", merge_rows,
 			    total_append_count);
 		}
+
+		// Explicitly end the timer for the vacuum tasks here.
+		timer.EndTimer();
+
 		// merging is complete - execute checkpoint tasks of the target row groups
 		for (idx_t i = 0; i < target_count; i++) {
 			auto checkpoint_task = collection.GetCheckpointTask(checkpoint_state, segment_idx + i);
@@ -1636,7 +1658,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				break;
 			}
 			auto &write_state = checkpoint_state.write_data[segment_idx];
-			if (!write_state.reuse_existing_metadata_blocks) {
+			if (write_state.write_action != RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA) {
 				table_has_changes = true;
 				break;
 			}
@@ -1649,14 +1671,10 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 				auto entry = checkpoint_state.GetSegment(segment_idx);
 				auto &row_group = entry->GetNode();
-				auto &write_state = checkpoint_state.write_data[segment_idx];
 				metadata_manager.ClearModifiedBlocks(row_group.GetColumnStartPointers());
-				D_ASSERT(write_state.reuse_existing_metadata_blocks);
-				vector<MetaBlockPointer> extra_metadata_block_pointers;
-				extra_metadata_block_pointers.reserve(write_state.existing_extra_metadata_blocks.size());
-				for (auto &block_pointer : write_state.existing_extra_metadata_blocks) {
-					extra_metadata_block_pointers.emplace_back(block_pointer, 0);
-				}
+				D_ASSERT(checkpoint_state.write_data[segment_idx].write_action ==
+				         RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA);
+				vector<MetaBlockPointer> extra_metadata_block_pointers = row_group.GetExtraMetadataBlockPointers();
 				metadata_manager.ClearModifiedBlocks(extra_metadata_block_pointers);
 				auto row_group_writer = checkpoint_state.writer.GetRowGroupWriter(row_group);
 				row_group.CheckpointDeletes(*row_group_writer);
@@ -1701,7 +1719,24 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		}
 		auto &row_group_write_data = checkpoint_state.write_data[segment_idx];
 		idx_t row_start = new_total_rows;
-		bool metadata_reuse = row_group_write_data.reuse_existing_metadata_blocks;
+		auto write_action = row_group_write_data.write_action;
+		auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
+		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
+		std::vector<bool> reuse_column;
+		if (debug_verify_blocks) {
+			if (write_action == RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA) {
+				auto existing_column_count = entry->ReferenceNode()->GetColumnCount();
+				reuse_column.reserve(existing_column_count);
+				for (idx_t column_idx = 0; column_idx < existing_column_count; column_idx++) {
+					reuse_column[column_idx] = true;
+				}
+			} else {
+				reuse_column.reserve(row_group_write_data.states.size());
+				for (idx_t column_idx = 0; column_idx < row_group_write_data.states.size(); column_idx++) {
+					reuse_column[column_idx] = !row_group_write_data.states[column_idx];
+				}
+			}
+		}
 		auto new_row_group = std::move(row_group_write_data.result_row_group);
 		if (!new_row_group) {
 			// row group was unchanged - emit previous row group
@@ -1709,9 +1744,6 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		}
 		auto &row_group = *new_row_group;
 		RowGroupPointer pointer_copy;
-		auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
-		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
-
 		// check if we should write this row group to the persistent storage
 		// don't write it if it only has uncommitted transaction-local changes made AFTER this checkpoint was started
 		auto pointer =
@@ -1730,46 +1762,91 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		new_row_groups->AppendSegment(l, std::move(new_row_group));
 
 		if (debug_verify_blocks) {
-			if (!pointer_copy.has_metadata_blocks) {
+			if (!pointer_copy.has_metadata_blocks && !pointer_copy.has_per_column_metadata_blocks) {
 				throw InternalException("Checkpointing should always remember metadata blocks");
 			}
-			if (metadata_reuse && pointer_copy.data_pointers != row_group.GetColumnStartPointers()) {
-				throw InternalException("Column start pointers changed during metadata reuse");
+			if (SupportsPerColumnWrites() != pointer_copy.has_per_column_metadata_blocks) {
+				throw InternalException(
+				    "Checkpointing should always remember per-column metadata blocks when supporting it");
 			}
+			if (write_action == RowGroupWriteAction::PARTIALLY_REUSE_COLUMN_METADATA && !SupportsPerColumnWrites()) {
+				throw InternalException("Partially reusing column metadata should only be done when supporting it");
+			}
+			if (write_action == RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA &&
+			    pointer_copy.data_pointers != row_group.GetColumnStartPointers()) {
+				throw InternalException("Column start pointers changed during full metadata reuse");
+			}
+
+			// Verify per_column_metadata_blocks matches full deserialization
+			if (pointer_copy.has_per_column_metadata_blocks) {
+				const auto &column_start_ptrs = row_group.GetColumnStartPointers();
+				auto &col_types = row_group.GetCollection().GetTypes();
+				auto &mm = row_group.GetCollection().GetMetadataManager();
+				vector<idx_t> columns;
+				vector<vector<idx_t>> deserialized_extras;
+				deserialized_extras.reserve(column_start_ptrs.size());
+				for (idx_t i = 0; i < column_start_ptrs.size(); i++) {
+					columns.emplace_back(i);
+					deserialized_extras.emplace_back();
+					vector<MetaBlockPointer> col_read_pointers;
+					MetadataReader reader(mm, column_start_ptrs[i], &col_read_pointers);
+					ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), i, reader, col_types[i]);
+					// collect extra blocks from deserialization (excluding start block)
+					for (auto &ptr : col_read_pointers) {
+						if (ptr.block_pointer != column_start_ptrs[i].block_pointer) {
+							deserialized_extras[i].emplace_back(ptr.block_pointer);
+						}
+					}
+				}
+				auto blocks_for_columns = pointer_copy.per_column_metadata_blocks.GetBlocksForColumns(columns);
+				if (deserialized_extras != blocks_for_columns) {
+					throw InternalException("per_column_metadata_blocks mismatch");
+				}
+			}
+
+			// Verify blocks are cleared for partial column reuse
+			for (idx_t col_idx = 0; col_idx < pointer_copy.data_pointers.size(); col_idx++) {
+				if (!reuse_column[col_idx]) {
+					continue;
+				}
+				// reused column: its start block should be cleared
+				if (!block_manager.GetMetadataManager().BlockHasBeenCleared(pointer_copy.data_pointers[col_idx])) {
+					throw InternalException("Partial reuse: column %llu start block was not cleared", col_idx);
+				}
+			}
+			pointer_copy.per_column_metadata_blocks.ForEachBlock([&](idx_t col_idx, idx_t block_id) {
+				if (!reuse_column[col_idx]) {
+					return;
+				}
+				// reused column: extra blocks should be cleared
+				auto block_ptr = MetaBlockPointer(block_id, 0);
+				if (!block_manager.GetMetadataManager().BlockHasBeenCleared(block_ptr)) {
+					throw InternalException("Partial reuse: column extra block %llu was not cleared", block_id);
+				}
+			});
 
 			// Capture blocks that have been written
 			vector<MetaBlockPointer> all_written_blocks = pointer_copy.data_pointers;
-			vector<MetaBlockPointer> all_metadata_blocks;
-			for (auto &block : pointer_copy.extra_metadata_blocks) {
-				all_written_blocks.emplace_back(block, 0);
-				all_metadata_blocks.emplace_back(block, 0);
+			if (pointer_copy.has_metadata_blocks) {
+				for (auto &block : pointer_copy.extra_metadata_blocks) {
+					all_written_blocks.emplace_back(block, 0);
+				}
+			} else {
+				if (!pointer_copy.has_per_column_metadata_blocks) {
+					throw InternalException("Checkpointing should always remember metadata blocks");
+				}
+				pointer_copy.per_column_metadata_blocks.ForEachBlock(
+				    [&](idx_t, idx_t block) { all_written_blocks.emplace_back(block, 0); });
 			}
 
-			// Verify that we can load the metadata correctly again
-			vector<MetaBlockPointer> all_quick_read_blocks;
-			for (auto &ptr : row_group.GetColumnStartPointers()) {
-				all_quick_read_blocks.emplace_back(ptr);
-				if (metadata_reuse && !block_manager.GetMetadataManager().BlockHasBeenCleared(ptr)) {
-					throw InternalException("Found column start block that was not cleared");
-				}
-			}
-			auto extra_metadata_blocks = row_group.GetOrComputeExtraMetadataBlocks(/* force_compute: */ true);
-			for (auto &ptr : extra_metadata_blocks) {
-				auto block_pointer = MetaBlockPointer(ptr, 0);
-				all_quick_read_blocks.emplace_back(block_pointer);
-				if (metadata_reuse && !block_manager.GetMetadataManager().BlockHasBeenCleared(block_pointer)) {
-					throw InternalException("Found extra metadata block that was not cleared");
-				}
-			}
-
-			// Deserialize all columns to check if the quick read via GetOrComputeExtraMetadataBlocks was correct
+			// Deserialize all columns to check if what's on disk matches our metadata
 			vector<MetaBlockPointer> all_full_read_blocks;
-			auto column_start_pointers = row_group.GetColumnStartPointers();
-			auto &types = row_group.GetCollection().GetTypes();
+			const auto &column_start_pointers = row_group.GetColumnStartPointers();
+			auto &column_types = row_group.GetCollection().GetTypes();
 			auto &metadata_manager = row_group.GetCollection().GetMetadataManager();
 			for (idx_t i = 0; i < column_start_pointers.size(); i++) {
 				MetadataReader reader(metadata_manager, column_start_pointers[i], &all_full_read_blocks);
-				ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), i, reader, types[i]);
+				ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), i, reader, column_types[i]);
 			}
 
 			// Derive sets of blocks to compare
@@ -1777,23 +1854,14 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			for (auto &ptr : all_written_blocks) {
 				all_written_block_ids.insert(ptr.block_pointer);
 			}
-			set<idx_t> all_quick_read_block_ids;
-			for (auto &ptr : all_quick_read_blocks) {
-				all_quick_read_block_ids.insert(ptr.block_pointer);
-			}
 			set<idx_t> all_full_read_block_ids;
 			for (auto &ptr : all_full_read_blocks) {
 				all_full_read_block_ids.insert(ptr.block_pointer);
 			}
-			if (all_written_block_ids != all_quick_read_block_ids ||
-			    all_quick_read_block_ids != all_full_read_block_ids) {
+			if (all_written_block_ids != all_full_read_block_ids) {
 				std::stringstream oss;
 				oss << "\nWritten: ";
 				for (auto &block : all_written_blocks) {
-					oss << block << ", ";
-				}
-				oss << "\nQuick read: ";
-				for (auto &block : all_quick_read_blocks) {
 					oss << block << ", ";
 				}
 				oss << "\nFull read: ";
@@ -1814,6 +1882,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			set<idx_t> all_written_deletes_block_ids;
 			for (auto &ptr : pointer_copy.deletes_pointers) {
 				all_written_deletes_block_ids.insert(ptr.block_pointer);
+				// delete ptr should be cleared (unless it's been newly written)
+				if (block_manager.GetMetadataManager().BlockIsModified(ptr) &&
+				    !block_manager.GetMetadataManager().BlockHasBeenCleared(ptr)) {
+					throw InternalException("Delete ptr %llu was not cleared", ptr.block_pointer);
+				}
 			}
 			set<idx_t> all_read_deletes_block_ids;
 			for (auto &ptr : read_deletes_pointers) {
@@ -1840,12 +1913,14 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	}
 	if (!columns_with_incomplete_stats.empty()) {
 		// for any columns that have incomplete stats we need to merge in the previous global stats to ensure the stats
-		// are correct
+		// are correct — use EXPAND_BOUNDS so additive stats (e.g. total_string_length) are invalidated rather than
+		// double-counted (the collection stats include contributions from all row groups, including those already
+		// merged)
 		auto lock = global_stats.GetLock();
 		for (auto &column_idx : columns_with_incomplete_stats) {
 			auto stats_lock = stats.GetLock();
 			auto &column_stats = stats.GetStats(*stats_lock, column_idx);
-			global_stats.MergeStats(*lock, column_idx, column_stats.Statistics());
+			global_stats.MergeStats(*lock, column_idx, column_stats.Statistics(), StatsMergeType::EXPAND_BOUNDS);
 		}
 	}
 	l.Release();
@@ -1944,15 +2019,48 @@ vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 //===--------------------------------------------------------------------===//
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
-vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(const QueryContext &context) {
+vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(const QueryContext &context,
+                                                                   const ColumnSegmentInfoScanOptions &options) const {
 	vector<ColumnSegmentInfo> result;
-	auto row_groups = GetRowGroups();
-	auto lock = row_groups->Lock();
-	for (auto &node : row_groups->SegmentNodes(lock)) {
-		auto &row_group = node.GetNode();
-		row_group.GetColumnSegmentInfo(context, node.GetIndex(), result);
+	ColumnSegmentInfoScanState state;
+	state.options = options;
+	InitializeColumnSegmentInfoScan(state);
+	while (ScanColumnSegmentInfo(context, state, result)) {
 	}
 	return result;
+}
+
+void RowGroupCollection::InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) const {
+	// Pin a consistent snapshot of the row groups. Holding the shared_ptr keeps the
+	// segment tree alive even if a concurrent operation (alter, vacuum) installs a
+	// new collection. The segment-tree node lock is acquired only briefly here to
+	// fetch the first node (and may lazily load it from disk).
+	state.row_groups = GetRowGroups();
+	state.current_row_group = state.row_groups->GetRootSegment();
+}
+
+bool RowGroupCollection::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+                                               vector<ColumnSegmentInfo> &result) const {
+	if (!state.current_row_group) {
+		return false;
+	}
+	auto &node = *state.current_row_group;
+	node.GetNode().GetColumnSegmentInfo(context, node.GetIndex(), result, state.options);
+	// Advance to the next row group. For lazy-loading segment trees this acquires
+	// the node lock briefly only while more segments still need to be loaded.
+	state.current_row_group = state.row_groups->GetNextSegment(node);
+	return true;
+}
+
+bool RowGroupCollection::SupportsPerColumnWrites() {
+	auto version = StorageCompatibility::FromDatabase(GetAttached());
+	if (version.storage_version >= StorageCompatibility::FromString("v2.0.0").storage_version) {
+		return true;
+	}
+	if (version.storage_version >= StorageCompatibility::FromString("v1.4.0").storage_version) {
+		return Settings::Get<ForceColumnMetadataReuseSetting>(GetAttached().GetDatabase());
+	}
+	return false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1967,9 +2075,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types),
 	                                                  row_groups->GetBaseRowId(), total_rows.load(), row_group_size);
 
-	DataChunk dummy_chunk;
-	Vector default_vector(new_column.GetType());
-
 	result->stats.InitializeAddColumn(stats, new_column.GetType());
 	auto lock = result->stats.GetLock();
 	auto &new_column_stats = result->stats.GetStats(*lock, new_column_idx);
@@ -1978,7 +2083,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	auto new_stats = make_uniq<SegmentStatistics>(new_column.GetType());
 	auto result_row_groups = result->GetRowGroups();
 	for (auto &current_row_group : row_groups->Segments()) {
-		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_executor, default_vector);
+		auto new_row_group = current_row_group.AddColumn(*result, new_column, default_executor);
 		// merge in the statistics
 		new_row_group->MergeIntoStatistics(new_column_idx, new_column_stats.Statistics());
 
@@ -2091,7 +2196,7 @@ void RowGroupCollection::VerifyNewConstraint(const QueryContext &context, DataTa
 		}
 
 		// Verify the NOT NULL constraint.
-		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
+		if (VectorOperations::HasNull(scan_chunk.data[0])) {
 			auto name = parent.Columns()[physical_index].GetName();
 			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->GetTableName(), name);
 		}

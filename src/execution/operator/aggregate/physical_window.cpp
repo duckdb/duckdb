@@ -221,6 +221,18 @@ public:
 	Executors executors;
 	//! The shared expressions library
 	WindowSharedExpressions shared;
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ClientContext &context) override {
+		// The sort strategy, executors, and shared expression layout are iteration-invariant. Only the
+		// sort sink holds per-iteration materialized data, so replace that while preserving the setup.
+		strategy_sink = sort_strategy->GetGlobalSinkState(context);
+		count = 0;
+		GlobalSinkState::Reset(context);
+	}
 };
 
 //	Per-thread sink state
@@ -231,6 +243,15 @@ public:
 	}
 
 	unique_ptr<LocalSinkState> local_group;
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ExecutionContext &context, GlobalSinkState &gstate_p) override {
+		auto &gstate = gstate_p.Cast<WindowGlobalSinkState>();
+		local_group = gstate.sort_strategy->GetLocalSinkState(context);
+	}
 };
 
 // this implements a sorted window functions variant

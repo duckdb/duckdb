@@ -52,7 +52,7 @@ public:
 	}
 
 	//! Select using a cutoff on the radix bits of the hash
-	static idx_t Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits,
+	static idx_t Select(const Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits,
 	                    const ValidityMask &partition_mask, SelectionVector *true_sel, SelectionVector *false_sel);
 };
 
@@ -115,6 +115,9 @@ public:
 	idx_t GetRadixBits() const {
 		return radix_bits;
 	}
+
+	void ResetAppendState(PartitionedTupleDataAppendState &state,
+	                      TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const override;
 
 private:
 	void Initialize();

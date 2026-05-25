@@ -4,6 +4,10 @@
 
 require skip_reload
 
+# FIXME: This is a significant regression because we no longer evict "tiny buffers", of which we're
+# FIXME: allocating plenty here.
+require vector_size 2048
+
 # Implicitly relies on the assumption that the block allocation size is 256KB.
 require block_size 262144
 

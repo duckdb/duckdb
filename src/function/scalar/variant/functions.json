@@ -58,5 +58,58 @@
 			"variant"
 		],
 		"type": "scalar_function"
+	},
+	{
+		"name": "variant_keys",
+		"variants": [
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					}
+				],
+				"description": "Returns the keys present at the root level of the object.",
+				"example": "variant_keys({'a': { 'a': 1, 'b': 2}}::VARIANT)",
+				"categories": [
+					"variant"
+				]
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR"
+					}
+				],
+				"description": "Returns the keys present at the level of the specified path.",
+				"example": "variant_keys({'a': { 'a': 1, 'b': 2}}::VARIANT, 'a')",
+				"categories": [
+					"variant"
+				]
+			},
+			{
+				"parameters": [
+					{
+						"name": "input_variant",
+						"type": "VARIANT"
+					},
+					{
+						"name": "path",
+						"type": "VARCHAR[]"
+					}
+				],
+				"description": "Returns a list of keys present at the level of each specified path.",
+				"example": "variant_keys({'a': { 'a': 1, 'b': 2}, 'b': {'c': 3}}::VARIANT, ['a', 'b'])",
+				"categories": [
+					"variant"
+				]
+			}
+		],
+		"type": "scalar_function_set"
 	}
 ]

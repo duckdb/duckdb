@@ -485,7 +485,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownCorrelatedNode(unique_ptr<L
 		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
 		RewriteCountAggregates::Rewrite(*plan, replacement_map);
 	}
-	ColumnBindingResolver::Verify(*plan);
+	ColumnBindingResolver::Verify(binder.context, *plan);
 	return state;
 }
 
@@ -541,7 +541,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownProjection(unique_ptr<Logic
 	AppendCorrelatedColumns(plan->expressions, state, true);
 	auto &proj = plan->Cast<LogicalProjection>();
 	auto correlated_offset = plan->expressions.size() - correlated_columns.size();
-	ColumnBindingResolver::Verify(*plan);
+	ColumnBindingResolver::Verify(binder.context, *plan);
 	return CreateContiguousState(ColumnBinding(proj.table_index, ProjectionIndex(correlated_offset)));
 }
 

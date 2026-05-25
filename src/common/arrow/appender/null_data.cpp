@@ -7,7 +7,7 @@ void ArrowNullData::Initialize(ArrowAppendData &result, const LogicalType &type,
 	// nop
 }
 
-void ArrowNullData::Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+void ArrowNullData::Append(ArrowAppendData &append_data, const Vector &input, idx_t from, idx_t to, idx_t input_size) {
 	idx_t size = to - from;
 	append_data.row_count += size;
 }

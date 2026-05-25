@@ -3,7 +3,7 @@
 # group: [tpch]
 
 # TPC-H power test
-mode skip
+mode skip instable
 
 require parquet
 

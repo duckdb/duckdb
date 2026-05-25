@@ -12,4 +12,26 @@ BaseAggregateHashTable::BaseAggregateHashTable(ClientContext &context, Allocator
 	filter_set.Initialize(context, aggregates, payload_types);
 }
 
+bool BaseAggregateHashTable::AllAggregatesClustered(const vector<AggregateObject> &aggregates) {
+	if (aggregates.empty()) {
+		return false;
+	}
+	for (auto &aggregate : aggregates) {
+		if (aggregate.filter || !aggregate.function.GetStateClusterUpdateCallback()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+idx_t BaseAggregateHashTable::CountAggregatesClustered(const vector<AggregateObject> &aggregates) {
+	idx_t count = 0;
+	for (auto &aggregate : aggregates) {
+		if (!aggregate.filter && aggregate.function.GetStateClusterUpdateCallback()) {
+			count++;
+		}
+	}
+	return count;
+}
+
 } // namespace duckdb

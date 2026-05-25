@@ -1,0 +1,47 @@
+# name: test/parquet/min_max_long_varchar_22515.test
+# description: Issue #22515 - MIN/MAX(VARCHAR) over read_parquet() must not be truncated to 8 bytes by statistics propagation.
+# group: [parquet]
+
+require parquet
+
+# Strings longer than the 8-byte StringStats prefix.
+statement ok
+COPY (SELECT 'A123456789' AS v UNION ALL SELECT 'B123456789') TO '{TEST_DIR}/min_max_long_varchar.parquet' (FORMAT PARQUET);
+
+query I
+SELECT MIN(v) FROM read_parquet('{TEST_DIR}/min_max_long_varchar.parquet');
+----
+A123456789
+
+query I
+SELECT MAX(v) FROM read_parquet('{TEST_DIR}/min_max_long_varchar.parquet');
+----
+B123456789
+
+# Strings within the 8-byte prefix should still be answered from stats.
+statement ok
+COPY (SELECT 'aa' AS v UNION ALL SELECT 'bb') TO '{TEST_DIR}/min_max_short_varchar.parquet' (FORMAT PARQUET);
+
+query I
+SELECT MIN(v) FROM read_parquet('{TEST_DIR}/min_max_short_varchar.parquet');
+----
+aa
+
+query I
+SELECT MAX(v) FROM read_parquet('{TEST_DIR}/min_max_short_varchar.parquet');
+----
+bb
+
+# Mix of short and long values: the long max must not be truncated.
+statement ok
+COPY (SELECT 'short' AS v UNION ALL SELECT 'A123456789') TO '{TEST_DIR}/min_max_mixed_varchar.parquet' (FORMAT PARQUET);
+
+query I
+SELECT MAX(v) FROM read_parquet('{TEST_DIR}/min_max_mixed_varchar.parquet');
+----
+short
+
+query I
+SELECT MIN(v) FROM read_parquet('{TEST_DIR}/min_max_mixed_varchar.parquet');
+----
+A123456789

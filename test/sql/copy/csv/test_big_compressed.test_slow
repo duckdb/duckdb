@@ -4,7 +4,7 @@
 
 # This test is way too slow to run on CI, generating a SF100 TPC-H lineitem file takes a LOT of time.
 # Still useful to check for problems locally.
-mode skip
+mode skip instable
 
 require tpch
 

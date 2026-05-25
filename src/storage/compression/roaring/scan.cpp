@@ -190,8 +190,8 @@ void BitsetContainerScanState::Verify() const {
 }
 
 RoaringScanState::RoaringScanState(ColumnSegment &segment) : segment(segment) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	handle = buffer_manager.Pin(segment.block);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	handle = buffer_manager.Pin(segment.GetBlockHandle());
 	auto segment_size = segment.SegmentSize();
 	auto segment_block_offset = segment.GetBlockOffset();
 	if (segment_block_offset >= segment_size) {

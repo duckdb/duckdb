@@ -5,10 +5,9 @@
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/dynamic_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -116,20 +115,20 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		auto col_binding = target.columns[0].probe_column_index;
 
 		// create the actual dynamic filter
-		auto dynamic_filter = make_uniq<DynamicFilter>(filter_data);
-		unique_ptr<TableFilter> pushed_filter = std::move(dynamic_filter);
+		auto pushed_expr = CreateDynamicFilterExpression(filter_data, type);
 		if (nulls_first) {
-			auto or_filter = make_uniq<ConjunctionOrFilter>();
+			auto or_filter = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
 			auto is_null = ExpressionFilter::CreateNullCheckExpression(
 			    make_uniq<BoundReferenceExpression>(type, idx_t(0)), ExpressionType::OPERATOR_IS_NULL);
-			or_filter->child_filters.push_back(make_uniq<ExpressionFilter>(std::move(is_null)));
-			or_filter->child_filters.push_back(std::move(pushed_filter));
-			pushed_filter = std::move(or_filter);
+			or_filter->children.push_back(std::move(is_null));
+			or_filter->children.push_back(std::move(pushed_expr));
+			pushed_expr = std::move(or_filter);
 		}
-		auto optional_filter = make_uniq<OptionalFilter>(std::move(pushed_filter));
 
 		// push the filter into the table scan
-		get.table_filters.PushFilter(col_binding.column_index, std::move(optional_filter));
+		get.table_filters.PushFilter(
+		    col_binding.column_index,
+		    make_uniq<ExpressionFilter>(CreateOptionalFilterExpression(std::move(pushed_expr), type)));
 	}
 }
 

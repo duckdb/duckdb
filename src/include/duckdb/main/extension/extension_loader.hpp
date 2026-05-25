@@ -11,6 +11,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/main/metric_info.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/main/extension_install_info.hpp"
@@ -26,20 +27,42 @@ struct CreateScalarFunctionInfo;
 struct CreateTableFunctionInfo;
 struct CreateWindowFunctionInfo;
 
+struct ExtensionLoaderInfo {
+	string extension_name;
+	string extension_alias;
+	string extension_description;
+	string extension_schema = DEFAULT_SCHEMA;
+};
+
 class ExtensionLoader {
 	friend class DuckDB;
 	friend class ExtensionHelper;
 
 public:
-	explicit ExtensionLoader(ExtensionActiveLoad &load_info);
+	explicit ExtensionLoader(const ExtensionActiveLoad &load_info);
 	ExtensionLoader(DatabaseInstance &db, const string &extension_name);
 
 	//! Returns the DatabaseInstance associated with this extension loader
-	DUCKDB_API DatabaseInstance &GetDatabaseInstance();
+	DUCKDB_API DatabaseInstance &GetDatabaseInstance() const;
 
 public:
 	//! Set the description of the extension
 	DUCKDB_API void SetDescription(const string &description);
+	//! Explicitly sets, creates and registers all functions in this dedicated extension schema
+	DUCKDB_API void UseDedicatedSchemaForExtension(const string &extension_schema_name);
+	//! Explicitly sets, creates and registers all functions in the registered extension schema
+	DUCKDB_API void UseDedicatedSchemaForExtension();
+	//! Creates a schema in the catalog with the extension name
+	DUCKDB_API void CreateSchema(const string &extension_schema_name) const;
+	//! Adds the created extension schema to the search path
+	DUCKDB_API void AddSchemaToSearchPath(const string &schema_name) const;
+	//! Sets the default extension schema for this extension
+	DUCKDB_API void UseDefaultSchema(const string &name = DEFAULT_SCHEMA);
+	DUCKDB_API static void RefreshSearchPath(ClientContext &context);
+	//! Gets registered extension name (or alias)
+	DUCKDB_API const string &GetRegisteredExtensionName() const {
+		return loader_info.extension_alias.empty() ? loader_info.extension_name : loader_info.extension_alias;
+	}
 
 public:
 	//! Register a new scalar function - merge overloads if the function already exists
@@ -106,13 +129,15 @@ public:
 	DUCKDB_API void RegisterCastFunction(const LogicalType &source, const LogicalType &target, BoundCastInfo function,
 	                                     int64_t implicit_cast_cost = -1);
 
+	//! Registers a custom metric so it appears in duckdb_available_metrics.
+	DUCKDB_API void RegisterMetric(MetricInfo info);
+
 private:
 	void FinalizeLoad();
 
 private:
 	DatabaseInstance &db;
-	string extension_name;
-	string extension_description;
+	ExtensionLoaderInfo loader_info;
 	optional_ptr<ExtensionInfo> extension_info;
 };
 
