@@ -231,6 +231,15 @@ update rpc.t1 set i = i + 1 where i = 99 returning double_it(i)
 statement ok
 delete from rpc.t1 where i = 100
 
+# DELETE RETURNING with local macro
+statement ok
+insert into rpc.t1 values (77);
+
+query I
+delete from rpc.t1 where i = 77 returning double_it(i)
+----
+154
+
 statement ok
 drop macro double_it;
 
