@@ -1,8 +1,13 @@
 # name: test/sql/json/copy_json_null_options.test
-# description: Test that invalid COPY (FORMAT JSON) options produce clean Binder Errors
+# description: Test that invalid COPY option values produce clean Binder Errors
 # group: [json]
 
 require json
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_use_tmp_file.csv' (FORMAT CSV, use_tmp_file NULL);
+----
+<REGEX>:Binder Error.*NULL is not supported as a valid option for COPY option "use_tmp_file".*
 
 statement error
 COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_dateformat.json' (FORMAT JSON, dateformat NULL);
