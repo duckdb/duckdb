@@ -898,7 +898,7 @@ public:
 		auto &ht = *sink.hash_table;
 		auto prefix_range_state = ht.ShouldBuildPrefixRangeFilter() ? RegisterPrefixRangeState(ht) : nullptr;
 		ExecuteHashJoinFinalizeTask(sink, optional_idx(), prefix_range_state);
-		FinishTasks(false);
+		FinishTasks();
 	}
 
 	void Schedule() override {
@@ -906,21 +906,22 @@ public:
 	}
 
 	void FinishEvent() override {
-		FinishTasks(true);
+		FinishTasks();
 	}
 
 	static constexpr idx_t CHUNKS_PER_TASK = 64;
 
 private:
-	void FinishTasks(bool build_dictionary_arrays) {
+	void FinishTasks() {
 		for (auto &prefix_range_state : prefix_range_states) {
 			sink.hash_table->MergePrefixRangeBuildState(*prefix_range_state);
 		}
 		sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 
-		// chains are final; materialize dict_arrays and overwrite NEXT_PTR with the dict index
-		if (build_dictionary_arrays && sink.hash_table->CanUseDictionaryEmission(
-		                                   sink.op, sink.external, sink.op.children[0].get().estimated_cardinality)) {
+		// both finalize paths finish writing the chains before reaching here,
+		// so dictionary emission is safe on either path
+		if (sink.hash_table->CanUseDictionaryEmission(sink.op, sink.external,
+		                                              sink.op.children[0].get().estimated_cardinality)) {
 			sink.hash_table->BuildDictionaryArrays(sink.op);
 		}
 
