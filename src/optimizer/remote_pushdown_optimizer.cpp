@@ -1625,7 +1625,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 		}
 	}
 	bool right_correlated_to_left = (right_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-	                                  HasLocalTableReference(*ref.right));
+	                                 HasLocalTableReference(*ref.right));
 	for (auto &alias : newly_added) {
 		local_table_names.erase(alias);
 	}
@@ -2424,6 +2424,9 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 			if (cte_pair.second->query_node) {
 				StripCatalogName(*cte_pair.second->query_node, catalog_name);
 			}
+			for (auto &key : cte_pair.second->key_targets) {
+				StripCatalogName(*key, catalog_name);
+			}
 		}
 		if (select.from_table) {
 			StripCatalogName(*select.from_table, catalog_name);
@@ -2491,6 +2494,9 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 			if (cte_pair.second->query_node) {
 				StripCatalogName(*cte_pair.second->query_node, catalog_name);
 			}
+			for (auto &key : cte_pair.second->key_targets) {
+				StripCatalogName(*key, catalog_name);
+			}
 		}
 		// Strip from the target table's catalog/schema fields (these are what ToString() serializes)
 		if (insert.catalog == catalog_name) {
@@ -2525,6 +2531,9 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 			if (cte_pair.second->query_node) {
 				StripCatalogName(*cte_pair.second->query_node, catalog_name);
 			}
+			for (auto &key : cte_pair.second->key_targets) {
+				StripCatalogName(*key, catalog_name);
+			}
 		}
 		if (del.table) {
 			StripCatalogName(*del.table, catalog_name);
@@ -2545,6 +2554,9 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 		for (auto &cte_pair : upd.cte_map.map) {
 			if (cte_pair.second->query_node) {
 				StripCatalogName(*cte_pair.second->query_node, catalog_name);
+			}
+			for (auto &key : cte_pair.second->key_targets) {
+				StripCatalogName(*key, catalog_name);
 			}
 		}
 		if (upd.table) {
@@ -2571,6 +2583,9 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 		for (auto &cte_pair : setop.cte_map.map) {
 			if (cte_pair.second->query_node) {
 				StripCatalogName(*cte_pair.second->query_node, catalog_name);
+			}
+			for (auto &key : cte_pair.second->key_targets) {
+				StripCatalogName(*key, catalog_name);
 			}
 		}
 		for (auto &child : setop.children) {
@@ -2624,6 +2639,9 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 			if (cte_pair.second->query_node) {
 				StripCatalogName(*cte_pair.second->query_node, catalog_name);
 			}
+			for (auto &key : cte_pair.second->key_targets) {
+				StripCatalogName(*key, catalog_name);
+			}
 		}
 		if (rec.left) {
 			StripCatalogName(*rec.left, catalog_name);
@@ -2657,6 +2675,9 @@ void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const st
 		for (auto &cte_pair : merge.cte_map.map) {
 			if (cte_pair.second->query_node) {
 				StripCatalogName(*cte_pair.second->query_node, catalog_name);
+			}
+			for (auto &key : cte_pair.second->key_targets) {
+				StripCatalogName(*key, catalog_name);
 			}
 		}
 		if (merge.target) {
