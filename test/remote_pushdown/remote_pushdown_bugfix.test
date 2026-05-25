@@ -750,5 +750,57 @@ returning i
 statement ok
 drop table local_bugfix16
 
+# ============================================================
+# Bug 17: any_child_pushed in Rewrite(SetOperationNode) did not detect
+# TABLE_FUNCTION refs in the from_table of UNKNOWN children.
+#
+# When a UNION ALL child has an all-remote from_table (rpc.t1) but an UNKNOWN
+# WHERE clause (contains a scalar subquery over a local table),
+# Rewrite(SelectNode) individually pushes the from_table to TABLE_FUNCTION
+# (streaming slot 1); child_result is UNKNOWN. The old any_child_pushed check
+# (SINGLE_REMOTE children only) missed this slot. If the set operation's
+# modifiers contained a pushable remote scalar subquery, PushdownSubqueries
+# would open a second streaming connection → "Multiple streaming scans".
+#
+# HasTableFunctionInTree detects TABLE_FUNCTION refs at the from_table root
+# so any_child_pushed is correctly set to true even when child_result is UNKNOWN.
+# ============================================================
+
+statement ok
+create table local_bugfix17(local_col int);
+
+statement ok
+insert into local_bugfix17 from range(10);
+
+# rpc.t1 from_table is pushed to TABLE_FUNCTION (streaming slot 1); child
+# result is UNKNOWN because the WHERE clause has a scalar subquery over
+# local_bugfix17. HasTableFunctionInTree detects the slot and sets
+# any_child_pushed=true, preventing PushdownSubqueries from pushing the
+# set operation's own modifiers to a second concurrent quack connection.
+# rpc.t1 = {0..9}; max(local_bugfix17.local_col) = 9 → i < 9 → {0..8}.
+# local_bugfix17 = {0..9}; local_col < 5 → {0..4}.
+query I rowsort
+(select i from rpc.t1 where i < (select max(local_col) from local_bugfix17))
+union all
+(select local_col from local_bugfix17 where local_col < 5)
+----
+0
+0
+1
+1
+2
+2
+3
+3
+4
+4
+5
+6
+7
+8
+
+statement ok
+drop table local_bugfix17
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

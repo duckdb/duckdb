@@ -247,6 +247,25 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	return Merge(result, cte_combined);
 }
 
+// Returns true if ref or any descendant in a JoinRef tree is a TABLE_FUNCTION ref.
+// Used in Rewrite(SetOperationNode) to detect whether any child SelectNode already holds
+// a quack streaming slot — either because its whole from_table was pushed to quack, or because
+// a JoinRef child inside the from_table was individually pushed to quack — so that modifier
+// subqueries are not independently pushed into a concurrent streaming connection.
+static bool HasTableFunctionInTree(const TableRef &ref) {
+	switch (ref.type) {
+	case TableReferenceType::TABLE_FUNCTION:
+		return true;
+	case TableReferenceType::JOIN: {
+		auto &join = ref.Cast<JoinRef>();
+		return (join.left && HasTableFunctionInTree(*join.left)) ||
+		       (join.right && HasTableFunctionInTree(*join.right));
+	}
+	default:
+		return false;
+	}
+}
+
 // Recursively collect the table name and alias from every BaseTableRef in a TableRef tree.
 // Used to register remote-table names as "locally visible" when an all-remote JoinRef was
 // NOT individually pushed to quack, so HasLocalTableReference can detect correlated subquery
@@ -1314,23 +1333,24 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 			}
 		}
 		// Push remote scalar subqueries in the set operation's own modifiers, but only when
-		// no child was individually pushed. An individually-pushed child holds an active
-		// quack streaming connection; a second quack_query_by_name from a modifier subquery
-		// would open a concurrent streaming connection that quack cannot serve (returns 0 rows).
-		// Use the TABLE_FUNCTION type check as the definitive signal — same pattern as
-		// from_table_actually_pushed in SelectNode — to avoid counting children that
-		// FinishPushdown(QueryNode) skipped (e.g. outer-CTE guard: result is SINGLE_REMOTE
-		// but no streaming slot was opened).
+		// no child holds an active quack streaming connection. A streaming slot is open when:
+		//   (a) FinishPushdown(QueryNode) successfully wrapped a child → the child is now a
+		//       SelectNode whose from_table is TABLE_FUNCTION (child_result == SINGLE_REMOTE).
+		//   (b) FinishPushdown(TableRef) wrapped the child SelectNode's from_table individually
+		//       because the from_table is SINGLE_REMOTE but the SelectNode has UNKNOWN expressions
+		//       → from_table type is TABLE_FUNCTION even though child_result is UNKNOWN.
+		//   (c) Rewrite(JoinRef) pushed one side of a mixed-catalog join in-place → a TABLE_FUNCTION
+		//       ref appears as a descendant of the child SelectNode's JoinRef from_table, even
+		//       though child_result is UNKNOWN.
+		// HasTableFunctionInTree detects all three: TABLE_FUNCTION at the from_table root (cases a/b)
+		// or anywhere in the JoinRef subtree (case c).
 		bool any_child_pushed = false;
 		for (idx_t i = 0; i < node.children.size(); i++) {
-			if (child_results[i].reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-				continue;
-			}
 			if (node.children[i]->type != QueryNodeType::SELECT_NODE) {
 				continue;
 			}
-			auto &pushed_sel = node.children[i]->Cast<SelectNode>();
-			if (pushed_sel.from_table && pushed_sel.from_table->type == TableReferenceType::TABLE_FUNCTION) {
+			auto &sel = node.children[i]->Cast<SelectNode>();
+			if (sel.from_table && HasTableFunctionInTree(*sel.from_table)) {
 				any_child_pushed = true;
 				break;
 			}
