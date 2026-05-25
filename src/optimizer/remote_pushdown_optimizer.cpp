@@ -32,8 +32,11 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
@@ -2059,6 +2062,17 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 		result = Merge(result, subquery_result);
 		return result;
 	}
+	// For CAST expressions with an unbound (user-defined) type, also scan the embedded type expression for catalog
+	// references. EnumerateChildren for CAST only visits the child value, not the cast_type LogicalType field.
+	if (expr.GetExpressionClass() == ExpressionClass::CAST) {
+		auto &cast_expr = expr.Cast<CastExpression>();
+		CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+		if (cast_expr.cast_type.id() == LogicalTypeId::UNBOUND) {
+			result = Merge(result, Rewrite(*UnboundType::GetTypeExpression(cast_expr.cast_type)));
+		}
+		result = Merge(result, Rewrite(*cast_expr.child));
+		return result;
+	}
 	// Handle function and window expressions: resolve catalog qualifiers.
 	auto check_catalog_qualified_expr = [&](const string &raw_catalog,
 	                                        const string &raw_schema) -> CatalogPushdownResult {
@@ -2094,6 +2108,14 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 		if (cat_result.reference_type != CatalogReferenceType::NO_CATALOG_REFERENCED) {
 			return cat_result;
 		}
+	} else if (expr.GetExpressionClass() == ExpressionClass::TYPE) {
+		// Catalog-qualified user-defined types (e.g. "rpc.my_type" or "rpc.schema.my_type") reference a catalog.
+		auto &type_expr = expr.Cast<TypeExpression>();
+		auto cat_result = check_catalog_qualified_expr(type_expr.GetCatalog(), type_expr.GetSchema());
+		if (cat_result.reference_type != CatalogReferenceType::NO_CATALOG_REFERENCED) {
+			return cat_result;
+		}
+		// Unqualified type: fall through to EnumerateChildren for type parameters
 	}
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
 	ParsedExpressionIterator::EnumerateChildren(
@@ -2218,8 +2240,8 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 		}
 		return;
 	}
-	// Strip catalog prefix from explicitly-qualified function/window calls.
-	// Also handle 2-part names (schema.func) where the schema is actually the remote catalog name
+	// Strip catalog prefix from explicitly-qualified function/window/type calls.
+	// Also handle 2-part names (schema.func/type) where the schema is actually the remote catalog name
 	// (e.g. "rpc.my_func()" parsed as schema="rpc", catalog="").
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func = expr.Cast<FunctionExpression>();
@@ -2237,6 +2259,26 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 			win.schema = "";
 		}
 		// Fall through to EnumerateChildren to strip catalog refs inside partitions/orders/children
+	} else if (expr.GetExpressionClass() == ExpressionClass::CAST) {
+		// CastExpression stores the cast target as a LogicalType, not an expression child — EnumerateChildren
+		// only visits the value being cast. For unbound (user-defined) types we must strip the catalog from the
+		// embedded TypeExpression and reconstruct the LogicalType::UNBOUND wrapper.
+		auto &cast_expr = expr.Cast<CastExpression>();
+		if (cast_expr.cast_type.id() == LogicalTypeId::UNBOUND) {
+			auto type_expr = UnboundType::GetTypeExpression(cast_expr.cast_type)->Copy();
+			StripCatalogName(*type_expr, catalog_name, strip_subquery_bodies);
+			cast_expr.cast_type = LogicalType::UNBOUND(std::move(type_expr));
+		}
+		// Fall through to EnumerateChildren to strip catalog refs inside the cast argument
+	} else if (expr.GetExpressionClass() == ExpressionClass::TYPE) {
+		// TypeExpression (used as a type argument) may carry catalog/schema qualifiers.
+		auto &type_expr = expr.Cast<TypeExpression>();
+		if (StringUtil::CIEquals(type_expr.GetCatalog(), catalog_name)) {
+			type_expr.SetCatalog("");
+		} else if (type_expr.GetCatalog().empty() && StringUtil::CIEquals(type_expr.GetSchema(), catalog_name)) {
+			type_expr.SetSchema("");
+		}
+		// Fall through to EnumerateChildren to strip catalog refs inside type parameters
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](ParsedExpression &child) { StripCatalogName(child, catalog_name, strip_subquery_bodies); });
