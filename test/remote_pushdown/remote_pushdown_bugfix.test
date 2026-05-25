@@ -802,5 +802,63 @@ union all
 statement ok
 drop table local_bugfix17
 
+# ============================================================
+# Bug 18: TryPushDMLWithLocalReturning — DML on a remote table with
+# a RETURNING clause containing a local-only expression (e.g. a local
+# macro that the remote server does not have) must be split:
+#   1. The DML body is pushed to the remote with a simplified RETURNING
+#      that contains only raw column refs.
+#   2. The original RETURNING expressions are evaluated locally over
+#      the result rows returned by the remote.
+#
+# Without the fix the optimizer would try to push the entire DML
+# including the local macro to the remote, where the macro is unknown,
+# causing "Function ... not found" or a silent mis-execution.
+# ============================================================
+
+# Create a local scalar macro that the remote server does not have.
+statement ok
+CREATE OR REPLACE MACRO local_double(x) AS (x * 2);
+
+# INSERT into remote table with a mixed RETURNING (remote column + local macro).
+# The remote executes "INSERT INTO t1 VALUES (77) RETURNING i" and returns i=77.
+# The local outer SELECT then applies local_double(77)=154.
+query II
+INSERT INTO rpc.t1 VALUES (77) RETURNING i, local_double(i) AS doubled
+----
+77	154
+
+# Verify the row was actually inserted on the remote.
+query I
+SELECT i FROM rpc.t1 WHERE i = 77
+----
+77
+
+# Clean up the inserted row.
+statement ok
+DELETE FROM rpc.t1 WHERE i = 77
+
+# DELETE from remote table with a mixed RETURNING.
+# Insert a row server-side first so there is something to delete.
+statement ok db1:con1
+INSERT INTO t1 VALUES (88);
+
+# The remote executes "DELETE FROM t1 WHERE i = 88 RETURNING i" and returns i=88.
+# The local outer SELECT then applies local_double(88)=176.
+query II
+DELETE FROM rpc.t1 WHERE i = 88 RETURNING i, local_double(i) AS doubled
+----
+88	176
+
+# Verify the row is gone from the remote.
+query I
+SELECT count(*) FROM rpc.t1 WHERE i = 88
+----
+0
+
+# Clean up the local macro.
+statement ok
+DROP MACRO local_double;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
