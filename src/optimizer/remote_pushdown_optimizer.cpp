@@ -2870,9 +2870,12 @@ void RemotePushdownOptimizer::TryPushDMLWithLocalReturning(unique_ptr<SQLStateme
 		for (auto &expr : *returning_list) {
 			CollectColumnNames(*expr, col_names);
 		}
+		// If no column refs were found (e.g. RETURNING (SELECT max(local_col) FROM local_t)),
+		// fall back to RETURNING * so the remote executes the DML and returns one row per
+		// modified row. The outer SELECT then evaluates the local RETURNING expressions once
+		// per returned row, giving the correct cardinality without needing specific columns.
 		if (col_names.empty()) {
-			// No column refs found - cannot build a remote RETURNING list; leave unpushed
-			return;
+			has_star_expr = true;
 		}
 	}
 
@@ -2885,7 +2888,8 @@ void RemotePushdownOptimizer::TryPushDMLWithLocalReturning(unique_ptr<SQLStateme
 	}
 
 	// Replace RETURNING with simplified expression(s) for remote execution:
-	// - Star present: use a bare * so the remote returns all columns and outer star expansions work.
+	// - Star present (or no column refs): use a bare * so the remote returns all columns and
+	//   outer star expansions work, or supplies row-presence for purely local RETURNING expressions.
 	// - No star: use explicit column refs extracted above.
 	returning_list->clear();
 	if (has_star_expr) {

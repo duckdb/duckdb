@@ -1117,6 +1117,19 @@ select val from ins
 statement ok
 DELETE FROM rpc.t1 WHERE i = 99
 
+# Top-level INSERT with RETURNING that is a pure local subquery (no remote column refs).
+# CollectColumnNames finds nothing in the subquery body, so TryPushDMLWithLocalReturning
+# must fall back to RETURNING * rather than giving up. The remote executes
+# "INSERT INTO t1 VALUES (99) RETURNING *", returning 1 row; the outer SELECT
+# evaluates (SELECT max(local_col) FROM local_t) once for that row → 9.
+query I
+INSERT INTO rpc.t1 VALUES (99) RETURNING (select max(local_col) from local_t) AS local_max
+----
+9
+
+statement ok
+DELETE FROM rpc.t1 WHERE i = 99
+
 # ============================================================
 # Bug 25: Rewrite(SubqueryRef), Rewrite(ParsedExpression) for
 # SUBQUERY, and PushdownSubqueries did not save/restore the
