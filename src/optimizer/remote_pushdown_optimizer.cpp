@@ -1590,26 +1590,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	// Rewrite both sides independently, tracking their individual results
 	auto left_result = Rewrite(ref.left);
-	// Register the left side's table aliases in local_table_names before analyzing the right side
-	// so that a LATERAL right-side SubqueryRef correlated to a left-side remote table is correctly
-	// detected as such by HasLocalTableReference inside Rewrite(SubqueryRef). Without this,
-	// "t1.i" in the right's WHERE (where t1 is the left remote table) would go undetected and the
-	// right SubqueryRef would be classified SINGLE_REMOTE, then independently pushed — breaking
-	// the lateral dependency on the left table's output columns at execution time.
-	case_insensitive_set_t left_aliases;
-	CollectTableAliases(*ref.left, left_aliases);
-	// Only track aliases that are not already in local_table_names so we don't erase
-	// a pre-existing entry (e.g., a local SubqueryRef alias) after the right is analyzed.
-	case_insensitive_set_t newly_added;
-	for (auto &alias : left_aliases) {
-		if (local_table_names.insert(alias).second) {
-			newly_added.insert(alias);
-		}
-	}
 	auto right_result = Rewrite(ref.right);
-	for (auto &alias : newly_added) {
-		local_table_names.erase(alias);
-	}
 	auto result = Merge(left_result, right_result);
 	// Also analyze the join condition - it may contain subqueries or local macro calls
 	// that affect whether the join can be pushed as a whole
@@ -1620,9 +1601,36 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		return result;
 	}
-	// Otherwise push down each side individually
+	// The JoinRef cannot be pushed as a whole — push each side individually where possible.
+	// Before pushing the right side, check whether it has a correlated reference to the left
+	// side's tables (e.g., a LATERAL subquery whose WHERE clause references the left table's
+	// output columns by alias). Such a right side depends on the left's row-by-row output and
+	// must NOT be pushed independently: the generated SQL would reference a left alias that is
+	// not in scope for a standalone remote execution.
+	// Detect this by temporarily registering the left aliases in local_table_names and calling
+	// HasLocalTableReference on the right-side TableRef.
+	// NOTE: This detection is intentionally deferred until after the SINGLE_REMOTE guard above
+	// so it does NOT affect the overall JoinRef classification. When both sides are SINGLE_REMOTE
+	// the guard exits early and the join is pushed as a whole — correct, since on the remote the
+	// lateral's left table IS in scope. Detecting correlation during Rewrite(right) would
+	// incorrectly downgrade right from SINGLE_REMOTE to UNKNOWN, turning a pushable all-remote
+	// lateral into an unpushable mixed query and causing "Multiple streaming scans" errors.
+	case_insensitive_set_t left_aliases;
+	CollectTableAliases(*ref.left, left_aliases);
+	// Only track aliases not already in local_table_names to avoid erasing pre-existing entries.
+	case_insensitive_set_t newly_added;
+	for (auto &alias : left_aliases) {
+		if (local_table_names.insert(alias).second) {
+			newly_added.insert(alias);
+		}
+	}
+	bool right_correlated_to_left = (right_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+	                                  HasLocalTableReference(*ref.right));
+	for (auto &alias : newly_added) {
+		local_table_names.erase(alias);
+	}
 	FinishPushdown(ref.left, left_result);
-	FinishPushdown(ref.right, right_result);
+	FinishPushdown(ref.right, right_correlated_to_left ? CatalogPushdownResult {} : right_result);
 	// Strip catalog name from the join condition and record pushed catalogs so the enclosing
 	// SelectNode can strip those catalog names from its outer expressions (SELECT list, WHERE,
 	// HAVING, etc.). Without this, catalog-qualified refs like "rpc.t1.i" in the join condition
@@ -1998,6 +2006,93 @@ bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
 			}
 		}
 		return (rec.left && HasLocalTableReference(*rec.left)) || (rec.right && HasLocalTableReference(*rec.right));
+	}
+	case QueryNodeType::INSERT_QUERY_NODE: {
+		// DML nodes can appear as CTE bodies (writeable CTEs) or in lateral subqueries.
+		// Their body expressions can carry correlated references to outer local tables, so
+		// falling through to "return false" would incorrectly classify the enclosing subquery
+		// as non-correlated — causing it to be pushed to the remote where the outer local
+		// table does not exist.
+		auto &insert = node.Cast<InsertQueryNode>();
+		for (auto &cte_pair : insert.cte_map.map) {
+			if (cte_pair.second->query_node && HasLocalTableReference(*cte_pair.second->query_node)) {
+				return true;
+			}
+		}
+		if (insert.select_statement && HasLocalTableReference(*insert.select_statement->node)) {
+			return true;
+		}
+		if (insert.on_conflict_info) {
+			if (insert.on_conflict_info->condition && HasLocalTableReference(*insert.on_conflict_info->condition)) {
+				return true;
+			}
+			if (insert.on_conflict_info->set_info) {
+				if (insert.on_conflict_info->set_info->condition &&
+				    HasLocalTableReference(*insert.on_conflict_info->set_info->condition)) {
+					return true;
+				}
+				for (auto &expr : insert.on_conflict_info->set_info->expressions) {
+					if (HasLocalTableReference(*expr)) {
+						return true;
+					}
+				}
+			}
+		}
+		for (auto &expr : insert.returning_list) {
+			if (HasLocalTableReference(*expr)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	case QueryNodeType::DELETE_QUERY_NODE: {
+		auto &del = node.Cast<DeleteQueryNode>();
+		for (auto &cte_pair : del.cte_map.map) {
+			if (cte_pair.second->query_node && HasLocalTableReference(*cte_pair.second->query_node)) {
+				return true;
+			}
+		}
+		if (del.condition && HasLocalTableReference(*del.condition)) {
+			return true;
+		}
+		for (auto &clause : del.using_clauses) {
+			if (HasLocalTableReference(*clause)) {
+				return true;
+			}
+		}
+		for (auto &expr : del.returning_list) {
+			if (HasLocalTableReference(*expr)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	case QueryNodeType::UPDATE_QUERY_NODE: {
+		auto &upd = node.Cast<UpdateQueryNode>();
+		for (auto &cte_pair : upd.cte_map.map) {
+			if (cte_pair.second->query_node && HasLocalTableReference(*cte_pair.second->query_node)) {
+				return true;
+			}
+		}
+		if (upd.from_table && HasLocalTableReference(*upd.from_table)) {
+			return true;
+		}
+		if (upd.set_info) {
+			if (upd.set_info->condition && HasLocalTableReference(*upd.set_info->condition)) {
+				return true;
+			}
+			for (auto &expr : upd.set_info->expressions) {
+				if (HasLocalTableReference(*expr)) {
+					return true;
+				}
+			}
+		}
+		for (auto &expr : upd.returning_list) {
+			if (HasLocalTableReference(*expr)) {
+				return true;
+			}
+		}
+		return false;
 	}
 	default:
 		return false;

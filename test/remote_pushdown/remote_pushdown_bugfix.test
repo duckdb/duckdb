@@ -997,5 +997,60 @@ ORDER BY t1.i
 statement ok
 DROP MACRO local_double;
 
+# ============================================================
+# Bug 22: HasLocalTableReference(QueryNode) fell through to
+# "return false" for INSERT_QUERY_NODE, DELETE_QUERY_NODE, and
+# UPDATE_QUERY_NODE.  When a DML statement appeared as a CTE body
+# inside a scalar/IN/EXISTS subquery, correlated references to
+# outer local tables hidden inside the DML body were not detected.
+# The subquery was then classified as fully-remote and pushed —
+# producing SQL that referenced an outer local table that does not
+# exist on the remote server.
+#
+# Fix: add explicit cases for INSERT/DELETE/UPDATE in
+# HasLocalTableReference(QueryNode) that inspect the body
+# expressions (source SELECT, WHERE condition, FROM clause, SET
+# expressions, ON CONFLICT, RETURNING, etc.) for local table refs.
+#
+# Note: DuckDB's binder rejects DML CTEs inside non-top-level
+# subqueries ("WITH clause containing a data-modifying statement
+# must be at the top level").  Without the fix the optimizer pushes
+# the inner subquery to the remote BEFORE the binder runs, so the
+# DML CTE disappears from the local AST and the binder never
+# complains — instead the remote fails with "Table local_t does not
+# exist".  With the fix the optimizer correctly preserves the
+# subquery locally, the binder then sees the DML CTE inside a
+# non-top-level subquery and raises the clear local error below.
+# ============================================================
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# Correlated IN subquery whose CTE body is a DELETE referencing the
+# outer local table.  Without the fix: remote error "local_t does not
+# exist".  With the fix: binder error (DML not at top level).
+statement error
+select count(*) from local_t where local_col in (
+    with del as (delete from rpc.t1 where t1.i > 100 and t1.i = local_t.local_col returning i)
+    select * from del
+)
+----
+<REGEX>:.*WITH clause containing a data-modifying statement must be at the top level.*
+
+# Same pattern with INSERT.
+statement error
+select count(*) from local_t where local_col in (
+    with ins as (insert into rpc.t2 select i from rpc.t2 where t2.i > 100 and t2.i = local_t.local_col returning i)
+    select * from ins
+)
+----
+<REGEX>:.*WITH clause containing a data-modifying statement must be at the top level.*
+
+statement ok
+drop table local_t;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
