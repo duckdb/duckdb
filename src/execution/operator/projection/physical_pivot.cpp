@@ -79,7 +79,7 @@ OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &
 			}
 		}
 	}
-	chunk.SetCardinality(input.size());
+	chunk.SetChildCardinality(input.size());
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 

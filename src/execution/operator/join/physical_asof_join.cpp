@@ -1629,7 +1629,7 @@ void AsOfLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChunk
 			const auto rhs_idx = op.right_projection_map[col_idx];
 			chunk.data[left_column_count + col_idx].Slice(rhs_chunk.data[rhs_idx], rsel, result_count);
 		}
-		chunk.SetCardinality(result_count);
+		chunk.SetChildCardinality(result_count);
 		return;
 	}
 

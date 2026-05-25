@@ -145,7 +145,7 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 		aliases.Append(Value::LIST(LogicalType::VARCHAR, std::move(entry.aliases)));
 		count++;
 	}
-	output.SetCardinality(count);
+	output.SetChildCardinality(count);
 }
 
 void DuckDBSettingsFun::RegisterFunction(BuiltinFunctions &set) {

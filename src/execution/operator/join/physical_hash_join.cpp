@@ -605,7 +605,7 @@ void JoinFilterPushdownInfo::Sink(DataChunk &chunk, JoinFilterLocalState &lstate
 		auto join_condition_idx = join_condition[pushdown_idx];
 		for (idx_t i = 0; i < 2; i++) {
 			idx_t aggr_idx = pushdown_idx * 2 + i;
-			lstate.local_aggregate_state->Sink(chunk, join_condition_idx, aggr_idx);
+			lstate.local_aggregate_state->Sink(chunk, join_condition_idx, aggr_idx, chunk.size());
 		}
 	}
 }
@@ -623,7 +623,7 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 	}
 
 	if (payload_columns.col_types.empty()) { // there are only keys: place an empty chunk in the payload
-		lstate.payload_chunk.SetCardinality(chunk.size());
+		lstate.payload_chunk.SetChildCardinality(chunk.size());
 	} else { // there are payload columns
 		lstate.payload_chunk.ReferenceColumns(chunk, payload_columns.col_idxs);
 	}

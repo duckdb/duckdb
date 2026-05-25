@@ -62,7 +62,7 @@ void DuckDBExternalFileCacheFunction(ClientContext &context, TableFunctionInput 
 		loaded.Append(Value::BOOLEAN(entry.loaded));
 		count++;
 	}
-	output.SetCardinality(count);
+	output.SetChildCardinality(count);
 }
 
 void DuckDBExternalFileCacheFun::RegisterFunction(BuiltinFunctions &set) {

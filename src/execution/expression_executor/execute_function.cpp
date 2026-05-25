@@ -242,7 +242,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 		// if all arguments are constant temporarily set the child cardinality to 1
 		arguments.SetChildCardinality(1ULL);
 	} else {
-		arguments.SetCardinality(count);
+		arguments.SetChildCardinality(count);
 	}
 	arguments.Verify(context);
 
@@ -291,7 +291,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 		D_ASSERT(state->types[i] == expr.children[i]->GetReturnType());
 		Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 	}
-	arguments.SetCardinality(count);
+	arguments.SetChildCardinality(count);
 	arguments.Verify(context);
 	return expr.function.GetSelectCallback()(arguments, *state, sel, true_sel, false_sel);
 }

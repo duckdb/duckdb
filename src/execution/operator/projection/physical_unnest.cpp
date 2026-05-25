@@ -217,7 +217,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			}
 		}
 		idx_t col_offset = 0;
-		chunk.SetCardinality(result_length);
+		chunk.SetChildCardinality(result_length);
 		if (result_length == 0) {
 			// nothing to unnest - skip column processing entirely
 			continue;

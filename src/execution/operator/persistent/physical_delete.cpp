@@ -169,7 +169,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	for (idx_t i = table.ColumnCount(); i < l_state.delete_chunk.ColumnCount(); i++) {
 		l_state.delete_chunk.data[i].Reference(row_ids);
 	}
-	l_state.delete_chunk.SetCardinality(chunk.size());
+	l_state.delete_chunk.SetChildCardinality(chunk.size());
 
 	// Slice down to the claimed rows (RETURNING only)
 	if (return_chunk && delete_count != chunk.size()) {
@@ -262,8 +262,8 @@ SourceResultType PhysicalDelete::GetDataInternal(ExecutionContext &context, Data
 	auto &state = input.global_state.Cast<DeleteSourceState>();
 	auto &g = sink_state->Cast<DeleteGlobalState>();
 	if (!return_chunk) {
-		chunk.SetCardinality(1);
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.deleted_count.load())));
+		chunk.SetChildCardinality(1);
 		return SourceResultType::FINISHED;
 	}
 

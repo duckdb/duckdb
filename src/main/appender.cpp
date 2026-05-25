@@ -79,7 +79,7 @@ void BaseAppender::EndRow() {
 		throw InvalidInputException("Call to EndRow before all columns have been appended to!");
 	}
 	column = 0;
-	chunk.SetCardinality(chunk.size() + 1);
+	chunk.SetChildCardinality(chunk.size() + 1);
 	if (ShouldFlushChunk()) {
 		FlushChunk();
 	}
@@ -368,7 +368,7 @@ void BaseAppender::AppendDataChunk(DataChunk &chunk_p) {
 	auto size = chunk_p.size();
 	DataChunk cast_chunk;
 	cast_chunk.Initialize(allocator, appender_types);
-	cast_chunk.SetCardinality(size);
+	cast_chunk.SetChildCardinality(size);
 
 	for (idx_t i = 0; i < count; i++) {
 		if (chunk_p.data[i].GetType() == appender_types[i]) {

@@ -408,14 +408,14 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 		for (idx_t i = 0; i < info.correlated_types.size(); i++) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
 		}
-		info.group_chunk.SetCardinality(keys);
+		info.group_chunk.SetChildCardinality(keys.size());
 		if (info.correlated_payload.data.empty()) {
 			vector<LogicalType> types;
 			types.push_back(keys.data[info.correlated_types.size()].GetType());
 			info.correlated_payload.InitializeEmpty(types);
 		}
 		info.correlated_payload.data[0].Reference(keys.data[info.correlated_types.size()]);
-		info.correlated_payload.SetCardinality(keys);
+		info.correlated_payload.SetChildCardinality(keys.size());
 		info.correlated_counts->AddChunk(info.group_chunk, info.correlated_payload, AggregateType::NON_DISTINCT);
 	}
 
@@ -438,7 +438,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	}
 	Vector hash_values(LogicalType::HASH);
 	source_chunk.data[col_offset].Reference(hash_values);
-	source_chunk.SetCardinality(keys);
+	source_chunk.SetChildCardinality(keys.size());
 
 	// ToUnifiedFormat the source chunk
 	TupleDataCollection::ToUnifiedFormat(append_state.chunk_state, source_chunk);
@@ -551,7 +551,7 @@ static inline void PerformKeyComparison(JoinHashTable::InsertState &state, JoinH
                                         const idx_t count, idx_t &key_match_count, idx_t &key_no_match_count) {
 	// Get the data for the rows that need to be compared
 	state.lhs_data.Reset();
-	state.lhs_data.SetCardinality(count); // the right size
+	state.lhs_data.SetChildCardinality(count); // the right size
 
 	// The target selection vector says where to write the results into the lhs_data, we just want to write
 	// sequentially as otherwise we trigger a bug in the Gather function
@@ -1014,7 +1014,7 @@ bool JoinHashTable::TryProbeDictionary(ScanStructure &scan_structure, DataChunk 
 			TupleDataCollection::InitializeChunkState(dict_state.unique_key_state, {equality_types[0]});
 		}
 		unique_values.data[0].Slice(dictionary_vector, unique_entries, unique_count);
-		unique_values.SetCardinality(unique_count);
+		unique_values.CheckCardinality(unique_count);
 
 		TupleDataCollection::ToUnifiedFormat(dict_state.unique_key_state, unique_values);
 
@@ -1090,7 +1090,7 @@ bool JoinHashTable::TryProbeConstant(ScanStructure &scan_structure, DataChunk &k
 		TupleDataCollection::InitializeChunkState(dict_state.unique_key_state, {equality_types[0]});
 	}
 	unique_values.data[0].Reference(constant_col);
-	unique_values.SetCardinality(1);
+	unique_values.SetChildCardinality(1);
 	unique_values.Flatten();
 
 	TupleDataCollection::ToUnifiedFormat(dict_state.unique_key_state, unique_values);
@@ -1278,7 +1278,7 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 
 	// reset chunks for reuse (no reallocation!)
 	residual_state->eval_chunk.Reset();
-	residual_state->eval_chunk.SetCardinality(match_count);
+	residual_state->eval_chunk.SetChildCardinality(match_count);
 
 	// copy probe columns at their ORIGINAL positions
 	for (const auto &entry : ht.residual_info->probe_input_to_probe_map) {
@@ -1462,7 +1462,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 						idx_t probe_col_idx = ht.lhs_output_in_probe[i];
 						result.data[i].Slice(probe_data.data[probe_col_idx], chain_match_sel_vector, result_count);
 					}
-					result.SetCardinality(result_count);
+					result.SetChildCardinality(result_count);
 
 					// on the RHS, we need to fetch the data from the hash table
 					ht.GatherRHS(pointers, chain_match_sel_vector, result_count, result, ht.lhs_output_in_probe.size());
@@ -1485,7 +1485,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 			idx_t probe_col_idx = ht.lhs_output_in_probe[i];
 			result.data[i].Slice(probe_data.data[probe_col_idx], lhs_sel_vector, base_count);
 		}
-		result.SetCardinality(base_count);
+		result.SetChildCardinality(base_count);
 
 		// 2) gather RHS vectors
 		ht.GatherRHS(rhs_pointers, *FlatVector::IncrementalSelectionVector(), base_count, result,
@@ -1535,7 +1535,7 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data, D
 			idx_t probe_col_idx = ht.lhs_output_in_probe[i];
 			result.data[i].Slice(probe_data.data[probe_col_idx], sel, result_count);
 		}
-		result.SetCardinality(result_count);
+		result.SetChildCardinality(result_count);
 	} else {
 		D_ASSERT(result.size() == 0);
 	}
@@ -1619,7 +1619,7 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_da
 
 void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) {
 	// extract OUTPUT columns from probe_data
-	result.SetCardinality(probe_data.size());
+	result.SetChildCardinality(probe_data.size());
 	for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
 		idx_t probe_col_idx = ht.lhs_output_in_probe[i];
 		result.data[i].Reference(probe_data.data[probe_col_idx]);
@@ -1685,11 +1685,11 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 		for (idx_t i = 0; i < info.group_chunk.ColumnCount(); i++) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
 		}
-		info.group_chunk.SetCardinality(keys);
+		info.group_chunk.SetChildCardinality(keys.size());
 		info.correlated_counts->FetchAggregates(info.group_chunk, info.result_chunk);
 
 		// extract OUTPUT columns from probe_data
-		result.SetCardinality(probe_data.size());
+		result.SetChildCardinality(probe_data.size());
 		for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
 			idx_t probe_col_idx = ht.lhs_output_in_probe[i];
 			result.data[i].Reference(probe_data.data[probe_col_idx]);
@@ -1769,7 +1769,7 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 				idx_t probe_col_idx = ht.lhs_output_in_probe[i];
 				result.data[i].Slice(probe_data.data[probe_col_idx], sel, remaining_count);
 			}
-			result.SetCardinality(remaining_count);
+			result.SetChildCardinality(remaining_count);
 
 			// now set the right side to NULL
 			for (idx_t i = ht.lhs_output_in_probe.size(); i < result.ColumnCount(); i++) {
@@ -1822,7 +1822,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataC
 		GatherResult(vector, result_sel, result_sel, result_count, output_col_idx);
 		FlatVector::SetSize(vector, count_t(probe_data.size()));
 	}
-	result.SetCardinality(probe_data.size());
+	result.SetChildCardinality(probe_data.size());
 
 	// like the SEMI, ANTI and MARK join types, the SINGLE join only ever does one pass over the HT per input chunk
 	finished = true;
@@ -1892,7 +1892,7 @@ void ScanStructure::NextUniqueLeftJoin(DataChunk &keys, DataChunk &probe_data, D
 	}
 
 	// single pass - done
-	result.SetCardinality(probe_data.size());
+	result.SetChildCardinality(probe_data.size());
 	finished = true;
 }
 
@@ -1937,7 +1937,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	if (found_entries == 0) {
 		return;
 	}
-	result.SetCardinality(found_entries);
+	result.SetChildCardinality(found_entries);
 
 	idx_t left_column_count = result.ColumnCount() - output_columns.size();
 	if (join_type == JoinType::RIGHT_SEMI || join_type == JoinType::RIGHT_ANTI) {

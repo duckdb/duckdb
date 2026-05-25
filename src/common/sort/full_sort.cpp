@@ -176,7 +176,7 @@ SinkResultType FullSort::Sink(ExecutionContext &context, DataChunk &input_chunk,
 		ConstantVector::SetNull(vec, count_t(input_chunk.size()));
 	}
 
-	payload_chunk.SetCardinality(input_chunk);
+	payload_chunk.SetChildCardinality(input_chunk.size());
 
 	//	OVER(ORDER BY...)
 	auto &sort_local = lstate.sort_local;

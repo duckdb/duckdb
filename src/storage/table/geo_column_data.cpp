@@ -385,13 +385,13 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 
 			auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
 			Scan(TransactionData::Committed(), vector_index++, scan_state, scan_chunk.data[0], to_scan);
-			scan_chunk.SetCardinality(to_scan);
+			scan_chunk.SetChildCardinality(to_scan);
 
 			// Verify the scan chunk
 			scan_chunk.Verify(GetDatabase());
 
 			append_chunk.Reset();
-			append_chunk.SetCardinality(to_scan);
+			append_chunk.SetChildCardinality(to_scan);
 
 			// Make the split
 			Specialize(scan_chunk.data[0], append_chunk.data[0], to_scan, GeometryStorageType::SPATIAL);
@@ -482,13 +482,13 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 
 		auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
 		Scan(TransactionData::Committed(), vector_index++, scan_state, scan_chunk.data[0], to_scan);
-		scan_chunk.SetCardinality(to_scan);
+		scan_chunk.SetChildCardinality(to_scan);
 
 		// Verify the scan chunk
 		scan_chunk.Verify(GetDatabase());
 
 		append_chunk.Reset();
-		append_chunk.SetCardinality(to_scan);
+		append_chunk.SetChildCardinality(to_scan);
 
 		// Make the split
 		Specialize(scan_chunk.data[0], append_chunk.data[0], to_scan, new_storage_type);

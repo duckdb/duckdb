@@ -2011,13 +2011,12 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 			}
 			ReturnStatistics(chunk, file_entry);
 		}
-		chunk.SetCardinality(count);
+		chunk.SetChildCardinality(count);
 		source_state.offset += count;
 		return source_state.offset < gstate.written_files.size() ? SourceResultType::HAVE_MORE_OUTPUT
 		                                                         : SourceResultType::FINISHED;
 	}
 
-	chunk.SetCardinality(1);
 	switch (return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(gstate.rows_copied.load())));
@@ -2038,6 +2037,7 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 	default:
 		throw NotImplementedException("Unknown CopyFunctionReturnType");
 	}
+	chunk.SetChildCardinality(1);
 
 	return SourceResultType::FINISHED;
 }

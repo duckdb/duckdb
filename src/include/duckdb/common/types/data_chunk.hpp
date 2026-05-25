@@ -53,23 +53,23 @@ public:
 
 public:
 	inline idx_t size() const { // NOLINT
-		return data[0].size();
+		return data.empty() ? 0 : data[0].size();
 	}
 	inline idx_t ColumnCount() const {
 		return data.size();
 	}
-	//! Verify all
+	//! Verify all child vectors have the expected cardinality
 	void CheckCardinality(idx_t count_p) const;
-	[[deprecated("DataChunk::SetCardinality should no longer be used - use CheckCardinality (verifies all child vectors have the correct size) or SetChildCardinality (set sizes of all child vectors) instead)")]]
-	void SetCardinality(idx_t count_p) {
-		SetChildCardinality(count_p);
-	}
-	[[deprecated("DataChunk::SetCardinality should no longer be used - use CheckCardinality (verifies all child vectors have the correct size) or SetChildCardinality (set sizes of all child vectors) instead)")]]
-	inline void SetCardinality(const DataChunk &other) {
-		SetChildCardinality(other.size());
-	}
 	//! Sets the cardinality of all child vectors of this chunk
 	void SetChildCardinality(idx_t count_p);
+	//! Deprecated: use SetChildCardinality instead
+	[[deprecated("Use SetChildCardinality instead")]] DUCKDB_API void SetCardinality(idx_t count_p) {
+		SetChildCardinality(count_p);
+	}
+	//! Deprecated: use SetChildCardinality instead
+	[[deprecated("Use SetChildCardinality instead")]] DUCKDB_API void SetCardinality(const DataChunk &chunk) {
+		SetChildCardinality(chunk.size());
+	}
 
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
 	[[deprecated("Use Vector::Append on data[col_idx] instead (or Vector::SetValue for write-at-index "

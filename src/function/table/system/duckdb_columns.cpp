@@ -369,7 +369,7 @@ static void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &da
 		// Check to see if we are going to exceed the maximum index for a DataChunk
 		if (index + (columns - column_offset) > STANDARD_VECTOR_SIZE) {
 			idx_t column_limit = column_offset + (STANDARD_VECTOR_SIZE - index);
-			output.SetCardinality(STANDARD_VECTOR_SIZE);
+			output.SetChildCardinality(STANDARD_VECTOR_SIZE);
 			column_helper->WriteColumns(column_offset, column_limit, output);
 
 			// Make the current column limit the column offset when we process the next chunk
@@ -378,7 +378,7 @@ static void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &da
 		} else {
 			// Otherwise, write all of the columns from the current relation and
 			// then move on to the next one.
-			output.SetCardinality(index + (columns - column_offset));
+			output.SetChildCardinality(index + (columns - column_offset));
 			column_helper->WriteColumns(column_offset, columns, output);
 			index += columns - column_offset;
 			next++;

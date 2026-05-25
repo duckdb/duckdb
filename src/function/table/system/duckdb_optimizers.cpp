@@ -48,7 +48,7 @@ void DuckDBOptimizersFunction(ClientContext &context, TableFunctionInput &data_p
 		name.Append(Value(entry));
 		count++;
 	}
-	output.SetCardinality(count);
+	output.SetChildCardinality(count);
 }
 
 void DuckDBOptimizersFun::RegisterFunction(BuiltinFunctions &set) {

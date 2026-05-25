@@ -64,7 +64,7 @@ void DuckDBSecretTypesFunction(ClientContext &context, TableFunctionInput &data_
 
 		count++;
 	}
-	output.SetCardinality(count);
+	output.SetChildCardinality(count);
 }
 
 void DuckDBSecretTypesFun::RegisterFunction(BuiltinFunctions &set) {

@@ -123,7 +123,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, DataChunk &chunk, 
 	}
 	auto max_cardinality = max_element - state.current_offset;
 	if (max_cardinality < chunk.size()) {
-		chunk.SetCardinality(max_cardinality);
+		chunk.SetChildCardinality(max_cardinality);
 	}
 	state.data.Append(chunk, state.partition_info.batch_index.GetIndex());
 	state.current_offset += chunk.size();
@@ -236,7 +236,7 @@ Value PhysicalLimit::GetDelimiter(ExecutionContext &context, DataChunk &input, c
 	for (idx_t c = 0; c < input.ColumnCount(); c++) {
 		ConstantVector::Reference(single_row_input.data[c], count_t(1), input.data[c], 0, input.size());
 	}
-	single_row_input.SetCardinality(1);
+	single_row_input.SetChildCardinality(1);
 	limit_executor.Execute(single_row_input, limit_chunk);
 	auto limit_value = limit_chunk.GetValue(0, 0);
 	return limit_value;

@@ -22,8 +22,6 @@ static unique_ptr<FunctionData> SummaryFunctionBind(ClientContext &context, Tabl
 
 static OperatorResultType SummaryFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
                                           DataChunk &output) {
-	output.SetCardinality(input.size());
-
 	auto &summary_col = output.data[0];
 	for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
 		string summary_val = "[";
@@ -40,6 +38,7 @@ static OperatorResultType SummaryFunction(ExecutionContext &context, TableFuncti
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		output.data[col_idx + 1].Reference(input.data[col_idx]);
 	}
+	output.SetChildCardinality(input.size());
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 

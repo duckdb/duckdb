@@ -197,7 +197,7 @@ struct SortedAggregateState {
 		idx_t total_count = 0;
 		for (column_t i = 0; i < linked.size(); ++i) {
 			funcs[i].BuildListVector(linked[i], chunk.data[i], total_count);
-			chunk.SetCardinality(linked[i].total_capacity);
+			chunk.SetChildCardinality(linked[i].total_capacity);
 			FlatVector::SetSize(chunk.data[i], count_t(linked[i].total_capacity));
 		}
 	}
@@ -374,7 +374,7 @@ struct SortedAggregateState {
 		for (column_t col_idx = 0; col_idx < input_chunk->ColumnCount(); ++col_idx) {
 			prefixed.data[col_idx + 1].Reference(input_chunk->data[col_idx]);
 		}
-		prefixed.SetCardinality(*input_chunk);
+		prefixed.SetChildCardinality(input_chunk->size());
 		// data[0] was referenced as a constant with count=1 - resize to match
 		FlatVector::SetSize(prefixed.data[0], count_t(input_chunk->size()));
 	}
@@ -444,7 +444,7 @@ struct SortedAggregateFunction {
 			D_ASSERT(buffered_cols[b] < input_count);
 			buffered.data[b].Reference(inputs[buffered_cols[b]]);
 		}
-		buffered.SetCardinality(count);
+		buffered.SetChildCardinality(count);
 	}
 
 	static void ScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
@@ -623,7 +623,7 @@ struct SortedAggregateFunction {
 					for (column_t col_idx = 0; col_idx < scanned.ColumnCount(); ++col_idx) {
 						sliced.data[col_idx].Slice(scanned.data[col_idx], consumed, consumed + input_count);
 					}
-					sliced.SetCardinality(input_count);
+					sliced.CheckCardinality(input_count);
 
 					if (cluster_update) {
 						ClusteredAggr clustered;

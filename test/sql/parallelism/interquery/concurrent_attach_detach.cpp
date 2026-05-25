@@ -292,7 +292,7 @@ void AttachWorker::append_internal(AttachTask &task, bool is_upsert) {
 			data_struct_varchar[i] = StringVector::AddString(entry_varchar, to_string(row_idx));
 		}
 
-		chunk.SetCardinality(task.ids.size());
+		chunk.SetChildCardinality(task.ids.size());
 		appender.AppendDataChunk(chunk);
 		appender.Close();
 

@@ -144,7 +144,7 @@ bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value 
 bool ExpressionFilter::EvaluateWithConstant(ExpressionExecutor &executor, const Value &val) const {
 	DataChunk input;
 	input.data.emplace_back(val, count_t(1));
-	input.SetCardinality(1);
+	input.SetChildCardinality(1);
 
 	SelectionVector sel(1);
 

@@ -487,7 +487,7 @@ void WindowBoundariesState::UpdateBounds(idx_t row_idx, DataChunk &eval_chunk) {
 	}
 	next_pos += count;
 
-	bounds.SetCardinality(count);
+	bounds.SetChildCardinality(count);
 }
 
 void WindowBoundariesState::PartitionBegin(idx_t row_idx, const idx_t count, bool is_jump) {

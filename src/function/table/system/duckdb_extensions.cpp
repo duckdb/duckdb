@@ -230,7 +230,7 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 		data.offset++;
 		count++;
 	}
-	output.SetCardinality(count);
+	output.SetChildCardinality(count);
 }
 
 void DuckDBExtensionsFun::RegisterFunction(BuiltinFunctions &set) {

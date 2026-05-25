@@ -281,7 +281,7 @@ public:
 		auto &gstate = gstate_p.Cast<HashAggregateGlobalSinkState>();
 		// Sink repopulates every aggregate-input column by reference before use, so we only need to clear cardinality
 		// here.
-		aggregate_input_chunk.SetCardinality(0);
+		aggregate_input_chunk.SetChildCardinality(0);
 		for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
 			auto &grouping = op.groupings[grouping_idx];
 			auto &grouping_gstate = gstate.grouping_states[grouping_idx];
@@ -366,7 +366,7 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 			D_ASSERT(it->second < chunk.data.size());
 			auto &filter_bound_ref = aggregate.filter->Cast<BoundReferenceExpression>();
 			filter_chunk.data[filter_bound_ref.index].Reference(chunk.data[it->second]);
-			filter_chunk.SetCardinality(chunk.size());
+			filter_chunk.SetChildCardinality(chunk.size());
 
 			// We cant use the AggregateFilterData::ApplyFilter method, because the chunk we need to
 			// apply the filter to also has the groups, and the filtered_data.filtered_payload does not have those.
@@ -396,7 +396,7 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 				col.Reference(chunk.data[bound_ref.index]);
 				col.Slice(sel_vec, count);
 			}
-			filtered_input.SetCardinality(count);
+			filtered_input.SetChildCardinality(count);
 
 			radix_table.Sink(context, filtered_input, sink_input, empty_chunk, empty_filter);
 		} else {
@@ -449,7 +449,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 		}
 	}
 
-	aggregate_input_chunk.SetCardinality(chunk.size());
+	aggregate_input_chunk.SetChildCardinality(chunk.size());
 	aggregate_input_chunk.Verify(context.client.db);
 
 	// For every grouping set there is one radix_table
@@ -794,13 +794,13 @@ TaskExecutionResult HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping
 				auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
 				group_chunk.data[bound_ref_expr.index].Reference(output_chunk.data[group_idx]);
 			}
-			group_chunk.SetCardinality(output_chunk);
+			group_chunk.SetChildCardinality(output_chunk.size());
 
 			for (idx_t child_idx = 0; child_idx < grouped_aggregate_data.groups.size() - group_by_size; child_idx++) {
 				aggregate_input_chunk.data[payload_idx + child_idx].Reference(
 				    output_chunk.data[group_by_size + child_idx]);
 			}
-			aggregate_input_chunk.SetCardinality(output_chunk);
+			aggregate_input_chunk.SetChildCardinality(output_chunk.size());
 
 			// Sink it into the main ht
 			grouping_data.table_data.Sink(execution_context, group_chunk, sink_input, aggregate_input_chunk, {agg_idx});

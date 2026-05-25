@@ -87,8 +87,8 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 			// error while evaluating scalar
 			return nullptr;
 		}
-		chunk.SetCardinality(chunk.size() + 1);
 		chunk.data[0].Append(value);
+		chunk.SetChildCardinality(chunk.data[0].size());
 		if (chunk.size() == STANDARD_VECTOR_SIZE || i + 1 == expr.children.size()) {
 			// chunk full: append to chunk collection
 			collection->Append(append_state, chunk);

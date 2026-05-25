@@ -13,7 +13,7 @@ SourceResultType PhysicalCreateSecret::GetDataInternal(ExecutionContext &context
 	secret_manager.CreateSecret(client, create_input);
 
 	chunk.data[0].Append(Value::BOOLEAN(true));
-	chunk.SetCardinality(1);
+	chunk.SetChildCardinality(1);
 
 	return SourceResultType::FINISHED;
 }

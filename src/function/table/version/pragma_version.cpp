@@ -35,10 +35,10 @@ static void PragmaVersionFunction(ClientContext &context, TableFunctionInput &da
 		// finished returning values
 		return;
 	}
-	output.SetCardinality(1);
 	output.data[0].Append(Value(DuckDB::LibraryVersion()));
 	output.data[1].Append(Value(DuckDB::SourceID()));
 	output.data[2].Append(Value(DuckDB::ReleaseCodename()));
+	output.SetChildCardinality(1);
 
 	data.finished = true;
 }
@@ -113,8 +113,8 @@ static void PragmaPlatformFunction(ClientContext &context, TableFunctionInput &d
 		// finished returning values
 		return;
 	}
-	output.SetCardinality(1);
 	output.data[0].Append(Value(DuckDB::Platform()));
+	output.SetChildCardinality(1);
 	data.finished = true;
 }
 

@@ -148,7 +148,7 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 		}
 		if (state.empty_range) {
 			// empty range
-			output.SetCardinality(0);
+			output.SetChildCardinality(0);
 			state.current_input_row++;
 			state.initialized_row = false;
 			return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -170,7 +170,7 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 		output.data[0].Sequence(current_value_i64, Hugeint::Cast<int64_t>(increment), remaining);
 		// increment the index pointer by the remaining count
 		state.current_idx += remaining;
-		output.SetCardinality(remaining);
+		output.SetChildCardinality(remaining);
 		if (remaining == 0) {
 			// move to next row
 			state.current_input_row++;
@@ -348,7 +348,7 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 		}
 		if (state.empty_range) {
 			// empty range
-			output.SetCardinality(0);
+			output.SetChildCardinality(0);
 			state.current_input_row++;
 			state.initialized_row = false;
 			return OperatorResultType::HAVE_MORE_OUTPUT;

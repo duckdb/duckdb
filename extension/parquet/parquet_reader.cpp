@@ -1724,7 +1724,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 	}
 
 	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.offset_in_group);
-	result.SetCardinality(scan_count);
+	result.SetChildCardinality(scan_count);
 
 	if (scan_count == 0) {
 		state.finished = true;

@@ -285,7 +285,7 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 			} else {
 				inputs.Reference(payload_chunk);
 			}
-			inputs.SetCardinality(end - begin);
+			inputs.SetChildCardinality(end - begin);
 		}
 
 		//	Aggregate the filtered rows into a single state

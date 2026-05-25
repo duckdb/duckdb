@@ -180,7 +180,7 @@ public:
 			data.offset++;
 			count++;
 		}
-		output.SetCardinality(count);
+		output.SetChildCardinality(count);
 	}
 };
 

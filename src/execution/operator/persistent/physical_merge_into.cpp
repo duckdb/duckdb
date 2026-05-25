@@ -456,8 +456,8 @@ SourceResultType PhysicalMergeInto::GetDataInternal(ExecutionContext &context, D
                                                     OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<MergeIntoGlobalState>();
 	if (!return_chunk) {
-		chunk.SetCardinality(1);
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.merged_count.load())));
+		chunk.SetChildCardinality(1);
 		return SourceResultType::FINISHED;
 	}
 	auto &gstate = input.global_state.Cast<MergeGlobalSourceState>();
@@ -503,7 +503,7 @@ SourceResultType PhysicalMergeInto::GetDataInternal(ExecutionContext &context, D
 			}
 			Value merge_action(merge_action_name);
 			chunk.data.back().Reference(merge_action, count_t(lstate.scan_chunk.size()));
-			chunk.SetCardinality(lstate.scan_chunk.size());
+			chunk.SetChildCardinality(lstate.scan_chunk.size());
 		}
 
 		if (result != SourceResultType::FINISHED) {

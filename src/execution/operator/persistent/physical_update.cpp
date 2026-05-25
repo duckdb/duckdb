@@ -114,7 +114,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	DataChunk &update_chunk = l_state.update_chunk;
 	update_chunk.Reset();
-	update_chunk.SetCardinality(chunk);
+	update_chunk.SetChildCardinality(chunk.size());
 
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		// Default expression, set to the default value of the column.
@@ -134,7 +134,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	// Regular in-place update.
 	if (!update_is_del_and_insert) {
 		if (return_chunk) {
-			mock_chunk.SetCardinality(update_chunk);
+			mock_chunk.SetChildCardinality(update_chunk.size());
 			for (idx_t i = 0; i < columns.size(); i++) {
 				mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 			}
@@ -177,7 +177,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	auto &delete_chunk = index_update ? l_state.delete_chunk : l_state.mock_chunk;
 	delete_chunk.Reset();
-	delete_chunk.SetCardinality(update_count);
+	delete_chunk.SetChildCardinality(update_count);
 
 	if (index_update) {
 		auto &transaction = DuckTransaction::Get(context.client, table.db);
@@ -194,7 +194,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	table.Delete(delete_state, context.client, tableref, del_row_ids, update_count);
 
 	// Arrange the columns in the standard table order.
-	mock_chunk.SetCardinality(update_count);
+	mock_chunk.SetChildCardinality(update_count);
 	for (idx_t i = 0; i < columns.size(); i++) {
 		mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 	}
@@ -249,8 +249,8 @@ SourceResultType PhysicalUpdate::GetDataInternal(ExecutionContext &context, Data
 	auto &state = input.global_state.Cast<UpdateSourceState>();
 	auto &g = sink_state->Cast<UpdateGlobalState>();
 	if (!return_chunk) {
-		chunk.SetCardinality(1);
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.updated_count.load())));
+		chunk.SetChildCardinality(1);
 		return SourceResultType::FINISHED;
 	}
 

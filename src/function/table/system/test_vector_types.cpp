@@ -149,7 +149,7 @@ struct TestVectorConstant {
 			for (idx_t c = 0; c < info.types.size(); c++) {
 				result->data[c].Reference(values.GetValue(0, c), count_t(cardinality));
 			}
-			result->SetCardinality(cardinality);
+			result->SetChildCardinality(cardinality);
 
 			info.entries.push_back(std::move(result));
 		}

@@ -424,7 +424,7 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 			idx_t chunk_end = offset + chunk_count;
 			DataChunk chunk;
 			chunk.data.emplace_back(vector, offset, chunk_end);
-			chunk.SetCardinality(chunk_count);
+			chunk.SetChildCardinality(chunk_count);
 
 			// construct the relevant selection vector for the current chunk (offset ... offset + chunk_count)
 			idx_t current_count = 0;
@@ -459,7 +459,7 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 		// standard case: we can handle everything at once - run the expression once
 		DataChunk chunk;
 		chunk.data.emplace_back(Vector::Ref(vector));
-		chunk.SetCardinality(scan_count);
+		chunk.SetChildCardinality(scan_count);
 		SelectionVector identity_sel;
 		optional_ptr<SelectionVector> current_sel = &sel;
 		if (!sel.IsSet()) {

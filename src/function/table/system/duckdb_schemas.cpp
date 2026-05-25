@@ -96,7 +96,7 @@ void DuckDBSchemasFunction(ClientContext &context, TableFunctionInput &data_p, D
 		data.offset++;
 		count++;
 	}
-	output.SetCardinality(count);
+	output.SetChildCardinality(count);
 }
 
 void DuckDBSchemasFun::RegisterFunction(BuiltinFunctions &set) {

@@ -71,7 +71,7 @@ void DuckDBKeywordsFunction(ClientContext &context, TableFunctionInput &data_p, 
 
 		count++;
 	}
-	output.SetCardinality(count);
+	output.SetChildCardinality(count);
 }
 
 void DuckDBKeywordsFun::RegisterFunction(BuiltinFunctions &set) {

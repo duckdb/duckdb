@@ -412,7 +412,7 @@ void DataTable::RebuildIndexes() {
 			for (idx_t i = 0; i < col_ids.size(); i++) {
 				table_chunk.data[col_ids[i]].Reference(scan_chunk.data[i]);
 			}
-			table_chunk.SetCardinality(scan_chunk);
+			table_chunk.SetChildCardinality(scan_chunk.size());
 			Vector &row_ids = scan_chunk.data[col_ids.size()];
 
 			auto error = bound_index.Append(table_chunk, row_ids);
@@ -546,7 +546,7 @@ void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vec
 	for (idx_t col = 0; col < result.ColumnCount(); col++) {
 		VectorOperations::Copy(local_chunk.data[col], result.data[col], local_count, 0, committed_count);
 	}
-	result.SetCardinality(committed_count + local_count);
+	result.SetChildCardinality(committed_count + local_count);
 
 	// Build inverse permutation to restore original row order.
 	// Current layout: [committed rows in relative order | local rows in relative order].
@@ -695,7 +695,7 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	}
 
 	auto count = chunk.size();
-	dst_chunk.SetCardinality(count);
+	dst_chunk.SetChildCardinality(count);
 	if (count <= 0) {
 		return;
 	}
@@ -1630,7 +1630,7 @@ static void CreateMockChunk(vector<LogicalType> &types, const vector<PhysicalInd
 	for (column_t i = 0; i < column_ids.size(); i++) {
 		mock_chunk.data[column_ids[i].index].Reference(chunk.data[i]);
 	}
-	mock_chunk.SetCardinality(chunk.size());
+	mock_chunk.SetChildCardinality(chunk.size());
 }
 
 static bool CreateMockChunk(TableCatalogEntry &table, const vector<PhysicalIndex> &column_ids,

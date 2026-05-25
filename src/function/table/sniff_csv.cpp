@@ -176,8 +176,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 	string str_opt;
 	string separator = ", ";
-	// Set output
-	output.SetCardinality(1);
+	// Set output (called after all Appends below)
 
 	// 1. Delimiter
 	str_opt = sniffer_options.dialect_options.state_machine_options.delimiter.FormatValue();
@@ -326,6 +325,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 	csv_read << ");";
 	output.data[11].Append(Value(csv_read.str()));
+	output.SetChildCardinality(1);
 	global_state.done = true;
 }
 

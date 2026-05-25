@@ -227,7 +227,6 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntr
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, table.GetColumns().LogicalColumnCount());
-	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
 		auto &column = table.GetColumn(LogicalIndex(i));
@@ -240,6 +239,7 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntr
 			PragmaShowHelper::GetTableColumns(column, constraint_info, output);
 		}
 	}
+	output.SetChildCardinality(next - data.offset);
 	data.offset = next;
 }
 
@@ -257,7 +257,6 @@ static void PragmaTableInfoView(ClientContext &context, PragmaTableOperatorData 
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, view_types.size());
-	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
 		auto type = view_types[i];
@@ -269,6 +268,7 @@ static void PragmaTableInfoView(ClientContext &context, PragmaTableOperatorData 
 			PragmaShowHelper::GetViewColumns(i, name, type, output);
 		}
 	}
+	output.SetChildCardinality(next - data.offset);
 	data.offset = next;
 }
 

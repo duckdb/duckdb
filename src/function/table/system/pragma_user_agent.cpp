@@ -35,8 +35,8 @@ void PragmaUserAgentFunction(ClientContext &context, TableFunctionInput &data_p,
 		return;
 	}
 
-	output.SetCardinality(1);
 	output.data[0].Append(Value(data.user_agent));
+	output.SetChildCardinality(1);
 
 	data.finished = true;
 }

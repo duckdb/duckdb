@@ -91,14 +91,19 @@ idx_t DataChunk::GetAllocationSize() const {
 }
 
 void DataChunk::Reset() {
-	SetCardinality(0);
-	if (data.empty() || vector_caches.empty()) {
+	if (data.empty()) {
+		return;
+	}
+	if (vector_caches.empty()) {
+		// InitializeEmpty chunk - vectors should be flat, safe to set size
+		SetChildCardinality(0);
 		return;
 	}
 	if (vector_caches.size() != data.size()) {
 		throw InternalException("VectorCache and column count mismatch in DataChunk::Reset");
 	}
 	for (idx_t i = 0; i < ColumnCount(); i++) {
+		// ResetFromCache resets vector type to FLAT and size to 0
 		data[i].ResetFromCache(vector_caches[i]);
 	}
 }
@@ -106,7 +111,6 @@ void DataChunk::Reset() {
 void DataChunk::Destroy() {
 	data.clear();
 	vector_caches.clear();
-	SetCardinality(0);
 }
 
 Value DataChunk::GetValue(idx_t col_idx, idx_t index) const {
@@ -130,15 +134,22 @@ bool DataChunk::AllConstant() const {
 void DataChunk::CheckCardinality(idx_t count_p) const {
 	for (auto &v : data) {
 		if (v.size() != count_p) {
-			throw InternalException("DataChunk::CheckCardinality - vector has size %d but expected size %d", v.size(), count_p);
+			throw InternalException("DataChunk::CheckCardinality - vector has size %d but expected size %d", v.size(),
+			                        count_p);
 		}
 	}
 }
 
-
 void DataChunk::SetChildCardinality(idx_t count_p) {
 	for (auto &v : data) {
-		FlatVector::SetSize(v, count_p);
+		// null-buffer placeholders (InitializeEmpty) and non-flat/constant vectors cannot be resized
+		if (!v.GetBufferRef()) {
+			continue;
+		}
+		auto vtype = v.GetVectorType();
+		if (vtype == VectorType::FLAT_VECTOR || vtype == VectorType::CONSTANT_VECTOR) {
+			FlatVector::SetSize(v, count_p);
+		}
 	}
 }
 
@@ -152,7 +163,6 @@ void DataChunk::Reference(DataChunk &chunk) {
 void DataChunk::Move(DataChunk &chunk) {
 	data = std::move(chunk.data);
 	vector_caches = std::move(chunk.vector_caches);
-
 	chunk.Destroy();
 }
 
