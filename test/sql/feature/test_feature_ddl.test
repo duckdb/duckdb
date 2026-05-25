@@ -72,10 +72,10 @@ SELECT feature_name, source_table, entity_column, granularity, window_size FROM 
 daily_txn	transactions	card_no	DAY	7
 
 # DESCRIBE FEATURE shows metadata
-query IIIIIIIII
+query IIIIIIIIII
 DESCRIBE FEATURE daily_txn;
 ----
-daily_txn	transactions	card_no	event_time	DAY	7	FULL	1	CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
+daily_txn	transactions	card_no	event_time	DAY	7	FULL	1	1	CREATE FEATURE daily_txn ON transactions ENTITY card_no TIMESTAMP event_time GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT card_no, sum(amount) FROM transactions GROUP BY card_no)
 
 # DESCRIBE non-existent feature returns empty
 query I

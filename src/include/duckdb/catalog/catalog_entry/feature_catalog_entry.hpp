@@ -39,6 +39,8 @@ public:
 	int64_t retain_versions;
 	//! The feature query
 	unique_ptr<SelectStatement> query;
+	//! Current version number (incremented on each REFRESH)
+	int64_t current_version;
 	//! Timestamp of last refresh (set at creation, derived from backing table at runtime)
 	timestamp_t last_refresh_timestamp;
 

@@ -44,6 +44,8 @@ unique_ptr<GlobalSinkState> PhysicalCreateFeature::GetGlobalSinkState(ClientCont
 	for (idx_t i = 0; i < info->result_names.size(); i++) {
 		table_info->columns.AddColumn(ColumnDefinition(info->result_names[i], info->result_types[i]));
 	}
+	// Add the version tracking column
+	table_info->columns.AddColumn(ColumnDefinition("__feature_version", LogicalType::BIGINT));
 
 	auto bound_info = make_uniq<BoundCreateTableInfo>(schema, std::move(table_info));
 	auto table_entry = catalog.CreateTable(transaction, schema, *bound_info);
@@ -77,8 +79,23 @@ SinkResultType PhysicalCreateFeature::Sink(ExecutionContext &context, DataChunk 
 
 	auto &storage = gstate.table->GetStorage();
 	chunk.Flatten();
+
+	// Append __feature_version column (version 1 for initial materialization)
+	DataChunk versioned_chunk;
+	vector<LogicalType> types;
+	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
+		types.push_back(chunk.data[i].GetType());
+	}
+	types.push_back(LogicalType::BIGINT);
+	versioned_chunk.Initialize(Allocator::DefaultAllocator(), types);
+	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
+		versioned_chunk.data[i].Reference(chunk.data[i]);
+	}
+	versioned_chunk.data[chunk.ColumnCount()].Reference(Value::BIGINT(1), count_t(chunk.size()));
+	versioned_chunk.SetCardinality(chunk.size());
+
 	vector<unique_ptr<BoundConstraint>> empty_constraints;
-	storage.LocalAppend(*gstate.table, context.client, chunk, empty_constraints, true);
+	storage.LocalAppend(*gstate.table, context.client, versioned_chunk, empty_constraints, true);
 	gstate.insert_count += chunk.size();
 	return SinkResultType::NEED_MORE_INPUT;
 }

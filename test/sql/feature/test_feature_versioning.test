@@ -1,0 +1,299 @@
+# name: test/sql/feature/test_feature_versioning.test
+# description: Test feature versioning — version increments on refresh, RETAIN controls GC
+# group: [feature]
+
+require noforcestorage
+
+require skip_reload
+
+# ============================================================
+# Setup
+# ============================================================
+statement ok
+CREATE TABLE events (
+    customer VARCHAR,
+    value INTEGER,
+    event_time TIMESTAMP
+);
+
+statement ok
+INSERT INTO events VALUES
+    ('x', 10, '2024-01-01 08:00:00'),
+    ('x', 20, '2024-01-02 08:00:00'),
+    ('y', 30, '2024-01-01 12:00:00');
+
+# ============================================================
+# FULL refresh with RETAIN 3: version increments each refresh
+# ============================================================
+statement ok
+CREATE FEATURE versioned_full ON events
+    ENTITY customer
+    TIMESTAMP event_time
+    GRANULARITY DAY
+    WINDOW 7
+    REFRESH FULL
+    RETAIN 3
+    AS (SELECT customer, SUM(value) AS total_value);
+
+# Initial materialization is version 1
+query I
+SELECT DISTINCT __feature_version FROM versioned_full ORDER BY __feature_version;
+----
+1
+
+# All rows are version 1
+query III rowsort
+SELECT customer, total_value, __feature_version FROM versioned_full WHERE feature_timestamp = '2024-01-01'::TIMESTAMP;
+----
+x	10	1
+y	30	1
+
+# First refresh -> version 2
+query I
+REFRESH FEATURE versioned_full;
+----
+3
+
+query I
+SELECT DISTINCT __feature_version FROM versioned_full ORDER BY __feature_version;
+----
+1
+2
+
+# Second refresh -> version 3 (now we have 3 versions, at RETAIN limit)
+query I
+REFRESH FEATURE versioned_full;
+----
+3
+
+query I
+SELECT DISTINCT __feature_version FROM versioned_full ORDER BY __feature_version;
+----
+1
+2
+3
+
+# Third refresh -> version 4, GC removes version 1 (retain 3 means keep 2,3,4)
+query I
+REFRESH FEATURE versioned_full;
+----
+3
+
+query I
+SELECT DISTINCT __feature_version FROM versioned_full ORDER BY __feature_version;
+----
+2
+3
+4
+
+# Version 1 rows are gone
+query I
+SELECT COUNT(*) FROM versioned_full WHERE __feature_version = 1;
+----
+0
+
+# Latest version has correct data
+query II rowsort
+SELECT customer, total_value FROM versioned_full WHERE __feature_version = 4 AND feature_timestamp = '2024-01-01'::TIMESTAMP;
+----
+x	10
+y	30
+
+statement ok
+DROP FEATURE versioned_full;
+
+# ============================================================
+# RETAIN 1: only latest version kept (default behavior)
+# ============================================================
+statement ok
+CREATE FEATURE versioned_retain1 ON events
+    ENTITY customer
+    TIMESTAMP event_time
+    GRANULARITY DAY
+    WINDOW 7
+    REFRESH FULL
+    RETAIN 1
+    AS (SELECT customer, SUM(value) AS total_value);
+
+# Version 1 initially
+query I
+SELECT DISTINCT __feature_version FROM versioned_retain1;
+----
+1
+
+# Refresh -> version 2, GC removes version 1
+query I
+REFRESH FEATURE versioned_retain1;
+----
+3
+
+query I
+SELECT DISTINCT __feature_version FROM versioned_retain1;
+----
+2
+
+# Only version 2 rows exist
+query I
+SELECT COUNT(*) FROM versioned_retain1 WHERE __feature_version = 1;
+----
+0
+
+statement ok
+DROP FEATURE versioned_retain1;
+
+# ============================================================
+# INCREMENTAL refresh: version increments, old versions GC'd
+# ============================================================
+statement ok
+CREATE FEATURE versioned_incr ON events
+    ENTITY customer
+    TIMESTAMP event_time
+    GRANULARITY DAY
+    WINDOW 7
+    REFRESH INCREMENTAL
+    RETAIN 2
+    AS (SELECT customer, SUM(value) AS total_value);
+
+# Initial: version 1
+query I
+SELECT DISTINCT __feature_version FROM versioned_incr;
+----
+1
+
+query I
+SELECT COUNT(*) FROM versioned_incr;
+----
+3
+
+# Add new data beyond watermark
+statement ok
+INSERT INTO events VALUES
+    ('x', 40, '2024-01-03 09:00:00'),
+    ('y', 50, '2024-01-03 10:00:00');
+
+# Incremental refresh -> version 2
+# Unaffected rows are copied forward, new buckets computed
+query I
+REFRESH FEATURE versioned_incr;
+----
+2
+
+query I
+SELECT DISTINCT __feature_version FROM versioned_incr ORDER BY __feature_version;
+----
+1
+2
+
+# Version 2 has the new bucket (01-03) plus copied-forward old rows
+query II rowsort
+SELECT customer, total_value FROM versioned_incr WHERE __feature_version = 2 AND feature_timestamp = '2024-01-03'::TIMESTAMP;
+----
+x	70
+y	80
+
+# Version 1 still has original data (RETAIN 2 keeps both)
+query I
+SELECT COUNT(*) FROM versioned_incr WHERE __feature_version = 1;
+----
+3
+
+# Add more data and refresh again -> version 3, GC removes version 1
+statement ok
+INSERT INTO events VALUES
+    ('x', 100, '2024-01-05 12:00:00');
+
+query I
+REFRESH FEATURE versioned_incr;
+----
+1
+
+query I
+SELECT DISTINCT __feature_version FROM versioned_incr ORDER BY __feature_version;
+----
+2
+3
+
+# Version 1 is gone (GC'd)
+query I
+SELECT COUNT(*) FROM versioned_incr WHERE __feature_version = 1;
+----
+0
+
+statement ok
+DROP FEATURE versioned_incr;
+
+# ============================================================
+# No-op refresh: version does NOT increment
+# ============================================================
+statement ok
+CREATE TABLE stable_src (
+    eid VARCHAR,
+    val INTEGER,
+    ts TIMESTAMP
+);
+
+statement ok
+INSERT INTO stable_src VALUES ('a', 10, '2024-01-01 08:00:00');
+
+statement ok
+CREATE FEATURE stable_feat ON stable_src
+    ENTITY eid
+    TIMESTAMP ts
+    GRANULARITY DAY
+    WINDOW 7
+    REFRESH INCREMENTAL
+    RETAIN 3
+    AS (SELECT eid, SUM(val) AS total);
+
+# Version 1 after creation
+query I
+SELECT DISTINCT __feature_version FROM stable_feat;
+----
+1
+
+# No new data -> no-op refresh, version stays at 1
+query I
+REFRESH FEATURE stable_feat;
+----
+0
+
+query I
+SELECT DISTINCT __feature_version FROM stable_feat;
+----
+1
+
+# Add data, refresh -> version 2
+statement ok
+INSERT INTO stable_src VALUES ('a', 20, '2024-01-02 08:00:00');
+
+query I
+REFRESH FEATURE stable_feat;
+----
+1
+
+query I
+SELECT DISTINCT __feature_version FROM stable_feat ORDER BY __feature_version;
+----
+1
+2
+
+# No-op again -> still versions 1 and 2
+query I
+REFRESH FEATURE stable_feat;
+----
+0
+
+query I
+SELECT DISTINCT __feature_version FROM stable_feat ORDER BY __feature_version;
+----
+1
+2
+
+statement ok
+DROP FEATURE stable_feat;
+
+statement ok
+DROP TABLE stable_src;
+
+statement ok
+DROP TABLE events;
