@@ -1174,6 +1174,17 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 
 	// Merge CTE results: even unreferenced CTEs are serialized when the set operation is pushed.
 	result = Merge(result, cte_combined);
+	// Save modifier expressions before rewriting them. Rewrite(ParsedExpression) on a subquery
+	// inside a modifier (e.g. ORDER BY (SELECT j FROM rpc.t2 JOIN local_t ON ...)) has the side
+	// effect of wrapping SINGLE_REMOTE JoinRef children in quack functions in-place. If the
+	// overall set-operation result is not SINGLE_REMOTE, those stale wrappers must be rolled back:
+	// individual child pushdown (below) opens one quack streaming slot per pushed child, and a
+	// modifier subquery running with a stale wrapper would try to open an additional concurrent
+	// slot, triggering "Multiple streaming scans" errors.
+	vector<unique_ptr<ResultModifier>> saved_modifiers;
+	for (auto &modifier : node.modifiers) {
+		saved_modifiers.push_back(modifier->Copy());
+	}
 	// Check result modifiers (ORDER BY / LIMIT on the set operation itself)
 	for (auto &modifier : node.modifiers) {
 		switch (modifier->type) {
@@ -1227,6 +1238,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 		}
 		return result;
 	}
+	// Restore modifiers to undo any in-place JoinRef partial-pushdown side effects from the
+	// Rewrite calls above. The saved copies carry no stale quack wrappers, so modifier
+	// subqueries will execute via DuckDB's own remote scanning rather than opening a competing
+	// quack streaming connection alongside any individually-pushed child below.
+	node.modifiers = std::move(saved_modifiers);
 	// Otherwise push down individual children that can be pushed, but only when no CTEs
 	// are present: a CTE-referencing child cannot be pushed individually because the CTE
 	// definition lives in the set operation scope and is not available on the remote.
