@@ -74,9 +74,8 @@ void ZstdStreamWrapper::Initialize(QueryContext context, CompressedFile &file, b
 	this->writing = write;
 	if (write) {
 		zstd_compress_ptr = duckdb_zstd::ZSTD_createCStream();
-		auto res =
-		    duckdb_zstd::ZSTD_CCtx_setParameter(zstd_compress_ptr, duckdb_zstd::ZSTD_c_compressionLevel,
-		                                        UnsafeNumericCast<int>(compression_level));
+		auto res = duckdb_zstd::ZSTD_CCtx_setParameter(zstd_compress_ptr, duckdb_zstd::ZSTD_c_compressionLevel,
+		                                               UnsafeNumericCast<int>(compression_level));
 		if (duckdb_zstd::ZSTD_isError(res)) {
 			throw IOException(duckdb_zstd::ZSTD_getErrorName(res));
 		}
@@ -205,7 +204,8 @@ struct ZStdFileSystemHolder {
 
 class ZStdFile : private ZStdFileSystemHolder, public CompressedFile {
 public:
-	ZStdFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write, int64_t compression_level)
+	ZStdFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write,
+	         int64_t compression_level)
 	    : ZStdFileSystemHolder(compression_level), CompressedFile(zstd_fs, std::move(child_handle_p), path) {
 		Initialize(context, write);
 	}
@@ -217,7 +217,8 @@ public:
 
 } // namespace
 
-unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle, bool write,
+unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
+                                                          bool write,
                                                           const FileCompressionOptions &compression_options) {
 	auto path = handle->path;
 	auto compression_level =

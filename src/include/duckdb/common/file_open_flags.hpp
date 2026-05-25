@@ -76,7 +76,8 @@ public:
 	}
 
 	inline constexpr FileOpenFlags operator|(FileOpenFlags b) const {
-		return FileOpenFlags(flags | b.flags, MergeLock(lock, b.lock), MergeCompression(compression_options, b.compression_options));
+		return FileOpenFlags(flags | b.flags, MergeLock(lock, b.lock),
+		                     MergeCompression(compression_options, b.compression_options));
 	}
 	inline FileOpenFlags &operator|=(FileOpenFlags b) {
 		flags |= b.flags;
