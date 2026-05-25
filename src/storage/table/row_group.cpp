@@ -1011,8 +1011,7 @@ idx_t RowGroup::Fetch(TransactionData transaction, const idx_t *offsets, idx_t f
 	}
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
-		// No version info at all -> every row is visible. Skip building an identity sel; the caller
-		// is responsible for treating "returned == fetch_count" as the all-visible / identity case.
+		// No version info at all, which means every row is visible.
 		return fetch_count;
 	}
 	return vinfo->GetVisibleRows(transaction, offsets, fetch_count, visible_sel);
