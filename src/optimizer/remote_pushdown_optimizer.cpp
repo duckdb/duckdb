@@ -1593,13 +1593,24 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	auto right_result = Rewrite(ref.right);
 	auto result = Merge(left_result, right_result);
 	// Also analyze the join condition - it may contain subqueries or local macro calls
-	// that affect whether the join can be pushed as a whole
+	// that affect whether the join can be pushed as a whole.
+	// Save condition before analysis: Rewrite may push inner JoinRef children in-place inside
+	// scalar subqueries. If the condition makes the result UNKNOWN and we fall through to
+	// individual child pushdown, restoring prevents concurrent quack streaming connections —
+	// individually-pushed left/right (up to 2 slots) + stale wrapper inside condition = 3 slots.
+	unique_ptr<ParsedExpression> saved_condition;
 	if (ref.condition) {
+		saved_condition = ref.condition->Copy();
 		result = Merge(result, Rewrite(*ref.condition));
 	}
 	// If both sides (and the condition) resolve to the same remote catalog, propagate upward
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		return result;
+	}
+	// Restore condition to remove any stale quack wrappers Rewrite inserted in-place.
+	// Catalog stripping (below) will strip the remote catalog prefix from the restored condition.
+	if (saved_condition) {
+		ref.condition = std::move(saved_condition);
 	}
 	// The JoinRef cannot be pushed as a whole — push each side individually where possible.
 	// Before pushing the right side, check whether it has a correlated reference to the left
@@ -2299,9 +2310,9 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &cata
 	switch (ref.type) {
 	case TableReferenceType::BASE_TABLE: {
 		auto &base = ref.Cast<BaseTableRef>();
-		if (base.catalog_name == catalog_name) {
+		if (StringUtil::CIEquals(base.catalog_name, catalog_name)) {
 			base.catalog_name = "";
-		} else if (base.catalog_name.empty() && base.schema_name == catalog_name) {
+		} else if (base.catalog_name.empty() && StringUtil::CIEquals(base.schema_name, catalog_name)) {
 			// 2-part name (schema.table) where the schema is actually the catalog being pushed to
 			base.schema_name = "";
 		}
