@@ -115,20 +115,21 @@ struct MatcherSuggestion {
 };
 
 struct MatchState {
-	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
+	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions,
+	           reference_set_t<const Matcher> &added_suggestions, ParseResultAllocator &allocator,
 	           idx_t &max_token_index, bool preserve_identifier_case_p = true)
-	    : tokens(tokens), suggestions(suggestions), token_index(0), allocator(allocator),
-	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p) {
+	    : tokens(tokens), suggestions(suggestions), added_suggestions(added_suggestions), token_index(0),
+	      allocator(allocator), max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p) {
 	}
 	MatchState(MatchState &state)
-	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
-	      allocator(state.allocator), max_token_index(state.max_token_index),
+	    : tokens(state.tokens), suggestions(state.suggestions), added_suggestions(state.added_suggestions),
+	      token_index(state.token_index), allocator(state.allocator), max_token_index(state.max_token_index),
 	      preserve_identifier_case(state.preserve_identifier_case) {
 	}
 
 	vector<MatcherToken> &tokens;
 	vector<MatcherSuggestion> &suggestions;
-	reference_set_t<const Matcher> added_suggestions;
+	reference_set_t<const Matcher> &added_suggestions;
 	idx_t token_index;
 	ParseResultAllocator &allocator;
 	idx_t &max_token_index;
