@@ -2525,9 +2525,9 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 			}
 		}
 		// Strip from the target table's catalog/schema fields (these are what ToString() serializes)
-		if (insert.catalog == catalog_name) {
+		if (StringUtil::CIEquals(insert.catalog, catalog_name)) {
 			insert.catalog = "";
-		} else if (insert.catalog.empty() && insert.schema == catalog_name) {
+		} else if (insert.catalog.empty() && StringUtil::CIEquals(insert.schema, catalog_name)) {
 			insert.schema = "";
 		}
 		if (insert.select_statement) {
