@@ -1,0 +1,118 @@
+# name: test/remote_pushdown/remote_pushdown_searchpath.test
+# description: Pushdown via search path (USE catalog) for remote catalogs
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok db1:con1
+create table t2(j int);
+
+statement ok db1:con1
+insert into t2 from range(5, 15);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+# After USE rpc, unqualified table names resolve to the remote catalog.
+# The optimizer must recognize that the INVALID_CATALOG sentinel in the search
+# path (which resolves to rpc, the new default) is the same as the explicit rpc
+# entry — without deduplication the remote catalog count appears as 2 and
+# pushdown is incorrectly blocked.
+
+statement ok
+use rpc
+
+# --- Unqualified table pushdown via search path ---
+
+# Simple scan: no SEQ_SCAN in local plan
+query II
+explain select * from t1
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from t1
+----
+10
+
+# Filter is pushed
+query II
+explain select * from t1 where i > 5
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from t1 where i > 5
+----
+4
+
+# Aggregate is pushed
+query II
+explain select sum(i) from t1
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select sum(i) from t1
+----
+45
+
+# Join of two unqualified remote tables: pushed as a single remote call (no JOIN in local plan)
+query II
+explain select * from t1 join t2 on i = j
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# t1={0..9}, t2={5..14}: overlap={5,6,7,8,9} -> 5 rows
+query I
+select count(*) from t1 join t2 on i = j
+----
+5
+
+# ORDER BY + LIMIT pushed
+query I
+select i from t1 order by i desc limit 3
+----
+9
+8
+7
+
+# Subquery on unqualified remote table: pushed
+query II
+explain select count(*) from t1 where i in (select j from t2)
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from t1 where i in (select j from t2)
+----
+5
+
+# CTE with unqualified remote table: pushed
+query II
+explain with cte as (select i from t1 where i < 3) select count(*) from cte
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+with cte as (select i from t1 where i < 3) select count(*) from cte
+----
+3
+
+# Restore default catalog so subsequent tests are unaffected
+statement ok
+use memory
+
+statement ok db1:con1
+call quack_stop('quack:localhost')

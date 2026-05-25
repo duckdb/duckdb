@@ -51,6 +51,12 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 	auto &client_data = ClientData::Get(binder.context);
 	// iterate over all catalogs mentioned in the search path and check if they are remote
 	auto search_path = client_data.catalog_search_path->Get();
+	// The search path always contains an INVALID_CATALOG ("") sentinel that resolves to the
+	// current default catalog at lookup time. After "USE rpc", this sentinel resolves to the
+	// same remote catalog that is already listed explicitly, causing the same catalog to appear
+	// twice in remote_catalogs_in_search_path. The size() != 1 guard in Rewrite(BaseTableRef)
+	// then incorrectly blocks all unqualified-table pushdown. Deduplicate by catalog name.
+	case_insensitive_set_t seen_remote_catalogs;
 	for (auto &entry : search_path) {
 		auto catalog_entry = Catalog::GetCatalogEntry(binder.context, entry.catalog);
 		if (!catalog_entry) {
@@ -59,7 +65,9 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 		if (!catalog_entry->IsRemoteCatalog()) {
 			local_catalogs_in_search_path.push_back(entry);
 		} else {
-			remote_catalogs_in_search_path.push_back(*catalog_entry);
+			if (seen_remote_catalogs.insert(catalog_entry->GetName()).second) {
+				remote_catalogs_in_search_path.push_back(*catalog_entry);
+			}
 		}
 	}
 }
