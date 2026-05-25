@@ -631,6 +631,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 	target_ref.catalog_name = node.catalog;
 	target_ref.schema_name = node.schema;
 	target_ref.table_name = node.table;
+	// Save local name state before analyzing the INSERT target. The target table is the
+	// destination; its columns/name are not in scope for the source SELECT's FROM clause.
+	// Without this, TrackLocalTable adds the local target's column names to
+	// local_table_column_names, and HasLocalTableReference then falsely marks source-SELECT
+	// subqueries as correlated to those columns — blocking valid remote pushdowns and
+	// potentially causing "Multiple streaming scans" when the FROM table is individually
+	// pushed while the falsely-blocked WHERE subquery stays local and opens a second stream.
+	auto pre_target_local_names = local_table_names;
+	auto pre_target_local_col_names = local_table_column_names;
 	CatalogPushdownResult result = Rewrite(target_ref);
 
 	// Merge CTE results: even unreferenced CTEs are serialized when the DML is pushed.
@@ -642,6 +651,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 	// Skip individual pushdown when CTEs are present: the source may reference a local CTE.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		if (node.cte_map.map.empty() && node.select_statement) {
+			// Restore pre-target local name state: the INSERT target is not in scope for
+			// the source SELECT, so its column names must not influence HasLocalTableReference.
+			local_table_names = std::move(pre_target_local_names);
+			local_table_column_names = std::move(pre_target_local_col_names);
 			auto select_result = Rewrite(*node.select_statement->node);
 			FinishPushdown(node.select_statement->node, select_result);
 		}

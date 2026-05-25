@@ -699,5 +699,56 @@ select count(*) from (
 statement ok
 drop table local_bugfix15
 
+# ============================================================
+# Bug 16: Rewrite(InsertQueryNode) polluted local_table_column_names
+# with the INSERT target's columns when the target was a local table.
+#
+# Rewrite(target_ref) calls TrackLocalTable for local targets, which
+# adds the local table's column names to local_table_column_names.
+# When the source SELECT was then analyzed, HasLocalTableReference
+# would falsely treat any remote subquery whose SELECT list contained
+# a column name matching a target-table column as "correlated to a
+# local table", blocking pushdown. In the worst case, if the source
+# SELECT's FROM was individually pushed (quack slot 1) while the
+# falsely-blocked WHERE subquery stayed local and executed against
+# the remote (quack slot 2), the query failed with "Multiple
+# streaming scans".
+#
+# The fix: save and restore local_table_names / local_table_column_names
+# around Rewrite(target_ref) before entering the local-target path, so
+# the INSERT target's columns are invisible during source SELECT analysis.
+# ============================================================
+
+statement ok
+create table local_bugfix16(i int);
+
+# Verify the source SELECT is pushed as a single quack call by checking
+# that the EXPLAIN plan does not contain a native UNION or JOIN scan
+# of the remote tables (i.e., the subquery is pushed together with FROM).
+# The source SELECT has FROM rpc.t1 and a WHERE with a scalar subquery
+# FROM rpc.t2. local_bugfix16 has column 'i' which shares the name with
+# columns in t1 and t2. Without the fix, the subquery would be falsely
+# blocked (local_bugfix16.i matches), rpc.t1 gets a quack slot, and
+# the WHERE subquery opens a second quack stream -> "Multiple streaming scans".
+query I rowsort
+insert into local_bugfix16
+select i from rpc.t1
+where i < (select max(i) from rpc.t2)
+returning i
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement ok
+drop table local_bugfix16
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
