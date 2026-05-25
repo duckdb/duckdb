@@ -228,13 +228,28 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	// Register the CTE's own name as neutral so the self-reference in the recursive arm
 	// is treated as NO_CATALOG_REFERENCED rather than triggering an unknown catalog lookup.
 	// The caller (Rewrite(SelectNode)) will overwrite this with the final result afterwards.
+	// Save any outer CTE with the same name first: an inner recursive CTE may shadow an outer
+	// CTE of the same name; without saving, erasing the self-reference placeholder below would
+	// permanently remove the outer entry from cte_results, breaking later references to it.
+	bool had_outer_ctename = false;
+	CatalogPushdownResult saved_ctename_result;
+	auto outer_ctename_it = cte_results.find(node.ctename);
+	if (outer_ctename_it != cte_results.end()) {
+		saved_ctename_result = outer_ctename_it->second;
+		had_outer_ctename = true;
+	}
 	cte_results[node.ctename] = {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
 
 	CatalogPushdownResult left_result = Rewrite(*node.left);
 	CatalogPushdownResult right_result = Rewrite(*node.right);
 
-	// Remove the self-reference placeholder so the caller's assignment is authoritative
-	cte_results.erase(node.ctename);
+	// Remove the self-reference placeholder so the caller's assignment is authoritative.
+	// If an outer CTE of the same name was shadowed, restore it now.
+	if (had_outer_ctename) {
+		cte_results[node.ctename] = saved_ctename_result;
+	} else {
+		cte_results.erase(node.ctename);
+	}
 
 	// Restore shadowed outer CTE entries
 	for (auto &cte_pair : node.cte_map.map) {
