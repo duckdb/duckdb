@@ -1052,5 +1052,32 @@ select count(*) from local_t where local_col in (
 statement ok
 drop table local_t;
 
+# ============================================================
+# Bug 23: StripCatalogName(InsertQueryNode) used exact string
+# comparison (==) instead of CIEquals for the INSERT target's
+# catalog and schema string fields.
+#
+# When the user writes INSERT INTO "RPC".t1 VALUES (...), the
+# parser preserves the quoted uppercase "RPC" as the catalog
+# field. result.catalog->GetName() returns the canonical "rpc".
+# Before the fix, "RPC" == "rpc" → false → catalog not stripped.
+# The remote SQL contained INSERT INTO "RPC".t1, which failed
+# with "Catalog 'RPC' does not exist" on the remote server.
+# After the fix CIEquals("RPC", "rpc") → true → stripped correctly.
+# ============================================================
+
+# INSERT with uppercase-quoted catalog name must still push and succeed.
+# The row is written to rpc.t1 under the canonical "rpc" catalog name.
+statement ok
+INSERT INTO "RPC".t1 VALUES (55)
+
+query I
+SELECT i FROM rpc.t1 WHERE i = 55
+----
+55
+
+statement ok
+DELETE FROM rpc.t1 WHERE i = 55
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
