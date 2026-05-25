@@ -705,11 +705,14 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 	// DuckDB can execute: INSERT INTO local_t SELECT * FROM quack_query_by_name(...).
 	// Skip individual pushdown when CTEs are present: the source may reference a local CTE.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		// Always restore pre-target local name state so the INSERT target's column names do not
+		// leak into the outer scope. Without this, an INSERT-as-CTE-body with sub-CTEs (which
+		// skips the individual-source-push path) leaves TrackLocalTable's additions in
+		// local_table_column_names, causing HasLocalTableReference false positives for the outer
+		// query's subqueries that happen to use the same unqualified column names.
+		local_table_names = std::move(pre_target_local_names);
+		local_table_column_names = std::move(pre_target_local_col_names);
 		if (node.cte_map.map.empty() && node.select_statement) {
-			// Restore pre-target local name state: the INSERT target is not in scope for
-			// the source SELECT, so its column names must not influence HasLocalTableReference.
-			local_table_names = std::move(pre_target_local_names);
-			local_table_column_names = std::move(pre_target_local_col_names);
 			auto select_result = Rewrite(*node.select_statement->node);
 			FinishPushdown(node.select_statement->node, select_result);
 		}
