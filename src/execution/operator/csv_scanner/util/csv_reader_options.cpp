@@ -6,6 +6,7 @@
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "zstd.h"
 
 namespace duckdb {
 
@@ -407,6 +408,15 @@ void CSVReaderOptions::SetWriteOption(const string &loption, const Value &value)
 		prefix = ParseString(value, loption);
 	} else if (loption == "suffix") {
 		suffix = ParseString(value, loption);
+	} else if (loption == "compression_level") {
+		auto val = ParseInteger(value, loption);
+		auto min_level = static_cast<int64_t>(duckdb_zstd::ZSTD_minCLevel());
+		auto max_level = static_cast<int64_t>(duckdb_zstd::ZSTD_maxCLevel());
+		if (val < min_level || val > max_level) {
+			throw BinderException("Compression level must be between %lld and %lld", min_level, max_level);
+		}
+		compression_level = val;
+		compression_level_set = true;
 	} else {
 		throw BinderException("Unrecognized option CSV writer \"%s\"", loption);
 	}

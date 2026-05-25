@@ -63,6 +63,9 @@ struct CSVReaderOptions {
 	//! Whether file is compressed or not, and if so which compression type
 	//! AUTO_DETECT (default; infer from file extension)
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
+	//! The compression level to use for writing compressed files, if specified
+	int64_t compression_level = 0;
+	bool compression_level_set = false;
 	//! Option to convert quoted values to NULL values
 	bool allow_quoted_nulls = true;
 	char comment = '\0';
