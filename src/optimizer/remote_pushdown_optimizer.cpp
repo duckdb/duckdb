@@ -753,6 +753,17 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 				}
 			}
 		}
+		// Save returning_list: Rewrite may push JoinRef children inside subquery bodies in-place.
+		// If returning_list makes result UNKNOWN after select_statement/on_conflict_info were
+		// SINGLE_REMOTE (their JoinRef children already pushed), roll back to prevent stale
+		// quack wrappers causing "Multiple streaming scans" in native execution.
+		vector<unique_ptr<ParsedExpression>> saved_returning;
+		for (auto &expr : node.returning_list) {
+			saved_returning.push_back(expr->Copy());
+		}
+		for (auto &expr : node.returning_list) {
+			result = Merge(result, Rewrite(*expr));
+		}
 		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 			if (saved_select) {
 				node.select_statement->node = std::move(saved_select);
@@ -760,10 +771,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 			if (saved_conflict_info) {
 				node.on_conflict_info = std::move(saved_conflict_info);
 			}
+			node.returning_list = std::move(saved_returning);
 		}
-	}
-	for (auto &expr : node.returning_list) {
-		result = Merge(result, Rewrite(*expr));
 	}
 	for (auto &cte_pair : node.cte_map.map) {
 		auto it = outer_cte_results.find(cte_pair.first);
@@ -878,15 +887,23 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 		for (auto &clause : node.using_clauses) {
 			result = Merge(result, Rewrite(clause));
 		}
+		// Save returning_list: Rewrite may push JoinRef children inside subquery bodies in-place.
+		// If returning_list makes result UNKNOWN after condition/USING were SINGLE_REMOTE (their
+		// JoinRef children already pushed), roll back to prevent stale quack wrappers.
+		vector<unique_ptr<ParsedExpression>> saved_returning;
+		for (auto &expr : node.returning_list) {
+			saved_returning.push_back(expr->Copy());
+		}
+		for (auto &expr : node.returning_list) {
+			result = Merge(result, Rewrite(*expr));
+		}
 		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 			node.using_clauses = std::move(saved_using);
 			if (saved_condition) {
 				node.condition = std::move(saved_condition);
 			}
+			node.returning_list = std::move(saved_returning);
 		}
-	}
-	for (auto &expr : node.returning_list) {
-		result = Merge(result, Rewrite(*expr));
 	}
 	for (auto &cte_pair : node.cte_map.map) {
 		auto it = outer_cte_results.find(cte_pair.first);
@@ -1064,6 +1081,16 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 				result = Merge(result, Rewrite(*expr));
 			}
 		}
+		// Save returning_list: Rewrite may push JoinRef children inside subquery bodies in-place.
+		// If returning_list makes result UNKNOWN after from_table/set_info were SINGLE_REMOTE
+		// (their JoinRef children already pushed), roll back to prevent stale quack wrappers.
+		vector<unique_ptr<ParsedExpression>> saved_returning;
+		for (auto &expr : node.returning_list) {
+			saved_returning.push_back(expr->Copy());
+		}
+		for (auto &expr : node.returning_list) {
+			result = Merge(result, Rewrite(*expr));
+		}
 		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 			if (saved_from) {
 				node.from_table = std::move(saved_from);
@@ -1071,10 +1098,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 			if (saved_set_info) {
 				node.set_info = std::move(saved_set_info);
 			}
+			node.returning_list = std::move(saved_returning);
 		}
-	}
-	for (auto &expr : node.returning_list) {
-		result = Merge(result, Rewrite(*expr));
 	}
 	for (auto &cte_pair : node.cte_map.map) {
 		auto it = outer_cte_results.find(cte_pair.first);
@@ -1508,6 +1533,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SubqueryRef &ref) {
 	auto saved_from_pushed_table_aliases = std::move(from_pushed_table_aliases);
 	from_pushed_catalog_names.clear();
 	from_pushed_table_aliases.clear();
+	// Save the subquery node before analysis. Rewrite(SelectNode) calls Rewrite(JoinRef) which
+	// pushes individual SINGLE_REMOTE children in-place via FinishPushdown even when the overall
+	// JoinRef result is UNKNOWN (mixed join). If the subquery body ends up UNKNOWN (e.g. because
+	// a JoinRef inside it is mixed), those stale quack wrappers must be rolled back; otherwise
+	// native execution of the SubqueryRef would open multiple concurrent quack streaming
+	// connections ("Multiple streaming scans" error).
+	auto saved_subquery_node = ref.subquery->node->Copy();
 	auto result = Rewrite(*ref.subquery->node);
 	from_pushed_catalog_names = std::move(saved_from_pushed_catalog_names);
 	from_pushed_table_aliases = std::move(saved_from_pushed_table_aliases);
@@ -1518,6 +1550,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SubqueryRef &ref) {
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
 	    HasLocalTableReference(*ref.subquery->node)) {
 		result = {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
+	}
+	// Restore the subquery node when result is not SINGLE_REMOTE to remove any stale quack
+	// wrappers inserted in-place by Rewrite(JoinRef) during mixed-JoinRef analysis above.
+	// When result IS SINGLE_REMOTE the enclosing FinishPushdown will wrap the whole subquery,
+	// so the internal state does not matter and restore is unnecessary.
+	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		ref.subquery->node = std::move(saved_subquery_node);
 	}
 	local_table_names = std::move(saved_local_table_names);
 	local_table_column_names = std::move(saved_local_table_column_names);
@@ -2209,11 +2248,19 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 		auto saved_from_pushed_aliases = std::move(from_pushed_table_aliases);
 		from_pushed_catalog_names.clear();
 		from_pushed_table_aliases.clear();
+		// Save subquery node before analysis: Rewrite(JoinRef) inside the body may push individual
+		// SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN (mixed join).
+		// If the overall subquery result ends up UNKNOWN, restore to remove those stale wrappers
+		// so native execution does not open multiple concurrent quack streaming connections.
+		auto saved_subquery_node = subquery_expr.subquery->node->Copy();
 		auto subquery_result = Rewrite(*subquery_expr.subquery->node);
 		// A SINGLE_REMOTE result is only valid if the subquery has no correlated references to outer local tables
 		if (subquery_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
 		    HasLocalTableReference(*subquery_expr.subquery->node)) {
 			subquery_result = {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
+		}
+		if (subquery_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			subquery_expr.subquery->node = std::move(saved_subquery_node);
 		}
 		local_table_names = std::move(saved_local_table_names);
 		local_table_column_names = std::move(saved_local_table_column_names);
@@ -2298,6 +2345,11 @@ void RemotePushdownOptimizer::PushdownSubqueries(unique_ptr<ParsedExpression> &e
 		auto saved_from_pushed_aliases = std::move(from_pushed_table_aliases);
 		from_pushed_catalog_names.clear();
 		from_pushed_table_aliases.clear();
+		// Save subquery node: Rewrite(JoinRef) inside the body may push individual SINGLE_REMOTE
+		// children in-place even when the JoinRef result is UNKNOWN. If the subquery is correlated
+		// (has_correlated_ref), restore the saved copy to remove those stale quack wrappers so
+		// the subquery executes natively without opening multiple concurrent quack connections.
+		auto saved_subquery_node = subquery_expr.subquery->node->Copy();
 		auto result = Rewrite(*subquery_expr.subquery->node);
 		bool has_correlated_ref = HasLocalTableReference(*subquery_expr.subquery->node);
 		local_table_names = std::move(saved_local_table_names);
@@ -2306,6 +2358,8 @@ void RemotePushdownOptimizer::PushdownSubqueries(unique_ptr<ParsedExpression> &e
 		from_pushed_table_aliases = std::move(saved_from_pushed_aliases);
 		if (!has_correlated_ref) {
 			FinishPushdown(subquery_expr.subquery->node, result);
+		} else {
+			subquery_expr.subquery->node = std::move(saved_subquery_node);
 		}
 		return;
 	}

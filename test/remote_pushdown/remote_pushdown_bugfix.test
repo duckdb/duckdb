@@ -1079,5 +1079,82 @@ SELECT i FROM rpc.t1 WHERE i = 55
 statement ok
 DELETE FROM rpc.t1 WHERE i = 55
 
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# ============================================================
+# Bug 24: Rewrite(InsertQueryNode/DeleteQueryNode/UpdateQueryNode)
+# did not include returning_list inside the save/restore block.
+# When a DML node used as a writable CTE body has an all-remote
+# body (SINGLE_REMOTE), and its RETURNING clause contains a scalar
+# subquery with a mixed JoinRef, Rewrite(JoinRef) pushes individual
+# SINGLE_REMOTE children in-place inside the RETURNING subquery body.
+# If the returning_list then makes the overall result UNKNOWN, those
+# stale quack wrappers are not rolled back and cause "Multiple
+# streaming scans" when the DML executes natively.
+#
+# Fix: include returning_list analysis and save/restore inside the
+# existing save/restore block so stale JoinRef pushes are undone.
+#
+# Note: quack's single-stream limit prevents testing the full
+# multi-remote scenario here (the 2nd concurrent scan silently
+# returns empty). These tests verify the surrounding optimizer logic
+# (all-remote RETURNING is pushed; local RETURNING stays native).
+# ============================================================
+
+# All-remote INSERT with RETURNING that has no local references:
+# the whole INSERT must be pushed (optimizer returns SINGLE_REMOTE).
+# The inserted row i=99 RETURNING i=99.
+query I
+with ins as (insert into rpc.t1 values (99) returning i as val)
+select val from ins
+----
+99
+
+statement ok
+DELETE FROM rpc.t1 WHERE i = 99
+
+# ============================================================
+# Bug 25: Rewrite(SubqueryRef), Rewrite(ParsedExpression) for
+# SUBQUERY, and PushdownSubqueries did not save/restore the
+# subquery node before calling Rewrite(*subquery->node).
+# When a FROM-clause subquery body contained a mixed JoinRef
+# (e.g. rpc.t2 JOIN local_t), Rewrite(JoinRef) pushed the
+# individual SINGLE_REMOTE child (rpc.t2) in-place via
+# FinishPushdown even though the overall SubqueryRef result was
+# UNKNOWN.  With two nested mixed JoinRefs the two pushed children
+# would cause "Multiple streaming scans" at execution time.
+#
+# Fix: save the subquery node before analysis in all three call
+# sites and restore it when the result is not SINGLE_REMOTE.
+#
+# Note: the multi-remote 2-stream scenario cannot be tested
+# directly (quack silently returns empty for the 2nd concurrent
+# scan). The test below verifies that a single-remote mixed
+# SubqueryRef (rpc.t2 JOIN local_t) produces correct results,
+# confirming the restore does not break valid execution.
+# ============================================================
+
+# FROM-clause SubqueryRef with rpc.t2 JOIN local_t (mixed).
+# SubqueryRef result is UNKNOWN (local_t blocks full pushdown).
+# With or without the fix 1 quack stream is needed — result correct.
+# t2.i=[5..14] ∩ local_t=[0..9] = {5,6,7,8,9}.
+query I
+select sub.i from (
+    select t2.i from rpc.t2 join local_t on t2.i = local_t.local_col
+) sub order by sub.i
+----
+5
+6
+7
+8
+9
+
+statement ok
+drop table local_t;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
