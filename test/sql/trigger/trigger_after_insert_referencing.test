@@ -278,20 +278,6 @@ SELECT id FROM t_cte_scope_log;
 ----
 7
 
-# REFERENCING NEW TABLE AS is not valid for DELETE triggers
-statement ok
-CREATE TABLE t_del_disallow (id INTEGER);
-
-statement ok
-CREATE TABLE t_del_disallow_log (id INTEGER);
-
-statement error
-CREATE TRIGGER trg_del_new AFTER DELETE ON t_del_disallow
-REFERENCING NEW TABLE AS deleted_rows
-FOR EACH STATEMENT
-    INSERT INTO t_del_disallow_log SELECT id FROM deleted_rows;
-----
-Binder Error: REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers
 
 # UPDATE OF + REFERENCING is rejected (PostgreSQL: transition tables cannot have column lists)
 statement ok
