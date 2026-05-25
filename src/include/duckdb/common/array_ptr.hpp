@@ -31,7 +31,7 @@ public:
 	bool operator!=(const array_ptr_iterator<DATA_TYPE> &other) const {
 		return ptr != other.ptr || index != other.index || size != other.size;
 	}
-	DATA_TYPE &operator*() const {
+	[[gnu::always_inline]] DATA_TYPE &operator*() const {
 		if (DUCKDB_UNLIKELY(index >= size)) {
 			throw InternalException("array_ptr iterator dereferenced while iterator is out of range");
 		}
@@ -51,7 +51,7 @@ public:
 	using iterator_type = array_ptr_iterator<DATA_TYPE>;
 
 private:
-	static inline void AssertNotNull(const bool null) {
+	[[gnu::always_inline]] static void AssertNotNull(const bool null) {
 #if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
 		return;
 #else
@@ -61,7 +61,7 @@ private:
 #endif
 	}
 
-	static inline void AssertIndexInBounds(idx_t index, idx_t size) {
+	[[gnu::always_inline]] static void AssertIndexInBounds(idx_t index, idx_t size) {
 #if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
 		return;
 #else
@@ -72,23 +72,23 @@ private:
 	}
 
 public:
-	array_ptr(DATA_TYPE *ptr_p, idx_t count) : ptr(ptr_p), count(count) {
-		if (MemorySafety<SAFE>::ENABLED) {
+	[[gnu::always_inline]] array_ptr(DATA_TYPE *ptr_p, idx_t count) : ptr(ptr_p), count(count) {
+		if constexpr (MemorySafety<SAFE>::ENABLED) {
 			AssertNotNull(!ptr);
 		}
 	}
 	explicit array_ptr(DATA_TYPE &ref) : ptr(&ref), count(1) {
 	}
 
-	const DATA_TYPE &operator[](idx_t idx) const {
-		if (MemorySafety<SAFE>::ENABLED) {
+	[[gnu::always_inline]] const DATA_TYPE &operator[](idx_t idx) const {
+		if constexpr (MemorySafety<SAFE>::ENABLED) {
 			AssertIndexInBounds(idx, count);
 		}
 		return ptr[idx];
 	}
 
-	DATA_TYPE &operator[](idx_t idx) {
-		if (MemorySafety<SAFE>::ENABLED) {
+	[[gnu::always_inline]] DATA_TYPE &operator[](idx_t idx) {
+		if constexpr (MemorySafety<SAFE>::ENABLED) {
 			AssertIndexInBounds(idx, count);
 		}
 		return ptr[idx];

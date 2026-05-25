@@ -29,22 +29,21 @@ public:
 	atomic_ptr(const shared_ptr<T> &ptr_p) : ptr(ptr_p.get()) { // NOLINT: allow implicit creation from shared pointer
 	}
 
-	void CheckValid(const T *ptr) const {
-		if (MemorySafety<SAFE>::ENABLED) {
-			return;
-		}
-		if (!ptr) {
-			throw InternalException("Attempting to dereference an optional pointer that is not set");
+	[[gnu::always_inline]] void CheckValid(const T *ptr) const {
+		if constexpr (!MemorySafety<SAFE>::ENABLED) {
+			if (DUCKDB_UNLIKELY(!ptr)) {
+				throw InternalException("Attempting to dereference an optional pointer that is not set");
+			}
 		}
 	}
 
-	T *GetPointer() {
+	[[gnu::always_inline]] T *GetPointer() {
 		auto res = ptr.load();
 		CheckValid(res);
 		return res;
 	}
 
-	const T *GetPointer() const {
+	[[gnu::always_inline]] const T *GetPointer() const {
 		auto res = ptr.load();
 		CheckValid(res);
 		return res;
@@ -53,26 +52,26 @@ public:
 	operator bool() const { // NOLINT: allow implicit conversion to bool
 		return ptr;
 	}
-	T &operator*() {
+	[[gnu::always_inline]] T &operator*() {
 		return *GetPointer();
 	}
-	const T &operator*() const {
+	[[gnu::always_inline]] const T &operator*() const {
 		return *GetPointer();
 	}
-	T *operator->() {
+	[[gnu::always_inline]] T *operator->() {
 		return GetPointer();
 	}
-	const T *operator->() const {
+	[[gnu::always_inline]] const T *operator->() const {
 		return GetPointer();
 	}
-	T *get() { // NOLINT: mimic std casing
+	[[gnu::always_inline]] T *get() { // NOLINT: mimic std casing
 		return GetPointer();
 	}
-	const T *get() const { // NOLINT: mimic std casing
+	[[gnu::always_inline]] const T *get() const { // NOLINT: mimic std casing
 		return GetPointer();
 	}
 	// this looks dirty - but this is the default behavior of raw pointers
-	T *get_mutable() const { // NOLINT: mimic std casing
+	[[gnu::always_inline]] T *get_mutable() const { // NOLINT: mimic std casing
 		return GetPointer();
 	}
 

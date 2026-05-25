@@ -28,9 +28,9 @@ public:
 	optional_ptr(const shared_ptr<T> &ptr_p) : ptr(ptr_p.get()) { // NOLINT: allow implicit creation from shared pointer
 	}
 
-	void CheckValid() const {
-		if (MemorySafety<SAFE>::ENABLED) {
-			if (!ptr) {
+	[[gnu::always_inline]] void CheckValid() const {
+		if constexpr (MemorySafety<SAFE>::ENABLED) {
+			if (DUCKDB_UNLIKELY(!ptr)) {
 				throw InternalException("Attempting to dereference an optional pointer that is not set");
 			}
 		}
@@ -39,19 +39,19 @@ public:
 	operator bool() const { // NOLINT: allow implicit conversion to bool
 		return ptr;
 	}
-	T &operator*() {
+	[[gnu::always_inline]] T &operator*() {
 		CheckValid();
 		return *ptr;
 	}
-	const T &operator*() const {
+	[[gnu::always_inline]] const T &operator*() const {
 		CheckValid();
 		return *ptr;
 	}
-	T *operator->() {
+	[[gnu::always_inline]] T *operator->() {
 		CheckValid();
 		return ptr;
 	}
-	const T *operator->() const {
+	[[gnu::always_inline]] const T *operator->() const {
 		CheckValid();
 		return ptr;
 	}

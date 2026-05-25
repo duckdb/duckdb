@@ -18,7 +18,7 @@ class optional_idx {
 public:
 	optional_idx() : index(INVALID_INDEX) {
 	}
-	optional_idx(idx_t index) : index(index) { // NOLINT: allow implicit conversion from idx_t
+	[[gnu::always_inline]] optional_idx(idx_t index) : index(index) { // NOLINT: allow implicit conversion from idx_t
 		if (index == INVALID_INDEX) {
 			throw InternalException("optional_idx cannot be initialized with an invalid index");
 		}
@@ -36,7 +36,7 @@ public:
 		index = INVALID_INDEX;
 	}
 
-	idx_t GetIndex() const {
+	[[gnu::always_inline]] idx_t GetIndex() const {
 		if (index == INVALID_INDEX) {
 			throw InternalException("Attempting to get the index of an optional_idx that is not set");
 		}

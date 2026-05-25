@@ -36,7 +36,7 @@ public:
 	using const_reverse_iterator = typename original::const_reverse_iterator;
 
 private:
-	static inline void AssertIndexInBounds(idx_t index, idx_t size) {
+	[[gnu::always_inline]] static void AssertIndexInBounds(idx_t index, idx_t size) {
 #if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
 		return;
 #else
@@ -51,7 +51,7 @@ public:
 	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
 	[[clang::reinitializes]]
 #endif
-	inline void
+	[[gnu::always_inline]] void
 	clear() noexcept { // NOLINT: hiding on purpose
 		original::clear();
 	}
@@ -66,53 +66,64 @@ public:
 	}
 
 	template <bool INTERNAL_SAFE = false>
-	inline typename original::reference get(typename original::size_type __n) { // NOLINT: hiding on purpose
-		if (MemorySafety<INTERNAL_SAFE>::ENABLED) {
+	[[gnu::always_inline]] typename original::reference
+	get(typename original::size_type __n) { // NOLINT: hiding on purpose
+		if constexpr (MemorySafety<INTERNAL_SAFE>::ENABLED) {
 			AssertIndexInBounds(__n, original::size());
 		}
 		return original::operator[](__n);
 	}
 
 	template <bool INTERNAL_SAFE = false>
-	inline typename original::const_reference get(typename original::size_type __n) const { // NOLINT: hiding on purpose
-		if (MemorySafety<INTERNAL_SAFE>::ENABLED) {
+	[[gnu::always_inline]] typename original::const_reference
+	get(typename original::size_type __n) const { // NOLINT: hiding on purpose
+		if constexpr (MemorySafety<INTERNAL_SAFE>::ENABLED) {
 			AssertIndexInBounds(__n, original::size());
 		}
 		return original::operator[](__n);
 	}
 
-	typename original::reference operator[](typename original::size_type __n) { // NOLINT: hiding on purpose
-		return get<SAFE>(__n);
-	}
-	typename original::const_reference operator[](typename original::size_type __n) const { // NOLINT: hiding on purpose
+	[[gnu::always_inline]] typename original::reference
+	operator[](typename original::size_type __n) { // NOLINT: hiding on purpose
 		return get<SAFE>(__n);
 	}
 
-	typename original::reference front() { // NOLINT: hiding on purpose
+	[[gnu::always_inline]] typename original::const_reference
+	operator[](typename original::size_type __n) const { // NOLINT: hiding on purpose
+		return get<SAFE>(__n);
+	}
+
+	[[gnu::always_inline]] typename original::reference front() { // NOLINT: hiding on purpose
 		return get<SAFE>(0);
 	}
 
-	typename original::const_reference front() const { // NOLINT: hiding on purpose
+	[[gnu::always_inline]] typename original::const_reference front() const { // NOLINT: hiding on purpose
 		return get<SAFE>(0);
 	}
 
-	typename original::reference back() { // NOLINT: hiding on purpose
-		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'back' called on an empty vector!");
+	[[gnu::always_inline]] typename original::reference back() { // NOLINT: hiding on purpose
+		if constexpr (MemorySafety<SAFE>::ENABLED) {
+			if (DUCKDB_UNLIKELY(original::empty())) {
+				throw InternalException("'back' called on an empty vector!");
+			}
 		}
 		return get<SAFE>(original::size() - 1);
 	}
 
-	typename original::const_reference back() const { // NOLINT: hiding on purpose
-		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'back' called on an empty vector!");
+	[[gnu::always_inline]] typename original::const_reference back() const { // NOLINT: hiding on purpose
+		if constexpr (MemorySafety<SAFE>::ENABLED) {
+			if (DUCKDB_UNLIKELY(original::empty())) {
+				throw InternalException("'back' called on an empty vector!");
+			}
 		}
 		return get<SAFE>(original::size() - 1);
 	}
 
 	void pop_back() { // NOLINT: hiding on purpose
-		if (MemorySafety<SAFE>::ENABLED && original::empty()) {
-			throw InternalException("'pop_back' called on an empty vector!");
+		if constexpr (MemorySafety<SAFE>::ENABLED) {
+			if (DUCKDB_UNLIKELY(original::empty())) {
+				throw InternalException("'pop_back' called on an empty vector!");
+			}
 		}
 		original::pop_back();
 	}
@@ -122,8 +133,10 @@ public:
 	}
 
 	void erase_at(idx_t idx) { // NOLINT: not using camelcase on purpose here
-		if (MemorySafety<SAFE>::ENABLED && idx > original::size()) {
-			throw InternalException("Can't remove offset %d from vector of size %d", idx, original::size());
+		if constexpr (MemorySafety<SAFE>::ENABLED) {
+			if (DUCKDB_UNLIKELY(idx > original::size())) {
+				throw InternalException("Can't remove offset %d from vector of size %d", idx, original::size());
+			}
 		}
 		unsafe_erase_at(idx);
 	}

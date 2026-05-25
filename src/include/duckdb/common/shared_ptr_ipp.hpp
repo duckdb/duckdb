@@ -18,7 +18,7 @@ public:
 	using weak_type = weak_ptr<T, SAFE>;
 
 private:
-	static inline void AssertNotNull(const bool null) {
+	[[gnu::always_inline]] static void AssertNotNull(const bool null) {
 #if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
 		return;
 #else
@@ -196,8 +196,8 @@ public:
 		return internal.operator bool();
 	}
 
-	typename std::add_lvalue_reference<T>::type operator*() const {
-		if (MemorySafety<SAFE>::ENABLED) {
+	[[gnu::always_inline]] typename std::add_lvalue_reference<T>::type operator*() const {
+		if constexpr (MemorySafety<SAFE>::ENABLED) {
 			const auto ptr = internal.get();
 			AssertNotNull(!ptr);
 			return *ptr;
@@ -206,8 +206,8 @@ public:
 		}
 	}
 
-	T *operator->() const {
-		if (MemorySafety<SAFE>::ENABLED) {
+	[[gnu::always_inline]] T *operator->() const {
+		if constexpr (MemorySafety<SAFE>::ENABLED) {
 			const auto ptr = internal.get();
 			AssertNotNull(!ptr);
 			return ptr;

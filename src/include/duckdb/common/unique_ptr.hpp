@@ -18,7 +18,7 @@ public:
 	using pointer = typename original::pointer;
 
 private:
-	static inline void AssertNotNull(const bool null) {
+	[[gnu::always_inline]] static void AssertNotNull(const bool null) {
 #if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
 		return;
 #else
@@ -29,17 +29,18 @@ private:
 	}
 
 public:
-	typename std::add_lvalue_reference<DATA_TYPE>::type operator*() const { // NOLINT: hiding on purpose
+	[[gnu::always_inline]] typename std::add_lvalue_reference<DATA_TYPE>::type
+	operator*() const { // NOLINT: hiding on purpose
 		const auto ptr = original::get();
-		if (MemorySafety<SAFE>::ENABLED) {
+		if constexpr (MemorySafety<SAFE>::ENABLED) {
 			AssertNotNull(!ptr);
 		}
 		return *ptr;
 	}
 
-	typename original::pointer operator->() const { // NOLINT: hiding on purpose
+	[[gnu::always_inline]] typename original::pointer operator->() const { // NOLINT: hiding on purpose
 		const auto ptr = original::get();
-		if (MemorySafety<SAFE>::ENABLED) {
+		if constexpr (MemorySafety<SAFE>::ENABLED) {
 			AssertNotNull(!ptr);
 		}
 		return ptr;
@@ -49,7 +50,7 @@ public:
 	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
 	[[clang::reinitializes]]
 #endif
-	inline void
+	[[gnu::always_inline]] void
 	reset(typename original::pointer ptr = typename original::pointer()) noexcept { // NOLINT: hiding on purpose
 		original::reset(ptr);
 	}
@@ -62,7 +63,7 @@ public:
 	using original::original;
 
 private:
-	static inline void AssertNotNull(const bool null) {
+	[[gnu::always_inline]] static void AssertNotNull(const bool null) {
 #if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
 		return;
 #else
@@ -73,9 +74,10 @@ private:
 	}
 
 public:
-	typename std::add_lvalue_reference<DATA_TYPE>::type operator[](size_t __i) const { // NOLINT: hiding on purpose
+	[[gnu::always_inline]] typename std::add_lvalue_reference<DATA_TYPE>::type
+	operator[](size_t __i) const { // NOLINT: hiding on purpose
 		const auto ptr = original::get();
-		if (MemorySafety<true>::ENABLED) {
+		if constexpr (MemorySafety<true>::ENABLED) {
 			AssertNotNull(!ptr);
 		}
 		return ptr[__i];
@@ -89,7 +91,7 @@ public:
 	using original::original;
 
 private:
-	static inline void AssertNotNull(const bool null) {
+	[[gnu::always_inline]] static void AssertNotNull(const bool null) {
 #if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
 		return;
 #else
@@ -100,9 +102,10 @@ private:
 	}
 
 public:
-	typename std::add_lvalue_reference<DATA_TYPE>::type operator[](size_t __i) const { // NOLINT: hiding on purpose
+	[[gnu::always_inline]] typename std::add_lvalue_reference<DATA_TYPE>::type
+	operator[](size_t __i) const { // NOLINT: hiding on purpose
 		const auto ptr = original::get();
-		if (MemorySafety<SAFE>::ENABLED) {
+		if constexpr (MemorySafety<SAFE>::ENABLED) {
 			AssertNotNull(!ptr);
 		}
 		return ptr[__i];
