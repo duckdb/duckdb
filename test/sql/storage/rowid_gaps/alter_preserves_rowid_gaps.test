@@ -3,6 +3,7 @@
 # group: [rowid_gaps]
 
 require skip_reload
+
 require no_alternative_verify
 
 statement ok
