@@ -1753,9 +1753,23 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<TableRef> &ref
 		// local_table_column_names.  Without this, a correlated WHERE subquery referencing
 		// a column from the PIVOT source is incorrectly classified as non-correlated and
 		// pushed to the remote where the source table does not exist.
+		// Save source and from_pushed_* before analysis: Rewrite(JoinRef) inside may push
+		// individual SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN
+		// (mixed join). Since PIVOT always returns UNKNOWN, always restore piv.source to
+		// remove those stale quack wrappers — otherwise a WHERE subquery pushed by
+		// PushdownSubqueries could open a second concurrent streaming slot alongside the
+		// stale wrapper, triggering "Multiple streaming scans".
+		// The TrackLocalTable side effects on local_table_names / local_table_column_names
+		// from Rewrite are intentionally preserved (they are needed for correlated-ref detection).
 		auto &piv = ref->Cast<PivotRef>();
 		if (piv.source) {
+			auto saved_pivot_source = piv.source->Copy();
+			idx_t saved_cats_size = from_pushed_catalog_names.size();
+			idx_t saved_aliases_size = from_pushed_table_aliases.size();
 			Rewrite(piv.source);
+			piv.source = std::move(saved_pivot_source);
+			from_pushed_catalog_names.resize(saved_cats_size);
+			from_pushed_table_aliases.resize(saved_aliases_size);
 		}
 		if (!ref->alias.empty()) {
 			local_table_names.insert(ref->alias);
