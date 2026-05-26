@@ -27,8 +27,10 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 
 	// At most one active binding at a time; the only way off a bound state is DISCONNECT.
 	// Sidesteps cross-backend transaction-state ambiguity; multi-binding can be relaxed later
-	// without breaking existing scripts.
-	if (client.IsBoundToCatalog()) {
+	// without breaking existing scripts. Read is_bound directly so we still refuse a fresh
+	// CONNECT when the previous target was detached elsewhere — the user has to DISCONNECT
+	// to acknowledge the broken binding first.
+	if (client.is_bound) {
 		auto current = client.TryGetBoundCatalog();
 		throw InvalidInputException("Already connected to \"%s\"; DISCONNECT first before issuing another CONNECT",
 		                            current ? current->GetName() : "<detached>");

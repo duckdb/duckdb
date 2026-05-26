@@ -232,10 +232,6 @@ void ClientContext::UnbindCatalog() {
 	is_bound = false;
 }
 
-bool ClientContext::IsBoundToCatalog() const {
-	return is_bound && !bound_database.expired();
-}
-
 shared_ptr<AttachedDatabase> ClientContext::TryGetBoundCatalog() const {
 	if (!is_bound) {
 		return nullptr;
@@ -999,8 +995,14 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		if (!is_control) {
 			auto live = bound_database.lock();
 			if (!live) {
+				// is_bound is still true: the user CONNECTed but the target was DETACHed
+				// elsewhere. They must explicitly DISCONNECT to acknowledge the broken
+				// binding before any further SQL (including a fresh CONNECT) is accepted.
 				return ErrorResult<PendingQueryResult>(
-				    ErrorData(InvalidInputException("The bound database has been detached")), query);
+				    ErrorData(InvalidInputException(
+				        "The bound database has been detached out from under this connection. Issue "
+				        "DISCONNECT to clear the binding before running further SQL.")),
+				    query);
 			}
 			auto fn = live->GetCatalog().GetConnectFunction();
 			if (!fn) {

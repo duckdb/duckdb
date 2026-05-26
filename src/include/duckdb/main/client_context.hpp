@@ -110,10 +110,9 @@ public:
 	DUCKDB_API void BindToCatalog(const shared_ptr<AttachedDatabase> &target);
 	//! Clear any active CONNECT binding; subsequent SQL goes through the normal DuckDB pipeline.
 	DUCKDB_API void UnbindCatalog();
-	//! True if there is a live CONNECT binding. False if never bound or bound target was detached.
-	DUCKDB_API bool IsBoundToCatalog() const;
 	//! Resolve the currently-bound AttachedDatabase. Returns nullptr if unbound or if the target
-	//! has been detached. Caller should check before dispatching.
+	//! has been detached out from under us (in that case is_bound is still true — read it directly
+	//! to disambiguate "never connected" from "was connected, target was detached elsewhere").
 	DUCKDB_API shared_ptr<AttachedDatabase> TryGetBoundCatalog() const;
 
 	MetaTransaction &ActiveTransaction() {
