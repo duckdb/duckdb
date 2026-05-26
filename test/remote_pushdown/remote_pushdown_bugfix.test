@@ -1390,5 +1390,34 @@ select id from rpc.t_struct_col where rpc.x > 8 order by id
 statement ok db1:con1
 drop table t_struct_col;
 
+# Bug 31: SubqueryRef with NO_CATALOG_REFERENCED result must NOT be tracked in
+# local_table_names. Previously, any SubqueryRef result that was not SINGLE_REMOTE
+# (including neutral NO_CATALOG constant subqueries like "SELECT 1") was added to
+# local_table_names, causing RefersToLocalTable to return true for every column ref,
+# blocking pushdown of queries like:
+#   SELECT t1.i FROM rpc.t1 t1, (SELECT 1 AS v) sub WHERE t1.i < sub.v
+# With the fix, only UNKNOWN subqueries (those referencing local data) are tracked.
+
+# Verify pushed: no SEQ_SCAN in plan
+query II
+explain
+select t1.i from rpc.t1 t1, (select 5 as v) sub
+where t1.i < sub.v
+order by t1.i
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# Verify correct result: rpc.t1.i in {0..4} (i < 5), joined with constant sub.v=5
+query I
+select t1.i from rpc.t1 t1, (select 5 as v) sub
+where t1.i < sub.v
+order by t1.i
+----
+0
+1
+2
+3
+4
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

@@ -474,7 +474,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ExpressionListRef &ref) {
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SubqueryRef &ref) {
 	RemotePushdownOptimizer child_binder(*this);
 	auto result = child_binder.Rewrite(*ref.subquery->node);
-	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG && !ref.alias.empty()) {
+	// Track the alias only for subqueries that reference local data (UNKNOWN). A subquery
+	// with NO_CATALOG_REFERENCED (e.g. "SELECT 1") has no local data and must not be
+	// tracked: doing so would make any outer column ref to this alias return UNKNOWN from
+	// RefersToLocalTable, incorrectly blocking pushdown of queries like
+	// "SELECT t1.i FROM rpc.t1 t1, (SELECT 1 AS v) sub WHERE t1.i < sub.v".
+	if (result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE && !ref.alias.empty()) {
 		local_table_names.insert(ref.alias);
 	}
 	return result;
