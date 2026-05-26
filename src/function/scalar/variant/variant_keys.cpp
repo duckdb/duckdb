@@ -7,36 +7,6 @@
 
 namespace duckdb {
 
-static void TraverseVariantPath(const UnifiedVariantVectorData &variant, const vector<VariantPathComponent> &components,
-                                const idx_t count, VariantNestedData *nested_data, ValidityMask &validity,
-                                VariantPathSelection &path_selection) {
-	for (idx_t i = 0; i < components.size(); i++) {
-		auto &component = components[i];
-		auto &input_indices = path_selection.Input(i);
-		auto &output_indices = path_selection.Output(i);
-
-		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
-			throw InternalException("'variant_keys' does not support path indexes");
-		}
-
-		(void)VariantUtils::CollectNestedData(variant, VariantLogicalType::OBJECT, input_indices, count, optional_idx(),
-		                                      0, nested_data, validity);
-
-		ValidityMask lookup_validity(count);
-		VariantUtils::FindChildValues(variant, component, nullptr, output_indices, lookup_validity, nested_data,
-		                              validity, count);
-
-		for (idx_t j = 0; j < count; j++) {
-			if (!validity.RowIsValid(j)) {
-				continue;
-			}
-			if (lookup_validity.CanHaveNull() && !lookup_validity.RowIsValid(j)) {
-				validity.SetInvalid(j);
-			}
-		}
-	}
-}
-
 static void WriteKeyIdList(const UnifiedVariantVectorData &variant, Vector &key_ids, VariantNestedData *nested_data,
                            const ValidityMask &object_validity, const idx_t count) {
 	auto writer = FlatVector::Writer<VectorListType<idx_t>>(key_ids, count);
@@ -76,7 +46,7 @@ static Vector CollectVariantKeys(const UnifiedVariantVectorData &variant,
 	const auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
 
 	auto &list_validity = FlatVector::ValidityMutable(key_ids);
-	TraverseVariantPath(variant, components, count, nested_data, list_validity, path_selection);
+	VariantUtils::TraversePath(variant, components, count, nested_data, list_validity, path_selection);
 
 	// For the final collection of nested_data we use an auxiliary validity vector so we can distinguish "path missing"
 	// from "path exists but not an object" (producing NULL and [] as output respectively).
@@ -174,99 +144,13 @@ static void ManyVariantKeys(const Vector &variant_vec, const vector<vector<Varia
 	}
 }
 
-static vector<string> CollectKeyPaths(const Value &constant_arg) {
-	vector<string> paths;
-	const auto &children = ListValue::GetChildren(constant_arg);
-	for (const auto &child : children) {
-		if (child.IsNull()) {
-			throw BinderException("'variant_keys' does not accept NULL paths");
-		}
-		paths.push_back(child.GetValue<string>());
-	}
-
-	return paths;
-}
-
-static unique_ptr<FunctionData> VariantKeysBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
-	auto &arguments = input.GetArguments();
-	if (arguments.size() != 1 && arguments.size() != 2) {
-		throw BinderException("'variant_keys' expects either one VARIANT column argument, or two VARIANT column and "
-		                      "VARCHAR path arguments");
-	}
-
-	if (arguments.size() == 1) {
-		// No path supplied, execute function over the root of the variant
-		return make_uniq<VariantPathBindData>();
-	}
-
-	const auto &path_expr = *arguments[1];
-	const auto &return_type = path_expr.GetReturnType();
-	if (return_type.id() != LogicalTypeId::VARCHAR && return_type.id() != LogicalTypeId::LIST) {
-		throw BinderException("'variant_keys' expects the second argument to be of type VARCHAR or VARCHAR[], not %s",
-		                      return_type.ToString());
-	}
-	if (return_type.id() == LogicalTypeId::LIST) {
-		const auto child_type_id = ListType::GetChildType(return_type).id();
-		if (child_type_id != LogicalTypeId::VARCHAR && child_type_id != LogicalTypeId::SQLNULL) {
-			throw BinderException(
-			    "'variant_keys' expects the second argument to be of type VARCHAR or VARCHAR[], not %s",
-			    return_type.ToString());
-		}
-	}
-
-	Value constant_arg;
-	if (!VariantBindUtils::GetConstantArgument(context, path_expr, constant_arg)) {
-		throw BinderException("'variant_keys' expects the second argument to be a constant expression");
-	}
-
-	const auto path_type_id = constant_arg.type().id();
-	if (path_type_id == LogicalTypeId::VARCHAR) {
-		return make_uniq<VariantPathBindData>(constant_arg.GetValue<string>());
-	}
-	if (path_type_id == LogicalTypeId::LIST) {
-		return make_uniq<VariantPathBindData>(CollectKeyPaths(constant_arg));
-	}
-
-	throw BinderException("'variant_keys' received an unexpected type for the second argument");
-}
-
 static void VariantKeysFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	D_ASSERT(input.ColumnCount() == 1 || input.ColumnCount() == 2);
-	const auto count = input.size();
-	const auto &variant_vec = input.data[0];
-
-	if (input.ColumnCount() == 2) {
-		const auto &path = input.data[1];
-		D_ASSERT(path.GetVectorType() == VectorType::CONSTANT_VECTOR);
-		(void)path;
-	}
-
-	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<VariantPathBindData>();
-	auto n_columns = input.ColumnCount();
-
-	if (n_columns == 1) {
-		UnaryVariantKeys(variant_vec, {}, result, count);
-		return;
-	}
-
-	D_ASSERT(n_columns == 2);
-	const auto &path_type_id = input.data[1].GetType().id();
-
-	if (path_type_id == LogicalTypeId::VARCHAR) {
-		UnaryVariantKeys(variant_vec, info.paths[0], result, count);
-		return;
-	}
-	if (path_type_id == LogicalTypeId::LIST) {
-		ManyVariantKeys(variant_vec, info.paths, result, count);
-		return;
-	}
+	VariantUtils::ExecutePathFunction(input, state, result, UnaryVariantKeys, ManyVariantKeys);
 }
 
 static void AddFunctionsWithParameterType(ScalarFunctionSet &fun_set, const LogicalType &input_type) {
 	ScalarFunction variant_keys("variant_keys", {}, LogicalType::LIST(LogicalType::VARCHAR), VariantKeysFunction,
-	                            VariantKeysBind, nullptr);
+	                            VariantBindUtils::VariantPathBind, nullptr);
 
 	variant_keys.GetSignature().AddParameter(input_type);
 	fun_set.AddFunction(variant_keys);

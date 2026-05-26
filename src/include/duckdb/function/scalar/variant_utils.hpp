@@ -113,6 +113,14 @@ struct VariantPathSelection {
 };
 
 struct VariantUtils {
+	using unary_path_function_t = void (*)(const Vector &, const vector<VariantPathComponent> &, Vector &, idx_t);
+	using many_path_function_t = void (*)(const Vector &, const vector<vector<VariantPathComponent>> &, Vector &,
+	                                      idx_t);
+
+	//! Generic dispatcher for function execution, used by functions that take an (optional) path(s)
+	DUCKDB_API static void ExecutePathFunction(DataChunk &input, const ExpressionState &state, Vector &result,
+	                                           const unary_path_function_t &unary_fn,
+	                                           const many_path_function_t &many_fn);
 	DUCKDB_API static bool IsNestedType(const UnifiedVariantVectorData &variant, idx_t row, uint32_t value_index);
 	DUCKDB_API static VariantDecimalData DecodeDecimalData(const UnifiedVariantVectorData &variant, idx_t row,
 	                                                       uint32_t value_index);
@@ -131,9 +139,11 @@ struct VariantUtils {
 	CollectNestedData(const UnifiedVariantVectorData &variant, VariantLogicalType expected_type,
 	                  const SelectionVector &value_index_sel, idx_t count, optional_idx row, idx_t offset,
 	                  VariantNestedData *child_data, ValidityMask &validity);
-	DUCKDB_API static void TraversePath(const UnifiedVariantVectorData &variant, const vector<VariantPathComponent> &components,
-		idx_t count, VariantNestedData *nested_data, ValidityMask &validity,
-				VariantPathSelection &path_selection);
+	//! Generic unshredded traversal over a variant using a provided path
+	DUCKDB_API static void TraversePath(const UnifiedVariantVectorData &variant,
+	                                    const vector<VariantPathComponent> &components, idx_t count,
+	                                    VariantNestedData *nested_data, ValidityMask &validity,
+	                                    VariantPathSelection &path_selection);
 	DUCKDB_API static vector<uint32_t> ValueIsNull(const UnifiedVariantVectorData &variant, const SelectionVector &sel,
 	                                               idx_t count, optional_idx row);
 	DUCKDB_API static Value ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row,
@@ -152,6 +162,7 @@ struct VariantUtils {
 };
 
 struct VariantBindUtils {
+	DUCKDB_API static unique_ptr<FunctionData> VariantPathBind(BindScalarFunctionInput &input);
 	DUCKDB_API static bool GetConstantArgument(ClientContext &context, const Expression &expr, Value &constant_arg);
 };
 
