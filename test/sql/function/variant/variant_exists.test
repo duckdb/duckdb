@@ -106,6 +106,18 @@ select variant_exists(NULL::VARIANT, 'a');
 ----
 NULL
 
+query I
+select variant_exists(j, 'a') from (values ({'a': 1}::VARIANT), (NULL::VARIANT)) t(j);
+----
+true
+NULL
+
+query I
+select variant_exists(j, ['a', 'b']) from (values ({'a': 1}::VARIANT), (NULL::VARIANT)) t(j);
+----
+[true, false]
+NULL
+
 # NULL path returns NULL
 
 query I

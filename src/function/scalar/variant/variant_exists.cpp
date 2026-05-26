@@ -36,6 +36,11 @@ static void UnaryVariantExists(const Vector &variant_vec, const vector<VariantPa
 	auto row_writer = FlatVector::Writer<bool>(result, count);
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		if (!variant.RowIsValid(row_idx)) {
+			row_writer.WriteNull();
+			continue;
+		}
+
 		if (path_validity.RowIsValid(row_idx)) {
 			row_writer.WriteValue(true);
 		} else {
@@ -61,6 +66,11 @@ static void ManyVariantExists(const Vector &variant_vec, const vector<vector<Var
 	auto result_writer = FlatVector::Writer<VectorListType<bool>>(result, count);
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		if (!variant.RowIsValid(row_idx)) {
+			result_writer.WriteNull();
+			continue;
+		}
+
 		auto row_writer = result_writer.WriteList(paths.size());
 		idx_t path_idx = 0;
 		for (auto &path_existence_writer : row_writer) {
