@@ -122,6 +122,7 @@
         "test/parquet/variant/variant_shredding_reanalysis_bug.test",
         "test/parquet/variant/variant_small_decimal.test",
         "test/sql/function/variant/variant_typeof.test",
+        "test/sql/function/variant/variant_keys.test",
         "test/sql/storage/types/variant/append_shredded.test",
         "test/sql/storage/types/variant/big_table.test_slow",
         "test/sql/storage/types/variant/extension_types.test",

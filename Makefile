@@ -821,6 +821,7 @@ generate-files-deps:
 generate-files:
 	$(PYTHON) scripts/generate_c_api.py
 	$(PYTHON) scripts/generate_functions.py
+	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py
 	$(PYTHON) scripts/generate_serialization.py
 	$(PYTHON) scripts/generate_storage_info.py

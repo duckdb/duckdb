@@ -19,7 +19,7 @@
 namespace duckdb {
 
 unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const string &column_name) {
-	return ColumnQualifier::GetSQLValueFunction(column_name);
+	return binder.GetSQLValueFunction(column_name);
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<ParsedExpression> base,

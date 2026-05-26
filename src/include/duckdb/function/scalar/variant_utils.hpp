@@ -110,4 +110,8 @@ struct VariantUtils {
 	DUCKDB_API static bool VariantSupportsType(const LogicalType &type);
 };
 
+struct VariantBindUtils {
+	DUCKDB_API static bool GetConstantArgument(ClientContext &context, const Expression &expr, Value &constant_arg);
+};
+
 } // namespace duckdb
