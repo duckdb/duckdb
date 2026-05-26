@@ -243,5 +243,41 @@ delete from rpc.t1 where i = 77 returning double_it(i)
 statement ok
 drop macro double_it;
 
+# ============================================================
+# RETURNING with scalar subquery: falls back to native execution
+# (StripAllTableQualifiers does not recurse into subquery bodies,
+# so correlated refs to the DML target table would be unresolvable
+# in the synthesized outer SELECT). The DML must still execute correctly.
+# ============================================================
+
+statement ok
+create table local_t(id int);
+
+statement ok
+insert into local_t values (5), (6), (7);
+
+statement ok
+insert into rpc.t1 values (55);
+
+# DELETE with a non-correlated scalar subquery in RETURNING: remote executes
+# DELETE RETURNING *, outer SELECT evaluates the subquery per deleted row.
+# local_t has 3 rows, so count(*) = 3.
+query I
+delete from rpc.t1 where i = 55 returning (select count(*) from local_t)
+----
+3
+
+# INSERT with non-correlated scalar subquery in RETURNING.
+query I
+insert into rpc.t1 values (66) returning (select count(*) from local_t)
+----
+3
+
+statement ok
+delete from rpc.t1 where i = 66
+
+statement ok
+drop table local_t;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
