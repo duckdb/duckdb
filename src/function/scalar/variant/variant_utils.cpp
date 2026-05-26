@@ -226,7 +226,7 @@ void VariantUtils::TraversePath(const UnifiedVariantVectorData &variant, const v
 		auto &output_indices = path_selection.Output(i);
 
 		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
-			throw InternalException("'variant_keys' does not support path indexes");
+			throw InternalException("Path indexes are not supported for this function");
 		}
 
 		(void)VariantUtils::CollectNestedData(variant, VariantLogicalType::OBJECT, input_indices, count, optional_idx(),
