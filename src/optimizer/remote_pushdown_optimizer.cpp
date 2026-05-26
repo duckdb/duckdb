@@ -1145,59 +1145,6 @@ void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const st
 	}
 }
 
-// Collect unique unqualified column names from RETURNING expressions.
-// name_to_qualifier maps each unqualified name to the table qualifier first seen with it.
-// Returns false when the same unqualified name appears with a DIFFERENT table qualifier —
-// the caller must then bail out and fall back to native execution rather than generating
-// an ambiguous "RETURNING col" clause on the remote (which fails with "ambiguous column").
-static bool CollectColumnNames(ParsedExpression &expr, vector<string> &col_names,
-                               case_insensitive_map_t<string> &name_to_qualifier) {
-	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-		auto &col_ref = expr.Cast<ColumnRefExpression>();
-		const string &col = col_ref.column_names.back();
-		const string qualifier =
-		    col_ref.column_names.size() >= 2 ? col_ref.column_names[col_ref.column_names.size() - 2] : string();
-		auto it = name_to_qualifier.find(col);
-		if (it == name_to_qualifier.end()) {
-			name_to_qualifier[col] = qualifier;
-			col_names.push_back(col);
-		} else if (!StringUtil::CIEquals(it->second, qualifier)) {
-			// Same unqualified name, different table qualifier → ambiguous on the remote.
-			return false;
-		}
-		return true;
-	}
-	bool ok = true;
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child) {
-		if (ok) {
-			ok = CollectColumnNames(child, col_names, name_to_qualifier);
-		}
-	});
-	return ok;
-}
-
-static void StripAllTableQualifiers(ParsedExpression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-		auto &col_ref = expr.Cast<ColumnRefExpression>();
-		if (col_ref.column_names.size() > 1) {
-			col_ref.column_names = {col_ref.column_names.back()};
-		}
-		return;
-	}
-	if (expr.GetExpressionClass() == ExpressionClass::STAR) {
-		// "t.*" → "*": clear the table qualifier so the outer SELECT binds against the
-		// returning_sub alias rather than looking for the now-absent table "t".
-		expr.Cast<StarExpression>().relation_name = "";
-	}
-	// Note: SUBQUERY expressions are intentionally NOT handled specially here.
-	// EnumerateChildren for SUBQUERY visits only the outer 'child' (left side of IN/NOT IN),
-	// not the subquery body. Stripping ALL qualifiers inside the subquery body would cause
-	// wrong results when the local table and the DML target share a column name
-	// (e.g. WHERE local_t.id < t1.id → WHERE id < id, which is a tautology). Non-correlated
-	// subqueries work without body stripping because their bodies don't reference the DML target.
-	// Correlated subqueries with column-name collisions give a binder error either way.
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child) { StripAllTableQualifiers(child); });
-}
 
 unique_ptr<QueryNode> GetNodeFromStatement(SQLStatement &statement) {
 	switch (statement.type) {
