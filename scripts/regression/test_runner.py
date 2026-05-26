@@ -289,9 +289,9 @@ else:
     print(f"New timing geometric mean: {time_b}")
 
 # nuke cached benchmark data between runs
-# if not keep_benchmark_data:
-#     if os.path.isdir("duckdb_benchmark_data"):
-#         shutil.rmtree('duckdb_benchmark_data')
+if not keep_benchmark_data:
+    if os.path.isdir("duckdb_benchmark_data"):
+        shutil.rmtree('duckdb_benchmark_data')
 
 if summary and not no_summary:
     print(
