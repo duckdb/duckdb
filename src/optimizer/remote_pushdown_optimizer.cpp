@@ -297,15 +297,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 	for(auto &using_clause : node.using_clauses) {
 		auto using_result = Rewrite(using_clause);
 		result = Merge(result, using_result);
-
-		if (using_result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
-			if (using_clause->alias.empty()) {
-				local_table_names.insert(using_clause->alias);
-			} else {
-				// FIXME: is this right?
-				local_table_names.insert("unnamed_subquery");
-			}
-		}
 	}
 	if (node.condition) {
 		auto condition_result = Rewrite(*node.condition);
@@ -323,15 +314,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	if (node.from_table) {
 		auto from_result = Rewrite(node.from_table);
 		result = Merge(result, from_result);
-
-		if (from_result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
-			if (node.from_table->alias.empty()) {
-				local_table_names.insert(node.from_table->alias);
-			} else {
-				// FIXME: is this right?
-				local_table_names.insert("unnamed_subquery");
-			}
-		}
 	}
 
 	if (node.set_info) {
