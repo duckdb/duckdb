@@ -1,0 +1,134 @@
+# name: test/sql/optimizer/topn_window_elimination_late_materialization.test
+# description: Top-N window elimination must not drop value-transforming expressions during late materialization
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+# Issue #22849: a payload that is a scalar function of a base column (parse_filename(path))
+# was rebuilt by the rowid semi-join as the raw base column, dropping the function.
+
+statement ok
+CREATE TABLE sample_table AS
+SELECT generate_series AS id, id % 4 AS partition_key, id % 7 AS sort_key, 'C:/file.txt' AS path
+FROM generate_series(10);
+
+statement ok
+CREATE VIEW sample_view AS SELECT *, parse_filename(path) AS filename FROM sample_table;
+
+# The window should still be eliminated (no FILTER over WINDOW left in the plan)...
+query II
+EXPLAIN SELECT * FROM sample_view
+QUALIFY row_number() OVER (PARTITION BY partition_key ORDER BY sort_key) = 1
+----
+logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
+
+# ...but late materialization must not be used, because parse_filename cannot be
+# reconstructed from a plain rowid re-scan.
+query II
+EXPLAIN SELECT * FROM sample_view
+QUALIFY row_number() OVER (PARTITION BY partition_key ORDER BY sort_key) = 1
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*
+
+# filename must be the parsed file name, not the original path
+query IIIII
+SELECT id, partition_key, sort_key, path, filename FROM sample_view
+QUALIFY row_number() OVER (PARTITION BY partition_key ORDER BY sort_key) = 1
+ORDER BY partition_key
+----
+0	0	0	C:/file.txt	file.txt
+1	1	1	C:/file.txt	file.txt
+2	2	2	C:/file.txt	file.txt
+7	3	0	C:/file.txt	file.txt
+
+# Differential check against the same query with the optimizer disabled
+statement ok
+SET disabled_optimizers = 'top_n_window_elimination'
+
+query IIIII
+SELECT id, partition_key, sort_key, path, filename FROM sample_view
+QUALIFY row_number() OVER (PARTITION BY partition_key ORDER BY sort_key) = 1
+ORDER BY partition_key
+----
+0	0	0	C:/file.txt	file.txt
+1	1	1	C:/file.txt	file.txt
+2	2	2	C:/file.txt	file.txt
+7	3	0	C:/file.txt	file.txt
+
+statement ok
+SET disabled_optimizers = ''
+
+# A few more value-transforming payloads, checked against the disabled-optimizer result.
+
+statement ok
+CREATE TABLE t(id INTEGER, g INTEGER, s INTEGER, v VARCHAR, n INTEGER)
+
+statement ok
+INSERT INTO t VALUES (1, 0, 5, 'aa', 10), (2, 0, 3, 'bb', 20), (3, 1, 2, 'cc', 30), (4, 1, 9, 'dd', 40), (5, 0, 1, 'ee', 50)
+
+# upper() payload, single row per group
+query II
+SELECT id, upper(v) FROM (SELECT *, upper(v) AS uv FROM t)
+QUALIFY row_number() OVER (PARTITION BY g ORDER BY s) = 1
+ORDER BY g
+----
+5	EE
+3	CC
+
+# arithmetic payload
+query II
+SELECT id, np FROM (SELECT *, n + 1 AS np FROM t)
+QUALIFY row_number() OVER (PARTITION BY g ORDER BY s) = 1
+ORDER BY g
+----
+5	51
+3	31
+
+# top-2 (limit > 1) with a function payload
+query II
+SELECT id, uv FROM (SELECT *, upper(v) AS uv FROM t)
+QUALIFY row_number() OVER (PARTITION BY g ORDER BY s) <= 2
+ORDER BY g, id
+----
+2	BB
+5	EE
+3	CC
+4	DD
+
+# single function payload (no extra columns), exercises the min/max arg path
+query I
+SELECT uv FROM (SELECT *, upper(v) AS uv FROM t)
+QUALIFY row_number() OVER (PARTITION BY g ORDER BY s) = 1
+ORDER BY uv
+----
+CC
+EE
+
+# a cast wrapping a function must also be preserved
+query II
+SELECT id, cf FROM (SELECT *, CAST(upper(v) AS VARCHAR) AS cf FROM t)
+QUALIFY row_number() OVER (PARTITION BY g ORDER BY s) = 1
+ORDER BY g
+----
+5	EE
+3	CC
+
+# A plain cast of a base column should still use late materialization (issue #22096 behaviour).
+statement ok
+CREATE TABLE casted (a VARCHAR, b BOOLEAN, c VARCHAR)
+
+statement ok
+INSERT INTO casted VALUES ('x', false, '2024-01-01')
+
+query II
+EXPLAIN WITH cte AS (SELECT a, b, c::TIMESTAMPTZ AS c FROM casted)
+SELECT * FROM cte QUALIFY row_number() OVER (PARTITION BY a ORDER BY c DESC) = 1
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*
+
+query III
+WITH cte AS (SELECT a, b, c::TIMESTAMPTZ AS c FROM casted)
+SELECT * FROM cte QUALIFY row_number() OVER (PARTITION BY a ORDER BY c DESC) = 1
+----
+x	false	2024-01-01 00:00:00+00
