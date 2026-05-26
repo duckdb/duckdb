@@ -1,0 +1,36 @@
+# name: test/issues/general/test_22624.test
+# description: Issue 22624 - MERGE silently reordered WHEN MATCHED clauses when catch-all preceded a conditional clause
+# group: [general]
+
+statement ok
+CREATE TABLE t (id int primary key, val text);
+
+statement ok
+INSERT INTO t (id) VALUES (1),(2),(3),(4);
+
+# A conditional WHEN MATCHED clause that follows an unconditional WHEN MATCHED clause is unreachable.
+# Previously the parser silently reordered the clauses, causing the conditional clause to fire instead.
+# We now reject the query at parse time so the unreachable clause cannot go unnoticed.
+statement error
+MERGE INTO t
+USING (SELECT 1)
+ON t.id > 2
+WHEN MATCHED THEN UPDATE SET val = 'x'
+WHEN MATCHED AND id = 4 THEN DELETE;
+----
+Unconditional WHEN MATCHED clause was already defined
+
+# Writing the catch-all last continues to work and follows declaration order.
+statement ok
+MERGE INTO t
+USING (SELECT 1)
+ON t.id > 2
+WHEN MATCHED AND id = 4 THEN DELETE
+WHEN MATCHED THEN UPDATE SET val = 'x';
+
+query IT
+FROM t ORDER BY id
+----
+1	NULL
+2	NULL
+3	x
