@@ -1479,15 +1479,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 
 unique_ptr<TableRef> RemotePushdownOptimizer::CreateRemoteFunctionRef(CatalogPushdownResult &result,
                                                                       unique_ptr<QueryNode> node) {
-	auto func_name = result.catalog->GetRemoteExecuteFunction();
-	auto catalog_name = result.catalog->GetName();
-	auto sql = node->ToString();
-	vector<unique_ptr<ParsedExpression>> args;
-	args.push_back(make_uniq<ConstantExpression>(Value(catalog_name)));
-	args.push_back(make_uniq<ConstantExpression>(Value(sql)));
-	auto func_ref = make_uniq<TableFunctionRef>();
-	func_ref->function = make_uniq<FunctionExpression>(func_name, std::move(args));
-	return func_ref;
+	return result.catalog->RemotePushdown(binder.context, std::move(node));
 }
 
 void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &catalog_name) {
