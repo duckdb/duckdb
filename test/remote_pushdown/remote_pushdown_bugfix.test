@@ -1282,6 +1282,48 @@ select local_col from local_t order by local_col
 5
 6
 
+# ============================================================
+# Bug 29: Nested mixed JoinRef — outer join's ON condition references
+# a remote table that was pushed in-place inside an inner JoinRef.
+#
+# When the right child of an outer JoinRef is itself a mixed inner JoinRef
+# (e.g. rpc.t1 JOIN local_x), Rewrite(JoinRef) pushes rpc.t1 in-place as
+# a TABLE_FUNCTION inside the inner join. The outer ON condition may still
+# carry the catalog-qualified name "rpc.t1.i". The stripping loop in
+# Rewrite(JoinRef) only processed SINGLE_REMOTE direct children; it did
+# not strip using catalogs accumulated by nested JoinRef processing.
+# Without the fix: binder error "Referenced table 'rpc.t1' not found"
+# because "rpc.t1" is no longer in scope after rpc.t1 → TABLE_FUNCTION.
+# With the fix: catalogs from from_pushed_catalog_names[initial_cats_size..]
+# are also stripped from the outer ON condition → "rpc.t1.i" → "t1.i". ✓
+#
+# local_t.local_col = {0..6} (after Bug 27 delete), rpc.t1.i = {0..9}
+# local_x.x = {0, 2, 4, 6}: intersection = {0, 2, 4, 6}
+# ============================================================
+
+statement ok
+create table local_x(x int);
+
+statement ok
+insert into local_x values (0), (2), (4), (6);
+
+# Nested mixed join: rpc.t1 is pushed in-place inside (rpc.t1 JOIN local_x);
+# outer ON references rpc.t1.i which must be stripped to t1.i.
+query I
+select local_t.local_col
+from local_t
+join (rpc.t1 join local_x on rpc.t1.i = local_x.x)
+on local_t.local_col = rpc.t1.i
+order by local_col
+----
+0
+2
+4
+6
+
+statement ok
+drop table local_x;
+
 statement ok
 drop table local_t;
 
