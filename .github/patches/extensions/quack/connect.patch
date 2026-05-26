@@ -14,37 +14,33 @@ index eaad115..c612dab 100644
  
  class QuackStorageExtensionInfo : public StorageExtensionInfo {
 diff --git a/src/include/storage/quack_catalog.hpp b/src/include/storage/quack_catalog.hpp
-index 1389757..83fc760 100644
+index 1389757..bdd3e6c 100644
 --- a/src/include/storage/quack_catalog.hpp
 +++ b/src/include/storage/quack_catalog.hpp
 @@ -55,6 +55,7 @@ public:
  	string GetDBPath() override;
  
  	unique_ptr<ColumnDataCollection> ExecuteCommandInternal(ClientContext &context, const string &query);
-+	optional_ptr<TableFunction> GetConnectFunction() override;
++	string GetConnectFunctionName(ClientContext &context) override;
  	const QuackUri &GetServerUri();
  	const string &GetConnectionId();
  
 diff --git a/src/storage/quack_catalog.cpp b/src/storage/quack_catalog.cpp
-index f5b1f92..fa93491 100644
+index f5b1f92..e80a1cc 100644
 --- a/src/storage/quack_catalog.cpp
 +++ b/src/storage/quack_catalog.cpp
-@@ -80,6 +80,20 @@ unique_ptr<ColumnDataCollection> QuackCatalog::ExecuteCommandInternal(ClientCont
+@@ -80,6 +80,16 @@ unique_ptr<ColumnDataCollection> QuackCatalog::ExecuteCommandInternal(ClientCont
  	return chunk_collection;
  }
  
-+// Pass-through dispatch for `CONNECT <quack_db>; <sql>` (and friends).
-+// TODO: replace the eager materialization below with a QuackBufferedData-backed StreamQueryResult
-+// so large remote results don't have to land fully in memory before the client can read them.
-+// StatementType is INVALID because we don't know what the SQL is; the protocol could carry it
-+// (extend PrepareResponseMessage with statement_type) if downstream consumers need finer info.
-+// Returns the existing quack_query_by_name(catalog, sql) table function — already streams via
-+// FetchRequest on result_uuid, supports projection pushdown, and tags chunks with BatchIndex.
-+// Reusing it lets the CONNECT dispatcher feed bound SQL through the normal DuckDB pipeline
-+// without writing a parallel implementation.
-+optional_ptr<TableFunction> QuackCatalog::GetConnectFunction() {
-+	static TableFunction connect_fn = QuackScanByNameFunction::GetFunction();
-+	return &connect_fn;
++// Pass-through dispatch for `CONNECT <quack_db>; <sql>` (and friends). Returns the registered
++// name of quack_query_by_name(catalog, sql) — already streams via FetchRequest on result_uuid,
++// supports projection pushdown, and tags chunks with BatchIndex. The CONNECT chokepoint rewrites
++// bound SQL as `SELECT * FROM quack_query_by_name('<catalog>', '<sql>')` and looks the function
++// up in the catalog at bind time, so per-catalog state (server URI, client connection) is
++// reached via the catalog-name argument rather than baked into the function pointer.
++string QuackCatalog::GetConnectFunctionName(ClientContext &context) {
++	return "quack_query_by_name";
 +}
 +
  shared_ptr<QuackClientConnection> QuackCatalog::GetClientConnection() {

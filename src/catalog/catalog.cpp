@@ -1301,8 +1301,8 @@ void Catalog::FinalizeLoad(optional_ptr<ClientContext> context) {
 void Catalog::OnDetach(ClientContext &context) {
 }
 
-optional_ptr<TableFunction> Catalog::GetConnectFunction() {
-	return nullptr;
+string Catalog::GetConnectFunctionName(ClientContext &context) {
+	return string();
 }
 
 bool Catalog::HasConflictingAttachOptions(const string &path, const AttachOptions &options) {

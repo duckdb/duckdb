@@ -1004,15 +1004,15 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 				        "DISCONNECT to clear the binding before running further SQL.")),
 				    query);
 			}
-			auto fn = live->GetCatalog().GetConnectFunction();
-			if (!fn) {
+			auto fn_name = live->GetCatalog().GetConnectFunctionName(*this);
+			if (fn_name.empty()) {
 				return ErrorResult<PendingQueryResult>(
 				    ErrorData(InvalidInputException(
-				        "Catalog \"%s\" reports CONNECT support but does not implement GetConnectFunction()",
+				        "Catalog \"%s\" reports CONNECT support but GetConnectFunctionName() returned no name",
 				        live->GetName())),
 				    query);
 			}
-			statement = BuildPassthroughSelect(fn->name, live->GetName(), query);
+			statement = BuildPassthroughSelect(fn_name, live->GetName(), query);
 			// statement is now SELECT * FROM <fn>('cat', '<sql>'); fall through.
 		}
 	}
