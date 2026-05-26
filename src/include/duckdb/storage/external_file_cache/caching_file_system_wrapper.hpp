@@ -114,7 +114,6 @@ public:
 	DUCKDB_API bool OnDiskFile(FileHandle &handle) override;
 
 	DUCKDB_API unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
-	                                                     bool write,
 	                                                     const FileCompressionOptions &compression_options) override;
 
 	DUCKDB_API void SetDisabledFileSystems(const vector<string> &names) override;

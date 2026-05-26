@@ -178,9 +178,9 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &f
 			throw NotImplementedException(
 			    "Attempting to open a compressed file, but the compression type is not supported");
 		}
+		compression_options.write = flags.OpenForWriting();
 		auto &compressed_fs = *entry->second->file_system;
-		file_handle = compressed_fs.OpenCompressedFile(context, std::move(file_handle), flags.OpenForWriting(),
-		                                               compression_options);
+		file_handle = compressed_fs.OpenCompressedFile(context, std::move(file_handle), compression_options);
 	}
 	return file_handle;
 }

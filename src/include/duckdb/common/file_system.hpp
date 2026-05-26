@@ -297,7 +297,6 @@ public:
 	DUCKDB_API virtual bool OnDiskFile(FileHandle &handle);
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
-	                                                             bool write,
 	                                                             const FileCompressionOptions &compression_options);
 
 	//! Create a LocalFileSystem.
