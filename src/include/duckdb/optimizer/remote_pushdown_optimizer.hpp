@@ -53,7 +53,6 @@ private:
 	CatalogPushdownResult Rewrite(InsertQueryNode &node);
 	CatalogPushdownResult Rewrite(DeleteQueryNode &node);
 	CatalogPushdownResult Rewrite(UpdateQueryNode &node);
-	CatalogPushdownResult Rewrite(MergeIntoStatement &stmt);
 	CatalogPushdownResult Rewrite(unique_ptr<TableRef> &ref);
 	CatalogPushdownResult Rewrite(ExpressionListRef &ref);
 	CatalogPushdownResult Rewrite(RecursiveCTENode &node);
@@ -78,7 +77,9 @@ private:
 	static void StripCatalogName(QueryNode &node, const string &catalog_name);
 	static void StripCatalogName(TableRef &ref, const string &catalog_name);
 	static void StripCatalogName(ParsedExpression &expr, const string &catalog_name, bool strip_subquery_bodies = true);
-	bool RefersToLocalTable(ColumnRefExpression &col_ref);
+	bool RefersToLocalTable(ColumnRefExpression &col_ref) const;
+
+	bool RefersToCTE(const string &cte_name, CatalogPushdownResult &result) const;
 
 private:
 	Binder &binder;

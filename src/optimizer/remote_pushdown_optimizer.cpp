@@ -123,6 +123,24 @@ void RemotePushdownOptimizer::Rewrite(unique_ptr<SQLStatement> &statement) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
+	if (!cte_results.empty()) {
+		throw InternalException("RemotePushdownOptimizer already has CTEs defined - this means no child was created correctly");
+	}
+	for (auto &cte_pair : node.cte_map.map) {
+		const string &cte_name = cte_pair.first;
+		auto &cte_info = *cte_pair.second;
+		CatalogPushdownResult cte_result;
+		if (cte_info.query_node) {
+			RemotePushdownOptimizer child_optimizer(*this);
+			cte_result = child_optimizer.Rewrite(*cte_info.query_node);
+		} else {
+			cte_result = {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
+		}
+		for (auto &key : cte_info.key_targets) {
+			cte_result = Merge(cte_result, Rewrite(*key));
+		}
+		cte_results[cte_name] = cte_result;
+	}
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
 		return Rewrite(node.Cast<SelectNode>());
@@ -142,42 +160,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
-	// Process any nested CTEs attached to this recursive CTE node (inherits cte_map from QueryNode).
-	// These CTEs are serialized in ToString() and must be analyzed and restored correctly.
-	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
-	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-	// Save nested CTE query_nodes before analysis. Rewrite(JoinRef) inside a nested CTE body
-	// pushes individual SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN
-	// (mixed join). If the overall RecursiveCTENode result is UNKNOWN, those stale quack wrappers
-	// must be rolled back: the recursive CTE body executes natively, and if the outer query also
-	// has a quack streaming slot open, the stale wrapper inside the nested CTE would open a
-	// concurrent second streaming connection → "Multiple streaming scans".
-	case_insensitive_map_t<unique_ptr<QueryNode>> saved_cte_nodes;
-	for (auto &cte_pair : node.cte_map.map) {
-		if (cte_pair.second->query_node) {
-			saved_cte_nodes[cte_pair.first] = cte_pair.second->query_node->Copy();
-		}
-	}
-	for (auto &cte_pair : node.cte_map.map) {
-		const string &cte_name = cte_pair.first;
-		auto &cte_info = *cte_pair.second;
-		auto it = cte_results.find(cte_name);
-		if (it != cte_results.end()) {
-			outer_cte_results[cte_name] = it->second;
-		}
-		CatalogPushdownResult cte_result;
-		if (cte_info.query_node) {
-			cte_result = Rewrite(*cte_info.query_node);
-		} else {
-			cte_result = {};
-		}
-		for (auto &key : cte_info.key_targets) {
-			cte_result = Merge(cte_result, Rewrite(*key));
-		}
-		cte_results[cte_name] = cte_result;
-		cte_combined = Merge(cte_combined, cte_result);
-	}
-
 	// Register the CTE's own name as neutral so the self-reference in the recursive arm
 	// is treated as NO_CATALOG_REFERENCED rather than triggering an unknown catalog lookup.
 	// The caller (Rewrite(SelectNode)) will overwrite this with the final result afterwards.
@@ -200,17 +182,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	// that would incorrectly block optimization of outer subqueries referencing a column like r.col.
 	bool ctename_was_local = local_table_names.count(node.ctename) > 0;
 
-	// Save left and right before analysis. Rewrite(SelectNode) calls Rewrite(JoinRef) which pushes
-	// individual SINGLE_REMOTE children in-place via FinishPushdown even when the JoinRef result is
-	// UNKNOWN (mixed join). If the overall RecursiveCTENode result is UNKNOWN, those stale quack
-	// wrappers must be rolled back: the CTE body executes natively, and if the outer query also has
-	// a quack streaming slot open (e.g. an individually-pushed remote FROM), the stale wrapper inside
-	// the CTE arm would open a concurrent second streaming connection → "Multiple streaming scans".
-	auto saved_left = node.left->Copy();
-	auto saved_right = node.right->Copy();
-
-	CatalogPushdownResult left_result = Rewrite(*node.left);
-	CatalogPushdownResult right_result = Rewrite(*node.right);
+	RemotePushdownOptimizer left_optimizer(*this);
+	RemotePushdownOptimizer right_optimizer(*this);
+	CatalogPushdownResult left_result = left_optimizer.Rewrite(*node.left);
+	CatalogPushdownResult right_result = right_optimizer.Rewrite(*node.right);
 
 	// Remove ctename leak from local_table_names (added by Rewrite(BaseTableRef) when it sees
 	// the self-reference classified as NO_CATALOG_REFERENCED in the recursive arm).
@@ -225,30 +200,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	} else {
 		cte_results.erase(node.ctename);
 	}
-
-	// Restore shadowed outer CTE entries
-	for (auto &cte_pair : node.cte_map.map) {
-		auto it = outer_cte_results.find(cte_pair.first);
-		if (it != outer_cte_results.end()) {
-			cte_results[cte_pair.first] = it->second;
-		} else {
-			cte_results.erase(cte_pair.first);
-		}
-	}
-
 	auto result = Merge(left_result, right_result);
-	result = Merge(result, cte_combined);
-	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		node.left = std::move(saved_left);
-		node.right = std::move(saved_right);
-		// Restore nested CTE bodies to remove any stale quack wrappers inserted in-place.
-		for (auto &cte_pair : node.cte_map.map) {
-			auto it = saved_cte_nodes.find(cte_pair.first);
-			if (it != saved_cte_nodes.end() && it->second) {
-				cte_pair.second->query_node = std::move(it->second);
-			}
-		}
-	}
 	return result;
 }
 
@@ -285,41 +237,6 @@ static void CollectTableAliases(const TableRef &ref, case_insensitive_set_t &out
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
-	// Analyze CTE definitions and register their catalog results for reference lookup.
-	// CTEs are processed in order so later CTEs can reference earlier ones.
-	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
-	// Save CTE bodies before analysis. Rewrite(JoinRef) inside a CTE body pushes individual
-	// SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN (mixed join).
-	// If the overall SelectNode result is UNKNOWN, those stale quack wrappers must be rolled back:
-	// PushdownSubqueries (called below for WHERE/HAVING/etc.) may push a subquery to quack,
-	// opening a second streaming slot while the CTE body's stale wrapper holds the first,
-	// triggering "Multiple streaming scans". Restoring removes the stale wrappers.
-	case_insensitive_map_t<unique_ptr<QueryNode>> saved_cte_query_nodes;
-	for (auto &cte_pair : node.cte_map.map) {
-		if (cte_pair.second->query_node) {
-			saved_cte_query_nodes[cte_pair.first] = cte_pair.second->query_node->Copy();
-		}
-	}
-	for (auto &cte_pair : node.cte_map.map) {
-		const string &cte_name = cte_pair.first;
-		auto &cte_info = *cte_pair.second;
-		// Save any outer CTE entry with the same name (shadowing)
-		auto it = cte_results.find(cte_name);
-		if (it != cte_results.end()) {
-			outer_cte_results[cte_name] = it->second;
-		}
-		CatalogPushdownResult cte_result;
-		if (cte_info.query_node) {
-			cte_result = Rewrite(*cte_info.query_node);
-		} else {
-			cte_result = {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
-		}
-		for (auto &key : cte_info.key_targets) {
-			cte_result = Merge(cte_result, Rewrite(*key));
-		}
-		cte_results[cte_name] = cte_result;
-	}
-
 	// Rewrite from_table first - its result is tracked separately for potential individual pushdown.
 	// Reset from_pushed_catalog_names / from_pushed_table_aliases so that entries pushed by
 	// JoinRef children during from_table processing are cleanly collected.
@@ -327,15 +244,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 		throw InternalException("from_pushed_catalog_names is not empty - forgot to create a recursive RemotePushdownOptimizer?");
 	}
 	CatalogPushdownResult from_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-	// When CTEs are present and the overall result is UNKNOWN, any JoinRef children pushed
-	// in-place by Rewrite(JoinRef) must be rolled back. The no-CTE path handles this via
-	// FinishPushdown (which is a no-op for non-SINGLE_REMOTE results), but the CTE path
-	// skips FinishPushdown entirely (inside the cte_map.map.empty() guard). Save from_table
-	// so it can be restored in the UNKNOWN path when JoinRef children were pushed in-place.
-	unique_ptr<TableRef> saved_from_table_for_cte;
-	if (!node.cte_map.map.empty() && node.from_table) {
-		saved_from_table_for_cte = node.from_table->Copy();
-	}
 	if (node.from_table) {
 		from_result = Rewrite(node.from_table);
 	}
@@ -412,44 +320,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 
 	// If the whole SELECT points to a single remote catalog, propagate upward
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		// Restore CTE bodies to remove stale quack wrappers inserted in-place by Rewrite(JoinRef).
-		// Without this, PushdownSubqueries below may push a WHERE/HAVING subquery to quack (slot 2)
-		// while the CTE body's stale wrapper holds slot 1 → "Multiple streaming scans".
-		for (auto &cte_pair : node.cte_map.map) {
-			auto it = saved_cte_query_nodes.find(cte_pair.first);
-			if (it != saved_cte_query_nodes.end() && it->second) {
-				cte_pair.second->query_node = std::move(it->second);
-			}
-		}
-		// Track whether any JoinRef children were individually pushed. Must be captured before
-		// from_pushed_catalog_names is consumed by the stripping block below.
-		bool had_join_child_pushdowns = !from_pushed_catalog_names.empty();
-		// Restore from_table when CTEs are present and JoinRef children were pushed in-place.
-		// Without this, the stale quack wrappers inside from_table (e.g. the SINGLE_REMOTE side
-		// of a mixed JoinRef) would open a concurrent streaming connection alongside the CTE
-		// body's native quack scan → "Multiple streaming scans". After restoration, outer
-		// catalog-qualified column refs (e.g. rpc.t1.i) are still resolvable against the
-		// original remote from_table, so the catalog-name stripping below is also skipped.
-		if (saved_from_table_for_cte && had_join_child_pushdowns) {
-			node.from_table = std::move(saved_from_table_for_cte);
-			from_pushed_catalog_names.clear();
-			from_pushed_table_aliases.clear();
-			had_join_child_pushdowns = false;
-		}
-		{
-			// When a remote table was individually pushed — either the whole from_table (no-CTE
-			// case, via FinishPushdown below) or a JoinRef child (both CTE and no-CTE cases, via
-			// Rewrite(JoinRef)) — outer expressions (SELECT list, WHERE, HAVING, GROUP BY, etc.)
-			// may contain catalog-qualified column refs like "rpc.t1.i" that the binder can no
-			// longer resolve because "rpc.t1" is now "quack_query_by_name(...) AS t1" in FROM.
-			// Strip those catalog prefixes so the binder resolves them via the table alias.
-			// Stripping must happen even when CTEs are present: Rewrite(JoinRef) pushes individual
-			// SINGLE_REMOTE children in-place regardless of outer CTE scope, so outer expressions
-			// referencing those children by catalog-qualified name must still be stripped.
-			// Collect catalogs pushed by JoinRef children (from_pushed_catalog_names) and, when
-			// no CTEs are present, the directly-pushed from_table catalog (from from_result).
-			// When CTEs are present, from_table is not pushed by FinishPushdown (the call is
-			// inside the cte_map.empty() guard below), so only JoinRef child catalogs apply.
 			vector<string> pushed_cats = std::move(from_pushed_catalog_names);
 			from_pushed_catalog_names.clear();
 			if (node.cte_map.map.empty() && from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
@@ -526,56 +396,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 					}
 				}
 			}
-		}
 	}
-
-	// Restore shadowed outer CTE entries (inner CTEs go out of scope)
-	for (auto &cte_pair : node.cte_map.map) {
-		auto it = outer_cte_results.find(cte_pair.first);
-		if (it != outer_cte_results.end()) {
-			cte_results[cte_pair.first] = it->second;
-		} else {
-			cte_results.erase(cte_pair.first);
-		}
-	}
-
 	return result;
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
-	// Process CTE definitions attached to this DML node so that any CTE reference in
-	// the source SELECT or ON CONFLICT clause is correctly classified.
-	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
-	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-	// Save CTE bodies before analysis: Rewrite(JoinRef) inside a CTE body pushes individual
-	// SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN. Restore when
-	// the overall result is UNKNOWN to prevent stale wrappers in native execution.
-	case_insensitive_map_t<unique_ptr<QueryNode>> saved_cte_query_nodes;
-	for (auto &cte_pair : node.cte_map.map) {
-		if (cte_pair.second->query_node) {
-			saved_cte_query_nodes[cte_pair.first] = cte_pair.second->query_node->Copy();
-		}
-	}
-	for (auto &cte_pair : node.cte_map.map) {
-		const string &cte_name = cte_pair.first;
-		auto &cte_info = *cte_pair.second;
-		auto it = cte_results.find(cte_name);
-		if (it != cte_results.end()) {
-			outer_cte_results[cte_name] = it->second;
-		}
-		CatalogPushdownResult cte_result;
-		if (cte_info.query_node) {
-			cte_result = Rewrite(*cte_info.query_node);
-		} else {
-			cte_result = {};
-		}
-		for (auto &key : cte_info.key_targets) {
-			cte_result = Merge(cte_result, Rewrite(*key));
-		}
-		cte_results[cte_name] = cte_result;
-		cte_combined = Merge(cte_combined, cte_result);
-	}
-
 	// InsertQueryNode stores the target table in catalog/schema/table string fields, not in table_ref
 	// (table_ref is only set for ON CONFLICT cases and is an alias ref)
 	BaseTableRef target_ref;
@@ -593,21 +418,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 	auto pre_target_local_col_names = local_table_column_names;
 	CatalogPushdownResult result = Rewrite(target_ref);
 
-	// Merge CTE results: even unreferenced CTEs are serialized when the DML is pushed.
-	result = Merge(result, cte_combined);
-
 	// Target table must be remote for the whole INSERT to be pushed to the remote.
 	// If it is local, push the SELECT source subquery individually if all-remote so that
 	// DuckDB can execute: INSERT INTO local_t SELECT * FROM quack_query_by_name(...).
 	// Skip individual pushdown when CTEs are present: the source may reference a local CTE.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		// Restore CTE bodies to remove stale quack wrappers inserted in-place by Rewrite(JoinRef).
-		for (auto &cte_pair : node.cte_map.map) {
-			auto it = saved_cte_query_nodes.find(cte_pair.first);
-			if (it != saved_cte_query_nodes.end() && it->second) {
-				cte_pair.second->query_node = std::move(it->second);
-			}
-		}
 		// Always restore pre-target local name state so the INSERT target's column names do not
 		// leak into the outer scope. Without this, an INSERT-as-CTE-body with sub-CTEs (which
 		// skips the individual-source-push path) leaves TrackLocalTable's additions in
@@ -618,14 +433,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 		if (node.cte_map.map.empty() && node.select_statement) {
 			auto select_result = Rewrite(*node.select_statement->node);
 			FinishPushdown(node.select_statement->node, select_result);
-		}
-		for (auto &cte_pair : node.cte_map.map) {
-			auto it = outer_cte_results.find(cte_pair.first);
-			if (it != outer_cte_results.end()) {
-				cte_results[cte_pair.first] = it->second;
-			} else {
-				cte_results.erase(cte_pair.first);
-			}
 		}
 		return {};
 	}
@@ -677,70 +484,19 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 			node.returning_list = std::move(saved_returning);
 		}
 	}
-	for (auto &cte_pair : node.cte_map.map) {
-		auto it = outer_cte_results.find(cte_pair.first);
-		if (it != outer_cte_results.end()) {
-			cte_results[cte_pair.first] = it->second;
-		} else {
-			cte_results.erase(cte_pair.first);
-		}
-	}
 	return result;
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
-	// Process CTE definitions attached to this DML node so that CTE references in the
-	// WHERE condition or USING clauses are correctly classified.
-	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
-	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-	// Save CTE bodies before analysis: Rewrite(JoinRef) inside a CTE body pushes individual
-	// SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN. Restore when
-	// the overall result is UNKNOWN to prevent stale wrappers in native execution.
-	case_insensitive_map_t<unique_ptr<QueryNode>> saved_cte_query_nodes;
-	for (auto &cte_pair : node.cte_map.map) {
-		if (cte_pair.second->query_node) {
-			saved_cte_query_nodes[cte_pair.first] = cte_pair.second->query_node->Copy();
-		}
-	}
-	for (auto &cte_pair : node.cte_map.map) {
-		const string &cte_name = cte_pair.first;
-		auto &cte_info = *cte_pair.second;
-		auto it = cte_results.find(cte_name);
-		if (it != cte_results.end()) {
-			outer_cte_results[cte_name] = it->second;
-		}
-		CatalogPushdownResult cte_result;
-		if (cte_info.query_node) {
-			cte_result = Rewrite(*cte_info.query_node);
-		} else {
-			cte_result = {};
-		}
-		for (auto &key : cte_info.key_targets) {
-			cte_result = Merge(cte_result, Rewrite(*key));
-		}
-		cte_results[cte_name] = cte_result;
-		cte_combined = Merge(cte_combined, cte_result);
-	}
-
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
 	if (node.table) {
 		result = Rewrite(node.table);
 	}
 
-	// Merge CTE results: even unreferenced CTEs are serialized when the DML is pushed.
-	result = Merge(result, cte_combined);
-
 	// Target table must be remote for the whole DELETE to be pushed to the remote.
 	// If it is local, still push individual remote subqueries in condition/USING for efficiency,
 	// but only when no CTEs are present: a CTE-referencing subquery cannot be pushed individually.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		// Restore CTE bodies to remove stale quack wrappers inserted in-place by Rewrite(JoinRef).
-		for (auto &cte_pair : node.cte_map.map) {
-			auto it = saved_cte_query_nodes.find(cte_pair.first);
-			if (it != saved_cte_query_nodes.end() && it->second) {
-				cte_pair.second->query_node = std::move(it->second);
-			}
-		}
 		if (node.cte_map.map.empty()) {
 			// Push individual remote USING clauses and collect the catalog names pushed,
 			// so that catalog-qualified column refs like "rpc.t1.i" in the WHERE condition
@@ -814,14 +570,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 				}
 			}
 		}
-		for (auto &cte_pair : node.cte_map.map) {
-			auto it = outer_cte_results.find(cte_pair.first);
-			if (it != outer_cte_results.end()) {
-				cte_results[cte_pair.first] = it->second;
-			} else {
-				cte_results.erase(cte_pair.first);
-			}
-		}
 		return {};
 	}
 	// Save condition and USING clauses together. Rewrite(ParsedExpression) on a condition
@@ -859,70 +607,19 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 			node.returning_list = std::move(saved_returning);
 		}
 	}
-	for (auto &cte_pair : node.cte_map.map) {
-		auto it = outer_cte_results.find(cte_pair.first);
-		if (it != outer_cte_results.end()) {
-			cte_results[cte_pair.first] = it->second;
-		} else {
-			cte_results.erase(cte_pair.first);
-		}
-	}
 	return result;
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
-	// Process CTE definitions attached to this DML node so that CTE references in the
-	// FROM clause or SET expressions are correctly classified.
-	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
-	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-	// Save CTE bodies before analysis: Rewrite(JoinRef) inside a CTE body pushes individual
-	// SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN. Restore when
-	// the overall result is UNKNOWN to prevent stale wrappers in native execution.
-	case_insensitive_map_t<unique_ptr<QueryNode>> saved_cte_query_nodes;
-	for (auto &cte_pair : node.cte_map.map) {
-		if (cte_pair.second->query_node) {
-			saved_cte_query_nodes[cte_pair.first] = cte_pair.second->query_node->Copy();
-		}
-	}
-	for (auto &cte_pair : node.cte_map.map) {
-		const string &cte_name = cte_pair.first;
-		auto &cte_info = *cte_pair.second;
-		auto it = cte_results.find(cte_name);
-		if (it != cte_results.end()) {
-			outer_cte_results[cte_name] = it->second;
-		}
-		CatalogPushdownResult cte_result;
-		if (cte_info.query_node) {
-			cte_result = Rewrite(*cte_info.query_node);
-		} else {
-			cte_result = {};
-		}
-		for (auto &key : cte_info.key_targets) {
-			cte_result = Merge(cte_result, Rewrite(*key));
-		}
-		cte_results[cte_name] = cte_result;
-		cte_combined = Merge(cte_combined, cte_result);
-	}
-
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
 	if (node.table) {
 		result = Rewrite(node.table);
 	}
 
-	// Merge CTE results: even unreferenced CTEs are serialized when the DML is pushed.
-	result = Merge(result, cte_combined);
-
 	// Target table must be remote for the whole UPDATE to be pushed to the remote.
 	// If it is local, still push individual remote subqueries in FROM/SET for efficiency,
 	// but only when no CTEs are present: a CTE-referencing subquery cannot be pushed individually.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		// Restore CTE bodies to remove stale quack wrappers inserted in-place by Rewrite(JoinRef).
-		for (auto &cte_pair : node.cte_map.map) {
-			auto it = saved_cte_query_nodes.find(cte_pair.first);
-			if (it != saved_cte_query_nodes.end() && it->second) {
-				cte_pair.second->query_node = std::move(it->second);
-			}
-		}
 		if (node.cte_map.map.empty()) {
 			string pushed_from_alias;
 			vector<string> update_pushed_cats;
@@ -1013,210 +710,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 			}
 			from_pushed_table_aliases.clear();
 		}
-		for (auto &cte_pair : node.cte_map.map) {
-			auto it = outer_cte_results.find(cte_pair.first);
-			if (it != outer_cte_results.end()) {
-				cte_results[cte_pair.first] = it->second;
-			} else {
-				cte_results.erase(cte_pair.first);
-			}
-		}
 		return {};
-	}
-	{
-		// Save from_table before both from_table and set_info rewrites. Rewrite(JoinRef) wraps
-		// remote children even when the overall result is UNKNOWN; if set_info later makes result
-		// UNKNOWN, from_table must be restored so native UPDATE does not encounter stale quack
-		// wrappers causing "Multiple streaming scans" errors.
-		// Save set_info for the same reason: its expressions may contain subqueries whose JoinRef
-		// children get partially pushed in-place during Rewrite.
-		unique_ptr<TableRef> saved_from;
-		if (node.from_table) {
-			saved_from = node.from_table->Copy();
-			result = Merge(result, Rewrite(node.from_table));
-		}
-		unique_ptr<UpdateSetInfo> saved_set_info;
-		if (node.set_info) {
-			saved_set_info = node.set_info->Copy();
-			if (node.set_info->condition) {
-				result = Merge(result, Rewrite(*node.set_info->condition));
-			}
-			for (auto &expr : node.set_info->expressions) {
-				result = Merge(result, Rewrite(*expr));
-			}
-		}
-		// Save returning_list: Rewrite may push JoinRef children inside subquery bodies in-place.
-		// If returning_list makes result UNKNOWN after from_table/set_info were SINGLE_REMOTE
-		// (their JoinRef children already pushed), roll back to prevent stale quack wrappers.
-		vector<unique_ptr<ParsedExpression>> saved_returning;
-		for (auto &expr : node.returning_list) {
-			saved_returning.push_back(expr->Copy());
-		}
-		for (auto &expr : node.returning_list) {
-			result = Merge(result, Rewrite(*expr));
-		}
-		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-			if (saved_from) {
-				node.from_table = std::move(saved_from);
-			}
-			if (saved_set_info) {
-				node.set_info = std::move(saved_set_info);
-			}
-			node.returning_list = std::move(saved_returning);
-		}
-	}
-	for (auto &cte_pair : node.cte_map.map) {
-		auto it = outer_cte_results.find(cte_pair.first);
-		if (it != outer_cte_results.end()) {
-			cte_results[cte_pair.first] = it->second;
-		} else {
-			cte_results.erase(cte_pair.first);
-		}
-	}
-	return result;
-}
-
-CatalogPushdownResult RemotePushdownOptimizer::Rewrite(MergeIntoStatement &stmt) {
-	// Process CTE definitions attached to this MERGE INTO statement
-	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
-	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-	// Save CTE bodies before analysis: Rewrite(JoinRef) inside a CTE body pushes individual
-	// SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN. Restore when
-	// the overall result is UNKNOWN to prevent stale wrappers in native execution.
-	case_insensitive_map_t<unique_ptr<QueryNode>> saved_cte_query_nodes;
-	for (auto &cte_pair : stmt.cte_map.map) {
-		if (cte_pair.second->query_node) {
-			saved_cte_query_nodes[cte_pair.first] = cte_pair.second->query_node->Copy();
-		}
-	}
-	for (auto &cte_pair : stmt.cte_map.map) {
-		const string &cte_name = cte_pair.first;
-		auto &cte_info = *cte_pair.second;
-		auto it = cte_results.find(cte_name);
-		if (it != cte_results.end()) {
-			outer_cte_results[cte_name] = it->second;
-		}
-		CatalogPushdownResult cte_result;
-		if (cte_info.query_node) {
-			cte_result = Rewrite(*cte_info.query_node);
-		} else {
-			cte_result = {};
-		}
-		for (auto &key : cte_info.key_targets) {
-			cte_result = Merge(cte_result, Rewrite(*key));
-		}
-		cte_results[cte_name] = cte_result;
-		cte_combined = Merge(cte_combined, cte_result);
-	}
-
-	// Analyze the target table - must be remote for full pushdown
-	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-	if (stmt.target) {
-		result = Rewrite(stmt.target);
-	}
-
-	// Merge CTE results: even unreferenced CTEs are serialized when the DML is pushed.
-	result = Merge(result, cte_combined);
-
-	// Target must be remote; MERGE INTO cannot partially push with a local target.
-	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		// Restore CTE bodies to remove stale quack wrappers inserted in-place by Rewrite(JoinRef).
-		for (auto &cte_pair : stmt.cte_map.map) {
-			auto it = saved_cte_query_nodes.find(cte_pair.first);
-			if (it != saved_cte_query_nodes.end() && it->second) {
-				cte_pair.second->query_node = std::move(it->second);
-			}
-		}
-		for (auto &cte_pair : stmt.cte_map.map) {
-			auto it = outer_cte_results.find(cte_pair.first);
-			if (it != outer_cte_results.end()) {
-				cte_results[cte_pair.first] = it->second;
-			} else {
-				cte_results.erase(cte_pair.first);
-			}
-		}
-		return {};
-	}
-
-	// Analyze the source. Rewrite(JoinRef) has a side effect of wrapping remote children in
-	// quack_query_by_name even when the overall result is UNKNOWN. Save the source and restore
-	// it if the full-push analysis fails (either from source itself, or from join_condition /
-	// actions processing below) so MERGE INTO can still execute natively without stale wrappers.
-	{
-		auto saved_source = stmt.source->Copy();
-		result = Merge(result, Rewrite(stmt.source));
-		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-			stmt.source = std::move(saved_source);
-			for (auto &cte_pair : stmt.cte_map.map) {
-				auto it = outer_cte_results.find(cte_pair.first);
-				if (it != outer_cte_results.end()) {
-					cte_results[cte_pair.first] = it->second;
-				} else {
-					cte_results.erase(cte_pair.first);
-				}
-			}
-			return {};
-		}
-
-		// Save join_condition and actions before analysis. Rewrite(ParsedExpression) on a
-		// subquery that contains a mixed JoinRef (some SINGLE_REMOTE children, some local)
-		// will push the remote JoinRef children to quack wrappers in-place. If join_condition
-		// or actions later make the overall result UNKNOWN, those stale wrappers must be
-		// rolled back so native MERGE INTO execution does not encounter concurrent quack
-		// streaming connections from both the source scan and the modified expressions.
-		unique_ptr<ParsedExpression> saved_join_condition;
-		if (stmt.join_condition) {
-			saved_join_condition = stmt.join_condition->Copy();
-		}
-		map<MergeActionCondition, vector<unique_ptr<MergeIntoAction>>> saved_actions;
-		for (auto &entry : stmt.actions) {
-			auto &vec = saved_actions[entry.first];
-			for (auto &action : entry.second) {
-				vec.push_back(action->Copy());
-			}
-		}
-
-		// Analyze ON join condition
-		if (stmt.join_condition) {
-			result = Merge(result, Rewrite(*stmt.join_condition));
-		}
-
-		// Analyze WHEN MATCHED/NOT MATCHED action conditions and SET/INSERT expressions
-		for (auto &entry : stmt.actions) {
-			for (auto &action : entry.second) {
-				if (action->condition) {
-					result = Merge(result, Rewrite(*action->condition));
-				}
-				if (action->update_info) {
-					if (action->update_info->condition) {
-						result = Merge(result, Rewrite(*action->update_info->condition));
-					}
-					for (auto &expr : action->update_info->expressions) {
-						result = Merge(result, Rewrite(*expr));
-					}
-				}
-				for (auto &expr : action->expressions) {
-					result = Merge(result, Rewrite(*expr));
-				}
-			}
-		}
-
-		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-			stmt.source = std::move(saved_source);
-			if (saved_join_condition) {
-				stmt.join_condition = std::move(saved_join_condition);
-			}
-			stmt.actions = std::move(saved_actions);
-		}
-	}
-
-	for (auto &cte_pair : stmt.cte_map.map) {
-		auto it = outer_cte_results.find(cte_pair.first);
-		if (it != outer_cte_results.end()) {
-			cte_results[cte_pair.first] = it->second;
-		} else {
-			cte_results.erase(cte_pair.first);
-		}
 	}
 	return result;
 }
@@ -1238,39 +732,6 @@ static void UnqualifyColumnRefs(ParsedExpression &expr, const string &catalog_na
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
-	// Process CTE definitions attached to this set operation so that CTE references inside
-	// the children are correctly classified (e.g. WITH cte AS (...) SELECT * FROM cte UNION ALL ...).
-	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
-	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-	// Save CTE bodies before analysis: Rewrite(JoinRef) inside a CTE body pushes individual
-	// SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN (mixed join).
-	// If the overall SetOperationNode result is UNKNOWN, those stale wrappers must be rolled back.
-	case_insensitive_map_t<unique_ptr<QueryNode>> saved_cte_query_nodes;
-	for (auto &cte_pair : node.cte_map.map) {
-		if (cte_pair.second->query_node) {
-			saved_cte_query_nodes[cte_pair.first] = cte_pair.second->query_node->Copy();
-		}
-	}
-	for (auto &cte_pair : node.cte_map.map) {
-		const string &cte_name = cte_pair.first;
-		auto &cte_info = *cte_pair.second;
-		auto it = cte_results.find(cte_name);
-		if (it != cte_results.end()) {
-			outer_cte_results[cte_name] = it->second;
-		}
-		CatalogPushdownResult cte_result;
-		if (cte_info.query_node) {
-			cte_result = Rewrite(*cte_info.query_node);
-		} else {
-			cte_result = {};
-		}
-		for (auto &key : cte_info.key_targets) {
-			cte_result = Merge(cte_result, Rewrite(*key));
-		}
-		cte_results[cte_name] = cte_result;
-		cte_combined = Merge(cte_combined, cte_result);
-	}
-
 	// Save each child before analysis. Rewrite(SelectNode) calls Rewrite(JoinRef) which pushes
 	// individual SINGLE_REMOTE children in-place via FinishPushdown even when the JoinRef result is
 	// UNKNOWN (mixed join). If that child's overall result is UNKNOWN, those stale quack wrappers
@@ -1286,13 +747,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	child_results.reserve(node.children.size());
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
 	for (auto &child : node.children) {
-		auto child_result = Rewrite(*child);
+		RemotePushdownOptimizer child_optimizer(*this);
+		auto child_result = child_optimizer.Rewrite(*child);
 		result = Merge(result, child_result);
 		child_results.push_back(child_result);
 	}
 
-	// Merge CTE results: even unreferenced CTEs are serialized when the set operation is pushed.
-	result = Merge(result, cte_combined);
 	// Save modifier expressions before rewriting them. Rewrite(ParsedExpression) on a subquery
 	// inside a modifier (e.g. ORDER BY (SELECT j FROM rpc.t2 JOIN local_t ON ...)) has the side
 	// effect of wrapping SINGLE_REMOTE JoinRef children in quack functions in-place. If the
@@ -1343,38 +803,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 		}
 		default:
 			break;
-		}
-	}
-	// If the whole set operation resolves to a single remote catalog, propagate upward
-	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		for (auto &cte_pair : node.cte_map.map) {
-			auto it = outer_cte_results.find(cte_pair.first);
-			if (it != outer_cte_results.end()) {
-				cte_results[cte_pair.first] = it->second;
-			} else {
-				cte_results.erase(cte_pair.first);
-			}
-		}
-		return result;
-	}
-	// Restore CTE bodies to remove stale quack wrappers inserted in-place by Rewrite(JoinRef).
-	for (auto &cte_pair : node.cte_map.map) {
-		auto it = saved_cte_query_nodes.find(cte_pair.first);
-		if (it != saved_cte_query_nodes.end() && it->second) {
-			cte_pair.second->query_node = std::move(it->second);
-		}
-	}
-	// Restore modifiers to undo any in-place JoinRef partial-pushdown side effects from the
-	// Rewrite calls above. The saved copies carry no stale quack wrappers, so modifier
-	// subqueries will execute via DuckDB's own remote scanning rather than opening a competing
-	// quack streaming connection alongside any individually-pushed child below.
-	node.modifiers = std::move(saved_modifiers);
-	for (auto &cte_pair : node.cte_map.map) {
-		auto it = outer_cte_results.find(cte_pair.first);
-		if (it != outer_cte_results.end()) {
-			cte_results[cte_pair.first] = it->second;
-		} else {
-			cte_results.erase(cte_pair.first);
 		}
 	}
 	return result;
@@ -1601,6 +1029,18 @@ bool RemotePushdownOptimizer::IsLocalMacro(const FunctionExpression &func) {
 	return false;
 }
 
+bool RemotePushdownOptimizer::RefersToCTE(const string &cte_name, CatalogPushdownResult &result) const {
+	auto entry = cte_results.find(cte_name);
+	if (entry != cte_results.end()) {
+		result = entry->second;
+		return true;
+	}
+	if (parent) {
+		return parent->RefersToCTE(cte_name, result);
+	}
+	return false;
+}
+
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// Resolve schema_name-as-catalog ambiguity using the binder's own resolution logic
 	string catalog_name = ref.catalog_name;
@@ -1609,16 +1049,16 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 
 	// Case 0: check if this is a CTE reference (must have no explicit catalog/schema)
 	if (catalog_name.empty() && schema_name.empty()) {
-		auto cte_it = cte_results.find(ref.table_name);
-		if (cte_it != cte_results.end()) {
-			if (cte_it->second.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		CatalogPushdownResult pushdown_result;
+		if (RefersToCTE(ref.table_name, pushdown_result)) {
+			if (pushdown_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 				// Local/unknown CTE - track as local for correlated subquery detection
 				local_table_names.insert(ref.table_name);
 				if (!ref.alias.empty()) {
 					local_table_names.insert(ref.alias);
 				}
 			}
-			return cte_it->second;
+			return pushdown_result;
 		}
 	}
 
@@ -1680,7 +1120,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, remote_catalogs_in_search_path.front().get()};
 }
 
-bool RemotePushdownOptimizer::RefersToLocalTable(ColumnRefExpression &col_ref) {
+bool RemotePushdownOptimizer::RefersToLocalTable(ColumnRefExpression &col_ref) const {
 	// check if this column reference points to a correlated subquery
 	if (col_ref.column_names.size() >= 2) {
 		// The second-to-last entry is the table qualifier (e.g. "tbl" in "tbl.col" or "cat.schema.tbl.col")
