@@ -351,7 +351,10 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 			checkpoint_state->global_stats = checkpoint_state->inner_column_state->GetStatistics();
 		} else {
 			// Otherwise interpret stats from shredded column
-			const auto [gtype, vtype] = Geometry::GetSpecializedType(checkpoint_state->storage_type);
+			const auto types = Geometry::GetSpecializedType(checkpoint_state->storage_type);
+			const auto gtype = types.first;
+			const auto vtype = types.second;
+
 			auto new_stats = checkpoint_state->inner_column_state->GetStatistics();
 			InterpretStats(*new_stats, *checkpoint_state->global_stats, gtype, vtype);
 		}
