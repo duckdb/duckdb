@@ -94,6 +94,8 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::DECIMAL:
 		return type;
+	case LogicalTypeId::VARIANT:
+		return LogicalType::JSON();
 	case LogicalTypeId::LIST:
 		return LogicalType::LIST(GetJSONType(const_struct_names, ListType::GetChildType(type)));
 	case LogicalTypeId::ARRAY:
@@ -130,6 +132,7 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 static unique_ptr<FunctionData> JSONCreateBindParams(BoundScalarFunction &bound_function,
                                                      vector<unique_ptr<Expression>> &arguments, bool object) {
 	StructNames const_struct_names;
+	bound_function.GetArguments().clear();
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &type = arguments[i]->GetReturnType();
 		if (arguments[i]->HasParameter()) {
