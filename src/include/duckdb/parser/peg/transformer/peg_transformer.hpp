@@ -279,6 +279,7 @@ public:
 	void RegisterInsert();
 	void RegisterConnect();
 	void RegisterDelete();
+	void RegisterCreatePublication();
 	void RegisterCreateTextSearchDictionary();
 	void RegisterMergeInto();
 	void RegisterPivot();
@@ -320,6 +321,10 @@ private:
 	static unique_ptr<SQLStatement> TransformConnectStatement(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<OrderByNode> TransformGenericCopyOptionParenthesizedExpressionList(PEGTransformer &transformer,
 	                                                                                 ParseResult &parse_result);
+	// create_publication.gram — optional FOR clause with an inline list requires a hand-written transformer.
+	 static unique_ptr<SQLStatement> TransformCreatePublicationStatement(PEGTransformer &transformer,
+                                                                       ParseResult &parse_result);
+
 	// delete.gram — TRUNCATE rules use List(TruncateTarget) which the generator
 	// cannot auto-extract; hand-write the entry points.
 	static unique_ptr<SQLStatement> TransformTruncateStatement(PEGTransformer &transformer, ParseResult &parse_result);

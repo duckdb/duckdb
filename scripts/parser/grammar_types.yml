@@ -62,6 +62,7 @@ SQLStatement:
     - DetachStatement
     - DisconnectStatement
     - DropStatement
+    - CreatePublicationStatement
     - ExecuteStatement
     - ExplainStatement
     - ExplainableStatements
@@ -1160,6 +1161,9 @@ excluded_rules:
   - CopyOptionName
   - AtTimeZoneOperator
   - Generated
+  - PublicationFor
+  - PublicationForAllTables
+  - PublicationForTable
   - AlwaysOrByDefault
   - Lateral
   - ReservedSchemaQualification

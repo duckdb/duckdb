@@ -20,6 +20,7 @@ add_library_unity(
   transform_create_sequence.cpp
   transform_create_secret.cpp
   transform_create_table.cpp
+  transform_create_publication.cpp
   transform_create_text_search_dictionary.cpp
   transform_create_trigger.cpp
   transform_create_view.cpp

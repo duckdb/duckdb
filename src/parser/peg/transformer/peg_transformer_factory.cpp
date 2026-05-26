@@ -591,6 +591,11 @@ void PEGTransformerFactory::RegisterDelete() {
 	REGISTER_TRANSFORM(TransformTruncateContinue);
 }
 
+void PEGTransformerFactory::RegisterCreatePublication() {
+  // create_publication.gram — optional FOR clause with an inline list requires a hand-written transformer.
+  REGISTER_TRANSFORM(TransformCreatePublicationStatement);
+}
+
 void PEGTransformerFactory::RegisterCreateTextSearchDictionary() {
 	// create_text_search_dictionary.gram — Parens(List(...)) bodies are not auto-extractable.
 	REGISTER_TRANSFORM(TransformCreateTSDictionaryStatement);
@@ -964,6 +969,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterInsert();
 	RegisterConnect();
 	RegisterDelete();
+	RegisterCreatePublication();
 	RegisterCreateTextSearchDictionary();
 	RegisterMergeInto();
 	RegisterPivot();

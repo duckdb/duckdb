@@ -1,0 +1,4 @@
+CreatePublicationStatement <- 'CREATE' 'PUBLICATION' Identifier PublicationFor?
+PublicationFor <- 'FOR' (PublicationForAllTables / PublicationForTable)
+PublicationForAllTables <- 'ALL' 'TABLES'
+PublicationForTable <- 'TABLE' List(BaseTableName)
