@@ -14,7 +14,6 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -2963,8 +2962,11 @@ bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t width, uint8_
 		return true;
 	}
 	// Avoid double rounding when the unscaled integer cannot be represented exactly by the target floating point type.
-	StringHeap heap;
-	auto decimal_string = DecimalToString::Format<SRC>(input, width, scale, heap);
+	char decimal_buffer[DecimalWidth<hugeint_t>::max + 3];
+	auto len = DecimalToString::DecimalLength<SRC>(input, width, scale);
+	D_ASSERT(len <= static_cast<int>(sizeof(decimal_buffer)));
+	DecimalToString::FormatDecimal<SRC>(input, width, scale, decimal_buffer, UnsafeNumericCast<idx_t>(len));
+	string_t decimal_string(decimal_buffer, UnsafeNumericCast<uint32_t>(len));
 	return TryCast::Operation<string_t, DST>(decimal_string, result, true);
 }
 
