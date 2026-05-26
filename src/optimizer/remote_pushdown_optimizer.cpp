@@ -159,57 +159,22 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
-	// Register the CTE's own name as neutral so the self-reference in the recursive arm
-	// is treated as NO_CATALOG_REFERENCED rather than triggering an unknown catalog lookup.
-	// The caller (Rewrite(SelectNode)) will overwrite this with the final result afterwards.
-	// Save any outer CTE with the same name first: an inner recursive CTE may shadow an outer
-	// CTE of the same name; without saving, erasing the self-reference placeholder below would
-	// permanently remove the outer entry from cte_results, breaking later references to it.
-	bool had_outer_ctename = false;
-	CatalogPushdownResult saved_ctename_result;
-	auto outer_ctename_it = cte_results.find(node.ctename);
-	if (outer_ctename_it != cte_results.end()) {
-		saved_ctename_result = outer_ctename_it->second;
-		had_outer_ctename = true;
-	}
-	cte_results[node.ctename] = {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-
-	// Track whether ctename was already in local_table_names before the recursive arm.
-	// Rewrite(BaseTableRef) adds ctename to local_table_names when it encounters the self-reference
-	// (classified as NO_CATALOG_REFERENCED). After the recursive arm completes, ctename must be
-	// erased from local_table_names so it does not leak into the outer scope as a false "local table"
-	// that would incorrectly block optimization of outer subqueries referencing a column like r.col.
-	bool ctename_was_local = local_table_names.count(node.ctename) > 0;
-
 	RemotePushdownOptimizer left_optimizer(*this);
-	RemotePushdownOptimizer right_optimizer(*this);
 	CatalogPushdownResult left_result = left_optimizer.Rewrite(*node.left);
+
+	// for recursive CTEs - the right-hand side of the CTE can refer to the recursive CTE itself
+	// we use whatever the CatalogPushdownResult of the LHS was to count this reference
+	RemotePushdownOptimizer recursive_optimizer(*this);
+	recursive_optimizer.cte_results[node.ctename] = left_result;
+
+	RemotePushdownOptimizer right_optimizer(recursive_optimizer);
 	CatalogPushdownResult right_result = right_optimizer.Rewrite(*node.right);
 
-	// Remove ctename leak from local_table_names (added by Rewrite(BaseTableRef) when it sees
-	// the self-reference classified as NO_CATALOG_REFERENCED in the recursive arm).
-	if (!ctename_was_local) {
-		local_table_names.erase(node.ctename);
-	}
-
-	// Remove the self-reference placeholder so the caller's assignment is authoritative.
-	// If an outer CTE of the same name was shadowed, restore it now.
-	if (had_outer_ctename) {
-		cte_results[node.ctename] = saved_ctename_result;
-	} else {
-		cte_results.erase(node.ctename);
-	}
 	auto result = Merge(left_result, right_result);
 	return result;
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
-	// Rewrite from_table first - its result is tracked separately for potential individual pushdown.
-	// Reset from_pushed_catalog_names / from_pushed_table_aliases so that entries pushed by
-	// JoinRef children during from_table processing are cleanly collected.
-	if (!from_pushed_catalog_names.empty() || !from_pushed_table_aliases.empty()) {
-		throw InternalException("from_pushed_catalog_names is not empty - forgot to create a recursive RemotePushdownOptimizer?");
-	}
 	CatalogPushdownResult from_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
 	if (node.from_table) {
 		from_result = Rewrite(node.from_table);
@@ -283,86 +248,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 		if (it != cte_results.end()) {
 			result = Merge(result, it->second);
 		}
-	}
-
-	// If the whole SELECT points to a single remote catalog, propagate upward
-	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-			vector<string> pushed_cats = std::move(from_pushed_catalog_names);
-			from_pushed_catalog_names.clear();
-			if (node.cte_map.map.empty() && from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-				from_result.catalog) {
-				bool found = false;
-				for (auto &existing : pushed_cats) {
-					if (StringUtil::CIEquals(existing, from_result.catalog->GetName())) {
-						found = true;
-						break;
-					}
-				}
-				if (!found) {
-					pushed_cats.push_back(from_result.catalog->GetName());
-				}
-			}
-			for (auto &cat_name : pushed_cats) {
-				// In the partial-pushdown context (individual JoinRef children pushed) we must NOT
-				// recurse into subquery bodies: those subqueries were not pushed and still contain
-				// their original remote table refs (e.g. "rpc.t2"). Stripping those refs would
-				// produce an unqualified "t2" that fails to bind locally.
-				for (auto &expr : node.select_list) {
-					StripCatalogName(*expr, cat_name, false);
-				}
-				if (node.where_clause) {
-					StripCatalogName(*node.where_clause, cat_name, false);
-				}
-				if (node.having) {
-					StripCatalogName(*node.having, cat_name, false);
-				}
-				if (node.qualify) {
-					StripCatalogName(*node.qualify, cat_name, false);
-				}
-				for (auto &expr : node.groups.group_expressions) {
-					StripCatalogName(*expr, cat_name, false);
-				}
-				for (auto &modifier : node.modifiers) {
-					switch (modifier->type) {
-					case ResultModifierType::ORDER_MODIFIER: {
-						auto &order_mod = modifier->Cast<OrderModifier>();
-						for (auto &order : order_mod.orders) {
-							StripCatalogName(*order.expression, cat_name, false);
-						}
-						break;
-					}
-					case ResultModifierType::LIMIT_MODIFIER: {
-						auto &limit_mod = modifier->Cast<LimitModifier>();
-						if (limit_mod.limit) {
-							StripCatalogName(*limit_mod.limit, cat_name, false);
-						}
-						if (limit_mod.offset) {
-							StripCatalogName(*limit_mod.offset, cat_name, false);
-						}
-						break;
-					}
-					case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-						auto &limit_mod = modifier->Cast<LimitPercentModifier>();
-						if (limit_mod.limit) {
-							StripCatalogName(*limit_mod.limit, cat_name, false);
-						}
-						if (limit_mod.offset) {
-							StripCatalogName(*limit_mod.offset, cat_name, false);
-						}
-						break;
-					}
-					case ResultModifierType::DISTINCT_MODIFIER: {
-						auto &distinct_mod = modifier->Cast<DistinctModifier>();
-						for (auto &expr : distinct_mod.distinct_on_targets) {
-							StripCatalogName(*expr, cat_name, false);
-						}
-						break;
-					}
-					default:
-						break;
-					}
-				}
-			}
 	}
 	return result;
 }

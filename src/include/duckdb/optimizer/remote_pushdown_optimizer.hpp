@@ -91,16 +91,5 @@ private:
 	case_insensitive_set_t local_table_names;
 	//! CTE name → catalog pushdown result, populated as CTEs are analyzed (inner scopes restore on exit)
 	case_insensitive_map_t<CatalogPushdownResult> cte_results;
-	//! Catalog names of remote tables individually pushed during the current SelectNode's from_table processing.
-	//! Populated by Rewrite(JoinRef&) when individual JoinRef children are pushed. Consumed and cleared by
-	//! Rewrite(SelectNode&) to strip those catalog names from outer SELECT/WHERE/HAVING/GROUP BY/ORDER BY
-	//! expressions so that catalog-qualified refs like "rpc.t1.i" remain resolvable after "rpc.t1" becomes
-	//! "quack_query_by_name(...) AS t1".
-	vector<string> from_pushed_catalog_names;
-	//! Aliases of remote tables individually pushed by Rewrite(JoinRef&). Consumed and cleared by
-	//! Rewrite(SelectNode&) to temporarily register them in local_table_names so HasLocalTableReference
-	//! detects correlated WHERE subqueries that reference a pushed alias (e.g. "t1.col" after "rpc.t1 AS t1"
-	//! was pushed to "quack_query_by_name(...) AS t1").
-	vector<string> from_pushed_table_aliases;
 };
 } // namespace duckdb
