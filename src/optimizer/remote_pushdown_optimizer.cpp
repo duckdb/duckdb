@@ -476,100 +476,106 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 
 	// If the whole SELECT points to a single remote catalog, propagate upward
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		// When CTEs are present, do not push individual children: a CTE-referencing FROM clause
-		// cannot be sent to the remote without its CTE definition.
+		// Track whether any JoinRef children were individually pushed. Must be captured before
+		// from_pushed_catalog_names is consumed by the stripping block below.
+		bool had_join_child_pushdowns = !from_pushed_catalog_names.empty();
+		{
+			// When a remote table was individually pushed — either the whole from_table (no-CTE
+			// case, via FinishPushdown below) or a JoinRef child (both CTE and no-CTE cases, via
+			// Rewrite(JoinRef)) — outer expressions (SELECT list, WHERE, HAVING, GROUP BY, etc.)
+			// may contain catalog-qualified column refs like "rpc.t1.i" that the binder can no
+			// longer resolve because "rpc.t1" is now "quack_query_by_name(...) AS t1" in FROM.
+			// Strip those catalog prefixes so the binder resolves them via the table alias.
+			// Stripping must happen even when CTEs are present: Rewrite(JoinRef) pushes individual
+			// SINGLE_REMOTE children in-place regardless of outer CTE scope, so outer expressions
+			// referencing those children by catalog-qualified name must still be stripped.
+			// Collect catalogs pushed by JoinRef children (from_pushed_catalog_names) and, when
+			// no CTEs are present, the directly-pushed from_table catalog (from from_result).
+			// When CTEs are present, from_table is not pushed by FinishPushdown (the call is
+			// inside the cte_map.empty() guard below), so only JoinRef child catalogs apply.
+			vector<string> pushed_cats = std::move(from_pushed_catalog_names);
+			from_pushed_catalog_names.clear();
+			if (node.cte_map.map.empty() &&
+			    from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && from_result.catalog) {
+				bool found = false;
+				for (auto &existing : pushed_cats) {
+					if (StringUtil::CIEquals(existing, from_result.catalog->GetName())) {
+						found = true;
+						break;
+					}
+				}
+				if (!found) {
+					pushed_cats.push_back(from_result.catalog->GetName());
+				}
+			}
+			for (auto &cat_name : pushed_cats) {
+				// In the partial-pushdown context (individual JoinRef children pushed) we must NOT
+				// recurse into subquery bodies: those subqueries were not pushed and still contain
+				// their original remote table refs (e.g. "rpc.t2"). Stripping those refs would
+				// produce an unqualified "t2" that fails to bind locally.
+				for (auto &expr : node.select_list) {
+					StripCatalogName(*expr, cat_name, false);
+				}
+				if (node.where_clause) {
+					StripCatalogName(*node.where_clause, cat_name, false);
+				}
+				if (node.having) {
+					StripCatalogName(*node.having, cat_name, false);
+				}
+				if (node.qualify) {
+					StripCatalogName(*node.qualify, cat_name, false);
+				}
+				for (auto &expr : node.groups.group_expressions) {
+					StripCatalogName(*expr, cat_name, false);
+				}
+				for (auto &modifier : node.modifiers) {
+					switch (modifier->type) {
+					case ResultModifierType::ORDER_MODIFIER: {
+						auto &order_mod = modifier->Cast<OrderModifier>();
+						for (auto &order : order_mod.orders) {
+							StripCatalogName(*order.expression, cat_name, false);
+						}
+						break;
+					}
+					case ResultModifierType::LIMIT_MODIFIER: {
+						auto &limit_mod = modifier->Cast<LimitModifier>();
+						if (limit_mod.limit) {
+							StripCatalogName(*limit_mod.limit, cat_name, false);
+						}
+						if (limit_mod.offset) {
+							StripCatalogName(*limit_mod.offset, cat_name, false);
+						}
+						break;
+					}
+					case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+						auto &limit_mod = modifier->Cast<LimitPercentModifier>();
+						if (limit_mod.limit) {
+							StripCatalogName(*limit_mod.limit, cat_name, false);
+						}
+						if (limit_mod.offset) {
+							StripCatalogName(*limit_mod.offset, cat_name, false);
+						}
+						break;
+					}
+					case ResultModifierType::DISTINCT_MODIFIER: {
+						auto &distinct_mod = modifier->Cast<DistinctModifier>();
+						for (auto &expr : distinct_mod.distinct_on_targets) {
+							StripCatalogName(*expr, cat_name, false);
+						}
+						break;
+					}
+					default:
+						break;
+					}
+				}
+			}
+		}
+		// When CTEs are present, do not push individual children via FinishPushdown: a
+		// CTE-referencing FROM clause cannot be sent to the remote without its CTE definition.
 		if (node.cte_map.map.empty()) {
 			// Otherwise, push down only the from_table component if possible
 			if (node.from_table) {
 				FinishPushdown(node.from_table, from_result);
-			}
-			// When a remote table was individually pushed (either the whole from_table or a JoinRef
-			// child), outer expressions (SELECT list, WHERE, HAVING, GROUP BY, ORDER BY) may contain
-			// catalog-qualified column refs like "rpc.t1.i" that can no longer bind because "rpc.t1"
-			// is now "quack_query_by_name(...) AS t1" in FROM. Strip those catalog prefixes so the
-			// binder resolves them via the table alias.
-			// Track whether any JoinRef children were individually pushed (and are therefore
-			// already using a streaming quack connection). This must be captured before the
-			// scoped block below moves from_pushed_catalog_names into pushed_cats.
-			bool had_join_child_pushdowns = !from_pushed_catalog_names.empty();
-			{
-				// Collect catalogs pushed by JoinRef children (from_pushed_catalog_names) and
-				// the directly-pushed from_table catalog (from from_result).
-				vector<string> pushed_cats = std::move(from_pushed_catalog_names);
-				from_pushed_catalog_names.clear();
-				if (from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && from_result.catalog) {
-					bool found = false;
-					for (auto &existing : pushed_cats) {
-						if (StringUtil::CIEquals(existing, from_result.catalog->GetName())) {
-							found = true;
-							break;
-						}
-					}
-					if (!found) {
-						pushed_cats.push_back(from_result.catalog->GetName());
-					}
-				}
-				for (auto &cat_name : pushed_cats) {
-					// In the partial-pushdown context (individual JoinRef children pushed) we must NOT
-					// recurse into subquery bodies: those subqueries were not pushed and still contain
-					// their original remote table refs (e.g. "rpc.t2"). Stripping those refs would
-					// produce an unqualified "t2" that fails to bind locally.
-					for (auto &expr : node.select_list) {
-						StripCatalogName(*expr, cat_name, false);
-					}
-					if (node.where_clause) {
-						StripCatalogName(*node.where_clause, cat_name, false);
-					}
-					if (node.having) {
-						StripCatalogName(*node.having, cat_name, false);
-					}
-					if (node.qualify) {
-						StripCatalogName(*node.qualify, cat_name, false);
-					}
-					for (auto &expr : node.groups.group_expressions) {
-						StripCatalogName(*expr, cat_name, false);
-					}
-					for (auto &modifier : node.modifiers) {
-						switch (modifier->type) {
-						case ResultModifierType::ORDER_MODIFIER: {
-							auto &order_mod = modifier->Cast<OrderModifier>();
-							for (auto &order : order_mod.orders) {
-								StripCatalogName(*order.expression, cat_name, false);
-							}
-							break;
-						}
-						case ResultModifierType::LIMIT_MODIFIER: {
-							auto &limit_mod = modifier->Cast<LimitModifier>();
-							if (limit_mod.limit) {
-								StripCatalogName(*limit_mod.limit, cat_name, false);
-							}
-							if (limit_mod.offset) {
-								StripCatalogName(*limit_mod.offset, cat_name, false);
-							}
-							break;
-						}
-						case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-							auto &limit_mod = modifier->Cast<LimitPercentModifier>();
-							if (limit_mod.limit) {
-								StripCatalogName(*limit_mod.limit, cat_name, false);
-							}
-							if (limit_mod.offset) {
-								StripCatalogName(*limit_mod.offset, cat_name, false);
-							}
-							break;
-						}
-						case ResultModifierType::DISTINCT_MODIFIER: {
-							auto &distinct_mod = modifier->Cast<DistinctModifier>();
-							for (auto &expr : distinct_mod.distinct_on_targets) {
-								StripCatalogName(*expr, cat_name, false);
-							}
-							break;
-						}
-						default:
-							break;
-						}
-					}
-				}
 			}
 			// After FinishPushdown the from_table may have been replaced by a table-function ref.
 			// Its alias is now the entry point for outer column refs inside subqueries. Track it

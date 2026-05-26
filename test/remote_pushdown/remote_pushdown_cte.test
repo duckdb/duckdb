@@ -366,6 +366,49 @@ with recursive r(n) as (
 11
 12
 
+# --- SelectNode with CTE + mixed JoinRef in FROM: outer-expression stripping fix ---
+#
+# Bug fix: when a SelectNode has CTEs in scope and the FROM clause contains a mixed JoinRef
+# (one SINGLE_REMOTE side, one local side), Rewrite(JoinRef) wraps the remote child in-place.
+# Previously the outer expression stripping (catalog-name removal from SELECT list, WHERE, etc.)
+# was skipped because it lived inside the cte_map.empty() guard. This left catalog-qualified
+# refs like "rpc.t1.i" unstripped after "rpc.t1" became "quack_query_by_name(...) AS t1",
+# causing a binder error. The fix moves stripping outside the CTE guard.
+
+# rpc.t1 = {0..9}, local_t = {0..9}, local_cte = {0..4}
+# Join rpc.t1 and local_cte on rpc.t1.i with catalog-qualified refs in SELECT and WHERE
+query I
+with local_cte as (select i from local_t where i < 5)
+select t1.i from rpc.t1 t1 join local_cte on t1.i = local_cte.i
+where t1.i < 3
+order by t1.i
+----
+0
+1
+2
+
+# GROUP BY referencing the pushed remote table alias
+query II
+with local_cte as (select i from local_t where i < 5)
+select t1.i % 2 as parity, count(*) as cnt
+from rpc.t1 t1 join local_cte on t1.i = local_cte.i
+where t1.i < 5
+group by t1.i % 2
+order by parity
+----
+0	3
+1	2
+
+# CTE not referenced in FROM (unused CTE still in cte_map.map → guard triggers)
+query I
+with unused_cte as (select 42 as v)
+select t1.i from rpc.t1 t1 join local_t on t1.i = local_t.i
+where t1.i < 2
+order by t1.i
+----
+0
+1
+
 statement ok
 drop table local_t
 
