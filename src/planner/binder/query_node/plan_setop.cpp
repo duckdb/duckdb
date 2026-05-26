@@ -25,38 +25,6 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(const vector<Logi
 	if (node->type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		// "node" is a projection; we can just do the casts in there
 		D_ASSERT(node->expressions.size() == source_types.size());
-		if (node->children.size() == 1 && node->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
-			// If this projection only has one child and that child is a logical get we can try to pushdown types
-			auto &logical_get = node->children[0]->Cast<LogicalGet>();
-			auto &column_ids = logical_get.GetColumnIds();
-			if (logical_get.function.type_pushdown) {
-				unordered_map<idx_t, LogicalType> new_column_types;
-				bool do_pushdown = true;
-				for (idx_t i = 0; i < op->expressions.size(); i++) {
-					if (op->expressions[i]->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-						auto &col_ref = op->expressions[i]->Cast<BoundColumnRefExpression>();
-						auto column_id = column_ids[col_ref.Binding().column_index].GetPrimaryIndex();
-						if (new_column_types.find(column_id) != new_column_types.end()) {
-							// Only one reference per column is accepted
-							do_pushdown = false;
-							break;
-						}
-						new_column_types[column_id] = target_types[i];
-					} else {
-						do_pushdown = false;
-						break;
-					}
-				}
-				if (do_pushdown) {
-					logical_get.function.type_pushdown(context, logical_get.bind_data, new_column_types);
-					// We also have to modify the types to the logical_get.returned_types
-					for (auto &type : new_column_types) {
-						logical_get.returned_types[type.first] = type.second;
-					}
-					return std::move(op->children[0]);
-				}
-			}
-		}
 		// add the casts to the selection list
 		for (idx_t i = 0; i < target_types.size(); i++) {
 			if (source_types[i] != target_types[i]) {
