@@ -41,6 +41,7 @@ struct CatalogPushdownResult {
 class RemotePushdownOptimizer {
 public:
 	explicit RemotePushdownOptimizer(Binder &binder);
+	explicit RemotePushdownOptimizer(RemotePushdownOptimizer &parent);
 
 	void Rewrite(unique_ptr<SQLStatement> &statement);
 
@@ -61,13 +62,7 @@ private:
 	CatalogPushdownResult Rewrite(TableFunctionRef &ref);
 	CatalogPushdownResult Rewrite(BaseTableRef &ref);
 	CatalogPushdownResult Rewrite(ParsedExpression &expr);
-	void PushdownSubqueries(unique_ptr<ParsedExpression> &expr);
 
-	//! Returns true if expr (or any descendant) contains a qualified column reference to a local table.
-	//! Used to detect correlated subqueries that reference outer local tables.
-	bool HasLocalTableReference(ParsedExpression &expr);
-	bool HasLocalTableReference(QueryNode &node);
-	bool HasLocalTableReference(TableRef &ref);
 	//! Records a BaseTableRef's name, alias and columns as local for correlated subquery detection
 	void TrackLocalTable(const BaseTableRef &ref, optional_ptr<CatalogEntry> entry = nullptr);
 	//! Returns true if the function is defined as a macro in a local (non-remote) catalog
@@ -83,9 +78,11 @@ private:
 	static void StripCatalogName(QueryNode &node, const string &catalog_name);
 	static void StripCatalogName(TableRef &ref, const string &catalog_name);
 	static void StripCatalogName(ParsedExpression &expr, const string &catalog_name, bool strip_subquery_bodies = true);
+	bool RefersToLocalTable(ColumnRefExpression &col_ref);
 
 private:
 	Binder &binder;
+	optional_ptr<RemotePushdownOptimizer> parent;
 	bool search_path_initialized = false;
 	vector<reference<Catalog>> remote_catalogs_in_search_path;
 	vector<CatalogSearchEntry> local_catalogs_in_search_path;
@@ -99,12 +96,12 @@ private:
 	//! Populated by Rewrite(JoinRef&) when individual JoinRef children are pushed. Consumed and cleared by
 	//! Rewrite(SelectNode&) to strip those catalog names from outer SELECT/WHERE/HAVING/GROUP BY/ORDER BY
 	//! expressions so that catalog-qualified refs like "rpc.t1.i" remain resolvable after "rpc.t1" becomes
-	//! "quack_query_by_name(...) AS t1". Saved/restored at subquery boundaries to prevent scope leakage.
+	//! "quack_query_by_name(...) AS t1".
 	vector<string> from_pushed_catalog_names;
 	//! Aliases of remote tables individually pushed by Rewrite(JoinRef&). Consumed and cleared by
 	//! Rewrite(SelectNode&) to temporarily register them in local_table_names so HasLocalTableReference
 	//! detects correlated WHERE subqueries that reference a pushed alias (e.g. "t1.col" after "rpc.t1 AS t1"
-	//! was pushed to "quack_query_by_name(...) AS t1"). Saved/restored at subquery boundaries.
+	//! was pushed to "quack_query_by_name(...) AS t1").
 	vector<string> from_pushed_table_aliases;
 };
 } // namespace duckdb
