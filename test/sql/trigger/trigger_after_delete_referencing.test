@@ -114,24 +114,6 @@ SELECT sql LIKE '%REFERENCING OLD TABLE AS del%' FROM duckdb_triggers() WHERE tr
 ----
 true
 
-# BEFORE DELETE + REFERENCING OLD TABLE AS is rejected (transition tables are AFTER-only)
-statement ok
-CREATE TABLE t_before_old_ref (i INTEGER);
-
-statement ok
-CREATE TABLE log_before_old_ref (i INTEGER);
-
-statement ok
-INSERT INTO t_before_old_ref VALUES (1);
-
-statement error
-CREATE TRIGGER tr_before_old_ref BEFORE DELETE ON t_before_old_ref
-REFERENCING OLD TABLE AS deleted_rows
-FOR EACH STATEMENT
-    INSERT INTO log_before_old_ref SELECT i FROM deleted_rows;
-----
-Binder Error: Transition tables can only be specified for AFTER triggers
-
 # Body CTE with same name as OLD alias shadows the alias
 statement ok
 CREATE TABLE t_old_alias_shadow (i INTEGER);

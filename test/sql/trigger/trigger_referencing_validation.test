@@ -34,6 +34,38 @@ FOR EACH STATEMENT
 ----
 Not implemented Error: REFERENCING OLD TABLE AS is not yet supported for AFTER UPDATE triggers
 
+# Transition tables can only be used with AFTER triggers
+statement ok
+CREATE TABLE t_before (i INTEGER);
+
+statement error
+CREATE TRIGGER trg_before_ins BEFORE INSERT ON t_before
+REFERENCING NEW TABLE AS inserted_rows
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Binder Error: Transition tables can only be specified for AFTER triggers
+
+statement error
+CREATE TRIGGER trg_before_del BEFORE DELETE ON t_before
+REFERENCING OLD TABLE AS deleted_rows
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Binder Error: Transition tables can only be specified for AFTER triggers
+
+# UPDATE OF is not valid with transition tables
+statement ok
+CREATE TABLE t_update_of (i INTEGER, j INTEGER);
+
+statement error
+CREATE TRIGGER trg_update_of AFTER UPDATE OF i ON t_update_of
+REFERENCING NEW TABLE AS updated_rows
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Binder Error: UPDATE OF is not valid with transition tables
+
 # Grammar supports both OLD TABLE and NEW TABLE in one REFERENCING clause,
 # but the binder rejects invalid event/alias combinations regardless of order
 statement error
