@@ -289,11 +289,16 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
                                                  duckdb_parquet::ColumnChunk &column_chunk) {
 	for (const auto &write_info : state.write_info) {
 		// only care about data page encodings, data_page_header.encoding is meaningless for dict
-		if (write_info.page_header.type != PageType::DATA_PAGE &&
-		    write_info.page_header.type != PageType::DATA_PAGE_V2) {
-			continue;
+		switch (write_info.page_header.type) {
+		case PageType::DATA_PAGE:
+			column_chunk.meta_data.encodings.push_back(write_info.page_header.data_page_header.encoding);
+			break;
+		case PageType::DATA_PAGE_V2:
+			column_chunk.meta_data.encodings.push_back(write_info.page_header.data_page_header_v2.encoding);
+			break;
+		default:
+			break;
 		}
-		column_chunk.meta_data.encodings.push_back(write_info.page_header.data_page_header.encoding);
 	}
 
 	if (!state.stats_state) {
