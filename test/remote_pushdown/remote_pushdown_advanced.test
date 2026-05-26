@@ -430,6 +430,60 @@ select count(*) from rpc.t1 cross join (select 1 as x) v
 10
 
 # ============================================================
+# NATURAL JOIN: all remote → pushed
+# ============================================================
+
+# t1(i) = {0..9}, t2(i) = {5..14}: NATURAL JOIN on i → {5,6,7,8,9} → 5 rows
+query II
+explain select count(*) from rpc.t1 natural join rpc.t2
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from rpc.t1 natural join rpc.t2
+----
+5
+
+# NATURAL JOIN: mixed (remote t1, local local_t both have column i) → stays local
+# local_t={0..9}, t1={0..9}: all 10 values match → 10 rows; local scan visible
+query II
+explain select count(*) from rpc.t1 natural join local_t
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from rpc.t1 natural join local_t
+----
+10
+
+# ============================================================
+# Lambda expressions in queries referencing remote tables
+# ============================================================
+
+# list_transform in WHERE with remote table: lambda body has no catalog refs.
+# DuckDB evaluates list_transform locally on each row from rpc.t1 (rpc.t1 is individually pushed).
+# list_transform([1,2,3], lambda x: x + 2) = [3,4,5]; t1={0..9}; list_contains → i in {3,4,5} → 3 rows
+query I
+select count(*) from rpc.t1 where list_contains(list_transform([1, 2, 3], lambda x: x + 2), i)
+----
+3
+
+# Lambda with local macro: macro call inside lambda body marks query as local
+# rpc.t1 is pushed individually; list_transform with local macro executes locally
+statement ok
+create macro my_double(x) as x * 2;
+
+# list_contains(list_transform([2,3,4], lambda x: my_double(x)), i) = list_contains([4,6,8], i)
+# t1={0..9}; i in {4,6,8} → 3 rows
+query I
+select count(*) from rpc.t1 where list_contains(list_transform([2, 3, 4], lambda x: my_double(x)), i)
+----
+3
+
+statement ok
+drop macro my_double;
+
+# ============================================================
 # NULL handling in remote queries
 # ============================================================
 
