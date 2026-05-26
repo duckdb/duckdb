@@ -957,25 +957,62 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 			// Push individual remote USING clauses and collect the catalog names pushed,
 			// so that catalog-qualified column refs like "rpc.t1.i" in the WHERE condition
 			// can be stripped to "t1.i" before binding (the alias on the pushed wrapper is "t1").
+			//
+			// Pushing a USING clause wraps it in a quack TABLE_FUNCTION streaming connection.
+			// Mixing a TABLE_FUNCTION streaming connection with a native quack scan of another
+			// remote USING clause triggers "Multiple streaming scans". When multiple USING clauses
+			// are SINGLE_REMOTE, don't push any of them: native quack catalog scanning of
+			// multiple remote tables is sequential and avoids concurrent streaming slots.
 			from_pushed_catalog_names.clear();
 			from_pushed_table_aliases.clear();
+			// Save all USING clauses before analysis: Rewrite(JoinRef) inside a USING clause
+			// can push individual JoinRef children in-place even when the JoinRef result is
+			// UNKNOWN. If we decide not to push (multiple remote clauses), restore all copies
+			// to remove those stale quack wrappers before native execution.
+			vector<unique_ptr<TableRef>> saved_using_clauses;
 			for (auto &clause : node.using_clauses) {
-				auto clause_result = Rewrite(clause);
-				FinishPushdown(clause, clause_result);
-				if (clause_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-				    clause_result.catalog) {
-					const string &cat_name = clause_result.catalog->GetName();
-					bool found = false;
-					for (auto &existing : from_pushed_catalog_names) {
-						if (StringUtil::CIEquals(existing, cat_name)) {
-							found = true;
-							break;
+				saved_using_clauses.push_back(clause->Copy());
+			}
+			vector<CatalogPushdownResult> using_clause_results;
+			using_clause_results.reserve(node.using_clauses.size());
+			for (auto &clause : node.using_clauses) {
+				using_clause_results.push_back(Rewrite(clause));
+			}
+			// Count how many USING clauses are SINGLE_REMOTE (would open streaming slots if pushed).
+			idx_t remote_using_count = 0;
+			for (auto &r : using_clause_results) {
+				if (r.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+					++remote_using_count;
+				}
+			}
+			if (remote_using_count <= 1) {
+				// At most one streaming slot needed: push SINGLE_REMOTE USING clauses.
+				for (idx_t i = 0; i < node.using_clauses.size(); i++) {
+					FinishPushdown(node.using_clauses[i], using_clause_results[i]);
+					if (using_clause_results[i].reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+					    using_clause_results[i].catalog) {
+						const string &cat_name = using_clause_results[i].catalog->GetName();
+						bool found = false;
+						for (auto &existing : from_pushed_catalog_names) {
+							if (StringUtil::CIEquals(existing, cat_name)) {
+								found = true;
+								break;
+							}
+						}
+						if (!found) {
+							from_pushed_catalog_names.push_back(cat_name);
 						}
 					}
-					if (!found) {
-						from_pushed_catalog_names.push_back(cat_name);
-					}
 				}
+			} else {
+				// Multiple remote USING clauses: restore all to remove stale quack wrappers
+				// inserted in-place by Rewrite(JoinRef). Native quack catalog scanning handles
+				// multiple remote tables sequentially without opening concurrent streaming slots.
+				for (idx_t i = 0; i < node.using_clauses.size(); i++) {
+					node.using_clauses[i] = std::move(saved_using_clauses[i]);
+				}
+				from_pushed_catalog_names.clear();
+				from_pushed_table_aliases.clear();
 			}
 			if (node.condition) {
 				for (auto &cat_name : from_pushed_catalog_names) {

@@ -1222,6 +1222,66 @@ select i from (
 9
 
 
+# ============================================================
+# Bug 27: DELETE with multiple remote USING clauses each being
+# pushed to a concurrent quack TABLE_FUNCTION streaming slot.
+#
+# When two (or more) USING clauses were both SINGLE_REMOTE, the
+# optimizer pushed each one to a quack TABLE_FUNCTION in the loop,
+# opening a second concurrent streaming slot alongside the first.
+# This triggered "Multiple streaming scans" before reaching quack's
+# native scanning layer.
+#
+# Fix: pre-analyze all USING clauses and, when more than one is
+# SINGLE_REMOTE, restore all of them (removing stale quack wrappers
+# inserted in-place by Rewrite(JoinRef)) rather than pushing any.
+# Native quack catalog scanning handles multiple remote USING tables
+# sequentially (without concurrent TABLE_FUNCTION streaming slots).
+#
+# Note: quack currently does not support two concurrent streaming
+# connections of ANY kind (TABLE_FUNCTION or native). A DELETE with
+# two remote USING clauses still triggers "Multiple streaming scans"
+# at the quack layer. The optimizer fix ensures it does NOT create
+# two TABLE_FUNCTION streaming wrappers, which would fail earlier
+# and leave stale quack wrappers in the AST if USING clauses are
+# JoinRef trees with individually-pushed children.
+#
+# local_t.local_col = {0..9}, rpc.t1.i = {0..9}, rpc.t2.i = {5..14}
+# ============================================================
+
+# Two remote USING clauses: quack cannot handle two concurrent streaming
+# connections (TABLE_FUNCTION or native) — both approaches fail.
+# The fix ensures the error is the quack streaming limit (not an internal
+# optimizer state corruption or a confusing binder error).
+statement error
+delete from local_t using rpc.t1, rpc.t2
+where local_t.local_col = t1.i and local_t.local_col = t2.i
+----
+Multiple streaming scans
+
+# Single remote USING clause still works correctly after the fix.
+# rpc.t1 is pushed to a single quack streaming slot; local_t is local.
+# rpc.t1 ∩ local_t where i = local_col AND rpc.t1.i > 6 → removes {7,8,9}
+statement ok
+delete from local_t using rpc.t1
+where local_t.local_col = rpc.t1.i and rpc.t1.i > 6
+
+query I
+select count(*) from local_t
+----
+7
+
+query I
+select local_col from local_t order by local_col
+----
+0
+1
+2
+3
+4
+5
+6
+
 statement ok
 drop table local_t;
 
