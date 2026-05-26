@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb.hpp"
+#include "duckdb/common/path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -162,6 +163,29 @@ static string ParseGroupFromPath(string file) {
 
 namespace duckdb {
 
+// This function is used to check that tests for this extension are already registered
+// when "test" relative path is registered. The check is strict (full path, not prefix)
+// as it is better to double-register a test (it will run twice) than to accidentally skip it.
+static bool ExtensionIsCurrentDir(FileSystem &fs, const string &extension_test_path) {
+	// <abs_path>/test/sql is used by default in register_external_extension and in
+	// duckdb_extension_load in CMake scripts
+	string current_test_path = "test/sql";
+	if (extension_test_path.rfind(current_test_path) == std::string::npos) {
+		return false;
+	}
+	string working_dir = fs.GetWorkingDirectory();
+	string current_test_path_absolute = fs.JoinPath(working_dir, current_test_path);
+	string current_test_path_normalized = Path::Normalize(current_test_path_absolute);
+	string extension_test_path_absolute;
+	if (fs.IsPathAbsolute(extension_test_path)) {
+		extension_test_path_absolute = extension_test_path;
+	} else {
+		extension_test_path_absolute = fs.JoinPath(working_dir, extension_test_path);
+	}
+	string extension_test_path_normalized = Path::Normalize(extension_test_path_absolute);
+	return current_test_path_normalized == extension_test_path_normalized;
+}
+
 void RegisterSqllogictests() {
 	vector<string> excludes = {
 	    // tested separately
@@ -221,6 +245,9 @@ void RegisterSqllogictests() {
 	});
 
 	for (const auto &extension_test_path : ExtensionHelper::LoadedExtensionTestPaths()) {
+		if (ExtensionIsCurrentDir(*fs, extension_test_path)) {
+			continue;
+		}
 		listFiles(*fs, extension_test_path, [&](const string &path) {
 			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
 				auto fun = testRunner<true>;
