@@ -74,7 +74,7 @@ private:
 	static void StripCatalogName(SQLStatement &statement, const string &catalog_name);
 	static void StripCatalogName(QueryNode &node, const string &catalog_name);
 	static void StripCatalogName(TableRef &ref, const string &catalog_name);
-	static void StripCatalogName(ParsedExpression &expr, const string &catalog_name, bool strip_subquery_bodies = true);
+	static void StripCatalogName(ParsedExpression &expr, const string &catalog_name);
 	bool RefersToLocalTable(ColumnRefExpression &col_ref) const;
 
 	bool RefersToCTE(const string &cte_name, CatalogPushdownResult &result) const;

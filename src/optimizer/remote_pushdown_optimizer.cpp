@@ -846,8 +846,7 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &cata
 	}
 }
 
-void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const string &catalog_name,
-                                               bool strip_subquery_bodies) {
+void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const string &catalog_name) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
 		// Strip catalog prefix from qualified column references (e.g. catalog.table.col -> table.col or
@@ -860,18 +859,9 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
 		auto &subq = expr.Cast<SubqueryExpression>();
-		// When strip_subquery_bodies is false (partial-pushdown context: individual JoinRef children pushed),
-		// do NOT recurse into the subquery body. The subquery was not pushed, so its FROM clause still
-		// contains the original remote table refs (e.g. "rpc.t2"). Stripping them would produce an
-		// unqualified "t2" that cannot be resolved locally when the subquery is executed locally.
-		// The child expression (e.g. left side of IN) still needs stripping because it is an outer-scope
-		// column ref (e.g. "rpc.t1.i" that should become "t1.i"). When strip_subquery_bodies is true
-		// (full-pushdown context) the entire subquery is being serialized as remote SQL and must be stripped.
-		if (strip_subquery_bodies) {
-			StripCatalogName(*subq.subquery->node, catalog_name);
-		}
+		StripCatalogName(*subq.subquery->node, catalog_name);
 		if (subq.child) {
-			StripCatalogName(*subq.child, catalog_name, strip_subquery_bodies);
+			StripCatalogName(*subq.child, catalog_name);
 		}
 		return;
 	}
@@ -901,7 +891,7 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 		auto &cast_expr = expr.Cast<CastExpression>();
 		if (cast_expr.cast_type.id() == LogicalTypeId::UNBOUND) {
 			auto type_expr = UnboundType::GetTypeExpression(cast_expr.cast_type)->Copy();
-			StripCatalogName(*type_expr, catalog_name, strip_subquery_bodies);
+			StripCatalogName(*type_expr, catalog_name);
 			cast_expr.cast_type = LogicalType::UNBOUND(std::move(type_expr));
 		}
 		// Fall through to EnumerateChildren to strip catalog refs inside the cast argument
@@ -916,7 +906,7 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 		// Fall through to EnumerateChildren to strip catalog refs inside type parameters
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](ParsedExpression &child) { StripCatalogName(child, catalog_name, strip_subquery_bodies); });
+	    expr, [&](ParsedExpression &child) { StripCatalogName(child, catalog_name); });
 }
 
 void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &catalog_name) {
