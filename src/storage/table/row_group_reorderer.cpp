@@ -24,7 +24,7 @@ bool CompareValues(const Value &v1, const Value &v2, const OrderByStatistics ord
 
 idx_t GetQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats, const OrderByColumnType type) {
 	if (!stats.CanHaveNull()) {
-		return row_group.count;
+		return row_group.GetCommittedRowCount();
 	}
 
 	if (type == OrderByColumnType::NUMERIC) {
