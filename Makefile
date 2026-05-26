@@ -561,7 +561,7 @@ test_release_tag:
 	$(PYTHON) scripts/ci/run_tests.py --test-flags="--select-tag release" ./build/release/$(UNITTEST_BINARY) $(T)
 
 unittest_relassert:
-	$(PYTHON) scripts/ci/run_tests.py build/relassert/$(UNITTEST_BINARY) $(T)
+	$(PYTHON) scripts/ci/run_tests.py build/relassert/$(UNITTEST_BINARY) $(UNITTEST_SLOW_FLAGS) $(T)
 
 smoke:
 	$(PYTHON) scripts/ci/run_tests.py --batch-timeout 120 --test-list test/smoke_tests.list $(SMOKE_UNITTEST) $(T)
@@ -821,6 +821,7 @@ generate-files-deps:
 generate-files:
 	$(PYTHON) scripts/generate_c_api.py
 	$(PYTHON) scripts/generate_functions.py
+	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py
 	$(PYTHON) scripts/generate_serialization.py
 	$(PYTHON) scripts/generate_storage_info.py

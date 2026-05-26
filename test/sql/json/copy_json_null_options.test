@@ -1,0 +1,35 @@
+# name: test/sql/json/copy_json_null_options.test
+# description: Test that NULL values for COPY (FORMAT JSON) options produce a clean Binder Error (issue #22829)
+# group: [json]
+
+require json
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_dateformat.json' (FORMAT JSON, dateformat NULL);
+----
+<REGEX>:Binder Error.*dateformat.*cannot be NULL.*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_date_format.json' (FORMAT JSON, date_format NULL);
+----
+<REGEX>:Binder Error.*date_format.*cannot be NULL.*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_timestampformat.json' (FORMAT JSON, timestampformat NULL);
+----
+<REGEX>:Binder Error.*timestampformat.*cannot be NULL.*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_timestamp_format.json' (FORMAT JSON, timestamp_format NULL);
+----
+<REGEX>:Binder Error.*timestamp_format.*cannot be NULL.*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_array.json' (FORMAT JSON, array NULL);
+----
+<REGEX>:Binder Error.*array.*cannot be NULL.*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_file_extension.json' (FORMAT JSON, file_extension NULL);
+----
+<REGEX>:Binder Error.*file_extension.*cannot be NULL.*

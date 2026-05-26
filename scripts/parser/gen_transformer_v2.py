@@ -364,7 +364,7 @@ def _is_by_value(rule_name, rule_types):
     info = rule_types.get(rule_name)
     if info is None:
         return False
-    return info.by_value or info.cpp_type.startswith('unique_ptr<')
+    return info.by_value or 'unique_ptr<' in info.cpp_type
 
 
 def _classify_literal():
@@ -384,8 +384,6 @@ def _classify_reference(name, idx, rule_types, excluded_rules):
         var_name = to_snake_case(name)
         lines = [f"\tauto {var_name} = list_pr.Child<IdentifierParseResult>({idx}).identifier;"]
         return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
-    if name in excluded_rules:
-        return _classify_literal()
     if name in rule_types:
         cpp_type = rule_types[name].cpp_type
         var_name = to_snake_case(name)
@@ -397,6 +395,8 @@ def _classify_reference(name, idx, rule_types, excluded_rules):
             by_value=_is_by_value(name, rule_types),
             extraction_lines=lines,
         )
+    if name in excluded_rules:
+        return _classify_literal()
     return None
 
 
@@ -418,8 +418,6 @@ def _classify_optional_reference(name, idx, rule_types, excluded_rules):
             f"\t}}",
         ]
         return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
-    if name in excluded_rules:
-        return _classify_literal()
     if name in rule_types:
         cpp_type = rule_types[name].cpp_type
         lines = [
@@ -433,6 +431,8 @@ def _classify_optional_reference(name, idx, rule_types, excluded_rules):
             by_value=_is_by_value(name, rule_types),
             extraction_lines=lines,
         )
+    if name in excluded_rules:
+        return _classify_literal()
     return None
 
 
@@ -467,7 +467,7 @@ def _build_wrapped_expr(base_expr, parens_count):
     return expr
 
 
-def _classify_macro(node, idx, rule_types):
+def _classify_macro(node, idx, rule_types, optional=False):
     """
     Unified classifier for arbitrary Parens/List nesting around a leaf rule.
 
@@ -478,6 +478,9 @@ def _classify_macro(node, idx, rule_types):
       List(D), Parens(List(D)), List(Parens(D)), Parens(List(Parens(D))), ...
 
     Nested lists (List(List(D))) produce vector<vector<T>> and are not supported.
+
+    When optional=True the node is wrapped in an OptionalParseResult: the vector
+    case emits a HasResult() guard (scalar optional macros are not supported).
     """
     result = _analyze_macro_node(node)
     if result is None:
@@ -497,6 +500,8 @@ def _classify_macro(node, idx, rule_types):
         return None  # nested lists not supported
 
     if not list_positions:
+        if optional:
+            return None  # scalar optional macro not supported
         # Scalar path: all ops are 'parens'.
         access_expr = _build_wrapped_expr(f"list_pr.GetChild({idx})", len(ops))
         if is_identifier:
@@ -517,22 +522,46 @@ def _classify_macro(node, idx, rule_types):
     pre_parens = ops[:list_pos].count('parens')
     post_parens = ops[list_pos + 1 :].count('parens')
 
-    outer_expr = _build_wrapped_expr(f"list_pr.GetChild({idx})", pre_parens)
     item_var = f"{var_name}_item"
     item_access = _build_wrapped_expr(item_var, post_parens)
 
     if is_identifier:
-        push_line = f"\t\t{var_name}.push_back({item_access}.Cast<IdentifierParseResult>().identifier);"
+        # item_var is reference<ParseResult> (std::reference_wrapper); need .get() when not already
+        # unwrapped by ExtractResultFromParens (which returns ParseResult&).
+        ident_access = f"{item_access}.get()" if post_parens == 0 else item_access
+        push_content = f"{var_name}.push_back({ident_access}.Cast<IdentifierParseResult>().identifier);"
     else:
-        push_line = f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({item_access}));"
+        push_content = f"{var_name}.push_back(transformer.Transform<{child_type}>({item_access}));"
 
-    lines = [
-        f"\tauto {var_name}_items = ExtractParseResultsFromList({outer_expr});",
-        f"\tvector<{child_type}> {var_name};",
-        f"\tfor (auto &{item_var} : {var_name}_items) {{",
-        push_line,
-        f"\t}}",
+    if optional:
+        opt_var = f"{var_name}_opt"
+        base_expr = f"{opt_var}.GetResult()"
+        ind = "\t\t"
+    else:
+        base_expr = f"list_pr.GetChild({idx})"
+        ind = "\t"
+
+    outer_expr = _build_wrapped_expr(base_expr, pre_parens)
+    loop_lines = [
+        f"{ind}auto {var_name}_items = ExtractParseResultsFromList({outer_expr});",
+        f"{ind}for (auto &{item_var} : {var_name}_items) {{",
+        f"{ind}\t{push_content}",
+        f"{ind}}}",
     ]
+
+    if optional:
+        lines = [
+            f"\tauto &{opt_var} = list_pr.Child<OptionalParseResult>({idx});",
+            f"\tvector<{child_type}> {var_name};",
+            f"\tif ({opt_var}.HasResult()) {{",
+            *loop_lines,
+            f"\t}}",
+        ]
+    else:
+        lines = [
+            f"\tvector<{child_type}> {var_name};",
+            *loop_lines,
+        ]
     return SeqElement(
         skip=False,
         var_name=var_name,
@@ -606,7 +635,9 @@ def classify_sequence_element(child, idx, rule_types, excluded_rules):
             # A* is represented as OptionalNode(RepeatNode(A)), matching the runtime
             # OptionalMatcher(RepeatMatcher(A)) structure.
             return _classify_repeat(inner, idx, rule_types, optional=True)
-        return None  # OptionalNode(ParensNode) etc. - deferred
+        if isinstance(inner, (ParensNode, ListMacroNode)):
+            return _classify_macro(inner, idx, rule_types, optional=True)
+        return None
     if isinstance(child, RepeatNode):
         return _classify_repeat(child, idx, rule_types, optional=False)
     if isinstance(child, (ParensNode, ListMacroNode)):
@@ -621,10 +652,24 @@ def classify_sequence_elements(children, rule_types, excluded_rules):
     Returns list of SeqElement, or None if any element cannot be classified.
     """
     elements = []
+    seen = {}  # var_name -> occurrence count, for deduplication
     for idx, child in enumerate(children):
         elem = classify_sequence_element(child, idx, rule_types, excluded_rules)
         if elem is None:
             return None
+        if not elem.skip:
+            count = seen.get(elem.var_name, 0)
+            seen[elem.var_name] = count + 1
+            if count > 0:
+                old_name = elem.var_name
+                new_name = f"{old_name}_{count}"
+                elem.extraction_lines = [line.replace(old_name, new_name) for line in elem.extraction_lines]
+                # For identifier rules the field access is always '.identifier'; restore it if renamed.
+                if old_name == "identifier":
+                    elem.extraction_lines = [
+                        line.replace(f".{new_name}", ".identifier") for line in elem.extraction_lines
+                    ]
+                elem.var_name = new_name
         elements.append(elem)
     return elements
 
@@ -741,6 +786,10 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
         return_type = rule.return_type
         if return_type is None:
             skipped.append((rule_name, "no return type in grammar_types.yml"))
+            continue
+
+        if rule_name in excluded_rules:
+            skipped.append((rule_name, "in excluded_rules (manually registered)"))
             continue
 
         try:
@@ -897,7 +946,10 @@ def _extract_func_signature(text, func_name):
 
 
 def _norm_ws(s):
-    return re.sub(r'\s+', ' ', s).strip()
+    s = re.sub(r'\s+', ' ', s).strip()
+    s = re.sub(r'\(\s+', '(', s)
+    s = re.sub(r'\s+\)', ')', s)
+    return s
 
 
 def _check_implementations(gram_stem, body_stubs):
@@ -1022,19 +1074,43 @@ def main():
     args = arg_parser.parse_args()
 
     gram_files_to_gen = [
+        'alter.gram',
         'analyze.gram',
         'attach.gram',
         'call.gram',
         'checkpoint.gram',
+        'comment.gram',
+        # 'common.gram',
+        'connect.gram',
+        # 'copy.gram',
+        # 'create_index.gram',
+        # 'create_macro.gram',
         'create_schema.gram',
         'create_secret.gram',
+        # 'create_sequence.gram',
+        # 'create_table.gram',
+        'create_trigger.gram',
+        # 'create_type.gram',
         'create_view.gram',
-        'connect.gram',
         'deallocate.gram',
+        'delete.gram',
+        # 'describe.gram',
         'detach.gram',
+        # 'drop.gram',
         'execute.gram',
+        'explain.gram',
         'export.gram',
+        # 'expression.gram',
+        # 'insert.gram',
+        'load.gram',
+        # 'merge_into.gram',
+        # 'pivot.gram',
+        'pragma.gram',
+        'prepare.gram',
+        # 'select.gram',
+        # 'set.gram',
         'transaction.gram',
+        'update.gram',
         'use.gram',
         'vacuum.gram',
     ]

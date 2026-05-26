@@ -344,6 +344,8 @@ public:
 
 	void BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
 	                      const string &catalog = "", const string &schema = "");
+	unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
+	string GetExpressionName(const ParsedExpression &expr);
 
 private:
 	//! The parent binder (if any)

@@ -47,8 +47,8 @@ struct StorageManagerOptions {
 	bool use_direct_io = false;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	optional_idx block_alloc_size;
-	optional_idx storage_version;
-	optional_idx version_number;
+	StorageVersion storage_version = StorageVersion::INVALID;
+	StorageVersion version_number = StorageVersion::INVALID;
 	optional_idx block_header_size;
 	//! Unique database identifier and optional encryption salt.
 	data_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
@@ -131,13 +131,18 @@ public:
 		return iteration_count;
 	}
 	//! Return the version number of the file.
-	uint64_t GetVersionNumber() const;
+	StorageVersion GetVersionNumber() const;
 	//! Return the database identifier.
 	data_ptr_t GetDBIdentifier() {
 		return options.db_identifier;
 	}
 
 private:
+	//! Rewrites the main header
+	//! Usage should be avoided
+	//! Except for phasing-out the storage version
+	void RewriteMainHeader(QueryContext &context,
+	                       StorageVersion version_number = MainHeader::DEPRECATED_VERSION_NUMBER);
 	//! Loads the free list of the file.
 	void LoadFreeList(QueryContext context);
 

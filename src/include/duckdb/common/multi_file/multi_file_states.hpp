@@ -200,6 +200,8 @@ public:
 	DataChunk scan_chunk;
 	//! The executor to transform scan_chunk into the final result with FinalizeChunk
 	ExpressionExecutor executor;
+	//! Number of rows scanned by this thread (for profiling)
+	idx_t rows_scanned = 0;
 };
 
 } // namespace duckdb

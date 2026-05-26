@@ -288,7 +288,8 @@ static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<Func
 	serializer.WriteProperty(102, "names", bind_data.names);
 	ParquetOptionsSerialization serialization(parquet_data.GetParquetOptions(), bind_data.file_options);
 	serializer.WriteProperty(103, "parquet_options", serialization);
-	if (serializer.ShouldSerialize(3)) {
+	// previously serialization version 3
+	if (serializer.ShouldSerialize(StorageVersion::V1_2_0)) {
 		serializer.WriteProperty(104, "table_columns", bind_data.table_columns);
 	}
 }
@@ -420,6 +421,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
 	table_function.named_parameters["parquet_version"] = LogicalType::VARCHAR;
 	table_function.named_parameters["can_have_nan"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["prefetch_strategy"] = LogicalType::VARCHAR;
 	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
 	table_function.supports_pushdown_extract = ParquetScanSupportPushdownExtract;
 	table_function.serialize = ParquetScanSerialize;
@@ -474,6 +476,13 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string 
 		options.can_have_nan = GetBooleanArgument(key, values);
 		return true;
 	}
+	if (key == "prefetch_strategy") {
+		if (values.size() != 1) {
+			throw BinderException("Parquet prefetch_strategy cannot be empty!");
+		}
+		options.prefetch_strategy = ParquetPrefetchStrategyOptionFromString(StringValue::Get(values[0]));
+		return true;
+	}
 	return false;
 }
 
@@ -526,6 +535,10 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &ori
 	}
 	if (key == "encryption_config") {
 		options.encryption_config = ParquetEncryptionConfig::Create(context, val);
+		return true;
+	}
+	if (key == "prefetch_strategy") {
+		options.prefetch_strategy = ParquetPrefetchStrategyOptionFromString(StringValue::Get(val));
 		return true;
 	}
 	return false;

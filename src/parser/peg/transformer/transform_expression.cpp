@@ -134,22 +134,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 	return expr;
 }
 
-unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformNestedColumnName(PEGTransformer &transformer,
-                                                                                 ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<string> column_names;
-	auto &opt_identifiers = list_pr.Child<OptionalParseResult>(0);
-	if (opt_identifiers.HasResult()) {
-		auto &repeat_identifiers = opt_identifiers.GetResult().Cast<RepeatParseResult>();
-		for (auto &child : repeat_identifiers.GetChildren()) {
-			auto &repeat_list = child.get().Cast<ListParseResult>();
-			column_names.push_back(repeat_list.Child<IdentifierParseResult>(0).identifier);
-		}
-	}
-	column_names.push_back(list_pr.Child<IdentifierParseResult>(1).identifier);
-	return make_uniq<ColumnRefExpression>(std::move(column_names));
-}
-
 // ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName /
 // NestedColumnName
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnReference(PEGTransformer &transformer,
@@ -691,7 +675,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsLiteral(PEGTransf
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &not_expr = list_pr.Child<OptionalParseResult>(1);
 	auto &inner_list_pr = list_pr.Child<ListParseResult>(2);
-	auto literal_value = transformer.TransformEnum<Value>(inner_list_pr.Child<ChoiceParseResult>(0).GetResult());
+	auto literal_value = transformer.Transform<Value>(inner_list_pr.Child<ChoiceParseResult>(0).GetResult());
 	if (literal_value.IsNull()) {
 		auto expr_type = not_expr.HasResult() ? ExpressionType::OPERATOR_IS_NOT_NULL : ExpressionType::OPERATOR_IS_NULL;
 		return make_uniq<OperatorExpression>(expr_type, nullptr);
@@ -1501,13 +1485,29 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformParensExpression(PE
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformConstantLiteral(PEGTransformer &transformer,
                                                                              ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto val = transformer.TransformEnum<Value>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+	auto val = transformer.Transform<Value>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 	if (val.IsNull()) {
 		return make_uniq<ConstantExpression>(val);
 	} else {
 		auto varchar_val = make_uniq<ConstantExpression>(val.GetValue<string>().substr(0, 1));
 		return make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(varchar_val));
 	}
+}
+
+Value PEGTransformerFactory::TransformFalseLiteral(PEGTransformer &transformer, ParseResult &parse_result) {
+	return Value(false);
+}
+
+Value PEGTransformerFactory::TransformTrueLiteral(PEGTransformer &transformer, ParseResult &parse_result) {
+	return Value(true);
+}
+
+Value PEGTransformerFactory::TransformNullLiteral(PEGTransformer &transformer, ParseResult &parse_result) {
+	return Value();
+}
+
+Value PEGTransformerFactory::TransformUnknownLiteral(PEGTransformer &transformer, ParseResult &parse_result) {
+	return Value();
 }
 
 // SingleExpression <- LiteralExpression /

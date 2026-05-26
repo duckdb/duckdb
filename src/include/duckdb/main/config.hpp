@@ -36,7 +36,7 @@
 #include "duckdb/main/user_settings.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/types/type_manager.hpp"
-#include "duckdb/common/serialization_compatibility.hpp"
+#include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/enums/debug_verification_mode.hpp"
 
 namespace duckdb {
@@ -102,7 +102,7 @@ struct DBConfigOptions {
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
 	bool checkpoint_on_shutdown = true;
 	//! Serialize the metadata on checkpoint with compatibility for a given DuckDB version.
-	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
+	StorageCompatibility storage_compatibility = StorageCompatibility::Default();
 	//! Initialize the database with the standard set of DuckDB functions
 	//! You should probably not touch this unless you know what you are doing
 	bool initialize_default_database = true;

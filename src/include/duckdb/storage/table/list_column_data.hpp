@@ -60,7 +60,8 @@ public:
 	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 
 	void GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
-	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result) override;
+	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result,
+	                          const ColumnSegmentInfoScanOptions &options) override;
 
 	void SetValidityData(shared_ptr<ValidityColumnData> validity_p);
 	void SetChildData(shared_ptr<ColumnData> child_column_p);

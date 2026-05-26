@@ -200,7 +200,7 @@ public:
 	                                          ReadStream &source, const LogicalType &type);
 
 	virtual void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-	                                  vector<ColumnSegmentInfo> &result);
+	                                  vector<ColumnSegmentInfo> &result, const ColumnSegmentInfoScanOptions &options);
 	virtual void Verify(RowGroup &parent);
 
 	FilterPropagateResult CheckZonemap(const StorageIndex &index, TableFilter &filter);

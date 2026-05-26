@@ -100,7 +100,7 @@ statement ok
 CREATE OR REPLACE TABLE sleep_profiling AS SELECT * FROM read_json('{TEST_DIR}/sleep_profiling.json')
 
 query T
-SELECT cpu_time >= 0.05 FROM sleep_profiling WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1
+SELECT query.cpu_time >= 0.05 FROM sleep_profiling WHERE contains(query.sql, 'sleep_ms') LIMIT 1
 ----
 true
 
@@ -126,7 +126,7 @@ statement ok
 CREATE OR REPLACE TABLE sleep_profiling_multi AS SELECT * FROM read_json('{TEST_DIR}/sleep_profiling_multi.json')
 
 query T
-SELECT cpu_time >= 0.05 FROM sleep_profiling_multi WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1
+SELECT query.cpu_time >= 0.05 FROM sleep_profiling_multi WHERE contains(query.sql, 'sleep_ms') LIMIT 1
 ----
 true
 
@@ -164,7 +164,7 @@ statement ok
 CREATE OR REPLACE TABLE sleep_nested_profiling AS SELECT * FROM read_json('{TEST_DIR}/sleep_nested_profiling.json')
 
 query T
-SELECT cpu_time >= 0.05 FROM sleep_nested_profiling WHERE contains(extra_info, 'sleep_ms') OR contains(query_name, 'sleep_ms') LIMIT 1
+SELECT query.cpu_time >= 0.05 FROM sleep_nested_profiling WHERE contains(query.sql, 'sleep_ms') LIMIT 1
 ----
 true
 
