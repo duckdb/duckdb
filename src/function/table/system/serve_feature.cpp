@@ -95,8 +95,8 @@ static string BuildServeSQL(ClientContext &context, const vector<string> &featur
 	auto schemas = Catalog::GetAllSchemas(context);
 	bool spine_found = false;
 	for (auto &schema : schemas) {
-		auto entry = schema.get().GetEntry(schema.get().GetCatalogTransaction(context), CatalogType::TABLE_ENTRY,
-		                                   spine_table);
+		auto entry =
+		    schema.get().GetEntry(schema.get().GetCatalogTransaction(context), CatalogType::TABLE_ENTRY, spine_table);
 		if (entry) {
 			spine_found = true;
 			break;
@@ -117,10 +117,9 @@ static string BuildServeSQL(ClientContext &context, const vector<string> &featur
 			if (first_entity.empty()) {
 				first_entity = entry->entity_column;
 			} else if (entry->entity_column != first_entity) {
-				throw BinderException(
-				    "Features have different entity columns (\"%s\" vs \"%s\"). "
-				    "Use ENTITY to specify the spine's entity column explicitly.",
-				    first_entity, entry->entity_column);
+				throw BinderException("Features have different entity columns (\"%s\" vs \"%s\"). "
+				                      "Use ENTITY to specify the spine's entity column explicitly.",
+				                      first_entity, entry->entity_column);
 			}
 		}
 	}
