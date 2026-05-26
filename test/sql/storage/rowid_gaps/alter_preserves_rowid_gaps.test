@@ -3,6 +3,7 @@
 # group: [rowid_gaps]
 
 require skip_reload
+require no_alternative_verify
 
 statement ok
 ATTACH '{TEST_DIR}/rowid_gap_alter.db' AS rowid_gap_alter (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);

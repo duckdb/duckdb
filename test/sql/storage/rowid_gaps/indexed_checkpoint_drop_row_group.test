@@ -41,6 +41,11 @@ SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_vacuum_idx.t WHERE i >= 4
 4096	6143	2048
 
 query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('rowid_gap_vacuum_idx.t');
+----
+2
+
+query I
 SELECT count(*) FROM rowid_gap_vacuum_idx.t WHERE rowid >= 2048 AND rowid < 4096;
 ----
 0
