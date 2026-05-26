@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/storage/caching_mode.hpp"
 
 namespace duckdb {
@@ -22,12 +23,11 @@ struct FileCompressionOptions {
 	    : type(type) {
 	}
 	constexpr FileCompressionOptions(FileCompressionType type, int64_t compression_level)
-	    : type(type), compression_level(compression_level), has_compression_level(true) {
+	    : type(type), compression_level(compression_level) {
 	}
 
 	FileCompressionType type = FileCompressionType::UNCOMPRESSED;
-	int64_t compression_level = 0;
-	bool has_compression_level = false;
+	optional<int64_t> compression_level;
 };
 
 class FileOpenFlags {
@@ -102,7 +102,7 @@ public:
 	void SetCompression(FileCompressionType new_compression) {
 		compression_options.type = new_compression;
 		if (new_compression == FileCompressionType::UNCOMPRESSED) {
-			compression_options.has_compression_level = false;
+			compression_options.compression_level = nullopt;
 		}
 	}
 
