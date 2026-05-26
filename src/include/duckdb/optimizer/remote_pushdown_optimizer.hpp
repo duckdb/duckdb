@@ -66,10 +66,6 @@ private:
 	void TrackLocalTable(const BaseTableRef &ref);
 	//! Returns true if the function is defined as a macro in a local (non-remote) catalog
 	bool IsLocalMacro(const FunctionExpression &func);
-	//! Returns true if expr/ref/node contains a column reference to a local table (for correlated subquery detection)
-	bool HasLocalTableReference(ParsedExpression &expr);
-	bool HasLocalTableReference(TableRef &ref);
-	bool HasLocalTableReference(QueryNode &node);
 
 	void FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result);
 	void FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result);

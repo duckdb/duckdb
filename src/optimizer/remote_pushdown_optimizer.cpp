@@ -333,7 +333,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 				if (!found) {
 					pushed_cats.push_back(from_result.catalog->GetName());
 				}
-				}
+			}
 			for (auto &cat_name : pushed_cats) {
 				// In the partial-pushdown context (individual JoinRef children pushed) we must NOT
 				// recurse into subquery bodies: those subqueries were not pushed and still contain
@@ -1034,104 +1034,16 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
-	// Track size of from_pushed_catalog_names before processing so we can later identify
-	// catalogs added by nested JoinRef children (pushed via the left side using this optimizer).
-	idx_t initial_cats_size = from_pushed_catalog_names.size();
 	auto left_result = Rewrite(ref.left);
 
 	// the left side of a join can be correlated to the left side - use a child optimizer to track this
 	RemotePushdownOptimizer child_optimizer(*this);
 	auto right_result = child_optimizer.Rewrite(ref.right);
-	// Merge pushed catalogs from the right side's nested JoinRef children into this optimizer's tracking.
-	// The child_optimizer processes the right side in isolation; any inner JoinRef pushes there add
-	// to child_optimizer.from_pushed_catalog_names, not to this->from_pushed_catalog_names. Without
-	// merging, the condition stripping loop below (which uses initial_cats_size..size()) and the
-	// enclosing SelectNode would not see those catalogs and would leave catalog-qualified refs like
-	// "rpc.t1.i" in the outer ON condition and SELECT list unstripped.
-	for (auto &cat : child_optimizer.from_pushed_catalog_names) {
-		bool already_tracked = false;
-		for (auto &existing : from_pushed_catalog_names) {
-			if (StringUtil::CIEquals(existing, cat)) {
-				already_tracked = true;
-				break;
-			}
-		}
-		if (!already_tracked) {
-			from_pushed_catalog_names.push_back(cat);
-		}
-	}
 	auto result = Merge(left_result, right_result);
 	// Also analyze the join condition - it may contain subqueries or local macro calls
 	// that affect whether the join can be pushed as a whole.
-	// Save condition before analysis: Rewrite may push inner JoinRef children in-place inside
-	// scalar subqueries. If the condition makes the result UNKNOWN, restore it to prevent stale wrappers.
-	unique_ptr<ParsedExpression> saved_condition;
 	if (ref.condition) {
-		saved_condition = ref.condition->Copy();
 		result = Merge(result, Rewrite(*ref.condition));
-	}
-	// If both sides (and the condition) resolve to the same remote catalog, propagate upward
-	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		return result;
-	}
-	// Restore condition to remove any stale quack wrappers Rewrite inserted in-place.
-	if (saved_condition) {
-		ref.condition = std::move(saved_condition);
-	}
-	// Detect correlated references from the right side to the left side's tables (lateral joins).
-	// Temporarily register left aliases in local_table_names so HasLocalTableReference sees them.
-	// This check is deferred until after the SINGLE_REMOTE guard: when both sides are SINGLE_REMOTE,
-	// the whole join can be pushed as a unit (the lateral's left table is in scope on the remote).
-	// Detecting correlation during Rewrite(right) would downgrade it from SINGLE_REMOTE to UNKNOWN,
-	// turning a fully-remote lateral into an unpushable mixed query.
-	case_insensitive_set_t left_aliases;
-	CollectTableAliases(*ref.left, left_aliases);
-	case_insensitive_set_t newly_added;
-	for (auto &alias : left_aliases) {
-		if (local_table_names.insert(alias).second) {
-			newly_added.insert(alias);
-		}
-	}
-	bool right_correlated_to_left = (right_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-	                                 HasLocalTableReference(*ref.right));
-	for (auto &alias : newly_added) {
-		local_table_names.erase(alias);
-	}
-	FinishPushdown(ref.left, left_result);
-	FinishPushdown(ref.right, right_correlated_to_left ? CatalogPushdownResult {} : right_result);
-	// Strip the catalog name from the join condition and track pushed catalogs in
-	// from_pushed_catalog_names so the enclosing SelectNode strips those names from its
-	// outer expressions (SELECT list, WHERE, HAVING, ORDER BY, etc.).
-	for (idx_t ci = 0; ci < 2; ci++) {
-		auto &child_result = (ci == 0) ? left_result : right_result;
-		auto &child_ref = (ci == 0) ? ref.left : ref.right;
-		if (child_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG || !child_result.catalog) {
-			continue;
-		}
-		const string &cat_name = child_result.catalog->GetName();
-		if (ref.condition) {
-			StripCatalogName(*ref.condition, cat_name, false);
-		}
-		// Only track as an active streaming slot when FinishPushdown actually wrapped with TABLE_FUNCTION.
-		if (child_ref->type != TableReferenceType::TABLE_FUNCTION) {
-			continue;
-		}
-		bool already_tracked = false;
-		for (auto &existing : from_pushed_catalog_names) {
-			if (StringUtil::CIEquals(existing, cat_name)) {
-				already_tracked = true;
-				break;
-			}
-		}
-		if (!already_tracked) {
-			from_pushed_catalog_names.push_back(cat_name);
-		}
-	}
-	// Strip from the condition using catalogs added by nested JoinRef children during left-side Rewrite.
-	if (ref.condition) {
-		for (idx_t ci = initial_cats_size; ci < from_pushed_catalog_names.size(); ci++) {
-			StripCatalogName(*ref.condition, from_pushed_catalog_names[ci], false);
-		}
 	}
 	return result;
 }
@@ -1252,106 +1164,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 
 	// Not found in any local catalog - push to the single remote catalog in the search path
 	return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, remote_catalogs_in_search_path.front().get()};
-}
-
-bool RemotePushdownOptimizer::HasLocalTableReference(ParsedExpression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-		return RefersToLocalTable(expr.Cast<ColumnRefExpression>());
-	}
-	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
-		auto &subq = expr.Cast<SubqueryExpression>();
-		if (subq.child && HasLocalTableReference(*subq.child)) {
-			return true;
-		}
-		return subq.subquery && HasLocalTableReference(*subq.subquery->node);
-	}
-	bool found = false;
-	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child) {
-		if (!found) {
-			found = HasLocalTableReference(child);
-		}
-	});
-	return found;
-}
-
-bool RemotePushdownOptimizer::HasLocalTableReference(QueryNode &node) {
-	if (node.type == QueryNodeType::SELECT_NODE) {
-		auto &select = node.Cast<SelectNode>();
-		for (auto &expr : select.select_list) {
-			if (HasLocalTableReference(*expr)) {
-				return true;
-			}
-		}
-		if (select.where_clause && HasLocalTableReference(*select.where_clause)) {
-			return true;
-		}
-		if (select.having && HasLocalTableReference(*select.having)) {
-			return true;
-		}
-		if (select.qualify && HasLocalTableReference(*select.qualify)) {
-			return true;
-		}
-		for (auto &expr : select.groups.group_expressions) {
-			if (HasLocalTableReference(*expr)) {
-				return true;
-			}
-		}
-		if (select.from_table && HasLocalTableReference(*select.from_table)) {
-			return true;
-		}
-		for (auto &modifier : select.modifiers) {
-			if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
-				for (auto &order : modifier->Cast<OrderModifier>().orders) {
-					if (HasLocalTableReference(*order.expression)) {
-						return true;
-					}
-				}
-			}
-		}
-		return false;
-	}
-	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
-		for (auto &child : node.Cast<SetOperationNode>().children) {
-			if (child && HasLocalTableReference(*child)) {
-				return true;
-			}
-		}
-		return false;
-	}
-	return false;
-}
-
-bool RemotePushdownOptimizer::HasLocalTableReference(TableRef &ref) {
-	switch (ref.type) {
-	case TableReferenceType::TABLE_FUNCTION: {
-		auto &tf = ref.Cast<TableFunctionRef>();
-		return tf.function && HasLocalTableReference(*tf.function);
-	}
-	case TableReferenceType::SUBQUERY: {
-		auto &sq = ref.Cast<SubqueryRef>();
-		return sq.subquery && HasLocalTableReference(*sq.subquery->node);
-	}
-	case TableReferenceType::JOIN: {
-		auto &join = ref.Cast<JoinRef>();
-		if (HasLocalTableReference(*join.left) || HasLocalTableReference(*join.right)) {
-			return true;
-		}
-		return join.condition && HasLocalTableReference(*join.condition);
-	}
-	case TableReferenceType::EXPRESSION_LIST: {
-		auto &el = ref.Cast<ExpressionListRef>();
-		for (auto &row : el.values) {
-			for (auto &expr : row) {
-				if (HasLocalTableReference(*expr)) {
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-	default:
-		return false;
-	}
 }
 
 bool RemotePushdownOptimizer::RefersToLocalTable(ColumnRefExpression &col_ref) const {
