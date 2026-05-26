@@ -13,12 +13,12 @@ COPY (
 	FROM range(1000) tbl(i)
 ) TO '{TEST_DIR}/timetz_metadata.parquet' (FORMAT PARQUET, COMPRESSION ZSTD)
 
-query TIIIII
-SELECT path_in_schema, encodings <> '', stats_min IS NOT NULL, stats_max IS NOT NULL,
-       stats_min_value IS NOT NULL, stats_max_value IS NOT NULL
+query TITTTT
+SELECT path_in_schema, encodings <> '', stats_min::VARCHAR, stats_max::VARCHAR,
+       stats_min_value::VARCHAR, stats_max_value::VARCHAR
 FROM parquet_metadata('{TEST_DIR}/timetz_metadata.parquet')
 ORDER BY column_id
 ----
-event_time_tz	true	true	true	true	true
-event_time	true	true	true	true	true
-ts_tz	true	true	true	true	true
+event_time_tz	true	08:30:00+00	08:34:00+00	08:30:00+00	08:34:00+00
+event_time	true	08:30:00	08:34:00	08:30:00	08:34:00
+ts_tz	true	2026-01-02 08:30:00+00	2026-01-02 08:34:00+00	2026-01-02 08:30:00+00	2026-01-02 08:34:00+00
