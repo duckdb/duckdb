@@ -1419,6 +1419,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	state.can_change_row_ids = !has_indexes || state.can_rebuild_indexes;
 	// obtain the set of committed row counts for each row group
 	auto row_group_count = checkpoint_state.SegmentCount();
+	vector<optional_idx> committed_counts;
 	state.row_group_counts.reserve(checkpoint_state.SegmentCount());
 	if (checkpoint_row_group_count.IsValid() && checkpoint_row_group_count.GetIndex() > row_group_count) {
 		// we have row groups that were concurrently appended to this collection
@@ -1430,6 +1431,9 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
 		auto row_group_count = row_group.GetCommittedRowCount();
+		if (!state.can_change_row_ids) {
+			committed_counts.emplace_back(row_group_count);
+		}
 		if (row_group_count == 0) {
 			if (!checkpoint_state.writer.CanLeaveGapsInRowIds()) {
 				// Older storage versions cannot represent rowid gaps, so dropping the row group requires rewriting
@@ -1458,6 +1462,23 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			}
 		}
 		state.row_group_counts.push_back(row_group_count);
+	}
+	if (!checkpoint_state.writer.CanLeaveGapsInRowIds() && !state.can_change_row_ids) {
+		// Older storage versions cannot persist rowid gaps. However, dropping fully deleted trailing row groups is
+		// still safe for stable rowids because it does not shift any surviving rowid.
+		auto segment_count = state.row_group_counts.size();
+		for (idx_t i = segment_count; i > 0; i--) {
+			auto segment_idx = i - 1;
+			D_ASSERT(committed_counts[segment_idx].IsValid());
+			if (committed_counts[segment_idx].GetIndex() != 0) {
+				break;
+			}
+			auto &entry = *checkpoint_state.row_groups.GetSegmentByIndex(NumericCast<int64_t>(segment_idx));
+			auto &row_group = entry.GetNode();
+			D_ASSERT(entry.GetIndex() == segment_idx);
+			row_group.CommitDrop();
+			checkpoint_state.DropSegment(segment_idx);
+		}
 	}
 }
 
