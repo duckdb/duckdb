@@ -216,8 +216,7 @@ unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(QueryContext context, 
 }
 
 unique_ptr<StreamWrapper> ZStdFileSystem::CreateStream(const FileCompressionOptions &compression_options) {
-	auto compression_level =
-	    compression_options.has_compression_level ? compression_options.compression_level : DefaultCompressionLevel();
+	auto compression_level = compression_options.compression_level.value_or(DefaultCompressionLevel());
 	return make_uniq<ZstdStreamWrapper>(compression_level);
 }
 
