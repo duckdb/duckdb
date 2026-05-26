@@ -195,10 +195,10 @@ struct ZStdFileSystemHolder {
 
 class ZStdFile : private ZStdFileSystemHolder, public CompressedFile {
 public:
-	ZStdFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write,
+	ZStdFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path,
 	         FileCompressionOptions compression_options)
 	    : CompressedFile(zstd_fs, std::move(child_handle_p), path, compression_options) {
-		Initialize(context, write);
+		Initialize(context, compression_options.write);
 	}
 
 	FileCompressionType GetFileCompressionType() override {
@@ -209,10 +209,9 @@ public:
 } // namespace
 
 unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
-                                                          bool write,
                                                           const FileCompressionOptions &compression_options) {
 	auto path = handle->path;
-	return make_uniq<ZStdFile>(context, std::move(handle), path, write, compression_options);
+	return make_uniq<ZStdFile>(context, std::move(handle), path, compression_options);
 }
 
 unique_ptr<StreamWrapper> ZStdFileSystem::CreateStream(const FileCompressionOptions &compression_options) {

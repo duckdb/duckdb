@@ -28,6 +28,7 @@ struct FileCompressionOptions {
 
 	FileCompressionType type = FileCompressionType::UNCOMPRESSED;
 	optional<int64_t> compression_level;
+	bool write = false;
 };
 
 class FileOpenFlags {
