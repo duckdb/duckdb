@@ -60,6 +60,7 @@ SQLStatement:
     - ExecuteStatement
     - ExplainStatement
     - ExplainableStatements
+    - ExplainSelectStatement
     - ExportStatement
     - ExpressionStatement
     - ImportStatement
@@ -83,6 +84,7 @@ SQLStatement:
     - UpdateStatement
     - UseStatement
     - VacuumStatement
+    - PragmaAssignOrFunction
 
 SelectStatement:
   type: "unique_ptr<SelectStatement>"
@@ -260,14 +262,7 @@ Constraint:
     - TopLevelConstraintList
     - TopPrimaryKeyConstraint
     - TopUniqueConstraint
-    - CheckConstraint
     - TopForeignKeyConstraint
-
-ForeignKeyConstraint:
-  type: "unique_ptr<ForeignKeyConstraint>"
-  by_value: true
-  rules:
-    - ForeignKeyConstraint
 
 WindowExpression:
   type: "unique_ptr<WindowExpression>"
@@ -438,8 +433,6 @@ Expression:
     - NumericModType
     - CopyFileName
     - DatabasePath
-    - DefaultValue
-    - ColumnCollation
     - UsingExpression
     - IndexElement
     - RelOptionArgumentOpt
@@ -542,7 +535,7 @@ ResultModifierList:
 
 OrderByNodeList:
   type: "vector<OrderByNode>"
-  by_value: false
+  by_value: true
   rules:
     - OrderByClause
     - OrderByExpressions
@@ -570,7 +563,7 @@ StringList:
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
-  by_value: true
+  by_value: false
   rules:
     - AttachOptions
     - GenericCopyOptionList
@@ -810,6 +803,8 @@ String:
     - PrefixOperator
     - TableQualification
     - ReservedTableQualification
+    - CatalogQualification
+    - SchemaQualification
     - BaseWindowName
     - Framing
     - AtUnit
@@ -836,6 +831,16 @@ String:
     - ExplainOptionName
     - OperatorLiteral
     - DotIdentifier
+    - IdentifierDot
+    - VacuumOption
+    - OptAnalyze
+    - OptFull
+    - OptFreeze
+    - OptVerbose
+    - ExtensionAlias
+    - ExplainOptionAnalyze
+    - DropNullability
+    - SetNullability
 
 Bool:
   type: "bool"
@@ -858,6 +863,14 @@ Bool:
     - PrecedingOrFollowing
     - IfExists
     - IncludeOrExcludeNulls
+    - AnalyzeVerbose
+    - CheckpointForce
+    - IfNotExists
+    - OrReplace
+    - DeallocatePrepare
+    - CreateRecursive
+    - ExplainAnalyze
+
 
 Int64:
   type: "int64_t"
@@ -873,6 +886,100 @@ LogicalType:
     - Type
     - EnumStringLiteralList
 
+LogicalTypeList:
+  type: "vector<LogicalType>"
+  by_value: false
+  rules:
+    - TypeList
+
+TransactionModifierType:
+  type: "TransactionModifierType"
+  by_value: false
+  rules:
+    - ReadOnly
+    - ReadWrite
+
+# ---------------------------------------------------------------------------
+# Structs passed by value (contain move-only members like unique_ptr<T>)
+# ---------------------------------------------------------------------------
+
+AddColumnEntry:
+  type: "AddColumnEntry"
+  by_value: true
+  rules:
+    - AddColumnEntry
+
+ColumnConstraintEntry:
+  type: "ColumnConstraintEntry"
+  by_value: true
+  rules:
+    - ColumnConstraint
+    - NotNullConstraint
+    - UniqueConstraint
+    - PrimaryKeyConstraint
+    - DefaultValue
+    - CheckConstraint
+    - ForeignKeyConstraint
+    - ColumnCollation
+    - ColumnCompression
+
+AnalyzeTarget:
+  type: "AnalyzeTarget"
+  by_value: true
+  rules:
+    - AnalyzeTarget
+
+CommonTableExpressionMap:
+  type: "CommonTableExpressionMap"
+  by_value: true
+  rules:
+    - WithClause
+
+CatalogType:
+  type: "CatalogType"
+  by_value: false
+  rules:
+    - CommentOnType
+    - CommentTable
+    - CommentSequence
+    - CommentFunction
+    - CommentMacroTable
+    - CommentMacro
+    - CommentView
+    - CommentDatabase
+    - CommentIndex
+    - CommentSchema
+    - CommentType
+    - CommentColumn
+    - TableOrView
+    - MaterializedViewEntry
+
+
+Value:
+  type: "Value"
+  by_value: false
+  rules:
+    - CommentValue
+    - NullLiteral
+    - UnknownLiteral
+    - TrueLiteral
+    - FalseLiteral
+
+TriggerTiming:
+  type: "TriggerTiming"
+  by_value: false
+  rules:
+    - TriggerBefore
+    - TriggerAfter
+    - TriggerInsteadOf
+
+TriggerForEach:
+  type: "TriggerForEach"
+  by_value: false
+  rules:
+    - ForEachRow
+    - ForEachStatement
+
 # ---------------------------------------------------------------------------
 # Overrides: rules with unique or complex return types that don't share a
 # category with other rules. Typically pair<>, map<>, or one-off structs.
@@ -885,9 +992,6 @@ overrides:
   TimeOrTimestamp: "LogicalTypeId"
   Interval: "DatePartSpecifier"
   IntervalToInterval: "DatePartSpecifier"
-  # comment.gram
-  CommentOnType: "CatalogType"
-  CommentValue: "Value"
   # copy.gram
   CopyDatabaseFlag: "CopyDatabaseType"
   SchemaOrData: "CopyDatabaseType"
@@ -898,12 +1002,7 @@ overrides:
   RelOptionList: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   Oids: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   # create_table.gram
-  AddColumnEntry: "AddColumnEntry"
   ColumnDefinition: "ConstraintColumnDefinition"
-  ColumnCompression: "CompressionType"
-  PrimaryKeyConstraint: "pair<bool, ConstraintType>"
-  UniqueConstraint: "pair<bool, ConstraintType>"
-  NotNullConstraint: "pair<bool, ConstraintType>"
   KeyActions: "KeyActions"
   GeneratedColumn: "GeneratedColumnDefinition"
   CreateTableAs: "CreateTableAs"
@@ -917,8 +1016,6 @@ overrides:
   ShowOrDescribeOrSummarize: "ShowType"
   ShowOrDescribe: "ShowType"
   Summarize: "ShowType"
-  # drop.gram
-  TableOrView: "CatalogType"
   # expression.gram
   ComparisonOperator: "ExpressionType"
   IsDistinctFromOp: "ExpressionType"
@@ -947,6 +1044,8 @@ overrides:
   ByNameOrPosition: "InsertColumnOrder"
   # load.gram
   FromSource: "ExtensionRepositoryInfo"
+  FromSourceIdentifier: "ExtensionRepositoryInfo"
+  FromSourceString: "ExtensionRepositoryInfo"
   # merge_into.gram
   MergeMatch: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"
   MatchedClause: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"
@@ -967,15 +1066,12 @@ overrides:
   SeqOwnedBy: "pair<string, unique_ptr<SequenceOption>>"
   # select.gram
   SetopType: "SetOperationType"
-  WithClause: "CommonTableExpressionMap"
   WithStatement: "pair<string, unique_ptr<CommonTableExpressionInfo>>"
   JoinType: "JoinType"
   SampleProperties: "pair<SampleMethod, optional_idx>"
   SampleSeed: "optional_idx"
   RepeatableSample: "optional_idx"
   SampleFunction: "SampleMethod"
-  # analyze.gram
-  AnalyzeTarget: "AnalyzeTarget"
   # transaction.gram
   ReadOrWrite: "TransactionModifierType"
   ReadOnlyOrReadWrite: "TransactionModifierType"
@@ -990,6 +1086,7 @@ overrides:
 # ---------------------------------------------------------------------------
 
 excluded_rules:
+  - CommentValue
   - Program
   - FunctionType
   - Database
@@ -1006,11 +1103,9 @@ excluded_rules:
   - RowOrRows
   - Recursive
   - StarSymbol
-  - IfNotExists
   - PlainIdentifier
   - QuotedIdentifier
   - CreateTableColumnElement
-  - OrReplace
   - ReservedIdentifier
   - CatalogName
   - SchemaName
@@ -1030,14 +1125,12 @@ excluded_rules:
   - CopyOptionName
   - AtTimeZoneOperator
   - Generated
-  - ColumnConstraint
   - AlwaysOrByDefault
   - Lateral
   - ConstraintNameClause
   - ReservedSchemaQualification
   - UsingSample
   - TableSample
-  - TypeList
   - NamedParameterAssignment
   - WithOrdinality
   - ByName
@@ -1050,8 +1143,6 @@ excluded_rules:
   - DefArg
   - NoneLiteral
   - RowOrStruct
-  - ForEachRow
-  - ForEachStatement
   - SetData
   - CTEBodyContent
   - SingleArrowPair

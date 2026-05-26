@@ -203,7 +203,7 @@ bool BaseTokenizer::IsValidDollarTagCharacter(char c) {
 	if (c == '_') {
 		return true;
 	}
-	if (static_cast<unsigned char>(c) >= 0x80) {
+	if ((unsigned char)c >= (unsigned char)'\200') {
 		return true;
 	}
 	return false;
@@ -411,7 +411,8 @@ bool BaseTokenizer::TokenizeInput() {
 			break;
 		case TokenizeState::KEYWORD:
 			// keyword - check if this is still a keyword
-			if (!CharacterIsKeyword(c)) {
+			// '$' is valid as a non-initial identifier character in PostgreSQL
+			if (c != '$' && !CharacterIsKeyword(c)) {
 				// not a keyword - return to standard state
 				auto word = sql.substr(last_pos, i - last_pos);
 				auto token_type = keyword_helper.IsKeyword(word) ? TokenType::KEYWORD : TokenType::IDENTIFIER;

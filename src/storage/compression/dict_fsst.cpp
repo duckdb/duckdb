@@ -70,7 +70,7 @@ struct DictFSSTCompressionStorage {
 //===--------------------------------------------------------------------===//
 unique_ptr<AnalyzeState> DictFSSTCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	auto &storage_manager = col_data.GetStorageManager();
-	if (storage_manager.GetStorageVersion() < 5) {
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_3_0, storage_manager.GetStorageVersion())) {
 		// dict_fsst not introduced yet, disable it
 		return nullptr;
 	}
@@ -112,8 +112,8 @@ void DictFSSTCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 unique_ptr<SegmentScanState> DictFSSTCompressionStorage::StringInitScan(const QueryContext &context,
                                                                         ColumnSegment &segment) {
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto state = make_uniq<CompressedStringScanState>(segment, buffer_manager.Pin(segment.block));
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+	auto state = make_uniq<CompressedStringScanState>(segment, buffer_manager.Pin(segment.GetBlockHandle()));
 	state->Initialize(true);
 
 	const auto &stats = segment.GetStats();

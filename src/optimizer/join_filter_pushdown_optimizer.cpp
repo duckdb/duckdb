@@ -29,6 +29,9 @@ bool JoinFilterPushdownUtil::PushdownJoinFilterExpression(const Expression &expr
 		// interval is not supported for pushdown
 		return false;
 	}
+	if (filter.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION && !filter.runtime_filter_type.IsValid()) {
+		filter.runtime_filter_type = expr.GetReturnType();
+	}
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_COLUMN_REF: {
 		// column-ref - pass through the new column binding
@@ -48,7 +51,20 @@ bool JoinFilterPushdownUtil::PushdownJoinFilterExpression(const Expression &expr
 		    GetTypeIdSize(tgt.InternalType()) > GetTypeIdSize(PhysicalType::INT64)) {
 			return false; // Only do this for (u)bigint and smaller
 		}
-		return JoinFilterPushdownUtil::PushdownJoinFilterExpression(*bound_cast.child, filter);
+		if (!JoinFilterPushdownUtil::PushdownJoinFilterExpression(*bound_cast.child, filter)) {
+			return false;
+		}
+		const bool widening_signed_cast =
+		    src.IsSigned() == tgt.IsSigned() && GetTypeIdSize(tgt.InternalType()) >= GetTypeIdSize(src.InternalType());
+		const bool widening_unsigned_to_signed_cast =
+		    !src.IsSigned() && tgt.IsSigned() && GetTypeIdSize(tgt.InternalType()) > GetTypeIdSize(src.InternalType());
+		if (widening_signed_cast || widening_unsigned_to_signed_cast) {
+			filter.runtime_filter_type = expr.GetReturnType();
+		} else {
+			filter.mode = JoinFilterPushdownMode::STORAGE_ONLY;
+			filter.runtime_filter_type = LogicalType::INVALID;
+		}
+		return true;
 	}
 	default:
 		return false;
@@ -119,7 +135,7 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 			auto child_bindings = child->GetColumnBindings();
 			child_columns.reserve(columns.size());
 			for (auto &child_column : columns) {
-				JoinFilterPushdownColumn new_col;
+				auto new_col = child_column;
 				new_col.probe_column_index = child_bindings[child_column.probe_column_index.column_index];
 				child_columns.push_back(new_col);
 			}

@@ -219,6 +219,11 @@ void StandardColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity
 	this->validity = std::move(validity_p);
 }
 
+ValidityColumnData &StandardColumnData::GetValidityData() {
+	D_ASSERT(validity);
+	return *validity;
+}
+
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
 	StandardColumnCheckpointState(const RowGroup &row_group, ColumnData &column_data,
 	                              PartialBlockManager &partial_block_manager)
@@ -326,11 +331,11 @@ void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, Bas
 }
 
 void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
-                                              vector<duckdb::idx_t> col_path,
-                                              vector<duckdb::ColumnSegmentInfo> &result) {
-	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result);
+                                              vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result,
+                                              const ColumnSegmentInfoScanOptions &options) {
+	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, std::move(col_path), result);
+	validity->GetColumnSegmentInfo(context, row_group_index, std::move(col_path), result, options);
 }
 
 void StandardColumnData::Verify(RowGroup &parent) {

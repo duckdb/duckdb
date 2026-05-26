@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "duckdb.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/common/common.hpp"
@@ -81,6 +82,7 @@ class EncryptionUtil;
 class PhysicalOperator;
 class Serializer;
 class TableFilter;
+class ThriftFileTransport;
 struct CryptoMetaData;
 struct GlobalTableFunctionState;
 struct LocalTableFunctionState;
@@ -88,9 +90,33 @@ struct PartitionStatistics;
 struct TableFilterState;
 
 struct ParquetReaderPrefetchConfig {
-	// Percentage of data in a row group span that should be scanned for enabling whole group prefetch
+	//! Percentage of data in a row group span that should be scanned for enabling whole group prefetch
 	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.95;
+	//! How many row groups need to produce at least one surviving row (from filtering)
+	static constexpr double PREFETCH_FILTER_MINIMUM_MATCH_RATIO = 0.9;
 };
+
+enum class ParquetPrefetchStrategy : uint8_t {
+	NONE,
+	WHOLE_GROUP,      //! Prefetches the whole group
+	PREFETCH_FILTERS, //! Used when we have fully selective filters, so they are prefetched earlier
+	COLUMN_WISE_EAGER //! Used when we have projections and optional only filters
+};
+
+const char *ParquetPrefetchStrategyToString(ParquetPrefetchStrategy strategy);
+
+enum class ParquetPrefetchStrategyOption : uint8_t {
+	AUTO,        //! Uses the runtime strategy to pick between ParquetPrefetchStrategy
+	WHOLE_GROUP, //! Always do the whole row group
+};
+
+ParquetPrefetchStrategyOption ParquetPrefetchStrategyOptionFromString(const string &value);
+
+template <>
+const char *EnumUtil::ToChars<ParquetPrefetchStrategyOption>(ParquetPrefetchStrategyOption value);
+
+template <>
+ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption>(const char *value);
 
 struct ParquetScanFilter {
 	ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter);
@@ -100,6 +126,62 @@ struct ParquetScanFilter {
 	ProjectionIndex filter_idx;
 	TableFilter &filter;
 	unique_ptr<TableFilterState> filter_state;
+};
+
+struct ParquetPrefetchColumn {
+	string name;
+	idx_t offset;
+
+	ParquetPrefetchColumn(string name_p, idx_t offset_p) : name(std::move(name_p)), offset(offset_p) {
+	}
+
+	bool operator<(const ParquetPrefetchColumn &other) const {
+		return offset < other.offset;
+	}
+};
+//! Logger-only prefetch metrics: populated only when ParquetPrefetch logging is enabled.
+struct ParquetLoggerPrefetchMetrics {
+	//! Physical prefetch groups (column-name batches) issued for the current row group, in order
+	vector<vector<string>> prefetch_groups;
+	//! Tracks which scan_filters were evaluated in the current row group (indexed by scan_filter position)
+	vector<bool> filters_used;
+	//! Prefetch strategy chosen for the current row group
+	ParquetPrefetchStrategy strategy = ParquetPrefetchStrategy::NONE;
+
+	void Reset() {
+		prefetch_groups.clear();
+		std::fill(filters_used.begin(), filters_used.end(), false);
+		strategy = ParquetPrefetchStrategy::NONE;
+	}
+
+	//! Build a prefetch group
+	void GeneratePrefetchGroup(ThriftFileTransport &trans, vector<ParquetPrefetchColumn> &requested_columns,
+	                           const vector<duckdb_parquet::ColumnChunk> &all_chunks);
+};
+
+struct ParquetPrefetchMetrics {
+	//! Whether any filter was evaluated against the current row group
+	bool filter_ran = false;
+	//! Whether the current row group produced at least one surviving row after filtering
+	bool had_match = false;
+	//! Total number of row groups for which filters were evaluated across the scan
+	idx_t row_groups_executed = 0;
+	//! Number of those row groups that produced at least one surviving row
+	idx_t row_groups_with_matches = 0;
+
+	ParquetLoggerPrefetchMetrics logger;
+
+	void FinalizeRowGroupSelectivity() {
+		if (filter_ran) {
+			row_groups_executed++;
+			if (had_match) {
+				row_groups_with_matches++;
+			}
+		}
+		filter_ran = false;
+		had_match = false;
+		logger.Reset();
+	}
 };
 
 struct ParquetReaderScanState {
@@ -124,10 +206,14 @@ public:
 	bool prefetch_mode = false;
 	bool current_group_prefetched = false;
 
+	ParquetPrefetchMetrics prefetch_metrics;
+
 	//! Per-thread adaptive filter cache
 	MultiFileAdaptiveFilterCache adaptive_filter_cache;
 	//! Table filter list
 	vector<ParquetScanFilter> scan_filters;
+	//! true once the filter at this index has driven the surviving row count to zero
+	vector<bool> filter_eliminated_all_rows;
 
 	//! (optional) pointer to the PhysicalOperator for logging
 	optional_ptr<const PhysicalOperator> op;
@@ -163,6 +249,7 @@ struct ParquetOptions {
 	vector<ParquetColumnDefinition> schema;
 	idx_t explicit_cardinality = 0;
 	bool can_have_nan = false; // if floats or doubles can contain NaN values
+	ParquetPrefetchStrategyOption prefetch_strategy = ParquetPrefetchStrategyOption::AUTO;
 };
 
 struct ParquetOptionsSerialization {
@@ -283,9 +370,15 @@ private:
 	const duckdb_parquet::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
-	// Group span is the distance between the min page offset and the max page offset plus the max page compressed size
+	//! Group span is the distance between the min page offset and the max page offset plus the max page compressed size
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
+	//! Whole-group prefetch strategy
+	void WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
+	                        const duckdb_parquet::RowGroup &group, uint64_t total_row_group_span, bool log_prefetch);
+	//! Column-wise prefetch strategy.
+	void ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
+	                        const duckdb_parquet::RowGroup &group, bool filters_look_unselective, bool log_prefetch);
 	ParquetColumnSchema ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
 	                                      idx_t schema_index, idx_t column_index,
 	                                      ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);

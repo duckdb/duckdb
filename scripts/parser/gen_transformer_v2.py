@@ -7,7 +7,7 @@ from typing import List
 
 sys.path.insert(0, str(Path(__file__).parent))
 from inline_grammar import parse_peg_grammar, PEGTokenType
-from generate_transformer import GrammarTypeInfo, load_grammar_types
+from generate_transformer import load_grammar_types
 
 
 # ---------------------------------------------------------------------------
@@ -262,6 +262,7 @@ def classify_choice_alternatives(alternatives, rule_types):
     identifier_alts = []
     unknown_alts = []
     for ref in alternatives:
+        assert isinstance(ref, ReferenceNode)
         name = ref.name
         if name in rule_types:
             transformer_alts.append(name)
@@ -328,14 +329,14 @@ def generate_choice_body_declaration(rule_name, return_type):
 # Mirrors the per-token-type dispatch inside MatcherFactory::CreateMatcher()
 # in matcher.cpp.  Each helper handles one matcher/parse-result kind:
 #
-#   _classify_literal           LiteralNode       -> KeywordParseResult           (skip)
-#   _classify_reference         ReferenceNode     -> IdentifierParseResult OR Transform<T>
-#   _classify_optional_reference OptionalNode(Ref) -> optional identifier OR TransformOptional<T>
-#   _classify_star_repeat       OptionalNode(Rep) -> OptionalParseResult(RepeatParseResult) vector<T>
-#   _classify_plus_repeat       RepeatNode        -> RepeatParseResult             vector<T>
-#   _classify_parens            ParensNode(Ref)   -> ExtractResultFromParens       T
-#   _classify_list_macro        ListMacroNode(Ref)-> ExtractParseResultsFromList   vector<T>
-#   _classify_parens_list       ParensNode(List)  -> ExtractParseResultsFromList(ExtractResultFromParens) vector<T>
+#   _classify_literal           LiteralNode          -> KeywordParseResult                     (skip)
+#   _classify_reference         ReferenceNode        -> IdentifierParseResult OR Transform<T>
+#   _classify_optional_reference OptionalNode(Ref)   -> optional identifier OR TransformOptional<T>
+#   _classify_repeat            OptionalNode(Rep)/Rep -> OptionalParseResult(Repeat)/Repeat     vector<T>
+#   _classify_macro             ParensNode/ListMacroNode (any depth) -> scalar T or vector<T>
+#     _analyze_macro_node       recursively unwraps to (leaf_name, ['parens'/'list', ...])
+#     _build_wrapped_expr       builds nested ExtractResultFromParens(...) call chains
+#     Examples: D, Parens(D), List(D), Parens(List(D)), List(Parens(D)), ...
 #
 # classify_sequence_element() is the top-level dispatch (= the switch in CreateMatcher).
 # classify_sequence_elements() iterates all children of a SequenceNode (= the token loop).
@@ -349,7 +350,7 @@ class SeqElement:
     skip: bool  # True for LiteralNode - no semantic value
     var_name: str = ""
     cpp_type: str = ""
-    by_value: bool = False  # True for unique_ptr<T>, vector<unique_ptr<T>>, bool, int64_t
+    by_value: bool = False  # True for unique_ptr<T> and vector<unique_ptr<T>> (non-copyable)
     extraction_lines: List[str] = field(default_factory=list)
 
 
@@ -363,7 +364,7 @@ def _is_by_value(rule_name, rule_types):
     info = rule_types.get(rule_name)
     if info is None:
         return False
-    return info.by_value or info.cpp_type.startswith('unique_ptr<')
+    return info.by_value or 'unique_ptr<' in info.cpp_type
 
 
 def _classify_literal():
@@ -383,8 +384,6 @@ def _classify_reference(name, idx, rule_types, excluded_rules):
         var_name = to_snake_case(name)
         lines = [f"\tauto {var_name} = list_pr.Child<IdentifierParseResult>({idx}).identifier;"]
         return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
-    if name in excluded_rules:
-        return _classify_literal()
     if name in rule_types:
         cpp_type = rule_types[name].cpp_type
         var_name = to_snake_case(name)
@@ -396,6 +395,8 @@ def _classify_reference(name, idx, rule_types, excluded_rules):
             by_value=_is_by_value(name, rule_types),
             extraction_lines=lines,
         )
+    if name in excluded_rules:
+        return _classify_literal()
     return None
 
 
@@ -403,12 +404,10 @@ def _classify_optional_reference(name, idx, rule_types, excluded_rules):
     """
     OptionalNode(ReferenceNode) -> OptionalMatcher wrapping a named rule.
     Priority order matches _classify_reference:
-      1. excluded_rules             -> keyword-only optional (Transaction?) -> skip
-      2. IDENTIFIER_OVERRIDE_RULES  -> optional identifier, extracted via HasResult()
+      1. IDENTIFIER_OVERRIDE_RULES  -> optional identifier, extracted via HasResult()
+      2. excluded_rules             -> keyword-only optional (Transaction?) -> skip
       3. rule_types                 -> optional typed rule, extracted via TransformOptional
     """
-    if name in excluded_rules:
-        return _classify_literal()
     var_name = to_snake_case(name)
     if name in IDENTIFIER_OVERRIDE_RULES:
         lines = [
@@ -432,97 +431,142 @@ def _classify_optional_reference(name, idx, rule_types, excluded_rules):
             by_value=_is_by_value(name, rule_types),
             extraction_lines=lines,
         )
+    if name in excluded_rules:
+        return _classify_literal()
     return None
 
 
-def _classify_parens(inner_node, idx, rule_types):
+def _analyze_macro_node(node):
     """
-    ParensNode -> Parens(D) <- '(' D ')'.
-    Uses ExtractResultFromParens() to reach child[1].
-    Only supported when inner is a plain ReferenceNode.
+    Recursively unwrap Parens/List nesting to find the leaf ReferenceNode.
+    Returns (leaf_name, ops) where ops is a list of 'parens'/'list' tokens
+    ordered outermost to innermost.  Returns None for unsupported structures.
     """
-    if not isinstance(inner_node, ReferenceNode):
+    if isinstance(node, ReferenceNode):
+        return (node.name, [])
+    if isinstance(node, ParensNode):
+        result = _analyze_macro_node(node.inner)
+        if result is None:
+            return None
+        leaf_name, ops = result
+        return (leaf_name, ['parens'] + ops)
+    if isinstance(node, ListMacroNode):
+        result = _analyze_macro_node(node.inner)
+        if result is None:
+            return None
+        leaf_name, ops = result
+        return (leaf_name, ['list'] + ops)
+    return None
+
+
+def _build_wrapped_expr(base_expr, parens_count):
+    """Wrap base_expr in parens_count layers of ExtractResultFromParens."""
+    expr = base_expr
+    for _ in range(parens_count):
+        expr = f"ExtractResultFromParens({expr})"
+    return expr
+
+
+def _classify_macro(node, idx, rule_types, optional=False):
+    """
+    Unified classifier for arbitrary Parens/List nesting around a leaf rule.
+
+    Scalar result (no List in the chain):
+      D, Parens(D), Parens(Parens(D)), ...
+
+    Vector result (exactly one List in the chain):
+      List(D), Parens(List(D)), List(Parens(D)), Parens(List(Parens(D))), ...
+
+    Nested lists (List(List(D))) produce vector<vector<T>> and are not supported.
+
+    When optional=True the node is wrapped in an OptionalParseResult: the vector
+    case emits a HasResult() guard (scalar optional macros are not supported).
+    """
+    result = _analyze_macro_node(node)
+    if result is None:
         return None
-    name = inner_node.name
-    var_name = to_snake_case(name)
-    if name in IDENTIFIER_OVERRIDE_RULES:
-        lines = [
-            f"\tauto {var_name} = ExtractResultFromParens(list_pr.GetChild({idx}))"
-            f".Cast<IdentifierParseResult>().identifier;",
-        ]
-        return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
-    if name in rule_types:
-        cpp_type = rule_types[name].cpp_type
-        lines = [
-            f"\tauto {var_name} = transformer.Transform<{cpp_type}>"
-            f"(ExtractResultFromParens(list_pr.GetChild({idx})));",
-        ]
+    leaf_name, ops = result
+
+    var_name = to_snake_case(leaf_name)
+    is_identifier = leaf_name in IDENTIFIER_OVERRIDE_RULES
+
+    if not is_identifier and leaf_name not in rule_types:
+        return None
+
+    child_type = "string" if is_identifier else rule_types[leaf_name].cpp_type
+
+    list_positions = [i for i, op in enumerate(ops) if op == 'list']
+    if len(list_positions) > 1:
+        return None  # nested lists not supported
+
+    if not list_positions:
+        if optional:
+            return None  # scalar optional macro not supported
+        # Scalar path: all ops are 'parens'.
+        access_expr = _build_wrapped_expr(f"list_pr.GetChild({idx})", len(ops))
+        if is_identifier:
+            line = f"\tauto {var_name} = {access_expr}.Cast<IdentifierParseResult>().identifier;"
+        else:
+            line = f"\tauto {var_name} = transformer.Transform<{child_type}>({access_expr});"
         return SeqElement(
             skip=False,
             var_name=var_name,
-            cpp_type=cpp_type,
-            by_value=_is_by_value(name, rule_types),
-            extraction_lines=lines,
+            cpp_type=child_type,
+            by_value=False if is_identifier else _is_by_value(leaf_name, rule_types),
+            extraction_lines=[line],
         )
-    return None
 
+    # Vector path: parens before the list wrap the collection access;
+    # parens after the list unwrap each individual item.
+    list_pos = list_positions[0]
+    pre_parens = ops[:list_pos].count('parens')
+    post_parens = ops[list_pos + 1 :].count('parens')
 
-def _classify_list_macro(inner_node, idx, rule_types):
-    """
-    ListMacroNode -> List(D) <- D (',' D)* ','?.
-    Uses ExtractParseResultsFromList() to collect all D results.
-    Only supported when inner is a plain ReferenceNode with a known type.
-    Produces vector<T>.
-    """
-    if not isinstance(inner_node, ReferenceNode):
-        return None
-    name = inner_node.name
-    if name not in rule_types:
-        return None
-    child_type = rule_types[name].cpp_type
-    var_name = to_snake_case(name)
-    lines = [
-        f"\tauto {var_name}_items = ExtractParseResultsFromList(list_pr.GetChild({idx}));",
-        f"\tvector<{child_type}> {var_name};",
-        f"\tfor (auto &{var_name}_item : {var_name}_items) {{",
-        f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
-        f"\t}}",
+    item_var = f"{var_name}_item"
+    item_access = _build_wrapped_expr(item_var, post_parens)
+
+    if is_identifier:
+        # item_var is reference<ParseResult> (std::reference_wrapper); need .get() when not already
+        # unwrapped by ExtractResultFromParens (which returns ParseResult&).
+        ident_access = f"{item_access}.get()" if post_parens == 0 else item_access
+        push_content = f"{var_name}.push_back({ident_access}.Cast<IdentifierParseResult>().identifier);"
+    else:
+        push_content = f"{var_name}.push_back(transformer.Transform<{child_type}>({item_access}));"
+
+    if optional:
+        opt_var = f"{var_name}_opt"
+        base_expr = f"{opt_var}.GetResult()"
+        ind = "\t\t"
+    else:
+        base_expr = f"list_pr.GetChild({idx})"
+        ind = "\t"
+
+    outer_expr = _build_wrapped_expr(base_expr, pre_parens)
+    loop_lines = [
+        f"{ind}auto {var_name}_items = ExtractParseResultsFromList({outer_expr});",
+        f"{ind}for (auto &{item_var} : {var_name}_items) {{",
+        f"{ind}\t{push_content}",
+        f"{ind}}}",
     ]
+
+    if optional:
+        lines = [
+            f"\tauto &{opt_var} = list_pr.Child<OptionalParseResult>({idx});",
+            f"\tvector<{child_type}> {var_name};",
+            f"\tif ({opt_var}.HasResult()) {{",
+            *loop_lines,
+            f"\t}}",
+        ]
+    else:
+        lines = [
+            f"\tvector<{child_type}> {var_name};",
+            *loop_lines,
+        ]
     return SeqElement(
         skip=False,
         var_name=var_name,
         cpp_type=f"vector<{child_type}>",
-        by_value=_is_by_value(name, rule_types),
-        extraction_lines=lines,
-    )
-
-
-def _classify_parens_list(inner_list_node, idx, rule_types):
-    """
-    ParensNode(ListMacroNode(D)) -> Parens(List(D)).
-    Uses ExtractParseResultsFromList(ExtractResultFromParens(...)) to collect all D results.
-    Only supported when the ListMacroNode's inner is a plain ReferenceNode with a known type.
-    Produces vector<T>.
-    """
-    if not isinstance(inner_list_node.inner, ReferenceNode):
-        return None
-    name = inner_list_node.inner.name
-    if name not in rule_types:
-        return None
-    child_type = rule_types[name].cpp_type
-    var_name = to_snake_case(name)
-    lines = [
-        f"\tauto {var_name}_items = ExtractParseResultsFromList(" f"ExtractResultFromParens(list_pr.GetChild({idx})));",
-        f"\tvector<{child_type}> {var_name};",
-        f"\tfor (auto &{var_name}_item : {var_name}_items) {{",
-        f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
-        f"\t}}",
-    ]
-    return SeqElement(
-        skip=False,
-        var_name=var_name,
-        cpp_type=f"vector<{child_type}>",
-        by_value=_is_by_value(name, rule_types),
+        by_value=False if is_identifier else _is_by_value(leaf_name, rule_types),
         extraction_lines=lines,
     )
 
@@ -535,9 +579,10 @@ def _classify_repeat(node, idx, rule_types, optional):
     Only supported when the repeated element is a plain reference with a known type.
     Produces vector<T>.
     """
-    if not isinstance(node.child, ReferenceNode):
+    child = node.child
+    if not isinstance(child, ReferenceNode):
         return None
-    ref_name = node.child.name
+    ref_name = child.name
     if ref_name not in rule_types:
         return None
     child_type = rule_types[ref_name].cpp_type
@@ -570,14 +615,6 @@ def _classify_repeat(node, idx, rule_types, optional):
     )
 
 
-def _classify_star_repeat(node, idx, rule_types):
-    return _classify_repeat(node, idx, rule_types, optional=True)
-
-
-def _classify_plus_repeat(node, idx, rule_types):
-    return _classify_repeat(node, idx, rule_types, optional=False)
-
-
 def classify_sequence_element(child, idx, rule_types, excluded_rules):
     """
     Classify one element of a SequenceNode.
@@ -596,17 +633,15 @@ def classify_sequence_element(child, idx, rule_types, excluded_rules):
             return _classify_optional_reference(inner.name, idx, rule_types, excluded_rules)
         if isinstance(inner, RepeatNode):
             # A* is represented as OptionalNode(RepeatNode(A)), matching the runtime
-            # OptionalMatcher(RepeatMatcher(A)) structure. Delegate to star-repeat classifier.
-            return _classify_star_repeat(inner, idx, rule_types)
-        return None  # OptionalNode(ParensNode) etc. - deferred
+            # OptionalMatcher(RepeatMatcher(A)) structure.
+            return _classify_repeat(inner, idx, rule_types, optional=True)
+        if isinstance(inner, (ParensNode, ListMacroNode)):
+            return _classify_macro(inner, idx, rule_types, optional=True)
+        return None
     if isinstance(child, RepeatNode):
-        return _classify_plus_repeat(child, idx, rule_types)
-    if isinstance(child, ParensNode):
-        if isinstance(child.inner, ListMacroNode):
-            return _classify_parens_list(child.inner, idx, rule_types)
-        return _classify_parens(child.inner, idx, rule_types)
-    if isinstance(child, ListMacroNode):
-        return _classify_list_macro(child.inner, idx, rule_types)
+        return _classify_repeat(child, idx, rule_types, optional=False)
+    if isinstance(child, (ParensNode, ListMacroNode)):
+        return _classify_macro(child, idx, rule_types)
     return None
 
 
@@ -617,12 +652,40 @@ def classify_sequence_elements(children, rule_types, excluded_rules):
     Returns list of SeqElement, or None if any element cannot be classified.
     """
     elements = []
+    seen = {}  # var_name -> occurrence count, for deduplication
     for idx, child in enumerate(children):
         elem = classify_sequence_element(child, idx, rule_types, excluded_rules)
         if elem is None:
             return None
+        if not elem.skip:
+            count = seen.get(elem.var_name, 0)
+            seen[elem.var_name] = count + 1
+            if count > 0:
+                old_name = elem.var_name
+                new_name = f"{old_name}_{count}"
+                elem.extraction_lines = [line.replace(old_name, new_name) for line in elem.extraction_lines]
+                # For identifier rules the field access is always '.identifier'; restore it if renamed.
+                if old_name == "identifier":
+                    elem.extraction_lines = [
+                        line.replace(f".{new_name}", ".identifier") for line in elem.extraction_lines
+                    ]
+                elem.var_name = new_name
         elements.append(elem)
     return elements
+
+
+def _sequence_skip_reason(children, rule_types, excluded_rules):
+    """Return a specific reason string explaining why classify_sequence_elements failed."""
+    for idx, child in enumerate(children):
+        if classify_sequence_element(child, idx, rule_types, excluded_rules) is not None:
+            continue
+        inner = child.child if isinstance(child, OptionalNode) else child
+        if isinstance(inner, ReferenceNode):
+            name = inner.name
+            if name not in rule_types and name not in excluded_rules and name not in IDENTIFIER_OVERRIDE_RULES:
+                return f"child rule '{name}' is missing from grammar_types.yml and excluded_rules"
+        return f"cannot classify element {idx} ({type(child).__name__})"
+    return "unknown reason"
 
 
 # ---------------------------------------------------------------------------
@@ -630,18 +693,39 @@ def classify_sequence_elements(children, rule_types, excluded_rules):
 # ---------------------------------------------------------------------------
 
 
+def _seq_param_decl(e):
+    """Format one SeqElement as a C++ parameter declaration."""
+    if e.by_value:
+        return f"{e.cpp_type} {e.var_name}"
+    return f"const {e.cpp_type} &{e.var_name}"
+
+
 def generate_sequence_body_decl(rule_name, return_type, elements):
     """Declaration for the hand-written body that receives extracted typed args."""
-
-    def _param_decl(e):
-        # Move-only types (unique_ptr<T>, vector<unique_ptr<T>>) are passed by value.
-        # Everything else (structs, strings, primitives) uses const T & to avoid tidy warnings.
-        if e.by_value:
-            return f"{e.cpp_type} {e.var_name}"
-        return f"const {e.cpp_type} &{e.var_name}"
-
-    params = ", ".join(_param_decl(e) for e in elements if not e.skip)
+    typed_params = ", ".join(_seq_param_decl(e) for e in elements if not e.skip)
+    params = f"PEGTransformer &transformer, {typed_params}" if typed_params else "PEGTransformer &transformer"
     return f"\tstatic {return_type} Transform{rule_name}({params});\n"
+
+
+def generate_sequence_body_stub(rule_name, return_type, elements):
+    """Stub .cpp definition for a sequence body that must be hand-implemented."""
+    typed_params = ", ".join(_seq_param_decl(e) for e in elements if not e.skip)
+    params = f"PEGTransformer &transformer, {typed_params}" if typed_params else "PEGTransformer &transformer"
+    return (
+        f"{return_type} PEGTransformerFactory::Transform{rule_name}({params}) {{\n"
+        f"\tthrow NotImplementedException(\"Transform{rule_name}\");\n"
+        f"}}\n"
+    )
+
+
+def generate_choice_body_stub(rule_name, return_type):
+    """Stub .cpp definition for a choice body that must be hand-implemented."""
+    return (
+        f"{return_type} PEGTransformerFactory::Transform{rule_name}"
+        f"(PEGTransformer &transformer, ParseResult &choice_result) {{\n"
+        f"\tthrow NotImplementedException(\"Transform{rule_name}\");\n"
+        f"}}\n"
+    )
 
 
 def generate_sequence_internal(rule_name, return_type, return_by_value, elements):
@@ -668,8 +752,8 @@ def generate_sequence_internal(rule_name, return_type, return_by_value, elements
             return f"std::move({e.var_name})"
         return e.var_name
 
-    arg_names = ", ".join(_param_arg(e) for e in semantic)
-    body.append(f"\tauto result = Transform{rule_name}({arg_names});")
+    args = ["transformer"] + [_param_arg(e) for e in semantic]
+    body.append(f"\tauto result = Transform{rule_name}({', '.join(args)});")
     box = _box_result(return_type, return_by_value).rstrip('\n')
     body.append(box)
     return (
@@ -686,6 +770,7 @@ class GramFileResult:
     registrations: list
     skipped: list  # (rule_name, reason) — nothing generated
     manual_bodies: list  # (rule_name, reason) — Internal generated, body is hand-written
+    body_stubs: list  # cpp definition stubs for bodies that need hand-implementation
 
 
 def collect_generated(gram_stem, rules, rule_types, excluded_rules):
@@ -695,11 +780,16 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
     registrations = []
     skipped = []
     manual_bodies = []
+    body_stubs = []
 
     for rule_name, rule in rules.items():
         return_type = rule.return_type
         if return_type is None:
             skipped.append((rule_name, "no return type in grammar_types.yml"))
+            continue
+
+        if rule_name in excluded_rules:
+            skipped.append((rule_name, "in excluded_rules (manually registered)"))
             continue
 
         try:
@@ -724,13 +814,14 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
             else:
                 declarations.append(generate_choice_body_declaration(rule_name, return_type))
                 implementations.append(generate_choice_internal_with_body(rule_name, return_type, return_by_value))
-                manual_bodies.append(
-                    (
-                        rule_name,
-                        f"choice body; identifier alternatives: {identifier_alts}",
-                    )
-                )
+                manual_bodies.append((rule_name, f"choice body; identifier alternatives: {identifier_alts}"))
+                body_stubs.append((rule_name, generate_choice_body_stub(rule_name, return_type)))
             continue
+
+        # Normalize: a single non-sequence, non-choice token (e.g. a lone keyword literal)
+        # is treated as a one-element sequence so the all-skip path handles it.
+        if not isinstance(ast, (SequenceNode, ChoiceNode)):
+            ast = SequenceNode([ast])
 
         if isinstance(ast, SequenceNode):
             elements = classify_sequence_elements(ast.children, rule_types, excluded_rules)
@@ -739,11 +830,22 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
                 declarations.append(generate_sequence_body_decl(rule_name, return_type, elements))
                 implementations.append(generate_sequence_internal(rule_name, return_type, return_by_value, elements))
                 registrations.append(generate_registration(rule_name))
+                body_stubs.append((rule_name, generate_sequence_body_stub(rule_name, return_type, elements)))
                 continue
+            skipped.append((rule_name, _sequence_skip_reason(ast.children, rule_types, excluded_rules)))
+            continue
 
         skipped.append((rule_name, "complex rule (has operators/choices/groups)"))
 
-    return GramFileResult(gram_stem, declarations, implementations, registrations, skipped, manual_bodies)
+    return GramFileResult(
+        gram_stem=gram_stem,
+        declarations=declarations,
+        implementations=implementations,
+        registrations=registrations,
+        skipped=skipped,
+        manual_bodies=manual_bodies,
+        body_stubs=body_stubs,
+    )
 
 
 def print_output(result: GramFileResult):
@@ -759,14 +861,18 @@ def print_output(result: GramFileResult):
             print(f"  {rule_name}: {reason}")
         print()
 
-    print("=== DECLARATIONS (peg_transformer_generated.hpp) ===")
+    print("=== DECLARATIONS (peg_transformer.hpp, between generated markers) ===")
     print("".join(result.declarations))
 
     print(f"=== IMPLEMENTATION (generated/transform_{result.gram_stem}_generated.cpp) ===")
     print("".join(result.implementations))
 
-    print(f"=== REGISTRATION (in Register{result.gram_stem.capitalize()}() in peg_transformer_factory.cpp) ===")
+    print(f"=== REGISTRATION (transform_generated.cpp static table) ===")
     print("".join(result.registrations))
+
+    if result.body_stubs:
+        print(f"=== BODY STUBS (add to transform_{result.gram_stem}.cpp) ===")
+        print("".join(stub for _, stub in result.body_stubs))
 
 
 def generate_table_and_register(all_registrations):
@@ -798,39 +904,152 @@ def write_cpp(all_implementations, all_registrations):
     print(f"Wrote {cpp_path}")
 
 
+_SEPARATOR = "\t//===--------------------------------------------------------------------===//\n"
+_START_BLOCK = _SEPARATOR + "\t// START GENERATED RULES\n" + _SEPARATOR
+_END_BLOCK = _SEPARATOR + "\t// END GENERATED RULES\n" + _SEPARATOR
+
+
 def write_hpp(all_declarations):
-    hpp_path = include_peg_dir / "peg_transformer_generated.hpp"
-    # This file is #include-d inside the PEGTransformerFactory class body, so it cannot be a
-    # valid standalone header (types like SQLStatement are only in scope inside the class).
-    # The #ifdef guard makes the file a no-op when clang-tidy processes it standalone,
-    # preventing false compilation errors. The guard is defined by peg_transformer.hpp
-    # immediately before the #include.
-    content = (
-        GENERATED_HEADER
-        + "#ifdef DUCKDB_INSIDE_PEG_TRANSFORMER_HPP\n"
-        + "".join(all_declarations)
-        + "#endif // DUCKDB_INSIDE_PEG_TRANSFORMER_HPP\n"
-    )
-    hpp_path.write_text(content)
-    print(f"Wrote {hpp_path}")
+    hpp_path = include_peg_dir / "peg_transformer.hpp"
+    content = hpp_path.read_text()
+
+    start_idx = content.find(_START_BLOCK)
+    if start_idx == -1:
+        raise RuntimeError(f"Could not find START GENERATED RULES marker in {hpp_path}")
+    end_idx = content.find(_END_BLOCK, start_idx + len(_START_BLOCK))
+    if end_idx == -1:
+        raise RuntimeError(f"Could not find END GENERATED RULES marker in {hpp_path}")
+
+    block_end = end_idx + len(_END_BLOCK)
+    generated_block = _START_BLOCK + "".join(all_declarations) + _END_BLOCK
+    new_content = content[:start_idx] + generated_block + content[block_end:]
+    hpp_path.write_text(new_content)
+    print(f"Updated {hpp_path}")
+
+
+def _extract_func_signature(text, func_name):
+    """Extract 'ReturnType PEGTransformerFactory::func_name(params)' from C++ source text."""
+    m = re.search(rf'\bPEGTransformerFactory::{re.escape(func_name)}\s*\(', text)
+    if not m:
+        return None
+    line_start = text.rfind('\n', 0, m.start()) + 1
+    paren_start = text.index('(', m.start())
+    depth = 0
+    for i, char in enumerate(text[paren_start:]):
+        if char == '(':
+            depth += 1
+        elif char == ')':
+            depth -= 1
+            if depth == 0:
+                return text[line_start : paren_start + i + 1]
+    return None
+
+
+def _norm_ws(s):
+    s = re.sub(r'\s+', ' ', s).strip()
+    s = re.sub(r'\(\s+', '(', s)
+    s = re.sub(r'\s+\)', ')', s)
+    return s
+
+
+def _check_implementations(gram_stem, body_stubs):
+    """Check which body stubs are implemented in transform_{gram_stem}.cpp.
+
+    Compares from PEGTransformerFactory:: onwards (normalized whitespace) so that return types
+    split across lines and multi-line param lists are handled correctly.
+
+    Returns (implemented, mismatched):
+      implemented: set of rule_names whose signature exactly matches the stub
+      mismatched:  set of rule_names that exist in the file but with a different signature
+    """
+    cpp_path = transformer_dir / f"transform_{gram_stem}.cpp"
+    if not cpp_path.exists():
+        return set(), set()
+    text = cpp_path.read_text()
+    prefix = 'PEGTransformerFactory::'
+    implemented = set()
+    mismatched = set()
+    for rule_name, stub_cpp in body_stubs:
+        actual = _extract_func_signature(text, f'Transform{rule_name}')
+        if actual is None:
+            continue
+        first_line = stub_cpp.split('\n')[0]
+        expected = _norm_ws(first_line.rstrip('{').rstrip())
+        actual = _norm_ws(actual)
+        expected_norm = expected[expected.find(prefix) :] if prefix in expected else expected
+        actual_norm = actual[actual.find(prefix) :] if prefix in actual else actual
+        if expected_norm == actual_norm:
+            implemented.add(rule_name)
+        else:
+            mismatched.add(rule_name)
+    return implemented, mismatched
 
 
 def print_manual_steps(all_results):
     print("\nRemaining manual steps:")
-    print(f"  1. In {include_peg_dir / 'peg_transformer.hpp'}:")
-    print("       - The #include of peg_transformer_generated.hpp must remain inside the class body")
-    print(f"  2. In {transformer_dir / 'CMakeLists.txt'}:")
-    print("       - Ensure transform_generated.cpp is listed in add_library_unity()")
-    for r in all_results:
-        if not r.registrations:
-            continue
-        reg_lines = "".join(f"           {r.strip()}\n" for r in r.registrations)
-        print(f"  3. In peg_transformer_factory.cpp Register{r.gram_stem.capitalize()}():")
-        print(f"       - Replace REGISTER_TRANSFORM macros for generated rules with:")
-        print(reg_lines, end="")
-        print(f"  4. In transform_{r.gram_stem}.cpp:")
-        print("       - Remove Internal wrappers now generated (keep only hand-written bodies)")
+
+    step = 1
+
+    all_skipped = [(r.gram_stem, rule_name, reason) for r in all_results for rule_name, reason in r.skipped]
+    if all_skipped:
+        print(f"\n  {step}. Skipped rules (not auto-generated):")
+        current_stem = None
+        for gram_stem, rule_name, reason in all_skipped:
+            if gram_stem != current_stem:
+                print(f"\n       {gram_stem}.gram:")
+                current_stem = gram_stem
+            print(f"         {rule_name}: {reason}")
+        step += 1
+
+    transform_files = [r for r in all_results if r.declarations]
+    if transform_files:
+        file_list = ", ".join(f"transform_{r.gram_stem}.cpp" for r in transform_files)
+        print(f"\n  {step}. {transformer_dir}/[{file_list}]:")
+        print("       - Remove Internal wrappers that are now generated (keep only hand-written bodies)")
         print("       - Update body function signatures to match the generated declarations")
+        step += 1
+
+    has_any_stubs = any(r.body_stubs for r in all_results)
+    if has_any_stubs:
+        pending_stubs = []
+        sig_mismatches = []
+        for r in all_results:
+            if not r.body_stubs:
+                continue
+            implemented, mismatched = _check_implementations(r.gram_stem, r.body_stubs)
+            for rule_name, stub in r.body_stubs:
+                if rule_name in implemented:
+                    pass
+                elif rule_name in mismatched:
+                    sig_mismatches.append((r.gram_stem, rule_name, stub.split('\n')[0].rstrip('{').rstrip()))
+                else:
+                    pending_stubs.append((r.gram_stem, stub))
+
+        if sig_mismatches:
+            print(f"\n  {step}. Signature mismatches (function exists but params don't match generated declaration):")
+            current_stem = None
+            for gram_stem, rule_name, expected_sig in sig_mismatches:
+                if gram_stem != current_stem:
+                    print(f"\n       transform_{gram_stem}.cpp:")
+                    current_stem = gram_stem
+                print(f"         Transform{rule_name} -- update to: {expected_sig}")
+            step += 1
+
+        if pending_stubs:
+            print(f"\n  {step}. Body stubs to implement (copy into respective transform_*.cpp files):")
+            current_stem = None
+            for gram_stem, stub in pending_stubs:
+                if gram_stem != current_stem:
+                    print(f"\n       // transform_{gram_stem}.cpp")
+                    current_stem = gram_stem
+                for line in stub.splitlines():
+                    print(f"       {line}")
+                print()
+            step += 1
+
+        if not sig_mismatches and not pending_stubs:
+            print(f"\n  {step}. All user-implemented body stubs already found in transform_*.cpp files.")
+            step += 1
 
 
 def process_gram_file(gram_filename, rule_types, excluded_rules):
@@ -854,7 +1073,47 @@ def main():
     arg_parser.add_argument("--write", action="store_true", help="Write generated files to disk.")
     args = arg_parser.parse_args()
 
-    gram_files_to_gen = ['use.gram', 'transaction.gram', 'detach.gram', 'export.gram', 'connect.gram']
+    gram_files_to_gen = [
+        'alter.gram',
+        'analyze.gram',
+        'attach.gram',
+        'call.gram',
+        'checkpoint.gram',
+        'comment.gram',
+        # 'common.gram',
+        'connect.gram',
+        # 'copy.gram',
+        # 'create_index.gram',
+        # 'create_macro.gram',
+        'create_schema.gram',
+        'create_secret.gram',
+        # 'create_sequence.gram',
+        # 'create_table.gram',
+        'create_trigger.gram',
+        # 'create_type.gram',
+        'create_view.gram',
+        'deallocate.gram',
+        'delete.gram',
+        # 'describe.gram',
+        'detach.gram',
+        # 'drop.gram',
+        'execute.gram',
+        'explain.gram',
+        'export.gram',
+        # 'expression.gram',
+        # 'insert.gram',
+        'load.gram',
+        # 'merge_into.gram',
+        # 'pivot.gram',
+        'pragma.gram',
+        'prepare.gram',
+        # 'select.gram',
+        # 'set.gram',
+        'transaction.gram',
+        'update.gram',
+        'use.gram',
+        'vacuum.gram',
+    ]
     rule_types, excluded_rules = load_grammar_types(type_dir / 'grammar_types.yml')
     results = [process_gram_file(f, rule_types, excluded_rules) for f in gram_files_to_gen]
 

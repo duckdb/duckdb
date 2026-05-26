@@ -97,6 +97,7 @@ public:
 
 	void clear() { // NOLINT: match stl API
 		map.clear();
+		map_idx.clear();
 	}
 
 	void insert(const string &key, V &&value) { // NOLINT: match stl API

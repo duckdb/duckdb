@@ -52,8 +52,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformConnectStatement(PEGTra
 }
 
 // DisconnectStatement <- 'DISCONNECT'
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformDisconnectStatement(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformDisconnectStatement(PEGTransformer &transformer) {
 	auto result = make_uniq<DisconnectStatement>();
 	result->info = make_uniq<DisconnectInfo>();
 	return std::move(result);

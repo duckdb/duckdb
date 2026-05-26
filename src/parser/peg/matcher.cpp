@@ -457,6 +457,9 @@ public:
 		if (IsQuoted(text)) {
 			return true;
 		}
+		if (BaseTokenizer::CharacterIsInitialNumber(text[0])) {
+			return false;
+		}
 		return BaseTokenizer::CharacterIsKeyword(text[0]);
 	}
 
@@ -1437,6 +1440,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("ColumnName", ColumnName());
 	AddRuleOverride("ReservedColumnName", ReservedColumnName());
 	AddRuleOverride("IndexName", Variable());
+	AddRuleOverride("ReservedIndexName", ReservedVariable());
 	AddRuleOverride("SequenceName", Variable());
 
 	AddRuleOverride("FunctionName", ScalarFunctionName());
