@@ -745,6 +745,12 @@ private:
 	                                                                 ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformSubstringParameters(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformSubstringFromFor(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformSubstringFromOptionalFor(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformSubstringFor(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformSubstringArguments(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformSubstringExpressionList(PEGTransformer &transformer,
