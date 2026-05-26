@@ -374,80 +374,35 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 	target_ref.catalog_name = node.catalog;
 	target_ref.schema_name = node.schema;
 	target_ref.table_name = node.table;
-	// Save local name state before analyzing the INSERT target. The target table is the
-	// destination; its columns/name are not in scope for the source SELECT's FROM clause.
-	// Without this, TrackLocalTable adds the local target's column names to
-	// local_table_column_names, and HasLocalTableReference then falsely marks source-SELECT
-	// subqueries as correlated to those columns — blocking valid remote pushdowns and
-	// potentially causing "Multiple streaming scans" when the FROM table is individually
-	// pushed while the falsely-blocked WHERE subquery stays local and opens a second stream.
-	auto pre_target_local_names = local_table_names;
-	CatalogPushdownResult result = Rewrite(target_ref);
 
-	// Target table must be remote for the whole INSERT to be pushed to the remote.
-	// If it is local, push the SELECT source subquery individually if all-remote so that
-	// DuckDB can execute: INSERT INTO local_t SELECT * FROM quack_query_by_name(...).
-	// Skip individual pushdown when CTEs are present: the source may reference a local CTE.
-	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		// Always restore pre-target local name state so the INSERT target's column names do not
-		// leak into the outer scope. Without this, an INSERT-as-CTE-body with sub-CTEs (which
-		// skips the individual-source-push path) leaves TrackLocalTable's additions in
-		// local_table_column_names, causing HasLocalTableReference false positives for the outer
-		// query's subqueries that happen to use the same unqualified column names.
-		local_table_names = std::move(pre_target_local_names);
-		if (node.cte_map.map.empty() && node.select_statement) {
-			auto select_result = Rewrite(*node.select_statement->node);
+	RemotePushdownOptimizer target_optimizer(*this);
+	auto result = target_optimizer.Rewrite(target_ref);
+	if (node.select_statement) {
+		auto select_result = Rewrite(*node.select_statement->node);
+		result = Merge(result, select_result);
+		if (select_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 			FinishPushdown(node.select_statement->node, select_result);
 		}
-		return {};
 	}
-	{
-		// Save before both select_statement and on_conflict_info rewrites. Rewrite(SelectNode)
-		// has a side effect of pushing remote JoinRef children even when the overall result is
-		// UNKNOWN; if on_conflict_info later makes the result UNKNOWN, select_statement must be
-		// restored so native INSERT execution does not encounter stale quack wrappers.
-		// Save on_conflict_info for the same reason: its expressions may contain subqueries
-		// whose JoinRef children get partially pushed in-place during Rewrite.
-		unique_ptr<QueryNode> saved_select;
-		if (node.select_statement) {
-			saved_select = node.select_statement->node->Copy();
-			result = Merge(result, Rewrite(*node.select_statement->node));
+	if (node.on_conflict_info) {
+		if (node.on_conflict_info->condition) {
+			auto condition_result = Rewrite(*node.on_conflict_info->condition);
+			result = Merge(result, condition_result);
 		}
-		unique_ptr<OnConflictInfo> saved_conflict_info;
-		if (node.on_conflict_info) {
-			saved_conflict_info = node.on_conflict_info->Copy();
-			if (node.on_conflict_info->condition) {
-				result = Merge(result, Rewrite(*node.on_conflict_info->condition));
+		if (node.on_conflict_info->set_info) {
+			if (node.on_conflict_info->set_info->condition) {
+				auto condition_result = Rewrite(*node.on_conflict_info->condition);
+				result = Merge(result, condition_result);
 			}
-			if (node.on_conflict_info->set_info) {
-				if (node.on_conflict_info->set_info->condition) {
-					result = Merge(result, Rewrite(*node.on_conflict_info->set_info->condition));
-				}
-				for (auto &expr : node.on_conflict_info->set_info->expressions) {
-					result = Merge(result, Rewrite(*expr));
-				}
+			for(auto &expr : node.on_conflict_info->set_info->expressions) {
+				auto expr_result = Rewrite(*expr);
+				result = Merge(result, expr_result);
 			}
 		}
-		// Save returning_list: Rewrite may push JoinRef children inside subquery bodies in-place.
-		// If returning_list makes result UNKNOWN after select_statement/on_conflict_info were
-		// SINGLE_REMOTE (their JoinRef children already pushed), roll back to prevent stale
-		// quack wrappers causing "Multiple streaming scans" in native execution.
-		vector<unique_ptr<ParsedExpression>> saved_returning;
-		for (auto &expr : node.returning_list) {
-			saved_returning.push_back(expr->Copy());
-		}
-		for (auto &expr : node.returning_list) {
-			result = Merge(result, Rewrite(*expr));
-		}
-		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-			if (saved_select) {
-				node.select_statement->node = std::move(saved_select);
-			}
-			if (saved_conflict_info) {
-				node.on_conflict_info = std::move(saved_conflict_info);
-			}
-			node.returning_list = std::move(saved_returning);
-		}
+	}
+	for (auto &expr : node.returning_list) {
+		auto expr_result = Rewrite(*expr);
+		result = Merge(result, expr_result);
 	}
 	return result;
 }
