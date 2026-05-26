@@ -345,8 +345,8 @@ unique_ptr<LogicalOperator> Catalog::BindAlterAddIndex(Binder &binder, TableCata
 	throw NotImplementedException("BindAlterAddIndex not supported by this catalog");
 }
 
-string Catalog::GetRemoteExecuteFunction() const {
-	throw NotImplementedException("GetRemoteExecuteFunction not supported by this catalog");
+unique_ptr<TableRef> Catalog::RemotePushdown(ClientContext &context, unique_ptr<QueryNode> node) {
+	throw NotImplementedException("RemotePushdown not supported by this catalog");
 }
 
 //===--------------------------------------------------------------------===//

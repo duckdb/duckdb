@@ -76,13 +76,9 @@ private:
 	void FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result);
 	void FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result);
 	void FinishPushdown(unique_ptr<TableRef> &ref, CatalogPushdownResult result);
-	//! When DML body is all-remote but RETURNING has local expressions, push the DML with
-	//! stripped RETURNING (raw col refs only) and wrap result in an outer SELECT that applies
-	//! the original RETURNING expressions locally.
-	void TryPushDMLWithLocalReturning(unique_ptr<SQLStatement> &statement, CatalogPushdownResult body_result);
 
 	static CatalogPushdownResult Merge(CatalogPushdownResult a, CatalogPushdownResult b);
-	static unique_ptr<TableFunctionRef> CreateRemoteFunctionRef(CatalogPushdownResult &result, string remote_sql);
+	unique_ptr<TableRef> CreateRemoteFunctionRef(CatalogPushdownResult &result, unique_ptr<QueryNode> node);
 	static void StripCatalogName(SQLStatement &statement, const string &catalog_name);
 	static void StripCatalogName(QueryNode &node, const string &catalog_name);
 	static void StripCatalogName(TableRef &ref, const string &catalog_name);

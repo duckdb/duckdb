@@ -79,6 +79,7 @@ class LogicalDelete;
 class LogicalUpdate;
 class CreateStatement;
 class CatalogEntryRetriever;
+class QueryNode;
 
 //! The Catalog object represents the catalog of the database.
 class Catalog {
@@ -346,7 +347,7 @@ public:
 	virtual bool IsRemoteCatalog() const {
 		return false;
 	}
-	virtual string GetRemoteExecuteFunction() const;
+	virtual unique_ptr<TableRef> RemotePushdown(ClientContext &context, unique_ptr<QueryNode> node);
 
 	//! Whether or not this catalog should search a specific type with the standard priority
 	DUCKDB_API virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {

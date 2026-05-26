@@ -99,82 +99,15 @@ void RemotePushdownOptimizer::Rewrite(unique_ptr<SQLStatement> &statement) {
 	case StatementType::SELECT_STATEMENT:
 		result = Rewrite(*statement->Cast<SelectStatement>().node);
 		break;
-	case StatementType::INSERT_STATEMENT: {
-		auto &dml_node = *statement->Cast<InsertStatement>().node;
-		auto saved_returning = std::move(dml_node.returning_list);
-		result = Rewrite(dml_node);
-		dml_node.returning_list = std::move(saved_returning);
-		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && !dml_node.returning_list.empty()) {
-			CatalogPushdownResult ret_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-			for (auto &expr : dml_node.returning_list) {
-				ret_result = Merge(ret_result, Rewrite(*expr));
-			}
-			auto combined = Merge(result, ret_result);
-			if (combined.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-				TryPushDMLWithLocalReturning(statement, result);
-				return;
-			}
-			result = combined;
-		}
+	case StatementType::INSERT_STATEMENT:
+		result = Rewrite(*statement->Cast<InsertStatement>().node);
 		break;
-	}
-	case StatementType::DELETE_STATEMENT: {
-		auto &dml_node = *statement->Cast<DeleteStatement>().node;
-		auto saved_returning = std::move(dml_node.returning_list);
-		result = Rewrite(dml_node);
-		dml_node.returning_list = std::move(saved_returning);
-		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && !dml_node.returning_list.empty()) {
-			CatalogPushdownResult ret_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-			for (auto &expr : dml_node.returning_list) {
-				ret_result = Merge(ret_result, Rewrite(*expr));
-			}
-			auto combined = Merge(result, ret_result);
-			if (combined.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-				TryPushDMLWithLocalReturning(statement, result);
-				return;
-			}
-			result = combined;
-		}
+	case StatementType::DELETE_STATEMENT:
+		result = Rewrite(*statement->Cast<DeleteStatement>().node);
 		break;
-	}
-	case StatementType::UPDATE_STATEMENT: {
-		auto &dml_node = *statement->Cast<UpdateStatement>().node;
-		auto saved_returning = std::move(dml_node.returning_list);
-		result = Rewrite(dml_node);
-		dml_node.returning_list = std::move(saved_returning);
-		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && !dml_node.returning_list.empty()) {
-			CatalogPushdownResult ret_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-			for (auto &expr : dml_node.returning_list) {
-				ret_result = Merge(ret_result, Rewrite(*expr));
-			}
-			auto combined = Merge(result, ret_result);
-			if (combined.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-				TryPushDMLWithLocalReturning(statement, result);
-				return;
-			}
-			result = combined;
-		}
+	case StatementType::UPDATE_STATEMENT:
+		result = Rewrite(*statement->Cast<UpdateStatement>().node);
 		break;
-	}
-	case StatementType::MERGE_INTO_STATEMENT: {
-		auto &merge = statement->Cast<MergeIntoStatement>();
-		auto saved_returning = std::move(merge.returning_list);
-		result = Rewrite(merge);
-		merge.returning_list = std::move(saved_returning);
-		if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && !merge.returning_list.empty()) {
-			CatalogPushdownResult ret_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-			for (auto &expr : merge.returning_list) {
-				ret_result = Merge(ret_result, Rewrite(*expr));
-			}
-			auto combined = Merge(result, ret_result);
-			if (combined.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-				TryPushDMLWithLocalReturning(statement, result);
-				return;
-			}
-			result = combined;
-		}
-		break;
-	}
 	case StatementType::EXPLAIN_STATEMENT:
 		Rewrite(statement->Cast<ExplainStatement>().stmt);
 		return;
@@ -550,8 +483,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			// inside the cte_map.empty() guard below), so only JoinRef child catalogs apply.
 			vector<string> pushed_cats = std::move(from_pushed_catalog_names);
 			from_pushed_catalog_names.clear();
-			if (node.cte_map.map.empty() &&
-			    from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && from_result.catalog) {
+			if (node.cte_map.map.empty() && from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+			    from_result.catalog) {
 				bool found = false;
 				for (auto &existing : pushed_cats) {
 					if (StringUtil::CIEquals(existing, from_result.catalog->GetName())) {
@@ -1618,8 +1551,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	// they are safe siblings and must not block individual pushdown of SINGLE_REMOTE siblings.
 	bool any_risky_unknown_sibling = false;
 	for (idx_t i = 0; i < node.children.size(); i++) {
-		if (child_results[i].reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE &&
-		    node.children[i] && QueryNodeHasTableFunctionPush(*node.children[i])) {
+		if (child_results[i].reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE && node.children[i] &&
+		    QueryNodeHasTableFunctionPush(*node.children[i])) {
 			any_risky_unknown_sibling = true;
 			break;
 		}
@@ -2709,15 +2642,9 @@ void RemotePushdownOptimizer::PushdownSubqueries(unique_ptr<ParsedExpression> &e
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { PushdownSubqueries(child); });
 }
 
-unique_ptr<TableFunctionRef> RemotePushdownOptimizer::CreateRemoteFunctionRef(CatalogPushdownResult &result,
-                                                                              string remote_sql) {
-	D_ASSERT(result.catalog);
-	vector<unique_ptr<ParsedExpression>> args;
-	args.push_back(make_uniq<ConstantExpression>(Value(result.catalog->GetName())));
-	args.push_back(make_uniq<ConstantExpression>(Value(std::move(remote_sql))));
-	auto func_ref = make_uniq<TableFunctionRef>();
-	func_ref->function = make_uniq<FunctionExpression>(result.catalog->GetRemoteExecuteFunction(), std::move(args));
-	return func_ref;
+unique_ptr<TableRef> RemotePushdownOptimizer::CreateRemoteFunctionRef(CatalogPushdownResult &result,
+                                                                      unique_ptr<QueryNode> node) {
+	return result.catalog->RemotePushdown(binder.context, std::move(node));
 }
 
 void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &catalog_name) {
@@ -3095,48 +3022,6 @@ void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const st
 	case StatementType::UPDATE_STATEMENT:
 		StripCatalogName(*statement.Cast<UpdateStatement>().node, catalog_name);
 		break;
-	case StatementType::MERGE_INTO_STATEMENT: {
-		auto &merge = statement.Cast<MergeIntoStatement>();
-		for (auto &cte_pair : merge.cte_map.map) {
-			if (cte_pair.second->query_node) {
-				StripCatalogName(*cte_pair.second->query_node, catalog_name);
-			}
-			for (auto &key : cte_pair.second->key_targets) {
-				StripCatalogName(*key, catalog_name);
-			}
-		}
-		if (merge.target) {
-			StripCatalogName(*merge.target, catalog_name);
-		}
-		if (merge.source) {
-			StripCatalogName(*merge.source, catalog_name);
-		}
-		if (merge.join_condition) {
-			StripCatalogName(*merge.join_condition, catalog_name, true);
-		}
-		for (auto &entry : merge.actions) {
-			for (auto &action : entry.second) {
-				if (action->condition) {
-					StripCatalogName(*action->condition, catalog_name, true);
-				}
-				if (action->update_info) {
-					if (action->update_info->condition) {
-						StripCatalogName(*action->update_info->condition, catalog_name, true);
-					}
-					for (auto &expr : action->update_info->expressions) {
-						StripCatalogName(*expr, catalog_name, true);
-					}
-				}
-				for (auto &expr : action->expressions) {
-					StripCatalogName(*expr, catalog_name, true);
-				}
-			}
-		}
-		for (auto &expr : merge.returning_list) {
-			StripCatalogName(*expr, catalog_name, true);
-		}
-		break;
-	}
 	default:
 		break;
 	}
@@ -3196,98 +3081,23 @@ static void StripAllTableQualifiers(ParsedExpression &expr) {
 	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child) { StripAllTableQualifiers(child); });
 }
 
-void RemotePushdownOptimizer::TryPushDMLWithLocalReturning(unique_ptr<SQLStatement> &statement,
-                                                           CatalogPushdownResult body_result) {
-	vector<unique_ptr<ParsedExpression>> *returning_list = nullptr;
-	switch (statement->type) {
+unique_ptr<QueryNode> GetNodeFromStatement(SQLStatement &statement) {
+	switch (statement.type) {
+	case StatementType::SELECT_STATEMENT:
+		return std::move(statement.Cast<SelectStatement>().node);
+		break;
 	case StatementType::INSERT_STATEMENT:
-		returning_list = &statement->Cast<InsertStatement>().node->returning_list;
+		return std::move(statement.Cast<InsertStatement>().node);
 		break;
 	case StatementType::DELETE_STATEMENT:
-		returning_list = &statement->Cast<DeleteStatement>().node->returning_list;
+		return std::move(statement.Cast<DeleteStatement>().node);
 		break;
 	case StatementType::UPDATE_STATEMENT:
-		returning_list = &statement->Cast<UpdateStatement>().node->returning_list;
-		break;
-	case StatementType::MERGE_INTO_STATEMENT:
-		returning_list = &statement->Cast<MergeIntoStatement>().returning_list;
+		return std::move(statement.Cast<UpdateStatement>().node);
 		break;
 	default:
-		return;
+		return nullptr;
 	}
-	D_ASSERT(returning_list && !returning_list->empty());
-
-	// If any RETURNING expression is a star (*, t.*, * REPLACE (...), etc.) we cannot enumerate
-	// the expanded column set at rewrite time (that requires schema knowledge available only after
-	// binding).  Use RETURNING * for the remote so all columns are returned, which lets the outer
-	// SELECT correctly evaluate star expansions and other expressions against the full row.
-	bool has_star_expr = false;
-	for (auto &expr : *returning_list) {
-		if (expr->GetExpressionClass() == ExpressionClass::STAR) {
-			has_star_expr = true;
-			break;
-		}
-	}
-
-	// Collect unique column names referenced in the RETURNING expressions (only needed without stars)
-	vector<string> col_names;
-	if (!has_star_expr) {
-		case_insensitive_map_t<string> name_to_qualifier;
-		for (auto &expr : *returning_list) {
-			if (!CollectColumnNames(*expr, col_names, name_to_qualifier)) {
-				// The same unqualified column name appears with different table qualifiers.
-				// Generating "RETURNING col" would be ambiguous on the remote. Bail out so
-				// the DML falls back to native execution rather than producing a remote error.
-				return;
-			}
-		}
-		// If no column refs were found (e.g. RETURNING (SELECT max(local_col) FROM local_t)),
-		// fall back to RETURNING * so the remote executes the DML and returns one row per
-		// modified row. The outer SELECT then evaluates the local RETURNING expressions once
-		// per returned row, giving the correct cardinality without needing specific columns.
-		if (col_names.empty()) {
-			has_star_expr = true;
-		}
-	}
-
-	// Build outer SELECT list: copies of RETURNING expressions with table/catalog qualifiers stripped
-	vector<unique_ptr<ParsedExpression>> outer_select_list;
-	for (auto &expr : *returning_list) {
-		auto outer_expr = expr->Copy();
-		StripAllTableQualifiers(*outer_expr);
-		outer_select_list.push_back(std::move(outer_expr));
-	}
-
-	// Replace RETURNING with simplified expression(s) for remote execution:
-	// - Star present (or no column refs): use a bare * so the remote returns all columns and
-	//   outer star expansions work, or supplies row-presence for purely local RETURNING expressions.
-	// - No star: use explicit column refs extracted above.
-	returning_list->clear();
-	if (has_star_expr) {
-		returning_list->push_back(make_uniq<StarExpression>());
-	} else {
-		for (auto &col : col_names) {
-			returning_list->push_back(make_uniq<ColumnRefExpression>(col));
-		}
-	}
-
-	// Strip catalog name from the whole statement and serialize as remote SQL
-	StripCatalogName(*statement, body_result.catalog->GetName());
-	string remote_sql = statement->ToString();
-
-	// Build: SELECT <outer_exprs> FROM (SELECT * FROM quack_query_by_name(...)) returning_sub
-	auto inner_select_node = make_uniq<SelectNode>();
-	inner_select_node->select_list.push_back(make_uniq<StarExpression>());
-	inner_select_node->from_table = CreateRemoteFunctionRef(body_result, std::move(remote_sql));
-	auto inner_stmt = make_uniq<SelectStatement>();
-	inner_stmt->node = std::move(inner_select_node);
-
-	auto outer_select_node = make_uniq<SelectNode>();
-	outer_select_node->select_list = std::move(outer_select_list);
-	outer_select_node->from_table = make_uniq<SubqueryRef>(std::move(inner_stmt), "returning_sub");
-	auto outer_stmt = make_uniq<SelectStatement>();
-	outer_stmt->node = std::move(outer_select_node);
-	statement = std::move(outer_stmt);
 }
 
 // Returns true when pushing this SelectNode would produce duplicate column names in the
@@ -3357,10 +3167,14 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<SQLStatement> &statement
 	}
 	// Strip the catalog name so the remote server doesn't recursively re-push
 	StripCatalogName(*statement, result.catalog->GetName());
-	string remote_sql = statement->ToString();
+	auto node = GetNodeFromStatement(*statement);
+	if (!node) {
+		return;
+	}
+
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = CreateRemoteFunctionRef(result, std::move(remote_sql));
+	select_node->from_table = CreateRemoteFunctionRef(result, std::move(node));
 	auto select_stmt = make_uniq<SelectStatement>();
 	select_stmt->node = std::move(select_node);
 	statement = std::move(select_stmt);
@@ -3384,10 +3198,9 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<QueryNode> &node, Catalo
 		}
 	}
 	StripCatalogName(*node, result.catalog->GetName());
-	string remote_sql = node->ToString();
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = CreateRemoteFunctionRef(result, std::move(remote_sql));
+	select_node->from_table = CreateRemoteFunctionRef(result, std::move(node));
 	node = std::move(select_node);
 }
 
@@ -3450,8 +3263,7 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<TableRef> &ref, CatalogP
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	select_node->from_table = std::move(ref);
-	string remote_sql = select_node->ToString();
-	auto func_ref = CreateRemoteFunctionRef(result, std::move(remote_sql));
+	auto func_ref = CreateRemoteFunctionRef(result, std::move(select_node));
 	func_ref->alias = std::move(alias);
 	ref = std::move(func_ref);
 }

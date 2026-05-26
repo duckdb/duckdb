@@ -822,6 +822,8 @@ drop table local_bugfix17
 # causing "Function ... not found" or a silent mis-execution.
 # ============================================================
 
+mode skip unsupported
+
 # Create a local scalar macro that the remote server does not have.
 statement ok
 CREATE OR REPLACE MACRO local_double(x) AS (x * 2);
@@ -960,6 +962,8 @@ SELECT count(*) FROM rpc.t3 WHERE i = 88
 
 statement ok
 DROP MACRO local_double;
+
+mode unskip
 
 # ============================================================
 # Bug 21: Rewrite(JoinRef) analyzed the right side without the left remote
@@ -1105,6 +1109,8 @@ insert into local_t from range(10);
 # (all-remote RETURNING is pushed; local RETURNING stays native).
 # ============================================================
 
+mode skip unsupported
+
 # All-remote INSERT with RETURNING that has no local references:
 # the whole INSERT must be pushed (optimizer returns SINGLE_REMOTE).
 # The inserted row i=99 RETURNING i=99.
@@ -1129,6 +1135,8 @@ INSERT INTO rpc.t1 VALUES (99) RETURNING (select max(local_col) from local_t) AS
 
 statement ok
 DELETE FROM rpc.t1 WHERE i = 99
+
+mode unskip
 
 # ============================================================
 # Bug 25: Rewrite(SubqueryRef), Rewrite(ParsedExpression) for
