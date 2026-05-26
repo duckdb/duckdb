@@ -10,7 +10,6 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
@@ -27,7 +26,6 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
-#include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -39,7 +37,6 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
-#include "duckdb/parser/statement/merge_into_statement.hpp"
 
 namespace duckdb {
 RemotePushdownOptimizer::RemotePushdownOptimizer(Binder &binder) : binder(binder) {

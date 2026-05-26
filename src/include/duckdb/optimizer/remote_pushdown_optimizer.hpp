@@ -29,7 +29,6 @@ class SetOperationNode;
 class InsertQueryNode;
 class DeleteQueryNode;
 class UpdateQueryNode;
-class MergeIntoStatement;
 
 enum class CatalogReferenceType { NO_CATALOG_REFERENCED, SINGLE_REMOTE_CATALOG, UNKNOWN_CATALOG_REFERENCE };
 
