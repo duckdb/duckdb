@@ -263,7 +263,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 	RemotePushdownOptimizer target_optimizer(*this);
 	auto result = target_optimizer.Rewrite(target_ref);
 	if (node.select_statement) {
-		auto select_result = Rewrite(*node.select_statement->node);
+		RemotePushdownOptimizer select_optimizer(*this);
+		auto select_result = select_optimizer.Rewrite(*node.select_statement->node);
 		result = Merge(result, select_result);
 		if (select_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 			FinishPushdown(node.select_statement->node, select_result);

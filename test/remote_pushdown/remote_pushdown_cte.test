@@ -409,6 +409,27 @@ order by t1.i
 0
 1
 
+# WITH cte AS (...) INSERT INTO remote SELECT * FROM cte
+# The INSERT's cte_map is processed before Rewrite(InsertQueryNode) calls Rewrite on the
+# select body. The select body must be analyzed in a child optimizer (not `this`) so the
+# assertion `!cte_results.empty()` in Rewrite(QueryNode) does not trigger.
+# Using a local-values CTE (no remote scan) to avoid the streaming-scan limitation.
+statement ok
+create table rpc.t3(i int);
+
+statement ok
+with cte as (select * from (values (0), (1), (2)) t(i)) insert into rpc.t3 select * from cte
+
+query I
+select i from rpc.t3 order by i
+----
+0
+1
+2
+
+statement ok
+drop table rpc.t3;
+
 statement ok
 drop table local_t
 
