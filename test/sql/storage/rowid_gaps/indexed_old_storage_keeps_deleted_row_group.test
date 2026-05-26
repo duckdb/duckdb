@@ -59,3 +59,11 @@ query II
 SELECT rowid, i FROM rowid_gap_old_storage_idx.t WHERE i = 4096;
 ----
 4096	4096
+
+# If checkpoint had densely renumbered the live row group after the deleted middle row group,
+# this row would have moved from rowid 4096 to rowid 2048.
+query T
+SELECT CASE rowid WHEN 4096 THEN 'preserved' WHEN 2048 THEN 'dense-renumbered' ELSE CAST(rowid AS VARCHAR) END
+FROM rowid_gap_old_storage_idx.t WHERE i = 4096;
+----
+preserved

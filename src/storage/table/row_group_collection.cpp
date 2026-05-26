@@ -1735,6 +1735,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			// Older storage versions do not serialize next_row_id, so the checkpointed row groups must have
 			// contiguous numbering for rowids.
 			row_start = base_row_id + new_total_rows;
+			// If rowids must remain stable, dense old-storage output must not move this surviving row group.
+			D_ASSERT(vacuum_state.can_change_row_ids || row_start == source_row_start);
 		}
 		if (!row_group_writer) {
 			// row group was not checkpointed - this can happen if compressing is disabled for in-memory tables
