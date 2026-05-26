@@ -69,3 +69,43 @@ where su.s_suppkey = li.l_suppkey
   and ps.ps_partkey = li.l_partkey;
 ----
 600000
+
+# --------------------------------------------------------------------------
+# Q9 can also expose the composite key indirectly. If ps joins su first, the
+# final join to li can be written as li.partkey=ps.partkey and
+# li.suppkey=su.suppkey. Since ps.suppkey=su.suppkey was already applied,
+# this implies a second li<->ps equality and should still trigger the
+# composite FK/PK floor. Without that, the estimate is roughly 4x too high
+# because ps4 has four suppliers per part.
+# --------------------------------------------------------------------------
+
+statement ok
+create table ps4 as select
+    range // 4 ps_partkey,
+    range % 1000 ps_suppkey
+from range(80000);
+
+statement ok
+create table su4 as select range s_suppkey from range(1000);
+
+statement ok
+create table li4 as select
+    range % 20000 l_partkey,
+    ((range % 20000) * 4) % 1000 l_suppkey
+from range(60000);
+
+query II
+explain select count(*) from ps4, su4, li4
+where ps4.ps_suppkey = su4.s_suppkey
+  and ps4.ps_partkey = li4.l_partkey
+  and su4.s_suppkey = li4.l_suppkey;
+----
+physical_plan	<REGEX>:.*~6[0-9],[0-9]{3} rows.*
+
+query I
+select count(*) from ps4, su4, li4
+where ps4.ps_suppkey = su4.s_suppkey
+  and ps4.ps_partkey = li4.l_partkey
+  and su4.s_suppkey = li4.l_suppkey;
+----
+60000

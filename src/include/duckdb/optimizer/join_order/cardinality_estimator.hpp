@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
@@ -75,6 +76,17 @@ struct Subgraph2Denominator {
 	double denom;
 
 	Subgraph2Denominator() : relations(nullptr), numerator_relations(nullptr), denom(1) {};
+};
+
+struct JoinPairInfo {
+	JoinPairInfo() : first_d(0), equivalence_index() {
+	}
+	JoinPairInfo(double first_d, optional_idx equivalence_index)
+	    : first_d(first_d), equivalence_index(equivalence_index) {
+	}
+
+	double first_d;
+	optional_idx equivalence_index;
 };
 
 class CardinalityHelper {
@@ -148,7 +160,14 @@ private:
 	double CalculateSemiAntiJoinDenom(double base_denom, Subgraph2Denominator &left, Subgraph2Denominator &right,
 	                                  FilterInfoWithTotalDomains &filter);
 	bool ApplyJoinIncrement(double &target_denom, FilterInfoWithTotalDomains &edge,
-	                        reference_map_t<JoinRelationSet, double> &inner_join_pair_first_d);
+	                        reference_map_t<JoinRelationSet, JoinPairInfo> &inner_join_pair_first_d,
+	                        optional_ptr<JoinRelationSet> join_pair = nullptr);
+	bool ApplyJoinPairCap(double &target_denom, JoinRelationSet &join_pair, optional_idx equivalence_index,
+	                      reference_map_t<JoinRelationSet, JoinPairInfo> &inner_join_pair_first_d);
+	bool ApplyImpliedJoinPairCaps(double &target_denom, FilterInfoWithTotalDomains &edge,
+	                              reference_map_t<JoinRelationSet, JoinPairInfo> &inner_join_pair_first_d,
+	                              unordered_map<idx_t, unordered_set<RelationIndex>> &group_relations);
+	double GetJoinPairCap(JoinRelationSet &join_pair);
 
 	JoinRelationSet &UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right,
 	                                          FilterInfoWithTotalDomains &filter);
