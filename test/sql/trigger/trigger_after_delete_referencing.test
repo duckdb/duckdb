@@ -113,3 +113,46 @@ query I
 SELECT sql LIKE '%REFERENCING OLD TABLE AS del%' FROM duckdb_triggers() WHERE trigger_name = 'trg_tosql';
 ----
 true
+
+# BEFORE DELETE + REFERENCING OLD TABLE AS is rejected (transition tables are AFTER-only)
+statement ok
+CREATE TABLE t_before_old_ref (i INTEGER);
+
+statement ok
+CREATE TABLE log_before_old_ref (i INTEGER);
+
+statement ok
+INSERT INTO t_before_old_ref VALUES (1);
+
+statement error
+CREATE TRIGGER tr_before_old_ref BEFORE DELETE ON t_before_old_ref
+REFERENCING OLD TABLE AS deleted_rows
+FOR EACH STATEMENT
+    INSERT INTO log_before_old_ref SELECT i FROM deleted_rows;
+----
+Binder Error: Transition tables can only be specified for AFTER triggers
+
+# Body CTE with same name as OLD alias shadows the alias
+statement ok
+CREATE TABLE t_old_alias_shadow (i INTEGER);
+
+statement ok
+CREATE TABLE log_old_alias_shadow (s VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_old_alias_shadow AFTER DELETE ON t_old_alias_shadow
+REFERENCING OLD TABLE AS o
+FOR EACH STATEMENT
+    WITH o AS (SELECT 'local' AS s)
+    INSERT INTO log_old_alias_shadow SELECT s FROM o;
+
+statement ok
+INSERT INTO t_old_alias_shadow VALUES (1);
+
+statement ok
+DELETE FROM t_old_alias_shadow;
+
+query I
+SELECT s FROM log_old_alias_shadow;
+----
+local
