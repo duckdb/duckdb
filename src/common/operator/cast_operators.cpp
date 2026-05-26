@@ -14,6 +14,7 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -2954,93 +2955,67 @@ bool IsRepresentableExactly(hugeint_t input, double dst) {
 	return (input <= MAX_INT_REPRESENTABLE_IN_DOUBLE && input >= -MAX_INT_REPRESENTABLE_IN_DOUBLE);
 }
 
-template <class SRC>
-static SRC GetPowerOfTen(SRC input, uint8_t scale) {
-	return static_cast<SRC>(NumericHelper::POWERS_OF_TEN[scale]);
-}
-
-template <>
-hugeint_t GetPowerOfTen(hugeint_t input, uint8_t scale) {
-	return Hugeint::POWERS_OF_TEN[scale];
-}
-
-template <class SRC>
-static void GetDivMod(SRC lhs, SRC rhs, SRC &div, SRC &mod) {
-	div = lhs / rhs;
-	mod = lhs % rhs;
-}
-
-template <>
-void GetDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &div, hugeint_t &mod) {
-	div = Hugeint::DivMod(lhs, rhs, mod);
-}
-
 template <class SRC, class DST>
-bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t scale) {
+bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t width, uint8_t scale) {
 	if (IsRepresentableExactly<SRC, DST>(input, DST(0.0)) || scale == 0) {
 		// Fast path, integer is representable exactly as a float/double
 		result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
 		return true;
 	}
-	auto power_of_ten = GetPowerOfTen(input, scale);
-
-	SRC div = 0;
-	SRC mod = 0;
-	GetDivMod(input, power_of_ten, div, mod);
-
-	result = Cast::Operation<SRC, DST>(div) +
-	         Cast::Operation<SRC, DST>(mod) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
-	return true;
+	// Avoid double rounding when the unscaled integer cannot be represented exactly by the target floating point type.
+	StringHeap heap;
+	auto decimal_string = DecimalToString::Format<SRC>(input, width, scale, heap);
+	return TryCast::Operation<string_t, DST>(decimal_string, result, true);
 }
 
 // DECIMAL -> FLOAT
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, float &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<int16_t, float>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<int16_t, float>(input, result, width, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(int32_t input, float &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<int32_t, float>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<int32_t, float>(input, result, width, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(int64_t input, float &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<int64_t, float>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<int64_t, float>(input, result, width, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, float &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<hugeint_t, float>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<hugeint_t, float>(input, result, width, scale);
 }
 
 // DECIMAL -> DOUBLE
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, double &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<int16_t, double>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<int16_t, double>(input, result, width, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(int32_t input, double &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<int32_t, double>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<int32_t, double>(input, result, width, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(int64_t input, double &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<int64_t, double>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<int64_t, double>(input, result, width, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, double &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<hugeint_t, double>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<hugeint_t, double>(input, result, width, scale);
 }
 
 } // namespace duckdb
