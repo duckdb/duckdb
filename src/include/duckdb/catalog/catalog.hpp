@@ -347,6 +347,9 @@ public:
 	virtual bool IsRemoteCatalog() const {
 		return false;
 	}
+	virtual string GetRemoteExecuteFunction() const {
+		return string();
+	}
 	virtual unique_ptr<TableRef> RemotePushdown(ClientContext &context, unique_ptr<QueryNode> node);
 
 	//! Whether or not this catalog should search a specific type with the standard priority

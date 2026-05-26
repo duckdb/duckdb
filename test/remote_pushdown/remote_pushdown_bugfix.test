@@ -1336,5 +1336,59 @@ drop table local_x;
 statement ok
 drop table local_t;
 
+# ============================================================
+# Bug 30: StripCatalogName for ColumnRefExpression must require
+# at least 3 parts (catalog.table.column) before stripping.
+#
+# A 2-part column ref like "rpc.x" is either table.column or struct.field —
+# never catalog-qualified. The old check (size >= 2) would incorrectly strip
+# "rpc" from "rpc.x" when rpc is a struct column named the same as the catalog.
+#
+# Tests:
+#  a) catalog.table.column (3-part) → stripped to table.column ✓
+#  b) table.column (2-part, table name ≠ catalog) → not stripped ✓
+#  c) struct column named same as catalog → struct.field NOT stripped ✓
+# ============================================================
+
+# (a) 3-part catalog.table.column in SELECT list and WHERE
+query I
+select rpc.t1.i from rpc.t1 where rpc.t1.i >= 8 order by rpc.t1.i
+----
+8
+9
+
+# (b) 2-part table.column not stripped (t1.i stays as-is)
+query I
+select t1.i from rpc.t1 t1 where t1.i >= 8 order by t1.i
+----
+8
+9
+
+# (c) struct column named 'rpc' (same as catalog): field access rpc.x must NOT be stripped
+statement ok db1:con1
+create table t_struct_col(id int, rpc struct(x int, y int));
+
+statement ok db1:con1
+insert into t_struct_col values (1, {'x': 10, 'y': 1}), (2, {'x': 20, 'y': 2}), (3, {'x': 5, 'y': 3});
+
+# "rpc.x" is a 2-part struct field access; old code (size >= 2) incorrectly stripped to "x"
+# which fails because t_struct_col has no column named x. With the fix (size >= 3), rpc.x is preserved.
+query II
+select id, rpc.x from rpc.t_struct_col order by id
+----
+1	10
+2	20
+3	5
+
+# struct field in WHERE: rpc.x > 8 must not be stripped to x > 8
+query I
+select id from rpc.t_struct_col where rpc.x > 8 order by id
+----
+1
+2
+
+statement ok db1:con1
+drop table t_struct_col;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

@@ -833,10 +833,10 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
                                                bool strip_subquery_bodies) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
-		// Strip catalog prefix from qualified column references (e.g. catalog.schema.table.col -> schema.table.col).
-		// Require at least 2 names: stripping an unqualified single-name ref that happens to match the catalog
-		// name (e.g. a column literally called "rpc") would leave an empty column_names vector.
-		if (col_ref.column_names.size() >= 2 && StringUtil::CIEquals(col_ref.column_names[0], catalog_name)) {
+		// Strip catalog prefix from qualified column references (e.g. catalog.table.col -> table.col or
+		// catalog.schema.table.col -> schema.table.col). Require at least 3 names: a 2-part ref like "rpc.field"
+		// is either table.col or struct-column.field — not catalog-qualified — so stripping would be wrong.
+		if (col_ref.column_names.size() >= 3 && StringUtil::CIEquals(col_ref.column_names[0], catalog_name)) {
 			col_ref.column_names.erase(col_ref.column_names.begin());
 		}
 		return;
