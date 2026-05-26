@@ -53,7 +53,14 @@ public:
 
 public:
 	inline idx_t size() const { // NOLINT
-		return data.empty() ? 0 : data[0].size();
+		// Some chunks (e.g., from InitializeEmpty) have null-buffer placeholder columns.
+		// Find the first column that has a real buffer to get the actual row count.
+		for (const auto &v : data) {
+			if (v.GetBufferRef()) {
+				return v.size();
+			}
+		}
+		return 0;
 	}
 	inline idx_t ColumnCount() const {
 		return data.size();

@@ -622,7 +622,7 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
                                     idx_t row_idx, OperatorSinkInput &sink) {
 	auto &glstate = sink.global_state.Cast<WindowLeadLagGlobalState>();
 	auto &llstate = sink.local_state.Cast<WindowLeadLagLocalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 	auto &cursor = *llstate.cursor;
 
 	auto &wexpr = glstate.executor.wexpr;
@@ -858,7 +858,7 @@ void WindowFirstValueExecutor::GetData(ExecutionContext &context, DataChunk &eva
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 	auto &frames = lvstate.frames;
 	auto &ignore_nulls = *lvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
@@ -978,7 +978,7 @@ void WindowLastValueExecutor::GetData(ExecutionContext &context, DataChunk &eval
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 	auto &frames = lvstate.frames;
 	auto &ignore_nulls = *lvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
@@ -1152,7 +1152,7 @@ void WindowNthValueExecutor::GetData(ExecutionContext &context, DataChunk &eval_
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 	auto &frames = lvstate.frames;
 	auto &ignore_nulls = *lvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
@@ -1611,7 +1611,7 @@ unique_ptr<LocalSinkState> WindowFillExecutor::GetLocal(ExecutionContext &contex
 void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
                                  idx_t row_idx, OperatorSinkInput &sink) {
 	auto &lfstate = sink.local_state.Cast<WindowFillLocalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 	auto &cursor = *lfstate.cursor;
 	auto &order_cursor = *lfstate.order_cursor;
 

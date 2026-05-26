@@ -1021,7 +1021,7 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 			eval_exec.Execute(input_chunk, eval_chunk);
 		}
 		OperatorSinkInput sink {*gestates[expr_idx], *local_states[expr_idx], interrupt};
-		executor.Evaluate(context, position, eval_chunk, result, sink);
+		executor.Evaluate(context, position, eval_chunk, result, sink, input_chunk.size());
 	}
 	output_chunk.SetChildCardinality(input_chunk.size());
 	output_chunk.Verify(context.client.db);

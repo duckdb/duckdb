@@ -258,7 +258,7 @@ void WindowAggregateExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 	D_ASSERT(aggregator);
 
 	OperatorSinkInput asink {*gsink, *lastate.aggregator_state, sink.interrupt_state};
-	aggregator->Evaluate(context, bounds, result, eval_chunk.size(), row_idx, asink);
+	aggregator->Evaluate(context, bounds, result, bounds.size(), row_idx, asink);
 }
 
 } // namespace duckdb

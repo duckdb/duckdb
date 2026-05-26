@@ -445,12 +445,10 @@ void WindowBoundariesState::Finalize(CollectionPtr collection) {
 	}
 }
 
-void WindowBoundariesState::UpdateBounds(idx_t row_idx, DataChunk &eval_chunk) {
+void WindowBoundariesState::UpdateBounds(idx_t row_idx, DataChunk &eval_chunk, idx_t count) {
 	// Evaluate the row-level arguments
 	WindowInputExpression boundary_start(eval_chunk, boundary_start_idx);
 	WindowInputExpression boundary_end(eval_chunk, boundary_end_idx);
-
-	const auto count = eval_chunk.size();
 
 	bounds.Reset();
 	D_ASSERT(bounds.ColumnCount() == 8);

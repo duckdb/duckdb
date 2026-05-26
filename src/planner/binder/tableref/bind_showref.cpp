@@ -132,7 +132,6 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 			output.data[5].Append(Value());
 		}
 
-		output.SetChildCardinality(output.size() + 1);
 		if (output.size() == STANDARD_VECTOR_SIZE) {
 			collection->Append(append_state, output);
 			output.Reset();

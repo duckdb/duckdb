@@ -501,6 +501,8 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 		return optional_idx();
 	}
 #endif
+	// Capture row_count before Reference+SetChildCardinality, which share the buffer and would corrupt groups.size()
+	const idx_t row_count = groups.size();
 	auto &dict_state = state.dict_state;
 	auto &unique_values = dict_state.unique_values;
 	if (unique_values.ColumnCount() == 0) {
@@ -527,7 +529,6 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	// process the aggregates
 	// FIXME: This should just be a CONSTANT_VECTOR but subsequent operations assume FLAT_VECTOR
 	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
-	const idx_t row_count = groups.size();
 	auto result_addresses = FlatVector::Writer<uintptr_t>(state.addresses, row_count);
 	uintptr_t aggregate_address = new_dict_addresses[0] + layout_ptr->GetAggrOffset();
 	static constexpr uint64_t GID_HIGH_MASK = ~(ClusteredAggr::MAX_GID_COUNT - 1);

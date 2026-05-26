@@ -34,13 +34,13 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, WindowSharedExpress
 }
 
 void WindowExecutor::Evaluate(ExecutionContext &context, idx_t row_idx, DataChunk &eval_chunk, Vector &result,
-                              OperatorSinkInput &sink) const {
+                              OperatorSinkInput &sink, idx_t count) const {
 	auto &lbstate = sink.local_state.Cast<WindowExecutorLocalState>();
-	lbstate.state.UpdateBounds(row_idx, eval_chunk);
+	lbstate.state.UpdateBounds(row_idx, eval_chunk, count);
 
 	EvaluateInternal(context, eval_chunk, lbstate.state.bounds, result, row_idx, sink);
 
-	FlatVector::SetSize(result, count_t(eval_chunk.size()));
+	FlatVector::SetSize(result, count_t(count));
 	result.Verify();
 }
 

@@ -236,13 +236,13 @@ void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t
 	if (sel_count == 0) {
 		return;
 	}
-	idx_t new_size = size() + sel_count;
 	if (ColumnCount() != other.ColumnCount()) {
 		throw InternalException("Column counts of appending chunk doesn't match!");
 	}
+	idx_t current_size = size();
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		// ensure data[i] has the chunk's current size so the append computes new_size = current + append_size
-		FlatVector::SetSize(data[i], size());
+		FlatVector::SetSize(data[i], current_size);
 		if (sel.IsSet()) {
 			data[i].Append(other.data[i], sel, sel_count, append_mode);
 		} else {

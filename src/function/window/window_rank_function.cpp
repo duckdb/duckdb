@@ -206,7 +206,7 @@ void WindowRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
                                  idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 	auto rdata = FlatVector::Writer<int64_t>(result, count);
 
 	if (gpeer.use_framing) {
@@ -290,7 +290,7 @@ void WindowDenseRankExecutor::GetData(ExecutionContext &context, DataChunk &eval
                                       Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 
 	auto &order_mask = gpeer.order_mask;
 	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
@@ -415,7 +415,7 @@ void WindowPercentRankExecutor::GetData(ExecutionContext &context, DataChunk &ev
                                         Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 	auto rdata = FlatVector::Writer<double>(result, count);
 
 	if (gpeer.use_framing) {
@@ -504,7 +504,7 @@ static inline double CumeDist(const idx_t begin, const idx_t end, const idx_t pe
 void WindowCumeDistExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
                                      Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 	auto rdata = FlatVector::Writer<double>(result, count);
 
 	if (gpeer.use_framing) {
