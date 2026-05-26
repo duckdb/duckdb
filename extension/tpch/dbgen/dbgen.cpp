@@ -683,20 +683,15 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 			if (executor.HasError()) {
 				executor.ThrowError();
 			}
-			ErrorData error;
-			try {
-				// flush the previous batch of appenders while waiting (if any are there)
-				// now flush the appenders in-order
-				for(auto &appender : finished_appenders) {
-					appender.Flush();
-				}
-			} catch(std::exception &ex) {
-				error = ErrorData(ex);
+			// flush the previous batch of appenders while waiting (if any are there)
+			// now flush the appenders in-order
+			// NOTE: do NOT catch exceptions here - if Flush() fails, let the exception
+			// propagate so that all appender destructors run with UncaughtException() == true,
+			// preventing them from re-attempting a flush on already-inconsistent local storage.
+			for(auto &appender : finished_appenders) {
+				appender.Flush();
 			}
 			finished_appenders.clear();
-			if (error.HasError()) {
-				error.Throw();
-			}
 			finished_appenders = std::move(new_appenders);
 		}
 		// flush the final batch of appenders

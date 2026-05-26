@@ -32,3 +32,27 @@ statement error
 DROP MACRO test.test_macro2;
 ----
 Catalog Error: Macro Function with name test_macro2 does not exist!
+
+statement ok
+attach ':memory:' as my_ducklake;
+
+statement ok
+create schema my_ducklake.default;
+
+# Try on a schema which is a reserved keyword
+statement ok
+drop schema my_ducklake.default;
+
+statement error
+DROP SCHEMA my_ducklake.default;
+----
+Catalog Error: Schema with name default does not exist!
+
+statement ok
+create table my_ducklake.foo (i bigint);
+
+statement ok
+create index "default" on my_ducklake.foo (i);
+
+statement ok
+drop index my_ducklake.default;

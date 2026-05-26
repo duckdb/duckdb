@@ -976,7 +976,7 @@ Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
 Value Value::TYPE(const LogicalType &type) {
 	MemoryStream stream;
 	SerializationOptions options;
-	options.serialization_compatibility = SerializationCompatibility::Latest();
+	options.storage_compatibility = StorageCompatibility::Latest();
 	BinarySerializer::Serialize(type, stream, options);
 	auto data_ptr = const_char_ptr_cast(stream.GetData());
 	auto data_len = stream.GetPosition();
@@ -2189,7 +2189,7 @@ void Value::SerializeChildren(Serializer &serializer, const vector<Value> &child
 }
 
 void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const {
-	if (serialize_type || !serializer.ShouldSerialize(4)) {
+	if (serialize_type || !serializer.ShouldSerialize(StorageVersion::V1_2_0)) {
 		// only the root value needs to serialize its type
 		// for forwards compatibility reasons, we also serialize the type always when targeting versions < v1.2.0
 		serializer.WriteProperty(100, "type", type_);
@@ -2256,7 +2256,7 @@ void Value::SerializeInternal(Serializer &serializer, bool serialize_type) const
 			auto blob_str = Blob::ToString(StringValue::Get(*this));
 			serializer.WriteProperty(102, "value", blob_str);
 		} else if (type_.id() == LogicalTypeId::GEOMETRY) {
-			if (!serializer.ShouldSerialize(7)) {
+			if (!serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 				// Write as old-style SPATIAL format
 				string blob;
 				Geometry::ToSpatialGeometry(StringValue::Get(*this), blob);

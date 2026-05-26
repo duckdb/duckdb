@@ -412,6 +412,7 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 		}
 		memset(dict_state.found_entry.get(), 0, dict_size * sizeof(bool));
 		dict_state.dictionary_id = dictionary_id;
+		dict_state.resolved_count = 0;
 		dict_state.address_high_bits = ~uint64_t(0);
 		dict_state.address_high_bits_uniform =
 		    (sizeof(uintptr_t) == sizeof(uint64_t)); // only relevant on 64-bits systems
@@ -426,11 +427,15 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 	idx_t unique_count = 0;
 	// for each of the dictionary entries - check if we have already done a look-up into the hash table
 	// if we have, we can just use the cached group pointers
-	for (idx_t i = 0; i < groups.size(); i++) {
-		auto dict_idx = offsets.get_index(i);
-		unique_entries.set_index(unique_count, dict_idx);
-		unique_count += !found_entry[dict_idx];
-		found_entry[dict_idx] = true;
+	// once every dict slot has been seen the walk would produce no new entries - skip it
+	if (dict_state.resolved_count < dict_size) {
+		for (idx_t i = 0; i < groups.size(); i++) {
+			auto dict_idx = offsets.get_index(i);
+			unique_entries.set_index(unique_count, dict_idx);
+			unique_count += !found_entry[dict_idx];
+			found_entry[dict_idx] = true;
+		}
+		dict_state.resolved_count += unique_count;
 	}
 	auto &new_dictionary_pointers = dict_state.new_dictionary_pointers;
 	idx_t new_group_count = 0;

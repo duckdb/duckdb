@@ -22,6 +22,7 @@ set(TEST_API_OBJECTS
     test_table_info.cpp
     test_appender_api.cpp
     test_lifecycle_hooks.cpp
+    test_extension_schema_api.cpp
     test_pending_query.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp
@@ -38,7 +39,8 @@ set(TEST_API_OBJECTS
     test_windows_unicode_path.cpp
     test_object_cache.cpp
     test_partial_executor.cpp
-    test_buffer_pool_eviction.cpp)
+    test_buffer_pool_eviction.cpp
+    test_block_allocator_tls.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)

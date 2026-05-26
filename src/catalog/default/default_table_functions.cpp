@@ -79,7 +79,7 @@ SELECT * EXCLUDE(input_type, scope, aliases)
       'profiling_coverage',
       'profiling_output',
       'profiling_mode',
-      'custom_profiling_settings'
+      'tracked_metrics'
   );
 )"},
 	{nullptr, nullptr, {nullptr}, {{nullptr, nullptr}}, nullptr}

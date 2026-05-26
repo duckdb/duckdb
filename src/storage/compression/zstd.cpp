@@ -144,7 +144,7 @@ unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, Ph
 		//! Can't use ZSTD in in-memory environment
 		return nullptr;
 	}
-	if (storage.GetStorageVersion() < 4) {
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage.GetStorageVersion())) {
 		// compatibility mode with old versions - disable zstd
 		return nullptr;
 	}
@@ -540,7 +540,7 @@ public:
 		stats_writer.Clear();
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
-		buffer_collection.segment_handle = buffer_manager.Pin(buffer_collection.segment->block);
+		buffer_collection.segment_handle = buffer_manager.Pin(buffer_collection.segment->GetBlockHandle());
 	}
 
 	void FlushSegment() {
@@ -706,10 +706,11 @@ struct ZSTDScanState : public SegmentScanState {
 public:
 	explicit ZSTDScanState(ColumnSegment &segment)
 	    : state(segment.GetSegmentState()->Cast<UncompressedStringSegmentState>()),
-	      block_manager(segment.block->GetBlockManager()), buffer_manager(BufferManager::GetBufferManager(segment.db)),
+	      block_manager(segment.GetBlockHandle()->GetBlockManager()),
+	      buffer_manager(BufferManager::GetBufferManager(segment.GetDatabase())),
 	      segment_block_offset(segment.GetBlockOffset()), segment(segment) {
 		decompression_context = duckdb_zstd::ZSTD_createDCtx();
-		segment_handle = buffer_manager.Pin(segment.block);
+		segment_handle = buffer_manager.Pin(segment.GetBlockHandle());
 
 		auto data = segment_handle.GetDataMutable() + segment.GetBlockOffset();
 		idx_t offset = 0;
