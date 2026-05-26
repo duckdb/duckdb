@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 
@@ -98,12 +99,13 @@ public:
 class CardinalityEstimator {
 public:
 	static constexpr double DEFAULT_SEMI_ANTI_SELECTIVITY = 5;
-	explicit CardinalityEstimator() {};
+	explicit CardinalityEstimator(JoinRelationSetManager &set_manager) : set_manager(set_manager) {
+	}
 
 private:
 	vector<RelationsSetToStats> relation_set_stats;
-	unordered_map<string, CardinalityHelper> relation_set_2_cardinality;
-	JoinRelationSetManager set_manager;
+	reference_map_t<JoinRelationSet, CardinalityHelper> relation_set_2_cardinality;
+	JoinRelationSetManager &set_manager;
 	vector<RelationStats> relation_stats;
 
 public:

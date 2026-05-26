@@ -185,7 +185,7 @@ double CardinalityEstimator::GetNumerator(JoinRelationSet &set) {
 	double numerator = 1;
 	for (idx_t i = 0; i < set.count; i++) {
 		auto &single_node_set = set_manager.GetJoinRelation(set.relations[i]);
-		auto entry = relation_set_2_cardinality.find(single_node_set.ToString());
+		auto entry = relation_set_2_cardinality.find(single_node_set);
 		D_ASSERT(entry != relation_set_2_cardinality.end());
 		if (entry == relation_set_2_cardinality.end()) {
 			continue;
@@ -595,7 +595,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 template <>
 double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
 	double result;
-	auto it = relation_set_2_cardinality.find(new_set.ToString());
+	auto it = relation_set_2_cardinality.find(new_set);
 	if (it != relation_set_2_cardinality.end()) {
 		result = it->second.cardinality_before_filters;
 	} else {
@@ -605,7 +605,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 		// include cardinalities of relations on the RHS of a semi/anti join.
 		auto numerator = GetNumerator(denom.numerator_relations);
 		result = numerator / denom.denominator;
-		relation_set_2_cardinality[new_set.ToString()] = CardinalityHelper(result);
+		relation_set_2_cardinality[new_set] = CardinalityHelper(result);
 	}
 	return ApplyOrFilterSelectivities(new_set, result);
 }
@@ -648,7 +648,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 	auto relation_cardinality = stats.cardinality;
 
 	auto card_helper = CardinalityHelper((double)relation_cardinality);
-	relation_set_2_cardinality[set->ToString()] = card_helper;
+	relation_set_2_cardinality[*set] = card_helper;
 
 	UpdateTotalDomains(set, stats);
 
