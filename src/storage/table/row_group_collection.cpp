@@ -1464,13 +1464,17 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		state.row_group_counts.push_back(row_group_count);
 	}
 	if (!checkpoint_state.writer.CanLeaveGapsInRowIds() && !state.can_change_row_ids) {
-		// Older storage versions cannot persist rowid gaps. However, dropping fully deleted trailing row groups is
-		// still safe for stable rowids because it does not shift any surviving rowid.
+		// If we cannot change rowids and cannot leave rowid gaps, we might still be able to vacuum trailing deletions
+		// because that does not change the rowids of any non-deleted rows.
 		auto segment_count = state.row_group_counts.size();
 		for (idx_t i = segment_count; i > 0; i--) {
 			auto segment_idx = i - 1;
-			D_ASSERT(committed_counts[segment_idx].IsValid());
+			if (!committed_counts[segment_idx].IsValid()) {
+				// cannot vacuum this row group
+				break;
+			}
 			if (committed_counts[segment_idx].GetIndex() != 0) {
+				// multiple rows found here - skip
 				break;
 			}
 			auto &entry = *checkpoint_state.row_groups.GetSegmentByIndex(NumericCast<int64_t>(segment_idx));
