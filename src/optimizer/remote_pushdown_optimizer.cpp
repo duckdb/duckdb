@@ -255,6 +255,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	}
 	cte_results[node.ctename] = {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
 
+	// Track whether ctename was already in local_table_names before the recursive arm.
+	// Rewrite(BaseTableRef) adds ctename to local_table_names when it encounters the self-reference
+	// (classified as NO_CATALOG_REFERENCED). After the recursive arm completes, ctename must be
+	// erased from local_table_names so it does not leak into the outer scope as a false "local table"
+	// that would incorrectly block optimization of outer subqueries referencing a column like r.col.
+	bool ctename_was_local = local_table_names.count(node.ctename) > 0;
+
 	// Save left and right before analysis. Rewrite(SelectNode) calls Rewrite(JoinRef) which pushes
 	// individual SINGLE_REMOTE children in-place via FinishPushdown even when the JoinRef result is
 	// UNKNOWN (mixed join). If the overall RecursiveCTENode result is UNKNOWN, those stale quack
@@ -266,6 +273,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 
 	CatalogPushdownResult left_result = Rewrite(*node.left);
 	CatalogPushdownResult right_result = Rewrite(*node.right);
+
+	// Remove ctename leak from local_table_names (added by Rewrite(BaseTableRef) when it sees
+	// the self-reference classified as NO_CATALOG_REFERENCED in the recursive arm).
+	if (!ctename_was_local) {
+		local_table_names.erase(node.ctename);
+	}
 
 	// Remove the self-reference placeholder so the caller's assignment is authoritative.
 	// If an outer CTE of the same name was shadowed, restore it now.
