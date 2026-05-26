@@ -1504,5 +1504,38 @@ order by rpc.t1.i
 statement ok
 drop table local_bug33;
 
+# ============================================================
+# Bug 34: PushJoinChild with explicit alias differing from table name.
+#
+# When a remote table has an explicit alias (rpc.t1 AS rt1) and the
+# ON condition uses the catalog-qualified original name (rpc.t1.i),
+# PushJoinChild pushes it as quack_query_by_name(...) AS rt1 and
+# StripCatalogName strips rpc.t1.i → t1.i.  But the binder only
+# sees "rt1", not "t1", so the stripped ref t1.i cannot be resolved.
+# Fix: after stripping, rename any remaining <table_name>.col
+# references to <alias>.col when alias != table_name.
+# ============================================================
+
+statement ok
+create table local_bug34(k int);
+
+statement ok
+insert into local_bug34 values (2), (5), (8);
+
+# Mixed join: rpc.t1 AS rt1 (pushed individually) + local_bug34.
+# ON condition uses catalog-qualified form rpc.t1.i (not rt1.i).
+# After fix: rpc.t1.i stripped to t1.i then renamed to rt1.i.
+query I
+select rt1.i
+from rpc.t1 AS rt1 join local_bug34 on rpc.t1.i = local_bug34.k
+order by rt1.i
+----
+2
+5
+8
+
+statement ok
+drop table local_bug34;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

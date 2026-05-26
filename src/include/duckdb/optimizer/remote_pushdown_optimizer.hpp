@@ -82,6 +82,9 @@ private:
 	//! Strip catalog-qualified column refs in ORDER BY expressions of a set operation to just the column name.
 	//! In a UNION/INTERSECT/EXCEPT output there are no table associations, so even a 2-part qualifier fails.
 	static void StripSetOpOrderByExpr(ParsedExpression &expr, const string &catalog_name);
+	//! After StripCatalogName reduces "catalog.table.col" to "table.col", rename "table.col" to "alias.col"
+	//! when the pushed table has an explicit alias that differs from its table name.
+	static void RenameTableInExpr(ParsedExpression &expr, const string &old_table, const string &new_alias);
 	bool RefersToLocalTable(ColumnRefExpression &col_ref) const;
 
 	bool RefersToCTE(const string &cte_name, CatalogPushdownResult &result) const;

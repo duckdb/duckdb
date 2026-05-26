@@ -425,13 +425,25 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		for (idx_t i = 0; i < node.using_clauses.size(); i++) {
 			if (using_results[i].reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+				string old_tname, new_talias;
+				if (node.using_clauses[i]->type == TableReferenceType::BASE_TABLE) {
+					auto &base = node.using_clauses[i]->Cast<BaseTableRef>();
+					old_tname = base.table_name;
+					new_talias = base.alias.empty() ? base.table_name : base.alias;
+				}
 				auto catalog_name = PushJoinChild(node.using_clauses[i], using_results[i]);
 				if (!catalog_name.empty()) {
 					if (node.condition) {
 						StripCatalogName(*node.condition, catalog_name, false);
+						if (!old_tname.empty() && !StringUtil::CIEquals(old_tname, new_talias)) {
+							RenameTableInExpr(*node.condition, old_tname, new_talias);
+						}
 					}
 					for (auto &expr : node.returning_list) {
 						StripCatalogName(*expr, catalog_name, false);
+						if (!old_tname.empty() && !StringUtil::CIEquals(old_tname, new_talias)) {
+							RenameTableInExpr(*expr, old_tname, new_talias);
+						}
 					}
 				}
 			}
@@ -473,18 +485,33 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	// table individually and strip catalog refs from SET expressions, WHERE condition, and RETURNING.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG && node.from_table &&
 	    from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		string old_tname, new_talias;
+		if (node.from_table->type == TableReferenceType::BASE_TABLE) {
+			auto &base = node.from_table->Cast<BaseTableRef>();
+			old_tname = base.table_name;
+			new_talias = base.alias.empty() ? base.table_name : base.alias;
+		}
 		auto catalog_name = PushJoinChild(node.from_table, from_result);
 		if (!catalog_name.empty()) {
 			if (node.set_info) {
 				if (node.set_info->condition) {
 					StripCatalogName(*node.set_info->condition, catalog_name, false);
+					if (!old_tname.empty() && !StringUtil::CIEquals(old_tname, new_talias)) {
+						RenameTableInExpr(*node.set_info->condition, old_tname, new_talias);
+					}
 				}
 				for (auto &expr : node.set_info->expressions) {
 					StripCatalogName(*expr, catalog_name, false);
+					if (!old_tname.empty() && !StringUtil::CIEquals(old_tname, new_talias)) {
+						RenameTableInExpr(*expr, old_tname, new_talias);
+					}
 				}
 			}
 			for (auto &expr : node.returning_list) {
 				StripCatalogName(*expr, catalog_name, false);
+				if (!old_tname.empty() && !StringUtil::CIEquals(old_tname, new_talias)) {
+					RenameTableInExpr(*expr, old_tname, new_talias);
+				}
 			}
 		}
 	}
@@ -788,22 +815,42 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	// After pushing, strip catalog-qualified refs from the ON condition so the binder can
 	// resolve them against the pushed table's alias instead of the original catalog.table name.
 	// Use strip_subquery_bodies=false to avoid incorrectly stripping subqueries that are NOT pushed.
+	// When the pushed table has an explicit alias (e.g. rpc.t1 AS rt1), StripCatalogName reduces
+	// "rpc.t1.col" to "t1.col", but the binder only knows "rt1". RenameTableInExpr fixes that up.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		if (left_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
 		    right_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			string old_tname, new_talias;
+			if (ref.left->type == TableReferenceType::BASE_TABLE) {
+				auto &base = ref.left->Cast<BaseTableRef>();
+				old_tname = base.table_name;
+				new_talias = base.alias.empty() ? base.table_name : base.alias;
+			}
 			auto catalog_name = PushJoinChild(ref.left, left_result);
 			if (!catalog_name.empty()) {
 				if (ref.condition) {
 					StripCatalogName(*ref.condition, catalog_name, false);
+					if (!old_tname.empty() && !StringUtil::CIEquals(old_tname, new_talias)) {
+						RenameTableInExpr(*ref.condition, old_tname, new_talias);
+					}
 				}
 				pending_outer_strip_catalogs.push_back(catalog_name);
 			}
 		} else if (right_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
 		           left_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			string old_tname, new_talias;
+			if (ref.right->type == TableReferenceType::BASE_TABLE) {
+				auto &base = ref.right->Cast<BaseTableRef>();
+				old_tname = base.table_name;
+				new_talias = base.alias.empty() ? base.table_name : base.alias;
+			}
 			auto catalog_name = PushJoinChild(ref.right, right_result);
 			if (!catalog_name.empty()) {
 				if (ref.condition) {
 					StripCatalogName(*ref.condition, catalog_name, false);
+					if (!old_tname.empty() && !StringUtil::CIEquals(old_tname, new_talias)) {
+						RenameTableInExpr(*ref.condition, old_tname, new_talias);
+					}
 				}
 				pending_outer_strip_catalogs.push_back(catalog_name);
 			}
@@ -1095,6 +1142,22 @@ void RemotePushdownOptimizer::StripSetOpOrderByExpr(ParsedExpression &expr, cons
 	// nested inside expressions like coalesce(rpc.t1.i, 0) are also stripped to their bare column name.
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](ParsedExpression &child) { StripSetOpOrderByExpr(child, catalog_name); });
+}
+
+void RemotePushdownOptimizer::RenameTableInExpr(ParsedExpression &expr, const string &old_table,
+                                               const string &new_alias) {
+	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		auto &col_ref = expr.Cast<ColumnRefExpression>();
+		// Rename table.col → alias.col for 2-part refs where the table part matches old_table.
+		// This is called after StripCatalogName has reduced catalog.table.col → table.col, so the
+		// table name is now the first element of a 2-part ref.
+		if (col_ref.column_names.size() == 2 && StringUtil::CIEquals(col_ref.column_names[0], old_table)) {
+			col_ref.column_names[0] = new_alias;
+		}
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](ParsedExpression &child) { RenameTableInExpr(child, old_table, new_alias); });
 }
 
 void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const string &catalog_name,
