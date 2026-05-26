@@ -268,6 +268,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 				for (auto &order : order_mod.orders) {
 					StripCatalogName(*order.expression, cat, false);
 				}
+			} else if (modifier->type == ResultModifierType::DISTINCT_MODIFIER) {
+				auto &distinct_mod = modifier->Cast<DistinctModifier>();
+				for (auto &expr : distinct_mod.distinct_on_targets) {
+					StripCatalogName(*expr, cat, false);
+				}
 			}
 		}
 	}
@@ -416,13 +421,18 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 		}
 	}
 	// Individual pushdown: for mixed DELETE (local target, remote USING clause), push remote USING
-	// clauses individually and strip catalog refs from the WHERE condition.
+	// clauses individually and strip catalog refs from the WHERE condition and RETURNING list.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		for (idx_t i = 0; i < node.using_clauses.size(); i++) {
 			if (using_results[i].reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 				auto catalog_name = PushJoinChild(node.using_clauses[i], using_results[i]);
-				if (!catalog_name.empty() && node.condition) {
-					StripCatalogName(*node.condition, catalog_name, false);
+				if (!catalog_name.empty()) {
+					if (node.condition) {
+						StripCatalogName(*node.condition, catalog_name, false);
+					}
+					for (auto &expr : node.returning_list) {
+						StripCatalogName(*expr, catalog_name, false);
+					}
 				}
 			}
 		}
@@ -460,15 +470,20 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 		}
 	}
 	// Individual pushdown: for mixed UPDATE (local target, remote FROM clause), push the remote FROM
-	// table individually and strip catalog refs from SET expressions and WHERE condition.
+	// table individually and strip catalog refs from SET expressions, WHERE condition, and RETURNING.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG && node.from_table &&
 	    from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		auto catalog_name = PushJoinChild(node.from_table, from_result);
-		if (!catalog_name.empty() && node.set_info) {
-			if (node.set_info->condition) {
-				StripCatalogName(*node.set_info->condition, catalog_name, false);
+		if (!catalog_name.empty()) {
+			if (node.set_info) {
+				if (node.set_info->condition) {
+					StripCatalogName(*node.set_info->condition, catalog_name, false);
+				}
+				for (auto &expr : node.set_info->expressions) {
+					StripCatalogName(*expr, catalog_name, false);
+				}
 			}
-			for (auto &expr : node.set_info->expressions) {
+			for (auto &expr : node.returning_list) {
 				StripCatalogName(*expr, catalog_name, false);
 			}
 		}
@@ -1074,7 +1089,12 @@ void RemotePushdownOptimizer::StripSetOpOrderByExpr(ParsedExpression &expr, cons
 			string col_name = col_ref.column_names.back();
 			col_ref.column_names = {col_name};
 		}
+		return;
 	}
+	// Recurse into function arguments and other composite expressions so catalog-prefixed column refs
+	// nested inside expressions like coalesce(rpc.t1.i, 0) are also stripped to their bare column name.
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](ParsedExpression &child) { StripSetOpOrderByExpr(child, catalog_name); });
 }
 
 void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const string &catalog_name,

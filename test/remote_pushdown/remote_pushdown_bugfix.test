@@ -1445,5 +1445,64 @@ order by t1.i
 3
 4
 
+# ============================================================
+# Bug 32: StripSetOpOrderByExpr did not recurse into composite
+# ORDER BY expressions for set operations after individual child
+# pushdown.
+#
+# When a mixed UNION/INTERSECT/EXCEPT has one SINGLE_REMOTE arm
+# and one local arm, the SINGLE_REMOTE arm is individually pushed
+# to quack_query_by_name(...). Any ORDER BY expression referencing
+# the pushed arm with a catalog-qualified column ref must have
+# that ref reduced to just the bare column name (since set-op
+# output has no table associations). Previously this worked only
+# for bare COLUMN_REF ORDER BY expressions; catalog-qualified refs
+# inside composite expressions like coalesce(rpc.t1.i, 0) were not
+# stripped, causing a binder error.
+# Fix: StripSetOpOrderByExpr now recurses into function arguments
+# and other composite expressions via EnumerateChildren.
+# ============================================================
+
+# Note: Testing this fix directly (e.g., ORDER BY abs(rpc.t1.i) on a mixed UNION ALL)
+# is not feasible with quack because ORDER BY <function>(col) on a UNION ALL where one
+# arm is a quack streaming table function fails at execution even when correctly stripped.
+# The fix is verified by code inspection: StripSetOpOrderByExpr now calls
+# EnumerateChildren to recurse into function arguments.
+
+# ============================================================
+# Bug 33: Rewrite(SelectNode) pending stripping loop handled
+# ORDER_MODIFIER but missed DISTINCT_MODIFIER.
+#
+# When a mixed join (one remote child pushed individually via
+# PushJoinChild) leaves pending_outer_strip_catalogs non-empty,
+# the stripping loop in Rewrite(SelectNode) applies
+# StripCatalogName to SELECT, WHERE, GROUP BY, HAVING, QUALIFY,
+# and ORDER BY — but not to DISTINCT ON target expressions.
+# A DISTINCT ON (rpc.t1.i) on a mixed join would leave the
+# catalog-qualified ref unstripped, causing a binder error.
+# Fix: add DISTINCT_MODIFIER handling to the pending stripping loop.
+# ============================================================
+
+statement ok
+create table local_bug33(k int);
+
+statement ok
+insert into local_bug33 values (2), (5), (8);
+
+# Mixed join: rpc.t1 (pushed individually) + local_bug33.
+# DISTINCT ON (rpc.t1.i) must have "rpc" stripped → DISTINCT ON (t1.i).
+# t1={0..9}; inner join on t1.i=k gives {2,5,8}; DISTINCT ON t1.i → 3 rows.
+query I
+select distinct on (rpc.t1.i) rpc.t1.i
+from rpc.t1 join local_bug33 on rpc.t1.i = local_bug33.k
+order by rpc.t1.i
+----
+2
+5
+8
+
+statement ok
+drop table local_bug33;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
