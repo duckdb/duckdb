@@ -152,6 +152,23 @@ select count(*) from cte1
 
 # --- CTE attached to UNION (SetOperationNode) ---
 
+# Unreferenced local CTE on a UNION (SetOperationNode): must NOT push the whole query.
+# Without the fix, Rewrite(SetOperationNode) skips the CTE-result merge and the overall
+# result appears all-remote. FinishPushdown then serializes the whole statement including
+# "WITH local_cte AS (SELECT * FROM local_t) ..." and sends it to the remote, which fails
+# with "Table local_t not found". With the fix, the unreferenced UNKNOWN CTE is merged
+# into the result (UNKNOWN), blocking full-query pushdown. Only the remote arm gets pushed
+# individually; the second arm (a constant SELECT) runs locally.
+query I
+with local_cte as (select * from local_t)
+select i from rpc.t1 where i = 3
+union all
+select 99
+order by i
+----
+3
+99
+
 # All-remote CTE on a UNION: the WITH clause is attached to the SetOperationNode; both the
 # CTE body and the UNION arms reference only rpc.t1 -> whole query pushed (no SEQ_SCAN).
 # Without the StripCatalogName fix for SET_OPERATION_NODE's cte_map the catalog prefix

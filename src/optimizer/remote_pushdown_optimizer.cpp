@@ -168,6 +168,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	CatalogPushdownResult right_result = right_optimizer.Rewrite(*node.right);
 
 	auto result = Merge(left_result, right_result);
+	for (auto &cte_pair : node.cte_map.map) {
+		auto it = cte_results.find(cte_pair.first);
+		if (it != cte_results.end()) {
+			result = Merge(result, it->second);
+		}
+	}
 	return result;
 }
 
@@ -287,6 +293,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 		auto expr_result = Rewrite(*expr);
 		result = Merge(result, expr_result);
 	}
+	for (auto &cte_pair : node.cte_map.map) {
+		auto it = cte_results.find(cte_pair.first);
+		if (it != cte_results.end()) {
+			result = Merge(result, it->second);
+		}
+	}
 	return result;
 }
 
@@ -303,6 +315,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 	for (auto &expr : node.returning_list) {
 		auto expr_result = Rewrite(*expr);
 		result = Merge(result, expr_result);
+	}
+	for (auto &cte_pair : node.cte_map.map) {
+		auto it = cte_results.find(cte_pair.first);
+		if (it != cte_results.end()) {
+			result = Merge(result, it->second);
+		}
 	}
 	return result;
 }
@@ -328,6 +346,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	for (auto &expr : node.returning_list) {
 		auto expr_result = Rewrite(*expr);
 		result = Merge(result, expr_result);
+	}
+	for (auto &cte_pair : node.cte_map.map) {
+		auto it = cte_results.find(cte_pair.first);
+		if (it != cte_results.end()) {
+			result = Merge(result, it->second);
+		}
 	}
 	return result;
 }
@@ -390,6 +414,14 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 		}
 		default:
 			break;
+		}
+	}
+	// Merge unreferenced CTEs: even if no arm references a CTE it is still serialized into
+	// the pushed SQL string.  A local-body CTE (UNKNOWN) must block full-query pushdown.
+	for (auto &cte_pair : node.cte_map.map) {
+		auto it = cte_results.find(cte_pair.first);
+		if (it != cte_results.end()) {
+			result = Merge(result, it->second);
 		}
 	}
 	// If the whole set operation resolves to a single remote catalog, propagate upward.
@@ -529,7 +561,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	auto left_result = Rewrite(ref.left);
 
-	// the left side of a join can be correlated to the left side - use a child optimizer to track this
+	// the right side of a join can be correlated to the left side - use a child optimizer to track this
 	RemotePushdownOptimizer child_optimizer(*this);
 	auto right_result = child_optimizer.Rewrite(ref.right);
 	auto result = Merge(left_result, right_result);
