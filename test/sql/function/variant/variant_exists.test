@@ -1,0 +1,165 @@
+# name: test/sql/function/variant/variant_exists.test
+# group: [variant]
+
+require json
+
+load {TEST_DIR}/variant_exists.db readwrite v1.5.0
+
+statement ok
+CREATE MACRO struct_cast_data() AS TABLE (
+	SELECT {'a': [
+		{
+			'b': 'hello',
+			'c': NULL,
+			'a': '1970/03/15'::DATE
+		},
+		{
+			'b': NULL,
+			'c': True,
+			'a': '2020/11/03'::DATE
+		}
+	]}::VARIANT AS a
+	UNION ALL
+	SELECT {'a': [
+		{
+			'b': 'this is a long string',
+			'c': False,
+			'a': '1953/9/16'::DATE
+		}
+	],
+	'b': 42,
+	'c': {
+	    'd': 'world'
+	}}::VARIANT
+);
+
+# FIXME: Can have VARCHAR as input for variant parameter (should produce `true`).
+
+query I
+select variant_exists('{"a": 1, "b": {"c": 12, "d": 10}}', 'a');
+----
+false
+
+# Empty path supplied
+
+query I
+select variant_exists(a, '') from struct_cast_data();
+----
+true
+true
+
+query I
+select variant_exists(a, []) from struct_cast_data();
+----
+[]
+[]
+
+query I
+select variant_exists(a, ['']) from struct_cast_data();
+----
+[true]
+[true]
+
+# Single path supplied
+
+query I
+select variant_exists(a, 'c') from struct_cast_data();
+----
+false
+true
+
+query I
+select variant_exists(a, ['c']) from struct_cast_data();
+----
+[false]
+[true]
+
+# Multiple paths supplied
+
+query I
+select variant_exists(a, ['', 'c']) from struct_cast_data();
+----
+[true, false]
+[true, true]
+
+# FIXME: map type is currently casted into a shape inconsistent with respect to JSON (should produce true)
+
+query I
+select variant_exists(MAP {'a': 1, 'b': 2}::VARIANT, 'a');
+----
+false
+
+# NULL returns NULL
+
+query I
+select variant_exists(NULL::VARIANT, NULL);
+----
+NULL
+
+query I
+select variant_exists(NULL, NULL);
+----
+NULL
+
+query I
+select variant_exists(NULL::VARIANT, 'a');
+----
+NULL
+
+# NULL path returns NULL
+
+query I
+select variant_exists({'a': 1}::VARIANT, NULL);
+----
+NULL
+
+# FIXME: Support for JSONPath and JSONPointer
+
+query I
+select variant_exists({'a': 1, 'b': {'c': {'d': 12}}}::VARIANT, '$.b.c');
+----
+false
+
+# Incorrect parameters
+
+statement error
+select variant_exists({'a': 1}::VARIANT, [1]);
+----
+
+statement error
+select variant_exists({'a': 1}::VARIANT, [NULL]);
+----
+
+# FIXME: malformed JSON object should result in an error
+
+statement ok
+select variant_exists('{"a"\: 1}'::VARIANT, 'a');
+
+# Table of varying objects
+
+statement ok
+create table t1 as
+select range, case when range % 2 = 0 then {"duck": 42}::VARIANT else {"duck": 42, "goose": 43}::VARIANT end j
+from range(4096)
+
+query II
+select range % 2 g, sum(length([present for present in variant_exists(j, ['duck', 'goose']) if present])) c
+from t1
+group by g
+order by all
+----
+0	2048
+1	4096
+
+# Table whilst applying list of paths
+
+statement ok
+create table t2 as
+select range, {'duck': {'key1': 42}, 'goose': {'key1': 42, 'key2': 43}}::VARIANT j
+from range(4096)
+
+query T
+select sum(length([present for present in variant_exists(j, ['duck', 'goose']) if present])) s
+from t2
+----
+8192
