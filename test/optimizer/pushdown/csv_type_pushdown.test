@@ -1,0 +1,51 @@
+# name: test/optimizer/pushdown/csv_type_pushdown.test
+# description: Test CSV With Pushing Down Type Casts
+# group: [pushdown]
+
+# Column is used uncasted
+query II
+EXPLAIN SELECT column00 FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|');
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+# Column is used casted
+query II
+EXPLAIN SELECT column00::UTINYINT FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|');
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+# Column is used casted and uncasted
+query II
+EXPLAIN SELECT column00, column00::UTINYINT FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|');
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+# Column is used uncasted with filter
+query II
+EXPLAIN SELECT column00 FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|')
+WHERE column00 > 0;
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+# Column is used uncasted with filter on casted.
+# CSV reader doesn't support CAST expression pushdown.
+query II
+EXPLAIN SELECT column00 FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|')
+WHERE column00::UTINYINT > 0;
+----
+physical_plan	<REGEX>:.*FILTER.*
+
+# Same cast in SELECT and ORDER BY: no conflict
+query II
+EXPLAIN SELECT column00::UTINYINT
+FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|')
+ORDER BY column00::UTINYINT;
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+# Two different casts of the same column: conflict
+query II
+EXPLAIN SELECT column00::UTINYINT, column00::USMALLINT
+FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|');
+----
+physical_plan	<REGEX>:.*PROJECTION.*
