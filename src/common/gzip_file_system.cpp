@@ -433,7 +433,7 @@ unique_ptr<FileHandle> GZipFileSystem::OpenCompressedFile(QueryContext context, 
 	return make_uniq<GZipFile>(context, std::move(handle), path, write);
 }
 
-unique_ptr<StreamWrapper> GZipFileSystem::CreateStream() {
+unique_ptr<StreamWrapper> GZipFileSystem::CreateStream(const FileCompressionOptions &) {
 	return make_uniq<MiniZStreamWrapper>();
 }
 

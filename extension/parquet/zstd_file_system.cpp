@@ -16,12 +16,6 @@
 
 namespace duckdb {
 
-ZStdFileSystem::ZStdFileSystem() : compression_level(DefaultCompressionLevel()) {
-}
-
-ZStdFileSystem::ZStdFileSystem(int64_t compression_level) : compression_level(compression_level) {
-}
-
 namespace {
 
 struct ZstdStreamWrapper : public StreamWrapper {
@@ -196,17 +190,14 @@ void ZstdStreamWrapper::Close() {
 }
 
 struct ZStdFileSystemHolder {
-	explicit ZStdFileSystemHolder(int64_t compression_level) : zstd_fs(compression_level) {
-	}
-
 	ZStdFileSystem zstd_fs;
 };
 
 class ZStdFile : private ZStdFileSystemHolder, public CompressedFile {
 public:
 	ZStdFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write,
-	         int64_t compression_level)
-	    : ZStdFileSystemHolder(compression_level), CompressedFile(zstd_fs, std::move(child_handle_p), path) {
+	         FileCompressionOptions compression_options)
+	    : CompressedFile(zstd_fs, std::move(child_handle_p), path, compression_options) {
 		Initialize(context, write);
 	}
 
@@ -221,12 +212,12 @@ unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(QueryContext context, 
                                                           bool write,
                                                           const FileCompressionOptions &compression_options) {
 	auto path = handle->path;
-	auto compression_level =
-	    compression_options.has_compression_level ? compression_options.compression_level : DefaultCompressionLevel();
-	return make_uniq<ZStdFile>(context, std::move(handle), path, write, compression_level);
+	return make_uniq<ZStdFile>(context, std::move(handle), path, write, compression_options);
 }
 
-unique_ptr<StreamWrapper> ZStdFileSystem::CreateStream() {
+unique_ptr<StreamWrapper> ZStdFileSystem::CreateStream(const FileCompressionOptions &compression_options) {
+	auto compression_level =
+	    compression_options.has_compression_level ? compression_options.compression_level : DefaultCompressionLevel();
 	return make_uniq<ZstdStreamWrapper>(compression_level);
 }
 

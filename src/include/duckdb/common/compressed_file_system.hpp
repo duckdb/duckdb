@@ -51,20 +51,22 @@ public:
 	DUCKDB_API bool OnDiskFile(FileHandle &handle) override;
 	DUCKDB_API bool CanSeek() override;
 
-	DUCKDB_API virtual unique_ptr<StreamWrapper> CreateStream() = 0;
+	DUCKDB_API virtual unique_ptr<StreamWrapper> CreateStream(const FileCompressionOptions &compression_options) = 0;
 	DUCKDB_API virtual idx_t InBufferSize() = 0;
 	DUCKDB_API virtual idx_t OutBufferSize() = 0;
 };
 
 class CompressedFile : public FileHandle {
 public:
-	DUCKDB_API CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> child_handle_p, const string &path);
+	DUCKDB_API CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> child_handle_p, const string &path,
+	                          FileCompressionOptions compression_options = FileCompressionOptions());
 	DUCKDB_API ~CompressedFile() override;
 
 	DUCKDB_API idx_t GetProgress() override;
 
 	CompressedFileSystem &compressed_fs;
 	unique_ptr<FileHandle> child_handle;
+	FileCompressionOptions compression_options;
 	//! Whether the file is opened for reading or for writing
 	bool write = false;
 	StreamData stream_data;
