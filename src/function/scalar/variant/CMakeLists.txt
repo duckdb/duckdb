@@ -2,8 +2,10 @@ add_library_unity(
   duckdb_func_variant_main
   OBJECT
   variant_utils.cpp
+  variant_bind_utils.cpp
   variant_exists.cpp
   variant_extract.cpp
+  variant_keys.cpp
   variant_typeof.cpp
   variant_normalize.cpp)
 set(ALL_OBJECT_FILES

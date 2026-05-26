@@ -7,86 +7,6 @@
 
 namespace duckdb {
 
-struct VariantKeysBindData : public FunctionData {
-public:
-	explicit VariantKeysBindData();
-	explicit VariantKeysBindData(const string &input_path);
-	explicit VariantKeysBindData(const vector<string> &input_paths);
-	VariantKeysBindData(const VariantKeysBindData &other) = default;
-
-public:
-	unique_ptr<FunctionData> Copy() const override;
-	bool Equals(const FunctionData &other) const override;
-
-public:
-	vector<vector<VariantPathComponent>> paths;
-};
-
-VariantKeysBindData::VariantKeysBindData() : FunctionData() {
-}
-VariantKeysBindData::VariantKeysBindData(const string &input_path) : FunctionData() {
-	if (input_path.empty()) {
-		paths.emplace_back();
-	} else {
-		paths.push_back({VariantPathComponent(input_path)});
-	}
-}
-VariantKeysBindData::VariantKeysBindData(const vector<string> &input_paths) : FunctionData() {
-	for (const auto &path : input_paths) {
-		if (path.empty()) {
-			paths.emplace_back();
-		} else {
-			paths.push_back({VariantPathComponent(path)});
-		}
-	}
-}
-
-unique_ptr<FunctionData> VariantKeysBindData::Copy() const {
-	return make_uniq<VariantKeysBindData>(*this);
-}
-
-bool VariantKeysBindData::Equals(const FunctionData &other) const {
-	auto &bind_data = other.Cast<VariantKeysBindData>();
-	if (paths.size() != bind_data.paths.size()) {
-		return false;
-	}
-
-	for (idx_t i = 0; i < paths.size(); i++) {
-		if (paths[i].size() != bind_data.paths[i].size()) {
-			return false;
-		}
-		for (idx_t j = 0; j < paths[i].size(); j++) {
-			if (paths[i][j] != bind_data.paths[i][j]) {
-				return false;
-			}
-		}
-	}
-	return true;
-}
-
-struct VariantPathSelection {
-	explicit VariantPathSelection(const idx_t count) {
-		value_index_sel.Initialize(count);
-		new_value_index_sel.Initialize(count);
-
-		// We start at values[0] for every row.
-		for (idx_t i = 0; i < count; i++) {
-			value_index_sel[i] = 0;
-		}
-	}
-
-	SelectionVector &Input(const idx_t depth) {
-		return depth % 2 == 0 ? value_index_sel : new_value_index_sel;
-	}
-
-	SelectionVector &Output(const idx_t depth) {
-		return depth % 2 == 0 ? new_value_index_sel : value_index_sel;
-	}
-
-	//! Input and output buffers used during the object walk, switched per iteration
-	SelectionVector value_index_sel, new_value_index_sel;
-};
-
 static void TraverseVariantPath(const UnifiedVariantVectorData &variant, const vector<VariantPathComponent> &components,
                                 const idx_t count, VariantNestedData *nested_data, ValidityMask &validity,
                                 VariantPathSelection &path_selection) {
@@ -254,7 +174,7 @@ static void ManyVariantKeys(const Vector &variant_vec, const vector<vector<Varia
 	}
 }
 
-static vector<string> CollectPaths(const Value &constant_arg) {
+static vector<string> CollectKeyPaths(const Value &constant_arg) {
 	vector<string> paths;
 	const auto &children = ListValue::GetChildren(constant_arg);
 	for (const auto &child : children) {
@@ -277,7 +197,7 @@ static unique_ptr<FunctionData> VariantKeysBind(BindScalarFunctionInput &input) 
 
 	if (arguments.size() == 1) {
 		// No path supplied, execute function over the root of the variant
-		return make_uniq<VariantKeysBindData>();
+		return make_uniq<VariantPathBindData>();
 	}
 
 	const auto &path_expr = *arguments[1];
@@ -302,10 +222,10 @@ static unique_ptr<FunctionData> VariantKeysBind(BindScalarFunctionInput &input) 
 
 	const auto path_type_id = constant_arg.type().id();
 	if (path_type_id == LogicalTypeId::VARCHAR) {
-		return make_uniq<VariantKeysBindData>(constant_arg.GetValue<string>());
+		return make_uniq<VariantPathBindData>(constant_arg.GetValue<string>());
 	}
 	if (path_type_id == LogicalTypeId::LIST) {
-		return make_uniq<VariantKeysBindData>(CollectPaths(constant_arg));
+		return make_uniq<VariantPathBindData>(CollectKeyPaths(constant_arg));
 	}
 
 	throw BinderException("'variant_keys' received an unexpected type for the second argument");
@@ -323,7 +243,7 @@ static void VariantKeysFunction(DataChunk &input, ExpressionState &state, Vector
 	}
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<VariantKeysBindData>();
+	auto &info = func_expr.bind_info->Cast<VariantPathBindData>();
 	auto n_columns = input.ColumnCount();
 
 	if (n_columns == 1) {
