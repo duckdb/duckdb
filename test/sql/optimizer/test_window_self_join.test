@@ -222,3 +222,21 @@ group by
 order by all;
 ----
 physical_plan	<REGEX>:.*Join Type: INNER.*
+
+statement ok
+CREATE OR REPLACE TABLE t(id INTEGER, x DOUBLE);
+
+statement ok
+INSERT INTO t VALUES (1, 10.0);
+
+query II
+SELECT id, SUM(x) OVER (PARTITION BY id) AS outer_sum
+FROM (
+  SELECT id, x, LAG(total, 1, 0) OVER (PARTITION BY id) AS prev_total
+  FROM (
+    SELECT id, x, COUNT(*) OVER (PARTITION BY id) AS total
+    FROM t
+  ) AS a
+) AS b;
+----
+1	10.0
