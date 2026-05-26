@@ -140,6 +140,23 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 	auto &db = DatabaseInstance::GetDatabase(context);
 	Connection con(db);
 
+	// Set the connection's default catalog/schema to match the feature's location
+	// so that unqualified table references resolve correctly
+	auto &feat_catalog = feat.ParentCatalog();
+	auto &feat_schema = feat.ParentSchema();
+	if (!feat_catalog.GetName().empty() && feat_catalog.GetName() != INVALID_CATALOG) {
+		auto use_result = con.Query("USE " + QuoteIdent(feat_catalog.GetName()));
+		if (use_result->HasError()) {
+			throw InternalException("Failed to set catalog for feature refresh: %s", use_result->GetError());
+		}
+	}
+	if (!feat_schema.name.empty() && feat_schema.name != DEFAULT_SCHEMA) {
+		auto schema_result = con.Query("SET schema = '" + feat_schema.name + "'");
+		if (schema_result->HasError()) {
+			throw InternalException("Failed to set schema for feature refresh: %s", schema_result->GetError());
+		}
+	}
+
 	auto table_id = QuoteIdent(feature_name);
 	int64_t new_version = feat.current_version + 1;
 	bool did_work = false;
