@@ -1174,16 +1174,12 @@ unique_ptr<QueryNode> GetNodeFromStatement(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		return std::move(statement.Cast<SelectStatement>().node);
-		break;
 	case StatementType::INSERT_STATEMENT:
 		return std::move(statement.Cast<InsertStatement>().node);
-		break;
 	case StatementType::DELETE_STATEMENT:
 		return std::move(statement.Cast<DeleteStatement>().node);
-		break;
 	case StatementType::UPDATE_STATEMENT:
 		return std::move(statement.Cast<UpdateStatement>().node);
-		break;
 	default:
 		return nullptr;
 	}
