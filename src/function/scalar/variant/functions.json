@@ -13,7 +13,7 @@
 						"type": "VARCHAR"
 					}
 				],
-				"description": "Returns true if the specified path exists in the variant, false otherwise.",
+				"description": "Returns whether the specified path exists in the variant.",
 				"example": "variant_exists({'a': { 'a': 1, 'b': 2}}::VARIANT, 'a')",
 				"categories": [
 					"variant"
@@ -30,8 +30,8 @@
 						"type": "VARCHAR[]"
 					}
 				],
-				"description": "Returns a list of booleans, true if the path exists and false otherwise, for each specified path.",
-				"example": "variant_exists({'a': { 'a': 1, 'b': 2}, 'b': {'c': 3}}::VARIANT, ['a', 'b'])",
+				"description": "Returns a boolean for each specified path, indicating whether that path exists in the variant.",
+				"example": "variant_exists({'a': 1, 'b': 2}::VARIANT, ['a', 'c'])",
 				"categories": [
 					"variant"
 				]
