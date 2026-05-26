@@ -203,38 +203,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	return result;
 }
 
-// Recursively collect the table name and alias from every BaseTableRef in a TableRef tree.
-// Used to register remote-table names as "locally visible" when an all-remote JoinRef was
-// NOT individually pushed to quack, so HasLocalTableReference can detect correlated subquery
-// references to those tables and prevent them from being pushed independently.
-static void CollectTableAliases(const TableRef &ref, case_insensitive_set_t &out) {
-	switch (ref.type) {
-	case TableReferenceType::BASE_TABLE: {
-		auto &base = ref.Cast<BaseTableRef>();
-		out.insert(base.table_name);
-		if (!base.alias.empty()) {
-			out.insert(base.alias);
-		}
-		break;
-	}
-	case TableReferenceType::JOIN: {
-		auto &join = ref.Cast<JoinRef>();
-		if (join.left) {
-			CollectTableAliases(*join.left, out);
-		}
-		if (join.right) {
-			CollectTableAliases(*join.right, out);
-		}
-		break;
-	}
-	default:
-		if (!ref.alias.empty()) {
-			out.insert(ref.alias);
-		}
-		break;
-	}
-}
-
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 	// Rewrite from_table first - its result is tracked separately for potential individual pushdown.
 	// Reset from_pushed_catalog_names / from_pushed_table_aliases so that entries pushed by
@@ -485,124 +453,27 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
-	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-	if (node.table) {
-		result = Rewrite(node.table);
-	}
+	auto result = Rewrite(node.table);
+	for(auto &using_clause : node.using_clauses) {
+		auto using_result = Rewrite(using_clause);
+		result = Merge(result, using_result);
 
-	// Target table must be remote for the whole DELETE to be pushed to the remote.
-	// If it is local, still push individual remote subqueries in condition/USING for efficiency,
-	// but only when no CTEs are present: a CTE-referencing subquery cannot be pushed individually.
-	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		if (node.cte_map.map.empty()) {
-			// Push individual remote USING clauses and collect the catalog names pushed,
-			// so that catalog-qualified column refs like "rpc.t1.i" in the WHERE condition
-			// can be stripped to "t1.i" before binding (the alias on the pushed wrapper is "t1").
-			//
-			// Pushing a USING clause wraps it in a quack TABLE_FUNCTION streaming connection.
-			// Mixing a TABLE_FUNCTION streaming connection with a native quack scan of another
-			// remote USING clause triggers "Multiple streaming scans". When multiple USING clauses
-			// are SINGLE_REMOTE, don't push any of them: native quack catalog scanning of
-			// multiple remote tables is sequential and avoids concurrent streaming slots.
-			from_pushed_catalog_names.clear();
-			from_pushed_table_aliases.clear();
-			// Save all USING clauses before analysis: Rewrite(JoinRef) inside a USING clause
-			// can push individual JoinRef children in-place even when the JoinRef result is
-			// UNKNOWN. If we decide not to push (multiple remote clauses), restore all copies
-			// to remove those stale quack wrappers before native execution.
-			vector<unique_ptr<TableRef>> saved_using_clauses;
-			for (auto &clause : node.using_clauses) {
-				saved_using_clauses.push_back(clause->Copy());
-			}
-			vector<CatalogPushdownResult> using_clause_results;
-			using_clause_results.reserve(node.using_clauses.size());
-			for (auto &clause : node.using_clauses) {
-				using_clause_results.push_back(Rewrite(clause));
-			}
-			// Count how many USING clauses are SINGLE_REMOTE (would open streaming slots if pushed).
-			idx_t remote_using_count = 0;
-			for (auto &r : using_clause_results) {
-				if (r.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-					++remote_using_count;
-				}
-			}
-			if (remote_using_count <= 1) {
-				// At most one streaming slot needed: push SINGLE_REMOTE USING clauses.
-				// Non-SINGLE_REMOTE clauses must be restored from their saved copies: Rewrite(JoinRef)
-				// inside a mixed-catalog USING clause (e.g. rpc.t2 JOIN local_t) pushes individual
-				// SINGLE_REMOTE children in-place, leaving stale TABLE_FUNCTION wrappers. Without
-				// restoring, those stale wrappers would open a concurrent second quack streaming slot
-				// alongside the SINGLE_REMOTE USING clause being pushed here.
-				for (idx_t i = 0; i < node.using_clauses.size(); i++) {
-					if (using_clause_results[i].reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-						node.using_clauses[i] = std::move(saved_using_clauses[i]);
-						continue;
-					}
-					FinishPushdown(node.using_clauses[i], using_clause_results[i]);
-					if (using_clause_results[i].catalog) {
-						const string &cat_name = using_clause_results[i].catalog->GetName();
-						bool found = false;
-						for (auto &existing : from_pushed_catalog_names) {
-							if (StringUtil::CIEquals(existing, cat_name)) {
-								found = true;
-								break;
-							}
-						}
-						if (!found) {
-							from_pushed_catalog_names.push_back(cat_name);
-						}
-					}
-				}
+		if (using_result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
+			if (using_clause->alias.empty()) {
+				local_table_names.insert(using_clause->alias);
 			} else {
-				// Multiple remote USING clauses: restore all to remove stale quack wrappers
-				// inserted in-place by Rewrite(JoinRef). Native quack catalog scanning handles
-				// multiple remote tables sequentially without opening concurrent streaming slots.
-				for (idx_t i = 0; i < node.using_clauses.size(); i++) {
-					node.using_clauses[i] = std::move(saved_using_clauses[i]);
-				}
-			}
-			if (node.condition) {
-				for (auto &cat_name : from_pushed_catalog_names) {
-					StripCatalogName(*node.condition, cat_name, false);
-				}
+				// FIXME: is this right?
+				local_table_names.insert("unnamed_subquery");
 			}
 		}
-		return {};
 	}
-	// Save condition and USING clauses together. Rewrite(ParsedExpression) on a condition
-	// containing scalar subqueries can push their inner JoinRef children; if USING clauses
-	// later make result UNKNOWN, both must be restored so native DELETE does not encounter
-	// stale quack wrappers causing "Multiple streaming scans" errors.
-	{
-		unique_ptr<ParsedExpression> saved_condition;
-		if (node.condition) {
-			saved_condition = node.condition->Copy();
-			result = Merge(result, Rewrite(*node.condition));
-		}
-		vector<unique_ptr<TableRef>> saved_using;
-		for (auto &clause : node.using_clauses) {
-			saved_using.push_back(clause->Copy());
-		}
-		for (auto &clause : node.using_clauses) {
-			result = Merge(result, Rewrite(clause));
-		}
-		// Save returning_list: Rewrite may push JoinRef children inside subquery bodies in-place.
-		// If returning_list makes result UNKNOWN after condition/USING were SINGLE_REMOTE (their
-		// JoinRef children already pushed), roll back to prevent stale quack wrappers.
-		vector<unique_ptr<ParsedExpression>> saved_returning;
-		for (auto &expr : node.returning_list) {
-			saved_returning.push_back(expr->Copy());
-		}
-		for (auto &expr : node.returning_list) {
-			result = Merge(result, Rewrite(*expr));
-		}
-		if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-			node.using_clauses = std::move(saved_using);
-			if (saved_condition) {
-				node.condition = std::move(saved_condition);
-			}
-			node.returning_list = std::move(saved_returning);
-		}
+	if (node.condition) {
+		auto condition_result = Rewrite(*node.condition);
+		result = Merge(result, condition_result);
+	}
+	for (auto &expr : node.returning_list) {
+		auto expr_result = Rewrite(*expr);
+		result = Merge(result, expr_result);
 	}
 	return result;
 }
