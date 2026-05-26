@@ -1145,7 +1145,7 @@ void RemotePushdownOptimizer::StripSetOpOrderByExpr(ParsedExpression &expr, cons
 }
 
 void RemotePushdownOptimizer::RenameTableInExpr(ParsedExpression &expr, const string &old_table,
-                                               const string &new_alias) {
+                                                const string &new_alias) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
 		// Rename table.col → alias.col for 2-part refs where the table part matches old_table.
