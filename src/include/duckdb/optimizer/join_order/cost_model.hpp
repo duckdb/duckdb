@@ -8,7 +8,6 @@
 #pragma once
 
 #include "duckdb/optimizer/join_order/join_node.hpp"
-#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 
 namespace duckdb {
@@ -22,7 +21,6 @@ public:
 private:
 	//! query graph storing relation manager information
 	QueryGraphManager &query_graph_manager;
-	bool has_cardinality_preserving_join;
 
 public:
 	//! Compute cost of a join relation set

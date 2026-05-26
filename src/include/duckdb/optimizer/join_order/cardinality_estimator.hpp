@@ -102,7 +102,7 @@ public:
 
 private:
 	vector<RelationsSetToStats> relation_set_stats;
-	reference_map_t<JoinRelationSet, CardinalityHelper> relation_set_2_cardinality;
+	unordered_map<string, CardinalityHelper> relation_set_2_cardinality;
 	JoinRelationSetManager set_manager;
 	vector<RelationStats> relation_stats;
 
@@ -141,7 +141,8 @@ private:
 	double CalculateUpdatedDenom(Subgraph2Denominator left, Subgraph2Denominator right,
 	                             FilterInfoWithTotalDomains &filter);
 	double CalculateInnerJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter);
-	double CalculateLeftJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter);
+	double CalculateLeftJoinDenom(Subgraph2Denominator &left, Subgraph2Denominator &right,
+	                              FilterInfoWithTotalDomains &filter);
 	double CalculateSemiAntiJoinDenom(double base_denom, Subgraph2Denominator &left, Subgraph2Denominator &right,
 	                                  FilterInfoWithTotalDomains &filter);
 	bool ApplyJoinIncrement(double &target_denom, FilterInfoWithTotalDomains &edge,

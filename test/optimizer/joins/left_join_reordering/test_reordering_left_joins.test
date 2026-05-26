@@ -75,3 +75,20 @@ query IIII
 select * from t1 left join t2 on a = b left join t3 on b = c join t4 on c = d order by all;
 ----
 1	1	1	1
+
+# A LEFT join should not be planned before an available INNER equality from its preserved side.
+# The plan may be reconstructed as a RIGHT join after build/probe swapping, but the optional
+# table join must remain above the selective fact/dimension INNER join.
+statement ok
+create table lj_fact as select range f_k, range % 100 f_d from range(10000);
+
+statement ok
+create table lj_dim as select 0 d_d;
+
+statement ok
+create table lj_opt as select range o_k from range(10000);
+
+query II
+explain select count(*) from lj_fact join lj_dim on f_d = d_d left join lj_opt on f_k = o_k;
+----
+physical_plan	<REGEX>:.*f_k = o_k.*f_d = CAST\(d_d AS BIGINT\).*

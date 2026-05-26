@@ -108,13 +108,6 @@ struct JoinOrderUtil {
 	static bool IsEquivalenceJoinPredicate(const FilterInfo &filter) {
 		return ClassifyJoinPredicate(filter) == JoinPredicateClass::INNER_EQUALITY;
 	}
-
-	//! LEFT/SEMI/ANTI preserve one side's cardinality and need hidden input-work costing.
-	static bool IsCardinalityPreservingJoinPredicate(const FilterInfo &filter) {
-		const auto predicate_class = ClassifyJoinPredicate(filter);
-		return predicate_class == JoinPredicateClass::LEFT_JOIN ||
-		       predicate_class == JoinPredicateClass::SEMI_ANTI_JOIN;
-	}
 };
 
 //! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations

@@ -185,7 +185,12 @@ double CardinalityEstimator::GetNumerator(JoinRelationSet &set) {
 	double numerator = 1;
 	for (idx_t i = 0; i < set.count; i++) {
 		auto &single_node_set = set_manager.GetJoinRelation(set.relations[i]);
-		auto card_helper = relation_set_2_cardinality[single_node_set];
+		auto entry = relation_set_2_cardinality.find(single_node_set.ToString());
+		D_ASSERT(entry != relation_set_2_cardinality.end());
+		if (entry == relation_set_2_cardinality.end()) {
+			continue;
+		}
+		auto &card_helper = entry->second;
 		numerator *= card_helper.cardinality_before_filters == 0 ? 1 : card_helper.cardinality_before_filters;
 	}
 	return numerator;
@@ -264,6 +269,7 @@ vector<idx_t> SubgraphsConnectedByEdge(FilterInfoWithTotalDomains &edge, vector<
 JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right,
                                                                 FilterInfoWithTotalDomains &filter) {
 	switch (filter.filter_info->join_type) {
+	case JoinType::LEFT:
 	case JoinType::SEMI:
 	case JoinType::ANTI: {
 		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
@@ -306,22 +312,13 @@ double CardinalityEstimator::CalculateInnerJoinDenom(double base_denom, FilterIn
 	return ApplyComparisonRatio(base_denom, comparison_type, effective_d);
 }
 
-double CardinalityEstimator::CalculateLeftJoinDenom(double base_denom, FilterInfoWithTotalDomains &filter) {
-	// For LEFT joins, cap D at |RHS| (not min(|LHS|, |RHS|) like INNER joins).
-	// This gives estimate = |LHS| * |RHS| / min(D, |RHS|) = max(|LHS|, inner_estimate),
-	// ensuring the estimate is always >= |LHS| (every LHS row is preserved in a LEFT join).
-	auto right_card = GetNumerator(*filter.filter_info->right_set);
-	auto raw_d = filter.GetDistinctCount();
-	auto comparison_type = filter.GetComparisonType();
-	auto effective_d = right_card > 0 ? MinValue(right_card, raw_d) : raw_d;
-	if (comparison_type == ExpressionType::COMPARE_EQUAL ||
-	    comparison_type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
-		effective_d = right_card > 0 ? right_card : raw_d;
+double CardinalityEstimator::CalculateLeftJoinDenom(Subgraph2Denominator &left, Subgraph2Denominator &right,
+                                                    FilterInfoWithTotalDomains &filter) {
+	if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
+	    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
+		return left.denom;
 	}
-	if (comparison_type == ExpressionType::INVALID) {
-		return base_denom * effective_d;
-	}
-	return ApplyComparisonRatio(base_denom, comparison_type, effective_d);
+	return right.denom;
 }
 
 double CardinalityEstimator::CalculateSemiAntiJoinDenom(double base_denom, Subgraph2Denominator &left,
@@ -340,7 +337,7 @@ double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Su
 	double base_denom = left.denom * right.denom;
 	switch (filter.filter_info->join_type) {
 	case JoinType::LEFT:
-		return CalculateLeftJoinDenom(base_denom, filter);
+		return CalculateLeftJoinDenom(left, right, filter);
 	case JoinType::INNER:
 		return CalculateInnerJoinDenom(base_denom, filter);
 	case JoinType::SEMI:
@@ -373,21 +370,8 @@ bool CardinalityEstimator::ApplyJoinIncrement(double &target_denom, FilterInfoWi
 	}
 
 	if (edge.filter_info->join_type == JoinType::LEFT) {
-		const auto it = join_pair_accumulated.find(edge.filter_info->set.get());
-		if (it == join_pair_accumulated.end()) {
-			// No prior entry: the pair was already connected by other conditions before this
-			// LEFT condition was recorded. Return true to suppress the unused_edge_tdoms penalty:
-			// LEFT join conditions are always bounded by |RHS| and are safe to ignore here.
-			return true;
-		}
-		double ratio = CalculateLeftJoinDenom(1.0, edge);
-		double right_card = GetNumerator(*edge.filter_info->right_set);
-		auto &accumulated = it->second;
-		double new_accumulated = right_card > 0 ? MinValue(accumulated * ratio, right_card) : accumulated * ratio;
-		if (new_accumulated > accumulated && accumulated > 0) {
-			target_denom *= new_accumulated / accumulated;
-		}
-		accumulated = new_accumulated;
+		// LEFT joins preserve the LHS cardinality in this estimator. Additional LEFT conditions
+		// should not reduce the output or add unused-edge penalties.
 		return true;
 	}
 
@@ -491,14 +475,6 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			if (edge.IsInnerEquality()) {
 				// Record the raw denom of the first (largest) equality edge for a join pair
 				join_pair_accumulated[edge.filter_info->set.get()] = CalculateInnerJoinDenom(1.0, edge);
-			} else if (edge.filter_info->join_type == JoinType::LEFT) {
-				// Record the ratio a LEFT join edge contributes on its own (base_denom = 1)
-				if (join_pair_accumulated.find(edge.filter_info->set.get()) == join_pair_accumulated.end()) {
-					const auto ratio = CalculateLeftJoinDenom(1.0, edge);
-					const auto right_card = GetNumerator(*edge.filter_info->right_set);
-					join_pair_accumulated[edge.filter_info->set.get()] =
-					    right_card > 0 ? MinValue(ratio, right_card) : ratio;
-				}
 			}
 		}
 
@@ -619,7 +595,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 template <>
 double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
 	double result;
-	auto it = relation_set_2_cardinality.find(new_set);
+	auto it = relation_set_2_cardinality.find(new_set.ToString());
 	if (it != relation_set_2_cardinality.end()) {
 		result = it->second.cardinality_before_filters;
 	} else {
@@ -629,7 +605,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 		// include cardinalities of relations on the RHS of a semi/anti join.
 		auto numerator = GetNumerator(denom.numerator_relations);
 		result = numerator / denom.denominator;
-		relation_set_2_cardinality[new_set] = CardinalityHelper(result);
+		relation_set_2_cardinality[new_set.ToString()] = CardinalityHelper(result);
 	}
 	return ApplyOrFilterSelectivities(new_set, result);
 }
@@ -672,7 +648,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 	auto relation_cardinality = stats.cardinality;
 
 	auto card_helper = CardinalityHelper((double)relation_cardinality);
-	relation_set_2_cardinality[*set] = card_helper;
+	relation_set_2_cardinality[set->ToString()] = card_helper;
 
 	UpdateTotalDomains(set, stats);
 
