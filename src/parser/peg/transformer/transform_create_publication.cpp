@@ -16,8 +16,8 @@ namespace duckdb {
 //
 // The pragma handler itself is not yet implemented (catalog work is out of scope here).
 // Parsing must succeed so that higher-level code can detect the statement type.
-unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformCreatePublicationStatement(PEGTransformer &transformer, ParseResult &parse_result) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreatePublicationStatement(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
 	// Layout of the list children (literals are counted as positions):
 	//  0: 'CREATE'
 	//  1: 'PUBLICATION'
@@ -42,15 +42,15 @@ PEGTransformerFactory::TransformCreatePublicationStatement(PEGTransformer &trans
 
 		if (for_choice.name == "PublicationForAllTables") {
 			// FOR ALL TABLES
-			result->info->named_parameters["for_all_tables"] =
-			    make_uniq<ConstantExpression>(Value::BOOLEAN(true));
+			result->info->named_parameters["for_all_tables"] = make_uniq<ConstantExpression>(Value::BOOLEAN(true));
 		} else {
 			// FOR TABLE t1, t2, ...
 			// PublicationForTable <- 'TABLE' List(BaseTableName)
 			// List children:
 			//  0: 'TABLE'
 			//  1: the List(...) inline expansion — a ListParseResult of BaseTableName results
-			auto table_results = ExtractParseResultsFromList(for_choice.Cast<ListParseResult>().Child<ListParseResult>(1));
+			auto table_results =
+			    ExtractParseResultsFromList(for_choice.Cast<ListParseResult>().Child<ListParseResult>(1));
 			string tables_value;
 			for (idx_t i = 0; i < table_results.size(); i++) {
 				auto base_ref = transformer.Transform<unique_ptr<BaseTableRef>>(table_results[i].get());
@@ -63,8 +63,7 @@ PEGTransformerFactory::TransformCreatePublicationStatement(PEGTransformer &trans
 					tables_value += base_ref->table_name;
 				}
 			}
-			result->info->named_parameters["tables"] =
-			    make_uniq<ConstantExpression>(Value(tables_value));
+			result->info->named_parameters["tables"] = make_uniq<ConstantExpression>(Value(tables_value));
 		}
 	}
 

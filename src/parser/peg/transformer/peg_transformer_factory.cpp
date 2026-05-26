@@ -592,8 +592,8 @@ void PEGTransformerFactory::RegisterDelete() {
 }
 
 void PEGTransformerFactory::RegisterCreatePublication() {
-  // create_publication.gram — optional FOR clause with an inline list requires a hand-written transformer.
-  REGISTER_TRANSFORM(TransformCreatePublicationStatement);
+	// create_publication.gram — optional FOR clause with an inline list requires a hand-written transformer.
+	REGISTER_TRANSFORM(TransformCreatePublicationStatement);
 }
 
 void PEGTransformerFactory::RegisterCreateTextSearchDictionary() {
