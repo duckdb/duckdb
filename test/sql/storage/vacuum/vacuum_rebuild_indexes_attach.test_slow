@@ -60,22 +60,32 @@ SELECT COUNT(*) FROM db1.t
 ----
 245760
 
-# Disable the setting on ATTACH OR REPLACE should work
-statement ok
+# ATTACH OR REPLACE with a different vacuum_rebuild_indexes value should fail
+statement error
 ATTACH OR REPLACE '__TEST_DIR__/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 0)
+----
+Cannot re-attach with a different vacuum_rebuild_indexes setting
 
-# delete all rows in the first row group
+# ATTACH OR REPLACE with the same value is a no-op
+statement ok
+ATTACH OR REPLACE '__TEST_DIR__/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 614400)
+
+# ATTACH IF NOT EXISTS ignores the supplied options; the existing threshold (614400) remains in effect
+statement ok
+ATTACH IF NOT EXISTS '__TEST_DIR__/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 0)
+
+# delete all rows in the (now) first row group
 statement ok
 DELETE FROM db1.t WHERE i < 245760
 
 statement ok
 CHECKPOINT db1
 
-# the empty first row group is NOT dropped
+# the original threshold (614400) is still active, so the empty row group is dropped
 query I
 SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('db1.t')
 ----
-2
+1
 
 statement ok
 DETACH db1

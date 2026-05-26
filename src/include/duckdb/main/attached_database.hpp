@@ -136,7 +136,6 @@ public:
 	//! vacuum_rebuild_indexes threshold for this attached database.
 	//! Falls back to the global VacuumRebuildIndexesSetting if not overridden.
 	idx_t GetVacuumRebuildIndexThreshold() const;
-	void SetVacuumRebuildIndexThreshold(idx_t threshold);
 	const unordered_map<string, Value> &GetAttachOptions() const {
 		return attach_options;
 	}

@@ -207,10 +207,6 @@ idx_t AttachedDatabase::GetVacuumRebuildIndexThreshold() const {
 	return Settings::Get<VacuumRebuildIndexesSetting>(db);
 }
 
-void AttachedDatabase::SetVacuumRebuildIndexThreshold(idx_t threshold) {
-	vacuum_rebuild_threshold = threshold;
-}
-
 string AttachedDatabase::StoredPath() const {
 	if (stored_database_path) {
 		return stored_database_path->path;
