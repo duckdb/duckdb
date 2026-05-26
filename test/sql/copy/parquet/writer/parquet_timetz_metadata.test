@@ -1,0 +1,24 @@
+# name: test/sql/copy/parquet/writer/parquet_timetz_metadata.test
+# description: TIME WITH TIME ZONE Parquet metadata
+# group: [writer]
+
+require parquet
+
+statement ok
+COPY (
+	SELECT
+		CAST(TIMETZ '08:30:00+00' + (i % 5) * INTERVAL 1 MINUTE AS TIME WITH TIME ZONE) AS event_time_tz,
+		CAST(TIME '08:30:00' + (i % 5) * INTERVAL 1 MINUTE AS TIME) AS event_time,
+		CAST(TIMESTAMP '2026-01-02 08:30:00+00' + (i % 5) * INTERVAL 1 MINUTE AS TIMESTAMP WITH TIME ZONE) AS ts_tz
+	FROM range(1000) tbl(i)
+) TO '{TEST_DIR}/timetz_metadata.parquet' (FORMAT PARQUET, COMPRESSION ZSTD)
+
+query TIIIII
+SELECT path_in_schema, encodings <> '', stats_min IS NOT NULL, stats_max IS NOT NULL,
+       stats_min_value IS NOT NULL, stats_max_value IS NOT NULL
+FROM parquet_metadata('{TEST_DIR}/timetz_metadata.parquet')
+ORDER BY column_id
+----
+event_time_tz	true	true	true	true	true
+event_time	true	true	true	true	true
+ts_tz	true	true	true	true	true
