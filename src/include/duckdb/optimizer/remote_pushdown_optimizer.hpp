@@ -63,7 +63,7 @@ private:
 	CatalogPushdownResult Rewrite(ParsedExpression &expr);
 
 	//! Records a BaseTableRef's name, alias and columns as local for correlated subquery detection
-	void TrackLocalTable(const BaseTableRef &ref, optional_ptr<CatalogEntry> entry = nullptr);
+	void TrackLocalTable(const BaseTableRef &ref);
 	//! Returns true if the function is defined as a macro in a local (non-remote) catalog
 	bool IsLocalMacro(const FunctionExpression &func);
 	//! Returns true if expr/ref/node contains a column reference to a local table (for correlated subquery detection)
@@ -93,8 +93,6 @@ private:
 	vector<CatalogSearchEntry> local_catalogs_in_search_path;
 	//! Names/aliases of non-remote tables seen in the current FROM scope, used to detect correlated subqueries
 	case_insensitive_set_t local_table_names;
-	//! Column names of all tracked local tables - used to detect unqualified correlated column references
-	case_insensitive_set_t local_table_column_names;
 	//! CTE name → catalog pushdown result, populated as CTEs are analyzed (inner scopes restore on exit)
 	case_insensitive_map_t<CatalogPushdownResult> cte_results;
 	//! Catalog names of remote tables individually pushed during the current SelectNode's from_table processing.

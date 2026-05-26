@@ -48,7 +48,6 @@ RemotePushdownOptimizer::RemotePushdownOptimizer(Binder &binder) : binder(binder
 RemotePushdownOptimizer::RemotePushdownOptimizer(RemotePushdownOptimizer &parent_p) : binder(parent_p.binder), parent(parent_p) {
 	// inherit table / column names from parent (for correlated subquery detection)
 	local_table_names = parent_p.local_table_names;
-	local_table_column_names = parent_p.local_table_column_names;
 }
 
 void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
@@ -415,7 +414,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 	// potentially causing "Multiple streaming scans" when the FROM table is individually
 	// pushed while the falsely-blocked WHERE subquery stays local and opens a second stream.
 	auto pre_target_local_names = local_table_names;
-	auto pre_target_local_col_names = local_table_column_names;
 	CatalogPushdownResult result = Rewrite(target_ref);
 
 	// Target table must be remote for the whole INSERT to be pushed to the remote.
@@ -429,7 +427,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 		// local_table_column_names, causing HasLocalTableReference false positives for the outer
 		// query's subqueries that happen to use the same unqualified column names.
 		local_table_names = std::move(pre_target_local_names);
-		local_table_column_names = std::move(pre_target_local_col_names);
 		if (node.cte_map.map.empty() && node.select_statement) {
 			auto select_result = Rewrite(*node.select_statement->node);
 			FinishPushdown(node.select_statement->node, select_result);
@@ -1139,15 +1136,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	return result;
 }
 
-void RemotePushdownOptimizer::TrackLocalTable(const BaseTableRef &ref, optional_ptr<CatalogEntry> entry) {
-	local_table_names.insert(ref.table_name);
+void RemotePushdownOptimizer::TrackLocalTable(const BaseTableRef &ref) {
 	if (!ref.alias.empty()) {
 		local_table_names.insert(ref.alias);
-	}
-	if (entry && entry->type == CatalogType::TABLE_ENTRY) {
-		for (auto &col : entry->Cast<TableCatalogEntry>().GetColumns().Logical()) {
-			local_table_column_names.insert(col.Name());
-		}
+	} else {
+		local_table_names.insert(ref.table_name);
 	}
 }
 
@@ -1214,12 +1207,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	if (catalog_name.empty() && schema_name.empty()) {
 		CatalogPushdownResult pushdown_result;
 		if (RefersToCTE(ref.table_name, pushdown_result)) {
-			if (pushdown_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			if (pushdown_result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
 				// Local/unknown CTE - track as local for correlated subquery detection
-				local_table_names.insert(ref.table_name);
-				if (!ref.alias.empty()) {
-					local_table_names.insert(ref.alias);
-				}
+				TrackLocalTable(ref);
 			}
 			return pushdown_result;
 		}
@@ -1231,19 +1221,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 		if (catalog && catalog->IsRemoteCatalog()) {
 			return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
 		}
-		// Local catalog: look up the entry to populate column names for correlated ref detection
-		if (catalog) {
-			const string &schema = schema_name.empty() ? DEFAULT_SCHEMA : schema_name;
-			EntryLookupInfo explicit_table_lookup(CatalogType::TABLE_ENTRY, ref.table_name);
-			auto found_entry = Catalog::GetEntry(binder.context, catalog_name, schema, explicit_table_lookup,
-												 OnEntryNotFound::RETURN_NULL);
-			TrackLocalTable(ref, found_entry);
-		} else {
-			TrackLocalTable(ref);
-		}
 		// A local table always blocks pushdown of any query that contains it.
 		// Returning UNKNOWN (not NO_CATALOG) ensures Merge(SINGLE_REMOTE, UNKNOWN) = UNKNOWN
 		// rather than the otherwise-neutral SINGLE_REMOTE.
+		TrackLocalTable(ref);
 		return {};
 	}
 
@@ -1253,17 +1234,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name);
 
 	if (remote_catalogs_in_search_path.size() != 1) {
-		// Can't determine remote catalog; try to get column info from local catalogs for correlated subquery detection
-		optional_ptr<CatalogEntry> found_entry;
-		for (auto &local_entry : local_catalogs_in_search_path) {
-			const auto &schema = schema_name.empty() ? local_entry.schema : schema_name;
-			found_entry = Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_lookup,
-											OnEntryNotFound::RETURN_NULL);
-			if (found_entry) {
-				break;
-			}
-		}
-		TrackLocalTable(ref, found_entry);
+		TrackLocalTable(ref);
 		return {};
 	}
 
@@ -1273,7 +1244,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 		auto entry =
 			Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_lookup, OnEntryNotFound::RETURN_NULL);
 		if (entry) {
-			TrackLocalTable(ref, entry);
+			TrackLocalTable(ref);
 			// Same as Case 1: local table → UNKNOWN to prevent Merge from treating it as neutral.
 			return {};
 		}
@@ -1384,15 +1355,19 @@ bool RemotePushdownOptimizer::HasLocalTableReference(TableRef &ref) {
 }
 
 bool RemotePushdownOptimizer::RefersToLocalTable(ColumnRefExpression &col_ref) const {
-	// check if this column reference points to a correlated subquery
-	if (col_ref.column_names.size() >= 2) {
-		// The second-to-last entry is the table qualifier (e.g. "tbl" in "tbl.col" or "cat.schema.tbl.col")
-		// FIXME: this is not true, we can have "schema.tbl.col.struct_field"
-		const auto &table_name = col_ref.column_names[col_ref.column_names.size() - 2];
-		return local_table_names.count(table_name) > 0;
+	// figuring out if a column refers to a local table is challenging without knowing all of the columns
+	// challenges are:
+	// (1) we might have a subquery (e.g. FROM (SELECT ...), (SELECT ...))
+	//   - when binding the second subquery we need to know the schema of the first subquery
+	// (2) we might have CTEs (e.g. FROM cte, (SELECT ...))
+	//   - when binding the subquery we need to know the schema of the CTE
+	// (3) we might have struct columns (e.g. FROM tbl, (SELECT struct_col.field)
+	//   - we need to correctly deal with this scenario and figure out which struct col this column references
+	// this is effectively having to re-implement many components of binding but with some information missing
+	if (local_table_names.empty()) {
+		return false;
 	}
-	// Unqualified column: correlated if the name matches a column of any outer local table
-	return local_table_column_names.count(col_ref.column_names[0]) > 0;
+	return true;
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
