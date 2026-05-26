@@ -412,6 +412,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 	from_pushed_catalog_names.clear();
 	from_pushed_table_aliases.clear();
 	CatalogPushdownResult from_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	// When CTEs are present and the overall result is UNKNOWN, any JoinRef children pushed
+	// in-place by Rewrite(JoinRef) must be rolled back. The no-CTE path handles this via
+	// FinishPushdown (which is a no-op for non-SINGLE_REMOTE results), but the CTE path
+	// skips FinishPushdown entirely (inside the cte_map.map.empty() guard). Save from_table
+	// so it can be restored in the UNKNOWN path when JoinRef children were pushed in-place.
+	unique_ptr<TableRef> saved_from_table_for_cte;
+	if (!node.cte_map.map.empty() && node.from_table) {
+		saved_from_table_for_cte = node.from_table->Copy();
+	}
 	if (node.from_table) {
 		from_result = Rewrite(node.from_table);
 	}
@@ -500,6 +509,17 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 		// Track whether any JoinRef children were individually pushed. Must be captured before
 		// from_pushed_catalog_names is consumed by the stripping block below.
 		bool had_join_child_pushdowns = !from_pushed_catalog_names.empty();
+		// Restore from_table when CTEs are present and JoinRef children were pushed in-place.
+		// Without this, the stale quack wrappers inside from_table (e.g. the SINGLE_REMOTE side
+		// of a mixed JoinRef) would open a concurrent streaming connection alongside the CTE
+		// body's native quack scan → "Multiple streaming scans". After restoration, outer
+		// catalog-qualified column refs (e.g. rpc.t1.i) are still resolvable against the
+		// original remote from_table, so the catalog-name stripping below is also skipped.
+		if (saved_from_table_for_cte && had_join_child_pushdowns) {
+			node.from_table = std::move(saved_from_table_for_cte);
+			from_pushed_catalog_names.clear();
+			had_join_child_pushdowns = false;
+		}
 		{
 			// When a remote table was individually pushed — either the whole from_table (no-CTE
 			// case, via FinishPushdown below) or a JoinRef child (both CTE and no-CTE cases, via
