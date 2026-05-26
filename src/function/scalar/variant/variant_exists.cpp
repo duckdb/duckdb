@@ -9,116 +9,6 @@
 
 namespace duckdb {
 
-struct VariantKeysBindData : public FunctionData {
-public:
-	explicit VariantKeysBindData();
-	explicit VariantKeysBindData(const string &input_path);
-	explicit VariantKeysBindData(const vector<string> &input_paths);
-	VariantKeysBindData(const VariantKeysBindData &other) = default;
-
-public:
-	unique_ptr<FunctionData> Copy() const override;
-	bool Equals(const FunctionData &other) const override;
-
-public:
-	vector<vector<VariantPathComponent>> paths;
-};
-
-VariantKeysBindData::VariantKeysBindData() : FunctionData() {
-}
-VariantKeysBindData::VariantKeysBindData(const string &input_path) : FunctionData() {
-	if (input_path.empty()) {
-		paths.emplace_back();
-	} else {
-		paths.push_back({VariantPathComponent(input_path)});
-	}
-}
-VariantKeysBindData::VariantKeysBindData(const vector<string> &input_paths) : FunctionData() {
-	for (const auto &path : input_paths) {
-		if (path.empty()) {
-			paths.emplace_back();
-		} else {
-			paths.push_back({VariantPathComponent(path)});
-		}
-	}
-}
-
-unique_ptr<FunctionData> VariantKeysBindData::Copy() const {
-	return make_uniq<VariantKeysBindData>(*this);
-}
-
-bool VariantKeysBindData::Equals(const FunctionData &other) const {
-	auto &bind_data = other.Cast<VariantKeysBindData>();
-	if (paths.size() != bind_data.paths.size()) {
-		return false;
-	}
-
-	for (idx_t i = 0; i < paths.size(); i++) {
-		if (paths[i].size() != bind_data.paths[i].size()) {
-			return false;
-		}
-		for (idx_t j = 0; j < paths[i].size(); j++) {
-			if (paths[i][j] != bind_data.paths[i][j]) {
-				return false;
-			}
-		}
-	}
-	return true;
-}
-
-struct VariantPathSelection {
-	explicit VariantPathSelection(const idx_t count) {
-		value_index_sel.Initialize(count);
-		new_value_index_sel.Initialize(count);
-
-		// We start at values[0] for every row.
-		for (idx_t i = 0; i < count; i++) {
-			value_index_sel[i] = 0;
-		}
-	}
-
-	SelectionVector &Input(const idx_t depth) {
-		return depth % 2 == 0 ? value_index_sel : new_value_index_sel;
-	}
-
-	SelectionVector &Output(const idx_t depth) {
-		return depth % 2 == 0 ? new_value_index_sel : value_index_sel;
-	}
-
-	//! Input and output buffers used during the object walk, switched per iteration
-	SelectionVector value_index_sel, new_value_index_sel;
-};
-
-static void TraverseVariantPath(const UnifiedVariantVectorData &variant, const vector<VariantPathComponent> &components,
-                                const idx_t count, VariantNestedData *nested_data, ValidityMask &validity,
-                                VariantPathSelection &path_selection) {
-	for (idx_t i = 0; i < components.size(); i++) {
-		auto &component = components[i];
-		auto &input_indices = path_selection.Input(i);
-		auto &output_indices = path_selection.Output(i);
-
-		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
-			throw InternalException("'variant_keys' does not support path indexes");
-		}
-
-		(void)VariantUtils::CollectNestedData(variant, VariantLogicalType::OBJECT, input_indices, count, optional_idx(),
-		                                      0, nested_data, validity);
-
-		ValidityMask lookup_validity(count);
-		VariantUtils::FindChildValues(variant, component, nullptr, output_indices, lookup_validity, nested_data,
-		                              validity, count);
-
-		for (idx_t j = 0; j < count; j++) {
-			if (!validity.RowIsValid(j)) {
-				continue;
-			}
-			if (lookup_validity.CanHaveNull() && !lookup_validity.RowIsValid(j)) {
-				validity.SetInvalid(j);
-			}
-		}
-	}
-}
-
 // TODO: Currently collection will always happen on the unshredded variant, introduce a fast path for shredded variants.
 static ValidityMask CollectVariantExistence(const UnifiedVariantVectorData &variant,
                                             const vector<VariantPathComponent> &components, const idx_t count) {
@@ -129,7 +19,7 @@ static ValidityMask CollectVariantExistence(const UnifiedVariantVectorData &vari
 	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
 	const auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
 
-	TraverseVariantPath(variant, components, count, nested_data, path_validity, path_selection);
+	VariantUtils::TraversePath(variant, components, count, nested_data, path_validity, path_selection);
 
 	return path_validity;
 }
@@ -220,7 +110,7 @@ static unique_ptr<FunctionData> VariantExistsBind(BindScalarFunctionInput &input
 
 	if (arguments.size() == 1) {
 		// No path supplied, execute function over the root of the variant
-		return make_uniq<VariantKeysBindData>();
+		return make_uniq<VariantPathBindData>();
 	}
 
 	const auto &path_expr = *arguments[1];
@@ -245,10 +135,10 @@ static unique_ptr<FunctionData> VariantExistsBind(BindScalarFunctionInput &input
 
 	const auto path_type_id = constant_arg.type().id();
 	if (path_type_id == LogicalTypeId::VARCHAR) {
-		return make_uniq<VariantKeysBindData>(constant_arg.GetValue<string>());
+		return make_uniq<VariantPathBindData>(constant_arg.GetValue<string>());
 	}
 	if (path_type_id == LogicalTypeId::LIST) {
-		return make_uniq<VariantKeysBindData>(CollectPaths(constant_arg));
+		return make_uniq<VariantPathBindData>(CollectPaths(constant_arg));
 	}
 
 	throw BinderException("'variant_keys' received an unexpected type for the second argument");
@@ -266,7 +156,7 @@ static void VariantExistsFunction(DataChunk &input, ExpressionState &state, Vect
 	}
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<VariantKeysBindData>();
+	auto &info = func_expr.bind_info->Cast<VariantPathBindData>();
 	auto n_columns = input.ColumnCount();
 
 	if (n_columns == 1) {
@@ -289,7 +179,6 @@ static void VariantExistsFunction(DataChunk &input, ExpressionState &state, Vect
 
 ScalarFunctionSet VariantExistsFun::GetFunctions() {
 	ScalarFunctionSet fun_set;
-
 
 	ScalarFunction variant_exists("variant_exists", {LogicalType::VARIANT(), LogicalType::VARCHAR},
 	                              LogicalType::BOOLEAN, VariantExistsFunction, VariantExistsBind, nullptr);

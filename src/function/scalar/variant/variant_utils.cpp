@@ -183,6 +183,36 @@ VariantUtils::CollectNestedData(const UnifiedVariantVectorData &variant, Variant
 	return VariantNestedDataCollectionResult();
 }
 
+void VariantUtils::TraversePath(const UnifiedVariantVectorData &variant, const vector<VariantPathComponent> &components,
+                                idx_t count, VariantNestedData *nested_data, ValidityMask &validity,
+                                VariantPathSelection &path_selection) {
+	for (idx_t i = 0; i < components.size(); i++) {
+		auto &component = components[i];
+		auto &input_indices = path_selection.Input(i);
+		auto &output_indices = path_selection.Output(i);
+
+		if (component.lookup_mode == VariantChildLookupMode::BY_INDEX) {
+			throw InternalException("'variant_keys' does not support path indexes");
+		}
+
+		(void)VariantUtils::CollectNestedData(variant, VariantLogicalType::OBJECT, input_indices, count, optional_idx(),
+											  0, nested_data, validity);
+
+		ValidityMask lookup_validity(count);
+		VariantUtils::FindChildValues(variant, component, nullptr, output_indices, lookup_validity, nested_data,
+									  validity, count);
+
+		for (idx_t j = 0; j < count; j++) {
+			if (!validity.RowIsValid(j)) {
+				continue;
+			}
+			if (lookup_validity.CanHaveNull() && !lookup_validity.RowIsValid(j)) {
+				validity.SetInvalid(j);
+			}
+		}
+	}
+}
+
 Value VariantUtils::ConvertVariantToValue(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx) {
 	return VariantVisitor<ValueConverter>::Visit(variant, row, values_idx);
 }
