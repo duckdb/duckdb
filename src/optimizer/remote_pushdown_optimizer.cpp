@@ -806,11 +806,16 @@ string RemotePushdownOptimizer::PushJoinChild(unique_ptr<TableRef> &ref, Catalog
 		return "";
 	}
 	if (ref->type == TableReferenceType::SUBQUERY) {
-		// Guard: if any remote CTE is in scope the subquery may reference it by name;
-		// pushing it standalone would fail on the remote because the CTE is not defined there.
+		// Guard: if any outer CTE is SINGLE_REMOTE or NO_CATALOG_REFERENCED, the subquery may reference it
+		// by name without its WITH definition being included. Pushing it standalone would fail on the remote.
+		// NO_CATALOG CTEs: Merge(SINGLE_REMOTE, NO_CATALOG) = SINGLE_REMOTE, so a subquery referencing both
+		// a remote table and a constant outer CTE (e.g. WITH zero AS (SELECT 0)) is classified SINGLE_REMOTE,
+		// but the pushed SQL references the CTE by name without its definition → remote error.
 		for (const RemotePushdownOptimizer *opt = this; opt; opt = opt->parent.get()) {
 			for (auto &cte_entry : opt->cte_results) {
-				if (cte_entry.second.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+				auto ref_type = cte_entry.second.reference_type;
+				if (ref_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG ||
+				    ref_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
 					return "";
 				}
 			}
@@ -1661,13 +1666,21 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<QueryNode> &node, Catalo
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		return;
 	}
-	// If any outer SINGLE_REMOTE CTE is in scope (including parent optimizer scopes), this node
-	// may reference it by name. Pushing the node standalone (without its WITH definition) would
-	// serialize "SELECT * FROM cte_name" which fails on the remote because cte_name is not a
-	// real table there. Skip pushdown; the node will execute locally against the CTE definition.
+	// If any outer CTE is in scope that is SINGLE_REMOTE or NO_CATALOG_REFERENCED, this node may
+	// reference it by name. Pushing the node standalone (without its WITH definition) would
+	// serialize a reference to a CTE that doesn't exist on the remote server. Skip pushdown so
+	// the node executes locally where the CTE definition is available.
+	// SINGLE_REMOTE CTEs: child arm may be SINGLE_REMOTE via the CTE reference alone.
+	// NO_CATALOG CTEs: Merge(SINGLE_REMOTE, NO_CATALOG) = SINGLE_REMOTE, so a child arm can be
+	// classified SINGLE_REMOTE even while referencing a constant outer CTE (e.g. WITH zero AS
+	// (SELECT 0)); the pushed SQL references the CTE by name without its definition.
+	// UNKNOWN CTEs are skipped: a child that references an UNKNOWN CTE would itself be UNKNOWN
+	// (not SINGLE_REMOTE), so FinishPushdown would return early at the first check above.
 	for (const RemotePushdownOptimizer *opt = this; opt; opt = opt->parent.get()) {
 		for (auto &cte_entry : opt->cte_results) {
-			if (cte_entry.second.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			auto ref_type = cte_entry.second.reference_type;
+			if (ref_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG ||
+			    ref_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
 				return;
 			}
 		}

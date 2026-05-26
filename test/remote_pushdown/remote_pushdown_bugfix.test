@@ -1722,5 +1722,62 @@ drop table local_upd_jref;
 statement ok
 drop table local_upd_jref_aux;
 
+# ============================================================
+# Bug 37: FinishPushdown(QueryNode) and PushJoinChild(SubqueryRef)
+# CTE guards did not block NO_CATALOG_REFERENCED outer CTEs.
+#
+# Merge(SINGLE_REMOTE, NO_CATALOG_REFERENCED) = SINGLE_REMOTE, so a
+# child arm or subquery that references both a remote table and a constant
+# outer CTE (e.g., WITH zero AS (SELECT 0 AS n)) is classified SINGLE_REMOTE.
+# Previously the guards only blocked pushdown when an outer SINGLE_REMOTE
+# CTE was in scope; they missed NO_CATALOG_REFERENCED CTEs.
+#
+# Fix (FinishPushdown): extend the scope loop to also return early for
+# NO_CATALOG_REFERENCED outer CTEs.
+# Fix (PushJoinChild): apply the same guard extension when deciding whether
+# to push a SubqueryRef join child standalone.
+#
+# Without the fix both queries below fail because the CTE definition is
+# not included in the SQL sent to the remote, causing a remote error.
+# ============================================================
+
+statement ok
+create table local_bug37(k int);
+
+statement ok
+insert into local_bug37 from range(10);
+
+# Bug 37a (FinishPushdown): UNION ALL where arm1 is SINGLE_REMOTE because it
+# references rpc.t1 CROSS JOIN the outer NO_CATALOG CTE (zero), while arm2 is
+# UNKNOWN (local_bug37).  Without fix: arm1 pushed standalone; remote fails on
+# "Table 'zero' not found".  With fix: arm1 not pushed; executes locally with
+# the CTE definition available.  zero.n=0 so i >= 0 matches all of rpc.t1={0..9}.
+query I
+with zero as (select 0 as n)
+select count(*) from (
+    select i from rpc.t1 cross join zero where i >= zero.n
+    union all
+    select k from local_bug37 where k < 0
+)
+----
+10
+
+# Bug 37b (PushJoinChild SubqueryRef): mixed JOIN where the subquery child
+# references rpc.t1 CROSS JOIN the outer NO_CATALOG CTE (zero).  Without fix:
+# PushJoinChild pushes the subquery standalone; remote fails on "Table 'zero'
+# not found".  With fix: guard blocks the push; subquery executes natively with
+# the CTE definition in scope.  local_bug37={0..9}, sub.i={0..9} (i>=0) → 10 rows.
+query I
+with zero as (select 0 as n)
+select count(*)
+from local_bug37
+join (select i from rpc.t1 cross join zero where i >= zero.n) sub
+    on local_bug37.k = sub.i
+----
+10
+
+statement ok
+drop table local_bug37;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
