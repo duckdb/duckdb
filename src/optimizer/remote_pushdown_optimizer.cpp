@@ -274,7 +274,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 		}
 		if (node.on_conflict_info->set_info) {
 			if (node.on_conflict_info->set_info->condition) {
-				auto condition_result = Rewrite(*node.on_conflict_info->condition);
+				auto condition_result = Rewrite(*node.on_conflict_info->set_info->condition);
 				result = Merge(result, condition_result);
 			}
 			for(auto &expr : node.on_conflict_info->set_info->expressions) {
