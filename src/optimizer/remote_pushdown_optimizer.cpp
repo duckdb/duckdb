@@ -712,51 +712,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	return result;
 }
 
-static void UnqualifyColumnRefs(ParsedExpression &expr, const string &catalog_name) {
-	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-		auto &col_ref = expr.Cast<ColumnRefExpression>();
-		// In UNION/INTERSECT/EXCEPT ORDER BY, the output has no table associations.
-		// Strip ALL qualifiers to just the column name when the leading qualifier matches the
-		// pushed catalog (e.g. "rpc.t1.i" → "i", "rpc.i" → "i").
-		if (col_ref.column_names.size() > 1 && StringUtil::CIEquals(col_ref.column_names[0], catalog_name)) {
-			string col_name = col_ref.column_names.back();
-			col_ref.column_names = {std::move(col_name)};
-		}
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-		expr, [&](ParsedExpression &child) { UnqualifyColumnRefs(child, catalog_name); });
-}
-
-static bool HasTableFunctionInTree(const TableRef &ref) {
-	switch (ref.type) {
-	case TableReferenceType::TABLE_FUNCTION:
-		return true;
-	case TableReferenceType::JOIN: {
-		auto &join = ref.Cast<JoinRef>();
-		return (join.left && HasTableFunctionInTree(*join.left)) ||
-		       (join.right && HasTableFunctionInTree(*join.right));
-	}
-	default:
-		return false;
-	}
-}
-
-static bool QueryNodeHasTableFunctionPush(const QueryNode &node) {
-	if (node.type == QueryNodeType::SELECT_NODE) {
-		auto &sel = node.Cast<SelectNode>();
-		return sel.from_table && HasTableFunctionInTree(*sel.from_table);
-	}
-	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
-		for (auto &child : node.Cast<SetOperationNode>().children) {
-			if (child && QueryNodeHasTableFunctionPush(*child)) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	// Save each child before analysis. Rewrite(SelectNode) calls Rewrite(JoinRef) which pushes
 	// individual SINGLE_REMOTE children in-place via FinishPushdown even when the JoinRef result is
@@ -779,24 +734,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 		child_results.push_back(child_result);
 	}
 
-	// Save modifier expressions before rewriting them. Rewrite(ParsedExpression) on a subquery
-	// inside a modifier (e.g. ORDER BY (SELECT j FROM rpc.t2 JOIN local_t ON ...)) has the side
-	// effect of wrapping SINGLE_REMOTE JoinRef children in quack functions in-place. If the
-	// overall set-operation result is not SINGLE_REMOTE, those stale wrappers must be rolled back:
-	// individual child pushdown (below) opens one quack streaming slot per pushed child, and a
-	// modifier subquery running with a stale wrapper would try to open an additional concurrent
-	// slot, triggering "Multiple streaming scans" errors.
-	vector<unique_ptr<ResultModifier>> saved_modifiers;
-	for (auto &modifier : node.modifiers) {
-		saved_modifiers.push_back(modifier->Copy());
-	}
 	// Check result modifiers (ORDER BY / LIMIT on the set operation itself)
+	bool has_expression_modifiers = false;
 	for (auto &modifier : node.modifiers) {
 		switch (modifier->type) {
 		case ResultModifierType::ORDER_MODIFIER: {
 			auto &order_mod = modifier->Cast<OrderModifier>();
 			for (auto &order : order_mod.orders) {
 				result = Merge(result, Rewrite(*order.expression));
+				has_expression_modifiers = true;
 			}
 			break;
 		}
@@ -804,9 +750,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 			auto &limit_mod = modifier->Cast<LimitModifier>();
 			if (limit_mod.limit) {
 				result = Merge(result, Rewrite(*limit_mod.limit));
+				has_expression_modifiers = true;
 			}
 			if (limit_mod.offset) {
 				result = Merge(result, Rewrite(*limit_mod.offset));
+				has_expression_modifiers = true;
 			}
 			break;
 		}
@@ -814,9 +762,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 			auto &limit_mod = modifier->Cast<LimitPercentModifier>();
 			if (limit_mod.limit) {
 				result = Merge(result, Rewrite(*limit_mod.limit));
+				has_expression_modifiers = true;
 			}
 			if (limit_mod.offset) {
 				result = Merge(result, Rewrite(*limit_mod.offset));
+				has_expression_modifiers = true;
 			}
 			break;
 		}
@@ -824,6 +774,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 			auto &distinct_mod = modifier->Cast<DistinctModifier>();
 			for (auto &expr : distinct_mod.distinct_on_targets) {
 				result = Merge(result, Rewrite(*expr));
+				has_expression_modifiers = true;
 			}
 			break;
 		}
@@ -835,53 +786,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		return result;
 	}
-	// Restore modifiers to remove any stale quack wrappers inserted by Rewrite(ParsedExpression)
-	// calls above (e.g., inside ORDER BY subqueries). Individual child pushdown below opens one
-	// quack streaming slot per pushed child; a stale wrapper in a modifier subquery would open an
-	// additional concurrent slot, triggering "Multiple streaming scans" errors.
-	node.modifiers = std::move(saved_modifiers);
-	// Check if any UNKNOWN child already has an open quack streaming slot (from JoinRef child pushdown).
-	// Pushing a SINGLE_REMOTE sibling alongside such a child would open two concurrent quack connections.
-	bool any_risky_unknown_sibling = false;
-	for (idx_t i = 0; i < node.children.size(); i++) {
-		if (child_results[i].reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-		    node.children[i] && QueryNodeHasTableFunctionPush(*node.children[i])) {
-			any_risky_unknown_sibling = true;
-			break;
-		}
+	if (has_expression_modifiers) {
+		// if the set operation has any modifiers (e.g. ORDER BY <expr>) then binding can go wrong if we do a pushdown
+		// into children, since we might have something like SELECT i + 1 FROM remote UNION ALL ... ORDER BY i + 1
+		// this requires "peeking into" the child query to figure out that the expressions match
+		// for now just be safe and skip pushdown into individual queries in this scenario
+		return result;
 	}
-	// Push individual SINGLE_REMOTE children and strip catalog qualifiers from ORDER BY / DISTINCT ON.
-	if (!any_risky_unknown_sibling) {
-		for (idx_t i = 0; i < node.children.size(); i++) {
-			FinishPushdown(node.children[i], child_results[i]);
-		}
-		for (idx_t i = 0; i < child_results.size(); i++) {
-			if (child_results[i].reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG ||
-			    !child_results[i].catalog) {
-				continue;
-			}
-			const string &cat_name = child_results[i].catalog->GetName();
-			for (auto &modifier : node.modifiers) {
-				switch (modifier->type) {
-				case ResultModifierType::ORDER_MODIFIER: {
-					auto &order_mod = modifier->Cast<OrderModifier>();
-					for (auto &order : order_mod.orders) {
-						UnqualifyColumnRefs(*order.expression, cat_name);
-					}
-					break;
-				}
-				case ResultModifierType::DISTINCT_MODIFIER: {
-					auto &distinct_mod = modifier->Cast<DistinctModifier>();
-					for (auto &expr : distinct_mod.distinct_on_targets) {
-						UnqualifyColumnRefs(*expr, cat_name);
-					}
-					break;
-				}
-				default:
-					break;
-				}
-			}
-		}
+	for (idx_t i = 0; i < node.children.size(); i++) {
+		FinishPushdown(node.children[i], child_results[i]);
 	}
 	return result;
 }
