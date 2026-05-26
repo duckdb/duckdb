@@ -110,7 +110,7 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
 		auto writer = FlatVector::Writer<list_entry_t>(result, result_size);
-		for (const auto entry : input.Values<list_entry_t>(result_size)) {
+		for (const auto entry : input.Values<list_entry_t>()) {
 			if (entry.IsValid()) {
 				writer.WriteValue(entry.GetValueUnsafe());
 			} else {
@@ -152,7 +152,7 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
 		auto writer = FlatVector::Writer<list_entry_t>(result, result_size);
-		for (const auto entry : input.Values<list_entry_t>(result_size)) {
+		for (const auto entry : input.Values<list_entry_t>()) {
 			if (entry.IsValid()) {
 				writer.WriteValue(entry.GetValueUnsafe());
 			} else {
@@ -186,7 +186,7 @@ void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t re
 			return;
 		}
 	} else {
-		auto validity_entries = input.Validity(result_size);
+		auto validity_entries = input.Validity();
 		if (validity_entries.CanHaveNull()) {
 			auto &result_validity = FlatVector::ValidityMutable(result);
 			for (idx_t i = 0; i < result_size; i++) {

@@ -47,12 +47,6 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		callback(cast_expr.child);
 		break;
 	}
-	case ExpressionClass::BOUND_COMPARISON: {
-		auto &comp_expr = expr.Cast<BoundComparisonExpression>();
-		callback(comp_expr.left);
-		callback(comp_expr.right);
-		break;
-	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
 		for (auto &child : conj_expr.children) {

@@ -80,7 +80,7 @@ struct ListTransformFunctor {
 		offset += entry.length;
 	}
 	//! Appends the lambda vector to the result's child vector
-	static void AppendResult(Vector &result, Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *,
+	static void AppendResult(Vector &result, const Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *,
 	                         ListFilterInfo &, LambdaExecuteInfo &) {
 		ListVector::Append(result, lambda_vector, elem_cnt);
 	}
@@ -102,13 +102,13 @@ struct ListFilterFunctor {
 		entry_lengths.push_back(entry.length);
 	}
 	//! Uses the lambda vector to filter the incoming list and to append the filtered list to the result vector
-	static void AppendResult(Vector &result, Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *result_entries,
-	                         ListFilterInfo &info, LambdaExecuteInfo &execute_info) {
+	static void AppendResult(Vector &result, const Vector &lambda_vector, const idx_t elem_cnt,
+	                         list_entry_t *result_entries, ListFilterInfo &info, LambdaExecuteInfo &execute_info) {
 		idx_t count = 0;
 		SelectionVector sel(elem_cnt);
 
 		// compute the new lengths and offsets, and create a selection vector
-		for (auto entry : lambda_vector.Values<bool>(elem_cnt)) {
+		for (auto entry : lambda_vector.Values<bool>()) {
 			// set length and offset of empty lists
 			while (info.row_idx < info.entry_lengths.size() && !info.entry_lengths[info.row_idx]) {
 				result_entries[info.row_idx].offset = info.offset;

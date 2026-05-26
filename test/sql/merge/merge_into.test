@@ -52,6 +52,30 @@ FROM Stock ORDER BY item_id
 20	1900
 30	300
 
+# relation-alias row comparison in a matched condition with a derived source
+statement ok
+CREATE TABLE merge_distinct_target(tableticker VARCHAR NOT NULL, figi VARCHAR, cik VARCHAR, lastupdated DATE NOT NULL);
+
+statement ok
+INSERT INTO merge_distinct_target VALUES ('tablepermaticker', 'old_figi', 'old_cik', DATE '2026-04-30');
+
+query I
+MERGE INTO merge_distinct_target AS t
+USING (
+	SELECT 'tablepermaticker' AS tableticker, 'new_figi' AS figi, 'new_cik' AS cik, DATE '2026-05-01' AS lastupdated
+	ORDER BY tableticker
+) AS q
+ON t.tableticker = q.tableticker
+WHEN MATCHED AND t IS DISTINCT FROM q THEN UPDATE
+WHEN NOT MATCHED THEN INSERT
+----
+1
+
+query IIII
+FROM merge_distinct_target ORDER BY tableticker
+----
+tablepermaticker	new_figi	new_cik	2026-05-01
+
 # sell - deleting all rows that are fully sold
 statement ok
 CREATE TABLE Sale(item_id int, volume int);

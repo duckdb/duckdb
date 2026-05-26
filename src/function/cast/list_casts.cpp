@@ -42,7 +42,7 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
 
 	// only handle constant and flat vectors here for now
-	auto source_data = source.Values<list_entry_t>(count);
+	auto source_data = source.Values<list_entry_t>();
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t r = 0; r < count; r++) {
 		auto source_list = source_data[r];
@@ -79,7 +79,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	auto write_string_func =
 	    child_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString<false>;
 
-	auto values = varchar_list.Values<VectorListType<string_t>>(count);
+	auto values = varchar_list.Values<VectorListType<string_t>>();
 
 	static constexpr idx_t SEP_LENGTH = 2;
 	static constexpr idx_t NULL_LENGTH = 4;

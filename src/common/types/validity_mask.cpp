@@ -27,7 +27,7 @@ void ValidityMask::Combine(const Vector &other, idx_t count) {
 		// other is not NULL - skip
 		return;
 	}
-	auto validity = other.Validity(count);
+	auto validity = other.Validity();
 	if (validity.CannotHaveNull()) {
 		// no NULL values - we can skip this
 		return;

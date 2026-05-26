@@ -188,8 +188,7 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	PushCollation(context, right, input_type);
 
 	// now create the bound comparison expression
-	return BindResult(
-	    make_uniq<BoundComparisonExpression>(expr.GetExpressionType(), std::move(left), std::move(right)));
+	return BindResult(BoundComparisonExpression::Create(expr.GetExpressionType(), std::move(left), std::move(right)));
 }
 
 } // namespace duckdb

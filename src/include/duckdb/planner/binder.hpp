@@ -193,12 +193,6 @@ struct GlobalBinderState {
 	string trigger_creation_name;
 };
 
-// QueryBinderState is state shared WITHIN a query, a new query-binder state is created when binding inside e.g. a view
-struct QueryBinderState {
-	//! The vector of active binders
-	vector<reference<ExpressionBinder>> active_binders;
-};
-
 //! Bind the parsed query tree to the actual columns present in the catalog.
 /*!
   The binder is responsible for binding tables and columns to actual physical
@@ -206,6 +200,7 @@ struct QueryBinderState {
   all expressions.
 */
 class Binder : public enable_shared_from_this<Binder> {
+	friend class ColumnQualifier;
 	friend class ExpressionBinder;
 	friend class RecursiveDependentJoinPlanner;
 
@@ -288,11 +283,10 @@ public:
 	//! Add the view to the set of currently bound views - used for detecting recursive view definitions
 	void AddBoundView(ViewCatalogEntry &view);
 
-	void PushExpressionBinder(ExpressionBinder &binder);
-	void PopExpressionBinder();
-	void SetActiveBinder(ExpressionBinder &binder);
+	void BeginSubqueryBind(Binder &parent, ExpressionBinder &binder);
 	ExpressionBinder &GetActiveBinder();
 	bool HasActiveBinder();
+	void FinishSubqueryBind();
 
 	vector<reference<ExpressionBinder>> &GetActiveBinders();
 
@@ -350,6 +344,8 @@ public:
 
 	void BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
 	                      const string &catalog = "", const string &schema = "");
+	unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
+	string GetExpressionName(const ParsedExpression &expr);
 
 private:
 	//! The parent binder (if any)
@@ -358,8 +354,8 @@ private:
 	BinderType binder_type = BinderType::REGULAR_BINDER;
 	//! Global binder state
 	shared_ptr<GlobalBinderState> global_binder_state;
-	//! Query binder state
-	shared_ptr<QueryBinderState> query_binder_state;
+	//! Active binders
+	vector<reference<ExpressionBinder>> active_binders;
 	//! Whether or not the binder has any unplanned dependent joins that still need to be planned/flattened
 	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
@@ -425,6 +421,8 @@ private:
 	BoundStatement Bind(CopyDatabaseStatement &stmt);
 	BoundStatement Bind(UpdateExtensionsStatement &stmt);
 	BoundStatement Bind(MergeIntoStatement &stmt);
+	BoundStatement Bind(ConnectStatement &stmt);
+	BoundStatement Bind(DisconnectStatement &stmt);
 
 	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.

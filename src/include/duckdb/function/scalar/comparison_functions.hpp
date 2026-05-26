@@ -25,4 +25,14 @@ struct BetweenFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ComparisonFun {
+	static constexpr const char *Name = "__comparison";
+	static constexpr const char *Parameters = "left,right";
+	static constexpr const char *Description = "Performs a comparison between left / right.";
+	static constexpr const char *Example = "__comparison(3, 0";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

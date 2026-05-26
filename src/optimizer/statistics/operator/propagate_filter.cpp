@@ -218,14 +218,11 @@ void StatisticsPropagator::UpdateFilterStatistics(const Expression &condition) {
 		UpdateFilterStatistics(input, lower_bound, lower_comparison);
 		UpdateFilterStatistics(input, upper_bound, upper_comparison);
 	}
-	switch (condition.GetExpressionClass()) {
-	case ExpressionClass::BOUND_COMPARISON: {
-		auto &comparison = condition.Cast<BoundComparisonExpression>();
-		UpdateFilterStatistics(*comparison.left, *comparison.right, comparison.GetExpressionType());
-		break;
-	}
-	default:
-		break;
+	if (BoundComparisonExpression::IsComparison(condition)) {
+		auto &comparison = condition.Cast<BoundFunctionExpression>();
+		auto &left = BoundComparisonExpression::Left(comparison);
+		auto &right = BoundComparisonExpression::Right(comparison);
+		UpdateFilterStatistics(left, right, comparison.GetExpressionType());
 	}
 }
 

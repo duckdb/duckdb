@@ -74,12 +74,12 @@ class ScalarFunctionCatalogEntry;
 struct StatementProperties;
 
 struct FunctionStatisticsPruneInput {
-	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, BaseStatistics &stats_p)
+	FunctionStatisticsPruneInput(optional_ptr<FunctionData> bind_data_p, const BaseStatistics &stats_p)
 	    : bind_data(bind_data_p), stats(stats_p) {
 	}
 
 	optional_ptr<FunctionData> bind_data;
-	BaseStatistics &stats;
+	const BaseStatistics &stats;
 };
 
 struct FunctionStatisticsInput {
@@ -141,8 +141,10 @@ typedef unique_ptr<FunctionLocalState> (*init_local_state_t)(ExpressionState &st
                                                              const BoundFunctionExpression &expr,
                                                              FunctionData *bind_data);
 //! The type to directly access the selection vector of a scalar function
-typedef idx_t (*scalar_function_select_t)(DataChunk &args, ExpressionState &state, SelectionVector *true_sel,
-                                          SelectionVector *false_sel);
+typedef idx_t (*scalar_function_select_t)(DataChunk &args, ExpressionState &state,
+                                          optional_ptr<const SelectionVector> sel,
+                                          optional_ptr<SelectionVector> true_sel,
+                                          optional_ptr<SelectionVector> false_sel);
 //! The type to propagate statistics for this scalar function
 typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, FunctionStatisticsInput &input);
 
@@ -391,20 +393,19 @@ public:
 	template <class TA, class TR, class OP>
 	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		D_ASSERT(input.ColumnCount() >= 1);
-		UnaryExecutor::Execute<TA, TR, OP>(input.data[0], result, input.size());
+		UnaryExecutor::Execute<TA, TR, OP>(input.data[0], result);
 	}
 
 	template <class TA, class TB, class TR, class OP>
 	static void BinaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		D_ASSERT(input.ColumnCount() == 2);
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP>(input.data[0], input.data[1], result, input.size());
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, OP>(input.data[0], input.data[1], result);
 	}
 
 	template <class TA, class TB, class TC, class TR, class OP>
 	static void TernaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 		D_ASSERT(input.ColumnCount() == 3);
-		TernaryExecutor::ExecuteStandard<TA, TB, TC, TR, OP>(input.data[0], input.data[1], input.data[2], result,
-		                                                     input.size());
+		TernaryExecutor::ExecuteStandard<TA, TB, TC, TR, OP>(input.data[0], input.data[1], input.data[2], result);
 	}
 
 public:

@@ -92,7 +92,7 @@ static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorS
 static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() >= 1 && args.ColumnCount() <= 3);
 	auto count = args.size();
-	Vector &input_lists = args.data[0];
+	const Vector &input_lists = args.data[0];
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &result_validity = FlatVector::ValidityMutable(result);
@@ -123,7 +123,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &child_vector = ListVector::GetChildMutable(sort_result_vec);
 
 	// get the lists data
-	auto list_entries = sort_result_vec.Values<list_entry_t>(count);
+	auto list_entries = sort_result_vec.Values<list_entry_t>();
 
 	// create the lists_indices vector, this contains an element for each list's entry,
 	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4]

@@ -102,7 +102,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 			// Offset the input dictionary
 			Vector offset_input(DictionaryVector::Child(unary_input), offset, offset + count);
 			input_chunk.data[input_col_idx.GetIndex()].Reference(offset_input);
-			input_chunk.SetCardinality(count);
+			input_chunk.SetChildCardinality(count);
 
 			// Execute, storing the result in an intermediate vector, and copying it to the output dictionary
 			Vector output_intermediate(result.GetType());
@@ -150,8 +150,8 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	// Combine all the argument validity masks into a flat validity mask
 	idx_t count = args.size();
 	ValidityMask combined_mask(count);
-	for (auto &arg : args.data) {
-		auto entries = arg.Validity(count);
+	for (const auto &arg : args.data) {
+		auto entries = arg.Validity();
 		if (!entries.CanHaveNull()) {
 			continue;
 		}
@@ -163,7 +163,7 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	}
 
 	// Default is that if any of the arguments are NULL, the result is also NULL
-	auto result_validity = result.Validity(count);
+	auto result_validity = result.Validity();
 	for (idx_t i = 0; i < count; i++) {
 		if (!combined_mask.RowIsValid(i)) {
 			D_ASSERT(!result_validity.IsValid(i));
@@ -194,8 +194,8 @@ static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk
 	auto &result_validity = FlatVector::ValidityMutable(result);
 	result_validity.SetAllValid(count);
 	D_ASSERT(expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING);
-	for (auto &arg : args.data) {
-		auto entries = arg.Validity(count);
+	for (const auto &arg : args.data) {
+		auto entries = arg.Validity();
 		if (!entries.CanHaveNull()) {
 			continue;
 		}
@@ -207,7 +207,8 @@ static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk
 	}
 
 	SelectionVector true_sel(count);
-	auto true_count = expr.function.GetSelectCallback()(args, state, &true_sel, nullptr);
+	auto true_count =
+	    expr.function.GetSelectCallback()(args, state, FlatVector::IncrementalSelectionVector(), &true_sel, nullptr);
 	for (idx_t i = 0; i < true_count; i++) {
 		result_data[true_sel.get_index(i)] = true;
 	}
@@ -277,24 +278,13 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	D_ASSERT(result.GetType() == expr.GetReturnType());
 }
 
-static void ScatterSelectionResult(const SelectionVector &source, idx_t source_count, const SelectionVector *sel,
-                                   SelectionVector *target) {
-	if (!target) {
-		return;
-	}
-	for (idx_t i = 0; i < source_count; i++) {
-		auto idx = source.get_index(i);
-		target->set_index(i, sel ? sel->get_index(idx) : idx);
-	}
-}
-
 idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                                  SelectionVector *false_sel) {
 	if (!expr.function.HasSelectCallback()) {
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
-	// FIXME: push constant handling in here
+	// FIXME: push constant handling in here similar to Execute
 	state->intermediate_chunk.Reset();
 	auto &arguments = state->intermediate_chunk;
 	for (idx_t i = 0; i < expr.children.size(); i++) {
@@ -303,23 +293,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	}
 	arguments.SetCardinality(count);
 	arguments.Verify(context);
-
-	const bool has_sel = sel && sel != FlatVector::IncrementalSelectionVector();
-	if (!has_sel) {
-		return expr.function.GetSelectCallback()(arguments, *state, true_sel, false_sel);
-	}
-
-	SelectionVector temp_true(count);
-	SelectionVector temp_false(count);
-	auto dense_true_sel = true_sel ? &temp_true : nullptr;
-	auto dense_false_sel = false_sel ? &temp_false : nullptr;
-	auto true_count = expr.function.GetSelectCallback()(arguments, *state, dense_true_sel, dense_false_sel);
-	ScatterSelectionResult(temp_true, true_count, sel, true_sel);
-	if (false_sel) {
-		auto false_count = count - true_count;
-		ScatterSelectionResult(temp_false, false_count, sel, false_sel);
-	}
-	return true_count;
+	return expr.function.GetSelectCallback()(arguments, *state, sel, true_sel, false_sel);
 }
 
 } // namespace duckdb

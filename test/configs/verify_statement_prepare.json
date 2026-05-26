@@ -1,6 +1,6 @@
 {
   "description": "Run with debug_verify_statement set to prepared_statement - forcing statements through PREPARE and EXECUTE with parameters",
-  "on_init": "SET debug_verify_statement='prepared_statement';",
+  "on_init": "SET debug_verify_statement='prepared_statement'; SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';",
   "skip_compiled": "true",
   "skip_error_messages": [
     "Parameter Not Allowed Error:",
@@ -42,6 +42,13 @@
       "paths": [
         "test/sql/pg_catalog/pg_prepared_statements.test",
         "test/sql/table_function/duckdb_prepared_statements.test"
+      ]
+    },
+    {
+      "reason": "EXECUTE does not emit parser/phase metrics; profiling output differs from direct SELECT",
+      "paths": [
+        "test/sql/pragma/profiling/test_custom_profiling_using_groups.test",
+        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test"
       ]
     }
   ]

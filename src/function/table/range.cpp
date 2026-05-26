@@ -4,7 +4,6 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 
@@ -299,7 +298,7 @@ static void GenerateRangeDateTimeParameters(DataChunk &input, idx_t row_id, Rang
 	result.increment = FlatVector::GetValue<interval_t>(input.data[2], row_id);
 
 	// Infinities either cause errors or infinite loops, so just ban them
-	if (!Timestamp::IsFinite(result.start) || !Timestamp::IsFinite(result.end)) {
+	if (!result.start.IsFinite() || !result.end.IsFinite()) {
 		throw BinderException("RANGE with infinite bounds is not supported");
 	}
 
@@ -407,6 +406,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet generate_series("generate_series");
 	range_function.bind = RangeFunctionBind<true>;
 	range_function.in_out_function = RangeFunction<true>;
+	range_function.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 	range_function.GetArguments() = {LogicalType::BIGINT};
 	generate_series.AddFunction(range_function);
 	range_function.GetArguments() = {LogicalType::BIGINT, LogicalType::BIGINT};
@@ -417,6 +417,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	                                     nullptr, RangeDateTimeBind<true>, nullptr, RangeDateTimeLocalInit);
 	generate_series_in_out.in_out_function = RangeDateTimeFunction<true>;
 	generate_series_in_out.parallelism = TableFunctionParallelism::FORCE_SINGLE_THREADED;
+	generate_series_in_out.return_type = TableFunctionReturnType::SET_RETURNING_FUNCTION;
 	generate_series.AddFunction(generate_series_in_out);
 	set.AddFunction(generate_series);
 }

@@ -5,5 +5,12 @@
         "description": "Returns whether or not input is between lower and upper.",
         "example": "__between(3, 0, 10)",
         "type": "scalar_function"
+    },
+    {
+        "name": "__comparison",
+        "parameters": "left,right",
+        "description": "Performs a comparison between left / right.",
+        "example": "__comparison(3, 0",
+        "type": "scalar_function"
     }
 ]

@@ -102,34 +102,34 @@ interval_parse_number:
 			// colon: we are parsing a time
 			goto interval_parse_time;
 		} else {
-			if (pos == start_pos) {
-				return false;
-			}
-			// finished the number, parse it from the string
-			string_t nr_string(str + start_pos, UnsafeNumericCast<uint32_t>(pos - start_pos));
-			number = Cast::Operation<string_t, int64_t>(nr_string);
-			fraction = 0;
-			if (c == '.') {
-				idx_t frac_start = 0;
-				for (++pos; pos < len && StringUtil::CharacterIsDigit(str[pos]); ++pos) {
-					if (frac_start == 0) {
-						frac_start = pos;
-					}
-				}
-
-				if (frac_start != 0) {
-					string_t frac_string(str + frac_start - 1, UnsafeNumericCast<uint32_t>(pos - frac_start + 1));
-					fraction = Cast::Operation<string_t, double>(frac_string);
-				}
-			}
-			if (negative) {
-				number = -number;
-				fraction = -fraction;
-			}
-			goto interval_parse_identifier;
+			break;
 		}
 	}
-	goto end_of_string;
+	{
+		if (pos == start_pos) {
+			return false;
+		}
+		string_t nr_string(str + start_pos, UnsafeNumericCast<uint32_t>(pos - start_pos));
+		number = Cast::Operation<string_t, int64_t>(nr_string);
+		fraction = 0;
+		if (pos < len && str[pos] == '.') {
+			idx_t frac_start = 0;
+			for (++pos; pos < len && StringUtil::CharacterIsDigit(str[pos]); ++pos) {
+				if (frac_start == 0) {
+					frac_start = pos;
+				}
+			}
+			if (frac_start != 0) {
+				string_t frac_string(str + frac_start - 1, UnsafeNumericCast<uint32_t>(pos - frac_start + 1));
+				fraction = Cast::Operation<string_t, double>(frac_string);
+			}
+		}
+		if (negative) {
+			number = -number;
+			fraction = -fraction;
+		}
+		goto interval_parse_identifier;
+	}
 interval_parse_time : {
 	// parse the remainder of the time as a Time type
 	dtime_t time;
@@ -443,7 +443,7 @@ interval_t Interval::GetAge(TimestampComponents ts1, TimestampComponents ts2, bo
 }
 
 interval_t Interval::GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2) {
-	D_ASSERT(Timestamp::IsFinite(timestamp_1) && Timestamp::IsFinite(timestamp_2));
+	D_ASSERT(timestamp_1.IsFinite() && timestamp_2.IsFinite());
 
 	auto ts_component1 = Timestamp::GetComponents(timestamp_1);
 	auto ts_component2 = Timestamp::GetComponents(timestamp_2);
@@ -452,7 +452,7 @@ interval_t Interval::GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2) {
 }
 
 interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
-	if (!Timestamp::IsFinite(timestamp_1) || !Timestamp::IsFinite(timestamp_2)) {
+	if (!timestamp_1.IsFinite() || !timestamp_2.IsFinite()) {
 		throw InvalidInputException("Cannot subtract infinite timestamps");
 	}
 	const auto us_1 = Timestamp::GetEpochMicroSeconds(timestamp_1);
@@ -481,7 +481,7 @@ interval_t Interval::Invert(interval_t interval) {
 }
 
 date_t Interval::Add(date_t left, interval_t right) {
-	if (!Date::IsFinite(left)) {
+	if (!left.IsFinite()) {
 		return left;
 	}
 	date_t result;
@@ -513,7 +513,7 @@ date_t Interval::Add(date_t left, interval_t right) {
 			throw OutOfRangeException("Date out of range");
 		}
 	}
-	if (!Date::IsFinite(result)) {
+	if (!result.IsFinite()) {
 		throw OutOfRangeException("Date out of range");
 	}
 	return result;
@@ -537,7 +537,7 @@ dtime_tz_t Interval::Add(dtime_tz_t left, interval_t right, date_t &date) {
 }
 
 timestamp_t Interval::Add(timestamp_t left, interval_t right) {
-	if (!Timestamp::IsFinite(left)) {
+	if (!left.IsFinite()) {
 		return left;
 	}
 	date_t date;

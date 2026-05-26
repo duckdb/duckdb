@@ -77,7 +77,7 @@ void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &type
 idx_t DataChunk::GetDataSize() const {
 	idx_t total_size = 0;
 	for (auto &vec : data) {
-		total_size += vec.GetDataSize(count);
+		total_size += vec.GetDataSize();
 	}
 	return total_size;
 }
@@ -209,7 +209,7 @@ void DataChunk::ReferenceColumns(DataChunk &other, const vector<column_t> &colum
 	D_ASSERT(ColumnCount() == column_ids.size());
 	Reset();
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		auto &other_col = other.data[column_ids[col_idx]];
+		const auto &other_col = other.data[column_ids[col_idx]];
 		auto &this_col = data[col_idx];
 		D_ASSERT(other_col.GetType() == this_col.GetType());
 		this_col.Reference(other_col);
@@ -283,7 +283,7 @@ void DataChunk::Serialize(Serializer &serializer, bool compressed_serialization)
 			// Reference the vector to avoid potentially mutating it during serialization
 			Vector serialized_vector(data[i].GetType());
 			serialized_vector.Reference(data[i]);
-			serialized_vector.Serialize(object, row_count, compressed_serialization);
+			serialized_vector.Serialize(object, compressed_serialization);
 		});
 	});
 }
@@ -365,19 +365,20 @@ unsafe_unique_array<UnifiedVectorFormat> DataChunk::ToUnifiedFormat() {
 
 void DataChunk::Hash(Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
-	VectorOperations::Hash(data[0], result, size());
+	const idx_t count = size();
+	VectorOperations::Hash(data[0], result, count);
 	for (idx_t i = 1; i < ColumnCount(); i++) {
-		VectorOperations::CombineHash(result, data[i], size());
+		VectorOperations::CombineHash(result, data[i], count);
 	}
 }
 
 void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
 	D_ASSERT(!column_ids.empty());
-
-	VectorOperations::Hash(data[column_ids[0]], result, size());
+	const idx_t count = size();
+	VectorOperations::Hash(data[column_ids[0]], result, count);
 	for (idx_t i = 1; i < column_ids.size(); i++) {
-		VectorOperations::CombineHash(result, data[column_ids[i]], size());
+		VectorOperations::CombineHash(result, data[column_ids[i]], count);
 	}
 }
 
@@ -449,12 +450,12 @@ void DataChunk::VerifyInternal(DebugVerificationMode mode, optional_ptr<Database
 		// ensure that all valid in-memory states can be verified.
 
 		SerializationOptions options;
-		options.serialization_compatibility = SerializationCompatibility::Latest();
+		options.storage_compatibility = StorageCompatibility::Latest();
 
 		if (db) {
 			DBConfig &config = DBConfig::GetConfig(*db);
-			if (config.options.serialization_compatibility.manually_set) {
-				options.serialization_compatibility = config.options.serialization_compatibility;
+			if (config.options.storage_compatibility.manually_set) {
+				options.storage_compatibility = config.options.storage_compatibility;
 			}
 		}
 

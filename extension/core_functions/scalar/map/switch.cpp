@@ -121,7 +121,7 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 		if (base_expr) {
 			auto max_type = LogicalType::MaxLogicalType(input.context, base_expr->GetReturnType(),
 			                                            keys_unpacked[i]->GetReturnType());
-			case_check.when_expr = make_uniq<BoundComparisonExpression>(
+			case_check.when_expr = BoundComparisonExpression::Create(
 			    ExpressionType::COMPARE_EQUAL, base_expr->Copy(),
 			    BoundCastExpression::AddCastToType(input.context, std::move(keys_unpacked[i]), max_type));
 		} else {

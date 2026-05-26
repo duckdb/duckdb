@@ -26,7 +26,6 @@ class BoundAggregateExpression;
 class BoundCaseExpression;
 class BoundCastExpression;
 class BoundColumnRefExpression;
-class BoundComparisonExpression;
 class BoundConjunctionExpression;
 class BoundConstantExpression;
 class BoundDefaultExpression;

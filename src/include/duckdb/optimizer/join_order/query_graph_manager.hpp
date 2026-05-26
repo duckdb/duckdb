@@ -107,7 +107,7 @@ private:
 
 	QueryGraphEdges query_graph;
 
-	void GetColumnBinding(Expression &expression, ColumnBinding &binding);
+	void GetColumnBinding(const Expression &expression, ColumnBinding &binding);
 
 	void CreateHyperGraphEdges();
 

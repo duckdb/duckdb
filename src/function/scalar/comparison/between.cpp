@@ -36,25 +36,24 @@ void BetweenFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	Vector intermediate1(LogicalType::BOOLEAN);
 	Vector intermediate2(LogicalType::BOOLEAN);
 
-	auto &input = args.data[0];
-	auto &lower = args.data[1];
-	auto &upper = args.data[2];
-	auto count = args.size();
+	const auto &input = args.data[0];
+	const auto &lower = args.data[1];
+	const auto &upper = args.data[2];
 
 	if (upper_inclusive && lower_inclusive) {
-		VectorOperations::GreaterThanEquals(input, lower, intermediate1, count);
-		VectorOperations::LessThanEquals(input, upper, intermediate2, count);
+		VectorOperations::GreaterThanEquals(input, lower, intermediate1);
+		VectorOperations::LessThanEquals(input, upper, intermediate2);
 	} else if (lower_inclusive) {
-		VectorOperations::GreaterThanEquals(input, lower, intermediate1, count);
-		VectorOperations::LessThan(input, upper, intermediate2, count);
+		VectorOperations::GreaterThanEquals(input, lower, intermediate1);
+		VectorOperations::LessThan(input, upper, intermediate2);
 	} else if (upper_inclusive) {
-		VectorOperations::GreaterThan(input, lower, intermediate1, count);
-		VectorOperations::LessThanEquals(input, upper, intermediate2, count);
+		VectorOperations::GreaterThan(input, lower, intermediate1);
+		VectorOperations::LessThanEquals(input, upper, intermediate2);
 	} else {
-		VectorOperations::GreaterThan(input, lower, intermediate1, count);
-		VectorOperations::LessThan(input, upper, intermediate2, count);
+		VectorOperations::GreaterThan(input, lower, intermediate1);
+		VectorOperations::LessThan(input, upper, intermediate2);
 	}
-	VectorOperations::And(intermediate1, intermediate2, result, count);
+	VectorOperations::And(intermediate1, intermediate2, result);
 }
 
 #ifndef DUCKDB_SMALLER_BINARY
@@ -87,8 +86,9 @@ struct ExclusiveBetweenOperator {
 };
 
 template <class OP>
-static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, SelectionVector *sel, idx_t count,
-                                   SelectionVector *true_sel, SelectionVector *false_sel) {
+static idx_t BetweenLoopTypeSwitch(const Vector &input, const Vector &lower, const Vector &upper,
+                                   optional_ptr<const SelectionVector> sel, idx_t count,
+                                   optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
 	switch (input.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -137,28 +137,28 @@ static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, 
 	}
 }
 
-idx_t BetweenSelect(DataChunk &args, ExpressionState &state, SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t BetweenSelect(DataChunk &args, ExpressionState &state, optional_ptr<const SelectionVector> sel,
+                    optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
 	auto &between_expr = state.expr.Cast<BoundFunctionExpression>();
 	bool upper_inclusive = BoundBetweenExpression::UpperInclusive(between_expr);
 	bool lower_inclusive = BoundBetweenExpression::LowerInclusive(between_expr);
 
-	auto &input = args.data[0];
-	auto &lower = args.data[1];
-	auto &upper = args.data[2];
+	const auto &input = args.data[0];
+	const auto &lower = args.data[1];
+	const auto &upper = args.data[2];
 	auto count = args.size();
 
 	if (upper_inclusive && lower_inclusive) {
-		return BetweenLoopTypeSwitch<BothInclusiveBetweenOperator>(input, lower, upper, nullptr, count, true_sel,
+		return BetweenLoopTypeSwitch<BothInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
 		                                                           false_sel);
 	} else if (lower_inclusive) {
-		return BetweenLoopTypeSwitch<LowerInclusiveBetweenOperator>(input, lower, upper, nullptr, count, true_sel,
+		return BetweenLoopTypeSwitch<LowerInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
 		                                                            false_sel);
 	} else if (upper_inclusive) {
-		return BetweenLoopTypeSwitch<UpperInclusiveBetweenOperator>(input, lower, upper, nullptr, count, true_sel,
+		return BetweenLoopTypeSwitch<UpperInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
 		                                                            false_sel);
 	} else {
-		return BetweenLoopTypeSwitch<ExclusiveBetweenOperator>(input, lower, upper, nullptr, count, true_sel,
-		                                                       false_sel);
+		return BetweenLoopTypeSwitch<ExclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel, false_sel);
 	}
 }
 #endif

@@ -210,8 +210,8 @@ string ExpressionClassToString(ExpressionClass type) {
 		return "BOUND_CAST";
 	case ExpressionClass::BOUND_COLUMN_REF:
 		return "BOUND_COLUMN_REF";
-	case ExpressionClass::BOUND_COMPARISON:
-		return "BOUND_COMPARISON";
+	case ExpressionClass::LEGACY_BOUND_COMPARISON:
+		return "LEGACY_BOUND_COMPARISON";
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return "BOUND_CONJUNCTION";
 	case ExpressionClass::BOUND_CONSTANT:

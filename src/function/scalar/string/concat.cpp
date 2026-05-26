@@ -42,7 +42,7 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	idx_t constant_lengths = 0;
 	vector<idx_t> result_lengths(args.size(), 0);
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-		auto &input = args.data[col_idx];
+		const auto &input = args.data[col_idx];
 		D_ASSERT(input.GetType().InternalType() == PhysicalType::VARCHAR);
 		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(input)) {
@@ -53,7 +53,7 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 			constant_lengths += input_data->GetSize();
 		} else {
 			// now get the lengths of each of the input elements
-			for (auto entry : input.Values<string_t>(args.size())) {
+			for (auto entry : input.Values<string_t>()) {
 				if (!entry.IsValid()) {
 					continue;
 				}
@@ -74,7 +74,7 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 
 	// now that the empty space for the strings has been allocated, perform the concatenation
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-		auto &input = args.data[col_idx];
+		const auto &input = args.data[col_idx];
 
 		// loop over the vector and concat to all results
 		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -92,7 +92,7 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 				result_lengths[i] += input_len;
 			}
 		} else {
-			for (auto entry : input.Values<string_t>(args.size())) {
+			for (auto entry : input.Values<string_t>()) {
 				if (!entry.IsValid()) {
 					continue;
 				}
@@ -112,7 +112,7 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 
 void ConcatOperator(DataChunk &args, ExpressionState &state, Vector &result) {
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
-	    args.data[0], args.data[1], result, args.size(), [&](string_t a, string_t b) {
+	    args.data[0], args.data[1], result, [&](string_t a, string_t b) {
 		    auto a_data = a.GetData();
 		    auto b_data = b.GetData();
 		    auto a_length = a.GetSize();
@@ -130,8 +130,8 @@ void ConcatOperator(DataChunk &args, ExpressionState &state, Vector &result) {
 }
 
 struct ListConcatInputData {
-	ListConcatInputData(Vector &input, idx_t size)
-	    : input(input), child_vec(ListVector::GetChild(input)), list_data(input.Values<list_entry_t>(size)) {
+	ListConcatInputData(const Vector &input, idx_t size)
+	    : input(input), child_vec(ListVector::GetChild(input)), list_data(input.Values<list_entry_t>()) {
 	}
 
 	const Vector &input;
@@ -143,7 +143,7 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 	auto count = args.size();
 
 	vector<ListConcatInputData> input_data;
-	for (auto &input : args.data) {
+	for (const auto &input : args.data) {
 		if (!is_operator && input.GetType().id() == LogicalTypeId::SQLNULL) {
 			// LIST_CONCAT ignores NULL values
 			continue;

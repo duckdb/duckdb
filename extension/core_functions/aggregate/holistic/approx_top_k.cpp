@@ -198,13 +198,13 @@ struct ApproxTopKOperation {
 	}
 
 	template <class TYPE, class STATE>
-	static void Operation(STATE &aggr_state, const TYPE &input, AggregateInputData &aggr_input, Vector &top_k_vector,
-	                      idx_t offset, idx_t count) {
+	static void Operation(STATE &aggr_state, const TYPE &input, AggregateInputData &aggr_input,
+	                      const Vector &top_k_vector, idx_t offset, idx_t count) {
 		auto &state = aggr_state.GetState();
 		if (state.values.empty()) {
 			static constexpr int64_t MAX_APPROX_K = 1000000;
 			// not initialized yet - initialize the K value and set all counters to 0
-			auto top_k_format = top_k_vector.Values<int64_t>(count);
+			auto top_k_format = top_k_vector.Values<int64_t>();
 			auto top_k_entry = top_k_format[offset];
 			if (!top_k_entry.IsValid()) {
 				throw InvalidInputException("Invalid input for approx_top_k: k value cannot be NULL");
@@ -321,13 +321,13 @@ void ApproxTopKUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 	using STATE = ApproxTopKState;
 	auto &input = inputs[0];
 
-	auto &top_k_vector = inputs[1];
+	const auto &top_k_vector = inputs[1];
 
-	auto extra_state = OP::CreateExtraState(count);
+	auto extra_state = OP::CreateExtraState();
 	UnifiedVectorFormat input_data;
-	OP::PrepareData(input, count, extra_state, input_data);
+	OP::PrepareData(input, extra_state, input_data);
 
-	auto states = state_vector.Values<STATE *>(count);
+	auto states = state_vector.Values<STATE *>();
 	auto data = UnifiedVectorFormat::GetData<T>(input_data);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
@@ -341,7 +341,7 @@ void ApproxTopKUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 
 template <class OP = HistogramGenericFunctor>
 void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
-	auto states = state_vector.Values<ApproxTopKState *>(count);
+	auto states = state_vector.Values<ApproxTopKState *>();
 
 	auto old_len = ListVector::GetListSize(result);
 	idx_t new_entries = 0;

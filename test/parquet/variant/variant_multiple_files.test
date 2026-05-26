@@ -46,7 +46,7 @@ Not implemented Error: ColumnWriter of type 'VARIANT' requires a transform, but 
 
 # Enable these when the above statement no longer fails
 # These tests are added to help remind that the multiple-file-scanning logic likely needs adjusting when variants are allowed in non-root columns
-mode skip
+mode skip instable
 
 query I
 select count(*)

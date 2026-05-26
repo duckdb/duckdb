@@ -273,7 +273,7 @@ static bool CastJSONListToVarchar(Vector &source, Vector &result, idx_t count, C
 	static constexpr char const *NULL_STRING = "NULL";
 	static constexpr idx_t NULL_STRING_LENGTH = 4;
 
-	auto input_jsons = source.Values<VectorListType<string_t>>(count);
+	auto input_jsons = source.Values<VectorListType<string_t>>();
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t r = 0; r < count; r++) {
 		auto entry = input_jsons[r];

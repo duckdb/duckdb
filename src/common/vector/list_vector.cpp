@@ -359,7 +359,7 @@ void ListVector::PushBack(Vector &target, const Value &insert) {
 	target_buffer.PushBack(insert);
 }
 
-idx_t ListVector::GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
+idx_t ListVector::GetConsecutiveChildList(const Vector &list, Vector &result, idx_t offset, idx_t count) {
 	auto info = ListVector::GetConsecutiveChildListInfo(list, offset, count);
 	if (info.needs_slicing) {
 		SelectionVector sel(info.child_list_info.length);
@@ -371,17 +371,17 @@ idx_t ListVector::GetConsecutiveChildList(Vector &list, Vector &result, idx_t of
 	return info.child_list_info.length;
 }
 
-idx_t ListVector::GetTotalEntryCount(Vector &list, idx_t count) {
+idx_t ListVector::GetTotalEntryCount(const Vector &list) {
 	idx_t total_count = 0;
-	for (auto entry : list.ValidValues<list_entry_t>(count)) {
+	for (auto entry : list.ValidValues<list_entry_t>()) {
 		total_count += entry.GetValue().length;
 	}
 	return total_count;
 }
 
-ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, idx_t offset, idx_t count) {
+ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(const Vector &list, idx_t offset, idx_t count) {
 	ConsecutiveChildListInfo info;
-	auto list_data = list.Values<list_entry_t>(offset + count);
+	auto list_data = list.Values<list_entry_t>();
 
 	// find the first non-NULL entry
 	idx_t first_length = 0;
@@ -432,8 +432,8 @@ ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, i
 	return info;
 }
 
-void ListVector::GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel, idx_t offset, idx_t count) {
-	auto list_data = list.Values<list_entry_t>(offset + count);
+void ListVector::GetConsecutiveChildSelVector(const Vector &list, SelectionVector &sel, idx_t offset, idx_t count) {
+	auto list_data = list.Values<list_entry_t>();
 
 	//	SelectionVector child_sel(info.second.length);
 	idx_t entry = 0;

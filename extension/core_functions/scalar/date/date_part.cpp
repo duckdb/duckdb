@@ -131,7 +131,7 @@ struct DatePart {
 			return nullptr;
 		}
 		// Infinities prevent us from computing generic ranges
-		if (!Value::IsFinite(min) || !Value::IsFinite(max)) {
+		if (!min.IsFinite() || !max.IsFinite()) {
 			return nullptr;
 		}
 		TR min_part = OP::template Operation<T, TR>(min);
@@ -147,7 +147,7 @@ struct DatePart {
 	struct PartOperator {
 		template <class TA, class TR, class DATA_TYPE>
 		static inline TR Operation(TA input, ValidityMask &mask, idx_t idx, DATA_TYPE &data) {
-			if (Value::IsFinite(input)) {
+			if (input.IsFinite()) {
 				return OP::template Operation<TA, TR>(input);
 			} else {
 				mask.SetInvalid(idx);
@@ -161,7 +161,7 @@ struct DatePart {
 		D_ASSERT(input.ColumnCount() >= 1);
 		using IOP = PartOperator<OP>;
 		std::nullptr_t no_data = nullptr;
-		UnaryExecutor::GenericExecute<TA, TR, IOP>(input.data[0], result, input.size(), no_data, true);
+		UnaryExecutor::GenericExecute<TA, TR, IOP>(input.data[0], result, no_data, true);
 	}
 
 	struct YearOperator {
@@ -413,7 +413,7 @@ struct DatePart {
 		static void Inverse(DataChunk &input, ExpressionState &state, Vector &result) {
 			D_ASSERT(input.ColumnCount() == 1);
 
-			UnaryExecutor::Execute<int64_t, timestamp_t>(input.data[0], result, input.size(), [&](int64_t input) {
+			UnaryExecutor::Execute<int64_t, timestamp_t>(input.data[0], result, [&](int64_t input) {
 				// millisecond amounts provided to epoch_ms should never be considered infinite
 				// instead such values will just throw when converted to microseconds
 				return Timestamp::FromEpochMsPossiblyInfinite(input);
@@ -541,11 +541,11 @@ struct DatePart {
 		template <typename TA, typename TB, typename TR>
 		static void BinaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 			D_ASSERT(input.ColumnCount() == 2);
-			auto &offset = input.data[0];
-			auto &timetz = input.data[1];
+			const auto &offset = input.data[0];
+			const auto &timetz = input.data[1];
 
 			auto func = DatePart::TimezoneOperator::Operation<TA, TB, TR>;
-			BinaryExecutor::Execute<TA, TB, TR>(offset, timetz, result, input.size(), func);
+			BinaryExecutor::Execute<TA, TB, TR>(offset, timetz, result, func);
 		}
 
 		template <class T>
@@ -772,7 +772,7 @@ struct DatePart {
 template <class OP, class T>
 void DatePartCachedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<DateCacheLocalState<OP>>();
-	UnaryExecutor::Execute<T, int64_t>(args.data[0], result, args.size(),
+	UnaryExecutor::Execute<T, int64_t>(args.data[0], result,
 	                                   [&](T input) { return lstate.cache.ExtractElement(input); });
 }
 
@@ -1075,13 +1075,13 @@ int64_t DatePart::YearWeekOperator::Operation(dtime_tz_t input) {
 
 template <>
 int64_t DatePart::EpochNanosecondsOperator::Operation(timestamp_t input) {
-	D_ASSERT(Timestamp::IsFinite(input));
+	D_ASSERT(input.IsFinite());
 	return Timestamp::GetEpochNanoSeconds(input);
 }
 
 template <>
 int64_t DatePart::EpochNanosecondsOperator::Operation(date_t input) {
-	D_ASSERT(Date::IsFinite(input));
+	D_ASSERT(input.IsFinite());
 	return Date::EpochNanoseconds(input);
 }
 
@@ -1117,7 +1117,7 @@ int64_t DatePart::EpochMicrosecondsOperator::Operation(interval_t input) {
 
 template <>
 int64_t DatePart::EpochMillisOperator::Operation(timestamp_t input) {
-	D_ASSERT(Timestamp::IsFinite(input));
+	D_ASSERT(input.IsFinite());
 	return Cast::Operation<timestamp_t, timestamp_ms_t>(input).value;
 }
 
@@ -1158,7 +1158,7 @@ int64_t DatePart::EpochMillisOperator::Operation(dtime_tz_t input) {
 
 template <>
 int64_t DatePart::NanosecondsOperator::Operation(timestamp_ns_t input) {
-	if (!Timestamp::IsFinite(input)) {
+	if (!input.IsFinite()) {
 		throw ConversionException("Can't get nanoseconds of infinite TIMESTAMP");
 	}
 	date_t date;
@@ -1176,7 +1176,7 @@ int64_t DatePart::NanosecondsOperator::Operation(dtime_ns_t input) {
 
 template <>
 int64_t DatePart::MicrosecondsOperator::Operation(timestamp_t input) {
-	D_ASSERT(Timestamp::IsFinite(input));
+	D_ASSERT(input.IsFinite());
 	auto time = Timestamp::GetTime(input);
 	// remove everything but the second & microsecond part
 	return time.micros % Interval::MICROS_PER_MINUTE;
@@ -1206,7 +1206,7 @@ int64_t DatePart::MicrosecondsOperator::Operation(dtime_tz_t input) {
 
 template <>
 int64_t DatePart::MillisecondsOperator::Operation(timestamp_t input) {
-	D_ASSERT(Timestamp::IsFinite(input));
+	D_ASSERT(input.IsFinite());
 	return MicrosecondsOperator::Operation<timestamp_t, int64_t>(input) / Interval::MICROS_PER_MSEC;
 }
 
@@ -1232,7 +1232,7 @@ int64_t DatePart::MillisecondsOperator::Operation(dtime_tz_t input) {
 
 template <>
 int64_t DatePart::SecondsOperator::Operation(timestamp_t input) {
-	D_ASSERT(Timestamp::IsFinite(input));
+	D_ASSERT(input.IsFinite());
 	return MicrosecondsOperator::Operation<timestamp_t, int64_t>(input) / Interval::MICROS_PER_SEC;
 }
 
@@ -1258,7 +1258,7 @@ int64_t DatePart::SecondsOperator::Operation(dtime_tz_t input) {
 
 template <>
 int64_t DatePart::MinutesOperator::Operation(timestamp_t input) {
-	D_ASSERT(Timestamp::IsFinite(input));
+	D_ASSERT(input.IsFinite());
 	auto time = Timestamp::GetTime(input);
 	// remove the hour part, and truncate to minutes
 	return (time.micros % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
@@ -1288,7 +1288,7 @@ int64_t DatePart::MinutesOperator::Operation(dtime_tz_t input) {
 
 template <>
 int64_t DatePart::HoursOperator::Operation(timestamp_t input) {
-	D_ASSERT(Timestamp::IsFinite(input));
+	D_ASSERT(input.IsFinite());
 	return Timestamp::GetTime(input).micros / Interval::MICROS_PER_HOUR;
 }
 
@@ -1314,7 +1314,7 @@ int64_t DatePart::HoursOperator::Operation(dtime_tz_t input) {
 
 template <>
 double DatePart::EpochOperator::Operation(timestamp_t input) {
-	D_ASSERT(Timestamp::IsFinite(input));
+	D_ASSERT(input.IsFinite());
 	return double(Timestamp::GetEpochMicroSeconds(input)) / double(Interval::MICROS_PER_SEC);
 }
 
@@ -1366,7 +1366,7 @@ unique_ptr<BaseStatistics> DatePart::EpochOperator::PropagateStatistics<dtime_t>
 
 template <>
 int64_t DatePart::EraOperator::Operation(timestamp_t input) {
-	D_ASSERT(Timestamp::IsFinite(input));
+	D_ASSERT(input.IsFinite());
 	return EraOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
@@ -1597,7 +1597,7 @@ void DatePart::StructOperator::Operation(bigint_vec &bigint_values, double_vec &
 template <>
 void DatePart::StructOperator::Operation(bigint_vec &bigint_values, double_vec &double_values, const timestamp_t &input,
                                          const idx_t idx, const part_mask_t mask) {
-	D_ASSERT(Timestamp::IsFinite(input));
+	D_ASSERT(input.IsFinite());
 	date_t d;
 	dtime_t t;
 	Timestamp::Convert(input, d, t);
@@ -1745,12 +1745,12 @@ int64_t ExtractElement(DatePartSpecifier type, T element) {
 template <typename T>
 void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
-	auto &spec_arg = args.data[0];
-	auto &date_arg = args.data[1];
+	const auto &spec_arg = args.data[0];
+	const auto &date_arg = args.data[1];
 
 	BinaryExecutor::Execute<string_t, T, int64_t>(
-	    spec_arg, date_arg, result, args.size(), [&](string_t specifier, T date) -> optional<int64_t> {
-		    if (Value::IsFinite(date)) {
+	    spec_arg, date_arg, result, [&](string_t specifier, T date) -> optional<int64_t> {
+		    if (date.IsFinite()) {
 			    return ExtractElement<T>(GetDatePartSpecifier(specifier.GetString()), date);
 		    } else {
 			    return nullopt;
@@ -1993,7 +1993,7 @@ struct StructDatePart {
 		D_ASSERT(args.ColumnCount() == 1);
 
 		const auto count = args.size();
-		Vector &input = args.data[0];
+		const Vector &input = args.data[0];
 
 		//	Type counts
 		const auto BIGINT_COUNT = size_t(DatePartSpecifier::BEGIN_DOUBLE) - size_t(DatePartSpecifier::BEGIN_BIGINT);
@@ -2014,7 +2014,7 @@ struct StructDatePart {
 			}
 		}
 
-		auto entries = input.Values<INPUT_TYPE>(count);
+		auto entries = input.Values<INPUT_TYPE>();
 
 		// Start with a valid flat vector
 		result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -2218,7 +2218,7 @@ static void ExecuteGetNanosFromTimestampNs(DataChunk &input, ExpressionState &st
 	D_ASSERT(input.ColumnCount() == 1);
 
 	auto func = GetEpochNanosOperator::Operation;
-	UnaryExecutor::Execute<timestamp_ns_t, int64_t>(input.data[0], result, input.size(), func);
+	UnaryExecutor::Execute<timestamp_ns_t, int64_t>(input.data[0], result, func);
 }
 
 ScalarFunctionSet EpochNsFun::GetFunctions() {

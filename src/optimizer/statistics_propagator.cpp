@@ -131,8 +131,6 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 		return PropagateExpression(expr.Cast<BoundFunctionExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CAST:
 		return PropagateExpression(expr.Cast<BoundCastExpression>(), expr_ptr);
-	case ExpressionClass::BOUND_COMPARISON:
-		return PropagateExpression(expr.Cast<BoundComparisonExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CONSTANT:
 		return PropagateExpression(expr.Cast<BoundConstantExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_COLUMN_REF:

@@ -558,10 +558,31 @@ struct DebugVerificationModeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DebugVerificationProjectionSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verification_projection";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: add internal verification projections to stress optimizers";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugVerifyBlocksSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_verify_blocks";
 	static constexpr const char *Description = "DEBUG SETTING: verify block metadata during checkpointing";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugVerifyColumnBindingsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_column_bindings";
+	static constexpr const char *Description = "DEBUG SETTING: run extra internal verification of column bindings";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
@@ -675,6 +696,19 @@ struct DefaultSecretStorageSetting {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct DefaultTransactionInvalidationPolicySetting {
+	using RETURN_TYPE = TransactionInvalidationPolicy;
+	static constexpr const char *Name = "default_transaction_invalidation_policy";
+	static constexpr const char *Description =
+	    "When to invalidate transactions when errors occur (SYNTACTIC_ERRORS_DO_NOT_INVALIDATE, i.e. parser and binder "
+	    "exceptions do not invalidate, or ALL_ERRORS_INVALIDATE_TRANSACTION)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "ALL_ERRORS_INVALIDATE_TRANSACTION";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct DeprecatedUsingKeySyntaxSetting {
@@ -1032,6 +1066,18 @@ struct ForceBitpackingModeSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct ForceColumnMetadataReuseSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "force_column_metadata_reuse";
+	static constexpr const char *Description =
+	    "Force re-use of row group metadata on a column-level when checkpointing on older storage versions 6 and 7. "
+	    "This breaks storage backward-compatibility with older DuckDB versions.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct ForceCompressionSetting {
 	using RETURN_TYPE = CompressionType;
 	static constexpr const char *Name = "force_compression";
@@ -1100,11 +1146,12 @@ struct HTTPLoggingOutputSetting {
 struct HTTPProxySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "http_proxy";
-	static constexpr const char *Description = "HTTP proxy host";
+	static constexpr const char *Description =
+	    "HTTP proxy host (defaults to the HTTP_PROXY environment variable when unset)";
 	static constexpr const char *InputType = "VARCHAR";
-	static constexpr const char *DefaultValue = "";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct HTTPProxyPasswordSetting {
@@ -1185,6 +1232,20 @@ struct IndexScanPercentageSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct InitialColumnSegmentSizeSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "initial_column_segment_size";
+	static constexpr const char *Description =
+	    "The initial memory (in bytes) reserved for the first transient column segment. Must be a power of two. "
+	    "Internally, we subtract the block header size (typically 8 bytes) for segments with or exceeding 1024 bytes. "
+	    "Subsequent segments double in size until reaching the block size.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "2048";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct IntegerDivisionSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "integer_division";
@@ -1215,6 +1276,17 @@ struct LateMaterializationMaxRowsSetting {
 	    "The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "50";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct LegacyMetricsFormatSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "legacy_metrics_format";
+	static constexpr const char *Description =
+	    "When enabled, profiling output uses the legacy flat format instead of the current grouped format";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
@@ -1681,6 +1753,17 @@ struct ThreadsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct TrackedMetricsSetting {
+	using RETURN_TYPE = vector<string>;
+	static constexpr const char *Name = "tracked_metrics";
+	static constexpr const char *Description =
+	    "A list of metric glob patterns to enable for collection (e.g. ['query.*', 'optimizer.*'])";
+	static constexpr const char *InputType = "VARCHAR[]";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct UsernameSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "username";
@@ -1759,6 +1842,19 @@ struct WriteBufferRowGroupCountSetting {
 	static constexpr const char *DefaultValue = "5";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct WriteBufferRowGroupMemoryLimitSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "write_buffer_row_group_memory_limit";
+	static constexpr const char *Description =
+	    "The maximum data to buffer in row groups (in bytes) to buffer prior to flushing them together. When either "
+	    "this limit is reached, or write_buffer_row_group_count is reached, we flush the data to disk. Defaults to 20% "
+	    "of memory limit divided by thread count.";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct ZstdMinStringLengthSetting {

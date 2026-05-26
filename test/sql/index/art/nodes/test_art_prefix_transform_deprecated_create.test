@@ -3,7 +3,7 @@
 # group: [nodes]
 
 # FIXME: sporadically breaks
-mode skip
+mode skip instable
 
 statement ok
 SET checkpoint_threshold = '10.0 GB';

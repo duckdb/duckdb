@@ -34,7 +34,7 @@ struct StructKeysBindData : public FunctionData {
 };
 
 static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input = args.data[0];
+	const auto &input = args.data[0];
 	const idx_t count = args.size();
 
 	auto &data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<StructKeysBindData>();
@@ -49,7 +49,7 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 	// Non-constant input: return a DICTIONARY_VECTOR over two entries (keys list and NULL) to preserve per-row NULLs
 	// Build the dictionary selection: 0 for non-null input, 1 for null input
 	SelectionVector sel(count);
-	auto validity_entries = input.Validity(count);
+	auto validity_entries = input.Validity();
 	for (idx_t i = 0; i < count; i++) {
 		sel.set_index(i, !validity_entries.IsValid(i));
 	}
