@@ -1,11 +1,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-
-#include <duckdb/execution/expression_executor.hpp>
 
 namespace duckdb {
 
