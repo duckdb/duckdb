@@ -183,6 +183,46 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	for (auto &key : node.key_targets) {
 		result = Merge(result, Rewrite(*key));
 	}
+	for (auto &modifier : node.modifiers) {
+		switch (modifier->type) {
+		case ResultModifierType::ORDER_MODIFIER: {
+			auto &order_mod = modifier->Cast<OrderModifier>();
+			for (auto &order : order_mod.orders) {
+				result = Merge(result, Rewrite(*order.expression));
+			}
+			break;
+		}
+		case ResultModifierType::LIMIT_MODIFIER: {
+			auto &limit_mod = modifier->Cast<LimitModifier>();
+			if (limit_mod.limit) {
+				result = Merge(result, Rewrite(*limit_mod.limit));
+			}
+			if (limit_mod.offset) {
+				result = Merge(result, Rewrite(*limit_mod.offset));
+			}
+			break;
+		}
+		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+			auto &limit_mod = modifier->Cast<LimitPercentModifier>();
+			if (limit_mod.limit) {
+				result = Merge(result, Rewrite(*limit_mod.limit));
+			}
+			if (limit_mod.offset) {
+				result = Merge(result, Rewrite(*limit_mod.offset));
+			}
+			break;
+		}
+		case ResultModifierType::DISTINCT_MODIFIER: {
+			auto &distinct_mod = modifier->Cast<DistinctModifier>();
+			for (auto &expr : distinct_mod.distinct_on_targets) {
+				result = Merge(result, Rewrite(*expr));
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
 	for (auto &cte_pair : node.cte_map.map) {
 		auto it = cte_results.find(cte_pair.first);
 		if (it != cte_results.end()) {
@@ -1154,6 +1194,46 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 		}
 		for (auto &key : rec.key_targets) {
 			StripCatalogName(*key, catalog_name);
+		}
+		for (auto &modifier : rec.modifiers) {
+			switch (modifier->type) {
+			case ResultModifierType::ORDER_MODIFIER: {
+				auto &order_mod = modifier->Cast<OrderModifier>();
+				for (auto &order : order_mod.orders) {
+					StripCatalogName(*order.expression, catalog_name);
+				}
+				break;
+			}
+			case ResultModifierType::LIMIT_MODIFIER: {
+				auto &limit_mod = modifier->Cast<LimitModifier>();
+				if (limit_mod.limit) {
+					StripCatalogName(*limit_mod.limit, catalog_name);
+				}
+				if (limit_mod.offset) {
+					StripCatalogName(*limit_mod.offset, catalog_name);
+				}
+				break;
+			}
+			case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
+				auto &limit_mod = modifier->Cast<LimitPercentModifier>();
+				if (limit_mod.limit) {
+					StripCatalogName(*limit_mod.limit, catalog_name);
+				}
+				if (limit_mod.offset) {
+					StripCatalogName(*limit_mod.offset, catalog_name);
+				}
+				break;
+			}
+			case ResultModifierType::DISTINCT_MODIFIER: {
+				auto &distinct_mod = modifier->Cast<DistinctModifier>();
+				for (auto &expr : distinct_mod.distinct_on_targets) {
+					StripCatalogName(*expr, catalog_name);
+				}
+				break;
+			}
+			default:
+				break;
+			}
 		}
 		if (rec.left) {
 			StripCatalogName(*rec.left, catalog_name);
