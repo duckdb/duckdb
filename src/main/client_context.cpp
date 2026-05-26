@@ -239,9 +239,7 @@ shared_ptr<AttachedDatabase> ClientContext::TryGetBoundCatalog() const {
 	return bound_database.lock();
 }
 
-//! Rewrite a bound-mode SQL string as `SELECT * FROM <fn>(<catalog>, <sql>)` so the normal
-//! binder/planner/executor pipeline can take it from there — unlocking streaming, parallelism
-//! via BatchIndex, and embedding inside larger DuckDB plans.
+//! Build `SELECT * FROM <fn>(<catalog>, <sql>)` for the CONNECT-binding rewrite.
 static unique_ptr<SQLStatement> BuildPassthroughSelect(const string &function_name, const string &catalog_name,
                                                        const string &sql) {
 	vector<unique_ptr<ParsedExpression>> args;
@@ -984,20 +982,15 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatement(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
-	// Single chokepoint for the CONNECT binding: every execution path funnels through here.
-	// When bound, anything other than CONNECT/DISCONNECT itself gets rewritten in place to
-	// `SELECT * FROM <fn>('cat', '<sql>')` and then falls through to the normal pipeline.
-	// No recursion (so no re-entry flag needed): the rewritten statement flows through
-	// PendingStatementInternal which doesn't loop back to this chokepoint.
+	// CONNECT chokepoint: when bound, non-control SQL is rewritten in place and falls through to
+	// the normal pipeline. No recursion — the rewrite goes through PendingStatementInternal, not back here.
 	if (is_bound && statement) {
 		bool is_control = statement->type == StatementType::CONNECT_STATEMENT ||
 		                  statement->type == StatementType::DISCONNECT_STATEMENT;
 		if (!is_control) {
 			auto live = bound_database.lock();
 			if (!live) {
-				// is_bound is still true: the user CONNECTed but the target was DETACHed
-				// elsewhere. They must explicitly DISCONNECT to acknowledge the broken
-				// binding before any further SQL (including a fresh CONNECT) is accepted.
+				// Target was detached elsewhere; user must explicitly DISCONNECT to clear is_bound.
 				return ErrorResult<PendingQueryResult>(
 				    ErrorData(InvalidInputException(
 				        "The bound database has been detached out from under this connection. Issue "

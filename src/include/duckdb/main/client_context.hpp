@@ -106,7 +106,7 @@ public:
 
 public:
 	//! Bind this client to a remote-style AttachedDatabase. Subsequent non-control SQL routes via
-	//! Catalog::ExecuteSQL. Use UnbindCatalog() to revert to LOCAL.
+	//! Catalog::GetConnectFunctionName. Use UnbindCatalog() to revert to LOCAL.
 	DUCKDB_API void BindToCatalog(const shared_ptr<AttachedDatabase> &target);
 	//! Clear any active CONNECT binding; subsequent SQL goes through the normal DuckDB pipeline.
 	DUCKDB_API void UnbindCatalog();

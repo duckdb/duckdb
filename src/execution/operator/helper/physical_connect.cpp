@@ -22,14 +22,10 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		throw NotImplementedException("CONNECT '<connection_string>' is not yet implemented");
 	}
 
-	// CONNECT <name> — actual implementation.
 	auto &client = context.client;
 
-	// At most one active binding at a time; the only way off a bound state is DISCONNECT.
-	// Sidesteps cross-backend transaction-state ambiguity; multi-binding can be relaxed later
-	// without breaking existing scripts. Read is_bound directly so we still refuse a fresh
-	// CONNECT when the previous target was detached elsewhere — the user has to DISCONNECT
-	// to acknowledge the broken binding first.
+	// At most one active binding; only DISCONNECT clears it (even if the target was detached
+	// elsewhere, so the user explicitly acknowledges the broken binding).
 	if (client.is_bound) {
 		auto current = client.TryGetBoundCatalog();
 		throw InvalidInputException("Already connected to \"%s\"; DISCONNECT first before issuing another CONNECT",

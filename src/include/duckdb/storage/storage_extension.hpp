@@ -39,10 +39,8 @@ public:
 	virtual ~StorageExtension() {
 	}
 
-	//! Whether the catalogs produced by this storage extension support pass-through SQL execution
-	//! via Catalog::ExecuteSQL (i.e. accept `CONNECT name`). Default false: backends opt in by
-	//! overriding this AND overriding Catalog::ExecuteSQL. Used to fail CONNECT early instead
-	//! of waiting for the first pass-through query to throw NotImplementedException.
+	//! Whether catalogs from this storage extension accept `CONNECT name`. Default false; backends opt in
+	//! by overriding this AND Catalog::GetConnectFunctionName. Gates CONNECT before the first query runs.
 	virtual bool SupportsPassthrough() const {
 		return false;
 	}

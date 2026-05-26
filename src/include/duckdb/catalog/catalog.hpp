@@ -415,16 +415,11 @@ public:
 	//! Called when the catalog is detached
 	DUCKDB_API virtual void OnDetach(ClientContext &context);
 
-	//! Returns the catalog-registered name of a table function taking (catalog_name, sql_string) and producing
-	//! the backend's result rows. When non-empty, the CONNECT dispatch rewrites bound SQL as
-	//! `SELECT * FROM <name>('cat', '<sql>')` and runs it through the normal binder/planner/executor pipeline —
-	//! unlocking streaming, parallelism via BatchIndex, and embedding pass-through reads inside larger DuckDB
-	//! plans. Default returns the empty string; backends that override StorageExtension::SupportsPassthrough()
-	//! to true should also return a registered function name here. Returning a name (rather than a pointer)
-	//! keeps lifetime/ownership out of the contract: the function is resolved by name through the catalog at
-	//! bind time, and per-catalog state stays where it belongs — on the AttachedDatabase, reached via the
-	//! catalog-name argument the rewrite passes to the function. The ClientContext is supplied so backends
-	//! can pick a variant based on session SETtings (e.g. `SET quack_dispatch = 'streaming'`).
+	//! Name of a catalog-registered table function `(catalog_name, sql_string) -> rows` that handles bound
+	//! pass-through SQL. When non-empty, the CONNECT dispatch rewrites bound SQL as
+	//! `SELECT * FROM <name>('cat', '<sql>')`. Default empty; backends that opt into
+	//! StorageExtension::SupportsPassthrough() should return a registered function name here. Context
+	//! is supplied so backends can pick a variant based on session SETtings.
 	DUCKDB_API virtual string GetConnectFunctionName(ClientContext &context);
 
 protected:
