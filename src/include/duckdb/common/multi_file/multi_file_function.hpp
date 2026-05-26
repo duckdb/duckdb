@@ -80,7 +80,7 @@ public:
 		pushdown_complex_filter = MultiFileComplexFilterPushdown;
 		get_partition_info = MultiFileGetPartitionInfo;
 		get_virtual_columns = MultiFileGetVirtualColumns;
-		dynamic_to_string = MultiFileDynamicToString;
+		get_metrics = MultiFileGetMetrics;
 		MultiFileReader::AddParameters(*this);
 	}
 
@@ -663,6 +663,7 @@ public:
 			output.SetCardinality(scan_chunk.size());
 
 			if (scan_chunk.size() > 0) {
+				data.rows_scanned += scan_chunk.size();
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data,
 				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
@@ -885,11 +886,14 @@ public:
 		return result;
 	}
 
-	static InsertionOrderPreservingMap<string> MultiFileDynamicToString(TableFunctionDynamicToStringInput &input) {
+	static void MultiFileGetMetrics(TableFunctionGetMetricsInput &input) {
 		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
-		InsertionOrderPreservingMap<string> result;
+		if (input.local_state) {
+			auto &local = input.local_state->Cast<MultiFileLocalState>();
+			input.operator_metrics.rows_scanned = local.rows_scanned;
+		}
 		auto files_loaded = gstate.files_opened.load();
-		result.insert(make_pair("Total Files Read", std::to_string(files_loaded)));
+		input.operator_metrics.AddExtraInfo("Total Files Read", std::to_string(files_loaded));
 
 		constexpr size_t FILE_NAME_LIST_LIMIT = 5;
 		auto file_paths = gstate.file_list.GetDisplayFileList(FILE_NAME_LIST_LIMIT + 1);
@@ -902,9 +906,8 @@ public:
 				file_path_names.push_back("...");
 			}
 			auto list_of_types = StringUtil::Join(file_path_names, ", ");
-			result.insert(make_pair("Filename(s)", list_of_types));
+			input.operator_metrics.AddExtraInfo("Filename(s)", list_of_types);
 		}
-		return result;
 	}
 
 	static void PushdownType(ClientContext &context, optional_ptr<FunctionData> bind_data_p,

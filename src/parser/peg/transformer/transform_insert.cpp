@@ -40,7 +40,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(PEGTran
 		if (or_action_opt.HasResult()) {
 			// OR REPLACE | OR IGNORE are shorthands for the ON CONFLICT clause
 			throw ParserException("You can not provide both OR REPLACE|IGNORE and an ON CONFLICT clause, please remove "
-			                      "the first if you want to have more granual control");
+			                      "the first if you want to have more granular control");
 		}
 		on_conflict_info = transformer.Transform<unique_ptr<OnConflictInfo>>(on_conflict_clause.GetResult());
 		node.on_conflict_info = std::move(on_conflict_info);

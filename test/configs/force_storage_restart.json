@@ -35,7 +35,11 @@
         "test/sql/logging/logging_memory_after_truncate.test",
         "test/sql/logging/physical_operator_logging.test_slow",
         "test/logging/warnings_as_errors.test",
-        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test"
+        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
+        "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
+        "test/sql/copy/parquet/parquet_prefetch_projection.test",
+        "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test",
+        "test/sql/copy/parquet/parquet_prefetch_strategy_option.test"
       ]
     },
     {

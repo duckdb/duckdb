@@ -1,0 +1,69 @@
+# name: test/sql/copy/parquet/parquet_prefetch_strategy_option.test
+# description: read_parquet `prefetch_strategy` named parameter forces the prefetch strategy per row group
+# group: [parquet]
+
+require parquet
+
+require vector_size 2048
+
+statement ok
+SET threads=1
+
+statement ok
+SET prefetch_all_parquet_files=true
+
+statement ok
+COPY (
+    SELECT i AS a,
+        ((i * 73 + 41) % 1000) AS b,
+        i AS c,
+        i AS d,
+        i AS e
+    FROM RANGE(8192) t(i)
+) TO '{TEST_DIR}/force.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+CALL enable_logging('ParquetPrefetch')
+
+# Forced whole_group
+statement ok
+SELECT sum(a) FROM read_parquet('{TEST_DIR}/force.parquet', prefetch_strategy='whole_group')
+WHERE b >= 0 AND b < 10
+
+query ITT
+SELECT row_group_id, fully_filtered, strategy
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%force.parquet'
+ORDER BY row_group_id
+----
+0	false	whole_group
+1	false	whole_group
+2	false	whole_group
+3	false	whole_group
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# Force Auto
+statement ok
+SELECT sum(a) FROM read_parquet('{TEST_DIR}/force.parquet', prefetch_strategy='auto')
+WHERE b >= 0 AND b < 10
+
+query I
+SELECT count(*) FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%force.parquet'
+  AND strategy IN ('column_wise_eager', 'prefetch_filters')
+----
+4
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement error
+SELECT * FROM read_parquet('{TEST_DIR}/force.parquet', prefetch_strategy='garbage')
+----
+<REGEX>:.*Unrecognized prefetch_strategy.*
+
+# Case-insensitive.
+statement ok
+SELECT count(*) FROM read_parquet('{TEST_DIR}/force.parquet', prefetch_strategy='Whole_Group')

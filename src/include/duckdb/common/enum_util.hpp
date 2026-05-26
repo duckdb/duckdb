@@ -132,8 +132,6 @@ enum class ColumnDataScanProperties : uint8_t;
 
 enum class ColumnIndexType : uint8_t;
 
-enum class ColumnSegmentInfoScanType : uint8_t;
-
 enum class ColumnSegmentType : uint8_t;
 
 enum class CompressedMaterializationDirection : uint8_t;
@@ -306,10 +304,6 @@ enum class MergeActionType : uint8_t;
 
 enum class MetaPipelineType : uint8_t;
 
-enum class MetricGroup : uint8_t;
-
-enum class MetricType : uint8_t;
-
 enum class Monotonicity : uint8_t;
 
 enum class MultiFileColumnMappingMode : uint8_t;
@@ -430,6 +424,8 @@ enum class SelectivityOptionalFilterType : uint8_t;
 
 enum class SequenceInfo : uint8_t;
 
+enum class SerializationVersionDeprecated : uint64_t;
+
 enum class SetOperationType : uint8_t;
 
 enum class SetScope : uint8_t;
@@ -467,6 +463,8 @@ enum class StatsInfo : uint8_t;
 enum class StorageBlockPrefetch : uint8_t;
 
 enum class StorageIndexType : uint8_t;
+
+enum class StorageVersion : uint64_t;
 
 enum class StrTimeSpecifier : uint8_t;
 
@@ -696,9 +694,6 @@ const char* EnumUtil::ToChars<ColumnDataScanProperties>(ColumnDataScanProperties
 
 template<>
 const char* EnumUtil::ToChars<ColumnIndexType>(ColumnIndexType value);
-
-template<>
-const char* EnumUtil::ToChars<ColumnSegmentInfoScanType>(ColumnSegmentInfoScanType value);
 
 template<>
 const char* EnumUtil::ToChars<ColumnSegmentType>(ColumnSegmentType value);
@@ -959,12 +954,6 @@ template<>
 const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
 
 template<>
-const char* EnumUtil::ToChars<MetricGroup>(MetricGroup value);
-
-template<>
-const char* EnumUtil::ToChars<MetricType>(MetricType value);
-
-template<>
 const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
 
 template<>
@@ -1145,6 +1134,9 @@ template<>
 const char* EnumUtil::ToChars<SequenceInfo>(SequenceInfo value);
 
 template<>
+const char* EnumUtil::ToChars<SerializationVersionDeprecated>(SerializationVersionDeprecated value);
+
+template<>
 const char* EnumUtil::ToChars<SetOperationType>(SetOperationType value);
 
 template<>
@@ -1200,6 +1192,9 @@ const char* EnumUtil::ToChars<StorageBlockPrefetch>(StorageBlockPrefetch value);
 
 template<>
 const char* EnumUtil::ToChars<StorageIndexType>(StorageIndexType value);
+
+template<>
+const char* EnumUtil::ToChars<StorageVersion>(StorageVersion value);
 
 template<>
 const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value);
@@ -1470,9 +1465,6 @@ template<>
 ColumnIndexType EnumUtil::FromString<ColumnIndexType>(const char *value);
 
 template<>
-ColumnSegmentInfoScanType EnumUtil::FromString<ColumnSegmentInfoScanType>(const char *value);
-
-template<>
 ColumnSegmentType EnumUtil::FromString<ColumnSegmentType>(const char *value);
 
 template<>
@@ -1731,12 +1723,6 @@ template<>
 MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
 
 template<>
-MetricGroup EnumUtil::FromString<MetricGroup>(const char *value);
-
-template<>
-MetricType EnumUtil::FromString<MetricType>(const char *value);
-
-template<>
 Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);
 
 template<>
@@ -1917,6 +1903,9 @@ template<>
 SequenceInfo EnumUtil::FromString<SequenceInfo>(const char *value);
 
 template<>
+SerializationVersionDeprecated EnumUtil::FromString<SerializationVersionDeprecated>(const char *value);
+
+template<>
 SetOperationType EnumUtil::FromString<SetOperationType>(const char *value);
 
 template<>
@@ -1972,6 +1961,9 @@ StorageBlockPrefetch EnumUtil::FromString<StorageBlockPrefetch>(const char *valu
 
 template<>
 StorageIndexType EnumUtil::FromString<StorageIndexType>(const char *value);
+
+template<>
+StorageVersion EnumUtil::FromString<StorageVersion>(const char *value);
 
 template<>
 StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value);

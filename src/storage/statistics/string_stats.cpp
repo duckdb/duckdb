@@ -397,7 +397,7 @@ void TruncateStatsIfRequired(idx_t &len, StringStatsType &type) {
 
 void StringStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
 	auto &string_data = GetDataUnsafe(stats);
-	if (!serializer.ShouldSerialize(8)) {
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		// targeting old storage: use legacy serialize
 		data_t min_data[StringStatsData::LEGACY_MAX_STRING_MINMAX_SIZE];
 		data_t max_data[StringStatsData::LEGACY_MAX_STRING_MINMAX_SIZE];

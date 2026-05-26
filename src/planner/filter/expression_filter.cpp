@@ -564,6 +564,10 @@ string ExpressionFilter::ToString(const string &column_name) const {
 	return ExpressionToFriendlyString(*expr, column_name);
 }
 
+string ExpressionFilter::DebugToString() const {
+	return ExpressionToFriendlyString(*expr, "c1");
+}
+
 void ExpressionFilter::ReplaceExpressionRecursive(unique_ptr<Expression> &expr, const Expression &column,
                                                   ExpressionType replace_type) {
 	if (expr->GetExpressionType() == replace_type) {

@@ -24,7 +24,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/common/serialization_compatibility.hpp"
+#include "duckdb/common/storage_compatibility.hpp"
 #include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
@@ -1219,10 +1219,10 @@ public:
 	}
 
 	void ExecuteTask() override {
-		ActiveTimer timer;
+		MetricsTimer timer;
 		auto context = checkpoint_state.writer.TryGetClientContext();
 		if (context) {
-			timer = QueryProfiler::Get(*context).StartTimer(MetricType::CUMULATIVE_VACUUM_TIME);
+			timer = QueryProfiler::Get(*context).StartTimer<MetricStorageTotalVacuumTime>();
 		}
 
 		auto &collection = checkpoint_state.collection;
@@ -1971,23 +1971,44 @@ vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(const QueryContext &context,
-                                                                   ColumnSegmentInfoScanType scan_type) const {
+                                                                   const ColumnSegmentInfoScanOptions &options) const {
 	vector<ColumnSegmentInfo> result;
-	auto row_groups = GetRowGroups();
-	auto lock = row_groups->Lock();
-	for (auto &node : row_groups->SegmentNodes(lock)) {
-		auto &row_group = node.GetNode();
-		row_group.GetColumnSegmentInfo(context, node.GetIndex(), result, scan_type);
+	ColumnSegmentInfoScanState state;
+	state.options = options;
+	InitializeColumnSegmentInfoScan(state);
+	while (ScanColumnSegmentInfo(context, state, result)) {
 	}
 	return result;
 }
 
+void RowGroupCollection::InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) const {
+	// Pin a consistent snapshot of the row groups. Holding the shared_ptr keeps the
+	// segment tree alive even if a concurrent operation (alter, vacuum) installs a
+	// new collection. The segment-tree node lock is acquired only briefly here to
+	// fetch the first node (and may lazily load it from disk).
+	state.row_groups = GetRowGroups();
+	state.current_row_group = state.row_groups->GetRootSegment();
+}
+
+bool RowGroupCollection::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+                                               vector<ColumnSegmentInfo> &result) const {
+	if (!state.current_row_group) {
+		return false;
+	}
+	auto &node = *state.current_row_group;
+	node.GetNode().GetColumnSegmentInfo(context, node.GetIndex(), result, state.options);
+	// Advance to the next row group. For lazy-loading segment trees this acquires
+	// the node lock briefly only while more segments still need to be loaded.
+	state.current_row_group = state.row_groups->GetNextSegment(node);
+	return true;
+}
+
 bool RowGroupCollection::SupportsPerColumnWrites() {
-	auto version = SerializationCompatibility::FromDatabase(GetAttached());
-	if (version.serialization_version >= SerializationCompatibility::FromString("v2.0.0").serialization_version) {
+	auto version = StorageCompatibility::FromDatabase(GetAttached());
+	if (version.storage_version >= StorageCompatibility::FromString("v2.0.0").storage_version) {
 		return true;
 	}
-	if (version.serialization_version >= SerializationCompatibility::FromString("v1.4.0").serialization_version) {
+	if (version.storage_version >= StorageCompatibility::FromString("v1.4.0").storage_version) {
 		return Settings::Get<ForceColumnMetadataReuseSetting>(GetAttached().GetDatabase());
 	}
 	return false;

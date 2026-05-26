@@ -1,0 +1,101 @@
+# name: test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test
+# description: ParquetPrefetch metrics across files within a multi-file scan
+# group: [parquet]
+
+require parquet
+
+require vector_size 2048
+
+statement ok
+SET threads=1
+
+statement ok
+SET prefetch_all_parquet_files=true
+
+statement ok
+COPY (
+    SELECT i AS a,
+        i + 10 AS b,
+        CASE
+            WHEN i % 100 = 50 THEN 51
+            ELSE i % 100
+        END AS c,
+        CASE
+            WHEN i >= 6144 AND i % 1000 = 500 THEN 501
+            ELSE i % 1000
+        END AS g
+    FROM RANGE(12288) t(i)
+) TO '{TEST_DIR}/multifile_a.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+COPY (
+    SELECT i AS a,
+        i + 10 AS b,
+        CASE
+            WHEN i % 100 = 50 THEN 51
+            ELSE i % 100
+        END AS c,
+        CASE
+            WHEN i >= 6144 AND i % 1000 = 500 THEN 501
+            ELSE i % 1000
+        END AS g
+    FROM RANGE(12288) t(i)
+) TO '{TEST_DIR}/multifile_b.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+CALL enable_logging('ParquetPrefetch')
+
+statement ok
+SELECT sum(a + b + c + g)
+FROM read_parquet(['{TEST_DIR}/multifile_a.parquet', '{TEST_DIR}/multifile_b.parquet'])
+WHERE g = 500
+
+# First file we get a fresh scan, so it takes a while to figure out the prefetch_filters
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%multifile_a.parquet'
+ORDER BY row_group_id
+----
+0	false	whole_group	[[a, b, c, g]]
+1	false	whole_group	[[a, b, c, g]]
+2	false	whole_group	[[a, b, c, g]]
+3	true	whole_group	[[a, b, c, g]]
+4	true	prefetch_filters	[[g], [a, b, c]]
+5	true	prefetch_filters	[[g], [a, b, c]]
+
+# File B already takes advantage of that info
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%multifile_b.parquet'
+ORDER BY row_group_id
+----
+0	false	prefetch_filters	[[g], [a, b, c]]
+1	false	prefetch_filters	[[g], [a, b, c]]
+2	false	prefetch_filters	[[g], [a, b, c]]
+3	true	prefetch_filters	[[g], [a, b, c]]
+4	true	prefetch_filters	[[g], [a, b, c]]
+5	true	prefetch_filters	[[g], [a, b, c]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# If we were to read B alone
+statement ok
+SELECT sum(a + b + c + g)
+FROM read_parquet('{TEST_DIR}/multifile_b.parquet')
+WHERE g = 500
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%multifile_b.parquet'
+ORDER BY row_group_id
+----
+0	false	whole_group	[[a, b, c, g]]
+1	false	whole_group	[[a, b, c, g]]
+2	false	whole_group	[[a, b, c, g]]
+3	true	whole_group	[[a, b, c, g]]
+4	true	prefetch_filters	[[g], [a, b, c]]
+5	true	prefetch_filters	[[g], [a, b, c]]

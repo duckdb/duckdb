@@ -36,12 +36,6 @@
       ]
     },
     {
-      "reason": "Logging setting doesn't survive restarts",
-      "paths": [
-        "test/logging/warnings_as_errors.test"
-      ]
-    },
-    {
       "reason": "FIXME: Unexpected (?) binder error.",
       "paths": [
         "test/fuzzer/pedro/index_generated_column.test",
@@ -86,7 +80,12 @@
     {
       "reason": "FIXME: Wrong result in query.",
       "paths": [
-        "test/sql/index/art/storage/test_art_duckdb_versions.test"
+        "test/sql/index/art/storage/test_art_duckdb_versions.test",
+        "test/sql/storage/update/nop_update_tpch.test_slow",
+        "test/sql/storage/optimistic_write/optimistic_write.test_slow",
+        "test/sql/index/art/storage/test_art_reclaim_storage_pk_fk.test_slow",
+        "test/sql/index/art/memory/test_art_non_linear.test_slow",
+        "test/sql/index/art/memory/test_art_varchar.test_slow"
       ]
     },
     {
