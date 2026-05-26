@@ -144,7 +144,7 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 	// so that unqualified table references resolve correctly
 	auto &feat_catalog = feat.ParentCatalog();
 	auto &feat_schema = feat.ParentSchema();
-	if (!feat_catalog.GetName().empty() && feat_catalog.GetName() != INVALID_CATALOG) {
+	if (!feat_catalog.GetName().empty()) {
 		auto use_result = con.Query("USE " + QuoteIdent(feat_catalog.GetName()));
 		if (use_result->HasError()) {
 			throw InternalException("Failed to set catalog for feature refresh: %s", use_result->GetError());
