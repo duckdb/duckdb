@@ -71,10 +71,17 @@ def get_operator_name(op) -> str:
 
 
 def get_root_operator(data) -> dict:
-    # Old binary (main) uses 'children', new binary uses 'operator_info'
+    # New format uses 'operator'
+    if 'operator' in data:
+        return data['operator'][0]
+    # Main branch (pre-rename) uses 'operator_info'
     if 'operator_info' in data:
         return data['operator_info'][0]
-    return data['children'][0]
+    # Old format uses 'children'
+    if 'children' in data:
+        return data['children'][0]
+    # Very old format: data IS the root operator
+    return data
 
 
 def is_measured_join(op) -> bool:
