@@ -2967,7 +2967,8 @@ bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t width, uint8_
 	D_ASSERT(len <= static_cast<int>(sizeof(decimal_buffer)));
 	DecimalToString::FormatDecimal<SRC>(input, width, scale, decimal_buffer, UnsafeNumericCast<idx_t>(len));
 	string_t decimal_string(decimal_buffer, UnsafeNumericCast<uint32_t>(len));
-	return TryCast::Operation<string_t, DST>(decimal_string, result, true);
+	constexpr bool strict = true;
+	return TryCast::Operation<string_t, DST>(decimal_string, result, strict);
 }
 
 // DECIMAL -> FLOAT
