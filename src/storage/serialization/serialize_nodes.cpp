@@ -747,12 +747,14 @@ TableFilterSet TableFilterSet::Deserialize(Deserializer &deserializer) {
 void VacuumOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(100, "vacuum", vacuum);
 	serializer.WritePropertyWithDefault<bool>(101, "analyze", analyze);
+	serializer.WritePropertyWithDefault<string>(102, "serenedb_pragma_option", serenedb_pragma_option);
 }
 
 VacuumOptions VacuumOptions::Deserialize(Deserializer &deserializer) {
 	VacuumOptions result;
 	deserializer.ReadPropertyWithDefault<bool>(100, "vacuum", result.vacuum);
 	deserializer.ReadPropertyWithDefault<bool>(101, "analyze", result.analyze);
+	deserializer.ReadPropertyWithDefault<string>(102, "serenedb_pragma_option", result.serenedb_pragma_option);
 	return result;
 }
 
