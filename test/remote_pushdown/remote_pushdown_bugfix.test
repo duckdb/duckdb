@@ -1634,5 +1634,93 @@ select count(*) from local_sq where k > 9
 statement ok
 drop table local_sq;
 
+# ============================================================
+# Bug 36: pending_outer_strip_catalogs was not applied to the
+# DELETE WHERE condition or UPDATE SET expressions when the
+# USING/FROM clause was a mixed JoinRef (one remote arm pushed
+# individually by Rewrite(JoinRef)).
+#
+# Rewrite(JoinRef) pushes the SINGLE_REMOTE arm in-place and adds
+# a PendingStripEntry so outer SELECT expressions get catalog refs
+# stripped.  But Rewrite(DeleteQueryNode) and Rewrite(UpdateQueryNode)
+# never read pending_outer_strip_catalogs, so catalog-qualified refs
+# like "rpc.t1.i" in WHERE / SET survived un-stripped.  After the
+# JoinRef push, "rpc.t1" is no longer in scope (replaced by a TABLE
+# FUNCTION with alias "t1"), so the binder would fail with
+# "Referenced table 'rpc.t1' not found".
+#
+# Fix: save/restore pending_outer_strip_catalogs around the FROM/USING
+# analysis in both Rewrite(DeleteQueryNode) and Rewrite(UpdateQueryNode),
+# and apply the accumulated pending entries to WHERE/SET/RETURNING
+# before handing them to the binder.
+# ============================================================
+
+statement ok
+create table local_del_jref(k int);
+
+statement ok
+insert into local_del_jref from range(10);
+
+statement ok
+create table local_del_jref_aux(m int);
+
+statement ok
+insert into local_del_jref_aux values (3), (5), (7);
+
+# DELETE with USING (local_del_jref_aux JOIN rpc.t1 ON ...)
+# WHERE uses catalog-qualified rpc.t1.i (not the alias t1.i).
+# JoinRef pushes rpc.t1 individually; without the fix the binder
+# fails because rpc.t1 is no longer in scope after the push.
+# t1={0..9}, aux={3,5,7}: condition rpc.t1.i > 4 matches {5,7}.
+statement ok
+delete from local_del_jref
+using local_del_jref_aux join rpc.t1 on local_del_jref_aux.m = rpc.t1.i
+where local_del_jref.k = rpc.t1.i and rpc.t1.i > 4
+
+# rows 5 and 7 deleted; {0..9} minus {5,7} = 8 rows
+query I
+select count(*) from local_del_jref
+----
+8
+
+statement ok
+drop table local_del_jref;
+
+statement ok
+drop table local_del_jref_aux;
+
+statement ok
+create table local_upd_jref(k int);
+
+statement ok
+insert into local_upd_jref from range(5);
+
+statement ok
+create table local_upd_jref_aux(m int);
+
+statement ok
+insert into local_upd_jref_aux values (1), (3);
+
+# UPDATE with FROM (local_upd_jref_aux JOIN rpc.t1 ON ...)
+# SET uses catalog-qualified rpc.t1.i in the expression.
+# Without the fix the binder fails on rpc.t1.i in the SET clause.
+# With fix: k=1 → 10, k=3 → 30.
+statement ok
+update local_upd_jref set k = rpc.t1.i * 10
+from local_upd_jref_aux join rpc.t1 on local_upd_jref_aux.m = rpc.t1.i
+where local_upd_jref.k = rpc.t1.i
+
+# rows with original k=1 and k=3 updated to 10 and 30; count >= 10 = 2
+query I
+select count(*) from local_upd_jref where k >= 10
+----
+2
+
+statement ok
+drop table local_upd_jref;
+
+statement ok
+drop table local_upd_jref_aux;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

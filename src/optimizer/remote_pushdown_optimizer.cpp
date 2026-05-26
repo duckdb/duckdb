@@ -408,6 +408,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
+	vector<PendingStripEntry> saved_pending = std::move(pending_outer_strip_catalogs);
+	pending_outer_strip_catalogs = {};
+
 	auto result = Rewrite(node.table);
 	vector<CatalogPushdownResult> using_results;
 	for (auto &using_clause : node.using_clauses) {
@@ -415,6 +418,26 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 		using_results.push_back(using_result);
 		result = Merge(result, using_result);
 	}
+
+	// Apply pending catalog stripping from individually-pushed JoinRef children within
+	// USING clauses to the WHERE condition and RETURNING list before analyzing them.
+	for (auto &entry : pending_outer_strip_catalogs) {
+		bool need_rename = !StringUtil::CIEquals(entry.old_table_name, entry.new_alias);
+		auto strip_and_rename = [&](ParsedExpression &expr) {
+			StripCatalogName(expr, entry.catalog_name, false);
+			if (need_rename) {
+				RenameTableInExpr(expr, entry.old_table_name, entry.new_alias);
+			}
+		};
+		if (node.condition) {
+			strip_and_rename(*node.condition);
+		}
+		for (auto &expr : node.returning_list) {
+			strip_and_rename(*expr);
+		}
+	}
+	pending_outer_strip_catalogs = std::move(saved_pending);
+
 	if (node.condition) {
 		auto condition_result = Rewrite(*node.condition);
 		result = Merge(result, condition_result);
@@ -465,12 +488,39 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
+	vector<PendingStripEntry> saved_pending = std::move(pending_outer_strip_catalogs);
+	pending_outer_strip_catalogs = {};
+
 	auto result = Rewrite(node.table);
 	CatalogPushdownResult from_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
 	if (node.from_table) {
 		from_result = Rewrite(node.from_table);
 		result = Merge(result, from_result);
 	}
+
+	// Apply pending catalog stripping from individually-pushed JoinRef children within
+	// the FROM clause to SET expressions, WHERE condition, and RETURNING list.
+	for (auto &entry : pending_outer_strip_catalogs) {
+		bool need_rename = !StringUtil::CIEquals(entry.old_table_name, entry.new_alias);
+		auto strip_and_rename = [&](ParsedExpression &expr) {
+			StripCatalogName(expr, entry.catalog_name, false);
+			if (need_rename) {
+				RenameTableInExpr(expr, entry.old_table_name, entry.new_alias);
+			}
+		};
+		if (node.set_info) {
+			if (node.set_info->condition) {
+				strip_and_rename(*node.set_info->condition);
+			}
+			for (auto &expr : node.set_info->expressions) {
+				strip_and_rename(*expr);
+			}
+		}
+		for (auto &expr : node.returning_list) {
+			strip_and_rename(*expr);
+		}
+	}
+	pending_outer_strip_catalogs = std::move(saved_pending);
 
 	if (node.set_info) {
 		if (node.set_info->condition) {
