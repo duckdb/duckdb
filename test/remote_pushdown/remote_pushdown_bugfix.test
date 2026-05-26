@@ -1390,6 +1390,32 @@ select id from rpc.t_struct_col where rpc.x > 8 order by id
 statement ok db1:con1
 drop table t_struct_col;
 
+# Bug 30 (extended): deeply nested structs (struct in struct in struct) must also
+# survive StripCatalogName — the stripping logic removes column_names[0] regardless
+# of depth, so rpc.t1.a.b.c (5-part) correctly strips to t1.a.b.c.
+# Create a table with a deeply nested struct column on the remote server.
+statement ok db1:con1
+create table t_nested(id int, s struct(a struct(b struct(c int))));
+
+statement ok db1:con1
+insert into t_nested values (1, {'a': {'b': {'c': 42}}}), (2, {'a': {'b': {'c': 7}}});
+
+# Catalog-qualified access rpc.t_nested.s.a.b.c (5-part): strip "rpc" → t_nested.s.a.b.c
+query II
+select id, rpc.t_nested.s.a.b.c from rpc.t_nested order by id
+----
+1	42
+2	7
+
+# 5-part ref in WHERE: rpc.t_nested.s.a.b.c > 10
+query I
+select id from rpc.t_nested where rpc.t_nested.s.a.b.c > 10 order by id
+----
+1
+
+statement ok db1:con1
+drop table t_nested;
+
 # Bug 31: SubqueryRef with NO_CATALOG_REFERENCED result must NOT be tracked in
 # local_table_names. Previously, any SubqueryRef result that was not SINGLE_REMOTE
 # (including neutral NO_CATALOG constant subqueries like "SELECT 1") was added to

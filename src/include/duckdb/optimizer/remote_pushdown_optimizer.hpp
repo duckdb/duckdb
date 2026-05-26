@@ -68,13 +68,20 @@ private:
 
 	void FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result);
 	void FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result);
+	//! Push a single BaseTableRef child to remote. Returns the catalog name if successful, empty string otherwise.
+	string PushJoinChild(unique_ptr<TableRef> &ref, CatalogPushdownResult result);
 
 	static CatalogPushdownResult Merge(CatalogPushdownResult a, CatalogPushdownResult b);
 	unique_ptr<TableRef> CreateRemoteFunctionRef(CatalogPushdownResult &result, unique_ptr<QueryNode> node);
 	static void StripCatalogName(SQLStatement &statement, const string &catalog_name);
 	static void StripCatalogName(QueryNode &node, const string &catalog_name);
 	static void StripCatalogName(TableRef &ref, const string &catalog_name);
-	static void StripCatalogName(ParsedExpression &expr, const string &catalog_name);
+	//! Strip catalog prefix from expression column refs. When strip_subquery_bodies=false, leaves subquery
+	//! bodies untouched (used for partial pushdown where inner subqueries are not being pushed).
+	static void StripCatalogName(ParsedExpression &expr, const string &catalog_name, bool strip_subquery_bodies = true);
+	//! Strip catalog-qualified column refs in ORDER BY expressions of a set operation to just the column name.
+	//! In a UNION/INTERSECT/EXCEPT output there are no table associations, so even a 2-part qualifier fails.
+	static void StripSetOpOrderByExpr(ParsedExpression &expr, const string &catalog_name);
 	bool RefersToLocalTable(ColumnRefExpression &col_ref) const;
 
 	bool RefersToCTE(const string &cte_name, CatalogPushdownResult &result) const;
@@ -89,5 +96,7 @@ private:
 	case_insensitive_set_t local_table_names;
 	//! CTE name → catalog pushdown result, populated as CTEs are analyzed (inner scopes restore on exit)
 	case_insensitive_map_t<CatalogPushdownResult> cte_results;
+	//! Catalogs individually pushed during FROM processing; Rewrite(SelectNode) reads this to strip outer expressions
+	vector<string> pending_outer_strip_catalogs;
 };
 } // namespace duckdb
