@@ -1311,6 +1311,16 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 		cte_combined = Merge(cte_combined, cte_result);
 	}
 
+	// Save each child before analysis. Rewrite(SelectNode) calls Rewrite(JoinRef) which pushes
+	// individual SINGLE_REMOTE children in-place via FinishPushdown even when the JoinRef result is
+	// UNKNOWN (mixed join). If that child's overall result is UNKNOWN, those stale quack wrappers
+	// must be rolled back so the child executes natively. A UNION where one child is pushed to quack
+	// (slot 1) and another child has a stale wrapper (slot 2) would trigger "Multiple streaming scans".
+	vector<unique_ptr<QueryNode>> saved_children;
+	saved_children.reserve(node.children.size());
+	for (auto &child : node.children) {
+		saved_children.push_back(child->Copy());
+	}
 	// Rewrite each child independently so we can push down individual children if needed
 	vector<CatalogPushdownResult> child_results;
 	child_results.reserve(node.children.size());
@@ -1392,10 +1402,40 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	// subqueries will execute via DuckDB's own remote scanning rather than opening a competing
 	// quack streaming connection alongside any individually-pushed child below.
 	node.modifiers = std::move(saved_modifiers);
+	// Before restoring UNKNOWN children, check whether any of them had remote refs pushed in-place
+	// by Rewrite(JoinRef). TABLE_FUNCTION nodes appear inside an UNKNOWN child only when Rewrite
+	// pushed a SINGLE_REMOTE join side in-place — this is a reliable indicator that the child
+	// will open a native quack connection when executed (scanning rpc.* tables). If such a child
+	// exists alongside an individually-pushed SINGLE_REMOTE sibling (quack streaming slot 1), the
+	// native quack scan would open a concurrent second slot → "Multiple streaming scans". Children
+	// whose UNKNOWN result comes only from unqualified local table names (e.g. local_t) do NOT get
+	// TABLE_FUNCTION wrappers during Rewrite and therefore do not open any quack connection —
+	// they are safe siblings and must not block individual pushdown of SINGLE_REMOTE siblings.
+	bool any_risky_unknown_sibling = false;
+	for (idx_t i = 0; i < node.children.size(); i++) {
+		if (child_results[i].reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE &&
+		    node.children[i] && QueryNodeHasTableFunctionPush(*node.children[i])) {
+			any_risky_unknown_sibling = true;
+			break;
+		}
+	}
+	// Restore children whose result is not SINGLE_REMOTE. Rewrite(JoinRef) pushes individual
+	// SINGLE_REMOTE sides in-place even when the JoinRef result is UNKNOWN (mixed join). Those
+	// stale wrappers remain in the child after Rewrite. If a sibling child is individually pushed
+	// to a quack streaming slot (SINGLE_REMOTE), and this child's stale wrapper opens another slot
+	// during native execution, both slots would be active concurrently → "Multiple streaming scans".
+	// SINGLE_REMOTE children are never partially wrapped (their JoinRefs are either fully pushed or
+	// not pushed at all), so restoring them is unnecessary and would incorrectly undo their analysis.
+	for (idx_t i = 0; i < node.children.size(); i++) {
+		if (child_results[i].reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			node.children[i] = std::move(saved_children[i]);
+		}
+	}
 	// Otherwise push down individual children that can be pushed, but only when no CTEs
-	// are present: a CTE-referencing child cannot be pushed individually because the CTE
-	// definition lives in the set operation scope and is not available on the remote.
-	if (node.cte_map.map.empty()) {
+	// are present (a CTE-referencing child cannot be pushed individually) AND no sibling
+	// child is a risky UNKNOWN (see above: UNKNOWN child with detected remote refs that would
+	// open a concurrent native quack connection alongside the pushed sibling's streaming slot).
+	if (node.cte_map.map.empty() && !any_risky_unknown_sibling) {
 		for (idx_t i = 0; i < node.children.size(); i++) {
 			FinishPushdown(node.children[i], child_results[i]);
 		}

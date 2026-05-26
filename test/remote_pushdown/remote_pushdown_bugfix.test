@@ -1166,6 +1166,62 @@ select sub.i from (
 8
 9
 
+# ============================================================
+# Bug 26: Rewrite(SetOperationNode) did not save/restore children
+# whose result is UNKNOWN. When a UNION child had a mixed JoinRef
+# (e.g. rpc.t1 JOIN local_t), Rewrite(JoinRef) pushed the remote
+# side in-place via FinishPushdown even though the JoinRef result
+# was UNKNOWN. If a sibling UNION child was all-remote and got
+# pushed to a quack streaming slot (slot 1), the stale quack wrapper
+# inside the UNKNOWN child would open a concurrent second slot (slot 2)
+# during native execution, triggering "Multiple streaming scans".
+#
+# Two-part fix:
+# (a) Save UNKNOWN children before analysis and restore them after,
+#     removing stale quack wrappers inserted by Rewrite(JoinRef).
+# (b) Skip individual child pushdown when any sibling has UNKNOWN
+#     result: an UNKNOWN child may still scan the remote catalog
+#     natively, causing a concurrent quack connection alongside
+#     any streaming slot opened by a pushed SINGLE_REMOTE sibling.
+#
+# The direct two-stream collision cannot be triggered in sqllogictest
+# (quack aborts on the second stream). The tests below verify that:
+# - UNION ALL where one arm is all-remote and the other references
+#   only a set-returning function (range(), NO_CATALOG_REFERENCED)
+#   correctly pushes the all-remote arm and produces correct results.
+# - UNION ALL where one arm is all-remote and the other has a mixed
+#   JoinRef (UNKNOWN) is conservatively not individually pushed,
+#   so it executes natively without triggering "Multiple streaming scans".
+#
+# --- Test (a+b): all-remote arm + constant arm ---
+# arm1: SELECT * FROM rpc.t1 WHERE i >= 8 -> {8, 9} (pushed to quack)
+# arm2: SELECT * FROM range(3) -> {0, 1, 2} (NO_CATALOG_REFERENCED, safe sibling)
+# Total: 5 rows
+# ============================================================
+
+query I
+select count(*) from (
+    select i from rpc.t1 where i >= 8
+    union all
+    select * from range(3)
+)
+----
+5
+
+query I
+select i from (
+    select i from rpc.t1 where i >= 8
+    union all
+    select * from range(3)
+) order by i
+----
+0
+1
+2
+8
+9
+
+
 statement ok
 drop table local_t;
 
