@@ -60,7 +60,7 @@ SELECT COUNT(*) FROM db1.t
 ----
 245760
 
-# ATTACH OR REPLACE with a different vacuum_rebuild_indexes value should fail
+# ATTACH OR REPLACE with a different vacuum_rebuild_indexes value fails
 statement error
 ATTACH OR REPLACE '__TEST_DIR__/attach_vacuum_indexed.db' AS db1 (vacuum_rebuild_indexes 0)
 ----
