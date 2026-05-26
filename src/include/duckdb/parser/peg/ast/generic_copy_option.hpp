@@ -39,7 +39,7 @@ struct GenericCopyOption {
 	GenericCopyOption(GenericCopyOption &&other) noexcept = default;
 	GenericCopyOption &operator=(GenericCopyOption &&other) noexcept = default;
 
-	unique_ptr<ParsedExpression> GetFirstChildOrExpression() {
+	unique_ptr<ParsedExpression> GetFirstChildOrExpression() const {
 		if (!children.empty()) {
 			return make_uniq<ConstantExpression>(children[0]);
 		}

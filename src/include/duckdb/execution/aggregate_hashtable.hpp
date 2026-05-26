@@ -126,6 +126,8 @@ public:
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
 	void Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress = nullptr);
+	//! Reset the HT for a new execution while reusing internal allocations where possible
+	void ResetForNewIteration(idx_t initial_capacity, idx_t radix_bits);
 
 private:
 	ClientContext &context;
@@ -144,6 +146,9 @@ private:
 		unique_ptr<Vector> dictionary_addresses;
 		unsafe_unique_array<bool> found_entry;
 		idx_t capacity = 0;
+		//! Cumulative count of dict slots added to found_entry under the current id; the
+		//! unique-entries walk is skipped once it reaches dict_size.
+		idx_t resolved_count = 0;
 		//! For the clustered-aggregate fast path: track whether every state pointer added to this
 		//! dictionary shares the same high (64 - SLOT_GID_BITS) bits. The clustered path stores only
 		//! the low SLOT_GID_BITS of each pointer, so if any two pointers differ in their high bits

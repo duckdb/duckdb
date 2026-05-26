@@ -642,7 +642,7 @@ static unique_ptr<FunctionData> FormatSQLBind(BindScalarFunctionInput &input) {
 static void FormatSQLExecute(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &info = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<FormatSQLBindData>();
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, [&](string_t input) {
 		return heap.AddString(FormatSQL(input.GetString(), info.config));
 	});
 }

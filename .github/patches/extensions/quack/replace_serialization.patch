@@ -1,0 +1,13 @@
+diff --git a/src/quack_message.cpp b/src/quack_message.cpp
+index 2177d58..75c9138 100644
+--- a/src/quack_message.cpp
++++ b/src/quack_message.cpp
+@@ -91,7 +91,7 @@ const char *EnumUtil::ToChars<MessageType>(MessageType value) {
+ void QuackMessage::ToMemoryStream(MemoryStream &write_stream) const {
+ 	write_stream.Rewind();
+ 	SerializationOptions options;
+-	options.serialization_compatibility = SerializationCompatibility::FromIndex(7);
++	options.storage_compatibility = StorageCompatibility::FromIndex(StorageVersion::V1_5_0);
+ 	BinarySerializer serializer(write_stream, options);
+ 
+ 	// write the header

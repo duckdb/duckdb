@@ -1176,6 +1176,11 @@ bool TryCast::Operation(timestamp_tz_t input, timestamp_tz_t &result, bool stric
 }
 
 template <>
+bool TryCast::Operation(timestamp_tz_t input, timestamp_t &result, bool strict) {
+	return TryCastTimebase<timestamp_tz_t, timestamp_t>(input, result, strict);
+}
+
+template <>
 bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_tz_ns_t &result, bool strict) {
 	return TryCastTimebase<timestamp_tz_ns_t, timestamp_tz_ns_t>(input, result, strict);
 }
@@ -1183,6 +1188,11 @@ bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_tz_ns_t &result, bool
 template <>
 bool TryCast::Operation(timestamp_ns_t input, timestamp_tz_ns_t &result, bool strict) {
 	return TryCastTimebase<timestamp_ns_t, timestamp_tz_ns_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_ns_t &result, bool strict) {
+	return TryCastTimebase<timestamp_tz_ns_t, timestamp_ns_t>(input, result, strict);
 }
 
 template <>

@@ -26,8 +26,8 @@ static bool MapIsNull(DataChunk &chunk) {
 		return false;
 	}
 	D_ASSERT(chunk.data.size() == 2);
-	auto &keys = chunk.data[0];
-	auto &values = chunk.data[1];
+	const auto &keys = chunk.data[0];
+	const auto &values = chunk.data[1];
 
 	if (keys.GetType().id() == LogicalTypeId::SQLNULL) {
 		return true;

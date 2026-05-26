@@ -48,7 +48,6 @@ public:
 	//! If this returns true - this sorts "in_list" as a side-effect
 	static bool IsDenseRange(vector<Value> &in_list);
 	static bool ContainsNull(vector<Value> &in_list);
-	static bool FindNextLegalUTF8(string &prefix_string);
 
 	void GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback);
 	bool HasFilters();

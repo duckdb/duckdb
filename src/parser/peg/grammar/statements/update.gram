@@ -8,4 +8,4 @@ UpdateSetClause <- UpdateSetElementList / UpdateSetTuple
 UpdateSetTuple <- Parens(List(ColumnName)) '=' Expression
 UpdateSetElementList <- List(UpdateSetElement)
 UpdateSetElement <- UpdateSetColumnTarget '=' Expression
-UpdateSetColumnTarget <- ColumnName ('.' Identifier)*
+UpdateSetColumnTarget <- ColumnName DotIdentifier*

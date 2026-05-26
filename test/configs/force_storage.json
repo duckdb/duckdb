@@ -51,6 +51,7 @@
         "test/geoparquet/mixed.test",
         "test/parquet/variant/variant_comparison.test",
         "test/parquet/variant/variant_json_copy.test",
+        "test/parquet/variant/variant_small_decimal.test",
         "test/sql/storage/types/variant/index_fetch.test",
         "test/sql/storage/types/variant/update.test",
         "test/sql/types/geo/geometry_crs.test",
@@ -66,6 +67,18 @@
         "test/sql/trigger/create_trigger_wal.test",
         "test/sql/trigger/drop_trigger.test",
         "test/sql/trigger/drop_trigger_wal.test"
+      ]
+    },
+    {
+      "reason": "Test relies on temp directory being required for sorting, but with force_storage the persistent DB file serves as external storage, so the invalid temp directory is never accessed.",
+      "paths": [
+        "test/sql/tpch/dbgen_error.test"
+      ]
+    },
+    {
+      "reason": "Test sets temp_directory='' and memory_limit='2MB' to trigger OOM, but with a persistent DB file the buffer manager can spill to the DB file regardless of temp_directory.",
+      "paths": [
+        "test/sql/settings/reset/reset_memory_limit.test"
       ]
     }
 

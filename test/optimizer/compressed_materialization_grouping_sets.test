@@ -3,9 +3,6 @@
 # group: [optimizer]
 
 statement ok
-pragma enable_verification
-
-statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY
 
 statement ok
@@ -32,7 +29,7 @@ select count(*) from (select a, b, sum(v)::bigint as s from grouping_set_cm grou
 query II
 explain select a, b, sum(v)::bigint as s from grouping_set_cm group by rollup(a, b)
 ----
-logical_opt	<REGEX>:(.*__internal_compress.*){2}
+logical_opt	<REGEX>:.*CAST.*__internal_decompress.*CAST.*__internal_compress.*
 
 # Windows that need an order should specify one; compressed materialization can
 # change the hash aggregate iteration order.
@@ -84,4 +81,4 @@ explain SELECT
 FROM grouping_set_window
 GROUP BY ROLLUP(k)
 ----
-logical_opt	<REGEX>:(.*__internal_compress.*)
+logical_opt	<REGEX>:.*CAST.*

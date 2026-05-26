@@ -68,7 +68,7 @@ FROM integers i1
 ----
 not yet supported
 
-mode skip
+mode skip instable
 
 # correlated
 query I

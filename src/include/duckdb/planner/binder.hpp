@@ -344,6 +344,8 @@ public:
 
 	void BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
 	                      const string &catalog = "", const string &schema = "");
+	unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
+	string GetExpressionName(const ParsedExpression &expr);
 
 private:
 	//! The parent binder (if any)
@@ -419,6 +421,8 @@ private:
 	BoundStatement Bind(CopyDatabaseStatement &stmt);
 	BoundStatement Bind(UpdateExtensionsStatement &stmt);
 	BoundStatement Bind(MergeIntoStatement &stmt);
+	BoundStatement Bind(ConnectStatement &stmt);
+	BoundStatement Bind(DisconnectStatement &stmt);
 
 	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.

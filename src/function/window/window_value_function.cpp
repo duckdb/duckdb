@@ -92,7 +92,7 @@ void WindowValueLocalState::Sinker(ExecutionContext &context, DataChunk &sink_ch
 		// If we need to IGNORE NULLS for the child, and there are NULLs,
 		// then build an SV to hold them
 		const auto coll_count = coll_chunk.size();
-		auto &values = coll_chunk.data[gvstate.value_idx];
+		const auto &values = coll_chunk.data[gvstate.value_idx];
 		auto validity = values.Validity();
 		auto &sort_nulls = lvstate.sort_nulls;
 		if (gvstate.executor.wexpr.ignore_nulls && validity.CanHaveNull()) {
@@ -413,7 +413,7 @@ public:
 
 	void ExecuteLag(ExecutionContext &context, DataChunk &input, Vector &result) {
 		D_ASSERT(offset >= 0);
-		auto &curr = curr_chunk.data[0];
+		const auto &curr = curr_chunk.data[0];
 		curr_chunk.Reset();
 		executor.Execute(input, curr_chunk);
 		const idx_t count = input.size();
@@ -449,7 +449,7 @@ public:
 		D_ASSERT(offset < 0);
 		// Input has been set up with the number of rows we CAN produce.
 		const idx_t count = input.size();
-		auto &curr = curr_chunk.data[0];
+		const auto &curr = curr_chunk.data[0];
 		// Copy unified[buffered:count] => result[pos:]
 		idx_t pos = 0;
 		idx_t unified_offset = buffered;
@@ -747,7 +747,7 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 				const idx_t col_idx = 0;
 				while (width) {
 					const auto source_offset = cursor.Seek(index);
-					auto &source = cursor.chunk.data[col_idx];
+					const auto &source = cursor.chunk.data[col_idx];
 					const auto copied = MinValue<idx_t>(cursor.chunk.size() - source_offset, width);
 					VectorOperations::Copy(source, result, source_offset + copied, source_offset, i);
 					i += copied;
@@ -1527,7 +1527,7 @@ void WindowFillExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpres
 static void WindowFillCopy(WindowCursor &cursor, Vector &result, idx_t count, idx_t row_idx, column_t col_idx = 0) {
 	for (idx_t target_offset = 0; target_offset < count;) {
 		const auto source_offset = cursor.Seek(row_idx);
-		auto &source = cursor.chunk.data[col_idx];
+		const auto &source = cursor.chunk.data[col_idx];
 		const auto copied = MinValue<idx_t>(cursor.chunk.size() - source_offset, count - target_offset);
 		VectorOperations::Copy(source, result, source_offset + copied, source_offset, target_offset);
 		target_offset += copied;

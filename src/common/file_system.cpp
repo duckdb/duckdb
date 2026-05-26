@@ -733,6 +733,10 @@ unique_ptr<FileHandle> FileSystem::OpenCompressedFile(QueryContext context, uniq
 	throw NotImplementedException("%s: OpenCompressedFile is not implemented!", GetName());
 }
 
+bool FileSystem::IsLocalFileSystem() const {
+	return false;
+}
+
 bool FileSystem::OnDiskFile(FileHandle &handle) {
 	throw NotImplementedException("%s: OnDiskFile is not implemented!", GetName());
 }
@@ -751,7 +755,7 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 
 int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(nr_bytes);
 	}
 
 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
@@ -767,7 +771,7 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 
 int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_WRITTEN, nr_bytes);
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(nr_bytes);
 	}
 
 	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
@@ -779,7 +783,7 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 
 void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(nr_bytes);
 	}
 
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
@@ -787,7 +791,7 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_WRITTEN, nr_bytes);
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(nr_bytes);
 	}
 
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);

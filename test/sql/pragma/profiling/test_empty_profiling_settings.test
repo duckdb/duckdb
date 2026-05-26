@@ -11,7 +11,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{}'
+SET tracked_metrics = [];
 
 statement ok
 SELECT unnest(['Maia', 'Thijs', 'Mark', 'Hannes', 'Tom', 'Max', 'Carlo', 'Sam', 'Tania']) AS names ORDER BY random();
@@ -22,13 +22,8 @@ PRAGMA disable_profiling;
 # Evaluate results.
 
 query I
-SELECT unnest(res) FROM (
-	SELECT current_setting('custom_profiling_settings') AS raw_setting,
-	raw_setting.trim('{}') AS setting,
-	string_split(setting, ', ') AS res
-) ORDER BY ALL
+SELECT unnest(current_setting('tracked_metrics')) ORDER BY ALL
 ----
-(empty)
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
