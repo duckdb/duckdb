@@ -132,7 +132,9 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 static unique_ptr<FunctionData> JSONCreateBindParams(BoundScalarFunction &bound_function,
                                                      vector<unique_ptr<Expression>> &arguments, bool object) {
 	StructNames const_struct_names;
-	bound_function.GetArguments().clear();
+	auto &bound_arguments = bound_function.GetArguments();
+	bound_arguments.clear();
+	bound_arguments.reserve(arguments.size());
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &type = arguments[i]->GetReturnType();
 		if (arguments[i]->HasParameter()) {
@@ -142,10 +144,10 @@ static unique_ptr<FunctionData> JSONCreateBindParams(BoundScalarFunction &bound_
 				throw BinderException("json_object() keys must be VARCHAR, add an explicit cast to argument \"%s\"",
 				                      arguments[i]->GetName());
 			}
-			bound_function.GetArguments().push_back(LogicalType::VARCHAR);
+			bound_arguments.push_back(LogicalType::VARCHAR);
 		} else {
 			// Value, cast to types that we can put in JSON
-			bound_function.GetArguments().push_back(GetJSONType(const_struct_names, type));
+			bound_arguments.push_back(GetJSONType(const_struct_names, type));
 		}
 	}
 	return make_uniq<JSONCreateFunctionData>(std::move(const_struct_names));
