@@ -17,7 +17,7 @@ int main(int argc_in, char *argv[]) {
 
 	auto &test_config = TestConfiguration::Get();
 	test_config.Initialize();
-	bool keep_home = false;
+	bool isolate_tests = false;
 
 	idx_t argc = NumericCast<idx_t>(argc_in);
 	int new_argc = 0;
@@ -37,8 +37,8 @@ int main(int argc_in, char *argv[]) {
 			SetTestDirectory(test_dir);
 		} else if (argument == "--require") {
 			AddRequire(string(argv[++i]));
-		} else if (argument == "--keep-home") {
-			keep_home = true;
+		} else if (argument == "--isolate-tests") {
+			isolate_tests = true;
 		} else if (!test_config.ParseArgument(argument, argc, argv, i)) {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
@@ -58,7 +58,7 @@ int main(int argc_in, char *argv[]) {
 	}
 
 	// Override the home dir so the .duckdb dir is isolated per test process.
-	if (!keep_home) {
+	if (isolate_tests) {
 #ifdef DUCKDB_WINDOWS
 		if (_putenv_s("USERPROFILE", dir.c_str()) != 0) {
 			fprintf(stderr, "Failed to set USERPROFILE environment variable\n");
