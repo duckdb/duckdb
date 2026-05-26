@@ -1110,8 +1110,6 @@ void ParquetMetaDataOperator::Function(ClientContext &context, TableFunctionInpu
 			rows_to_output = left_in_vector;
 		}
 
-		output.SetChildCardinality(output_count + rows_to_output);
-
 		for (idx_t i = 0; i < rows_to_output; ++i) {
 			local_state.processor->ReadRow(output_vectors, local_state.row_idx + i, *local_state.reader);
 		}

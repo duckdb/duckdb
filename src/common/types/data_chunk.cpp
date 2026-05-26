@@ -92,11 +92,15 @@ idx_t DataChunk::GetAllocationSize() const {
 
 void DataChunk::Reset() {
 	if (data.empty()) {
+		count_ = 0;
 		return;
 	}
 	if (vector_caches.empty()) {
-		// InitializeEmpty chunk - vectors should be flat, safe to set size
-		SetChildCardinality(0);
+		// InitializeEmpty chunk - vectors reference external buffers, drop references to avoid aliasing.
+		// Calling SetChildCardinality(0) would modify shared buffers, corrupting the original owner's view.
+		for (auto &v : data) {
+			v.SetBuffer(buffer_ptr<VectorBuffer>());
+		}
 		return;
 	}
 	if (vector_caches.size() != data.size()) {
@@ -141,6 +145,11 @@ void DataChunk::CheckCardinality(idx_t count_p) const {
 }
 
 void DataChunk::SetChildCardinality(idx_t count_p) {
+	// Track count for 0-column chunks (no vectors to derive the size from).
+	if (data.empty()) {
+		count_ = count_p;
+		return;
+	}
 	for (auto &v : data) {
 		// null-buffer placeholders (InitializeEmpty) and non-flat/constant vectors cannot be resized
 		if (!v.GetBufferRef()) {

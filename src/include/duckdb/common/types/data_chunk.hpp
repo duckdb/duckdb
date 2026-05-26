@@ -51,8 +51,17 @@ public:
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
 
+private:
+	//! Fallback row count used only when data is empty (0-column chunks).
+	//! When data is non-empty, the count is always derived from the vectors.
+	idx_t count_ = 0;
+
 public:
 	inline idx_t size() const { // NOLINT
+		// When there are no columns, use the stored count fallback.
+		if (data.empty()) {
+			return count_;
+		}
 		// Some chunks (e.g., from InitializeEmpty) have null-buffer placeholder columns.
 		// Find the first column that has a real buffer to get the actual row count.
 		for (const auto &v : data) {
