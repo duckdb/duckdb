@@ -168,6 +168,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	CatalogPushdownResult right_result = right_optimizer.Rewrite(*node.right);
 
 	auto result = Merge(left_result, right_result);
+	for (auto &key : node.key_targets) {
+		result = Merge(result, Rewrite(*key));
+	}
 	for (auto &cte_pair : node.cte_map.map) {
 		auto it = cte_results.find(cte_pair.first);
 		if (it != cte_results.end()) {
@@ -1136,6 +1139,9 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 			for (auto &key : cte_pair.second->key_targets) {
 				StripCatalogName(*key, catalog_name);
 			}
+		}
+		for (auto &key : rec.key_targets) {
+			StripCatalogName(*key, catalog_name);
 		}
 		if (rec.left) {
 			StripCatalogName(*rec.left, catalog_name);
