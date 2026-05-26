@@ -148,6 +148,10 @@ static bool CTEContainsDML(const LogicalOperator &op) {
 }
 
 void Optimizer::OptimizeStatement(unique_ptr<SQLStatement> &statement) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (!config.enable_optimizer) {
+		return;
+	}
 	RunOptimizer(OptimizerType::REMOTE_PUSHDOWN, [&]() {
 		RemotePushdownOptimizer optimizer(binder);
 		optimizer.Rewrite(statement);
@@ -406,6 +410,10 @@ void Optimizer::RunBuiltInOptimizers() {
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (!config.enable_optimizer) {
+		return std::move(plan_p);
+	}
 	Verify(*plan_p);
 
 	this->plan = std::move(plan_p);
