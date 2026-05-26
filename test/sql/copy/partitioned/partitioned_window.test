@@ -57,3 +57,26 @@ FROM partitioned_tbl2
 WINDOW w AS (PARTITION BY partition1, partition2 ORDER BY col1)
 QUALIFY (col1 - prev) <> 6
 ----
+
+# Single partition key with double partitioning
+query I
+SELECT count(*)
+FROM (
+	SELECT partition1, partition2, lag(col1) OVER w AS prev
+	FROM partitioned_tbl2
+	WINDOW w AS (PARTITION BY partition1 ORDER BY col1)
+	QUALIFY col1 - prev <> 2
+)
+----
+0
+
+query I
+SELECT count(*)
+FROM (
+	SELECT partition1, partition2, lag(col1) OVER w AS prev
+	FROM partitioned_tbl2
+	WINDOW w AS (PARTITION BY partition2 ORDER BY col1)
+	QUALIFY col1 - prev <> 3
+)
+----
+0
