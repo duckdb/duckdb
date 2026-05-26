@@ -250,7 +250,39 @@ static bool PerformDelimOnType(const LogicalType &type) {
 	return true;
 }
 
-static bool PerformDuplicateElimination(Binder &binder, CorrelatedColumns &correlated_columns) {
+//! duckdb#17011: a subquery body that contains a VOLATILE expression (e.g. random(),
+//! gen_random_uuid()) must be re-evaluated for every outer row, even when the correlated key
+//! repeats. Duplicate-eliminating the correlated keys would collapse repeated keys into a single
+//! evaluation, observably differing from PostgreSQL and the SQL semantics for correlated
+//! subqueries containing nondeterministic functions. Mirrors the IsVolatile() gate already used
+//! by src/optimizer/cse_optimizer.cpp and other optimizer consumers in DuckDB.
+//!
+//! CONSISTENT_WITHIN_QUERY functions (e.g. current_timestamp, now()) are intentionally NOT
+//! flagged: they return the same value throughout a query, so deduplication is still sound.
+//! Expression::IsVolatile() correctly returns false for them.
+static bool SubqueryPlanHasVolatileExpression(LogicalOperator &op) {
+	bool has_volatile = false;
+	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr_ptr) {
+		if (has_volatile) {
+			return;
+		}
+		if ((*expr_ptr)->IsVolatile()) {
+			has_volatile = true;
+		}
+	});
+	if (has_volatile) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (SubqueryPlanHasVolatileExpression(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool PerformDuplicateElimination(Binder &binder, CorrelatedColumns &correlated_columns,
+                                        LogicalOperator &subquery_plan) {
 	if (!Settings::Get<EnableOptimizerSetting>(binder.context)) {
 		// if optimizations are disabled we always do a delim join
 		return true;
@@ -261,6 +293,10 @@ static bool PerformDuplicateElimination(Binder &binder, CorrelatedColumns &corre
 			perform_delim = false;
 			break;
 		}
+	}
+	if (perform_delim && SubqueryPlanHasVolatileExpression(subquery_plan)) {
+		// duckdb#17011: see SubqueryPlanHasVolatileExpression above.
+		perform_delim = false;
 	}
 	if (perform_delim) {
 		return true;
@@ -280,7 +316,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 	auto &correlated_columns = expr.binder->correlated_columns;
 	// FIXME: there should be a way of disabling decorrelation for ANY queries as well, but not for now...
 	bool perform_delim =
-	    expr.subquery_type == SubqueryType::ANY ? true : PerformDuplicateElimination(binder, correlated_columns);
+	    expr.subquery_type == SubqueryType::ANY ? true : PerformDuplicateElimination(binder, correlated_columns, *plan);
 	D_ASSERT(expr.IsCorrelated());
 	// correlated subquery
 	// for a more in-depth explanation of this code, read the paper "Unnesting Arbitrary Subqueries"
@@ -468,7 +504,7 @@ unique_ptr<LogicalOperator> Binder::PlanLateralJoin(unique_ptr<LogicalOperator> 
 		}
 	}
 
-	auto perform_delim = PerformDuplicateElimination(*this, correlated);
+	auto perform_delim = PerformDuplicateElimination(*this, correlated, *right);
 	auto delim_join = CreateDuplicateEliminatedJoin(correlated, join_type, std::move(left), perform_delim);
 
 	// Store all information required to perform UNNESTING later.

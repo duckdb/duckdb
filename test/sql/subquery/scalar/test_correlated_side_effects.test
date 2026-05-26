@@ -1,10 +1,11 @@
 # name: test/sql/subquery/scalar/test_correlated_side_effects.test
-# description: Test correlated subqueries with side effects
+# description: Test correlated subqueries with side effects (duckdb#17011)
 # group: [scalar]
 
-# FIXME: we should not perform duplicate elimination for subqueries that have side-effects
-
-mode skip instable
+# Correlated subqueries whose body contains a VOLATILE expression must be re-evaluated for every
+# outer row, even when the correlated key repeats. Duplicate-eliminating the correlated keys would
+# observably differ from PostgreSQL and SQL semantics. See PlanCorrelatedSubquery() and the
+# SubqueryPlanHasVolatileExpression() gate in src/planner/binder/query_node/plan_subquery.cpp.
 
 query I
 SELECT COUNT(DISTINCT
@@ -13,3 +14,22 @@ SELECT COUNT(DISTINCT
 FROM (SELECT 1 FROM generate_series(1, 100, 1)) AS t(r)
 ----
 100
+
+# duckdb#17011 original reporter's repro: two outer rows with r=1 must produce two distinct
+# random() values (PostgreSQL behavior). Under the bug, dedupe collapsed both rows into one
+# subquery evaluation and the two outputs were identical.
+query I
+SELECT COUNT(DISTINCT s) FROM (
+  SELECT (SELECT random() + r) AS s FROM (VALUES (1), (1)) _(r)
+)
+----
+2
+
+# Sanity oracle: CONSISTENT_WITHIN_QUERY functions (e.g. current_timestamp) must STILL dedupe —
+# they return the same value throughout a query, so deduplication is sound. If the predicate is
+# accidentally widened to "any non-default stability", this test fails (would return 3).
+query I
+SELECT COUNT(DISTINCT (SELECT current_timestamp::VARCHAR || '_' || r::VARCHAR))
+FROM (VALUES (1), (1), (1)) _(r)
+----
+1
