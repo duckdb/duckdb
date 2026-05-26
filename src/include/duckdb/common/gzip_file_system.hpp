@@ -32,7 +32,7 @@ public:
 	static string UncompressGZIPString(const string &in);
 	static string UncompressGZIPString(const char *length, idx_t size);
 
-	unique_ptr<StreamWrapper> CreateStream() override;
+	unique_ptr<StreamWrapper> CreateStream(const FileCompressionOptions &compression_options) override;
 	idx_t InBufferSize() override;
 	idx_t OutBufferSize() override;
 };
