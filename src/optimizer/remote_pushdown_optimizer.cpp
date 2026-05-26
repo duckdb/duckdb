@@ -1000,10 +1000,18 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 			}
 			if (remote_using_count <= 1) {
 				// At most one streaming slot needed: push SINGLE_REMOTE USING clauses.
+				// Non-SINGLE_REMOTE clauses must be restored from their saved copies: Rewrite(JoinRef)
+				// inside a mixed-catalog USING clause (e.g. rpc.t2 JOIN local_t) pushes individual
+				// SINGLE_REMOTE children in-place, leaving stale TABLE_FUNCTION wrappers. Without
+				// restoring, those stale wrappers would open a concurrent second quack streaming slot
+				// alongside the SINGLE_REMOTE USING clause being pushed here.
 				for (idx_t i = 0; i < node.using_clauses.size(); i++) {
+					if (using_clause_results[i].reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+						node.using_clauses[i] = std::move(saved_using_clauses[i]);
+						continue;
+					}
 					FinishPushdown(node.using_clauses[i], using_clause_results[i]);
-					if (using_clause_results[i].reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-					    using_clause_results[i].catalog) {
+					if (using_clause_results[i].catalog) {
 						const string &cat_name = using_clause_results[i].catalog->GetName();
 						bool found = false;
 						for (auto &existing : from_pushed_catalog_names) {
