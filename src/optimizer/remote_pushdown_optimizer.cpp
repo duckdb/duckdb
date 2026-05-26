@@ -52,6 +52,16 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 	if (search_path_initialized) {
 		return;
 	}
+	// Inherit from the nearest ancestor that has already scanned, avoiding redundant catalog lookups
+	// in child optimizers created for subqueries/CTEs. The search path is constant within a query.
+	for (const RemotePushdownOptimizer *p = parent.get(); p; p = p->parent.get()) {
+		if (p->search_path_initialized) {
+			search_path_initialized = true;
+			remote_catalogs_in_search_path = p->remote_catalogs_in_search_path;
+			local_catalogs_in_search_path = p->local_catalogs_in_search_path;
+			return;
+		}
+	}
 	search_path_initialized = true;
 	auto &client_data = ClientData::Get(binder.context);
 	// iterate over all catalogs mentioned in the search path and check if they are remote
