@@ -2905,19 +2905,35 @@ void RemotePushdownOptimizer::StripCatalogName(SQLStatement &statement, const st
 	}
 }
 
-static void CollectColumnNames(ParsedExpression &expr, vector<string> &col_names) {
+// Collect unique unqualified column names from RETURNING expressions.
+// name_to_qualifier maps each unqualified name to the table qualifier first seen with it.
+// Returns false when the same unqualified name appears with a DIFFERENT table qualifier —
+// the caller must then bail out and fall back to native execution rather than generating
+// an ambiguous "RETURNING col" clause on the remote (which fails with "ambiguous column").
+static bool CollectColumnNames(ParsedExpression &expr, vector<string> &col_names,
+                               case_insensitive_map_t<string> &name_to_qualifier) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-		const string &col = expr.Cast<ColumnRefExpression>().column_names.back();
-		for (auto &existing : col_names) {
-			if (StringUtil::CIEquals(existing, col)) {
-				return;
-			}
+		auto &col_ref = expr.Cast<ColumnRefExpression>();
+		const string &col = col_ref.column_names.back();
+		const string qualifier =
+		    col_ref.column_names.size() >= 2 ? col_ref.column_names[col_ref.column_names.size() - 2] : string();
+		auto it = name_to_qualifier.find(col);
+		if (it == name_to_qualifier.end()) {
+			name_to_qualifier[col] = qualifier;
+			col_names.push_back(col);
+		} else if (!StringUtil::CIEquals(it->second, qualifier)) {
+			// Same unqualified name, different table qualifier → ambiguous on the remote.
+			return false;
 		}
-		col_names.push_back(col);
-		return;
+		return true;
 	}
-	ParsedExpressionIterator::EnumerateChildren(expr,
-	                                            [&](ParsedExpression &child) { CollectColumnNames(child, col_names); });
+	bool ok = true;
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child) {
+		if (ok) {
+			ok = CollectColumnNames(child, col_names, name_to_qualifier);
+		}
+	});
+	return ok;
 }
 
 static void StripAllTableQualifiers(ParsedExpression &expr) {
@@ -2972,8 +2988,14 @@ void RemotePushdownOptimizer::TryPushDMLWithLocalReturning(unique_ptr<SQLStateme
 	// Collect unique column names referenced in the RETURNING expressions (only needed without stars)
 	vector<string> col_names;
 	if (!has_star_expr) {
+		case_insensitive_map_t<string> name_to_qualifier;
 		for (auto &expr : *returning_list) {
-			CollectColumnNames(*expr, col_names);
+			if (!CollectColumnNames(*expr, col_names, name_to_qualifier)) {
+				// The same unqualified column name appears with different table qualifiers.
+				// Generating "RETURNING col" would be ambiguous on the remote. Bail out so
+				// the DML falls back to native execution rather than producing a remote error.
+				return;
+			}
 		}
 		// If no column refs were found (e.g. RETURNING (SELECT max(local_col) FROM local_t)),
 		// fall back to RETURNING * so the remote executes the DML and returns one row per
