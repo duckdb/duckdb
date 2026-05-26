@@ -1940,6 +1940,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	// Rewrite both sides independently, tracking their individual results
+	// Record the current size of from_pushed_catalog_names before processing children so we can
+	// later identify catalogs that were pushed by nested JoinRef children (as opposed to the direct
+	// SINGLE_REMOTE children of this JoinRef which are handled by the stripping loop below).
+	// Nested catalogs must also be stripped from this JoinRef's ON condition: e.g. when the right
+	// child is an inner JoinRef that pushed rpc.t2 in-place, the outer ON condition may reference
+	// "rpc.t2.col" which needs stripping (but right_result is UNKNOWN → the loop below skips it).
+	idx_t initial_cats_size = from_pushed_catalog_names.size();
 	auto left_result = Rewrite(ref.left);
 	auto right_result = Rewrite(ref.right);
 	auto result = Merge(left_result, right_result);
@@ -2030,6 +2037,17 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 		}
 		if (!already_tracked) {
 			from_pushed_catalog_names.push_back(cat_name);
+		}
+	}
+	// Strip from the condition using catalogs added by nested JoinRef children during Rewrite above.
+	// The loop above only strips for the DIRECT children (left_result / right_result). When a child
+	// is itself a mixed JoinRef (UNKNOWN result), any SINGLE_REMOTE grandchildren it pushed in-place
+	// added their catalog to from_pushed_catalog_names. The outer condition may reference those
+	// grandchild tables by catalog-qualified name (e.g. "rpc.t2.col" when rpc.t2 is inside the
+	// inner JoinRef), so they must be stripped here using the newly-added catalog entries.
+	if (ref.condition) {
+		for (idx_t ci = initial_cats_size; ci < from_pushed_catalog_names.size(); ci++) {
+			StripCatalogName(*ref.condition, from_pushed_catalog_names[ci], false);
 		}
 	}
 	// Track aliases of individually-pushed remote children (and CTE/SubqueryRef children that were
