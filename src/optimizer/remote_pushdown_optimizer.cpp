@@ -374,6 +374,18 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 	// Analyze CTE definitions and register their catalog results for reference lookup.
 	// CTEs are processed in order so later CTEs can reference earlier ones.
 	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
+	// Save CTE bodies before analysis. Rewrite(JoinRef) inside a CTE body pushes individual
+	// SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN (mixed join).
+	// If the overall SelectNode result is UNKNOWN, those stale quack wrappers must be rolled back:
+	// PushdownSubqueries (called below for WHERE/HAVING/etc.) may push a subquery to quack,
+	// opening a second streaming slot while the CTE body's stale wrapper holds the first,
+	// triggering "Multiple streaming scans". Restoring removes the stale wrappers.
+	case_insensitive_map_t<unique_ptr<QueryNode>> saved_cte_query_nodes;
+	for (auto &cte_pair : node.cte_map.map) {
+		if (cte_pair.second->query_node) {
+			saved_cte_query_nodes[cte_pair.first] = cte_pair.second->query_node->Copy();
+		}
+	}
 	for (auto &cte_pair : node.cte_map.map) {
 		const string &cte_name = cte_pair.first;
 		auto &cte_info = *cte_pair.second;
@@ -476,6 +488,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 
 	// If the whole SELECT points to a single remote catalog, propagate upward
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		// Restore CTE bodies to remove stale quack wrappers inserted in-place by Rewrite(JoinRef).
+		// Without this, PushdownSubqueries below may push a WHERE/HAVING subquery to quack (slot 2)
+		// while the CTE body's stale wrapper holds slot 1 → "Multiple streaming scans".
+		for (auto &cte_pair : node.cte_map.map) {
+			auto it = saved_cte_query_nodes.find(cte_pair.first);
+			if (it != saved_cte_query_nodes.end() && it->second) {
+				cte_pair.second->query_node = std::move(it->second);
+			}
+		}
 		// Track whether any JoinRef children were individually pushed. Must be captured before
 		// from_pushed_catalog_names is consumed by the stripping block below.
 		bool had_join_child_pushdowns = !from_pushed_catalog_names.empty();
@@ -708,6 +729,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 	// the source SELECT or ON CONFLICT clause is correctly classified.
 	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
 	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	// Save CTE bodies before analysis: Rewrite(JoinRef) inside a CTE body pushes individual
+	// SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN. Restore when
+	// the overall result is UNKNOWN to prevent stale wrappers in native execution.
+	case_insensitive_map_t<unique_ptr<QueryNode>> saved_cte_query_nodes;
+	for (auto &cte_pair : node.cte_map.map) {
+		if (cte_pair.second->query_node) {
+			saved_cte_query_nodes[cte_pair.first] = cte_pair.second->query_node->Copy();
+		}
+	}
 	for (auto &cte_pair : node.cte_map.map) {
 		const string &cte_name = cte_pair.first;
 		auto &cte_info = *cte_pair.second;
@@ -753,6 +783,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 	// DuckDB can execute: INSERT INTO local_t SELECT * FROM quack_query_by_name(...).
 	// Skip individual pushdown when CTEs are present: the source may reference a local CTE.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		// Restore CTE bodies to remove stale quack wrappers inserted in-place by Rewrite(JoinRef).
+		for (auto &cte_pair : node.cte_map.map) {
+			auto it = saved_cte_query_nodes.find(cte_pair.first);
+			if (it != saved_cte_query_nodes.end() && it->second) {
+				cte_pair.second->query_node = std::move(it->second);
+			}
+		}
 		// Always restore pre-target local name state so the INSERT target's column names do not
 		// leak into the outer scope. Without this, an INSERT-as-CTE-body with sub-CTEs (which
 		// skips the individual-source-push path) leaves TrackLocalTable's additions in
@@ -838,6 +875,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 	// WHERE condition or USING clauses are correctly classified.
 	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
 	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	// Save CTE bodies before analysis: Rewrite(JoinRef) inside a CTE body pushes individual
+	// SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN. Restore when
+	// the overall result is UNKNOWN to prevent stale wrappers in native execution.
+	case_insensitive_map_t<unique_ptr<QueryNode>> saved_cte_query_nodes;
+	for (auto &cte_pair : node.cte_map.map) {
+		if (cte_pair.second->query_node) {
+			saved_cte_query_nodes[cte_pair.first] = cte_pair.second->query_node->Copy();
+		}
+	}
 	for (auto &cte_pair : node.cte_map.map) {
 		const string &cte_name = cte_pair.first;
 		auto &cte_info = *cte_pair.second;
@@ -870,6 +916,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 	// If it is local, still push individual remote subqueries in condition/USING for efficiency,
 	// but only when no CTEs are present: a CTE-referencing subquery cannot be pushed individually.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		// Restore CTE bodies to remove stale quack wrappers inserted in-place by Rewrite(JoinRef).
+		for (auto &cte_pair : node.cte_map.map) {
+			auto it = saved_cte_query_nodes.find(cte_pair.first);
+			if (it != saved_cte_query_nodes.end() && it->second) {
+				cte_pair.second->query_node = std::move(it->second);
+			}
+		}
 		if (node.cte_map.map.empty()) {
 			// Push subqueries in the condition only when there are no USING clauses.
 			// USING clause tables create outer-scope bindings: a subquery correlated with a
@@ -972,6 +1025,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	// FROM clause or SET expressions are correctly classified.
 	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
 	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	// Save CTE bodies before analysis: Rewrite(JoinRef) inside a CTE body pushes individual
+	// SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN. Restore when
+	// the overall result is UNKNOWN to prevent stale wrappers in native execution.
+	case_insensitive_map_t<unique_ptr<QueryNode>> saved_cte_query_nodes;
+	for (auto &cte_pair : node.cte_map.map) {
+		if (cte_pair.second->query_node) {
+			saved_cte_query_nodes[cte_pair.first] = cte_pair.second->query_node->Copy();
+		}
+	}
 	for (auto &cte_pair : node.cte_map.map) {
 		const string &cte_name = cte_pair.first;
 		auto &cte_info = *cte_pair.second;
@@ -1004,6 +1066,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	// If it is local, still push individual remote subqueries in FROM/SET for efficiency,
 	// but only when no CTEs are present: a CTE-referencing subquery cannot be pushed individually.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		// Restore CTE bodies to remove stale quack wrappers inserted in-place by Rewrite(JoinRef).
+		for (auto &cte_pair : node.cte_map.map) {
+			auto it = saved_cte_query_nodes.find(cte_pair.first);
+			if (it != saved_cte_query_nodes.end() && it->second) {
+				cte_pair.second->query_node = std::move(it->second);
+			}
+		}
 		if (node.cte_map.map.empty()) {
 			string pushed_from_alias;
 			vector<string> update_pushed_cats;
@@ -1170,6 +1239,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(MergeIntoStatement &stmt)
 	// Process CTE definitions attached to this MERGE INTO statement
 	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
 	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	// Save CTE bodies before analysis: Rewrite(JoinRef) inside a CTE body pushes individual
+	// SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN. Restore when
+	// the overall result is UNKNOWN to prevent stale wrappers in native execution.
+	case_insensitive_map_t<unique_ptr<QueryNode>> saved_cte_query_nodes;
+	for (auto &cte_pair : stmt.cte_map.map) {
+		if (cte_pair.second->query_node) {
+			saved_cte_query_nodes[cte_pair.first] = cte_pair.second->query_node->Copy();
+		}
+	}
 	for (auto &cte_pair : stmt.cte_map.map) {
 		const string &cte_name = cte_pair.first;
 		auto &cte_info = *cte_pair.second;
@@ -1201,6 +1279,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(MergeIntoStatement &stmt)
 
 	// Target must be remote; MERGE INTO cannot partially push with a local target.
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+		// Restore CTE bodies to remove stale quack wrappers inserted in-place by Rewrite(JoinRef).
+		for (auto &cte_pair : stmt.cte_map.map) {
+			auto it = saved_cte_query_nodes.find(cte_pair.first);
+			if (it != saved_cte_query_nodes.end() && it->second) {
+				cte_pair.second->query_node = std::move(it->second);
+			}
+		}
 		for (auto &cte_pair : stmt.cte_map.map) {
 			auto it = outer_cte_results.find(cte_pair.first);
 			if (it != outer_cte_results.end()) {
@@ -1316,6 +1401,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	// the children are correctly classified (e.g. WITH cte AS (...) SELECT * FROM cte UNION ALL ...).
 	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
 	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	// Save CTE bodies before analysis: Rewrite(JoinRef) inside a CTE body pushes individual
+	// SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN (mixed join).
+	// If the overall SetOperationNode result is UNKNOWN, those stale wrappers must be rolled back.
+	case_insensitive_map_t<unique_ptr<QueryNode>> saved_cte_query_nodes;
+	for (auto &cte_pair : node.cte_map.map) {
+		if (cte_pair.second->query_node) {
+			saved_cte_query_nodes[cte_pair.first] = cte_pair.second->query_node->Copy();
+		}
+	}
 	for (auto &cte_pair : node.cte_map.map) {
 		const string &cte_name = cte_pair.first;
 		auto &cte_info = *cte_pair.second;
@@ -1421,6 +1515,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 			}
 		}
 		return result;
+	}
+	// Restore CTE bodies to remove stale quack wrappers inserted in-place by Rewrite(JoinRef).
+	for (auto &cte_pair : node.cte_map.map) {
+		auto it = saved_cte_query_nodes.find(cte_pair.first);
+		if (it != saved_cte_query_nodes.end() && it->second) {
+			cte_pair.second->query_node = std::move(it->second);
+		}
 	}
 	// Restore modifiers to undo any in-place JoinRef partial-pushdown side effects from the
 	// Rewrite calls above. The saved copies carry no stale quack wrappers, so modifier
