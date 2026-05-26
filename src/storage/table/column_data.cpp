@@ -631,6 +631,20 @@ void ColumnData::RevertAppend(row_t new_count_p) {
 	if (!last_segment_node) {
 		return;
 	}
+	while (last_segment_node->GetCount() == 0 && new_count <= last_segment_node->GetRowStart()) {
+		// Appends can create the next transient segment before any rows are written to it. If the append is
+		// reverted after that point, drop the empty tail before looking up the row to truncate at.
+		auto last_segment_index = last_segment_node->GetIndex();
+		data.EraseSegments(l, last_segment_index);
+		if (last_segment_index > 0) {
+			auto previous_segment = data.GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(last_segment_index - 1));
+			previous_segment->SetNext(nullptr);
+		}
+		last_segment_node = data.GetLastSegment(l);
+		if (!last_segment_node) {
+			return;
+		}
+	}
 	auto &last_segment = last_segment_node->GetNode();
 	if (new_count >= last_segment_node->GetRowStart() + last_segment.count) {
 		// the start row is equal to the final portion of the column data: nothing was ever appended here
