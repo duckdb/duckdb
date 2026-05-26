@@ -21,11 +21,140 @@ static bool Disjoint(const unordered_set<T> &a, const unordered_set<T> &b) {
 	});
 }
 
-void QueryGraphManager::MarkEdgeEquivalences() {
+void JoinPredicateModel::Clear() {
+	all_filters.clear();
+	equality_filters.clear();
+	selectivity_filters.clear();
+	left_filters.clear();
+	semi_anti_filters.clear();
+	other_filters.clear();
+	equality_classes.clear();
+	equality_pairs.clear();
+}
+
+void JoinPredicateModel::RegisterFilter(FilterInfo &filter, JoinPredicateClass predicate_class) {
+	all_filters.push_back(filter);
+	switch (predicate_class) {
+	case JoinPredicateClass::INNER_EQUALITY:
+		equality_filters.push_back(filter);
+		break;
+	case JoinPredicateClass::INNER_NON_EQUALITY:
+		selectivity_filters.push_back(filter);
+		break;
+	case JoinPredicateClass::LEFT_JOIN:
+		selectivity_filters.push_back(filter);
+		left_filters.push_back(filter);
+		break;
+	case JoinPredicateClass::SEMI_ANTI_JOIN:
+		selectivity_filters.push_back(filter);
+		semi_anti_filters.push_back(filter);
+		break;
+	default:
+		selectivity_filters.push_back(filter);
+		other_filters.push_back(filter);
+		break;
+	}
+}
+
+void JoinPredicateModel::AddEqualityClass(JoinEqualityClass equality_class) {
+	D_ASSERT(equality_class.index == equality_classes.size());
+	equality_classes.push_back(std::move(equality_class));
+}
+
+bool JoinPredicateModel::ContainsClassIndex(const vector<idx_t> &class_indices, idx_t equality_class_index) {
+	return std::find(class_indices.begin(), class_indices.end(), equality_class_index) != class_indices.end();
+}
+
+void JoinPredicateModel::AddEqualityPairClass(JoinRelationSet &pair, idx_t equality_class_index) {
+	auto &summary = equality_pairs[pair];
+	if (!ContainsClassIndex(summary.equality_class_indices, equality_class_index)) {
+		summary.equality_class_indices.push_back(equality_class_index);
+	}
+}
+
+const vector<optional_ptr<FilterInfo>> &JoinPredicateModel::GetFilters() const {
+	return all_filters;
+}
+
+const vector<optional_ptr<FilterInfo>> &JoinPredicateModel::GetEqualityFilters() const {
+	return equality_filters;
+}
+
+const vector<optional_ptr<FilterInfo>> &JoinPredicateModel::GetSelectivityFilters() const {
+	return selectivity_filters;
+}
+
+const vector<JoinEqualityClass> &JoinPredicateModel::GetEqualityClasses() const {
+	return equality_classes;
+}
+
+const reference_map_t<JoinRelationSet, RelationPairEqualitySummary> &JoinPredicateModel::GetEqualityPairs() const {
+	return equality_pairs;
+}
+
+bool JoinPredicateModel::HasLeftJoinPredicates() const {
+	return !left_filters.empty();
+}
+
+bool JoinPredicateModel::EqualityClassConnectsPairInScope(idx_t class_index, JoinRelationSet &pair,
+                                                          JoinRelationSet &scope) const {
+	if (class_index >= equality_classes.size() || pair.count != 2) {
+		return false;
+	}
+	auto left = pair.relations[0];
+	auto right = pair.relations[1];
+	if (!JoinOrderUtil::ContainsRelation(scope, left) || !JoinOrderUtil::ContainsRelation(scope, right)) {
+		return false;
+	}
+
+	vector<RelationIndex> stack;
+	unordered_set<RelationIndex> visited;
+	stack.push_back(left);
+	visited.insert(left);
+
+	const auto &equality_class = equality_classes[class_index];
+	while (!stack.empty()) {
+		auto relation = stack.back();
+		stack.pop_back();
+		if (relation == right) {
+			return true;
+		}
+		for (auto &edge : equality_class.filters) {
+			if (!JoinOrderUtil::ContainsRelation(scope, edge.left_relation) ||
+			    !JoinOrderUtil::ContainsRelation(scope, edge.right_relation)) {
+				continue;
+			}
+			if (edge.left_relation == relation && visited.insert(edge.right_relation).second) {
+				stack.push_back(edge.right_relation);
+			}
+			if (edge.right_relation == relation && visited.insert(edge.left_relation).second) {
+				stack.push_back(edge.left_relation);
+			}
+		}
+	}
+	return false;
+}
+
+idx_t JoinPredicateModel::CountActiveEqualityClasses(JoinRelationSet &pair, JoinRelationSet &scope) const {
+	auto entry = equality_pairs.find(pair);
+	if (entry == equality_pairs.end()) {
+		return 0;
+	}
+	idx_t result = 0;
+	for (auto equality_class_index : entry->second.equality_class_indices) {
+		if (EqualityClassConnectsPairInScope(equality_class_index, pair, scope)) {
+			result++;
+		}
+	}
+	return result;
+}
+
+void QueryGraphManager::BuildPredicateModel() {
+	predicate_model.Clear();
+
 	// Assign edge_equivalence_index to INNER equality join filters using union-find over column bindings.
 	// All filters in the same transitive equality closure receive the same index, regardless of the
-	// order they appear in filters_and_bindings. This allows skipping redundant edges during
-	// plan reconstruction (GenerateJoins) and cardinality estimation (GetDenominator).
+	// order they appear in filters_and_bindings.
 	column_binding_map_t<idx_t> binding_to_component;
 	vector<idx_t> parents;
 
@@ -51,14 +180,10 @@ void QueryGraphManager::MarkEdgeEquivalences() {
 	// First union all INNER equality predicates. Do not assign edge ids in this pass,
 	// because a later predicate can merge two previously separate components.
 	for (auto &filter : filters_and_bindings) {
+		auto predicate_class = JoinOrderUtil::ClassifyJoinPredicate(*filter);
+		predicate_model.RegisterFilter(*filter, predicate_class);
 		filter->edge_equivalence_index = optional_idx();
-		if (!JoinOrderUtil::IsEquivalenceJoinPredicate(*filter)) {
-			continue;
-		}
-		if (!filter->left_binding.table_index.IsValid() || !filter->right_binding.table_index.IsValid()) {
-			continue;
-		}
-		if (filter->left_set == filter->right_set) {
+		if (!JoinOrderUtil::CanBuildEqualityClosure(*filter)) {
 			continue;
 		}
 
@@ -71,22 +196,51 @@ void QueryGraphManager::MarkEdgeEquivalences() {
 
 	// Then assign stable final ids to every equality edge using the final roots.
 	unordered_map<idx_t, idx_t> root_to_equivalence_id;
+	vector<vector<optional_ptr<FilterInfo>>> equality_class_filters;
 	for (auto &filter : filters_and_bindings) {
-		if (!JoinOrderUtil::IsEquivalenceJoinPredicate(*filter)) {
-			continue;
-		}
-		if (!filter->left_binding.table_index.IsValid() || !filter->right_binding.table_index.IsValid()) {
-			continue;
-		}
-		if (filter->left_set == filter->right_set) {
+		if (!JoinOrderUtil::CanBuildEqualityClosure(*filter)) {
 			continue;
 		}
 		auto root = find_root(binding_to_component[filter->left_binding]);
 		auto entry = root_to_equivalence_id.find(root);
 		if (entry == root_to_equivalence_id.end()) {
 			entry = root_to_equivalence_id.insert(make_pair(root, root_to_equivalence_id.size())).first;
+			equality_class_filters.emplace_back();
 		}
 		filter->edge_equivalence_index = optional_idx(entry->second);
+		equality_class_filters[entry->second].push_back(filter.get());
+	}
+
+	for (idx_t equality_class_index = 0; equality_class_index < equality_class_filters.size(); equality_class_index++) {
+		JoinEqualityClass equality_class;
+		equality_class.index = equality_class_index;
+		for (auto &filter : equality_class_filters[equality_class_index]) {
+			auto left_relation = JoinOrderUtil::GetBindingRelation(filter->left_binding);
+			auto right_relation = JoinOrderUtil::GetBindingRelation(filter->right_binding);
+			equality_class.columns.insert(filter->left_binding);
+			equality_class.columns.insert(filter->right_binding);
+			equality_class.relations.insert(left_relation);
+			equality_class.relations.insert(right_relation);
+			equality_class.filters.emplace_back(filter, left_relation, right_relation, filter->left_binding,
+			                                    filter->right_binding);
+		}
+		predicate_model.AddEqualityClass(std::move(equality_class));
+	}
+
+	for (auto &equality_class : predicate_model.GetEqualityClasses()) {
+		vector<RelationIndex> relations;
+		relations.reserve(equality_class.relations.size());
+		for (auto &relation : equality_class.relations) {
+			relations.push_back(relation);
+		}
+		for (idx_t outer = 0; outer < relations.size(); outer++) {
+			for (idx_t inner = outer + 1; inner < relations.size(); inner++) {
+				auto &left = set_manager.GetJoinRelation(relations[outer]);
+				auto &right = set_manager.GetJoinRelation(relations[inner]);
+				auto &pair = set_manager.Union(left, right);
+				predicate_model.AddEqualityPairClass(pair, equality_class.index);
+			}
+		}
 	}
 }
 
@@ -103,14 +257,17 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	filters_and_bindings = relation_manager.ExtractEdges(op, filter_operators, set_manager);
 	// Create the query_graph hyper edges (also populates left_binding/right_binding on each FilterInfo).
 	CreateHyperGraphEdges();
-	// Mark INNER equality filters with equivalence group indices for redundancy detection.
-	// Must run AFTER CreateHyperGraphEdges so that left_binding/right_binding are populated.
-	MarkEdgeEquivalences();
+	// Build the predicate model AFTER CreateHyperGraphEdges so that left_binding/right_binding are populated.
+	BuildPredicateModel();
 	return true;
 }
 
 const vector<unique_ptr<FilterInfo>> &QueryGraphManager::GetFilterBindings() const {
 	return filters_and_bindings;
+}
+
+const JoinPredicateModel &QueryGraphManager::GetPredicateModel() const {
+	return predicate_model;
 }
 
 void QueryGraphManager::GetColumnBinding(const Expression &root_expr, ColumnBinding &binding) {

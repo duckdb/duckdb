@@ -47,7 +47,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	if (reorderable) {
 		// query graph now has filters and relations
-		auto cardinality_estimator = CardinalityEstimator(query_graph_manager.set_manager);
+		auto cardinality_estimator =
+		    CardinalityEstimator(query_graph_manager.set_manager, query_graph_manager.GetPredicateModel());
 		auto cost_model = CostModel(query_graph_manager, cardinality_estimator);
 
 		// Initialize a plan enumerator.

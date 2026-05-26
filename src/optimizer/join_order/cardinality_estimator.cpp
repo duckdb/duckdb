@@ -23,14 +23,14 @@ bool FilterInfoWithTotalDomains::IsInnerEquality() {
 
 // The filter was made on top of a logical sample or other projection,
 // but no specific columns are referenced. See issue 4978 number 4.
-bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
+bool CardinalityEstimator::EmptyFilter(const FilterInfo &filter_info) {
 	if (!filter_info.left_set && !filter_info.right_set) {
 		return true;
 	}
 	return false;
 }
 
-void CardinalityEstimator::AddRelationStats(FilterInfo &filter_info) {
+void CardinalityEstimator::AddRelationStats(const FilterInfo &filter_info) {
 	D_ASSERT(!filter_info.set.get().Empty());
 	// Use whichever binding is valid: prefer left_binding, fall back to right_binding.
 	// left_binding may be INVALID_INDEX when left_set is empty (e.g. residual predicates
@@ -57,7 +57,7 @@ void CardinalityEstimator::AddRelationStats(FilterInfo &filter_info) {
 	relation_set_stats.emplace_back(new_r2tdom);
 }
 
-bool CardinalityEstimator::SingleColumnFilter(FilterInfo &filter_info) {
+bool CardinalityEstimator::SingleColumnFilter(const FilterInfo &filter_info) {
 	if (filter_info.left_set && filter_info.right_set && filter_info.set.get().count > 1) {
 		// Both set and are from different relations
 		return false;
@@ -71,92 +71,45 @@ bool CardinalityEstimator::SingleColumnFilter(FilterInfo &filter_info) {
 	return true;
 }
 
-vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(optional_ptr<FilterInfo> filter_info) {
-	vector<idx_t> matching_equivalent_sets;
-	idx_t equivalent_relation_index = 0;
-
-	for (const RelationsSetToStats &r2tdom : relation_set_stats) {
-		auto &i_set = r2tdom.equivalent_relations;
-		if (i_set.find(filter_info->left_binding) != i_set.end()) {
-			matching_equivalent_sets.push_back(equivalent_relation_index);
-		} else if (i_set.find(filter_info->right_binding) != i_set.end()) {
-			// don't add both left and right to the matching_equivalent_sets
-			// since both left and right get added to that index anyway.
-			matching_equivalent_sets.push_back(equivalent_relation_index);
-		}
-		equivalent_relation_index++;
-	}
-	return matching_equivalent_sets;
+static bool IsJoinOrFilter(const FilterInfo &filter) {
+	return filter.filter && filter.filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
+	       filter.filter->GetExpressionType() == ExpressionType::CONJUNCTION_OR && filter.set.get().count >= 2;
 }
 
-void CardinalityEstimator::AddToEquivalenceSets(optional_ptr<FilterInfo> filter_info,
-                                                vector<idx_t> matching_equivalent_sets) {
-	D_ASSERT(matching_equivalent_sets.size() <= 2);
-	if (matching_equivalent_sets.size() > 1) {
-		// an equivalence relation is connecting two sets of equivalence relations
-		// so push all relations from the second set into the first. Later we will delete
-		// the second set.
-		for (ColumnBinding i : relation_set_stats.at(matching_equivalent_sets[1]).equivalent_relations) {
-			relation_set_stats.at(matching_equivalent_sets[0]).equivalent_relations.insert(i);
-		}
-		for (auto &column_name : relation_set_stats.at(matching_equivalent_sets[1]).column_names) {
-			relation_set_stats.at(matching_equivalent_sets[0]).column_names.push_back(column_name);
-		}
-		relation_set_stats.at(matching_equivalent_sets[1]).equivalent_relations.clear();
-		relation_set_stats.at(matching_equivalent_sets[1]).column_names.clear();
-		relation_set_stats.at(matching_equivalent_sets[0]).filters.push_back(filter_info);
-		// add all values of one set to the other, delete the empty one
-	} else if (matching_equivalent_sets.size() == 1) {
-		auto &tdom_i = relation_set_stats.at(matching_equivalent_sets.at(0));
-		tdom_i.equivalent_relations.insert(filter_info->left_binding);
-		tdom_i.equivalent_relations.insert(filter_info->right_binding);
-		tdom_i.filters.push_back(filter_info);
-	} else if (matching_equivalent_sets.empty()) {
-		column_binding_set_t tmp;
-		tmp.insert(filter_info->left_binding);
-		tmp.insert(filter_info->right_binding);
-		relation_set_stats.emplace_back(tmp);
-		relation_set_stats.back().filters.push_back(filter_info);
-	}
-}
+void CardinalityEstimator::InitEquivalentRelations() {
+	relation_set_stats.clear();
+	or_filters.clear();
+	active_equality_class_count_cache.clear();
 
-void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<FilterInfo>> &filter_infos) {
-	// For each filter, we fill keep track of the index of the equivalent relation set
-	// the left and right relation needs to be added to.
-	for (auto &filter : filter_infos) {
-		if (filter->filter && filter->filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
-		    filter->filter->GetExpressionType() == ExpressionType::CONJUNCTION_OR && filter->set.get().count >= 2) {
-			or_filters.push_back(filter.get());
+	for (auto filter : predicate_model.GetFilters()) {
+		if (IsJoinOrFilter(*filter)) {
+			or_filters.push_back(filter);
 			continue;
 		}
 		if (SingleColumnFilter(*filter)) {
 			// Filter on one relation, (i.e. string or range filter on a column).
 			// Grab the first relation and add it to  the equivalence_relations
 			AddRelationStats(*filter);
-			continue;
-		} else if (EmptyFilter(*filter)) {
-			continue;
 		}
-		D_ASSERT(!filter->left_set->Empty());
-		D_ASSERT(!filter->right_set->Empty());
-
-		if (!JoinOrderUtil::IsEquivalenceJoinPredicate(*filter)) {
-			continue;
-		}
-
-		auto matching_equivalent_sets = DetermineMatchingEquivalentSets(filter.get());
-		AddToEquivalenceSets(filter.get(), matching_equivalent_sets);
 	}
-	for (auto &filter : filter_infos) {
-		if (filter->filter && filter->filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
-		    filter->filter->GetExpressionType() == ExpressionType::CONJUNCTION_OR && filter->set.get().count >= 2) {
+
+	for (auto &equality_class : predicate_model.GetEqualityClasses()) {
+		if (equality_class.columns.empty()) {
 			continue;
 		}
-		if (SingleColumnFilter(*filter) || EmptyFilter(*filter) || JoinOrderUtil::IsEquivalenceJoinPredicate(*filter)) {
+		relation_set_stats.emplace_back(equality_class.columns);
+		for (auto &filter : equality_class.filters) {
+			relation_set_stats.back().filters.push_back(filter.filter);
+		}
+	}
+
+	for (auto filter : predicate_model.GetSelectivityFilters()) {
+		if (IsJoinOrFilter(*filter) || SingleColumnFilter(*filter) || EmptyFilter(*filter)) {
 			continue;
 		}
-		D_ASSERT(!filter->left_set->Empty());
-		D_ASSERT(!filter->right_set->Empty());
+		if (!filter->left_set || !filter->right_set || filter->left_set->Empty() || filter->right_set->Empty()) {
+			continue;
+		}
 
 		column_binding_set_t domain_group;
 		if (filter->left_binding.table_index.IsValid()) {
@@ -172,6 +125,17 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 		relation_set_stats.back().filters.push_back(filter.get());
 	}
 	RemoveEmptyTotalDomains();
+}
+
+idx_t CardinalityEstimator::GetActiveEqualityClassCount(JoinRelationSet &pair, JoinRelationSet &scope) {
+	auto &scope_cache = active_equality_class_count_cache[scope];
+	auto entry = scope_cache.find(pair);
+	if (entry != scope_cache.end()) {
+		return entry->second;
+	}
+	auto count = predicate_model.CountActiveEqualityClasses(pair, scope);
+	scope_cache[pair] = count;
+	return count;
 }
 
 void CardinalityEstimator::RemoveEmptyTotalDomains() {
@@ -389,31 +353,31 @@ double CardinalityEstimator::GetJoinPairCap(JoinRelationSet &join_pair) {
 }
 
 bool CardinalityEstimator::ApplyJoinPairCap(double &target_denom, JoinRelationSet &join_pair,
-                                            optional_idx equivalence_index,
-                                            reference_map_t<JoinRelationSet, JoinPairInfo> &join_pair_accumulated) {
-	const auto it = join_pair_accumulated.find(join_pair);
-	if (it == join_pair_accumulated.end()) {
+                                            reference_map_t<JoinRelationSet, double> &join_pair_first_d,
+                                            reference_set_t<JoinRelationSet> &capped_join_pairs) {
+	if (capped_join_pairs.find(join_pair) != capped_join_pairs.end()) {
 		return false;
 	}
-	auto &join_pair_info = it->second;
-	if (join_pair_info.equivalence_index.IsValid() && equivalence_index.IsValid() &&
-	    join_pair_info.equivalence_index == equivalence_index) {
+	const auto it = join_pair_first_d.find(join_pair);
+	if (it == join_pair_first_d.end()) {
 		return false;
 	}
+	auto &first_d = it->second;
 	auto cap = GetJoinPairCap(join_pair);
-	auto &first_d = join_pair_info.first_d;
 	if (cap > 0 && first_d != cap && first_d > 0) {
 		// Replace the first-edge D contribution with cap (FK/PK floor).
 		// target_denom = base * first_d -> new = base * cap
 		target_denom = target_denom / first_d * cap;
 		first_d = cap;
 	}
+	capped_join_pairs.insert(join_pair);
 	return true;
 }
 
 bool CardinalityEstimator::ApplyJoinIncrement(double &target_denom, FilterInfoWithTotalDomains &edge,
-                                              reference_map_t<JoinRelationSet, JoinPairInfo> &join_pair_accumulated,
-                                              optional_ptr<JoinRelationSet> join_pair) {
+                                              reference_map_t<JoinRelationSet, double> &join_pair_first_d,
+                                              reference_set_t<JoinRelationSet> &capped_join_pairs,
+                                              JoinRelationSet &scope, optional_ptr<JoinRelationSet> join_pair) {
 	if (edge.IsInnerEquality()) {
 		auto target_pair = join_pair;
 		if (!target_pair) {
@@ -422,8 +386,10 @@ bool CardinalityEstimator::ApplyJoinIncrement(double &target_denom, FilterInfoWi
 		if (!target_pair) {
 			return false;
 		}
-		return ApplyJoinPairCap(target_denom, *target_pair, edge.filter_info->edge_equivalence_index,
-		                        join_pair_accumulated);
+		if (GetActiveEqualityClassCount(*target_pair, scope) < 2) {
+			return false;
+		}
+		return ApplyJoinPairCap(target_denom, *target_pair, join_pair_first_d, capped_join_pairs);
 	}
 
 	if (edge.filter_info->join_type == JoinType::LEFT) {
@@ -433,6 +399,26 @@ bool CardinalityEstimator::ApplyJoinIncrement(double &target_denom, FilterInfoWi
 	}
 
 	return false;
+}
+
+bool CardinalityEstimator::ApplyCompositeJoinPairCaps(double &target_denom, JoinRelationSet &scope,
+                                                      reference_map_t<JoinRelationSet, double> &join_pair_first_d,
+                                                      reference_set_t<JoinRelationSet> &capped_join_pairs) {
+	bool applied = false;
+	for (auto &entry : join_pair_first_d) {
+		auto &join_pair = entry.first.get();
+		if (capped_join_pairs.find(join_pair) != capped_join_pairs.end()) {
+			continue;
+		}
+		if (!JoinRelationSet::IsSubset(scope, join_pair)) {
+			continue;
+		}
+		if (GetActiveEqualityClassCount(join_pair, scope) < 2) {
+			continue;
+		}
+		applied = ApplyJoinPairCap(target_denom, join_pair, join_pair_first_d, capped_join_pairs) || applied;
+	}
+	return applied;
 }
 
 enum class DenominatorEdgeKind : uint8_t {
@@ -473,74 +459,15 @@ static bool CanIncrementExistingJoin(DenominatorEdgeKind kind) {
 }
 
 static void RegisterEqualityJoinPair(FilterInfoWithTotalDomains &edge, JoinRelationSetManager &set_manager,
-                                     reference_map_t<JoinRelationSet, JoinPairInfo> &join_pair_accumulated) {
+                                     reference_map_t<JoinRelationSet, double> &join_pair_first_d) {
 	if (!edge.IsInnerEquality()) {
 		return;
 	}
 	auto join_pair = GetEqualityJoinPair(edge, set_manager);
-	if (!join_pair || join_pair_accumulated.find(*join_pair) != join_pair_accumulated.end()) {
+	if (!join_pair || join_pair_first_d.find(*join_pair) != join_pair_first_d.end()) {
 		return;
 	}
-	join_pair_accumulated[*join_pair] = JoinPairInfo(edge.GetDistinctCount(), edge.filter_info->edge_equivalence_index);
-}
-
-static void TrackEquivalenceGroupRelations(FilterInfoWithTotalDomains &edge,
-                                           unordered_map<idx_t, unordered_set<RelationIndex>> &group_relations) {
-	if (!edge.filter_info->edge_equivalence_index.IsValid()) {
-		return;
-	}
-	RelationIndex left;
-	RelationIndex right;
-	if (!GetEqualityEdgeRelations(edge, left, right)) {
-		return;
-	}
-	auto &relations = group_relations[edge.filter_info->edge_equivalence_index.GetIndex()];
-	relations.insert(left);
-	relations.insert(right);
-}
-
-static vector<reference<JoinRelationSet>>
-GetImpliedJoinPairs(FilterInfoWithTotalDomains &edge, JoinRelationSetManager &set_manager,
-                    unordered_map<idx_t, unordered_set<RelationIndex>> &group_relations) {
-	vector<reference<JoinRelationSet>> result;
-	if (!edge.filter_info->edge_equivalence_index.IsValid()) {
-		return result;
-	}
-	RelationIndex left;
-	RelationIndex right;
-	if (!GetEqualityEdgeRelations(edge, left, right)) {
-		return result;
-	}
-	auto entry = group_relations.find(edge.filter_info->edge_equivalence_index.GetIndex());
-	if (entry == group_relations.end()) {
-		return result;
-	}
-	for (auto &relation : entry->second) {
-		if (relation != left) {
-			auto &left_relation = set_manager.GetJoinRelation(left);
-			auto &other_relation = set_manager.GetJoinRelation(relation);
-			result.push_back(set_manager.Union(left_relation, other_relation));
-		}
-		if (relation != right) {
-			auto &right_relation = set_manager.GetJoinRelation(right);
-			auto &other_relation = set_manager.GetJoinRelation(relation);
-			result.push_back(set_manager.Union(right_relation, other_relation));
-		}
-	}
-	return result;
-}
-
-bool CardinalityEstimator::ApplyImpliedJoinPairCaps(
-    double &target_denom, FilterInfoWithTotalDomains &edge,
-    reference_map_t<JoinRelationSet, JoinPairInfo> &join_pair_accumulated,
-    unordered_map<idx_t, unordered_set<RelationIndex>> &group_relations) {
-	bool applied = false;
-	for (auto &join_pair : GetImpliedJoinPairs(edge, set_manager, group_relations)) {
-		applied = ApplyJoinPairCap(target_denom, join_pair, edge.filter_info->edge_equivalence_index,
-		                           join_pair_accumulated) ||
-		          applied;
-	}
-	return applied;
+	join_pair_first_d[*join_pair] = edge.GetDistinctCount();
 }
 
 DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
@@ -565,28 +492,26 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 
 	// For multi-key INNER joins (>=2 equality conditions on the same join pair),
 	// we treat the composite key as a FK/PK relationship and enforce the FK/PK floor.
-	// For multi-condition LEFT joins (e.g. A LEFT JOIN B ON k1=k1 AND k2=k2),
-	// independent conditions on the same RHS should each contribute to the denominator
-	// but their product must not exceed |RHS|.
 	// For a single equality condition, the standard denominator-based formula is used as-is.
-	reference_map_t<JoinRelationSet, JoinPairInfo> join_pair_accumulated;
-	unordered_map<idx_t, unordered_set<RelationIndex>> equivalence_group_relations;
+	reference_map_t<JoinRelationSet, double> join_pair_first_d;
+	reference_set_t<JoinRelationSet> capped_join_pairs;
 
 	unordered_set<idx_t> unused_edge_tdoms;
 	auto edges = GetEdges(relation_set_stats, set);
 	for (auto &edge : edges) {
 		auto edge_kind = ClassifyDenominatorEdge(edge, applied_equivalence_groups);
-		if (subgraphs.size() == 1 && subgraphs.at(0).relations->ToString() == set.ToString()) {
+		if (subgraphs.size() == 1 && RefersToSameObject(*subgraphs.at(0).relations, set)) {
 			// The subgraph already connects all desired relations
-			ApplyImpliedJoinPairCaps(subgraphs.at(0).denom, edge, join_pair_accumulated, equivalence_group_relations);
-			TrackEquivalenceGroupRelations(edge, equivalence_group_relations);
+			ApplyCompositeJoinPairCaps(subgraphs.at(0).denom, *subgraphs.at(0).relations, join_pair_first_d,
+			                           capped_join_pairs);
 			if (edge_kind == DenominatorEdgeKind::REDUNDANT_TRANSITIVE_EQUALITY) {
 				// Transitively implied by equality conditions already used to build the subgraph, skip this denom
 				// skip the penalty entirely.
 				continue;
 			}
 			if (CanIncrementExistingJoin(edge_kind) &&
-			    ApplyJoinIncrement(subgraphs.at(0).denom, edge, join_pair_accumulated)) {
+			    ApplyJoinIncrement(subgraphs.at(0).denom, edge, join_pair_first_d, capped_join_pairs,
+			                       *subgraphs.at(0).relations)) {
 				// increment applied, skip unused_edge_tdoms penalty.
 				continue;
 			}
@@ -601,7 +526,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			applied_equivalence_groups.insert(edge.filter_info->edge_equivalence_index.GetIndex());
 		}
 
-		RegisterEqualityJoinPair(edge, set_manager, join_pair_accumulated);
+		RegisterEqualityJoinPair(edge, set_manager, join_pair_first_d);
 
 		auto edge_left_set = GetEdgeEndpoint(edge, set_manager, true);
 		auto edge_right_set = GetEdgeEndpoint(edge, set_manager, false);
@@ -622,8 +547,8 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
 			left_subgraph.relations = &set_manager.Union(*edge_left_set, *edge_right_set);
 			left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
-			ApplyImpliedJoinPairCaps(left_subgraph.denom, edge, join_pair_accumulated, equivalence_group_relations);
-			TrackEquivalenceGroupRelations(edge, equivalence_group_relations);
+			ApplyCompositeJoinPairCaps(left_subgraph.denom, *left_subgraph.relations, join_pair_first_d,
+			                           capped_join_pairs);
 			subgraphs.push_back(left_subgraph);
 		} else if (subgraph_connections.size() == 1) {
 			auto left_subgraph = &subgraphs.at(subgraph_connections.at(0));
@@ -640,18 +565,18 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 				// Edge connects the same subgraph to itself; no new relation is added.
 				// Apply the incremental denominator contribution for LEFT or INNER multi-key joins.
 				if (CanIncrementExistingJoin(edge_kind)) {
-					ApplyJoinIncrement(left_subgraph->denom, edge, join_pair_accumulated);
+					ApplyJoinIncrement(left_subgraph->denom, edge, join_pair_first_d, capped_join_pairs,
+					                   *left_subgraph->relations);
 				}
-				ApplyImpliedJoinPairCaps(left_subgraph->denom, edge, join_pair_accumulated,
-				                         equivalence_group_relations);
-				TrackEquivalenceGroupRelations(edge, equivalence_group_relations);
+				ApplyCompositeJoinPairCaps(left_subgraph->denom, *left_subgraph->relations, join_pair_first_d,
+				                           capped_join_pairs);
 				continue;
 			}
 			left_subgraph->numerator_relations = &UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
 			left_subgraph->relations = &set_manager.Union(*left_subgraph->relations, *right_subgraph.relations);
 			left_subgraph->denom = CalculateUpdatedDenom(*left_subgraph, right_subgraph, edge);
-			ApplyImpliedJoinPairCaps(left_subgraph->denom, edge, join_pair_accumulated, equivalence_group_relations);
-			TrackEquivalenceGroupRelations(edge, equivalence_group_relations);
+			ApplyCompositeJoinPairCaps(left_subgraph->denom, *left_subgraph->relations, join_pair_first_d,
+			                           capped_join_pairs);
 		} else if (subgraph_connections.size() == 2) {
 			// The two subgraphs in the subgraph_connections can be merged by this edge.
 			D_ASSERT(subgraph_connections.at(0) < subgraph_connections.at(1));
@@ -662,9 +587,8 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 			subgraph_to_merge_into->numerator_relations =
 			    &UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
 			subgraph_to_merge_into->denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
-			ApplyImpliedJoinPairCaps(subgraph_to_merge_into->denom, edge, join_pair_accumulated,
-			                         equivalence_group_relations);
-			TrackEquivalenceGroupRelations(edge, equivalence_group_relations);
+			ApplyCompositeJoinPairCaps(subgraph_to_merge_into->denom, *subgraph_to_merge_into->relations,
+			                           join_pair_first_d, capped_join_pairs);
 			subgraph_to_delete->relations = nullptr;
 			auto remove_start = std::remove_if(subgraphs.begin(), subgraphs.end(),
 			                                   [](Subgraph2Denominator &s) { return !s.relations; });

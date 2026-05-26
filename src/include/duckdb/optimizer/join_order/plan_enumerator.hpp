@@ -52,6 +52,9 @@ private:
 	CostModel &cost_model;
 	//! A map to store the optimal join plan found for a specific JoinRelationSet*
 	reference_map_t<JoinRelationSet, unique_ptr<DPJoinNode>> plans;
+	reference_map_t<JoinRelationSet, reference_map_t<JoinRelationSet, vector<reference<NeighborInfo>>>>
+	    connection_cache;
+	unordered_map<idx_t, vector<reference<JoinRelationSet>>> neighbor_set_cache;
 
 	unordered_set<string> join_nodes_in_full_plan;
 
@@ -65,6 +68,8 @@ private:
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
 	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
+	const vector<reference<NeighborInfo>> &GetConnections(JoinRelationSet &left, JoinRelationSet &right);
+	const vector<reference<JoinRelationSet>> &GetAllNeighborRelationSets(vector<RelationIndex> neighbors);
 
 	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right,
 	                           unordered_set<RelationIndex> &exclusion_set);

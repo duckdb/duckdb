@@ -64,9 +64,8 @@ static double GetLeftJoinDeferredInnerCost(QueryGraphManager &query_graph_manage
 				continue;
 			}
 
-			for (auto &pending_filter : query_graph_manager.GetFilterBindings()) {
-				if (!JoinOrderUtil::IsEquivalenceJoinPredicate(*pending_filter) || !pending_filter->left_set ||
-				    !pending_filter->right_set) {
+			for (auto pending_filter : query_graph_manager.GetPredicateModel().GetEqualityFilters()) {
+				if (!pending_filter->left_set || !pending_filter->right_set) {
 					continue;
 				}
 				if (JoinRelationSet::IsSubset(*lhs_child, pending_filter->set.get())) {
@@ -99,13 +98,15 @@ static double GetLeftJoinDeferredInnerCost(QueryGraphManager &query_graph_manage
 // Currently cost of a join mostly factors in the cardinalities.
 // LEFT joins need an explicit RHS input component because their output cardinality preserves the LHS,
 // which otherwise makes early LEFT joins over large RHS inputs look almost free.
-double CostModel::ComputeCost(DPJoinNode &left, DPJoinNode &right,
+double CostModel::ComputeCost(DPJoinNode &left, DPJoinNode &right, JoinRelationSet &combination,
                               const vector<reference<NeighborInfo>> &possible_connections) {
-	auto &combination = query_graph_manager.set_manager.Union(left.set, right.set);
 	auto join_card = cardinality_estimator.EstimateCardinalityWithSet<double>(combination);
-	auto join_cost = join_card + GetLeftJoinInputCost(cardinality_estimator, possible_connections) +
-	                 GetLeftJoinDeferredInnerCost(query_graph_manager, cardinality_estimator, left, right, combination,
-	                                              possible_connections);
+	auto join_cost = join_card;
+	if (query_graph_manager.GetPredicateModel().HasLeftJoinPredicates()) {
+		join_cost += GetLeftJoinInputCost(cardinality_estimator, possible_connections) +
+		             GetLeftJoinDeferredInnerCost(query_graph_manager, cardinality_estimator, left, right, combination,
+		                                          possible_connections);
+	}
 	return join_cost + left.cost + right.cost;
 }
 

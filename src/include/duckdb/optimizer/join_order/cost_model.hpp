@@ -24,7 +24,7 @@ private:
 
 public:
 	//! Compute cost of a join relation set
-	double ComputeCost(DPJoinNode &left, DPJoinNode &right,
+	double ComputeCost(DPJoinNode &left, DPJoinNode &right, JoinRelationSet &combination,
 	                   const vector<reference<NeighborInfo>> &possible_connections);
 	CardinalityEstimator &GetCardinalityEstimator();
 
