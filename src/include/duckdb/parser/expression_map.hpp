@@ -18,6 +18,7 @@ class Expression;
 
 template <class T>
 struct ExpressionHashFunction {
+	using skip_absl_hash_eq_consistent = void;
 	uint64_t operator()(const const_reference<T> &expr) const {
 		return (uint64_t)expr.get().Hash();
 	}
@@ -25,6 +26,7 @@ struct ExpressionHashFunction {
 
 template <class T>
 struct ExpressionEquality {
+	using skip_absl_hash_eq_consistent = void;
 	bool operator()(const const_reference<T> &a, const const_reference<T> &b) const {
 		return a.get().Equals(b.get());
 	}
