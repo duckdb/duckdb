@@ -523,6 +523,14 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	if (create_trigger_info.for_each == TriggerForEach::ROW) {
 		throw NotImplementedException("FOR EACH ROW triggers are not yet supported");
 	}
+	if ((!create_trigger_info.referencing_new_table.empty() || !create_trigger_info.referencing_old_table.empty()) &&
+	    create_trigger_info.timing != TriggerTiming::AFTER) {
+		throw BinderException("Transition tables can only be specified for AFTER triggers");
+	}
+	if ((!create_trigger_info.referencing_new_table.empty() || !create_trigger_info.referencing_old_table.empty()) &&
+	    !create_trigger_info.columns.empty()) {
+		throw BinderException("UPDATE OF is not valid with transition tables");
+	}
 	if (!create_trigger_info.referencing_old_table.empty()) {
 		if (create_trigger_info.event_type == TriggerEventType::INSERT_EVENT) {
 			throw BinderException("REFERENCING OLD TABLE AS is not valid for AFTER INSERT triggers");
@@ -534,14 +542,6 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	if (!create_trigger_info.referencing_new_table.empty() &&
 	    create_trigger_info.event_type == TriggerEventType::DELETE_EVENT) {
 		throw BinderException("REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers");
-	}
-	if ((!create_trigger_info.referencing_new_table.empty() || !create_trigger_info.referencing_old_table.empty()) &&
-	    create_trigger_info.timing != TriggerTiming::AFTER) {
-		throw BinderException("Transition tables can only be specified for AFTER triggers");
-	}
-	if ((!create_trigger_info.referencing_new_table.empty() || !create_trigger_info.referencing_old_table.empty()) &&
-	    !create_trigger_info.columns.empty()) {
-		throw BinderException("UPDATE OF is not valid with transition tables");
 	}
 	if (create_trigger_info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
 		table.ScanTriggers(table.ParentCatalog().GetCatalogTransaction(context), [&](CatalogEntry &entry) {

@@ -66,6 +66,14 @@ FOR EACH STATEMENT
 ----
 Binder Error: UPDATE OF is not valid with transition tables
 
+statement error
+CREATE TRIGGER trg_update_of_old AFTER UPDATE OF i ON t_update_of
+REFERENCING OLD TABLE AS old_rows
+FOR EACH STATEMENT
+    INSERT INTO t VALUES (1);
+----
+Binder Error: UPDATE OF is not valid with transition tables
+
 # Grammar supports both OLD TABLE and NEW TABLE in one REFERENCING clause,
 # but the binder rejects invalid event/alias combinations regardless of order
 statement error
