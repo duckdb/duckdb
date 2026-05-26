@@ -1226,7 +1226,6 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<QueryNode> &node, Catalo
 	// may reference it by name. Pushing the node standalone (without its WITH definition) would
 	// serialize "SELECT * FROM cte_name" which fails on the remote because cte_name is not a
 	// real table there. Skip pushdown; the node will execute locally against the CTE definition.
-	// This mirrors the SubqueryRef guard in FinishPushdown(TableRef).
 	for (const RemotePushdownOptimizer *opt = this; opt; opt = opt->parent.get()) {
 		for (auto &cte_entry : opt->cte_results) {
 			if (cte_entry.second.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
@@ -1239,70 +1238,6 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<QueryNode> &node, Catalo
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	select_node->from_table = CreateRemoteFunctionRef(result, std::move(node));
 	node = std::move(select_node);
-}
-
-void RemotePushdownOptimizer::FinishPushdown(unique_ptr<TableRef> &ref, CatalogPushdownResult result) {
-	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		return;
-	}
-	// A JoinRef cannot be atomically wrapped in SELECT * FROM quack_fn(...): the wrapper
-	// loses all table aliases so outer column refs like "a.i" become unresolvable, and
-	// self-joins would expose duplicate column names. Skip the pushdown; each table in
-	// the join is accessed via native remote scanning, which hits the "Multiple streaming
-	// scans" documented limitation if more than one quack connection is needed.
-	if (ref->type == TableReferenceType::JOIN) {
-		return;
-	}
-	// Do not individually push a CTE reference. The CTE body lives in the enclosing
-	// SelectNode's WITH clause and is only serialized when the entire query is pushed as
-	// a unit. Pushing the bare reference ("SELECT * FROM cte_name") without the WITH
-	// definition would fail on the remote server because the CTE name is not a real table.
-	// This situation arises when Rewrite(JoinRef) tries to push one child of a join that
-	// contains a remote CTE reference alongside a local table.
-	if (ref->type == TableReferenceType::BASE_TABLE) {
-		auto &base = ref->Cast<BaseTableRef>();
-		if (base.catalog_name.empty() && base.schema_name.empty() && cte_results.count(base.table_name) > 0) {
-			return;
-		}
-	}
-	// Do not individually push a SubqueryRef when there are outer SINGLE_REMOTE CTEs in scope.
-	// The SubqueryRef body may reference one of those CTEs. Pushing the body standalone
-	// (without its WITH clause) would produce SQL like "SELECT * FROM (SELECT * FROM cte_name)"
-	// that fails on the remote because cte_name is not a real table there.
-	// We check for SINGLE_REMOTE CTEs specifically: if all outer CTEs are UNKNOWN (local), the
-	// SubqueryRef's Rewrite result would already be UNKNOWN (since it references a local CTE),
-	// so FinishPushdown would be a no-op. Only a SINGLE_REMOTE CTE could make a
-	// SubqueryRef appear SINGLE_REMOTE while actually depending on an outer CTE definition.
-	if (ref->type == TableReferenceType::SUBQUERY) {
-		for (auto &cte_entry : cte_results) {
-			if (cte_entry.second.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-				return;
-			}
-		}
-	}
-	string alias = ref->alias;
-	// For a BaseTableRef with no explicit alias the table name is the implicit alias
-	// (e.g. "rpc.t1" is referenced as "t1" in column refs like "t1.i" in WHERE).
-	// Preserve it so that table-qualified column refs in the outer query remain
-	// resolvable after the FROM is replaced by an anonymous table function ref.
-	if (alias.empty() && ref->type == TableReferenceType::BASE_TABLE) {
-		alias = ref->Cast<BaseTableRef>().table_name;
-	}
-	StripCatalogName(*ref, result.catalog->GetName());
-	// For BaseTableRef, clear the alias before serializing: the alias is forwarded to the outer
-	// table-function wrapper (func_ref->alias) and must NOT appear in the remote SQL. Including
-	// it (e.g. "SELECT * FROM t1 AS ft") is redundant and may cause parse errors on remote
-	// servers with limited SQL parsers. SubqueryRef aliases are intentionally left intact because
-	// SQL requires subqueries in FROM to carry an alias ("SELECT * FROM (...) AS sub").
-	if (ref->type == TableReferenceType::BASE_TABLE) {
-		ref->alias = "";
-	}
-	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = std::move(ref);
-	auto func_ref = CreateRemoteFunctionRef(result, std::move(select_node));
-	func_ref->alias = std::move(alias);
-	ref = std::move(func_ref);
 }
 
 } // namespace duckdb

@@ -68,7 +68,6 @@ private:
 
 	void FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result);
 	void FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result);
-	void FinishPushdown(unique_ptr<TableRef> &ref, CatalogPushdownResult result);
 
 	static CatalogPushdownResult Merge(CatalogPushdownResult a, CatalogPushdownResult b);
 	unique_ptr<TableRef> CreateRemoteFunctionRef(CatalogPushdownResult &result, unique_ptr<QueryNode> node);
