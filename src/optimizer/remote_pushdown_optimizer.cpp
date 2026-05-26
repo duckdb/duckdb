@@ -2936,8 +2936,6 @@ static bool CollectColumnNames(ParsedExpression &expr, vector<string> &col_names
 	return ok;
 }
 
-static void StripAllTableQualifiers(QueryNode &node);
-
 static void StripAllTableQualifiers(ParsedExpression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
@@ -2951,63 +2949,14 @@ static void StripAllTableQualifiers(ParsedExpression &expr) {
 		// returning_sub alias rather than looking for the now-absent table "t".
 		expr.Cast<StarExpression>().relation_name = "";
 	}
-	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
-		// EnumerateChildren for SUBQUERY visits only the outer 'child' (left side of IN/NOT IN),
-		// not the subquery body. Recursively strip inside the body so correlated column refs to
-		// the DML target table (e.g. "WHERE t1.id = ...") become unqualified and resolve from the
-		// outer returning_sub alias in the synthesized SELECT.
-		auto &subq = expr.Cast<SubqueryExpression>();
-		if (subq.child) {
-			StripAllTableQualifiers(*subq.child);
-		}
-		if (subq.subquery && subq.subquery->node) {
-			StripAllTableQualifiers(*subq.subquery->node);
-		}
-		return;
-	}
+	// Note: SUBQUERY expressions are intentionally NOT handled specially here.
+	// EnumerateChildren for SUBQUERY visits only the outer 'child' (left side of IN/NOT IN),
+	// not the subquery body. Stripping ALL qualifiers inside the subquery body would cause
+	// wrong results when the local table and the DML target share a column name
+	// (e.g. WHERE local_t.id < t1.id → WHERE id < id, which is a tautology). Non-correlated
+	// subqueries work without body stripping because their bodies don't reference the DML target.
+	// Correlated subqueries with column-name collisions give a binder error either way.
 	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child) { StripAllTableQualifiers(child); });
-}
-
-// Strip table qualifiers from the expressions inside a subquery body.
-// Only expression nodes are stripped (SELECT list, WHERE, HAVING, GROUP BY, QUALIFY, ORDER BY).
-// The FROM table refs are intentionally left intact since they are part of the subquery's own scope.
-static void StripAllTableQualifiers(QueryNode &node) {
-	switch (node.type) {
-	case QueryNodeType::SELECT_NODE: {
-		auto &select = node.Cast<SelectNode>();
-		for (auto &expr : select.select_list) {
-			StripAllTableQualifiers(*expr);
-		}
-		if (select.where_clause) {
-			StripAllTableQualifiers(*select.where_clause);
-		}
-		for (auto &expr : select.groups.group_expressions) {
-			StripAllTableQualifiers(*expr);
-		}
-		if (select.having) {
-			StripAllTableQualifiers(*select.having);
-		}
-		if (select.qualify) {
-			StripAllTableQualifiers(*select.qualify);
-		}
-		for (auto &modifier : select.modifiers) {
-			if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
-				for (auto &order : modifier->Cast<OrderModifier>().orders) {
-					StripAllTableQualifiers(*order.expression);
-				}
-			}
-		}
-		break;
-	}
-	case QueryNodeType::SET_OPERATION_NODE: {
-		for (auto &child : node.Cast<SetOperationNode>().children) {
-			StripAllTableQualifiers(*child);
-		}
-		break;
-	}
-	default:
-		break;
-	}
 }
 
 void RemotePushdownOptimizer::TryPushDMLWithLocalReturning(unique_ptr<SQLStatement> &statement,
