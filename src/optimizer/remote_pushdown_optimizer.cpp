@@ -713,16 +713,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
-	// Save each child before analysis. Rewrite(SelectNode) calls Rewrite(JoinRef) which pushes
-	// individual SINGLE_REMOTE children in-place via FinishPushdown even when the JoinRef result is
-	// UNKNOWN (mixed join). If that child's overall result is UNKNOWN, those stale quack wrappers
-	// must be rolled back so the child executes natively. A UNION where one child is pushed to quack
-	// (slot 1) and another child has a stale wrapper (slot 2) would trigger "Multiple streaming scans".
-	vector<unique_ptr<QueryNode>> saved_children;
-	saved_children.reserve(node.children.size());
-	for (auto &child : node.children) {
-		saved_children.push_back(child->Copy());
-	}
 	// Rewrite each child independently so we can push down individual children if needed
 	vector<CatalogPushdownResult> child_results;
 	child_results.reserve(node.children.size());
@@ -802,7 +792,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<TableRef> &ref) {
 	switch (ref->type) {
 	case TableReferenceType::BASE_TABLE:
-		// Propagate the detection result up - BaseTableRef is never pushed down individually
 		return Rewrite(ref->Cast<BaseTableRef>());
 	case TableReferenceType::JOIN:
 		return Rewrite(ref->Cast<JoinRef>());
@@ -815,35 +804,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(unique_ptr<TableRef> &ref
 	case TableReferenceType::EMPTY_FROM:
 	case TableReferenceType::COLUMN_DATA:
 		return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-	case TableReferenceType::PIVOT: {
-		// PIVOT/UNPIVOT is never pushed to remote.  However, we must still Rewrite the source
-		// so that its local table names and column names are populated in local_table_names /
-		// local_table_column_names.  Without this, a correlated WHERE subquery referencing
-		// a column from the PIVOT source is incorrectly classified as non-correlated and
-		// pushed to the remote where the source table does not exist.
-		// Save source and from_pushed_* before analysis: Rewrite(JoinRef) inside may push
-		// individual SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN
-		// (mixed join). Since PIVOT always returns UNKNOWN, always restore piv.source to
-		// remove those stale quack wrappers — otherwise a WHERE subquery pushed by
-		// PushdownSubqueries could open a second concurrent streaming slot alongside the
-		// stale wrapper, triggering "Multiple streaming scans".
-		// The TrackLocalTable side effects on local_table_names / local_table_column_names
-		// from Rewrite are intentionally preserved (they are needed for correlated-ref detection).
-		auto &piv = ref->Cast<PivotRef>();
-		if (piv.source) {
-			auto saved_pivot_source = piv.source->Copy();
-			idx_t saved_cats_size = from_pushed_catalog_names.size();
-			idx_t saved_aliases_size = from_pushed_table_aliases.size();
-			Rewrite(piv.source);
-			piv.source = std::move(saved_pivot_source);
-			from_pushed_catalog_names.resize(saved_cats_size);
-			from_pushed_table_aliases.resize(saved_aliases_size);
-		}
-		if (!ref->alias.empty()) {
-			local_table_names.insert(ref->alias);
-		}
-		return {};
-	}
 	default:
 		return {};
 	}
