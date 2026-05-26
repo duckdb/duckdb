@@ -1579,5 +1579,60 @@ order by rpc.t1.i
 statement ok
 drop table local_bug35;
 
+# ============================================================
+# Enhancement: PushJoinChild for SubqueryRef.
+#
+# When a mixed JOIN has a fully-remote SubqueryRef on one side
+# (e.g. local_t JOIN (SELECT * FROM rpc.t1 WHERE i > 5) sub),
+# the subquery is individually pushed via quack_query_by_name so
+# the filter executes on the remote server.  Previously PushJoinChild
+# returned "" for non-BASE_TABLE refs, leaving the full scan local.
+# ============================================================
+
+statement ok
+create table local_sq(k int);
+
+statement ok
+insert into local_sq from range(10);
+
+# Remote subquery with filter in mixed JOIN is pushed individually
+query I
+select sub.i from local_sq join (select i from rpc.t1 where i > 5) sub on local_sq.k = sub.i
+order by sub.i
+----
+6
+7
+8
+9
+
+# Remote subquery with aggregation in mixed JOIN is pushed individually
+query I
+select count(*) from local_sq join (select i from rpc.t1 where i between 3 and 7) sub on local_sq.k = sub.i
+----
+5
+
+# DELETE USING with remote subquery USING clause is pushed individually
+statement ok
+delete from local_sq using (select i from rpc.t1 where i >= 7) sub where local_sq.k = sub.i
+
+# rows 7-9 deleted; local_sq = {0..6}, count = 7
+query I
+select count(*) from local_sq
+----
+7
+
+# UPDATE FROM with remote subquery FROM clause is pushed individually
+statement ok
+update local_sq set k = sub.v from (select i, i * 10 as v from rpc.t1 where i < 3) sub where local_sq.k = sub.i
+
+# rows 0,1,2 become 0,10,20; count where k > 9 = 2 (values 10 and 20)
+query I
+select count(*) from local_sq where k > 9
+----
+2
+
+statement ok
+drop table local_sq;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

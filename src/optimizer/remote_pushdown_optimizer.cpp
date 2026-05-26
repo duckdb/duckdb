@@ -439,6 +439,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 					auto &base = node.using_clauses[i]->Cast<BaseTableRef>();
 					old_tname = base.table_name;
 					new_talias = base.alias.empty() ? base.table_name : base.alias;
+				} else if (node.using_clauses[i]->type == TableReferenceType::SUBQUERY) {
+					old_tname = node.using_clauses[i]->Cast<SubqueryRef>().alias;
+					new_talias = old_tname;
 				}
 				auto catalog_name = PushJoinChild(node.using_clauses[i], using_results[i]);
 				if (!catalog_name.empty()) {
@@ -499,6 +502,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 			auto &base = node.from_table->Cast<BaseTableRef>();
 			old_tname = base.table_name;
 			new_talias = base.alias.empty() ? base.table_name : base.alias;
+		} else if (node.from_table->type == TableReferenceType::SUBQUERY) {
+			old_tname = node.from_table->Cast<SubqueryRef>().alias;
+			new_talias = old_tname;
 		}
 		auto catalog_name = PushJoinChild(node.from_table, from_result);
 		if (!catalog_name.empty()) {
@@ -749,6 +755,24 @@ string RemotePushdownOptimizer::PushJoinChild(unique_ptr<TableRef> &ref, Catalog
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		return "";
 	}
+	if (ref->type == TableReferenceType::SUBQUERY) {
+		// Guard: if any remote CTE is in scope the subquery may reference it by name;
+		// pushing it standalone would fail on the remote because the CTE is not defined there.
+		for (const RemotePushdownOptimizer *opt = this; opt; opt = opt->parent.get()) {
+			for (auto &cte_entry : opt->cte_results) {
+				if (cte_entry.second.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+					return "";
+				}
+			}
+		}
+		auto &sq = ref->Cast<SubqueryRef>();
+		string alias = sq.alias;
+		StripCatalogName(*sq.subquery->node, result.catalog->GetName());
+		auto func_ref = CreateRemoteFunctionRef(result, std::move(sq.subquery->node));
+		func_ref->alias = alias;
+		ref = std::move(func_ref);
+		return result.catalog->GetName();
+	}
 	if (ref->type != TableReferenceType::BASE_TABLE) {
 		return "";
 	}
@@ -839,6 +863,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 				auto &base = ref.left->Cast<BaseTableRef>();
 				old_tname = base.table_name;
 				new_talias = base.alias.empty() ? base.table_name : base.alias;
+			} else if (ref.left->type == TableReferenceType::SUBQUERY) {
+				old_tname = ref.left->Cast<SubqueryRef>().alias;
+				new_talias = old_tname;
 			}
 			auto catalog_name = PushJoinChild(ref.left, left_result);
 			if (!catalog_name.empty()) {
@@ -857,6 +884,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 				auto &base = ref.right->Cast<BaseTableRef>();
 				old_tname = base.table_name;
 				new_talias = base.alias.empty() ? base.table_name : base.alias;
+			} else if (ref.right->type == TableReferenceType::SUBQUERY) {
+				old_tname = ref.right->Cast<SubqueryRef>().alias;
+				new_talias = old_tname;
 			}
 			auto catalog_name = PushJoinChild(ref.right, right_result);
 			if (!catalog_name.empty()) {
