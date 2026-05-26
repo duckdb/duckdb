@@ -124,4 +124,5 @@ TEST_CASE("RevertAppend removes trailing empty column segments", "[storage]") {
 		REQUIRE(last_segment->GetRowEnd() == revert_count);
 		REQUIRE(column.count == revert_count);
 	}
+	REQUIRE_NOTHROW(con.Rollback());
 }
