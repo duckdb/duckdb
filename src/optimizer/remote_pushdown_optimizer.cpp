@@ -518,6 +518,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 		if (saved_from_table_for_cte && had_join_child_pushdowns) {
 			node.from_table = std::move(saved_from_table_for_cte);
 			from_pushed_catalog_names.clear();
+			from_pushed_table_aliases.clear();
 			had_join_child_pushdowns = false;
 		}
 		{
