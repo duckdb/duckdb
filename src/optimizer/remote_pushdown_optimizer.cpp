@@ -208,6 +208,18 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	// These CTEs are serialized in ToString() and must be analyzed and restored correctly.
 	case_insensitive_map_t<CatalogPushdownResult> outer_cte_results;
 	CatalogPushdownResult cte_combined {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	// Save nested CTE query_nodes before analysis. Rewrite(JoinRef) inside a nested CTE body
+	// pushes individual SINGLE_REMOTE children in-place even when the JoinRef result is UNKNOWN
+	// (mixed join). If the overall RecursiveCTENode result is UNKNOWN, those stale quack wrappers
+	// must be rolled back: the recursive CTE body executes natively, and if the outer query also
+	// has a quack streaming slot open, the stale wrapper inside the nested CTE would open a
+	// concurrent second streaming connection → "Multiple streaming scans".
+	case_insensitive_map_t<unique_ptr<QueryNode>> saved_cte_nodes;
+	for (auto &cte_pair : node.cte_map.map) {
+		if (cte_pair.second->query_node) {
+			saved_cte_nodes[cte_pair.first] = cte_pair.second->query_node->Copy();
+		}
+	}
 	for (auto &cte_pair : node.cte_map.map) {
 		const string &cte_name = cte_pair.first;
 		auto &cte_info = *cte_pair.second;
@@ -278,6 +290,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		node.left = std::move(saved_left);
 		node.right = std::move(saved_right);
+		// Restore nested CTE bodies to remove any stale quack wrappers inserted in-place.
+		for (auto &cte_pair : node.cte_map.map) {
+			auto it = saved_cte_nodes.find(cte_pair.first);
+			if (it != saved_cte_nodes.end() && it->second) {
+				cte_pair.second->query_node = std::move(it->second);
+			}
+		}
 	}
 	return result;
 }
