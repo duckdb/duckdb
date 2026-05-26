@@ -84,9 +84,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Merge(CatalogPushdownResult a, Ca
 		return a;
 	}
 	if (a.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE ||
-		b.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
+	    b.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
 		return {};
-		}
+	}
 	// Both are SINGLE_REMOTE_CATALOG - only valid if they refer to the same catalog
 	if (a.catalog == b.catalog) {
 		return a;
