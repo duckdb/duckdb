@@ -7,8 +7,10 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
@@ -21,6 +23,8 @@ struct ServeFeatureBindData : public FunctionData {
 	vector<string> result_names;
 	vector<LogicalType> result_types;
 	string generated_sql;
+	string default_catalog; // caller's default catalog for sub-connections
+	string default_schema;  // caller's default schema for sub-connections
 
 	unique_ptr<FunctionData> Copy() const override {
 		auto result = make_uniq<ServeFeatureBindData>();
@@ -31,6 +35,8 @@ struct ServeFeatureBindData : public FunctionData {
 		result->result_names = result_names;
 		result->result_types = result_types;
 		result->generated_sql = generated_sql;
+		result->default_catalog = default_catalog;
+		result->default_schema = default_schema;
 		return std::move(result);
 	}
 
@@ -48,6 +54,21 @@ struct ServeFeatureState : public GlobalTableFunctionState {
 
 static string QuoteId(const string &name) {
 	return SQLIdentifier::ToString(name);
+}
+
+static void SetConnectionCatalog(Connection &con, const string &catalog, const string &schema) {
+	if (!catalog.empty()) {
+		auto use_result = con.Query("USE " + QuoteId(catalog));
+		if (use_result->HasError()) {
+			throw InternalException("Failed to set catalog for SERVE FEATURE: %s", use_result->GetError());
+		}
+	}
+	if (!schema.empty() && schema != DEFAULT_SCHEMA) {
+		auto schema_result = con.Query("SET schema = '" + schema + "'");
+		if (schema_result->HasError()) {
+			throw InternalException("Failed to set schema for SERVE FEATURE: %s", schema_result->GetError());
+		}
+	}
 }
 
 static optional_ptr<FeatureCatalogEntry> LookupFeature(ClientContext &context, const string &feature_name) {
@@ -176,6 +197,12 @@ static unique_ptr<FunctionData> ServeFeatureBind(ClientContext &context, TableFu
 		StringUtil::Trim(f);
 	}
 
+	// Capture the caller's default catalog/schema so sub-connections resolve tables correctly
+	auto &search_path = ClientData::Get(context).catalog_search_path;
+	auto &default_entry = search_path->GetDefault();
+	result->default_catalog = default_entry.catalog;
+	result->default_schema = default_entry.schema;
+
 	// Build the SQL — empty entity/as_of means "use same column name as feature metadata"
 	result->generated_sql =
 	    BuildServeSQL(context, feature_list, result->spine_table, result->entity_column, result->as_of_column);
@@ -183,6 +210,7 @@ static unique_ptr<FunctionData> ServeFeatureBind(ClientContext &context, TableFu
 	// Use a sub-connection to determine the result schema
 	auto &db = DatabaseInstance::GetDatabase(context);
 	Connection con(db);
+	SetConnectionCatalog(con, result->default_catalog, result->default_schema);
 	auto prep = con.Prepare(result->generated_sql);
 	if (prep->HasError()) {
 		throw BinderException("Failed to prepare SERVE FEATURE query: %s\nGenerated SQL: %s", prep->GetError(),
@@ -214,6 +242,7 @@ static void ServeFeatureFunction(ClientContext &context, TableFunctionInput &dat
 	if (!state.query_result) {
 		auto &db = DatabaseInstance::GetDatabase(context);
 		Connection con(db);
+		SetConnectionCatalog(con, bind_data.default_catalog, bind_data.default_schema);
 		state.query_result = con.Query(bind_data.generated_sql);
 		if (state.query_result->HasError()) {
 			throw InternalException("SERVE FEATURE query failed: %s", state.query_result->GetError());
