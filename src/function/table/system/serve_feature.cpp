@@ -44,8 +44,6 @@ struct ServeFeatureBindData : public FunctionData {
 struct ServeFeatureState : public GlobalTableFunctionState {
 	bool done = false;
 	unique_ptr<QueryResult> query_result;
-	unique_ptr<DataChunk> current_chunk;
-	idx_t current_row = 0;
 };
 
 static string QuoteId(const string &name) {
@@ -71,6 +69,40 @@ static string BuildServeSQL(ClientContext &context, const vector<string> &featur
 	// entity_override: if non-empty, use this as the spine's entity column (maps to feature's entity)
 	// as_of_override: if non-empty, use this as the spine's timestamp column
 	// If empty, assume spine has same column name as the feature's entity/timestamp column
+
+	// Validate that spine table exists
+	auto schemas = Catalog::GetAllSchemas(context);
+	bool spine_found = false;
+	for (auto &schema : schemas) {
+		auto entry = schema.get().GetEntry(schema.get().GetCatalogTransaction(context), CatalogType::TABLE_ENTRY,
+		                                   spine_table);
+		if (entry) {
+			spine_found = true;
+			break;
+		}
+	}
+	if (!spine_found) {
+		throw CatalogException("Spine table \"%s\" does not exist", spine_table);
+	}
+
+	// For multiple features without an entity override, validate they all share the same entity column
+	if (feature_list.size() > 1 && entity_override.empty()) {
+		string first_entity;
+		for (auto &fname : feature_list) {
+			auto entry = LookupFeature(context, fname);
+			if (!entry) {
+				throw CatalogException("Feature \"%s\" does not exist", fname);
+			}
+			if (first_entity.empty()) {
+				first_entity = entry->entity_column;
+			} else if (entry->entity_column != first_entity) {
+				throw BinderException(
+				    "Features have different entity columns (\"%s\" vs \"%s\"). "
+				    "Use ENTITY to specify the spine's entity column explicitly.",
+				    first_entity, entry->entity_column);
+			}
+		}
+	}
 
 	if (feature_list.size() == 1) {
 		// Single feature: simple ASOF JOIN
@@ -157,13 +189,6 @@ static unique_ptr<FunctionData> ServeFeatureBind(ClientContext &context, TableFu
 		                      result->generated_sql);
 	}
 
-	for (idx_t i = 0; i < prep->ColumnCount(); i++) {
-		names.push_back(prep->GetStatementProperties().return_type == StatementReturnType::QUERY_RESULT
-		                    ? prep->GetNames()[i]
-		                    : "col" + duckdb::to_string(i));
-		return_types.push_back(prep->GetTypes()[i]);
-	}
-	// Use the names/types from Prepare directly
 	names = prep->GetNames();
 	return_types = prep->GetTypes();
 

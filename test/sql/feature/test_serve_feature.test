@@ -135,6 +135,12 @@ SERVE FEATURE nonexistent FOR requests;
 ----
 does not exist
 
+# Non-existent spine table
+statement error
+SERVE FEATURE daily_txn FOR nonexistent_table;
+----
+does not exist
+
 # ============================================================
 # SERVE FEATURES (plural) with multiple features
 # ============================================================
