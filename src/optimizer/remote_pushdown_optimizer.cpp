@@ -235,7 +235,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 	// Save and reset the pending strip catalogs set by child JoinRef individual pushdown.
 	// Scoped to this SelectNode so nested selects (via child optimizers) don't interfere.
-	vector<string> saved_pending = std::move(pending_outer_strip_catalogs);
+	vector<PendingStripEntry> saved_pending = std::move(pending_outer_strip_catalogs);
 	pending_outer_strip_catalogs = {};
 
 	CatalogPushdownResult from_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
@@ -246,32 +246,41 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 	// Apply pending catalog stripping from individual JoinRef child pushdown.
 	// Use strip_subquery_bodies=false: subqueries in SELECT/WHERE are NOT being pushed
 	// individually and must keep their catalog-qualified references intact.
-	for (auto &cat : pending_outer_strip_catalogs) {
+	// When the pushed table has an explicit alias (e.g. rpc.t1 AS rt1), StripCatalogName reduces
+	// "rpc.t1.col" to "t1.col" but the binder only knows "rt1". RenameTableInExpr fixes that up.
+	for (auto &entry : pending_outer_strip_catalogs) {
+		bool need_rename = !StringUtil::CIEquals(entry.old_table_name, entry.new_alias);
+		auto strip_and_rename = [&](ParsedExpression &expr) {
+			StripCatalogName(expr, entry.catalog_name, false);
+			if (need_rename) {
+				RenameTableInExpr(expr, entry.old_table_name, entry.new_alias);
+			}
+		};
 		for (auto &expr : node.select_list) {
-			StripCatalogName(*expr, cat, false);
+			strip_and_rename(*expr);
 		}
 		if (node.where_clause) {
-			StripCatalogName(*node.where_clause, cat, false);
+			strip_and_rename(*node.where_clause);
 		}
 		for (auto &expr : node.groups.group_expressions) {
-			StripCatalogName(*expr, cat, false);
+			strip_and_rename(*expr);
 		}
 		if (node.having) {
-			StripCatalogName(*node.having, cat, false);
+			strip_and_rename(*node.having);
 		}
 		if (node.qualify) {
-			StripCatalogName(*node.qualify, cat, false);
+			strip_and_rename(*node.qualify);
 		}
 		for (auto &modifier : node.modifiers) {
 			if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
 				auto &order_mod = modifier->Cast<OrderModifier>();
 				for (auto &order : order_mod.orders) {
-					StripCatalogName(*order.expression, cat, false);
+					strip_and_rename(*order.expression);
 				}
 			} else if (modifier->type == ResultModifierType::DISTINCT_MODIFIER) {
 				auto &distinct_mod = modifier->Cast<DistinctModifier>();
 				for (auto &expr : distinct_mod.distinct_on_targets) {
-					StripCatalogName(*expr, cat, false);
+					strip_and_rename(*expr);
 				}
 			}
 		}
@@ -791,16 +800,21 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 
 	// Propagate pending strip catalogs from the right-side child optimizer (set by inner JoinRef
 	// pushdowns on that side) into the current scope so the outer SelectNode can strip SELECT/WHERE.
-	for (auto &cat : child_optimizer.pending_outer_strip_catalogs) {
-		pending_outer_strip_catalogs.push_back(cat);
+	for (auto &entry : child_optimizer.pending_outer_strip_catalogs) {
+		pending_outer_strip_catalogs.push_back(entry);
 	}
 
 	// Strip this JoinRef's own ON condition for all catalogs that were pushed during child processing
 	// (both from left-side inner JoinRefs and from the propagated right-side child entries).
 	// strip_subquery_bodies=false: subqueries within the ON condition are NOT being pushed individually.
+	// Also apply alias renaming when the pushed table has an explicit alias differing from its name.
 	if (ref.condition) {
 		for (idx_t i = pending_before; i < pending_outer_strip_catalogs.size(); i++) {
-			StripCatalogName(*ref.condition, pending_outer_strip_catalogs[i], false);
+			auto &entry = pending_outer_strip_catalogs[i];
+			StripCatalogName(*ref.condition, entry.catalog_name, false);
+			if (!StringUtil::CIEquals(entry.old_table_name, entry.new_alias)) {
+				RenameTableInExpr(*ref.condition, entry.old_table_name, entry.new_alias);
+			}
 		}
 	}
 
@@ -834,7 +848,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 						RenameTableInExpr(*ref.condition, old_tname, new_talias);
 					}
 				}
-				pending_outer_strip_catalogs.push_back(catalog_name);
+				pending_outer_strip_catalogs.push_back({catalog_name, old_tname, new_talias});
 			}
 		} else if (right_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
 		           left_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
@@ -852,7 +866,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 						RenameTableInExpr(*ref.condition, old_tname, new_talias);
 					}
 				}
-				pending_outer_strip_catalogs.push_back(catalog_name);
+				pending_outer_strip_catalogs.push_back({catalog_name, old_tname, new_talias});
 			}
 		}
 	}

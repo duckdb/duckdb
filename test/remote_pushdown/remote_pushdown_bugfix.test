@@ -1537,5 +1537,47 @@ order by rt1.i
 statement ok
 drop table local_bug34;
 
+# ============================================================
+# Bug 35: pending_outer_strip_catalogs missing RenameTableInExpr.
+#
+# When a remote table with an explicit alias (rpc.t1 AS rt1) is
+# pushed in a mixed JOIN, pending_outer_strip_catalogs propagates
+# the catalog name to Rewrite(SelectNode) so SELECT/WHERE expressions
+# are stripped (rpc.t1.col → t1.col).  But without RenameTableInExpr
+# the result is t1.col, not rt1.col — and the binder fails because
+# only rt1 is in scope.  Fix: carry (old_tname, new_alias) in the
+# pending entries and call RenameTableInExpr after StripCatalogName.
+# ============================================================
+
+statement ok
+create table local_bug35(k int);
+
+statement ok
+insert into local_bug35 values (2), (5), (8);
+
+# SELECT uses catalog-qualified rpc.t1.i (not the alias rt1.i):
+# After stripping → t1.i; after rename → rt1.i.  Should return 3 rows.
+query I
+select rpc.t1.i
+from rpc.t1 AS rt1 join local_bug35 on rt1.i = local_bug35.k
+order by rpc.t1.i
+----
+2
+5
+8
+
+# WHERE also uses catalog-qualified form: rpc.t1.i > 3
+query I
+select rpc.t1.i
+from rpc.t1 AS rt1 join local_bug35 on rt1.i = local_bug35.k
+where rpc.t1.i > 3
+order by rpc.t1.i
+----
+5
+8
+
+statement ok
+drop table local_bug35;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

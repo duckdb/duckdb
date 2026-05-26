@@ -95,11 +95,20 @@ private:
 	bool search_path_initialized = false;
 	vector<reference<Catalog>> remote_catalogs_in_search_path;
 	vector<CatalogSearchEntry> local_catalogs_in_search_path;
+	//! Entry pushed to pending_outer_strip_catalogs: catalog + optional table→alias rename info.
+	//! After StripCatalogName reduces "catalog.table.col" to "table.col", RenameTableInExpr renames
+	//! "table.col" to "alias.col" when the pushed table carries an explicit alias differing from its name.
+	struct PendingStripEntry {
+		string catalog_name;
+		string old_table_name; // table name before push (non-empty when entry is valid)
+		string new_alias;      // alias assigned after push (may equal old_table_name)
+	};
+
 	//! Names/aliases of non-remote tables seen in the current FROM scope, used to detect correlated subqueries
 	case_insensitive_set_t local_table_names;
 	//! CTE name → catalog pushdown result, populated as CTEs are analyzed (inner scopes restore on exit)
 	case_insensitive_map_t<CatalogPushdownResult> cte_results;
 	//! Catalogs individually pushed during FROM processing; Rewrite(SelectNode) reads this to strip outer expressions
-	vector<string> pending_outer_strip_catalogs;
+	vector<PendingStripEntry> pending_outer_strip_catalogs;
 };
 } // namespace duckdb
