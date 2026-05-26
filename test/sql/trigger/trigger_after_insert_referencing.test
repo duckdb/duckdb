@@ -321,3 +321,55 @@ FOR EACH STATEMENT
 ----
 Binder Error: REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers
 
+# UPDATE OF + REFERENCING is rejected (PostgreSQL: transition tables cannot have column lists)
+statement ok
+CREATE TABLE t_update_of (i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE log_update_of (i INTEGER);
+
+statement error
+CREATE TRIGGER tr_update_of AFTER UPDATE OF i ON t_update_of
+REFERENCING NEW TABLE AS updated_rows
+FOR EACH STATEMENT
+    INSERT INTO log_update_of SELECT i FROM updated_rows;
+----
+Binder Error: UPDATE OF is not valid with transition tables
+
+# BEFORE + REFERENCING is rejected (transition tables are AFTER-only)
+statement ok
+CREATE TABLE t_before_ref (i INTEGER);
+
+statement ok
+CREATE TABLE log_before_ref (i INTEGER);
+
+statement error
+CREATE TRIGGER tr_before_ref BEFORE INSERT ON t_before_ref
+REFERENCING NEW TABLE AS inserted_rows
+FOR EACH STATEMENT
+    INSERT INTO log_before_ref SELECT i FROM inserted_rows;
+----
+Binder Error: Transition tables can only be specified for AFTER triggers
+
+# Body CTE with same name as REFERENCING alias: body CTE shadows the alias
+statement ok
+CREATE TABLE t_alias_shadow (i INTEGER);
+
+statement ok
+CREATE TABLE log_alias_shadow (s VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_alias_shadow AFTER INSERT ON t_alias_shadow
+REFERENCING NEW TABLE AS n
+FOR EACH STATEMENT
+    WITH n AS (SELECT 'local' AS s)
+    INSERT INTO log_alias_shadow SELECT s FROM n;
+
+statement ok
+INSERT INTO t_alias_shadow VALUES (1);
+
+query I
+SELECT s FROM log_alias_shadow;
+----
+local
+
