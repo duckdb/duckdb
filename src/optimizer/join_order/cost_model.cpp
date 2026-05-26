@@ -1,6 +1,8 @@
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/cost_model.hpp"
+
+#include "duckdb/main/relation/join_relation.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 
 namespace duckdb {
@@ -20,14 +22,13 @@ CardinalityEstimator &CostModel::GetCardinalityEstimator() {
 static double GetLeftJoinInputCost(CardinalityEstimator &cardinality_estimator,
                                    const vector<reference<NeighborInfo>> &possible_connections) {
 	double cost = 0;
-	unordered_set<string> seen_right_sides;
+	reference_set_t<JoinRelationSet> seen_right_sides;
 	for (auto &connection : possible_connections) {
 		for (auto &filter : connection.get().filters) {
 			if (filter->join_type != JoinType::LEFT || !filter->right_set) {
 				continue;
 			}
-			auto right_side = filter->right_set->ToString();
-			if (!seen_right_sides.insert(right_side).second) {
+			if (!seen_right_sides.insert(*filter->right_set).second) {
 				continue;
 			}
 			cost += cardinality_estimator.EstimateCardinalityWithSet<double>(*filter->right_set);
@@ -62,7 +63,7 @@ static double GetPendingSmallSidePenalty(QueryGraphManager &query_graph_manager,
 	}
 
 	double cost = 0;
-	unordered_set<string> seen_inside_sets;
+	reference_set_t<JoinRelationSet> seen_inside_sets;
 	for (auto &filter : query_graph_manager.GetFilterBindings()) {
 		if (!JoinOrderUtil::IsEquivalenceJoinPredicate(*filter) || !filter->left_set || !filter->right_set) {
 			continue;
@@ -86,8 +87,7 @@ static double GetPendingSmallSidePenalty(QueryGraphManager &query_graph_manager,
 			continue;
 		}
 
-		auto inside_key = inside->ToString();
-		if (!seen_inside_sets.insert(inside_key).second) {
+		if (!seen_inside_sets.insert(*inside).second) {
 			continue;
 		}
 		cost += inside_card;

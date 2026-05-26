@@ -185,7 +185,7 @@ double CardinalityEstimator::GetNumerator(JoinRelationSet &set) {
 	double numerator = 1;
 	for (idx_t i = 0; i < set.count; i++) {
 		auto &single_node_set = set_manager.GetJoinRelation(set.relations[i]);
-		auto card_helper = relation_set_2_cardinality[single_node_set.ToString()];
+		auto card_helper = relation_set_2_cardinality[single_node_set];
 		numerator *= card_helper.cardinality_before_filters == 0 ? 1 : card_helper.cardinality_before_filters;
 	}
 	return numerator;
@@ -619,7 +619,7 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 template <>
 double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
 	double result;
-	auto it = relation_set_2_cardinality.find(new_set.ToString());
+	auto it = relation_set_2_cardinality.find(new_set);
 	if (it != relation_set_2_cardinality.end()) {
 		result = it->second.cardinality_before_filters;
 	} else {
@@ -629,7 +629,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 		// include cardinalities of relations on the RHS of a semi/anti join.
 		auto numerator = GetNumerator(denom.numerator_relations);
 		result = numerator / denom.denominator;
-		relation_set_2_cardinality[new_set.ToString()] = CardinalityHelper(result);
+		relation_set_2_cardinality[new_set] = CardinalityHelper(result);
 	}
 	return ApplyOrFilterSelectivities(new_set, result);
 }
@@ -672,7 +672,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 	auto relation_cardinality = stats.cardinality;
 
 	auto card_helper = CardinalityHelper((double)relation_cardinality);
-	relation_set_2_cardinality[set->ToString()] = card_helper;
+	relation_set_2_cardinality[*set] = card_helper;
 
 	UpdateTotalDomains(set, stats);
 
@@ -697,16 +697,15 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 				continue;
 			}
 			auto distinct_count = stats.column_distinct_count.at(i);
-			auto effective_distinct_count = distinct_count.GetEffectiveDistinctCount();
 			if (distinct_count.from_hll && relation_to_tdom.has_distinct_count_hll) {
 				relation_to_tdom.distinct_count_hll =
-				    MaxValue(relation_to_tdom.distinct_count_hll, effective_distinct_count);
+				    MaxValue(relation_to_tdom.distinct_count_hll, distinct_count.distinct_count);
 			} else if (distinct_count.from_hll && !relation_to_tdom.has_distinct_count_hll) {
 				relation_to_tdom.has_distinct_count_hll = true;
-				relation_to_tdom.distinct_count_hll = effective_distinct_count;
+				relation_to_tdom.distinct_count_hll = distinct_count.distinct_count;
 			} else {
 				relation_to_tdom.distinct_count_no_hll =
-				    MinValue(effective_distinct_count, relation_to_tdom.distinct_count_no_hll);
+				    MinValue(distinct_count.distinct_count, relation_to_tdom.distinct_count_no_hll);
 			}
 			break;
 		}

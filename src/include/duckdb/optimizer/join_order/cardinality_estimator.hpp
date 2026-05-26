@@ -102,7 +102,7 @@ public:
 
 private:
 	vector<RelationsSetToStats> relation_set_stats;
-	unordered_map<string, CardinalityHelper> relation_set_2_cardinality;
+	reference_map_t<JoinRelationSet, CardinalityHelper> relation_set_2_cardinality;
 	JoinRelationSetManager set_manager;
 	vector<RelationStats> relation_stats;
 
