@@ -715,7 +715,7 @@ benchmark:
 
 .PHONY: test_benchmark_sql
 test_benchmark_sql:
-	$(PYTHON) scripts/test_benchmark_sql_runner.py --shell build/relassert/duckdb
+	$(PYTHON) -u scripts/test_benchmark_sql_runner.py --shell build/relassert/duckdb
 
 
 tidy-check:
