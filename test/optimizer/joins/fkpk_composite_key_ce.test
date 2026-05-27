@@ -56,6 +56,26 @@ select count(*) from ck_a join ck_b on ck_a.x = ck_b.x and ck_a.y = ck_b.y;
 ----
 1000
 
+# Same-pair predicates are not always composite keys. If both inputs have many
+# rows per observed single-column domain, the row-count cap would make a broad
+# fact-to-fact join look like a key lookup and hide useful local filters.
+
+statement ok
+create table ff_a as select (range % 1000)::integer x, (range % 1000)::integer y from range(100000);
+
+statement ok
+create table ff_b as select (range % 1000)::integer x, (range % 1000)::integer y from range(100000);
+
+query II
+explain select count(*) from ff_a join ff_b on ff_a.x = ff_b.x and ff_a.y = ff_b.y;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~[1-9].[0-9]{3}.[0-9]{3} rows.*
+
+query I
+select count(*) from ff_a join ff_b on ff_a.x = ff_b.x and ff_a.y = ff_b.y;
+----
+10000000
+
 # --------------------------------------------------------------------------
 # Q9-like 3-way join: ps_suppkey=l_suppkey AND s_suppkey=l_suppkey AND
 # ps_partkey=l_partkey. DuckDB derives the transitive condition

@@ -83,6 +83,31 @@ struct Subgraph2Denominator {
 	Subgraph2Denominator() : relations(nullptr), numerator_relations(nullptr), denom(1) {};
 };
 
+struct CompositeJoinPairStats {
+	// The row-count cap is only plausible when the candidate key cardinality is within the same order of magnitude
+	// as an observed single-column domain. Otherwise broad fact-to-fact joins can look like key lookups.
+	static constexpr double MAX_CARDINALITY_TO_DISTINCT_RATIO = 8;
+
+	double first_distinct_count = 0;
+	double max_distinct_count = 0;
+	bool has_distinct_count = false;
+
+	void RegisterDistinctCount(double distinct_count) {
+		if (!has_distinct_count) {
+			first_distinct_count = distinct_count;
+			has_distinct_count = true;
+		}
+		if (distinct_count > max_distinct_count) {
+			max_distinct_count = distinct_count;
+		}
+	}
+
+	bool CanApplyCap(double cap) const {
+		return has_distinct_count && max_distinct_count > 0 &&
+		       cap <= max_distinct_count * MAX_CARDINALITY_TO_DISTINCT_RATIO;
+	}
+};
+
 class CardinalityHelper {
 public:
 	CardinalityHelper() {
@@ -165,14 +190,14 @@ private:
 	double CalculateSemiAntiJoinDenom(double base_denom, Subgraph2Denominator &left, Subgraph2Denominator &right,
 	                                  FilterInfoWithTotalDomains &filter);
 	bool ApplyJoinIncrement(double &target_denom, FilterInfoWithTotalDomains &edge,
-	                        reference_map_t<JoinRelationSet, double> &inner_join_pair_first_d,
+	                        reference_map_t<JoinRelationSet, CompositeJoinPairStats> &inner_join_pair_stats,
 	                        reference_set_t<JoinRelationSet> &capped_join_pairs, JoinRelationSet &scope,
 	                        optional_ptr<JoinRelationSet> join_pair = nullptr);
 	bool ApplyJoinPairCap(double &target_denom, JoinRelationSet &join_pair,
-	                      reference_map_t<JoinRelationSet, double> &inner_join_pair_first_d,
+	                      reference_map_t<JoinRelationSet, CompositeJoinPairStats> &inner_join_pair_stats,
 	                      reference_set_t<JoinRelationSet> &capped_join_pairs);
 	bool ApplyCompositeJoinPairCaps(double &target_denom, JoinRelationSet &scope,
-	                                reference_map_t<JoinRelationSet, double> &inner_join_pair_first_d,
+	                                reference_map_t<JoinRelationSet, CompositeJoinPairStats> &inner_join_pair_stats,
 	                                reference_set_t<JoinRelationSet> &capped_join_pairs);
 	double GetJoinPairCap(JoinRelationSet &join_pair);
 
