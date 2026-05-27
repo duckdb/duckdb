@@ -1083,7 +1083,7 @@ def main():
         # 'common.gram',
         'connect.gram',
         # 'copy.gram',
-        # 'create_index.gram',
+        'create_index.gram',
         # 'create_macro.gram',
         'create_schema.gram',
         'create_secret.gram',

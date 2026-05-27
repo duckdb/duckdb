@@ -1133,19 +1133,26 @@ GeneratedColumnType <- 'VIRTUAL' / 'STORED'
 CommitAction <- 'ON' 'COMMIT' PreserveOrDelete 'ROWS'
 PreserveOrDelete <- 'PRESERVE' / 'DELETE'
 
-CreateIndexStmt <- Unique? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName InsertColumnList? IndexType? Parens(List(IndexElement))? WithList? WhereClause?
+CreateIndexStmt <- UniqueIndex? 'INDEX' IfNotExists? IndexName? 'ON' BaseTableName InsertColumnList? IndexType? Parens(List(IndexElement))? WithList? WhereClause?
 
 WithList <- 'WITH' RelOptionOrOids
 RelOptionOrOids <- RelOptionList / Oids
 RelOptionList <- Parens(List(RelOption))
-Oids <- ('WITH' / 'WITHOUT') 'OIDS'
+Oids <- WithOrWithoutOids 'OIDS'
+WithOrWithoutOids <- WithOids / WithoutOids
+WithOids <- 'WITH'
+WithoutOids <- 'WITHOUT'
 IndexElement <- Expression DescOrAsc? NullsFirstOrLast?
-Unique <- 'UNIQUE'
+UniqueIndex <- 'UNIQUE'
 IndexType <- 'USING' Identifier
 RelOption <- RelOptionName RelOptionArgumentOpt?
-RelOptionName <- DottedIdentifier / StringLiteral
+RelOptionName <- DottedIdentifierString / StringLiteral
+DottedIdentifierString <- DottedIdentifier
 RelOptionArgumentOpt <- '=' DefArg
-DefArg <- NullLiteral / ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral / Expression
+DefArg <- DefArgNull / DefArgKeyword / DefArgStringLiteral / NumberLiteral / NoneLiteral / Expression
+DefArgNull <- NullLiteral
+DefArgKeyword <- ReservedKeyword
+DefArgStringLiteral <- StringLiteral
 NoneLiteral <- 'NONE'
 
 LoadStatement <- 'LOAD' ColIdOrString ExtensionAlias?

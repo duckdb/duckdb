@@ -215,21 +215,6 @@ void PEGTransformerFactory::RegisterCopy() {
 	REGISTER_TRANSFORM(TransformGenericCopyOptionParenthesizedExpressionList);
 }
 
-void PEGTransformerFactory::RegisterCreateIndex() {
-	// create_index.gram
-	REGISTER_TRANSFORM(TransformCreateIndexStmt);
-	REGISTER_TRANSFORM(TransformIndexType);
-	REGISTER_TRANSFORM(TransformIndexElement);
-	REGISTER_TRANSFORM(TransformWithList);
-	REGISTER_TRANSFORM(TransformRelOptionOrOids);
-	REGISTER_TRANSFORM(TransformRelOptionList);
-	REGISTER_TRANSFORM(TransformOids);
-	REGISTER_TRANSFORM(TransformRelOptionName);
-	REGISTER_TRANSFORM(TransformRelOptionArgumentOpt);
-	REGISTER_TRANSFORM(TransformRelOption);
-	REGISTER_TRANSFORM(TransformIndexName);
-}
-
 void PEGTransformerFactory::RegisterCreateMacro() {
 	// create_macro.gram
 	REGISTER_TRANSFORM(TransformCreateMacroStmt);
@@ -884,7 +869,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterComment();
 	RegisterCommon();
 	RegisterCopy();
-	RegisterCreateIndex();
 	RegisterCreateMacro();
 	RegisterCreateSequence();
 	RegisterCreateTable();

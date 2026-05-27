@@ -425,6 +425,11 @@ Expression:
     - ZoneDefault
     - ZoneStringLiteral
     - ZoneIdentifier
+    - DefArg
+    - DefArgNull
+    - DefArgKeyword
+    - DefArgStringLiteral
+    - NoneLiteral
     - NumberLiteral
     - TimeType
     - NumericType
@@ -796,6 +801,7 @@ String:
     - CollationName
     - IndexType
     - RelOptionName
+    - DottedIdentifierString
     - IndexName
     - ColId
     - ColIdOrString
@@ -803,6 +809,7 @@ String:
     - TypeFuncName
     - Identifier
     - ExportSource
+    - ReservedKeyword
     - VersionNumber
     - LikeVariations
     - OtherOperator
@@ -886,6 +893,10 @@ Bool:
     - DeallocatePrepare
     - CreateRecursive
     - ExplainAnalyze
+    - WithOrWithoutOids
+    - WithOids
+    - WithoutOids
+    - UniqueIndex
 
 
 Int64:
@@ -1155,8 +1166,6 @@ excluded_rules:
   - PivotKeyword
   - UnpivotKeyword
   - Unique
-  - DefArg
-  - NoneLiteral
   - RowOrStruct
   - SetData
   - CTEBodyContent
