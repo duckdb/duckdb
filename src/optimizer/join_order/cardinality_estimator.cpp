@@ -470,173 +470,180 @@ static void RegisterEqualityJoinPair(FilterInfoWithTotalDomains &edge, JoinRelat
 	join_pair_first_d[*join_pair] = edge.GetDistinctCount();
 }
 
-DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
+struct DenominatorState {
 	vector<Subgraph2Denominator> subgraphs;
-
-	// Finding the denominator is tricky. You need to go through the tdoms in decreasing order
-	// Then loop through all filters in the equivalence set of the tdom to see if both the
-	// left and right relations are in the new set, if so you can use that filter.
-	// You must also make sure that the filters all relations in the given set, so we use subgraphs
-	// that should eventually merge into one connected graph that joins all the relations
-	// TODO: Implement a method to cache subgraphs so you don't have to build them up every
-	//  time the cardinality of a new set is requested
-
-	// relations_to_tdoms has already been sorted by largest to smallest total domain
-	// then we look through the filters for the relations_to_tdoms,
-	// and we start to choose the filters that join relations in the set.
-	// edges are guaranteed to be in order of largest tdom to smallest tdom.
-
-	// Track which INNER equality equivalence groups have been used to build the subgraph,
-	// so we don't apply them more than once in cardinality estimation
 	unordered_set<idx_t> applied_equivalence_groups;
-
-	// For multi-key INNER joins (>=2 equality conditions on the same join pair),
-	// we treat the composite key as a FK/PK relationship and enforce the FK/PK floor.
-	// For a single equality condition, the standard denominator-based formula is used as-is.
 	reference_map_t<JoinRelationSet, double> join_pair_first_d;
 	reference_set_t<JoinRelationSet> capped_join_pairs;
-
 	unordered_set<idx_t> unused_edge_tdoms;
-	auto edges = GetEdges(relation_set_stats, set);
-	for (auto &edge : edges) {
-		auto edge_kind = ClassifyDenominatorEdge(edge, applied_equivalence_groups);
-		if (subgraphs.size() == 1 && RefersToSameObject(*subgraphs.at(0).relations, set)) {
-			// The subgraph already connects all desired relations
-			ApplyCompositeJoinPairCaps(subgraphs.at(0).denom, *subgraphs.at(0).relations, join_pair_first_d,
-			                           capped_join_pairs);
-			if (edge_kind == DenominatorEdgeKind::REDUNDANT_TRANSITIVE_EQUALITY) {
-				// Transitively implied by equality conditions already used to build the subgraph, skip this denom
-				// skip the penalty entirely.
-				continue;
-			}
-			if (CanIncrementExistingJoin(edge_kind) &&
-			    ApplyJoinIncrement(subgraphs.at(0).denom, edge, join_pair_first_d, capped_join_pairs,
-			                       *subgraphs.at(0).relations)) {
-				// increment applied, skip unused_edge_tdoms penalty.
-				continue;
-			}
-			if (edge.has_distinct_count_hll) {
-				unused_edge_tdoms.insert(edge.distinct_count_hll);
-			}
-			continue;
+};
+
+static bool DenominatorSubgraphComplete(DenominatorState &state, JoinRelationSet &set) {
+	return state.subgraphs.size() == 1 && state.subgraphs.at(0).relations &&
+	       RefersToSameObject(*state.subgraphs.at(0).relations, set);
+}
+
+void CardinalityEstimator::ProcessDenominatorEdge(FilterInfoWithTotalDomains &edge, JoinRelationSet &requested_set,
+                                                  DenominatorState &state) {
+	auto edge_kind = ClassifyDenominatorEdge(edge, state.applied_equivalence_groups);
+	if (DenominatorSubgraphComplete(state, requested_set)) {
+		auto &complete_subgraph = state.subgraphs.at(0);
+		ApplyCompositeJoinPairCaps(complete_subgraph.denom, *complete_subgraph.relations, state.join_pair_first_d,
+		                           state.capped_join_pairs);
+		if (edge_kind == DenominatorEdgeKind::REDUNDANT_TRANSITIVE_EQUALITY) {
+			return;
 		}
-
-		if (edge.filter_info->edge_equivalence_index.IsValid()) {
-			// Record edge_equivalence_index whenever an edge is actively used to build the subgraph.
-			applied_equivalence_groups.insert(edge.filter_info->edge_equivalence_index.GetIndex());
+		if (CanIncrementExistingJoin(edge_kind) &&
+		    ApplyJoinIncrement(complete_subgraph.denom, edge, state.join_pair_first_d, state.capped_join_pairs,
+		                       *complete_subgraph.relations)) {
+			return;
 		}
-
-		RegisterEqualityJoinPair(edge, set_manager, join_pair_first_d);
-
-		auto edge_left_set = GetEdgeEndpoint(edge, set_manager, true);
-		auto edge_right_set = GetEdgeEndpoint(edge, set_manager, false);
-		if (!edge_left_set || !edge_right_set) {
-			continue;
+		if (edge.has_distinct_count_hll) {
+			state.unused_edge_tdoms.insert(edge.distinct_count_hll);
 		}
-
-		auto subgraph_connections = SubgraphsConnectedByEdge(edge, subgraphs, set_manager);
-		if (subgraph_connections.empty()) {
-			// create a subgraph out of left and right, then merge right into left and add left to subgraphs.
-			// this helps cover a case where there are no subgraphs yet, and the only join filter is a SEMI JOIN
-			auto left_subgraph = Subgraph2Denominator();
-			auto right_subgraph = Subgraph2Denominator();
-			left_subgraph.relations = edge_left_set;
-			left_subgraph.numerator_relations = edge_left_set;
-			right_subgraph.relations = edge_right_set;
-			right_subgraph.numerator_relations = edge_right_set;
-			left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
-			left_subgraph.relations = &set_manager.Union(*edge_left_set, *edge_right_set);
-			left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
-			ApplyCompositeJoinPairCaps(left_subgraph.denom, *left_subgraph.relations, join_pair_first_d,
-			                           capped_join_pairs);
-			subgraphs.push_back(left_subgraph);
-		} else if (subgraph_connections.size() == 1) {
-			auto left_subgraph = &subgraphs.at(subgraph_connections.at(0));
-			auto right_subgraph = Subgraph2Denominator();
-			right_subgraph.relations = edge_right_set;
-			right_subgraph.numerator_relations = edge_right_set;
-			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *right_subgraph.relations)) {
-				right_subgraph.relations = edge_left_set;
-				right_subgraph.numerator_relations = edge_left_set;
-			}
-
-			if (JoinRelationSet::IsSubset(*left_subgraph->relations, *edge_left_set) &&
-			    JoinRelationSet::IsSubset(*left_subgraph->relations, *edge_right_set)) {
-				// Edge connects the same subgraph to itself; no new relation is added.
-				// Apply the incremental denominator contribution for LEFT or INNER multi-key joins.
-				if (CanIncrementExistingJoin(edge_kind)) {
-					ApplyJoinIncrement(left_subgraph->denom, edge, join_pair_first_d, capped_join_pairs,
-					                   *left_subgraph->relations);
-				}
-				ApplyCompositeJoinPairCaps(left_subgraph->denom, *left_subgraph->relations, join_pair_first_d,
-				                           capped_join_pairs);
-				continue;
-			}
-			left_subgraph->numerator_relations = &UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
-			left_subgraph->relations = &set_manager.Union(*left_subgraph->relations, *right_subgraph.relations);
-			left_subgraph->denom = CalculateUpdatedDenom(*left_subgraph, right_subgraph, edge);
-			ApplyCompositeJoinPairCaps(left_subgraph->denom, *left_subgraph->relations, join_pair_first_d,
-			                           capped_join_pairs);
-		} else if (subgraph_connections.size() == 2) {
-			// The two subgraphs in the subgraph_connections can be merged by this edge.
-			D_ASSERT(subgraph_connections.at(0) < subgraph_connections.at(1));
-			auto subgraph_to_merge_into = &subgraphs.at(subgraph_connections.at(0));
-			auto subgraph_to_delete = &subgraphs.at(subgraph_connections.at(1));
-			subgraph_to_merge_into->relations =
-			    &set_manager.Union(*subgraph_to_merge_into->relations, *subgraph_to_delete->relations);
-			subgraph_to_merge_into->numerator_relations =
-			    &UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
-			subgraph_to_merge_into->denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
-			ApplyCompositeJoinPairCaps(subgraph_to_merge_into->denom, *subgraph_to_merge_into->relations,
-			                           join_pair_first_d, capped_join_pairs);
-			subgraph_to_delete->relations = nullptr;
-			auto remove_start = std::remove_if(subgraphs.begin(), subgraphs.end(),
-			                                   [](Subgraph2Denominator &s) { return !s.relations; });
-			subgraphs.erase(remove_start, subgraphs.end());
-		}
+		return;
 	}
 
-	// Slight penalty to cardinality for unused INNER join edges.
-	auto denom_multiplier = 1.0 + static_cast<double>(unused_edge_tdoms.size());
-
-	// It's possible cross-products were added and are not present in the filters in the relation_2_tdom
-	// structures. When that's the case, merge all remaining subgraphs as if they are connected by a cross product
-	if (subgraphs.size() > 1) {
-		auto final_subgraph = subgraphs.at(0);
-		for (auto merge_with = subgraphs.begin() + 1; merge_with != subgraphs.end(); merge_with++) {
-			D_ASSERT(final_subgraph.relations && merge_with->relations);
-			final_subgraph.relations = &set_manager.Union(*final_subgraph.relations, *merge_with->relations);
-			D_ASSERT(final_subgraph.numerator_relations && merge_with->numerator_relations);
-			final_subgraph.numerator_relations =
-			    &set_manager.Union(*final_subgraph.numerator_relations, *merge_with->numerator_relations);
-			final_subgraph.denom *= merge_with->denom;
-		}
-		subgraphs.clear();
-		subgraphs.push_back(final_subgraph);
+	if (edge.filter_info->edge_equivalence_index.IsValid()) {
+		state.applied_equivalence_groups.insert(edge.filter_info->edge_equivalence_index.GetIndex());
 	}
-	if (!subgraphs.empty()) {
-		// Some relations are connected by cross products and will not end up in a subgraph
-		// Check and make sure all relations were considered, if not, they are connected to the graph by cross products
-		auto &returning_subgraph = subgraphs.at(0);
-		if (returning_subgraph.relations->count != set.count) {
-			for (idx_t rel_index = 0; rel_index < set.count; rel_index++) {
-				auto relation_id = set.relations[rel_index];
-				auto &rel = set_manager.GetJoinRelation(relation_id);
-				if (!JoinRelationSet::IsSubset(*returning_subgraph.relations, rel)) {
-					returning_subgraph.numerator_relations =
-					    &set_manager.Union(*returning_subgraph.numerator_relations, rel);
-					returning_subgraph.relations = &set_manager.Union(*returning_subgraph.relations, rel);
-				}
-			}
-		}
+	RegisterEqualityJoinPair(edge, set_manager, state.join_pair_first_d);
+
+	auto edge_left_set = GetEdgeEndpoint(edge, set_manager, true);
+	auto edge_right_set = GetEdgeEndpoint(edge, set_manager, false);
+	if (!edge_left_set || !edge_right_set) {
+		return;
 	}
 
-	// can happen if a table has cardinality 0, a tdom is set to 0, or if a cross product is used.
-	if (subgraphs.empty() || subgraphs.at(0).denom == 0) {
-		// denominator is 1 and numerators are a cross product of cardinalities.
+	auto subgraph_connections = SubgraphsConnectedByEdge(edge, state.subgraphs, set_manager);
+	if (subgraph_connections.empty()) {
+		CreateDenominatorSubgraph(edge, *edge_left_set, *edge_right_set, state);
+	} else if (subgraph_connections.size() == 1) {
+		ExtendDenominatorSubgraph(subgraph_connections.at(0), edge, *edge_left_set, *edge_right_set,
+		                          CanIncrementExistingJoin(edge_kind), state);
+	} else if (subgraph_connections.size() == 2) {
+		MergeDenominatorSubgraphs(subgraph_connections, edge, state);
+	}
+}
+
+void CardinalityEstimator::CreateDenominatorSubgraph(FilterInfoWithTotalDomains &edge, JoinRelationSet &edge_left_set,
+                                                     JoinRelationSet &edge_right_set, DenominatorState &state) {
+	auto left_subgraph = Subgraph2Denominator();
+	auto right_subgraph = Subgraph2Denominator();
+	left_subgraph.relations = &edge_left_set;
+	left_subgraph.numerator_relations = &edge_left_set;
+	right_subgraph.relations = &edge_right_set;
+	right_subgraph.numerator_relations = &edge_right_set;
+	left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
+	left_subgraph.relations = &set_manager.Union(edge_left_set, edge_right_set);
+	left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
+	ApplyCompositeJoinPairCaps(left_subgraph.denom, *left_subgraph.relations, state.join_pair_first_d,
+	                           state.capped_join_pairs);
+	state.subgraphs.push_back(left_subgraph);
+}
+
+void CardinalityEstimator::ExtendDenominatorSubgraph(idx_t subgraph_index, FilterInfoWithTotalDomains &edge,
+                                                     JoinRelationSet &edge_left_set, JoinRelationSet &edge_right_set,
+                                                     bool can_increment_existing_join, DenominatorState &state) {
+	auto left_subgraph = &state.subgraphs.at(subgraph_index);
+	auto right_subgraph = Subgraph2Denominator();
+	right_subgraph.relations = &edge_right_set;
+	right_subgraph.numerator_relations = &edge_right_set;
+	if (JoinRelationSet::IsSubset(*left_subgraph->relations, *right_subgraph.relations)) {
+		right_subgraph.relations = &edge_left_set;
+		right_subgraph.numerator_relations = &edge_left_set;
+	}
+
+	if (JoinRelationSet::IsSubset(*left_subgraph->relations, edge_left_set) &&
+	    JoinRelationSet::IsSubset(*left_subgraph->relations, edge_right_set)) {
+		if (can_increment_existing_join) {
+			ApplyJoinIncrement(left_subgraph->denom, edge, state.join_pair_first_d, state.capped_join_pairs,
+			                   *left_subgraph->relations);
+		}
+		ApplyCompositeJoinPairCaps(left_subgraph->denom, *left_subgraph->relations, state.join_pair_first_d,
+		                           state.capped_join_pairs);
+		return;
+	}
+
+	left_subgraph->numerator_relations = &UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
+	left_subgraph->relations = &set_manager.Union(*left_subgraph->relations, *right_subgraph.relations);
+	left_subgraph->denom = CalculateUpdatedDenom(*left_subgraph, right_subgraph, edge);
+	ApplyCompositeJoinPairCaps(left_subgraph->denom, *left_subgraph->relations, state.join_pair_first_d,
+	                           state.capped_join_pairs);
+}
+
+void CardinalityEstimator::MergeDenominatorSubgraphs(const vector<idx_t> &subgraph_connections,
+                                                     FilterInfoWithTotalDomains &edge, DenominatorState &state) {
+	D_ASSERT(subgraph_connections.size() == 2);
+	D_ASSERT(subgraph_connections.at(0) < subgraph_connections.at(1));
+	auto subgraph_to_merge_into = &state.subgraphs.at(subgraph_connections.at(0));
+	auto subgraph_to_delete = &state.subgraphs.at(subgraph_connections.at(1));
+	subgraph_to_merge_into->relations =
+	    &set_manager.Union(*subgraph_to_merge_into->relations, *subgraph_to_delete->relations);
+	subgraph_to_merge_into->numerator_relations =
+	    &UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
+	subgraph_to_merge_into->denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
+	ApplyCompositeJoinPairCaps(subgraph_to_merge_into->denom, *subgraph_to_merge_into->relations,
+	                           state.join_pair_first_d, state.capped_join_pairs);
+	subgraph_to_delete->relations = nullptr;
+	auto remove_start = std::remove_if(state.subgraphs.begin(), state.subgraphs.end(),
+	                                   [](Subgraph2Denominator &s) { return !s.relations; });
+	state.subgraphs.erase(remove_start, state.subgraphs.end());
+}
+
+void CardinalityEstimator::MergeDisconnectedDenominatorSubgraphs(DenominatorState &state) {
+	if (state.subgraphs.size() <= 1) {
+		return;
+	}
+	auto final_subgraph = state.subgraphs.at(0);
+	for (auto merge_with = state.subgraphs.begin() + 1; merge_with != state.subgraphs.end(); merge_with++) {
+		D_ASSERT(final_subgraph.relations && merge_with->relations);
+		final_subgraph.relations = &set_manager.Union(*final_subgraph.relations, *merge_with->relations);
+		D_ASSERT(final_subgraph.numerator_relations && merge_with->numerator_relations);
+		final_subgraph.numerator_relations =
+		    &set_manager.Union(*final_subgraph.numerator_relations, *merge_with->numerator_relations);
+		final_subgraph.denom *= merge_with->denom;
+	}
+	state.subgraphs.clear();
+	state.subgraphs.push_back(final_subgraph);
+}
+
+void CardinalityEstimator::AddCrossProductRelations(JoinRelationSet &set, DenominatorState &state) {
+	if (state.subgraphs.empty()) {
+		return;
+	}
+	auto &returning_subgraph = state.subgraphs.at(0);
+	if (returning_subgraph.relations->count == set.count) {
+		return;
+	}
+	for (idx_t rel_index = 0; rel_index < set.count; rel_index++) {
+		auto relation_id = set.relations[rel_index];
+		auto &rel = set_manager.GetJoinRelation(relation_id);
+		if (!JoinRelationSet::IsSubset(*returning_subgraph.relations, rel)) {
+			returning_subgraph.numerator_relations = &set_manager.Union(*returning_subgraph.numerator_relations, rel);
+			returning_subgraph.relations = &set_manager.Union(*returning_subgraph.relations, rel);
+		}
+	}
+}
+
+DenomInfo CardinalityEstimator::CreateDenominatorResult(JoinRelationSet &set, DenominatorState &state) {
+	auto denom_multiplier = 1.0 + static_cast<double>(state.unused_edge_tdoms.size());
+	MergeDisconnectedDenominatorSubgraphs(state);
+	AddCrossProductRelations(set, state);
+
+	if (state.subgraphs.empty() || state.subgraphs.at(0).denom == 0) {
 		return DenomInfo(set, 1);
 	}
-	return DenomInfo(*subgraphs.at(0).numerator_relations, subgraphs.at(0).denom * denom_multiplier);
+	return DenomInfo(*state.subgraphs.at(0).numerator_relations, state.subgraphs.at(0).denom * denom_multiplier);
+}
+
+DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
+	DenominatorState state;
+	auto edges = GetEdges(relation_set_stats, set);
+	for (auto &edge : edges) {
+		ProcessDenominatorEdge(edge, set, state);
+	}
+	return CreateDenominatorResult(set, state);
 }
 
 // Cardinality is calculated using logic found in

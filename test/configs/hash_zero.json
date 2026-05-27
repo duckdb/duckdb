@@ -51,8 +51,7 @@
         "test/sql/types/geo/geometry_shred_types.test",
         "test/sql/types/geo/geometry_shred_empty.test",
         "test/sql/types/geo/geometry_shred_limit.test",
-        "test/sql/types/geo/geometry_shred_checkpoint.test",
-        "test/optimizer/joins/filtered_domain_cardinality_estimation.test"
+        "test/sql/types/geo/geometry_shred_checkpoint.test"
       ]
     },
     {

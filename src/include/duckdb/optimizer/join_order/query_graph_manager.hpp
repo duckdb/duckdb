@@ -63,7 +63,7 @@ public:
 	bool from_residual_predicate = false;
 	//! Index of the equivalence group for INNER equality/IS NOT DISTINCT FROM join filters.
 	//! All filters transitively connected by equality (a=b, b=c -> a=c all share the same index).
-	//! Used to skip redundant conditions during plan reconstruction and cardinality estimation.
+	//! Used by cardinality estimation to skip redundant transitive conditions.
 	optional_idx edge_equivalence_index;
 
 	void SetLeftSet(optional_ptr<JoinRelationSet> left_set_new);

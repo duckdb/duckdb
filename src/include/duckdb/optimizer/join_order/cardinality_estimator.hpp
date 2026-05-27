@@ -18,6 +18,7 @@ namespace duckdb {
 
 class FilterInfo;
 class JoinPredicateModel;
+struct DenominatorState;
 
 struct DenomInfo {
 	DenomInfo(JoinRelationSet &numerator_relations, double denominator)
@@ -132,6 +133,18 @@ public:
 private:
 	double GetNumerator(JoinRelationSet &set);
 	DenomInfo GetDenominator(JoinRelationSet &set);
+	void ProcessDenominatorEdge(FilterInfoWithTotalDomains &edge, JoinRelationSet &requested_set,
+	                            DenominatorState &state);
+	void CreateDenominatorSubgraph(FilterInfoWithTotalDomains &edge, JoinRelationSet &edge_left_set,
+	                               JoinRelationSet &edge_right_set, DenominatorState &state);
+	void ExtendDenominatorSubgraph(idx_t subgraph_index, FilterInfoWithTotalDomains &edge,
+	                               JoinRelationSet &edge_left_set, JoinRelationSet &edge_right_set,
+	                               bool can_increment_existing_join, DenominatorState &state);
+	void MergeDenominatorSubgraphs(const vector<idx_t> &subgraph_connections, FilterInfoWithTotalDomains &edge,
+	                               DenominatorState &state);
+	void MergeDisconnectedDenominatorSubgraphs(DenominatorState &state);
+	void AddCrossProductRelations(JoinRelationSet &set, DenominatorState &state);
+	DenomInfo CreateDenominatorResult(JoinRelationSet &set, DenominatorState &state);
 	//! Applied outside the cardinality cache so stored values stay pre-OR.
 	double ApplyOrFilterSelectivities(JoinRelationSet &new_set, double cardinality) const;
 	idx_t GetActiveEqualityClassCount(JoinRelationSet &pair, JoinRelationSet &scope);
