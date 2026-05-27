@@ -10,8 +10,39 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/object_cache.hpp"
 
 namespace duckdb {
+
+class ExternalFileCache::ExternalFileCacheObjectCacheEntry : public ObjectCacheEntry {
+public:
+	ExternalFileCacheObjectCacheEntry(ExternalFileCache &cache_p, string path_p,
+	                                  ExternalFileCache::CachedFile &cached_file_p)
+	    : cache(cache_p), path(std::move(path_p)), cached_file(cached_file_p) {
+	}
+
+	~ExternalFileCacheObjectCacheEntry() override {
+		cache.EraseCachedFile(path, cached_file);
+	}
+
+	static string ObjectType() {
+		return "external_file_cache";
+	}
+
+	string GetObjectType() override {
+		return ObjectType();
+	}
+
+	optional_idx GetEstimatedCacheMemory() const override {
+		// Filepath is stored as both cache entry key and in external file.
+		return path.size() * 2;
+	}
+
+private:
+	ExternalFileCache &cache;
+	string path;
+	ExternalFileCache::CachedFile &cached_file;
+};
 
 idx_t ExternalFileCache::GetCacheBlockSize(const string &path) const {
 	auto &db = buffer_manager.GetDatabase();
@@ -200,11 +231,21 @@ bool ExternalFileCache::IsEnabled() const {
 }
 
 void ExternalFileCache::SetEnabled(bool enable_p) {
-	annotated_lock_guard<annotated_mutex> guard(lock);
-	enable = enable_p;
-	if (!enable) {
-		cached_files.clear();
+	vector<string> keys_to_delete;
+	unordered_map<string, unique_ptr<CachedFile>> cached_files_to_destroy;
+	{
+		const annotated_lock_guard<annotated_mutex> guard(lock);
+		enable = enable_p;
+		if (!enable) {
+			// TODO(hjiang): only evict cache entries with zero ref count.
+			keys_to_delete.reserve(cached_files.size());
+			for (auto &file : cached_files) {
+				keys_to_delete.emplace_back(ObjectCacheKey(file.first));
+			}
+			cached_files_to_destroy = std::move(cached_files);
+		}
 	}
+	DeleteObjectCacheEntries(std::move(keys_to_delete));
 }
 
 bool ExternalFileCache::IsStale(const CachedFile &file) {
@@ -272,25 +313,66 @@ ExternalFileCache &ExternalFileCache::Get(ClientContext &context) {
 	return context.db->GetExternalFileCache();
 }
 
+string ExternalFileCache::ObjectCacheKey(const string &path) {
+	return StringUtil::Format("external-cache-%s", path);
+}
+
 BufferManager &ExternalFileCache::GetBufferManager() const {
 	return buffer_manager;
 }
 
-ExternalFileCache::CachedFile &ExternalFileCache::GetOrCreateCachedFile(const string &path) {
-	annotated_lock_guard<annotated_mutex> guard(lock);
-	auto existing = cached_files.find(path);
-	if (existing != cached_files.end()) {
-		// Pin the entry before returning so a concurrent prune cannot evict it
-		// between this call and CachingFileHandle's constructor.
-		++existing->second->ref_count;
-		return *existing->second;
+void ExternalFileCache::RegisterObjectCacheEntry(const string &path, CachedFile &cached_file) {
+	const auto key = ObjectCacheKey(path);
+	auto entry = make_shared_ptr<ExternalFileCacheObjectCacheEntry>(*this, path, cached_file);
+	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
+	object_cache.Put(key, std::move(entry));
+}
+
+void ExternalFileCache::DeleteObjectCacheEntries(vector<string> object_cache_keys_p) {
+	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
+	for (auto &key : object_cache_keys_p) {
+		object_cache.Delete(key);
 	}
-	// Opportunistic cleanup: drop entries whose content has been released by the
-	// BufferManager and that have no live handle. Amortizes O(N) over inserts.
-	PruneStaleEntries();
-	auto inserted = cached_files.emplace(path, make_uniq<CachedFile>(path)).first;
-	++inserted->second->ref_count;
-	return *inserted->second;
+}
+
+ExternalFileCache::CachedFile &ExternalFileCache::GetOrCreateCachedFile(const string &path) {
+	bool register_object_cache_entry = false;
+	CachedFile &result = [&]() -> CachedFile & {
+		const annotated_lock_guard<annotated_mutex> guard(lock);
+		auto existing = cached_files.find(path);
+		if (existing != cached_files.end()) {
+			++existing->second->ref_count;
+			return *existing->second;
+		}
+		auto inserted = cached_files.emplace(path, make_uniq<CachedFile>(path)).first;
+		++inserted->second->ref_count;
+		register_object_cache_entry = true;
+		return *inserted->second;
+	}();
+	// TODO(hjiang): we should update LRU access.
+	if (register_object_cache_entry) {
+		RegisterObjectCacheEntry(path, result);
+	}
+	return result;
+}
+
+void ExternalFileCache::ReleaseCachedFile(CachedFile &cached_file) {
+	const annotated_lock_guard<annotated_mutex> guard(lock);
+	auto entry = cached_files.find(cached_file.path);
+	ALWAYS_ASSERT(entry != cached_files.end());
+	ALWAYS_ASSERT(entry->second->ref_count > 0);
+	--entry->second->ref_count;
+}
+
+void ExternalFileCache::EraseCachedFile(const string &path, CachedFile &cached_file) {
+	unique_ptr<CachedFile> cached_file_to_destroy;
+	{
+		const annotated_lock_guard<annotated_mutex> guard(lock);
+		auto entry = cached_files.find(path);
+		ALWAYS_ASSERT(entry != cached_files.end());
+		cached_file_to_destroy = std::move(entry->second);
+		cached_files.erase(entry);
+	}
 }
 
 } // namespace duckdb

@@ -58,9 +58,7 @@ public:
 		string version_tag DUCKDB_GUARDED_BY(meta_lock);
 		bool can_seek DUCKDB_GUARDED_BY(meta_lock) = false;
 		bool on_disk_file DUCKDB_GUARDED_BY(meta_lock) = false;
-
 		//! Number of live CachingFileHandles referencing this CachedFile.
-		//! Used by ExternalFileCache to skip pruning of in-use entries.
 		atomic<idx_t> ref_count {0};
 	};
 
@@ -88,6 +86,10 @@ public:
 	                               const string &current_version_tag, timestamp_t current_last_modified);
 
 private:
+	class ExternalFileCacheObjectCacheEntry;
+
+	static string ObjectCacheKey(const string &path);
+
 	//! Re-index blocks of a single cached file.
 	void ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size, idx_t new_block_size)
 	    DUCKDB_REQUIRES(cached_file.map_lock);
@@ -98,6 +100,12 @@ private:
 
 	//! Return true if `file` has no live handle and no resident cached content.
 	static bool IsStale(const CachedFile &file);
+	//! Register a zero-ref cached file entry in ObjectCache.
+	void RegisterObjectCacheEntry(const string &path, CachedFile &cached_file);
+	//! Attempts to erase a zero-ref cached file entry at ObjectCache eviction.
+	void TryEraseCachedFile(const string &path, CachedFile &cached_file);
+	//! Delete ObjectCache entries.
+	void DeleteObjectCacheEntries(vector<string> object_cache_keys);
 
 	//! The BufferManager used to cache files
 	BufferManager &buffer_manager;
@@ -106,6 +114,7 @@ private:
 	//! Lock for accessing cached_files.
 	mutable annotated_mutex lock;
 	//! Mapping from file path to cached file with cached blocks
+	//! Invariant: all entrie keys are stored in object cache, which are evicted by buffer pool manager.
 	unordered_map<string, unique_ptr<CachedFile>> cached_files DUCKDB_GUARDED_BY(lock);
 };
 

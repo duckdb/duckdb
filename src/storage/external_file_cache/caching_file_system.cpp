@@ -20,7 +20,8 @@ namespace {
 
 class CachedFileRefGuard {
 public:
-	explicit CachedFileRefGuard(ExternalFileCache::CachedFile &cached_file_p) : cached_file(cached_file_p) {
+	CachedFileRefGuard(ExternalFileCache &external_file_cache_p, ExternalFileCache::CachedFile &cached_file_p)
+	    : external_file_cache(external_file_cache_p), cached_file(cached_file_p) {
 	}
 	// Disable copy and move.
 	CachedFileRefGuard(const CachedFileRefGuard &other) = delete;
@@ -28,7 +29,7 @@ public:
 
 	~CachedFileRefGuard() {
 		if (!released) {
-			--cached_file.ref_count;
+			external_file_cache.ReleaseCachedFile(cached_file);
 		}
 	}
 
@@ -37,6 +38,7 @@ public:
 	}
 
 private:
+	ExternalFileCache &external_file_cache;
 	ExternalFileCache::CachedFile &cached_file;
 	bool released = false;
 };
@@ -154,7 +156,7 @@ CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
                                                           optional_ptr<FileOpener> opener) {
 	auto &cached_file = external_file_cache.GetOrCreateCachedFile(path.path);
-	CachedFileRefGuard guard(cached_file);
+	CachedFileRefGuard guard(external_file_cache, cached_file);
 	auto result = make_uniq<CachingFileHandle>(QueryContext(), *this, path, flags, opener, cached_file);
 	guard.Release();
 	return result;
@@ -163,7 +165,7 @@ unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &pa
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, const OpenFileInfo &path,
                                                           FileOpenFlags flags, optional_ptr<FileOpener> opener) {
 	auto &cached_file = external_file_cache.GetOrCreateCachedFile(path.path);
-	CachedFileRefGuard guard(cached_file);
+	CachedFileRefGuard guard(external_file_cache, cached_file);
 	auto result = make_uniq<CachingFileHandle>(context, *this, path, flags, opener, cached_file);
 	guard.Release();
 	return result;
@@ -206,7 +208,7 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
       cached_file(cached_file_p), position(0) {
 	// ref_count is incremented by ExternalFileCache::GetOrCreateCachedFile while
 	// the cache lock is held, to prevent a concurrent prune from evicting this
-	// entry between its lookup and our construction. We decrement in the dtor.
+	// entry between its lookup and our construction. We release it in the dtor.
 	if (!external_file_cache.IsEnabled() || Validate()) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();
@@ -228,7 +230,7 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
 }
 
 CachingFileHandle::~CachingFileHandle() {
-	--cached_file.ref_count;
+	external_file_cache.ReleaseCachedFile(cached_file);
 }
 
 FileHandle &CachingFileHandle::GetFileHandle() {
