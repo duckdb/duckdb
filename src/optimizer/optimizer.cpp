@@ -50,6 +50,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -150,6 +151,10 @@ static bool CTEContainsDML(const LogicalOperator &op) {
 void Optimizer::OptimizeStatement(unique_ptr<SQLStatement> &statement) {
 	auto &config = ClientConfig::GetConfig(context);
 	if (!config.enable_optimizer) {
+		return;
+	}
+	// Skip the remote pushdown pass entirely when no remote catalogs are attached.
+	if (DatabaseManager::Get(context).GetRemoteCatalogCount() == 0) {
 		return;
 	}
 	RunOptimizer(OptimizerType::REMOTE_PUSHDOWN, [&]() {
