@@ -867,6 +867,16 @@ bool RemotePushdownOptimizer::RefersToLocalTable(const ColumnRefExpression &col_
 	if (local_table_names.empty()) {
 		return false;
 	}
+	// For 3-or-more part column refs (e.g. catalog.table.col, schema.table.col, alias.struct.field)
+	// the first part is a table/schema/catalog qualifier. Remote catalogs and remote table aliases are
+	// never added to local_table_names, so if the leading qualifier is absent it is almost certainly
+	// remote-qualified (e.g. rpc.t1.col) and should NOT block pushdown.
+	// 1- and 2-part refs remain conservative: a 2-part ref like "x.field" may be a struct field access
+	// on column "x" from a local table rather than a table-qualified column, so we can't distinguish
+	// without binding.
+	if (col_ref.column_names.size() >= 3) {
+		return local_table_names.count(col_ref.column_names[0]) > 0;
+	}
 	return true;
 }
 

@@ -171,6 +171,7 @@ select count(*) from local_t where i = (select min(i) from rpc.t1)
 ----
 0
 
+
 # Subquery in FROM (derived table): all remote -> pushed (verified in basic test via explain)
 
 statement ok
