@@ -1463,7 +1463,8 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		}
 		state.row_group_counts.push_back(row_group_count);
 	}
-	if (!checkpoint_state.writer.CanLeaveGapsInRowIds() && !state.can_change_row_ids) {
+	if (!checkpoint_state.writer.CanLeaveGapsInRowIds() && !state.can_change_row_ids &&
+	    options.type != CheckpointType::CONCURRENT_CHECKPOINT) {
 		// If we cannot change rowids and cannot leave rowid gaps, we might still be able to vacuum trailing deletions
 		// because that does not change the rowids of any non-deleted rows.
 		auto segment_count = state.row_group_counts.size();
