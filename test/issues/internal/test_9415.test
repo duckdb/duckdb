@@ -91,3 +91,22 @@ query I
 SELECT count(*) FROM (SELECT id FROM t ORDER BY id OFFSET 8000 LIMIT 525);
 ----
 521
+
+statement ok
+BEGIN;
+
+statement ok
+DELETE FROM t WHERE chunk_id = 6 AND id BETWEEN 4176 AND 4275;
+
+query I
+SELECT count(*) FROM t;
+----
+8421
+
+query I
+SELECT count(*) FROM (SELECT id FROM t ORDER BY id OFFSET 7900 LIMIT 50);
+----
+50
+
+statement ok
+ROLLBACK;
