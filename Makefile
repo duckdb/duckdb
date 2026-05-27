@@ -826,6 +826,7 @@ generate-files:
 	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py
 	$(PYTHON) scripts/generate_serialization.py
+	$(PYTHON) scripts/generate_util.py
 	$(PYTHON) scripts/generate_storage_info.py
 	$(PYTHON) scripts/generate_enum_util.py
 # Run the formatter again after (re)generating the files
