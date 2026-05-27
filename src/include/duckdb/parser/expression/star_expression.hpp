@@ -24,20 +24,45 @@ public:
 public:
 	explicit StarExpression(string relation_name = string());
 
-	//! The relation name in case of tbl.*, or empty if this is a normal *
-	string relation_name;
-	//! List of columns to exclude from the STAR expression
-	qualified_column_set_t exclude_list;
-	//! List of columns to replace with another expression
-	case_insensitive_map_t<unique_ptr<ParsedExpression>> replace_list;
-	//! List of columns to rename
-	qualified_column_map_t<string> rename_list;
-	//! The expression to select the columns (regular expression or list)
-	unique_ptr<ParsedExpression> expr;
-	//! Whether or not this is a COLUMNS expression
-	bool columns = false;
-
 public:
+	const string &RelationName() const {
+		return relation_name;
+	}
+	string &RelationNameMutable() {
+		return relation_name;
+	}
+	const qualified_column_set_t &ExcludeList() const {
+		return exclude_list;
+	}
+	qualified_column_set_t &ExcludeListMutable() {
+		return exclude_list;
+	}
+	const case_insensitive_map_t<unique_ptr<ParsedExpression>> &ReplaceList() const {
+		return replace_list;
+	}
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> &ReplaceListMutable() {
+		return replace_list;
+	}
+	const qualified_column_map_t<string> &RenameList() const {
+		return rename_list;
+	}
+	qualified_column_map_t<string> &RenameListMutable() {
+		return rename_list;
+	}
+	const unique_ptr<ParsedExpression> &Expression() const {
+		return expr;
+	}
+	unique_ptr<ParsedExpression> &ExpressionMutable() {
+		return expr;
+	}
+	bool IsColumns() const {
+		return columns;
+	}
+	bool &IsColumnsMutable() {
+		return columns;
+	}
+
+
 	string ToString() const override;
 
 	bool Equals(const ParsedExpression &other) const override;
@@ -56,6 +81,20 @@ public:
 	                          qualified_column_map_t<string> &&rename_list);
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
+
+private:
+	//! The relation name in case of tbl.*, or empty if this is a normal *
+	string relation_name;
+	//! List of columns to exclude from the STAR expression
+	qualified_column_set_t exclude_list;
+	//! List of columns to replace with another expression
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> replace_list;
+	//! List of columns to rename
+	qualified_column_map_t<string> rename_list;
+	//! The expression to select the columns (regular expression or list)
+	unique_ptr<ParsedExpression> expr;
+	//! Whether or not this is a COLUMNS expression
+	bool columns = false;
 
 public:
 	// these methods exist for backwards compatibility of (de)serialization
