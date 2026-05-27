@@ -573,9 +573,8 @@ vector<unordered_set<string>> TestConfiguration::GetSkipTagSets() {
 	return skip_tag_sets;
 }
 
-std::unordered_set<string> make_tag_set(const Value &src_val) {
-	// handle both cases -- singleton VARCHAR/string, and set of strings
-	auto dst_set = std::unordered_set<string>();
+unordered_set<string> make_tag_set(const Value &src_val) {
+	auto dst_set = unordered_set<string>();
 	if (src_val.type() == LogicalType::VARCHAR) {
 		dst_set.insert(src_val.GetValue<string>());
 	} else /* LIST(VARCHAR) */ {

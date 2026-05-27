@@ -54,15 +54,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(unittest PRIVATE -Wno-error=maybe-uninitialized)
 endif()
 
-if(TARGET duckdb AND NOT WIN32)
-  # Some tests reference internal third-party symbols (e.g. re2/mbedtls) that
-  # are linked into duckdb but not exported from the shared library.
-  target_link_libraries(unittest duckdb test_helpers duckdb_re2 duckdb_mbedtls)
-else()
-  # On Windows, tests require internal DuckDB symbols that are not DLL-exported.
-  target_link_libraries(unittest duckdb_static test_helpers)
-  link_extension_libraries(unittest "")
-endif()
+target_link_libraries(unittest duckdb_static test_helpers)
+link_extension_libraries(unittest "")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   target_link_libraries(unittest atomic)
