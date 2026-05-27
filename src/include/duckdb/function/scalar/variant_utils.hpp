@@ -133,16 +133,16 @@ struct VariantUtils {
 	DUCKDB_API static void FindChildValues(const UnifiedVariantVectorData &variant,
 	                                       const VariantPathComponent &component,
 	                                       optional_ptr<const SelectionVector> sel, SelectionVector &res,
-	                                       ValidityMask &res_validity, const VariantNestedData *nested_data,
+	                                       ValidityMask &res_validity, array_ptr<const VariantNestedData> nested_data,
 	                                       const ValidityMask &validity, idx_t count);
 	DUCKDB_API static VariantNestedDataCollectionResult
 	CollectNestedData(const UnifiedVariantVectorData &variant, VariantLogicalType expected_type,
 	                  const SelectionVector &value_index_sel, idx_t count, optional_idx row, idx_t offset,
-	                  VariantNestedData *child_data, ValidityMask &validity);
+	                  array_ptr<VariantNestedData> child_data, ValidityMask &validity);
 	//! Generic unshredded traversal over a variant using a provided path
 	DUCKDB_API static void TraversePath(const UnifiedVariantVectorData &variant,
 	                                    const vector<VariantPathComponent> &components, idx_t count,
-	                                    VariantNestedData *nested_data, ValidityMask &validity,
+	                                    array_ptr<VariantNestedData> nested_data, ValidityMask &validity,
 	                                    VariantPathSelection &path_selection);
 	DUCKDB_API static vector<uint32_t> ValueIsNull(const UnifiedVariantVectorData &variant, const SelectionVector &sel,
 	                                               idx_t count, optional_idx row);

@@ -11,9 +11,8 @@ static ValidityMask CollectVariantExistence(const UnifiedVariantVectorData &vari
 	ValidityMask path_validity(count);
 	VariantPathSelection path_selection(count);
 
-	auto &allocator = Allocator::DefaultAllocator();
-	auto owned_nested_data = allocator.Allocate(sizeof(VariantNestedData) * count);
-	const auto nested_data = reinterpret_cast<VariantNestedData *>(owned_nested_data.get());
+	const auto owned_nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	const array_ptr nested_data(owned_nested_data.get(), count);
 
 	VariantUtils::TraversePath(variant, components, count, nested_data, path_validity, path_selection);
 
