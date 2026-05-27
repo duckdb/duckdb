@@ -2454,7 +2454,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTypeLiteral(PEGTran
 		throw ParserException("Cannot convert to type %s, requires exactly one type modifier",
 		                      EnumUtil::ToString(type.id()));
 	}
-	if (type == LogicalTypeId::UNBOUND) {
+	if (type == LogicalTypeId::UNBOUND || type.InternalType() == PhysicalType::INVALID) {
 		type = LogicalType::UNBOUND(make_uniq<TypeExpression>(colid, vector<unique_ptr<ParsedExpression>>()));
 	}
 	auto string_literal = list_pr.Child<StringLiteralParseResult>(1).result;
