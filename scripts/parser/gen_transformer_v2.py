@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 
+import yaml
+
 sys.path.insert(0, str(Path(__file__).parent))
 from inline_grammar import parse_peg_grammar, PEGTokenType
 from generate_transformer import load_grammar_types
@@ -316,10 +318,45 @@ def generate_choice_internal_with_body(rule_name, return_type, return_by_value):
     )
 
 
+def generate_choice_internal_with_typed_body(rule_name, return_type, return_by_value, child_type, child_by_value):
+    """
+    Internal for a choice rule where all alternatives have the same transform type,
+    but the rule itself returns a different type. The generated wrapper extracts the
+    child value and the manual body performs the type conversion.
+    """
+    arg = "std::move(child)" if child_by_value else "child"
+    return (
+        f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
+        f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
+        f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
+        f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
+        f"\tauto child = transformer.Transform<{child_type}>(choice_pr.GetResult());\n"
+        f"\tauto result = Transform{rule_name}(transformer, {arg});\n"
+        + _box_result(return_type, return_by_value)
+        + f"}}\n"
+    )
+
+
 def generate_choice_body_declaration(rule_name, return_type):
     """Declaration for the manual body that handles identifier alternatives."""
     return (
         f"\tstatic {return_type} Transform{rule_name}" f"(PEGTransformer &transformer, ParseResult &choice_result);\n"
+    )
+
+
+def generate_typed_choice_body_declaration(rule_name, return_type, child_type, child_by_value):
+    """Declaration for a manual choice body that receives the already-transformed child value."""
+    child_param = f"{child_type} child" if child_by_value else f"const {child_type} &child"
+    return f"\tstatic {return_type} Transform{rule_name}(PEGTransformer &transformer, {child_param});\n"
+
+
+def generate_typed_choice_body_stub(rule_name, return_type, child_type, child_by_value):
+    """Stub .cpp definition for a typed choice body that must be hand-implemented."""
+    child_param = f"{child_type} child" if child_by_value else f"const {child_type} &child"
+    return (
+        f"{return_type} PEGTransformerFactory::Transform{rule_name}(PEGTransformer &transformer, {child_param}) {{\n"
+        f"\tthrow NotImplementedException(\"Transform{rule_name}\");\n"
+        f"}}\n"
     )
 
 
@@ -728,6 +765,45 @@ def generate_choice_body_stub(rule_name, return_type):
     )
 
 
+def generate_constant_internal(rule_name, return_type, return_by_value, value_expr):
+    return (
+        f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
+        f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
+        f"\tauto result = {value_expr};\n" + _box_result(return_type, return_by_value) + f"}}\n"
+    )
+
+
+def generate_choice_struct_internal(
+    rule_name, return_type, return_by_value, alternatives, choice_struct_rule, rule_types
+):
+    body = [
+        "\tauto &list_pr = parse_result.Cast<ListParseResult>();",
+        "\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);",
+        "\tauto &choice_result = choice_pr.GetResult();",
+        f"\t{return_type} result;",
+    ]
+    for idx, alt in enumerate(alternatives):
+        alt_name = alt.name
+        alt_config = choice_struct_rule[alt_name]
+        keyword = "if" if idx == 0 else "else if"
+        body.append(f'\t{keyword} (choice_result.name == "{alt_name}") {{')
+        if "flag" in alt_config:
+            body.append(f"\t\tresult.{alt_config['flag']} = true;")
+        alt_type = rule_types[alt_name].cpp_type
+        result_expr = f"transformer.Transform<{alt_type}>(choice_result)"
+        body.append(f"\t\tresult.{alt_config['field']} = {result_expr};")
+        body.append("\t}")
+    body.append("\telse {")
+    body.append(f'\t\tthrow InternalException("Unexpected choice for {rule_name}: %s", choice_result.name);')
+    body.append("\t}")
+    box = _box_result(return_type, return_by_value).rstrip('\n')
+    body.append(box)
+    return (
+        f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
+        f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n" + "\n".join(body) + "\n}\n"
+    )
+
+
 def generate_sequence_internal(rule_name, return_type, return_by_value, elements):
     """
     Generate the Internal static class member for a sequence rule.
@@ -762,6 +838,22 @@ def generate_sequence_internal(rule_name, return_type, return_by_value, elements
     )
 
 
+def generate_sequence_forward_internal(rule_name, return_type, return_by_value, elements):
+    semantic = [e for e in elements if not e.skip]
+    assert len(semantic) == 1
+    elem = semantic[0]
+    body = ["\tauto &list_pr = parse_result.Cast<ListParseResult>();"]
+    body.extend(elem.extraction_lines)
+    result_expr = f"std::move({elem.var_name})" if elem.by_value else elem.var_name
+    body.append(f"\tauto result = {result_expr};")
+    box = _box_result(return_type, return_by_value).rstrip('\n')
+    body.append(box)
+    return (
+        f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
+        f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n" + "\n".join(body) + "\n}\n"
+    )
+
+
 @dataclass
 class GramFileResult:
     gram_stem: str
@@ -773,7 +865,9 @@ class GramFileResult:
     body_stubs: list  # cpp definition stubs for bodies that need hand-implementation
 
 
-def collect_generated(gram_stem, rules, rule_types, excluded_rules):
+def collect_generated(
+    gram_stem, rules, rule_types, excluded_rules, constant_rules, choice_struct_rules, preserve_manual_rules
+):
     """Classify all rules; return a GramFileResult."""
     declarations = []
     implementations = []
@@ -792,6 +886,15 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
             skipped.append((rule_name, "in excluded_rules (manually registered)"))
             continue
 
+        if rule_name in constant_rules:
+            return_by_value = _is_by_value(rule_name, rule_types)
+            declarations.append(generate_internal_declaration(rule_name))
+            implementations.append(
+                generate_constant_internal(rule_name, return_type, return_by_value, constant_rules[rule_name])
+            )
+            registrations.append(generate_registration(rule_name))
+            continue
+
         try:
             ast = rule_to_ast(rule)
         except Exception as e:
@@ -801,7 +904,7 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
         return_by_value = _is_by_value(rule_name, rule_types)
 
         if is_pure_reference_choice(ast):
-            _, identifier_alts, unknown_alts = classify_choice_alternatives(ast.alternatives, rule_types)
+            transformer_alts, identifier_alts, unknown_alts = classify_choice_alternatives(ast.alternatives, rule_types)
             if unknown_alts:
                 skipped.append((rule_name, f"choice has unknown alternatives: {unknown_alts}"))
                 continue
@@ -810,7 +913,41 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
             registrations.append(generate_registration(rule_name))
 
             if not identifier_alts:
-                implementations.append(generate_choice_internal_full(rule_name, return_type, return_by_value))
+                alt_types = {rule_types[alt].cpp_type for alt in transformer_alts}
+                if rule_name in choice_struct_rules:
+                    choice_struct_rule = choice_struct_rules[rule_name]
+                    missing_alts = [alt.name for alt in ast.alternatives if alt.name not in choice_struct_rule]
+                    if missing_alts:
+                        skipped.append((rule_name, f"choice struct missing alternative mappings: {missing_alts}"))
+                        continue
+                    implementations.append(
+                        generate_choice_struct_internal(
+                            rule_name, return_type, return_by_value, ast.alternatives, choice_struct_rule, rule_types
+                        )
+                    )
+                    continue
+                if len(alt_types) == 1 and return_type in alt_types:
+                    implementations.append(generate_choice_internal_full(rule_name, return_type, return_by_value))
+                elif len(alt_types) == 1:
+                    child_type = next(iter(alt_types))
+                    child_by_value = any(_is_by_value(alt, rule_types) for alt in transformer_alts)
+                    declarations.append(
+                        generate_typed_choice_body_declaration(rule_name, return_type, child_type, child_by_value)
+                    )
+                    implementations.append(
+                        generate_choice_internal_with_typed_body(
+                            rule_name, return_type, return_by_value, child_type, child_by_value
+                        )
+                    )
+                    manual_bodies.append((rule_name, f"choice body; wraps alternative return type: {child_type}"))
+                    body_stubs.append(
+                        (rule_name, generate_typed_choice_body_stub(rule_name, return_type, child_type, child_by_value))
+                    )
+                else:
+                    declarations.append(generate_choice_body_declaration(rule_name, return_type))
+                    implementations.append(generate_choice_internal_with_body(rule_name, return_type, return_by_value))
+                    manual_bodies.append((rule_name, f"choice body; alternative return types: {sorted(alt_types)}"))
+                    body_stubs.append((rule_name, generate_choice_body_stub(rule_name, return_type)))
             else:
                 declarations.append(generate_choice_body_declaration(rule_name, return_type))
                 implementations.append(generate_choice_internal_with_body(rule_name, return_type, return_by_value))
@@ -827,10 +964,22 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
             elements = classify_sequence_elements(ast.children, rule_types, excluded_rules)
             if elements is not None:
                 declarations.append(generate_internal_declaration(rule_name))
-                declarations.append(generate_sequence_body_decl(rule_name, return_type, elements))
-                implementations.append(generate_sequence_internal(rule_name, return_type, return_by_value, elements))
                 registrations.append(generate_registration(rule_name))
-                body_stubs.append((rule_name, generate_sequence_body_stub(rule_name, return_type, elements)))
+                semantic = [e for e in elements if not e.skip]
+                if (
+                    len(semantic) == 1
+                    and semantic[0].cpp_type == return_type
+                    and rule_name not in preserve_manual_rules
+                ):
+                    implementations.append(
+                        generate_sequence_forward_internal(rule_name, return_type, return_by_value, elements)
+                    )
+                else:
+                    declarations.append(generate_sequence_body_decl(rule_name, return_type, elements))
+                    implementations.append(
+                        generate_sequence_internal(rule_name, return_type, return_by_value, elements)
+                    )
+                    body_stubs.append((rule_name, generate_sequence_body_stub(rule_name, return_type, elements)))
                 continue
             skipped.append((rule_name, _sequence_skip_reason(ast.children, rule_types, excluded_rules)))
             continue
@@ -1052,7 +1201,9 @@ def print_manual_steps(all_results):
             step += 1
 
 
-def process_gram_file(gram_filename, rule_types, excluded_rules):
+def process_gram_file(
+    gram_filename, rule_types, excluded_rules, constant_rules, choice_struct_rules, preserve_manual_rules
+):
     """Parse a .gram file and classify all its rules into a GramFileResult."""
     gram_stem = gram_filename.removesuffix('.gram')
     gram_path = statements_dir / gram_filename
@@ -1065,7 +1216,25 @@ def process_gram_file(gram_filename, rule_types, excluded_rules):
         if rule_name in rules:
             rules[rule_name].return_type = info.cpp_type
 
-    return collect_generated(gram_stem, rules, rule_types, excluded_rules)
+    return collect_generated(
+        gram_stem, rules, rule_types, excluded_rules, constant_rules, choice_struct_rules, preserve_manual_rules
+    )
+
+
+def load_constant_rules(types_file):
+    data = yaml.safe_load(types_file.read_text())
+    constant_rules = data.get("constant_rules", {})
+    return {rule_name: rule_config["value"] for rule_name, rule_config in constant_rules.items()}
+
+
+def load_choice_struct_rules(types_file):
+    data = yaml.safe_load(types_file.read_text())
+    return data.get("choice_struct_rules", {})
+
+
+def load_preserve_manual_rules(types_file):
+    data = yaml.safe_load(types_file.read_text())
+    return set(data.get("preserve_manual_rules", []))
 
 
 def main():
@@ -1094,7 +1263,7 @@ def main():
         'create_view.gram',
         'deallocate.gram',
         'delete.gram',
-        # 'describe.gram',
+        'describe.gram',
         'detach.gram',
         # 'drop.gram',
         'execute.gram',
@@ -1114,8 +1283,15 @@ def main():
         'use.gram',
         'vacuum.gram',
     ]
-    rule_types, excluded_rules = load_grammar_types(type_dir / 'grammar_types.yml')
-    results = [process_gram_file(f, rule_types, excluded_rules) for f in gram_files_to_gen]
+    grammar_types_file = type_dir / 'grammar_types.yml'
+    rule_types, excluded_rules = load_grammar_types(grammar_types_file)
+    constant_rules = load_constant_rules(grammar_types_file)
+    choice_struct_rules = load_choice_struct_rules(grammar_types_file)
+    preserve_manual_rules = load_preserve_manual_rules(grammar_types_file)
+    results = [
+        process_gram_file(f, rule_types, excluded_rules, constant_rules, choice_struct_rules, preserve_manual_rules)
+        for f in gram_files_to_gen
+    ]
 
     if args.write:
         all_declarations = [d for r in results for d in r.declarations]

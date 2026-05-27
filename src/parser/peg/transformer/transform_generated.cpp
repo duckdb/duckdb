@@ -321,7 +321,7 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformAlterSequenceOptionsInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<unique_ptr<AlterInfo>>(choice_pr.GetResult());
+	auto result = TransformAlterSequenceOptions(transformer, choice_pr.GetResult());
 	return make_uniq<TypedTransformResult<unique_ptr<AlterInfo>>>(std::move(result));
 }
 
@@ -978,6 +978,111 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDeleteUsingClau
 	}
 	auto result = TransformDeleteUsingClause(transformer, std::move(table_ref));
 	return make_uniq<TypedTransformResult<vector<unique_ptr<TableRef>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDescribeStatementInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto child = transformer.Transform<unique_ptr<QueryNode>>(choice_pr.GetResult());
+	auto result = TransformDescribeStatement(transformer, std::move(child));
+	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformShowSelectInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto show_or_describe_or_summarize = transformer.Transform<ShowType>(list_pr, 0);
+	auto select_statement_internal = transformer.Transform<unique_ptr<SelectStatement>>(list_pr, 1);
+	auto result = TransformShowSelect(transformer, show_or_describe_or_summarize, std::move(select_statement_internal));
+	return make_uniq<TypedTransformResult<unique_ptr<QueryNode>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformShowAllTablesInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto show_or_describe = transformer.Transform<ShowType>(list_pr, 0);
+	auto result = TransformShowAllTables(transformer, show_or_describe);
+	return make_uniq<TypedTransformResult<unique_ptr<QueryNode>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformShowQualifiedNameInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto show_or_describe_or_summarize = transformer.Transform<ShowType>(list_pr, 0);
+	DescribeTarget describe_target {};
+	transformer.TransformOptional(list_pr, 1, describe_target);
+	auto result = TransformShowQualifiedName(transformer, show_or_describe_or_summarize, std::move(describe_target));
+	return make_uniq<TypedTransformResult<unique_ptr<QueryNode>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformShowTablesInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto show_or_describe = transformer.Transform<ShowType>(list_pr, 0);
+	auto qualified_name = transformer.Transform<QualifiedName>(list_pr, 3);
+	auto result = TransformShowTables(transformer, show_or_describe, qualified_name);
+	return make_uniq<TypedTransformResult<unique_ptr<QueryNode>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDescribeTargetInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	DescribeTarget result;
+	if (choice_result.name == "BaseTableName") {
+		result.table_ref = transformer.Transform<unique_ptr<BaseTableRef>>(choice_result);
+	} else if (choice_result.name == "StringLiteral") {
+		result.is_table_name = true;
+		result.table_name = transformer.Transform<string>(choice_result);
+	} else {
+		throw InternalException("Unexpected choice for DescribeTarget: %s", choice_result.name);
+	}
+	return make_uniq<TypedTransformResult<DescribeTarget>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformShowOrDescribeOrSummarizeInternal(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<ShowType>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<ShowType>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSummarizeInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto summarize_rule = transformer.Transform<ShowType>(list_pr, 0);
+	auto result = summarize_rule;
+	return make_uniq<TypedTransformResult<ShowType>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSummarizeRuleInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto result = ShowType::SUMMARY;
+	return make_uniq<TypedTransformResult<ShowType>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformShowOrDescribeInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<ShowType>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<ShowType>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformShowRuleInternal(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	auto result = ShowType::DESCRIBE;
+	return make_uniq<TypedTransformResult<ShowType>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDescribeRuleInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto result = ShowType::DESCRIBE;
+	return make_uniq<TypedTransformResult<ShowType>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDetachStatementInternal(PEGTransformer &transformer,
@@ -1822,6 +1927,18 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"TruncateStatement", &PEGTransformerFactory::TransformTruncateStatementInternal},
 	    {"TargetOptAlias", &PEGTransformerFactory::TransformTargetOptAliasInternal},
 	    {"DeleteUsingClause", &PEGTransformerFactory::TransformDeleteUsingClauseInternal},
+	    {"DescribeStatement", &PEGTransformerFactory::TransformDescribeStatementInternal},
+	    {"ShowSelect", &PEGTransformerFactory::TransformShowSelectInternal},
+	    {"ShowAllTables", &PEGTransformerFactory::TransformShowAllTablesInternal},
+	    {"ShowQualifiedName", &PEGTransformerFactory::TransformShowQualifiedNameInternal},
+	    {"ShowTables", &PEGTransformerFactory::TransformShowTablesInternal},
+	    {"DescribeTarget", &PEGTransformerFactory::TransformDescribeTargetInternal},
+	    {"ShowOrDescribeOrSummarize", &PEGTransformerFactory::TransformShowOrDescribeOrSummarizeInternal},
+	    {"Summarize", &PEGTransformerFactory::TransformSummarizeInternal},
+	    {"SummarizeRule", &PEGTransformerFactory::TransformSummarizeRuleInternal},
+	    {"ShowOrDescribe", &PEGTransformerFactory::TransformShowOrDescribeInternal},
+	    {"ShowRule", &PEGTransformerFactory::TransformShowRuleInternal},
+	    {"DescribeRule", &PEGTransformerFactory::TransformDescribeRuleInternal},
 	    {"DetachStatement", &PEGTransformerFactory::TransformDetachStatementInternal},
 	    {"ExecuteStatement", &PEGTransformerFactory::TransformExecuteStatementInternal},
 	    {"ExplainStatement", &PEGTransformerFactory::TransformExplainStatementInternal},

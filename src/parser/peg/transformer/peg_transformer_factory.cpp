@@ -306,14 +306,6 @@ void PEGTransformerFactory::RegisterCreateType() {
 
 void PEGTransformerFactory::RegisterDescribe() {
 	// describe.gram
-	REGISTER_TRANSFORM(TransformDescribeStatement);
-	REGISTER_TRANSFORM(TransformShowSelect);
-	REGISTER_TRANSFORM(TransformShowTables);
-	REGISTER_TRANSFORM(TransformShowAllTables);
-	REGISTER_TRANSFORM(TransformShowQualifiedName);
-	REGISTER_TRANSFORM(TransformShowOrDescribeOrSummarize);
-	REGISTER_TRANSFORM(TransformShowOrDescribe);
-	REGISTER_TRANSFORM(TransformSummarize);
 }
 
 void PEGTransformerFactory::RegisterDrop() {
@@ -794,10 +786,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("MinusPrefixOperator", "-");
 	RegisterEnum<string>("PlusPrefixOperator", "+");
 	RegisterEnum<string>("TildePrefixOperator", "~");
-
-	RegisterEnum<ShowType>("SummarizeRule", ShowType::SUMMARY);
-	RegisterEnum<ShowType>("ShowRule", ShowType::DESCRIBE);
-	RegisterEnum<ShowType>("DescribeRule", ShowType::DESCRIBE);
 
 	RegisterEnum<InsertColumnOrder>("InsertByName", InsertColumnOrder::INSERT_BY_NAME);
 	RegisterEnum<InsertColumnOrder>("InsertByPosition", InsertColumnOrder::INSERT_BY_POSITION);
