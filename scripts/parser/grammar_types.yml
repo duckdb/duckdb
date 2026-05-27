@@ -1043,9 +1043,20 @@ overrides:
   DescribeTarget:
     type: "DescribeTarget"
     by_value: true
+  DescribeBaseTableName:
+    type: "DescribeTarget"
+    by_value: true
+  DescribeStringLiteral:
+    type: "DescribeTarget"
+    by_value: true
   ShowOrDescribeOrSummarize: "ShowType"
   ShowOrDescribe: "ShowType"
   Summarize: "ShowType"
+  SummarizeRule: "ShowType"
+  ShowRule: "ShowType"
+  DescribeRule: "ShowType"
+  DescribeLongRule: "ShowType"
+  DescRule: "ShowType"
   # expression.gram
   ComparisonOperator: "ExpressionType"
   IsDistinctFromOp: "ExpressionType"
@@ -1112,51 +1123,6 @@ overrides:
   UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
   UpdateSetColumnTarget: "string"
 
-constant_rules:
-  SummarizeRule:
-    type: "ShowType"
-    value: "ShowType::SUMMARY"
-  ShowRule:
-    type: "ShowType"
-    value: "ShowType::DESCRIBE"
-  DescribeRule:
-    type: "ShowType"
-    value: "ShowType::DESCRIBE"
-
-choice_struct_rules:
-  DescribeTarget:
-    BaseTableName:
-      field: "table_ref"
-    StringLiteral:
-      field: "table_name"
-      flag: "is_table_name"
-
-preserve_manual_rules:
-  - IdentifierDot
-  - UsingExpression
-  - DatabasePath
-  - AttachAlias
-  - AttachOptions
-  - WithList
-  - IndexType
-  - RelOptionArgumentOpt
-  - SecretStorageSpecifier
-  - SecretName
-  - TriggerName
-  - TriggerColumnList
-  - DeleteUsingClause
-  - ExplainOptionList
-  - ExportSource
-  - ExtensionAlias
-  - PragmaStatement
-  - PragmaParameters
-  - TypeList
-  - SetAssignment
-  - VariableList
-  - ReadOrWrite
-  - UpdateAlias
-  - DotIdentifier
-  - NameList
 # ---------------------------------------------------------------------------
 # excluded_rules: no transformer stub generated, no semantic value extracted
 # ---------------------------------------------------------------------------

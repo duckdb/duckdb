@@ -117,4 +117,35 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTrans
 	return std::move(select_node);
 }
 
+DescribeTarget PEGTransformerFactory::TransformDescribeBaseTableName(PEGTransformer &transformer,
+                                                                     unique_ptr<BaseTableRef> base_table_name) {
+	DescribeTarget result;
+	result.table_ref = std::move(base_table_name);
+	return result;
+}
+
+DescribeTarget PEGTransformerFactory::TransformDescribeStringLiteral(PEGTransformer &transformer,
+                                                                     const string &string_literal) {
+	DescribeTarget result;
+	result.is_table_name = true;
+	result.table_name = string_literal;
+	return result;
+}
+
+ShowType PEGTransformerFactory::TransformSummarizeRule(PEGTransformer &transformer) {
+	return ShowType::SUMMARY;
+}
+
+ShowType PEGTransformerFactory::TransformShowRule(PEGTransformer &transformer) {
+	return ShowType::DESCRIBE;
+}
+
+ShowType PEGTransformerFactory::TransformDescribeLongRule(PEGTransformer &transformer) {
+	return ShowType::DESCRIBE;
+}
+
+ShowType PEGTransformerFactory::TransformDescRule(PEGTransformer &transformer) {
+	return ShowType::DESCRIBE;
+}
+
 } // namespace duckdb

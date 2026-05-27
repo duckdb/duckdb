@@ -85,23 +85,9 @@ def load_grammar_types(types_file):
                 by_value = bool(value.get("by_value", False))
                 register(name, cpp_type, by_value, "overrides")
 
-    # Constant rules: RuleName -> {type: "...", value: "...", by_value: bool}
-    constant_rules = data.get("constant_rules", {})
-    if isinstance(constant_rules, dict):
-        for name, value in constant_rules.items():
-            if not isinstance(value, dict):
-                print(f"Error: constant_rules.{name} must be a mapping with 'type' and 'value'", file=sys.stderr)
-                sys.exit(1)
-            cpp_type = value.get("type", "")
-            if not cpp_type or "value" not in value:
-                print(f"Error: constant_rules.{name} must define 'type' and 'value'", file=sys.stderr)
-                sys.exit(1)
-            by_value = bool(value.get("by_value", False))
-            register(name, cpp_type, by_value, "constant_rules")
-
     # Category entries: CategoryName -> {type: "...", by_value: bool, rules: [...]}
     for key, value in data.items():
-        if key in ("overrides", "excluded_rules", "constant_rules", "choice_struct_rules", "preserve_manual_rules"):
+        if key in ("overrides", "excluded_rules"):
             continue
         if not isinstance(value, dict):
             continue

@@ -1470,18 +1470,33 @@ private:
 	                                                 const QualifiedName &qualified_name);
 	static unique_ptr<TransformResultValue> TransformDescribeTargetInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformDescribeBaseTableNameInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static DescribeTarget TransformDescribeBaseTableName(PEGTransformer &transformer,
+	                                                     unique_ptr<BaseTableRef> base_table_name);
+	static unique_ptr<TransformResultValue> TransformDescribeStringLiteralInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static DescribeTarget TransformDescribeStringLiteral(PEGTransformer &transformer, const string &string_literal);
 	static unique_ptr<TransformResultValue> TransformShowOrDescribeOrSummarizeInternal(PEGTransformer &transformer,
 	                                                                                   ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformSummarizeInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformSummarizeRuleInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
+	static ShowType TransformSummarizeRule(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformShowOrDescribeInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformShowRuleInternal(PEGTransformer &transformer,
 	                                                                  ParseResult &parse_result);
+	static ShowType TransformShowRule(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformDescribeRuleInternal(PEGTransformer &transformer,
 	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformDescribeLongRuleInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static ShowType TransformDescribeLongRule(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformDescRuleInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static ShowType TransformDescRule(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformDetachStatementInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformDetachStatement(PEGTransformer &transformer, const bool &if_exists,
