@@ -43,10 +43,10 @@ RemotePushdownOptimizer::RemotePushdownOptimizer(Binder &binder)
     : binder(binder), owned_pushdown_state(make_uniq<RemotePushdownState>()), pushdown_state(*owned_pushdown_state) {
 }
 
-RemotePushdownOptimizer::RemotePushdownOptimizer(RemotePushdownOptimizer &parent_p)
-    : binder(parent_p.binder), parent(parent_p), pushdown_state(parent_p.pushdown_state) {
+RemotePushdownOptimizer::RemotePushdownOptimizer(optional_ptr<RemotePushdownOptimizer> parent_p)
+    : binder(parent_p->binder), parent(parent_p), pushdown_state(parent->pushdown_state) {
 	// inherit table / column names from parent (for correlated subquery detection)
-	local_table_names = parent_p.local_table_names;
+	local_table_names = parent->local_table_names;
 }
 
 void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {

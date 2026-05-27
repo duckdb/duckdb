@@ -46,7 +46,7 @@ struct RemotePushdownState {
 class RemotePushdownOptimizer {
 public:
 	explicit RemotePushdownOptimizer(Binder &binder);
-	explicit RemotePushdownOptimizer(RemotePushdownOptimizer &parent);
+	explicit RemotePushdownOptimizer(optional_ptr<RemotePushdownOptimizer> parent);
 
 	void Rewrite(unique_ptr<SQLStatement> &statement);
 
