@@ -162,18 +162,22 @@ statement ok
 drop macro double_it;
 
 # Bug 4: pushing a JOIN with duplicate output column names caused an internal binding crash.
+# Fix: quack_query_by_name's bind function now calls QueryResult::DeduplicateColumns so that
+# two identically-named result columns (e.g. a.i and b.i both named "i") are renamed to i, i_1.
+# The pushed query executes correctly; the test verifies values (not column names).
 
-# FIXME: this is a bug that is caused by TableFunctions not being able to produce columns from multiple bindings
-mode skip pushdown_bug
-
-query II
-select a.i, b.i from rpc.t1 a join rpc.t1 b on a.i + 1 = b.i
+query II rowsort
+select a.i, b.i from rpc.t1 a join rpc.t1 b on a.i + 1 = b.i order by a.i
 ----
 0	1
 1	2
 2	3
-
-mode unskip
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
 
 # Verify that the alias-based workaround still works correctly
 query II
