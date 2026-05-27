@@ -743,12 +743,12 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 		//! the cardinality
 		// Update the relation_to_tdom set with the estimated distinct count (or tdom) calculated above
 		auto key = ColumnBinding(TableIndex(relation_id.index), ProjectionIndex(i));
+		auto distinct_count = stats.column_distinct_count.at(i);
 		for (auto &relation_to_tdom : relation_set_stats) {
-			column_binding_set_t i_set = relation_to_tdom.equivalent_relations;
+			const auto &i_set = relation_to_tdom.equivalent_relations;
 			if (i_set.find(key) == i_set.end()) {
 				continue;
 			}
-			auto distinct_count = stats.column_distinct_count.at(i);
 			if (distinct_count.from_hll && relation_to_tdom.has_distinct_count_hll) {
 				relation_to_tdom.distinct_count_hll =
 				    MaxValue(relation_to_tdom.distinct_count_hll, distinct_count.distinct_count);
@@ -759,7 +759,6 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 				relation_to_tdom.distinct_count_no_hll =
 				    MinValue(distinct_count.distinct_count, relation_to_tdom.distinct_count_no_hll);
 			}
-			break;
 		}
 	}
 }

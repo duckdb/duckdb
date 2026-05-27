@@ -101,6 +101,29 @@ join ne_c on ne_b.y < ne_c.y;
 ----
 437500
 
+# A column can be part of an equality closure and a separate expression
+# selectivity predicate. Its distinct count must update both domain groups.
+# Otherwise the expression predicate keeps an infinite denominator, estimates
+# ~0 rows, and is chosen before the local equality joins.
+
+statement ok
+create table sg_wss as select (range % 100)::integer w from range(27455);
+
+statement ok
+create table sg_d1 as select (range % 100)::integer w from range(14609);
+
+statement ok
+create table sg_d2 as select (range % 100)::integer w from range(14609);
+
+query II
+explain select count(*)
+from
+  (select sg_wss.w w1 from sg_wss, sg_d1 where sg_d1.w = sg_wss.w) y,
+  (select sg_wss.w w2 from sg_wss, sg_d2 where sg_d2.w = sg_wss.w) x
+where w1 = w2 - 52;
+----
+physical_plan	<REGEX>:.*w1 = \(w2 - 52\).*~[1-9][0-9,]* rows.*
+
 # Expression equality predicates should remain graph/selectivity predicates,
 # but should not become transitive equality-closure predicates. The expression
 # edge still needs to participate in join ordering instead of being left as a
