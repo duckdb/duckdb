@@ -115,9 +115,24 @@ struct JoinOrderUtil {
 		return filter.left_binding.table_index.IsValid() && filter.right_binding.table_index.IsValid();
 	}
 
-	static bool CanBuildEqualityClosure(const FilterInfo &filter) {
-		return IsEquivalenceJoinPredicate(filter) && HasValidJoinBindings(filter) &&
+	static bool HasAnyValidJoinBinding(const FilterInfo &filter) {
+		return filter.left_binding.table_index.IsValid() || filter.right_binding.table_index.IsValid();
+	}
+
+	static bool HasValidJoinEndpoints(const FilterInfo &filter) {
+		return filter.left_set && filter.right_set && !filter.left_set->Empty() && !filter.right_set->Empty() &&
 		       filter.left_set != filter.right_set;
+	}
+
+	static bool CanBuildEqualityClosure(const FilterInfo &filter) {
+		return IsEquivalenceJoinPredicate(filter) && HasValidJoinBindings(filter) && HasValidJoinEndpoints(filter);
+	}
+
+	static bool CanBuildSelectivityDomain(const FilterInfo &filter, JoinPredicateClass predicate_class) {
+		if (!HasValidJoinEndpoints(filter) || !HasAnyValidJoinBinding(filter)) {
+			return false;
+		}
+		return predicate_class != JoinPredicateClass::INNER_EQUALITY || !CanBuildEqualityClosure(filter);
 	}
 
 	static RelationIndex GetBindingRelation(const ColumnBinding &binding) {
@@ -168,10 +183,9 @@ public:
 	void AddEqualityPairClass(JoinRelationSet &pair, idx_t equality_class_index);
 
 	const vector<optional_ptr<FilterInfo>> &GetFilters() const;
-	const vector<optional_ptr<FilterInfo>> &GetEqualityFilters() const;
+	const vector<optional_ptr<FilterInfo>> &GetEqualityJoinFilters() const;
 	const vector<optional_ptr<FilterInfo>> &GetSelectivityFilters() const;
 	const vector<JoinEqualityClass> &GetEqualityClasses() const;
-	const reference_map_t<JoinRelationSet, RelationPairEqualitySummary> &GetEqualityPairs() const;
 	bool HasLeftJoinPredicates() const;
 
 	bool EqualityClassConnectsPairInScope(idx_t class_index, JoinRelationSet &pair, JoinRelationSet &scope) const;
@@ -181,11 +195,9 @@ private:
 	static bool ContainsClassIndex(const vector<idx_t> &class_indices, idx_t equality_class_index);
 
 	vector<optional_ptr<FilterInfo>> all_filters;
-	vector<optional_ptr<FilterInfo>> equality_filters;
+	vector<optional_ptr<FilterInfo>> equality_join_filters;
 	vector<optional_ptr<FilterInfo>> selectivity_filters;
-	vector<optional_ptr<FilterInfo>> left_filters;
-	vector<optional_ptr<FilterInfo>> semi_anti_filters;
-	vector<optional_ptr<FilterInfo>> other_filters;
+	bool has_left_join_predicates = false;
 	vector<JoinEqualityClass> equality_classes;
 	reference_map_t<JoinRelationSet, RelationPairEqualitySummary> equality_pairs;
 };
@@ -215,10 +227,6 @@ public:
 	//! Get a reference to the QueryGraphEdges structure that stores edges between
 	//! nodes and hypernodes.
 	const QueryGraphEdges &GetQueryGraphEdges() const;
-
-	//! Get a list of the join filters in the join plan than eventually are
-	//! transformed into the query graph edges
-	const vector<unique_ptr<FilterInfo>> &GetFilterBindings() const;
 
 	const JoinPredicateModel &GetPredicateModel() const;
 

@@ -104,12 +104,8 @@ void CardinalityEstimator::InitEquivalentRelations() {
 	}
 
 	for (auto filter : predicate_model.GetSelectivityFilters()) {
-		if (IsJoinOrFilter(*filter) || SingleColumnFilter(*filter) || EmptyFilter(*filter)) {
-			continue;
-		}
-		if (!filter->left_set || !filter->right_set || filter->left_set->Empty() || filter->right_set->Empty()) {
-			continue;
-		}
+		D_ASSERT(JoinOrderUtil::HasValidJoinEndpoints(*filter));
+		D_ASSERT(JoinOrderUtil::HasAnyValidJoinBinding(*filter));
 
 		column_binding_set_t domain_group;
 		if (filter->left_binding.table_index.IsValid()) {
@@ -118,9 +114,7 @@ void CardinalityEstimator::InitEquivalentRelations() {
 		if (filter->right_binding.table_index.IsValid()) {
 			domain_group.insert(filter->right_binding);
 		}
-		if (domain_group.empty()) {
-			continue;
-		}
+		D_ASSERT(!domain_group.empty());
 		relation_set_stats.emplace_back(domain_group);
 		relation_set_stats.back().filters.push_back(filter.get());
 	}

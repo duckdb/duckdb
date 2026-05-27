@@ -20,9 +20,10 @@ static double GetLeftJoinInputCost(CardinalityEstimator &cardinality_estimator,
 	reference_set_t<JoinRelationSet> seen_right_sides;
 	for (auto &connection : possible_connections) {
 		for (auto &filter : connection.get().filters) {
-			if (filter->join_type != JoinType::LEFT || !filter->right_set) {
+			if (filter->join_type != JoinType::LEFT) {
 				continue;
 			}
+			D_ASSERT(filter->right_set);
 			if (!seen_right_sides.insert(*filter->right_set).second) {
 				continue;
 			}
@@ -32,15 +33,11 @@ static double GetLeftJoinInputCost(CardinalityEstimator &cardinality_estimator,
 	return cost;
 }
 
-static optional_ptr<JoinRelationSet> GetContainingChild(DPJoinNode &left, DPJoinNode &right,
-                                                        optional_ptr<JoinRelationSet> set) {
-	if (!set) {
-		return nullptr;
-	}
-	if (JoinRelationSet::IsSubset(left.set, *set)) {
+static optional_ptr<JoinRelationSet> GetContainingChild(DPJoinNode &left, DPJoinNode &right, JoinRelationSet &set) {
+	if (JoinRelationSet::IsSubset(left.set, set)) {
 		return &left.set;
 	}
-	if (JoinRelationSet::IsSubset(right.set, *set)) {
+	if (JoinRelationSet::IsSubset(right.set, set)) {
 		return &right.set;
 	}
 	return nullptr;
@@ -58,16 +55,15 @@ static double GetLeftJoinDeferredInnerCost(QueryGraphManager &query_graph_manage
 			if (left_filter->join_type != JoinType::LEFT) {
 				continue;
 			}
-			auto lhs_child = GetContainingChild(left, right, left_filter->left_set);
-			auto rhs_child = GetContainingChild(left, right, left_filter->right_set);
+			D_ASSERT(left_filter->left_set && left_filter->right_set);
+			auto lhs_child = GetContainingChild(left, right, *left_filter->left_set);
+			auto rhs_child = GetContainingChild(left, right, *left_filter->right_set);
 			if (!lhs_child || !rhs_child || lhs_child == rhs_child) {
 				continue;
 			}
 
-			for (auto pending_filter : query_graph_manager.GetPredicateModel().GetEqualityFilters()) {
-				if (!pending_filter->left_set || !pending_filter->right_set) {
-					continue;
-				}
+			for (auto pending_filter : query_graph_manager.GetPredicateModel().GetEqualityJoinFilters()) {
+				D_ASSERT(pending_filter->left_set && pending_filter->right_set);
 				if (JoinRelationSet::IsSubset(*lhs_child, pending_filter->set.get())) {
 					continue;
 				}

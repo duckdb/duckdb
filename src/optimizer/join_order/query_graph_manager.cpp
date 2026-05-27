@@ -23,41 +23,28 @@ static bool Disjoint(const unordered_set<T> &a, const unordered_set<T> &b) {
 
 void JoinPredicateModel::Clear() {
 	all_filters.clear();
-	equality_filters.clear();
+	equality_join_filters.clear();
 	selectivity_filters.clear();
-	left_filters.clear();
-	semi_anti_filters.clear();
-	other_filters.clear();
+	has_left_join_predicates = false;
 	equality_classes.clear();
 	equality_pairs.clear();
 }
 
 void JoinPredicateModel::RegisterFilter(FilterInfo &filter, JoinPredicateClass predicate_class) {
 	all_filters.push_back(filter);
-	switch (predicate_class) {
-	case JoinPredicateClass::INNER_EQUALITY:
-		equality_filters.push_back(filter);
-		break;
-	case JoinPredicateClass::INNER_NON_EQUALITY:
+	if (predicate_class == JoinPredicateClass::LEFT_JOIN) {
+		has_left_join_predicates = true;
+	}
+	if (JoinOrderUtil::CanBuildSelectivityDomain(filter, predicate_class)) {
 		selectivity_filters.push_back(filter);
-		break;
-	case JoinPredicateClass::LEFT_JOIN:
-		selectivity_filters.push_back(filter);
-		left_filters.push_back(filter);
-		break;
-	case JoinPredicateClass::SEMI_ANTI_JOIN:
-		selectivity_filters.push_back(filter);
-		semi_anti_filters.push_back(filter);
-		break;
-	default:
-		selectivity_filters.push_back(filter);
-		other_filters.push_back(filter);
-		break;
 	}
 }
 
 void JoinPredicateModel::AddEqualityClass(JoinEqualityClass equality_class) {
 	D_ASSERT(equality_class.index == equality_classes.size());
+	for (auto &filter : equality_class.filters) {
+		equality_join_filters.push_back(filter.filter);
+	}
 	equality_classes.push_back(std::move(equality_class));
 }
 
@@ -76,8 +63,8 @@ const vector<optional_ptr<FilterInfo>> &JoinPredicateModel::GetFilters() const {
 	return all_filters;
 }
 
-const vector<optional_ptr<FilterInfo>> &JoinPredicateModel::GetEqualityFilters() const {
-	return equality_filters;
+const vector<optional_ptr<FilterInfo>> &JoinPredicateModel::GetEqualityJoinFilters() const {
+	return equality_join_filters;
 }
 
 const vector<optional_ptr<FilterInfo>> &JoinPredicateModel::GetSelectivityFilters() const {
@@ -88,12 +75,8 @@ const vector<JoinEqualityClass> &JoinPredicateModel::GetEqualityClasses() const 
 	return equality_classes;
 }
 
-const reference_map_t<JoinRelationSet, RelationPairEqualitySummary> &JoinPredicateModel::GetEqualityPairs() const {
-	return equality_pairs;
-}
-
 bool JoinPredicateModel::HasLeftJoinPredicates() const {
-	return !left_filters.empty();
+	return has_left_join_predicates;
 }
 
 bool JoinPredicateModel::EqualityClassConnectsPairInScope(idx_t class_index, JoinRelationSet &pair,
@@ -180,9 +163,9 @@ void QueryGraphManager::BuildPredicateModel() {
 	// First union all INNER equality predicates. Do not assign edge ids in this pass,
 	// because a later predicate can merge two previously separate components.
 	for (auto &filter : filters_and_bindings) {
+		filter->edge_equivalence_index = optional_idx();
 		auto predicate_class = JoinOrderUtil::ClassifyJoinPredicate(*filter);
 		predicate_model.RegisterFilter(*filter, predicate_class);
-		filter->edge_equivalence_index = optional_idx();
 		if (!JoinOrderUtil::CanBuildEqualityClosure(*filter)) {
 			continue;
 		}
@@ -260,10 +243,6 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	// Build the predicate model AFTER CreateHyperGraphEdges so that left_binding/right_binding are populated.
 	BuildPredicateModel();
 	return true;
-}
-
-const vector<unique_ptr<FilterInfo>> &QueryGraphManager::GetFilterBindings() const {
-	return filters_and_bindings;
 }
 
 const JoinPredicateModel &QueryGraphManager::GetPredicateModel() const {
