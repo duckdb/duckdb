@@ -153,14 +153,13 @@ void Optimizer::OptimizeStatement(unique_ptr<SQLStatement> &statement) {
 	if (!config.enable_optimizer) {
 		return;
 	}
-	// Skip the remote pushdown pass entirely when no remote catalogs are attached.
-	if (DatabaseManager::Get(context).GetRemoteCatalogCount() == 0) {
-		return;
+	if (DatabaseManager::Get(context).GetRemoteCatalogCount() > 0) {
+		// if we have any remote catalogs attached then pushdown into remote
+		RunOptimizer(OptimizerType::REMOTE_PUSHDOWN, [&]() {
+			RemotePushdownOptimizer optimizer(binder);
+			optimizer.Rewrite(statement);
+		});
 	}
-	RunOptimizer(OptimizerType::REMOTE_PUSHDOWN, [&]() {
-		RemotePushdownOptimizer optimizer(binder);
-		optimizer.Rewrite(statement);
-	});
 }
 
 void Optimizer::RunBuiltInOptimizers() {
