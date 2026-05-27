@@ -567,6 +567,7 @@ option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 option(SMALLER_BINARY "Produce a smaller binary by trimming specialized code paths. This can negatively affect performance." FALSE)
 option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
+option(ENABLE_JEMALLOC "Enable jemalloc as the memory allocator (only on supported platforms)" TRUE)
 option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabled)" FALSE)
 option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)
 option(PREBUILT_BINARY "Whether to use a prebuilt version of the DuckDB library, typically called libduckdb_static.a" "")
@@ -618,6 +619,9 @@ if(NATIVE_ARCH)
 endif()
 
 if(OVERRIDE_NEW_DELETE)
+  if (NOT ENABLE_JEMALLOC)
+    message(FATAL_ERROR "Cannot override new/delete without jemalloc enabled")
+  endif ()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_OVERRIDE_NEW_DELETE")
 endif()
 
@@ -800,14 +804,6 @@ endif()
 message(STATUS
         "Build workers: compile=$ENV{CMAKE_BUILD_PARALLEL_LEVEL} link_release=${DUCKDB_RELEASE_LINK_JOBS} link_non_release=${DUCKDB_DEBUG_LINK_JOBS}")
 
-if(OS_NAME STREQUAL "windows")
-  list (FIND DUCKDB_EXTENSION_NAMES jemalloc _index)
-  if (${_index} GREATER -1)
-    # have to throw an error because this will crash at runtime
-    message(FATAL_ERROR "The jemalloc extension is not supported on Windows")
-  endif()
-endif()
-
 include_directories(src/include)
 if (NOT EXTENSION_CONFIG_BUILD)
   include_directories(third_party/fsst)
@@ -825,6 +821,7 @@ if (NOT EXTENSION_CONFIG_BUILD)
   include_directories(third_party/pdqsort)
   include_directories(third_party/tdigest)
   include_directories(third_party/mbedtls/include)
+  include_directories(third_party/httplib)
   include_directories(third_party/jaro_winkler)
   include_directories(third_party/vergesort)
   include_directories(third_party/yyjson/include)
@@ -921,6 +918,22 @@ endfunction()
 # this depends on disable_target_warnings so the order matters
 include(${PROJECT_SOURCE_DIR}/extension/extension_build_tools.cmake)
 
+# These compile definitions/paths are consumed by sources in src/ (e.g. extension_helper.cpp, allocator.cpp),
+# so they must be configured before add_subdirectory(src).
+include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
+add_extension_definitions()
+add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
+add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
+add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
+add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
+
+if(ENABLE_JEMALLOC AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT FORCE_32_BIT AND OS_NAME STREQUAL "linux" AND NOT EMSCRIPTEN AND NOT CLANG_TIDY AND NOT ANDROID AND NOT ZOS AND NOT BSD AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
+  set(JEMALLOC_ENABLED TRUE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ENABLE_JEMALLOC")
+  include_directories(third_party/jemalloc/include)
+  add_third_party(jemalloc)
+endif()
+
 if(PREBUILT_BINARY)
   message("Using pre-built static library from file ${PREBUILT_BINARY}")
   add_library(duckdb_static STATIC IMPORTED GLOBAL)
@@ -950,9 +963,6 @@ if (NOT EXTENSION_CONFIG_BUILD)
   add_third_party(utf8proc)
   add_third_party(yyjson)
   add_third_party(zstd)
-endif()
-
-if (NOT EXTENSION_CONFIG_BUILD)
   if(NOT DUCKDB_EXPLICIT_PLATFORM)
     set(VERSION_SOURCES tools/utils/test_platform.cpp)
 

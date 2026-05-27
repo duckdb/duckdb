@@ -1,0 +1,10 @@
+# name: test/fuzzer/duckfuzz/vector_size_out_of_range.test
+# description: Coverage for wrong vector size
+# group: [duckfuzz]
+
+require core_functions
+
+statement error
+SELECT DISTINCT OPERATOR ( / ) + ARRAY [ ] :: INTERVAL SECONDS [9] [ ] :: SETOF NCHAR ARRAY :: FLOAT ;
+----
+Binder Error:

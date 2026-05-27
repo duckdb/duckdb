@@ -83,7 +83,8 @@ public:
 	//! Convert the Expression to a String
 	string ToString() const override;
 
-	static bool Equal(const WindowExpression &a, const WindowExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
+	hash_t Hash() const override;
 
 	bool HasBoundedParts();
 
@@ -280,6 +281,7 @@ public:
 	}
 
 private:
+	WindowExpression();
 	//	Backwards-compatible serialization interface
 	WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children,
 	                 unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr);

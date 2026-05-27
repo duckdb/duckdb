@@ -34,6 +34,7 @@ public:
 	bool IsScalar() const override;
 	string GetName() const override;
 	string ToString() const override;
+	bool Equals(const ParsedExpression &other) const override;
 	hash_t Hash() const override;
 	unique_ptr<ParsedExpression> Copy() const override;
 

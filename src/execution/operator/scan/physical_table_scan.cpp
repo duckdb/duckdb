@@ -415,25 +415,16 @@ TableFunctionParallelism PhysicalTableScan::SourceParallelism() const {
 	return function.parallelism;
 }
 
-InsertionOrderPreservingMap<string> PhysicalTableScan::ExtraSourceParams(GlobalSourceState &gstate_p,
-                                                                         LocalSourceState &lstate) const {
-	if (!function.dynamic_to_string) {
-		return InsertionOrderPreservingMap<string>();
+void PhysicalTableScan::GetMetrics(ClientContext &context, GlobalSourceState &gstate_p, LocalSourceState &lstate,
+                                   OperatorMetrics &operator_metrics) const {
+	if (!function.get_metrics) {
+		return;
 	}
 	auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
 	auto &state = lstate.Cast<TableScanLocalSourceState>();
-	TableFunctionDynamicToStringInput input(function, bind_data.get(), state.local_state.get(),
-	                                        gstate.global_state.get());
-	return function.dynamic_to_string(input);
-}
-
-optional_idx PhysicalTableScan::GetRowsScanned(GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
-	if (function.rows_scanned) {
-		auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
-		auto &state = lstate.Cast<TableScanLocalSourceState>();
-		return function.rows_scanned(*gstate.global_state, *state.local_state);
-	}
-	return optional_idx();
+	TableFunctionGetMetricsInput input(context, bind_data.get(), state.local_state.get(), gstate.global_state.get(),
+	                                   operator_metrics);
+	function.get_metrics(input);
 }
 
 } // namespace duckdb

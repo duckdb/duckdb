@@ -39,7 +39,7 @@ void IsFormatExtensionKnown(const string &format) {
 			// It's a match, we must throw
 			throw CatalogException(
 			    "Copy Function with name \"%s\" is not in the catalog, but it exists in the %s extension.", format,
-			    std::string(file_postfixes.extension));
+			    file_postfixes.extension);
 		}
 	}
 }
@@ -619,8 +619,8 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 			// check if this matches the mode
 			if (copy_option.mode != CopyOptionMode::READ_WRITE && copy_option.mode != copy_mode) {
 				throw InvalidInputException("Option \"%s\" is not supported for %s - only for %s", provided_option,
-				                            std::string(stmt.info->is_from ? "reading" : "writing"),
-				                            std::string(stmt.info->is_from ? "writing" : "reading"));
+				                            stmt.info->is_from ? "reading" : "writing",
+				                            stmt.info->is_from ? "writing" : "reading");
 			}
 			if (copy_option.type.id() != LogicalTypeId::ANY) {
 				if (provided_entry.second.empty()) {
@@ -636,6 +636,10 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 					                            provided_option);
 				}
 				auto &original_value = provided_entry.second[0];
+				if (original_value.IsNull()) {
+					throw BinderException("NULL is not supported as a valid option for COPY option \"%s\"",
+					                      provided_option);
+				}
 				if (copy_option.type == original_value.type()) {
 					// types match
 					continue;
