@@ -722,7 +722,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	FindRemoteCatalogsInSearchPath();
 
 	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name);
-	EntryLookupInfo view_lookup(CatalogType::VIEW_ENTRY, ref.table_name);
 
 	if (pushdown_state.remote_catalogs_in_search_path.size() != 1) {
 		TrackLocalTable(ref);
@@ -734,11 +733,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 		const auto &schema = schema_name.empty() ? local_entry.schema : schema_name;
 		auto entry =
 		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, table_lookup, OnEntryNotFound::RETURN_NULL);
-		if (!entry) {
-			// Also check for views: CREATE VIEW v AS ... is referenced as a BaseTableRef
-			entry = Catalog::GetEntry(binder.context, local_entry.catalog, schema, view_lookup,
-			                          OnEntryNotFound::RETURN_NULL);
-		}
 		if (entry) {
 			TrackLocalTable(ref);
 			// Same as Case 1: local table → UNKNOWN to prevent Merge from treating it as neutral.
