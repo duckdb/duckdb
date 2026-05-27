@@ -11,6 +11,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/main/metric_info.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/main/extension_install_info.hpp"
@@ -127,6 +128,9 @@ public:
 	                                     bind_cast_function_t function, int64_t implicit_cast_cost = -1);
 	DUCKDB_API void RegisterCastFunction(const LogicalType &source, const LogicalType &target, BoundCastInfo function,
 	                                     int64_t implicit_cast_cost = -1);
+
+	//! Registers a custom metric so it appears in duckdb_available_metrics.
+	DUCKDB_API void RegisterMetric(MetricInfo info);
 
 private:
 	void FinalizeLoad();

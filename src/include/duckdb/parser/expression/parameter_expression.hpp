@@ -46,7 +46,7 @@ public:
 
 	string ToString() const override;
 
-	static bool Equal(const ParameterExpression &a, const ParameterExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;
 	hash_t Hash() const override;

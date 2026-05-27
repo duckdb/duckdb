@@ -67,9 +67,16 @@
       "reason": "References explicit optimizer logging.",
       "paths": [
         "test/sql/pragma/profiling/test_custom_profiling_optimizer_settings.test",
+        "test/sql/pragma/profiling/test_custom_profiling_using_groups.test",
+        "test/sql/detailed_profiler/test_detailed_profiler.test",
+        "test/sql/copy/csv/parallel/csv_parallel_null_option.test",
         "test/sql/transactions/concurrent_drop_table.test",
         "test/sql/index/art/scan/test_art_prepared_scan.test",
-        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test"
+        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
+        "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
+        "test/sql/copy/parquet/parquet_prefetch_projection.test",
+        "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test",
+        "test/sql/copy/parquet/parquet_prefetch_strategy_option.test"
       ]
     },
     {

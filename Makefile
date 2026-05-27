@@ -535,7 +535,9 @@ TEST_CONFIGS := \
 	test/configs/variant_vector.json \
 	test/configs/compressed_in_memory.json \
 	test/configs/prefetch_all_storage.json \
-	test/configs/encryption.json
+	test/configs/encryption.json \
+	test/configs/v1_storage.json \
+	test/configs/v1_storage_block_size_16kB.json
 
 test_configs:
 	$(PYTHON) scripts/ci/run_tests.py $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg)) ./build/release/$(UNITTEST_BINARY)
@@ -577,13 +579,13 @@ endif
 
 unittest_threadsan: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
 unittest_threadsan: unittest_reldebug
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) build/reldebug/$(UNITTEST_BINARY) "[intraquery],[interquery],[detailed_profiler],test/sql/tpch/tpch_sf01.test_slow" $(T)
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage --force-reload" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json build/reldebug/$(UNITTEST_BINARY) "[intraquery],[interquery],[detailed_profiler],test/sql/tpch/tpch_sf01.test_slow" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json --test-flags="--force-storage --force-reload" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
 
 .PHONY: unittest_threadsan_extra
 unittest_threadsan_extra: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
 unittest_threadsan_extra: unittest_reldebug
-	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-config test/configs/threadsan.json --test-flags="--force-storage" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
 
 docs:
 	mkdir -p ./build/docs && \
@@ -821,8 +823,10 @@ generate-files-deps:
 generate-files:
 	$(PYTHON) scripts/generate_c_api.py
 	$(PYTHON) scripts/generate_functions.py
+	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py
 	$(PYTHON) scripts/generate_serialization.py
+	$(PYTHON) scripts/generate_util.py
 	$(PYTHON) scripts/generate_storage_info.py
 	$(PYTHON) scripts/generate_enum_util.py
 # Run the formatter again after (re)generating the files

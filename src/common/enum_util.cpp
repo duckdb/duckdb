@@ -47,7 +47,6 @@
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
-#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
@@ -148,7 +147,7 @@
 #include "duckdb/main/extension.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
-#include "duckdb/main/profiling_info.hpp"
+#include "duckdb/main/gathered_metrics.hpp"
 #include "duckdb/main/query_parameters.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/query_result.hpp"
@@ -3319,125 +3318,6 @@ const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value) {
 template<>
 MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value) {
 	return static_cast<MetaPipelineType>(StringUtil::StringToEnum(GetMetaPipelineTypeValues(), 2, "MetaPipelineType", value));
-}
-
-const StringUtil::EnumStringLiteral *GetMetricGroupValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(MetricGroup::ALL), "ALL" },
-		{ static_cast<uint32_t>(MetricGroup::CORE), "CORE" },
-		{ static_cast<uint32_t>(MetricGroup::DEFAULT), "DEFAULT" },
-		{ static_cast<uint32_t>(MetricGroup::EXECUTION), "EXECUTION" },
-		{ static_cast<uint32_t>(MetricGroup::FILE), "FILE" },
-		{ static_cast<uint32_t>(MetricGroup::OPERATOR), "OPERATOR" },
-		{ static_cast<uint32_t>(MetricGroup::OPTIMIZER), "OPTIMIZER" },
-		{ static_cast<uint32_t>(MetricGroup::PHASE_TIMING), "PHASE_TIMING" },
-		{ static_cast<uint32_t>(MetricGroup::INVALID), "INVALID" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<MetricGroup>(MetricGroup value) {
-	return StringUtil::EnumToString(GetMetricGroupValues(), 9, "MetricGroup", static_cast<uint32_t>(value));
-}
-
-template<>
-MetricGroup EnumUtil::FromString<MetricGroup>(const char *value) {
-	return static_cast<MetricGroup>(StringUtil::StringToEnum(GetMetricGroupValues(), 9, "MetricGroup", value));
-}
-
-const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(MetricType::CPU_TIME), "CPU_TIME" },
-		{ static_cast<uint32_t>(MetricType::CUMULATIVE_CARDINALITY), "CUMULATIVE_CARDINALITY" },
-		{ static_cast<uint32_t>(MetricType::CUMULATIVE_ROWS_SCANNED), "CUMULATIVE_ROWS_SCANNED" },
-		{ static_cast<uint32_t>(MetricType::CUMULATIVE_ROW_GROUPS_SCANNED), "CUMULATIVE_ROW_GROUPS_SCANNED" },
-		{ static_cast<uint32_t>(MetricType::CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN), "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN" },
-		{ static_cast<uint32_t>(MetricType::EXTRA_INFO), "EXTRA_INFO" },
-		{ static_cast<uint32_t>(MetricType::LATENCY), "LATENCY" },
-		{ static_cast<uint32_t>(MetricType::QUERY_NAME), "QUERY_NAME" },
-		{ static_cast<uint32_t>(MetricType::RESULT_SET_SIZE), "RESULT_SET_SIZE" },
-		{ static_cast<uint32_t>(MetricType::ROWS_RETURNED), "ROWS_RETURNED" },
-		{ static_cast<uint32_t>(MetricType::BLOCKED_THREAD_TIME), "BLOCKED_THREAD_TIME" },
-		{ static_cast<uint32_t>(MetricType::SYSTEM_PEAK_BUFFER_MEMORY), "SYSTEM_PEAK_BUFFER_MEMORY" },
-		{ static_cast<uint32_t>(MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE), "SYSTEM_PEAK_TEMP_DIR_SIZE" },
-		{ static_cast<uint32_t>(MetricType::TOTAL_MEMORY_ALLOCATED), "TOTAL_MEMORY_ALLOCATED" },
-		{ static_cast<uint32_t>(MetricType::ATTACH_LOAD_STORAGE_LATENCY), "ATTACH_LOAD_STORAGE_LATENCY" },
-		{ static_cast<uint32_t>(MetricType::ATTACH_REPLAY_WAL_LATENCY), "ATTACH_REPLAY_WAL_LATENCY" },
-		{ static_cast<uint32_t>(MetricType::CHECKPOINT_LATENCY), "CHECKPOINT_LATENCY" },
-		{ static_cast<uint32_t>(MetricType::COMMIT_LOCAL_STORAGE_LATENCY), "COMMIT_LOCAL_STORAGE_LATENCY" },
-		{ static_cast<uint32_t>(MetricType::CUMULATIVE_VACUUM_TIME), "CUMULATIVE_VACUUM_TIME" },
-		{ static_cast<uint32_t>(MetricType::TOTAL_BYTES_READ), "TOTAL_BYTES_READ" },
-		{ static_cast<uint32_t>(MetricType::TOTAL_BYTES_WRITTEN), "TOTAL_BYTES_WRITTEN" },
-		{ static_cast<uint32_t>(MetricType::WAITING_TO_ATTACH_LATENCY), "WAITING_TO_ATTACH_LATENCY" },
-		{ static_cast<uint32_t>(MetricType::WAL_REPLAY_ENTRY_COUNT), "WAL_REPLAY_ENTRY_COUNT" },
-		{ static_cast<uint32_t>(MetricType::WRITE_TO_WAL_LATENCY), "WRITE_TO_WAL_LATENCY" },
-		{ static_cast<uint32_t>(MetricType::OPERATOR_CARDINALITY), "OPERATOR_CARDINALITY" },
-		{ static_cast<uint32_t>(MetricType::OPERATOR_NAME), "OPERATOR_NAME" },
-		{ static_cast<uint32_t>(MetricType::OPERATOR_ROWS_SCANNED), "OPERATOR_ROWS_SCANNED" },
-		{ static_cast<uint32_t>(MetricType::OPERATOR_ROW_GROUPS_SCANNED), "OPERATOR_ROW_GROUPS_SCANNED" },
-		{ static_cast<uint32_t>(MetricType::OPERATOR_TIMING), "OPERATOR_TIMING" },
-		{ static_cast<uint32_t>(MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN), "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN" },
-		{ static_cast<uint32_t>(MetricType::OPERATOR_TYPE), "OPERATOR_TYPE" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_EXPRESSION_REWRITER), "OPTIMIZER_EXPRESSION_REWRITER" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_FILTER_PULLUP), "OPTIMIZER_FILTER_PULLUP" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_FILTER_PUSHDOWN), "OPTIMIZER_FILTER_PUSHDOWN" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_EMPTY_RESULT_PULLUP), "OPTIMIZER_EMPTY_RESULT_PULLUP" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_CTE_FILTER_PUSHER), "OPTIMIZER_CTE_FILTER_PUSHER" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_REGEX_RANGE), "OPTIMIZER_REGEX_RANGE" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_IN_CLAUSE), "OPTIMIZER_IN_CLAUSE" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_JOIN_ORDER), "OPTIMIZER_JOIN_ORDER" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_DELIMINATOR), "OPTIMIZER_DELIMINATOR" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_UNNEST_REWRITER), "OPTIMIZER_UNNEST_REWRITER" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_UNUSED_COLUMNS), "OPTIMIZER_UNUSED_COLUMNS" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_STATISTICS_PROPAGATION), "OPTIMIZER_STATISTICS_PROPAGATION" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_COMMON_SUBEXPRESSIONS), "OPTIMIZER_COMMON_SUBEXPRESSIONS" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_COMMON_AGGREGATE), "OPTIMIZER_COMMON_AGGREGATE" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_COLUMN_LIFETIME), "OPTIMIZER_COLUMN_LIFETIME" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE), "OPTIMIZER_BUILD_SIDE_PROBE_SIDE" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_LIMIT_PUSHDOWN), "OPTIMIZER_LIMIT_PUSHDOWN" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_TOP_N), "OPTIMIZER_TOP_N" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_COMPRESSED_MATERIALIZATION), "OPTIMIZER_COMPRESSED_MATERIALIZATION" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_DUPLICATE_GROUPS), "OPTIMIZER_DUPLICATE_GROUPS" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_REORDER_FILTER), "OPTIMIZER_REORDER_FILTER" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_SAMPLING_PUSHDOWN), "OPTIMIZER_SAMPLING_PUSHDOWN" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_JOIN_FILTER_PUSHDOWN), "OPTIMIZER_JOIN_FILTER_PUSHDOWN" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_EXTENSION), "OPTIMIZER_EXTENSION" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_MATERIALIZED_CTE), "OPTIMIZER_MATERIALIZED_CTE" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_AGGREGATE_FUNCTION_REWRITER), "OPTIMIZER_AGGREGATE_FUNCTION_REWRITER" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_LATE_MATERIALIZATION), "OPTIMIZER_LATE_MATERIALIZATION" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_CTE_INLINING), "OPTIMIZER_CTE_INLINING" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_ROW_GROUP_PRUNER), "OPTIMIZER_ROW_GROUP_PRUNER" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION), "OPTIMIZER_TOP_N_WINDOW_ELIMINATION" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_COMMON_SUBPLAN), "OPTIMIZER_COMMON_SUBPLAN" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_JOIN_ELIMINATION), "OPTIMIZER_JOIN_ELIMINATION" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_WINDOW_SELF_JOIN), "OPTIMIZER_WINDOW_SELF_JOIN" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_PROJECTION_PULLUP), "OPTIMIZER_PROJECTION_PULLUP" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_OUTER_JOIN_SIMPLIFICATION), "OPTIMIZER_OUTER_JOIN_SIMPLIFICATION" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_ROW_NUMBER_REWRITER), "OPTIMIZER_ROW_NUMBER_REWRITER" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_PARTITIONED_EXECUTION), "OPTIMIZER_PARTITIONED_EXECUTION" },
-		{ static_cast<uint32_t>(MetricType::OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN), "OPTIMIZER_PARTIAL_AGGREGATE_PUSHDOWN" },
-		{ static_cast<uint32_t>(MetricType::ALL_OPTIMIZERS), "ALL_OPTIMIZERS" },
-		{ static_cast<uint32_t>(MetricType::CUMULATIVE_OPTIMIZER_TIMING), "CUMULATIVE_OPTIMIZER_TIMING" },
-		{ static_cast<uint32_t>(MetricType::PARSER), "PARSER" },
-		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER), "PHYSICAL_PLANNER" },
-		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER_COLUMN_BINDING), "PHYSICAL_PLANNER_COLUMN_BINDING" },
-		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER_CREATE_PLAN), "PHYSICAL_PLANNER_CREATE_PLAN" },
-		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES), "PHYSICAL_PLANNER_RESOLVE_TYPES" },
-		{ static_cast<uint32_t>(MetricType::PLANNER), "PLANNER" },
-		{ static_cast<uint32_t>(MetricType::PLANNER_BINDING), "PLANNER_BINDING" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<MetricType>(MetricType value) {
-	return StringUtil::EnumToString(GetMetricTypeValues(), 78, "MetricType", static_cast<uint32_t>(value));
-}
-
-template<>
-MetricType EnumUtil::FromString<MetricType>(const char *value) {
-	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 78, "MetricType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMonotonicityValues() {

@@ -586,11 +586,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateTriggerSt
 	auto trigger_timing = transformer.Transform<TriggerTiming>(list_pr, 3);
 	auto trigger_event = transformer.Transform<TriggerEventInfo>(list_pr, 4);
 	auto base_table_name = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr, 6);
+	string referencing_new_table_as {};
+	transformer.TransformOptional(list_pr, 7, referencing_new_table_as);
 	TriggerForEach for_each_clause {};
-	transformer.TransformOptional(list_pr, 7, for_each_clause);
-	auto trigger_body = transformer.Transform<unique_ptr<SQLStatement>>(list_pr, 8);
+	transformer.TransformOptional(list_pr, 8, for_each_clause);
+	auto trigger_body = transformer.Transform<unique_ptr<SQLStatement>>(list_pr, 9);
 	auto result = TransformCreateTriggerStmt(transformer, if_not_exists, trigger_name, trigger_timing, trigger_event,
-	                                         std::move(base_table_name), for_each_clause, std::move(trigger_body));
+	                                         std::move(base_table_name), referencing_new_table_as, for_each_clause,
+	                                         std::move(trigger_body));
 	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
 }
 
@@ -607,6 +610,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTriggerNameInte
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto identifier = list_pr.Child<IdentifierParseResult>(0).identifier;
 	auto result = TransformTriggerName(transformer, identifier);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformReferencingNewTableAsInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_id = transformer.Transform<string>(list_pr, 4);
+	auto result = TransformReferencingNewTableAs(transformer, col_id);
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
@@ -1413,6 +1424,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CreateTriggerStmt", &PEGTransformerFactory::TransformCreateTriggerStmtInternal},
 	    {"TriggerBody", &PEGTransformerFactory::TransformTriggerBodyInternal},
 	    {"TriggerName", &PEGTransformerFactory::TransformTriggerNameInternal},
+	    {"ReferencingNewTableAs", &PEGTransformerFactory::TransformReferencingNewTableAsInternal},
 	    {"TriggerTiming", &PEGTransformerFactory::TransformTriggerTimingInternal},
 	    {"TriggerBefore", &PEGTransformerFactory::TransformTriggerBeforeInternal},
 	    {"TriggerAfter", &PEGTransformerFactory::TransformTriggerAfterInternal},

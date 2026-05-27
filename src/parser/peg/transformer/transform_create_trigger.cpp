@@ -25,8 +25,8 @@ static unique_ptr<QueryNode> ExtractQueryNode(unique_ptr<SQLStatement> stmt) {
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(
     PEGTransformer &transformer, const bool &if_not_exists, const string &trigger_name,
     const TriggerTiming &trigger_timing, const TriggerEventInfo &trigger_event,
-    unique_ptr<BaseTableRef> base_table_name, const TriggerForEach &for_each_clause,
-    unique_ptr<SQLStatement> trigger_body) {
+    unique_ptr<BaseTableRef> base_table_name, const string &referencing_new_table_as,
+    const TriggerForEach &for_each_clause, unique_ptr<SQLStatement> trigger_body) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTriggerInfo>();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
@@ -35,6 +35,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(
 	info->event_type = trigger_event.event_type;
 	info->columns = trigger_event.columns;
 	info->base_table = std::move(base_table_name);
+	info->referencing_new_table = referencing_new_table_as;
 	info->for_each = for_each_clause;
 	info->trigger_action = ExtractQueryNode(std::move(trigger_body));
 	result->info = std::move(info);
@@ -100,6 +101,10 @@ TriggerEventInfo PEGTransformerFactory::TransformTriggerEventUpdateOf(PEGTransfo
 
 vector<string> PEGTransformerFactory::TransformTriggerColumnList(PEGTransformer &transformer,
                                                                  const vector<string> &col_id) {
+	return col_id;
+}
+
+string PEGTransformerFactory::TransformReferencingNewTableAs(PEGTransformer &transformer, const string &col_id) {
 	return col_id;
 }
 
