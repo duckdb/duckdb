@@ -29,7 +29,6 @@ public:
 public:
 	DUCKDB_API CaseExpression();
 
-
 public:
 	const vector<CaseCheck> &CaseChecks() const {
 		return case_checks;
