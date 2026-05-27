@@ -54,7 +54,7 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	static bool Equal(const FunctionExpression &a, const FunctionExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
 	hash_t Hash() const override;
 
 	void Serialize(Serializer &serializer) const override;
