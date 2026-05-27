@@ -1,6 +1,9 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/parsed_data/create_feature_info.hpp"
 #include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/statement/call_statement.hpp"
 
 namespace duckdb {
 
@@ -62,6 +65,75 @@ FeatureRefreshMode PEGTransformerFactory::TransformFeatureRefreshMode(PEGTransfo
                                                                       ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return transformer.TransformEnum<FeatureRefreshMode>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+}
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformRefreshFeatureStatement(PEGTransformer &transformer,
+                                                                                 ParseResult &parse_result) {
+	// RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	// index 0: 'REFRESH' keyword
+	// index 1: 'FEATURE' keyword
+	auto feature_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2)).name;
+
+	// Rewrite to: CALL refresh_feature('feature_name')
+	auto result = make_uniq<CallStatement>();
+	vector<unique_ptr<ParsedExpression>> args;
+	args.push_back(make_uniq<ConstantExpression>(Value(feature_name)));
+	auto function_expression = make_uniq<FunctionExpression>("refresh_feature", std::move(args));
+	result->function = std::move(function_expression);
+	return std::move(result);
+}
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformServeFeatureStatement(PEGTransformer &transformer,
+                                                                               ParseResult &parse_result) {
+	// ServeFeatureStatement <- 'SERVE' ServeFeatureKw List(IdentifierOrStringLiteral) 'FOR' IdentifierOrStringLiteral
+	// ServeFeatureEntity? ServeFeatureAsOf?
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	// index 0: 'SERVE' keyword
+	// index 1: ServeFeatureKw ('FEATURE' or 'FEATURES')
+	// index 2: List(IdentifierOrStringLiteral) - feature names
+	auto feature_items = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(2));
+	// Build comma-separated feature names
+	string feature_names;
+	for (auto &item : feature_items) {
+		auto name = transformer.Transform<QualifiedName>(item).name;
+		if (!feature_names.empty()) {
+			feature_names += ",";
+		}
+		feature_names += name;
+	}
+	// index 3: 'FOR' keyword
+	auto spine_table = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(4)).name;
+
+	// index 5: optional ServeFeatureEntity <- 'ENTITY' IdentifierOrStringLiteral
+	string entity_column;
+	auto &entity_opt = list_pr.Child<OptionalParseResult>(5);
+	if (entity_opt.HasResult()) {
+		auto &entity_list = entity_opt.GetResult().Cast<ListParseResult>();
+		// index 0: 'ENTITY' keyword, index 1: identifier
+		entity_column = transformer.Transform<QualifiedName>(entity_list.Child<ListParseResult>(1)).name;
+	}
+
+	// index 6: optional ServeFeatureAsOf <- 'ASOF' IdentifierOrStringLiteral
+	string as_of_column;
+	auto &asof_opt = list_pr.Child<OptionalParseResult>(6);
+	if (asof_opt.HasResult()) {
+		auto &asof_list = asof_opt.GetResult().Cast<ListParseResult>();
+		// index 0: 'ASOF' keyword, index 1: identifier
+		as_of_column = transformer.Transform<QualifiedName>(asof_list.Child<ListParseResult>(1)).name;
+	}
+
+	// Rewrite to: CALL serve_feature('feature_names', 'spine_table', 'entity_column', 'as_of_column')
+	// Empty strings signal "use default from feature metadata"
+	auto result = make_uniq<CallStatement>();
+	vector<unique_ptr<ParsedExpression>> args;
+	args.push_back(make_uniq<ConstantExpression>(Value(feature_names)));
+	args.push_back(make_uniq<ConstantExpression>(Value(spine_table)));
+	args.push_back(make_uniq<ConstantExpression>(Value(entity_column)));
+	args.push_back(make_uniq<ConstantExpression>(Value(as_of_column)));
+	auto function_expression = make_uniq<FunctionExpression>("serve_feature", std::move(args));
+	result->function = std::move(function_expression);
+	return std::move(result);
 }
 
 } // namespace duckdb

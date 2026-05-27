@@ -4,10 +4,7 @@
   "on_new_connection": "USE __test__config__crypto;",
   "on_load": "skip",
   "skip_compiled": "true",
-  "statically_loaded_extensions": [
-    "core_functions",
-    "httpfs"
-  ],
+  "statically_loaded_extensions": ["core_functions", "httpfs"],
   "skip_tests": [
     {
       "reason": "TODO",
@@ -44,16 +41,14 @@
     },
     {
       "reason": "Attached databases have a main schema, which is not implicit.",
-      "paths": [
-        "test/fuzzer/sqlsmith/current_schemas_null.test"
-      ]
+      "paths": ["test/fuzzer/sqlsmith/current_schemas_null.test"]
     },
     {
       "reason": "Expects httpfs to not be present",
-      "paths" : [
-          "test/sql/secrets/create_secret_hffs_autoload.test",
-          "test/sql/secrets/secret_autoloading_errors.test",
-          "test/sql/partitioning/hive_partitioning_autodetect.test"
+      "paths": [
+        "test/sql/secrets/create_secret_hffs_autoload.test",
+        "test/sql/secrets/secret_autoloading_errors.test",
+        "test/sql/partitioning/hive_partitioning_autodetect.test"
       ]
     },
     {
@@ -87,8 +82,14 @@
     },
     {
       "reason": "Test relies on temp directory being required for dbgen, but with an encrypted persistent DB the buffer manager uses the DB file as external storage, so the invalid temp directory is never accessed.",
+      "paths": ["test/sql/tpch/dbgen_error.test"]
+    },
+    {
+      "reason": "Feature catalog entries are not yet persisted to WAL",
       "paths": [
-        "test/sql/tpch/dbgen_error.test"
+        "test/sql/feature/test_feature_ddl.test",
+        "test/sql/feature/test_feature_refresh.test",
+        "test/sql/feature/test_feature_materialize.test"
       ]
     }
   ]

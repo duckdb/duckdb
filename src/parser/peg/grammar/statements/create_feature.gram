@@ -8,3 +8,11 @@ FeatureGranularityMinute <- 'MINUTE'
 FeatureRefreshMode <- FeatureRefreshFull / FeatureRefreshIncremental
 FeatureRefreshFull <- 'FULL'
 FeatureRefreshIncremental <- 'INCREMENTAL'
+
+RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral
+
+ServeFeatureStatement <- 'SERVE' ServeFeatureKw List(IdentifierOrStringLiteral) 'FOR' IdentifierOrStringLiteral ServeFeatureEntity? ServeFeatureAsOf?
+
+ServeFeatureKw <- 'FEATURES' / 'FEATURE'
+ServeFeatureEntity <- 'ENTITY' IdentifierOrStringLiteral
+ServeFeatureAsOf <- 'ASOF' IdentifierOrStringLiteral

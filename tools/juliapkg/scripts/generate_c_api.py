@@ -7,7 +7,6 @@ from packaging.version import Version
 from functools import reduce
 from pathlib import Path
 
-
 EXT_API_DEFINITION_PATTERN = "src/include/duckdb/main/capi/header_generation/apis/v1/*/*.json"
 
 # The JSON files that define all available CAPI functions

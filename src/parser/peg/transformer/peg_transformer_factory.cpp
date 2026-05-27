@@ -376,6 +376,8 @@ void PEGTransformerFactory::RegisterCreateFeature() {
 	REGISTER_TRANSFORM(TransformCreateFeatureStmt);
 	REGISTER_TRANSFORM(TransformFeatureGranularity);
 	REGISTER_TRANSFORM(TransformFeatureRefreshMode);
+	REGISTER_TRANSFORM(TransformRefreshFeatureStatement);
+	REGISTER_TRANSFORM(TransformServeFeatureStatement);
 }
 
 void PEGTransformerFactory::RegisterDelete() {
@@ -391,6 +393,7 @@ void PEGTransformerFactory::RegisterDescribe() {
 	REGISTER_TRANSFORM(TransformDescribeStatement);
 	REGISTER_TRANSFORM(TransformShowSelect);
 	REGISTER_TRANSFORM(TransformShowTables);
+	REGISTER_TRANSFORM(TransformShowFeature);
 	REGISTER_TRANSFORM(TransformShowAllTables);
 	REGISTER_TRANSFORM(TransformShowQualifiedName);
 	REGISTER_TRANSFORM(TransformShowOrDescribeOrSummarize);

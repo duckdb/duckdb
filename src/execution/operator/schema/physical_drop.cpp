@@ -75,6 +75,12 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		}
 		break;
 	}
+	case CatalogType::FEATURE_ENTRY: {
+		// Drop the feature catalog entry; ownership cascades to the backing table
+		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
+		catalog.DropEntry(context.client, *info);
+		break;
+	}
 	default: {
 		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 		catalog.DropEntry(context.client, *info);

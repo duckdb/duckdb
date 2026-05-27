@@ -38,6 +38,10 @@ struct CreateFeatureInfo : public CreateInfo {
 	int64_t retain_versions;
 	//! The SELECT query that defines the feature
 	unique_ptr<SelectStatement> query;
+	//! Column names of the materialized result (set during binding)
+	vector<string> result_names;
+	//! Column types of the materialized result (set during binding)
+	vector<LogicalType> result_types;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;

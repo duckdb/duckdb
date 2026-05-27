@@ -59,6 +59,19 @@ unique_ptr<QueryNode> PEGTransformerFactory::TransformShowAllTables(PEGTransform
 	return std::move(select_node);
 }
 
+unique_ptr<QueryNode> PEGTransformerFactory::TransformShowFeature(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto feature_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2)).name;
+	auto showref = make_uniq<ShowRef>();
+	showref->table_name = "__describe_feature:" + feature_name;
+	showref->show_type = ShowType::SHOW_UNQUALIFIED;
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(showref);
+	return std::move(select_node);
+}
+
 unique_ptr<QueryNode> PEGTransformerFactory::TransformShowQualifiedName(PEGTransformer &transformer,
                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();

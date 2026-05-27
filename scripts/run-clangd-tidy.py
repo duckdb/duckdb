@@ -10,7 +10,6 @@ import subprocess
 import sys
 import time
 
-
 MAX_CHUNK_CHARS = 100000
 MAX_RETRIES = 2
 RETRY_BACKOFF_MS = 500

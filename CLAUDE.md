@@ -18,11 +18,13 @@ FORCE_DEBUG=1 make relassert # Builds optimized version with sanitizers and asse
 ## Testing
 
 ### Running Tests
+
 ```bash
 build/reldebug/test/unittest # Fast unit tests
 ```
 
 ### Running Specific Tests
+
 ```bash
 # Run specific test file
 build/reldebug/test/unittest test/sql/order/test_limit.test
@@ -34,7 +36,9 @@ build/reldebug/test/unittest "*"
 It is recommended to use `make reldebug` and `build/reldebug/test/unittest` unless a good reason exists to use the debug build - the debug build is much slower than the reldebug build.
 
 ### Test File Format
+
 Tests use the sqllogictest format (`.test` files). Example structure:
+
 ```sql
 # name: test/sql/order/test_limit.test
 # description: Test LIMIT keyword
@@ -55,6 +59,7 @@ SELECT a FROM test LIMIT a
 ```
 
 Test directives:
+
 - `statement ok` - Statement should succeed
 - `statement error` - Statement should fail
 - `query I` - Query returning INTEGER column
@@ -104,54 +109,63 @@ Results
 ### Core Components
 
 **Parser** (`src/parser/`)
+
 - Converts SQL strings to Abstract Syntax Tree (AST)
 - Uses a PEG-based parser
 - The grammar is located in `*.gram` files and generated using `scripts/build_grammar.sh`
 - Outputs: `SQLStatement`, `ParsedExpression`, `TableRef` objects
 - Key subdirectories: `expression/`, `statement/`, `tableref/`, `peg/`
 
-For more details on adding new grammar, see the README located at `src/parser/peg/README.md`. 
+For more details on adding new grammar, see the README located at `src/parser/peg/README.md`.
 Each new grammar rule must have a corresponding transformer rule, located at `peg/transformer`.
 
 **Planner** (`src/planner/`)
+
 - Binds symbols to catalog entries and resolves types
 - Creates logical query execution plan
 - Key classes: `Binder`, `LogicalOperator`, bound `Expression` types
 - Subdirectories: `binder/`, `expression/`, `subquery/`
 
 **Optimizer** (`src/optimizer/`)
+
 - Transforms logical plans without changing semantics
 - Applies predicate pushdown, join ordering, expression rewriting, etc.
 - Subdirectories: `join_order/`, `statistics/`, `rule/`, `pushdown/`
 
 **Execution Engine** (`src/execution/`)
+
 - Converts logical plan to physical plan and executes
 - Push-based vectorized execution model
 - Processes data in batches (typically 2048 rows)
 - Key subdirectories: `operator/` (scan, join, filter, aggregate, etc.), `expression_executor/`
 
 **Storage** (`src/storage/`)
+
 - Manages persistent data storage and buffer management
 - Block-based storage with compression
 - Includes WAL (Write-Ahead Log) for durability
 - Subdirectories: `buffer/`, `compression/`, `checkpoint/`, `table/`
 
 **Catalog** (`src/catalog/`)
+
 - Metadata management for tables, schemas, functions, types, etc.
 - Single source of truth for database metadata
 - Key classes: `Catalog`, `CatalogEntry`, `SchemaCatalogEntry`
 
 **Transaction Manager** (`src/transaction/`)
+
 - ACID transaction management with MVCC
 - Coordinates concurrent access to data
 - Key files: `transaction_manager.cpp`, `undo_buffer.cpp`, `wal_write_state.cpp`
 
 **Parallel Execution** (`src/parallel/`)
+
 - Multi-threaded execution with task scheduling
 - Pipeline-based parallelism
 - Key files: `executor.cpp`, `pipeline_executor.cpp`, `task_scheduler.cpp`
 
 **Functions** (`src/function/`)
+
 - Built-in function implementations
 - Types: `scalar/`, `aggregate/`, `table/`, `window/`, `pragma/`
 
@@ -187,16 +201,19 @@ Each new grammar rule must have a corresponding transformer rule, located at `pe
 DuckDB supports two types of extensions:
 
 **In-Tree Extensions** (in `extension/` directory):
+
 - Extensions are located in-tree
 - Full list in `.github/config/in_tree_extensions.cmake`
 - Code can be edited directly and checked into the repository.
 
 **Out-of-Tree Extensions**:
+
 - Extensions are located in a separate git repository
 - Full list in `.github/config/out_of_tree_extensions.cmake`
 - When changes have to be made, they have to be made in patch files stored in `.github/patches`
 
 Building with extensions:
+
 ```bash
 # build all extensions
 BUILD_ALL_EXT=1 make
@@ -207,27 +224,32 @@ DUCKDB_EXTENSIONS='json;icu' make
 ## Key Development Patterns
 
 ### Data Flow
+
 - **Vectorized Processing**: Data processed in columnar batches (not row-by-row), typically 2048 rows per batch
 - **Vector class**: Represents a columnar batch of data
 - **ColumnBinding**: Unique identifier `(table_index, column_index)` for columns throughout planning/execution
 
 ### Expression Types
+
 - `ParsedExpression` - From parser, unbound
 - `Expression` - Bound with type information
 - `ExpressionExecutor` - Vectorized execution of expressions
 
 ### Memory Management
+
 - Prefer `unique_ptr<T>` for exclusive ownership
 - Use `shared_ptr<T>` only when necessary
 - `optional_ptr<T>` for nullable references, `reference<T>` for non-nullable references
 - Never use raw pointers
 
 ### Type System
+
 - `LogicalType` - Abstract data type representation
 - Type promotion rules in `src/function/cast_rules.cpp`
 - Custom types supported via extension system
 
 ### Common Patterns
+
 - **Visitor Pattern**: For tree traversal (e.g., `LogicalOperatorVisitor`, `ExpressionIterator`)
 - **Factory Pattern**: `Deserialize()` methods for object creation
 - **Class Hierarchy**: Base classes like `*Operator`, `*Entry`, `*Expression` with typed subclasses
@@ -235,6 +257,7 @@ DUCKDB_EXTENSIONS='json;icu' make
 ## Coding Guidelines (Key Points)
 
 ### C++ Style
+
 - Use tabs for indentation, spaces for alignment
 - Lines should not exceed 120 columns (run formatter)
 - Use `[u]int(8|16|32|64)_t` instead of `int`, `long`, etc.
@@ -245,12 +268,14 @@ DUCKDB_EXTENSIONS='json;icu' make
 - Never use `const_cast`
 
 ### Naming Conventions
+
 - **Files**: `snake_case` (e.g., `abstract_operator.cpp`)
 - **Types**: `PascalCase` (e.g., `LogicalOperator`)
 - **Variables**: `snake_case` (e.g., `chunk_size`)
 - **Functions**: `PascalCase` (e.g., `GetChunk`)
 
 ### Class Layout
+
 ```cpp
 class MyClass {
 public:
@@ -269,12 +294,14 @@ private:
 ```
 
 ### Error Handling
+
 - Use exceptions for query-terminating errors (parser error, table not found, out-of-memory, etc.)
 - Use return values for errors that are recoverable during a query
 - Use `D_ASSERT` for programmer errors (never triggered by user input)
 - Assert liberally with clear comments
 
 ### Testing Requirements
+
 - Prefer sqllogictest framework (`.test` files) over C++ tests
 - Test with different types (numerics, strings, nested types)
 - Test unexpected/incorrect usage, not just happy path
@@ -285,6 +312,7 @@ private:
 ## Navigation Tips
 
 ### Finding Components
+
 - Entry point: `src/main/database.cpp` (DatabaseInstance)
 - Query execution coordinator: `src/main/client_context.cpp`
 - SQL parsing: `src/parser/parser.cpp`
@@ -294,23 +322,29 @@ private:
 - Execution orchestration: `src/parallel/executor.cpp`
 
 ### Searching the Codebase
+
 - Use `grep` or `ripgrep` for code search
 - Function definitions typically in `.cpp` files
 - Class declarations in `src/include/duckdb/` headers
 - Test cases in `test/sql/` by functionality
 
 ### Understanding a Feature
+
 1. Find test cases in `test/sql/` to see usage examples
 2. Trace from parser → planner → optimizer → execution
 3. Look for corresponding `*Statement`, `*Operator`, `*Expression` classes
 4. Check function registration in catalog
 
 ### Modifying Generated Files
+
 Some files are auto-generated. After modifying their sources, run:
+
 ```bash
 make generate-files
 ```
+
 This regenerates:
+
 - C API bindings
 - Function registration
 - Settings

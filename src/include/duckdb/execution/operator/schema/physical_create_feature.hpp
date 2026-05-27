@@ -2,8 +2,17 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/create_feature_info.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
 namespace duckdb {
+
+class CreateFeatureGlobalState : public GlobalSinkState {
+public:
+	CreateFeatureGlobalState() : insert_count(0) {
+	}
+	optional_ptr<DuckTableEntry> table;
+	idx_t insert_count;
+};
 
 //! PhysicalCreateFeature represents a CREATE FEATURE command
 class PhysicalCreateFeature : public PhysicalOperator {
@@ -19,6 +28,21 @@ public:
 	}
 
 	unique_ptr<CreateFeatureInfo> info;
+
+public:
+	// Sink interface
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
+	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+	                          OperatorSinkFinalizeInput &input) const override;
+
+	bool IsSink() const override {
+		return true;
+	}
+
+	bool ParallelSink() const override {
+		return false;
+	}
 
 public:
 	// Source interface

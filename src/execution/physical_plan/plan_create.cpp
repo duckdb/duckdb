@@ -22,9 +22,16 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreate &op) {
 	case LogicalOperatorType::LOGICAL_CREATE_TRIGGER:
 		return Make<PhysicalCreateTrigger>(unique_ptr_cast<CreateInfo, CreateTriggerInfo>(std::move(op.info)),
 		                                   op.estimated_cardinality);
-	case LogicalOperatorType::LOGICAL_CREATE_FEATURE:
-		return Make<PhysicalCreateFeature>(unique_ptr_cast<CreateInfo, CreateFeatureInfo>(std::move(op.info)),
-		                                   op.estimated_cardinality);
+	case LogicalOperatorType::LOGICAL_CREATE_FEATURE: {
+		auto &create = Make<PhysicalCreateFeature>(unique_ptr_cast<CreateInfo, CreateFeatureInfo>(std::move(op.info)),
+		                                           op.estimated_cardinality);
+		if (!op.children.empty()) {
+			D_ASSERT(op.children.size() == 1);
+			auto &plan = CreatePlan(*op.children[0]);
+			create.children.push_back(plan);
+		}
+		return create;
+	}
 	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
 		return Make<PhysicalCreateView>(unique_ptr_cast<CreateInfo, CreateViewInfo>(std::move(op.info)),
 		                                op.estimated_cardinality);

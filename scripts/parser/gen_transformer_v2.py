@@ -9,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 from inline_grammar import parse_peg_grammar, PEGTokenType
 from generate_transformer import load_grammar_types
 
-
 # ---------------------------------------------------------------------------
 # Grammar AST - mirrors the Matcher class hierarchy in matcher.cpp
 # ---------------------------------------------------------------------------

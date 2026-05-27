@@ -21,6 +21,8 @@ unique_ptr<CreateInfo> CreateFeatureInfo::Copy() const {
 	result->refresh_mode = refresh_mode;
 	result->retain_versions = retain_versions;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
+	result->result_names = result_names;
+	result->result_types = result_types;
 	return std::move(result);
 }
 

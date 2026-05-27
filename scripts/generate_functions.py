@@ -2,7 +2,6 @@ import os
 import json
 from pathlib import Path
 
-
 function_groups = {
     ('src', 'include/duckdb', 'function'): ['scalar', 'aggregate', 'window'],
     ('extension', 'core_functions/include', 'core_functions'): ['scalar', 'aggregate'],
