@@ -156,7 +156,7 @@ duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_
 }
 
 duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t scale) {
-	if (width < 1 || width > duckdb::Decimal::MAX_WIDTH_DECIMAL || scale > width) {
+	if (!duckdb::Decimal::IsValidWidthScale(width, scale)) {
 		return nullptr;
 	}
 	try {
