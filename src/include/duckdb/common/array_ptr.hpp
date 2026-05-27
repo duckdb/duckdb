@@ -47,10 +47,6 @@ private:
 //! array_ptr is a non-owning (optionally) bounds-checked pointer to an array
 template <class DATA_TYPE, bool SAFE = true>
 class array_ptr { // NOLINT: match std naming style
-	// Make private members accessible for implicit conversion
-	template <class, bool>
-	friend class array_ptr;
-
 public:
 	using iterator_type = array_ptr_iterator<DATA_TYPE>;
 
@@ -80,9 +76,6 @@ public:
 		if (MemorySafety<SAFE>::ENABLED) {
 			AssertNotNull(!ptr);
 		}
-	}
-	template <class OTHER_TYPE, typename = std::enable_if_t<std::is_convertible_v<OTHER_TYPE *, DATA_TYPE *>>>
-	array_ptr(const array_ptr<OTHER_TYPE, SAFE> &other) : ptr(other.ptr), count(other.count) {
 	}
 	explicit array_ptr(DATA_TYPE &ref) : ptr(&ref), count(1) {
 	}
