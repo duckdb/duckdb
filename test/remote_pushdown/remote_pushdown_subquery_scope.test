@@ -1,0 +1,225 @@
+# name: test/remote_pushdown/remote_pushdown_subquery_scope.test
+# description: Regression tests for subquery scope and pushdown bugs in RemotePushdownOptimizer
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok db1:con1
+create table t2(i int);
+
+statement ok db1:con1
+insert into t2 values (5), (6), (7), (8), (9), (10), (11), (12), (13), (14);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# Bug 5: PushdownSubqueries was not called for GROUP BY / ORDER BY when the whole query could not be pushed.
+
+# Scalar subquery in ORDER BY: local_t={0..9}; order by (9 - local_col) ASC -> local_col=9 first
+query I
+select local_col from local_t
+order by (select max(i) from rpc.t1) - local_col
+limit 3
+----
+9
+8
+7
+
+# Scalar subquery in ORDER BY ascending
+query I
+select local_col from local_t
+order by local_col - (select min(i) from rpc.t1)
+limit 3
+----
+0
+1
+2
+
+# Scalar subquery in GROUP BY: local_col % 9 for {0..9} yields 9 distinct buckets
+query I
+select count(distinct bucket) from (
+  select local_col % (select max(i) from rpc.t1) as bucket from local_t
+) sub
+----
+9
+
+# Bug 9: Rewrite(SubqueryRef) did not save/restore local_table_names, causing column names from inner
+# local tables to leak into the outer scope and falsely block remote subquery pushdown.
+
+statement ok
+create table local_i(i int);
+
+statement ok
+insert into local_i from range(5);
+
+# FROM clause has local SubqueryRef (local_i with column 'i'); WHERE has purely-remote IN subquery.
+# With fix: save/restore clears leaked 'i', IN subquery is correctly pushed.
+# local_i={0..4}; IN filter keeps i in {0,1,2} -> 3 rows.
+query I
+select count(*) from (select * from local_i) sq
+where sq.i in (select i from rpc.t1 where i < 3)
+----
+3
+
+statement ok
+drop table local_i
+
+# Bug 15: FinishPushdown(QueryNode) pushed a UNION ALL child standalone when an outer SINGLE_REMOTE CTE
+# was in scope; remote failed with "Table cte_name not found".
+# Fix: check cte_results for outer SINGLE_REMOTE CTEs and skip the push.
+
+statement ok
+create table local_bugfix15(i int);
+
+statement ok
+insert into local_bugfix15 from range(5, 10);
+
+# outer_cte = {0..4}, local_bugfix15 = {5..9} -> total 10 rows.
+query I
+with outer_cte as (select i from rpc.t1 where i < 5)
+select count(*) from (
+    select i from outer_cte
+    union all
+    select i from local_bugfix15
+)
+----
+10
+
+statement ok
+drop table local_bugfix15
+
+# Bug 17: any_child_pushed in Rewrite(SetOperationNode) did not detect TABLE_FUNCTION refs in UNKNOWN
+# children, causing PushdownSubqueries to open a second streaming connection.
+# Fix: HasTableFunctionInTree detects TABLE_FUNCTION refs so any_child_pushed is set correctly.
+
+statement ok
+create table local_bugfix17(local_col int);
+
+statement ok
+insert into local_bugfix17 from range(10);
+
+# rpc.t1 pushed to TABLE_FUNCTION (slot 1); UNION with local arm uses local_bugfix17.
+# rpc.t1={0..9}; i < max(local_bugfix17)=9 -> {0..8}; local_bugfix17 where local_col<5 -> {0..4}.
+query I rowsort
+(select i from rpc.t1 where i < (select max(local_col) from local_bugfix17))
+union all
+(select local_col from local_bugfix17 where local_col < 5)
+----
+0
+0
+1
+1
+2
+2
+3
+3
+4
+4
+5
+6
+7
+8
+
+statement ok
+drop table local_bugfix17
+
+# Bug 25: Rewrite(SubqueryRef) did not save/restore the subquery node before calling Rewrite(*subquery->node).
+# A mixed JoinRef inside a FROM-clause subquery had its remote child pushed in-place even when result was UNKNOWN.
+# Fix: save and restore the subquery node when result is not SINGLE_REMOTE.
+
+# FROM-clause SubqueryRef with rpc.t2 JOIN local_t (mixed); t2=[5..14] ∩ local_t=[0..9] = {5..9}.
+query I
+select sub.i from (
+    select t2.i from rpc.t2 join local_t on t2.i = local_t.local_col
+) sub order by sub.i
+----
+5
+6
+7
+8
+9
+
+# Bug 31: SubqueryRef with NO_CATALOG_REFERENCED result must NOT be tracked in local_table_names.
+# Previously any non-SINGLE_REMOTE SubqueryRef was added to local_table_names, blocking pushdown
+# of queries with constant subqueries like (SELECT 1 AS v) in FROM.
+
+# Verify pushed: no SEQ_SCAN in plan
+query II
+explain
+select t1.i from rpc.t1 t1, (select 5 as v) sub
+where t1.i < sub.v
+order by t1.i
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+# rpc.t1.i in {0..4} (i < 5), joined with constant sub.v=5
+query I
+select t1.i from rpc.t1 t1, (select 5 as v) sub
+where t1.i < sub.v
+order by t1.i
+----
+0
+1
+2
+3
+4
+
+# Bug 37: FinishPushdown(QueryNode) and PushJoinChild(SubqueryRef) CTE guards did not block
+# NO_CATALOG_REFERENCED outer CTEs; remote failed with "Table 'zero' not found".
+# Fix: extend guards to also return early for NO_CATALOG_REFERENCED outer CTEs.
+
+statement ok
+create table local_bug37(k int);
+
+statement ok
+insert into local_bug37 from range(10);
+
+# Bug 37a (FinishPushdown): UNION ALL arm1 references rpc.t1 CROSS JOIN outer NO_CATALOG CTE (zero).
+# Without fix: arm1 pushed standalone, remote fails on "Table 'zero' not found".
+# zero.n=0 so i >= 0 matches all of rpc.t1={0..9}; arm2 has no rows (k<0); total=10.
+query I
+with zero as (select 0 as n)
+select count(*) from (
+    select i from rpc.t1 cross join zero where i >= zero.n
+    union all
+    select k from local_bug37 where k < 0
+)
+----
+10
+
+# Bug 37b (PushJoinChild SubqueryRef): mixed JOIN where subquery references rpc.t1 CROSS JOIN outer CTE.
+# local_bug37={0..9}, sub.i={0..9} (i>=0) -> 10 rows.
+query I
+with zero as (select 0 as n)
+select count(*)
+from local_bug37
+join (select i from rpc.t1 cross join zero where i >= zero.n) sub
+    on local_bug37.k = sub.i
+----
+10
+
+statement ok
+drop table local_bug37;
+
+statement ok
+drop table local_t;
+
+statement ok db1:con1
+call quack_stop('quack:localhost')
