@@ -2,9 +2,6 @@
 # description: Issue 489
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # A predicate NOT(NULL OR TRUE) unexpectedly evaluates to TRUE
 statement ok
 CREATE TABLE t0(c0 INT);

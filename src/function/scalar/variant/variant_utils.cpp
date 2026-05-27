@@ -99,7 +99,7 @@ void VariantUtils::FindChildValues(const UnifiedVariantVectorData &variant, cons
 				continue;
 			}
 			auto value_id = variant.GetValuesIndex(row_index, nested_data_entry.children_idx + child_idx);
-			res[i] = static_cast<uint8_t>(value_id);
+			res[i] = value_id;
 			continue;
 		}
 		bool found_child = false;
@@ -220,9 +220,9 @@ void VariantUtils::FinalizeVariantKeys(Vector &variant, OrderedOwningStringMap<u
 	}
 }
 
-bool VariantUtils::Verify(Vector &variant, const SelectionVector &sel_p, idx_t count) {
+bool VariantUtils::Verify(const Vector &variant, const SelectionVector &sel_p, idx_t count) {
 	RecursiveUnifiedVectorFormat format;
-	Vector::RecursiveToUnifiedFormat(variant, count, format);
+	Vector::RecursiveToUnifiedFormat(variant, format);
 
 	//! keys
 	auto &keys = UnifiedVariantVector::GetKeys(format);
@@ -396,6 +396,7 @@ bool VariantUtils::VariantSupportsType(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::BIT:
 	case LogicalTypeId::GEOMETRY:

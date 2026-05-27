@@ -2,9 +2,6 @@
 # group: [prepared]
 
 statement ok
-pragma enable_verification;
-
-statement ok
 PREPARE q1 AS
 	COPY (
 		select $1 as 'col'

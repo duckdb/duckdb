@@ -171,6 +171,8 @@ public:
 		throw NotImplementedException("Writer doesn't require an AnalyzeSchemaFinalize pass");
 	}
 
+	virtual bool TryExportPreparedShreddingType(ShreddingType &result) const;
+
 	virtual idx_t FinalizeSchema(vector<duckdb_parquet::SchemaElement> &schemas) = 0;
 
 	//! Create the column writer for a specific type recursively

@@ -100,7 +100,7 @@ struct KurtosisOperation {
 	}
 };
 
-LogicalType GetKurtosisStateType(const AggregateFunction &function) {
+LogicalType GetKurtosisStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("n", LogicalType::UBIGINT);
 	children.emplace_back("sum", LogicalType::DOUBLE);

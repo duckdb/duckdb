@@ -108,6 +108,8 @@ public:
 			return Visitor::VisitTimestampNanos(Load<timestamp_ns_t>(ptr), std::forward<Args>(args)...);
 		case VariantLogicalType::TIMESTAMP_MICROS_TZ:
 			return Visitor::VisitTimestampTZ(Load<timestamp_tz_t>(ptr), std::forward<Args>(args)...);
+		case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+			return Visitor::VisitTimestampTZNanos(Load<timestamp_tz_ns_t>(ptr), std::forward<Args>(args)...);
 		default:
 			return Visitor::VisitDefault(type_id, ptr, std::forward<Args>(args)...);
 		}

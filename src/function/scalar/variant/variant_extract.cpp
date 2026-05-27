@@ -30,28 +30,7 @@ unique_ptr<FunctionData> VariantExtractBindData::Copy() const {
 
 bool VariantExtractBindData::Equals(const FunctionData &other) const {
 	auto &bind_data = other.Cast<VariantExtractBindData>();
-	if (bind_data.component.lookup_mode != component.lookup_mode) {
-		return false;
-	}
-	if (bind_data.component.lookup_mode == VariantChildLookupMode::BY_INDEX &&
-	    bind_data.component.index != component.index) {
-		return false;
-	}
-	if (bind_data.component.lookup_mode == VariantChildLookupMode::BY_KEY && bind_data.component.key != component.key) {
-		return false;
-	}
-	return true;
-}
-
-static bool GetConstantArgument(ClientContext &context, Expression &expr, Value &constant_arg) {
-	if (!expr.IsFoldable()) {
-		return false;
-	}
-	constant_arg = ExpressionExecutor::EvaluateScalar(context, expr);
-	if (!constant_arg.IsNull()) {
-		return true;
-	}
-	return false;
+	return component == bind_data.component;
 }
 
 static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
@@ -83,14 +62,14 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 	if (arguments.size() != 2) {
 		throw BinderException("'variant_extract' expects two arguments, VARIANT column and VARCHAR path");
 	}
-	auto &path = *arguments[1];
-	if (path.return_type.id() != LogicalTypeId::VARCHAR && path.return_type.id() != LogicalTypeId::UINTEGER) {
+	const auto &path = *arguments[1];
+	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && path.GetReturnType().id() != LogicalTypeId::UINTEGER) {
 		throw BinderException("'variant_extract' expects the second argument to be of type VARCHAR or UINTEGER, not %s",
-		                      path.return_type.ToString());
+		                      path.GetReturnType().ToString());
 	}
 
 	Value constant_arg;
-	if (!GetConstantArgument(context, path, constant_arg)) {
+	if (!VariantBindUtils::GetConstantArgument(context, path, constant_arg)) {
 		throw BinderException("'variant_extract' expects the second argument to be a constant expression");
 	}
 
@@ -103,8 +82,8 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 	}
 }
 
-static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathComponent> &components, Vector &result,
-                                        idx_t count, idx_t path_index = 0) {
+static bool TryShreddedExtractRecursive(const Vector &input, const vector<VariantPathComponent> &components,
+                                        Vector &result, idx_t count, idx_t path_index = 0) {
 	if (path_index >= components.size()) {
 		// reached the end of the path - shred
 		if (input.GetType().IsNested()) {
@@ -124,6 +103,7 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 		auto &shredded_child = top_shredded[1];
 		shredded_child.Reference(input);
 
+		FlatVector::SetSize(shredded_vector, count_t(count));
 		result.Shred(shredded_vector, count);
 		return true;
 	}
@@ -150,8 +130,8 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 	return false;
 }
 
-static bool TryFromShreddedExtract(Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
-                                   idx_t count) {
+static bool TryFromShreddedExtract(const Vector &variant_vec, const vector<VariantPathComponent> &components,
+                                   Vector &result, idx_t count) {
 	if (variant_vec.GetVectorType() != VectorType::SHREDDED_VECTOR) {
 		// input vector is not shredded
 		return false;
@@ -164,15 +144,15 @@ static bool TryFromShreddedExtract(Vector &variant_vec, const vector<VariantPath
 	return TryShreddedExtractRecursive(shredded_vec, components, result, count);
 }
 
-void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
-                                  idx_t count) {
+void VariantUtils::VariantExtract(const Vector &variant_vec, const vector<VariantPathComponent> &components,
+                                  Vector &result, idx_t count) {
 	if (TryFromShreddedExtract(variant_vec, components, result, count)) {
 		return;
 	}
 	auto &allocator = Allocator::DefaultAllocator();
 
 	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, count, source_format);
+	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
 
 	UnifiedVariantVectorData variant(source_format);
 
@@ -284,6 +264,7 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 			}
 		}
 	}
+	FlatVector::SetSize(result, count_t(count));
 }
 
 //! FIXME: it could make sense to allow a third argument: 'default'
@@ -292,10 +273,10 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	auto count = input.size();
 
 	D_ASSERT(input.ColumnCount() == 2);
-	auto &variant_vec = input.data[0];
+	const auto &variant_vec = input.data[0];
 	D_ASSERT(variant_vec.GetType() == LogicalType::VARIANT());
 
-	auto &path = input.data[1];
+	const auto &path = input.data[1];
 	D_ASSERT(path.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	(void)path;
 
@@ -311,10 +292,11 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 	ScalarFunction variant_extract("variant_extract", {}, variant_type, VariantExtractFunction, VariantExtractBind,
 	                               VariantExtractPropagateStats);
 
-	variant_extract.GetArguments() = {variant_type, LogicalType::VARCHAR};
+	variant_extract.GetSignature().AddParameter(variant_type);
+	variant_extract.GetSignature().AddParameter(LogicalType::VARCHAR);
 	fun_set.AddFunction(variant_extract);
 
-	variant_extract.GetArguments() = {variant_type, LogicalType::UINTEGER};
+	variant_extract.GetSignature().GetParameter(1).SetType(LogicalType::UINTEGER);
 	fun_set.AddFunction(variant_extract);
 	return fun_set;
 }

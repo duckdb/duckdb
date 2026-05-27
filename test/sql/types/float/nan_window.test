@@ -2,9 +2,6 @@
 # description: Test NaN and inf in windowing functions
 # group: [float]
 
-statement ok
-PRAGMA enable_verification
-
 # grouping by inf and nan
 foreach type FLOAT DOUBLE
 

@@ -2,9 +2,6 @@
 # description: Issue 497
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Comparison of two boolean columns in different tables results in an error 'Not implemented: Unimplemented
 # type for sort'
 statement ok

@@ -2,9 +2,6 @@
 # description: Test create_sort_key function
 # group: [blob]
 
-statement ok
-PRAGMA enable_verification
-
 # test integer types with all modifiers
 statement ok
 CREATE TABLE integers(i INTEGER);

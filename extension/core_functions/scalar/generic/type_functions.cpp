@@ -18,7 +18,7 @@ static void TypeOfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 static unique_ptr<Expression> BindTypeOfFunctionExpression(FunctionBindExpressionInput &input) {
-	auto &return_type = input.children[0]->return_type;
+	auto &return_type = input.children[0]->GetReturnType();
 	if (return_type.id() == LogicalTypeId::UNKNOWN || return_type.id() == LogicalTypeId::SQLNULL) {
 		// parameter - unknown return type
 		return nullptr;
@@ -50,12 +50,12 @@ static unique_ptr<FunctionData> BindGetTypeFunction(BindScalarFunctionInput &inp
 	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	bound_function.GetArguments()[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 	return nullptr;
 }
 
 static unique_ptr<Expression> BindGetTypeFunctionExpression(FunctionBindExpressionInput &input) {
-	auto &return_type = input.children[0]->return_type;
+	auto &return_type = input.children[0]->GetReturnType();
 	if (return_type.id() == LogicalTypeId::UNKNOWN || return_type.id() == LogicalTypeId::SQLNULL) {
 		// parameter - unknown return type
 		return nullptr;
@@ -83,7 +83,7 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 
 	// Evaluate all arguments to constant values
 	for (auto &child : input.children) {
-		string name = child->alias;
+		string name = child->GetAlias();
 		if (!child->IsFoldable()) {
 			throw BinderException("make_type function arguments must be constant expressions");
 		}

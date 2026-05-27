@@ -2,8 +2,8 @@
 
 namespace duckdb {
 
-static inline bool JSONExists(yyjson_val *val, yyjson_alc *, Vector &, ValidityMask &, idx_t) {
-	return val;
+static inline optional<bool> JSONExists(yyjson_val *val, yyjson_alc *, Vector &) {
+	return val != nullptr;
 }
 
 static void BinaryExistsFunction(DataChunk &args, ExpressionState &state, Vector &result) {

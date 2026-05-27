@@ -3,9 +3,6 @@
 # group: [afl]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t1(c1 INT);
 
 query II

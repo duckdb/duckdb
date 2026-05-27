@@ -1,6 +1,7 @@
 #include "duckdb/common/sorting/hashed_sort.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
@@ -307,9 +308,12 @@ public:
 	//! Merge the state into the global state.
 	void Combine(ExecutionContext &context);
 
-	// OVER(PARTITION BY...) (hash grouping)
+	//! OVER(PARTITION BY...) (hash grouping)
 	GroupingPartition local_grouping;
 	GroupingAppend grouping_append;
+
+	//! (optional) HyperLogLog state
+	optional_ptr<ParallelHyperLogLogLocalState> hll;
 };
 
 HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, const HashedSort &hashed_sort)
@@ -318,13 +322,13 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 	vector<LogicalType> group_types;
 	for (idx_t prt_idx = 0; prt_idx < hashed_sort.partitions.size(); prt_idx++) {
 		auto &pexpr = *hashed_sort.partitions[prt_idx].expression.get();
-		group_types.push_back(pexpr.return_type);
+		group_types.push_back(pexpr.GetReturnType());
 		hash_exec.AddExpression(pexpr);
 	}
 
 	vector<LogicalType> sort_types;
 	for (const auto &expr : hashed_sort.sort_exprs) {
-		sort_types.emplace_back(expr->return_type);
+		sort_types.emplace_back(expr->GetReturnType());
 		sort_exec.AddExpression(*expr);
 	}
 	sort_chunk.Initialize(context.client, sort_types);
@@ -342,12 +346,12 @@ void HashedSort::Synchronize(const GlobalSinkState &source, GlobalSinkState &tar
 }
 
 void HashedSortLocalSinkState::Hash(DataChunk &input_chunk, Vector &hash_vector) {
-	const auto count = input_chunk.size();
 	D_ASSERT(group_chunk.ColumnCount() > 0);
 
 	// OVER(PARTITION BY...) (hash grouping)
 	group_chunk.Reset();
 	hash_exec.Execute(input_chunk, group_chunk);
+	const idx_t count = group_chunk.size();
 	VectorOperations::Hash(group_chunk.data[0], hash_vector, count);
 	for (idx_t prt_idx = 1; prt_idx < group_chunk.ColumnCount(); ++prt_idx) {
 		VectorOperations::CombineHash(hash_vector, group_chunk.data[prt_idx], count);
@@ -391,6 +395,11 @@ SinkResultType HashedSort::Sink(ExecutionContext &context, DataChunk &input_chun
 	lstate.Hash(input_chunk, hash_vector);
 	for (idx_t col_idx = 0; col_idx < input_chunk.ColumnCount(); ++col_idx) {
 		payload_chunk.data[col_idx].Reference(input_chunk.data[col_idx]);
+	}
+
+	// Update HLL state with hashes if necessary
+	if (lstate.hll) {
+		lstate.hll->Update(hash_vector);
 	}
 
 	auto &local_grouping = lstate.local_grouping;
@@ -539,7 +548,7 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
 
 		//	Real expression - replace with a ref and save the expression
 		auto saved = std::move(order.expression);
-		const auto type = saved->return_type;
+		const auto type = saved->GetReturnType();
 		const auto idx = payload_types.size();
 		order.expression = make_uniq<BoundReferenceExpression>(type, idx);
 		sort_ids.emplace_back(idx);
@@ -572,6 +581,11 @@ unique_ptr<GlobalSinkState> HashedSort::GetGlobalSinkState(ClientContext &client
 
 unique_ptr<LocalSinkState> HashedSort::GetLocalSinkState(ExecutionContext &context) const {
 	return make_uniq<HashedSortLocalSinkState>(context, *this);
+}
+
+void HashedSort::RegisterHyperLogLog(LocalSinkState &local_state, ParallelHyperLogLogLocalState &hll_state) const {
+	auto &lstate = local_state.Cast<HashedSortLocalSinkState>();
+	lstate.hll = hll_state;
 }
 
 unique_ptr<GlobalSourceState> HashedSort::GetGlobalSourceState(ClientContext &client, GlobalSinkState &sink) const {

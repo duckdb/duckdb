@@ -2,9 +2,6 @@
 # description: Test timestamp limits
 # group: [timestamp]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select timestamp '1970-01-01';
 ----

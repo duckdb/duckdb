@@ -3,9 +3,6 @@
 # group: [delete]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE a AS SELECT * FROM range(0, 10000, 1) t1(i);
 
 query I

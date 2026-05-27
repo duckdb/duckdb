@@ -133,7 +133,7 @@ FullSortLocalSinkState::FullSortLocalSinkState(ExecutionContext &context, const 
     : full_sort(full_sort), sort_exec(context.client) {
 	vector<LogicalType> sort_types;
 	for (const auto &expr : full_sort.sort_exprs) {
-		sort_types.emplace_back(expr->return_type);
+		sort_types.emplace_back(expr->GetReturnType());
 		sort_exec.AddExpression(*expr);
 	}
 	sort_chunk.Initialize(context.client, sort_types);
@@ -256,7 +256,7 @@ FullSort::FullSort(ClientContext &client, const vector<BoundOrderByNode> &order_
 
 		//	Real expression - replace with a ref and save the expression
 		auto saved = std::move(order.expression);
-		const auto type = saved->return_type;
+		const auto type = saved->GetReturnType();
 		const auto idx = payload_types.size();
 		order.expression = make_uniq<BoundReferenceExpression>(type, idx);
 		sort_ids.emplace_back(idx);

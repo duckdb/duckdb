@@ -3,9 +3,6 @@
 # group: [memory]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 ATTACH ':memory:' AS memory_compressed (COMPRESS)
 
 statement ok

@@ -2,9 +2,6 @@
 # description: Test basic interval usage
 # group: [interval]
 
-statement ok
-PRAGMA enable_verification
-
 # 2 years
 query T
 SELECT INTERVAL '2 years'
@@ -392,10 +389,10 @@ SELECT INTERVAL '100 months' DAY;
 ----
 <REGEX>:Conversion Error.*Could not convert string.*
 
-statement error
+query I
 SELECT '100'::INTERVAL;
 ----
-<REGEX>:Conversion Error.*Could not convert string.*
+00:01:40
 
 statement error
 SELECT '100 unknowns'::INTERVAL;

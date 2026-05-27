@@ -8,6 +8,12 @@
     "includes": [
       "duckdb/parser/expression/list.hpp"
     ],
+    "functions": [
+      "Equals",
+      "Hash",
+      "Children",
+      "Copy"
+    ],
     "members": [
       {
         "id": 100,
@@ -23,13 +29,15 @@
       {
         "id": 102,
         "name": "alias",
-        "type": "string"
+        "type": "string",
+        "equals_skip": true
       },
       {
         "id": 103,
         "name": "query_location",
         "type": "optional_idx",
-        "default": "optional_idx()"
+        "default": "optional_idx()",
+        "equals_skip": true
       }
     ]
   },
@@ -41,17 +49,23 @@
       {
         "id": 200,
         "name": "input",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "InputMutable()",
+        "accessor": "Input()"
       },
       {
         "id": 201,
         "name": "lower",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "LowerBoundMutable()",
+        "accessor": "LowerBound()"
       },
       {
         "id": 202,
         "name": "upper",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "UpperBoundMutable()",
+        "accessor": "UpperBound()"
       }
     ]
   },
@@ -119,7 +133,7 @@
       {
         "id": 200,
         "name": "column_names",
-        "type": "vector<string>"
+        "type": "vector<Identifier>"
       }
     ]
   },
@@ -136,10 +150,13 @@
       {
         "id": 201,
         "name": "column_name",
-        "type": "string"
+        "type": "Identifier"
       }
     ],
-    "constructor": ["lambda_idx", "column_name"]
+    "constructor": [
+      "lambda_idx",
+      "column_name"
+    ]
   },
   {
     "class": "ComparisonExpression",
@@ -157,7 +174,9 @@
         "type": "ParsedExpression*"
       }
     ],
-    "constructor": ["type"]
+    "constructor": [
+      "type"
+    ]
   },
   {
     "class": "ConjunctionExpression",
@@ -170,7 +189,9 @@
         "type": "vector<ParsedExpression*>"
       }
     ],
-    "constructor": ["type"]
+    "constructor": [
+      "type"
+    ]
   },
   {
     "class": "ConstantExpression",
@@ -188,8 +209,7 @@
     "class": "DefaultExpression",
     "base": "ParsedExpression",
     "enum": "DEFAULT",
-    "members": [
-    ]
+    "members": []
   },
   {
     "class": "FunctionExpression",
@@ -230,7 +250,8 @@
       {
         "id": 206,
         "name": "is_operator",
-        "type": "bool"
+        "type": "bool",
+        "equals_skip": true
       },
       {
         "id": 207,
@@ -264,7 +285,8 @@
         "name": "syntax_type",
         "type": "LambdaSyntaxType",
         "default": "LambdaSyntaxType::SINGLE_ARROW_STORAGE",
-        "version": "v1.3.0"
+        "version": "v1.3.0",
+        "equals_skip": true
       }
     ]
   },
@@ -279,7 +301,9 @@
         "type": "vector<ParsedExpression*>"
       }
     ],
-    "constructor": ["type"]
+    "constructor": [
+      "type"
+    ]
   },
   {
     "class": "ParameterExpression",
@@ -289,7 +313,7 @@
       {
         "id": 200,
         "name": "identifier",
-        "type": "string"
+        "type": "Identifier"
       }
     ]
   },
@@ -319,7 +343,8 @@
         "id": 201,
         "name": "exclude_list",
         "type": "case_insensitive_set_t",
-        "serialize_property": "SerializedExcludeList()"
+        "serialize_property": "SerializedExcludeList()",
+        "hash_skip": true
       },
       {
         "id": 202,
@@ -348,7 +373,8 @@
         "name": "qualified_exclude_list",
         "type": "qualified_column_set_t",
         "default": "qualified_column_set_t()",
-        "serialize_property": "SerializedQualifiedExcludeList()"
+        "serialize_property": "SerializedQualifiedExcludeList()",
+        "equals_skip": true
       },
       {
         "id": 207,
@@ -446,13 +472,15 @@
         "id": 210,
         "name": "offset_expr",
         "type": "ParsedExpression*",
-        "serialize_property": "SerializedOffset(serializer)"
+        "serialize_property": "SerializedOffset(serializer)",
+        "equals_skip": true
       },
       {
         "id": 211,
         "name": "default_expr",
         "type": "ParsedExpression*",
-        "serialize_property": "SerializedDefault(serializer)"
+        "serialize_property": "SerializedDefault(serializer)",
+        "equals_skip": true
       },
       {
         "id": 212,
@@ -484,10 +512,15 @@
         "id": 217,
         "name": "has_ignore_nulls",
         "type": "bool",
-        "version": "8"
+        "version": "v2.0.0"
       }
     ],
-    "constructor": ["type", "children", "offset_expr", "default_expr"]
+    "constructor": [
+      "type",
+      "children",
+      "offset_expr",
+      "default_expr"
+    ]
   },
   {
     "class": "TypeExpression",
@@ -500,19 +533,20 @@
         "type": "string"
       },
       {
-          "id": 201,
-          "name": "schema",
-          "type": "string"
+        "id": 201,
+        "name": "schema",
+        "type": "string"
       },
       {
-          "id": 202,
-          "name": "type_name",
-          "type": "string"
+        "id": 202,
+        "name": "type_name",
+        "type": "string"
       },
       {
-          "id": 203,
-          "name": "children",
-          "type": "vector<unique_ptr<ParsedExpression>>"
+        "id": 203,
+        "name": "children",
+        "type": "vector<unique_ptr<ParsedExpression>>",
+        "accessor_mut": "GetChildren()"
       }
     ]
   }

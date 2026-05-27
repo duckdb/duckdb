@@ -5,6 +5,7 @@
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -35,7 +36,7 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	return true;
 }
 
-void QueryGraphManager::GetColumnBinding(Expression &root_expr, ColumnBinding &binding) {
+void QueryGraphManager::GetColumnBinding(const Expression &root_expr, ColumnBinding &binding) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
 	    root_expr, [&](const BoundColumnRefExpression &colref) {
 		    D_ASSERT(colref.depth == 0);
@@ -81,14 +82,16 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 	for (auto &filter_info : filters_and_bindings) {
 		auto &filter = filter_info->filter;
 		// now check if it can be used as a join predicate
-		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-			auto &comparison = filter->Cast<BoundComparisonExpression>();
+		if (BoundComparisonExpression::IsComparison(*filter)) {
+			auto &comparison = filter->Cast<BoundFunctionExpression>();
+			auto &left = BoundComparisonExpression::Left(comparison);
+			auto &right = BoundComparisonExpression::Right(comparison);
 			// extract the bindings that are required for the left and right side of the comparison
 			unordered_set<RelationIndex> left_bindings, right_bindings;
-			relation_manager.ExtractBindings(*comparison.left, left_bindings);
-			relation_manager.ExtractBindings(*comparison.right, right_bindings);
-			GetColumnBinding(*comparison.left, filter_info->left_binding);
-			GetColumnBinding(*comparison.right, filter_info->right_binding);
+			relation_manager.ExtractBindings(left, left_bindings);
+			relation_manager.ExtractBindings(right, right_bindings);
+			GetColumnBinding(left, filter_info->left_binding);
+			GetColumnBinding(right, filter_info->right_binding);
 			if (!left_bindings.empty() && !right_bindings.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
@@ -121,20 +124,22 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			D_ASSERT(filter_info->right_set);
 			D_ASSERT(filter_info->join_type == JoinType::SEMI || filter_info->join_type == JoinType::ANTI);
 			for (auto &child_comp : conjunction.children) {
-				if (child_comp->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
+				if (!BoundComparisonExpression::IsComparison(*child_comp)) {
 					continue;
 				}
-				auto &comparison = child_comp->Cast<BoundComparisonExpression>();
+				auto &comparison = child_comp->Cast<BoundFunctionExpression>();
+				auto &left = BoundComparisonExpression::Left(comparison);
+				auto &right = BoundComparisonExpression::Right(comparison);
 				// extract the bindings that are required for the left and right side of the comparison
-				relation_manager.ExtractBindings(*comparison.left, left_bindings);
-				relation_manager.ExtractBindings(*comparison.right, right_bindings);
+				relation_manager.ExtractBindings(left, left_bindings);
+				relation_manager.ExtractBindings(right, right_bindings);
 				if (!filter_info->left_binding.table_index.IsValid() &&
 				    !filter_info->left_binding.column_index.IsValid()) {
-					GetColumnBinding(*comparison.left, filter_info->left_binding);
+					GetColumnBinding(left, filter_info->left_binding);
 				}
 				if (!filter_info->right_binding.table_index.IsValid() &&
 				    !filter_info->right_binding.column_index.IsValid()) {
-					GetColumnBinding(*comparison.right, filter_info->right_binding);
+					GetColumnBinding(right, filter_info->right_binding);
 				}
 			}
 			if (!left_bindings.empty() && !right_bindings.empty()) {
@@ -216,9 +221,17 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 }
 
 static JoinCondition MaybeInvertConditions(unique_ptr<Expression> condition, bool invert) {
-	auto &comparison = condition->Cast<BoundComparisonExpression>();
-	auto left = !invert ? std::move(comparison.left) : std::move(comparison.right);
-	auto right = !invert ? std::move(comparison.right) : std::move(comparison.left);
+	auto &comparison = condition->Cast<BoundFunctionExpression>();
+	auto &left_ref = BoundComparisonExpression::LeftMutable(comparison);
+	auto &right_ref = BoundComparisonExpression::RightMutable(comparison);
+	unique_ptr<Expression> left, right;
+	if (!invert) {
+		left = std::move(left_ref);
+		right = std::move(right_ref);
+	} else {
+		left = std::move(right_ref);
+		right = std::move(left_ref);
+	}
 	auto comp_type = condition->GetExpressionType();
 	if (invert) {
 		// reverse comparison expression if we reverse the order of the children
@@ -285,13 +298,13 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 					invert = false;
 				}
 
-				if (condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+				if (BoundComparisonExpression::IsComparison(*condition)) {
 					auto cond = MaybeInvertConditions(std::move(condition), invert);
 					join->conditions.push_back(std::move(cond));
 				} else if (condition->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 					auto &conjunction = condition->Cast<BoundConjunctionExpression>();
 					for (auto &child : conjunction.children) {
-						D_ASSERT(child->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
+						D_ASSERT(BoundComparisonExpression::IsComparison(*child));
 						auto cond = MaybeInvertConditions(std::move(child), invert);
 						join->conditions.push_back(std::move(cond));
 					}
@@ -388,11 +401,19 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 					continue;
 				}
 				// create the join condition
-				D_ASSERT(filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
-				auto &comparison = filter->Cast<BoundComparisonExpression>();
+				D_ASSERT(BoundComparisonExpression::IsComparison(*filter));
+				auto &comparison = filter->Cast<BoundFunctionExpression>();
+				auto &left_ref = BoundComparisonExpression::LeftMutable(comparison);
+				auto &right_ref = BoundComparisonExpression::RightMutable(comparison);
 				// we need to figure out which side is which by looking at the relations available to us
-				auto left = !invert ? std::move(comparison.left) : std::move(comparison.right);
-				auto right = !invert ? std::move(comparison.right) : std::move(comparison.left);
+				unique_ptr<Expression> left, right;
+				if (!invert) {
+					left = std::move(left_ref);
+					right = std::move(right_ref);
+				} else {
+					left = std::move(right_ref);
+					right = std::move(left_ref);
+				}
 				auto comp_type = comparison.GetExpressionType();
 				if (invert) {
 					// reverse comparison expression if we reverse the order of the children

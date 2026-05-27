@@ -1,4 +1,6 @@
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 // uncomment to dynamically read the PEG parser from a file instead of compiling it in (useful for testing)
 // #define PEG_PARSER_SOURCE_FILE "duckdb/parser/peg/inlined_grammar.gram"
@@ -19,11 +21,6 @@
 #endif
 
 namespace duckdb {
-
-PEGMatcherCache &GetGlobalPEGMatcherCache() {
-	static PEGMatcherCache *cache = new PEGMatcherCache();
-	return *cache;
-}
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	auto entry = state.added_suggestions.find(*this);
@@ -460,6 +457,9 @@ public:
 		if (IsQuoted(text)) {
 			return true;
 		}
+		if (BaseTokenizer::CharacterIsInitialNumber(text[0])) {
+			return false;
+		}
 		return BaseTokenizer::CharacterIsKeyword(text[0]);
 	}
 
@@ -583,8 +583,13 @@ private:
 		const auto &keyword_helper = PEGKeywordHelper::Instance();
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_TYPE_NAME:
+			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED) ||
+			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_TYPE_NAME)) {
+				break;
+			}
 			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED) ||
-			    keyword_helper.KeywordCategoryType(token_text, GetBannedCategory())) {
+			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_TYPE_FUNC) ||
+			    keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
 				return false;
 			}
 			break;
@@ -1021,7 +1026,7 @@ private:
 	Matcher &ReservedScalarFunctionName() const;
 	Matcher &ReservedVariable() const;
 
-	void AddKeywordOverride(const char *name, uint32_t score, char extra_char = ' ');
+	void AddKeywordOverride(const char *name, int32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
 	void SuppressSuggestions(const char *name);
 	Matcher &CreateMatcher(PEGParser &parser, string_t rule_name);
@@ -1175,7 +1180,9 @@ public:
 				throw InternalException("Choice matcher should never be the root in the matcher stack");
 			}
 			root_matcher.Cast<ChoiceMatcher>().matchers.push_back(matcher);
-			matchers.pop_back();
+			if (!matchers.empty()) {
+				matchers.pop_back();
+			}
 			break;
 		default:
 			throw InternalException("Cannot add matcher to root matcher of this type");
@@ -1309,7 +1316,9 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 					final_matcher = Repeat(final_matcher.get());
 				}
 				auto &replaced_matcher = Optional(final_matcher);
-				list_matcher.matchers.pop_back();
+				if (!list_matcher.matchers.empty()) {
+					list_matcher.matchers.pop_back();
+				}
 				list_matcher.matchers.push_back(replaced_matcher);
 				break;
 			}
@@ -1325,7 +1334,9 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 				}
 				auto &final_matcher = list_matcher.matchers.back();
 				final_matcher = Repeat(final_matcher.get());
-				list_matcher.matchers.pop_back();
+				if (!list_matcher.matchers.empty()) {
+					list_matcher.matchers.pop_back();
+				}
 				list_matcher.matchers.push_back(final_matcher);
 				break;
 			}
@@ -1348,7 +1359,9 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 					choice_options.push_back(previous_matcher);
 					auto &new_choice_matcher = Choice(choice_options);
 
-					list_matcher.matchers.pop_back();
+					if (!list_matcher.matchers.empty()) {
+						list_matcher.matchers.pop_back();
+					}
 					list_matcher.matchers.push_back(new_choice_matcher);
 
 					list.AddRootMatcher(new_choice_matcher);
@@ -1393,7 +1406,7 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 	return matcher;
 }
 
-void MatcherFactory::AddKeywordOverride(const char *name, uint32_t score, char extra_char) {
+void MatcherFactory::AddKeywordOverride(const char *name, int32_t score, char extra_char) {
 	auto &keyword_matcher = allocator.Allocate(make_uniq<KeywordMatcher>(name, score, extra_char));
 	keyword_overrides.insert(make_pair(name, reference<Matcher>(keyword_matcher)));
 }
@@ -1427,6 +1440,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("ColumnName", ColumnName());
 	AddRuleOverride("ReservedColumnName", ReservedColumnName());
 	AddRuleOverride("IndexName", Variable());
+	AddRuleOverride("ReservedIndexName", ReservedVariable());
 	AddRuleOverride("SequenceName", Variable());
 
 	AddRuleOverride("FunctionName", ScalarFunctionName());
@@ -1449,7 +1463,17 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	return CreateMatcher(parser, root_rule);
 }
 
-shared_ptr<PEGMatcher> PEGMatcherCache::GetMatcher() {
+shared_ptr<PEGMatcher> PEGMatcher::Get(ClientContext &context) {
+	auto &db = DatabaseInstance::GetDatabase(context);
+	return PEGMatcher::Get(db);
+}
+
+shared_ptr<PEGMatcher> PEGMatcher::Get(DatabaseInstance &db) {
+	auto &parser_cache = db.GetParserCache();
+	return parser_cache.GetMatcher();
+}
+
+shared_ptr<PEGMatcher> ParserCache::GetMatcher() {
 	{
 		std::unique_lock<std::mutex> lock(mutex);
 		if (matcher) {
@@ -1475,9 +1499,25 @@ shared_ptr<PEGMatcher> PEGMatcherCache::GetMatcher() {
 	return matcher;
 }
 
-void PEGMatcherCache::Invalidate() {
+shared_ptr<PEGTransformerFactory> ParserCache::GetTransformerFactory() {
+	{
+		std::unique_lock<std::mutex> lock(mutex);
+		if (transformer_factory) {
+			return transformer_factory;
+		}
+	}
+	auto new_factory = make_shared_ptr<PEGTransformerFactory>();
+	std::unique_lock<std::mutex> lock(mutex);
+	if (!transformer_factory) {
+		transformer_factory = std::move(new_factory);
+	}
+	return transformer_factory;
+}
+
+void ParserCache::Invalidate() {
 	std::unique_lock<std::mutex> lock(mutex);
 	matcher = nullptr;
+	transformer_factory = nullptr;
 }
 
 } // namespace duckdb

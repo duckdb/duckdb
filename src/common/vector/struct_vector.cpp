@@ -4,11 +4,12 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 
 namespace duckdb {
 
 VectorStructBuffer::VectorStructBuffer(const LogicalType &type, capacity_t capacity)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER), capacity(capacity) {
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER, count_t(0)), capacity(capacity) {
 	auto &child_types = StructType::GetChildTypes(type);
 	for (auto &child_type : child_types) {
 		children.emplace_back(child_type.second, capacity);
@@ -17,13 +18,13 @@ VectorStructBuffer::VectorStructBuffer(const LogicalType &type, capacity_t capac
 }
 
 VectorStructBuffer::VectorStructBuffer(vector<Vector> children_p, capacity_t capacity_p)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER), children(std::move(children_p)),
-      capacity(capacity_p) {
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER, count_t(0)),
+      children(std::move(children_p)), capacity(capacity_p) {
 	validity.Resize(capacity);
 }
 
-VectorStructBuffer::VectorStructBuffer(VectorStructBuffer &other, const SelectionVector &sel, idx_t count)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER),
+VectorStructBuffer::VectorStructBuffer(VectorStructBuffer &other, const SelectionVector &sel, count_t count)
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER, count),
       capacity(MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE)) {
 	auto &other_vector = other.children;
 	for (auto &child_vector : other_vector) {
@@ -35,7 +36,6 @@ VectorStructBuffer::VectorStructBuffer(VectorStructBuffer &other, const Selectio
 		validity.Resize(count);
 	}
 	validity.CopySel(original_validity, sel, 0, 0, count);
-	v_size = count;
 }
 
 void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
@@ -48,8 +48,15 @@ void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
 VectorStructBuffer::~VectorStructBuffer() {
 }
 
-void VectorStructBuffer::ResetCapacity(idx_t capacity) {
-	this->capacity = capacity;
+void VectorStructBuffer::SetVectorSize(idx_t new_size) {
+	VectorBuffer::SetVectorSize(new_size);
+	for (auto &child : children) {
+		FlatVector::SetSize(child, new_size);
+	}
+}
+
+void VectorStructBuffer::ResetCapacity(idx_t capacity_p) {
+	this->capacity = capacity_p;
 	validity.Reset(capacity);
 }
 
@@ -70,31 +77,57 @@ idx_t VectorStructBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void VectorStructBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	if (count == 0) {
-		return;
-	}
+void VectorStructBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
 	auto &child_types = StructType::GetChildTypes(type);
-	D_ASSERT(child_types.size() == children.size());
+	if (child_types.size() != children.size()) {
+		throw InternalException("Struct child count mismatch - expected %d children but found %d", child_types.size(),
+		                        children.size());
+	}
 	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 		auto &child = children[child_idx];
-		D_ASSERT(child.GetType() == child_types[child_idx].second);
-		child.Verify(sel, count);
+		if (child.GetType() != child_types[child_idx].second) {
+			throw InternalException("Struct child type mismatch - expected child of type %s but found child of type %s",
+			                        child_types[child_idx].second, child.GetType());
+		}
+		if (!sel.IsSet() && count == Size()) {
+			child.Verify();
+		} else {
+			child.Verify(sel, count);
+		}
+		if (child.size() != Size()) {
+			throw InternalException("Struct child size mismatch - parent struct had size %d but child has size %d",
+			                        Size(), child.size());
+		}
+		// for any NULL entry in the struct, the child should be NULL as well
+		// may produce structs where parent NULLs are not propagated to all children
 		if (vector_type == VectorType::CONSTANT_VECTOR) {
-			D_ASSERT(child.GetVectorType() == VectorType::CONSTANT_VECTOR);
+			if (child.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+				throw InternalException(
+				    "Struct constant mismatch - expected a child of a constant struct to also be constant");
+			}
 			if (!validity.RowIsValid(0)) {
-				D_ASSERT(ConstantVector::IsNull(child));
+				if (!ConstantVector::IsNull(child)) {
+					throw InternalException("Struct NULL mismatch - a child of a NULL struct must always be NULL");
+				}
+			}
+		} else {
+			if (child.GetVectorType() == VectorType::FLAT_VECTOR ||
+			    child.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+				auto child_validity = child.Validity();
+				for (idx_t r = 0; r < Size(); r++) {
+					if (!validity.RowIsValid(r)) {
+						if (child_validity.IsValid(r)) {
+							throw InternalException("Struct NULL mismatch - a child of a NULL struct must always be "
+							                        "NULL\nStruct type: %s\nChild idx: %llu, Child type: %s\nRow: %llu",
+							                        type.ToString(), (uint64_t)child_idx,
+							                        child_types[child_idx].second.ToString(), (uint64_t)r);
+						}
+					}
+				}
 			}
 		}
-		if (vector_type != VectorType::FLAT_VECTOR) {
-			continue;
-		}
-		// FIXME: re-add struct NULL propagation check
-		// for any NULL entry in the struct, the child should be NULL as well
-		// this check is currently disabled because projection pushdown and other optimizations
-		// may produce structs where parent NULLs are not propagated to all children
 	}
 }
 
@@ -112,7 +145,7 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::SliceInternal(const LogicalType &ty
 
 buffer_ptr<VectorBuffer> VectorStructBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
                                                            idx_t count) {
-	return make_buffer<VectorStructBuffer>(*this, sel, count);
+	return make_buffer<VectorStructBuffer>(*this, sel, count_t(count));
 }
 
 buffer_ptr<VectorBuffer> VectorStructBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
@@ -127,9 +160,9 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::ConstantSliceInternal(const Logical
 	return result;
 }
 
-void VectorStructBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+void VectorStructBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
+		format.sel = ConstantVector::ZeroSelectionVector(Size(), format.owned_sel);
 	} else {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}
@@ -198,12 +231,12 @@ Value VectorStructBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	}
 }
 
-void VectorStructBuffer::Resize(idx_t current_size, idx_t new_size) {
+void VectorStructBuffer::ReserveInternal(idx_t new_size) {
 	// resize over the validity
 	validity.Resize(new_size);
 	// resize the struct children
 	for (auto &child : children) {
-		child.Resize(current_size, new_size);
+		child.Reserve(new_size);
 	}
 	capacity = new_size;
 }
@@ -217,14 +250,14 @@ void VectorStructBuffer::CopyInternal(const Vector &source, const SelectionVecto
 	}
 }
 
-buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, idx_t count) const {
+buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type) const {
 	if (GetVectorType() == VectorType::FLAT_VECTOR) {
 		for (auto &child : children) {
-			child.Flatten(count);
+			child.Flatten();
 		}
 		return nullptr;
 	}
-	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), Size());
 }
 
 buffer_ptr<VectorBuffer> VectorStructBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
@@ -261,6 +294,14 @@ vector<Vector> &StructVector::GetEntries(Vector &vector) {
 
 const vector<Vector> &StructVector::GetEntries(const Vector &vector) {
 	return GetEntries((Vector &)vector);
+}
+
+const vector<Vector> &VectorIteratorGetStructEntries(const Vector &vector) {
+	return StructVector::GetEntries(vector);
+}
+
+vector<Vector> &VectorWriterGetStructEntries(Vector &vector) {
+	return StructVector::GetEntries(vector);
 }
 
 } // namespace duckdb

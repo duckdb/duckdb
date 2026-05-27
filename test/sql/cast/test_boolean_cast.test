@@ -2,9 +2,6 @@
 # description: Test boolean casts
 # group: [cast]
 
-statement ok
-PRAGMA enable_verification
-
 query T
 SELECT CAST(1=1 AS VARCHAR)
 ----

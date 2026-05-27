@@ -79,7 +79,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopySelect(PEGTransform
 	auto file_name = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
 	if (file_name->GetExpressionClass() == ExpressionClass::CONSTANT) {
 		auto &const_expr = file_name->Cast<ConstantExpression>();
-		info->file_path = const_expr.value.GetValue<string>();
+		info->file_path = const_expr.GetValue().GetValue<string>();
 	} else {
 		info->file_path_expression = std::move(file_name);
 	}
@@ -158,7 +158,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 	auto file_name = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(3));
 	if (file_name->GetExpressionClass() == ExpressionClass::CONSTANT) {
 		auto &const_expr = file_name->Cast<ConstantExpression>();
-		info->file_path = const_expr.value.GetValue<string>();
+		info->file_path = const_expr.GetValue().GetValue<string>();
 	} else {
 		info->file_path_expression = std::move(file_name);
 	}

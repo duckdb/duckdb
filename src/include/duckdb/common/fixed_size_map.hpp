@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 
@@ -47,13 +48,31 @@ public:
 
 	void clear() { // NOLINT: match stl case
 		count = 0;
+		min_occupied_key = capacity;
+		max_occupied_key = 0;
 		occupied.SetAllInvalid(capacity);
 	}
 
 	mapped_type &operator[](const key_type &key) {
 		D_ASSERT(key < capacity);
-		count += 1 - occupied.RowIsValidUnsafe(key);
-		occupied.SetValidUnsafe(key);
+		if (!occupied.RowIsValidUnsafe(key)) {
+			count++;
+			min_occupied_key = MinValue(min_occupied_key, key);
+			max_occupied_key = MaxValue(max_occupied_key, key);
+			occupied.SetValidUnsafe(key);
+		}
+		return values[key];
+	}
+
+	mapped_type &GetOrInsert(const key_type &key, bool &inserted) {
+		D_ASSERT(key < capacity);
+		inserted = !occupied.RowIsValidUnsafe(key);
+		if (inserted) {
+			count++;
+			min_occupied_key = MinValue(min_occupied_key, key);
+			max_occupied_key = MaxValue(max_occupied_key, key);
+			occupied.SetValidUnsafe(key);
+		}
 		return values[key];
 	}
 
@@ -63,19 +82,17 @@ public:
 	}
 
 	iterator begin() { // NOLINT: match stl case
-		iterator result(*this, 0);
-		if (!occupied_mask::RowIsValid(occupied.GetValidityEntryUnsafe(0), 0)) {
-			++result;
+		if (count == 0) {
+			return end();
 		}
-		return result;
+		return iterator(*this, min_occupied_key);
 	}
 
 	const_iterator begin() const { // NOLINT: match stl case
-		const_iterator result(*this, 0);
-		if (!occupied_mask::RowIsValid(occupied.GetValidityEntryUnsafe(0), 0)) {
-			++result;
+		if (count == 0) {
+			return end();
 		}
-		return result;
+		return const_iterator(*this, min_occupied_key);
 	}
 
 	iterator end() { // NOLINT: match stl case
@@ -97,6 +114,8 @@ public:
 private:
 	idx_t capacity;
 	idx_t count;
+	idx_t min_occupied_key;
+	idx_t max_occupied_key;
 
 	occupied_mask occupied;
 	unsafe_unique_array<mapped_type> values;
@@ -121,33 +140,7 @@ public:
 		if (++idx_in_entry == occupied_mask::BITS_PER_VALUE) {
 			NextEntry();
 		}
-		// Loop until we find an occupied index, or until the end
-		auto end = map.end();
-		while (*this < end) {
-			const auto &entry = map.occupied.GetValidityEntryUnsafe(entry_idx);
-			if (entry == static_cast<uint8_t>(~occupied_mask::ValidityBuffer::MAX_ENTRY)) {
-				// Entire entry is unoccupied, skip
-				if (entry_idx == end.entry_idx) {
-					// This is the last entry
-					idx_in_entry = end.idx_in_entry;
-					break;
-				}
-				NextEntry();
-			} else {
-				// One or more occupied in entry, loop over it
-				const auto idx_to = entry_idx == end.entry_idx ? end.idx_in_entry : occupied_mask::BITS_PER_VALUE;
-				for (; idx_in_entry < idx_to; idx_in_entry++) {
-					if (map.occupied.RowIsValid(entry, idx_in_entry)) {
-						// We found an occupied index
-						return *this;
-					}
-				}
-				// We did not find an occupied index
-				if (*this != end) {
-					NextEntry();
-				}
-			}
-		}
+		MoveToNextOccupied();
 		return *this;
 	}
 
@@ -191,6 +184,27 @@ private:
 	void NextEntry() {
 		entry_idx++;
 		idx_in_entry = 0;
+	}
+
+	void MoveToNextOccupied() {
+		const auto iterator_end = map.capacity;
+		const auto scan_end = map.count == 0 ? iterator_end : map.max_occupied_key + 1;
+		idx_t end_entry_idx;
+		idx_t end_idx_in_entry;
+		occupied_mask::GetEntryIndex(scan_end, end_entry_idx, end_idx_in_entry);
+		while (entry_idx < end_entry_idx || (entry_idx == end_entry_idx && idx_in_entry < end_idx_in_entry)) {
+			const auto entry_end = entry_idx == end_entry_idx ? end_idx_in_entry : occupied_mask::BITS_PER_VALUE;
+			const auto entry = map.occupied.GetValidityEntryUnsafe(entry_idx);
+			const auto valid_until_end = static_cast<uint8_t>(entry & occupied_mask::EntryWithValidBits(entry_end));
+			const auto remaining =
+			    static_cast<uint8_t>(valid_until_end & ~occupied_mask::EntryWithValidBits(idx_in_entry));
+			if (remaining) {
+				idx_in_entry = CountZeros<uint64_t>::Trailing(remaining);
+				return;
+			}
+			NextEntry();
+		}
+		occupied_mask::GetEntryIndex(iterator_end, entry_idx, idx_in_entry);
 	}
 
 private:

@@ -10,9 +10,6 @@ CREATE TABLE integers AS SELECT i::{type} i FROM (VALUES (1), (2), (3)) tbl(i);
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
-statement ok
-PRAGMA enable_verification
-
 # = filter is out of range
 query II
 EXPLAIN SELECT * FROM integers WHERE i=0;

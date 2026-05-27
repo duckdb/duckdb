@@ -9,6 +9,7 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -199,17 +200,17 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 					    expr.GetAlias(), expr.binding.table_index.index, expr.binding.column_index, bindings.size(),
 					    types.size());
 				}
-				if (expr.return_type != types[i]) {
+				if (expr.GetReturnType() != types[i]) {
 					throw InternalException("Failed to bind column reference \"%s\" [%d.%d]: inequal types (%s != %s)",
 					                        expr.GetAlias(), expr.binding.table_index.index, expr.binding.column_index,
-					                        expr.return_type.ToString(), types[i].ToString());
+					                        expr.GetReturnType().ToString(), types[i].ToString());
 				}
 			}
 			if (verify_only) {
 				// in verification mode
 				return nullptr;
 			}
-			return make_uniq<BoundReferenceExpression>(expr.GetAlias(), expr.return_type, i);
+			return make_uniq<BoundReferenceExpression>(expr.GetAlias(), expr.GetReturnType(), i);
 		}
 	}
 	// LCOV_EXCL_START
@@ -244,13 +245,14 @@ unordered_set<TableIndex> ColumnBindingResolver::VerifyInternal(LogicalOperator 
 	return result;
 }
 
-void ColumnBindingResolver::Verify(LogicalOperator &op) {
-#ifdef DEBUG
+void ColumnBindingResolver::Verify(ClientContext &context, LogicalOperator &op) {
+	if (!Settings::Get<DebugVerifyColumnBindingsSetting>(context)) {
+		return;
+	}
 	op.ResolveOperatorTypes();
 	ColumnBindingResolver resolver(true);
 	resolver.VisitOperator(op);
 	VerifyInternal(op);
-#endif
 }
 
 } // namespace duckdb

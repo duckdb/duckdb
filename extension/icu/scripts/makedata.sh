@@ -11,13 +11,13 @@ set -e
 mkdir -p build
 pushd build
 
-# download ICU 77-1
-code_version=77-1
+# download ICU version we are using
+code_version=78.3
 wget -nc ${icu/version/$code_version}
 unzip -o ${zip_file/version/$code_version}
 
-# download ICU 77-1 (replace with latest version)
-data_version=77-1
+# download ICU latest data version
+data_version=78.3
 wget -nc ${icu/version/$data_version}
 unzip -o ${zip_file/version/$data_version}
 
@@ -41,10 +41,10 @@ ICU_DATA_FILTER_FILE=filters.json ./runConfigureICU Linux --with-data-packaging=
 make
 popd
 
-# the data file will be located in icu-release-66-1/icu4c/source/data/out/icudt66l.dat
+# the data file will be located in icu-release-XX-X/icu4c/source/data/out/icudtXXl.dat
 # copy over the data to the minimal-icu-collation data repository
 # then run the following two commands:
 popd
 
-icudt=icudt${code_version/-[[:digit:]]/}l.dat
+icudt=icudt${code_version/[-.][[:digit:]]/}l.dat
 python3 scripts/inline-data.py < build/${data_path/version/$code_version}/out/${icudt} > third_party/icu/stubdata/stubdata.cpp

@@ -17,6 +17,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
@@ -68,7 +69,7 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 	}
 
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::CATALOG_ENTRY, alloc_size);
-	auto ptr = undo_entry.Ptr();
+	auto ptr = undo_entry.GetDataMutable();
 	// store the pointer to the catalog entry
 	Store<CatalogEntry *>(&entry, ptr);
 	if (extra_data_size > 0) {
@@ -84,7 +85,7 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 
 void DuckTransaction::PushAttach(AttachedDatabase &db) {
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::ATTACHED_DATABASE, sizeof(AttachedDatabase *));
-	auto ptr = undo_entry.Ptr();
+	auto ptr = undo_entry.GetDataMutable();
 	// store the pointer to the database
 	Store<CatalogEntry *>(&db, ptr);
 }
@@ -106,7 +107,7 @@ void DuckTransaction::PushDelete(DuckTableEntry &table_entry, RowVersionManager 
 	}
 
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, alloc_size);
-	auto delete_info = reinterpret_cast<DeleteInfo *>(undo_entry.Ptr());
+	auto delete_info = reinterpret_cast<DeleteInfo *>(undo_entry.GetDataMutable());
 	delete_info->version_info = &info;
 	delete_info->vector_idx = vector_idx;
 	delete_info->table = &table_entry;
@@ -124,7 +125,7 @@ void DuckTransaction::PushDelete(DuckTableEntry &table_entry, RowVersionManager 
 
 void DuckTransaction::PushAppend(DuckTableEntry &table_entry, idx_t start_row, idx_t row_count) {
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
-	auto append_info = reinterpret_cast<AppendInfo *>(undo_entry.Ptr());
+	auto append_info = reinterpret_cast<AppendInfo *>(undo_entry.GetDataMutable());
 	append_info->table = &table_entry;
 	append_info->start_row = start_row;
 	append_info->count = row_count;
@@ -144,7 +145,7 @@ void DuckTransaction::PushSequenceUsage(SequenceCatalogEntry &sequence, const Se
 	auto entry = sequence_usage.find(sequence);
 	if (entry == sequence_usage.end()) {
 		auto undo_entry = undo_buffer.CreateEntry(UndoFlags::SEQUENCE_VALUE, sizeof(SequenceValue));
-		auto sequence_info = reinterpret_cast<SequenceValue *>(undo_entry.Ptr());
+		auto sequence_info = reinterpret_cast<SequenceValue *>(undo_entry.GetDataMutable());
 		sequence_info->entry = &sequence;
 		sequence_info->usage_count = data.usage_count;
 		sequence_info->counter = data.counter;
@@ -213,11 +214,11 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 		commit_state = storage_manager.GenStorageCommitState(*wal);
 
 		auto &profiler = *context.client_data->profiler;
-
-		auto commit_timer = profiler.StartTimer(MetricType::COMMIT_LOCAL_STORAGE_LATENCY);
+		auto commit_timer = profiler.StartTimer<MetricStorageCommitLocalStorageLatency>();
 		storage->Commit(commit_state.get());
+		commit_timer.EndTimer();
 
-		auto wal_timer = profiler.StartTimer(MetricType::WRITE_TO_WAL_LATENCY);
+		auto wal_timer = profiler.StartTimer<MetricStorageWriteToWALLatency>();
 		undo_buffer.WriteToWAL(*wal, commit_state.get());
 		if (commit_state->HasRowGroupData()) {
 			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
@@ -225,6 +226,8 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 			// hence we need to ensure those optimistically written blocks are persisted
 			storage_manager.GetBlockManager().FileSync();
 		}
+		wal_timer.EndTimer();
+
 	} catch (std::exception &ex) {
 		// Call RevertCommit() outside this try-catch as it itself may throw
 		error_data = ErrorData(ex);

@@ -165,7 +165,7 @@ static void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_ch
 	// Add the VALUES list
 	for (idx_t i = 0; i < insert_types.size(); i++) {
 		idx_t col_idx = i;
-		auto &other_col = input_chunk.data[i];
+		const auto &other_col = input_chunk.data[i];
 		auto &this_col = result.data[col_idx];
 		D_ASSERT(other_col.GetType() == this_col.GetType());
 		this_col.Reference(other_col);
@@ -173,7 +173,7 @@ static void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_ch
 	// Add the columns from the original conflicting tuples
 	for (idx_t i = 0; i < types_to_fetch.size(); i++) {
 		idx_t col_idx = i + insert_types.size();
-		auto &other_col = scan_chunk.data[i];
+		const auto &other_col = scan_chunk.data[i];
 		auto &this_col = result.data[col_idx];
 		D_ASSERT(other_col.GetType() == this_col.GetType());
 		this_col.Reference(other_col);
@@ -217,7 +217,7 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, DuckT
 			chunk.Slice(sel, count);
 			chunk.SetCardinality(count);
 			row_ids.Slice(sel, count);
-			row_ids.Flatten(count);
+			row_ids.Flatten();
 		}
 	}
 
@@ -351,9 +351,9 @@ static void PrepareSortKeys(DataChunk &input, unordered_map<column_t, unique_ptr
 		if (sort_key != nullptr) {
 			continue;
 		}
-		auto &column = input.data[it];
+		const auto &column = input.data[it];
 		sort_key = make_uniq<Vector>(LogicalType::BLOB);
-		CreateSortKeyHelpers::CreateSortKey(column, input.size(), order_modifiers, *sort_key);
+		CreateSortKeyHelpers::CreateSortKey(column, order_modifiers, *sort_key);
 	}
 }
 

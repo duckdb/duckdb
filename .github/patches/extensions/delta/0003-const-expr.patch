@@ -1,0 +1,48 @@
+diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
+index c2f58b9..eeaab95 100644
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -329,8 +329,8 @@ void ExpressionVisitor::VisitLiteralMap(void *state, uintptr_t sibling_list_id,
+ 			    ErrorData("DuckDB only supports parsing Map literals from delta kernel that consist for constants!");
+ 			return;
+ 		}
+-		key_values.push_back(key_field->Cast<ConstantExpression>().value);
+-		key_type = key_field->Cast<ConstantExpression>().value.type();
++		key_values.push_back(key_field->Cast<ConstantExpression>().GetValue());
++		key_type = key_field->Cast<ConstantExpression>().GetValue().type();
+ 	}
+ 
+ 	vector<Value> value_values;
+@@ -341,8 +341,8 @@ void ExpressionVisitor::VisitLiteralMap(void *state, uintptr_t sibling_list_id,
+ 			    ErrorData("DuckDB only supports parsing Map literals from delta kernel that consist for constants!");
+ 			return;
+ 		}
+-		value_values.push_back(value_field->Cast<ConstantExpression>().value);
+-		value_type = value_field->Cast<ConstantExpression>().value.type();
++		value_values.push_back(value_field->Cast<ConstantExpression>().GetValue());
++		value_type = value_field->Cast<ConstantExpression>().GetValue().type();
+ 	}
+ 
+ 	unique_ptr<ParsedExpression> expression =
+diff --git a/src/functions/delta_scan/delta_multi_file_list.cpp b/src/functions/delta_scan/delta_multi_file_list.cpp
+index 06483e7..26fc20c 100644
+--- a/src/functions/delta_scan/delta_multi_file_list.cpp
++++ b/src/functions/delta_scan/delta_multi_file_list.cpp
+@@ -374,7 +374,7 @@ static unordered_map<idx_t, Value> FindPartitionValues(ParsedExpression &transfo
+ 			if (transform_op_child->GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
+ 				auto name =
+ 				    transform_op_child->Cast<ComparisonExpression>().left->Cast<ColumnRefExpression>().GetName();
+-				auto value = transform_op_child->Cast<ComparisonExpression>().right->Cast<ConstantExpression>().value;
++				auto value = transform_op_child->Cast<ComparisonExpression>().right->Cast<ConstantExpression>().GetValue();
+ 
+ 				if (name == "is_replace") {
+ 					is_replace = value.GetValue<bool>();
+@@ -387,7 +387,7 @@ static unordered_map<idx_t, Value> FindPartitionValues(ParsedExpression &transfo
+ 					                        name);
+ 				}
+ 			} else if (transform_op_child->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+-				values.push_back(transform_op_child->Cast<ConstantExpression>().value);
++				values.push_back(transform_op_child->Cast<ConstantExpression>().GetValue());
+ 			} else {
+ 				throw NotImplementedException(
+ 				    "Unexpected expression for delta_transform_op returned by delta kernel: %s",

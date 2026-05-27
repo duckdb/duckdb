@@ -101,7 +101,12 @@ void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size) {
 		return;
 	}
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
-	dchunk->SetCardinality(size);
+	try {
+		dchunk->SetChildCardinality(size);
+	} catch (...) {
+		// we cannot return exceptions here...
+		D_ASSERT(false);
+	}
 }
 
 duckdb_logical_type duckdb_vector_get_column_type(duckdb_vector vector) {

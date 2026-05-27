@@ -106,7 +106,7 @@ Results
 **Parser** (`src/parser/`)
 - Converts SQL strings to Abstract Syntax Tree (AST)
 - Uses a PEG-based parser
-- The grammar is located in `*.gram` files and generated using `scripts/build_peg_grammar.sh`
+- The grammar is located in `*.gram` files and generated using `scripts/build_grammar.sh`
 - Outputs: `SQLStatement`, `ParsedExpression`, `TableRef` objects
 - Key subdirectories: `expression/`, `statement/`, `tableref/`, `peg/`
 
@@ -242,6 +242,7 @@ DUCKDB_EXTENSIONS='json;icu' make
 - Use `const` references for non-trivial objects
 - Use C++11 range-based for loops when possible
 - Always use braces for if statements and loops
+- Never use `const_cast`
 
 ### Naming Conventions
 - **Files**: `snake_case` (e.g., `abstract_operator.cpp`)

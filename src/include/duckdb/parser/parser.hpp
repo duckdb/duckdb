@@ -19,6 +19,7 @@
 
 namespace duckdb {
 
+struct ParserCache;
 class GroupByNode;
 struct UnicodeSpace {
 	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
@@ -34,6 +35,7 @@ struct UnicodeSpace {
 class Parser {
 public:
 	explicit Parser(ParserOptions options = ParserOptions());
+	~Parser();
 
 	//! The parsed SQL statements from an invocation to ParseQuery.
 	vector<unique_ptr<SQLStatement>> statements;
@@ -81,6 +83,9 @@ public:
 	void ThrowParserOverrideError(ParserOverrideResult &result);
 
 private:
+	ParserCache &GetCache();
+
 	ParserOptions options;
+	unique_ptr<ParserCache> local_cache;
 };
 } // namespace duckdb

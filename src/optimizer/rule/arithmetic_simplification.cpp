@@ -32,9 +32,9 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 	(void)root;
 	// any arithmetic operator involving NULL is always NULL
 	if (constant.value.IsNull()) {
-		return make_uniq<BoundConstantExpression>(Value(root.return_type));
+		return make_uniq<BoundConstantExpression>(Value(root.GetReturnType()));
 	}
-	auto &func_name = root.function.name;
+	auto &func_name = root.function.GetName();
 	if (func_name == "+") {
 		if (constant.value == 0) {
 			// addition with 0
@@ -54,7 +54,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 		} else if (constant.value == 0) {
 			// multiply by zero: replace with constant or null
 			return ExpressionRewriter::ConstantOrNull(std::move(root.children[1 - constant_child]),
-			                                          Value::Numeric(root.return_type, 0));
+			                                          Value::Numeric(root.GetReturnType(), 0));
 		}
 	} else if (func_name == "//") {
 		if (constant_child == 1) {
@@ -63,7 +63,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 				return std::move(root.children[1 - constant_child]);
 			} else if (constant.value == 0) {
 				// divide by 0, replace with NULL
-				return make_uniq<BoundConstantExpression>(Value(root.return_type));
+				return make_uniq<BoundConstantExpression>(Value(root.GetReturnType()));
 			}
 		}
 	} else {

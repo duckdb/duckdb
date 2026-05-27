@@ -4,32 +4,29 @@
 namespace duckdb {
 
 Value PEGTransformerFactory::GetConstantExpressionValue(unique_ptr<ParsedExpression> &expr) {
-	if (expr->type == ExpressionType::VALUE_CONSTANT) {
-		return expr->Cast<ConstantExpression>().value;
+	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		return expr->Cast<ConstantExpression>().GetValue();
 	}
-	if (expr->type == ExpressionType::COLUMN_REF) {
+	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		return expr->Cast<ColumnRefExpression>().GetName();
 	}
 	return Value();
 }
 
-unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
+unique_ptr<CreateStatement>
+PEGTransformerFactory::TransformCreateSecretStmt(PEGTransformer &transformer, const bool &if_not_exists,
+                                                 const string &secret_name, const string &secret_storage_specifier,
+                                                 const vector<GenericCopyOption> &generic_copy_option_list) {
 	auto result = make_uniq<CreateStatement>();
-	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	auto info = make_uniq<CreateSecretInfo>(on_conflict, SecretPersistType::DEFAULT);
-	auto &secret_name_pr = list_pr.Child<OptionalParseResult>(2);
-	if (secret_name_pr.HasResult()) {
-		info->name = transformer.Transform<string>(secret_name_pr.GetResult());
+	if (!secret_name.empty()) {
+		info->name = secret_name;
 	}
-	auto &secret_storage_specifier_pr = list_pr.Child<OptionalParseResult>(3);
-	if (secret_storage_specifier_pr.HasResult()) {
-		info->storage_type = StringUtil::Lower(transformer.Transform<string>(secret_storage_specifier_pr.GetResult()));
+	if (!secret_storage_specifier.empty()) {
+		info->storage_type = StringUtil::Lower(secret_storage_specifier);
 	}
-	auto option_list = transformer.Transform<vector<GenericCopyOption>>(list_pr.Child<ListParseResult>(4));
-	for (auto option : option_list) {
+	for (const auto &option : generic_copy_option_list) {
 		auto lower_name = StringUtil::Lower(option.name);
 		if (lower_name == "scope") {
 			info->scope = option.GetFirstChildOrExpression();
@@ -64,14 +61,12 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(PEG
 	return result;
 }
 
-string PEGTransformerFactory::TransformSecretName(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+string PEGTransformerFactory::TransformSecretStorageSpecifier(PEGTransformer &transformer, const string &identifier) {
+	return identifier;
 }
 
-string PEGTransformerFactory::TransformSecretStorageSpecifier(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return list_pr.Child<IdentifierParseResult>(1).identifier;
+string PEGTransformerFactory::TransformSecretName(PEGTransformer &transformer, const string &col_id) {
+	return col_id;
 }
 
 } // namespace duckdb

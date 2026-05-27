@@ -3,9 +3,6 @@
 # group: [attach]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 ATTACH '{TEST_DIR}/version_1_2_0.db' (STORAGE_VERSION 'v1.2.0');
 
 # exposed through tags

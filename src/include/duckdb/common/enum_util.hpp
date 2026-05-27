@@ -136,6 +136,8 @@ enum class ColumnSegmentType : uint8_t;
 
 enum class CompressedMaterializationDirection : uint8_t;
 
+enum class CompressedMaterializationType : uint8_t;
+
 enum class CompressionType : uint8_t;
 
 enum class CompressionValidity : uint8_t;
@@ -162,7 +164,11 @@ enum class DatePartSpecifier : uint8_t;
 
 enum class DebugInitialize : uint8_t;
 
+enum class DebugStatementVerification : uint8_t;
+
 enum class DebugVectorVerification : uint8_t;
+
+enum class DebugVerificationMode : uint8_t;
 
 enum class DecimalBitWidth : uint8_t;
 
@@ -254,6 +260,8 @@ enum class InsertColumnOrder : uint8_t;
 
 enum class InterruptMode : uint8_t;
 
+enum class JoinFilterPushdownMode : uint8_t;
+
 enum class JoinRefType : uint8_t;
 
 enum class JoinType : uint8_t;
@@ -296,9 +304,7 @@ enum class MergeActionType : uint8_t;
 
 enum class MetaPipelineType : uint8_t;
 
-enum class MetricGroup : uint8_t;
-
-enum class MetricType : uint8_t;
+enum class Monotonicity : uint8_t;
 
 enum class MultiFileColumnMappingMode : uint8_t;
 
@@ -386,6 +392,10 @@ enum class QueryResultType : uint8_t;
 
 enum class RecoveryMode : uint8_t;
 
+enum class RecursiveCTEInlineStageType : uint8_t;
+
+enum class RecursiveProbeSidePreference : uint8_t;
+
 enum class RelationType : uint8_t;
 
 enum class RenderMode : uint8_t;
@@ -413,6 +423,8 @@ enum class SecretSerializationType : uint8_t;
 enum class SelectivityOptionalFilterType : uint8_t;
 
 enum class SequenceInfo : uint8_t;
+
+enum class SerializationVersionDeprecated : uint64_t;
 
 enum class SetOperationType : uint8_t;
 
@@ -452,6 +464,8 @@ enum class StorageBlockPrefetch : uint8_t;
 
 enum class StorageIndexType : uint8_t;
 
+enum class StorageVersion : uint64_t;
+
 enum class StrTimeSpecifier : uint8_t;
 
 enum class StreamExecutionResult : uint8_t;
@@ -463,6 +477,8 @@ enum class SuggestionState : uint8_t;
 enum class TableColumnType : uint8_t;
 
 enum class TableFilterType : uint8_t;
+
+enum class TableFunctionParallelism : uint8_t;
 
 enum class TablePartitionInfo : uint8_t;
 
@@ -513,8 +529,6 @@ enum class VariantValueType : uint8_t;
 enum class VectorBufferType : uint8_t;
 
 enum class VectorType : uint8_t;
-
-enum class VerificationType : uint8_t;
 
 enum class VerifyExistenceType : uint8_t;
 
@@ -688,6 +702,9 @@ template<>
 const char* EnumUtil::ToChars<CompressedMaterializationDirection>(CompressedMaterializationDirection value);
 
 template<>
+const char* EnumUtil::ToChars<CompressedMaterializationType>(CompressedMaterializationType value);
+
+template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value);
 
 template<>
@@ -727,7 +744,13 @@ template<>
 const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value);
 
 template<>
+const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value);
+
+template<>
 const char* EnumUtil::ToChars<DebugVectorVerification>(DebugVectorVerification value);
+
+template<>
+const char* EnumUtil::ToChars<DebugVerificationMode>(DebugVerificationMode value);
 
 template<>
 const char* EnumUtil::ToChars<DecimalBitWidth>(DecimalBitWidth value);
@@ -865,6 +888,9 @@ template<>
 const char* EnumUtil::ToChars<InterruptMode>(InterruptMode value);
 
 template<>
+const char* EnumUtil::ToChars<JoinFilterPushdownMode>(JoinFilterPushdownMode value);
+
+template<>
 const char* EnumUtil::ToChars<JoinRefType>(JoinRefType value);
 
 template<>
@@ -928,10 +954,7 @@ template<>
 const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
 
 template<>
-const char* EnumUtil::ToChars<MetricGroup>(MetricGroup value);
-
-template<>
-const char* EnumUtil::ToChars<MetricType>(MetricType value);
+const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
 
 template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
@@ -1063,6 +1086,12 @@ template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
 
 template<>
+const char* EnumUtil::ToChars<RecursiveCTEInlineStageType>(RecursiveCTEInlineStageType value);
+
+template<>
+const char* EnumUtil::ToChars<RecursiveProbeSidePreference>(RecursiveProbeSidePreference value);
+
+template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
 
 template<>
@@ -1103,6 +1132,9 @@ const char* EnumUtil::ToChars<SelectivityOptionalFilterType>(SelectivityOptional
 
 template<>
 const char* EnumUtil::ToChars<SequenceInfo>(SequenceInfo value);
+
+template<>
+const char* EnumUtil::ToChars<SerializationVersionDeprecated>(SerializationVersionDeprecated value);
 
 template<>
 const char* EnumUtil::ToChars<SetOperationType>(SetOperationType value);
@@ -1162,6 +1194,9 @@ template<>
 const char* EnumUtil::ToChars<StorageIndexType>(StorageIndexType value);
 
 template<>
+const char* EnumUtil::ToChars<StorageVersion>(StorageVersion value);
+
+template<>
 const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value);
 
 template<>
@@ -1178,6 +1213,9 @@ const char* EnumUtil::ToChars<TableColumnType>(TableColumnType value);
 
 template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value);
+
+template<>
+const char* EnumUtil::ToChars<TableFunctionParallelism>(TableFunctionParallelism value);
 
 template<>
 const char* EnumUtil::ToChars<TablePartitionInfo>(TablePartitionInfo value);
@@ -1253,9 +1291,6 @@ const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value);
 
 template<>
 const char* EnumUtil::ToChars<VectorType>(VectorType value);
-
-template<>
-const char* EnumUtil::ToChars<VerificationType>(VerificationType value);
 
 template<>
 const char* EnumUtil::ToChars<VerifyExistenceType>(VerifyExistenceType value);
@@ -1436,6 +1471,9 @@ template<>
 CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializationDirection>(const char *value);
 
 template<>
+CompressedMaterializationType EnumUtil::FromString<CompressedMaterializationType>(const char *value);
+
+template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value);
 
 template<>
@@ -1475,7 +1513,13 @@ template<>
 DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value);
 
 template<>
+DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value);
+
+template<>
 DebugVectorVerification EnumUtil::FromString<DebugVectorVerification>(const char *value);
+
+template<>
+DebugVerificationMode EnumUtil::FromString<DebugVerificationMode>(const char *value);
 
 template<>
 DecimalBitWidth EnumUtil::FromString<DecimalBitWidth>(const char *value);
@@ -1613,6 +1657,9 @@ template<>
 InterruptMode EnumUtil::FromString<InterruptMode>(const char *value);
 
 template<>
+JoinFilterPushdownMode EnumUtil::FromString<JoinFilterPushdownMode>(const char *value);
+
+template<>
 JoinRefType EnumUtil::FromString<JoinRefType>(const char *value);
 
 template<>
@@ -1676,10 +1723,7 @@ template<>
 MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
 
 template<>
-MetricGroup EnumUtil::FromString<MetricGroup>(const char *value);
-
-template<>
-MetricType EnumUtil::FromString<MetricType>(const char *value);
+Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);
 
 template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);
@@ -1811,6 +1855,12 @@ template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
 
 template<>
+RecursiveCTEInlineStageType EnumUtil::FromString<RecursiveCTEInlineStageType>(const char *value);
+
+template<>
+RecursiveProbeSidePreference EnumUtil::FromString<RecursiveProbeSidePreference>(const char *value);
+
+template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);
 
 template<>
@@ -1851,6 +1901,9 @@ SelectivityOptionalFilterType EnumUtil::FromString<SelectivityOptionalFilterType
 
 template<>
 SequenceInfo EnumUtil::FromString<SequenceInfo>(const char *value);
+
+template<>
+SerializationVersionDeprecated EnumUtil::FromString<SerializationVersionDeprecated>(const char *value);
 
 template<>
 SetOperationType EnumUtil::FromString<SetOperationType>(const char *value);
@@ -1910,6 +1963,9 @@ template<>
 StorageIndexType EnumUtil::FromString<StorageIndexType>(const char *value);
 
 template<>
+StorageVersion EnumUtil::FromString<StorageVersion>(const char *value);
+
+template<>
 StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value);
 
 template<>
@@ -1926,6 +1982,9 @@ TableColumnType EnumUtil::FromString<TableColumnType>(const char *value);
 
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value);
+
+template<>
+TableFunctionParallelism EnumUtil::FromString<TableFunctionParallelism>(const char *value);
 
 template<>
 TablePartitionInfo EnumUtil::FromString<TablePartitionInfo>(const char *value);
@@ -2001,9 +2060,6 @@ VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value);
 
 template<>
 VectorType EnumUtil::FromString<VectorType>(const char *value);
-
-template<>
-VerificationType EnumUtil::FromString<VerificationType>(const char *value);
 
 template<>
 VerifyExistenceType EnumUtil::FromString<VerifyExistenceType>(const char *value);

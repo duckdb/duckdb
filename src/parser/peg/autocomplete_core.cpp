@@ -134,7 +134,7 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 				result = StringUtil::Upper(result);
 			}
 		} else if (suggestion.candidate_type == CandidateType::IDENTIFIER) {
-			result = KeywordHelper::WriteOptionallyQuoted(result, '"');
+			result = SQLIdentifier::ToString(result);
 		}
 		if (suggestion.extra_char != '\0') {
 			result += suggestion.extra_char;

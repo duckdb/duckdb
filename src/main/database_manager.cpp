@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/extension_helper.hpp"
@@ -147,14 +148,13 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 
 	if (requires_tracking_attaches) {
 		// Start timing the ATTACH-delay step.
-		auto profiler = context.client_data->profiler->StartTimer(MetricType::WAITING_TO_ATTACH_LATENCY);
-
+		auto timer = context.client_data->profiler->StartTimer<MetricStorageWaitingToAttachLatency>();
+		// Start trying to attach.
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists
 			// first check if it exists within this transaction
 			auto &meta_transaction = MetaTransaction::Get(context);
-			auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name);
-			if (existing_db) {
+			if (auto existing_db = meta_transaction.GetReferencedDatabaseOwning(info.name)) {
 				// it does! return it
 				return existing_db;
 			}
@@ -169,6 +169,8 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 			}
 			context.InterruptCheck();
 		}
+		// Returning in the loop above will also end the timer, otherwise, do it explicitly here.
+		timer.EndTimer();
 	}
 	auto &config = DBConfig::GetConfig(context);
 	GetDatabaseType(context, info, config, options);
@@ -380,7 +382,7 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 		// FIXME: Here it might be preferable to use an AutoLoadOrThrow kind of function
 		// so that either there will be success or a message to throw, and load will be
 		// attempted only once respecting the auto-loading options
-		ExtensionHelper::LoadExternalExtension(context, options.db_type);
+		ExtensionHelper::LoadExternalExtension(context, {options.db_type});
 	}
 }
 

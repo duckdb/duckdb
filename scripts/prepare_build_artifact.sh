@@ -37,12 +37,18 @@ else
 	echo "No $BUILD_DIR/src/libduckdb.so* files found"
 fi
 
+# Required by jobs that link against the prebuilt static library.
+if [[ -f "$BUILD_DIR/src/libduckdb_static.a" ]]; then
+	cp -av "$BUILD_DIR/src/libduckdb_static.a" "$ARTIFACT_DIR"/src/
+else
+	echo "No $BUILD_DIR/src/libduckdb_static.a file found"
+fi
+
 # Required by regression jobs that run the prebuilt benchmark runner.
 if [[ -f "$BUILD_DIR/benchmark/benchmark_runner" ]]; then
 	mkdir -p "$ARTIFACT_DIR"/benchmark "$ARTIFACT_DIR"/scripts
 	mkdir -p "$ARTIFACT_DIR"/test/sql/storage_version
 	cp -av "$BUILD_DIR/benchmark/benchmark_runner" "$ARTIFACT_DIR"/benchmark/
-	cp -av scripts/generate_storage_version.py "$ARTIFACT_DIR"/scripts/
 	cp -av test/sql/storage_version/. "$ARTIFACT_DIR"/test/sql/storage_version/
 else
 	echo "No $BUILD_DIR/benchmark/benchmark_runner file found"

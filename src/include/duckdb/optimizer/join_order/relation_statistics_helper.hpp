@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
@@ -28,7 +28,7 @@ public:
 		if (!FoundExpression()) {
 			return false;
 		}
-		return expression->type == ExpressionType::BOUND_COLUMN_REF;
+		return expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF;
 	}
 
 public:

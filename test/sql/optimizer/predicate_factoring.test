@@ -3,9 +3,6 @@
 # group: [optimizer]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t (a INTEGER, b INTEGER, c INTEGER);
 
 statement ok
@@ -22,6 +19,19 @@ SELECT * FROM t WHERE (a=1 AND b>3) OR (a=1 AND c<5)
 # Verify a=1 is pushed down into the scan as a required filter
 query II
 EXPLAIN SELECT * FROM t WHERE (a=1 AND b>3) OR (a=1 AND c<5)
+----
+physical_plan	<REGEX>:.*Filters:.*a = 1.*
+
+# Predicate factoring still works when nested conjunctions must be simplified first
+query III rowsort
+SELECT * FROM t WHERE (a=1 AND (b>3 AND TRUE)) OR (a=1 AND (TRUE AND c<5))
+----
+1	2	3
+1	5	11
+1	5	3
+
+query II
+EXPLAIN SELECT * FROM t WHERE (a=1 AND (b>3 AND TRUE)) OR (a=1 AND (TRUE AND c<5))
 ----
 physical_plan	<REGEX>:.*Filters:.*a = 1.*
 

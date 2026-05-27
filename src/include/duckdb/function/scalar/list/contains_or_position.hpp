@@ -7,23 +7,14 @@
 namespace duckdb {
 
 template <class T, class RETURN_TYPE, bool FIND_NULLS>
-idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target, Vector &result, const idx_t count) {
+idx_t ListSearchSimpleOp(const Vector &input_list, const Vector &list_child, const Vector &target, Vector &result,
+                         const idx_t count) {
 	// If the return type is not a bool, return the position
 	const auto return_pos = std::is_same<RETURN_TYPE, int32_t>::value;
 
-	const auto input_count = ListVector::GetListSize(input_list);
-
-	UnifiedVectorFormat list_format;
-	input_list.ToUnifiedFormat(count, list_format);
-	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_format);
-
-	UnifiedVectorFormat child_format;
-	list_child.ToUnifiedFormat(input_count, child_format);
-	const auto child_data = UnifiedVectorFormat::GetData<T>(child_format);
-
-	UnifiedVectorFormat target_format;
-	target.ToUnifiedFormat(count, target_format);
-	const auto target_data = UnifiedVectorFormat::GetData<T>(target_format);
+	const auto list_entries = input_list.Values<list_entry_t>();
+	const auto child_data = list_child.Values<T>();
+	const auto target_data = target.Values<T>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<RETURN_TYPE>(result, count);
@@ -31,21 +22,22 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 	idx_t total_matches = 0;
 
 	for (idx_t row_idx = 0; row_idx < count; ++row_idx) {
-		const auto list_entry_idx = list_format.sel->get_index(row_idx);
+		auto list_entry = list_entries[row_idx];
 
 		// The entire list is NULL, the result is also NULL.
-		if (!list_format.validity.RowIsValid(list_entry_idx)) {
+		if (!list_entry.IsValid()) {
 			result_data.WriteNull();
 			continue;
 		}
+		auto list = list_entry.GetValue();
+		auto target_entry = target_data[row_idx];
 
-		const auto target_entry_idx = target_format.sel->get_index(row_idx);
-		const bool target_valid = target_format.validity.RowIsValid(target_entry_idx);
+		const bool target_valid = target_entry.IsValid();
 
 		// We are finished, if we are not looking for NULL, and the target is NULL.
 		const auto finished = !FIND_NULLS && !target_valid;
 		// We did not find the target (finished, or list is empty).
-		if (finished || list_entries[list_entry_idx].length == 0) {
+		if (finished || list.length == 0) {
 			if (finished || return_pos) {
 				// Return NULL as the position.
 				result_data.WriteNull();
@@ -56,19 +48,19 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 			continue;
 		}
 
-		const auto entry_length = list_entries[list_entry_idx].length;
-		const auto entry_offset = list_entries[list_entry_idx].offset;
+		const auto entry_length = list.length;
+		const auto entry_offset = list.offset;
 
 		bool found = false;
 		RETURN_TYPE found_value {};
 
 		for (auto list_idx = entry_offset; list_idx < entry_length + entry_offset && !found; list_idx++) {
-			const auto child_entry_idx = child_format.sel->get_index(list_idx);
-			const bool child_valid = child_format.validity.RowIsValid(child_entry_idx);
+			auto child_entry = child_data[list_idx];
+			const bool child_valid = child_entry.IsValid();
 
 			if ((FIND_NULLS && !child_valid && !target_valid) ||
 			    (child_valid && target_valid &&
-			     Equals::Operation<T>(child_data[child_entry_idx], target_data[target_entry_idx]))) {
+			     Equals::Operation<T>(child_entry.GetValue(), target_entry.GetValue()))) {
 				found = true;
 				total_matches++;
 				if (return_pos) {
@@ -94,7 +86,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 }
 
 template <class RETURN_TYPE, bool FIND_NULLS>
-idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_vec, Vector &result_vec,
+idx_t ListSearchNestedOp(const Vector &list_vec, const Vector &source_vec, const Vector &target_vec, Vector &result_vec,
                          const idx_t target_count) {
 	// Set up sort keys for nested types.
 	auto source_count = ListVector::GetListSize(list_vec);
@@ -102,6 +94,9 @@ idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 	Vector target_sort_key_vec(LogicalType::BLOB, target_count);
 
 	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
+	// Pass explicit counts: source_vec and target_vec may have different sizes than source_count/target_count
+	// when called via dictionary expression optimization (TryExecuteDictionaryExpression uses the dictionary
+	// size as the chunk count, while the non-key arguments retain their original size).
 	CreateSortKeyHelpers::CreateSortKeyWithValidity(source_vec, source_sort_key_vec, order_modifiers, source_count);
 	CreateSortKeyHelpers::CreateSortKeyWithValidity(target_vec, target_sort_key_vec, order_modifiers, target_count);
 
@@ -114,7 +109,8 @@ idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 //! usually the "source" vector is the list child vector, but it is passed separately to enable searching nested
 //! children, for example when searching the keys of a MAP vectors.
 template <class RETURN_TYPE, bool FIND_NULLS = false>
-idx_t ListSearchOp(Vector &list_v, Vector &source_v, Vector &target_v, Vector &result_v, idx_t target_count) {
+idx_t ListSearchOp(const Vector &list_v, const Vector &source_v, const Vector &target_v, Vector &result_v,
+                   idx_t target_count) {
 	const auto type = target_v.GetType().InternalType();
 	switch (type) {
 	case PhysicalType::BOOL:

@@ -12,7 +12,7 @@ static vector<LogicalType> GetPayloadTypes(const vector<unique_ptr<Expression>> 
 	for (auto &aggr_expr : aggregates) {
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		for (auto &child : aggr.children) {
-			payload_types.push_back(child->return_type);
+			payload_types.push_back(child->GetReturnType());
 		}
 	}
 	return payload_types;
@@ -33,7 +33,7 @@ PhysicalLimitedDistinct::PhysicalLimitedDistinct(PhysicalPlan &physical_plan, ve
     : PhysicalOperator(physical_plan, PhysicalOperatorType::LIMITED_DISTINCT, std::move(types), estimated_cardinality),
       groups(std::move(groups_p)), aggregates(std::move(aggregates_p)), limit(limit_p) {
 	for (auto &group : groups) {
-		group_types.push_back(group->return_type);
+		group_types.push_back(group->GetReturnType());
 	}
 }
 
@@ -160,7 +160,7 @@ struct LimitedDistinctGlobalSourceState : public GlobalSourceState {
 		vector<LogicalType> payload_types;
 		for (auto &aggr_expr : op.aggregates) {
 			auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
-			payload_types.push_back(aggr.return_type);
+			payload_types.push_back(aggr.GetReturnType());
 		}
 		if (!payload_types.empty()) {
 			payload_chunk.Initialize(Allocator::Get(context), payload_types);

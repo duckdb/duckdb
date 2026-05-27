@@ -86,7 +86,7 @@ public:
 				state.insert_executor = make_uniq<ExpressionExecutor>(context.client, action->expressions);
 				vector<LogicalType> insert_types;
 				for (auto &expr : action->expressions) {
-					insert_types.push_back(expr->return_type);
+					insert_types.push_back(expr->GetReturnType());
 				}
 				state.insert_chunk = make_uniq<DataChunk>();
 				state.insert_chunk->Initialize(context.client, insert_types);
@@ -286,10 +286,10 @@ void PhysicalMergeInto::ComputeMatches(MergeIntoLocalState &local_state, DataChu
 	not_matched.count = 0;
 	not_matched_by_source.count = 0;
 
-	auto row_id_validity = chunk.data[row_id_index].Validity(chunk.size());
+	auto row_id_validity = chunk.data[row_id_index].Validity();
 	if (source_marker.IsValid()) {
 		// source marker - check both row id and source marker
-		auto source_marker_validity = chunk.data[source_marker.GetIndex()].Validity(chunk.size());
+		auto source_marker_validity = chunk.data[source_marker.GetIndex()].Validity();
 		for (idx_t i = 0; i < chunk.size(); i++) {
 			if (!source_marker_validity.IsValid(i)) {
 				// source marker is NULL - no source match

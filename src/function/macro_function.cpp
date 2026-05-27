@@ -70,7 +70,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		LogicalType arg_type = LogicalType::UNKNOWN;
 		if (requires_bind) {
 			const auto arg_bind_result = expr_binder.BindExpression(arg_copy, depth + 1);
-			arg_type = arg_bind_result.HasError() ? LogicalType::UNKNOWN : arg_bind_result.expression->return_type;
+			arg_type = arg_bind_result.HasError() ? LogicalType::UNKNOWN : arg_bind_result.expression->GetReturnType();
 		}
 		if (!arg->GetAlias().empty()) {
 			// Default argument
@@ -289,7 +289,7 @@ void MacroFunction::CopyProperties(MacroFunction &other) const {
 vector<unique_ptr<ParsedExpression>>
 MacroFunction::GetPositionalParametersForSerialization(Serializer &serializer) const {
 	vector<unique_ptr<ParsedExpression>> result;
-	if (serializer.ShouldSerialize(6)) {
+	if (serializer.ShouldSerialize(StorageVersion::V1_4_0)) {
 		// We serialize all positional parameters as-is
 		for (auto &param : parameters) {
 			result.push_back(param->Copy());

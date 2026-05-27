@@ -61,11 +61,30 @@ struct RegrR2Operation {
 	}
 };
 
-LogicalType GetRegrR2StateType(const AggregateFunction &) {
+LogicalType GetRegrR2StateType(const BoundAggregateFunction &) {
+	child_list_t<LogicalType> covar_children;
+	covar_children.emplace_back("count", LogicalType::UBIGINT);
+	covar_children.emplace_back("meanx", LogicalType::DOUBLE);
+	covar_children.emplace_back("meany", LogicalType::DOUBLE);
+	covar_children.emplace_back("co_moment", LogicalType::DOUBLE);
+	auto cov_pop_type = LogicalType::STRUCT(std::move(covar_children));
+
+	child_list_t<LogicalType> stddev_types;
+	stddev_types.emplace_back("count", LogicalType::UBIGINT);
+	stddev_types.emplace_back("mean", LogicalType::DOUBLE);
+	stddev_types.emplace_back("dsquared", LogicalType::DOUBLE);
+	auto stddev_type = LogicalType::STRUCT(std::move(stddev_types));
+
+	child_list_t<LogicalType> corr_children;
+	corr_children.emplace_back("cov_pop", std::move(cov_pop_type));
+	corr_children.emplace_back("dev_pop_x", stddev_type);
+	corr_children.emplace_back("dev_pop_y", stddev_type);
+	auto corr_state = LogicalType::STRUCT(std::move(corr_children));
+
 	child_list_t<LogicalType> state_children;
-	state_children.emplace_back("corr", CorrFun::GetFunction().GetStateType());
-	state_children.emplace_back("var_pop_x", VarPopFun::GetFunction().GetStateType());
-	state_children.emplace_back("var_pop_y", VarPopFun::GetFunction().GetStateType());
+	state_children.emplace_back("corr", corr_state);
+	state_children.emplace_back("var_pop_x", stddev_type);
+	state_children.emplace_back("var_pop_y", stddev_type);
 	return LogicalType::STRUCT(std::move(state_children));
 }
 

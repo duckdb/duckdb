@@ -2,9 +2,6 @@
 # description: Test unnamed subqueries
 # group: [table]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT a FROM (SELECT 42 a)
 ----

@@ -54,7 +54,7 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	static bool Equal(const FunctionExpression &a, const FunctionExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
 	hash_t Hash() const override;
 
 	void Serialize(Serializer &serializer) const override;
@@ -88,12 +88,12 @@ public:
 		// standard function call
 		string result;
 		if (!catalog.empty()) {
-			result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
+			result += SQLIdentifier(catalog) + ".";
 		}
 		if (!schema.empty()) {
-			result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+			result += SQLIdentifier(schema) + ".";
 		}
-		result += KeywordHelper::WriteOptionallyQuoted(function_name);
+		result += SQLIdentifier(function_name);
 		result += "(";
 		if (distinct) {
 			result += "DISTINCT ";

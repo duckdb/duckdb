@@ -27,7 +27,7 @@ public:
 public:
 	string ToString() const override;
 
-	static bool Equal(const ComparisonExpression &a, const ComparisonExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
@@ -35,13 +35,13 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
 public:
-	template <class T, class BASE>
-	static string ToString(const T &entry) {
-		return StringUtil::Format("(%s %s %s)", entry.left->ToString(),
-		                          ExpressionTypeToOperator(entry.GetExpressionType()), entry.right->ToString());
+	template <class T>
+	static string ToString(ExpressionType type, const T &left, const T &right) {
+		return StringUtil::Format("(%s %s %s)", left.ToString(), ExpressionTypeToOperator(type), right.ToString());
 	}
 
 private:
 	explicit ComparisonExpression(ExpressionType type);
+	ComparisonExpression();
 };
 } // namespace duckdb

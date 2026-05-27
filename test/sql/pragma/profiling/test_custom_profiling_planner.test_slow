@@ -5,16 +5,13 @@
 require json
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
 PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"PLANNER": "true", "PHYSICAL_PLANNER": "true"}';
+SET tracked_metrics = ['planner.total_time', 'physical_planner.total_time'];
 
 loop i 0 8
 
@@ -39,29 +36,25 @@ statement ok
 PRAGMA disable_profiling;
 
 query I rowsort
-SELECT unnest(res) FROM (
-	SELECT current_setting('custom_profiling_settings') AS raw_setting,
-	raw_setting.trim('{}') AS setting,
-	string_split(setting, ', ') AS res
-) ORDER BY ALL
+SELECT unnest(current_setting('tracked_metrics'))
 ----
-"PHYSICAL_PLANNER": "true"
-"PLANNER": "true"
+physical_planner.total_time
+planner.total_time
 
 statement ok
 CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 query I
-SELECT 
-	CASE WHEN physical_planner > 0 THEN 'true'
+SELECT
+	CASE WHEN physical_planner.total_time > 0 THEN 'true'
     ELSE 'false' END
 FROM metrics_output;
 ----
 true
 
 query I
-SELECT 
-	CASE WHEN planner > 0 THEN 'true'
+SELECT
+	CASE WHEN planner.total_time > 0 THEN 'true'
     ELSE 'false' END
 FROM metrics_output;
 ----

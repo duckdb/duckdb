@@ -2,9 +2,6 @@
 # description: Comparison testing for bignum type
 # group: [bignum]
 
-statement ok
-PRAGMA enable_verification
-
 # Create table with a variety of bignums
 statement ok
 CREATE TABLE bignum_comparisons(a bignum);

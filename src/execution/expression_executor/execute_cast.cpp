@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -37,6 +38,7 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 	parameters.query_location = expr.GetQueryLocation();
 	parameters.cast_source = expr.child.get();
 	parameters.cast_target = expr;
+	idx_t cast_count = count;
 	bool all_constant = child.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	if (all_constant) {
 		// if the input is constant we only need to cast one value
@@ -46,12 +48,25 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 			ConstantVector::SetNull(result, count_t(count));
 			return;
 		}
-		count = 1;
+		// temporarily set the input size to 1
+		FlatVector::SetSize(child, 1ULL);
+		cast_count = 1;
 	}
-	expr.bound_cast.Cast(child, result, count, parameters);
+	expr.bound_cast.Cast(child, result, cast_count, parameters);
 	if (all_constant) {
+		if (child.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			child.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
+		// restore the size of the input vector
+		FlatVector::SetSize(child, count);
+		// ensure the result type is constant
+		if (result.GetVectorType() != VectorType::FLAT_VECTOR &&
+		    result.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			result.Flatten();
+		}
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+	FlatVector::SetSize(result, count_t(count));
 }
 
 } // namespace duckdb
