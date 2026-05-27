@@ -23,14 +23,14 @@ CONNECT my_database;
 ----
 <REGEX>:Invalid Input Error:.*Database "my_database" is not attached.*
 
-# Attached but unsupported backend → SupportsPassthrough() gate fires.
+# Attached but unsupported backend → HasConnectFunction() gate fires.
 statement ok
 ATTACH ':memory:' AS plain_duckdb;
 
 statement error
 CONNECT plain_duckdb;
 ----
-<REGEX>:Invalid Input Error:.*does not support pass-through.*
+<REGEX>:Invalid Input Error:.*does not support CONNECT.*
 
 statement ok
 DETACH plain_duckdb;
@@ -43,8 +43,8 @@ Not implemented Error: CONNECT '<connection_string>' is not yet implemented
 
 # ========================= DISCONNECT =========================
 
-# DISCONNECT; — bare form, IMPLEMENTED. Errors when there is no active binding.
+# DISCONNECT; — bare form, IMPLEMENTED. Errors when there is no active connection.
 statement error
 DISCONNECT;
 ----
-<REGEX>:Invalid Input Error:.*no active CONNECT binding.*
+<REGEX>:Invalid Input Error:.*no active CONNECT.*

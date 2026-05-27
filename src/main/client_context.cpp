@@ -239,9 +239,15 @@ shared_ptr<AttachedDatabase> ClientContext::TryGetConnectedCatalog() const {
 	return connected_to_database.lock();
 }
 
-//! Build `SELECT * FROM <fn>(<catalog>, <sql>)` for the CONNECT-binding rewrite.
-static unique_ptr<SQLStatement> BuildPassthroughSelect(const string &function_name, const string &catalog_name,
-                                                       const string &sql) {
+//! True if `type` is a CONNECT control statement that must execute against LOCAL even while a
+//! CONNECT binding is active (i.e. the chokepoint must let it fall through, not rewrite it).
+static bool IsConnectControlStatement(StatementType type) {
+	return type == StatementType::CONNECT_STATEMENT || type == StatementType::DISCONNECT_STATEMENT;
+}
+
+//! Build `SELECT * FROM <fn>(<catalog>, <sql>)` for the CONNECT rewrite.
+static unique_ptr<SQLStatement> BuildConnectSelect(const string &function_name, const string &catalog_name,
+                                                   const string &sql) {
 	vector<unique_ptr<ParsedExpression>> args;
 	args.push_back(make_uniq<ConstantExpression>(Value(catalog_name)));
 	args.push_back(make_uniq<ConstantExpression>(Value(sql)));
@@ -984,10 +990,28 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
 	// CONNECT chokepoint: when connected, non-control SQL is rewritten in place and falls through to
 	// the normal pipeline. No recursion — the rewrite goes through PendingStatementInternal, not back here.
-	if (is_connected && statement) {
-		bool is_control = statement->type == StatementType::CONNECT_STATEMENT ||
-		                  statement->type == StatementType::DISCONNECT_STATEMENT;
+	if (is_connected) {
+		bool is_control = false;
+		if (statement && IsConnectControlStatement(statement->type)) {
+			is_control = true;
+		}
 		if (!is_control) {
+			if (!statement) {
+				// Prepared-statement execution path (statement is null, prepared is set). Parameterized
+				// prepared statements would need parameter substitution we don't do in v0 — reject.
+				// No-param prepared statements have a fully-resolved `query` already, route them.
+				if (!prepared || prepared->properties.parameter_count > 0) {
+					return ErrorResult<PendingQueryResult>(
+					    ErrorData(InvalidInputException(
+					        "Parameterized prepared statements cannot be executed while CONNECTed; "
+					        "DISCONNECT first, or run the SQL as a fresh statement to route through "
+					        "the CONNECT binding")),
+					    query);
+				}
+				// Clear prepared so the rest of the function takes the fresh-statement path on the
+				// rewritten SELECT below.
+				prepared.reset();
+			}
 			auto live = connected_to_database.lock();
 			if (!live) {
 				// Target was detached elsewhere; user must explicitly DISCONNECT to clear is_connected.
@@ -1000,12 +1024,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			auto fn_name = live->GetCatalog().GetConnectFunctionName(*this);
 			if (fn_name.empty()) {
 				return ErrorResult<PendingQueryResult>(
-				    ErrorData(InvalidInputException(
-				        "Catalog \"%s\" reports CONNECT support but GetConnectFunctionName() returned no name",
-				        live->GetName())),
+				    ErrorData(InvalidInputException("CONNECT is not available for catalog \"%s\" in this context",
+				                                    live->GetName())),
 				    query);
 			}
-			statement = BuildPassthroughSelect(fn_name, live->GetName(), query);
+			statement = BuildConnectSelect(fn_name, live->GetName(), query);
 			// statement is now SELECT * FROM <fn>('cat', '<sql>'); fall through.
 		}
 	}
