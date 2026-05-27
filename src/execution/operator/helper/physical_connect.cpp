@@ -37,10 +37,8 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		throw InvalidInputException("Database \"%s\" is not attached", info->name);
 	}
 	auto ext = target->GetStorageExtension();
-	if (!ext || !ext->SupportsPassthrough()) {
-		throw InvalidInputException(
-		    "Database \"%s\" does not support pass-through SQL execution (CONNECT).",
-		    info->name);
+	if (!ext || !ext->HasConnectFunction()) {
+		throw InvalidInputException("Database \"%s\" does not support CONNECT", info->name);
 	}
 	client.ConnectToCatalog(target);
 	return SourceResultType::FINISHED;

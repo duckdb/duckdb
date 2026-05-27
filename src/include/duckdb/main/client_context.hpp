@@ -347,7 +347,7 @@ private:
 	QueryProgress query_progress;
 	//! The connection corresponding to this client context
 	connection_t connection_id;
-	//! Routing target for pass-through SQL execution (CONNECT/DISCONNECT).
+	//! Routing target for SQL execution while CONNECTed (CONNECT/DISCONNECT).
 	//! When is_connected is true and connected_to_database can be locked, non-control SQL is rewritten
 	//! at the chokepoint as `SELECT * FROM <fn>('cat', '<sql>')` and runs through the normal pipeline.
 	weak_ptr<AttachedDatabase> connected_to_database;

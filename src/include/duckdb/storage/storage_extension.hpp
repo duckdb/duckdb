@@ -41,7 +41,7 @@ public:
 
 	//! Whether catalogs from this storage extension accept `CONNECT name`. Default false; backends opt in
 	//! by overriding this AND Catalog::GetConnectFunctionName. Gates CONNECT before the first query runs.
-	virtual bool SupportsPassthrough() const {
+	virtual bool HasConnectFunction() const {
 		return false;
 	}
 

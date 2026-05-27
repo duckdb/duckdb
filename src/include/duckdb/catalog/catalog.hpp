@@ -415,10 +415,10 @@ public:
 	//! Called when the catalog is detached
 	DUCKDB_API virtual void OnDetach(ClientContext &context);
 
-	//! Name of a catalog-registered table function `(catalog_name, sql_string) -> rows` that handles bound
-	//! pass-through SQL. When non-empty, the CONNECT dispatch rewrites bound SQL as
-	//! `SELECT * FROM <name>('cat', '<sql>')`. Default empty; backends that opt into
-	//! StorageExtension::SupportsPassthrough() should return a registered function name here. Context
+	//! Name of a catalog-registered table function `(catalog_name, sql_string) -> rows` that handles
+	//! routed SQL while CONNECTed to this catalog. When non-empty, the CONNECT dispatch rewrites
+	//! routed SQL as `SELECT * FROM <name>('cat', '<sql>')`. Default empty; backends that opt into
+	//! StorageExtension::HasConnectFunction() should return a registered function name here. Context
 	//! is supplied so backends can pick a variant based on session SETtings.
 	DUCKDB_API virtual string GetConnectFunctionName(ClientContext &context);
 

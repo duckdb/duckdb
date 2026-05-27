@@ -7,7 +7,7 @@ index eaad115..c612dab 100644
  public:
  	QuackStorageExtension();
 +
-+	bool SupportsPassthrough() const override {
++	bool HasConnectFunction() const override {
 +		return true;
 +	}
  };
