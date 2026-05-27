@@ -1,6 +1,9 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/parser/query_node/recursive_cte_node.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "json_deserializer.hpp"
@@ -177,6 +180,48 @@ ScalarFunctionSet JSONFunctions::GetSerializeSqlFunction() {
 //----------------------------------------------------------------------
 // JSON DESERIALIZE
 //----------------------------------------------------------------------
+static void ValidateDeserializedQueryNode(const QueryNode &node) {
+	for (const auto &cte_entry : node.cte_map.map) {
+		if (!cte_entry.second || !cte_entry.second->query_node) {
+			throw ParserException("Error parsing json: CTE query node cannot be null");
+		}
+		ValidateDeserializedQueryNode(*cte_entry.second->query_node);
+	}
+
+	switch (node.type) {
+	case QueryNodeType::SELECT_NODE: {
+		auto &select_node = node.Cast<SelectNode>();
+		for (const auto &select_entry : select_node.select_list) {
+			if (!select_entry) {
+				throw ParserException("Error parsing json: SELECT node select_list cannot contain null values");
+			}
+		}
+		break;
+	}
+	case QueryNodeType::SET_OPERATION_NODE: {
+		auto &setop_node = node.Cast<SetOperationNode>();
+		for (const auto &child : setop_node.children) {
+			if (!child) {
+				throw ParserException("Error parsing json: set operation child cannot be null");
+			}
+			ValidateDeserializedQueryNode(*child);
+		}
+		break;
+	}
+	case QueryNodeType::RECURSIVE_CTE_NODE: {
+		auto &recursive_cte = node.Cast<RecursiveCTENode>();
+		if (!recursive_cte.left || !recursive_cte.right) {
+			throw ParserException("Error parsing json: recursive CTE children cannot be null");
+		}
+		ValidateDeserializedQueryNode(*recursive_cte.left);
+		ValidateDeserializedQueryNode(*recursive_cte.right);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
 static vector<unique_ptr<SelectStatement>> DeserializeSelectStatement(string_t input, yyjson_alc *alc) {
 	auto doc = yyjson_doc_ptr(JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc));
 	if (!doc) {
@@ -214,6 +259,7 @@ static vector<unique_ptr<SelectStatement>> DeserializeSelectStatement(string_t i
 		if (!stmt->node) {
 			throw ParserException("Error parsing json: no select node found in json");
 		}
+		ValidateDeserializedQueryNode(*stmt->node);
 		result.push_back(std::move(stmt));
 	}
 

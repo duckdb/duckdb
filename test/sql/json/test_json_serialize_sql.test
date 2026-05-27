@@ -126,6 +126,14 @@ SELECT * FROM json_execute_serialized_sql('{ "statements": [ {"expression_class"
 ----
 Parser Error: Error parsing json: no select node found in json
 
+# Null entries in the select list should not produce an internal error
+statement error
+SELECT json_deserialize_sql($json$
+{"error":false,"statements":[{"node":{"type":"SELECT_NODE","modifiers":[],"cte_map":{"map":[]},"select_list":[null],"from_table":{"type":"EMPTY","alias":"","sample":null,"query_location":18446744073709551615},"where_clause":null,"group_expressions":[],"group_sets":[],"aggregate_handling":"STANDARD_HANDLING","having":null,"sample":null,"qualify":null}}]}
+$json$);
+----
+Parser Error: Error parsing json: SELECT node select_list cannot contain null values
+
 # Test execute json serialized sql with multiple select nodes
 query I
 SELECT json_deserialize_sql(json_serialize_sql('SELECT 1;SELECT 2'));
