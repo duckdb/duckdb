@@ -24,10 +24,10 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 
 	auto &client = context.client;
 
-	// At most one active binding; only DISCONNECT clears it (even if the target was detached
-	// elsewhere, so the user explicitly acknowledges the broken binding).
-	if (client.is_bound) {
-		auto current = client.TryGetBoundCatalog();
+	// At most one active connection; only DISCONNECT clears it (even if the target was detached
+	// elsewhere, so the user explicitly acknowledges the broken connection).
+	if (client.IsConnected()) {
+		auto current = client.TryGetConnectedCatalog();
 		throw InvalidInputException("Already connected to \"%s\"; DISCONNECT first before issuing another CONNECT",
 		                            current ? current->GetName() : "<detached>");
 	}
@@ -44,7 +44,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		    "Catalog::GetConnectFunction().",
 		    info->name);
 	}
-	client.BindToCatalog(target);
+	client.ConnectToCatalog(target);
 	return SourceResultType::FINISHED;
 }
 

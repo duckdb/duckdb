@@ -221,22 +221,22 @@ unique_ptr<ClientContextLock> ClientContext::LockContext() {
 	return make_uniq<ClientContextLock>(context_lock);
 }
 
-void ClientContext::BindToCatalog(const shared_ptr<AttachedDatabase> &target) {
+void ClientContext::ConnectToCatalog(const shared_ptr<AttachedDatabase> &target) {
 	D_ASSERT(target);
-	bound_database = target;
-	is_bound = true;
+	connected_to_database = target;
+	is_connected = true;
 }
 
-void ClientContext::UnbindCatalog() {
-	bound_database.reset();
-	is_bound = false;
+void ClientContext::DisconnectFromCatalog() {
+	connected_to_database.reset();
+	is_connected = false;
 }
 
-shared_ptr<AttachedDatabase> ClientContext::TryGetBoundCatalog() const {
-	if (!is_bound) {
+shared_ptr<AttachedDatabase> ClientContext::TryGetConnectedCatalog() const {
+	if (!is_connected) {
 		return nullptr;
 	}
-	return bound_database.lock();
+	return connected_to_database.lock();
 }
 
 //! Build `SELECT * FROM <fn>(<catalog>, <sql>)` for the CONNECT-binding rewrite.
@@ -982,19 +982,19 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatement(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
-	// CONNECT chokepoint: when bound, non-control SQL is rewritten in place and falls through to
+	// CONNECT chokepoint: when connected, non-control SQL is rewritten in place and falls through to
 	// the normal pipeline. No recursion — the rewrite goes through PendingStatementInternal, not back here.
-	if (is_bound && statement) {
+	if (is_connected && statement) {
 		bool is_control = statement->type == StatementType::CONNECT_STATEMENT ||
 		                  statement->type == StatementType::DISCONNECT_STATEMENT;
 		if (!is_control) {
-			auto live = bound_database.lock();
+			auto live = connected_to_database.lock();
 			if (!live) {
-				// Target was detached elsewhere; user must explicitly DISCONNECT to clear is_bound.
+				// Target was detached elsewhere; user must explicitly DISCONNECT to clear is_connected.
 				return ErrorResult<PendingQueryResult>(
 				    ErrorData(InvalidInputException(
-				        "The bound database has been detached out from under this connection. Issue "
-				        "DISCONNECT to clear the binding before running further SQL.")),
+				        "The connected database has been detached out from under this connection. Issue "
+				        "DISCONNECT to clear the connection before running further SQL.")),
 				    query);
 			}
 			auto fn_name = live->GetCatalog().GetConnectFunctionName(*this);

@@ -98,22 +98,20 @@ public:
 	//! Data for the currently running transaction
 	TransactionContext transaction;
 
-	//! Routing target for pass-through SQL execution (CONNECT/DISCONNECT).
-	//! When is_bound is true and bound_database can be locked, non-control SQL is rewritten at
-	//! the chokepoint as `SELECT * FROM <fn>('cat', '<sql>')` and runs through the normal pipeline.
-	weak_ptr<AttachedDatabase> bound_database;
-	bool is_bound = false;
-
 public:
-	//! Bind this client to a remote-style AttachedDatabase. Subsequent non-control SQL routes via
-	//! Catalog::GetConnectFunctionName. Use UnbindCatalog() to revert to LOCAL.
-	DUCKDB_API void BindToCatalog(const shared_ptr<AttachedDatabase> &target);
-	//! Clear any active CONNECT binding; subsequent SQL goes through the normal DuckDB pipeline.
-	DUCKDB_API void UnbindCatalog();
-	//! Resolve the currently-bound AttachedDatabase. Returns nullptr if unbound or if the target
-	//! has been detached out from under us (in that case is_bound is still true — read it directly
-	//! to disambiguate "never connected" from "was connected, target was detached elsewhere").
-	DUCKDB_API shared_ptr<AttachedDatabase> TryGetBoundCatalog() const;
+	//! Connect this client to a remote-style AttachedDatabase. Subsequent non-control SQL routes via
+	//! Catalog::GetConnectFunctionName. Use DisconnectFromCatalog() to revert to LOCAL.
+	DUCKDB_API void ConnectToCatalog(const shared_ptr<AttachedDatabase> &target);
+	//! Clear any active CONNECT; subsequent SQL goes through the normal DuckDB pipeline.
+	DUCKDB_API void DisconnectFromCatalog();
+	//! True iff a CONNECT is currently active (even if the target was detached out from under us).
+	DUCKDB_API bool IsConnected() const {
+		return is_connected;
+	}
+	//! Resolve the currently-connected AttachedDatabase. Returns nullptr if not connected or if the
+	//! target has been detached out from under us (in that case IsConnected() is still true — call it
+	//! directly to disambiguate "never connected" from "was connected, target was detached elsewhere").
+	DUCKDB_API shared_ptr<AttachedDatabase> TryGetConnectedCatalog() const;
 
 	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
@@ -349,6 +347,11 @@ private:
 	QueryProgress query_progress;
 	//! The connection corresponding to this client context
 	connection_t connection_id;
+	//! Routing target for pass-through SQL execution (CONNECT/DISCONNECT).
+	//! When is_connected is true and connected_to_database can be locked, non-control SQL is rewritten
+	//! at the chokepoint as `SELECT * FROM <fn>('cat', '<sql>')` and runs through the normal pipeline.
+	weak_ptr<AttachedDatabase> connected_to_database;
+	bool is_connected = false;
 };
 
 class ClientContextLock {
