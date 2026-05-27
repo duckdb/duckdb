@@ -1911,5 +1911,100 @@ select count(rpc.main.t1.i) from rpc.main.t1 join local_t on (i = local_col)
 statement ok
 drop table local_t;
 
+# ============================================================
+# Bug 39: RenameTableInExpr did not handle struct field access
+# in 3+-part refs after catalog stripping.
+#
+# When a remote table with a struct column is individually pushed
+# in a mixed JOIN, rpc.t1.info.val becomes t1.info.val (3-part)
+# after StripCatalogName.  Previously RenameTableInExpr only
+# renamed 2-part refs (table.col → alias.col), so t1.info.val
+# was left unmodified and the binder failed to resolve "t1"
+# against the TABLE_FUNCTION alias.
+#
+# Fix: Case 3 in RenameTableInExpr renames col[0] when size>=3
+# and col[0]==old_table, covering t1.struct_col.field...
+# ============================================================
+
+statement ok db1:con1
+create table t1_struct(id int, info struct(val int));
+
+statement ok db1:con1
+insert into t1_struct values (1, {'val': 10}), (2, {'val': 20}), (3, {'val': 30});
+
+statement ok
+create table local_struct(id int);
+
+statement ok
+insert into local_struct values (1), (2), (3);
+
+# Bug 39a: struct field in SELECT of mixed join — no alias
+query I
+select rpc.t1_struct.info.val from rpc.t1_struct join local_struct on (rpc.t1_struct.id = local_struct.id) order by 1
+----
+10
+20
+30
+
+# Bug 39b: struct field in SELECT of mixed join — with explicit alias
+query I
+select rpc.t1_struct.info.val from rpc.t1_struct as ts join local_struct on (rpc.t1_struct.id = local_struct.id) order by 1
+----
+10
+20
+30
+
+# Bug 39c: struct field in WHERE of mixed join
+query I
+select rpc.t1_struct.id from rpc.t1_struct join local_struct on (rpc.t1_struct.id = local_struct.id) where rpc.t1_struct.info.val > 15 order by 1
+----
+2
+3
+
+# ============================================================
+# Bug 40: RenameTableInExpr did not handle schema-qualified
+# struct field access in 4+-part refs after catalog stripping.
+#
+# When a remote table is referenced with an explicit schema
+# (e.g. rpc.main.t1_struct) and has a struct column, the
+# expression rpc.main.t1_struct.info.val is 5-part.
+# StripCatalogName("rpc") reduces it to main.t1_struct.info.val
+# (4-part).  Previously RenameTableInExpr had no case for
+# size>=4 with col[1]==old_table, so main.t1_struct.info.val
+# was left unchanged and the binder failed.
+#
+# Fix: Case 4 in RenameTableInExpr strips the schema prefix and
+# renames the table: main.t1_struct.info.val → alias.info.val.
+# ============================================================
+
+# Bug 40a: schema-qualified struct field in SELECT — no alias
+query I
+select rpc.main.t1_struct.info.val from rpc.main.t1_struct join local_struct on (rpc.main.t1_struct.id = local_struct.id) order by 1
+----
+10
+20
+30
+
+# Bug 40b: schema-qualified struct field in SELECT — with alias
+query I
+select rpc.main.t1_struct.info.val from rpc.main.t1_struct as ts join local_struct on (rpc.main.t1_struct.id = local_struct.id) order by 1
+----
+10
+20
+30
+
+# Bug 40c: schema-qualified struct field in WHERE
+query I
+select rpc.main.t1_struct.id from rpc.main.t1_struct join local_struct on (rpc.main.t1_struct.id = local_struct.id) where rpc.main.t1_struct.info.val > 15 order by 1
+----
+2
+3
+
+statement ok
+drop table local_struct;
+
+statement ok db1:con1
+drop table t1_struct;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
