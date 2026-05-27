@@ -502,7 +502,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	child_results.reserve(node.children.size());
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
 	for (auto &child : node.children) {
-		auto saved_child = child->Copy();
 		RemotePushdownOptimizer child_optimizer(*this);
 		auto child_result = child_optimizer.Rewrite(*child);
 		result = Merge(result, child_result);
@@ -591,6 +590,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 					}
 				}
 			}
+		}
+		// Even though the whole set op cannot be pushed (UNKNOWN/mixed), individual remote children
+		// can still be pushed independently. The ORDER BY refers to output column names and resolves
+		// against whichever form the child produces — bare column names after stripping work fine.
+		for (idx_t i = 0; i < node.children.size(); i++) {
+			FinishPushdown(node.children[i], child_results[i]);
 		}
 		return result;
 	}
