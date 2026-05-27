@@ -60,7 +60,7 @@ def extract_declarations(setting) -> str:
     return definition
 
 
-# generate code for all the settings for the the header file
+# generate code for all the settings for the header file
 def generate_content(header_file_path):
     with open(header_file_path, 'r') as source_file:
         source_code = source_file.read()
