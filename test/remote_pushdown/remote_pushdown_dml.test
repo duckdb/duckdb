@@ -275,5 +275,66 @@ drop table local_del
 statement ok
 drop table local_j
 
+# --- All-remote DELETE USING with a second remote table ---
+#
+# When both the DELETE target and the USING table are in the same remote catalog,
+# the entire statement is pushed as a single remote query (no local execution).
+
+statement ok db1:con1
+create table t2(j int);
+
+statement ok db1:con1
+insert into t2 values (3), (4), (5), (6);
+
+# rpc.t1={0..9}, rpc.t2.j={3,4,5,6}; delete t1 rows where t1.i = t2.j -> removes {3,4,5,6}
+statement ok
+delete from rpc.t1 using rpc.t2 where rpc.t1.i = rpc.t2.j
+
+query I
+select count(*) from rpc.t1
+----
+6
+
+query II
+select min(i), max(i) from rpc.t1
+----
+0	9
+
+# Restore t1 to {0..9}
+statement ok db1:con1
+delete from t1 where true
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+# --- All-remote UPDATE FROM with a second remote table ---
+#
+# When both the UPDATE target and the FROM table are in the same remote catalog,
+# the entire UPDATE is pushed as a single remote query.
+
+# rpc.t2.j={3,4,5,6}; update t1.i += 10 where t1.i = t2.j -> rows 3,4,5,6 become 13,14,15,16
+statement ok
+update rpc.t1 set i = rpc.t1.i + 10 from rpc.t2 where rpc.t1.i = rpc.t2.j
+
+query I
+select count(*) from rpc.t1 where i >= 10
+----
+4
+
+query II
+select min(i), max(i) from rpc.t1 where i >= 10
+----
+13	16
+
+statement ok db1:con1
+drop table t2;
+
+# Restore t1 to {0..9}
+statement ok db1:con1
+delete from t1 where true
+
+statement ok db1:con1
+insert into t1 from range(10);
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
