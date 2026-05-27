@@ -170,6 +170,8 @@ void PEGTransformerFactory::RegisterCommon() {
 	REGISTER_TRANSFORM(TransformTypeModifiers);
 	REGISTER_TRANSFORM(TransformSimpleType);
 	REGISTER_TRANSFORM(TransformQualifiedTypeName);
+	REGISTER_TRANSFORM(TransformSchemaReservedTypeName);
+	REGISTER_TRANSFORM(TransformCatalogReservedSchemaTypeName);
 	REGISTER_TRANSFORM(TransformCharacterType);
 	REGISTER_TRANSFORM(TransformMapType);
 	REGISTER_TRANSFORM(TransformRowType);

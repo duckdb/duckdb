@@ -21,7 +21,7 @@ select 'abc'::main.char;
 statement error
 select cast(1 as memory.main.bla.text);
 ----
-Too many qualifications 
+<REGEX>:.*syntax error.*
 
 foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint uhugeint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
 
