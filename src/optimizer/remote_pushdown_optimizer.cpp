@@ -601,7 +601,6 @@ void RemotePushdownOptimizer::TrackLocalTable(const SubqueryRef &ref) {
 	}
 }
 
-
 bool RemotePushdownOptimizer::IsLocalMacro(const FunctionExpression &func) {
 	// If explicitly qualified with a catalog, check whether that catalog is remote
 	if (!func.catalog.empty()) {
@@ -745,7 +744,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const CastExpression &cas
 	return result;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const string &catalog_p, const string &schema_p) {
+CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const string &catalog_p,
+                                                                         const string &schema_p) {
 	string catalog_name = catalog_p;
 	string schema_name = schema_p;
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
@@ -784,10 +784,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const ColumnRefExpression
 	return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
 }
 
-
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 	CatalogPushdownResult result;
-	switch(expr.GetExpressionClass()) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::SUBQUERY:
 		result = Rewrite(expr.Cast<SubqueryExpression>());
 		break;
@@ -1271,17 +1270,12 @@ void RemotePushdownOptimizer::FinishPushdown(unique_ptr<QueryNode> &node, Catalo
 	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		return;
 	}
-	// If any outer CTE is in scope that is SINGLE_REMOTE or NO_CATALOG_REFERENCED, this node may
-	// reference it by name. Pushing the node standalone (without its WITH definition) would
-	// serialize a reference to a CTE that doesn't exist on the remote server. Skip pushdown so
-	// the node executes locally where the CTE definition is available.
-	// SINGLE_REMOTE CTEs: child arm may be SINGLE_REMOTE via the CTE reference alone.
-	// NO_CATALOG CTEs: Merge(SINGLE_REMOTE, NO_CATALOG) = SINGLE_REMOTE, so a child arm can be
-	// classified SINGLE_REMOTE even while referencing a constant outer CTE (e.g. WITH zero AS
-	// (SELECT 0)); the pushed SQL references the CTE by name without its definition.
-	// UNKNOWN CTEs are skipped: a child that references an UNKNOWN CTE would itself be UNKNOWN
-	// (not SINGLE_REMOTE), so FinishPushdown would return early at the first check above.
-	for (const RemotePushdownOptimizer *opt = this; opt; opt = opt->parent.get()) {
+	// FIXME: work-around for referencing a CTE in a parent
+	// if this query refers to a CTE in the parent we can't push down only this node
+	// as the parent CTE is lost. For now we just block all pushdown if the parent has a CTE.
+	// we could fix this in a better way by either (1) moving the parent CTE into this node
+	// or (2) tracking if we actually refer to a parent CTE
+	for (auto opt = this; opt; opt = opt->parent.get()) {
 		for (auto &cte_entry : opt->cte_results) {
 			auto ref_type = cte_entry.second.reference_type;
 			if (ref_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG ||
