@@ -416,7 +416,7 @@ public:
 	DUCKDB_API virtual void OnDetach(ClientContext &context);
 
 	//! Name of a catalog-registered table function `(catalog_name, sql_string) -> rows` that handles
-	//! routed SQL while CONNECTed to this catalog. When non-empty, the CONNECT dispatch rewrites
+	//! routed SQL while CONNECT-ed to this catalog. When non-empty, the CONNECT dispatch rewrites
 	//! routed SQL as `SELECT * FROM <name>('cat', '<sql>')`. Default empty (= CONNECT not supported);
 	//! backends opt in by overriding this to return a registered function name. Resolved ONCE at
 	//! CONNECT time and cached on the ClientContext — per-context variation (e.g. picking a variant

@@ -1012,7 +1012,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 				if (!prepared || prepared->properties.parameter_count > 0) {
 					return ErrorResult<PendingQueryResult>(
 					    ErrorData(InvalidInputException(
-					        "Parameterized prepared statements cannot be executed while CONNECTed; "
+					        "Parameterized prepared statements cannot be executed while CONNECT-ed; "
 					        "DISCONNECT first, or run the SQL as a fresh statement to route through "
 					        "the CONNECT binding")),
 					    query);
