@@ -2006,5 +2006,45 @@ drop table local_struct;
 statement ok db1:con1
 drop table t1_struct;
 
+# ============================================================
+# Bug 41: Rewrite(BaseTableRef) Case 2 only checked TABLE_ENTRY
+# in local catalogs, not VIEW_ENTRY.  A local view referenced
+# without a catalog qualifier was not found → incorrectly
+# classified as SINGLE_REMOTE → pushed to quack as SQL that
+# the remote server cannot execute (view not defined there).
+#
+# Fix: also check VIEW_ENTRY in the local catalog search loop.
+# ============================================================
+
+statement ok
+create view local_v as select * from range(5) t(i)
+
+# Verify local view is usable locally
+query I
+select count(*) from local_v
+----
+5
+
+# Mixed query: local view + remote table.
+# Without the fix, local_v was classified as SINGLE_REMOTE
+# and the query was incorrectly pushed to quack → error.
+# With the fix, local_v is UNKNOWN → executes locally.
+query I
+select count(*) from rpc.t1 join local_v on (rpc.t1.i = local_v.i)
+----
+5
+
+query I
+select local_v.i from rpc.t1 join local_v on (rpc.t1.i = local_v.i) order by 1
+----
+0
+1
+2
+3
+4
+
+statement ok
+drop view local_v
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
