@@ -126,7 +126,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 		auto &cte_info = *cte_pair.second;
 		CatalogPushdownResult cte_result;
 		if (cte_info.query_node) {
-			RemotePushdownOptimizer child_optimizer(*this);
+			RemotePushdownOptimizer child_optimizer(this);
 			cte_result = child_optimizer.Rewrite(*cte_info.query_node);
 		} else {
 			cte_result = {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
@@ -173,15 +173,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
-	RemotePushdownOptimizer left_optimizer(*this);
+	RemotePushdownOptimizer left_optimizer(this);
 	CatalogPushdownResult left_result = left_optimizer.Rewrite(*node.left);
 
 	// for recursive CTEs - the right-hand side of the CTE can refer to the recursive CTE itself
 	// we use whatever the CatalogPushdownResult of the LHS was to count this reference
-	RemotePushdownOptimizer recursive_optimizer(*this);
+	RemotePushdownOptimizer recursive_optimizer(this);
 	recursive_optimizer.cte_results[node.ctename] = left_result;
 
-	RemotePushdownOptimizer right_optimizer(recursive_optimizer);
+	RemotePushdownOptimizer right_optimizer(&recursive_optimizer);
 	CatalogPushdownResult right_result = right_optimizer.Rewrite(*node.right);
 
 	auto result = Merge(left_result, right_result);
@@ -304,10 +304,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 	target_ref.schema_name = node.schema;
 	target_ref.table_name = node.table;
 
-	RemotePushdownOptimizer target_optimizer(*this);
+	RemotePushdownOptimizer target_optimizer(this);
 	auto result = target_optimizer.Rewrite(target_ref);
 	if (node.select_statement) {
-		RemotePushdownOptimizer select_optimizer(*this);
+		RemotePushdownOptimizer select_optimizer(this);
 		auto select_result = select_optimizer.Rewrite(*node.select_statement->node);
 		result = Merge(result, select_result);
 		if (select_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
@@ -390,7 +390,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	child_results.reserve(node.children.size());
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
 	for (auto &child : node.children) {
-		RemotePushdownOptimizer child_optimizer(*this);
+		RemotePushdownOptimizer child_optimizer(this);
 		auto child_result = child_optimizer.Rewrite(*child);
 		result = Merge(result, child_result);
 		child_results.push_back(child_result);
@@ -492,7 +492,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ExpressionListRef &ref) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SubqueryRef &ref) {
-	RemotePushdownOptimizer child_binder(*this);
+	RemotePushdownOptimizer child_binder(this);
 	auto result = child_binder.Rewrite(*ref.subquery->node);
 	if (result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
 		TrackLocalTable(ref);
@@ -564,7 +564,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	auto left_result = Rewrite(ref.left);
 
 	// the right side of a join can be correlated to the left side - use a child optimizer to track this
-	RemotePushdownOptimizer child_optimizer(*this);
+	RemotePushdownOptimizer child_optimizer(this);
 	auto right_result = child_optimizer.Rewrite(ref.right);
 
 	auto result = Merge(left_result, right_result);
@@ -731,7 +731,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const LogicalType &type) 
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const SubqueryExpression &subquery_expr) {
-	RemotePushdownOptimizer child_optimizer(*this);
+	RemotePushdownOptimizer child_optimizer(this);
 	return child_optimizer.Rewrite(*subquery_expr.subquery->node);
 }
 
