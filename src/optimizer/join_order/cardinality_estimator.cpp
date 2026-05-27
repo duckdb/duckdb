@@ -399,6 +399,10 @@ bool CardinalityEstimator::ApplyJoinIncrement(double &target_denom, FilterInfoWi
 		if (GetActiveEqualityClassCount(*target_pair, scope) < 2) {
 			return false;
 		}
+		if (capped_join_pairs.find(*target_pair) != capped_join_pairs.end()) {
+			// The composite-key cap already accounts for same-pair equality predicates.
+			return true;
+		}
 		return ApplyJoinPairCap(target_denom, *target_pair, join_pair_first_d, capped_join_pairs);
 	}
 
@@ -657,18 +661,13 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	return CreateDenominatorResult(set, state);
 }
 
-// Cardinality is calculated using logic found in
-// https://blobs.duckdb.org/papers/tom-ebergen-msc-thesis-join-order-optimization-with-almost-no-statistics.pdf TL;DR
-// Cardinality is estimated based on cardinality of base tables and the distinct counts of joined columns. If you have
-// two tables A and B joined using A.x = B.y we assume that each tuple in A will match ~ B/(distinct(y)) tuples in B.
-// The cardinality estimation then becomes (|A|x|B|) / max(distinct(x), distinct(y)).
-// If there are extra joins, you can add the cardinality of the table to the numerator, and the
-// distinct count of the join condition to the denominator.
-// One benefit of this cardinality estimation formula is that it is associative and commutative, which means regardless
-// of the order of the joins/join tree, the cardinality estimate will always be the same. The drawback of this current
-// implementation, however, is that it only considers equality join conditions. Some modification have been made for
-// comparison types like <, <=, >, >=, !=, but only a "penalty" was introduced, and the calculated cardinality is not
-// based on stats (see CalculateUpdatedDenom()).
+// Cardinality is calculated using logic based on
+// https://blobs.duckdb.org/papers/tom-ebergen-msc-thesis-join-order-optimization-with-almost-no-statistics.pdf
+//
+// The estimator starts with base relation cardinalities and divides by a denominator assembled from predicate domain
+// groups. INNER equality predicates use transitive equality classes, composite same-pair equalities can apply an FK/PK
+// cap, disconnected predicate subgraphs are merged by cross product, and LEFT/SEMI/ANTI joins adjust the numerator side
+// according to their output semantics. Non-equality predicates still use a heuristic total-domain penalty.
 template <>
 double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
 	double result;

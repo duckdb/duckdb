@@ -36,6 +36,26 @@ create table li as select
     range % 200000 l_partkey
 from range(600000);
 
+# Same-pair composite equalities should not be counted as unused edges after
+# the composite-key cap has already been applied. The estimate should remain
+# at the one-to-one join size rather than being divided by an extra penalty.
+
+statement ok
+create table ck_a as select range::integer x, range::integer y from range(1000);
+
+statement ok
+create table ck_b as select range::integer x, range::integer y from range(1000);
+
+query II
+explain select count(*) from ck_a join ck_b on ck_a.x = ck_b.x and ck_a.y = ck_b.y;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~1.000 rows.*
+
+query I
+select count(*) from ck_a join ck_b on ck_a.x = ck_b.x and ck_a.y = ck_b.y;
+----
+1000
+
 # --------------------------------------------------------------------------
 # Q9-like 3-way join: ps_suppkey=l_suppkey AND s_suppkey=l_suppkey AND
 # ps_partkey=l_partkey. DuckDB derives the transitive condition
