@@ -1260,6 +1260,11 @@ void RemotePushdownOptimizer::RenameTableInExpr(ParsedExpression &expr, const st
 			// further reduce schema.table.col → alias.col so the binder can resolve the reference
 			// against the TABLE_FUNCTION alias (which has no schema prefix in its registration).
 			col_ref.column_names = {new_alias, col_ref.column_names[2]};
+		} else if (col_ref.column_names.size() >= 3 && StringUtil::CIEquals(col_ref.column_names[0], old_table)) {
+			// After StripCatalogName reduced catalog.table.struct_col.field → table.struct_col.field
+			// (3+-part), rename the table prefix in-place to the alias so that struct access like
+			// rpc.t1.info.val (→ t1.info.val after strip) binds against the TABLE_FUNCTION alias.
+			col_ref.column_names[0] = new_alias;
 		}
 		return;
 	}
