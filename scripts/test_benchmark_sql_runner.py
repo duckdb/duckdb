@@ -20,7 +20,10 @@ def run_sql_file(cli: str, db_path: str, sql_path: str, benchmark_dir: str) -> N
 
 def run_benchmark_dir(cli: str, benchmark_dir: str) -> None:
     benchmark_name = os.path.basename(os.path.normpath(benchmark_dir))
-    db_path = f"{benchmark_name}.duckdb"
+    build_dir = "build"
+    os.makedirs(build_dir, exist_ok=True)
+    db_path = os.path.join(build_dir, f"{benchmark_name}.duckdb")
+    wal_path = f"{db_path}.wal"
 
     try:
         run_sql_file(cli, db_path, os.path.join(benchmark_dir, "init", "schema.sql"), benchmark_dir)
@@ -32,6 +35,8 @@ def run_benchmark_dir(cli: str, benchmark_dir: str) -> None:
     finally:
         if os.path.exists(db_path):
             os.remove(db_path)
+        if os.path.exists(wal_path):
+            os.remove(wal_path)
 
 
 def main() -> int:
