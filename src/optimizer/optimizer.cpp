@@ -416,7 +416,7 @@ void Optimizer::RunBuiltInOptimizers() {
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
 	auto &config = ClientConfig::GetConfig(context);
 	if (!config.enable_optimizer) {
-		return std::move(plan_p);
+		return plan_p;
 	}
 	Verify(*plan_p);
 
