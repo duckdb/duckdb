@@ -24,9 +24,8 @@ create table local_t(i int);
 statement ok
 insert into local_t from range(10);
 
-# --- Non-recursive CTE: all remote -> pushed ---
+# --- Non-recursive CTE: all remote → pushed ---
 
-# Simple CTE referencing remote table
 query II
 explain with cte as (select * from rpc.t1) select * from cte
 ----
@@ -37,13 +36,11 @@ with cte as (select * from rpc.t1 where i > 5) select count(*) from cte
 ----
 4
 
-# CTE with filter and aggregate
 query I
 with cte as (select i from rpc.t1 where i < 5) select sum(i) from cte
 ----
 10
 
-# CTE with LIMIT
 query II
 explain with cte as (select * from rpc.t1 limit 5) select count(*) from cte
 ----
@@ -54,35 +51,35 @@ with cte as (select * from rpc.t1 order by i limit 5) select count(*) from cte
 ----
 5
 
-# CTE used twice via self-join: all remote -> pushed
+# CTE used twice via self-join
 query II
 explain with cte as (select i from rpc.t1 where i < 5)
 select count(*) from cte a join cte b on a.i = b.i
 ----
 physical_plan	<!REGEX>:.*SEQ_SCAN.*
 
-# Self-join of {0..4}: 5 matching pairs
+# {0..4} self-join: 5 matching pairs
 query I
 with cte as (select i from rpc.t1 where i < 5)
 select count(*) from cte a join cte b on a.i = b.i
 ----
 5
 
-# CTE referenced in WHERE subquery: all remote -> pushed
+# CTE referenced in WHERE subquery
 query II
 explain with cte as (select i from rpc.t1 where i > 7)
 select count(*) from rpc.t1 where i in (select i from cte)
 ----
 physical_plan	<!REGEX>:.*SEQ_SCAN.*
 
-# cte = {8,9}; t1 WHERE i in {8,9} = 2 rows
+# cte={8,9}; t1 WHERE i in {8,9} = 2 rows
 query I
 with cte as (select i from rpc.t1 where i > 7)
 select count(*) from rpc.t1 where i in (select i from cte)
 ----
 2
 
-# --- Chained CTEs: all remote -> pushed ---
+# --- Chained CTEs ---
 
 query II
 explain with c1 as (select * from rpc.t1), c2 as (select i * 2 as val from c1)
@@ -90,59 +87,48 @@ select count(*) from c2
 ----
 physical_plan	<!REGEX>:.*SEQ_SCAN.*
 
-# c1={0..9}, c2={0,2,4,6,8,10,12,14,16,18}, count=10
 query I
 with c1 as (select * from rpc.t1), c2 as (select i * 2 as val from c1)
 select count(*) from c2
 ----
 10
 
-# c1={0..9}, c2={0,2,4,...,18}, sum=90
+# c1={0..4}, c2 doubles each value, sum=20
 query I
 with c1 as (select i from rpc.t1 where i < 5), c2 as (select i * 2 as v from c1)
 select sum(v) from c2
 ----
 20
 
-# Chained CTE with aggregate inside: all remote -> pushed
 query I
 with agg as (select i % 2 as parity, count(*) as cnt from rpc.t1 group by parity)
 select sum(cnt) from agg
 ----
 10
 
-# --- Mixed CTE (CTE body references local table -> pushdown blocked) ---
+# --- Mixed CTE (CTE body references local table → pushdown blocked) ---
 
-# CTE with local table body: JOIN stays in local plan
 query II
 explain with cte as (select * from local_t)
 select * from cte c join rpc.t1 r on c.i = r.i
 ----
 physical_plan	<REGEX>:.*JOIN.*
 
-# local_t={0..9}, rpc.t1={0..9}: all 10 values match -> 10 rows
+# local_t={0..9}, rpc.t1={0..9}: all 10 values match
 query I
 with cte as (select * from local_t)
 select count(*) from cte c join rpc.t1 r on c.i = r.i
 ----
 10
 
-# CTE with local table: count via subquery
 query I
 with cte as (select i from local_t where i >= 5)
 select count(*) from rpc.t1 where i in (select i from cte)
 ----
 5
 
-# Unreferenced local CTE: must NOT push the whole query even though the outer SELECT
-# only uses the remote CTE. Without the fix, cte2 (local body) is not merged into
-# the pushdown result because it is never referenced in FROM. The query appears
-# all-remote and is pushed, but the serialized SQL includes
-# "cte2 AS (SELECT * FROM local_t)" which fails on the remote server with
-# "Table local_t not found". With the fix the results of all CTEs in the cte_map
-# are merged into the outer result, so cte2 (UNKNOWN) prevents the push and the
-# query falls back to local execution.
-# cte1={0..4} from rpc.t1; outer selects count(*) from cte1 = 5.
+# Unreferenced local CTE blocks full pushdown (its local body is still merged into the result)
+# cte1={0..4} from rpc.t1; outer selects count(*) from cte1 = 5
 query I
 with cte1 as (select * from rpc.t1 where i < 5),
      cte2 as (select * from local_t)
@@ -152,13 +138,7 @@ select count(*) from cte1
 
 # --- CTE attached to UNION (SetOperationNode) ---
 
-# Unreferenced local CTE on a UNION (SetOperationNode): must NOT push the whole query.
-# Without the fix, Rewrite(SetOperationNode) skips the CTE-result merge and the overall
-# result appears all-remote. FinishPushdown then serializes the whole statement including
-# "WITH local_cte AS (SELECT * FROM local_t) ..." and sends it to the remote, which fails
-# with "Table local_t not found". With the fix, the unreferenced UNKNOWN CTE is merged
-# into the result (UNKNOWN), blocking full-query pushdown. Only the remote arm gets pushed
-# individually; the second arm (a constant SELECT) runs locally.
+# Unreferenced local CTE on a UNION blocks whole-query pushdown; only the remote arm is pushed
 query I
 with local_cte as (select * from local_t)
 select i from rpc.t1 where i = 3
@@ -169,32 +149,28 @@ order by i
 3
 99
 
-# All-remote CTE on a UNION: the WITH clause is attached to the SetOperationNode; both the
-# CTE body and the UNION arms reference only rpc.t1 -> whole query pushed (no SEQ_SCAN).
-# Without the StripCatalogName fix for SET_OPERATION_NODE's cte_map the catalog prefix
-# is not stripped from the serialized CTE body, causing a parse error on the remote.
+# All-remote CTE on a UNION: whole query pushed (no SEQ_SCAN)
 query II
 explain with cte as (select i from rpc.t1 where i < 5)
 select * from cte union all select * from rpc.t1 where i >= 5
 ----
 physical_plan	<!REGEX>:.*SEQ_SCAN.*
 
-# cte={0,1,2,3,4}, second arm={5,6,7,8,9} -> 10 rows total
+# cte={0,1,2,3,4}, second arm={5,6,7,8,9} → 10 rows total
 query I
 with cte as (select i from rpc.t1 where i < 5)
 select count(*) from (select * from cte union all select * from rpc.t1 where i >= 5)
 ----
 10
 
-# Mixed: CTE body references local table -> whole UNION stays local
-# The CTE is attached to the SetOperationNode's cte_map; the local body must block pushdown.
+# Mixed CTE on a UNION: CTE body has local table → stays local
 query II
 explain with cte as (select i from local_t where i < 5)
 select * from cte union all select * from rpc.t1 where i >= 5
 ----
 physical_plan	<REGEX>:.*UNION.*
 
-# cte={0,1,2,3,4} from local_t, second arm={5,6,7,8,9} from rpc.t1 -> 10 rows
+# cte={0,1,2,3,4} from local_t, second arm={5,6,7,8,9} → 10 rows
 query I
 with cte as (select i from local_t where i < 5)
 select count(*) from (select * from cte union all select * from rpc.t1 where i >= 5)
@@ -203,7 +179,7 @@ select count(*) from (select * from cte union all select * from rpc.t1 where i >
 
 # --- Recursive CTEs ---
 
-# Pure arithmetic recursive CTE: no remote refs -> stays local (REC_CTE in plan)
+# Pure arithmetic recursive CTE: no remote refs → stays local
 query II
 explain with recursive r(n) as (
   select 1 union all select n+1 from r where n < 5
@@ -211,7 +187,7 @@ explain with recursive r(n) as (
 ----
 physical_plan	<REGEX>:.*REC_CTE.*
 
-# Functional: {1,2,3,4,5} -> count = 5
+# {1,2,3,4,5} → count = 5
 query I
 with recursive r(n) as (
   select 1 union all select n+1 from r where n < 5
@@ -219,7 +195,7 @@ with recursive r(n) as (
 ----
 5
 
-# Recursive CTE with remote base case: whole CTE pushed (no SEQ_SCAN)
+# Recursive CTE with remote base case: whole CTE pushed
 query II
 explain with recursive chain(n, depth) as (
   select i, 0 from rpc.t1 where i = 0
@@ -229,7 +205,7 @@ explain with recursive chain(n, depth) as (
 ----
 physical_plan	<!REGEX>:.*SEQ_SCAN.*
 
-# base (0,0) + steps 1..4 => (1,1),(2,2),(3,3),(4,4) -> 5 rows
+# base (0,0) + 4 steps → 5 rows
 query I
 with recursive chain(n, depth) as (
   select i, 0 from rpc.t1 where i = 0
@@ -240,7 +216,7 @@ with recursive chain(n, depth) as (
 5
 
 # Recursive CTE with remote reference in recursive arm: pushed
-# Use JOIN form to avoid compound AND in WHERE (quack thread has limited stack for PEG parsing)
+# Use JOIN form to avoid compound AND in WHERE (quack has limited stack for PEG parsing)
 query II
 explain with recursive acc(val) as (
   select 0
@@ -250,7 +226,7 @@ explain with recursive acc(val) as (
 ----
 physical_plan	<!REGEX>:.*SEQ_SCAN.*
 
-# base {0}; steps: val=0->1, val=1->2, val=2->3; val=3 stops; count = 4
+# base {0}; steps 0→1, 1→2, 2→3; stops at val=3; count = 4
 query I
 with recursive acc(val) as (
   select 0
@@ -270,7 +246,7 @@ explain with recursive r(n) as (
 ----
 physical_plan	<!REGEX>:.*SEQ_SCAN.*
 
-# base: min(t1.i)=0; steps: n=0->1 (t1.i=1 exists), n=1->2 (t1.i=2 exists), n=2->3 (t1.i=3 exists), n=3 stop
+# base: min=0; steps 0→1, 1→2, 2→3; stops; count = 4
 query I
 with recursive r(n) as (
   select min(i) from rpc.t1
@@ -280,8 +256,7 @@ with recursive r(n) as (
 ----
 4
 
-# Mixed recursive CTE (local base, pure arithmetic recursive arm): NOT pushed -> stays local
-# A local base case forces the entire CTE to stay in the local plan (REC_CTE operator)
+# Mixed recursive CTE (local base case): not pushed → stays local
 query II
 explain with recursive r(n) as (
   select i from local_t where i = 0
@@ -291,7 +266,7 @@ explain with recursive r(n) as (
 ----
 physical_plan	<REGEX>:.*REC_CTE.*
 
-# base {0}, steps give {1,2,3} -> 4 rows total
+# base {0}, steps {1,2,3} → 4 rows total
 query I
 with recursive r(n) as (
   select i from local_t where i = 0
@@ -302,11 +277,7 @@ with recursive r(n) as (
 4
 
 # --- SubqueryRef referencing an outer CTE inside a JoinRef with a local table ---
-
-# A SubqueryRef "(SELECT * FROM cte)" alongside a local table in a JOIN. Without the fix,
-# FinishPushdown would wrap the SubqueryRef individually as
-# "quack_query_by_name('rpc', 'SELECT * FROM (SELECT * FROM cte)')" which fails on the
-# remote because cte_name is not a real table there.
+# Pushing a SubqueryRef wrapping a CTE name would fail; falls back to local execution.
 
 # cte={0..4} from rpc.t1, local_t join on i → 5 rows
 query I
@@ -323,42 +294,24 @@ select count(*) from (select * from cte) sub join local_t on sub.i = local_t.i
 3
 
 # --- CTE reference inside a JoinRef with a local table ---
+# Individual pushdown of CTE-named BaseTableRefs is skipped; falls back to local execution.
 
-# When a remote CTE appears as one side of a JOIN alongside a local table, the JoinRef
-# result is UNKNOWN (local side blocks full pushdown). Previously, FinishPushdown would
-# try to push the CTE reference individually as "SELECT * FROM cte_name" without its
-# WITH definition, which fails on the remote. The fix prevents individual pushdown of
-# CTE-named BaseTableRefs so the query falls back to correct local execution.
-
-# cte={0,1,2,3,4}, local_t={0..9}, join on cte.i=local_t.i -> 5 rows
+# cte={0,1,2,3,4}, local_t={0..9}, join on cte.i=local_t.i → 5 rows
 query I
 with cte as (select * from rpc.t1 where i < 5)
 select count(*) from cte join local_t on cte.i = local_t.i
 ----
 5
 
-# Same with remote CTE on the right side
 query I
 with cte as (select * from rpc.t1 where i >= 7)
 select count(*) from local_t join cte on local_t.i = cte.i
 ----
 3
 
-# --- Recursive CTE with mixed JoinRef in base case: save/restore fix ---
-#
-# Bug fix: Rewrite(RecursiveCTENode) previously did not save/restore node.left and node.right.
-# When the base case has a mixed JoinRef (e.g. rpc.t1 JOIN local_t), Rewrite(JoinRef) pushes
-# the remote child in-place even though the overall JoinRef result is UNKNOWN. Without the fix,
-# those stale quack wrappers remain in the CTE arms after the CTE result is classified as UNKNOWN.
-# With the fix, node.left and node.right are restored to their original state so the CTE executes
-# via native remote scanning rather than the quack streaming protocol, preventing potential
-# "Multiple streaming scans" errors when the outer query also opens a quack streaming slot.
-#
-# local_t = {0..9}, rpc.t1 = {0..9}
-# recursive CTE base: rpc.t1 JOIN local_t on i=i where i < 3 -> {0, 1, 2}
-# recursive arm: adds 10 to each row until >= 15 -> adds {10, 11, 12}
-# outer SELECT: count(*) from CTE -> 6 rows
-
+# --- Recursive CTE with mixed JoinRef in base case: node arms saved/restored ---
+# Without the fix, stale quack wrappers from JoinRef pushdown remain after UNKNOWN classification.
+# local_t = {0..9}, rpc.t1 = {0..9}; base: rpc.t1 JOIN local_t where i < 3 → {0,1,2}; recursive adds 10 each
 query I
 with recursive r(n) as (
   select t1.i from rpc.t1 t1 join local_t on t1.i = local_t.i where t1.i < 3
@@ -368,7 +321,6 @@ with recursive r(n) as (
 ----
 6
 
-# Verify correct values
 query I
 with recursive r(n) as (
   select t1.i from rpc.t1 t1 join local_t on t1.i = local_t.i where t1.i < 3
@@ -383,17 +335,10 @@ with recursive r(n) as (
 11
 12
 
-# --- SelectNode with CTE + mixed JoinRef in FROM: outer-expression stripping fix ---
-#
-# Bug fix: when a SelectNode has CTEs in scope and the FROM clause contains a mixed JoinRef
-# (one SINGLE_REMOTE side, one local side), Rewrite(JoinRef) wraps the remote child in-place.
-# Previously the outer expression stripping (catalog-name removal from SELECT list, WHERE, etc.)
-# was skipped because it lived inside the cte_map.empty() guard. This left catalog-qualified
-# refs like "rpc.t1.i" unstripped after "rpc.t1" became "quack_query_by_name(...) AS t1",
-# causing a binder error. The fix moves stripping outside the CTE guard.
+# --- SelectNode with CTE + mixed JoinRef: outer-expression stripping outside CTE guard ---
+# Bug fix: catalog-qualified refs in SELECT/WHERE must be stripped even when CTEs are present.
 
-# rpc.t1 = {0..9}, local_t = {0..9}, local_cte = {0..4}
-# Join rpc.t1 and local_cte on rpc.t1.i with catalog-qualified refs in SELECT and WHERE
+# rpc.t1={0..9}, local_t={0..9}, local_cte={0..4}; join rpc.t1 and local_cte
 query I
 with local_cte as (select i from local_t where i < 5)
 select t1.i from rpc.t1 t1 join local_cte on t1.i = local_cte.i
@@ -404,7 +349,6 @@ order by t1.i
 1
 2
 
-# GROUP BY referencing the pushed remote table alias
 query II
 with local_cte as (select i from local_t where i < 5)
 select t1.i % 2 as parity, count(*) as cnt
@@ -416,7 +360,6 @@ order by parity
 0	3
 1	2
 
-# CTE not referenced in FROM (unused CTE still in cte_map.map → guard triggers)
 query I
 with unused_cte as (select 42 as v)
 select t1.i from rpc.t1 t1 join local_t on t1.i = local_t.i
@@ -427,10 +370,6 @@ order by t1.i
 1
 
 # WITH cte AS (...) INSERT INTO remote SELECT * FROM cte
-# The INSERT's cte_map is processed before Rewrite(InsertQueryNode) calls Rewrite on the
-# select body. The select body must be analyzed in a child optimizer (not `this`) so the
-# assertion `!cte_results.empty()` in Rewrite(QueryNode) does not trigger.
-# Using a local-values CTE (no remote scan) to avoid the streaming-scan limitation.
 statement ok
 create table rpc.t3(i int);
 

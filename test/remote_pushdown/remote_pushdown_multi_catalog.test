@@ -1,0 +1,230 @@
+# name: test/remote_pushdown/remote_pushdown_multi_catalog.test
+# description: Tests with two distinct remote catalogs (rpc1, rpc2)
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+# rpc1: t1={0..9}, t2={5..14}
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok db1:con1
+create table t2(j int);
+
+statement ok db1:con1
+insert into t2 values (5), (6), (7), (8), (9), (10), (11), (12), (13), (14);
+
+# rpc2: t3={0..4}, t4={10..14}
+statement ok db2:con2
+call quack_serve('quack:localhost:9495', token='asdf2');
+
+statement ok db2:con2
+create table t3(k int);
+
+statement ok db2:con2
+insert into t3 from range(5);
+
+statement ok db2:con2
+create table t4(m int);
+
+statement ok db2:con2
+insert into t4 values (10), (11), (12), (13), (14);
+
+statement ok
+attach 'quack:localhost' as rpc1 (token 'asdf')
+
+statement ok
+attach 'quack:localhost:9495' as rpc2 (token 'asdf2')
+
+# --- Single-catalog queries: each pushed to its own remote ---
+
+# rpc1.t1 pushed (no SEQ_SCAN)
+query II
+explain select * from rpc1.t1
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from rpc1.t1
+----
+10
+
+query I
+select sum(i) from rpc1.t1
+----
+45
+
+# rpc2.t3 pushed (no SEQ_SCAN)
+query II
+explain select * from rpc2.t3
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from rpc2.t3
+----
+5
+
+query I
+select sum(k) from rpc2.t3
+----
+10
+
+# All-remote query on rpc1: join of rpc1.t1 and rpc1.t2 pushed as one call
+query II
+explain select * from rpc1.t1 join rpc1.t2 on i = j
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query I
+select count(*) from rpc1.t1 join rpc1.t2 on i = j
+----
+5
+
+# All-remote query on rpc2: join of rpc2.t3 and rpc2.t4 pushed as one call
+query II
+explain select * from rpc2.t3 join rpc2.t4 on k = m
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+# t3={0..4}, t4={10..14}: no overlap
+query I
+select count(*) from rpc2.t3 join rpc2.t4 on k = m
+----
+0
+
+# --- Cross-catalog join: different remotes -> join stays local ---
+
+# JOIN of rpc1.t1 and rpc2.t3 is not pushed as a single query (local JOIN operator)
+query II
+explain select * from rpc1.t1 join rpc2.t3 on i = k
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+# Tables are still fetched via quack transport (per-table QUACK_QUERY, not a pushed single call)
+query II
+explain select * from rpc1.t1 join rpc2.t3 on i = k
+----
+physical_plan	<REGEX>:.*QUACK_QUERY.*
+
+# t1={0..9}, t3={0..4}: overlap={0,1,2,3,4} -> 5 rows
+query I
+select count(*) from rpc1.t1 join rpc2.t3 on i = k
+----
+5
+
+# Cross-catalog UNION ALL: each arm is pushed independently
+query I
+select count(*) from (
+  select i as v from rpc1.t1 where i < 3
+  union all
+  select k as v from rpc2.t3 where k < 3
+)
+----
+6
+
+# --- Pushdown into rpc2 while rpc1 is the active catalog (USE rpc1) ---
+
+statement ok
+use rpc1
+
+# Unqualified t1 resolves to rpc1 (single remote in search path after USE rpc1): pushed
+query II
+explain select * from t1
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from t1
+----
+10
+
+# Explicit rpc2.t3 still pushed to rpc2 even while rpc1 is the default
+query II
+explain select * from rpc2.t3
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from rpc2.t3
+----
+5
+
+# Cross-catalog join with USE rpc1: local join, both tables via quack
+query II
+explain select * from t1 join rpc2.t3 on i = k
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query I
+select count(*) from t1 join rpc2.t3 on i = k
+----
+5
+
+statement ok
+use memory
+
+# --- Multiple remote catalogs in search path (SET search_path='rpc1,rpc2') ---
+
+statement ok
+SET search_path='rpc1,rpc2'
+
+# Explicitly qualified queries still push to their respective catalogs
+query II
+explain select * from rpc1.t1
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from rpc1.t1
+----
+10
+
+query II
+explain select * from rpc2.t3
+----
+physical_plan	<!REGEX>:.*SEQ_SCAN.*
+
+query I
+select count(*) from rpc2.t3
+----
+5
+
+# Unqualified names with two remote catalogs in search path are NOT pushed (conservative fallback)
+query II
+explain select * from t1
+----
+physical_plan	<REGEX>:.*QUACK_QUERY.*
+
+query I
+select count(*) from t1
+----
+10
+
+# Cross-catalog join in multi-remote search path: local join
+query II
+explain select * from rpc1.t1 join rpc2.t3 on i = k
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query I
+select count(*) from rpc1.t1 join rpc2.t3 on i = k
+----
+5
+
+statement ok
+RESET search_path
+
+statement ok db1:con1
+call quack_stop('quack:localhost')
+
+statement ok db2:con2
+call quack_stop('quack:localhost:9495')

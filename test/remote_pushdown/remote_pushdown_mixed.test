@@ -32,13 +32,13 @@ explain (select * from rpc.t1 limit 5) union all select * from local_t
 ----
 physical_plan	<REGEX>:.*UNION.*
 
-# The pushed remote side (LIMIT 5) is not visible as a LIMIT in the local plan
+# Pushed remote side (LIMIT 5) is not visible as LIMIT in the local plan
 query II
 explain (select * from rpc.t1 limit 5) union all select * from local_t
 ----
 physical_plan	<!REGEX>:.*LIMIT.*
 
-# Functional: 5 from remote + 10 from local = 15 rows
+# 5 from remote + 10 from local = 15 rows
 query I
 select count(*) from ((select * from rpc.t1 limit 5) union all select * from local_t)
 ----
@@ -46,27 +46,25 @@ select count(*) from ((select * from rpc.t1 limit 5) union all select * from loc
 
 # --- Mixed JOIN ---
 
-# Mixed JOIN: stays in local plan (JOIN operator visible)
+# Mixed JOIN: stays in local plan
 query II
 explain select * from rpc.t1 join local_t on (i = local_col)
 ----
 physical_plan	<REGEX>:.*JOIN.*
 
-# local_t={0..9}, rpc.t1={0..9}: all 10 values match -> 10 rows
+# local_t={0..9}, rpc.t1={0..9}: all 10 values match
 query I
 select count(*) from rpc.t1 join local_t on (i = local_col)
 ----
 10
 
-# Catalog-qualified column ref in mixed JOIN condition: "rpc.t1.i" must be stripped to "t1.i"
-# after rpc.t1 is replaced by quack_query_by_name(...) AS t1 in FROM, otherwise the binder
-# fails with "Referenced table rpc.t1 not found".
+# Catalog-qualified column ref in mixed JOIN condition: rpc.t1.i stripped to t1.i after individual pushdown
 query I
 select count(*) from rpc.t1 join local_t on (rpc.t1.i = local_t.local_col)
 ----
 10
 
-# Catalog-qualified ref in WHERE clause with mixed join: "rpc.t1.i" must be stripped too
+# Catalog-qualified ref in WHERE clause with mixed join
 query I
 select count(*) from rpc.t1 join local_t on (i = local_col) where rpc.t1.i > 5
 ----
@@ -92,7 +90,7 @@ select count(*) from rpc.t1, range(0, 10) r(n) where i = n
 ----
 10
 
-# generate_series() is also neutral: whole query pushed
+# generate_series() is also neutral
 query II
 explain select count(*) from rpc.t1, generate_series(0, 9) gs(n) where i = n
 ----
@@ -103,13 +101,12 @@ select count(*) from rpc.t1, generate_series(0, 9) gs(n) where i = n
 ----
 10
 
-# range() with local table: local table blocks full pushdown; local scan visible
+# range() with local table: local table blocks full pushdown
 query II
 explain select count(*) from local_t, range(0, 10) r(n) where local_col = n
 ----
 physical_plan	<REGEX>:.*SEQ_SCAN.*
 
-# Local range scan still produces correct result
 query I
 select count(*) from local_t, range(0, 10) r(n) where local_col = n
 ----
@@ -126,22 +123,19 @@ physical_plan	<REGEX>:.*UNION.*
 statement ok
 create macro my_add(x, y) as x + y;
 
-# Local macro used on remote table: macro stays local, remote scan is pushed individually
-# rpc.t1={0..9}; my_add(i,0) > 5 -> i > 5 -> {6,7,8,9} -> 4 rows
+# Local macro used on remote table: macro stays local, remote scan pushed individually
+# i > 5 → {6,7,8,9} → 4 rows
 query I
 select count(*) from rpc.t1 where my_add(i, 0) > 5
 ----
 4
 
-# Table-qualified column ref (t1.i) in WHERE with local macro: rpc.t1 is pushed individually
-# as quack_query_by_name(...) AS t1 so t1.i in the outer WHERE still resolves.
-# my_add(t1.i, 0) > 5 -> i > 5 -> {6,7,8,9} -> 4 rows
+# Table-qualified column ref (t1.i) in WHERE with local macro
 query I
 select count(*) from rpc.t1 where my_add(t1.i, 0) > 5
 ----
 4
 
-# Scalar macro result is correct via local evaluation
 query I
 select my_add(10, 5)
 ----
@@ -163,43 +157,33 @@ select count(*) from rpc.t1 where i + 1 > 6
 
 # --- Lateral joins ---
 
-# Lateral: local outer table + remote inner -> NOT pushed (outer must stay local)
-# local_t={0..9}, rpc.t1={0..9}: i = local_col always matches -> 10 rows
+# Local outer + remote inner: NOT pushed (outer must stay local)
+# local_t={0..9}, rpc.t1={0..9}: each row matches → 10 rows
 query I
 select count(*) from local_t, lateral (select * from rpc.t1 where i = local_col) sub
 ----
 10
 
-# Same with explicit catalog prefix on local table: column names must still be tracked
-# (Rewrite(BaseTableRef) Case 1 now does a catalog lookup to populate column names)
+# Explicit catalog prefix on local table: column names still tracked correctly
 query I
 select count(*) from memory.main.local_t, lateral (select * from rpc.t1 where i = local_col) sub
 ----
 10
 
-# Lateral: local outer with no matching remote rows
-# local_col+100 won't be in t1={0..9} -> 0 rows
+# local_col+100 not in t1={0..9} → 0 rows
 query I
 select count(*) from local_t, lateral (select * from rpc.t1 where i = local_col + 100) sub
 ----
 0
 
-# Correlated ORDER BY in lateral subquery: outer local_col reference in ORDER BY must block push.
-# Without the fix, HasLocalTableReference missed modifiers and the subquery was pushed to the
-# remote, which then failed because local_col is not a column on the remote server.
-# With the fix, the correlation is detected and the lateral executes locally:
-# 10 outer rows (local_t) x 1 inner row (LIMIT 1 from rpc.t1) = 10 rows
+# Correlated ORDER BY in lateral: outer local_col in ORDER BY blocks push
+# 10 outer rows × 1 inner row (LIMIT 1) = 10 rows
 query I
 select count(*) from local_t, lateral (select i from rpc.t1 order by local_col limit 1) sub
 ----
 10
 
-# Correlated JOIN ON in lateral from_table: HasLocalTableReference must check from_table
-# expressions (join condition and table function args). Without the fix, local_col in
-# the ON clause is missed and the lateral is pushed to remote where it fails with a
-# "column not found" error. With the fix the correlation is detected, pushdown is blocked,
-# and the query falls back to local execution — which hits the documented "Multiple streaming
-# scans" limitation because the inner 2-table join needs two simultaneous quack connections.
+# Correlated JOIN ON in lateral: local_col in ON clause blocks push; falls back to local execution
 mode skip multiple_streaming_scans
 
 query I
@@ -208,13 +192,7 @@ select count(*) from local_t,
 ----
 ?
 
-# Correlated SubqueryRef inside JoinRef in lateral: HasLocalTableReference(TableRef&) must
-# recurse into SubqueryRef children of a JoinRef, not just into JOIN conditions. Without the
-# fix, the SubqueryRef case fell through to default (return false), so the correlated
-# local_col ref inside the nested subquery was missed and the lateral was incorrectly pushed
-# to the remote where it failed with a "column not found" error.
-# With the fix, the correlation is detected and the query falls back to local execution,
-# which hits the documented "Multiple streaming scans" limitation.
+# Correlated SubqueryRef inside JoinRef in lateral: local_col inside nested subquery blocks push
 query I
 select count(*) from local_t,
     lateral (
@@ -226,13 +204,13 @@ select count(*) from local_t,
 
 mode unskip
 
-# Lateral: all remote outer + remote inner -> pushed (no SEQ_SCAN)
+# All-remote outer + remote inner: pushed
 query II
 explain select t1a.i from rpc.t1 t1a, lateral (select * from rpc.t1 t1b where t1b.i = t1a.i) sub
 ----
 physical_plan	<!REGEX>:.*SEQ_SCAN.*
 
-# Each of the 10 rows in t1 has exactly 1 match via lateral -> 10 rows
+# 10 rows in t1, each has exactly 1 match via lateral → 10 rows
 query I
 select count(*) from rpc.t1 t1a, lateral (select * from rpc.t1 t1b where t1b.i = t1a.i) sub
 ----
@@ -240,7 +218,7 @@ select count(*) from rpc.t1 t1a, lateral (select * from rpc.t1 t1b where t1b.i =
 
 # --- Subquery wrapping remote (nested levels) ---
 
-# Double-wrapped subquery: all remote -> pushed
+# Double-wrapped subquery: all remote → pushed
 query II
 explain select count(*) from (select * from (select i from rpc.t1 where i > 5) sub1) sub2
 ----

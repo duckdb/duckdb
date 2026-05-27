@@ -20,11 +20,8 @@ attach 'quack:localhost' as rpc (token 'asdf')
 
 # Initial state: t1 = {0..9}
 
-# ============================================================
-# INSERT RETURNING
-# ============================================================
+# --- INSERT RETURNING ---
 
-# Basic INSERT RETURNING: pushed, returns inserted value
 query I
 insert into rpc.t1 values (42) returning i
 ----
@@ -35,7 +32,7 @@ select count(*) from rpc.t1 where i = 42
 ----
 1
 
-# Catalog-qualified column ref in RETURNING: rpc.t1.i stripped before push
+# Catalog-qualified column ref in RETURNING stripped before push
 query I
 insert into rpc.t1 values (43) returning rpc.t1.i
 ----
@@ -47,18 +44,15 @@ insert into rpc.t1 values (44) returning i * 2
 ----
 88
 
-# INSERT from remote SELECT with RETURNING: all remote → pushed
-# Insert i+100 for i in {0,1,2}; returns 3 rows in some order
+# INSERT from remote SELECT with RETURNING
 statement ok
 insert into rpc.t1 select i + 100 from rpc.t1 where i < 3 returning i
 
-# Verify rows landed
 query I
 select count(*) from rpc.t1 where i >= 100 and i < 103
 ----
 3
 
-# Cleanup extra rows
 statement ok
 delete from rpc.t1 where i >= 42
 
@@ -67,17 +61,13 @@ select min(i), max(i) from rpc.t1
 ----
 0	9
 
-# ============================================================
-# UPDATE RETURNING
-# ============================================================
+# --- UPDATE RETURNING ---
 
-# Basic UPDATE RETURNING: pushed, returns new value
 query I
 update rpc.t1 set i = i + 1 where i = 5 returning i
 ----
 6
 
-# Now have two rows with i=6; restore
 statement ok
 delete from rpc.t1 where i = 6
 
@@ -90,7 +80,6 @@ update rpc.t1 set i = i - 1 where i = 1 returning rpc.t1.i
 ----
 0
 
-# Now have two rows with i=0 (original 0 + updated 1), original 1 gone; restore both
 statement ok
 delete from rpc.t1 where i = 0
 
@@ -103,11 +92,9 @@ update rpc.t1 set i = i + 10 where i = 9 returning i - 10
 ----
 9
 
-# Restore (i was set to 19)
 statement ok
 update rpc.t1 set i = i - 10 where i = 19
 
-# UPDATE RETURNING: verify correct row was modified
 query I
 select count(*) from rpc.t1 where i = 7
 ----
@@ -127,11 +114,8 @@ delete from rpc.t1 where i = 8
 statement ok
 insert into rpc.t1 values (7), (8)
 
-# ============================================================
-# DELETE RETURNING
-# ============================================================
+# --- DELETE RETURNING ---
 
-# Basic DELETE RETURNING: pushed, returns deleted value
 query I
 delete from rpc.t1 where i = 9 returning i
 ----
@@ -163,7 +147,6 @@ delete from rpc.t1 where i = 0 returning i + 100
 statement ok
 insert into rpc.t1 values (0)
 
-# DELETE multiple rows RETURNING: verify deletion happened correctly
 statement ok
 delete from rpc.t1 where i >= 7 returning i
 
@@ -175,17 +158,14 @@ select count(*) from rpc.t1 where i >= 7
 statement ok
 insert into rpc.t1 values (7), (8), (9)
 
-# ============================================================
-# INSERT RETURNING: scalar aggregate over remote data
-# ============================================================
+# --- INSERT RETURNING: scalar aggregate over remote data ---
 
-# Insert max+1 into t1, return the inserted value
+# Insert max+1 into t1 and return the inserted value
 query I
 insert into rpc.t1 select max(i) + 1 from rpc.t1 returning i
 ----
 10
 
-# Verify it was inserted
 query I
 select count(*) from rpc.t1 where i = 10
 ----
@@ -194,25 +174,19 @@ select count(*) from rpc.t1 where i = 10
 statement ok
 delete from rpc.t1 where i = 10
 
-# Final state: t1 = {0..9}
 query II
 select min(i), max(i) from rpc.t1
 ----
 0	9
 
-# ============================================================
-# RETURNING with local macro: body pushed to remote,
-# macro expression evaluated locally on returned rows.
-# Previously crashed with "Mismatch in input vector sizes".
-# ============================================================
+# --- RETURNING with local macro: body pushed to remote, macro evaluated locally on returned rows ---
 
 mode skip unsupported_returning
 
 statement ok
 create macro double_it(x) as x * 2;
 
-# INSERT RETURNING with local macro: remote executes INSERT RETURNING i,
-# local SELECT applies double_it(i) = 50*2 = 100
+# INSERT RETURNING with local macro: remote executes INSERT RETURNING i; local applies double_it
 query I
 insert into rpc.t1 values (50) returning double_it(i)
 ----
@@ -221,10 +195,10 @@ insert into rpc.t1 values (50) returning double_it(i)
 statement ok
 delete from rpc.t1 where i = 50
 
-# UPDATE RETURNING with local macro
 statement ok
 insert into rpc.t1 values (99);
 
+# UPDATE RETURNING with local macro
 query I
 update rpc.t1 set i = i + 1 where i = 99 returning double_it(i)
 ----
@@ -233,10 +207,10 @@ update rpc.t1 set i = i + 1 where i = 99 returning double_it(i)
 statement ok
 delete from rpc.t1 where i = 100
 
-# DELETE RETURNING with local macro
 statement ok
 insert into rpc.t1 values (77);
 
+# DELETE RETURNING with local macro
 query I
 delete from rpc.t1 where i = 77 returning double_it(i)
 ----
@@ -245,12 +219,7 @@ delete from rpc.t1 where i = 77 returning double_it(i)
 statement ok
 drop macro double_it;
 
-# ============================================================
-# RETURNING with scalar subquery: falls back to native execution
-# (StripAllTableQualifiers does not recurse into subquery bodies,
-# so correlated refs to the DML target table would be unresolvable
-# in the synthesized outer SELECT). The DML must still execute correctly.
-# ============================================================
+# --- RETURNING with scalar subquery: non-correlated subquery evaluated locally on returned rows ---
 
 statement ok
 create table local_t(id int);
@@ -261,15 +230,12 @@ insert into local_t values (5), (6), (7);
 statement ok
 insert into rpc.t1 values (55);
 
-# DELETE with a non-correlated scalar subquery in RETURNING: remote executes
-# DELETE RETURNING *, outer SELECT evaluates the subquery per deleted row.
-# local_t has 3 rows, so count(*) = 3.
+# Non-correlated scalar subquery in RETURNING: count(*) = 3 (from local_t)
 query I
 delete from rpc.t1 where i = 55 returning (select count(*) from local_t)
 ----
 3
 
-# INSERT with non-correlated scalar subquery in RETURNING.
 query I
 insert into rpc.t1 values (66) returning (select count(*) from local_t)
 ----

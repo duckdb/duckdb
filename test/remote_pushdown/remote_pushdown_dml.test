@@ -24,7 +24,7 @@ insert into t2 values (3), (4), (5), (6);
 statement ok
 attach 'quack:localhost' as rpc (token 'asdf')
 
-# Initial state: t1 = {0..9}, count = 10
+# Initial state: t1 = {0..9}
 query I
 select count(*) from rpc.t1
 ----
@@ -32,7 +32,6 @@ select count(*) from rpc.t1
 
 # --- INSERT ---
 
-# INSERT from remote SELECT is pushed (verify with functional result)
 statement ok
 insert into rpc.t1 select i + 10 from rpc.t1
 
@@ -47,11 +46,10 @@ select min(i), max(i) from rpc.t1
 ----
 0	19
 
-# INSERT with WHERE filter from remote is pushed
 statement ok
 insert into rpc.t1 select i + 100 from rpc.t1 where i < 5
 
-# adds {100,101,102,103,104} -> total 25 rows
+# adds {100,101,102,103,104} → total 25 rows
 query I
 select count(*) from rpc.t1
 ----
@@ -62,11 +60,10 @@ select count(*) from rpc.t1 where i >= 100
 ----
 5
 
-# INSERT from subquery wrapping remote SELECT is pushed
 statement ok
 insert into rpc.t1 select i + 200 from (select i from rpc.t1 where i >= 100) sub
 
-# adds {300,301,302,303,304} -> total 30 rows
+# adds {300,301,302,303,304} → total 30 rows
 query I
 select count(*) from rpc.t1
 ----
@@ -74,7 +71,6 @@ select count(*) from rpc.t1
 
 # --- DELETE ---
 
-# DELETE simple is pushed
 statement ok
 delete from rpc.t1 where i >= 200
 
@@ -86,14 +82,13 @@ select count(*) from rpc.t1
 statement ok
 delete from rpc.t1 where i >= 100
 
-# t1 = {0..19}, count = 20
+# t1 = {0..19}
 query I
 select count(*) from rpc.t1
 ----
 20
 
-# DELETE with subquery referencing same remote table is pushed
-# max(i) where i < 15 = 14, so delete where i > 14 removes {15..19}
+# DELETE with subquery: max(i) where i < 15 = 14; removes {15..19}
 statement ok
 delete from rpc.t1 where i > (select max(i) from rpc.t1 where i < 15)
 
@@ -102,11 +97,11 @@ select count(*) from rpc.t1
 ----
 15
 
-# DELETE with IN subquery referencing same remote table is pushed
+# DELETE with IN subquery: removes {10..14}
 statement ok
 delete from rpc.t1 where i in (select i from rpc.t1 where i >= 10)
 
-# removes {10,11,12,13,14} -> t1 = {0..9}, count = 10
+# t1 = {0..9}
 query I
 select count(*) from rpc.t1
 ----
@@ -119,7 +114,6 @@ select min(i), max(i) from rpc.t1
 
 # --- UPDATE ---
 
-# UPDATE simple is pushed
 statement ok
 update rpc.t1 set i = i + 100
 
@@ -129,7 +123,6 @@ select min(i), max(i) from rpc.t1
 ----
 100	109
 
-# UPDATE with FROM subquery referencing same remote table is pushed
 statement ok
 update rpc.t1 t1 set i = t1.i where t1.i in (select i from rpc.t1 where i >= 105)
 
@@ -138,7 +131,6 @@ select count(*) from rpc.t1 where i >= 105
 ----
 5
 
-# Restore: update back
 statement ok
 update rpc.t1 set i = i - 100
 
@@ -147,11 +139,10 @@ select min(i), max(i) from rpc.t1
 ----
 0	9
 
-# UPDATE with expression in SET
+# i=3 → 7; t1 now has two rows where i=7
 statement ok
 update rpc.t1 set i = i * 2 + 1 where i = 3
 
-# i=3 -> 7; now t1 has two rows where i=7
 query I
 select count(*) from rpc.t1 where i = 7
 ----
@@ -159,7 +150,6 @@ select count(*) from rpc.t1 where i = 7
 
 # --- Mixed DML: local target with remote USING / FROM ---
 
-# Reset t1 to {0..9} for the mixed DML tests below
 statement ok db1:con1
 delete from t1 where true
 
@@ -172,13 +162,11 @@ create table local_t(i int);
 statement ok
 insert into local_t from range(10);
 
-# DELETE USING with 3-part catalog-qualified ref in WHERE: "rpc.t1.i" must be stripped to
-# "t1.i" after rpc.t1 is replaced by quack_query_by_name(...) AS t1 in USING, otherwise
-# the binder fails with "Referenced table rpc.t1 not found".
+# DELETE USING: catalog-qualified ref rpc.t1.i stripped to t1.i after individual pushdown
 statement ok
 delete from local_t using rpc.t1 where local_t.i = rpc.t1.i and rpc.t1.i > 5
 
-# rows 6-9 deleted; local_t = {0..5}, count = 6
+# rows 6-9 deleted; local_t = {0..5}
 query I
 select count(*) from local_t
 ----
@@ -187,11 +175,11 @@ select count(*) from local_t
 statement ok
 insert into local_t from range(6, 10);
 
-# UPDATE FROM with 3-part catalog-qualified ref in SET expression: "rpc.t1.i" stripped
+# UPDATE FROM: catalog-qualified ref rpc.t1.i stripped in SET expression
 statement ok
 update local_t set i = rpc.t1.i * 2 from rpc.t1 where local_t.i = rpc.t1.i
 
-# local_t becomes {0,2,4,6,8,10,12,14,16,18}; rows > 10: {12,14,16,18} = 4
+# local_t = {0,2,4,6,8,10,12,14,16,18}; rows > 10: {12,14,16,18} = 4
 query I
 select count(*) from local_t where i > 10
 ----
@@ -200,15 +188,14 @@ select count(*) from local_t where i > 10
 statement ok
 drop table local_t
 
-# Test explicit-alias forms (Bug 34 fix): use a fresh table to avoid state from above.
+# Explicit-alias forms: catalog-qualified refs must resolve via the alias after stripping
 statement ok
 create table local_alias(k int);
 
 statement ok
 insert into local_alias from range(10);
 
-# DELETE USING with explicit alias: "rpc.t1 AS rt1" — WHERE uses catalog-qualified
-# "rpc.t1.i" which strips to "t1.i" then renames to "rt1.i" (Bug 34 fix).
+# DELETE USING with explicit alias: rpc.t1.i in WHERE must resolve to rt1.i
 statement error
 delete from local_alias using rpc.t1 AS rt1 where local_alias.k = rpc.t1.i and rpc.t1.i > 5
 ----
@@ -217,7 +204,7 @@ not found
 statement ok
 delete from local_alias using rpc.t1 AS rt1 where local_alias.k = rt1.i and rt1.i > 5
 
-# rows 6-9 deleted; local_alias = {0..5}, count = 6
+# rows 6-9 deleted; local_alias = {0..5}
 query I
 select count(*) from local_alias
 ----
@@ -226,10 +213,7 @@ select count(*) from local_alias
 statement ok
 insert into local_alias select k + 4 from local_alias where k > 1;
 
-# local_alias = {0,1,2,3,4,5,6,7,8,9}
-
-# UPDATE FROM with explicit alias: "rpc.t1 AS rt1" — SET/WHERE use catalog-qualified
-# "rpc.t1.i" which strips to "t1.i" then renames to "rt1.i" (Bug 34 fix).
+# UPDATE FROM with explicit alias: rpc.t1.i must resolve to rt1.i
 statement error
 update local_alias set k = rpc.t1.i * 2 from rpc.t1 AS rt1 where local_alias.k = rpc.t1.i
 ----
@@ -238,7 +222,7 @@ not found
 statement ok
 update local_alias set k = rt1.i * 2 from rpc.t1 AS rt1 where local_alias.k = rt1.i
 
-# each row k → k*2; {0,2,4,6,8,10,12,14,16,18}; rows > 10: {12,14,16,18} = 4
+# each row k→k*2; rows > 10: {12,14,16,18} = 4
 query I
 select count(*) from local_alias where k > 10
 ----
@@ -247,13 +231,8 @@ select count(*) from local_alias where k > 10
 statement ok
 drop table local_alias
 
-# --- DELETE USING with a mixed JoinRef (remote + local) in the USING clause ---
-#
-# When USING contains a JoinRef with one remote side (rpc.t1) and one local side (local_j),
-# Rewrite(JoinRef) pushes rpc.t1 individually as TABLE_FUNCTION AS t1.
-# The JoinRef result is UNKNOWN (mixed), so the whole DELETE is not fully pushed.
-# The DELETE runs locally: the USING clause is "TABLE_FUNCTION(t1) JOIN local_j ON ..."
-# and the WHERE condition has catalog refs stripped by the pending_outer_strip_catalogs logic.
+# --- DELETE USING with mixed JoinRef (remote + local) in USING clause ---
+# rpc.t1 is pushed individually; JoinRef result is UNKNOWN; DELETE runs locally.
 
 statement ok
 create table local_del(val int);
@@ -267,9 +246,7 @@ create table local_j(val int);
 statement ok
 insert into local_j values (3), (4), (5), (6);
 
-# Delete rows from local_del where local_del.val == rpc.t1.i AND rpc.t1.i is in local_j
-# After strip: WHERE local_del.val = t1.i (t1 is the TABLE_FUNCTION alias for rpc.t1)
-# rpc.t1={0..9}, local_j={3,4,5,6}; rows deleted from local_del: {3,4,5,6} -> 4 rows removed
+# rpc.t1={0..9}, local_j={3,4,5,6}; removes {3,4,5,6} from local_del
 statement ok
 delete from local_del
     using rpc.t1 join local_j on (rpc.t1.i = local_j.val)
@@ -291,12 +268,9 @@ drop table local_del
 statement ok
 drop table local_j
 
-# --- All-remote DELETE USING with a second remote table ---
-#
-# When both the DELETE target and the USING table are in the same remote catalog,
-# the entire statement is pushed as a single remote query (no local execution).
+# --- All-remote DELETE USING (same remote catalog) ---
 
-# rpc.t1={0..9}, rpc.t2.j={3,4,5,6}; delete t1 rows where t1.i = t2.j -> removes {3,4,5,6}
+# rpc.t1={0..9}, rpc.t2.j={3,4,5,6}; removes {3,4,5,6} from t1
 statement ok
 delete from rpc.t1 using rpc.t2 where rpc.t1.i = rpc.t2.j
 
@@ -310,19 +284,15 @@ select min(i), max(i) from rpc.t1
 ----
 0	9
 
-# Restore t1 to {0..9}
 statement ok db1:con1
 delete from t1 where true
 
 statement ok db1:con1
 insert into t1 from range(10);
 
-# --- All-remote UPDATE FROM with a second remote table ---
-#
-# When both the UPDATE target and the FROM table are in the same remote catalog,
-# the entire UPDATE is pushed as a single remote query.
+# --- All-remote UPDATE FROM (same remote catalog) ---
 
-# rpc.t2.j={3,4,5,6}; update t1.i += 10 where t1.i = t2.j -> rows 3,4,5,6 become 13,14,15,16
+# rpc.t2.j={3,4,5,6}; rows 3,4,5,6 become 13,14,15,16
 statement ok
 update rpc.t1 set i = rpc.t1.i + 10 from rpc.t2 where rpc.t1.i = rpc.t2.j
 
@@ -339,7 +309,6 @@ select min(i), max(i) from rpc.t1 where i >= 10
 statement ok db1:con1
 drop table t2;
 
-# Restore t1 to {0..9}
 statement ok db1:con1
 delete from t1 where true
 

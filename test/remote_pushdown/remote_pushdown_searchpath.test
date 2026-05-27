@@ -24,11 +24,7 @@ insert into t2 from range(5, 15);
 statement ok
 attach 'quack:localhost' as rpc (token 'asdf')
 
-# After USE rpc, unqualified table names resolve to the remote catalog.
-# The optimizer must recognize that the INVALID_CATALOG sentinel in the search
-# path (which resolves to rpc, the new default) is the same as the explicit rpc
-# entry — without deduplication the remote catalog count appears as 2 and
-# pushdown is incorrectly blocked.
+# After USE rpc, the optimizer deduplicates the INVALID_CATALOG sentinel and the explicit rpc entry.
 
 statement ok
 use rpc
@@ -68,7 +64,7 @@ select sum(i) from t1
 ----
 45
 
-# Join of two unqualified remote tables: pushed as a single remote call (no JOIN in local plan)
+# Join of two unqualified remote tables: no JOIN in local plan
 query II
 explain select * from t1 join t2 on i = j
 ----
