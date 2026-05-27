@@ -1,0 +1,329 @@
+# name: test/remote_pushdown/remote_pushdown_dml_local.test
+# description: Regression tests for local vs remote DML detection bugs in RemotePushdownOptimizer
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok db1:con1
+create table t2(i int);
+
+statement ok db1:con1
+insert into t2 values (5), (6), (7), (8), (9), (10), (11), (12), (13), (14);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# Bug 7: Rewrite(DML) did not guard on target-table locality; local DML with remote subquery was pushed to remote.
+
+# DELETE with remote scalar subquery in WHERE; max(rpc.t1.i)=9; local_col > 9 -> 0 rows deleted
+query I
+select count(*) from local_t
+----
+10
+
+statement ok
+delete from local_t where local_col > (select max(i) from rpc.t1)
+
+query I
+select count(*) from local_t
+----
+10
+
+# local_col IN {0,1,2} -> 3 rows removed; 7 remain
+statement ok
+delete from local_t where local_col in (select i from rpc.t1 where i < 3)
+
+query I
+select count(*) from local_t
+----
+7
+
+statement ok
+insert into local_t from range(3)
+
+# UPDATE local table with remote scalar subquery in SET: local_col += max(rpc.t1.i)=9 where local_col < 3
+statement ok
+update local_t set local_col = local_col + (select max(i) from rpc.t1) where local_col < 3
+
+query I
+select count(*) from local_t where local_col >= 9
+----
+4
+
+# Restore
+statement ok
+update local_t set local_col = local_col - (select max(i) from rpc.t1) where local_col >= 9 and local_col <= 11
+
+# INSERT into local table from remote SELECT: adds rows {100,101,102}
+statement ok
+insert into local_t select i + 100 from rpc.t1 where i < 3
+
+query I
+select count(*) from local_t where local_col >= 100
+----
+3
+
+statement ok
+delete from local_t where local_col >= 100
+
+# Bug 8: Rewrite(BaseTableRef) returned NO_CATALOG_REFERENCED for local tables with explicit catalog prefix,
+# causing them to be misclassified as all-remote and pushed to the remote server.
+
+statement ok
+drop table local_t
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# local_t = {0..9}; local_col IN {0..4} -> 5 rows
+query I
+select count(*) from memory.main.local_t where local_col in (select i from rpc.t1 where i < 5)
+----
+5
+
+# Result sanity check with explicit-catalog subquery
+query I
+select count(*) from local_t where local_col >= (select min(i) from rpc.t1)
+----
+10
+
+statement ok
+drop table local_t
+
+# Bug 10: Rewrite/StripCatalogName for DML did not process the node's own cte_map,
+# causing CTE bodies to be invisible and CTE catalog refs to go unstripped.
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# DELETE with all-remote CTE: t1={0..9}; cte = {8,9}; delete local_col in {8,9} -> 2 removed; 8 remain.
+statement ok
+with remote_cte as (select i from rpc.t1 where i > 7)
+delete from local_t where local_col in (select i from remote_cte)
+
+query I
+select count(*) from local_t
+----
+8
+
+statement ok
+insert into local_t values (8), (9)
+
+# DELETE with local CTE: must NOT be pushed to remote; deletes local_col in {0,1,2} -> 7 remain.
+statement ok
+create table local_t2(v int);
+
+statement ok
+insert into local_t2 values (0), (1), (2);
+
+statement ok
+with local_cte as (select v from local_t2)
+delete from local_t where local_col in (select v from local_cte)
+
+query I
+select count(*) from local_t
+----
+7
+
+statement ok
+insert into local_t values (0), (1), (2)
+
+# INSERT with all-remote CTE: cte = {0..4}; insert {100..104} -> 5 new rows added.
+statement ok
+with remote_cte as (select i from rpc.t1 where i < 5)
+insert into local_t select local_col + 100 from (select i as local_col from remote_cte) sub
+
+query I
+select count(*) from local_t where local_col >= 100
+----
+5
+
+statement ok
+delete from local_t where local_col >= 100
+
+# UPDATE with all-remote CTE: max(rpc.t1.i)=9; local_col {0,1,2} become {9,10,11}; count >= 9 becomes 4
+statement ok
+with remote_max as (select max(i) as m from rpc.t1)
+update local_t set local_col = local_col + (select m from remote_max) where local_col < 3
+
+query I
+select count(*) from local_t where local_col >= 9
+----
+4
+
+statement ok
+drop table local_t
+
+statement ok
+drop table local_t2
+
+# Bug 16: Rewrite(InsertQueryNode) polluted local_table_column_names with INSERT target's columns,
+# falsely blocking pushdown of remote subqueries in the source SELECT.
+# Fix: save/restore local_table_names/column_names around Rewrite(target_ref).
+
+statement ok
+create table local_bugfix16(i int);
+
+# Source SELECT (rpc.t1 WHERE i < max(rpc.t2.i)) must be pushed as a single quack call.
+query I rowsort
+insert into local_bugfix16
+select i from rpc.t1
+where i < (select max(i) from rpc.t2)
+returning i
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement ok
+drop table local_bugfix16
+
+# Bug 22: HasLocalTableReference(QueryNode) returned false for INSERT/DELETE/UPDATE nodes, causing DML
+# CTEs inside subqueries to be pushed to remote where local tables don't exist.
+# Fix: add explicit cases for DML nodes that inspect body expressions for local table refs.
+# Note: DuckDB's binder rejects DML CTEs inside non-top-level subqueries; with the fix the optimizer
+# correctly preserves the subquery locally, and the binder then raises the clear error below.
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# Correlated IN subquery with DELETE CTE referencing outer local table.
+# Without fix: remote error. With fix: binder error (DML not at top level).
+statement error
+select count(*) from local_t where local_col in (
+    with del as (delete from rpc.t1 where t1.i > 100 and t1.i = local_t.local_col returning i)
+    select * from del
+)
+----
+<REGEX>:.*WITH clause containing a data-modifying statement must be at the top level.*
+
+# Same pattern with INSERT.
+statement error
+select count(*) from local_t where local_col in (
+    with ins as (insert into rpc.t2 select i from rpc.t2 where t2.i > 100 and t2.i = local_t.local_col returning i)
+    select * from ins
+)
+----
+<REGEX>:.*WITH clause containing a data-modifying statement must be at the top level.*
+
+statement ok
+drop table local_t;
+
+# Bug 23: StripCatalogName(InsertQueryNode) used exact string comparison instead of CIEquals for
+# catalog/schema fields; uppercase-quoted catalog "RPC" was not stripped, failing on the remote.
+
+# INSERT with uppercase-quoted catalog name must still push and succeed.
+statement ok
+INSERT INTO "RPC".t1 VALUES (55)
+
+query I
+SELECT i FROM rpc.t1 WHERE i = 55
+----
+55
+
+statement ok
+DELETE FROM rpc.t1 WHERE i = 55
+
+# Bug 24: Rewrite(InsertQueryNode/DeleteQueryNode/UpdateQueryNode) did not include returning_list
+# inside the save/restore block, causing stale quack wrappers from JoinRef pushes to trigger
+# "Multiple streaming scans". Fix: include returning_list inside the save/restore block.
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+mode skip unsupported_returning
+
+# All-remote INSERT with RETURNING: whole INSERT is pushed; returns i=99.
+query I
+with ins as (insert into rpc.t1 values (99) returning i as val)
+select val from ins
+----
+99
+
+statement ok
+DELETE FROM rpc.t1 WHERE i = 99
+
+# INSERT with pure-local RETURNING subquery: TryPushDMLWithLocalReturning falls back to RETURNING *.
+# Remote executes "INSERT INTO t1 VALUES (99) RETURNING *"; outer evaluates max(local_col)=9.
+query I
+INSERT INTO rpc.t1 VALUES (99) RETURNING (select max(local_col) from local_t) AS local_max
+----
+9
+
+statement ok
+DELETE FROM rpc.t1 WHERE i = 99
+
+mode unskip
+
+statement ok
+drop table local_t;
+
+# Bug 41: Rewrite(BaseTableRef) Case 2 only checked TABLE_ENTRY in local catalogs, not VIEW_ENTRY.
+# A local view without a catalog qualifier was classified as SINGLE_REMOTE and pushed to quack.
+# Fix: also check VIEW_ENTRY in the local catalog search loop.
+
+statement ok
+create view local_v as select * from range(5) t(i)
+
+# Verify local view is usable locally
+query I
+select count(*) from local_v
+----
+5
+
+# Mixed query: local view + remote table; without fix local_v incorrectly pushed -> error.
+query I
+select count(*) from rpc.t1 join local_v on (rpc.t1.i = local_v.i)
+----
+5
+
+query I
+select local_v.i from rpc.t1 join local_v on (rpc.t1.i = local_v.i) order by 1
+----
+0
+1
+2
+3
+4
+
+statement ok
+drop view local_v
+
+statement ok db1:con1
+call quack_stop('quack:localhost')

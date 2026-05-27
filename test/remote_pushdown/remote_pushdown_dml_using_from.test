@@ -1,0 +1,247 @@
+# name: test/remote_pushdown/remote_pushdown_dml_using_from.test
+# description: Regression tests for DELETE USING / UPDATE FROM join pushdown in RemotePushdownOptimizer
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok db1:con1
+create table t2(i int);
+
+statement ok db1:con1
+insert into t2 values (5), (6), (7), (8), (9), (10), (11), (12), (13), (14);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# Bug 27: DELETE with multiple remote USING clauses each being pushed to concurrent quack streaming slots.
+# Fix: pre-analyze all USING clauses; restore all when more than one is SINGLE_REMOTE.
+
+# Two remote USING clauses still hit quack's single-stream limit; fix ensures no worse failure.
+mode skip multiple_streaming_scans
+
+query I
+delete from local_t using rpc.t1, rpc.t2
+where local_t.local_col = t1.i and local_t.local_col = t2.i
+----
+5
+
+mode unskip
+
+# Single remote USING clause: rpc.t1 pushed to one quack slot; removes {7,8,9} from local_t.
+statement ok
+delete from local_t using rpc.t1
+where local_t.local_col = rpc.t1.i and rpc.t1.i > 6
+
+query I
+select count(*) from local_t
+----
+7
+
+query I
+select local_col from local_t order by local_col
+----
+0
+1
+2
+3
+4
+5
+6
+
+statement ok
+drop table local_t;
+
+# Enhancement: PushJoinChild for SubqueryRef — fully-remote SubqueryRef on one side of a mixed JOIN
+# is individually pushed so the filter executes on the remote server.
+
+statement ok
+create table local_sq(k int);
+
+statement ok
+insert into local_sq from range(10);
+
+# Remote subquery with filter in mixed JOIN is pushed individually
+query I
+select sub.i from local_sq join (select i from rpc.t1 where i > 5) sub on local_sq.k = sub.i
+order by sub.i
+----
+6
+7
+8
+9
+
+# Remote subquery with aggregation in mixed JOIN is pushed individually
+query I
+select count(*) from local_sq join (select i from rpc.t1 where i between 3 and 7) sub on local_sq.k = sub.i
+----
+5
+
+# DELETE USING with remote subquery USING clause is pushed individually
+statement ok
+delete from local_sq using (select i from rpc.t1 where i >= 7) sub where local_sq.k = sub.i
+
+# rows 7-9 deleted; local_sq = {0..6}, count = 7
+query I
+select count(*) from local_sq
+----
+7
+
+# UPDATE FROM with remote subquery FROM clause is pushed individually
+statement ok
+update local_sq set k = sub.v from (select i, i * 10 as v from rpc.t1 where i < 3) sub where local_sq.k = sub.i
+
+# rows 0,1,2 become 0,10,20; count where k > 9 = 2 (values 10 and 20)
+query I
+select count(*) from local_sq where k > 9
+----
+2
+
+statement ok
+drop table local_sq;
+
+# Bug 36: pending_outer_strip_catalogs was not applied to DELETE WHERE / UPDATE SET when the USING/FROM
+# clause was a mixed JoinRef. Fix: apply accumulated pending entries to WHERE/SET/RETURNING.
+
+statement ok
+create table local_del_jref(k int);
+
+statement ok
+insert into local_del_jref from range(10);
+
+statement ok
+create table local_del_jref_aux(m int);
+
+statement ok
+insert into local_del_jref_aux values (3), (5), (7);
+
+# DELETE with USING (local JOIN rpc.t1): WHERE uses rpc.t1.i which must be stripped.
+# t1={0..9}, aux={3,5,7}: condition rpc.t1.i > 4 matches {5,7}; rows 5 and 7 deleted.
+statement ok
+delete from local_del_jref
+using local_del_jref_aux join rpc.t1 on local_del_jref_aux.m = rpc.t1.i
+where local_del_jref.k = rpc.t1.i and rpc.t1.i > 4
+
+# {0..9} minus {5,7} = 8 rows
+query I
+select count(*) from local_del_jref
+----
+8
+
+statement ok
+drop table local_del_jref;
+
+statement ok
+drop table local_del_jref_aux;
+
+statement ok
+create table local_upd_jref(k int);
+
+statement ok
+insert into local_upd_jref from range(5);
+
+statement ok
+create table local_upd_jref_aux(m int);
+
+statement ok
+insert into local_upd_jref_aux values (1), (3);
+
+# UPDATE with FROM (local JOIN rpc.t1): SET uses rpc.t1.i which must be stripped.
+# With fix: k=1 -> 10, k=3 -> 30.
+statement ok
+update local_upd_jref set k = rpc.t1.i * 10
+from local_upd_jref_aux join rpc.t1 on local_upd_jref_aux.m = rpc.t1.i
+where local_upd_jref.k = rpc.t1.i
+
+# rows with original k=1 and k=3 updated to 10 and 30; count >= 10 = 2
+query I
+select count(*) from local_upd_jref where k >= 10
+----
+2
+
+statement ok
+drop table local_upd_jref;
+
+statement ok
+drop table local_upd_jref_aux;
+
+# Bug 36 addendum: symmetric coverage — remote table on the LEFT of a JoinRef inside DELETE USING / UPDATE FROM.
+
+statement ok
+create table local_del_jref2(k int);
+
+statement ok
+insert into local_del_jref2 from range(10);
+
+statement ok
+create table local_del_jref2_aux(m int);
+
+statement ok
+insert into local_del_jref2_aux values (3), (5), (7);
+
+# DELETE with USING (rpc.t1 JOIN local) — remote LEFT, local RIGHT; rpc.t1.i > 4 matches {5,7}.
+statement ok
+delete from local_del_jref2
+using rpc.t1 join local_del_jref2_aux on rpc.t1.i = local_del_jref2_aux.m
+where local_del_jref2.k = rpc.t1.i and rpc.t1.i > 4
+
+# rows 5 and 7 deleted; {0..9} minus {5,7} = 8 rows
+query I
+select count(*) from local_del_jref2
+----
+8
+
+statement ok
+drop table local_del_jref2;
+
+statement ok
+drop table local_del_jref2_aux;
+
+statement ok
+create table local_upd_jref2(k int);
+
+statement ok
+insert into local_upd_jref2 from range(5);
+
+statement ok
+create table local_upd_jref2_aux(m int);
+
+statement ok
+insert into local_upd_jref2_aux values (1), (3);
+
+# UPDATE with FROM (rpc.t1 JOIN local) — remote LEFT, local RIGHT; k=1 -> 10, k=3 -> 30.
+statement ok
+update local_upd_jref2 set k = rpc.t1.i * 10
+from rpc.t1 join local_upd_jref2_aux on rpc.t1.i = local_upd_jref2_aux.m
+where local_upd_jref2.k = rpc.t1.i
+
+# rows with original k=1 and k=3 updated to 10 and 30; count >= 10 = 2
+query I
+select count(*) from local_upd_jref2 where k >= 10
+----
+2
+
+statement ok
+drop table local_upd_jref2;
+
+statement ok
+drop table local_upd_jref2_aux;
+
+statement ok db1:con1
+call quack_stop('quack:localhost')

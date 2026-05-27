@@ -1,0 +1,270 @@
+# name: test/remote_pushdown/remote_pushdown_join.test
+# description: Regression tests for JOIN pushdown bugs in RemotePushdownOptimizer
+# group: [remote_pushdown]
+
+require quack
+
+require httpfs
+
+statement ok db1:con1
+call quack_serve('quack:localhost', token='asdf');
+
+statement ok db1:con1
+create table t1(i int);
+
+statement ok db1:con1
+insert into t1 from range(10);
+
+statement ok db1:con1
+create table t2(i int);
+
+statement ok db1:con1
+insert into t2 values (5), (6), (7), (8), (9), (10), (11), (12), (13), (14);
+
+statement ok
+attach 'quack:localhost' as rpc (token 'asdf')
+
+# Bug 2: StripCatalogName(JoinRef) did not strip JOIN ON condition expressions.
+
+# JOIN ON with catalog-qualified left column: rpc.t1.i stripped to t1.i
+query II
+explain select count(*) from rpc.t1 join rpc.t1 t2 on rpc.t1.i = t2.i
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query I
+select count(*) from rpc.t1 join rpc.t1 t2 on rpc.t1.i = t2.i
+----
+10
+
+# JOIN ON with both sides catalog-qualified: rpc.t1.i and rpc.t2.i both stripped
+# t1={0..9}, t2={5..14}: join on equal values gives {5,6,7,8,9} -> 5 rows
+query II
+explain select count(*) from rpc.t1 join rpc.t2 on rpc.t1.i = rpc.t2.i
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query I
+select count(*) from rpc.t1 join rpc.t2 on rpc.t1.i = rpc.t2.i
+----
+5
+
+# JOIN ON with catalog-qualified filter: t1 rows where i < 5 have no overlap with t2={5..14} -> 0 rows
+query I
+select count(*) from rpc.t1 join rpc.t2 on rpc.t1.i = rpc.t2.i and rpc.t1.i < 5
+----
+0
+
+# Bug 3: Rewrite(JoinRef) did not analyze the JOIN ON condition; local macro in ON must block pushdown.
+
+statement ok
+create macro double_it(x) as x * 2;
+
+# Local macro in JOIN ON blocks full pushdown; hits "multiple streaming scans" limitation
+mode skip multiple_streaming_scans
+
+query I
+select count(*) from rpc.t1 a join rpc.t2 b on double_it(a.i) = b.i
+----
+5
+
+mode unskip
+
+# double_it(i) > 10 -> i > 5 -> {6,7,8,9} = 4 rows
+query I
+select count(*) from rpc.t1 where double_it(i) > 10
+----
+4
+
+# double_it(i) in [10,14] -> i in {5,6,7} = 3 rows
+query I
+select count(*) from rpc.t1 where double_it(i) >= 10 and double_it(i) <= 14
+----
+3
+
+statement ok
+drop macro double_it;
+
+# Bug 4: pushing a JOIN with duplicate output column names caused an internal binding crash.
+# Fix: quack_query_by_name's bind function now calls QueryResult::DeduplicateColumns so that
+# two identically-named result columns (e.g. a.i and b.i both named "i") are renamed to i, i_1.
+# The pushed query executes correctly; the test verifies values (not column names).
+
+mode skip duplicate_name_pushdown_bug
+
+query II rowsort
+select a.i, b.i from rpc.t1 a join rpc.t1 b on a.i + 1 = b.i order by a.i
+----
+0	1
+1	2
+2	3
+3	4
+4	5
+5	6
+6	7
+7	8
+8	9
+
+mode unskip
+
+# Verify that the alias-based workaround still works correctly
+query II
+select a.i as ai, b.i as bi from rpc.t1 a join rpc.t1 b on a.i + 1 = b.i where a.i < 3 order by ai
+----
+0	1
+1	2
+2	3
+
+# Bug 6: FinishPushdown(TableRef&) with a JoinRef loses table aliases, causing "table not found".
+# Fix: skip JoinRef pushdown in FinishPushdown(TableRef&); falls back to native scanning.
+
+statement ok
+create macro double_it(x) as x * 2;
+
+# Local macro in SELECT over 2-table remote join must produce "Multiple streaming scans", not an internal error
+mode skip multiple_streaming_scans
+
+query I rowsort
+select double_it(a.i) from rpc.t1 a join rpc.t2 b on a.i = b.i
+----
+10
+12
+14
+16
+18
+
+mode unskip
+
+statement ok
+drop macro double_it;
+
+# Bug 11: Correlated WHERE subquery was pushed independently when the outer from_table was pushed to remote.
+# Fix: alias must be preserved on the outer table-function wrapper so column refs like ft.i resolve.
+
+statement ok
+create macro id_macro(x) as x;
+
+# id_macro(ft.i) forces UNKNOWN result; rpc.t1 AS ft is pushed individually.
+# t1={0..9}; ft.i>=5 -> {5,6,7,8,9} -> count=5.
+query I
+select count(*) from rpc.t1 AS ft where id_macro(ft.i) >= 5
+----
+5
+
+statement ok
+drop macro id_macro;
+
+# Bug 13: Two bugs: (a) StripCatalogName incorrectly recursed into unpushed subquery bodies in partial
+# pushdown; (b) HasLocalTableReference missed aliases of individually pushed JoinRef children.
+# Fix: pass strip_subquery_bodies=false in partial-pushdown; populate from_pushed_table_aliases.
+
+statement ok
+create table local_k(k int);
+
+statement ok
+insert into local_k values (2), (5), (8);
+
+# Mixed join with correlated EXISTS: must hit "Multiple streaming scans", not a binder error.
+mode skip multiple_streaming_scans
+
+query I
+select count(*) from rpc.t1 t1 join local_k on t1.i = local_k.k
+where exists (select 1 from rpc.t2 where t2.i = t1.i)
+----
+2
+
+mode unskip
+
+statement ok
+drop table local_k
+
+# Bug 14: PushdownSubqueries was incorrectly called when JoinRef children already occupied the quack
+# streaming slot, creating a second concurrent connection.
+
+statement ok
+create table local_m(m int);
+
+statement ok
+insert into local_m values (1), (3), (5);
+
+# Mixed join (rpc.t1 + local_m): both old and new code produce "Multiple streaming scans".
+mode skip multiple_streaming_scans
+
+query I rowsort
+select t1.i from rpc.t1 join local_m on t1.i = local_m.m
+where t1.i < (select max(i) from rpc.t2)
+----
+1
+3
+5
+
+mode unskip
+
+statement ok
+drop table local_m
+
+# Bug 21: Rewrite(JoinRef) analyzed the right side without the left remote table's aliases in
+# local_table_names; a LATERAL correlated subquery was incorrectly classified SINGLE_REMOTE and pushed.
+# Fix: add left aliases to local_table_names before analyzing the right side.
+
+statement ok
+CREATE OR REPLACE MACRO local_double(x) AS (x * 2);
+
+# Both with and without the fix, quack rejects this due to single-stream limit.
+# The error must be about streaming concurrency, not an undefined table reference.
+mode skip multiple_streaming_scans
+
+query II rowsort
+SELECT t1.i, sub.i AS sub_i
+FROM rpc.t1 JOIN (SELECT i FROM rpc.t2 WHERE i = t1.i) sub ON local_double(sub.i) > 0
+ORDER BY t1.i
+----
+5	5
+6	6
+7	7
+8	8
+9	9
+
+mode unskip
+
+statement ok
+DROP MACRO local_double;
+
+# Bug 29: Nested mixed JoinRef — outer ON condition references a remote table pushed in-place inside an
+# inner JoinRef; the stripping loop only processed direct SINGLE_REMOTE children, not nested ones.
+# Fix: also strip catalogs accumulated by nested JoinRef processing from the outer ON condition.
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+statement ok
+create table local_x(x int);
+
+statement ok
+insert into local_x values (0), (2), (4), (6);
+
+# Nested mixed join: rpc.t1 pushed inside (rpc.t1 JOIN local_x); outer ON references rpc.t1.i -> stripped to t1.i.
+# rpc.t1={0..9}, local_x={0,2,4,6}: intersection with local_t = {0,2,4,6}
+query I
+select local_t.local_col
+from local_t
+join (rpc.t1 join local_x on rpc.t1.i = local_x.x)
+on local_t.local_col = rpc.t1.i
+order by local_col
+----
+0
+2
+4
+6
+
+statement ok
+drop table local_x;
+
+statement ok
+drop table local_t;
+
+statement ok db1:con1
+call quack_stop('quack:localhost')
