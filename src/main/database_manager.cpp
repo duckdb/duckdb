@@ -234,14 +234,14 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 	auto &meta_transaction = MetaTransaction::Get(context);
 	if (detached_db) {
 		if (detached_db->GetCatalog().IsRemoteCatalog()) {
-			remote_catalog_count--;
+			--remote_catalog_count;
 		}
 		meta_transaction.DetachDatabase(*detached_db);
 		detached_db->OnDetach(context);
 		detached_db.reset();
 	}
 	if (attached_db->GetCatalog().IsRemoteCatalog()) {
-		remote_catalog_count++;
+		++remote_catalog_count;
 	}
 	auto &db_ref = meta_transaction.UseDatabase(attached_db);
 	auto &transaction = DuckTransaction::Get(context, *system);
@@ -331,7 +331,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const string &name)
 		databases.erase(entry);
 	}
 	if (attached_db && attached_db->GetCatalog().IsRemoteCatalog()) {
-		remote_catalog_count--;
+		--remote_catalog_count;
 	}
 	return attached_db;
 }

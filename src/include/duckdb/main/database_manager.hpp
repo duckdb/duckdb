@@ -14,6 +14,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
+#include "duckdb/common/checked_integer.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -81,7 +82,7 @@ public:
 	idx_t ApproxDatabaseCount();
 	//! Returns the number of remote catalogs currently attached.
 	idx_t GetRemoteCatalogCount() const {
-		return remote_catalog_count;
+		return remote_catalog_count.load();
 	}
 	//! Removes all databases from the catalog set. This is necessary for the database instance's destructor,
 	//! as the database manager has to be alive when destroying the catalog set objects.
@@ -129,7 +130,7 @@ private:
 	//! The current transaction number
 	atomic<transaction_t> current_transaction_id;
 	//! Count of remote catalogs currently attached; used to skip the remote pushdown optimizer when zero
-	atomic<idx_t> remote_catalog_count;
+	atomic<CheckedInteger<idx_t, InternalException>> remote_catalog_count;
 	//! The current default database
 	string default_database;
 	//! Manager for ensuring we never open the same database file twice in the same program

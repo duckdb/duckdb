@@ -294,73 +294,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			break;
 		}
 	}
-
-	// For mixed (UNKNOWN) queries strip remote catalog prefixes from column refs in locally-bound
-	// expressions so that e.g. rpc.t1.i becomes t1.i, which the binder can resolve correctly.
-	if (result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE && node.from_table) {
-		case_insensitive_set_t remote_catalogs;
-		CollectRemoteCatalogs(*node.from_table, remote_catalogs);
-		for (const auto &catalog_name : remote_catalogs) {
-			for (auto &expr : node.select_list) {
-				StripCatalogName(*expr, catalog_name);
-			}
-			if (node.where_clause) {
-				StripCatalogName(*node.where_clause, catalog_name);
-			}
-			for (auto &expr : node.groups.group_expressions) {
-				StripCatalogName(*expr, catalog_name);
-			}
-			if (node.having) {
-				StripCatalogName(*node.having, catalog_name);
-			}
-			if (node.qualify) {
-				StripCatalogName(*node.qualify, catalog_name);
-			}
-			for (auto &modifier : node.modifiers) {
-				switch (modifier->type) {
-				case ResultModifierType::ORDER_MODIFIER: {
-					auto &order_mod = modifier->Cast<OrderModifier>();
-					for (auto &order : order_mod.orders) {
-						StripCatalogName(*order.expression, catalog_name);
-					}
-					break;
-				}
-				case ResultModifierType::LIMIT_MODIFIER: {
-					auto &limit_mod = modifier->Cast<LimitModifier>();
-					if (limit_mod.limit) {
-						StripCatalogName(*limit_mod.limit, catalog_name);
-					}
-					if (limit_mod.offset) {
-						StripCatalogName(*limit_mod.offset, catalog_name);
-					}
-					break;
-				}
-				case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-					auto &limit_mod = modifier->Cast<LimitPercentModifier>();
-					if (limit_mod.limit) {
-						StripCatalogName(*limit_mod.limit, catalog_name);
-					}
-					if (limit_mod.offset) {
-						StripCatalogName(*limit_mod.offset, catalog_name);
-					}
-					break;
-				}
-				case ResultModifierType::DISTINCT_MODIFIER: {
-					auto &distinct_mod = modifier->Cast<DistinctModifier>();
-					for (auto &expr : distinct_mod.distinct_on_targets) {
-						StripCatalogName(*expr, catalog_name);
-					}
-					break;
-				}
-				default:
-					break;
-				}
-			}
-			// Strip from embedded expressions in table refs (e.g. JOIN ON conditions) without
-			// touching the table name identifiers themselves.
-			StripExpressionsInRef(*node.from_table, catalog_name);
-		}
-	}
 	return result;
 }
 
@@ -422,26 +355,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 		auto expr_result = Rewrite(*expr);
 		result = Merge(result, expr_result);
 	}
-
-	// For mixed (UNKNOWN) queries strip remote catalog prefixes from locally-bound expressions.
-	if (result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
-		case_insensitive_set_t remote_catalogs;
-		CollectRemoteCatalogs(*node.table, remote_catalogs);
-		for (auto &using_clause : node.using_clauses) {
-			CollectRemoteCatalogs(*using_clause, remote_catalogs);
-		}
-		for (const auto &catalog_name : remote_catalogs) {
-			if (node.condition) {
-				StripCatalogName(*node.condition, catalog_name);
-			}
-			for (auto &expr : node.returning_list) {
-				StripCatalogName(*expr, catalog_name);
-			}
-			for (auto &using_clause : node.using_clauses) {
-				StripExpressionsInRef(*using_clause, catalog_name);
-			}
-		}
-	}
 	return result;
 }
 
@@ -467,31 +380,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	for (auto &expr : node.returning_list) {
 		auto expr_result = Rewrite(*expr);
 		result = Merge(result, expr_result);
-	}
-
-	// For mixed (UNKNOWN) queries strip remote catalog prefixes from locally-bound expressions.
-	if (result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
-		case_insensitive_set_t remote_catalogs;
-		CollectRemoteCatalogs(*node.table, remote_catalogs);
-		if (node.from_table) {
-			CollectRemoteCatalogs(*node.from_table, remote_catalogs);
-		}
-		for (const auto &catalog_name : remote_catalogs) {
-			if (node.set_info) {
-				if (node.set_info->condition) {
-					StripCatalogName(*node.set_info->condition, catalog_name);
-				}
-				for (auto &expr : node.set_info->expressions) {
-					StripCatalogName(*expr, catalog_name);
-				}
-			}
-			for (auto &expr : node.returning_list) {
-				StripCatalogName(*expr, catalog_name);
-			}
-			if (node.from_table) {
-				StripExpressionsInRef(*node.from_table, catalog_name);
-			}
-		}
 	}
 	return result;
 }
@@ -565,38 +453,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 		// into children, since we might have something like SELECT i + 1 FROM remote UNION ALL ... ORDER BY i + 1
 		// this requires "peeking into" the child query to figure out that the expressions match
 		// for now just be safe and skip pushdown into individual queries in this scenario
-
-		// For mixed queries: strip remote catalog.table qualifiers from ORDER BY expressions down to bare
-		// column names (e.g. rpc.t1.i → i) so the UNION output binding can resolve them.
-		if (result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
-			case_insensitive_set_t remote_catalogs;
-			for (auto &cr : child_results) {
-				if (cr.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG && cr.catalog) {
-					remote_catalogs.insert(cr.catalog->GetName());
-				}
-			}
-			if (!remote_catalogs.empty()) {
-				for (auto &modifier : node.modifiers) {
-					switch (modifier->type) {
-					case ResultModifierType::ORDER_MODIFIER: {
-						auto &order_mod = modifier->Cast<OrderModifier>();
-						for (auto &order : order_mod.orders) {
-							StripToColumnName(*order.expression, remote_catalogs);
-						}
-						break;
-					}
-					default:
-						break;
-					}
-				}
-			}
-		}
-		// Even though the whole set op cannot be pushed (UNKNOWN/mixed), individual remote children
-		// can still be pushed independently. The ORDER BY refers to output column names and resolves
-		// against whichever form the child produces — bare column names after stripping work fine.
-		for (idx_t i = 0; i < node.children.size(); i++) {
-			FinishPushdown(node.children[i], child_results[i]);
-		}
 		return result;
 	}
 	for (idx_t i = 0; i < node.children.size(); i++) {
@@ -1084,67 +940,6 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](ParsedExpression &child) { StripCatalogName(child, catalog_name); });
-}
-
-void RemotePushdownOptimizer::CollectRemoteCatalogs(const TableRef &ref,
-                                                    case_insensitive_set_t &catalog_names) const {
-	switch (ref.type) {
-	case TableReferenceType::BASE_TABLE: {
-		auto &base = ref.Cast<BaseTableRef>();
-		string catalog_name = base.catalog_name;
-		string schema_name = base.schema_name;
-		Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
-		if (!catalog_name.empty()) {
-			auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
-			if (catalog && catalog->IsRemoteCatalog()) {
-				catalog_names.insert(catalog->GetName());
-			}
-		}
-		break;
-	}
-	case TableReferenceType::JOIN: {
-		auto &join = ref.Cast<JoinRef>();
-		CollectRemoteCatalogs(*join.left, catalog_names);
-		CollectRemoteCatalogs(*join.right, catalog_names);
-		break;
-	}
-	default:
-		break;
-	}
-}
-
-void RemotePushdownOptimizer::StripExpressionsInRef(TableRef &ref, const string &catalog_name) {
-	switch (ref.type) {
-	case TableReferenceType::JOIN: {
-		auto &join = ref.Cast<JoinRef>();
-		if (join.condition) {
-			StripCatalogName(*join.condition, catalog_name);
-		}
-		StripExpressionsInRef(*join.left, catalog_name);
-		StripExpressionsInRef(*join.right, catalog_name);
-		break;
-	}
-	default:
-		break;
-	}
-}
-
-void RemotePushdownOptimizer::StripToColumnName(ParsedExpression &expr,
-                                                const case_insensitive_set_t &remote_catalogs) {
-	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-		auto &col_ref = expr.Cast<ColumnRefExpression>();
-		// Strip catalog + all intermediate qualifiers, leaving only the bare column name.
-		// Only strip when the leading qualifier is a known remote catalog and there are at least 3 parts
-		// (catalog.table.col), so bare column refs and 2-part table.col refs are left untouched.
-		if (col_ref.column_names.size() >= 3 && remote_catalogs.count(col_ref.column_names[0])) {
-			string last = col_ref.column_names.back();
-			col_ref.column_names.clear();
-			col_ref.column_names.push_back(std::move(last));
-		}
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](ParsedExpression &child) { StripToColumnName(child, remote_catalogs); });
 }
 
 void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &catalog_name) {
