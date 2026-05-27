@@ -524,7 +524,7 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	// Otherwise we evaluate the row_group_append_mode
 	if (!needs_new_row_group) {
 		auto last_row_group = state.row_groups->GetLastSegment(l);
-		D_ASSERT(last_row_group->GetRowEnd() == append_start);
+		D_ASSERT(last_row_group->GetRowEnd() == state.row_groups->GetBaseRowId() + next_row_id);
 		if (info->GetIndexes().Empty()) {
 			// We honor SUGGEST_NEW unless the table has indexes because there is no vacuuming for indexed tables...
 			needs_new_row_group = row_group_append_mode == RowGroupAppendMode::SUGGEST_NEW;
@@ -770,7 +770,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 	idx_t source_offset = 0;
 	idx_t target_row_start = start_index;
 	for (auto &entry : segments) {
-		D_ASSERT(entry->GetRowStart() == source_base_row_id + source_offset);
+		D_ASSERT(entry->GetRowStart() == source_row_groups->GetBaseRowId() + source_offset);
 		auto row_group = entry->MoveNode();
 		row_group->MoveToCollection(*this);
 		idx_t row_group_count = row_group->count;
