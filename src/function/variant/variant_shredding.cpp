@@ -175,8 +175,8 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 	(void)validity;
 
 	//! Collect the nested data for the objects
-	const auto owned_child_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
-	array_ptr nested_data(owned_child_data.get(), count);
+	const auto owned_nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
+	array_ptr nested_data(owned_nested_data.get(), count);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
