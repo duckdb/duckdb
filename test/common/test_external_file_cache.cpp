@@ -313,4 +313,24 @@ TEST_CASE("Concurrent SET and Read do not corrupt data or cache state", "[extern
 	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
 }
 
+TEST_CASE("Failed CachingFileHandle construction releases cached file reference", "[external_file_cache]") {
+	DuckDB db(":memory:");
+	auto &db_instance = *db.instance;
+	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
+	CachingFileSystem cfs(*tracking_fs, db_instance);
+	auto &cache = db_instance.GetExternalFileCache();
+
+	auto local_fs = FileSystem::CreateLocal();
+	const auto missing_a = TestCreatePath("test_efc_missing_a.bin");
+	const auto missing_b = TestCreatePath("test_efc_missing_b.bin");
+	local_fs->TryRemoveFile(missing_a);
+	local_fs->TryRemoveFile(missing_b);
+
+	REQUIRE_THROWS(cfs.OpenFile(MakeTestOpenFileInfo(missing_a), FileFlags::FILE_FLAGS_READ));
+	REQUIRE_THROWS(cfs.OpenFile(MakeTestOpenFileInfo(missing_b), FileFlags::FILE_FLAGS_READ));
+
+	auto &cached_file = cache.GetOrCreateCachedFile(missing_a);
+	REQUIRE(cached_file.ref_count == 1);
+}
+
 } // namespace duckdb

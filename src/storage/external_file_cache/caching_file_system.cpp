@@ -16,6 +16,33 @@ namespace duckdb {
 // Forward declaration.
 class DatabaseInstance;
 
+namespace {
+
+class CachedFileRefGuard {
+public:
+	explicit CachedFileRefGuard(ExternalFileCache::CachedFile &cached_file_p) : cached_file(cached_file_p) {
+	}
+	// Disable copy and move.
+	CachedFileRefGuard(const CachedFileRefGuard &other) = delete;
+	CachedFileRefGuard &operator=(const CachedFileRefGuard &other) = delete;
+
+	~CachedFileRefGuard() {
+		if (!released) {
+			--cached_file.ref_count;
+		}
+	}
+
+	void Release() {
+		released = true;
+	}
+
+private:
+	ExternalFileCache::CachedFile &cached_file;
+	bool released = false;
+};
+
+} // namespace
+
 //===----------------------------------------------------------------------===//
 // FetchBlockTask
 //===----------------------------------------------------------------------===//
@@ -126,14 +153,20 @@ CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
                                                           optional_ptr<FileOpener> opener) {
-	return make_uniq<CachingFileHandle>(QueryContext(), *this, path, flags, opener,
-	                                    external_file_cache.GetOrCreateCachedFile(path.path));
+	auto &cached_file = external_file_cache.GetOrCreateCachedFile(path.path);
+	CachedFileRefGuard guard(cached_file);
+	auto result = make_uniq<CachingFileHandle>(QueryContext(), *this, path, flags, opener, cached_file);
+	guard.Release();
+	return result;
 }
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, const OpenFileInfo &path,
                                                           FileOpenFlags flags, optional_ptr<FileOpener> opener) {
-	return make_uniq<CachingFileHandle>(context, *this, path, flags, opener,
-	                                    external_file_cache.GetOrCreateCachedFile(path.path));
+	auto &cached_file = external_file_cache.GetOrCreateCachedFile(path.path);
+	CachedFileRefGuard guard(cached_file);
+	auto result = make_uniq<CachingFileHandle>(context, *this, path, flags, opener, cached_file);
+	guard.Release();
+	return result;
 }
 
 //===----------------------------------------------------------------------===//
