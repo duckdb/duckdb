@@ -1779,5 +1779,64 @@ join (select i from rpc.t1 cross join zero where i >= zero.n) sub
 statement ok
 drop table local_bug37;
 
+# ============================================================
+# Bug 38: RenameTableInExpr only handled 2-part column refs.
+#
+# When a table is referenced with an explicit schema qualifier in a mixed
+# join (e.g. rpc.main.t1), StripCatalogName reduces catalog.schema.table.col
+# (4-part) to schema.table.col (3-part) by removing only the catalog prefix.
+# Previously RenameTableInExpr only renamed 2-part refs (table.col → alias.col),
+# so the 3-part schema.table.col was left unmodified and the binder failed with
+# "Referenced table schema.table not found" or similar.
+#
+# Fix: extend RenameTableInExpr to also reduce 3-part schema.table.col →
+# alias.col, and remove the !CIEquals guard so the rename is attempted even
+# when the table has no explicit alias (old_name == new_alias).  This ensures
+# both the no-alias case (main.t1.col → t1.col) and the explicit-alias case
+# (main.t1.col → rt1.col) are handled correctly.
+#
+# Without the fix all four queries below fail with a binder error because
+# main.t1.i or main.t1.col cannot be resolved after rpc.main.t1 is replaced
+# by a quack_query_by_name(...) TABLE_FUNCTION aliased as "t1".
+# ============================================================
+
+statement ok
+create table local_t(local_col int);
+
+statement ok
+insert into local_t from range(10);
+
+# Bug 38a: schema-qualified ON condition — no alias
+# rpc.main.t1={0..9}, local_t={0..9}: all 10 rows match
+query I
+select count(*) from rpc.main.t1 join local_t on (rpc.main.t1.i = local_t.local_col)
+----
+10
+
+# Bug 38b: schema-qualified ON condition — with explicit alias (rt1)
+# rpc.main.t1 AS rt1 is pushed as TABLE_FUNCTION aliased "rt1";
+# rpc.main.t1.i in ON must reduce to rt1.i (not main.t1.i or t1.i)
+query I
+select count(*) from rpc.main.t1 as rt1 join local_t on (rpc.main.t1.i = local_t.local_col)
+----
+10
+
+# Bug 38c: schema-qualified column ref in WHERE of mixed join
+# rpc.main.t1 pushed individually as "t1"; rpc.main.t1.i in WHERE → t1.i after fix
+# local_t={0..9}: 4 rows with local_col > 5
+query I
+select count(*) from rpc.main.t1 join local_t on (i = local_col) where rpc.main.t1.i > 5
+----
+4
+
+# Bug 38d: schema-qualified column ref in SELECT list of mixed join
+query I
+select count(rpc.main.t1.i) from rpc.main.t1 join local_t on (i = local_col)
+----
+10
+
+statement ok
+drop table local_t;
+
 statement ok db1:con1
 call quack_stop('quack:localhost')

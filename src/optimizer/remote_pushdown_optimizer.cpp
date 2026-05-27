@@ -248,8 +248,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 	// individually and must keep their catalog-qualified references intact.
 	// When the pushed table has an explicit alias (e.g. rpc.t1 AS rt1), StripCatalogName reduces
 	// "rpc.t1.col" to "t1.col" but the binder only knows "rt1". RenameTableInExpr fixes that up.
+	// Also handles schema-qualified 4-part refs: StripCatalogName reduces rpc.main.t1.col to
+	// main.t1.col (3-part); RenameTableInExpr then reduces main.t1.col → alias.col so the binder
+	// can resolve the reference against the TABLE_FUNCTION alias (which has no schema prefix).
 	for (auto &entry : pending_outer_strip_catalogs) {
-		bool need_rename = !StringUtil::CIEquals(entry.old_table_name, entry.new_alias);
+		bool need_rename = !entry.old_table_name.empty();
 		auto strip_and_rename = [&](ParsedExpression &expr) {
 			StripCatalogName(expr, entry.catalog_name, false);
 			if (need_rename) {
@@ -422,7 +425,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 	// Apply pending catalog stripping from individually-pushed JoinRef children within
 	// USING clauses to the WHERE condition and RETURNING list before analyzing them.
 	for (auto &entry : pending_outer_strip_catalogs) {
-		bool need_rename = !StringUtil::CIEquals(entry.old_table_name, entry.new_alias);
+		bool need_rename = !entry.old_table_name.empty();
 		auto strip_and_rename = [&](ParsedExpression &expr) {
 			StripCatalogName(expr, entry.catalog_name, false);
 			if (need_rename) {
@@ -470,13 +473,13 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 				if (!catalog_name.empty()) {
 					if (node.condition) {
 						StripCatalogName(*node.condition, catalog_name, false);
-						if (!old_tname.empty() && !StringUtil::CIEquals(old_tname, new_talias)) {
+						if (!old_tname.empty()) {
 							RenameTableInExpr(*node.condition, old_tname, new_talias);
 						}
 					}
 					for (auto &expr : node.returning_list) {
 						StripCatalogName(*expr, catalog_name, false);
-						if (!old_tname.empty() && !StringUtil::CIEquals(old_tname, new_talias)) {
+						if (!old_tname.empty()) {
 							RenameTableInExpr(*expr, old_tname, new_talias);
 						}
 					}
@@ -501,7 +504,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	// Apply pending catalog stripping from individually-pushed JoinRef children within
 	// the FROM clause to SET expressions, WHERE condition, and RETURNING list.
 	for (auto &entry : pending_outer_strip_catalogs) {
-		bool need_rename = !StringUtil::CIEquals(entry.old_table_name, entry.new_alias);
+		bool need_rename = !entry.old_table_name.empty();
 		auto strip_and_rename = [&](ParsedExpression &expr) {
 			StripCatalogName(expr, entry.catalog_name, false);
 			if (need_rename) {
@@ -561,20 +564,20 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 			if (node.set_info) {
 				if (node.set_info->condition) {
 					StripCatalogName(*node.set_info->condition, catalog_name, false);
-					if (!old_tname.empty() && !StringUtil::CIEquals(old_tname, new_talias)) {
+					if (!old_tname.empty()) {
 						RenameTableInExpr(*node.set_info->condition, old_tname, new_talias);
 					}
 				}
 				for (auto &expr : node.set_info->expressions) {
 					StripCatalogName(*expr, catalog_name, false);
-					if (!old_tname.empty() && !StringUtil::CIEquals(old_tname, new_talias)) {
+					if (!old_tname.empty()) {
 						RenameTableInExpr(*expr, old_tname, new_talias);
 					}
 				}
 			}
 			for (auto &expr : node.returning_list) {
 				StripCatalogName(*expr, catalog_name, false);
-				if (!old_tname.empty() && !StringUtil::CIEquals(old_tname, new_talias)) {
+				if (!old_tname.empty()) {
 					RenameTableInExpr(*expr, old_tname, new_talias);
 				}
 			}
@@ -891,7 +894,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 		for (idx_t i = pending_before; i < pending_outer_strip_catalogs.size(); i++) {
 			auto &entry = pending_outer_strip_catalogs[i];
 			StripCatalogName(*ref.condition, entry.catalog_name, false);
-			if (!StringUtil::CIEquals(entry.old_table_name, entry.new_alias)) {
+			if (!entry.old_table_name.empty()) {
 				RenameTableInExpr(*ref.condition, entry.old_table_name, entry.new_alias);
 			}
 		}
@@ -926,7 +929,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 			if (!catalog_name.empty()) {
 				if (ref.condition) {
 					StripCatalogName(*ref.condition, catalog_name, false);
-					if (!old_tname.empty() && !StringUtil::CIEquals(old_tname, new_talias)) {
+					if (!old_tname.empty()) {
 						RenameTableInExpr(*ref.condition, old_tname, new_talias);
 					}
 				}
@@ -947,7 +950,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 			if (!catalog_name.empty()) {
 				if (ref.condition) {
 					StripCatalogName(*ref.condition, catalog_name, false);
-					if (!old_tname.empty() && !StringUtil::CIEquals(old_tname, new_talias)) {
+					if (!old_tname.empty()) {
 						RenameTableInExpr(*ref.condition, old_tname, new_talias);
 					}
 				}
@@ -1252,6 +1255,11 @@ void RemotePushdownOptimizer::RenameTableInExpr(ParsedExpression &expr, const st
 		// table name is now the first element of a 2-part ref.
 		if (col_ref.column_names.size() == 2 && StringUtil::CIEquals(col_ref.column_names[0], old_table)) {
 			col_ref.column_names[0] = new_alias;
+		} else if (col_ref.column_names.size() == 3 && StringUtil::CIEquals(col_ref.column_names[1], old_table)) {
+			// After StripCatalogName reduced catalog.schema.table.col → schema.table.col (3-part),
+			// further reduce schema.table.col → alias.col so the binder can resolve the reference
+			// against the TABLE_FUNCTION alias (which has no schema prefix in its registration).
+			col_ref.column_names = {new_alias, col_ref.column_names[2]};
 		}
 		return;
 	}
