@@ -36,9 +36,6 @@ public:
 	const ParsedExpression &Else() const {
 		return *else_expr;
 	}
-	bool HasElse() const {
-		return else_expr != nullptr;
-	}
 	vector<CaseCheck> &CaseChecksMutable() {
 		return case_checks;
 	}

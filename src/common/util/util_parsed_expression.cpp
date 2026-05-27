@@ -60,16 +60,12 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::CAST: {
 		auto &cast_expr = Cast<CastExpression>();
-		if (cast_expr.child) {
-			result.Append(*cast_expr.child);
-		}
+		result.Append(cast_expr.Child());
 		break;
 	}
 	case ExpressionClass::COLLATE: {
 		auto &cast_expr = Cast<CollateExpression>();
-		if (cast_expr.child) {
-			result.Append(*cast_expr.child);
-		}
+		result.Append(cast_expr.Child());
 		break;
 	}
 	case ExpressionClass::COMPARISON: {
@@ -206,16 +202,12 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::CAST: {
 		auto &cast_expr = Cast<CastExpression>();
-		if (cast_expr.child) {
-			result.Append(cast_expr.child);
-		}
+		result.Append(cast_expr.ChildMutable());
 		break;
 	}
 	case ExpressionClass::COLLATE: {
 		auto &cast_expr = Cast<CollateExpression>();
-		if (cast_expr.child) {
-			result.Append(cast_expr.child);
-		}
+		result.Append(cast_expr.ChildMutable());
 		break;
 	}
 	case ExpressionClass::COMPARISON: {

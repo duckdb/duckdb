@@ -98,7 +98,9 @@
       {
         "id": 200,
         "name": "child",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "ChildMutable()",
+        "accessor": "Child()"
       },
       {
         "id": 201,
@@ -120,7 +122,9 @@
       {
         "id": 200,
         "name": "child",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "ChildMutable()",
+        "accessor": "Child()"
       },
       {
         "id": 201,
