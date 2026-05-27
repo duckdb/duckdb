@@ -223,6 +223,27 @@ query I
 8
 9
 
+# Schema-qualified ORDER BY in mixed UNION: "rpc.main.t1.i" (4-part) must also be reduced to "i"
+# by StripSetOpOrderByExpr which checks col_ref.column_names[0] == catalog_name.
+query I
+(select i from rpc.main.t1) union all (select i from local_t) order by rpc.main.t1.i
+----
+0
+0
+1
+1
+2
+2
+3
+3
+4
+4
+5
+6
+7
+8
+9
+
 statement ok
 drop table local_t
 

@@ -231,5 +231,49 @@ select count(*) from local_alias where k > 10
 statement ok
 drop table local_alias
 
+# --- DELETE USING with a mixed JoinRef (remote + local) in the USING clause ---
+#
+# When USING contains a JoinRef with one remote side (rpc.t1) and one local side (local_j),
+# Rewrite(JoinRef) pushes rpc.t1 individually as TABLE_FUNCTION AS t1.
+# The JoinRef result is UNKNOWN (mixed), so the whole DELETE is not fully pushed.
+# The DELETE runs locally: the USING clause is "TABLE_FUNCTION(t1) JOIN local_j ON ..."
+# and the WHERE condition has catalog refs stripped by the pending_outer_strip_catalogs logic.
+
+statement ok
+create table local_del(val int);
+
+statement ok
+insert into local_del from range(10);
+
+statement ok
+create table local_j(val int);
+
+statement ok
+insert into local_j values (3), (4), (5), (6);
+
+# Delete rows from local_del where local_del.val == rpc.t1.i AND rpc.t1.i is in local_j
+# After strip: WHERE local_del.val = t1.i (t1 is the TABLE_FUNCTION alias for rpc.t1)
+# rpc.t1={0..9}, local_j={3,4,5,6}; rows deleted from local_del: {3,4,5,6} -> 4 rows removed
+statement ok
+delete from local_del
+    using rpc.t1 join local_j on (rpc.t1.i = local_j.val)
+    where local_del.val = rpc.t1.i
+
+query I
+select count(*) from local_del
+----
+6
+
+query II
+select min(val), max(val) from local_del
+----
+0	9
+
+statement ok
+drop table local_del
+
+statement ok
+drop table local_j
+
 statement ok db1:con1
 call quack_stop('quack:localhost')
