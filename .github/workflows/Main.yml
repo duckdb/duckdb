@@ -293,9 +293,12 @@ jobs:
 
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        CORE_EXTENSIONS: "tpch;httpfs;parquet"
       with:
         build-type: relassert
         build: python3 scripts/ci/retry.py -- make relassert
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
         test: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
         bundle: make relassert-artifact
         upload-name: linux-relassert-build
