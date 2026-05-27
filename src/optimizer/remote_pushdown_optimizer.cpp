@@ -39,7 +39,8 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 
 namespace duckdb {
-RemotePushdownOptimizer::RemotePushdownOptimizer(Binder &binder) : binder(binder), owned_pushdown_state(make_uniq<RemotePushdownState>()), pushdown_state(*owned_pushdown_state) {
+RemotePushdownOptimizer::RemotePushdownOptimizer(Binder &binder)
+    : binder(binder), owned_pushdown_state(make_uniq<RemotePushdownState>()), pushdown_state(*owned_pushdown_state) {
 }
 
 RemotePushdownOptimizer::RemotePushdownOptimizer(RemotePushdownOptimizer &parent_p)
@@ -223,62 +224,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
-	// Save and reset the pending strip catalogs set by child JoinRef individual pushdown.
-	// Scoped to this SelectNode so nested selects (via child optimizers) don't interfere.
-	vector<PendingStripEntry> saved_pending = std::move(pending_outer_strip_catalogs);
-	pending_outer_strip_catalogs = {};
-
 	CatalogPushdownResult from_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
 	if (node.from_table) {
 		from_result = Rewrite(node.from_table);
 	}
-
-	// Apply pending catalog stripping from individual JoinRef child pushdown.
-	// Use strip_subquery_bodies=false: subqueries in SELECT/WHERE are NOT being pushed
-	// individually and must keep their catalog-qualified references intact.
-	// When the pushed table has an explicit alias (e.g. rpc.t1 AS rt1), StripCatalogName reduces
-	// "rpc.t1.col" to "t1.col" but the binder only knows "rt1". RenameTableInExpr fixes that up.
-	// Also handles schema-qualified 4-part refs: StripCatalogName reduces rpc.main.t1.col to
-	// main.t1.col (3-part); RenameTableInExpr then reduces main.t1.col → alias.col so the binder
-	// can resolve the reference against the TABLE_FUNCTION alias (which has no schema prefix).
-	for (auto &entry : pending_outer_strip_catalogs) {
-		bool need_rename = !entry.old_table_name.empty();
-		auto strip_and_rename = [&](ParsedExpression &expr) {
-			StripCatalogName(expr, entry.catalog_name, false);
-			if (need_rename) {
-				RenameTableInExpr(expr, entry.old_table_name, entry.new_alias);
-			}
-		};
-		for (auto &expr : node.select_list) {
-			strip_and_rename(*expr);
-		}
-		if (node.where_clause) {
-			strip_and_rename(*node.where_clause);
-		}
-		for (auto &expr : node.groups.group_expressions) {
-			strip_and_rename(*expr);
-		}
-		if (node.having) {
-			strip_and_rename(*node.having);
-		}
-		if (node.qualify) {
-			strip_and_rename(*node.qualify);
-		}
-		for (auto &modifier : node.modifiers) {
-			if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
-				auto &order_mod = modifier->Cast<OrderModifier>();
-				for (auto &order : order_mod.orders) {
-					strip_and_rename(*order.expression);
-				}
-			} else if (modifier->type == ResultModifierType::DISTINCT_MODIFIER) {
-				auto &distinct_mod = modifier->Cast<DistinctModifier>();
-				for (auto &expr : distinct_mod.distinct_on_targets) {
-					strip_and_rename(*expr);
-				}
-			}
-		}
-	}
-	pending_outer_strip_catalogs = std::move(saved_pending);
 
 	// Merge from_table result with all expressions to determine if the whole node can be pushed
 	CatalogPushdownResult result = from_result;
@@ -401,9 +350,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
-	vector<PendingStripEntry> saved_pending = std::move(pending_outer_strip_catalogs);
-	pending_outer_strip_catalogs = {};
-
 	auto result = Rewrite(node.table);
 	vector<CatalogPushdownResult> using_results;
 	for (auto &using_clause : node.using_clauses) {
@@ -411,25 +357,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 		using_results.push_back(using_result);
 		result = Merge(result, using_result);
 	}
-
-	// Apply pending catalog stripping from individually-pushed JoinRef children within
-	// USING clauses to the WHERE condition and RETURNING list before analyzing them.
-	for (auto &entry : pending_outer_strip_catalogs) {
-		bool need_rename = !entry.old_table_name.empty();
-		auto strip_and_rename = [&](ParsedExpression &expr) {
-			StripCatalogName(expr, entry.catalog_name, false);
-			if (need_rename) {
-				RenameTableInExpr(expr, entry.old_table_name, entry.new_alias);
-			}
-		};
-		if (node.condition) {
-			strip_and_rename(*node.condition);
-		}
-		for (auto &expr : node.returning_list) {
-			strip_and_rename(*expr);
-		}
-	}
-	pending_outer_strip_catalogs = std::move(saved_pending);
 
 	if (node.condition) {
 		auto condition_result = Rewrite(*node.condition);
@@ -445,85 +372,16 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 			result = Merge(result, it->second);
 		}
 	}
-	// Individual pushdown: for mixed DELETE (local target, remote USING clause), push remote USING
-	// clauses individually and strip catalog refs from the WHERE condition and RETURNING list.
-	// Skip when multiple USING clauses are SINGLE_REMOTE: each would open a quack streaming slot
-	// concurrently, triggering "Multiple streaming scans" before reaching quack's native layer.
-	// Let quack's native scanning handle multiple remote USING tables sequentially instead.
-	idx_t single_remote_using_count = 0;
-	for (auto &ur : using_results) {
-		if (ur.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-			single_remote_using_count++;
-		}
-	}
-	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-	    single_remote_using_count <= 1) {
-		for (idx_t i = 0; i < node.using_clauses.size(); i++) {
-			if (using_results[i].reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-				string old_tname, new_talias;
-				if (node.using_clauses[i]->type == TableReferenceType::BASE_TABLE) {
-					auto &base = node.using_clauses[i]->Cast<BaseTableRef>();
-					old_tname = base.table_name;
-					new_talias = base.alias.empty() ? base.table_name : base.alias;
-				} else if (node.using_clauses[i]->type == TableReferenceType::SUBQUERY) {
-					old_tname = node.using_clauses[i]->Cast<SubqueryRef>().alias;
-					new_talias = old_tname;
-				}
-				auto catalog_name = PushJoinChild(node.using_clauses[i], using_results[i]);
-				if (!catalog_name.empty()) {
-					if (node.condition) {
-						StripCatalogName(*node.condition, catalog_name, false);
-						if (!old_tname.empty()) {
-							RenameTableInExpr(*node.condition, old_tname, new_talias);
-						}
-					}
-					for (auto &expr : node.returning_list) {
-						StripCatalogName(*expr, catalog_name, false);
-						if (!old_tname.empty()) {
-							RenameTableInExpr(*expr, old_tname, new_talias);
-						}
-					}
-				}
-			}
-		}
-	}
 	return result;
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
-	vector<PendingStripEntry> saved_pending = std::move(pending_outer_strip_catalogs);
-	pending_outer_strip_catalogs = {};
-
 	auto result = Rewrite(node.table);
 	CatalogPushdownResult from_result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
 	if (node.from_table) {
 		from_result = Rewrite(node.from_table);
 		result = Merge(result, from_result);
 	}
-
-	// Apply pending catalog stripping from individually-pushed JoinRef children within
-	// the FROM clause to SET expressions, WHERE condition, and RETURNING list.
-	for (auto &entry : pending_outer_strip_catalogs) {
-		bool need_rename = !entry.old_table_name.empty();
-		auto strip_and_rename = [&](ParsedExpression &expr) {
-			StripCatalogName(expr, entry.catalog_name, false);
-			if (need_rename) {
-				RenameTableInExpr(expr, entry.old_table_name, entry.new_alias);
-			}
-		};
-		if (node.set_info) {
-			if (node.set_info->condition) {
-				strip_and_rename(*node.set_info->condition);
-			}
-			for (auto &expr : node.set_info->expressions) {
-				strip_and_rename(*expr);
-			}
-		}
-		for (auto &expr : node.returning_list) {
-			strip_and_rename(*expr);
-		}
-	}
-	pending_outer_strip_catalogs = std::move(saved_pending);
 
 	if (node.set_info) {
 		if (node.set_info->condition) {
@@ -546,43 +404,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 			result = Merge(result, it->second);
 		}
 	}
-	// Individual pushdown: for mixed UPDATE (local target, remote FROM clause), push the remote FROM
-	// table individually and strip catalog refs from SET expressions, WHERE condition, and RETURNING.
-	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG && node.from_table &&
-	    from_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		string old_tname, new_talias;
-		if (node.from_table->type == TableReferenceType::BASE_TABLE) {
-			auto &base = node.from_table->Cast<BaseTableRef>();
-			old_tname = base.table_name;
-			new_talias = base.alias.empty() ? base.table_name : base.alias;
-		} else if (node.from_table->type == TableReferenceType::SUBQUERY) {
-			old_tname = node.from_table->Cast<SubqueryRef>().alias;
-			new_talias = old_tname;
-		}
-		auto catalog_name = PushJoinChild(node.from_table, from_result);
-		if (!catalog_name.empty()) {
-			if (node.set_info) {
-				if (node.set_info->condition) {
-					StripCatalogName(*node.set_info->condition, catalog_name, false);
-					if (!old_tname.empty()) {
-						RenameTableInExpr(*node.set_info->condition, old_tname, new_talias);
-					}
-				}
-				for (auto &expr : node.set_info->expressions) {
-					StripCatalogName(*expr, catalog_name, false);
-					if (!old_tname.empty()) {
-						RenameTableInExpr(*expr, old_tname, new_talias);
-					}
-				}
-			}
-			for (auto &expr : node.returning_list) {
-				StripCatalogName(*expr, catalog_name, false);
-				if (!old_tname.empty()) {
-					RenameTableInExpr(*expr, old_tname, new_talias);
-				}
-			}
-		}
-	}
 	return result;
 }
 
@@ -591,29 +412,10 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	vector<CatalogPushdownResult> child_results;
 	child_results.reserve(node.children.size());
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-	// Rewrite(JoinRef) may push remote tables in-place (as quack TABLE_FUNCTIONs) even when the
-	// overall child result is UNKNOWN (mixed remote+local join). If a SINGLE_REMOTE sibling is
-	// later individually pushed, the stale TABLE_FUNCTION wrapper in the UNKNOWN child causes a
-	// concurrent second streaming slot, triggering "Multiple streaming scans".
-	//
-	// Fix (a): restore UNKNOWN children that had in-place JoinRef modifications to remove stale
-	//          TABLE_FUNCTION wrappers. Detected via non-empty child pending_outer_strip_catalogs.
-	// Fix (b): skip individual SINGLE_REMOTE pushdown when such an UNKNOWN sibling exists: the
-	//          restored UNKNOWN child still accesses remote tables natively, so a concurrently
-	//          pushed SINGLE_REMOTE sibling would open a second quack streaming slot.
-	bool any_unknown_with_remote_join = false;
 	for (auto &child : node.children) {
 		auto saved_child = child->Copy();
 		RemotePushdownOptimizer child_optimizer(*this);
 		auto child_result = child_optimizer.Rewrite(*child);
-		if (child_result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
-			if (!child_optimizer.pending_outer_strip_catalogs.empty()) {
-				// JoinRef pushed remote tables in-place → restore to remove stale wrappers (fix a)
-				// and mark that sibling pushdown must be skipped (fix b).
-				child = std::move(saved_child);
-				any_unknown_with_remote_join = true;
-			}
-		}
 		result = Merge(result, child_result);
 		child_results.push_back(child_result);
 	}
@@ -678,31 +480,15 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		return result;
 	}
-	// Push individual children that resolve to a single remote catalog.
-	// Skip when any UNKNOWN sibling had in-place JoinRef modifications (fix b): after restoring
-	// that sibling (fix a), it still accesses remote tables natively, and a concurrently-pushed
-	// SINGLE_REMOTE sibling would open a second quack streaming slot alongside the native scan.
-	if (!any_unknown_with_remote_join) {
-		for (idx_t i = 0; i < node.children.size(); i++) {
-			FinishPushdown(node.children[i], child_results[i]);
-		}
-	}
-	// Strip catalog-qualified ORDER BY expressions for any arm that references a remote catalog.
-	// UNION/INTERSECT/EXCEPT output has no table associations — catalog.table.col refs in ORDER BY
-	// must be reduced to the bare column name regardless of whether the arm was individually pushed.
 	if (has_expression_modifiers) {
-		for (idx_t i = 0; i < node.children.size(); i++) {
-			if (child_results[i].reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-				for (auto &modifier : node.modifiers) {
-					if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
-						auto &order_mod = modifier->Cast<OrderModifier>();
-						for (auto &order : order_mod.orders) {
-							StripSetOpOrderByExpr(*order.expression, child_results[i].catalog->GetName());
-						}
-					}
-				}
-			}
-		}
+		// if the set operation has any modifiers (e.g. ORDER BY <expr>) then binding can go wrong if we do a pushdown
+		// into children, since we might have something like SELECT i + 1 FROM remote UNION ALL ... ORDER BY i + 1
+		// this requires "peeking into" the child query to figure out that the expressions match
+		// for now just be safe and skip pushdown into individual queries in this scenario
+		return result;
+	}
+	for (idx_t i = 0; i < node.children.size(); i++) {
+		FinishPushdown(node.children[i], child_results[i]);
 	}
 	return result;
 }
@@ -740,11 +526,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ExpressionListRef &ref) {
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SubqueryRef &ref) {
 	RemotePushdownOptimizer child_binder(*this);
 	auto result = child_binder.Rewrite(*ref.subquery->node);
-	// Track the alias only for subqueries that reference local data (UNKNOWN). A subquery
-	// with NO_CATALOG_REFERENCED (e.g. "SELECT 1") has no local data and must not be
-	// tracked: doing so would make any outer column ref to this alias return UNKNOWN from
-	// RefersToLocalTable, incorrectly blocking pushdown of queries like
-	// "SELECT t1.i FROM rpc.t1 t1, (SELECT 1 AS v) sub WHERE t1.i < sub.v".
 	if (result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE && !ref.alias.empty()) {
 		local_table_names.insert(ref.alias);
 	}
@@ -829,101 +610,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	return {};
 }
 
-string RemotePushdownOptimizer::PushJoinChild(unique_ptr<TableRef> &ref, CatalogPushdownResult result) {
-	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		return "";
-	}
-	if (ref->type == TableReferenceType::SUBQUERY) {
-		// Guard: if any outer CTE is SINGLE_REMOTE or NO_CATALOG_REFERENCED, the subquery may reference it
-		// by name without its WITH definition being included. Pushing it standalone would fail on the remote.
-		// NO_CATALOG CTEs: Merge(SINGLE_REMOTE, NO_CATALOG) = SINGLE_REMOTE, so a subquery referencing both
-		// a remote table and a constant outer CTE (e.g. WITH zero AS (SELECT 0)) is classified SINGLE_REMOTE,
-		// but the pushed SQL references the CTE by name without its definition → remote error.
-		for (const RemotePushdownOptimizer *opt = this; opt; opt = opt->parent.get()) {
-			for (auto &cte_entry : opt->cte_results) {
-				auto ref_type = cte_entry.second.reference_type;
-				if (ref_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG ||
-				    ref_type == CatalogReferenceType::NO_CATALOG_REFERENCED) {
-					return "";
-				}
-			}
-		}
-		auto &sq = ref->Cast<SubqueryRef>();
-		string alias = sq.alias;
-		StripCatalogName(*sq.subquery->node, result.catalog->GetName());
-		auto func_ref = CreateRemoteFunctionRef(result, std::move(sq.subquery->node));
-		func_ref->alias = alias;
-		ref = std::move(func_ref);
-		return result.catalog->GetName();
-	}
-	if (ref->type != TableReferenceType::BASE_TABLE) {
-		return "";
-	}
-	auto &base = ref->Cast<BaseTableRef>();
-	// Resolve the actual catalog/schema split (e.g. "rpc.t1" is parsed as schema="rpc", catalog=""
-	// but BindSchemaOrCatalog recognises "rpc" as a catalog, giving catalog="rpc", schema="").
-	string resolved_catalog = base.catalog_name;
-	string resolved_schema = base.schema_name;
-	Binder::BindSchemaOrCatalog(binder.context, resolved_catalog, resolved_schema);
-
-	// Don't push CTE references — they are local definitions that don't exist on the remote server.
-	// A CTE always has no catalog or schema qualifier after resolution.
-	if (resolved_catalog.empty() && resolved_schema.empty()) {
-		CatalogPushdownResult cte_check;
-		if (RefersToCTE(base.table_name, cte_check)) {
-			return "";
-		}
-	}
-
-	string alias = base.alias.empty() ? base.table_name : base.alias;
-
-	// Build SELECT * FROM <table_without_catalog_prefix> and push to remote.
-	// Use resolved_schema (which is empty for simple "rpc.t1") so the remote sees "t1" not "rpc.t1".
-	auto inner_ref = make_uniq<BaseTableRef>();
-	inner_ref->schema_name = resolved_schema;
-	inner_ref->table_name = base.table_name;
-
-	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = std::move(inner_ref);
-
-	auto func_ref = CreateRemoteFunctionRef(result, std::move(select_node));
-	func_ref->alias = alias;
-	ref = std::move(func_ref);
-
-	return result.catalog->GetName();
-}
-
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
-	// Capture pending size before processing children: new entries (from inner JoinRef pushdowns)
-	// must be used to strip THIS JoinRef's ON condition as well as the outer SELECT expressions.
-	idx_t pending_before = pending_outer_strip_catalogs.size();
-
 	auto left_result = Rewrite(ref.left);
 
 	// the right side of a join can be correlated to the left side - use a child optimizer to track this
 	RemotePushdownOptimizer child_optimizer(*this);
 	auto right_result = child_optimizer.Rewrite(ref.right);
-
-	// Propagate pending strip catalogs from the right-side child optimizer (set by inner JoinRef
-	// pushdowns on that side) into the current scope so the outer SelectNode can strip SELECT/WHERE.
-	for (auto &entry : child_optimizer.pending_outer_strip_catalogs) {
-		pending_outer_strip_catalogs.push_back(entry);
-	}
-
-	// Strip this JoinRef's own ON condition for all catalogs that were pushed during child processing
-	// (both from left-side inner JoinRefs and from the propagated right-side child entries).
-	// strip_subquery_bodies=false: subqueries within the ON condition are NOT being pushed individually.
-	// Also apply alias renaming when the pushed table has an explicit alias differing from its name.
-	if (ref.condition) {
-		for (idx_t i = pending_before; i < pending_outer_strip_catalogs.size(); i++) {
-			auto &entry = pending_outer_strip_catalogs[i];
-			StripCatalogName(*ref.condition, entry.catalog_name, false);
-			if (!entry.old_table_name.empty()) {
-				RenameTableInExpr(*ref.condition, entry.old_table_name, entry.new_alias);
-			}
-		}
-	}
 
 	auto result = Merge(left_result, right_result);
 	// Also analyze the join condition - it may contain subqueries or local macro calls
@@ -931,59 +623,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(JoinRef &ref) {
 	if (ref.condition) {
 		result = Merge(result, Rewrite(*ref.condition));
 	}
-
-	// For mixed joins (one remote child, one local), push the remote child individually.
-	// After pushing, strip catalog-qualified refs from the ON condition so the binder can
-	// resolve them against the pushed table's alias instead of the original catalog.table name.
-	// Use strip_subquery_bodies=false to avoid incorrectly stripping subqueries that are NOT pushed.
-	// When the pushed table has an explicit alias (e.g. rpc.t1 AS rt1), StripCatalogName reduces
-	// "rpc.t1.col" to "t1.col", but the binder only knows "rt1". RenameTableInExpr fixes that up.
-	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-		if (left_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-		    right_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-			string old_tname, new_talias;
-			if (ref.left->type == TableReferenceType::BASE_TABLE) {
-				auto &base = ref.left->Cast<BaseTableRef>();
-				old_tname = base.table_name;
-				new_talias = base.alias.empty() ? base.table_name : base.alias;
-			} else if (ref.left->type == TableReferenceType::SUBQUERY) {
-				old_tname = ref.left->Cast<SubqueryRef>().alias;
-				new_talias = old_tname;
-			}
-			auto catalog_name = PushJoinChild(ref.left, left_result);
-			if (!catalog_name.empty()) {
-				if (ref.condition) {
-					StripCatalogName(*ref.condition, catalog_name, false);
-					if (!old_tname.empty()) {
-						RenameTableInExpr(*ref.condition, old_tname, new_talias);
-					}
-				}
-				pending_outer_strip_catalogs.push_back({catalog_name, old_tname, new_talias});
-			}
-		} else if (right_result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
-		           left_result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
-			string old_tname, new_talias;
-			if (ref.right->type == TableReferenceType::BASE_TABLE) {
-				auto &base = ref.right->Cast<BaseTableRef>();
-				old_tname = base.table_name;
-				new_talias = base.alias.empty() ? base.table_name : base.alias;
-			} else if (ref.right->type == TableReferenceType::SUBQUERY) {
-				old_tname = ref.right->Cast<SubqueryRef>().alias;
-				new_talias = old_tname;
-			}
-			auto catalog_name = PushJoinChild(ref.right, right_result);
-			if (!catalog_name.empty()) {
-				if (ref.condition) {
-					StripCatalogName(*ref.condition, catalog_name, false);
-					if (!old_tname.empty()) {
-						RenameTableInExpr(*ref.condition, old_tname, new_talias);
-					}
-				}
-				pending_outer_strip_catalogs.push_back({catalog_name, old_tname, new_talias});
-			}
-		}
-	}
-
 	return result;
 }
 
@@ -1258,56 +897,6 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &cata
 	default:
 		break;
 	}
-}
-
-void RemotePushdownOptimizer::StripSetOpOrderByExpr(ParsedExpression &expr, const string &catalog_name) {
-	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-		auto &col_ref = expr.Cast<ColumnRefExpression>();
-		// In a set operation output there are no table associations, so reduce any catalog-prefixed ref to
-		// just the column name. Even a 2-part "t1.i" would fail to bind in the UNION output.
-		if (col_ref.column_names.size() >= 2 && StringUtil::CIEquals(col_ref.column_names[0], catalog_name)) {
-			string col_name = col_ref.column_names.back();
-			col_ref.column_names = {col_name};
-		}
-		return;
-	}
-	// Recurse into function arguments and other composite expressions so catalog-prefixed column refs
-	// nested inside expressions like coalesce(rpc.t1.i, 0) are also stripped to their bare column name.
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](ParsedExpression &child) { StripSetOpOrderByExpr(child, catalog_name); });
-}
-
-void RemotePushdownOptimizer::RenameTableInExpr(ParsedExpression &expr, const string &old_table,
-                                                const string &new_alias) {
-	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-		auto &col_ref = expr.Cast<ColumnRefExpression>();
-		// Rename table.col → alias.col for 2-part refs where the table part matches old_table.
-		// This is called after StripCatalogName has reduced catalog.table.col → table.col, so the
-		// table name is now the first element of a 2-part ref.
-		if (col_ref.column_names.size() == 2 && StringUtil::CIEquals(col_ref.column_names[0], old_table)) {
-			col_ref.column_names[0] = new_alias;
-		} else if (col_ref.column_names.size() == 3 && StringUtil::CIEquals(col_ref.column_names[1], old_table)) {
-			// After StripCatalogName reduced catalog.schema.table.col → schema.table.col (3-part),
-			// further reduce schema.table.col → alias.col so the binder can resolve the reference
-			// against the TABLE_FUNCTION alias (which has no schema prefix in its registration).
-			col_ref.column_names = {new_alias, col_ref.column_names[2]};
-		} else if (col_ref.column_names.size() >= 3 && StringUtil::CIEquals(col_ref.column_names[0], old_table)) {
-			// After StripCatalogName reduced catalog.table.struct_col.field → table.struct_col.field
-			// (3+-part), rename the table prefix in-place to the alias so that struct access like
-			// rpc.t1.info.val (→ t1.info.val after strip) binds against the TABLE_FUNCTION alias.
-			col_ref.column_names[0] = new_alias;
-		} else if (col_ref.column_names.size() >= 4 && StringUtil::CIEquals(col_ref.column_names[1], old_table)) {
-			// After StripCatalogName reduced catalog.schema.table.struct_col.field →
-			// schema.table.struct_col.field (4+-part), strip the schema prefix and rename the table
-			// to the alias so that rpc.main.t1.info.val (→ main.t1.info.val after strip) binds
-			// against the TABLE_FUNCTION alias.
-			col_ref.column_names.erase(col_ref.column_names.begin());
-			col_ref.column_names[0] = new_alias;
-		}
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](ParsedExpression &child) { RenameTableInExpr(child, old_table, new_alias); });
 }
 
 void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const string &catalog_name,

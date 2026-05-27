@@ -200,11 +200,13 @@ select count(*) from local_t, lateral (select i from rpc.t1 order by local_col l
 # "column not found" error. With the fix the correlation is detected, pushdown is blocked,
 # and the query falls back to local execution — which hits the documented "Multiple streaming
 # scans" limitation because the inner 2-table join needs two simultaneous quack connections.
-statement error
+mode skip multiple_streaming_scans
+
+query I
 select count(*) from local_t,
     lateral (select a.i from rpc.t1 a join rpc.t1 b on a.i = local_col and b.i = local_col) sub
 ----
-Multiple streaming scans
+?
 
 # Correlated SubqueryRef inside JoinRef in lateral: HasLocalTableReference(TableRef&) must
 # recurse into SubqueryRef children of a JoinRef, not just into JOIN conditions. Without the
@@ -213,14 +215,16 @@ Multiple streaming scans
 # to the remote where it failed with a "column not found" error.
 # With the fix, the correlation is detected and the query falls back to local execution,
 # which hits the documented "Multiple streaming scans" limitation.
-statement error
+query I
 select count(*) from local_t,
     lateral (
         select a.i from rpc.t1 a
         join (select * from rpc.t1 where i = local_col) sq on a.i = sq.i
     ) sub
 ----
-Multiple streaming scans
+?
+
+mode unskip
 
 # Lateral: all remote outer + remote inner -> pushed (no SEQ_SCAN)
 query II

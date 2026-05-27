@@ -206,7 +206,7 @@ select min(i), max(i) from rpc.t1
 # Previously crashed with "Mismatch in input vector sizes".
 # ============================================================
 
-mode skip
+mode skip unsupported_returning
 
 statement ok
 create macro double_it(x) as x * 2;

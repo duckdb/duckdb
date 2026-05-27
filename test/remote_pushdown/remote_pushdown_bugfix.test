@@ -27,6 +27,24 @@ create table t3(i int, j int);
 statement ok db1:con1
 insert into t3 values (1, 10), (2, 20), (3, 30);
 
+statement ok db1:con1
+create table t1_struct(id int, info struct(val int));
+
+statement ok db1:con1
+insert into t1_struct values (1, {'val': 10}), (2, {'val': 20}), (3, {'val': 30});
+
+statement ok db1:con1
+create table t_struct_col(id int, rpc struct(x int, y int));
+
+statement ok db1:con1
+insert into t_struct_col values (1, {'x': 10, 'y': 1}), (2, {'x': 20, 'y': 2}), (3, {'x': 5, 'y': 3});
+
+statement ok db1:con1
+create table t_nested(id int, s struct(a struct(b struct(c int))));
+
+statement ok db1:con1
+insert into t_nested values (1, {'a': {'b': {'c': 42}}}), (2, {'a': {'b': {'c': 7}}});
+
 statement ok
 attach 'quack:localhost' as rpc (token 'asdf')
 
@@ -845,7 +863,7 @@ drop table local_bugfix17
 # causing "Function ... not found" or a silent mis-execution.
 # ============================================================
 
-mode skip unsupported
+mode skip unsupported_returning
 
 # Create a local scalar macro that the remote server does not have.
 statement ok
@@ -1141,7 +1159,7 @@ insert into local_t from range(10);
 # (all-remote RETURNING is pushed; local RETURNING stays native).
 # ============================================================
 
-mode skip unsupported
+mode skip unsupported_returning
 
 # All-remote INSERT with RETURNING that has no local references:
 # the whole INSERT must be pushed (optimizer returns SINGLE_REMOTE).
@@ -1399,13 +1417,6 @@ select t1.i from rpc.t1 t1 where t1.i >= 8 order by t1.i
 8
 9
 
-# (c) struct column named 'rpc' (same as catalog): field access rpc.x must NOT be stripped
-statement ok db1:con1
-create table t_struct_col(id int, rpc struct(x int, y int));
-
-statement ok db1:con1
-insert into t_struct_col values (1, {'x': 10, 'y': 1}), (2, {'x': 20, 'y': 2}), (3, {'x': 5, 'y': 3});
-
 # "rpc.x" is a 2-part struct field access; old code (size >= 2) incorrectly stripped to "x"
 # which fails because t_struct_col has no column named x. With the fix (size >= 3), rpc.x is preserved.
 query II
@@ -1429,12 +1440,6 @@ drop table t_struct_col;
 # survive StripCatalogName — the stripping logic removes column_names[0] regardless
 # of depth, so rpc.t1.a.b.c (5-part) correctly strips to t1.a.b.c.
 # Create a table with a deeply nested struct column on the remote server.
-statement ok db1:con1
-create table t_nested(id int, s struct(a struct(b struct(c int))));
-
-statement ok db1:con1
-insert into t_nested values (1, {'a': {'b': {'c': 42}}}), (2, {'a': {'b': {'c': 7}}});
-
 # Catalog-qualified access rpc.t_nested.s.a.b.c (5-part): strip "rpc" → t_nested.s.a.b.c
 query II
 select id, rpc.t_nested.s.a.b.c from rpc.t_nested order by id
@@ -1447,9 +1452,6 @@ query I
 select id from rpc.t_nested where rpc.t_nested.s.a.b.c > 10 order by id
 ----
 1
-
-statement ok db1:con1
-drop table t_nested;
 
 # Bug 31: SubqueryRef with NO_CATALOG_REFERENCED result must NOT be tracked in
 # local_table_names. Previously, any SubqueryRef result that was not SINGLE_REMOTE
@@ -1956,12 +1958,6 @@ drop table local_t;
 # and col[0]==old_table, covering t1.struct_col.field...
 # ============================================================
 
-statement ok db1:con1
-create table t1_struct(id int, info struct(val int));
-
-statement ok db1:con1
-insert into t1_struct values (1, {'val': 10}), (2, {'val': 20}), (3, {'val': 30});
-
 statement ok
 create table local_struct(id int);
 
@@ -2029,8 +2025,6 @@ select rpc.main.t1_struct.id from rpc.main.t1_struct join local_struct on (rpc.m
 statement ok
 drop table local_struct;
 
-statement ok db1:con1
-drop table t1_struct;
 
 # ============================================================
 # Bug 41: Rewrite(BaseTableRef) Case 2 only checked TABLE_ENTRY

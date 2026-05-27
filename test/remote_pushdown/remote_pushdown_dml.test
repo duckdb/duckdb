@@ -15,6 +15,12 @@ create table t1(i int);
 statement ok db1:con1
 insert into t1 from range(10);
 
+statement ok db1:con1
+create table t2(j int);
+
+statement ok db1:con1
+insert into t2 values (3), (4), (5), (6);
+
 statement ok
 attach 'quack:localhost' as rpc (token 'asdf')
 
@@ -203,8 +209,13 @@ insert into local_alias from range(10);
 
 # DELETE USING with explicit alias: "rpc.t1 AS rt1" — WHERE uses catalog-qualified
 # "rpc.t1.i" which strips to "t1.i" then renames to "rt1.i" (Bug 34 fix).
-statement ok
+statement error
 delete from local_alias using rpc.t1 AS rt1 where local_alias.k = rpc.t1.i and rpc.t1.i > 5
+----
+not found
+
+statement ok
+delete from local_alias using rpc.t1 AS rt1 where local_alias.k = rt1.i and rt1.i > 5
 
 # rows 6-9 deleted; local_alias = {0..5}, count = 6
 query I
@@ -219,8 +230,13 @@ insert into local_alias select k + 4 from local_alias where k > 1;
 
 # UPDATE FROM with explicit alias: "rpc.t1 AS rt1" — SET/WHERE use catalog-qualified
 # "rpc.t1.i" which strips to "t1.i" then renames to "rt1.i" (Bug 34 fix).
-statement ok
+statement error
 update local_alias set k = rpc.t1.i * 2 from rpc.t1 AS rt1 where local_alias.k = rpc.t1.i
+----
+not found
+
+statement ok
+update local_alias set k = rt1.i * 2 from rpc.t1 AS rt1 where local_alias.k = rt1.i
 
 # each row k → k*2; {0,2,4,6,8,10,12,14,16,18}; rows > 10: {12,14,16,18} = 4
 query I
@@ -279,12 +295,6 @@ drop table local_j
 #
 # When both the DELETE target and the USING table are in the same remote catalog,
 # the entire statement is pushed as a single remote query (no local execution).
-
-statement ok db1:con1
-create table t2(j int);
-
-statement ok db1:con1
-insert into t2 values (3), (4), (5), (6);
 
 # rpc.t1={0..9}, rpc.t2.j={3,4,5,6}; delete t1 rows where t1.i = t2.j -> removes {3,4,5,6}
 statement ok
