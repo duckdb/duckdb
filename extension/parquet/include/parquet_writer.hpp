@@ -134,8 +134,7 @@ public:
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
 public:
-	ParquetWriteGlobalState() {
-	}
+	ParquetWriteGlobalState();
 
 public:
 	unique_ptr<ParquetWriter> writer;

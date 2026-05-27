@@ -745,6 +745,12 @@ private:
 	                                                                 ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformSubstringParameters(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformSubstringFromFor(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformSubstringFromOptionalFor(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformSubstringFor(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformSubstringArguments(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformSubstringExpressionList(PEGTransformer &transformer,
@@ -1321,13 +1327,16 @@ private:
 	static unique_ptr<CreateStatement>
 	TransformCreateTriggerStmt(PEGTransformer &transformer, const bool &if_not_exists, const string &trigger_name,
 	                           const TriggerTiming &trigger_timing, const TriggerEventInfo &trigger_event,
-	                           unique_ptr<BaseTableRef> base_table_name, const TriggerForEach &for_each_clause,
-	                           unique_ptr<SQLStatement> trigger_body);
+	                           unique_ptr<BaseTableRef> base_table_name, const string &referencing_new_table_as,
+	                           const TriggerForEach &for_each_clause, unique_ptr<SQLStatement> trigger_body);
 	static unique_ptr<TransformResultValue> TransformTriggerBodyInternal(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformTriggerNameInternal(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
 	static string TransformTriggerName(PEGTransformer &transformer, const string &identifier);
+	static unique_ptr<TransformResultValue> TransformReferencingNewTableAsInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static string TransformReferencingNewTableAs(PEGTransformer &transformer, const string &col_id);
 	static unique_ptr<TransformResultValue> TransformTriggerTimingInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformTriggerBeforeInternal(PEGTransformer &transformer,
