@@ -80,3 +80,17 @@ FROM (
 )
 ----
 0
+
+# Use expression index, not operator index...
+query I
+SELECT count(*)
+FROM (
+	SELECT
+		lag(col1) OVER (PARTITION BY partition2 ORDER BY col1) AS prev_p2,
+		lag(col1) OVER (PARTITION BY partition1 ORDER BY col1) AS prev_p1,
+		col1
+	FROM partitioned_tbl2
+) t
+WHERE col1 - prev_p1 <> 2
+----
+0

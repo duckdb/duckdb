@@ -169,7 +169,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 			window.children.push_back(plan);
 			plan = window;
 		} else {
-			auto &partitions = partitioned_columns[i];
+			const auto expr_idx = matching[0];
+			auto &partitions = partitioned_columns[expr_idx];
 			auto &window =
 			    Make<PhysicalWindow>(types, std::move(select_list), op.estimated_cardinality, std::move(partitions));
 			window.children.push_back(plan);
