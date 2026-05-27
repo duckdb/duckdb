@@ -750,21 +750,6 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformRepeatableSample);
 }
 
-void PEGTransformerFactory::RegisterSet() {
-	// set.gram
-	REGISTER_TRANSFORM(TransformResetStatement);
-	REGISTER_TRANSFORM(TransformSetAssignment);
-	REGISTER_TRANSFORM(TransformSetSetting);
-	REGISTER_TRANSFORM(TransformSetStatement);
-	REGISTER_TRANSFORM(TransformSetTimeZone);
-	REGISTER_TRANSFORM(TransformSetVariable);
-	REGISTER_TRANSFORM(TransformStandardAssignment);
-	REGISTER_TRANSFORM(TransformVariableList);
-	REGISTER_TRANSFORM(TransformZoneValue);
-	REGISTER_TRANSFORM(TransformZoneIntervalWithInterval);
-	REGISTER_TRANSFORM(TransformZoneIntervalWithPrecision);
-}
-
 void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 	Register("PragmaName", &TransformIdentifierOrKeyword);
 	Register("TypeName", &TransformIdentifierOrKeyword);
@@ -782,11 +767,6 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 }
 
 void PEGTransformerFactory::RegisterEnums() {
-	RegisterEnum<SetScope>("LocalScope", SetScope::LOCAL);
-	RegisterEnum<SetScope>("GlobalScope", SetScope::GLOBAL);
-	RegisterEnum<SetScope>("SessionScope", SetScope::SESSION);
-	RegisterEnum<SetScope>("VariableScope", SetScope::VARIABLE);
-
 	RegisterEnum<CopyDatabaseType>("CopySchema", CopyDatabaseType::COPY_SCHEMA);
 	RegisterEnum<CopyDatabaseType>("CopyData", CopyDatabaseType::COPY_DATA);
 
@@ -917,7 +897,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterMergeInto();
 	RegisterPivot();
 	RegisterSelect();
-	RegisterSet();
 	RegisterKeywordsAndIdentifiers();
 	RegisterEnums();
 }

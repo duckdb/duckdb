@@ -1044,6 +1044,185 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTypeListInterna
 	return make_uniq<TypedTransformResult<vector<LogicalType>>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSetStatementInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto set_assignment_or_time_zone = transformer.Transform<unique_ptr<SetStatement>>(list_pr, 1);
+	auto result = TransformSetStatement(transformer, std::move(set_assignment_or_time_zone));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformSetAssignmentOrTimeZoneInternal(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<SetStatement>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<SetStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformResetStatementInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto set_variable_or_setting = transformer.Transform<SettingInfo>(list_pr, 1);
+	auto result = TransformResetStatement(transformer, set_variable_or_setting);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformStandardAssignmentInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto set_variable_or_setting = transformer.Transform<SettingInfo>(list_pr, 0);
+	auto set_assignment = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr, 1);
+	auto result = TransformStandardAssignment(transformer, set_variable_or_setting, std::move(set_assignment));
+	return make_uniq<TypedTransformResult<unique_ptr<SetStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformSetVariableOrSettingInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<SettingInfo>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<SettingInfo>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSetTimeZoneInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto zone_value = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr, 2);
+	auto result = TransformSetTimeZone(transformer, std::move(zone_value));
+	return make_uniq<TypedTransformResult<unique_ptr<SetStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformZoneValueInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformZoneLocalInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto result = TransformZoneLocal(transformer);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformZoneDefaultInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto result = TransformZoneDefault(transformer);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformZoneStringLiteralInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto string_literal = transformer.Transform<string>(list_pr, 0);
+	auto result = TransformZoneStringLiteral(transformer, string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformZoneIdentifierInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto identifier = list_pr.Child<IdentifierParseResult>(0).identifier;
+	auto result = TransformZoneIdentifier(transformer, identifier);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformZoneIntervalWithIntervalInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto string_literal = transformer.Transform<string>(list_pr, 1);
+	DatePartSpecifier interval {};
+	transformer.TransformOptional(list_pr, 2, interval);
+	auto result = TransformZoneIntervalWithInterval(transformer, string_literal, interval);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformZoneIntervalWithPrecisionInternal(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto number_literal =
+	    transformer.Transform<unique_ptr<ParsedExpression>>(ExtractResultFromParens(list_pr.GetChild(1)));
+	auto string_literal = transformer.Transform<string>(list_pr, 2);
+	auto result = TransformZoneIntervalWithPrecision(transformer, std::move(number_literal), string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSetSettingInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	SetScope setting_scope {};
+	transformer.TransformOptional(list_pr, 0, setting_scope);
+	auto setting_name = list_pr.Child<IdentifierParseResult>(1).identifier;
+	auto result = TransformSetSetting(transformer, setting_scope, setting_name);
+	return make_uniq<TypedTransformResult<SettingInfo>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSetVariableInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto variable_scope = transformer.Transform<SetScope>(list_pr, 0);
+	auto identifier = list_pr.Child<IdentifierParseResult>(1).identifier;
+	auto result = TransformSetVariable(transformer, variable_scope, identifier);
+	return make_uniq<TypedTransformResult<SettingInfo>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformVariableScopeInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto result = TransformVariableScope(transformer);
+	return make_uniq<TypedTransformResult<SetScope>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSettingScopeInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<SetScope>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<SetScope>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformLocalScopeInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto result = TransformLocalScope(transformer);
+	return make_uniq<TypedTransformResult<SetScope>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSessionScopeInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto result = TransformSessionScope(transformer);
+	return make_uniq<TypedTransformResult<SetScope>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformGlobalScopeInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto result = TransformGlobalScope(transformer);
+	return make_uniq<TypedTransformResult<SetScope>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSetAssignmentInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto variable_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr, 1);
+	auto result = TransformSetAssignment(transformer, std::move(variable_list));
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformVariableListInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> expression;
+	auto expression_items = ExtractParseResultsFromList(list_pr.GetChild(0));
+	for (auto &expression_item : expression_items) {
+		expression.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expression_item));
+	}
+	auto result = TransformVariableList(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::TransformTransactionStatementInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -1460,6 +1639,28 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"PragmaParameters", &PEGTransformerFactory::TransformPragmaParametersInternal},
 	    {"PrepareStatement", &PEGTransformerFactory::TransformPrepareStatementInternal},
 	    {"TypeList", &PEGTransformerFactory::TransformTypeListInternal},
+	    {"SetStatement", &PEGTransformerFactory::TransformSetStatementInternal},
+	    {"SetAssignmentOrTimeZone", &PEGTransformerFactory::TransformSetAssignmentOrTimeZoneInternal},
+	    {"ResetStatement", &PEGTransformerFactory::TransformResetStatementInternal},
+	    {"StandardAssignment", &PEGTransformerFactory::TransformStandardAssignmentInternal},
+	    {"SetVariableOrSetting", &PEGTransformerFactory::TransformSetVariableOrSettingInternal},
+	    {"SetTimeZone", &PEGTransformerFactory::TransformSetTimeZoneInternal},
+	    {"ZoneValue", &PEGTransformerFactory::TransformZoneValueInternal},
+	    {"ZoneLocal", &PEGTransformerFactory::TransformZoneLocalInternal},
+	    {"ZoneDefault", &PEGTransformerFactory::TransformZoneDefaultInternal},
+	    {"ZoneStringLiteral", &PEGTransformerFactory::TransformZoneStringLiteralInternal},
+	    {"ZoneIdentifier", &PEGTransformerFactory::TransformZoneIdentifierInternal},
+	    {"ZoneIntervalWithInterval", &PEGTransformerFactory::TransformZoneIntervalWithIntervalInternal},
+	    {"ZoneIntervalWithPrecision", &PEGTransformerFactory::TransformZoneIntervalWithPrecisionInternal},
+	    {"SetSetting", &PEGTransformerFactory::TransformSetSettingInternal},
+	    {"SetVariable", &PEGTransformerFactory::TransformSetVariableInternal},
+	    {"VariableScope", &PEGTransformerFactory::TransformVariableScopeInternal},
+	    {"SettingScope", &PEGTransformerFactory::TransformSettingScopeInternal},
+	    {"LocalScope", &PEGTransformerFactory::TransformLocalScopeInternal},
+	    {"SessionScope", &PEGTransformerFactory::TransformSessionScopeInternal},
+	    {"GlobalScope", &PEGTransformerFactory::TransformGlobalScopeInternal},
+	    {"SetAssignment", &PEGTransformerFactory::TransformSetAssignmentInternal},
+	    {"VariableList", &PEGTransformerFactory::TransformVariableListInternal},
 	    {"TransactionStatement", &PEGTransformerFactory::TransformTransactionStatementInternal},
 	    {"BeginTransaction", &PEGTransformerFactory::TransformBeginTransactionInternal},
 	    {"RollbackTransaction", &PEGTransformerFactory::TransformRollbackTransactionInternal},

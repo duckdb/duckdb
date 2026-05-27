@@ -1108,7 +1108,7 @@ def main():
         'pragma.gram',
         'prepare.gram',
         # 'select.gram',
-        # 'set.gram',
+        'set.gram',
         'transaction.gram',
         'update.gram',
         'use.gram',

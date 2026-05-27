@@ -110,6 +110,7 @@ SetStatement:
   type: "unique_ptr<SetStatement>"
   by_value: true
   rules:
+    - SetAssignmentOrTimeZone
     - SetTimeZone
     - StandardAssignment
 
@@ -276,6 +277,16 @@ WindowExpression:
     - WindowFrameNameContentsParens
     - WindowFrameContents
 
+SetScope:
+  type: "SetScope"
+  by_value: false
+  rules:
+    - LocalScope
+    - GlobalScope
+    - SessionScope
+    - VariableScope
+    - SettingScope
+
 SampleOptions:
   type: "unique_ptr<SampleOptions>"
   by_value: true
@@ -410,6 +421,10 @@ Expression:
     - ZoneValue
     - ZoneIntervalWithInterval
     - ZoneIntervalWithPrecision
+    - ZoneLocal
+    - ZoneDefault
+    - ZoneStringLiteral
+    - ZoneIdentifier
     - NumberLiteral
     - TimeType
     - NumericType
@@ -747,6 +762,7 @@ SettingInfo:
   type: "SettingInfo"
   by_value: false
   rules:
+    - SetVariableOrSetting
     - SetSetting
     - SetVariable
 
@@ -1096,7 +1112,6 @@ excluded_rules:
   - Transaction
   - VariableAssign
   - MacroOrFunction
-  - SettingScope
   - ColLabel
   - GroupingOrGroupingId
   - DefaultValues
