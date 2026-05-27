@@ -39,30 +39,20 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 
 namespace duckdb {
-RemotePushdownOptimizer::RemotePushdownOptimizer(Binder &binder) : binder(binder) {
+RemotePushdownOptimizer::RemotePushdownOptimizer(Binder &binder) : binder(binder), owned_pushdown_state(make_uniq<RemotePushdownState>()), pushdown_state(*owned_pushdown_state) {
 }
 
 RemotePushdownOptimizer::RemotePushdownOptimizer(RemotePushdownOptimizer &parent_p)
-    : binder(parent_p.binder), parent(parent_p) {
+    : binder(parent_p.binder), parent(parent_p), pushdown_state(parent_p.pushdown_state) {
 	// inherit table / column names from parent (for correlated subquery detection)
 	local_table_names = parent_p.local_table_names;
 }
 
 void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
-	if (search_path_initialized) {
+	if (pushdown_state.search_path_initialized) {
 		return;
 	}
-	// Inherit from the nearest ancestor that has already scanned, avoiding redundant catalog lookups
-	// in child optimizers created for subqueries/CTEs. The search path is constant within a query.
-	for (const RemotePushdownOptimizer *p = parent.get(); p; p = p->parent.get()) {
-		if (p->search_path_initialized) {
-			search_path_initialized = true;
-			remote_catalogs_in_search_path = p->remote_catalogs_in_search_path;
-			local_catalogs_in_search_path = p->local_catalogs_in_search_path;
-			return;
-		}
-	}
-	search_path_initialized = true;
+	pushdown_state.search_path_initialized = true;
 	auto &client_data = ClientData::Get(binder.context);
 	// iterate over all catalogs mentioned in the search path and check if they are remote
 	auto search_path = client_data.catalog_search_path->Get();
@@ -78,10 +68,10 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 			continue;
 		}
 		if (!catalog_entry->IsRemoteCatalog()) {
-			local_catalogs_in_search_path.push_back(entry);
+			pushdown_state.local_catalogs_in_search_path.push_back(entry);
 		} else {
 			if (seen_remote_catalogs.insert(catalog_entry->GetName()).second) {
-				remote_catalogs_in_search_path.push_back(*catalog_entry);
+				pushdown_state.remote_catalogs_in_search_path.push_back(*catalog_entry);
 			}
 		}
 	}
@@ -802,7 +792,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	// SET_RETURNING_FUNCTION entries are neutral: they don't belong to any catalog and can be pushed
 	FindRemoteCatalogsInSearchPath();
 	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, func_expr.function_name);
-	for (auto &local_entry : local_catalogs_in_search_path) {
+	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
 		const string &schema = schema_name.empty() ? local_entry.schema : schema_name;
 		auto entry =
 		    Catalog::GetEntry(binder.context, local_entry.catalog, schema, func_lookup, OnEntryNotFound::RETURN_NULL);
@@ -1028,7 +1018,7 @@ bool RemotePushdownOptimizer::IsLocalMacro(const FunctionExpression &func) {
 
 	// Unqualified function - search local catalogs for a macro with this name
 	FindRemoteCatalogsInSearchPath();
-	for (auto &local_entry : local_catalogs_in_search_path) {
+	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
 		const string &schema = func.schema.empty() ? local_entry.schema : func.schema;
 		EntryLookupInfo macro_lookup(CatalogType::MACRO_ENTRY, func.function_name);
 		auto entry =
@@ -1095,12 +1085,12 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name);
 	EntryLookupInfo view_lookup(CatalogType::VIEW_ENTRY, ref.table_name);
 
-	if (remote_catalogs_in_search_path.size() != 1) {
+	if (pushdown_state.remote_catalogs_in_search_path.size() != 1) {
 		TrackLocalTable(ref);
 		return {};
 	}
 
-	for (auto &local_entry : local_catalogs_in_search_path) {
+	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
 		// If the ref specifies a schema, use it; otherwise use the search path schema
 		const auto &schema = schema_name.empty() ? local_entry.schema : schema_name;
 		auto entry =
@@ -1118,7 +1108,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	}
 
 	// Not found in any local catalog - push to the single remote catalog in the search path
-	return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, remote_catalogs_in_search_path.front().get()};
+	return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, pushdown_state.remote_catalogs_in_search_path.front().get()};
 }
 
 bool RemotePushdownOptimizer::RefersToLocalTable(ColumnRefExpression &col_ref) const {

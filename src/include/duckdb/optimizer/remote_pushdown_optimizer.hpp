@@ -37,6 +37,12 @@ struct CatalogPushdownResult {
 	optional_ptr<Catalog> catalog;
 };
 
+struct RemotePushdownState {
+	bool search_path_initialized = false;
+	vector<reference<Catalog>> remote_catalogs_in_search_path;
+	vector<CatalogSearchEntry> local_catalogs_in_search_path;
+};
+
 class RemotePushdownOptimizer {
 public:
 	explicit RemotePushdownOptimizer(Binder &binder);
@@ -92,9 +98,8 @@ private:
 private:
 	Binder &binder;
 	optional_ptr<RemotePushdownOptimizer> parent;
-	bool search_path_initialized = false;
-	vector<reference<Catalog>> remote_catalogs_in_search_path;
-	vector<CatalogSearchEntry> local_catalogs_in_search_path;
+	unique_ptr<RemotePushdownState> owned_pushdown_state;
+	RemotePushdownState &pushdown_state;
 	//! Entry pushed to pending_outer_strip_catalogs: catalog + optional table→alias rename info.
 	//! After StripCatalogName reduces "catalog.table.col" to "table.col", RenameTableInExpr renames
 	//! "table.col" to "alias.col" when the pushed table carries an explicit alias differing from its name.
