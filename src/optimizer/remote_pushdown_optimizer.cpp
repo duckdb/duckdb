@@ -527,8 +527,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 		return {};
 	}
 
-	// Determine whether the function is a SET_RETURNING_FUNCTION (like range(), generate_series())
-	// SET_RETURNING_FUNCTION entries are neutral: they don't belong to any catalog and can be pushed
+	// we have an unqualified table function
 	FindRemoteCatalogsInSearchPath();
 	EntryLookupInfo func_lookup(CatalogType::TABLE_FUNCTION_ENTRY, func_expr.function_name);
 	for (auto &local_entry : pushdown_state.local_catalogs_in_search_path) {
@@ -713,7 +712,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, pushdown_state.remote_catalogs_in_search_path.front().get()};
 }
 
-bool RemotePushdownOptimizer::RefersToLocalTable(ColumnRefExpression &col_ref) const {
+bool RemotePushdownOptimizer::RefersToLocalTable(const ColumnRefExpression &col_ref) const {
 	// figuring out if a column refers to a local table is challenging without knowing all of the columns
 	// challenges are:
 	// (1) we might have a subquery (e.g. FROM (SELECT ...), (SELECT ...))
@@ -729,82 +728,88 @@ bool RemotePushdownOptimizer::RefersToLocalTable(ColumnRefExpression &col_ref) c
 	return true;
 }
 
-CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
-		auto &subquery_expr = expr.Cast<SubqueryExpression>();
-		CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-		// EnumerateChildren for SUBQUERY only visits `child` (e.g., left side of IN), not subquery->node
-		if (subquery_expr.child) {
-			result = Merge(result, Rewrite(*subquery_expr.child));
-		}
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const LogicalType &type) {
+	return Rewrite(*UnboundType::GetTypeExpression(type));
+}
 
-		RemotePushdownOptimizer child_optimizer(*this);
-		auto subquery_result = child_optimizer.Rewrite(*subquery_expr.subquery->node);
-		result = Merge(result, subquery_result);
-		return result;
-	}
-	// For CAST expressions with an unbound (user-defined) type, also scan the embedded type expression for catalog
-	// references. EnumerateChildren for CAST only visits the child value, not the cast_type LogicalType field.
-	if (expr.GetExpressionClass() == ExpressionClass::CAST) {
-		auto &cast_expr = expr.Cast<CastExpression>();
-		CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-		if (cast_expr.cast_type.id() == LogicalTypeId::UNBOUND) {
-			result = Merge(result, Rewrite(*UnboundType::GetTypeExpression(cast_expr.cast_type)));
-		}
-		result = Merge(result, Rewrite(*cast_expr.child));
-		return result;
-	}
-	// Handle function and window expressions: resolve catalog qualifiers.
-	auto check_catalog_qualified_expr = [&](const string &raw_catalog,
-	                                        const string &raw_schema) -> CatalogPushdownResult {
-		string catalog_name = raw_catalog;
-		string schema_name = raw_schema;
-		Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
-		if (!catalog_name.empty()) {
-			auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
-			if (catalog && catalog->IsRemoteCatalog()) {
-				CatalogPushdownResult result {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
-				ParsedExpressionIterator::EnumerateChildren(
-				    expr, [&](ParsedExpression &child) { result = Merge(result, Rewrite(child)); });
-				return result;
-			}
-			// Explicitly local-catalog: block pushdown.
-			return {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
-		}
-		return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-	};
-	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
-		auto &func = expr.Cast<FunctionExpression>();
-		auto cat_result = check_catalog_qualified_expr(func.catalog, func.schema);
-		if (cat_result.reference_type != CatalogReferenceType::NO_CATALOG_REFERENCED) {
-			return cat_result;
-		}
-		// Unqualified function: local macros can't be pushed to remote.
-		if (IsLocalMacro(func)) {
-			return {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
-		}
-	} else if (expr.GetExpressionClass() == ExpressionClass::WINDOW) {
-		auto &win = expr.Cast<WindowExpression>();
-		auto cat_result = check_catalog_qualified_expr(win.catalog, win.schema);
-		if (cat_result.reference_type != CatalogReferenceType::NO_CATALOG_REFERENCED) {
-			return cat_result;
-		}
-	} else if (expr.GetExpressionClass() == ExpressionClass::TYPE) {
-		// Catalog-qualified user-defined types (e.g. "rpc.my_type" or "rpc.schema.my_type") reference a catalog.
-		auto &type_expr = expr.Cast<TypeExpression>();
-		auto cat_result = check_catalog_qualified_expr(type_expr.GetCatalog(), type_expr.GetSchema());
-		if (cat_result.reference_type != CatalogReferenceType::NO_CATALOG_REFERENCED) {
-			return cat_result;
-		}
-		// Unqualified type: fall through to EnumerateChildren for type parameters
-	} else if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-		auto &col_ref = expr.Cast<ColumnRefExpression>();
-		if (RefersToLocalTable(col_ref)) {
-			// column refers to local table - bail
-			return {};
-		}
-	}
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const SubqueryExpression &subquery_expr) {
+	RemotePushdownOptimizer child_optimizer(*this);
+	return child_optimizer.Rewrite(*subquery_expr.subquery->node);
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const CastExpression &cast_expr) {
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	if (cast_expr.cast_type.id() == LogicalTypeId::UNBOUND) {
+		result = Merge(result, Rewrite(cast_expr.cast_type));
+	}
+	return result;
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const string &catalog_p, const string &schema_p) {
+	string catalog_name = catalog_p;
+	string schema_name = schema_p;
+	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
+	if (!catalog_name.empty()) {
+		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
+		if (catalog && catalog->IsRemoteCatalog()) {
+			return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
+		}
+		// Explicitly local-catalog: block pushdown.
+		return {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
+	}
+	return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const FunctionExpression &func) {
+	if (IsLocalMacro(func)) {
+		// local macros can't be pushed to remote
+		return {CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE, nullptr};
+	}
+	return CheckCatalogQualification(func.catalog, func.schema);
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const WindowExpression &func) {
+	return CheckCatalogQualification(func.catalog, func.schema);
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const TypeExpression &type_expr) {
+	return CheckCatalogQualification(type_expr.GetCatalog(), type_expr.GetSchema());
+}
+
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const ColumnRefExpression &col_ref) {
+	if (RefersToLocalTable(col_ref)) {
+		// column refers to local table - bail
+		return {};
+	}
+	return {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+}
+
+
+CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
+	CatalogPushdownResult result;
+	switch(expr.GetExpressionClass()) {
+	case ExpressionClass::SUBQUERY:
+		result = Rewrite(expr.Cast<SubqueryExpression>());
+		break;
+	case ExpressionClass::CAST:
+		result = Rewrite(expr.Cast<CastExpression>());
+		break;
+	case ExpressionClass::FUNCTION:
+		result = Rewrite(expr.Cast<FunctionExpression>());
+		break;
+	case ExpressionClass::WINDOW:
+		result = Rewrite(expr.Cast<WindowExpression>());
+		break;
+	case ExpressionClass::TYPE:
+		result = Rewrite(expr.Cast<TypeExpression>());
+		break;
+	case ExpressionClass::COLUMN_REF:
+		result = Rewrite(expr.Cast<ColumnRefExpression>());
+		break;
+	default:
+		result = {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+		break;
+	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](ParsedExpression &child) { result = Merge(result, Rewrite(child)); });
 	return result;

@@ -65,7 +65,17 @@ private:
 	CatalogPushdownResult Rewrite(SubqueryRef &ref);
 	CatalogPushdownResult Rewrite(TableFunctionRef &ref);
 	CatalogPushdownResult Rewrite(BaseTableRef &ref);
+
 	CatalogPushdownResult Rewrite(ParsedExpression &expr);
+	CatalogPushdownResult Rewrite(const SubqueryExpression &expr);
+	CatalogPushdownResult Rewrite(const CastExpression &expr);
+	CatalogPushdownResult Rewrite(const FunctionExpression &expr);
+	CatalogPushdownResult Rewrite(const WindowExpression &expr);
+	CatalogPushdownResult Rewrite(const TypeExpression &expr);
+	CatalogPushdownResult Rewrite(const ColumnRefExpression &expr);
+
+	CatalogPushdownResult Rewrite(const LogicalType &type);
+	CatalogPushdownResult CheckCatalogQualification(const string &catalog_name, const string &schema_name);
 
 	//! Records a BaseTableRef's name, alias and columns as local for correlated subquery detection
 	void TrackLocalTable(const BaseTableRef &ref);
@@ -85,7 +95,7 @@ private:
 	//! Strip catalog prefix from expression column refs. When strip_subquery_bodies=false, leaves subquery
 	//! bodies untouched (used for partial pushdown where inner subqueries are not being pushed).
 	static void StripCatalogName(ParsedExpression &expr, const string &catalog_name, bool strip_subquery_bodies = true);
-	bool RefersToLocalTable(ColumnRefExpression &col_ref) const;
+	bool RefersToLocalTable(const ColumnRefExpression &col_ref) const;
 
 	bool RefersToCTE(const string &cte_name, CatalogPushdownResult &result) const;
 
