@@ -27,7 +27,7 @@ TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, QueryContext contex
 		// older storage versions require legacy start row to be written
 		require_legacy_start_row = true;
 	}
-	can_leave_gaps_in_row_ids = storage_compatibility.storage_version >= StorageVersion::V2_0_0;
+	can_persist_rowid_gaps = storage_compatibility.storage_version >= StorageVersion::V2_0_0;
 }
 
 TableDataWriter::~TableDataWriter() {

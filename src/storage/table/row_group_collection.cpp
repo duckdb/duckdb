@@ -1429,7 +1429,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
 		auto row_group_count = row_group.GetCommittedRowCount();
-		if (!checkpoint_state.writer.CanLeaveGapsInRowIds() && !state.can_change_row_ids) {
+		if (!checkpoint_state.writer.CanPersistRowIdGaps() && !state.can_change_row_ids) {
 			// This is used to handle trailing deletions. For new storage we do not need to handle trailing deletions
 			// as they are implicitly handled by dropping empty row groups. For older storage, however, we skip
 			// dropping empty row groups (see code below), so we can still try to remove trailing deleted row groups
@@ -1437,7 +1437,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			committed_counts.emplace_back(row_group_count);
 		}
 		if (row_group_count == 0) {
-			if (!checkpoint_state.writer.CanLeaveGapsInRowIds()) {
+			if (!checkpoint_state.writer.CanPersistRowIdGaps()) {
 				// Older storage versions cannot represent rowid gaps, so dropping the row group requires rewriting
 				// rowids to be contiguous.
 				if (!state.can_change_row_ids) {
@@ -1468,7 +1468,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		}
 		state.row_group_counts.push_back(row_group_count);
 	}
-	if (!checkpoint_state.writer.CanLeaveGapsInRowIds() && !state.can_change_row_ids &&
+	if (!checkpoint_state.writer.CanPersistRowIdGaps() && !state.can_change_row_ids &&
 	    options.type != CheckpointType::CONCURRENT_CHECKPOINT) {
 		// If we cannot change rowids and cannot leave rowid gaps, we might still be able to vacuum trailing deletions
 		// because that does not change the rowids of any non-deleted rows.
@@ -1730,7 +1730,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	idx_t new_total_rows = 0;
 	idx_t new_next_row_id = 0;
 	auto base_row_id = row_groups->GetBaseRowId();
-	auto can_leave_gaps = writer.CanLeaveGapsInRowIds();
+	auto can_persist_rowid_gaps = writer.CanPersistRowIdGaps();
 	unordered_set<idx_t> columns_with_incomplete_stats;
 	for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 		auto entry = checkpoint_state.GetSegment(segment_idx);
@@ -1743,7 +1743,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		auto &row_group_writer = checkpoint_state.writers[segment_idx];
 		auto source_row_start = entry->GetRowStart();
 		auto row_start = source_row_start;
-		if (!can_leave_gaps) {
+		if (!can_persist_rowid_gaps) {
 			// Older storage versions do not serialize next_row_id, so the checkpointed row groups must have
 			// contiguous numbering for rowids.
 			row_start = base_row_id + new_total_rows;

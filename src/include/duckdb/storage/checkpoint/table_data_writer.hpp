@@ -55,8 +55,8 @@ public:
 	bool RequireLegacyStartRow() const {
 		return require_legacy_start_row;
 	}
-	bool CanLeaveGapsInRowIds() const {
-		return can_leave_gaps_in_row_ids;
+	bool CanPersistRowIdGaps() const {
+		return can_persist_rowid_gaps;
 	}
 	void SetRowIdsChanged() {
 		row_ids_changed = true;
@@ -79,7 +79,7 @@ protected:
 	optional_idx row_group_count;
 	bool rebuild_indexes = false;
 	bool require_legacy_start_row = false;
-	bool can_leave_gaps_in_row_ids = false;
+	bool can_persist_rowid_gaps = false;
 	atomic<bool> row_ids_changed {false};
 };
 
