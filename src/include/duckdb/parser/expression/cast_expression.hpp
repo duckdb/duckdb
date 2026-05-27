@@ -25,6 +25,9 @@ public:
 	const LogicalType &TargetType() const {
 		return cast_type;
 	}
+	LogicalType &TargetTypeMutable() {
+		return cast_type;
+	}
 	const ParsedExpression &Child() const {
 		return *child;
 	}
