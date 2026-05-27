@@ -1752,6 +1752,7 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 	if (n_local_update > 0) {
 		updates_slice.Slice(updates, sel_local_update, n_local_update);
 		updates_slice.Flatten();
+		updates_slice.SetChildCardinality(n_local_update);
 		row_ids_slice.Slice(row_ids, sel_local_update, n_local_update);
 		row_ids_slice.Flatten();
 
@@ -1763,6 +1764,7 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 		auto &transaction = DuckTransaction::Get(context, db);
 		updates_slice.Slice(updates, sel_global_update, n_global_update);
 		updates_slice.Flatten();
+		updates_slice.SetChildCardinality(n_global_update);
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
 		row_ids_slice.Flatten();
 

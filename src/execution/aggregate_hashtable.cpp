@@ -512,6 +512,9 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	unique_values.Reference(groups);
 	unique_values.SetChildCardinality(1);
 	unique_values.Flatten();
+	// Restore the groups chunk's buffer v_size which was corrupted to 1 by SetChildCardinality(1) above.
+	// unique_values.Flatten() created new independent buffers, so restoring groups is safe.
+	groups.SetChildCardinality(row_count);
 
 	auto &hashes = dict_state.hashes;
 	unique_values.Hash(hashes);
