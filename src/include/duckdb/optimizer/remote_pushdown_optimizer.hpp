@@ -69,6 +69,8 @@ private:
 
 	//! Records a BaseTableRef's name, alias and columns as local for correlated subquery detection
 	void TrackLocalTable(const BaseTableRef &ref);
+	void TrackLocalTable(const TableFunctionRef &ref);
+	void TrackLocalTable(const SubqueryRef &ref);
 	//! Returns true if the function is defined as a macro in a local (non-remote) catalog
 	bool IsLocalMacro(const FunctionExpression &func);
 

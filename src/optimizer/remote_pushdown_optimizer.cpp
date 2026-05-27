@@ -57,11 +57,7 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 	auto &client_data = ClientData::Get(binder.context);
 	// iterate over all catalogs mentioned in the search path and check if they are remote
 	auto search_path = client_data.catalog_search_path->Get();
-	// The search path always contains an INVALID_CATALOG ("") sentinel that resolves to the
-	// current default catalog at lookup time. After "USE rpc", this sentinel resolves to the
-	// same remote catalog that is already listed explicitly, causing the same catalog to appear
-	// twice in remote_catalogs_in_search_path. The size() != 1 guard in Rewrite(BaseTableRef)
-	// then incorrectly blocks all unqualified-table pushdown. Deduplicate by catalog name.
+	// Deduplicate by catalog name.
 	case_insensitive_set_t seen_remote_catalogs;
 	for (auto &entry : search_path) {
 		auto catalog_entry = Catalog::GetCatalogEntry(binder.context, entry.catalog);
@@ -140,22 +136,40 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(QueryNode &node) {
 		}
 		cte_results[cte_name] = cte_result;
 	}
+	CatalogPushdownResult result;
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		return Rewrite(node.Cast<SelectNode>());
+		result = Rewrite(node.Cast<SelectNode>());
+		break;
 	case QueryNodeType::INSERT_QUERY_NODE:
-		return Rewrite(node.Cast<InsertQueryNode>());
+		result = Rewrite(node.Cast<InsertQueryNode>());
+		break;
 	case QueryNodeType::DELETE_QUERY_NODE:
-		return Rewrite(node.Cast<DeleteQueryNode>());
+		result = Rewrite(node.Cast<DeleteQueryNode>());
+		break;
 	case QueryNodeType::UPDATE_QUERY_NODE:
-		return Rewrite(node.Cast<UpdateQueryNode>());
+		result = Rewrite(node.Cast<UpdateQueryNode>());
+		break;
 	case QueryNodeType::SET_OPERATION_NODE:
-		return Rewrite(node.Cast<SetOperationNode>());
+		result = Rewrite(node.Cast<SetOperationNode>());
+		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
-		return Rewrite(node.Cast<RecursiveCTENode>());
+		result = Rewrite(node.Cast<RecursiveCTENode>());
+		break;
 	default:
 		return {};
 	}
+
+	// Merge results of all CTEs defined in this scope
+	// FIXME: this is only necessary because we push all CTEs, including unreferenced ones, to the result
+	// if we pruned unreferenced CTEs we could remove this
+	for (auto &cte_pair : node.cte_map.map) {
+		auto it = cte_results.find(cte_pair.first);
+		if (it != cte_results.end()) {
+			result = Merge(result, it->second);
+		}
+	}
+	return result;
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
@@ -212,12 +226,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 		}
 		default:
 			break;
-		}
-	}
-	for (auto &cte_pair : node.cte_map.map) {
-		auto it = cte_results.find(cte_pair.first);
-		if (it != cte_results.end()) {
-			result = Merge(result, it->second);
 		}
 	}
 	return result;
@@ -286,24 +294,11 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 			break;
 		}
 	}
-
-	// Merge results of all CTEs defined in this scope: even unreferenced CTEs are serialized
-	// into the SQL string when the whole query is pushed. A local CTE body (UNKNOWN) or a
-	// CTE from a different remote catalog would fail on the target remote server. Including
-	// all CTE results here ensures they are considered even when the outer query does not
-	// explicitly reference them.
-	for (auto &cte_pair : node.cte_map.map) {
-		auto it = cte_results.find(cte_pair.first);
-		if (it != cte_results.end()) {
-			result = Merge(result, it->second);
-		}
-	}
 	return result;
 }
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
-	// InsertQueryNode stores the target table in catalog/schema/table string fields, not in table_ref
-	// (table_ref is only set for ON CONFLICT cases and is an alias ref)
+	// first bind the target table for the insert
 	BaseTableRef target_ref;
 	target_ref.catalog_name = node.catalog;
 	target_ref.schema_name = node.schema;
@@ -340,12 +335,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(InsertQueryNode &node) {
 		auto expr_result = Rewrite(*expr);
 		result = Merge(result, expr_result);
 	}
-	for (auto &cte_pair : node.cte_map.map) {
-		auto it = cte_results.find(cte_pair.first);
-		if (it != cte_results.end()) {
-			result = Merge(result, it->second);
-		}
-	}
 	return result;
 }
 
@@ -365,12 +354,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 	for (auto &expr : node.returning_list) {
 		auto expr_result = Rewrite(*expr);
 		result = Merge(result, expr_result);
-	}
-	for (auto &cte_pair : node.cte_map.map) {
-		auto it = cte_results.find(cte_pair.first);
-		if (it != cte_results.end()) {
-			result = Merge(result, it->second);
-		}
 	}
 	return result;
 }
@@ -397,12 +380,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(UpdateQueryNode &node) {
 	for (auto &expr : node.returning_list) {
 		auto expr_result = Rewrite(*expr);
 		result = Merge(result, expr_result);
-	}
-	for (auto &cte_pair : node.cte_map.map) {
-		auto it = cte_results.find(cte_pair.first);
-		if (it != cte_results.end()) {
-			result = Merge(result, it->second);
-		}
 	}
 	return result;
 }
@@ -468,14 +445,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 			break;
 		}
 	}
-	// Merge unreferenced CTEs: even if no arm references a CTE it is still serialized into
-	// the pushed SQL string.  A local-body CTE (UNKNOWN) must block full-query pushdown.
-	for (auto &cte_pair : node.cte_map.map) {
-		auto it = cte_results.find(cte_pair.first);
-		if (it != cte_results.end()) {
-			result = Merge(result, it->second);
-		}
-	}
 	// If the whole set operation resolves to a single remote catalog, propagate upward.
 	if (result.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 		return result;
@@ -526,8 +495,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ExpressionListRef &ref) {
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SubqueryRef &ref) {
 	RemotePushdownOptimizer child_binder(*this);
 	auto result = child_binder.Rewrite(*ref.subquery->node);
-	if (result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE && !ref.alias.empty()) {
-		local_table_names.insert(ref.alias);
+	if (result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
+		TrackLocalTable(ref);
 	}
 	return result;
 }
@@ -538,9 +507,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	}
 	auto &func_expr = ref.function->Cast<FunctionExpression>();
 
-	// Resolve schema-as-catalog ambiguity: "rpc.my_tvf()" is parsed as schema="rpc", catalog="",
-	// but "rpc" is a catalog name.  Apply the same resolution that BaseTableRef uses so that
-	// catalog-qualified TVF calls are correctly recognized as remote.
+	// Figure out
 	string catalog_name = func_expr.catalog;
 	string schema_name = func_expr.schema;
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
@@ -556,16 +523,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 			}
 			return result;
 		}
-		// Local catalog (explicitly qualified): StripCatalogName only strips the remote
-		// catalog's name. An explicit local qualifier like "memory.main.range(0,10)" would
-		// survive stripping and appear in the pushed SQL, which the remote cannot resolve.
-		// Block pushdown for ALL explicitly-catalogued local functions regardless of whether
-		// they are SET_RETURNING (which is neutral when used unqualified) or TABLE_RETURNING.
-		// Returning NO_CATALOG_REFERENCED here would cause Merge(NO_CATALOG, SINGLE_REMOTE)
-		// = SINGLE_REMOTE, incorrectly classifying a mixed query as all-remote.
-		if (!ref.alias.empty()) {
-			local_table_names.insert(ref.alias);
-		}
+		TrackLocalTable(ref);
 		return {};
 	}
 
@@ -589,9 +547,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 			if (!is_set_returning) {
 				// TABLE_RETURNING_FUNCTION - blocks pushdown; track alias so correlated
 				// refs from nested lateral subqueries are detected
-				if (!ref.alias.empty()) {
-					local_table_names.insert(ref.alias);
-				}
+				TrackLocalTable(ref);
 				return {};
 			}
 			// SET_RETURNING_FUNCTION: neutral, recurse into args
@@ -602,11 +558,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 			return result;
 		}
 	}
-	// Not found in local catalogs - unknown function, blocks pushdown; track alias
-	// so any lateral subquery that references this function's output is detected
-	if (!ref.alias.empty()) {
-		local_table_names.insert(ref.alias);
-	}
+	TrackLocalTable(ref);
 	return {};
 }
 
@@ -633,6 +585,23 @@ void RemotePushdownOptimizer::TrackLocalTable(const BaseTableRef &ref) {
 		local_table_names.insert(ref.table_name);
 	}
 }
+
+void RemotePushdownOptimizer::TrackLocalTable(const TableFunctionRef &ref) {
+	if (!ref.alias.empty()) {
+		local_table_names.insert(ref.alias);
+	} else {
+		local_table_names.insert(ref.function->Cast<FunctionExpression>().function_name);
+	}
+}
+
+void RemotePushdownOptimizer::TrackLocalTable(const SubqueryRef &ref) {
+	if (!ref.alias.empty()) {
+		local_table_names.insert(ref.alias);
+	} else {
+		local_table_names.insert("unnamed_subquery");
+	}
+}
+
 
 bool RemotePushdownOptimizer::IsLocalMacro(const FunctionExpression &func) {
 	// If explicitly qualified with a catalog, check whether that catalog is remote
