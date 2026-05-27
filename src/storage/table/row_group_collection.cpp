@@ -1429,7 +1429,11 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
 		auto row_group_count = row_group.GetCommittedRowCount();
-		if (!state.can_change_row_ids) {
+		if (!checkpoint_state.writer.CanLeaveGapsInRowIds() && !state.can_change_row_ids) {
+			// This is used to handle trailing deletions. For new storage we do not need to handle trailing deletions
+			// as they are implicitly handled by dropping empty row groups. For older storage, however, we skip
+			// dropping empty row groups (see code below), so we can still try to remove trailing deleted row groups
+			// without shifting rowids/creating any gaps.
 			committed_counts.emplace_back(row_group_count);
 		}
 		if (row_group_count == 0) {
@@ -1441,6 +1445,8 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 					state.row_group_counts.emplace_back();
 					continue;
 				}
+				// If we are allowed to change rowids, however, then we can later densely repack rowids to target
+				// older storage.
 				state.row_ids_changed = true;
 			}
 			// empty row group - we can drop it entirely.
@@ -1452,12 +1458,13 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		}
 		if (!state.can_change_row_ids) {
 			idx_t total_count = row_group.count;
-			// we cannot change row ids, and this row group has deletes
-			// vacuuming here would alter row ids - so skip it
 			if (total_count != row_group_count) {
+				// We have partial deletes and cannot change rowid's, so skip it.
 				state.row_group_counts.emplace_back();
 				continue;
 			}
+			// Otherwise, the row group is fully live. We can still consider fully live row groups for merging as
+			// that does not change rowids.
 		}
 		state.row_group_counts.push_back(row_group_count);
 	}
@@ -1542,6 +1549,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 			}
 			auto &next_row_group = next_segment->GetNode();
 			auto next_total_count = next_row_group.count.load();
+			// If we are not allowed to remap rowids, we can still allow
 			if (!state.can_change_row_ids) {
 				if (next_row_count != next_total_count) {
 					break;
