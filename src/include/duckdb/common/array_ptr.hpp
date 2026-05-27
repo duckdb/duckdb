@@ -81,11 +81,9 @@ public:
 			AssertNotNull(!ptr);
 		}
 	}
-	//! Allow the implicit conversion between array views when their element pointers can be implicitly converted
 	template <class OTHER_TYPE, typename = std::enable_if_t<std::is_convertible_v<OTHER_TYPE *, DATA_TYPE *>>>
 	array_ptr(const array_ptr<OTHER_TYPE, SAFE> &other) : ptr(other.ptr), count(other.count) {
 	}
-
 	explicit array_ptr(DATA_TYPE &ref) : ptr(&ref), count(1) {
 	}
 
