@@ -1549,11 +1549,14 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 			}
 			auto &next_row_group = next_segment->GetNode();
 			auto next_total_count = next_row_group.count.load();
-			// If we are not allowed to remap rowids, we can still allow
 			if (!state.can_change_row_ids) {
+				// Check if row group is fully live.
 				if (next_row_count != next_total_count) {
 					break;
 				}
+				// We can merge fully live row groups, assuming there aren't already gaps present (since a gap
+				// would mean the vacuum shifts some rowid's forward, even if all the row groups being merged
+				// are fully live).
 				if (!expected_row_start.IsValid()) {
 					expected_row_start = next_segment->GetRowStart();
 				}
@@ -1643,6 +1646,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				// vacuum tasks were scheduled - don't schedule a checkpoint task yet
 				total_vacuum_tasks++;
 				if (vacuum_state.can_change_row_ids) {
+					// With stable rowids, ScheduleVacuumTasks only permits merges that
+					// preserve rowids, so only mark rowids changed when remapping is allowed.
 					vacuum_state.row_ids_changed = true;
 					writer.SetRowIdsChanged();
 				}
