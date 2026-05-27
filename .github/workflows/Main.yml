@@ -342,6 +342,9 @@ jobs:
     - name: Test
       run: make unittest_relassert
 
+    - name: Test Benchmark SQL
+      run: make test_benchmark_sql
+
  regression:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'regression') }}
     uses: ./.github/workflows/Regression.yml
