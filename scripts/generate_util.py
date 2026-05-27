@@ -495,6 +495,13 @@ def generate_member_children_appends(member, expr_var):
                 f'\t\t\tresult.Append(child);',
                 f'\t\t}}',
             ]
+        if type_str == 'vector<CaseCheck>':
+            return [
+                f'\t\tfor (auto &check : {access}) {{',
+                f'\t\t\tresult.Append(check.when_expr);',
+                f'\t\t\tresult.Append(check.then_expr);',
+                f'\t\t}}',
+            ]
         return []
 
     access = f'{expr_var}.{field}'
@@ -555,6 +562,13 @@ def generate_member_const_children_appends(member, expr_var):
             return [
                 f'\t\tfor (auto &child : {access}) {{',
                 f'\t\t\tresult.Append(*child);',
+                f'\t\t}}',
+            ]
+        if type_str == 'vector<CaseCheck>':
+            return [
+                f'\t\tfor (auto &check : {access}) {{',
+                f'\t\t\tresult.Append(*check.when_expr);',
+                f'\t\t\tresult.Append(*check.then_expr);',
                 f'\t\t}}',
             ]
         return []
