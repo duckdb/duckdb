@@ -84,6 +84,15 @@ private:
 	//! Returns true if the function is defined as a macro in a local (non-remote) catalog
 	bool IsLocalMacro(const FunctionExpression &func);
 
+	//! Collect canonical names of all explicitly-qualified remote catalogs referenced in a TableRef tree
+	void CollectRemoteCatalogs(const TableRef &ref, case_insensitive_set_t &catalog_names) const;
+	//! Strip catalog prefix from expressions embedded in a TableRef (e.g. JOIN ON conditions) without
+	//! touching the table name identifiers themselves (keeps rpc.t1 intact for the binder)
+	static void StripExpressionsInRef(TableRef &ref, const string &catalog_name);
+	//! For ORDER BY on mixed set operations: strip catalog.table.col → col when the leading
+	//! qualifier is a known remote catalog name, to produce a bare column ref the UNION output can resolve
+	static void StripToColumnName(ParsedExpression &expr, const case_insensitive_set_t &remote_catalogs);
+
 	void FinishPushdown(unique_ptr<SQLStatement> &statement, CatalogPushdownResult result);
 	void FinishPushdown(unique_ptr<QueryNode> &node, CatalogPushdownResult result);
 
