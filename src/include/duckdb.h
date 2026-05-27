@@ -2516,8 +2516,11 @@ DUCKDB_C_API duckdb_value duckdb_create_bignum(duckdb_bignum input);
 /*!
 Creates a DECIMAL value from a duckdb_decimal
 
+The width must be between 1 and 38, and the scale must not exceed the width.
+
 * @param input The duckdb_decimal value
-* @return The value. This must be destroyed with `duckdb_destroy_value`.
+* @return The value, or `nullptr` if the width or scale are out of range. This must be destroyed with
+`duckdb_destroy_value`.
 */
 DUCKDB_C_API duckdb_value duckdb_create_decimal(duckdb_decimal input);
 
