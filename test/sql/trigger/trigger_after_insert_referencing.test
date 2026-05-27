@@ -1,0 +1,375 @@
+# name: test/sql/trigger/trigger_after_insert_referencing.test
+# description: Test AFTER INSERT trigger with REFERENCING NEW TABLE AS <alias>
+# group: [trigger]
+
+require noforcestorage
+
+# Basic: alias exposes all inserted rows to the trigger body
+statement ok
+CREATE TABLE target (id INTEGER, val VARCHAR);
+
+statement ok
+CREATE TABLE audit (id INTEGER, val VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_ref AFTER INSERT ON target
+REFERENCING NEW TABLE AS inserted
+FOR EACH STATEMENT
+    INSERT INTO audit SELECT id, val FROM inserted;
+
+statement ok
+INSERT INTO target VALUES (1, 'a');
+
+query II rowsort
+SELECT id, val FROM target;
+----
+1	a
+
+query II rowsort
+SELECT id, val FROM audit;
+----
+1	a
+
+# Multi-row INSERT: all rows visible through the alias
+statement ok
+INSERT INTO target VALUES (2, 'b'), (3, 'c'), (4, 'd');
+
+query II rowsort
+SELECT id, val FROM target;
+----
+1	a
+2	b
+3	c
+4	d
+
+query II rowsort
+SELECT id, val FROM audit;
+----
+1	a
+2	b
+3	c
+4	d
+
+# Only the rows from the current INSERT are in the alias (not the full table)
+statement ok
+CREATE TABLE t_rows (id INTEGER);
+
+statement ok
+CREATE TABLE t_rows_log (n INTEGER);
+
+statement ok
+CREATE TRIGGER trg_rows AFTER INSERT ON t_rows
+REFERENCING NEW TABLE AS new_rows
+FOR EACH STATEMENT
+    INSERT INTO t_rows_log SELECT COUNT(*) FROM new_rows;
+
+statement ok
+INSERT INTO t_rows VALUES (1), (2), (3);
+
+query I
+SELECT n FROM t_rows_log;
+----
+3
+
+statement ok
+INSERT INTO t_rows VALUES (10), (20);
+
+query I rowsort
+SELECT n FROM t_rows_log;
+----
+2
+3
+
+# Trigger without REFERENCING still works (alias is simply not available)
+statement ok
+CREATE TABLE t_plain (id INTEGER);
+
+statement ok
+CREATE TABLE t_plain_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_plain AFTER INSERT ON t_plain FOR EACH STATEMENT
+    INSERT INTO t_plain_log VALUES ('fired');
+
+statement ok
+INSERT INTO t_plain VALUES (1);
+
+query I
+SELECT COUNT(*) FROM t_plain_log;
+----
+1
+
+# Body references alias that doesn't exist - rejected at CREATE TRIGGER time
+statement ok
+CREATE TABLE t_bad (id INTEGER);
+
+statement ok
+CREATE TABLE t_bad_log (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_bad AFTER INSERT ON t_bad FOR EACH STATEMENT
+    INSERT INTO t_bad_log SELECT id FROM nonexistent_alias;
+----
+Catalog Error:
+
+# Alias name referenced in body must match the declared alias
+statement ok
+CREATE TABLE t_alias_mismatch (id INTEGER);
+
+statement ok
+CREATE TABLE t_alias_mismatch_log (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_alias_mismatch AFTER INSERT ON t_alias_mismatch
+REFERENCING NEW TABLE AS new_rows
+FOR EACH STATEMENT
+    INSERT INTO t_alias_mismatch_log SELECT id FROM wrong_alias;
+----
+Catalog Error:
+
+# ToSQL round-trips REFERENCING clause correctly
+statement ok
+CREATE TABLE t_tosql (id INTEGER);
+
+statement ok
+CREATE TABLE t_tosql_log (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_tosql AFTER INSERT ON t_tosql
+REFERENCING NEW TABLE AS ins
+FOR EACH STATEMENT
+    INSERT INTO t_tosql_log SELECT id FROM ins;
+
+query I
+SELECT sql LIKE '%REFERENCING NEW TABLE AS ins%' FROM duckdb_triggers() WHERE trigger_name = 'trg_tosql';
+----
+true
+
+# Aggregate over alias: count inserted rows and store in log
+statement ok
+CREATE TABLE t_agg (val INTEGER);
+
+statement ok
+CREATE TABLE t_agg_log (total INTEGER, cnt INTEGER);
+
+statement ok
+CREATE TRIGGER trg_agg AFTER INSERT ON t_agg
+REFERENCING NEW TABLE AS new_vals
+FOR EACH STATEMENT
+    INSERT INTO t_agg_log SELECT SUM(val), COUNT(*) FROM new_vals;
+
+statement ok
+INSERT INTO t_agg VALUES (10), (20), (30);
+
+query II
+SELECT total, cnt FROM t_agg_log;
+----
+60	3
+
+# ON CONFLICT DO NOTHING: alias only sees rows that were actually inserted
+statement ok
+CREATE TABLE t_conflict (id INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE t_conflict_log (id INTEGER);
+
+statement ok
+INSERT INTO t_conflict VALUES (1);
+
+statement ok
+CREATE TRIGGER trg_conflict AFTER INSERT ON t_conflict
+REFERENCING NEW TABLE AS ins
+FOR EACH STATEMENT
+    INSERT INTO t_conflict_log SELECT id FROM ins;
+
+statement ok
+INSERT INTO t_conflict VALUES (1), (2), (3) ON CONFLICT DO NOTHING;
+
+query I rowsort
+SELECT id FROM t_conflict_log;
+----
+2
+3
+
+# ON CONFLICT DO UPDATE is blocked when trigger uses REFERENCING NEW TABLE AS
+statement ok
+CREATE TABLE t_upsert (id INTEGER PRIMARY KEY, val INTEGER);
+
+statement ok
+CREATE TABLE t_upsert_log (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO t_upsert VALUES (1, 100);
+
+statement ok
+CREATE TRIGGER trg_upsert AFTER INSERT ON t_upsert
+REFERENCING NEW TABLE AS ins
+FOR EACH STATEMENT
+    INSERT INTO t_upsert_log SELECT id, val FROM ins;
+
+statement error
+INSERT INTO t_upsert VALUES (1, 999), (2, 200) ON CONFLICT (id) DO UPDATE SET val = excluded.val;
+----
+Not implemented Error: ON CONFLICT DO UPDATE is not yet supported with REFERENCING NEW TABLE AS triggers
+
+# Rollback: if trigger body fails, the whole statement rolls back
+statement ok
+CREATE TABLE t_rollback (id INTEGER);
+
+statement ok
+CREATE TABLE t_rollback_log (id INTEGER UNIQUE);
+
+statement ok
+INSERT INTO t_rollback_log VALUES (999);
+
+statement ok
+CREATE TRIGGER trg_rollback AFTER INSERT ON t_rollback
+REFERENCING NEW TABLE AS ins
+FOR EACH STATEMENT
+    INSERT INTO t_rollback_log SELECT id FROM ins;
+
+statement error
+INSERT INTO t_rollback VALUES (999);
+----
+Constraint Error:
+
+query I
+SELECT COUNT(*) FROM t_rollback;
+----
+0
+
+# Internal CTE names are collision-proof (UUID suffix) - alias can use any name
+statement ok
+CREATE TABLE t_naming (id INTEGER);
+
+statement ok
+CREATE TABLE t_naming_log (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_naming AFTER INSERT ON t_naming
+REFERENCING NEW TABLE AS __duckdb_trigger_base
+FOR EACH STATEMENT
+    INSERT INTO t_naming_log SELECT id FROM __duckdb_trigger_base;
+
+statement ok
+INSERT INTO t_naming VALUES (42);
+
+query I
+SELECT id FROM t_naming_log;
+----
+42
+
+# Trigger body can reference a real table whose name matches internal prefix
+statement ok
+CREATE TABLE __duckdb_trigger_base (id INTEGER);
+
+statement ok
+INSERT INTO __duckdb_trigger_base VALUES (999);
+
+statement ok
+CREATE TABLE t_real_ref (id INTEGER);
+
+statement ok
+CREATE TABLE t_real_ref_log (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_real_ref AFTER INSERT ON t_real_ref FOR EACH STATEMENT
+    INSERT INTO t_real_ref_log SELECT id FROM __duckdb_trigger_base;
+
+statement ok
+INSERT INTO t_real_ref VALUES (1);
+
+query I
+SELECT id FROM t_real_ref_log;
+----
+999
+
+# INSERT query using a CTE with internal name still works (scoped inside, no collision)
+statement ok
+CREATE TABLE t_cte_scope (id INTEGER);
+
+statement ok
+CREATE TABLE t_cte_scope_log (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_cte_scope AFTER INSERT ON t_cte_scope
+REFERENCING NEW TABLE AS ins
+FOR EACH STATEMENT
+    INSERT INTO t_cte_scope_log SELECT id FROM ins;
+
+statement ok
+WITH __duckdb_trigger_base AS (SELECT 7 as id)
+INSERT INTO t_cte_scope SELECT id FROM __duckdb_trigger_base;
+
+query I
+SELECT id FROM t_cte_scope_log;
+----
+7
+
+# REFERENCING NEW TABLE AS is not valid for DELETE triggers
+statement ok
+CREATE TABLE t_del_disallow (id INTEGER);
+
+statement ok
+CREATE TABLE t_del_disallow_log (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_del_new AFTER DELETE ON t_del_disallow
+REFERENCING NEW TABLE AS deleted_rows
+FOR EACH STATEMENT
+    INSERT INTO t_del_disallow_log SELECT id FROM deleted_rows;
+----
+Binder Error: REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers
+
+# UPDATE OF + REFERENCING is rejected (PostgreSQL: transition tables cannot have column lists)
+statement ok
+CREATE TABLE t_update_of (i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE log_update_of (i INTEGER);
+
+statement error
+CREATE TRIGGER tr_update_of AFTER UPDATE OF i ON t_update_of
+REFERENCING NEW TABLE AS updated_rows
+FOR EACH STATEMENT
+    INSERT INTO log_update_of SELECT i FROM updated_rows;
+----
+Binder Error: UPDATE OF is not valid with transition tables
+
+# BEFORE + REFERENCING is rejected (transition tables are AFTER-only)
+statement ok
+CREATE TABLE t_before_ref (i INTEGER);
+
+statement ok
+CREATE TABLE log_before_ref (i INTEGER);
+
+statement error
+CREATE TRIGGER tr_before_ref BEFORE INSERT ON t_before_ref
+REFERENCING NEW TABLE AS inserted_rows
+FOR EACH STATEMENT
+    INSERT INTO log_before_ref SELECT i FROM inserted_rows;
+----
+Binder Error: Transition tables can only be specified for AFTER triggers
+
+# Body CTE with same name as REFERENCING alias: body CTE shadows the alias
+statement ok
+CREATE TABLE t_alias_shadow (i INTEGER);
+
+statement ok
+CREATE TABLE log_alias_shadow (s VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_alias_shadow AFTER INSERT ON t_alias_shadow
+REFERENCING NEW TABLE AS n
+FOR EACH STATEMENT
+    WITH n AS (SELECT 'local' AS s)
+    INSERT INTO log_alias_shadow SELECT s FROM n;
+
+statement ok
+INSERT INTO t_alias_shadow VALUES (1);
+
+query I
+SELECT s FROM log_alias_shadow;
+----
+local
+

@@ -816,6 +816,7 @@ String:
     - SecretStorageSpecifier
     - SecretName
     - TriggerName
+    - ReferencingNewTableAs
     - UpdateAction
     - DeleteAction
     - KeyAction

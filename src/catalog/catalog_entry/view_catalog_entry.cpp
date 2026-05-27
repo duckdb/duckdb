@@ -74,19 +74,27 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 		auto &comment_on_column_info = info.Cast<SetColumnCommentInfo>();
 		auto copied_view = Copy(context);
 
+		string &resolved_column_name = comment_on_column_info.column_name;
 		auto view_columns = GetColumnInfo();
 		if (view_columns) {
 			// if the view is bound - verify the name we are commenting on exists
 			auto &names = view_columns->names;
-			auto entry = std::find(names.begin(), names.end(), comment_on_column_info.column_name);
+			auto entry = std::find(names.begin(), names.end(), resolved_column_name);
 			if (entry == names.end()) {
-				throw BinderException("View \"%s\" does not have a column with name \"%s\"", name,
-				                      comment_on_column_info.column_name);
+				// the column name might be a view alias - check those as well
+				auto alias_entry = std::find(aliases.begin(), aliases.end(), resolved_column_name);
+				if (alias_entry == aliases.end()) {
+					throw BinderException("View \"%s\" does not have a column with name \"%s\"", name,
+					                      resolved_column_name);
+				}
+				auto alias_index = NumericCast<idx_t>(std::distance(aliases.begin(), alias_entry));
+				D_ASSERT(alias_index < names.size());
+				resolved_column_name = names[alias_index];
 			}
 		}
 		// apply the comment to the view
 		auto &copied_view_entry = copied_view->Cast<ViewCatalogEntry>();
-		copied_view_entry.column_comments[comment_on_column_info.column_name] = comment_on_column_info.comment_value;
+		copied_view_entry.column_comments[resolved_column_name] = comment_on_column_info.comment_value;
 		return copied_view;
 	}
 

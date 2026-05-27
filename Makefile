@@ -535,7 +535,9 @@ TEST_CONFIGS := \
 	test/configs/variant_vector.json \
 	test/configs/compressed_in_memory.json \
 	test/configs/prefetch_all_storage.json \
-	test/configs/encryption.json
+	test/configs/encryption.json \
+	test/configs/v1_storage.json \
+	test/configs/v1_storage_block_size_16kB.json
 
 test_configs:
 	$(PYTHON) scripts/ci/run_tests.py $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg)) ./build/release/$(UNITTEST_BINARY)
@@ -824,6 +826,7 @@ generate-files:
 	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py
 	$(PYTHON) scripts/generate_serialization.py
+	$(PYTHON) scripts/generate_util.py
 	$(PYTHON) scripts/generate_storage_info.py
 	$(PYTHON) scripts/generate_enum_util.py
 # Run the formatter again after (re)generating the files
