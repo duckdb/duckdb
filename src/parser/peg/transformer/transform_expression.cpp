@@ -245,8 +245,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		CaseCheck check;
 		check.when_expr = std::move(function_children[0]);
 		check.then_expr = std::move(function_children[1]);
-		expr->case_checks.push_back(std::move(check));
-		expr->else_expr = std::move(function_children[2]);
+		expr->CaseChecksMutable().push_back(std::move(check));
+		expr->ElseMutable() = std::move(function_children[2]);
 		return std::move(expr);
 	} else if (lowercase_name == "unpack") {
 		if (function_children.size() != 1) {
@@ -499,8 +499,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayParensSelect(P
 	CaseCheck check;
 	check.when_expr = std::move(agg_is_null);
 	check.then_expr = std::move(empty_list);
-	case_expr->case_checks.push_back(std::move(check));
-	case_expr->else_expr = std::move(aggr);
+	case_expr->CaseChecksMutable().push_back(std::move(check));
+	case_expr->ElseMutable() = std::move(aggr);
 
 	select_node->select_list.push_back(std::move(case_expr));
 
@@ -2387,13 +2387,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 			new_case.when_expr = std::move(case_expr.when_expr);
 		}
 		new_case.then_expr = std::move(case_expr.then_expr);
-		result->case_checks.push_back(std::move(new_case));
+		result->CaseChecksMutable().push_back(std::move(new_case));
 	}
 	auto &else_expr_opt = list_pr.Child<OptionalParseResult>(3);
 	if (else_expr_opt.HasResult()) {
-		result->else_expr = transformer.Transform<unique_ptr<ParsedExpression>>(else_expr_opt.GetResult());
+		result->ElseMutable() = transformer.Transform<unique_ptr<ParsedExpression>>(else_expr_opt.GetResult());
 	} else {
-		result->else_expr = make_uniq<ConstantExpression>(Value());
+		result->ElseMutable() = make_uniq<ConstantExpression>(Value());
 	}
 	return std::move(result);
 }

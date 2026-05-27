@@ -51,12 +51,12 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::CASE: {
 		auto &cast_expr = Cast<CaseExpression>();
-		for (auto &check : cast_expr.case_checks) {
+		for (auto &check : cast_expr.CaseChecks()) {
 			result.Append(*check.when_expr);
 			result.Append(*check.then_expr);
 		}
-		if (cast_expr.else_expr) {
-			result.Append(*cast_expr.else_expr);
+		if (cast_expr.HasElse()) {
+			result.Append(cast_expr.Else());
 		}
 		break;
 	}
@@ -199,12 +199,12 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::CASE: {
 		auto &cast_expr = Cast<CaseExpression>();
-		for (auto &check : cast_expr.case_checks) {
+		for (auto &check : cast_expr.CaseChecksMutable()) {
 			result.Append(check.when_expr);
 			result.Append(check.then_expr);
 		}
-		if (cast_expr.else_expr) {
-			result.Append(cast_expr.else_expr);
+		if (cast_expr.ElseMutable()) {
+			result.Append(cast_expr.ElseMutable());
 		}
 		break;
 	}
