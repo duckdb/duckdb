@@ -1,30 +1,15 @@
-diff --git a/src/include/quack_storage.hpp b/src/include/quack_storage.hpp
-index eaad115..c612dab 100644
---- a/src/include/quack_storage.hpp
-+++ b/src/include/quack_storage.hpp
-@@ -11,6 +11,10 @@ class DatabaseInstance;
- class QuackStorageExtension : public StorageExtension {
- public:
- 	QuackStorageExtension();
-+
-+	bool HasConnectFunction() const override {
-+		return true;
-+	}
- };
- 
- class QuackStorageExtensionInfo : public StorageExtensionInfo {
 diff --git a/src/include/storage/quack_catalog.hpp b/src/include/storage/quack_catalog.hpp
 index 1389757..bdd3e6c 100644
 --- a/src/include/storage/quack_catalog.hpp
 +++ b/src/include/storage/quack_catalog.hpp
 @@ -55,6 +55,7 @@ public:
  	string GetDBPath() override;
- 
+
  	unique_ptr<ColumnDataCollection> ExecuteCommandInternal(ClientContext &context, const string &query);
 +	string GetConnectFunctionName(ClientContext &context) override;
  	const QuackUri &GetServerUri();
  	const string &GetConnectionId();
- 
+
 diff --git a/src/storage/quack_catalog.cpp b/src/storage/quack_catalog.cpp
 index f5b1f92..e80a1cc 100644
 --- a/src/storage/quack_catalog.cpp
@@ -32,11 +17,11 @@ index f5b1f92..e80a1cc 100644
 @@ -80,6 +80,16 @@ unique_ptr<ColumnDataCollection> QuackCatalog::ExecuteCommandInternal(ClientCont
  	return chunk_collection;
  }
- 
-+// Pass-through dispatch for `CONNECT <quack_db>; <sql>` (and friends). Returns the registered
+
++// CONNECT dispatch for `CONNECT <quack_db>; <sql>` (and friends). Returns the registered
 +// name of quack_query_by_name(catalog, sql) — already streams via FetchRequest on result_uuid,
 +// supports projection pushdown, and tags chunks with BatchIndex. The CONNECT chokepoint rewrites
-+// bound SQL as `SELECT * FROM quack_query_by_name('<catalog>', '<sql>')` and looks the function
++// routed SQL as `SELECT * FROM quack_query_by_name('<catalog>', '<sql>')` and looks the function
 +// up in the catalog at bind time, so per-catalog state (server URI, client connection) is
 +// reached via the catalog-name argument rather than baked into the function pointer.
 +string QuackCatalog::GetConnectFunctionName(ClientContext &context) {

@@ -349,8 +349,11 @@ private:
 	connection_t connection_id;
 	//! Routing target for SQL execution while CONNECTed (CONNECT/DISCONNECT).
 	//! When is_connected is true and connected_to_database can be locked, non-control SQL is rewritten
-	//! at the chokepoint as `SELECT * FROM <fn>('cat', '<sql>')` and runs through the normal pipeline.
+	//! at the chokepoint as `SELECT * FROM <connected_function_name>('cat', '<sql>')` and runs through
+	//! the normal pipeline. The function name is resolved once at ConnectToCatalog and cached here —
+	//! see Catalog::GetConnectFunctionName for the resolution contract.
 	weak_ptr<AttachedDatabase> connected_to_database;
+	string connected_function_name;
 	bool is_connected = false;
 };
 

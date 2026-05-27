@@ -39,12 +39,6 @@ public:
 	virtual ~StorageExtension() {
 	}
 
-	//! Whether catalogs from this storage extension accept `CONNECT name`. Default false; backends opt in
-	//! by overriding this AND Catalog::GetConnectFunctionName. Gates CONNECT before the first query runs.
-	virtual bool HasConnectFunction() const {
-		return false;
-	}
-
 	virtual void OnCheckpointStart(AttachedDatabase &db, CheckpointOptions checkpoint_options) {
 	}
 

@@ -36,10 +36,8 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 	if (!target) {
 		throw InvalidInputException("Database \"%s\" is not attached", info->name);
 	}
-	auto ext = target->GetStorageExtension();
-	if (!ext || !ext->HasConnectFunction()) {
-		throw InvalidInputException("Database \"%s\" does not support CONNECT", info->name);
-	}
+	// ConnectToCatalog resolves and caches the dispatch function name; throws if the catalog returns
+	// empty from GetConnectFunctionName (i.e. CONNECT is not supported in this context).
 	client.ConnectToCatalog(target);
 	return SourceResultType::FINISHED;
 }

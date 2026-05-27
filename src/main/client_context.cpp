@@ -223,12 +223,21 @@ unique_ptr<ClientContextLock> ClientContext::LockContext() {
 
 void ClientContext::ConnectToCatalog(const shared_ptr<AttachedDatabase> &target) {
 	D_ASSERT(target);
+	// Resolve and validate the dispatch function name up-front; mutations below only run on success
+	// (so a throw leaves the client unbound). The cached name is the single source of truth for the
+	// chokepoint until DISCONNECT — see the field comment on connected_function_name.
+	auto fn_name = target->GetCatalog().GetConnectFunctionName(*this);
+	if (fn_name.empty()) {
+		throw InvalidInputException("Database \"%s\" does not support CONNECT", target->GetName());
+	}
 	connected_to_database = target;
+	connected_function_name = std::move(fn_name);
 	is_connected = true;
 }
 
 void ClientContext::DisconnectFromCatalog() {
 	connected_to_database.reset();
+	connected_function_name.clear();
 	is_connected = false;
 }
 
@@ -1021,14 +1030,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 				        "DISCONNECT to clear the connection before running further SQL.")),
 				    query);
 			}
-			auto fn_name = live->GetCatalog().GetConnectFunctionName(*this);
-			if (fn_name.empty()) {
-				return ErrorResult<PendingQueryResult>(
-				    ErrorData(InvalidInputException("CONNECT is not available for catalog \"%s\" in this context",
-				                                    live->GetName())),
-				    query);
-			}
-			statement = BuildConnectSelect(fn_name, live->GetName(), query);
+			// Function name was resolved and validated at CONNECT time — see ConnectToCatalog.
+			statement = BuildConnectSelect(connected_function_name, live->GetName(), query);
 			// statement is now SELECT * FROM <fn>('cat', '<sql>'); fall through.
 		}
 	}
