@@ -1723,6 +1723,79 @@ statement ok
 drop table local_upd_jref_aux;
 
 # ============================================================
+# Bug 36 addendum: symmetric coverage — remote table on the LEFT of a JoinRef
+# inside DELETE USING and UPDATE FROM, with local table on the RIGHT.
+# Rewrite(JoinRef) handles both orderings symmetrically; these tests ensure the
+# left-remote path (left_result==SINGLE_REMOTE, right_result!=SINGLE_REMOTE) also
+# correctly strips catalog-qualified refs from the WHERE/SET expressions via
+# pending_outer_strip_catalogs.
+# ============================================================
+
+statement ok
+create table local_del_jref2(k int);
+
+statement ok
+insert into local_del_jref2 from range(10);
+
+statement ok
+create table local_del_jref2_aux(m int);
+
+statement ok
+insert into local_del_jref2_aux values (3), (5), (7);
+
+# DELETE with USING (rpc.t1 JOIN local_del_jref2_aux ON ...) — remote LEFT, local RIGHT.
+# WHERE references rpc.t1.i which must be stripped to t1.i before binding.
+# t1={0..9}, aux={3,5,7}: condition rpc.t1.i > 4 matches {5,7}.
+statement ok
+delete from local_del_jref2
+using rpc.t1 join local_del_jref2_aux on rpc.t1.i = local_del_jref2_aux.m
+where local_del_jref2.k = rpc.t1.i and rpc.t1.i > 4
+
+# rows 5 and 7 deleted; {0..9} minus {5,7} = 8 rows
+query I
+select count(*) from local_del_jref2
+----
+8
+
+statement ok
+drop table local_del_jref2;
+
+statement ok
+drop table local_del_jref2_aux;
+
+statement ok
+create table local_upd_jref2(k int);
+
+statement ok
+insert into local_upd_jref2 from range(5);
+
+statement ok
+create table local_upd_jref2_aux(m int);
+
+statement ok
+insert into local_upd_jref2_aux values (1), (3);
+
+# UPDATE with FROM (rpc.t1 JOIN local_upd_jref2_aux ON ...) — remote LEFT, local RIGHT.
+# SET expression rpc.t1.i * 10 and WHERE rpc.t1.i must both be stripped to t1.i.
+# With fix: rows k=1 and k=3 become 10 and 30.
+statement ok
+update local_upd_jref2 set k = rpc.t1.i * 10
+from rpc.t1 join local_upd_jref2_aux on rpc.t1.i = local_upd_jref2_aux.m
+where local_upd_jref2.k = rpc.t1.i
+
+# rows with original k=1 and k=3 updated to 10 and 30; count >= 10 = 2
+query I
+select count(*) from local_upd_jref2 where k >= 10
+----
+2
+
+statement ok
+drop table local_upd_jref2;
+
+statement ok
+drop table local_upd_jref2_aux;
+
+# ============================================================
 # Bug 37: FinishPushdown(QueryNode) and PushJoinChild(SubqueryRef)
 # CTE guards did not block NO_CATALOG_REFERENCED outer CTEs.
 #
