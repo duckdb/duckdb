@@ -566,10 +566,11 @@ public:
 	}
 
 	// true if OP defines ClusteredOp (early-exit optimization for first/last/any_value).
-	template <class OP, class = void>
+	template <class OP, class INPUT_TYPE, class STATE_TYPE, class = void>
 	struct HasClusteredOperation : std::false_type {};
-	template <class OP>
-	struct HasClusteredOperation<OP, void_t_helper<decltype(&OP::template ClusteredOp<int32_t, int32_t, OP>)>>
+	template <class OP, class INPUT_TYPE, class STATE_TYPE>
+	struct HasClusteredOperation<OP, INPUT_TYPE, STATE_TYPE,
+	                             void_t_helper<decltype(&OP::template ClusteredOp<INPUT_TYPE, STATE_TYPE, OP>)>>
 	    : std::true_type {};
 
 	template <class INPUT_TYPE, class OP, class = void>
@@ -596,7 +597,7 @@ public:
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void ExecuteUnaryNoClusteredOpt(Vector &input, AggregateInputData &aggr_input_data,
 	                                       const ClusteredAggr &clustered, idx_t count) {
-		static_assert(HasClusteredOperation<OP>::value, "Expected custom clustered operation");
+		static_assert(HasClusteredOperation<OP, INPUT_TYPE, STATE_TYPE>::value, "Expected custom clustered operation");
 		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			ExecuteUnaryClustConstantCustomState<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, clustered);
 			return;
@@ -648,7 +649,7 @@ public:
 				return;
 			}
 		}
-		if constexpr (HasClusteredOperation<OP>::value) {
+		if constexpr (HasClusteredOperation<OP, INPUT_TYPE, STATE_TYPE>::value) {
 			ExecuteUnaryNoClusteredOpt<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, clustered, count);
 		} else {
 			D_ASSERT(false);
