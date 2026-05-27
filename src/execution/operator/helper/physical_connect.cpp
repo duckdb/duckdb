@@ -39,9 +39,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 	auto ext = target->GetStorageExtension();
 	if (!ext || !ext->SupportsPassthrough()) {
 		throw InvalidInputException(
-		    "Database \"%s\" does not support pass-through SQL execution (CONNECT). The storage extension must "
-		    "override StorageExtension::SupportsPassthrough() and the catalog must implement "
-		    "Catalog::GetConnectFunction().",
+		    "Database \"%s\" does not support pass-through SQL execution (CONNECT).",
 		    info->name);
 	}
 	client.ConnectToCatalog(target);
