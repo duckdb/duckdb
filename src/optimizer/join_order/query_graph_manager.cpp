@@ -4,6 +4,8 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -13,37 +15,41 @@
 
 namespace duckdb {
 
-//! Returns true if A and B are disjoint, false otherwise
-template <class T>
-static bool Disjoint(const unordered_set<T> &a, const unordered_set<T> &b) {
-	return std::all_of(a.begin(), a.end(), [&b](typename std::unordered_set<T>::const_reference entry) {
-		return b.find(entry) == b.end();
-	});
-}
-
 void JoinPredicateModel::Clear() {
-	all_filters.clear();
-	equality_join_filters.clear();
-	selectivity_filters.clear();
+	predicates.clear();
+	all_predicates.clear();
+	equality_join_predicates.clear();
+	selectivity_predicates.clear();
+	graph_predicates.clear();
 	has_left_join_predicates = false;
 	equality_classes.clear();
 	equality_pairs.clear();
 }
 
-void JoinPredicateModel::RegisterFilter(FilterInfo &filter, JoinPredicateClass predicate_class) {
-	all_filters.push_back(filter);
+JoinPredicate &JoinPredicateModel::RegisterPredicate(FilterInfo &filter, JoinPredicateClass predicate_class,
+                                                     ColumnBinding left_equality_binding,
+                                                     ColumnBinding right_equality_binding) {
+	auto predicate = make_uniq<JoinPredicate>(predicates.size(), filter, predicate_class, left_equality_binding,
+	                                          right_equality_binding);
+	auto &result = *predicate;
+	predicates.push_back(std::move(predicate));
+	all_predicates.push_back(result);
 	if (predicate_class == JoinPredicateClass::LEFT_JOIN) {
 		has_left_join_predicates = true;
 	}
-	if (JoinOrderUtil::CanBuildSelectivityDomain(filter, predicate_class)) {
-		selectivity_filters.push_back(filter);
+	if (result.HasDisjointJoinEndpoints()) {
+		graph_predicates.push_back(result);
 	}
+	if (result.CanBuildSelectivityDomain()) {
+		selectivity_predicates.push_back(result);
+	}
+	return result;
 }
 
 void JoinPredicateModel::AddEqualityClass(JoinEqualityClass equality_class) {
 	D_ASSERT(equality_class.index == equality_classes.size());
-	for (auto &filter : equality_class.filters) {
-		equality_join_filters.push_back(filter.filter);
+	for (auto &edge : equality_class.edges) {
+		equality_join_predicates.push_back(edge.predicate);
 	}
 	equality_classes.push_back(std::move(equality_class));
 }
@@ -59,16 +65,20 @@ void JoinPredicateModel::AddEqualityPairClass(JoinRelationSet &pair, idx_t equal
 	}
 }
 
-const vector<optional_ptr<FilterInfo>> &JoinPredicateModel::GetFilters() const {
-	return all_filters;
+const vector<reference<JoinPredicate>> &JoinPredicateModel::GetPredicates() const {
+	return all_predicates;
 }
 
-const vector<optional_ptr<FilterInfo>> &JoinPredicateModel::GetEqualityJoinFilters() const {
-	return equality_join_filters;
+const vector<reference<JoinPredicate>> &JoinPredicateModel::GetEqualityJoinPredicates() const {
+	return equality_join_predicates;
 }
 
-const vector<optional_ptr<FilterInfo>> &JoinPredicateModel::GetSelectivityFilters() const {
-	return selectivity_filters;
+const vector<reference<JoinPredicate>> &JoinPredicateModel::GetSelectivityPredicates() const {
+	return selectivity_predicates;
+}
+
+const vector<reference<JoinPredicate>> &JoinPredicateModel::GetGraphPredicates() const {
+	return graph_predicates;
 }
 
 const vector<JoinEqualityClass> &JoinPredicateModel::GetEqualityClasses() const {
@@ -102,7 +112,7 @@ bool JoinPredicateModel::EqualityClassConnectsPairInScope(idx_t class_index, Joi
 		if (relation == right) {
 			return true;
 		}
-		for (auto &edge : equality_class.filters) {
+		for (auto &edge : equality_class.edges) {
 			if (!JoinOrderUtil::ContainsRelation(scope, edge.left_relation) ||
 			    !JoinOrderUtil::ContainsRelation(scope, edge.right_relation)) {
 				continue;
@@ -135,9 +145,6 @@ idx_t JoinPredicateModel::CountActiveEqualityClasses(JoinRelationSet &pair, Join
 void QueryGraphManager::BuildPredicateModel() {
 	predicate_model.Clear();
 
-	// Assign edge_equivalence_index to INNER equality join filters using union-find over column bindings.
-	// All filters in the same transitive equality closure receive the same index, regardless of the
-	// order they appear in filters_and_bindings.
 	column_binding_map_t<idx_t> binding_to_component;
 	vector<idx_t> parents;
 
@@ -160,18 +167,26 @@ void QueryGraphManager::BuildPredicateModel() {
 		return component;
 	};
 
-	// First union all INNER equality predicates. Do not assign edge ids in this pass,
+	// First union all normalized equality predicates. Do not assign edge ids in this pass,
 	// because a later predicate can merge two previously separate components.
 	for (auto &filter : filters_and_bindings) {
 		filter->edge_equivalence_index = optional_idx();
 		auto predicate_class = JoinOrderUtil::ClassifyJoinPredicate(*filter);
-		predicate_model.RegisterFilter(*filter, predicate_class);
-		if (!JoinOrderUtil::CanBuildEqualityClosure(*filter)) {
+		ColumnBinding left_equality_binding;
+		ColumnBinding right_equality_binding;
+		if (BoundComparisonExpression::IsComparison(*filter->filter)) {
+			auto &comparison = filter->filter->Cast<BoundFunctionExpression>();
+			GetEquivalenceBinding(BoundComparisonExpression::Left(comparison), left_equality_binding);
+			GetEquivalenceBinding(BoundComparisonExpression::Right(comparison), right_equality_binding);
+		}
+		auto &predicate =
+		    predicate_model.RegisterPredicate(*filter, predicate_class, left_equality_binding, right_equality_binding);
+		if (!predicate.CanBuildEqualityClosure()) {
 			continue;
 		}
 
-		auto left_root = find_root(get_component(filter->left_binding));
-		auto right_root = find_root(get_component(filter->right_binding));
+		auto left_root = find_root(get_component(predicate.GetEqualityBinding(true)));
+		auto right_root = find_root(get_component(predicate.GetEqualityBinding(false)));
 		if (left_root != right_root) {
 			parents[MaxValue(left_root, right_root)] = MinValue(left_root, right_root);
 		}
@@ -179,33 +194,37 @@ void QueryGraphManager::BuildPredicateModel() {
 
 	// Then assign stable final ids to every equality edge using the final roots.
 	unordered_map<idx_t, idx_t> root_to_equivalence_id;
-	vector<vector<optional_ptr<FilterInfo>>> equality_class_filters;
-	for (auto &filter : filters_and_bindings) {
-		if (!JoinOrderUtil::CanBuildEqualityClosure(*filter)) {
+	vector<vector<reference<JoinPredicate>>> equality_class_predicates;
+	for (auto predicate_ref : predicate_model.GetPredicates()) {
+		auto &predicate = predicate_ref.get();
+		if (!predicate.CanBuildEqualityClosure()) {
 			continue;
 		}
-		auto root = find_root(binding_to_component[filter->left_binding]);
+		auto root = find_root(binding_to_component[predicate.GetEqualityBinding(true)]);
 		auto entry = root_to_equivalence_id.find(root);
 		if (entry == root_to_equivalence_id.end()) {
 			entry = root_to_equivalence_id.insert(make_pair(root, root_to_equivalence_id.size())).first;
-			equality_class_filters.emplace_back();
+			equality_class_predicates.emplace_back();
 		}
-		filter->edge_equivalence_index = optional_idx(entry->second);
-		equality_class_filters[entry->second].push_back(filter.get());
+		predicate.SetEqualityClassIndex(optional_idx(entry->second));
+		equality_class_predicates[entry->second].push_back(predicate);
 	}
 
-	for (idx_t equality_class_index = 0; equality_class_index < equality_class_filters.size(); equality_class_index++) {
+	for (idx_t equality_class_index = 0; equality_class_index < equality_class_predicates.size();
+	     equality_class_index++) {
 		JoinEqualityClass equality_class;
 		equality_class.index = equality_class_index;
-		for (auto &filter : equality_class_filters[equality_class_index]) {
-			auto left_relation = JoinOrderUtil::GetBindingRelation(filter->left_binding);
-			auto right_relation = JoinOrderUtil::GetBindingRelation(filter->right_binding);
-			equality_class.columns.insert(filter->left_binding);
-			equality_class.columns.insert(filter->right_binding);
+		for (auto predicate_ref : equality_class_predicates[equality_class_index]) {
+			auto &predicate = predicate_ref.get();
+			auto &left_binding = predicate.GetEqualityBinding(true);
+			auto &right_binding = predicate.GetEqualityBinding(false);
+			auto left_relation = JoinOrderUtil::GetBindingRelation(left_binding);
+			auto right_relation = JoinOrderUtil::GetBindingRelation(right_binding);
+			equality_class.columns.insert(left_binding);
+			equality_class.columns.insert(right_binding);
 			equality_class.relations.insert(left_relation);
 			equality_class.relations.insert(right_relation);
-			equality_class.filters.emplace_back(filter, left_relation, right_relation, filter->left_binding,
-			                                    filter->right_binding);
+			equality_class.edges.emplace_back(predicate, left_relation, right_relation, left_binding, right_binding);
 		}
 		predicate_model.AddEqualityClass(std::move(equality_class));
 	}
@@ -238,10 +257,12 @@ bool QueryGraphManager::Build(JoinOrderOptimizer &optimizer, LogicalOperator &op
 	}
 	// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
 	filters_and_bindings = relation_manager.ExtractEdges(op, filter_operators, set_manager);
-	// Create the query_graph hyper edges (also populates left_binding/right_binding on each FilterInfo).
-	CreateHyperGraphEdges();
-	// Build the predicate model AFTER CreateHyperGraphEdges so that left_binding/right_binding are populated.
+	// Populate left/right endpoints and stats bindings before building the predicate model.
+	BindFilterEndpoints();
+	// Build the predicate model after BindFilterEndpoints so that left_binding/right_binding are populated.
 	BuildPredicateModel();
+	// Create query_graph hyper edges from the normalized predicate model.
+	CreateHyperGraphEdges();
 	return true;
 }
 
@@ -260,6 +281,32 @@ void QueryGraphManager::GetColumnBinding(const Expression &root_expr, ColumnBind
 		    binding = ColumnBinding(TableIndex(relation_manager.relation_mapping[colref.binding.table_index].index),
 		                            colref.binding.column_index);
 	    });
+}
+
+void QueryGraphManager::GetEquivalenceBinding(const Expression &expression, ColumnBinding &binding) {
+	switch (expression.GetExpressionClass()) {
+	case ExpressionClass::BOUND_COLUMN_REF: {
+		auto &colref = expression.Cast<BoundColumnRefExpression>();
+		D_ASSERT(colref.depth == 0);
+		if (!colref.binding.table_index.IsValid()) {
+			return;
+		}
+		auto entry = relation_manager.relation_mapping.find(colref.binding.table_index);
+		D_ASSERT(entry != relation_manager.relation_mapping.end());
+		binding = ColumnBinding(TableIndex(entry->second.index), colref.binding.column_index);
+		return;
+	}
+	case ExpressionClass::BOUND_CAST: {
+		auto &cast = expression.Cast<BoundCastExpression>();
+		if (cast.try_cast || !BoundCastExpression::CastIsInvertible(cast.source_type(), cast.GetReturnType())) {
+			return;
+		}
+		GetEquivalenceBinding(*cast.child, binding);
+		return;
+	}
+	default:
+		return;
+	}
 }
 
 void FilterInfo::SetLeftSet(optional_ptr<JoinRelationSet> left_set_new) {
@@ -286,8 +333,7 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 	return node;
 }
 
-void QueryGraphManager::CreateHyperGraphEdges() {
-	// create potential edges from the comparisons
+void QueryGraphManager::BindFilterEndpoints() {
 	for (auto &filter_info : filters_and_bindings) {
 		auto &filter = filter_info->filter;
 		// now check if it can be used as a join predicate
@@ -310,15 +356,7 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 				if (!filter_info->right_set) {
 					filter_info->right_set = &set_manager.GetJoinRelation(right_bindings);
 				}
-				// we can only create a meaningful edge if the sets are not exactly the same
-				if (filter_info->left_set != filter_info->right_set) {
-					// check if the sets are disjoint
-					if (Disjoint(left_bindings, right_bindings)) {
-						// they are disjoint, we only need to create one set of edges in the join graph
-						query_graph.CreateEdge(*filter_info->left_set, *filter_info->right_set, filter_info);
-						query_graph.CreateEdge(*filter_info->right_set, *filter_info->left_set, filter_info);
-					}
-				}
+				D_ASSERT(filter_info->left_set && filter_info->right_set);
 			}
 		} else if (filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 			auto &conjunction = filter->Cast<BoundConjunctionExpression>();
@@ -352,17 +390,18 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 				}
 			}
 			if (!left_bindings.empty() && !right_bindings.empty()) {
-				// we can only create a meaningful edge if the sets are not exactly the same
-				if (filter_info->left_set != filter_info->right_set) {
-					// check if the sets are disjoint
-					if (Disjoint(left_bindings, right_bindings)) {
-						// they are disjoint, we only need to create one set of edges in the join graph
-						query_graph.CreateEdge(*filter_info->left_set, *filter_info->right_set, filter_info);
-						query_graph.CreateEdge(*filter_info->right_set, *filter_info->left_set, filter_info);
-					}
-				}
+				D_ASSERT(filter_info->left_set && filter_info->right_set);
 			}
 		}
+	}
+}
+
+void QueryGraphManager::CreateHyperGraphEdges() {
+	for (auto predicate_ref : predicate_model.GetGraphPredicates()) {
+		auto &predicate = predicate_ref.get();
+		D_ASSERT(predicate.GetLeftSetOptional() && predicate.GetRightSetOptional());
+		query_graph.CreateEdge(predicate.GetLeftSet(), predicate.GetRightSet(), predicate);
+		query_graph.CreateEdge(predicate.GetRightSet(), predicate.GetLeftSet(), predicate);
 	}
 }
 
@@ -480,7 +519,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		// generate the left and right children
 		auto left = GenerateJoins(extracted_relations, node->left_set);
 		auto right = GenerateJoins(extracted_relations, node->right_set);
-		if (dp_entry->second->info->filters.empty()) {
+		if (dp_entry->second->info->predicates.empty()) {
 			// no filters, create a cross product
 			auto cardinality = left.op->estimated_cardinality * right.op->estimated_cardinality;
 			result_operator = LogicalCrossProduct::Create(std::move(left.op), std::move(right.op));
@@ -489,11 +528,13 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			// we have filters, create a join node
 			// Prefer non-INNER join types (LEFT/SEMI/ANTI) since WHERE clause filters default
 			// to INNER but should not override the actual join semantics of the edge.
-			auto chosen_filter = node->info->filters.at(0);
-			for (idx_t i = 0; i < node->info->filters.size(); i++) {
-				auto filter_join_type = node->info->filters.at(i)->join_type;
+			auto &chosen_predicates = node->info->predicates;
+			auto chosen_filter = &chosen_predicates.at(0).get().GetFilter();
+			for (idx_t i = 0; i < chosen_predicates.size(); i++) {
+				auto &predicate = chosen_predicates.at(i).get();
+				auto filter_join_type = predicate.GetJoinType();
 				if (filter_join_type != JoinType::INNER) {
-					chosen_filter = node->info->filters.at(i);
+					chosen_filter = &predicate.GetFilter();
 					break;
 				}
 			}
@@ -504,8 +545,8 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			join->children.push_back(std::move(right.op));
 
 			// set the join conditions from the join node
-			for (auto &filter_ref : node->info->filters) {
-				auto f = filter_ref.get();
+			for (auto predicate_ref : node->info->predicates) {
+				auto f = &predicate_ref.get().GetFilter();
 				// extract the filter from the operator it originally belonged to
 				D_ASSERT(filters_and_bindings[f->filter_index]->filter);
 				auto &filter_and_binding = filters_and_bindings.at(f->filter_index);

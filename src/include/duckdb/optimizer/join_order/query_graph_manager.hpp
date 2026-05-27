@@ -32,6 +32,7 @@
 namespace duckdb {
 
 class QueryGraphEdges;
+class JoinPredicate;
 
 struct GenerateJoinRelation {
 	GenerateJoinRelation(optional_ptr<JoinRelationSet> set, unique_ptr<LogicalOperator> op_p)
@@ -106,15 +107,6 @@ struct JoinOrderUtil {
 		}
 	}
 
-	//! INNER equality and IS NOT DISTINCT FROM predicates are the only predicates that form equivalence closures.
-	static bool IsEquivalenceJoinPredicate(const FilterInfo &filter) {
-		return ClassifyJoinPredicate(filter) == JoinPredicateClass::INNER_EQUALITY;
-	}
-
-	static bool HasValidJoinBindings(const FilterInfo &filter) {
-		return filter.left_binding.table_index.IsValid() && filter.right_binding.table_index.IsValid();
-	}
-
 	static bool HasAnyValidJoinBinding(const FilterInfo &filter) {
 		return filter.left_binding.table_index.IsValid() || filter.right_binding.table_index.IsValid();
 	}
@@ -124,15 +116,20 @@ struct JoinOrderUtil {
 		       filter.left_set != filter.right_set;
 	}
 
-	static bool CanBuildEqualityClosure(const FilterInfo &filter) {
-		return IsEquivalenceJoinPredicate(filter) && HasValidJoinBindings(filter) && HasValidJoinEndpoints(filter);
-	}
-
-	static bool CanBuildSelectivityDomain(const FilterInfo &filter, JoinPredicateClass predicate_class) {
-		if (!HasValidJoinEndpoints(filter) || !HasAnyValidJoinBinding(filter)) {
+	static bool HasDisjointJoinEndpoints(const FilterInfo &filter) {
+		if (!HasValidJoinEndpoints(filter)) {
 			return false;
 		}
-		return predicate_class != JoinPredicateClass::INNER_EQUALITY || !CanBuildEqualityClosure(filter);
+		auto &left = *filter.left_set;
+		auto &right = *filter.right_set;
+		for (idx_t left_idx = 0; left_idx < left.count; left_idx++) {
+			for (idx_t right_idx = 0; right_idx < right.count; right_idx++) {
+				if (left.relations[left_idx] == right.relations[right_idx]) {
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	static RelationIndex GetBindingRelation(const ColumnBinding &binding) {
@@ -150,14 +147,124 @@ struct JoinOrderUtil {
 	}
 };
 
-struct JoinEqualityFilterEdge {
-	JoinEqualityFilterEdge(optional_ptr<FilterInfo> filter, RelationIndex left_relation, RelationIndex right_relation,
-	                       ColumnBinding left_binding, ColumnBinding right_binding)
-	    : filter(filter), left_relation(left_relation), right_relation(right_relation), left_binding(left_binding),
-	      right_binding(right_binding) {
+class JoinPredicate {
+public:
+	JoinPredicate(idx_t index, FilterInfo &filter, JoinPredicateClass predicate_class,
+	              ColumnBinding left_equality_binding, ColumnBinding right_equality_binding)
+	    : index(index), filter(filter), predicate_class(predicate_class),
+	      comparison_type(JoinOrderUtil::GetJoinPredicateComparisonType(filter)),
+	      left_equality_binding(left_equality_binding), right_equality_binding(right_equality_binding) {
 	}
 
-	optional_ptr<FilterInfo> filter;
+	idx_t GetIndex() const {
+		return index;
+	}
+
+	FilterInfo &GetFilter() const {
+		return filter.get();
+	}
+
+	JoinPredicateClass GetPredicateClass() const {
+		return predicate_class;
+	}
+
+	JoinType GetJoinType() const {
+		return filter.get().join_type;
+	}
+
+	ExpressionType GetComparisonType() const {
+		return comparison_type;
+	}
+
+	JoinRelationSet &GetSet() const {
+		return filter.get().set;
+	}
+
+	JoinRelationSet &GetLeftSet() const {
+		D_ASSERT(filter.get().left_set);
+		return *filter.get().left_set;
+	}
+
+	JoinRelationSet &GetRightSet() const {
+		D_ASSERT(filter.get().right_set);
+		return *filter.get().right_set;
+	}
+
+	optional_ptr<JoinRelationSet> GetLeftSetOptional() const {
+		return filter.get().left_set;
+	}
+
+	optional_ptr<JoinRelationSet> GetRightSetOptional() const {
+		return filter.get().right_set;
+	}
+
+	const ColumnBinding &GetStatsBinding(bool left) const {
+		return left ? filter.get().left_binding : filter.get().right_binding;
+	}
+
+	const ColumnBinding &GetEqualityBinding(bool left) const {
+		return left ? left_equality_binding : right_equality_binding;
+	}
+
+	bool HasValidJoinEndpoints() const {
+		return JoinOrderUtil::HasValidJoinEndpoints(filter.get());
+	}
+
+	bool HasDisjointJoinEndpoints() const {
+		return JoinOrderUtil::HasDisjointJoinEndpoints(filter.get());
+	}
+
+	bool HasAnyValidStatsBinding() const {
+		return JoinOrderUtil::HasAnyValidJoinBinding(filter.get());
+	}
+
+	bool HasValidEqualityBindings() const {
+		return left_equality_binding.table_index.IsValid() && right_equality_binding.table_index.IsValid();
+	}
+
+	bool CanBuildEqualityClosure() const {
+		return predicate_class == JoinPredicateClass::INNER_EQUALITY && HasValidEqualityBindings() &&
+		       HasValidJoinEndpoints();
+	}
+
+	bool CanBuildSelectivityDomain() const {
+		if (!HasValidJoinEndpoints() || !HasAnyValidStatsBinding()) {
+			return false;
+		}
+		return predicate_class != JoinPredicateClass::INNER_EQUALITY || !CanBuildEqualityClosure();
+	}
+
+	bool IsEquivalencePredicate() const {
+		return CanBuildEqualityClosure();
+	}
+
+	void SetEqualityClassIndex(optional_idx equality_class_index) {
+		this->equality_class_index = equality_class_index;
+		filter.get().edge_equivalence_index = equality_class_index;
+	}
+
+	optional_idx GetEqualityClassIndex() const {
+		return equality_class_index;
+	}
+
+private:
+	idx_t index;
+	reference<FilterInfo> filter;
+	JoinPredicateClass predicate_class;
+	ExpressionType comparison_type;
+	ColumnBinding left_equality_binding;
+	ColumnBinding right_equality_binding;
+	optional_idx equality_class_index;
+};
+
+struct JoinEqualityPredicateEdge {
+	JoinEqualityPredicateEdge(JoinPredicate &predicate, RelationIndex left_relation, RelationIndex right_relation,
+	                          ColumnBinding left_binding, ColumnBinding right_binding)
+	    : predicate(predicate), left_relation(left_relation), right_relation(right_relation),
+	      left_binding(left_binding), right_binding(right_binding) {
+	}
+
+	reference<JoinPredicate> predicate;
 	RelationIndex left_relation;
 	RelationIndex right_relation;
 	ColumnBinding left_binding;
@@ -168,7 +275,7 @@ struct JoinEqualityClass {
 	idx_t index = DConstants::INVALID_INDEX;
 	column_binding_set_t columns;
 	unordered_set<RelationIndex> relations;
-	vector<JoinEqualityFilterEdge> filters;
+	vector<JoinEqualityPredicateEdge> edges;
 };
 
 struct RelationPairEqualitySummary {
@@ -178,13 +285,15 @@ struct RelationPairEqualitySummary {
 class JoinPredicateModel {
 public:
 	void Clear();
-	void RegisterFilter(FilterInfo &filter, JoinPredicateClass predicate_class);
+	JoinPredicate &RegisterPredicate(FilterInfo &filter, JoinPredicateClass predicate_class,
+	                                 ColumnBinding left_equality_binding, ColumnBinding right_equality_binding);
 	void AddEqualityClass(JoinEqualityClass equality_class);
 	void AddEqualityPairClass(JoinRelationSet &pair, idx_t equality_class_index);
 
-	const vector<optional_ptr<FilterInfo>> &GetFilters() const;
-	const vector<optional_ptr<FilterInfo>> &GetEqualityJoinFilters() const;
-	const vector<optional_ptr<FilterInfo>> &GetSelectivityFilters() const;
+	const vector<reference<JoinPredicate>> &GetPredicates() const;
+	const vector<reference<JoinPredicate>> &GetEqualityJoinPredicates() const;
+	const vector<reference<JoinPredicate>> &GetSelectivityPredicates() const;
+	const vector<reference<JoinPredicate>> &GetGraphPredicates() const;
 	const vector<JoinEqualityClass> &GetEqualityClasses() const;
 	bool HasLeftJoinPredicates() const;
 
@@ -194,9 +303,11 @@ public:
 private:
 	static bool ContainsClassIndex(const vector<idx_t> &class_indices, idx_t equality_class_index);
 
-	vector<optional_ptr<FilterInfo>> all_filters;
-	vector<optional_ptr<FilterInfo>> equality_join_filters;
-	vector<optional_ptr<FilterInfo>> selectivity_filters;
+	vector<unique_ptr<JoinPredicate>> predicates;
+	vector<reference<JoinPredicate>> all_predicates;
+	vector<reference<JoinPredicate>> equality_join_predicates;
+	vector<reference<JoinPredicate>> selectivity_predicates;
+	vector<reference<JoinPredicate>> graph_predicates;
 	bool has_left_join_predicates = false;
 	vector<JoinEqualityClass> equality_classes;
 	reference_map_t<JoinRelationSet, RelationPairEqualitySummary> equality_pairs;
@@ -248,10 +359,12 @@ private:
 	JoinPredicateModel predicate_model;
 
 	void GetColumnBinding(const Expression &expression, ColumnBinding &binding);
+	void GetEquivalenceBinding(const Expression &expression, ColumnBinding &binding);
 
+	void BindFilterEndpoints();
 	void CreateHyperGraphEdges();
 
-	//! Build the normalized predicate model after filter bindings and query graph edges are populated.
+	//! Build the normalized predicate model after filter endpoints and stats bindings are populated.
 	void BuildPredicateModel();
 
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set);

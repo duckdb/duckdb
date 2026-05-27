@@ -19,15 +19,16 @@ static double GetLeftJoinInputCost(CardinalityEstimator &cardinality_estimator,
 	double cost = 0;
 	reference_set_t<JoinRelationSet> seen_right_sides;
 	for (auto &connection : possible_connections) {
-		for (auto &filter : connection.get().filters) {
-			if (filter->join_type != JoinType::LEFT) {
+		for (auto predicate_ref : connection.get().predicates) {
+			auto &predicate = predicate_ref.get();
+			if (predicate.GetJoinType() != JoinType::LEFT) {
 				continue;
 			}
-			D_ASSERT(filter->right_set);
-			if (!seen_right_sides.insert(*filter->right_set).second) {
+			D_ASSERT(predicate.GetRightSetOptional());
+			if (!seen_right_sides.insert(predicate.GetRightSet()).second) {
 				continue;
 			}
-			cost += cardinality_estimator.EstimateCardinalityWithSet<double>(*filter->right_set);
+			cost += cardinality_estimator.EstimateCardinalityWithSet<double>(predicate.GetRightSet());
 		}
 	}
 	return cost;
@@ -51,30 +52,33 @@ static double GetLeftJoinDeferredInnerCost(QueryGraphManager &query_graph_manage
 	double cost = 0;
 	reference_set_t<JoinRelationSet> seen_pending_sides;
 	for (auto &connection : possible_connections) {
-		for (auto &left_filter : connection.get().filters) {
-			if (left_filter->join_type != JoinType::LEFT) {
+		for (auto left_predicate_ref : connection.get().predicates) {
+			auto &left_predicate = left_predicate_ref.get();
+			if (left_predicate.GetJoinType() != JoinType::LEFT) {
 				continue;
 			}
-			D_ASSERT(left_filter->left_set && left_filter->right_set);
-			auto lhs_child = GetContainingChild(left, right, *left_filter->left_set);
-			auto rhs_child = GetContainingChild(left, right, *left_filter->right_set);
+			D_ASSERT(left_predicate.GetLeftSetOptional() && left_predicate.GetRightSetOptional());
+			auto lhs_child = GetContainingChild(left, right, left_predicate.GetLeftSet());
+			auto rhs_child = GetContainingChild(left, right, left_predicate.GetRightSet());
 			if (!lhs_child || !rhs_child || lhs_child == rhs_child) {
 				continue;
 			}
 
-			for (auto pending_filter : query_graph_manager.GetPredicateModel().GetEqualityJoinFilters()) {
-				D_ASSERT(pending_filter->left_set && pending_filter->right_set);
-				if (JoinRelationSet::IsSubset(*lhs_child, pending_filter->set.get())) {
+			for (auto pending_predicate_ref : query_graph_manager.GetPredicateModel().GetEqualityJoinPredicates()) {
+				auto &pending_predicate = pending_predicate_ref.get();
+				D_ASSERT(pending_predicate.GetLeftSetOptional() && pending_predicate.GetRightSetOptional());
+				if (JoinRelationSet::IsSubset(*lhs_child, pending_predicate.GetSet())) {
 					continue;
 				}
 
-				auto left_inside = JoinRelationSet::IsSubset(*lhs_child, *pending_filter->left_set);
-				auto right_inside = JoinRelationSet::IsSubset(*lhs_child, *pending_filter->right_set);
+				auto left_inside = JoinRelationSet::IsSubset(*lhs_child, pending_predicate.GetLeftSet());
+				auto right_inside = JoinRelationSet::IsSubset(*lhs_child, pending_predicate.GetRightSet());
 				if (left_inside == right_inside) {
 					continue;
 				}
 
-				auto pending_side = left_inside ? pending_filter->right_set : pending_filter->left_set;
+				auto pending_side =
+				    left_inside ? pending_predicate.GetRightSetOptional() : pending_predicate.GetLeftSetOptional();
 				if (JoinRelationSet::IsSubset(combination, *pending_side)) {
 					continue;
 				}

@@ -101,6 +101,36 @@ join ne_c on ne_b.y < ne_c.y;
 ----
 437500
 
+# Expression equality predicates should remain graph/selectivity predicates,
+# but should not become transitive equality-closure predicates. The expression
+# edge still needs to participate in join ordering instead of being left as a
+# post-join filter or cross product.
+
+statement ok
+create table ee_a as select range::integer x from range(1000);
+
+statement ok
+create table ee_b as select range::integer y from range(1000);
+
+statement ok
+create table ee_c as select range::integer z from range(1000);
+
+query II
+explain select *
+from ee_a, ee_b, ee_c
+where ee_a.x + 1 = ee_b.y
+  and ee_b.y = ee_c.z;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*x \+ 1.*HASH_JOIN.*
+
+query I
+select count(*)
+from ee_a, ee_b, ee_c
+where ee_a.x + 1 = ee_b.y
+  and ee_b.y = ee_c.z;
+----
+999
+
 # A redundant edge in a transitive equality class must not be treated as an
 # additional composite-key condition. Otherwise the estimator can replace a
 # small domain with the full table cardinality and badly underestimate fanout.

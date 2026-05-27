@@ -17,6 +17,7 @@
 namespace duckdb {
 
 class FilterInfo;
+class JoinPredicate;
 class JoinPredicateModel;
 struct DenominatorState;
 
@@ -38,7 +39,7 @@ struct RelationsSetToStats {
 	//! the estimated total domains of each relation without using HLL
 	idx_t distinct_count_no_hll;
 	bool has_distinct_count_hll;
-	vector<optional_ptr<FilterInfo>> filters;
+	vector<reference<JoinPredicate>> predicates;
 	vector<string> column_names;
 
 	explicit RelationsSetToStats(const column_binding_set_t &column_binding_set)
@@ -49,8 +50,8 @@ struct RelationsSetToStats {
 // class to wrap a join Filter along with some statistical information about the joined columns
 class FilterInfoWithTotalDomains {
 public:
-	FilterInfoWithTotalDomains(optional_ptr<FilterInfo> filter_info, RelationsSetToStats &relation_set_to_stats)
-	    : filter_info(filter_info), distinct_count_hll(relation_set_to_stats.distinct_count_hll),
+	FilterInfoWithTotalDomains(JoinPredicate &predicate, RelationsSetToStats &relation_set_to_stats)
+	    : predicate(predicate), distinct_count_hll(relation_set_to_stats.distinct_count_hll),
 	      distinct_count_no_hll(relation_set_to_stats.distinct_count_no_hll),
 	      has_distinct_count_hll(relation_set_to_stats.has_distinct_count_hll) {
 	}
@@ -63,8 +64,10 @@ public:
 	ExpressionType GetComparisonType();
 	//! Whether this is an INNER equality filter
 	bool IsInnerEquality();
+	FilterInfo &GetFilter() const;
+	JoinPredicate &GetPredicate() const;
 
-	optional_ptr<FilterInfo> filter_info;
+	reference<JoinPredicate> predicate;
 	//!	the estimated distinct count the joined columns determined using HLL
 	idx_t distinct_count_hll;
 	//! the estimated total domains of each relation without using HLL

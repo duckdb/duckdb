@@ -23,14 +23,14 @@
 
 namespace duckdb {
 
-class FilterInfo;
+class JoinPredicate;
 
 struct NeighborInfo {
 	explicit NeighborInfo(optional_ptr<JoinRelationSet> neighbor) : neighbor(neighbor) {
 	}
 
 	optional_ptr<JoinRelationSet> neighbor;
-	vector<optional_ptr<FilterInfo>> filters;
+	vector<reference<JoinPredicate>> predicates;
 };
 
 //! The QueryGraph contains edges between relations and allows edges to be created/queried
@@ -55,7 +55,7 @@ public:
 	//! Enumerate all neighbors of a given JoinRelationSet node
 	void EnumerateNeighbors(JoinRelationSet &node, const std::function<bool(NeighborInfo &)> &callback) const;
 	//! Create an edge in the edge_set
-	void CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optional_ptr<FilterInfo> info);
+	void CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optional_ptr<JoinPredicate> predicate);
 
 private:
 	//! Get the QueryEdge of a specific node

@@ -14,11 +14,19 @@
 namespace duckdb {
 
 ExpressionType FilterInfoWithTotalDomains::GetComparisonType() {
-	return JoinOrderUtil::GetJoinPredicateComparisonType(*filter_info);
+	return GetPredicate().GetComparisonType();
 }
 
 bool FilterInfoWithTotalDomains::IsInnerEquality() {
-	return JoinOrderUtil::IsEquivalenceJoinPredicate(*filter_info);
+	return GetPredicate().IsEquivalencePredicate();
+}
+
+FilterInfo &FilterInfoWithTotalDomains::GetFilter() const {
+	return GetPredicate().GetFilter();
+}
+
+JoinPredicate &FilterInfoWithTotalDomains::GetPredicate() const {
+	return predicate.get();
 }
 
 // The filter was made on top of a logical sample or other projection,
@@ -81,15 +89,16 @@ void CardinalityEstimator::InitEquivalentRelations() {
 	or_filters.clear();
 	active_equality_class_count_cache.clear();
 
-	for (auto filter : predicate_model.GetFilters()) {
-		if (IsJoinOrFilter(*filter)) {
+	for (auto predicate_ref : predicate_model.GetPredicates()) {
+		auto &filter = predicate_ref.get().GetFilter();
+		if (IsJoinOrFilter(filter)) {
 			or_filters.push_back(filter);
 			continue;
 		}
-		if (SingleColumnFilter(*filter)) {
+		if (SingleColumnFilter(filter)) {
 			// Filter on one relation, (i.e. string or range filter on a column).
 			// Grab the first relation and add it to  the equivalence_relations
-			AddRelationStats(*filter);
+			AddRelationStats(filter);
 		}
 	}
 
@@ -98,25 +107,26 @@ void CardinalityEstimator::InitEquivalentRelations() {
 			continue;
 		}
 		relation_set_stats.emplace_back(equality_class.columns);
-		for (auto &filter : equality_class.filters) {
-			relation_set_stats.back().filters.push_back(filter.filter);
+		for (auto &edge : equality_class.edges) {
+			relation_set_stats.back().predicates.push_back(edge.predicate);
 		}
 	}
 
-	for (auto filter : predicate_model.GetSelectivityFilters()) {
-		D_ASSERT(JoinOrderUtil::HasValidJoinEndpoints(*filter));
-		D_ASSERT(JoinOrderUtil::HasAnyValidJoinBinding(*filter));
+	for (auto predicate_ref : predicate_model.GetSelectivityPredicates()) {
+		auto &predicate = predicate_ref.get();
+		D_ASSERT(predicate.HasValidJoinEndpoints());
+		D_ASSERT(predicate.HasAnyValidStatsBinding());
 
 		column_binding_set_t domain_group;
-		if (filter->left_binding.table_index.IsValid()) {
-			domain_group.insert(filter->left_binding);
+		if (predicate.GetStatsBinding(true).table_index.IsValid()) {
+			domain_group.insert(predicate.GetStatsBinding(true));
 		}
-		if (filter->right_binding.table_index.IsValid()) {
-			domain_group.insert(filter->right_binding);
+		if (predicate.GetStatsBinding(false).table_index.IsValid()) {
+			domain_group.insert(predicate.GetStatsBinding(false));
 		}
 		D_ASSERT(!domain_group.empty());
 		relation_set_stats.emplace_back(domain_group);
-		relation_set_stats.back().filters.push_back(filter.get());
+		relation_set_stats.back().predicates.push_back(predicate);
 	}
 	RemoveEmptyTotalDomains();
 }
@@ -158,9 +168,11 @@ vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsSetToStats> &relatio
                                             JoinRelationSet &requested_set) {
 	vector<FilterInfoWithTotalDomains> res;
 	for (auto &relation_2_tdom : relations_to_tdom) {
-		for (auto &filter : relation_2_tdom.filters) {
-			if (JoinRelationSet::IsSubset(requested_set, filter->set.get()) && filter->left_set != filter->right_set) {
-				FilterInfoWithTotalDomains new_edge(filter, relation_2_tdom);
+		for (auto predicate_ref : relation_2_tdom.predicates) {
+			auto &predicate = predicate_ref.get();
+			auto &filter = predicate.GetFilter();
+			if (JoinRelationSet::IsSubset(requested_set, filter.set.get()) && filter.left_set != filter.right_set) {
+				FilterInfoWithTotalDomains new_edge(predicate, relation_2_tdom);
 				res.push_back(new_edge);
 			}
 		}
@@ -170,14 +182,14 @@ vector<FilterInfoWithTotalDomains> GetEdges(vector<RelationsSetToStats> &relatio
 
 static optional_ptr<JoinRelationSet> GetEdgeEndpoint(FilterInfoWithTotalDomains &edge,
                                                      JoinRelationSetManager &set_manager, bool left) {
-	auto &filter = *edge.filter_info;
+	auto &filter = edge.GetFilter();
 	if (filter.filter && BoundComparisonExpression::IsComparison(*filter.filter)) {
-		auto &binding = left ? filter.left_binding : filter.right_binding;
+		auto &binding = edge.GetPredicate().GetStatsBinding(left);
 		if (binding.table_index.IsValid()) {
 			return &set_manager.GetJoinRelation(RelationIndex(binding.table_index.index));
 		}
 	}
-	return left ? filter.left_set : filter.right_set;
+	return left ? edge.GetPredicate().GetLeftSetOptional() : edge.GetPredicate().GetRightSetOptional();
 }
 
 bool EdgeConnects(FilterInfoWithTotalDomains &edge, Subgraph2Denominator &subgraph,
@@ -226,12 +238,13 @@ vector<idx_t> SubgraphsConnectedByEdge(FilterInfoWithTotalDomains &edge, vector<
 
 JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denominator left, Subgraph2Denominator right,
                                                                 FilterInfoWithTotalDomains &filter) {
-	switch (filter.filter_info->join_type) {
+	auto &predicate = filter.GetPredicate();
+	switch (predicate.GetJoinType()) {
 	case JoinType::LEFT:
 	case JoinType::SEMI:
 	case JoinType::ANTI: {
-		if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
-		    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
+		if (JoinRelationSet::IsSubset(*left.relations, predicate.GetLeftSet()) &&
+		    JoinRelationSet::IsSubset(*right.relations, predicate.GetRightSet())) {
 			return *left.numerator_relations;
 		}
 		return *right.numerator_relations;
@@ -272,8 +285,9 @@ double CardinalityEstimator::CalculateInnerJoinDenom(double base_denom, FilterIn
 
 double CardinalityEstimator::CalculateLeftJoinDenom(Subgraph2Denominator &left, Subgraph2Denominator &right,
                                                     FilterInfoWithTotalDomains &filter) {
-	if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
-	    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
+	auto &predicate = filter.GetPredicate();
+	if (JoinRelationSet::IsSubset(*left.relations, predicate.GetLeftSet()) &&
+	    JoinRelationSet::IsSubset(*right.relations, predicate.GetRightSet())) {
 		return left.denom;
 	}
 	return right.denom;
@@ -282,8 +296,9 @@ double CardinalityEstimator::CalculateLeftJoinDenom(Subgraph2Denominator &left, 
 double CardinalityEstimator::CalculateSemiAntiJoinDenom(double base_denom, Subgraph2Denominator &left,
                                                         Subgraph2Denominator &right,
                                                         FilterInfoWithTotalDomains &filter) {
-	if (JoinRelationSet::IsSubset(*left.relations, *filter.filter_info->left_set) &&
-	    JoinRelationSet::IsSubset(*right.relations, *filter.filter_info->right_set)) {
+	auto &predicate = filter.GetPredicate();
+	if (JoinRelationSet::IsSubset(*left.relations, predicate.GetLeftSet()) &&
+	    JoinRelationSet::IsSubset(*right.relations, predicate.GetRightSet())) {
 		return left.denom * DEFAULT_SEMI_ANTI_SELECTIVITY;
 	}
 	return right.denom * DEFAULT_SEMI_ANTI_SELECTIVITY;
@@ -293,7 +308,7 @@ double CardinalityEstimator::CalculateSemiAntiJoinDenom(double base_denom, Subgr
 double CardinalityEstimator::CalculateUpdatedDenom(Subgraph2Denominator left, Subgraph2Denominator right,
                                                    FilterInfoWithTotalDomains &filter) {
 	double base_denom = left.denom * right.denom;
-	switch (filter.filter_info->join_type) {
+	switch (filter.GetPredicate().GetJoinType()) {
 	case JoinType::LEFT:
 		return CalculateLeftJoinDenom(left, right, filter);
 	case JoinType::INNER:
@@ -311,12 +326,13 @@ static bool GetEqualityEdgeRelations(FilterInfoWithTotalDomains &edge, RelationI
 	if (!edge.IsInnerEquality()) {
 		return false;
 	}
-	if (!edge.filter_info->left_binding.table_index.IsValid() ||
-	    !edge.filter_info->right_binding.table_index.IsValid()) {
+	auto &left_binding = edge.GetPredicate().GetEqualityBinding(true);
+	auto &right_binding = edge.GetPredicate().GetEqualityBinding(false);
+	if (!left_binding.table_index.IsValid() || !right_binding.table_index.IsValid()) {
 		return false;
 	}
-	left = RelationIndex(edge.filter_info->left_binding.table_index.index);
-	right = RelationIndex(edge.filter_info->right_binding.table_index.index);
+	left = RelationIndex(left_binding.table_index.index);
+	right = RelationIndex(right_binding.table_index.index);
 	return left != right;
 }
 
@@ -386,7 +402,7 @@ bool CardinalityEstimator::ApplyJoinIncrement(double &target_denom, FilterInfoWi
 		return ApplyJoinPairCap(target_denom, *target_pair, join_pair_first_d, capped_join_pairs);
 	}
 
-	if (edge.filter_info->join_type == JoinType::LEFT) {
+	if (edge.GetPredicate().GetJoinType() == JoinType::LEFT) {
 		// LEFT joins preserve the LHS cardinality in this estimator. Additional LEFT conditions
 		// should not reduce the output or add unused-edge penalties.
 		return true;
@@ -425,8 +441,8 @@ enum class DenominatorEdgeKind : uint8_t {
 };
 
 static bool EquivalenceGroupApplied(FilterInfoWithTotalDomains &edge, const unordered_set<idx_t> &applied_groups) {
-	return edge.filter_info->edge_equivalence_index.IsValid() &&
-	       applied_groups.count(edge.filter_info->edge_equivalence_index.GetIndex()) > 0;
+	auto equality_class_index = edge.GetPredicate().GetEqualityClassIndex();
+	return equality_class_index.IsValid() && applied_groups.count(equality_class_index.GetIndex()) > 0;
 }
 
 static DenominatorEdgeKind ClassifyDenominatorEdge(FilterInfoWithTotalDomains &edge,
@@ -434,7 +450,7 @@ static DenominatorEdgeKind ClassifyDenominatorEdge(FilterInfoWithTotalDomains &e
 	if (EquivalenceGroupApplied(edge, applied_groups)) {
 		return DenominatorEdgeKind::REDUNDANT_TRANSITIVE_EQUALITY;
 	}
-	switch (JoinOrderUtil::ClassifyJoinPredicate(*edge.filter_info)) {
+	switch (edge.GetPredicate().GetPredicateClass()) {
 	case JoinPredicateClass::INNER_EQUALITY:
 		return DenominatorEdgeKind::INNER_EQUIVALENCE;
 	case JoinPredicateClass::INNER_NON_EQUALITY:
@@ -498,8 +514,9 @@ void CardinalityEstimator::ProcessDenominatorEdge(FilterInfoWithTotalDomains &ed
 		return;
 	}
 
-	if (edge.filter_info->edge_equivalence_index.IsValid()) {
-		state.applied_equivalence_groups.insert(edge.filter_info->edge_equivalence_index.GetIndex());
+	auto equality_class_index = edge.GetPredicate().GetEqualityClassIndex();
+	if (equality_class_index.IsValid()) {
+		state.applied_equivalence_groups.insert(equality_class_index.GetIndex());
 	}
 	RegisterEqualityJoinPair(edge, set_manager, state.join_pair_first_d);
 

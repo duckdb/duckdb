@@ -142,11 +142,11 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
                                                       DPJoinNode &left, DPJoinNode &right) {
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	optional_ptr<NeighborInfo> best_connection = possible_connections.back().get();
-	// cross products are technically still connections, but the filter expression is a null_ptr
+	// cross products are technically still connections, but they have no predicates
 	bool found_non_cross_product_connection = false;
 	for (auto &connection : possible_connections) {
-		for (auto &filter : connection.get().filters) {
-			if (filter->join_type != JoinType::INVALID) {
+		for (auto predicate_ref : connection.get().predicates) {
+			if (predicate_ref.get().GetJoinType() != JoinType::INVALID) {
 				best_connection = connection.get();
 				found_non_cross_product_connection = true;
 				break;
@@ -157,12 +157,13 @@ unique_ptr<DPJoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 		}
 	}
 	auto join_type = JoinType::INVALID;
-	for (auto &filter_binding : best_connection->filters) {
-		if (!filter_binding->left_set || !filter_binding->right_set) {
+	for (auto predicate_ref : best_connection->predicates) {
+		auto &predicate = predicate_ref.get();
+		if (!predicate.GetLeftSetOptional() || !predicate.GetRightSetOptional()) {
 			continue;
 		}
 
-		join_type = filter_binding->join_type;
+		join_type = predicate.GetJoinType();
 		// prefer joining on semi and anti joins as they have a higher chance of being more
 		// selective
 		if (join_type == JoinType::SEMI || join_type == JoinType::ANTI) {
