@@ -867,8 +867,7 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &cata
 	}
 }
 
-void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const string &catalog_name,
-                                               bool strip_subquery_bodies) {
+void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const string &catalog_name) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
 		// Strip catalog prefix from qualified column references (e.g. catalog.table.col -> table.col or
@@ -881,11 +880,9 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
 		auto &subq = expr.Cast<SubqueryExpression>();
-		if (strip_subquery_bodies) {
-			StripCatalogName(*subq.subquery->node, catalog_name);
-		}
+		StripCatalogName(*subq.subquery->node, catalog_name);
 		if (subq.child) {
-			StripCatalogName(*subq.child, catalog_name, strip_subquery_bodies);
+			StripCatalogName(*subq.child, catalog_name);
 		}
 		return;
 	}
@@ -915,7 +912,7 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 		auto &cast_expr = expr.Cast<CastExpression>();
 		if (cast_expr.cast_type.id() == LogicalTypeId::UNBOUND) {
 			auto type_expr = UnboundType::GetTypeExpression(cast_expr.cast_type)->Copy();
-			StripCatalogName(*type_expr, catalog_name, strip_subquery_bodies);
+			StripCatalogName(*type_expr, catalog_name);
 			cast_expr.cast_type = LogicalType::UNBOUND(std::move(type_expr));
 		}
 		// Fall through to EnumerateChildren to strip catalog refs inside the cast argument
@@ -930,7 +927,7 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 		// Fall through to EnumerateChildren to strip catalog refs inside type parameters
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](ParsedExpression &child) { StripCatalogName(child, catalog_name, strip_subquery_bodies); });
+	    expr, [&](ParsedExpression &child) { StripCatalogName(child, catalog_name); });
 }
 
 void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &catalog_name) {
