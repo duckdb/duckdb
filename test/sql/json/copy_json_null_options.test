@@ -1,8 +1,13 @@
 # name: test/sql/json/copy_json_null_options.test
-# description: Test that NULL values for COPY (FORMAT JSON) options produce a clean Binder Error (issue #22829)
+# description: Test that invalid COPY option values produce clean Binder Errors
 # group: [json]
 
 require json
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_use_tmp_file.csv' (FORMAT CSV, use_tmp_file NULL);
+----
+<REGEX>:Binder Error.*NULL is not supported as a valid option for COPY option "use_tmp_file".*
 
 statement error
 COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_dateformat.json' (FORMAT JSON, dateformat NULL);
@@ -33,3 +38,53 @@ statement error
 COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_file_extension.json' (FORMAT JSON, file_extension NULL);
 ----
 <REGEX>:Binder Error.*file_extension.*cannot be NULL.*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_use_tmp_file.json' (FORMAT JSON, use_tmp_file NULL);
+----
+<REGEX>:.*use_tmp_file.*NULL.*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_encoding.json' (FORMAT JSON, encoding NULL);
+----
+<REGEX>:Binder Error.*encoding.*cannot be NULL.*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_compression.json' (FORMAT JSON, compression NULL);
+----
+<REGEX>:Binder Error.*compression.*cannot be NULL.*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_null_filename_pattern.json' (FORMAT JSON, filename_pattern NULL);
+----
+<REGEX>:Binder Error.*filename_pattern.*cannot be NULL.*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_bool_dateformat.json' (FORMAT JSON, dateformat TRUE);
+----
+<REGEX>:Binder Error.*dateformat.*VARCHAR.*BOOLEAN.*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_double_timestampformat.json' (FORMAT JSON, timestampformat 1.5);
+----
+<REGEX>:Binder Error.*timestampformat.*VARCHAR.*DECIMAL.*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_integer_file_extension.json' (FORMAT JSON, file_extension 42);
+----
+<REGEX>:Binder Error.*file_extension.*VARCHAR.*INTEGER.*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_list_dateformat.json' (FORMAT JSON, dateformat [1, 2, 3]);
+----
+<REGEX>:Binder Error.*dateformat.*VARCHAR.*INTEGER\[\].*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_struct_file_extension.json' (FORMAT JSON, file_extension {'a': 1});
+----
+<REGEX>:Binder Error.*file_extension.*VARCHAR.*STRUCT.*
+
+statement error
+COPY (SELECT 1 AS a) TO '{TEST_DIR}/test_bool_filename_pattern.json' (FORMAT JSON, filename_pattern FALSE);
+----
+<REGEX>:.*filename_pattern.*VARCHAR.*BOOLEAN.*
