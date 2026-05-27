@@ -457,7 +457,17 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(DeleteQueryNode &node) {
 	}
 	// Individual pushdown: for mixed DELETE (local target, remote USING clause), push remote USING
 	// clauses individually and strip catalog refs from the WHERE condition and RETURNING list.
-	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+	// Skip when multiple USING clauses are SINGLE_REMOTE: each would open a quack streaming slot
+	// concurrently, triggering "Multiple streaming scans" before reaching quack's native layer.
+	// Let quack's native scanning handle multiple remote USING tables sequentially instead.
+	idx_t single_remote_using_count = 0;
+	for (auto &ur : using_results) {
+		if (ur.reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
+			single_remote_using_count++;
+		}
+	}
+	if (result.reference_type != CatalogReferenceType::SINGLE_REMOTE_CATALOG &&
+	    single_remote_using_count <= 1) {
 		for (idx_t i = 0; i < node.using_clauses.size(); i++) {
 			if (using_results[i].reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
 				string old_tname, new_talias;
@@ -591,9 +601,29 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 	vector<CatalogPushdownResult> child_results;
 	child_results.reserve(node.children.size());
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
+	// Rewrite(JoinRef) may push remote tables in-place (as quack TABLE_FUNCTIONs) even when the
+	// overall child result is UNKNOWN (mixed remote+local join). If a SINGLE_REMOTE sibling is
+	// later individually pushed, the stale TABLE_FUNCTION wrapper in the UNKNOWN child causes a
+	// concurrent second streaming slot, triggering "Multiple streaming scans".
+	//
+	// Fix (a): restore UNKNOWN children that had in-place JoinRef modifications to remove stale
+	//          TABLE_FUNCTION wrappers. Detected via non-empty child pending_outer_strip_catalogs.
+	// Fix (b): skip individual SINGLE_REMOTE pushdown when such an UNKNOWN sibling exists: the
+	//          restored UNKNOWN child still accesses remote tables natively, so a concurrently
+	//          pushed SINGLE_REMOTE sibling would open a second quack streaming slot.
+	bool any_unknown_with_remote_join = false;
 	for (auto &child : node.children) {
+		auto saved_child = child->Copy();
 		RemotePushdownOptimizer child_optimizer(*this);
 		auto child_result = child_optimizer.Rewrite(*child);
+		if (child_result.reference_type == CatalogReferenceType::UNKNOWN_CATALOG_REFERENCE) {
+			if (!child_optimizer.pending_outer_strip_catalogs.empty()) {
+				// JoinRef pushed remote tables in-place → restore to remove stale wrappers (fix a)
+				// and mark that sibling pushdown must be skipped (fix b).
+				child = std::move(saved_child);
+				any_unknown_with_remote_join = true;
+			}
+		}
 		result = Merge(result, child_result);
 		child_results.push_back(child_result);
 	}
@@ -659,12 +689,17 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 		return result;
 	}
 	// Push individual children that resolve to a single remote catalog.
-	for (idx_t i = 0; i < node.children.size(); i++) {
-		FinishPushdown(node.children[i], child_results[i]);
+	// Skip when any UNKNOWN sibling had in-place JoinRef modifications (fix b): after restoring
+	// that sibling (fix a), it still accesses remote tables natively, and a concurrently-pushed
+	// SINGLE_REMOTE sibling would open a second quack streaming slot alongside the native scan.
+	if (!any_unknown_with_remote_join) {
+		for (idx_t i = 0; i < node.children.size(); i++) {
+			FinishPushdown(node.children[i], child_results[i]);
+		}
 	}
-	// After individual child pushdown, ORDER BY expressions on the set operation output can no longer
-	// use catalog.table.col qualifiers — the UNION/INTERSECT/EXCEPT output has no table associations.
-	// Strip any catalog-prefixed column refs in ORDER BY down to just the column name.
+	// Strip catalog-qualified ORDER BY expressions for any arm that references a remote catalog.
+	// UNION/INTERSECT/EXCEPT output has no table associations — catalog.table.col refs in ORDER BY
+	// must be reduced to the bare column name regardless of whether the arm was individually pushed.
 	if (has_expression_modifiers) {
 		for (idx_t i = 0; i < node.children.size(); i++) {
 			if (child_results[i].reference_type == CatalogReferenceType::SINGLE_REMOTE_CATALOG) {
