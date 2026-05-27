@@ -50,6 +50,28 @@ TEST_CASE("Test decimal types C API", "[capi]") {
 	REQUIRE(duckdb_decimal_internal_type(nullptr) == DUCKDB_TYPE_INVALID);
 }
 
+TEST_CASE("Test duckdb_create_decimal_type width/scale validation", "[capi]") {
+	// valid width/scale combinations succeed and round-trip
+	duckdb::vector<std::pair<uint8_t, uint8_t>> valid = {{1, 0}, {4, 1}, {9, 2}, {18, 3}, {38, 4}, {38, 38}};
+	for (auto &entry : valid) {
+		auto type = duckdb_create_decimal_type(entry.first, entry.second);
+		REQUIRE(type != nullptr);
+		REQUIRE(duckdb_get_type_id(type) == DUCKDB_TYPE_DECIMAL);
+		REQUIRE(duckdb_decimal_width(type) == entry.first);
+		REQUIRE(duckdb_decimal_scale(type) == entry.second);
+		duckdb_destroy_logical_type(&type);
+	}
+
+	// invalid width/scale combinations return nullptr instead of throwing or returning a malformed type
+	duckdb::vector<std::pair<uint8_t, uint8_t>> invalid = {{0, 0},  // width below the minimum
+	                                                       {39, 0}, // width above the maximum (MAX_WIDTH_DECIMAL == 38)
+	                                                       {4, 5},  // scale greater than width
+	                                                       {255, 255}};
+	for (auto &entry : invalid) {
+		REQUIRE(duckdb_create_decimal_type(entry.first, entry.second) == nullptr);
+	}
+}
+
 TEST_CASE("Test enum types C API", "[capi]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;

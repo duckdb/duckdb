@@ -3138,9 +3138,9 @@ DUCKDB_C_API duckdb_logical_type duckdb_create_enum_type(const char **member_nam
 Creates a DECIMAL type with the specified width and scale.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 
-* @param width The width of the decimal type
-* @param scale The scale of the decimal type
-* @return The logical type.
+* @param width The width of the decimal type. Must be between 1 and 38.
+* @param scale The scale of the decimal type. Must not exceed the width.
+* @return The logical type, or `nullptr` if the width or scale are out of range.
 */
 DUCKDB_C_API duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t scale);
 
