@@ -51,27 +51,21 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::CASE: {
 		auto &cast_expr = Cast<CaseExpression>();
-		for (auto &check : cast_expr.case_checks) {
+		for (auto &check : cast_expr.CaseChecks()) {
 			result.Append(*check.when_expr);
 			result.Append(*check.then_expr);
 		}
-		if (cast_expr.else_expr) {
-			result.Append(*cast_expr.else_expr);
-		}
+		result.Append(cast_expr.Else());
 		break;
 	}
 	case ExpressionClass::CAST: {
 		auto &cast_expr = Cast<CastExpression>();
-		if (cast_expr.child) {
-			result.Append(*cast_expr.child);
-		}
+		result.Append(cast_expr.Child());
 		break;
 	}
 	case ExpressionClass::COLLATE: {
 		auto &cast_expr = Cast<CollateExpression>();
-		if (cast_expr.child) {
-			result.Append(*cast_expr.child);
-		}
+		result.Append(cast_expr.Child());
 		break;
 	}
 	case ExpressionClass::COMPARISON: {
@@ -199,27 +193,21 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::CASE: {
 		auto &cast_expr = Cast<CaseExpression>();
-		for (auto &check : cast_expr.case_checks) {
+		for (auto &check : cast_expr.CaseChecksMutable()) {
 			result.Append(check.when_expr);
 			result.Append(check.then_expr);
 		}
-		if (cast_expr.else_expr) {
-			result.Append(cast_expr.else_expr);
-		}
+		result.Append(cast_expr.ElseMutable());
 		break;
 	}
 	case ExpressionClass::CAST: {
 		auto &cast_expr = Cast<CastExpression>();
-		if (cast_expr.child) {
-			result.Append(cast_expr.child);
-		}
+		result.Append(cast_expr.ChildMutable());
 		break;
 	}
 	case ExpressionClass::COLLATE: {
 		auto &cast_expr = Cast<CollateExpression>();
-		if (cast_expr.child) {
-			result.Append(cast_expr.child);
-		}
+		result.Append(cast_expr.ChildMutable());
 		break;
 	}
 	case ExpressionClass::COMPARISON: {
