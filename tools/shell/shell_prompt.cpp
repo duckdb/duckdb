@@ -261,9 +261,8 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 			return ExecuteSQL(state, "SELECT current_schema()");
 		}
 		if (component.literal == "current_database_and_schema") {
-			return ExecuteSQL(state,
-			                  "SELECT CASE WHEN current_schema() = 'main' THEN current_database() "
-			                  "ELSE current_database() || '.' || current_schema() END");
+			return ExecuteSQL(state, "SELECT CASE WHEN current_schema() = 'main' THEN current_database() "
+			                         "ELSE current_database() || '.' || current_schema() END");
 		}
 		if (component.literal == "connect_suffix") {
 			auto connected = context.TryGetConnectedCatalog();
