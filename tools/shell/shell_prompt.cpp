@@ -249,6 +249,21 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 		auto profiler = client_data.profiler;
 		return StringUtil::BytesToHumanReadableString(profiler->GetBytesWritten(), 1000);
 	}
+	// When CONNECT-ed the local catalog_search_path doesn't reflect where queries route, so route
+	// the setting query through the chokepoint to match what `SELECT current_database()` returns.
+	if (context.IsConnected()) {
+		if (component.literal == "current_database") {
+			return ExecuteSQL(state, "SELECT current_database()");
+		}
+		if (component.literal == "current_schema") {
+			return ExecuteSQL(state, "SELECT current_schema()");
+		}
+		if (component.literal == "current_database_and_schema") {
+			return ExecuteSQL(state,
+			                  "SELECT CASE WHEN current_schema() = 'main' THEN current_database() "
+			                  "ELSE current_database() || '.' || current_schema() END");
+		}
+	}
 	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(context);
 	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().schema;
 	if (component.literal == "current_database") {
