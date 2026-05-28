@@ -1,8 +1,6 @@
 name: Mirror Stale PR Submitted Issues
 
 on:
-  schedule:
-    - cron: "0 5 * * 1,4"  # run every Monday and Thursday at 5AM
   workflow_dispatch: {}  # allow running manually from the github ui
 
 env:
