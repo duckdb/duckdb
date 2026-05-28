@@ -1430,7 +1430,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	}
 	bool legacy_vacuum_with_stable_row_ids =
 	    !checkpoint_state.writer.CanPersistRowIdGaps() && !state.can_change_row_ids;
-	bool dropped_row_group_needs_dense_rewrite = false;
+	bool pending_old_storage_rowid_shift = false;
 	vector<idx_t> committed_counts;
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
@@ -1453,8 +1453,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 				}
 				// Index state allows rowid changes, so checkpointing can densely repack rowids for older storage if
 				// this dropped row group is followed by live rows.
-				dropped_row_group_needs_dense_rewrite =
-				    dropped_row_group_needs_dense_rewrite || row_group.count.load() != 0;
+				pending_old_storage_rowid_shift = true;
 			}
 			// Drop the empty row group. Newer storage versions persist the resulting rowid gap; older storage reaches
 			// this path only when rowids may be densely rewritten.
@@ -1473,7 +1472,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			// Otherwise, the row group is fully live. We can still consider fully live row groups for merging as
 			// that does not change rowids.
 		}
-		if (dropped_row_group_needs_dense_rewrite) {
+		if (pending_old_storage_rowid_shift) {
 			state.row_ids_changed = true;
 		}
 		state.row_group_counts.push_back(row_group_num_rows);
