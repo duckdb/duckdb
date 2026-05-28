@@ -116,7 +116,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 			prev_indirection_was_cast = false;
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 			auto function_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(indirection_expr));
-			function_expr->children.insert(function_expr->children.begin(), std::move(expr));
+			function_expr->GetArgumentsMutable().insert(function_expr->GetArgumentsMutable().begin(), std::move(expr));
 			expr = std::move(function_expr);
 			prev_indirection_was_cast = false;
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
@@ -827,9 +827,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeExpres
 	} else if (between_in_like_expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(between_in_like_expr));
 		if (func_expr->function_name == "contains") {
-			func_expr->children.push_back(std::move(expr));
+			func_expr->GetArgumentsMutable().push_back(std::move(expr));
 		} else {
-			func_expr->children.insert(func_expr->children.begin(), std::move(expr));
+			func_expr->GetArgumentsMutable().insert(func_expr->GetArgumentsMutable().begin(), std::move(expr));
 		}
 		if (has_not) {
 			if (!TryNegateLikeFunction(func_expr->function_name)) {

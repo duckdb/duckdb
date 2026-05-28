@@ -142,12 +142,12 @@ pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqSetI
 		if (func_expr->function_name != "-") {
 			throw InvalidInputException("Expected a minus function instead of %s", func_expr->function_name);
 		}
-		D_ASSERT(!func_expr->children.empty());
-		if (func_expr->children[0].GetExpression().GetExpressionClass() != ExpressionClass::CONSTANT) {
+		D_ASSERT(!func_expr->GetArguments().empty());
+		if (func_expr->GetArguments()[0].GetExpression().GetExpressionClass() != ExpressionClass::CONSTANT) {
 			throw InvalidInputException("Expected constant expression as child of minus function");
 		}
 		const auto const_value =
-		    func_expr->children[0].GetExpression().Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
+		    func_expr->GetArguments()[0].GetExpression().Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
 		expr = make_uniq<ConstantExpression>(Value::Numeric(LogicalType::BIGINT, -const_value));
 	}
 	if (expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
@@ -168,12 +168,12 @@ pair<string, unique_ptr<SequenceOption>> PEGTransformerFactory::TransformSeqSetM
 		if (func_expr->function_name != "-") {
 			throw InvalidInputException("Expected a minus function instead of %s", func_expr->function_name);
 		}
-		D_ASSERT(!func_expr->children.empty());
-		if (func_expr->children[0].GetExpression().GetExpressionClass() != ExpressionClass::CONSTANT) {
+		D_ASSERT(!func_expr->GetArguments().empty());
+		if (func_expr->GetArguments()[0].GetExpression().GetExpressionClass() != ExpressionClass::CONSTANT) {
 			throw InvalidInputException("Expected constant expression as child of minus function");
 		}
 		const auto const_value =
-		    func_expr->children[0].GetExpression().Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
+		    func_expr->GetArguments()[0].GetExpression().Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
 		expr = make_uniq<ConstantExpression>(Value::Numeric(LogicalType::BIGINT, -const_value));
 	}
 

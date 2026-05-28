@@ -1012,8 +1012,8 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 		if (function.function_name == "struct_pack") {
 			unordered_set<string> unique_names;
 			child_list_t<Value> values;
-			values.reserve(function.children.size());
-			for (const auto &child : function.children) {
+			values.reserve(function.GetArguments().size());
+			for (const auto &child : function.GetArguments()) {
 				if (!unique_names.insert(child.GetExpression().GetAlias()).second) {
 					throw BinderException("Duplicate struct entry name \"%s\"", child.GetExpression().GetAlias());
 				}
@@ -1027,8 +1027,8 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			return true;
 		} else if (function.function_name == "list_value") {
 			vector<Value> values;
-			values.reserve(function.children.size());
-			for (const auto &child : function.children) {
+			values.reserve(function.GetArguments().size());
+			for (const auto &child : function.GetArguments()) {
 				Value child_value;
 				if (!ConstructConstantFromExpression(child.GetExpression(), child_value)) {
 					return false;
@@ -1047,12 +1047,12 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			return true;
 		} else if (function.function_name == "map") {
 			Value keys;
-			if (!ConstructConstantFromExpression(function.children[0].GetExpression(), keys)) {
+			if (!ConstructConstantFromExpression(function.GetArguments()[0].GetExpression(), keys)) {
 				return false;
 			}
 
 			Value values;
-			if (!ConstructConstantFromExpression(function.children[1].GetExpression(), values)) {
+			if (!ConstructConstantFromExpression(function.GetArguments()[1].GetExpression(), values)) {
 				return false;
 			}
 

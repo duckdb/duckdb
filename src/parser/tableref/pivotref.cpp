@@ -145,8 +145,8 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 		if (function.function_name == "struct_pack") {
 			unordered_set<string> unique_names;
 			child_list_t<Value> values;
-			values.reserve(function.children.size());
-			for (const auto &child : function.children) {
+			values.reserve(function.GetArguments().size());
+			for (const auto &child : function.GetArguments()) {
 				if (!unique_names.insert(child.GetExpression().GetAlias()).second) {
 					return false;
 				}
@@ -160,8 +160,8 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 			return true;
 		} else if (function.function_name == "list_value") {
 			vector<Value> values;
-			values.reserve(function.children.size());
-			for (const auto &child : function.children) {
+			values.reserve(function.GetArguments().size());
+			for (const auto &child : function.GetArguments()) {
 				Value child_value;
 				if (!TryFoldConstantForBackwardsCompatibility(child.GetExpression(), child_value)) {
 					return false;
@@ -180,12 +180,12 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 			return true;
 		} else if (function.function_name == "map") {
 			Value keys;
-			if (!TryFoldConstantForBackwardsCompatibility(function.children[0].GetExpression(), keys)) {
+			if (!TryFoldConstantForBackwardsCompatibility(function.GetArguments()[0].GetExpression(), keys)) {
 				return false;
 			}
 
 			Value values;
-			if (!TryFoldConstantForBackwardsCompatibility(function.children[1].GetExpression(), values)) {
+			if (!TryFoldConstantForBackwardsCompatibility(function.GetArguments()[1].GetExpression(), values)) {
 				return false;
 			}
 
@@ -253,7 +253,7 @@ static bool TryFoldForBackwardsCompatibility(const unique_ptr<ParsedExpression> 
 		if (function.function_name != "row") {
 			return false;
 		}
-		for (auto &child : function.children) {
+		for (auto &child : function.GetArgumentsMutable()) {
 			if (!TryFoldForBackwardsCompatibility(child.GetExpressionMutable(), values)) {
 				return false;
 			}

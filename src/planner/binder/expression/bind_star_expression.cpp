@@ -161,10 +161,10 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		return;
 	}
 	auto &function = expr->Cast<FunctionExpression>();
-	if (function.children.size() < 2 || function.children.size() > 3) {
+	if (function.GetArguments().size() < 2 || function.GetArguments().size() > 3) {
 		return;
 	}
-	auto &left = function.children[0];
+	auto &left = function.GetArgumentsMutable()[0];
 	// expression must have a star on the LHS, and a literal on the RHS
 	if (left.GetExpression().GetExpressionClass() != ExpressionClass::STAR) {
 		return;
@@ -189,7 +189,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		// unsupported op for * expression
 		throw BinderException(*root, "Function \"%s\" cannot be applied to a star expression", function.function_name);
 	}
-	auto &right = function.children[1];
+	auto &right = function.GetArgumentsMutable()[1];
 	if (right.GetExpression().GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw BinderException(*root, "Pattern applied to a star expression must be a constant");
 	}
@@ -211,8 +211,8 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		// -> COLUMNS(list_filter(*, x -> x LIKE '%literal%'))
 		vector<string> named_parameters;
 		named_parameters.push_back("__lambda_col");
-		function.children[0] = FunctionArgument(make_uniq<ColumnRefExpression>("__lambda_col"));
-		function.children[1] = std::move(right);
+		function.GetArgumentsMutable()[0] = FunctionArgument(make_uniq<ColumnRefExpression>("__lambda_col"));
+		function.GetArgumentsMutable()[1] = std::move(right);
 
 		unique_ptr<ParsedExpression> lambda_body = std::move(expr);
 		if (inverse) {

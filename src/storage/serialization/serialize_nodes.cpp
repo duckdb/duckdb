@@ -11,6 +11,7 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/common/queue.hpp"
@@ -337,6 +338,18 @@ ExtraOperatorInfo ExtraOperatorInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadProperty<optional_idx>(101, "total_files", result.total_files);
 	deserializer.ReadProperty<optional_idx>(102, "filtered_files", result.filtered_files);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(103, "sample_options", result.sample_options);
+	return result;
+}
+
+void FunctionArgument::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "name", name);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "expression", expression);
+}
+
+FunctionArgument FunctionArgument::Deserialize(Deserializer &deserializer) {
+	auto name = deserializer.ReadPropertyWithDefault<string>(100, "name");
+	auto expression = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "expression");
+	FunctionArgument result(std::move(name), std::move(expression));
 	return result;
 }
 

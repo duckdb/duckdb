@@ -68,7 +68,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	}
 
 	ErrorData error;
-	if (function.children.empty()) {
+	if (function.GetArguments().empty()) {
 		return BindResult(BinderException(function, "UNNEST() requires at lease one argument"));
 	}
 	if (inside_window || inside_aggregate || inside_try) {
@@ -82,21 +82,23 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 
 	idx_t max_depth = 1;
 	bool keep_parent_names = false;
-	if (function.children.size() != 1) {
+	auto &args = function.GetArgumentsMutable();
+
+	if (args.size() != 1) {
 		bool supported_argument = false;
-		for (idx_t i = 1; i < function.children.size(); i++) {
-			if (function.children[i].GetExpression().HasParameter()) {
+		for (idx_t i = 1; i < args.size(); i++) {
+			if (args[i].GetExpression().HasParameter()) {
 				throw ParameterNotAllowedException("Parameter not allowed in unnest parameter");
 			}
-			if (!function.children[i].GetExpression().IsScalar()) {
+			if (!args[i].GetExpression().IsScalar()) {
 				break;
 			}
-			auto alias = StringUtil::Lower(function.children[i].GetExpression().GetAlias());
-			BindChild(function.children[i].GetExpressionMutable(), depth, error);
+			auto alias = StringUtil::Lower(args[i].GetExpression().GetAlias());
+			BindChild(args[i].GetExpressionMutable(), depth, error);
 			if (error.HasError()) {
 				return BindResult(std::move(error));
 			}
-			auto &const_child = BoundExpression::GetExpression(*function.children[i].GetExpressionMutable());
+			auto &const_child = BoundExpression::GetExpression(*args[i].GetExpressionMutable());
 			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child, true);
 			if (alias == "recursive") {
 				auto recursive = value.GetValue<bool>();
@@ -124,18 +126,18 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		}
 	}
 	unnest_level++;
-	BindChild(function.children[0].GetExpressionMutable(), depth, error);
+	BindChild(args[0].GetExpressionMutable(), depth, error);
 	if (error.HasError()) {
 		// failed to bind
 		// try to bind correlated columns manually
-		auto result = BindCorrelatedColumns(function.children[0].GetExpressionMutable(), error);
+		auto result = BindCorrelatedColumns(args[0].GetExpressionMutable(), error);
 		if (result.HasError()) {
 			return BindResult(result.error);
 		}
-		auto &bound_expr = BoundExpression::GetExpression(*function.children[0].GetExpressionMutable());
+		auto &bound_expr = BoundExpression::GetExpression(*args[0].GetExpressionMutable());
 		ExtractCorrelatedExpressions(binder, *bound_expr);
 	}
-	auto &child = BoundExpression::GetExpression(*function.children[0].GetExpressionMutable());
+	auto &child = BoundExpression::GetExpression(*args[0].GetExpressionMutable());
 	child = BoundCastExpression::AddArrayCastToList(context, std::move(child));
 	auto &child_type = child->GetReturnType();
 	unnest_level--;

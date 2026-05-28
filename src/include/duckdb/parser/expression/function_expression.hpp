@@ -106,7 +106,7 @@ public:
 	//! Whether or not the function is an operator, only used for rendering
 	bool is_operator;
 	//! List of arguments to the function
-	vector<FunctionArgument> children;
+	vector<FunctionArgument> arguments;
 	//! Whether or not the aggregate function is distinct, only used for aggregates
 	bool distinct;
 	//! Expression representing a filter, only used for aggregates
@@ -115,10 +115,6 @@ public:
 	unique_ptr<OrderModifier> order_bys;
 	//! whether this function should export its state or not
 	bool export_state;
-
-	//! Whether this function is a legacy function call, which means it was parsed from a function call that does not
-	//! use the new function argument syntax. This is used to determine how to handle named arguments during binding.
-	bool is_legacy_function_call = false;
 
 public:
 	string ToString() const override;
@@ -141,13 +137,17 @@ public:
 	}
 
 	const vector<FunctionArgument> &GetArguments() const {
-		return children;
+		return arguments;
 	}
 	vector<FunctionArgument> &GetArgumentsMutable() {
-		return children;
+		return arguments;
 	}
 
 private:
 	FunctionExpression();
+
+	//! Whether this function is a legacy function call, which means it was parsed from a function call that does not
+	//! use the new function argument syntax. This is used to determine how to handle named arguments during binding.
+	bool is_legacy_function_call = false;
 };
 } // namespace duckdb

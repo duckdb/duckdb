@@ -699,7 +699,7 @@ void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> 
 	} else if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func_expr = expr->Cast<FunctionExpression>();
 		if (func_expr.function_name == "row") {
-			for (auto &col : func_expr.children) {
+			for (auto &col : func_expr.GetArgumentsMutable()) {
 				GetValueFromExpression(col.GetExpressionMutable(), result);
 			}
 		}
@@ -721,7 +721,7 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 		if (function.function_name != "row") {
 			return false;
 		}
-		for (auto &child : function.children) {
+		for (auto &child : function.GetArgumentsMutable()) {
 			if (!TransformPivotInList(child.GetExpressionMutable(), entry)) {
 				return false;
 			}
@@ -816,7 +816,7 @@ PivotColumn PEGTransformerFactory::TransformPivotValueList(PEGTransformer &trans
 		}
 	}
 	if (has_tuple_entries) {
-		for (auto &child : func_expr.children) {
+		for (auto &child : func_expr.GetArgumentsMutable()) {
 			result.pivot_expressions.emplace_back(std::move(child.GetExpressionMutable()));
 		}
 	} else {
@@ -1421,7 +1421,7 @@ void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> ex
 	if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &func = expression->Cast<FunctionExpression>();
 		if (func.function_name == "row") {
-			for (auto &child : func.children) {
+			for (auto &child : func.GetArgumentsMutable()) {
 				AddGroupByExpression(std::move(child.GetExpressionMutable()), map, result, result_set);
 			}
 			return;

@@ -52,11 +52,11 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetTuple(PEGTran
 
 	if (is_row_assignment) {
 		auto &func_expr = expression->Cast<FunctionExpression>();
-		if (func_expr.children.size() != result->columns.size()) {
+		if (func_expr.GetArguments().size() != result->columns.size()) {
 			throw ParserException("Could not perform assignment, expected %d values, got %d", result->columns.size(),
-			                      func_expr.children.size());
+			                      func_expr.GetArguments().size());
 		}
-		for (auto &arg : func_expr.children) {
+		for (auto &arg : func_expr.GetArgumentsMutable()) {
 			result->expressions.push_back(std::move(arg.GetExpressionMutable()));
 		}
 	} else {

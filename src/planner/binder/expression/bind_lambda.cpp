@@ -66,17 +66,17 @@ static bool IsDoubleArrowRHS(const ParsedExpression &expr) {
 		return false;
 	}
 	auto &func = expr.Cast<FunctionExpression>();
-	return func.is_operator && func.function_name == "->>" && func.children.size() == 2;
+	return func.is_operator && func.function_name == "->>" && func.GetArguments().size() == 2;
 }
 
 static unique_ptr<ParsedExpression> RestructureArrowChain(LambdaExpression &expr) {
 	auto &rhs_func = expr.expr->Cast<FunctionExpression>();
-	auto inner_lambda =
-	    make_uniq<LambdaExpression>(std::move(expr.lhs), std::move(rhs_func.children[0].GetExpressionMutable()));
+	auto inner_lambda = make_uniq<LambdaExpression>(
+	    std::move(expr.lhs), std::move(rhs_func.GetArgumentsMutable()[0].GetExpressionMutable()));
 	inner_lambda->syntax_type = expr.syntax_type;
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(inner_lambda));
-	children.push_back(std::move(rhs_func.children[1].GetExpressionMutable()));
+	children.push_back(std::move(rhs_func.GetArgumentsMutable()[1].GetExpressionMutable()));
 	auto restructured = make_uniq<FunctionExpression>("->>", std::move(children));
 	restructured->is_operator = true;
 	return std::move(restructured);

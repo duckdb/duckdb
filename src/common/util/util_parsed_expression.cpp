@@ -87,9 +87,6 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &cast_expr = Cast<FunctionExpression>();
-		for (auto &arg : cast_expr.GetArguments()) {
-			result.Append(arg.GetExpression());
-		}
 		if (cast_expr.filter) {
 			result.Append(*cast_expr.filter);
 		}
@@ -97,6 +94,9 @@ ConstChildrenView ParsedExpression::Children() const {
 			for (auto &order : cast_expr.order_bys->orders) {
 				result.Append(*order.expression);
 			}
+		}
+		for (auto &arg : cast_expr.GetArguments()) {
+			result.Append(arg.GetExpression());
 		}
 		break;
 	}
@@ -229,9 +229,6 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &cast_expr = Cast<FunctionExpression>();
-		for (auto &arg : cast_expr.GetArgumentsMutable()) {
-			result.Append(arg.GetExpressionMutable());
-		}
 		if (cast_expr.filter) {
 			result.Append(cast_expr.filter);
 		}
@@ -239,6 +236,9 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 			for (auto &order : cast_expr.order_bys->orders) {
 				result.Append(order.expression);
 			}
+		}
+		for (auto &arg : cast_expr.GetArgumentsMutable()) {
+			result.Append(arg.GetExpressionMutable());
 		}
 		break;
 	}
@@ -603,14 +603,6 @@ bool FunctionExpression::Equals(const ParsedExpression &other) const {
 	if (schema != other_p.schema) {
 		return false;
 	}
-	if (children.size() != other_p.children.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < children.size(); i++) {
-		if (!children[i].Equals(other_p.children[i])) {
-			return false;
-		}
-	}
 	if (!ParsedExpression::Equals(filter, other_p.filter)) {
 		return false;
 	}
@@ -625,6 +617,14 @@ bool FunctionExpression::Equals(const ParsedExpression &other) const {
 	}
 	if (catalog != other_p.catalog) {
 		return false;
+	}
+	if (arguments.size() != other_p.arguments.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		if (!arguments[i].Equals(other_p.arguments[i])) {
+			return false;
+		}
 	}
 	return true;
 }
@@ -643,15 +643,15 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
 	copy->function_name = function_name;
 	copy->schema = schema;
-	for (auto &arg : children) {
-		copy->children.emplace_back(arg.Copy());
-	}
 	copy->filter = filter ? filter->Copy() : nullptr;
 	copy->order_bys = order_bys ? unique_ptr_cast<ResultModifier, OrderModifier>(order_bys->Copy()) : nullptr;
 	copy->distinct = distinct;
 	copy->is_operator = is_operator;
 	copy->export_state = export_state;
 	copy->catalog = catalog;
+	for (auto &arg : arguments) {
+		copy->arguments.emplace_back(arg.Copy());
+	}
 	copy->CopyBase(*this);
 	return std::move(copy);
 }

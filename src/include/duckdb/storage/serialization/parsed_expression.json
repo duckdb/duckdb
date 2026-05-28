@@ -237,9 +237,9 @@
       {
         "id": 202,
         "name": "children",
-        "type": "vector<FunctionArgument>",
-        "accessor_mut": "GetArgumentsMutable()",
-        "accessor": "GetArguments()"
+        "type": "vector<unique_ptr<ParsedExpression>>",
+        "version": "2.0.0",
+        "status": "deleted"
       },
       {
         "id": 203,
@@ -272,8 +272,16 @@
         "id": 208,
         "name": "catalog",
         "type": "string"
+      },
+      {
+        "id": 209,
+        "name": "arguments",
+        "type": "vector<FunctionArgument>",
+        "accessor_mut": "GetArgumentsMutable()",
+        "accessor": "GetArguments()"
       }
-    ]
+    ],
+    "custom_implementation": true
   },
   {
     "class": "LambdaExpression",

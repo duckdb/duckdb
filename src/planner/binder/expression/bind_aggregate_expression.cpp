@@ -156,11 +156,11 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		}
 	}
 
-	for (idx_t i = 0; i < aggr.children.size(); ++i) {
-		auto &child = aggr.children[i];
+	for (idx_t i = 0; i < aggr.GetArguments().size(); ++i) {
+		auto &child = aggr.GetArgumentsMutable()[i];
 		BindChild(child.GetExpressionMutable(), 0, error);
 		// We have to negate the fractions for PERCENTILE_XXXX DESC
-		if (!error.HasError() && ordered_set_agg && i == aggr.children.size() - 1) {
+		if (!error.HasError() && ordered_set_agg && i == aggr.GetArguments().size() - 1) {
 			NegatePercentileFractions(context, child.GetExpressionMutable(), negate_fractions);
 		}
 	}
@@ -191,18 +191,19 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	if (error.HasError()) {
 		// failed to bind child
 		if (bound_columns) {
-			for (idx_t i = 0; i < aggr.children.size(); i++) {
+			for (auto &child : aggr.GetArgumentsMutable()) {
 				// however, we bound columns!
 				// that means this aggregation belongs to this node
 				// check if we have to resolve any errors by binding with parent binders
-				auto result = BindCorrelatedColumns(aggr.children[i].GetExpressionMutable(), error);
+				auto result = BindCorrelatedColumns(child.GetExpressionMutable(), error);
 				// if there is still an error after this, we could not successfully bind the aggregate
 				if (result.HasError()) {
 					result.error.Throw();
 				}
-				auto &bound_expr = BoundExpression::GetExpression(*aggr.children[i].GetExpressionMutable());
+				auto &bound_expr = BoundExpression::GetExpression(*child.GetExpressionMutable());
 				ExtractCorrelatedExpressions(binder, *bound_expr);
 			}
+
 			if (aggr.filter) {
 				auto result = BindCorrelatedColumns(aggr.filter, error);
 				// if there is still an error after this, we could not successfully bind the aggregate
@@ -244,7 +245,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	if (ordered_set_agg) {
 		const bool order_sensitive = (aggr.function_name == "mode");
 		// Inject missing ordering arguments
-		if (aggr.children.size() < ordered_set_agg) {
+		if (aggr.GetArguments().size() < ordered_set_agg) {
 			for (auto &order : aggr.order_bys->orders) {
 				auto &child = BoundExpression::GetExpression(*order.expression);
 				types.push_back(child->GetReturnType());
@@ -261,11 +262,11 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		}
 	}
 
-	for (idx_t i = 0; i < aggr.children.size(); i++) {
-		auto &child = BoundExpression::GetExpression(*aggr.children[i].GetExpressionMutable());
-		types.push_back(child->GetReturnType());
-		arguments.push_back(child->GetReturnType());
-		children.push_back(std::move(child));
+	for (auto &child : aggr.GetArgumentsMutable()) {
+		auto &bound_child = BoundExpression::GetExpression(*child.GetExpressionMutable());
+		types.push_back(bound_child->GetReturnType());
+		arguments.push_back(bound_child->GetReturnType());
+		children.push_back(std::move(bound_child));
 	}
 
 	// bind the aggregate

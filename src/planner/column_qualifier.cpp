@@ -296,7 +296,7 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	}
 	// we can! transform this into a function call on the column
 	// i.e. "x.lower()" becomes "lower(x)"
-	function.children.insert(function.children.begin(), std::move(new_colref));
+	function.GetArgumentsMutable().insert(function.GetArgumentsMutable().begin(), std::move(new_colref));
 	function.catalog = INVALID_CATALOG;
 	function.schema = INVALID_SCHEMA;
 	return func;
@@ -304,7 +304,7 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 
 void ColumnQualifier::QualifyColumnNamesInLambda(FunctionExpression &function,
                                                  vector<unordered_set<string>> &lambda_params) {
-	for (auto &child : function.children) {
+	for (auto &child : function.GetArgumentsMutable()) {
 		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
 			// not a lambda expression
 			QualifyColumnNames(child.GetExpressionMutable(), lambda_params, true);

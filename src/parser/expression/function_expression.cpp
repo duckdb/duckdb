@@ -17,9 +17,9 @@ FunctionExpression::FunctionExpression(string catalog, string schema, const stri
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), catalog(std::move(catalog)),
       schema(std::move(schema)), function_name(StringUtil::Lower(function_name)), is_operator(is_operator),
       distinct(distinct), filter(std::move(filter)), order_bys(std::move(order_bys_p)), export_state(export_state_p) {
-	children.reserve(children_p.size());
+	arguments.reserve(children_p.size());
 	for (auto &child : children_p) {
-		children.emplace_back(std::move(child));
+		arguments.emplace_back(std::move(child));
 	}
 	D_ASSERT(!function_name.empty());
 	if (!order_bys) {
@@ -40,7 +40,7 @@ FunctionExpression::FunctionExpression(string catalog_name, string schema_name, 
                                        bool export_state)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), catalog(std::move(catalog_name)),
       schema(std::move(schema_name)), function_name(StringUtil::Lower(function_name)), is_operator(is_operator),
-      children(std::move(children)), distinct(distinct), filter(std::move(filter)), order_bys(std::move(order_bys_p)),
+      arguments(std::move(children)), distinct(distinct), filter(std::move(filter)), order_bys(std::move(order_bys_p)),
       export_state(export_state) {
 	D_ASSERT(!function_name.empty());
 	if (!order_bys) {
@@ -59,14 +59,14 @@ string FunctionExpression::ToString() const {
 	if (is_operator) {
 		// built-in operator
 		D_ASSERT(!distinct);
-		if (children.size() == 1) {
+		if (arguments.size() == 1) {
 			if (StringUtil::Contains(function_name, "__postfix")) {
-				return "((" + children[0].ToString() + ")" + StringUtil::Replace(function_name, "__postfix", "") + ")";
+				return "((" + arguments[0].ToString() + ")" + StringUtil::Replace(function_name, "__postfix", "") + ")";
 			}
-			return function_name + "(" + children[0].ToString() + ")";
+			return function_name + "(" + arguments[0].ToString() + ")";
 		}
-		if (children.size() == 2) {
-			return StringUtil::Format("(%s %s %s)", children[0].ToString(), function_name, children[1].ToString());
+		if (arguments.size() == 2) {
+			return StringUtil::Format("(%s %s %s)", arguments[0].ToString(), function_name, arguments[1].ToString());
 		}
 	}
 	// standard function call
@@ -82,11 +82,11 @@ string FunctionExpression::ToString() const {
 	if (distinct) {
 		result += "DISTINCT ";
 	}
-	result += StringUtil::Join(children, children.size(), ", ",
+	result += StringUtil::Join(arguments, arguments.size(), ", ",
 	                           [&](const FunctionArgument &child) { return child.ToString(); });
 	// ordered aggregate
 	if (order_bys && !order_bys->orders.empty()) {
-		if (children.empty()) {
+		if (arguments.empty()) {
 			result += ") WITHIN GROUP (";
 		}
 		result += " ORDER BY ";
@@ -121,12 +121,74 @@ optional_ptr<ParsedExpression> FunctionExpression::IsLambdaFunction() {
 		return nullptr;
 	}
 	// Check the children for lambda expressions.
-	for (auto &child : children) {
+	for (auto &child : arguments) {
 		if (child.GetExpression().GetExpressionClass() == ExpressionClass::LAMBDA) {
 			return *child.GetExpressionMutable();
 		}
 	}
 	return nullptr;
+}
+
+void FunctionExpression::Serialize(Serializer &serializer) const {
+	ParsedExpression::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "function_name", function_name);
+	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
+
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		// Legacy serialization.
+		vector<unique_ptr<ParsedExpression>> children;
+		for (auto &arg : arguments) {
+			auto copy = arg.GetExpression().Copy();
+			copy->SetAlias(arg.GetName());
+			children.push_back(std::move(copy));
+		}
+		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", children);
+	}
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(203, "filter", filter);
+	serializer.WritePropertyWithDefault<unique_ptr<OrderModifier>>(204, "order_bys", order_bys);
+	serializer.WritePropertyWithDefault<bool>(205, "distinct", distinct);
+	serializer.WritePropertyWithDefault<bool>(206, "is_operator", is_operator);
+	serializer.WritePropertyWithDefault<bool>(207, "export_state", export_state);
+	serializer.WritePropertyWithDefault<string>(208, "catalog", catalog);
+
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<vector<FunctionArgument>>(209, "arguments", arguments);
+	}
+}
+
+unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
+	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->function_name);
+	deserializer.ReadPropertyWithDefault<string>(201, "schema", result->schema);
+
+	// Legacy children deserialization
+	vector<unique_ptr<ParsedExpression>> children;
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", children);
+	if (!children.empty()) {
+		result->arguments.reserve(children.size());
+		for (auto &child : children) {
+			auto alias = child->GetAlias();
+			result->arguments.emplace_back(std::move(alias), std::move(child));
+		}
+
+		// Mark this function expression as a legacy function call, so that the binder can handle it accordingly.
+		result->is_legacy_function_call = true;
+	}
+
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(203, "filter", result->filter);
+	auto order_bys = deserializer.ReadPropertyWithDefault<unique_ptr<ResultModifier>>(204, "order_bys");
+	result->order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(std::move(order_bys));
+	deserializer.ReadPropertyWithDefault<bool>(205, "distinct", result->distinct);
+	deserializer.ReadPropertyWithDefault<bool>(206, "is_operator", result->is_operator);
+	deserializer.ReadPropertyWithDefault<bool>(207, "export_state", result->export_state);
+	deserializer.ReadPropertyWithDefault<string>(208, "catalog", result->catalog);
+
+	// New children deserialization
+	if (children.empty()) {
+		deserializer.ReadPropertyWithDefault<vector<FunctionArgument>>(209, "arguments", result->arguments);
+	}
+
+	return std::move(result);
 }
 
 hash_t FunctionArgument::Hash() const {

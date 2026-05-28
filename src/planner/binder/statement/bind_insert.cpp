@@ -97,7 +97,7 @@ void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_
 
 void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
                                 vector<unordered_set<string>> &lambda_params) {
-	for (auto &child : function.children) {
+	for (auto &child : function.GetArgumentsMutable()) {
 		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
 			DoUpdateSetQualify(child.GetExpressionMutable(), table_name, lambda_params);
 			continue;
