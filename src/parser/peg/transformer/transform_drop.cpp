@@ -69,7 +69,7 @@ PEGTransformerFactory::TransformDropFunction(PEGTransformer &transformer, const 
 	if (function_identifier.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	auto function = function_identifier[0];
+	const auto &function = function_identifier[0];
 	info->catalog = function.catalog.empty() ? INVALID_CATALOG : function.catalog;
 	info->schema = function.schema;
 	info->name = function.name;
@@ -87,7 +87,7 @@ PEGTransformerFactory::TransformDropSchema(PEGTransformer &transformer, const bo
 	if (qualified_schema_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	auto schema = qualified_schema_name[0];
+	const auto &schema = qualified_schema_name[0];
 	info->catalog = schema.catalog;
 	info->name = schema.schema;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
@@ -120,7 +120,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropIndex(PEGTransform
 	if (qualified_index_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	auto index = qualified_index_name[0];
+	const auto &index = qualified_index_name[0];
 	info->catalog = index.catalog;
 	info->schema = index.schema;
 	info->name = index.name;
@@ -168,7 +168,7 @@ PEGTransformerFactory::TransformDropSequence(PEGTransformer &transformer, const 
 	if (qualified_sequence_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	auto sequence = qualified_sequence_name[0];
+	const auto &sequence = qualified_sequence_name[0];
 	if (sequence.schema.empty()) {
 		info->schema = sequence.catalog;
 	} else {
@@ -215,7 +215,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropType(PEGTransforme
 	if (qualified_type_name.size() > 1) {
 		throw NotImplementedException("Can only drop one object at a time");
 	}
-	auto type = qualified_type_name[0];
+	const auto &type = qualified_type_name[0];
 	if (type.schema.empty()) {
 		info->schema = type.catalog;
 	} else {
