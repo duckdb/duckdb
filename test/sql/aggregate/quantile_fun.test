@@ -2,14 +2,13 @@
 # description: Test pg_sequence function
 # group: [aggregate]
 
-require tpch
+set variable sf 0.001
+
+include test/sql/tpch/tpch_setup.test_template
 
 # scalar quantiles
 statement ok
 create table quantiles as select range r, random() FROM range(100) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
-
-statement ok
-CALL dbgen(sf=0.001);
 
 statement ok
 SET debug_force_external=true;
