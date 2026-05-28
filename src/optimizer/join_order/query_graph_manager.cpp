@@ -333,6 +333,10 @@ static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, 
 	return node;
 }
 
+static bool RelationSetsEqual(JoinRelationSet &left, JoinRelationSet &right) {
+	return JoinRelationSet::IsSubset(left, right) && JoinRelationSet::IsSubset(right, left);
+}
+
 void QueryGraphManager::BindFilterEndpoints() {
 	for (auto &filter_info : filters_and_bindings) {
 		auto &filter = filter_info->filter;
@@ -357,6 +361,11 @@ void QueryGraphManager::BindFilterEndpoints() {
 					filter_info->right_set = &set_manager.GetJoinRelation(right_bindings);
 				}
 				D_ASSERT(filter_info->left_set && filter_info->right_set);
+				auto &condition_set = set_manager.Union(*filter_info->left_set, *filter_info->right_set);
+				if (!RelationSetsEqual(filter_info->set.get(), condition_set)) {
+					filter_info->SetLeftSet(nullptr);
+					filter_info->SetRightSet(nullptr);
+				}
 			}
 		} else if (filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 			auto &conjunction = filter->Cast<BoundConjunctionExpression>();

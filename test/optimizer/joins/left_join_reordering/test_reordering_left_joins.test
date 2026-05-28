@@ -16,6 +16,37 @@ create table t2 as from values (0), (1) t(b);
 statement ok
 create table t3 as from values (1), (2) t(c);
 
+# Post-LEFT filters that reference nullable-side columns must stay above the LEFT join.
+# If this filter is reconstructed before the LEFT join, the NULL-extended rows disappear.
+statement ok
+create table lj_pin_l(id integer, v integer);
+
+statement ok
+insert into lj_pin_l values (1, 10), (2, 20);
+
+statement ok
+create table lj_pin_n(dx integer);
+
+statement ok
+insert into lj_pin_n values (0), (1);
+
+statement ok
+create table lj_pin_r(id integer, v integer);
+
+statement ok
+insert into lj_pin_r values (1, 10);
+
+query IIII
+select l.id, n.dx, r.id, r.v
+from (lj_pin_l l cross join lj_pin_n n)
+left join lj_pin_r r on l.id + n.dx = r.id
+where l.v is distinct from r.v
+order by all;
+----
+1	1	NULL	NULL
+2	0	NULL	NULL
+2	1	NULL	NULL
+
 
 # filters (a ⟕ (b ⨝ c))
 query III

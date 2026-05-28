@@ -147,6 +147,30 @@ bool ExpressionContainsColumnRef(const Expression &root_expr) {
 	return contains_column_ref;
 }
 
+static bool RelationSetsIntersect(const JoinRelationSet &left, const JoinRelationSet &right) {
+	for (idx_t left_idx = 0; left_idx < left.count; left_idx++) {
+		for (idx_t right_idx = 0; right_idx < right.count; right_idx++) {
+			if (left.relations[left_idx] == right.relations[right_idx]) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static void PinFilterAfterLeftJoin(FilterInfo &filter, JoinRelationSet &nullable_set, JoinRelationSet &left_join_set,
+                                   JoinRelationSetManager &set_manager) {
+	if (RelationSetsIntersect(filter.set.get(), nullable_set)) {
+		filter.set = set_manager.Union(filter.set.get(), left_join_set);
+	}
+	if (filter.left_set && RelationSetsIntersect(*filter.left_set, nullable_set)) {
+		filter.left_set = &set_manager.Union(*filter.left_set, left_join_set);
+	}
+	if (filter.right_set && RelationSetsIntersect(*filter.right_set, nullable_set)) {
+		filter.right_set = &set_manager.Union(*filter.right_set, left_join_set);
+	}
+}
+
 static bool JoinIsReorderable(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
 		return true;
@@ -800,21 +824,15 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 						filters_and_bindings.push_back(std::move(filter_info));
 					}
 
-					// Expand filters that reference only the RIGHT side of this LEFT join so that
-					// the LEFT join is always planned before those filters.
+					// Filters above a LEFT join that reference nullable-side bindings must be evaluated
+					// after the LEFT join has introduced NULL-extended rows. Pin them to the full LEFT
+					// join output, otherwise reconstruction can push null-aware predicates like
+					// "lhs IS DISTINCT FROM rhs" below the LEFT join and turn them into inner filters.
 					for (auto &filter : filters_and_bindings) {
 						if (filter->join_type == JoinType::LEFT) {
 							continue;
 						}
-						if (JoinRelationSet::IsSubset(filter->set.get(), *full_right_set)) {
-							filter->set = set_manager.Union(filter->set.get(), full_set);
-						}
-						if (filter->left_set && JoinRelationSet::IsSubset(*filter->left_set, *full_right_set)) {
-							filter->left_set = &set_manager.Union(*filter->left_set, full_set);
-						}
-						if (filter->right_set && JoinRelationSet::IsSubset(*filter->right_set, *full_right_set)) {
-							filter->right_set = &set_manager.Union(*filter->right_set, full_set);
-						}
+						PinFilterAfterLeftJoin(*filter, *full_right_set, full_set, set_manager);
 					}
 				}
 
