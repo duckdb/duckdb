@@ -338,6 +338,8 @@ private:
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformSimpleType(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName TransformQualifiedTypeName(PEGTransformer &transformer, ParseResult &parse_result);
+	static QualifiedName TransformSchemaReservedTypeName(PEGTransformer &transformer, ParseResult &parse_result);
+	static QualifiedName TransformCatalogReservedSchemaTypeName(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformCharacterType(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformMapType(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformRowType(PEGTransformer &transformer, ParseResult &parse_result);
