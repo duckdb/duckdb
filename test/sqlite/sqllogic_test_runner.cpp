@@ -978,6 +978,13 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					parser.Fail("Failed to set seed: %s", res->GetError());
 				}
 				skip_reload = true;
+			} else if (token.parameters[0] == "variable") {
+				if (token.parameters.size() != 3) {
+					parser.Fail("set variable requires two parameters (name value)");
+				}
+				auto &var_name = token.parameters[1];
+				auto &var_value = token.parameters[2];
+				environment_variables[var_name] = var_value;
 			} else {
 				parser.Fail("unrecognized set parameter: %s", token.parameters[0]);
 			}
@@ -1212,6 +1219,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			auto command = make_uniq<ContinueCommand>(*this);
 			command->conditions = std::move(conditions);
 			ExecuteCommand(std::move(command));
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_INCLUDE) {
+			if (token.parameters.size() != 1) {
+				parser.Fail("Expected include <path>");
+			}
+			parser.IncludeFile(token.parameters[0]);
 		}
 	}
 	if (InLoop()) {

@@ -2,16 +2,15 @@
 # description: Test TPC-H SF0.01 Q1 with unions
 # group: [tpch]
 
-require tpch
+set variable sf 0.01
+
+include test/sql/tpch/tpch_setup.test_template
 
 statement ok
 PRAGMA threads=4
 
 statement ok
 PRAGMA verify_parallelism
-
-statement ok
-CALL dbgen(sf=0.01);
 
 query IIIII
 SELECT

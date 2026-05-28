@@ -1,10 +1,9 @@
 # name: test/sql/optimizer/test_rowid_pushdown_plan.test
 # group: [optimizer]
 
-require tpch
+set variable sf 0.01
 
-statement ok
-CALL dbgen(sf=0.01);
+include test/sql/tpch/tpch_setup.test_template
 
 query IIIIIIIIIIIIIIII rowsort top5_result
 SELECT * FROM lineitem ORDER BY l_orderkey DESC LIMIT 5;
