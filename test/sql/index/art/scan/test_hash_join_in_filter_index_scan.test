@@ -2,10 +2,9 @@
 # description: Test using an index scan for IN filter pushdown via hash joins.
 # group: [scan]
 
-require tpch
+set variable sf 0.01
 
-statement ok
-CALL dbgen(sf=0.01);
+include test/sql/tpch/tpch_setup.test_template
 
 statement ok
 CREATE TABLE random_orders AS (

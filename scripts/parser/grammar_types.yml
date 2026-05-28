@@ -735,6 +735,15 @@ TriggerEventInfo:
     - TriggerEventUpdate
     - TriggerEventUpdateOf
 
+TriggerTableReferencingInfo:
+  type: "TriggerTableReferencingInfo"
+  by_value: false
+  rules:
+    - ReferencingClause
+    - ReferencingItem
+    - ReferencingNewTableAs
+    - ReferencingOldTableAs
+
 VacuumOptions:
   type: "VacuumOptions"
   by_value: false
@@ -816,7 +825,6 @@ String:
     - SecretStorageSpecifier
     - SecretName
     - TriggerName
-    - ReferencingNewTableAs
     - UpdateAction
     - DeleteAction
     - KeyAction

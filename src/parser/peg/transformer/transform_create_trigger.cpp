@@ -25,7 +25,7 @@ static unique_ptr<QueryNode> ExtractQueryNode(unique_ptr<SQLStatement> stmt) {
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(
     PEGTransformer &transformer, const bool &if_not_exists, const string &trigger_name,
     const TriggerTiming &trigger_timing, const TriggerEventInfo &trigger_event,
-    unique_ptr<BaseTableRef> base_table_name, const string &referencing_new_table_as,
+    unique_ptr<BaseTableRef> base_table_name, const TriggerTableReferencingInfo &referencing_clause,
     const TriggerForEach &for_each_clause, unique_ptr<SQLStatement> trigger_body) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTriggerInfo>();
@@ -35,7 +35,8 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(
 	info->event_type = trigger_event.event_type;
 	info->columns = trigger_event.columns;
 	info->base_table = std::move(base_table_name);
-	info->referencing_new_table = referencing_new_table_as;
+	info->referencing_new_table = referencing_clause.new_table;
+	info->referencing_old_table = referencing_clause.old_table;
 	info->for_each = for_each_clause;
 	info->trigger_action = ExtractQueryNode(std::move(trigger_body));
 	result->info = std::move(info);
@@ -104,8 +105,41 @@ vector<string> PEGTransformerFactory::TransformTriggerColumnList(PEGTransformer 
 	return col_id;
 }
 
-string PEGTransformerFactory::TransformReferencingNewTableAs(PEGTransformer &transformer, const string &col_id) {
-	return col_id;
+TriggerTableReferencingInfo PEGTransformerFactory::TransformReferencingNewTableAs(PEGTransformer &transformer,
+                                                                                  const string &col_id) {
+	TriggerTableReferencingInfo info;
+	info.new_table = col_id;
+	return info;
+}
+
+TriggerTableReferencingInfo PEGTransformerFactory::TransformReferencingOldTableAs(PEGTransformer &transformer,
+                                                                                  const string &col_id) {
+	TriggerTableReferencingInfo info;
+	info.old_table = col_id;
+	return info;
+}
+
+TriggerTableReferencingInfo
+PEGTransformerFactory::TransformReferencingClause(PEGTransformer &transformer,
+                                                  const TriggerTableReferencingInfo &referencing_item,
+                                                  const TriggerTableReferencingInfo &referencing_item_1) {
+	auto result = referencing_item;
+	if (!referencing_item_1.new_table.empty()) {
+		if (!result.new_table.empty()) {
+			throw ParserException("NEW TABLE cannot be specified multiple times in REFERENCING clause");
+		}
+		result.new_table = referencing_item_1.new_table;
+	}
+	if (!referencing_item_1.old_table.empty()) {
+		if (!result.old_table.empty()) {
+			throw ParserException("OLD TABLE cannot be specified multiple times in REFERENCING clause");
+		}
+		result.old_table = referencing_item_1.old_table;
+	}
+	if (!result.new_table.empty() && !result.old_table.empty() && result.new_table == result.old_table) {
+		throw ParserException("REFERENCING aliases must be distinct");
+	}
+	return result;
 }
 
 TriggerForEach PEGTransformerFactory::TransformForEachRow(PEGTransformer &transformer) {

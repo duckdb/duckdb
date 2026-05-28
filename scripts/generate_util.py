@@ -488,11 +488,31 @@ def generate_member_children_appends(member, expr_var):
     if iterate_via:
         access = f'{expr_var}.{iterate_via}'
         if is_parsed_expression_ptr(type_str):
+            # If nullable, generate a null guard using the accessor_mut (which returns unique_ptr&)
+            if member.get('nullable'):
+                return [
+                    f'\t\tif ({access}) {{',
+                    f'\t\t\tresult.Append({access});',
+                    f'\t\t}}',
+                ]
             return [f'\t\tresult.Append({access});']
         if is_parsed_expression_list(type_str):
             return [
                 f'\t\tfor (auto &child : {access}) {{',
                 f'\t\t\tresult.Append(child);',
+                f'\t\t}}',
+            ]
+        if type_str == 'vector<CaseCheck>':
+            return [
+                f'\t\tfor (auto &check : {access}) {{',
+                f'\t\t\tresult.Append(check.when_expr);',
+                f'\t\t\tresult.Append(check.then_expr);',
+                f'\t\t}}',
+            ]
+        if is_expression_map(type_str):
+            return [
+                f'\t\tfor (auto &item : {access}) {{',
+                f'\t\t\tresult.Append(item.second);',
                 f'\t\t}}',
             ]
         return []
@@ -549,12 +569,32 @@ def generate_member_const_children_appends(member, expr_var):
     if const_via:
         access = f'{expr_var}.{const_via}'
         if is_parsed_expression_ptr(type_str):
-            # const accessor returns const ParsedExpression& directly
+            # If nullable, the accessor returns a unique_ptr ref that may be null — check and deref
+            if member.get('nullable'):
+                return [
+                    f'\t\tif ({access}) {{',
+                    f'\t\t\tresult.Append(*{access});',
+                    f'\t\t}}',
+                ]
+            # Non-nullable: const accessor returns const ParsedExpression& directly (assume non-null)
             return [f'\t\tresult.Append({access});']
         if is_parsed_expression_list(type_str):
             return [
                 f'\t\tfor (auto &child : {access}) {{',
                 f'\t\t\tresult.Append(*child);',
+                f'\t\t}}',
+            ]
+        if type_str == 'vector<CaseCheck>':
+            return [
+                f'\t\tfor (auto &check : {access}) {{',
+                f'\t\t\tresult.Append(*check.when_expr);',
+                f'\t\t\tresult.Append(*check.then_expr);',
+                f'\t\t}}',
+            ]
+        if is_expression_map(type_str):
+            return [
+                f'\t\tfor (auto &item : {access}) {{',
+                f'\t\t\tresult.Append(*item.second);',
                 f'\t\t}}',
             ]
         return []

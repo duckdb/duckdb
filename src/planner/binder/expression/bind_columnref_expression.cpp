@@ -118,7 +118,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 
 	// we bound the column reference
 	BoundColumnReferenceInfo ref;
-	ref.name = col_ref.column_names.back();
+	ref.name = col_ref.ColumnNames().back();
 	ref.query_location = col_ref.GetQueryLocation();
 	bound_columns.push_back(std::move(ref));
 	return result;
