@@ -295,9 +295,12 @@ jobs:
 
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
       with:
         build-type: relassert
         build: python3 scripts/ci/retry.py -- make relassert
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
         test: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
         bundle: make relassert-artifact
         upload-name: linux-relassert-build
@@ -343,6 +346,9 @@ jobs:
 
     - name: Test
       run: make unittest_relassert
+
+    - name: Test Benchmark SQL
+      run: make test_benchmark_sql
 
  regression:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'regression') }}

@@ -1,0 +1,6 @@
+diff --git a/src/http_state.cpp b/src/http_state.cpp
+--- a/src/http_state.cpp
++++ b/src/http_state.cpp
+@@ -9 +9 @@ CachedFileHandle::CachedFileHandle(shared_ptr<CachedFile> &file_p) {
+-		lock = make_uniq<lock_guard<mutex>>(file_p->lock);
++		lock = unique_ptr<lock_guard<mutex>>(new lock_guard<mutex>(file_p->lock));

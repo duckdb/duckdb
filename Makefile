@@ -713,6 +713,10 @@ benchmark:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_BENCHMARKS=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
 	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
+.PHONY: test_benchmark_sql
+test_benchmark_sql:
+	$(PYTHON) -u scripts/test_benchmark_sql_runner.py --shell build/relassert/duckdb
+
 
 tidy-check:
 	mkdir -p ./build/tidy && \
