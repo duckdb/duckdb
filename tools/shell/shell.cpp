@@ -2776,6 +2776,14 @@ int ShellState::ProcessInput(InputMode mode) {
 		zLine = OneInputLine(in, zLine, nSql > 0);
 		if (!zLine) {
 			/* End of input */
+			if (!in && stdin_is_interactive && conn && conn->context && conn->context->IsConnected()) {
+				// First Ctrl-D while CONNECT-ed: implicit DISCONNECT instead of exiting. A second
+				// Ctrl-D (now unbound) will exit normally.
+				printf("\n");
+				conn->Query("DISCONNECT");
+				nSql = 0;
+				continue;
+			}
 			if (!in && stdin_is_interactive) {
 				printf("\n");
 			}
