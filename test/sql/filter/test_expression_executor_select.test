@@ -1,5 +1,5 @@
 # name: test/sql/filter/test_expression_executor_select.test
-# description: Exercise ExpressionExecutor::Select with constant parameters and dictionary-compressed scans
+# description: Exercise ExpressionExecutor::Select with constant parameters and dictionary vectors
 # group: [filter]
 
 statement ok
@@ -36,8 +36,11 @@ EXECUTE const_is_not_distinct(1, NULL)
 statement ok
 CREATE TABLE dict_select(
 	id INTEGER,
-	s VARCHAR USING COMPRESSION Dictionary
+	s VARCHAR
 );
+
+statement ok
+PRAGMA debug_verify_vector='dictionary_expression'
 
 statement ok
 INSERT INTO dict_select VALUES
@@ -91,6 +94,9 @@ EXECUTE dict_between('duck', 'goose')
 2
 4
 6
+
+statement ok
+PRAGMA debug_verify_vector='none'
 
 statement ok
 PRAGMA enable_optimizer
