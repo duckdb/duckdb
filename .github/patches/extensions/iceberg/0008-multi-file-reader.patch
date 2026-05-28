@@ -139,7 +139,7 @@ index 3c6ef640..f057805a 100644
  			}
  		}
 diff --git a/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test b/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test
-index 3ce08b8b..1a22d863 100644
+index 8dd5610e..6b7e34ff 100644
 --- a/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test
 +++ b/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test
 @@ -22,14 +22,20 @@ DROP TABLE IF EXISTS my_datalake.default.v2_to_v3_upgrade;
