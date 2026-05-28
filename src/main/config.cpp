@@ -68,7 +68,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AccessModeSetting),
     DUCKDB_SETTING_CALLBACK(AllocatorBackgroundThreadsSetting),
     DUCKDB_GLOBAL(AllocatorBulkDeallocationFlushThresholdSetting),
-    DUCKDB_GLOBAL(AllocatorFlushThresholdSetting),
+    DUCKDB_SETTING_CALLBACK(AllocatorFlushThresholdSetting),
     DUCKDB_SETTING_CALLBACK(AllowCommunityExtensionsSetting),
     DUCKDB_SETTING(AllowExtensionsMetadataMismatchSetting),
     DUCKDB_SETTING_CALLBACK(AllowParserOverrideExtensionSetting),
