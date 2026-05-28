@@ -1,0 +1,38 @@
+From af33d2547e06e9c182196237bed1f65bf7808466 Mon Sep 17 00:00:00 2001
+From: Mytherin <mark.raasveldt@gmail.com>
+Date: Thu, 28 May 2026 11:57:58 +0200
+Subject: [PATCH 3/3] relassert_werror_fixes.patch
+
+---
+ src/httpfs_connection_caching.cpp | 2 +-
+ src/s3fs.cpp                      | 1 -
+ 2 files changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/src/httpfs_connection_caching.cpp b/src/httpfs_connection_caching.cpp
+index 210abd4..e2bf406 100644
+--- a/src/httpfs_connection_caching.cpp
++++ b/src/httpfs_connection_caching.cpp
+@@ -149,7 +149,7 @@ unique_ptr<HTTPResponse> HTTPFSCurlUtil::CachingSendRequest(BaseRequest &request
+ 	if (!caller_owns_client) {
+ 		connection_cache.Store(std::move(client));
+ 	}
+-	return std::move(r);
++	return r;
+ }
+ 
+ unique_ptr<HTTPResponse> HTTPFSCurlUtil::SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client) {
+diff --git a/src/s3fs.cpp b/src/s3fs.cpp
+index 95b4342..c21b5b0 100644
+--- a/src/s3fs.cpp
++++ b/src/s3fs.cpp
+@@ -359,7 +359,6 @@ void S3FileHandle::Close() {
+ }
+ 
+ void S3FileHandle::FinalizeUpload() {
+-	auto &s3fs = (S3FileSystem &)file_system;
+ 	if (flags.OpenForWriting() && multi_part_upload) {
+ 		multi_part_upload->Finalize();
+ 	}
+-- 
+2.39.5 (Apple Git-154)
+

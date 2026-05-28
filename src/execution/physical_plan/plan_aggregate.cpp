@@ -1,7 +1,5 @@
 #include "duckdb/main/settings.hpp"
 
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/aggregate/physical_perfecthash_aggregate.hpp"
 #include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
@@ -11,8 +9,6 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/expression/comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 
@@ -44,9 +40,16 @@ static bool CanUsePartitionedAggregate(ClientContext &context, LogicalAggregate 
 			return false;
 		}
 	}
+
+	return PhysicalPlanGenerator::HasSingleValuePartitions(context, op.groups, child, partition_columns);
+}
+
+bool PhysicalPlanGenerator::HasSingleValuePartitions(ClientContext &context,
+                                                     const vector<unique_ptr<Expression>> &partitions,
+                                                     PhysicalOperator &child, vector<column_t> &partition_columns) {
 	// check if the source is partitioned by the aggregate columns
 	// figure out the columns we are grouping by
-	for (auto &group_expr : op.groups) {
+	for (auto &group_expr : partitions) {
 		// only support bound reference here
 		if (group_expr->GetExpressionType() != ExpressionType::BOUND_REF) {
 			return false;

@@ -69,9 +69,22 @@ Slow tests should use `.test_slow` extension instead of `.test`.
 
 ```bash
 make format-fix        # Format all code (clang-format + black)
+make generate-files    # Generate files + format all code
 ```
 
 Ensure you run formatting before committing.
+
+## Extensive Testing / Making CI Work
+
+Below is a set of tests that should be run in order to make sure a changeset passes extensive tests in CI. If the user is asking you to fix CI make sure that the below commands succeed.
+
+```bash
+make allunit
+FORCE_DEBUG=1 FORCE_ASSERT=1 make reldebug && build/reldebug/test/unittest
+make test_configs
+make test_vector
+```
+
 
 ## Architecture
 

@@ -400,7 +400,7 @@ bool ExpressionBinder::IsPotentialAlias(const ColumnRefExpression &colref) {
 	if (!colref.IsQualified()) {
 		return true;
 	}
-	if (colref.column_names.size() == 2) {
+	if (colref.ColumnNames().size() == 2) {
 		return StringUtil::CIEquals(colref.GetTableName(), "alias");
 	}
 	return false;

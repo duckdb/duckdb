@@ -56,6 +56,7 @@ SettingName <- Identifier
 PragmaName <- Identifier
 FunctionName <- Identifier
 ReservedFunctionName <- Identifier
+ReservedTypeName <- Identifier
 TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier
@@ -137,7 +138,9 @@ DecimalType <- 'DECIMAL' TypeModifiers?
 DecType <- 'DEC' TypeModifiers?
 NumericModType <- 'NUMERIC' TypeModifiers?
 
-QualifiedTypeName <- (Identifier '.')* TypeName
+QualifiedTypeName <- CatalogReservedSchemaTypeName / SchemaReservedTypeName / TypeName
+CatalogReservedSchemaTypeName <- CatalogQualification ReservedSchemaQualification ReservedTypeName
+SchemaReservedTypeName <- SchemaQualification ReservedTypeName
 TypeModifiers <- Parens(List(Expression)?)
 RowType <- RowOrStruct ColIdTypeList
 SetofType <- 'SETOF' Type
@@ -955,7 +958,10 @@ RowExpression <- 'ROW' Parens(List(Expression)?)
 SubstringExpression <- 'SUBSTRING' Parens(SubstringArguments)
 SubstringArguments <- SubstringParameters / SubstringExpressionList
 SubstringExpressionList <- List(Expression)
-SubstringParameters <- Expression FromExpression ForExpression
+SubstringParameters <- Expression SubstringFromFor
+SubstringFromFor <- SubstringFromOptionalFor / SubstringFor
+SubstringFromOptionalFor <- FromExpression ForExpression?
+SubstringFor <- ForExpression
 TrimExpression <- 'TRIM' Parens(TrimDirection? TrimSource? List(Expression))
 TrimDirection <- TrimBoth / TrimLeading / TrimTrailing
 TrimBoth <- 'BOTH'

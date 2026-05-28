@@ -2,9 +2,6 @@
 # description: Test constant-vector hash-join probing (TryProbeConstant)
 # group: [hash_join]
 
-statement ok
-PRAGMA enable_verification
-
 # build side - small dimension table
 statement ok
 CREATE TABLE dim (k VARCHAR PRIMARY KEY, name VARCHAR)

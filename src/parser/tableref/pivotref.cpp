@@ -207,14 +207,14 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 	case ExpressionType::OPERATOR_CAST: {
 		auto &cast = expr.Cast<CastExpression>();
 		Value dummy_value;
-		if (!TryFoldConstantForBackwardsCompatibility(*cast.child, dummy_value)) {
+		if (!TryFoldConstantForBackwardsCompatibility(cast.Child(), dummy_value)) {
 			return false;
 		}
 
 		// Try to default bind cast
 		LogicalType cast_type;
 		try {
-			cast_type = UnboundType::TryDefaultBind(cast.cast_type);
+			cast_type = UnboundType::TryDefaultBind(cast.TargetType());
 		} catch (...) {
 			return false;
 		}

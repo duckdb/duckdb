@@ -1,0 +1,86 @@
+From 854866dd0aa4d77d009057d22399ad80babfb08d Mon Sep 17 00:00:00 2001
+From: DuckDB Sync <sync@duckdb.org>
+Date: Thu, 28 May 2026 12:00:47 +0200
+Subject: [PATCH] Use accessor methods instead of private members of
+ ParsedExpression subclasses
+
+---
+ src/statement_generator.cpp  | 10 +++++-----
+ src/statement_simplifier.cpp | 10 +++++-----
+ 2 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
+index add178e..c44c139 100644
+--- a/src/statement_generator.cpp
++++ b/src/statement_generator.cpp
+@@ -1054,7 +1054,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateStar() {
+ 	auto result = make_uniq<StarExpression>();
+ 	if (!current_relation_names.empty()) {
+ 		if (RandomPercentage(10)) {
+-			result->relation_name = GenerateRelationName();
++			result->RelationNameMutable() = GenerateRelationName();
+ 		}
+ 	}
+ 	if (!verification_enabled) {
+@@ -1063,19 +1063,19 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateStar() {
+ 			if (column_name.empty()) {
+ 				break;
+ 			}
+-			result->exclude_list.insert(column_name);
++			result->ExcludeListMutable().insert(column_name);
+ 		}
+ 		while (RandomPercentage(20)) {
+ 			auto column_name = GenerateColumnName();
+ 			if (column_name.empty()) {
+ 				break;
+ 			}
+-			result->replace_list.insert(make_pair(column_name, GenerateExpression()));
++			result->ReplaceListMutable().insert(make_pair(column_name, GenerateExpression()));
+ 		}
+ 		if (RandomPercentage(50) || expression_depth > 0) {
+-			result->columns = true;
++			result->IsColumnsMutable() = true;
+ 			if (RandomPercentage(50)) {
+-				result->expr = GenerateLambda();
++				result->ExpressionMutable() = GenerateLambda();
+ 			}
+ 		}
+ 	}
+diff --git a/src/statement_simplifier.cpp b/src/statement_simplifier.cpp
+index efbecfe..d059d90 100644
+--- a/src/statement_simplifier.cpp
++++ b/src/statement_simplifier.cpp
+@@ -288,7 +288,7 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
+ 	switch (expr_class) {
+ 	case ExpressionClass::CONJUNCTION: {
+ 		auto &conj = expr->Cast<ConjunctionExpression>();
+-		SimplifyExpressionList(expr, conj.children);
++		SimplifyExpressionList(expr, conj.GetChildrenMutable());
+ 		break;
+ 	}
+ 	case ExpressionClass::FUNCTION: {
+@@ -304,7 +304,7 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
+ 	}
+ 	case ExpressionClass::OPERATOR: {
+ 		auto &op = expr->Cast<OperatorExpression>();
+-		SimplifyExpressionList(expr, op.children);
++		SimplifyExpressionList(expr, op.GetChildrenMutable());
+ 		break;
+ 	}
+ 	case ExpressionClass::CASE: {
+@@ -345,9 +345,9 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
+ 	}
+ 	case ExpressionClass::STAR: {
+ 		auto &star = expr->Cast<StarExpression>();
+-		SimplifyMap(star.replace_list);
+-		SimplifySet(star.exclude_list);
+-		for (auto &entry : star.replace_list) {
++		SimplifyMap(star.ReplaceListMutable());
++		SimplifySet(star.ExcludeListMutable());
++		for (auto &entry : star.ReplaceListMutable()) {
+ 			SimplifyChildExpression(expr, entry.second);
+ 		}
+ 		break;
+-- 
+2.39.5 (Apple Git-154)
+

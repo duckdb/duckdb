@@ -28,8 +28,14 @@ public:
 	const string &GetSchema() const {
 		return schema;
 	}
+	void SetSchema(string new_schema) {
+		schema = std::move(new_schema);
+	}
 	const string &GetCatalog() const {
 		return catalog;
+	}
+	void SetCatalog(string new_catalog) {
+		catalog = std::move(new_catalog);
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
 		return children;

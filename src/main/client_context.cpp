@@ -786,10 +786,8 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 
 		plan = std::move(planner.plan);
 
-		if (config.enable_optimizer) {
-			Optimizer optimizer(*planner.binder, *this);
-			plan = optimizer.Optimize(std::move(plan));
-		}
+		Optimizer optimizer(*planner.binder, *this);
+		plan = optimizer.Optimize(std::move(plan));
 
 		ColumnBindingResolver resolver;
 		resolver.Verify(*this, *plan);
