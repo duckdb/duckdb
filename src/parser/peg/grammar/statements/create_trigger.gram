@@ -1,7 +1,12 @@
-CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ForEachClause? TriggerBody
+CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName ReferencingClause? ForEachClause? TriggerBody
 
 TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
 TriggerName <- Identifier
+
+ReferencingClause <- 'REFERENCING' ReferencingItem ReferencingItem?
+ReferencingItem <- ReferencingNewTableAs / ReferencingOldTableAs
+ReferencingNewTableAs <- 'NEW' 'TABLE' 'AS' ColId
+ReferencingOldTableAs <- 'OLD' 'TABLE' 'AS' ColId
 
 TriggerTiming <- TriggerBefore / TriggerAfter / TriggerInsteadOf
 TriggerBefore <- 'BEFORE'
