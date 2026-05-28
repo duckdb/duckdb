@@ -412,7 +412,14 @@ void BaseAppender::Flush() {
 		return;
 	}
 
-	FlushInternal(*collection);
+	try {
+		FlushInternal(*collection);
+	} catch (...) {
+		// Reset so the destructor does not re-attempt flushing the same data,
+		// which would hit assertions in the storage layer if it is inconsistent.
+		collection->Reset();
+		throw;
+	}
 	collection->Reset();
 	column = 0;
 }

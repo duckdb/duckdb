@@ -42,7 +42,8 @@ public:
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
-	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
+	void Append(ColumnAppendState &state, const Vector &vector, idx_t count) override;
+	void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) override;
 	void RevertAppend(row_t new_count) override;
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index, row_t row_id,
@@ -65,15 +66,16 @@ public:
 	void InitializeColumn(PersistentColumnData &column_data, BaseStatistics &target_stats) override;
 
 	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-	                          vector<ColumnSegmentInfo> &result) override;
+	                          vector<ColumnSegmentInfo> &result, const ColumnSegmentInfoScanOptions &options) override;
 
 	void Verify(RowGroup &parent) override;
 
 	void VisitBlockIds(BlockIdVisitor &visitor) const override;
 
 private:
-	static void Specialize(Vector &source, Vector &target, idx_t count, GeometryStorageType storage_type);
-	static void Reassemble(Vector &source, Vector &target, idx_t count, GeometryStorageType storage_type, idx_t offset);
+	static void Specialize(const Vector &source, Vector &target, idx_t count, GeometryStorageType storage_type);
+	static void Reassemble(const Vector &source, Vector &target, idx_t count, GeometryStorageType storage_type,
+	                       idx_t offset);
 	static void InterpretStats(BaseStatistics &source, BaseStatistics &target, GeometryType geom_type,
 	                           VertexType vert_type);
 };

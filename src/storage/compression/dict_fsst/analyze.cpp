@@ -3,10 +3,10 @@
 namespace duckdb {
 namespace dict_fsst {
 
-DictFSSTAnalyzeState::DictFSSTAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {
+DictFSSTAnalyzeState::DictFSSTAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager) {
 }
 
-bool DictFSSTAnalyzeState::Analyze(Vector &input, idx_t count) {
+bool DictFSSTAnalyzeState::Analyze(const Vector &input) {
 	for (auto entry : input.Values<string_t>()) {
 		if (!entry.IsValid()) {
 			contains_nulls = true;
@@ -23,7 +23,7 @@ bool DictFSSTAnalyzeState::Analyze(Vector &input, idx_t count) {
 			return false;
 		}
 	}
-	total_count += count;
+	total_count += input.size();
 	return true;
 }
 

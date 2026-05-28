@@ -4,6 +4,12 @@
   "skip_compiled": "true",
   "skip_tests": [
     {
+      "reason": "Zone map pruning requires filter pushdown from optimizer.",
+      "paths": [
+        "test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test"
+      ]
+    },
+    {
       "reason": "Unoptimized statement differs from original result (cross product, conversion, overflow, statistics).",
       "paths": [
         "test/fuzzer/duckfuzz/semi_join_has_correct_left_right_relations.test",
@@ -61,9 +67,16 @@
       "reason": "References explicit optimizer logging.",
       "paths": [
         "test/sql/pragma/profiling/test_custom_profiling_optimizer_settings.test",
+        "test/sql/pragma/profiling/test_custom_profiling_using_groups.test",
+        "test/sql/detailed_profiler/test_detailed_profiler.test",
+        "test/sql/copy/csv/parallel/csv_parallel_null_option.test",
         "test/sql/transactions/concurrent_drop_table.test",
         "test/sql/index/art/scan/test_art_prepared_scan.test",
-        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test"
+        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
+        "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
+        "test/sql/copy/parquet/parquet_prefetch_projection.test",
+        "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test",
+        "test/sql/copy/parquet/parquet_prefetch_strategy_option.test"
       ]
     },
     {
@@ -98,7 +111,10 @@
         "test/sql/copy/parquet/shredded_variant_stats.test",
         "test/sql/copy/parquet/corrupt_stats.test",
         "test/sql/copy/parquet/parquet_row_number.test",
-        "test/sql/copy/parquet/parquet_string_stats.test"
+        "test/sql/copy/parquet/parquet_string_stats.test",
+        "test/sql/storage/extended_string_stats.test",
+        "test/sql/storage/min_string_length_too_large.test_slow",
+        "test/sql/storage/total_string_length_repeated_insert.test"
       ]
     },
     {

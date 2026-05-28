@@ -12,6 +12,7 @@ TriggerCatalogEntry::TriggerCatalogEntry(Catalog &catalog, SchemaCatalogEntry &s
     : StandardEntry(CatalogType::TRIGGER_ENTRY, schema, catalog, info.trigger_name),
       base_table(unique_ptr_cast<TableRef, BaseTableRef>(info.base_table->Copy())), timing(info.timing),
       event_type(info.event_type), columns(info.columns), for_each(info.for_each),
+      referencing_new_table(info.referencing_new_table), referencing_old_table(info.referencing_old_table),
       trigger_action(info.trigger_action->Copy()) {
 	this->temporary = info.temporary;
 	this->comment = info.comment;
@@ -34,6 +35,8 @@ unique_ptr<CreateInfo> TriggerCatalogEntry::GetInfo() const {
 	result->event_type = event_type;
 	result->columns = columns;
 	result->for_each = for_each;
+	result->referencing_new_table = referencing_new_table;
+	result->referencing_old_table = referencing_old_table;
 	result->trigger_action = trigger_action->Copy();
 	result->dependencies = dependencies;
 	result->comment = comment;
@@ -60,6 +63,15 @@ string TriggerCatalogEntry::ToSQL() const {
 	}
 	ss << " ON ";
 	ss << ParseInfo::QualifierToString(base_table->catalog_name, base_table->schema_name, base_table->table_name);
+	if (!referencing_new_table.empty() || !referencing_old_table.empty()) {
+		ss << " REFERENCING";
+		if (!referencing_new_table.empty()) {
+			ss << " NEW TABLE AS " << SQLIdentifier(referencing_new_table);
+		}
+		if (!referencing_old_table.empty()) {
+			ss << " OLD TABLE AS " << SQLIdentifier(referencing_old_table);
+		}
+	}
 	ss << " FOR EACH " << EnumUtil::ToString(for_each);
 	ss << " " << trigger_action->ToString();
 	ss << ";";

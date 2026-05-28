@@ -111,7 +111,7 @@ private:
 #endif
 	static inline void UnaryScatterLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                    STATE_TYPE **__restrict states, const SelectionVector &isel,
-	                                    const SelectionVector &ssel, ValidityMask &mask, idx_t count) {
+	                                    const SelectionVector &ssel, const ValidityMask &mask, idx_t count) {
 #ifdef DUCKDB_SMALLER_BINARY
 		const auto HAS_ISEL = isel.IsSet();
 		const auto HAS_SSEL = ssel.IsSet();
@@ -172,7 +172,7 @@ private:
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
-	                                   STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask,
+	                                   STATE_TYPE *__restrict state, idx_t count, const ValidityMask &mask,
 	                                   const SelectionVector &__restrict sel_vector) {
 		AggregateUnaryInput input(aggr_input_data, mask);
 		if (OP::IgnoreNull() && mask.CanHaveNull()) {
@@ -233,8 +233,8 @@ private:
 	static inline void BinaryScatterLoop(const A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
 	                                     const B_TYPE *__restrict bdata, STATE_TYPE **__restrict states, idx_t count,
 	                                     const SelectionVector &asel, const SelectionVector &bsel,
-	                                     const SelectionVector &ssel, ValidityMask &avalidity,
-	                                     ValidityMask &bvalidity) {
+	                                     const SelectionVector &ssel, const ValidityMask &avalidity,
+	                                     const ValidityMask &bvalidity) {
 		AggregateBinaryInput input(aggr_input_data, avalidity, bvalidity);
 		if (OP::IgnoreNull() && (avalidity.CanHaveNull() || bvalidity.CanHaveNull())) {
 			// potential NULL values and NULL values are ignored
@@ -263,7 +263,7 @@ private:
 	static inline void BinaryUpdateLoop(const A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
 	                                    const B_TYPE *__restrict bdata, STATE_TYPE *__restrict state, idx_t count,
 	                                    const SelectionVector &asel, const SelectionVector &bsel,
-	                                    ValidityMask &avalidity, ValidityMask &bvalidity) {
+	                                    const ValidityMask &avalidity, const ValidityMask &bvalidity) {
 		AggregateBinaryInput input(aggr_input_data, avalidity, bvalidity);
 		if (OP::IgnoreNull() && (avalidity.CanHaveNull() || bvalidity.CanHaveNull())) {
 			// potential NULL values and NULL values are ignored
@@ -486,6 +486,12 @@ public:
 	static inline void
 	ExecuteUnaryClusteredDispatch(const INPUT_TYPE *vals, const ClusteredAggr &clustered, const ValidityMask &validity,
 	                              const SelectionVector *isel = nullptr, const sel_t *cluster_iter = nullptr) {
+		if constexpr (HasI64HugeintSumFastPath<INPUT_TYPE, OP>::value) {
+			if (!validity.CanHaveNull()) {
+				OP::template ExecuteFlatI64HugeintSum<STATE_TYPE, INPUT_TYPE>(vals, clustered, isel, cluster_iter);
+				return;
+			}
+		}
 		if (OP::IgnoreNull() && validity.CanHaveNull()) {
 			ExecuteUnaryClusteredOpt<true, STATE_TYPE, INPUT_TYPE, OP>(vals, clustered, validity, isel, cluster_iter);
 		} else {
@@ -560,11 +566,18 @@ public:
 	}
 
 	// true if OP defines ClusteredOp (early-exit optimization for first/last/any_value).
-	template <class OP, class = void>
+	template <class OP, class INPUT_TYPE, class STATE_TYPE, class = void>
 	struct HasClusteredOperation : std::false_type {};
-	template <class OP>
-	struct HasClusteredOperation<OP, void_t_helper<decltype(&OP::template ClusteredOp<int32_t, int32_t, OP>)>>
+	template <class OP, class INPUT_TYPE, class STATE_TYPE>
+	struct HasClusteredOperation<OP, INPUT_TYPE, STATE_TYPE,
+	                             void_t_helper<decltype(&OP::template ClusteredOp<INPUT_TYPE, STATE_TYPE, OP>)>>
 	    : std::true_type {};
+
+	template <class INPUT_TYPE, class OP, class = void>
+	struct HasI64HugeintSumFastPath : std::false_type {};
+	template <class INPUT_TYPE, class OP>
+	struct HasI64HugeintSumFastPath<INPUT_TYPE, OP, void_t_helper<decltype(OP::ClusteredI64HugeintSum)>>
+	    : std::integral_constant<bool, std::is_integral<INPUT_TYPE>::value && OP::ClusteredI64HugeintSum> {};
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void ExecuteUnaryClustConstantCustomState(Vector &input, AggregateInputData &aggr_input_data,
@@ -584,7 +597,7 @@ public:
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void ExecuteUnaryNoClusteredOpt(Vector &input, AggregateInputData &aggr_input_data,
 	                                       const ClusteredAggr &clustered, idx_t count) {
-		static_assert(HasClusteredOperation<OP>::value, "Expected custom clustered operation");
+		static_assert(HasClusteredOperation<OP, INPUT_TYPE, STATE_TYPE>::value, "Expected custom clustered operation");
 		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			ExecuteUnaryClustConstantCustomState<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, clustered);
 			return;
@@ -613,6 +626,15 @@ public:
 				ExecuteUnaryClusteredConstantOpt<STATE_TYPE, INPUT_TYPE, OP>(input, clustered);
 				return;
 			case VectorType::DICTIONARY_VECTOR: {
+				if constexpr (HasI64HugeintSumFastPath<INPUT_TYPE, OP>::value) {
+					if (clustered.state) {
+						auto props = clustered.state->GetDictProps(input);
+						if (props && *props) {
+							OP::template ExecuteDictI64HugeintSum<STATE_TYPE>(input, clustered, props->get());
+							return;
+						}
+					}
+				}
 				auto *cluster_iter = clustered.ClusterIter(input, count);
 				if (cluster_iter) {
 					ExecuteUnaryClusteredDictOpt<true, STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count,
@@ -627,7 +649,7 @@ public:
 				return;
 			}
 		}
-		if constexpr (HasClusteredOperation<OP>::value) {
+		if constexpr (HasClusteredOperation<OP, INPUT_TYPE, STATE_TYPE>::value) {
 			ExecuteUnaryNoClusteredOpt<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, clustered, count);
 		} else {
 			D_ASSERT(false);

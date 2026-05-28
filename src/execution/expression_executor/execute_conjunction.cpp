@@ -44,10 +44,10 @@ void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, Express
 			// AND/OR together
 			switch (expr.GetExpressionType()) {
 			case ExpressionType::CONJUNCTION_AND:
-				VectorOperations::And(current_result, result, intermediate, count);
+				VectorOperations::And(current_result, result, intermediate);
 				break;
 			case ExpressionType::CONJUNCTION_OR:
-				VectorOperations::Or(current_result, result, intermediate, count);
+				VectorOperations::Or(current_result, result, intermediate);
 				break;
 			default:
 				throw InternalException("Unknown conjunction type!");

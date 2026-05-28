@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb.h"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/profiler.hpp"

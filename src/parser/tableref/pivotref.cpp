@@ -207,14 +207,14 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 	case ExpressionType::OPERATOR_CAST: {
 		auto &cast = expr.Cast<CastExpression>();
 		Value dummy_value;
-		if (!TryFoldConstantForBackwardsCompatibility(*cast.child, dummy_value)) {
+		if (!TryFoldConstantForBackwardsCompatibility(cast.Child(), dummy_value)) {
 			return false;
 		}
 
 		// Try to default bind cast
 		LogicalType cast_type;
 		try {
-			cast_type = UnboundType::TryDefaultBind(cast.cast_type);
+			cast_type = UnboundType::TryDefaultBind(cast.TargetType());
 		} catch (...) {
 			return false;
 		}
@@ -274,7 +274,7 @@ static bool TryFoldForBackwardsCompatibility(const unique_ptr<ParsedExpression> 
 vector<PivotColumnEntry> PivotColumn::GetEntriesForSerialization(Serializer &serializer) const {
 	vector<PivotColumnEntry> result;
 
-	if (serializer.ShouldSerialize(7)) {
+	if (serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		// Latest version, serialize as is.
 		// Unfortunately, we have to make a deep copy to return vector by value.
 		for (auto &entry : entries) {
@@ -312,7 +312,7 @@ vector<PivotColumnEntry> PivotColumn::GetEntriesForSerialization(Serializer &ser
 
 		// Otherwise this is a PIVOT with an expression we could not fold.
 		// Older versions of DuckDB do not support this, so throw an exception.
-		const auto target_version = serializer.GetOptions().serialization_compatibility.duckdb_version;
+		const auto target_version = serializer.GetOptions().storage_compatibility.duckdb_version;
 
 		throw SerializationException(
 		    "Cannot serialize non-constant expression '%s' in pivot list when targeting database storage version '%s'",

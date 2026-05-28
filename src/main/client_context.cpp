@@ -426,7 +426,6 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()));
-	profiler.StartPhase(MetricType::PLANNER);
 	Planner logical_planner(*this);
 	if (parameters.parameters) {
 		auto &parameter_values = *parameters.parameters;
@@ -435,9 +434,11 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 		}
 	}
 
-	logical_planner.CreatePlan(std::move(statement));
-	D_ASSERT(logical_planner.plan || !logical_planner.properties.bound_all_parameters);
-	profiler.EndPhase();
+	{
+		auto planner_timer = profiler.StartTimer<MetricPlannerTotalTime>();
+		logical_planner.CreatePlan(std::move(statement));
+		D_ASSERT(logical_planner.plan || !logical_planner.properties.bound_all_parameters);
+	}
 
 	auto logical_plan = std::move(logical_planner.plan);
 	// extract the result column names from the plan
@@ -471,22 +472,23 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 		}
 	}
 	if (optimize && logical_plan->RequireOptimizer()) {
-		profiler.StartPhase(MetricType::ALL_OPTIMIZERS);
-		Optimizer optimizer(*logical_planner.binder, *this);
-		logical_plan = optimizer.Optimize(std::move(logical_plan));
-		D_ASSERT(logical_plan);
-		profiler.EndPhase();
-
+		{
+			auto optimizer_timer = profiler.StartTimer<MetricOptimizerTotalTime>();
+			Optimizer optimizer(*logical_planner.binder, *this);
+			logical_plan = optimizer.Optimize(std::move(logical_plan));
+			D_ASSERT(logical_plan);
+		}
 #ifdef DEBUG
 		logical_plan->Verify(*this);
 #endif
 	}
 
 	// Convert the logical query plan into a physical query plan.
-	profiler.StartPhase(MetricType::PHYSICAL_PLANNER);
-	PhysicalPlanGenerator physical_planner(*this);
-	result->physical_plan = physical_planner.Plan(std::move(logical_plan));
-	profiler.EndPhase();
+	{
+		auto physical_timer = profiler.StartTimer<MetricPhysicalPlannerTotalTime>();
+		PhysicalPlanGenerator physical_planner(*this);
+		result->physical_plan = physical_planner.Plan(std::move(logical_plan));
+	}
 	D_ASSERT(result->physical_plan);
 	return result;
 }
@@ -742,7 +744,7 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 		Parser parser(GetParserOptions());
 		auto &profiler = QueryProfiler::Get(*this);
 		profiler.StartQuery(query);
-		profiler.StartPhase(MetricType::PARSER);
+		auto parser_timer = profiler.StartTimer<MetricParserTotalTime>();
 		parser.ParseQuery(query);
 
 		StatementPreprocessor preprocessor(*this);

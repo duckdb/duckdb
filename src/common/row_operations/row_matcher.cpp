@@ -156,55 +156,55 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 }
 
 template <typename OP>
-static idx_t SelectComparison(Vector &, Vector &, const SelectionVector &, idx_t, SelectionVector *,
+static idx_t SelectComparison(const Vector &, const Vector &, const SelectionVector &, idx_t, SelectionVector *,
                               SelectionVector *) {
 	throw NotImplementedException("Unsupported list comparison operand for RowMatcher::GetMatchFunction");
 }
 
 template <>
-idx_t SelectComparison<Equals>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+idx_t SelectComparison<Equals>(const Vector &left, const Vector &right, const SelectionVector &sel, idx_t count,
                                SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::NestedEquals(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
-idx_t SelectComparison<NotEquals>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+idx_t SelectComparison<NotEquals>(const Vector &left, const Vector &right, const SelectionVector &sel, idx_t count,
                                   SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::NestedNotEquals(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
-idx_t SelectComparison<DistinctFrom>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+idx_t SelectComparison<DistinctFrom>(const Vector &left, const Vector &right, const SelectionVector &sel, idx_t count,
                                      SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::DistinctFrom(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
-idx_t SelectComparison<NotDistinctFrom>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
-                                        SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t SelectComparison<NotDistinctFrom>(const Vector &left, const Vector &right, const SelectionVector &sel,
+                                        idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::NotDistinctFrom(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
-idx_t SelectComparison<GreaterThan>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+idx_t SelectComparison<GreaterThan>(const Vector &left, const Vector &right, const SelectionVector &sel, idx_t count,
                                     SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::DistinctGreaterThan(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
-idx_t SelectComparison<GreaterThanEquals>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
-                                          SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t SelectComparison<GreaterThanEquals>(const Vector &left, const Vector &right, const SelectionVector &sel,
+                                          idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::DistinctGreaterThanEquals(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
-idx_t SelectComparison<LessThan>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+idx_t SelectComparison<LessThan>(const Vector &left, const Vector &right, const SelectionVector &sel, idx_t count,
                                  SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::DistinctLessThan(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
-idx_t SelectComparison<LessThanEquals>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+idx_t SelectComparison<LessThanEquals>(const Vector &left, const Vector &right, const SelectionVector &sel, idx_t count,
                                        SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::DistinctLessThanEquals(left, right, &sel, count, true_sel, false_sel);
 }

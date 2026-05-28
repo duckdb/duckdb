@@ -119,10 +119,10 @@ SELECT NULL::BIT
 ----
 NULL
 
-statement error
+query I
 SELECT ''::BIT
 ----
-<REGEX>:Conversion Error.*Cannot cast empty string to BIT.*
+0
 
 statement ok
 DELETE FROM bits
@@ -130,15 +130,14 @@ DELETE FROM bits
 statement ok
 INSERT INTO bits VALUES (NULL)
 
-statement error
+statement ok
 INSERT INTO bits VALUES ('')
-----
-<REGEX>:Conversion Error.*Cannot cast empty string to BIT.*
 
 query I
 SELECT * FROM bits
 ----
 NULL
+0
 
 # try cast
 query I

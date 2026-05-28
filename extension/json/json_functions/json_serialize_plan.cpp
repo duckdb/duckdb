@@ -113,7 +113,7 @@ static bool OperatorSupportsSerialization(LogicalOperator &op, string &operator_
 static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &local_state = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = local_state.json_allocator->GetYYAlc();
-	auto &inputs = args.data[0];
+	const auto &inputs = args.data[0];
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.bind_info->Cast<JsonSerializePlanBindData>();
@@ -124,7 +124,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 	auto &context = state.GetContext();
 
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
+	UnaryExecutor::Execute<string_t, string_t>(inputs, result, [&](string_t input) {
 		auto doc = JSONCommon::CreateDocument(alc);
 		auto result_obj = yyjson_mut_obj(doc);
 		yyjson_mut_doc_set_root(doc, result_obj);

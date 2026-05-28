@@ -192,7 +192,7 @@ void GroupedAggregateHashTable::DestroyAggregateData(PartitionedTupleData &data,
 		TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE, false);
 		auto &row_locations = iterator.GetChunkState().row_locations;
 		do {
-			RowOperations::DestroyStates(state.row_state, *layout_ptr, row_locations, iterator.GetCurrentChunkCount());
+			RowOperations::DestroyStates(state.row_state, *layout_ptr, row_locations);
 		} while (iterator.Next());
 		data_collection->Reset();
 	}
@@ -377,7 +377,7 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 	static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = 20000;
 	static constexpr idx_t DICTIONARY_THRESHOLD = 2;
 	// dictionary vector - check if this is a duplicate eliminated dictionary from the storage
-	auto &dict_col = groups.data[0];
+	const auto &dict_col = groups.data[0];
 	auto opt_dict_size = DictionaryVector::DictionarySize(dict_col);
 	if (!opt_dict_size.IsValid()) {
 		// dict size not known - this is not a dictionary that comes from the storage
@@ -400,8 +400,8 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 			return optional_idx();
 		}
 	}
-	auto &dictionary_vector = DictionaryVector::Child(dict_col);
-	auto &offsets = DictionaryVector::SelVector(dict_col);
+	const auto &dictionary_vector = DictionaryVector::Child(dict_col);
+	const auto &offsets = DictionaryVector::SelVector(dict_col);
 	auto &dict_state = state.dict_state;
 	if (dict_state.dictionary_id.empty() || dict_state.dictionary_id != dictionary_id) {
 		// new dictionary - initialize the index state
@@ -412,6 +412,7 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 		}
 		memset(dict_state.found_entry.get(), 0, dict_size * sizeof(bool));
 		dict_state.dictionary_id = dictionary_id;
+		dict_state.resolved_count = 0;
 		dict_state.address_high_bits = ~uint64_t(0);
 		dict_state.address_high_bits_uniform =
 		    (sizeof(uintptr_t) == sizeof(uint64_t)); // only relevant on 64-bits systems
@@ -426,11 +427,15 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 	idx_t unique_count = 0;
 	// for each of the dictionary entries - check if we have already done a look-up into the hash table
 	// if we have, we can just use the cached group pointers
-	for (idx_t i = 0; i < groups.size(); i++) {
-		auto dict_idx = offsets.get_index(i);
-		unique_entries.set_index(unique_count, dict_idx);
-		unique_count += !found_entry[dict_idx];
-		found_entry[dict_idx] = true;
+	// once every dict slot has been seen the walk would produce no new entries - skip it
+	if (dict_state.resolved_count < dict_size) {
+		for (idx_t i = 0; i < groups.size(); i++) {
+			auto dict_idx = offsets.get_index(i);
+			unique_entries.set_index(unique_count, dict_idx);
+			unique_count += !found_entry[dict_idx];
+			found_entry[dict_idx] = true;
+		}
+		dict_state.resolved_count += unique_count;
 	}
 	auto &new_dictionary_pointers = dict_state.new_dictionary_pointers;
 	idx_t new_group_count = 0;
@@ -480,6 +485,7 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 		auto dict_idx = offsets.get_index(i);
 		result_addresses.WriteValue(dict_addresses[dict_idx]);
 	}
+	FlatVector::SetSize(state.addresses, groups.size());
 
 	// finally process the aggregates (ht_offsets are only valid for unique entries, not the full payload)
 	UpdateAggregates(payload, filter, false);
@@ -529,9 +535,11 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	for (idx_t i = 0; i < payload.size(); i++) {
 		result_addresses.WriteValue(aggregate_address);
 	}
-
-	// Process the aggregates: ht_offsets are only valid for the single constant group, not the full payload.
+	FlatVector::SetSize(state.addresses, payload.size());
+	state.addresses.SetVectorType(VectorType::CONSTANT_VECTOR);
+	// ht_offsets are only valid for the single constant group, not the full payload
 	UpdateAggregates(payload, filter, false);
+	state.addresses.SetVectorType(VectorType::FLAT_VECTOR);
 
 	return new_group_count;
 }
@@ -603,7 +611,7 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 	const bool skip_addresses = clustered_state.all_clustered;
 	auto &aggregates = layout_ptr->GetAggregates();
 	RowOperations::UpdateStatesClustered(state.row_state, aggregates, &filter_set, &filter, state.addresses, payload,
-	                                     payload.size(), clustered, skip_addresses);
+	                                     clustered, skip_addresses);
 	return true;
 }
 
@@ -622,7 +630,7 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 		if (filter_idx >= filter.size() || i < filter[filter_idx]) {
 			// Skip all the aggregates that are not in the filter
 			payload_idx += aggr.child_count;
-			VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
+			VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size));
 			continue;
 		}
 		D_ASSERT(i == filter[filter_idx]);
@@ -631,12 +639,12 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 			RowOperations::UpdateFilteredStates(state.row_state, filter_set.GetFilterData(i), aggr, state.addresses,
 			                                    payload, payload_idx);
 		} else {
-			RowOperations::UpdateStates(state.row_state, aggr, state.addresses, payload, payload_idx, payload.size());
+			RowOperations::UpdateStates(state.row_state, aggr, state.addresses, payload, payload_idx);
 		}
 
 		// Move to the next aggregate
 		payload_idx += aggr.child_count;
-		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
+		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size));
 		filter_idx++;
 	}
 
@@ -657,7 +665,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 #endif
 
 	const auto new_group_count = FindOrCreateGroups(groups, group_hashes, state.addresses, state.new_groups);
-	VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout_ptr->GetAggrOffset()), payload.size());
+	VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(layout_ptr->GetAggrOffset()));
 
 	UpdateAggregates(payload, filter);
 
@@ -779,6 +787,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			addresses[i] = row_location;
 		}
 		count += chunk_size;
+		FlatVector::SetSize(addresses_v, chunk_size);
 		return chunk_size;
 	}
 
@@ -890,6 +899,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		throw InternalException("Maximum outer iteration count reached in GroupedAggregateHashTable");
 	}
 
+	FlatVector::SetSize(addresses_v, chunk_size);
 	count += new_group_count;
 	return new_group_count;
 }
@@ -977,13 +987,11 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	while (fm_state.Scan()) {
 		// Check for interrupts with each chunk
 		context.InterruptCheck();
-		const auto input_chunk_size = fm_state.groups.size();
 		FindOrCreateGroups(fm_state.groups, fm_state.hashes, fm_state.group_addresses, fm_state.new_groups_sel);
 		RowOperations::CombineStates(state.row_state, *layout_ptr, fm_state.scan_state.chunk_state.row_locations,
-		                             fm_state.group_addresses, input_chunk_size);
+		                             fm_state.group_addresses);
 		if (layout_ptr->HasDestructor()) {
-			RowOperations::DestroyStates(state.row_state, *layout_ptr, fm_state.scan_state.chunk_state.row_locations,
-			                             input_chunk_size);
+			RowOperations::DestroyStates(state.row_state, *layout_ptr, fm_state.scan_state.chunk_state.row_locations);
 		}
 
 		if (progress) {

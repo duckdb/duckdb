@@ -38,8 +38,9 @@ static optional_idx TryGetChildOffset(const list_entry_t &list_entry, const int6
 	return optional_idx(list_entry.offset + unsigned_offset);
 }
 
-static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
+static void ExecuteListExtract(Vector &result, const Vector &list, const Vector &offsets) {
 	D_ASSERT(list.GetType().id() == LogicalTypeId::LIST);
+	const auto count = list.size();
 
 	auto list_entries = list.Values<list_entry_t>();
 	auto offsets_entries = offsets.Values<int64_t>();
@@ -93,25 +94,25 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 	}
 }
 
-static void ExecuteStringExtract(Vector &result, Vector &input_vector, Vector &subscript_vector, const idx_t count) {
+static void ExecuteStringExtract(Vector &result, const Vector &input_vector, const Vector &subscript_vector) {
 	BinaryExecutor::Execute<string_t, int64_t, string_t>(
-	    input_vector, subscript_vector, result, count,
+	    input_vector, subscript_vector, result,
 	    [&](string_t input_string, int64_t subscript) { return SubstringUnicode(result, input_string, subscript, 1); });
 }
 
 static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
-	auto count = args.size();
+	const auto count = args.size();
 
-	Vector &base = args.data[0];
-	Vector &subscript = args.data[1];
+	const Vector &base = args.data[0];
+	const Vector &subscript = args.data[1];
 
 	switch (base.GetType().id()) {
 	case LogicalTypeId::LIST:
-		ExecuteListExtract(result, base, subscript, count);
+		ExecuteListExtract(result, base, subscript);
 		break;
 	case LogicalTypeId::VARCHAR:
-		ExecuteStringExtract(result, base, subscript, count);
+		ExecuteStringExtract(result, base, subscript);
 		break;
 	case LogicalTypeId::SQLNULL:
 		ConstantVector::SetNull(result, count_t(count));

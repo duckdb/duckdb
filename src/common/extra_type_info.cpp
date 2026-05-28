@@ -322,7 +322,7 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::DeepCopy() const {
 void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
 
-	if (serializer.ShouldSerialize(7)) {
+	if (serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
 		return;
 	}
@@ -331,7 +331,7 @@ void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 	if (expr->GetExpressionType() != ExpressionType::TYPE) {
 		throw SerializationException(
 		    "Cannot serialize non-type type expression when targeting database storage version '%s'",
-		    serializer.GetOptions().serialization_compatibility.duckdb_version);
+		    serializer.GetOptions().storage_compatibility.duckdb_version);
 	}
 
 	auto &type_expr = expr->Cast<TypeExpression>();
@@ -345,7 +345,7 @@ void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 		if (param->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			throw SerializationException(
 			    "Cannot serialize non-constant type parameter when targeting serialization version %s",
-			    serializer.GetOptions().serialization_compatibility.duckdb_version);
+			    serializer.GetOptions().storage_compatibility.duckdb_version);
 		}
 
 		auto &const_expr = param->Cast<ConstantExpression>();
@@ -396,7 +396,7 @@ PhysicalType EnumTypeInfo::DictType(idx_t size) {
 	}
 }
 
-EnumTypeInfo::EnumTypeInfo(Vector &values_insert_order_p, idx_t dict_size_p)
+EnumTypeInfo::EnumTypeInfo(const Vector &values_insert_order_p, idx_t dict_size_p)
     : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(Vector::Ref(values_insert_order_p)),
       dict_type(EnumDictType::VECTOR_DICT), dict_size(dict_size_p) {
 }
@@ -413,7 +413,7 @@ const idx_t &EnumTypeInfo::GetDictSize() const {
 	return dict_size;
 }
 
-LogicalType EnumTypeInfo::CreateType(Vector &ordered_data, idx_t size) {
+LogicalType EnumTypeInfo::CreateType(const Vector &ordered_data, idx_t size) {
 	// Generate EnumTypeInfo
 	shared_ptr<ExtraTypeInfo> info;
 	auto enum_internal_type = EnumTypeInfo::DictType(size);

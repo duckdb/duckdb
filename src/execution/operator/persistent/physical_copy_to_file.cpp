@@ -11,7 +11,6 @@
 #include "duckdb/function/window/window_collection.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
-#include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/main/settings.hpp"
 #include "fmt/format.h"
@@ -669,9 +668,12 @@ void PartitionedCopyHashGroup::Materialize(ExecutionContext &execution_context, 
 	auto unused = make_uniq<LocalSourceState>();
 	OperatorSourceInput source_input {source, *unused, interrupt};
 	partitioned_copy.sort_strategy->MaterializeColumnData(execution_context, group_idx, source_input);
-	materialized += (task.end_idx - task.begin_idx);
+	// Read `blocks` before incrementing `materialized`: once materialized == blocks another thread can advance
+	// the stage all the way to FLUSH completion and delete this hash group, making `blocks` a dangling read.
+	const idx_t local_blocks = blocks;
+	const auto new_materialized = (materialized += (task.end_idx - task.begin_idx));
 
-	if (materialized >= blocks) {
+	if (new_materialized >= local_blocks) {
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		if (!collection) {
 			collection = partitioned_copy.sort_strategy->GetColumnData(group_idx, source_input);
@@ -996,8 +998,8 @@ unique_ptr<const SortStrategy> PartitionedCopy::ConstructSortStrategy() const {
 	}
 	vector<unique_ptr<BaseStatistics>> partition_stats;
 
-	return SortStrategy::Factory(context, partition_bys, op.order_columns, op.children[0].get().GetTypes(),
-	                             partition_stats, op.children[0].get().estimated_cardinality);
+	return SortStrategy::Factory(context, partition_bys, op.order_columns, op.expected_types, partition_stats,
+	                             op.children.empty() ? 0 : op.children[0].get().estimated_cardinality);
 }
 
 void PartitionedCopy::CreateNextState() {
@@ -1186,13 +1188,14 @@ private:
 };
 
 void PartitionedCopy::Finalize(Pipeline &pipeline, Event &event, InterruptState &interrupt_state) {
-	bool should_finalize_writes = false;
+	bool should_finalize_writes;
 	{
 		annotated_lock_guard<annotated_mutex> global_guard(lock);
 		finalized = true;
 		if (!sinking_state && !flushing_state) {
 			should_finalize_writes = true;
 		} else {
+			should_finalize_writes = false;
 			if (sinking_state) {
 				annotated_lock_guard<annotated_mutex> guard(sinking_state->lock);
 				FinalizeState(*sinking_state, interrupt_state);

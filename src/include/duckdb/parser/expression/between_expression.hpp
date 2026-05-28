@@ -20,14 +20,10 @@ public:
 	DUCKDB_API BetweenExpression(unique_ptr<ParsedExpression> input, unique_ptr<ParsedExpression> lower,
 	                             unique_ptr<ParsedExpression> upper);
 
-	unique_ptr<ParsedExpression> input;
-	unique_ptr<ParsedExpression> lower;
-	unique_ptr<ParsedExpression> upper;
-
 public:
 	string ToString() const override;
 
-	static bool Equal(const BetweenExpression &a, const BetweenExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
@@ -43,6 +39,15 @@ public:
 	const ParsedExpression &UpperBound() const {
 		return *upper;
 	}
+	unique_ptr<ParsedExpression> &InputMutable() {
+		return input;
+	}
+	unique_ptr<ParsedExpression> &LowerBoundMutable() {
+		return lower;
+	}
+	unique_ptr<ParsedExpression> &UpperBoundMutable() {
+		return upper;
+	}
 
 public:
 	template <class T>
@@ -52,5 +57,10 @@ public:
 
 private:
 	BetweenExpression();
+
+private:
+	unique_ptr<ParsedExpression> input;
+	unique_ptr<ParsedExpression> lower;
+	unique_ptr<ParsedExpression> upper;
 };
 } // namespace duckdb

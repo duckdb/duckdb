@@ -101,7 +101,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 		auto indirection_expr = transformer.Transform<unique_ptr<ParsedExpression>>(child);
 		if (indirection_expr->GetExpressionClass() == ExpressionClass::CAST) {
 			auto cast_expr = unique_ptr_cast<ParsedExpression, CastExpression>(std::move(indirection_expr));
-			cast_expr->child = std::move(expr);
+			cast_expr->ChildMutable() = std::move(expr);
 			expr = std::move(cast_expr);
 			prev_indirection_was_cast = true;
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
@@ -132,22 +132,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 		}
 	}
 	return expr;
-}
-
-unique_ptr<ColumnRefExpression> PEGTransformerFactory::TransformNestedColumnName(PEGTransformer &transformer,
-                                                                                 ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<string> column_names;
-	auto &opt_identifiers = list_pr.Child<OptionalParseResult>(0);
-	if (opt_identifiers.HasResult()) {
-		auto &repeat_identifiers = opt_identifiers.GetResult().Cast<RepeatParseResult>();
-		for (auto &child : repeat_identifiers.GetChildren()) {
-			auto &repeat_list = child.get().Cast<ListParseResult>();
-			column_names.push_back(repeat_list.Child<IdentifierParseResult>(0).identifier);
-		}
-	}
-	column_names.push_back(list_pr.Child<IdentifierParseResult>(1).identifier);
-	return make_uniq<ColumnRefExpression>(std::move(column_names));
 }
 
 // ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName /
@@ -273,8 +257,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		CaseCheck check;
 		check.when_expr = std::move(function_children[0].GetExpression());
 		check.then_expr = std::move(function_children[1].GetExpression());
-		expr->case_checks.push_back(std::move(check));
-		expr->else_expr = std::move(function_children[2].GetExpression());
+		expr->CaseChecksMutable().push_back(std::move(check));
+		expr->ElseMutable() = std::move(function_children[2].GetExpression());
 		return std::move(expr);
 	}
 	if (lowercase_name == "unpack") {
@@ -552,8 +536,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayParensSelect(P
 	CaseCheck check;
 	check.when_expr = std::move(agg_is_null);
 	check.then_expr = std::move(empty_list);
-	case_expr->case_checks.push_back(std::move(check));
-	case_expr->else_expr = std::move(aggr);
+	case_expr->CaseChecksMutable().push_back(std::move(check));
+	case_expr->ElseMutable() = std::move(aggr);
 
 	select_node->select_list.push_back(std::move(case_expr));
 
@@ -728,7 +712,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsLiteral(PEGTransf
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &not_expr = list_pr.Child<OptionalParseResult>(1);
 	auto &inner_list_pr = list_pr.Child<ListParseResult>(2);
-	auto literal_value = transformer.TransformEnum<Value>(inner_list_pr.Child<ChoiceParseResult>(0).GetResult());
+	auto literal_value = transformer.Transform<Value>(inner_list_pr.Child<ChoiceParseResult>(0).GetResult());
 	if (literal_value.IsNull()) {
 		auto expr_type = not_expr.HasResult() ? ExpressionType::OPERATOR_IS_NOT_NULL : ExpressionType::OPERATOR_IS_NULL;
 		return make_uniq<OperatorExpression>(expr_type, nullptr);
@@ -833,7 +817,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeExpres
 	bool has_not = op_list.Child<OptionalParseResult>(0).HasResult();
 	if (between_in_like_expr->GetExpressionClass() == ExpressionClass::BETWEEN) {
 		auto between_expr = unique_ptr_cast<ParsedExpression, BetweenExpression>(std::move(between_in_like_expr));
-		between_expr->input = std::move(expr);
+		between_expr->InputMutable() = std::move(expr);
 		if (has_not) {
 			expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(between_expr));
 		} else {
@@ -1538,13 +1522,29 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformParensExpression(PE
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformConstantLiteral(PEGTransformer &transformer,
                                                                              ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto val = transformer.TransformEnum<Value>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+	auto val = transformer.Transform<Value>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 	if (val.IsNull()) {
 		return make_uniq<ConstantExpression>(val);
 	} else {
 		auto varchar_val = make_uniq<ConstantExpression>(val.GetValue<string>().substr(0, 1));
 		return make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(varchar_val));
 	}
+}
+
+Value PEGTransformerFactory::TransformFalseLiteral(PEGTransformer &transformer, ParseResult &parse_result) {
+	return Value(false);
+}
+
+Value PEGTransformerFactory::TransformTrueLiteral(PEGTransformer &transformer, ParseResult &parse_result) {
+	return Value(true);
+}
+
+Value PEGTransformerFactory::TransformNullLiteral(PEGTransformer &transformer, ParseResult &parse_result) {
+	return Value();
+}
+
+Value PEGTransformerFactory::TransformUnknownLiteral(PEGTransformer &transformer, ParseResult &parse_result) {
+	return Value();
 }
 
 // SingleExpression <- LiteralExpression /
@@ -2273,11 +2273,45 @@ PEGTransformerFactory::TransformSubstringExpressionList(PEGTransformer &transfor
 
 vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSubstringParameters(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
+	// SubstringParameters <- Expression SubstringFromFor
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	vector<unique_ptr<ParsedExpression>> results;
 	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0)));
-	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2)));
-	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(4)));
+	auto from_for = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.GetChild(1));
+	for (auto &arg : from_for) {
+		results.push_back(std::move(arg));
+	}
+	return results;
+}
+
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSubstringFromFor(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	// SubstringFromFor <- SubstringFromOptionalFor / SubstringFor
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+}
+
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformSubstringFromOptionalFor(PEGTransformer &transformer, ParseResult &parse_result) {
+	// SubstringFromOptionalFor <- FromExpression ForExpression?
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> results;
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0)));
+	auto &for_opt = list_pr.Child<OptionalParseResult>(1);
+	if (for_opt.HasResult()) {
+		results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(for_opt.GetResult()));
+	}
+	return results;
+}
+
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSubstringFor(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	// SubstringFor <- ForExpression
+	// SUBSTRING(str FOR len) => substring(str, 1, len)
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> results;
+	results.push_back(make_uniq<ConstantExpression>(Value::INTEGER(1)));
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0)));
 	return results;
 }
 
@@ -2316,6 +2350,63 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTrimSource(PEGTrans
 		return transformer.Transform<unique_ptr<ParsedExpression>>(expr_opt.GetResult());
 	}
 	return nullptr;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformOverlayExpression(PEGTransformer &transformer,
+                                                                               ParseResult &parse_result) {
+	// OverlayExpression <- 'OVERLAY' Parens(OverlayArguments)
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto args = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(extract_parens);
+	return make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "overlay", std::move(args));
+}
+
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformOverlayArguments(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	// OverlayArguments <- OverlayParameters / OverlayExpressionList
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+}
+
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformOverlayParameters(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	// OverlayParameters <- Expression 'PLACING' Expression FromExpression ForExpression?
+	// Children: 0=expr(A), 1='PLACING', 2=expr(B), 3=FromExpression, 4=optional(ForExpression)
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> results;
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0))); // A
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2))); // B (after PLACING)
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(3))); // C FromExpression
+	auto &for_opt = list_pr.Child<OptionalParseResult>(4);                                       // D ForExpression?
+	if (for_opt.HasResult()) {
+		auto &for_pr = for_opt.GetResult();
+		results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(for_pr));
+	}
+	return results;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFromExpression(PEGTransformer &transformer,
+                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1)); // after FROM
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformForExpression(PEGTransformer &transformer,
+                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1)); // after FOR
+}
+
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformOverlayExpressionList(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	// OverlayExpressionList <- List(Expression)
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> results;
+	auto expr_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
+	for (const auto expr : expr_list) {
+		results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
+	}
+	return results;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPositionExpression(PEGTransformer &transformer,
@@ -2366,13 +2457,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 			new_case.when_expr = std::move(case_expr.when_expr);
 		}
 		new_case.then_expr = std::move(case_expr.then_expr);
-		result->case_checks.push_back(std::move(new_case));
+		result->CaseChecksMutable().push_back(std::move(new_case));
 	}
 	auto &else_expr_opt = list_pr.Child<OptionalParseResult>(3);
 	if (else_expr_opt.HasResult()) {
-		result->else_expr = transformer.Transform<unique_ptr<ParsedExpression>>(else_expr_opt.GetResult());
+		result->ElseMutable() = transformer.Transform<unique_ptr<ParsedExpression>>(else_expr_opt.GetResult());
 	} else {
-		result->else_expr = make_uniq<ConstantExpression>(Value());
+		result->ElseMutable() = make_uniq<ConstantExpression>(Value());
 	}
 	return std::move(result);
 }

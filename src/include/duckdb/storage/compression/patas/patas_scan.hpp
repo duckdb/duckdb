@@ -88,9 +88,9 @@ public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	explicit PatasScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 
-		handle = buffer_manager.Pin(segment.block);
+		handle = buffer_manager.Pin(segment.GetBlockHandle());
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
 		segment_data = handle.GetDataMutable() + segment.GetBlockOffset();

@@ -136,6 +136,8 @@ enum class ColumnSegmentType : uint8_t;
 
 enum class CompressedMaterializationDirection : uint8_t;
 
+enum class CompressedMaterializationType : uint8_t;
+
 enum class CompressionType : uint8_t;
 
 enum class CompressionValidity : uint8_t;
@@ -258,6 +260,8 @@ enum class InsertColumnOrder : uint8_t;
 
 enum class InterruptMode : uint8_t;
 
+enum class JoinFilterPushdownMode : uint8_t;
+
 enum class JoinRefType : uint8_t;
 
 enum class JoinType : uint8_t;
@@ -299,10 +303,6 @@ enum class MergeActionCondition : uint8_t;
 enum class MergeActionType : uint8_t;
 
 enum class MetaPipelineType : uint8_t;
-
-enum class MetricGroup : uint8_t;
-
-enum class MetricType : uint8_t;
 
 enum class Monotonicity : uint8_t;
 
@@ -424,6 +424,8 @@ enum class SelectivityOptionalFilterType : uint8_t;
 
 enum class SequenceInfo : uint8_t;
 
+enum class SerializationVersionDeprecated : uint64_t;
+
 enum class SetOperationType : uint8_t;
 
 enum class SetScope : uint8_t;
@@ -461,6 +463,8 @@ enum class StatsInfo : uint8_t;
 enum class StorageBlockPrefetch : uint8_t;
 
 enum class StorageIndexType : uint8_t;
+
+enum class StorageVersion : uint64_t;
 
 enum class StrTimeSpecifier : uint8_t;
 
@@ -698,6 +702,9 @@ template<>
 const char* EnumUtil::ToChars<CompressedMaterializationDirection>(CompressedMaterializationDirection value);
 
 template<>
+const char* EnumUtil::ToChars<CompressedMaterializationType>(CompressedMaterializationType value);
+
+template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value);
 
 template<>
@@ -881,6 +888,9 @@ template<>
 const char* EnumUtil::ToChars<InterruptMode>(InterruptMode value);
 
 template<>
+const char* EnumUtil::ToChars<JoinFilterPushdownMode>(JoinFilterPushdownMode value);
+
+template<>
 const char* EnumUtil::ToChars<JoinRefType>(JoinRefType value);
 
 template<>
@@ -942,12 +952,6 @@ const char* EnumUtil::ToChars<MergeActionType>(MergeActionType value);
 
 template<>
 const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
-
-template<>
-const char* EnumUtil::ToChars<MetricGroup>(MetricGroup value);
-
-template<>
-const char* EnumUtil::ToChars<MetricType>(MetricType value);
 
 template<>
 const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
@@ -1130,6 +1134,9 @@ template<>
 const char* EnumUtil::ToChars<SequenceInfo>(SequenceInfo value);
 
 template<>
+const char* EnumUtil::ToChars<SerializationVersionDeprecated>(SerializationVersionDeprecated value);
+
+template<>
 const char* EnumUtil::ToChars<SetOperationType>(SetOperationType value);
 
 template<>
@@ -1185,6 +1192,9 @@ const char* EnumUtil::ToChars<StorageBlockPrefetch>(StorageBlockPrefetch value);
 
 template<>
 const char* EnumUtil::ToChars<StorageIndexType>(StorageIndexType value);
+
+template<>
+const char* EnumUtil::ToChars<StorageVersion>(StorageVersion value);
 
 template<>
 const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value);
@@ -1461,6 +1471,9 @@ template<>
 CompressedMaterializationDirection EnumUtil::FromString<CompressedMaterializationDirection>(const char *value);
 
 template<>
+CompressedMaterializationType EnumUtil::FromString<CompressedMaterializationType>(const char *value);
+
+template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value);
 
 template<>
@@ -1644,6 +1657,9 @@ template<>
 InterruptMode EnumUtil::FromString<InterruptMode>(const char *value);
 
 template<>
+JoinFilterPushdownMode EnumUtil::FromString<JoinFilterPushdownMode>(const char *value);
+
+template<>
 JoinRefType EnumUtil::FromString<JoinRefType>(const char *value);
 
 template<>
@@ -1705,12 +1721,6 @@ MergeActionType EnumUtil::FromString<MergeActionType>(const char *value);
 
 template<>
 MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
-
-template<>
-MetricGroup EnumUtil::FromString<MetricGroup>(const char *value);
-
-template<>
-MetricType EnumUtil::FromString<MetricType>(const char *value);
 
 template<>
 Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);
@@ -1893,6 +1903,9 @@ template<>
 SequenceInfo EnumUtil::FromString<SequenceInfo>(const char *value);
 
 template<>
+SerializationVersionDeprecated EnumUtil::FromString<SerializationVersionDeprecated>(const char *value);
+
+template<>
 SetOperationType EnumUtil::FromString<SetOperationType>(const char *value);
 
 template<>
@@ -1948,6 +1961,9 @@ StorageBlockPrefetch EnumUtil::FromString<StorageBlockPrefetch>(const char *valu
 
 template<>
 StorageIndexType EnumUtil::FromString<StorageIndexType>(const char *value);
+
+template<>
+StorageVersion EnumUtil::FromString<StorageVersion>(const char *value);
 
 template<>
 StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value);

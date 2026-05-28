@@ -172,8 +172,7 @@ StreamingWindowGlobalState::StreamingWindowGlobalState(ClientContext &client) {
 	local_state = make_uniq<StreamingWindowState>(client);
 }
 
-bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &client, unique_ptr<Expression> &expr) {
-	auto &wexpr = expr->Cast<BoundWindowExpression>();
+bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &client, BoundWindowExpression &wexpr) {
 	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || !wexpr.arg_orders.empty() ||
 	    wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
 		return false;
@@ -277,7 +276,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	// is not copied to the children when you slice
 	vector<column_t> structs;
 	for (column_t col_idx = 0; col_idx < arg_chunk.ColumnCount(); ++col_idx) {
-		auto &col_vec = arg_cursor.data[col_idx];
+		const auto &col_vec = arg_cursor.data[col_idx];
 		if (col_vec.GetType().InternalType() == PhysicalType::STRUCT) {
 			structs.emplace_back(col_idx);
 		} else {

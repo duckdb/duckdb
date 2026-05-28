@@ -12,156 +12,26 @@
 
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/constants.hpp"
-#include "duckdb/common/enums/optimizer_type.hpp"
 
 namespace duckdb {
 
-enum class MetricGroup : uint8_t {
-	ALL,
-	CORE,
-	DEFAULT,
-	EXECUTION,
-	FILE,
-	OPERATOR,
-	OPTIMIZER,
-	PHASE_TIMING,
-	INVALID,
-};
-
-enum class MetricType : uint8_t {
-	// Core metrics
-	CPU_TIME = 2,
-	CUMULATIVE_CARDINALITY = 4,
-	CUMULATIVE_ROWS_SCANNED = 7,
-	EXTRA_INFO = 3,
-	LATENCY = 11,
-	QUERY_NAME = 0,
-	RESULT_SET_SIZE = 10,
-	ROWS_RETURNED = 12,
-	// Execution metrics
-	BLOCKED_THREAD_TIME = 1,
-	SYSTEM_PEAK_BUFFER_MEMORY = 14,
-	SYSTEM_PEAK_TEMP_DIR_SIZE = 15,
-	TOTAL_MEMORY_ALLOCATED = 91,
-	// File metrics
-	ATTACH_LOAD_STORAGE_LATENCY = 92,
-	ATTACH_REPLAY_WAL_LATENCY = 93,
-	CHECKPOINT_LATENCY = 94,
-	COMMIT_LOCAL_STORAGE_LATENCY = 95,
-	TOTAL_BYTES_READ = 16,
-	TOTAL_BYTES_WRITTEN = 17,
-	WAITING_TO_ATTACH_LATENCY = 96,
-	WAL_REPLAY_ENTRY_COUNT = 97,
-	WRITE_TO_WAL_LATENCY = 98,
-	// Operator metrics
-	OPERATOR_CARDINALITY = 6,
-	OPERATOR_NAME = 13,
-	OPERATOR_ROWS_SCANNED = 8,
-	OPERATOR_TIMING = 9,
-	OPERATOR_TYPE = 5,
-	// Optimizer metrics
-	OPTIMIZER_EXPRESSION_REWRITER = 26,
-	OPTIMIZER_FILTER_PULLUP = 27,
-	OPTIMIZER_FILTER_PUSHDOWN = 28,
-	OPTIMIZER_EMPTY_RESULT_PULLUP = 29,
-	OPTIMIZER_CTE_FILTER_PUSHER = 30,
-	OPTIMIZER_REGEX_RANGE = 31,
-	OPTIMIZER_IN_CLAUSE = 32,
-	OPTIMIZER_JOIN_ORDER = 33,
-	OPTIMIZER_DELIMINATOR = 34,
-	OPTIMIZER_UNNEST_REWRITER = 35,
-	OPTIMIZER_UNUSED_COLUMNS = 36,
-	OPTIMIZER_STATISTICS_PROPAGATION = 37,
-	OPTIMIZER_COMMON_SUBEXPRESSIONS = 38,
-	OPTIMIZER_COMMON_AGGREGATE = 39,
-	OPTIMIZER_COLUMN_LIFETIME = 40,
-	OPTIMIZER_BUILD_SIDE_PROBE_SIDE = 41,
-	OPTIMIZER_LIMIT_PUSHDOWN = 42,
-	OPTIMIZER_TOP_N = 43,
-	OPTIMIZER_COMPRESSED_MATERIALIZATION = 44,
-	OPTIMIZER_DUPLICATE_GROUPS = 45,
-	OPTIMIZER_REORDER_FILTER = 46,
-	OPTIMIZER_SAMPLING_PUSHDOWN = 47,
-	OPTIMIZER_JOIN_FILTER_PUSHDOWN = 48,
-	OPTIMIZER_EXTENSION = 49,
-	OPTIMIZER_MATERIALIZED_CTE = 50,
-	OPTIMIZER_AGGREGATE_FUNCTION_REWRITER = 51,
-	OPTIMIZER_LATE_MATERIALIZATION = 52,
-	OPTIMIZER_CTE_INLINING = 53,
-	OPTIMIZER_ROW_GROUP_PRUNER = 54,
-	OPTIMIZER_TOP_N_WINDOW_ELIMINATION = 55,
-	OPTIMIZER_COMMON_SUBPLAN = 56,
-	OPTIMIZER_JOIN_ELIMINATION = 57,
-	OPTIMIZER_WINDOW_SELF_JOIN = 58,
-	OPTIMIZER_PROJECTION_PULLUP = 59,
-	OPTIMIZER_OUTER_JOIN_SIMPLIFICATION = 60,
-	OPTIMIZER_ROW_NUMBER_REWRITER = 61,
-	OPTIMIZER_PARTITIONED_EXECUTION = 62,
-	// PhaseTiming metrics
-	ALL_OPTIMIZERS = 18,
-	CUMULATIVE_OPTIMIZER_TIMING = 19,
-	PARSER = 99,
-	PHYSICAL_PLANNER = 22,
-	PHYSICAL_PLANNER_COLUMN_BINDING = 23,
-	PHYSICAL_PLANNER_CREATE_PLAN = 25,
-	PHYSICAL_PLANNER_RESOLVE_TYPES = 24,
-	PLANNER = 20,
-	PLANNER_BINDING = 21,
-};
-
-struct MetricTypeHashFunction {
-    uint64_t operator()(const MetricType &index) const {
-        return std::hash<uint8_t>()(static_cast<uint8_t>(index));
-    }
-};
-
-typedef unordered_set<MetricType, MetricTypeHashFunction> profiler_settings_t;
-typedef unordered_map<MetricType, Value, MetricTypeHashFunction> profiler_metrics_t;
+typedef unordered_map<string, Value> profiler_metrics_t;
 
 class MetricsUtils {
 public:
-	static constexpr uint8_t START_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_EXPRESSION_REWRITER);
-	static constexpr uint8_t END_OPTIMIZER = static_cast<uint8_t>(MetricType::OPTIMIZER_PARTITIONED_EXECUTION);
+	template<class T>
+	static bool IsMetric(const string &metric_name) {
+		return StringUtil::Equals(metric_name, T::Name);
+	}
 
-public:
-
-	// All metrics
-	static profiler_settings_t GetAllMetrics();
-	static profiler_settings_t GetMetricsByGroupType(MetricGroup type);
-
-	// Core metrics
-	static profiler_settings_t GetCoreMetrics();
-	static bool IsCoreMetric(MetricType type);
-
-	// Default metrics
-	static profiler_settings_t GetDefaultMetrics();
-	static bool IsDefaultMetric(MetricType type);
-
-	// Execution metrics
-	static profiler_settings_t GetExecutionMetrics();
-	static bool IsExecutionMetric(MetricType type);
-
-	// File metrics
-	static profiler_settings_t GetFileMetrics();
-	static bool IsFileMetric(MetricType type);
-
-	// Operator metrics
-	static profiler_settings_t GetOperatorMetrics();
-	static bool IsOperatorMetric(MetricType type);
-
-	// Optimizer metrics
-	static profiler_settings_t GetOptimizerMetrics();
-	static bool IsOptimizerMetric(MetricType type);
-	static MetricType GetOptimizerMetricByType(OptimizerType type);
-	static OptimizerType GetOptimizerTypeByMetric(MetricType type);
-
-	// PhaseTiming metrics
-	static profiler_settings_t GetPhaseTimingMetrics();
-	static bool IsPhaseTimingMetric(MetricType type);
-
-	// RootScope metrics
-	static profiler_settings_t GetRootScopeMetrics();
-	static bool IsRootScopeMetric(MetricType type);
+	static bool MetricInGroup(const string &metric_name, const string &group_name) {
+		if (metric_name.size() < group_name.size() + 1) {
+			return false;
+		}
+		if (!StringUtil::StartsWith(metric_name, group_name)) {
+			return false;
+		}
+		return metric_name[group_name.size()] == '.';
+	}
 };
 } // namespace duckdb

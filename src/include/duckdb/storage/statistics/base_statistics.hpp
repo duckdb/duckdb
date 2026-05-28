@@ -17,6 +17,7 @@
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
+#include "duckdb/storage/statistics/stats_merge_type.hpp"
 
 namespace duckdb {
 struct SelectionVector;
@@ -119,7 +120,7 @@ public:
 	void SetHasNull();
 	void SetHasNoNull();
 
-	void Merge(const BaseStatistics &other);
+	void Merge(const BaseStatistics &other, StatsMergeType merge_type = StatsMergeType::MERGE_STATS);
 
 	void Copy(const BaseStatistics &other);
 
@@ -132,8 +133,8 @@ public:
 	static BaseStatistics Deserialize(Deserializer &deserializer);
 
 	//! Verify that a vector does not violate the statistics
-	void Verify(Vector &vector, const SelectionVector &sel, idx_t count, bool ignore_has_null = false) const;
-	void Verify(Vector &vector, idx_t count) const;
+	void Verify(const Vector &vector, const SelectionVector &sel, idx_t count, bool ignore_has_null = false) const;
+	void Verify(const Vector &vector, idx_t count) const;
 
 	Value ToStruct() const;
 	string ToString() const;

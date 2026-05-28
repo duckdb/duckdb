@@ -1,3 +1,4 @@
+#include "duckdb/common/set.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 
@@ -18,28 +19,25 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(PEGT
 	}
 
 	auto &merge_match_repeat = list_pr.Child<RepeatParseResult>(6);
-	map<MergeActionCondition, unique_ptr<MergeIntoAction>> unconditional_actions;
+	set<MergeActionCondition> unconditional_actions;
 	for (auto merge_match : merge_match_repeat.GetChildren()) {
 		auto merge_match_result =
 		    transformer.Transform<pair<MergeActionCondition, unique_ptr<MergeIntoAction>>>(merge_match);
 		auto action_condition = merge_match_result.first;
 		auto &action = merge_match_result.second;
+		// once an unconditional clause has been seen for a given condition type, no further clauses
+		// of the same condition type are allowed - they would be unreachable. preserve declaration
+		// order so that the first matching clause wins, matching the SQL standard.
+		if (unconditional_actions.count(action_condition)) {
+			string action_condition_str = MergeIntoStatement::ActionConditionToString(action_condition);
+			throw ParserException(
+			    "Unconditional %s clause was already defined - any following %s clause would be unreachable",
+			    action_condition_str, action_condition_str);
+		}
 		if (!action->condition) {
-			auto entry = unconditional_actions.find(action_condition);
-			if (entry != unconditional_actions.end()) {
-				string action_condition_str = MergeIntoStatement::ActionConditionToString(action_condition);
-				throw ParserException(
-				    "Unconditional %s clause was already defined - only one unconditional %s clause is supported",
-				    action_condition_str, action_condition_str);
-			}
-			unconditional_actions.emplace(action_condition, std::move(action));
-			continue;
+			unconditional_actions.insert(action_condition);
 		}
 		result->actions[action_condition].push_back(std::move(action));
-	}
-	// finally add the unconditional actions
-	for (auto &entry : unconditional_actions) {
-		result->actions[entry.first].push_back(std::move(entry.second));
 	}
 	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 7, result->returning_list);
 	return std::move(result);
