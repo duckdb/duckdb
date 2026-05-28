@@ -1,29 +1,10 @@
 #include "duckdb/function/scalar/comparison_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 
 namespace duckdb {
-
-struct ComparisonFunctionData : public FunctionData {
-	explicit ComparisonFunctionData(ExpressionType expression_type_p) : expression_type(expression_type_p) {
-	}
-
-	ExpressionType expression_type;
-
-public:
-	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<ComparisonFunctionData>(expression_type);
-	}
-
-	bool Equals(const FunctionData &other_p) const override {
-		auto &other = other_p.Cast<ComparisonFunctionData>();
-		return expression_type == other.expression_type;
-	}
-};
 
 template <ExpressionType TYPE>
 void ComparisonFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -157,36 +138,6 @@ ScalarFunction IsDistinctFromFun::GetFunction() {
 
 ScalarFunction IsNotDistinctFromFun::GetFunction() {
 	return GetComparisonFunctionInternal<ExpressionType::COMPARE_NOT_DISTINCT_FROM>(IsNotDistinctFromFun::Name);
-}
-
-unique_ptr<FunctionData> BindComparisonFun(BindScalarFunctionInput &input) {
-	throw InvalidInputException("Comparison function cannot be called directly");
-}
-
-static unique_ptr<Expression> ComparisonBindExpression(FunctionBindExpressionInput &input) {
-	auto &comparison_data = input.bind_data->Cast<ComparisonFunctionData>();
-	return BoundComparisonExpression::Create(comparison_data.expression_type, std::move(input.children[0]),
-	                                         std::move(input.children[1]));
-}
-
-void ComparisonFunctionSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                 const BoundScalarFunction &function) {
-	auto &bind_data = bind_data_p->Cast<ComparisonFunctionData>();
-	serializer.WriteProperty(100, "comparison_type", bind_data.expression_type);
-}
-
-unique_ptr<FunctionData> ComparisonFunctionDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
-	auto expression_type = deserializer.ReadProperty<ExpressionType>(100, "comparison_type");
-	return make_uniq<ComparisonFunctionData>(expression_type);
-}
-
-ScalarFunction ComparisonFun::GetFunction() {
-	ScalarFunction comparison_fun(ComparisonFun::Name, {LogicalType::ANY, LogicalType::ANY}, LogicalType::BOOLEAN,
-	                              nullptr, BindComparisonFun);
-	comparison_fun.SetBindExpressionCallback(ComparisonBindExpression);
-	comparison_fun.SetSerializeCallback(ComparisonFunctionSerialize);
-	comparison_fun.SetDeserializeCallback(ComparisonFunctionDeserialize);
-	return comparison_fun;
 }
 
 //===--------------------------------------------------------------------===//

@@ -105,14 +105,4 @@ struct IsNotDistinctFromFun {
 	static ScalarFunction GetFunction();
 };
 
-struct ComparisonFun {
-	static constexpr const char *Name = "__comparison";
-	static constexpr const char *Parameters = "left,right";
-	static constexpr const char *Description = "Compatibility wrapper for serialized comparison expressions.";
-	static constexpr const char *Example = "__comparison(1, 2)";
-	static constexpr const char *Categories = "";
-
-	static ScalarFunction GetFunction();
-};
-
 } // namespace duckdb

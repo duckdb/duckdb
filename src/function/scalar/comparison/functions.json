@@ -69,13 +69,5 @@
         "example": "NULL IS NOT DISTINCT FROM NULL",
         "type": "scalar_function",
         "struct": "IsNotDistinctFromFun"
-    },
-    {
-        "name": "__comparison",
-        "parameters": "left,right",
-        "description": "Compatibility wrapper for serialized comparison expressions.",
-        "example": "__comparison(1, 2)",
-        "type": "scalar_function",
-        "struct": "ComparisonFun"
     }
 ]
