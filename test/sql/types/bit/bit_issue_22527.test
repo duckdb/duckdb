@@ -38,10 +38,52 @@ SELECT v::VARCHAR FROM bit_comparison_values WHERE v < '10101010'::BIT ORDER BY 
 01
 1
 
+query IIIII
+SELECT
+	'0'::BIT IS DISTINCT FROM '10101010'::BIT,
+	'0'::BIT IS NOT DISTINCT FROM '0'::BIT,
+	'0'::BIT IS DISTINCT FROM '0'::BIT,
+	NULL::BIT IS DISTINCT FROM '0'::BIT,
+	NULL::BIT IS NOT DISTINCT FROM NULL::BIT;
+----
+true	true	false	true	true
+
 query II
 SELECT min(v)::VARCHAR, max(v)::VARCHAR FROM bit_comparison_values;
 ----
 0	10101010
+
+statement ok
+CREATE TABLE bit_join_l(v BIT);
+
+statement ok
+CREATE TABLE bit_join_r(v BIT);
+
+statement ok
+INSERT INTO bit_join_l VALUES ('0'), ('10101010'), ('1');
+
+statement ok
+INSERT INTO bit_join_r VALUES ('00'), ('10101010'), ('1');
+
+query II
+SELECT l.v::VARCHAR, r.v::VARCHAR
+FROM bit_join_l l, bit_join_r r
+WHERE l.v = r.v
+ORDER BY 1, 2;
+----
+1	1
+10101010	10101010
+
+query II
+SELECT l.v::VARCHAR, r.v::VARCHAR
+FROM bit_join_l l, bit_join_r r
+WHERE l.v < r.v
+ORDER BY 1, 2;
+----
+0	00
+0	1
+0	10101010
+1	10101010
 
 statement ok
 CREATE TABLE bit_zonemap_values(v BIT);
@@ -58,3 +100,25 @@ query I
 SELECT v::VARCHAR FROM bit_zonemap_values WHERE v > '10101010'::BIT ORDER BY v;
 ----
 11111111
+
+statement ok
+CREATE TABLE bit_long_zonemap_values(v BIT);
+
+statement ok
+INSERT INTO bit_long_zonemap_values VALUES (repeat('0', 100)::BIT), (repeat('1', 100)::BIT);
+
+query II
+SELECT length(v::VARCHAR), substr(v::VARCHAR, 1, 1)
+FROM bit_long_zonemap_values
+WHERE v < repeat('1', 100)::BIT
+ORDER BY v;
+----
+100	0
+
+query II
+SELECT length(v::VARCHAR), substr(v::VARCHAR, 1, 1)
+FROM bit_long_zonemap_values
+WHERE v > repeat('0', 100)::BIT
+ORDER BY v;
+----
+100	1
