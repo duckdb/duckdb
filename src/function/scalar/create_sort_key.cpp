@@ -415,12 +415,7 @@ struct SortKeyBitOperator {
 	}
 
 	static idx_t Encode(data_ptr_t result, TYPE input) {
-		const auto bit_length = Bit::BitLength(input);
-		for (idx_t r = 0; r < bit_length; r++) {
-			result[r] = static_cast<data_t>((Bit::GetBit(input, r) ? '1' : '0') + 1);
-		}
-		result[bit_length] = SortKeyVectorData::STRING_DELIMITER;
-		return bit_length + 1;
+		return Encode<false>(result, input);
 	}
 
 	template <bool FLIP_BYTES>
@@ -436,21 +431,7 @@ struct SortKeyBitOperator {
 	}
 
 	static idx_t Decode(const_data_ptr_t input, Vector &result, TYPE &result_value, bool flip_bytes) {
-		data_t string_delimiter = SortKeyVectorData::STRING_DELIMITER;
-		if (flip_bytes) {
-			string_delimiter = static_cast<data_t>(~string_delimiter);
-		}
-		idx_t pos;
-		for (pos = 0; input[pos] != string_delimiter; pos++) {
-		}
-		auto buffer = make_unsafe_uniq_array_uninitialized<char>(pos);
-		for (idx_t r = 0; r < pos; r++) {
-			auto encoded_byte = flip_bytes ? static_cast<data_t>(~input[r]) : input[r];
-			buffer[r] = encoded_byte == static_cast<data_t>('1' + 1) ? '1' : '0';
-		}
-		result_value = StringVector::EmptyString(result, Bit::ComputeBitstringLen(pos));
-		Bit::ToBit(string_t(buffer.get(), UnsafeNumericCast<uint32_t>(pos)), result_value, nullptr);
-		return pos + 1;
+		return flip_bytes ? Decode<true>(input, result, result_value) : Decode<false>(input, result, result_value);
 	}
 
 	template <bool FLIP_BYTES>
