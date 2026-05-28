@@ -1,6 +1,7 @@
 #include "duckdb/function/function_binder.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/type_visitor.hpp"
@@ -953,9 +954,9 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &
 }
 
 pair<BoundAggregateFunction, unique_ptr<FunctionData>>
-FunctionBinder::ResolveFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> &children) {
+FunctionBinder::ResolveFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> &children,
+                                vector<pair<string, unique_ptr<Expression>>> &named_arguments) {
 	// Reorder named args
-	vector<pair<string, unique_ptr<Expression>>> named_arguments;
 	ResolveArguments(function, children, named_arguments);
 
 	// Make a BoundFunction out of the func
@@ -993,10 +994,35 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(const
                                                                            vector<unique_ptr<Expression>> children,
                                                                            unique_ptr<Expression> filter,
                                                                            AggregateType aggr_type) {
-	auto [bound_function, bind_info] = ResolveFunction(function, children);
+	return BindAggregateFunction(function, std::move(children), {}, std::move(filter), aggr_type);
+}
+
+unique_ptr<BoundAggregateExpression>
+FunctionBinder::BindAggregateFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> children,
+                                      vector<pair<string, unique_ptr<Expression>>> keyword_args,
+                                      unique_ptr<Expression> filter, AggregateType aggr_type) {
+	auto [bound_function, bind_info] = ResolveFunction(function, children, keyword_args);
 
 	return make_uniq<BoundAggregateExpression>(std::move(bound_function), std::move(children), std::move(filter),
 	                                           std::move(bind_info), aggr_type);
+}
+
+unique_ptr<BoundAggregateExpression>
+FunctionBinder::BindAggregateFunction(const AggregateFunctionCatalogEntry &func,
+                                      vector<unique_ptr<Expression>> regular_args,
+                                      vector<pair<string, unique_ptr<Expression>>> keyword_args, ErrorData &error,
+                                      unique_ptr<Expression> filter, AggregateType aggr_type) {
+	// bind the function
+	auto best_function = BindFunction(func.name, func.functions, regular_args, keyword_args, error);
+	if (!best_function.IsValid()) {
+		return nullptr;
+	}
+
+	// found a matching function!
+	const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+
+	return BindAggregateFunction(bound_function, std::move(regular_args), std::move(keyword_args), std::move(filter),
+	                             aggr_type);
 }
 
 pair<BoundWindowFunction, unique_ptr<FunctionData>>

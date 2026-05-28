@@ -238,9 +238,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// all children bound successfully
 	// extract the children and types
-	vector<LogicalType> types;
-	vector<LogicalType> arguments;
 	vector<unique_ptr<Expression>> children;
+	vector<pair<string, unique_ptr<Expression>>> keyword_children;
 
 	if (ordered_set_agg) {
 		const bool order_sensitive = (aggr.function_name == "mode");
@@ -248,8 +247,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		if (aggr.GetArguments().size() < ordered_set_agg) {
 			for (auto &order : aggr.order_bys->orders) {
 				auto &child = BoundExpression::GetExpression(*order.expression);
-				types.push_back(child->GetReturnType());
-				arguments.push_back(child->GetReturnType());
+				// types.push_back(child->GetReturnType());
 				if (order_sensitive) {
 					children.push_back(child->Copy());
 				} else {
@@ -262,28 +260,32 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		}
 	}
 
-	for (auto &child : aggr.GetArgumentsMutable()) {
-		auto &bound_child = BoundExpression::GetExpression(*child.GetExpressionMutable());
-		types.push_back(bound_child->GetReturnType());
-		arguments.push_back(bound_child->GetReturnType());
-		children.push_back(std::move(bound_child));
-	}
+	for (auto &arg : aggr.GetArgumentsMutable()) {
+		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
 
-	// bind the aggregate
-	FunctionBinder function_binder(binder);
-	auto best_function = function_binder.BindFunction(func.name, func.functions, types, error);
-	if (!best_function.IsValid()) {
-		error.AddQueryLocation(aggr);
-		error.Throw();
-	}
-	// found a matching function!
-	const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+		if (aggr.IsLegacyFunctionCall()) {
+			// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
+			// But we do alias them by their name, so that if we serialize the bound function expression and
+			// deserialize it on an older version of DuckDB, we can still match the arguments by name during binding
+			// (as old DuckDB uses the argument names as aliases for legacy function calls)
+			bound_arg->SetAlias(arg.GetName());
+			children.push_back(std::move(bound_arg));
+			continue;
+		}
 
-	if (!bound_function.CanAggregate() && bound_function.CanWindow()) {
-		auto msg = StringUtil::Format("Function '%s' can only be used as a window function", bound_function.GetName());
-		error = BinderException(msg);
-		error.AddQueryLocation(aggr);
-		error.Throw();
+		if (arg.HasName()) {
+			keyword_children.emplace_back(arg.GetName(), std::move(bound_arg));
+			continue;
+		}
+
+		if (keyword_children.empty()) {
+			children.push_back(std::move(bound_arg));
+			continue;
+		}
+
+		throw BinderException(bound_arg->GetQueryLocation(),
+		                      "Positional argument '%s' cannot follow named arguments in a function call.",
+		                      bound_arg->ToString());
 	}
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
@@ -312,9 +314,26 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		}
 	}
 
-	auto aggregate =
-	    function_binder.BindAggregateFunction(bound_function, std::move(children), std::move(bound_filter),
-	                                          aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
+	// Bind the function
+	FunctionBinder function_binder(binder);
+	auto aggregate = function_binder.BindAggregateFunction(
+	    func, std::move(children), std::move(keyword_children), error, std::move(bound_filter),
+	    aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
+	// No function found, throw an error
+	if (!aggregate) {
+		error.AddQueryLocation(aggr);
+		error.Throw();
+	}
+
+	// If the function cannot be used as an aggregate, but can be used as a window function, throw a specific error
+	// message
+	if (!aggregate->function.CanAggregate() && aggregate->function.CanWindow()) {
+		auto msg = StringUtil::Format("Function '%s' can only be used as a window function", func.name);
+		error = BinderException(msg);
+		error.AddQueryLocation(aggr);
+		error.Throw();
+	}
+
 	if (aggr.export_state) {
 		aggregate = ExportAggregateFunction::Bind(std::move(aggregate));
 	}

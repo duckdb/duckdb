@@ -119,6 +119,17 @@ public:
 	                      unique_ptr<Expression> filter = nullptr,
 	                      AggregateType aggr_type = AggregateType::NON_DISTINCT);
 
+	DUCKDB_API unique_ptr<BoundAggregateExpression>
+	BindAggregateFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> children,
+	                      vector<pair<string, unique_ptr<Expression>>> keyword_args, unique_ptr<Expression> filter,
+	                      AggregateType aggr_type);
+
+	DUCKDB_API unique_ptr<BoundAggregateExpression>
+	BindAggregateFunction(const AggregateFunctionCatalogEntry &function, vector<unique_ptr<Expression>> regular_args,
+	                      vector<pair<string, unique_ptr<Expression>>> keyword_args, ErrorData &error,
+	                      unique_ptr<Expression> filter = nullptr,
+	                      AggregateType aggr_type = AggregateType::NON_DISTINCT);
+
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
 	                                           const vector<unique_ptr<Expression>> &groups,
 	                                           optional_ptr<vector<GroupingSet>> grouping_sets);
@@ -139,8 +150,15 @@ public:
 	ResolveFunction(const ScalarFunction &function, vector<unique_ptr<Expression>> &children,
 	                vector<pair<string, unique_ptr<Expression>>> &keyword_args);
 
+	pair<BoundAggregateFunction, unique_ptr<FunctionData>>
+	ResolveFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> &children,
+	                vector<pair<string, unique_ptr<Expression>>> &keyword_args);
+
 	pair<BoundAggregateFunction, unique_ptr<FunctionData>> ResolveFunction(const AggregateFunction &function,
-	                                                                       vector<unique_ptr<Expression>> &children);
+	                                                                       vector<unique_ptr<Expression>> &children) {
+		vector<pair<string, unique_ptr<Expression>>> empty_keyword_args;
+		return ResolveFunction(function, children, empty_keyword_args);
+	}
 
 	pair<BoundWindowFunction, unique_ptr<FunctionData>>
 	ResolveFunction(const WindowFunction &function, vector<unique_ptr<Expression>> &children,

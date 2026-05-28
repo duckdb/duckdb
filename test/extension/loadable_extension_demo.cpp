@@ -913,6 +913,77 @@ static void TestFunctionArgs(DataChunk &args, ExpressionState &state, Vector &re
 	}
 }
 
+// Aggregate counterpart of the scalar inspection function. The state captures the argument values
+// from the first row it sees; on finalize it emits "<7>|a|b|c|" so a test can observe how named
+// arguments / default values were bound into positional order.
+struct InspectAggState {
+	int32_t vals[3];
+	bool valid[3];
+	idx_t arg_count;
+	bool initialized;
+};
+
+struct InspectAggOp {
+	template <class STATE>
+	static void Initialize(STATE &state) {
+		state.arg_count = 0;
+		state.initialized = false;
+		for (idx_t i = 0; i < 3; i++) {
+			state.valid[i] = false;
+		}
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (source.initialized && !target.initialized) {
+			target = source;
+		}
+	}
+
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		string str = "<7>|";
+		for (idx_t i = 0; i < state.arg_count; i++) {
+			str += (state.valid[i] ? to_string(state.vals[i]) : string("NULL")) + "|";
+		}
+		target = StringVector::AddString(finalize_data.result, str);
+	}
+
+	static bool IgnoreNull() {
+		return false;
+	}
+};
+
+static void InspectAggUpdate(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector,
+                             idx_t count) {
+	UnifiedVectorFormat sdata;
+	state_vector.ToUnifiedFormat(sdata);
+	auto states = UnifiedVectorFormat::GetData<InspectAggState *>(sdata);
+
+	vector<UnifiedVectorFormat> idata(input_count);
+	for (idx_t c = 0; c < input_count; c++) {
+		inputs[c].ToUnifiedFormat(idata[c]);
+	}
+
+	for (idx_t i = 0; i < count; i++) {
+		auto &state = *states[sdata.sel->get_index(i)];
+		if (state.initialized) {
+			continue;
+		}
+		state.arg_count = MinValue<idx_t>(input_count, 3);
+		for (idx_t c = 0; c < state.arg_count; c++) {
+			const auto idx = idata[c].sel->get_index(i);
+			if (idata[c].validity.RowIsValid(idx)) {
+				state.vals[c] = UnifiedVectorFormat::GetData<int32_t>(idata[c])[idx];
+				state.valid[c] = true;
+			} else {
+				state.valid[c] = false;
+			}
+		}
+		state.initialized = true;
+	}
+}
+
 // The inspection functions below return VARCHAR and print "<idx>|arg|arg|..." (see
 // TestFunctionArgs) so that a single query result reveals both which overload was chosen
 // and the final positional argument list (after reordering/defaults/varargs). SPECIAL_HANDLING
@@ -1018,6 +1089,26 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 		sig.AddParameter("b", LogicalType::INTEGER, Value::INTEGER(100));
 		sig.SetReturnType(LogicalType::VARCHAR);
 		loader.RegisterFunction(ScalarFunction("test_named_nullshort", std::move(sig), TestFunctionArgs<6>));
+	}
+
+	// test_named_agg_inspect(a INTEGER, b INTEGER = 100, c INTEGER = 200) -> VARCHAR
+	// Aggregate counterpart of test_named_inspect. AggregateFunction has no FunctionSignature
+	// constructor, so we build it from positional types and then set parameter names + defaults on
+	// the signature. Exercises named-argument binding for aggregates (shared resolution path).
+	{
+		AggregateFunction agg(
+		    "test_named_agg_inspect", {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER},
+		    LogicalType::VARCHAR, AggregateFunction::StateSize<InspectAggState>,
+		    AggregateFunction::StateInitialize<InspectAggState, InspectAggOp>, InspectAggUpdate,
+		    AggregateFunction::StateCombine<InspectAggState, InspectAggOp>,
+		    AggregateFunction::StateFinalize<InspectAggState, string_t, InspectAggOp>, NH::DEFAULT_NULL_HANDLING);
+		auto &sig = agg.GetSignature();
+		sig.GetParameter(0).SetName("a");
+		sig.GetParameter(1).SetName("b");
+		sig.GetParameter(1).SetDefaultValue(Value::INTEGER(100));
+		sig.GetParameter(2).SetName("c");
+		sig.GetParameter(2).SetDefaultValue(Value::INTEGER(200));
+		loader.RegisterFunction(std::move(agg));
 	}
 }
 

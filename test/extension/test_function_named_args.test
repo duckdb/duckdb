@@ -326,3 +326,63 @@ statement error
 SELECT test_named_inspect(a := 1, 2);
 ----
 <REGEX>:Binder Error:.*cannot follow named arguments.*
+
+#===--------------------------------------------------------------------===#
+# Aggregate named arguments (same resolution path as scalars)
+#   test_named_agg_inspect(a INTEGER, b INTEGER = 100, c INTEGER = 200) -> VARCHAR
+# Emits "<7>|a|b|c|" from the first row's reordered/default-filled arguments.
+#===--------------------------------------------------------------------===#
+
+query I
+SELECT test_named_agg_inspect(1);
+----
+<7>|1|100|200|
+
+query I
+SELECT test_named_agg_inspect(1, 2);
+----
+<7>|1|2|200|
+
+query I
+SELECT test_named_agg_inspect(1, 2, 3);
+----
+<7>|1|2|3|
+
+# all named, shuffled
+query I
+SELECT test_named_agg_inspect(c := 3, b := 2, a := 1);
+----
+<7>|1|2|3|
+
+# name a later parameter, leave a middle one to its default
+query I
+SELECT test_named_agg_inspect(c := 3, a := 1);
+----
+<7>|1|100|3|
+
+# positional prefix + named suffix
+query I
+SELECT test_named_agg_inspect(1, c := 3);
+----
+<7>|1|100|3|
+
+# positional column argument + named default, over a single-row relation
+query I
+SELECT test_named_agg_inspect(x, c := 9) FROM (VALUES (5)) t(x);
+----
+<7>|5|100|9|
+
+# missing required argument goes through the shared argument resolution
+statement error
+SELECT test_named_agg_inspect(b := 2);
+----
+<REGEX>:Binder Error:.*Missing value for parameter 'a'.*
+
+
+###===--------------------------------------------------------------------===#
+## Window Functions (TODO)
+###===--------------------------------------------------------------------===#
+statement error
+select sum(x := i) over () from range(0, 10) r(i);
+----
+Named arguments are not supported in window functions
