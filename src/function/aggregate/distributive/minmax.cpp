@@ -222,6 +222,8 @@ struct StringMinMaxOperation : public StringMinMaxBase {
 
 using MinOperationString = StringMinMaxOperation<LessThan>;
 using MaxOperationString = StringMinMaxOperation<GreaterThan>;
+using MinOperationBitString = StringMinMaxOperation<BitComparisonOperation<LessThan>>;
+using MaxOperationBitString = StringMinMaxOperation<BitComparisonOperation<GreaterThan>>;
 
 template <OrderType ORDER_TYPE_TEMPLATED>
 struct VectorMinMaxBase {
@@ -300,11 +302,15 @@ static AggregateFunction GetMinMaxFunction(const LogicalType &type) {
 	    AggregateFunction::StateDestroy<STATE, OP>);
 }
 
-template <class OP, class OP_STRING, class OP_VECTOR>
+template <class OP, class OP_STRING, class OP_BIT_STRING, class OP_VECTOR>
 static AggregateFunction GetMinMaxOperator(const LogicalType &type) {
 	auto internal_type = type.InternalType();
 	switch (internal_type) {
 	case PhysicalType::VARCHAR:
+		if (type.id() == LogicalTypeId::BIT) {
+			return AggregateFunction::UnaryAggregateDestructor<MinMaxStringState, string_t, string_t, OP_BIT_STRING>(
+			    type, type);
+		}
 		return AggregateFunction::UnaryAggregateDestructor<MinMaxStringState, string_t, string_t, OP_STRING>(type,
 		                                                                                                     type);
 	case PhysicalType::LIST:
@@ -316,7 +322,7 @@ static AggregateFunction GetMinMaxOperator(const LogicalType &type) {
 	}
 }
 
-template <class OP, class OP_STRING, class OP_VECTOR>
+template <class OP, class OP_STRING, class OP_BIT_STRING, class OP_VECTOR>
 unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
@@ -367,7 +373,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto name = function.GetName();
 
 	auto state_export_type = function.GetStateTypeCallback();
-	auto minmax_func = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
+	auto minmax_func = GetMinMaxOperator<OP, OP_STRING, OP_BIT_STRING, OP_VECTOR>(input_type);
 
 	minmax_func.SetStructStateExport(state_export_type);
 	minmax_func.SetName(std::move(name));
@@ -381,20 +387,20 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	return std::move(expr->bind_info);
 }
 
-template <class OP, class OP_STRING, class OP_VECTOR>
+template <class OP, class OP_STRING, class OP_BIT_STRING, class OP_VECTOR>
 AggregateFunction GetMinMaxOperator(const string &name) {
 	return AggregateFunction(name, {LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                         nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
+	                         nullptr, BindMinMax<OP, OP_STRING, OP_BIT_STRING, OP_VECTOR>);
 }
 
 } // namespace
 
 AggregateFunction MinFunction::GetFunction() {
-	return GetMinMaxOperator<MinOperation, MinOperationString, MinOperationVector>("min");
+	return GetMinMaxOperator<MinOperation, MinOperationString, MinOperationBitString, MinOperationVector>("min");
 }
 
 AggregateFunction MaxFunction::GetFunction() {
-	return GetMinMaxOperator<MaxOperation, MaxOperationString, MaxOperationVector>("max");
+	return GetMinMaxOperator<MaxOperation, MaxOperationString, MaxOperationBitString, MaxOperationVector>("max");
 }
 
 //---------------------------------------------------
