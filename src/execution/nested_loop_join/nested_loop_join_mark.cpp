@@ -124,6 +124,34 @@ static void MarkJoinComparisonSwitch(const Vector &left, const Vector &right, id
 		break;
 	}
 	D_ASSERT(left.GetType() == right.GetType());
+	if (left.GetType().id() == LogicalTypeId::BIT) {
+		switch (comparison_type) {
+		case ExpressionType::COMPARE_EQUAL:
+			return TemplatedMarkJoin<string_t, BitComparisonOperation<Equals>>(left, right, lcount, rcount,
+			                                                                   found_match);
+		case ExpressionType::COMPARE_NOTEQUAL:
+			return TemplatedMarkJoin<string_t, BitComparisonOperation<NotEquals>>(left, right, lcount, rcount,
+			                                                                      found_match);
+		case ExpressionType::COMPARE_LESSTHAN:
+			return TemplatedMarkJoin<string_t, BitComparisonOperation<LessThan>>(left, right, lcount, rcount,
+			                                                                     found_match);
+		case ExpressionType::COMPARE_GREATERTHAN:
+			return TemplatedMarkJoin<string_t, BitComparisonOperation<GreaterThan>>(left, right, lcount, rcount,
+			                                                                        found_match);
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			return TemplatedMarkJoin<string_t, BitComparisonOperation<LessThanEquals>>(left, right, lcount, rcount,
+			                                                                           found_match);
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			return TemplatedMarkJoin<string_t, BitComparisonOperation<GreaterThanEquals>>(left, right, lcount, rcount,
+			                                                                              found_match);
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			return TemplatedMarkJoin<string_t, BitDistinctFrom>(left, right, lcount, rcount, found_match);
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			return TemplatedMarkJoin<string_t, BitNotDistinctFrom>(left, right, lcount, rcount, found_match);
+		default:
+			throw InternalException("Unsupported comparison type for MarkJoin");
+		}
+	}
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		return MarkJoinSwitch<Equals>(left, right, lcount, rcount, found_match);

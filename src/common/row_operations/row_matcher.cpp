@@ -292,6 +292,41 @@ MatchFunction RowMatcher::GetMatchFunction(const bool no_match_sel, const Logica
 }
 
 template <bool NO_MATCH_SEL>
+static MatchFunction GetBitMatchFunction(const ExpressionType predicate) {
+	MatchFunction result;
+	switch (predicate) {
+	case ExpressionType::COMPARE_EQUAL:
+		result.function = TemplatedMatch<NO_MATCH_SEL, string_t, BitComparisonOperation<Equals>>;
+		break;
+	case ExpressionType::COMPARE_NOTEQUAL:
+		result.function = TemplatedMatch<NO_MATCH_SEL, string_t, BitComparisonOperation<NotEquals>>;
+		break;
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		result.function = TemplatedMatch<NO_MATCH_SEL, string_t, BitDistinctFrom>;
+		break;
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		result.function = TemplatedMatch<NO_MATCH_SEL, string_t, BitNotDistinctFrom>;
+		break;
+	case ExpressionType::COMPARE_GREATERTHAN:
+		result.function = TemplatedMatch<NO_MATCH_SEL, string_t, BitComparisonOperation<GreaterThan>>;
+		break;
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		result.function = TemplatedMatch<NO_MATCH_SEL, string_t, BitComparisonOperation<GreaterThanEquals>>;
+		break;
+	case ExpressionType::COMPARE_LESSTHAN:
+		result.function = TemplatedMatch<NO_MATCH_SEL, string_t, BitComparisonOperation<LessThan>>;
+		break;
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		result.function = TemplatedMatch<NO_MATCH_SEL, string_t, BitComparisonOperation<LessThanEquals>>;
+		break;
+	default:
+		throw InternalException("Unsupported ExpressionType for GetBitMatchFunction: %s",
+		                        EnumUtil::ToString(predicate));
+	}
+	return result;
+}
+
+template <bool NO_MATCH_SEL>
 MatchFunction RowMatcher::GetMatchFunction(const LogicalType &type, const ExpressionType predicate) {
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
@@ -323,6 +358,9 @@ MatchFunction RowMatcher::GetMatchFunction(const LogicalType &type, const Expres
 	case PhysicalType::INTERVAL:
 		return GetMatchFunction<NO_MATCH_SEL, interval_t>(predicate);
 	case PhysicalType::VARCHAR:
+		if (type.id() == LogicalTypeId::BIT) {
+			return GetBitMatchFunction<NO_MATCH_SEL>(predicate);
+		}
 		return GetMatchFunction<NO_MATCH_SEL, string_t>(predicate);
 	case PhysicalType::STRUCT:
 		return GetStructMatchFunction<NO_MATCH_SEL>(type, predicate);
