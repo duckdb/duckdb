@@ -46,23 +46,23 @@ static void ReplaceInFunction(unique_ptr<ParsedExpression> &expr, expression_lis
 
 	// Replace children
 	expression_list_t new_children;
-	for (auto &child : function_expr.children) {
+	for (auto &child : function_expr.GetChildrenMutable()) {
 		AddChild(child, new_children, star_list, star, regex);
 	}
-	function_expr.children = std::move(new_children);
+	function_expr.GetChildrenMutable() = std::move(new_children);
 
 	// Replace ORDER_BY
-	if (function_expr.order_bys) {
+	if (function_expr.OrderBy()) {
 		expression_list_t new_orders;
-		for (auto &order : function_expr.order_bys->orders) {
+		for (auto &order : function_expr.OrderByMutable()->orders) {
 			AddChild(order.expression, new_orders, star_list, star, regex);
 		}
-		if (new_orders.size() != function_expr.order_bys->orders.size()) {
+		if (new_orders.size() != function_expr.OrderBy()->orders.size()) {
 			throw NotImplementedException("*COLUMNS(...) is not supported in the order expression");
 		}
 		for (idx_t i = 0; i < new_orders.size(); i++) {
 			auto &new_order = new_orders[i];
-			function_expr.order_bys->orders[i].expression = std::move(new_order);
+			function_expr.OrderByMutable()->orders[i].expression = std::move(new_order);
 		}
 	}
 }

@@ -65,7 +65,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 	// Find argument types and separate positional and default arguments
 	vector<LogicalType> positional_arg_types;
 	InsertionOrderPreservingMap<LogicalType> named_arg_types;
-	for (auto &arg : function_expr.children) {
+	for (auto &arg : function_expr.GetChildrenMutable()) {
 		auto arg_copy = arg->Copy();
 		LogicalType arg_type = LogicalType::UNKNOWN;
 		if (requires_bind) {
