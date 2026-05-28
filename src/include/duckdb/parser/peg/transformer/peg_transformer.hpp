@@ -265,7 +265,6 @@ public:
 	void RegisterCopy();
 	void RegisterCreateMacro();
 	void RegisterCreateTable();
-	void RegisterCreateType();
 	void RegisterDrop();
 	void RegisterExpression();
 	void RegisterInsert();
@@ -451,12 +450,6 @@ private:
 	static bool TransformGeneratedColumnType(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformIfNotExists(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformOrReplace(PEGTransformer &transformer, ParseResult &parse_result);
-
-	// create_type.gram
-	static unique_ptr<CreateStatement> TransformCreateTypeStmt(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<CreateTypeInfo> TransformCreateType(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<SelectStatement> TransformEnumSelectType(PEGTransformer &transformer, ParseResult &parse_result);
-	static LogicalType TransformEnumStringLiteralList(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// create_trigger.gram
 	static TriggerForEach TransformForEachClause(PEGTransformer &transformer, ParseResult &parse_result);
@@ -1412,6 +1405,24 @@ private:
 	static unique_ptr<TransformResultValue> TransformForEachStatementInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static TriggerForEach TransformForEachStatement(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCreateTypeStmtInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<CreateStatement> TransformCreateTypeStmt(PEGTransformer &transformer, const bool &if_not_exists,
+	                                                           const QualifiedName &qualified_name,
+	                                                           unique_ptr<CreateTypeInfo> create_type);
+	static unique_ptr<TransformResultValue> TransformCreateTypeInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCreateTypeFromTypeInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<CreateTypeInfo> TransformCreateTypeFromType(PEGTransformer &transformer, const LogicalType &type);
+	static unique_ptr<TransformResultValue> TransformEnumSelectTypeInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<CreateTypeInfo> TransformEnumSelectType(PEGTransformer &transformer,
+	                                                          unique_ptr<SelectStatement> select_statement_internal);
+	static unique_ptr<TransformResultValue> TransformEnumStringLiteralListInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static unique_ptr<CreateTypeInfo> TransformEnumStringLiteralList(PEGTransformer &transformer,
+	                                                                 const vector<string> &string_literal);
 	static unique_ptr<TransformResultValue> TransformCreateViewStmtInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<CreateStatement>

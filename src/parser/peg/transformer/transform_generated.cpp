@@ -999,6 +999,57 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformForEachStatemen
 	return make_uniq<TypedTransformResult<TriggerForEach>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateTypeStmtInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool if_not_exists {};
+	transformer.TransformOptional(list_pr, 1, if_not_exists);
+	auto qualified_name = transformer.Transform<QualifiedName>(list_pr, 2);
+	auto create_type = transformer.Transform<unique_ptr<CreateTypeInfo>>(list_pr, 4);
+	auto result = TransformCreateTypeStmt(transformer, if_not_exists, qualified_name, std::move(create_type));
+	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateTypeInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<CreateTypeInfo>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<CreateTypeInfo>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateTypeFromTypeInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto type = transformer.Transform<LogicalType>(list_pr, 0);
+	auto result = TransformCreateTypeFromType(transformer, type);
+	return make_uniq<TypedTransformResult<unique_ptr<CreateTypeInfo>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformEnumSelectTypeInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto select_statement_internal =
+	    transformer.Transform<unique_ptr<SelectStatement>>(ExtractResultFromParens(list_pr.GetChild(1)));
+	auto result = TransformEnumSelectType(transformer, std::move(select_statement_internal));
+	return make_uniq<TypedTransformResult<unique_ptr<CreateTypeInfo>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformEnumStringLiteralListInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &string_literal_opt = ExtractResultFromParens(list_pr.GetChild(1)).Cast<OptionalParseResult>();
+	vector<string> string_literal;
+	if (string_literal_opt.HasResult()) {
+		auto string_literal_items = ExtractParseResultsFromList(string_literal_opt.GetResult());
+		for (auto &string_literal_item : string_literal_items) {
+			string_literal.push_back(transformer.Transform<string>(string_literal_item));
+		}
+	}
+	auto result = TransformEnumStringLiteralList(transformer, string_literal);
+	return make_uniq<TypedTransformResult<unique_ptr<CreateTypeInfo>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateViewStmtInternal(PEGTransformer &transformer,
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -2061,6 +2112,11 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ForEachClause", &PEGTransformerFactory::TransformForEachClauseInternal},
 	    {"ForEachRow", &PEGTransformerFactory::TransformForEachRowInternal},
 	    {"ForEachStatement", &PEGTransformerFactory::TransformForEachStatementInternal},
+	    {"CreateTypeStmt", &PEGTransformerFactory::TransformCreateTypeStmtInternal},
+	    {"CreateType", &PEGTransformerFactory::TransformCreateTypeInternal},
+	    {"CreateTypeFromType", &PEGTransformerFactory::TransformCreateTypeFromTypeInternal},
+	    {"EnumSelectType", &PEGTransformerFactory::TransformEnumSelectTypeInternal},
+	    {"EnumStringLiteralList", &PEGTransformerFactory::TransformEnumStringLiteralListInternal},
 	    {"CreateViewStmt", &PEGTransformerFactory::TransformCreateViewStmtInternal},
 	    {"CreateRecursive", &PEGTransformerFactory::TransformCreateRecursiveInternal},
 	    {"DeallocateStatement", &PEGTransformerFactory::TransformDeallocateStatementInternal},

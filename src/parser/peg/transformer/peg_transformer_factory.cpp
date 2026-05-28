@@ -284,14 +284,6 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformOrReplace);
 }
 
-void PEGTransformerFactory::RegisterCreateType() {
-	// create_type.gram
-	REGISTER_TRANSFORM(TransformCreateTypeStmt);
-	REGISTER_TRANSFORM(TransformCreateType);
-	REGISTER_TRANSFORM(TransformEnumSelectType);
-	REGISTER_TRANSFORM(TransformEnumStringLiteralList);
-}
-
 void PEGTransformerFactory::RegisterDrop() {
 	// drop.gram
 	REGISTER_TRANSFORM(TransformDropStatement);
@@ -840,8 +832,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCopy();
 	RegisterCreateMacro();
 	RegisterCreateTable();
-	RegisterCreateType();
-	RegisterDescribe();
 	RegisterDrop();
 	RegisterExpression();
 	RegisterInsert();

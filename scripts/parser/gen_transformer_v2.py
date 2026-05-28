@@ -499,6 +499,12 @@ def _analyze_macro_node(node):
             return None
         leaf_name, ops = result
         return (leaf_name, ['list'] + ops)
+    if isinstance(node, OptionalNode):
+        result = _analyze_macro_node(node.child)
+        if result is None:
+            return None
+        leaf_name, ops = result
+        return (leaf_name, ['optional'] + ops)
     return None
 
 
@@ -539,11 +545,16 @@ def _classify_macro(node, idx, rule_types, optional=False):
     child_type = "string" if is_identifier else rule_types[leaf_name].cpp_type
 
     list_positions = [i for i, op in enumerate(ops) if op == 'list']
+    optional_positions = [i for i, op in enumerate(ops) if op == 'optional']
     if len(list_positions) > 1:
         return None  # nested lists not supported
+    if len(optional_positions) > 1:
+        return None
+    if optional and optional_positions:
+        return None
 
     if not list_positions:
-        if optional:
+        if optional or optional_positions:
             return None  # scalar optional macro not supported
         # Scalar path: all ops are 'parens'.
         access_expr = _build_wrapped_expr(f"list_pr.GetChild({idx})", len(ops))
@@ -562,7 +573,16 @@ def _classify_macro(node, idx, rule_types, optional=False):
     # Vector path: parens before the list wrap the collection access;
     # parens after the list unwrap each individual item.
     list_pos = list_positions[0]
-    pre_parens = ops[:list_pos].count('parens')
+    if optional_positions:
+        optional_pos = optional_positions[0]
+        if optional_pos > list_pos:
+            return None
+        pre_optional_parens = ops[:optional_pos].count('parens')
+        pre_parens = ops[optional_pos + 1 : list_pos].count('parens')
+    else:
+        optional_pos = None
+        pre_optional_parens = 0
+        pre_parens = ops[:list_pos].count('parens')
     post_parens = ops[list_pos + 1 :].count('parens')
 
     item_var = f"{var_name}_item"
@@ -577,6 +597,10 @@ def _classify_macro(node, idx, rule_types, optional=False):
         push_content = f"{var_name}.push_back(transformer.Transform<{child_type}>({item_access}));"
 
     if optional:
+        opt_var = f"{var_name}_opt"
+        base_expr = f"{opt_var}.GetResult()"
+        ind = "\t\t"
+    elif optional_pos is not None:
         opt_var = f"{var_name}_opt"
         base_expr = f"{opt_var}.GetResult()"
         ind = "\t\t"
@@ -595,6 +619,15 @@ def _classify_macro(node, idx, rule_types, optional=False):
     if optional:
         lines = [
             f"\tauto &{opt_var} = list_pr.Child<OptionalParseResult>({idx});",
+            f"\tvector<{child_type}> {var_name};",
+            f"\tif ({opt_var}.HasResult()) {{",
+            *loop_lines,
+            f"\t}}",
+        ]
+    elif optional_pos is not None:
+        opt_expr = _build_wrapped_expr(f"list_pr.GetChild({idx})", pre_optional_parens)
+        lines = [
+            f"\tauto &{opt_var} = {opt_expr}.Cast<OptionalParseResult>();",
             f"\tvector<{child_type}> {var_name};",
             f"\tif ({opt_var}.HasResult()) {{",
             *loop_lines,
@@ -1183,7 +1216,7 @@ def main():
         'create_sequence.gram',
         # 'create_table.gram',
         'create_trigger.gram',
-        # 'create_type.gram',
+        'create_type.gram',
         'create_view.gram',
         'deallocate.gram',
         'delete.gram',

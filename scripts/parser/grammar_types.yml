@@ -102,7 +102,6 @@ SelectStatement:
     - OptionalParensSimpleSelect
     - SimpleSelectParens
     - SimpleSelect
-    - EnumSelectType
     - ValuesClause
     - TableStatement
 
@@ -212,6 +211,9 @@ CreateTypeInfo:
   by_value: true
   rules:
     - CreateType
+    - CreateTypeFromType
+    - EnumSelectType
+    - EnumStringLiteralList
 
 MacroFunction:
   type: "unique_ptr<MacroFunction>"
@@ -913,7 +915,6 @@ LogicalType:
   by_value: false
   rules:
     - Type
-    - EnumStringLiteralList
 
 LogicalTypeList:
   type: "vector<LogicalType>"
