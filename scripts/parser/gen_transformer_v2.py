@@ -873,6 +873,7 @@ class GramFileResult:
     declarations: list
     implementations: list
     registrations: list
+    generated_rule_names: list  # names of rules that received an auto-generated Internal
     skipped: list  # (rule_name, reason) — nothing generated
     manual_bodies: list  # (rule_name, reason) — Internal generated, body is hand-written
     body_stubs: list  # cpp definition stubs for bodies that need hand-implementation
@@ -883,6 +884,7 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, matcher_rule
     declarations = []
     implementations = []
     registrations = []
+    generated_rule_names = []
     skipped = []
     manual_bodies = []
     body_stubs = []
@@ -919,6 +921,7 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, matcher_rule
 
             declarations.append(generate_internal_declaration(rule_name))
             registrations.append(generate_registration(rule_name))
+            generated_rule_names.append(rule_name)
 
             if not identifier_alts:
                 alt_types = {rule_types[alt].cpp_type for alt in transformer_alts}
@@ -961,6 +964,7 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, matcher_rule
             if elements is not None:
                 declarations.append(generate_internal_declaration(rule_name))
                 registrations.append(generate_registration(rule_name))
+                generated_rule_names.append(rule_name)
                 semantic = [e for e in elements if not e.skip]
                 if (
                     len(semantic) == 1
@@ -989,6 +993,7 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, matcher_rule
         declarations=declarations,
         implementations=implementations,
         registrations=registrations,
+        generated_rule_names=generated_rule_names,
         skipped=skipped,
         manual_bodies=manual_bodies,
         body_stubs=body_stubs,
@@ -1180,6 +1185,18 @@ def _check_implementations(gram_stem, body_stubs):
     return implemented, mismatched
 
 
+def _find_stale_manual_internals(gram_stem, generated_rule_names):
+    """Return rules whose Internal is now auto-generated but still exists in transform_{gram_stem}.cpp."""
+    cpp_path = transformer_dir / f"transform_{gram_stem}.cpp"
+    if not cpp_path.exists():
+        return []
+    text = cpp_path.read_text()
+    return [
+        name for name in sorted(generated_rule_names)
+        if re.search(rf'\bPEGTransformerFactory::Transform{re.escape(name)}Internal\s*\(', text)
+    ]
+
+
 def print_manual_steps(all_results):
     print("\nRemaining manual steps:")
 
@@ -1196,12 +1213,18 @@ def print_manual_steps(all_results):
             print(f"         {rule_name}: {reason}")
         step += 1
 
-    transform_files = [r for r in all_results if r.declarations]
-    if transform_files:
-        file_list = ", ".join(f"transform_{r.gram_stem}.cpp" for r in transform_files)
-        print(f"\n  {step}. {transformer_dir}/[{file_list}]:")
-        print("       - Remove Internal wrappers that are now generated (keep only hand-written bodies)")
-        print("       - Update body function signatures to match the generated declarations")
+    stale_by_stem = {}
+    for r in all_results:
+        if r.generated_rule_names:
+            stale = _find_stale_manual_internals(r.gram_stem, r.generated_rule_names)
+            if stale:
+                stale_by_stem[r.gram_stem] = stale
+    if stale_by_stem:
+        print(f"\n  {step}. Stale manual Internal wrappers (now auto-generated; remove from transform_*.cpp):")
+        for gram_stem, rule_names in sorted(stale_by_stem.items()):
+            print(f"\n       transform_{gram_stem}.cpp:")
+            for name in rule_names:
+                print(f"         Transform{name}Internal")
         step += 1
 
     has_any_stubs = any(r.body_stubs for r in all_results)
@@ -1260,7 +1283,9 @@ def process_gram_file(gram_filename, rule_types, excluded_rules, matcher_rule_na
         if rule_name in rules:
             rules[rule_name].return_type = info.cpp_type
 
-    return collect_generated(gram_stem, rules, rule_types, excluded_rules, matcher_rule_names, identifier_override_rules)
+    return collect_generated(
+        gram_stem, rules, rule_types, excluded_rules, matcher_rule_names, identifier_override_rules
+    )
 
 
 def main():

@@ -20,11 +20,16 @@
 # Rules handled by RegisterEnum() are NOT listed here (they are auto-detected
 # by generate_transformer.py from peg_transformer_factory.cpp).
 #
-# excluded_rules: rules intentionally skipped during stub generation. When
-# encountered as children in auto-generated sequence rules they are treated as
-# skip elements (no semantic value extracted). Keep this list for syntax-only
-# rules and temporary manual exceptions; matcher-provided rules belong in
-# matcher_rule_overrides instead.
+# excluded_rules: rules intentionally skipped during auto-generation of Internal
+# wrappers. When encountered as children in auto-generated sequence rules they
+# are treated as skip elements UNLESS they also have a type entry, in which case
+# the type entry takes precedence and their value IS extracted. Keep this list
+# for syntax-only rules and temporary manual exceptions; matcher-provided rules
+# belong in matcher_rule_overrides instead.
+# Note: some entries (e.g. CTEBodyContent, SingleArrowPair, CommentValue,
+# ConstraintName, IntervalNumber, Program) also appear in type categories because
+# they are manually implemented and referenced as children by auto-generated
+# rules. The excluded status only suppresses Internal auto-generation.
 #
 # matcher_rule_overrides: named grammar rules that matcher.cpp replaces with a
 # specialized Matcher instead of constructing from the grammar rule body. The
@@ -1165,6 +1170,7 @@ overrides:
 
 matcher_rule_overrides:
   Identifier:
+    allow_type_overlap: true
     matcher: identifier
     suggestion: SUGGEST_VARIABLE
   ReservedIdentifier:
@@ -1192,12 +1198,14 @@ matcher_rule_overrides:
     matcher: reserved_identifier
     suggestion: SUGGEST_COLUMN_NAME
   IndexName:
+    allow_type_overlap: true
     matcher: identifier
     suggestion: SUGGEST_VARIABLE
   ReservedIndexName:
     matcher: reserved_identifier
     suggestion: SUGGEST_VARIABLE
   SequenceName:
+    allow_type_overlap: true
     matcher: identifier
     suggestion: SUGGEST_VARIABLE
   FunctionName:
@@ -1222,10 +1230,13 @@ matcher_rule_overrides:
     matcher: reserved_identifier
     suggestion: SUGGEST_VARIABLE
   NumberLiteral:
+    allow_type_overlap: true
     matcher: number_literal
   StringLiteral:
+    allow_type_overlap: true
     matcher: string_literal
   OperatorLiteral:
+    allow_type_overlap: true
     matcher: operator
 
 # ---------------------------------------------------------------------------
