@@ -629,6 +629,11 @@ QualifiedName:
     - QualifiedName
     - QualifiedSchemaName
     - QualifiedIndexName
+    - QualifiedSchemaNameString
+    - QualifiedIndexNameString
+    - CatalogReservedSchema
+    - SchemaReservedIndex
+    - CatalogReservedSchemaIndex
     - FunctionIdentifier
     - SchemaReservedFunctionName
     - CatalogReservedSchemaFunctionName
@@ -839,6 +844,7 @@ String:
     - ReservedTableQualification
     - CatalogQualification
     - SchemaQualification
+    - ReservedSchemaQualification
     - BaseWindowName
     - Framing
     - AtUnit
@@ -894,6 +900,8 @@ Bool:
     - Materialized
     - SampleUnit
     - DropBehavior
+    - CascadeDropBehavior
+    - RestrictDropBehavior
     - AnyOrAll
     - IgnoreOrRespectNulls
     - PrecedingOrFollowing
@@ -903,6 +911,9 @@ Bool:
     - CheckpointForce
     - IfNotExists
     - OrReplace
+    - FunctionTypeMacro
+    - FunctionTypeMacroKeyword
+    - FunctionTypeFunction
     - DeallocatePrepare
     - CreateRecursive
     - ExplainAnalyze
@@ -1144,7 +1155,6 @@ overrides:
 excluded_rules:
   - CommentValue
   - Program
-  - FunctionType
   - Database
   - AbortOrRollback
   - CommitOrEnd
@@ -1183,7 +1193,6 @@ excluded_rules:
   - AlwaysOrByDefault
   - Lateral
   - ConstraintNameClause
-  - ReservedSchemaQualification
   - UsingSample
   - TableSample
   - NamedParameterAssignment

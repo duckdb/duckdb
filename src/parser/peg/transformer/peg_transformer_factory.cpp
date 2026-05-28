@@ -155,6 +155,7 @@ void PEGTransformerFactory::RegisterCommon() {
 	// common.gram
 	REGISTER_TRANSFORM(TransformNumberLiteral);
 	REGISTER_TRANSFORM(TransformStringLiteral);
+	REGISTER_TRANSFORM(TransformCollationName);
 	REGISTER_TRANSFORM(TransformType);
 	REGISTER_TRANSFORM(TransformArrayBounds);
 	REGISTER_TRANSFORM(TransformSquareBracketsArray);
@@ -282,32 +283,6 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformGeneratedColumnType);
 	REGISTER_TRANSFORM(TransformIfNotExists);
 	REGISTER_TRANSFORM(TransformOrReplace);
-}
-
-void PEGTransformerFactory::RegisterDrop() {
-	// drop.gram
-	REGISTER_TRANSFORM(TransformDropStatement);
-	REGISTER_TRANSFORM(TransformDropEntries);
-	REGISTER_TRANSFORM(TransformDropTable);
-	REGISTER_TRANSFORM(TransformTableOrView);
-	REGISTER_TRANSFORM(TransformDropTableFunction);
-	REGISTER_TRANSFORM(TransformDropFunction);
-	REGISTER_TRANSFORM(TransformDropSchema);
-	REGISTER_TRANSFORM(TransformQualifiedSchemaName);
-	REGISTER_TRANSFORM(TransformCatalogReservedSchema);
-	REGISTER_TRANSFORM(TransformDropIndex);
-	REGISTER_TRANSFORM(TransformQualifiedIndexName);
-	REGISTER_TRANSFORM(TransformSchemaReservedIndex);
-	REGISTER_TRANSFORM(TransformCatalogReservedSchemaIndex);
-	REGISTER_TRANSFORM(TransformDropSequence);
-	REGISTER_TRANSFORM(TransformCollationName);
-	REGISTER_TRANSFORM(TransformDropCollation);
-	REGISTER_TRANSFORM(TransformDropType);
-	REGISTER_TRANSFORM(TransformDropBehavior);
-	REGISTER_TRANSFORM(TransformIfExists);
-	REGISTER_TRANSFORM(TransformDropSecret);
-	REGISTER_TRANSFORM(TransformDropSecretStorage);
-	REGISTER_TRANSFORM(TransformDropTrigger);
 }
 
 void PEGTransformerFactory::RegisterExpression() {
@@ -835,7 +810,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCopy();
 	RegisterCreateMacro();
 	RegisterCreateTable();
-	RegisterDrop();
 	RegisterExpression();
 	RegisterInsert();
 	RegisterConnect();
