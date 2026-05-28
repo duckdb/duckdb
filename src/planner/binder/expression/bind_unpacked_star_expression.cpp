@@ -47,7 +47,7 @@ static void ReplaceInFunction(unique_ptr<ParsedExpression> &expr, expression_lis
 	// Replace children
 	expression_list_t new_children;
 	for (auto &child : function_expr.children) {
-		AddChild(child.GetExpression(), new_children, star_list, star, regex);
+		AddChild(child.GetExpressionMutable(), new_children, star_list, star, regex);
 	}
 
 	function_expr.children.clear();

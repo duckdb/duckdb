@@ -196,8 +196,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 	transformer.TransformOptional<bool>(extract_parens, 3, ignore_nulls);
 
 	auto &export_opt = list_pr.Child<OptionalParseResult>(4);
-	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0].GetExpression()) && !distinct &&
-	    order_modifier->orders.empty()) {
+	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0].GetExpressionMutable()) &&
+	    !distinct && order_modifier->orders.empty()) {
 		// COUNT(*) gets converted into COUNT()
 		function_children.clear();
 	}
@@ -228,7 +228,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			if (arg.HasName()) {
 				throw ParserException("Named arguments are not supported in window functions");
 			}
-			expr->children.push_back(std::move(arg.GetExpression()));
+			expr->children.push_back(std::move(arg.GetExpressionMutable()));
 		}
 
 		expr->has_ignore_nulls = has_ignore_nulls_result;
@@ -255,10 +255,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 
 		auto expr = make_uniq<CaseExpression>();
 		CaseCheck check;
-		check.when_expr = std::move(function_children[0].GetExpression());
-		check.then_expr = std::move(function_children[1].GetExpression());
+		check.when_expr = std::move(function_children[0].GetExpressionMutable());
+		check.then_expr = std::move(function_children[1].GetExpressionMutable());
 		expr->CaseChecksMutable().push_back(std::move(check));
-		expr->ElseMutable() = std::move(function_children[2].GetExpression());
+		expr->ElseMutable() = std::move(function_children[2].GetExpressionMutable());
 		return std::move(expr);
 	}
 	if (lowercase_name == "unpack") {
@@ -270,7 +270,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			if (arg.HasName()) {
 				throw ParserException("Named arguments are not supported in UNPACK operator");
 			}
-			expr->children.push_back(std::move(arg.GetExpression()));
+			expr->children.push_back(std::move(arg.GetExpressionMutable()));
 		}
 		return std::move(expr);
 	}
@@ -283,7 +283,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			if (arg.HasName()) {
 				throw ParserException("Named arguments are not supported in TRY expression");
 			}
-			try_expression->children.push_back(std::move(arg.GetExpression()));
+			try_expression->children.push_back(std::move(arg.GetExpressionMutable()));
 		}
 		return std::move(try_expression);
 	}
@@ -293,7 +293,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			if (arg.HasName()) {
 				throw ParserException("Named arguments are not supported in array constructors");
 			}
-			construct_array->children.push_back(std::move(arg.GetExpression()));
+			construct_array->children.push_back(std::move(arg.GetExpressionMutable()));
 		}
 		return std::move(construct_array);
 	}
@@ -309,15 +309,16 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 
 		//  Two-argument COALESCE
 		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
-		coalesce_op->children.push_back(std::move(function_children[0].GetExpression()));
-		coalesce_op->children.push_back(std::move(function_children[1].GetExpression()));
+		coalesce_op->children.push_back(std::move(function_children[0].GetExpressionMutable()));
+		coalesce_op->children.push_back(std::move(function_children[1].GetExpressionMutable()));
 		return std::move(coalesce_op);
 	}
 	if (lowercase_name == "date") {
 		if (function_children.size() != 1) {
 			throw ParserException("Wrong number of arguments provided to DATE function");
 		}
-		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0].GetExpression())));
+		return std::move(
+		    make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0].GetExpressionMutable())));
 	}
 	if (has_ignore_nulls_result) {
 		throw ParserException("RESPECT/IGNORE NULLS is not supported for non-window functions");
@@ -1627,7 +1628,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMethodExpression(PE
 			function_children.push_back(transformer.Transform<FunctionArgument>(function_argument));
 		}
 	}
-	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0].GetExpression())) {
+	if (function_children.size() == 1 && ExpressionIsEmptyStar(function_children[0].GetExpression())) {
 		// COUNT(*) gets converted into COUNT()
 		function_children.clear();
 	}

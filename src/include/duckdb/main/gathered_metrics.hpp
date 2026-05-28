@@ -51,7 +51,7 @@ public:
 	}
 
 	bool AnyOperatorMetricTracked() const {
-		static const string OPERATOR_PREFIX = "operator.";
+		const string OPERATOR_PREFIX = "operator.";
 		if (MetricIsTracked(OPERATOR_PREFIX)) {
 			return true;
 		}

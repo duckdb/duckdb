@@ -526,7 +526,7 @@ static void BindPivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &v
 			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain columns or lists of columns");
 		}
 		for (auto &child : function.children) {
-			BindPivotInList(child.GetExpression(), values, binder);
+			BindPivotInList(child.GetExpressionMutable(), values, binder);
 		}
 	} break;
 	default: {

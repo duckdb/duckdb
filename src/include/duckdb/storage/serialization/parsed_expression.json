@@ -237,7 +237,9 @@
       {
         "id": 202,
         "name": "children",
-        "type": "vector<ParsedExpression*>"
+        "type": "vector<FunctionArgument>",
+        "accessor_mut": "GetArgumentsMutable()",
+        "accessor": "GetArguments()"
       },
       {
         "id": 203,

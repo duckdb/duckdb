@@ -87,8 +87,8 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &cast_expr = Cast<FunctionExpression>();
-		for (auto &child : cast_expr.children) {
-			result.Append(*child);
+		for (auto &arg : cast_expr.GetArguments()) {
+			result.Append(arg.GetExpression());
 		}
 		if (cast_expr.filter) {
 			result.Append(*cast_expr.filter);
@@ -229,8 +229,8 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &cast_expr = Cast<FunctionExpression>();
-		for (auto &child : cast_expr.children) {
-			result.Append(child);
+		for (auto &arg : cast_expr.GetArgumentsMutable()) {
+			result.Append(arg.GetExpressionMutable());
 		}
 		if (cast_expr.filter) {
 			result.Append(cast_expr.filter);
@@ -603,8 +603,13 @@ bool FunctionExpression::Equals(const ParsedExpression &other) const {
 	if (schema != other_p.schema) {
 		return false;
 	}
-	if (!ParsedExpression::ListEquals(children, other_p.children)) {
+	if (children.size() != other_p.children.size()) {
 		return false;
+	}
+	for (idx_t i = 0; i < children.size(); i++) {
+		if (!children[i].Equals(other_p.children[i])) {
+			return false;
+		}
 	}
 	if (!ParsedExpression::Equals(filter, other_p.filter)) {
 		return false;
@@ -638,8 +643,8 @@ unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
 	copy->function_name = function_name;
 	copy->schema = schema;
-	for (auto &child : children) {
-		copy->children.push_back(child->Copy());
+	for (auto &arg : children) {
+		copy->children.emplace_back(arg.Copy());
 	}
 	copy->filter = filter ? filter->Copy() : nullptr;
 	copy->order_bys = order_bys ? unique_ptr_cast<ResultModifier, OrderModifier>(order_bys->Copy()) : nullptr;

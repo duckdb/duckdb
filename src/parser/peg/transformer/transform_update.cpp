@@ -57,7 +57,7 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetTuple(PEGTran
 			                      func_expr.children.size());
 		}
 		for (auto &arg : func_expr.children) {
-			result->expressions.push_back(std::move(arg.GetExpression()));
+			result->expressions.push_back(std::move(arg.GetExpressionMutable()));
 		}
 	} else {
 		result->expressions.reserve(result->columns.size());

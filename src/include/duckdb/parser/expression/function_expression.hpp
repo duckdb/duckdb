@@ -35,11 +35,11 @@ public:
 		return !name.empty();
 	}
 
-	unique_ptr<ParsedExpression> &GetExpression() {
+	unique_ptr<ParsedExpression> &GetExpressionMutable() {
 		return expression;
 	}
-	const unique_ptr<ParsedExpression> &GetExpression() const {
-		return expression;
+	const ParsedExpression &GetExpression() const {
+		return *expression;
 	}
 
 	FunctionArgument Copy() const {
@@ -134,9 +134,18 @@ public:
 	void Verify() const override;
 
 	//! Returns a pointer to the lambda expression, if the function has a lambda expression as a child, else nullptr.
-	optional_ptr<ParsedExpression> IsLambdaFunction() const;
+	optional_ptr<ParsedExpression> IsLambdaFunction();
 
-	bool IsLegacyFunctionCall() const { return is_legacy_function_call; }
+	bool IsLegacyFunctionCall() const {
+		return is_legacy_function_call;
+	}
+
+	const vector<FunctionArgument> &GetArguments() const {
+		return children;
+	}
+	vector<FunctionArgument> &GetArgumentsMutable() {
+		return children;
+	}
 
 private:
 	FunctionExpression();

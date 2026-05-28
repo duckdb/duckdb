@@ -305,15 +305,15 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 void ColumnQualifier::QualifyColumnNamesInLambda(FunctionExpression &function,
                                                  vector<unordered_set<string>> &lambda_params) {
 	for (auto &child : function.children) {
-		if (child.GetExpression()->GetExpressionClass() != ExpressionClass::LAMBDA) {
+		if (child.GetExpression().GetExpressionClass() != ExpressionClass::LAMBDA) {
 			// not a lambda expression
-			QualifyColumnNames(child.GetExpression(), lambda_params, true);
+			QualifyColumnNames(child.GetExpressionMutable(), lambda_params, true);
 			continue;
 		}
 
 		// special-handling for LHS lambda parameters
 		// we do not qualify them, and we add them to the lambda_params vector
-		auto &lambda_expr = child.GetExpression()->Cast<LambdaExpression>();
+		auto &lambda_expr = child.GetExpressionMutable()->Cast<LambdaExpression>();
 		string error_message;
 		auto column_ref_expressions = lambda_expr.ExtractColumnRefExpressions(error_message);
 

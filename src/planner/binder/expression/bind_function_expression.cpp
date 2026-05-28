@@ -316,7 +316,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 	// bind of each child
 	for (idx_t i = 0; i < function.children.size(); i++) {
-		BindChild(function.children[i].GetExpression(), depth, error);
+		BindChild(function.children[i].GetExpressionMutable(), depth, error);
 	}
 
 	if (error.HasError()) {
@@ -333,7 +333,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	vector<pair<string, unique_ptr<Expression>>> keyword_children;
 
 	for (auto &arg : function.children) {
-		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpression());
+		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
 
 		if (function.IsLegacyFunctionCall()) {
 			// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
@@ -354,7 +354,6 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		throw BinderException(bound_arg->GetQueryLocation(),
 		                      "Positional argument '%s' cannot follow named arguments in a function call.",
 		                      bound_arg->ToString());
-
 	}
 
 	FunctionBinder function_binder(binder);
@@ -386,7 +385,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	// constexpr idx_t list_ix = 0;
 	constexpr idx_t list_idx = 0;
 	constexpr idx_t lambda_expr_idx = 1;
-	D_ASSERT(function.children[lambda_expr_idx].GetExpression()->GetExpressionClass() == ExpressionClass::LAMBDA);
+	D_ASSERT(function.children[lambda_expr_idx].GetExpression().GetExpressionClass() == ExpressionClass::LAMBDA);
 
 	vector<LogicalType> function_child_types;
 	// bind the list
@@ -397,22 +396,22 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 			continue;
 		}
 
-		if (function.children[i].GetExpression()->GetExpressionClass() == ExpressionClass::LAMBDA) {
+		if (function.children[i].GetExpression().GetExpressionClass() == ExpressionClass::LAMBDA) {
 			return BindResult("No function matches the given name and argument types: '" + function.ToString() +
 			                  "'. You might need to add explicit type casts.");
 		}
 
-		BindChild(function.children[i].GetExpression(), depth, error);
+		BindChild(function.children[i].GetExpressionMutable(), depth, error);
 		if (error.HasError()) {
 			return BindResult(std::move(error));
 		}
 
-		const auto &child = BoundExpression::GetExpression(*function.children[i].GetExpression());
+		const auto &child = BoundExpression::GetExpression(*function.children[i].GetExpressionMutable());
 		function_child_types.push_back(child->GetReturnType());
 	}
 
 	// get the logical type of the children of the list
-	auto &list_child = BoundExpression::GetExpression(*function.children[list_idx].GetExpression());
+	auto &list_child = BoundExpression::GetExpression(*function.children[list_idx].GetExpressionMutable());
 	if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
 	    list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
 	    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
@@ -421,7 +420,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// bind the lambda parameter
-	auto &lambda_expr = function.children[lambda_expr_idx].GetExpression()->Cast<LambdaExpression>();
+	auto &lambda_expr = function.children[lambda_expr_idx].GetExpressionMutable()->Cast<LambdaExpression>();
 
 	unique_ptr<ParsedExpression> lambda_expr_copy;
 	const bool is_list_reduce = func.name == "list_reduce";
@@ -466,10 +465,10 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// successfully bound: replace the node with a BoundExpression
-	auto alias = function.children[lambda_expr_idx].GetExpression()->GetAlias();
+	auto alias = function.children[lambda_expr_idx].GetExpression().GetAlias();
 	bind_lambda_result.expression->SetAlias(alias);
 
-	function.children[lambda_expr_idx].GetExpression() =
+	function.children[lambda_expr_idx].GetExpressionMutable() =
 	    make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
 
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
@@ -480,7 +479,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	// extract the children and types
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < function.children.size(); i++) {
-		auto &child = BoundExpression::GetExpression(*function.children[i].GetExpression());
+		auto &child = BoundExpression::GetExpression(*function.children[i].GetExpressionMutable());
 		children.push_back(std::move(child));
 	}
 

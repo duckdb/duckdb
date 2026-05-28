@@ -415,7 +415,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 
 	vector<unique_ptr<ParsedExpression>> children;
 	for (auto &child : fexpr.children) {
-		children.push_back(std::move(child.GetExpression()));
+		children.push_back(std::move(child.GetExpressionMutable()));
 	}
 
 	if (!BindTableFunctionParameters(function, children, arguments, parameters, named_parameters, subquery, error)) {

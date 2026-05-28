@@ -166,10 +166,10 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	}
 	auto &left = function.children[0];
 	// expression must have a star on the LHS, and a literal on the RHS
-	if (left.GetExpression()->GetExpressionClass() != ExpressionClass::STAR) {
+	if (left.GetExpression().GetExpressionClass() != ExpressionClass::STAR) {
 		return;
 	}
-	auto &star = left.GetExpression()->Cast<StarExpression>();
+	auto &star = left.GetExpressionMutable()->Cast<StarExpression>();
 	if (star.columns) {
 		// COLUMNS(*) has different semantics
 		return;
@@ -190,7 +190,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		throw BinderException(*root, "Function \"%s\" cannot be applied to a star expression", function.function_name);
 	}
 	auto &right = function.children[1];
-	if (right.GetExpression()->GetExpressionClass() != ExpressionClass::CONSTANT) {
+	if (right.GetExpression().GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw BinderException(*root, "Pattern applied to a star expression must be a constant");
 	}
 	if (!star.rename_list.empty()) {
@@ -204,7 +204,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	unique_ptr<ParsedExpression> child_expr;
 	if (!inverse && function.function_name == "regexp_full_match" && star.exclude_list.empty()) {
 		// * SIMILAR TO '[regex]' is equivalent to COLUMNS('[regex]') so we can just move the expression directly
-		child_expr = std::move(right.GetExpression());
+		child_expr = std::move(right.GetExpressionMutable());
 	} else {
 		// for other expressions -> generate a columns expression
 		// "* LIKE '%literal%'
@@ -223,7 +223,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		auto lambda = make_uniq<LambdaExpression>(std::move(named_parameters), std::move(lambda_body));
 
 		vector<unique_ptr<ParsedExpression>> filter_children;
-		filter_children.push_back(std::move(star_expr.GetExpression()));
+		filter_children.push_back(std::move(star_expr.GetExpressionMutable()));
 		filter_children.push_back(std::move(lambda));
 		child_expr = make_uniq<FunctionExpression>("list_filter", std::move(filter_children));
 	}

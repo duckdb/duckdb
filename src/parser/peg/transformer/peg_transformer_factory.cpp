@@ -947,7 +947,7 @@ ParseResult &PEGTransformerFactory::ExtractResultFromParens(ParseResult &parse_r
 	return list_pr.GetChild(1);
 }
 
-bool PEGTransformerFactory::ExpressionIsEmptyStar(ParsedExpression &expr) {
+bool PEGTransformerFactory::ExpressionIsEmptyStar(const ParsedExpression &expr) {
 	if (expr.GetExpressionClass() != ExpressionClass::STAR) {
 		return false;
 	}
@@ -1014,14 +1014,14 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			child_list_t<Value> values;
 			values.reserve(function.children.size());
 			for (const auto &child : function.children) {
-				if (!unique_names.insert(child.GetExpression()->GetAlias()).second) {
-					throw BinderException("Duplicate struct entry name \"%s\"", child.GetExpression()->GetAlias());
+				if (!unique_names.insert(child.GetExpression().GetAlias()).second) {
+					throw BinderException("Duplicate struct entry name \"%s\"", child.GetExpression().GetAlias());
 				}
 				Value child_value;
-				if (!ConstructConstantFromExpression(*child.GetExpression(), child_value)) {
+				if (!ConstructConstantFromExpression(child.GetExpression(), child_value)) {
 					return false;
 				}
-				values.emplace_back(child.GetExpression()->GetAlias(), std::move(child_value));
+				values.emplace_back(child.GetExpression().GetAlias(), std::move(child_value));
 			}
 			value = Value::STRUCT(std::move(values));
 			return true;
@@ -1030,7 +1030,7 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			values.reserve(function.children.size());
 			for (const auto &child : function.children) {
 				Value child_value;
-				if (!ConstructConstantFromExpression(*child.GetExpression(), child_value)) {
+				if (!ConstructConstantFromExpression(child.GetExpression(), child_value)) {
 					return false;
 				}
 				values.emplace_back(std::move(child_value));
@@ -1047,12 +1047,12 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			return true;
 		} else if (function.function_name == "map") {
 			Value keys;
-			if (!ConstructConstantFromExpression(*function.children[0].GetExpression(), keys)) {
+			if (!ConstructConstantFromExpression(function.children[0].GetExpression(), keys)) {
 				return false;
 			}
 
 			Value values;
-			if (!ConstructConstantFromExpression(*function.children[1].GetExpression(), values)) {
+			if (!ConstructConstantFromExpression(function.children[1].GetExpression(), values)) {
 				return false;
 			}
 
