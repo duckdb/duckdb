@@ -218,13 +218,6 @@ void PEGTransformerFactory::RegisterCopy() {
 
 void PEGTransformerFactory::RegisterCreateMacro() {
 	// create_macro.gram
-	REGISTER_TRANSFORM(TransformCreateMacroStmt);
-	REGISTER_TRANSFORM(TransformMacroDefinition);
-	REGISTER_TRANSFORM(TransformTableMacroDefinition);
-	REGISTER_TRANSFORM(TransformScalarMacroDefinition);
-	REGISTER_TRANSFORM(TransformMacroParameters);
-	REGISTER_TRANSFORM(TransformMacroParameter);
-	REGISTER_TRANSFORM(TransformSimpleParameter);
 }
 
 void PEGTransformerFactory::RegisterCreateTable() {

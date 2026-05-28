@@ -725,6 +725,110 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformNoneLiteralInte
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateMacroStmtInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto macro_or_function = transformer.Transform<bool>(list_pr, 0);
+	bool if_not_exists {};
+	transformer.TransformOptional(list_pr, 1, if_not_exists);
+	auto qualified_name = transformer.Transform<QualifiedName>(list_pr, 2);
+	vector<unique_ptr<MacroFunction>> macro_definition;
+	auto macro_definition_items = ExtractParseResultsFromList(list_pr.GetChild(3));
+	for (auto &macro_definition_item : macro_definition_items) {
+		macro_definition.push_back(transformer.Transform<unique_ptr<MacroFunction>>(macro_definition_item));
+	}
+	auto result = TransformCreateMacroStmt(transformer, macro_or_function, if_not_exists, qualified_name,
+	                                       std::move(macro_definition));
+	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMacroOrFunctionInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<bool>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMacroKeywordInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto result = TransformMacroKeyword(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformFunctionKeywordInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto result = TransformFunctionKeyword(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMacroDefinitionInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<MacroParameter> macro_parameters {};
+	auto &macro_parameters_opt = ExtractResultFromParens(list_pr.GetChild(0)).Cast<OptionalParseResult>();
+	if (macro_parameters_opt.HasResult()) {
+		macro_parameters = transformer.Transform<vector<MacroParameter>>(macro_parameters_opt.GetResult());
+	}
+	auto macro_definition_body = transformer.Transform<unique_ptr<MacroFunction>>(list_pr, 2);
+	auto result = TransformMacroDefinition(transformer, std::move(macro_parameters), std::move(macro_definition_body));
+	return make_uniq<TypedTransformResult<unique_ptr<MacroFunction>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformMacroDefinitionBodyInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<MacroFunction>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<MacroFunction>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMacroParametersInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<MacroParameter> macro_parameter;
+	auto macro_parameter_items = ExtractParseResultsFromList(list_pr.GetChild(0));
+	for (auto &macro_parameter_item : macro_parameter_items) {
+		macro_parameter.push_back(transformer.Transform<MacroParameter>(macro_parameter_item));
+	}
+	auto result = TransformMacroParameters(transformer, std::move(macro_parameter));
+	return make_uniq<TypedTransformResult<vector<MacroParameter>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMacroParameterInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<MacroParameter>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<MacroParameter>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSimpleParameterInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto type_func_name = transformer.Transform<string>(list_pr, 0);
+	LogicalType type {};
+	transformer.TransformOptional(list_pr, 1, type);
+	auto result = TransformSimpleParameter(transformer, type_func_name, type);
+	return make_uniq<TypedTransformResult<MacroParameter>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformScalarMacroDefinitionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr, 0);
+	auto result = TransformScalarMacroDefinition(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<unique_ptr<MacroFunction>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformTableMacroDefinitionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto select_statement_internal = transformer.Transform<unique_ptr<SelectStatement>>(list_pr, 1);
+	auto result = TransformTableMacroDefinition(transformer, std::move(select_statement_internal));
+	return make_uniq<TypedTransformResult<unique_ptr<MacroFunction>>>(std::move(result));
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateSchemaStmtInternal(PEGTransformer &transformer,
                                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -2407,6 +2511,17 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"DefArgKeyword", &PEGTransformerFactory::TransformDefArgKeywordInternal},
 	    {"DefArgStringLiteral", &PEGTransformerFactory::TransformDefArgStringLiteralInternal},
 	    {"NoneLiteral", &PEGTransformerFactory::TransformNoneLiteralInternal},
+	    {"CreateMacroStmt", &PEGTransformerFactory::TransformCreateMacroStmtInternal},
+	    {"MacroOrFunction", &PEGTransformerFactory::TransformMacroOrFunctionInternal},
+	    {"MacroKeyword", &PEGTransformerFactory::TransformMacroKeywordInternal},
+	    {"FunctionKeyword", &PEGTransformerFactory::TransformFunctionKeywordInternal},
+	    {"MacroDefinition", &PEGTransformerFactory::TransformMacroDefinitionInternal},
+	    {"MacroDefinitionBody", &PEGTransformerFactory::TransformMacroDefinitionBodyInternal},
+	    {"MacroParameters", &PEGTransformerFactory::TransformMacroParametersInternal},
+	    {"MacroParameter", &PEGTransformerFactory::TransformMacroParameterInternal},
+	    {"SimpleParameter", &PEGTransformerFactory::TransformSimpleParameterInternal},
+	    {"ScalarMacroDefinition", &PEGTransformerFactory::TransformScalarMacroDefinitionInternal},
+	    {"TableMacroDefinition", &PEGTransformerFactory::TransformTableMacroDefinitionInternal},
 	    {"CreateSchemaStmt", &PEGTransformerFactory::TransformCreateSchemaStmtInternal},
 	    {"CreateSecretStmt", &PEGTransformerFactory::TransformCreateSecretStmtInternal},
 	    {"SecretStorageSpecifier", &PEGTransformerFactory::TransformSecretStorageSpecifierInternal},

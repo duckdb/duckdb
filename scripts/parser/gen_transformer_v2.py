@@ -555,8 +555,32 @@ def _classify_macro(node, idx, rule_types, optional=False):
         return None
 
     if not list_positions:
-        if optional or optional_positions:
-            return None  # scalar optional macro not supported
+        if optional:
+            return None
+        if optional_positions:
+            optional_pos = optional_positions[0]
+            pre_optional_parens = ops[:optional_pos].count('parens')
+            post_optional_parens = ops[optional_pos + 1 :].count('parens')
+            opt_expr = _build_wrapped_expr(f"list_pr.GetChild({idx})", pre_optional_parens)
+            result_expr = _build_wrapped_expr(f"{var_name}_opt.GetResult()", post_optional_parens)
+            if is_identifier:
+                assign_line = f"\t\t{var_name} = {result_expr}.Cast<IdentifierParseResult>().identifier;"
+            else:
+                assign_line = f"\t\t{var_name} = transformer.Transform<{child_type}>({result_expr});"
+            lines = [
+                f"\t{child_type} {var_name} {{}};",
+                f"\tauto &{var_name}_opt = {opt_expr}.Cast<OptionalParseResult>();",
+                f"\tif ({var_name}_opt.HasResult()) {{",
+                assign_line,
+                f"\t}}",
+            ]
+            return SeqElement(
+                skip=False,
+                var_name=var_name,
+                cpp_type=child_type,
+                by_value=False if is_identifier else _is_by_value(leaf_name, rule_types),
+                extraction_lines=lines,
+            )
         # Scalar path: all ops are 'parens'.
         access_expr = _build_wrapped_expr(f"list_pr.GetChild({idx})", len(ops))
         if is_identifier:
@@ -1211,7 +1235,7 @@ def main():
         'connect.gram',
         # 'copy.gram',
         'create_index.gram',
-        # 'create_macro.gram',
+        'create_macro.gram',
         'create_schema.gram',
         'create_secret.gram',
         'create_sequence.gram',

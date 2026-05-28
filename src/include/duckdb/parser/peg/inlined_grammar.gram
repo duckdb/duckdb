@@ -1651,9 +1651,12 @@ AnalyzeTarget <- BaseTableName NameList?
 AnalyzeVerbose <- 'VERBOSE'
 CreateMacroStmt <- MacroOrFunction IfNotExists? QualifiedName List(MacroDefinition)
 
-MacroOrFunction <- 'MACRO' / 'FUNCTION'
+MacroOrFunction <- MacroKeyword / FunctionKeyword
+MacroKeyword <- 'MACRO'
+FunctionKeyword <- 'FUNCTION'
 
-MacroDefinition <- Parens(MacroParameters?) 'AS' (TableMacroDefinition / ScalarMacroDefinition)
+MacroDefinition <- Parens(MacroParameters?) 'AS' MacroDefinitionBody
+MacroDefinitionBody <- TableMacroDefinition / ScalarMacroDefinition
 
 MacroParameters <- List(MacroParameter)
 MacroParameter <- NamedParameter / SimpleParameter

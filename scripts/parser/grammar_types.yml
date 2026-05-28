@@ -220,6 +220,7 @@ MacroFunction:
   by_value: true
   rules:
     - MacroDefinition
+    - MacroDefinitionBody
     - TableMacroDefinition
     - ScalarMacroDefinition
 
@@ -567,7 +568,7 @@ OrderByNodeList:
 
 MacroParameterList:
   type: "vector<MacroParameter>"
-  by_value: false
+  by_value: true
   rules:
     - MacroParameters
 
@@ -746,7 +747,7 @@ GenericCopyOption:
 
 MacroParameter:
   type: "MacroParameter"
-  by_value: false
+  by_value: true
   rules:
     - MacroParameter
     - SimpleParameter
@@ -914,6 +915,9 @@ Bool:
     - FunctionTypeMacro
     - FunctionTypeMacroKeyword
     - FunctionTypeFunction
+    - MacroOrFunction
+    - MacroKeyword
+    - FunctionKeyword
     - DeallocatePrepare
     - CreateRecursive
     - ExplainAnalyze
@@ -1161,7 +1165,6 @@ excluded_rules:
   - StartOrBegin
   - Transaction
   - VariableAssign
-  - MacroOrFunction
   - ColLabel
   - GroupingOrGroupingId
   - DefaultValues
