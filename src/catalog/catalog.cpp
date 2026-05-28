@@ -439,7 +439,7 @@ SchemaCatalogEntry &Catalog::GetSchema(CatalogTransaction transaction, const Ent
 }
 
 bool Catalog::CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &schema) {
-	if (IsRemoteCatalog()) {
+	if (Supports(RemoteCapability::IS_REMOTE)) {
 		// skip this check for remote catalogs
 		return false;
 	}

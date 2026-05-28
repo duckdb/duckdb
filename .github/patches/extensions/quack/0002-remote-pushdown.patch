@@ -18,7 +18,7 @@ index 1389757..43a3e2f 100644
  	bool InMemory() override;
  	string GetDBPath() override;
  
-+	bool IsRemoteCatalog() const override {
++	bool Supports(RemoteCapability) const override {
 +		return true;
 +	}
 +	unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node) override;
