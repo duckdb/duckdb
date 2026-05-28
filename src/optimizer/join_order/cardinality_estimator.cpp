@@ -368,9 +368,11 @@ bool CardinalityEstimator::ApplyJoinPairCap(double &target_denom, JoinRelationSe
 		return false;
 	}
 	auto &first_d = stats.first_distinct_count;
+	if (cap <= 0 || first_d <= 0 || first_d > cap) {
+		return false;
+	}
 	if (cap > 0 && first_d < cap && first_d > 0) {
 		// Raise weak same-pair composite evidence to the FK/PK denominator floor.
-		// If one key is already more selective than the FK/PK floor, keep that stronger denominator.
 		target_denom = target_denom / first_d * cap;
 		first_d = cap;
 	}

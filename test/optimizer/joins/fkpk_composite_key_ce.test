@@ -57,9 +57,10 @@ select count(*) from ck_a join ck_b on ck_a.x = ck_b.x and ck_a.y = ck_b.y;
 1000
 
 # If one same-pair key is already more selective than the FK/PK floor, the
-# composite cap should not weaken that estimate. Here each side is estimated at
-# ~2K rows after filtering, so the FK/PK floor would produce ~2K rows. The x
-# key alone has a 10K-row raw domain and should keep the estimate lower.
+# composite cap should not weaken that estimate or suppress the second
+# condition. Here each side is estimated at ~2K rows after filtering, so the
+# FK/PK floor would produce ~2K rows. The x key alone has a 10K-row raw domain,
+# and the y condition should behave like an extra same-pair inequality.
 
 statement ok
 create table ck_sel_a as select range::integer x, (range % 10)::integer y from range(10000);
@@ -72,7 +73,14 @@ explain select count(*)
 from ck_sel_a join ck_sel_b on ck_sel_a.x = ck_sel_b.x and ck_sel_a.y = ck_sel_b.y
 where ck_sel_a.x < 100 and ck_sel_b.x < 100;
 ----
-physical_plan	<REGEX>:.*HASH_JOIN.*~400 rows.*
+physical_plan	<REGEX>:.*HASH_JOIN.*~200 rows.*
+
+query II
+explain select count(*)
+from ck_sel_a join ck_sel_b on ck_sel_a.x = ck_sel_b.x and ck_sel_a.y < ck_sel_b.y
+where ck_sel_a.x < 100 and ck_sel_b.x < 100;
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*~200 rows.*
 
 # Same-pair predicates are not always composite keys. If both inputs have many
 # rows per observed single-column domain, the row-count cap would make a broad
