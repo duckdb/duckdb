@@ -308,7 +308,10 @@ string Prompt::HandleText(ShellState &state, const string &text, idx_t &length) 
 		length += render_length;
 		return text;
 	}
-	// length gets exceeded by this string - render whatever we can
+	// length gets exceeded by this string - render whatever we can, reserving room for "... D ".
+	constexpr idx_t TRUNCATION_SUFFIX_LENGTH = 6; // "... D "
+	const idx_t max = max_length.GetIndex();
+	const idx_t truncate_budget = max > TRUNCATION_SUFFIX_LENGTH ? max - TRUNCATION_SUFFIX_LENGTH : 0;
 	idx_t start_pos = 0;
 	string truncated_text;
 	for (idx_t i = 1; i <= text.size(); i++) {
@@ -319,7 +322,7 @@ string Prompt::HandleText(ShellState &state, const string &text, idx_t &length) 
 		// this is a character - can we render the PREVIOUS character?
 		auto prev_character = text.substr(start_pos, i - start_pos);
 		auto char_length = state.RenderLength(prev_character);
-		if (length + char_length > max_length.GetIndex()) {
+		if (length + char_length > truncate_budget) {
 			// we cannot - we are done!
 			break;
 		}
