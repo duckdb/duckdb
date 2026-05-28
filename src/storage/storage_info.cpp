@@ -11,7 +11,7 @@ constexpr idx_t Storage::MIN_BLOCK_ALLOC_SIZE;
 constexpr idx_t Storage::DEFAULT_BLOCK_HEADER_SIZE;
 constexpr uint64_t MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 
-const uint64_t VERSION_NUMBER = 64;
+const uint64_t VERSION_NUMBER = 69;
 const uint64_t VERSION_NUMBER_LOWER = 64;
 const uint64_t VERSION_NUMBER_UPPER = 69;
 
@@ -129,7 +129,7 @@ static const SerializationVersionInfo serialization_version_info[] = {
 // END OF SER_ARRAY VERSION INFO
 // clang-format on
 
-static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V0_10_2;
+static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V2_0_0;
 static_assert(static_cast<idx_t>(DEFAULT_STORAGE_VERSION_INFO) == VERSION_NUMBER, "Check on VERSION_INFO");
 
 const StorageVersionInfo *GetStorageVersionInfo() {

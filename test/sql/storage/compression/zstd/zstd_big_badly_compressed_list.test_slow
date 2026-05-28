@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/zstd/zstd_big_badly_compressed_list.test
+# name: test/sql/storage/compression/zstd/zstd_big_badly_compressed_list.test_slow
 # group: [zstd]
 
 statement ok

@@ -420,7 +420,7 @@ void SingleFileBlockManager::AddStorageVersionTag() {
 StorageVersion SingleFileBlockManager::GetVersionNumber() const {
 	auto storage_version = options.storage_version;
 	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version)) {
-		return static_cast<StorageVersion>(VERSION_NUMBER);
+		return StorageVersion::V0_10_2;
 	}
 	// Look up the matching version number.
 	auto version_name = GetStorageVersionName(storage_version, false);

@@ -883,11 +883,14 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateTriggerSt
 	auto trigger_timing = transformer.Transform<TriggerTiming>(list_pr, 3);
 	auto trigger_event = transformer.Transform<TriggerEventInfo>(list_pr, 4);
 	auto base_table_name = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr, 6);
+	TriggerTableReferencingInfo referencing_clause {};
+	transformer.TransformOptional(list_pr, 7, referencing_clause);
 	TriggerForEach for_each_clause {};
-	transformer.TransformOptional(list_pr, 7, for_each_clause);
-	auto trigger_body = transformer.Transform<unique_ptr<SQLStatement>>(list_pr, 8);
+	transformer.TransformOptional(list_pr, 8, for_each_clause);
+	auto trigger_body = transformer.Transform<unique_ptr<SQLStatement>>(list_pr, 9);
 	auto result = TransformCreateTriggerStmt(transformer, if_not_exists, trigger_name, trigger_timing, trigger_event,
-	                                         std::move(base_table_name), for_each_clause, std::move(trigger_body));
+	                                         std::move(base_table_name), referencing_clause, for_each_clause,
+	                                         std::move(trigger_body));
 	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
 }
 
@@ -905,6 +908,40 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTriggerNameInte
 	auto identifier = list_pr.Child<IdentifierParseResult>(0).identifier;
 	auto result = TransformTriggerName(transformer, identifier);
 	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformReferencingClauseInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto referencing_item = transformer.Transform<TriggerTableReferencingInfo>(list_pr, 1);
+	TriggerTableReferencingInfo referencing_item_1 {};
+	transformer.TransformOptional(list_pr, 2, referencing_item_1);
+	auto result = TransformReferencingClause(transformer, referencing_item, referencing_item_1);
+	return make_uniq<TypedTransformResult<TriggerTableReferencingInfo>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformReferencingItemInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<TriggerTableReferencingInfo>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<TriggerTableReferencingInfo>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformReferencingNewTableAsInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_id = transformer.Transform<string>(list_pr, 3);
+	auto result = TransformReferencingNewTableAs(transformer, col_id);
+	return make_uniq<TypedTransformResult<TriggerTableReferencingInfo>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformReferencingOldTableAsInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_id = transformer.Transform<string>(list_pr, 3);
+	auto result = TransformReferencingOldTableAs(transformer, col_id);
+	return make_uniq<TypedTransformResult<TriggerTableReferencingInfo>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformTriggerTimingInternal(PEGTransformer &transformer,
@@ -2099,6 +2136,10 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CreateTriggerStmt", &PEGTransformerFactory::TransformCreateTriggerStmtInternal},
 	    {"TriggerBody", &PEGTransformerFactory::TransformTriggerBodyInternal},
 	    {"TriggerName", &PEGTransformerFactory::TransformTriggerNameInternal},
+	    {"ReferencingClause", &PEGTransformerFactory::TransformReferencingClauseInternal},
+	    {"ReferencingItem", &PEGTransformerFactory::TransformReferencingItemInternal},
+	    {"ReferencingNewTableAs", &PEGTransformerFactory::TransformReferencingNewTableAsInternal},
+	    {"ReferencingOldTableAs", &PEGTransformerFactory::TransformReferencingOldTableAsInternal},
 	    {"TriggerTiming", &PEGTransformerFactory::TransformTriggerTimingInternal},
 	    {"TriggerBefore", &PEGTransformerFactory::TransformTriggerBeforeInternal},
 	    {"TriggerAfter", &PEGTransformerFactory::TransformTriggerAfterInternal},

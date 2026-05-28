@@ -315,6 +315,12 @@ supported_member_entries = [
     'default',
     'status',
     'version',
+    # equality/hash generation annotations (used by generate_util.py)
+    'equals_skip',
+    'hash_skip',
+    # accessor annotations (used by generate_util.py for Children/ChildrenMutable generation)
+    'accessor_mut',
+    'accessor',
 ]
 
 
@@ -334,11 +340,20 @@ def has_default_by_default(type):
     return False
 
 
+def normalize_json_type(type_str):
+    """Map JSON-only type names to their C++ equivalents for serialization."""
+    if type_str == 'Identifier':
+        return 'string'
+    if type_str == 'vector<Identifier>':
+        return 'vector<string>'
+    return type_str
+
+
 class MemberVariable:
     def __init__(self, entry):
         self.id = entry['id']
         self.name = entry['name']
-        self.type = entry['type']
+        self.type = normalize_json_type(entry['type'])
         self.base = None
         self.has_default = False
         self.default = None
@@ -389,6 +404,7 @@ supported_serialize_entries = [
     'includes',
     'finalize_deserialization',
     'ignore_clang_tidy_rules',
+    'functions',
 ]
 
 

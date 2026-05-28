@@ -459,6 +459,9 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformSubstringArguments);
 	REGISTER_TRANSFORM(TransformSubstringExpressionList);
 	REGISTER_TRANSFORM(TransformSubstringParameters);
+	REGISTER_TRANSFORM(TransformSubstringFromFor);
+	REGISTER_TRANSFORM(TransformSubstringFromOptionalFor);
+	REGISTER_TRANSFORM(TransformSubstringFor);
 	REGISTER_TRANSFORM(TransformTrimExpression);
 	REGISTER_TRANSFORM(TransformTrimDirection);
 	REGISTER_TRANSFORM(TransformTrimSource);
@@ -992,14 +995,14 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 	case ExpressionType::OPERATOR_CAST: {
 		auto &cast = expr.Cast<CastExpression>();
 		Value dummy_value;
-		if (!ConstructConstantFromExpression(*cast.child, dummy_value)) {
+		if (!ConstructConstantFromExpression(cast.Child(), dummy_value)) {
 			return false;
 		}
 
 		string error_message;
-		if (!dummy_value.DefaultTryCastAs(cast.cast_type, value, &error_message)) {
+		if (!dummy_value.DefaultTryCastAs(cast.TargetType(), value, &error_message)) {
 			throw ConversionException("Unable to cast %s to %s", dummy_value.ToString(),
-			                          EnumUtil::ToString(cast.cast_type.id()));
+			                          EnumUtil::ToString(cast.TargetType().id()));
 		}
 		return true;
 	}

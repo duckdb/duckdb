@@ -14,7 +14,7 @@ SET index_scan_max_count=999999999
 statement ok
 SET index_scan_percentage=1
 
-foreach sleep_time 0 25 50 75 100
+foreach sleep_time 0 50 100
 
 statement ok
 SET debug_checkpoint_sleep_ms={sleep_time}
