@@ -23,6 +23,11 @@
 # excluded_rules: rules skipped during stub generation. When encountered as
 # children in auto-generated sequence rules they are treated as skip elements
 # (no semantic value extracted).
+#
+# matcher_rule_overrides: named grammar rules that matcher.cpp replaces with a
+# specialized Matcher instead of constructing from the grammar rule body. The
+# transformer generator should treat only `identifier` and `reserved_identifier`
+# entries as direct IdentifierParseResult-producing rules.
 
 # ---------------------------------------------------------------------------
 # unique_ptr<T> categories
@@ -1151,6 +1156,75 @@ overrides:
   # update.gram
   UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
   UpdateSetColumnTarget: "string"
+
+# ---------------------------------------------------------------------------
+# matcher.cpp rule overrides
+# ---------------------------------------------------------------------------
+
+matcher_rule_overrides:
+  Identifier:
+    matcher: identifier
+    suggestion: SUGGEST_VARIABLE
+  ReservedIdentifier:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_VARIABLE
+  CatalogName:
+    matcher: identifier
+    suggestion: SUGGEST_CATALOG_NAME
+  SchemaName:
+    matcher: identifier
+    suggestion: SUGGEST_SCHEMA_NAME
+  ReservedSchemaName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_SCHEMA_NAME
+  TableName:
+    matcher: identifier
+    suggestion: SUGGEST_TABLE_NAME
+  ReservedTableName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_TABLE_NAME
+  ColumnName:
+    matcher: identifier
+    suggestion: SUGGEST_COLUMN_NAME
+  ReservedColumnName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_COLUMN_NAME
+  IndexName:
+    matcher: identifier
+    suggestion: SUGGEST_VARIABLE
+  ReservedIndexName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_VARIABLE
+  SequenceName:
+    matcher: identifier
+    suggestion: SUGGEST_VARIABLE
+  FunctionName:
+    matcher: identifier
+    suggestion: SUGGEST_SCALAR_FUNCTION_NAME
+  ReservedFunctionName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_SCALAR_FUNCTION_NAME
+  TableFunctionName:
+    matcher: identifier
+    suggestion: SUGGEST_TABLE_FUNCTION_NAME
+  TypeName:
+    matcher: identifier
+    suggestion: SUGGEST_TYPE_NAME
+  PragmaName:
+    matcher: identifier
+    suggestion: SUGGEST_PRAGMA_NAME
+  SettingName:
+    matcher: identifier
+    suggestion: SUGGEST_SETTING_NAME
+  CopyOptionName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_VARIABLE
+  NumberLiteral:
+    matcher: number_literal
+  StringLiteral:
+    matcher: string_literal
+  OperatorLiteral:
+    matcher: operator
 
 # ---------------------------------------------------------------------------
 # excluded_rules: no transformer stub generated, no semantic value extracted

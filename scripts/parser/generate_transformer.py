@@ -109,6 +109,30 @@ def load_grammar_types(types_file):
     return rule_types, excluded_rules
 
 
+def load_matcher_rule_overrides(types_file):
+    """Load matcher_rule_overrides from grammar_types.yml."""
+    if yaml is None:
+        print("Error: PyYAML is required. Install with: pip install pyyaml", file=sys.stderr)
+        sys.exit(1)
+
+    if not types_file.is_file():
+        print(f"Error: {types_file} not found.", file=sys.stderr)
+        sys.exit(1)
+
+    with types_file.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+
+    if not isinstance(data, dict):
+        print(f"Error: {types_file} is malformed (expected a top-level mapping).", file=sys.stderr)
+        sys.exit(1)
+
+    overrides = data.get("matcher_rule_overrides", {})
+    if not isinstance(overrides, dict):
+        print(f"Error: matcher_rule_overrides in {types_file} must be a mapping.", file=sys.stderr)
+        sys.exit(1)
+    return overrides
+
+
 def find_grammar_rules(grammar_path):
     """
     Scans the grammar directory for *.gram files and extracts all rule names.
