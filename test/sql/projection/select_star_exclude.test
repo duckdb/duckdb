@@ -145,3 +145,143 @@ SELECT * EXCLUDE (blabla) FROM integers
 statement error
 SELECT integers.* EXCLUDE (blabla) FROM integers
 ----
+
+# EXCEPT is accepted interchangeably with EXCLUDE
+query II
+SELECT * EXCEPT i FROM integers
+----
+2	3
+
+query I
+SELECT * EXCEPT (i, j) FROM integers
+----
+3
+
+query II
+SELECT * EXCEPT (j) FROM integers
+----
+1	3
+
+# case insensitive EXCEPT
+query II
+SELECT * EXCEPT ("J") FROM integers
+----
+1	3
+
+# no columns remaining...
+statement error
+SELECT * EXCEPT (i, j, k) FROM integers
+----
+
+# same but with integers.*
+query II
+SELECT integers.* EXCEPT (i) FROM integers
+----
+2	3
+
+query II
+SELECT integers.* EXCEPT ('i') FROM integers
+----
+2	3
+
+query I
+SELECT integers.* EXCEPT (i, j) FROM integers
+----
+3
+
+query II
+SELECT integers.* EXCEPT (j) FROM integers
+----
+1	3
+
+query III
+SELECT integers.* EXCEPT (i, j), * EXCEPT (i, j), * EXCEPT (i, k) FROM integers
+----
+3	3	2
+
+statement error
+SELECT integers.* EXCEPT (i, j, k) FROM integers
+----
+
+# EXCEPT with multiple tables
+query II
+SELECT * EXCEPT (i, j) FROM integers i1, integers i2
+----
+3	3
+
+query I
+SELECT i1.* EXCEPT (i, j), i2.* EXCEPT (i, j, k) FROM integers i1, integers i2
+----
+3
+
+query III
+SELECT i1.* EXCEPT (i, j), i2.* EXCEPT (k) FROM integers i1, integers i2
+----
+3	1	2
+
+query IIII
+SELECT * EXCEPT (i) FROM integers i1 JOIN integers i2 USING (i)
+----
+2	3	2	3
+
+# qualified EXCEPT entries
+query II
+SELECT * EXCEPT integers.i FROM integers
+----
+2	3
+
+query I
+SELECT * EXCEPT (integers.i, integers.j) FROM integers
+----
+3
+
+query I
+SELECT integers.* EXCEPT (integers.i, integers.j) FROM integers
+----
+3
+
+query I
+SELECT * EXCEPT (INTEGERS.i, integers.J) FROM integers
+----
+3
+
+statement error
+SELECT * EXCEPT (integers.i, integers.j, integers2.i) FROM integers
+----
+not found in FROM clause
+
+statement error
+SELECT * EXCEPT (integers2.i) FROM integers
+----
+not found in FROM clause
+
+query IIII
+SELECT * EXCEPT (i1.i, i2.i) FROM integers i1 JOIN integers i2 USING (i)
+----
+2	3	2	3
+
+# duplicate entry in EXCEPT list
+statement error
+SELECT * EXCEPT (i, i) FROM integers
+----
+Duplicate entry
+
+statement error
+SELECT * EXCEPT (integers.i, i) FROM integers
+----
+Duplicate entry
+
+# column name that does not exist
+statement error
+SELECT * EXCEPT (blabla) FROM integers
+----
+
+statement error
+SELECT integers.* EXCEPT (blabla) FROM integers
+----
+
+# mixing EXCLUDE and EXCEPT in the same query
+query III
+SELECT integers.* EXCLUDE (i, j), * EXCEPT (i, j), * EXCLUDE (i, k) FROM integers
+----
+3	3	2
