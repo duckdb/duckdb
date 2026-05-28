@@ -710,7 +710,39 @@ void StringStats::Merge(BaseStatistics &stats, const StatsWriter<string_t> &stat
 	Merge(stats, other_data);
 }
 
-static FilterPropagateResult CheckZonemapComparisons(int8_t min_comp, int8_t max_comp, ExpressionType comparison_type);
+static FilterPropagateResult CheckZonemapComparisons(int8_t min_comp, int8_t max_comp, ExpressionType comparison_type) {
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		if (min_comp >= 0 && max_comp <= 0) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		if (min_comp < 0 || max_comp > 0) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHAN:
+		if (max_comp <= 0) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		if (min_comp >= 0) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		} else {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+	default:
+		throw InternalException("Expression type not implemented for string statistics zone map");
+	}
+}
 
 FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
                                                 array_ptr<const Value> constants) {
@@ -752,40 +784,6 @@ int8_t CompareStringStats(string_t input, string_t stats, StringStatsType type) 
 		return Comparator::Operation(string_t(input.GetData(), static_cast<uint32_t>(stats.GetSize())), stats);
 	}
 	return Comparator::Operation(input, stats);
-}
-
-static FilterPropagateResult CheckZonemapComparisons(int8_t min_comp, int8_t max_comp, ExpressionType comparison_type) {
-	switch (comparison_type) {
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		if (min_comp >= 0 && max_comp <= 0) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else {
-			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-		}
-	case ExpressionType::COMPARE_NOTEQUAL:
-	case ExpressionType::COMPARE_DISTINCT_FROM:
-		if (min_comp < 0 || max_comp > 0) {
-			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		}
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-	case ExpressionType::COMPARE_GREATERTHAN:
-		if (max_comp <= 0) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else {
-			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-		}
-	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		if (min_comp >= 0) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else {
-			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-		}
-	default:
-		throw InternalException("Expression type not implemented for string statistics zone map");
-	}
 }
 
 FilterPropagateResult StringStats::CheckZonemap(string_t min, StringStatsType min_type, string_t max,
