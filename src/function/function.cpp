@@ -50,6 +50,10 @@ Function::Function(string name_p) : name(std::move(name_p)) {
 Function::~Function() {
 }
 
+SimpleFunction::SimpleFunction(string name_p, FunctionSignature signature_p)
+    : Function(std::move(name_p)), signature(std::move(signature_p)) {
+}
+
 SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type,
                                LogicalType varargs_p)
     : Function(std::move(name_p)), signature(std::move(arguments_p), std::move(varargs_p), std::move(return_type)) {

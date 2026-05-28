@@ -147,6 +147,8 @@ private:
 
 class FunctionSignature {
 public:
+	FunctionSignature() = default;
+
 	FunctionSignature(vector<LogicalType> arguments, LogicalType varargs, LogicalType return_type)
 	    : varargs(std::move(varargs)), return_type(std::move(return_type)) {
 		for (auto &arg : arguments) {
@@ -212,8 +214,9 @@ public:
 	}
 
 	auto GetParameterIndexByName(const string &name) const -> optional_idx {
+		// Parameter names are matched case-insensitively, consistent with SQL identifier semantics.
 		for (idx_t i = 0; i < parameters.size(); i++) {
-			if (parameters[i].GetName() == name) {
+			if (StringUtil::CIEquals(parameters[i].GetName(), name)) {
 				return i;
 			}
 		}
@@ -320,6 +323,7 @@ public:
 
 class SimpleFunction : public Function {
 public:
+	DUCKDB_API SimpleFunction(string name, FunctionSignature signature);
 	DUCKDB_API SimpleFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~SimpleFunction() override;

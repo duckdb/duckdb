@@ -337,6 +337,10 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 		if (function.IsLegacyFunctionCall()) {
 			// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
+			// But we do alias them by their name, so that if we serialize the bound function expression and
+			// deserialize it on an older version of DuckDB, we can still match the arguments by name during binding
+			// (as old DuckDB uses the argument names as aliases for legacy function calls)
+			bound_arg->SetAlias(arg.GetName());
 			children.push_back(std::move(bound_arg));
 			continue;
 		}

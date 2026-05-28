@@ -895,12 +895,141 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
+// Test extension function with named arguments, overloads and default values
+//===--------------------------------------------------------------------===//
+template <int OVERLOAD_IDX>
+static void TestFunctionArgs(DataChunk &args, ExpressionState &state, Vector &result) {
+	args.Flatten();
+	for (idx_t row = 0; row < args.size(); row++) {
+		string str = StringUtil::Format("<%d>|", OVERLOAD_IDX);
+		for (auto &vec : args.data) {
+			if (FlatVector::IsNull(vec, row)) {
+				str += "NULL|";
+			} else {
+				str += vec.GetValue(row).ToSQLString() + "|";
+			}
+		}
+		FlatVector::GetDataMutable<string_t>(result)[row] = StringVector::AddString(result, str);
+	}
+}
+
+// The inspection functions below return VARCHAR and print "<idx>|arg|arg|..." (see
+// TestFunctionArgs) so that a single query result reveals both which overload was chosen
+// and the final positional argument list (after reordering/defaults/varargs). SPECIAL_HANDLING
+// is used so that NULL arguments still reach the body and we can observe their final position.
+static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
+	using NH = FunctionNullHandling;
+
+	// test_named_inspect(a INTEGER, b INTEGER = 100, c INTEGER = 200) -> VARCHAR
+	// Single overload, used to test reordering + defaults.
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddParameter("b", LogicalType::INTEGER, Value::INTEGER(100));
+		sig.AddParameter("c", LogicalType::INTEGER, Value::INTEGER(200));
+		sig.SetReturnType(LogicalType::VARCHAR);
+		ScalarFunction fn("test_named_inspect", std::move(sig), TestFunctionArgs<1>);
+		fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(fn));
+	}
+
+	// test_named_varargs(a INTEGER, b INTEGER = 100, ... INTEGER) -> VARCHAR
+	// Varargs are appended trailing; named varargs have their names discarded but keep order.
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddParameter("b", LogicalType::INTEGER, Value::INTEGER(100));
+		sig.SetVarArgs(LogicalType::INTEGER);
+		sig.SetReturnType(LogicalType::VARCHAR);
+		ScalarFunction fn("test_named_varargs", std::move(sig), TestFunctionArgs<2>);
+		fn.SetNullHandling(NH::SPECIAL_HANDLING);
+		loader.RegisterFunction(std::move(fn));
+	}
+
+	// test_named_overload: overload resolution driven by argument types/arity, including when
+	// the call uses named arguments (which must be reordered before cost is computed).
+	//   <10> (a INTEGER, b INTEGER)
+	//   <11> (a INTEGER, b VARCHAR)
+	//   <12> (a INTEGER)
+	{
+		ScalarFunctionSet set("test_named_overload");
+		{
+			FunctionSignature sig;
+			sig.AddParameter("a", LogicalType::INTEGER);
+			sig.AddParameter("b", LogicalType::INTEGER);
+			sig.SetReturnType(LogicalType::VARCHAR);
+			ScalarFunction fn("", std::move(sig), TestFunctionArgs<10>);
+			fn.SetNullHandling(NH::SPECIAL_HANDLING);
+			set.AddFunction(std::move(fn));
+		}
+		{
+			FunctionSignature sig;
+			sig.AddParameter("a", LogicalType::INTEGER);
+			sig.AddParameter("b", LogicalType::VARCHAR);
+			sig.SetReturnType(LogicalType::VARCHAR);
+			ScalarFunction fn("", std::move(sig), TestFunctionArgs<11>);
+			fn.SetNullHandling(NH::SPECIAL_HANDLING);
+			set.AddFunction(std::move(fn));
+		}
+		{
+			FunctionSignature sig;
+			sig.AddParameter("a", LogicalType::INTEGER);
+			sig.SetReturnType(LogicalType::VARCHAR);
+			ScalarFunction fn("", std::move(sig), TestFunctionArgs<12>);
+			fn.SetNullHandling(NH::SPECIAL_HANDLING);
+			set.AddFunction(std::move(fn));
+		}
+		loader.RegisterFunction(set);
+	}
+
+	// test_named_ambig: two symmetric overloads that tie in cost for an (INTEGER, INTEGER)
+	// call, to verify the ambiguity error is raised even when arguments are named/reordered.
+	//   <13> (x INTEGER, y BIGINT)
+	//   <14> (x BIGINT,  y INTEGER)
+	{
+		ScalarFunctionSet set("test_named_ambig");
+		{
+			FunctionSignature sig;
+			sig.AddParameter("x", LogicalType::INTEGER);
+			sig.AddParameter("y", LogicalType::BIGINT);
+			sig.SetReturnType(LogicalType::VARCHAR);
+			ScalarFunction fn("", std::move(sig), TestFunctionArgs<13>);
+			fn.SetNullHandling(NH::SPECIAL_HANDLING);
+			set.AddFunction(std::move(fn));
+		}
+		{
+			FunctionSignature sig;
+			sig.AddParameter("x", LogicalType::BIGINT);
+			sig.AddParameter("y", LogicalType::INTEGER);
+			sig.SetReturnType(LogicalType::VARCHAR);
+			ScalarFunction fn("", std::move(sig), TestFunctionArgs<14>);
+			fn.SetNullHandling(NH::SPECIAL_HANDLING);
+			set.AddFunction(std::move(fn));
+		}
+		loader.RegisterFunction(set);
+	}
+
+	// test_named_nullshort(a INTEGER, b INTEGER = 100) -> VARCHAR
+	// DEFAULT_NULL_HANDLING (the default): a NULL argument should short-circuit the whole call
+	// to NULL, even when arguments are named/reordered.
+	{
+		FunctionSignature sig;
+		sig.AddParameter("a", LogicalType::INTEGER);
+		sig.AddParameter("b", LogicalType::INTEGER, Value::INTEGER(100));
+		sig.SetReturnType(LogicalType::VARCHAR);
+		loader.RegisterFunction(ScalarFunction("test_named_nullshort", std::move(sig), TestFunctionArgs<6>));
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Extension load + setup
 //===--------------------------------------------------------------------===//
 extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	CreateScalarFunctionInfo hello_alias_info(
 	    ScalarFunction("test_alias_hello", {}, LogicalType::VARCHAR, TestAliasHello));
+
+	RegisterNamedArgumentFunction(loader);
 
 	auto &db = loader.GetDatabaseInstance();
 	// create a scalar function
