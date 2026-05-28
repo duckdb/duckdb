@@ -517,8 +517,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 		if (catalog && catalog->IsRemoteCatalog()) {
 			// Check args: a local macro or UNKNOWN expression in args blocks pushdown
 			CatalogPushdownResult result {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
-			for (auto &arg : func_expr.children) {
-				result = Merge(result, Rewrite(*arg));
+			for (auto &arg : func_expr.GetArgumentsMutable()) {
+				result = Merge(result, Rewrite(*arg.GetExpressionMutable()));
 			}
 			return result;
 		}
@@ -550,8 +550,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 			}
 			// SET_RETURNING_FUNCTION: neutral, recurse into args
 			CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-			for (auto &arg : func_expr.children) {
-				result = Merge(result, Rewrite(*arg));
+			for (auto &arg : func_expr.GetArgumentsMutable()) {
+				result = Merge(result, Rewrite(*arg.GetExpressionMutable()));
 			}
 			return result;
 		}
