@@ -8,6 +8,9 @@ namespace duckdb {
 
 using QueryEdge = QueryGraphEdges::QueryEdge;
 
+NeighborInfo::NeighborInfo(optional_ptr<JoinRelationSet> neighbor) : neighbor(neighbor) {
+}
+
 // LCOV_EXCL_START
 static string QueryEdgeToString(const QueryEdge *info, vector<RelationIndex> prefix) {
 	string result = "";

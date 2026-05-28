@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/join_order/join_relation.hpp
+// duckdb/optimizer/join_order/join_relation_set.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,17 +17,17 @@ namespace duckdb {
 
 //! Set of relations, used in the join graph.
 struct JoinRelationSet {
-	JoinRelationSet(unsafe_unique_array<RelationIndex> relations, idx_t count)
-	    : relations(std::move(relations)), count(count) {
-	}
+public:
+	JoinRelationSet(unsafe_unique_array<RelationIndex> relations, idx_t count);
 
+public:
 	string ToString() const;
 	bool Empty() const;
+	static bool IsSubset(JoinRelationSet &super, JoinRelationSet &sub);
 
+public:
 	unsafe_unique_array<RelationIndex> relations;
 	idx_t count;
-
-	static bool IsSubset(JoinRelationSet &super, JoinRelationSet &sub);
 };
 
 //! The JoinRelationTree is a structure holding all the created JoinRelationSet objects and allowing fast lookup on to

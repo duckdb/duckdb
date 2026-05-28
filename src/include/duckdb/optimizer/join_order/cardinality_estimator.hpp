@@ -7,139 +7,26 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/reference_map.hpp"
-#include "duckdb/planner/column_binding_map.hpp"
-#include "duckdb/optimizer/join_order/query_graph.hpp"
-
+#include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 
 namespace duckdb {
 
 class FilterInfo;
-class JoinPredicate;
 class JoinPredicateModel;
+struct CardinalityEstimatorState;
+struct CompositeJoinPairStats;
+struct DenomInfo;
 struct DenominatorState;
-
-struct DenomInfo {
-	DenomInfo(JoinRelationSet &numerator_relations, double denominator)
-	    : numerator_relations(numerator_relations), denominator(denominator) {
-	}
-
-	JoinRelationSet &numerator_relations;
-	double denominator;
-};
-
-struct RelationsSetToStats {
-	//! column binding sets that are equivalent in a join plan.
-	//! if you have A.x = B.y and B.y = C.z, then one set is {A.x, B.y, C.z}.
-	column_binding_set_t equivalent_relations;
-	//!	the estimated total domains of the equivalent relations determined using HLL
-	idx_t distinct_count_hll;
-	//! the estimated total domains of each relation without using HLL
-	idx_t distinct_count_no_hll;
-	bool has_distinct_count_hll;
-	vector<reference<JoinPredicate>> predicates;
-	vector<string> column_names;
-
-	explicit RelationsSetToStats(const column_binding_set_t &column_binding_set)
-	    : equivalent_relations(column_binding_set), distinct_count_hll(0),
-	      distinct_count_no_hll(NumericLimits<idx_t>::Maximum()), has_distinct_count_hll(false) {};
-};
-
-// class to wrap a join Filter along with some statistical information about the joined columns
-class FilterInfoWithTotalDomains {
-public:
-	FilterInfoWithTotalDomains(JoinPredicate &predicate, RelationsSetToStats &relation_set_to_stats)
-	    : predicate(predicate), distinct_count_hll(relation_set_to_stats.distinct_count_hll),
-	      distinct_count_no_hll(relation_set_to_stats.distinct_count_no_hll),
-	      has_distinct_count_hll(relation_set_to_stats.has_distinct_count_hll) {
-	}
-
-	double GetDistinctCount() const {
-		return static_cast<double>(has_distinct_count_hll ? distinct_count_hll : distinct_count_no_hll);
-	}
-
-	//! Extract the comparison type (EQUAL, LESSTHAN, etc.) from a join filter expression.
-	ExpressionType GetComparisonType();
-	//! Whether this is an INNER equality filter
-	bool IsInnerEquality();
-	FilterInfo &GetFilter() const;
-	JoinPredicate &GetPredicate() const;
-
-	reference<JoinPredicate> predicate;
-	//!	the estimated distinct count the joined columns determined using HLL
-	idx_t distinct_count_hll;
-	//! the estimated total domains of each relation without using HLL
-	idx_t distinct_count_no_hll;
-	bool has_distinct_count_hll;
-};
-
-struct Subgraph2Denominator {
-	optional_ptr<JoinRelationSet> relations;
-	optional_ptr<JoinRelationSet> numerator_relations;
-	double denom;
-
-	Subgraph2Denominator() : relations(nullptr), numerator_relations(nullptr), denom(1) {};
-};
-
-struct CompositeJoinPairStats {
-	// The row-count cap is only plausible when the candidate key cardinality is within the same order of magnitude
-	// as an observed single-column domain. Otherwise broad fact-to-fact joins can look like key lookups.
-	static constexpr double MAX_CARDINALITY_TO_DISTINCT_RATIO = 8;
-
-	double first_distinct_count = 0;
-	double max_distinct_count = 0;
-	bool has_distinct_count = false;
-
-	void RegisterDistinctCount(double distinct_count) {
-		if (!has_distinct_count) {
-			first_distinct_count = distinct_count;
-			has_distinct_count = true;
-		}
-		if (distinct_count > max_distinct_count) {
-			max_distinct_count = distinct_count;
-		}
-	}
-
-	bool CanApplyCap(double cap) const {
-		return has_distinct_count && max_distinct_count > 0 &&
-		       cap <= max_distinct_count * MAX_CARDINALITY_TO_DISTINCT_RATIO;
-	}
-};
-
-class CardinalityHelper {
-public:
-	CardinalityHelper() {
-	}
-	explicit CardinalityHelper(double cardinality_before_filters)
-	    : cardinality_before_filters(cardinality_before_filters) {};
-
-public:
-	// must be a double. Otherwise we can lose significance between different join orders.
-	// our cardinality estimator severely underestimates cardinalities for 3+ joins. However,
-	// if one join order has an estimate of 0.8, and another has an estimate of 0.6, rounding
-	// them means there is no estimated difference, when in reality there could be a very large
-	// difference.
-	double cardinality_before_filters;
-
-	vector<string> table_names_joined;
-	vector<string> column_names;
-};
+struct FilterInfoWithTotalDomains;
+struct Subgraph2Denominator;
 
 class CardinalityEstimator {
 public:
 	static constexpr double DEFAULT_SEMI_ANTI_SELECTIVITY = 5;
-	explicit CardinalityEstimator(JoinRelationSetManager &set_manager, const JoinPredicateModel &predicate_model)
-	    : set_manager(set_manager), predicate_model(predicate_model) {
-	}
-
-private:
-	vector<RelationsSetToStats> relation_set_stats;
-	reference_map_t<JoinRelationSet, CardinalityHelper> relation_set_2_cardinality;
-	JoinRelationSetManager &set_manager;
-	const JoinPredicateModel &predicate_model;
-	vector<RelationStats> relation_stats;
+	CardinalityEstimator(JoinRelationSetManager &set_manager, const JoinPredicateModel &predicate_model);
+	~CardinalityEstimator();
 
 public:
 	void RemoveEmptyTotalDomains();
@@ -175,8 +62,6 @@ private:
 	//! Applied outside the cardinality cache so stored values stay pre-OR.
 	double ApplyOrFilterSelectivities(JoinRelationSet &new_set, double cardinality) const;
 
-	vector<optional_ptr<FilterInfo>> or_filters;
-
 	bool SingleColumnFilter(const FilterInfo &filter_info);
 
 	//! Denom calculation
@@ -204,6 +89,11 @@ private:
 
 	void AddRelationStats(const FilterInfo &filter_info);
 	bool EmptyFilter(const FilterInfo &filter_info);
+
+private:
+	unique_ptr<CardinalityEstimatorState> state;
+	JoinRelationSetManager &set_manager;
+	const JoinPredicateModel &predicate_model;
 };
 
 } // namespace duckdb

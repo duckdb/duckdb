@@ -9,6 +9,11 @@
 
 namespace duckdb {
 
+PlanEnumerator::PlanEnumerator(QueryGraphManager &query_graph_manager, CostModel &cost_model,
+                               const QueryGraphEdges &query_graph)
+    : query_graph(query_graph), query_graph_manager(query_graph_manager), cost_model(cost_model) {
+}
+
 static vector<unordered_set<RelationIndex>> AddSuperSets(const vector<unordered_set<RelationIndex>> &current,
                                                          const vector<RelationIndex> &all_neighbors) {
 	vector<unordered_set<RelationIndex>> ret;

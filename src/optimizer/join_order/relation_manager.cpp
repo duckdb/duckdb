@@ -4,7 +4,7 @@
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
-#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -13,6 +13,17 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
+
+SingleJoinRelation::SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent)
+    : op(op), parent(parent) {
+}
+
+SingleJoinRelation::SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats)
+    : op(op), parent(parent), stats(std::move(stats)) {
+}
+
+RelationManager::RelationManager(ClientContext &context) : context(context) {
+}
 
 const vector<RelationStats> RelationManager::GetRelationStats() {
 	vector<RelationStats> ret;

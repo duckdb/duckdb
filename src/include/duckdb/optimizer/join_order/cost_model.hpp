@@ -18,10 +18,6 @@ class CostModel {
 public:
 	explicit CostModel(QueryGraphManager &query_graph_manager, CardinalityEstimator &cardinality_estimator);
 
-private:
-	//! query graph storing relation manager information
-	QueryGraphManager &query_graph_manager;
-
 public:
 	//! Compute cost of a join relation set
 	double ComputeCost(DPJoinNode &left, DPJoinNode &right, JoinRelationSet &combination,
@@ -29,6 +25,8 @@ public:
 	CardinalityEstimator &GetCardinalityEstimator();
 
 private:
+	//! query graph storing relation manager information
+	QueryGraphManager &query_graph_manager;
 	CardinalityEstimator &cardinality_estimator;
 };
 

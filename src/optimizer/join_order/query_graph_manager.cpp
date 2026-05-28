@@ -3,7 +3,7 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
-#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -15,89 +15,11 @@
 
 namespace duckdb {
 
-void JoinPredicateModel::Clear() {
-	predicates.clear();
-	all_predicates.clear();
-	equality_join_predicates.clear();
-	selectivity_predicates.clear();
-	graph_predicates.clear();
-	has_left_join_predicates = false;
-	equality_classes.clear();
-	equality_pairs.clear();
+GenerateJoinRelation::GenerateJoinRelation(optional_ptr<JoinRelationSet> set, unique_ptr<LogicalOperator> op_p)
+    : set(set), op(std::move(op_p)) {
 }
 
-JoinPredicate &JoinPredicateModel::RegisterPredicate(FilterInfo &filter, JoinPredicateClass predicate_class,
-                                                     ColumnBinding left_equality_binding,
-                                                     ColumnBinding right_equality_binding) {
-	auto predicate = make_uniq<JoinPredicate>(predicates.size(), filter, predicate_class, left_equality_binding,
-	                                          right_equality_binding);
-	auto &result = *predicate;
-	predicates.push_back(std::move(predicate));
-	all_predicates.push_back(result);
-	if (predicate_class == JoinPredicateClass::LEFT_JOIN) {
-		has_left_join_predicates = true;
-	}
-	if (result.HasDisjointJoinEndpoints()) {
-		graph_predicates.push_back(result);
-	}
-	if (result.CanBuildSelectivityDomain()) {
-		selectivity_predicates.push_back(result);
-	}
-	return result;
-}
-
-void JoinPredicateModel::AddEqualityClass(JoinEqualityClass equality_class) {
-	D_ASSERT(equality_class.index == equality_classes.size());
-	for (auto &edge : equality_class.edges) {
-		equality_join_predicates.push_back(edge.predicate);
-	}
-	equality_classes.push_back(std::move(equality_class));
-}
-
-bool JoinPredicateModel::ContainsClassIndex(const vector<idx_t> &class_indices, idx_t equality_class_index) {
-	return std::find(class_indices.begin(), class_indices.end(), equality_class_index) != class_indices.end();
-}
-
-void JoinPredicateModel::AddDirectEqualityPairClass(JoinRelationSet &pair, idx_t equality_class_index,
-                                                    ColumnBinding first_binding, ColumnBinding second_binding) {
-	auto &summary = equality_pairs[pair];
-	if (!ContainsClassIndex(summary.direct_equality_class_indices, equality_class_index)) {
-		summary.direct_equality_class_indices.push_back(equality_class_index);
-	}
-	summary.first_relation_bindings.insert(first_binding);
-	summary.second_relation_bindings.insert(second_binding);
-}
-
-const vector<reference<JoinPredicate>> &JoinPredicateModel::GetPredicates() const {
-	return all_predicates;
-}
-
-const vector<reference<JoinPredicate>> &JoinPredicateModel::GetEqualityJoinPredicates() const {
-	return equality_join_predicates;
-}
-
-const vector<reference<JoinPredicate>> &JoinPredicateModel::GetSelectivityPredicates() const {
-	return selectivity_predicates;
-}
-
-const vector<reference<JoinPredicate>> &JoinPredicateModel::GetGraphPredicates() const {
-	return graph_predicates;
-}
-
-const vector<JoinEqualityClass> &JoinPredicateModel::GetEqualityClasses() const {
-	return equality_classes;
-}
-
-bool JoinPredicateModel::HasLeftJoinPredicates() const {
-	return has_left_join_predicates;
-}
-
-bool JoinPredicateModel::HasDirectCompositeEquality(JoinRelationSet &pair) const {
-	auto entry = equality_pairs.find(pair);
-	if (entry == equality_pairs.end()) {
-		return false;
-	}
-	return entry->second.HasDirectCompositeEquality();
+QueryGraphManager::QueryGraphManager(ClientContext &context) : context(context), relation_manager(context) {
 }
 
 void QueryGraphManager::BuildPredicateModel() {
@@ -265,14 +187,6 @@ void QueryGraphManager::GetEquivalenceBinding(const Expression &expression, Colu
 	default:
 		return;
 	}
-}
-
-void FilterInfo::SetLeftSet(optional_ptr<JoinRelationSet> left_set_new) {
-	left_set = left_set_new;
-}
-
-void FilterInfo::SetRightSet(optional_ptr<JoinRelationSet> right_set_new) {
-	right_set = right_set_new;
 }
 
 static unique_ptr<LogicalOperator> PushFilter(unique_ptr<LogicalOperator> node, unique_ptr<Expression> expr) {

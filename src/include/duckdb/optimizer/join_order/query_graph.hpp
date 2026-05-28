@@ -10,7 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
 #include "duckdb/common/pair.hpp"
@@ -26,9 +26,10 @@ namespace duckdb {
 class JoinPredicate;
 
 struct NeighborInfo {
-	explicit NeighborInfo(optional_ptr<JoinRelationSet> neighbor) : neighbor(neighbor) {
-	}
+public:
+	explicit NeighborInfo(optional_ptr<JoinRelationSet> neighbor);
 
+public:
 	optional_ptr<JoinRelationSet> neighbor;
 	vector<reference<JoinPredicate>> predicates;
 };
@@ -64,6 +65,7 @@ private:
 	void EnumerateNeighborsDFS(JoinRelationSet &node, reference<QueryEdge> info, idx_t index,
 	                           const std::function<bool(NeighborInfo &)> &callback) const;
 
+private:
 	QueryEdge root;
 };
 

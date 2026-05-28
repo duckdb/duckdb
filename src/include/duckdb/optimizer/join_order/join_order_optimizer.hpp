@@ -19,9 +19,9 @@ namespace duckdb {
 class JoinOrderOptimizer {
 public:
 	explicit JoinOrderOptimizer(ClientContext &context);
-	JoinOrderOptimizer CreateChildOptimizer();
 
 public:
+	JoinOrderOptimizer CreateChildOptimizer();
 	//! Perform join reordering inside a plan
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan, optional_ptr<RelationStats> stats = nullptr);
 	//! Adds/gets materialized CTE stats

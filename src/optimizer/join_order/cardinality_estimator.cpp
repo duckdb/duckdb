@@ -13,6 +13,129 @@
 
 namespace duckdb {
 
+struct DenomInfo {
+public:
+	DenomInfo(JoinRelationSet &numerator_relations, double denominator)
+	    : numerator_relations(numerator_relations), denominator(denominator) {
+	}
+
+public:
+	JoinRelationSet &numerator_relations;
+	double denominator;
+};
+
+struct RelationsSetToStats {
+public:
+	explicit RelationsSetToStats(const column_binding_set_t &column_binding_set)
+	    : equivalent_relations(column_binding_set), distinct_count_hll(0),
+	      distinct_count_no_hll(NumericLimits<idx_t>::Maximum()), has_distinct_count_hll(false) {
+	}
+
+public:
+	//! Column binding sets that are equivalent in a join plan.
+	column_binding_set_t equivalent_relations;
+	//! The estimated total domains of the equivalent relations determined using HLL.
+	idx_t distinct_count_hll;
+	//! The estimated total domains of each relation without using HLL.
+	idx_t distinct_count_no_hll;
+	bool has_distinct_count_hll;
+	vector<reference<JoinPredicate>> predicates;
+	vector<string> column_names;
+};
+
+struct FilterInfoWithTotalDomains {
+	FilterInfoWithTotalDomains(JoinPredicate &predicate, RelationsSetToStats &relation_set_to_stats)
+	    : predicate(predicate), distinct_count_hll(relation_set_to_stats.distinct_count_hll),
+	      distinct_count_no_hll(relation_set_to_stats.distinct_count_no_hll),
+	      has_distinct_count_hll(relation_set_to_stats.has_distinct_count_hll) {
+	}
+
+public:
+	double GetDistinctCount() const;
+	ExpressionType GetComparisonType();
+	bool IsInnerEquality();
+	FilterInfo &GetFilter() const;
+	JoinPredicate &GetPredicate() const;
+
+public:
+	reference<JoinPredicate> predicate;
+	idx_t distinct_count_hll;
+	idx_t distinct_count_no_hll;
+	bool has_distinct_count_hll;
+};
+
+struct Subgraph2Denominator {
+public:
+	Subgraph2Denominator() : relations(nullptr), numerator_relations(nullptr), denom(1) {
+	}
+
+public:
+	optional_ptr<JoinRelationSet> relations;
+	optional_ptr<JoinRelationSet> numerator_relations;
+	double denom;
+};
+
+struct CompositeJoinPairStats {
+public:
+	//! The row-count cap is only plausible when the candidate key cardinality is within the same order of magnitude
+	//! as an observed single-column domain. Otherwise broad fact-to-fact joins can look like key lookups.
+	static constexpr double MAX_CARDINALITY_TO_DISTINCT_RATIO = 8;
+
+	void RegisterDistinctCount(double distinct_count) {
+		if (!has_distinct_count) {
+			first_distinct_count = distinct_count;
+			has_distinct_count = true;
+		}
+		if (distinct_count > max_distinct_count) {
+			max_distinct_count = distinct_count;
+		}
+	}
+
+	bool CanApplyCap(double cap) const {
+		return has_distinct_count && max_distinct_count > 0 &&
+		       cap <= max_distinct_count * MAX_CARDINALITY_TO_DISTINCT_RATIO;
+	}
+
+public:
+	double first_distinct_count = 0;
+	double max_distinct_count = 0;
+	bool has_distinct_count = false;
+};
+
+struct CardinalityHelper {
+public:
+	CardinalityHelper() : cardinality_before_filters(0) {
+	}
+	explicit CardinalityHelper(double cardinality_before_filters)
+	    : cardinality_before_filters(cardinality_before_filters) {
+	}
+
+public:
+	// Must be a double. Otherwise we can lose significance between different join orders.
+	double cardinality_before_filters;
+	vector<string> table_names_joined;
+	vector<string> column_names;
+};
+
+struct CardinalityEstimatorState {
+	vector<RelationsSetToStats> relation_set_stats;
+	reference_map_t<JoinRelationSet, CardinalityHelper> relation_set_2_cardinality;
+	vector<RelationStats> relation_stats;
+	vector<optional_ptr<FilterInfo>> or_filters;
+};
+
+CardinalityEstimator::CardinalityEstimator(JoinRelationSetManager &set_manager,
+                                           const JoinPredicateModel &predicate_model)
+    : state(make_uniq<CardinalityEstimatorState>()), set_manager(set_manager), predicate_model(predicate_model) {
+}
+
+CardinalityEstimator::~CardinalityEstimator() {
+}
+
+double FilterInfoWithTotalDomains::GetDistinctCount() const {
+	return static_cast<double>(has_distinct_count_hll ? distinct_count_hll : distinct_count_no_hll);
+}
+
 ExpressionType FilterInfoWithTotalDomains::GetComparisonType() {
 	return GetPredicate().GetComparisonType();
 }
@@ -51,7 +174,7 @@ void CardinalityEstimator::AddRelationStats(const FilterInfo &filter_info) {
 		// No valid binding (EmptyFilter), nothing to record
 		return;
 	}
-	for (const RelationsSetToStats &r2tdom : relation_set_stats) {
+	for (const RelationsSetToStats &r2tdom : state->relation_set_stats) {
 		auto &i_set = r2tdom.equivalent_relations;
 		if (i_set.find(binding) != i_set.end()) {
 			// found an equivalent filter
@@ -62,7 +185,7 @@ void CardinalityEstimator::AddRelationStats(const FilterInfo &filter_info) {
 	auto key = ColumnBinding(binding.table_index, binding.column_index);
 	RelationsSetToStats new_r2tdom(column_binding_set_t({key}));
 
-	relation_set_stats.emplace_back(new_r2tdom);
+	state->relation_set_stats.emplace_back(new_r2tdom);
 }
 
 bool CardinalityEstimator::SingleColumnFilter(const FilterInfo &filter_info) {
@@ -85,13 +208,13 @@ static bool IsJoinOrFilter(const FilterInfo &filter) {
 }
 
 void CardinalityEstimator::InitEquivalentRelations() {
-	relation_set_stats.clear();
-	or_filters.clear();
+	state->relation_set_stats.clear();
+	state->or_filters.clear();
 
 	for (auto predicate_ref : predicate_model.GetPredicates()) {
 		auto &filter = predicate_ref.get().GetFilter();
 		if (IsJoinOrFilter(filter)) {
-			or_filters.push_back(filter);
+			state->or_filters.push_back(filter);
 			continue;
 		}
 		if (SingleColumnFilter(filter)) {
@@ -105,9 +228,9 @@ void CardinalityEstimator::InitEquivalentRelations() {
 		if (equality_class.columns.empty()) {
 			continue;
 		}
-		relation_set_stats.emplace_back(equality_class.columns);
+		state->relation_set_stats.emplace_back(equality_class.columns);
 		for (auto &edge : equality_class.edges) {
-			relation_set_stats.back().predicates.push_back(edge.predicate);
+			state->relation_set_stats.back().predicates.push_back(edge.predicate);
 		}
 	}
 
@@ -124,26 +247,26 @@ void CardinalityEstimator::InitEquivalentRelations() {
 			domain_group.insert(predicate.GetStatsBinding(false));
 		}
 		D_ASSERT(!domain_group.empty());
-		relation_set_stats.emplace_back(domain_group);
-		relation_set_stats.back().predicates.push_back(predicate);
+		state->relation_set_stats.emplace_back(domain_group);
+		state->relation_set_stats.back().predicates.push_back(predicate);
 	}
 	RemoveEmptyTotalDomains();
 }
 
 void CardinalityEstimator::RemoveEmptyTotalDomains() {
 	auto remove_start =
-	    std::remove_if(relation_set_stats.begin(), relation_set_stats.end(),
+	    std::remove_if(state->relation_set_stats.begin(), state->relation_set_stats.end(),
 	                   [](RelationsSetToStats &r_2_tdom) { return r_2_tdom.equivalent_relations.empty(); });
-	relation_set_stats.erase(remove_start, relation_set_stats.end());
+	state->relation_set_stats.erase(remove_start, state->relation_set_stats.end());
 }
 
 double CardinalityEstimator::GetNumerator(JoinRelationSet &set) {
 	double numerator = 1;
 	for (idx_t i = 0; i < set.count; i++) {
 		auto &single_node_set = set_manager.GetJoinRelation(set.relations[i]);
-		auto entry = relation_set_2_cardinality.find(single_node_set);
-		D_ASSERT(entry != relation_set_2_cardinality.end());
-		if (entry == relation_set_2_cardinality.end()) {
+		auto entry = state->relation_set_2_cardinality.find(single_node_set);
+		D_ASSERT(entry != state->relation_set_2_cardinality.end());
+		if (entry == state->relation_set_2_cardinality.end()) {
 			continue;
 		}
 		auto &card_helper = entry->second;
@@ -652,7 +775,7 @@ DenomInfo CardinalityEstimator::CreateDenominatorResult(JoinRelationSet &set, De
 
 DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 	DenominatorState state;
-	auto edges = GetEdges(relation_set_stats, set);
+	auto edges = GetEdges(this->state->relation_set_stats, set);
 	for (auto &edge : edges) {
 		ProcessDenominatorEdge(edge, set, state);
 	}
@@ -669,8 +792,8 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 template <>
 double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
 	double result;
-	auto it = relation_set_2_cardinality.find(new_set);
-	if (it != relation_set_2_cardinality.end()) {
+	auto it = state->relation_set_2_cardinality.find(new_set);
+	if (it != state->relation_set_2_cardinality.end()) {
 		result = it->second.cardinality_before_filters;
 	} else {
 		// can happen if a table has cardinality 0, or a tdom is set to 0
@@ -679,13 +802,13 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 		// include cardinalities of relations on the RHS of a semi/anti join.
 		auto numerator = GetNumerator(denom.numerator_relations);
 		result = numerator / denom.denominator;
-		relation_set_2_cardinality[new_set] = CardinalityHelper(result);
+		state->relation_set_2_cardinality[new_set] = CardinalityHelper(result);
 	}
 	return ApplyOrFilterSelectivities(new_set, result);
 }
 
 double CardinalityEstimator::ApplyOrFilterSelectivities(JoinRelationSet &new_set, double cardinality) const {
-	for (auto &filter : or_filters) {
+	for (auto &filter : state->or_filters) {
 		if (JoinRelationSet::IsSubset(new_set, filter->set.get())) {
 			cardinality *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
 		}
@@ -722,12 +845,12 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 	auto relation_cardinality = stats.cardinality;
 
 	auto card_helper = CardinalityHelper((double)relation_cardinality);
-	relation_set_2_cardinality[*set] = card_helper;
+	state->relation_set_2_cardinality[*set] = card_helper;
 
 	UpdateTotalDomains(set, stats);
 
 	// sort relations from greatest tdom to lowest tdom.
-	std::sort(relation_set_stats.begin(), relation_set_stats.end(), SortTdoms);
+	std::sort(state->relation_set_stats.begin(), state->relation_set_stats.end(), SortTdoms);
 }
 
 void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set, RelationStats &stats) {
@@ -742,7 +865,7 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 		// Update the relation_to_tdom set with the estimated distinct count (or tdom) calculated above
 		auto key = ColumnBinding(TableIndex(relation_id.index), ProjectionIndex(i));
 		auto distinct_count = stats.column_distinct_count.at(i);
-		for (auto &relation_to_tdom : relation_set_stats) {
+		for (auto &relation_to_tdom : state->relation_set_stats) {
 			const auto &i_set = relation_to_tdom.equivalent_relations;
 			if (i_set.find(key) == i_set.end()) {
 				continue;
@@ -765,7 +888,7 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 
 void CardinalityEstimator::AddRelationNamesToRelationStats(vector<RelationStats> &stats) {
 #ifdef DEBUG
-	for (auto &total_domain : relation_set_stats) {
+	for (auto &total_domain : state->relation_set_stats) {
 		for (auto &binding : total_domain.equivalent_relations) {
 			D_ASSERT(binding.table_index.index < stats.size());
 			string column_name;
@@ -781,7 +904,7 @@ void CardinalityEstimator::AddRelationNamesToRelationStats(vector<RelationStats>
 }
 
 void CardinalityEstimator::PrintRelationStats() {
-	for (auto &total_domain : relation_set_stats) {
+	for (auto &total_domain : state->relation_set_stats) {
 		string domain = "Following columns have the same distinct count: ";
 		for (auto &column_name : total_domain.column_names) {
 			domain += column_name + ", ";
