@@ -59,7 +59,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIndexElement(PEGTra
                                                                           const OrderType &desc_or_asc,
                                                                           const OrderByNullType &nulls_first_or_last) {
 	// TODO(Dtenwolde): We currently ignore desc_or_asc and nulls_first_or_last
-	return std::move(expression);
+	return expression;
 }
 
 bool PEGTransformerFactory::TransformUniqueIndex(PEGTransformer &transformer) {
@@ -69,7 +69,7 @@ bool PEGTransformerFactory::TransformUniqueIndex(PEGTransformer &transformer) {
 case_insensitive_map_t<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformWithList(PEGTransformer &transformer,
                                          case_insensitive_map_t<unique_ptr<ParsedExpression>> rel_option_or_oids) {
-	return std::move(rel_option_or_oids);
+	return rel_option_or_oids;
 }
 
 case_insensitive_map_t<unique_ptr<ParsedExpression>>
@@ -111,7 +111,7 @@ PEGTransformerFactory::TransformRelOption(PEGTransformer &transformer, const str
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformRelOptionArgumentOpt(PEGTransformer &transformer,
                                                      unique_ptr<ParsedExpression> def_arg) {
-	return std::move(def_arg);
+	return def_arg;
 }
 
 // DefArgNull <- NullLiteral

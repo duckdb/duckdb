@@ -17,7 +17,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformResetStatement(PEGTrans
 vector<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformSetAssignment(PEGTransformer &transformer,
                                               vector<unique_ptr<ParsedExpression>> variable_list) {
-	return std::move(variable_list);
+	return variable_list;
 }
 
 // SetSetting <- SettingScope? SettingName
@@ -103,7 +103,7 @@ PEGTransformerFactory::TransformStandardAssignment(PEGTransformer &transformer,
 vector<unique_ptr<ParsedExpression>>
 PEGTransformerFactory::TransformVariableList(PEGTransformer &transformer,
                                              vector<unique_ptr<ParsedExpression>> expression) {
-	return std::move(expression);
+	return expression;
 }
 
 // VariableScope <- 'VARIABLE'
