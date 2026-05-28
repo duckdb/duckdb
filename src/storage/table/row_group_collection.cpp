@@ -24,12 +24,12 @@
 
 namespace duckdb {
 
-static bool CanRebuildExistingIndexesAfterVacuum(DataTableInfo &info, idx_t total_rows,
-                                                 idx_t vacuum_rebuild_threshold) {
+static bool CanRebuildExistingIndexesAfterVacuum(DataTableInfo &info, AttachedDatabase &attached, idx_t total_rows) {
 	auto &indexes = info.GetIndexes();
 	if (indexes.Empty() || indexes.HasUnbound()) {
 		return false;
 	}
+	auto vacuum_rebuild_threshold = attached.GetVacuumRebuildIndexThreshold();
 	if (vacuum_rebuild_threshold == 0 || total_rows > vacuum_rebuild_threshold) {
 		return false;
 	}
@@ -501,9 +501,7 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	bool needs_new_row_group = state.row_groups->IsEmpty(l) || row_group_append_mode == RowGroupAppendMode::REQUIRE_NEW;
 	// Otherwise we evaluate the row_group_append_mode
 	if (!needs_new_row_group) {
-		auto vacuum_rebuild_threshold = GetAttached().GetVacuumRebuildIndexThreshold();
-		if (info->GetIndexes().Empty() ||
-		    CanRebuildExistingIndexesAfterVacuum(*info, GetTotalRows(), vacuum_rebuild_threshold)) {
+		if (info->GetIndexes().Empty() || CanRebuildExistingIndexesAfterVacuum(*info, GetAttached(), GetTotalRows())) {
 			// Honor SUGGEST_NEW if vacuum can compact the table later, either because there are no indexes or because
 			// the existing indexes can be rebuilt after vacuuming.
 			needs_new_row_group = row_group_append_mode == RowGroupAppendMode::SUGGEST_NEW;
@@ -1360,8 +1358,8 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	// *unless* vacuum_rebuild_indexes threshold is set, the table's row count
 	// is within the threshold, and all indexes are bound ART indexes,
 	// in which case we allow vacuuming and rebuild the indexes afterward.
-	auto vacuum_rebuild_threshold = checkpoint_state.writer.GetAttached().GetVacuumRebuildIndexThreshold();
-	state.can_rebuild_indexes = CanRebuildExistingIndexesAfterVacuum(*info, GetTotalRows(), vacuum_rebuild_threshold);
+	state.can_rebuild_indexes =
+	    CanRebuildExistingIndexesAfterVacuum(*info, checkpoint_state.writer.GetAttached(), GetTotalRows());
 
 	// We can move around rowids if we either 1) don't have any indexes at all or 2) can_rebuild_indexes is true (in
 	// which case indexes are entirely rebuilt after vacuuming).
