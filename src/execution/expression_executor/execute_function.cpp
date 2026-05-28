@@ -295,6 +295,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 		} else {
 			ExecuteConstantSelectFunction(expr, arguments, *state, result);
 		}
+		arguments.SetChildCardinality(count);
 		return SelectBooleanResult(result, sel, count, true_sel, false_sel);
 	}
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
