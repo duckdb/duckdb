@@ -1,17 +1,15 @@
 #include "duckdb/function/scalar/comparison_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/legacy_bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 
 namespace duckdb {
 
 struct ComparisonFunctionData : public FunctionData {
-	explicit ComparisonFunctionData(ExpressionType expression_type) : expression_type(expression_type) {
+	explicit ComparisonFunctionData(ExpressionType expression_type_p) : expression_type(expression_type_p) {
 	}
 
 	ExpressionType expression_type;
@@ -19,7 +17,7 @@ struct ComparisonFunctionData : public FunctionData {
 public:
 	unique_ptr<FunctionData> Copy() const override {
 		return make_uniq<ComparisonFunctionData>(expression_type);
-	};
+	}
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<ComparisonFunctionData>();
@@ -27,88 +25,148 @@ public:
 	}
 };
 
+template <ExpressionType TYPE>
 void ComparisonFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto expr_type = state.expr.GetExpressionType();
+	(void)state;
 	const auto &left = args.data[0];
 	const auto &right = args.data[1];
 
-	switch (expr_type) {
-	case ExpressionType::COMPARE_EQUAL:
+	if constexpr (TYPE == ExpressionType::COMPARE_EQUAL) {
 		VectorOperations::Equals(left, right, result);
-		break;
-	case ExpressionType::COMPARE_NOTEQUAL:
+	} else if constexpr (TYPE == ExpressionType::COMPARE_NOTEQUAL) {
 		VectorOperations::NotEquals(left, right, result);
-		break;
-	case ExpressionType::COMPARE_LESSTHAN:
+	} else if constexpr (TYPE == ExpressionType::COMPARE_LESSTHAN) {
 		VectorOperations::LessThan(left, right, result);
-		break;
-	case ExpressionType::COMPARE_GREATERTHAN:
+	} else if constexpr (TYPE == ExpressionType::COMPARE_GREATERTHAN) {
 		VectorOperations::GreaterThan(left, right, result);
-		break;
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	} else if constexpr (TYPE == ExpressionType::COMPARE_LESSTHANOREQUALTO) {
 		VectorOperations::LessThanEquals(left, right, result);
-		break;
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+	} else if constexpr (TYPE == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
 		VectorOperations::GreaterThanEquals(left, right, result);
-		break;
-	case ExpressionType::COMPARE_DISTINCT_FROM:
+	} else if constexpr (TYPE == ExpressionType::COMPARE_DISTINCT_FROM) {
 		VectorOperations::DistinctFrom(left, right, result);
-		break;
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+	} else if constexpr (TYPE == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 		VectorOperations::NotDistinctFrom(left, right, result);
-		break;
+	} else {
+		throw InternalException("Unknown comparison type!");
+	}
+}
+
+#ifndef DUCKDB_SMALLER_BINARY
+template <ExpressionType TYPE>
+idx_t ComparisonSelect(DataChunk &args, ExpressionState &state, optional_ptr<const SelectionVector> sel,
+                       optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
+	(void)state;
+	const auto &left = args.data[0];
+	const auto &right = args.data[1];
+	auto count = args.size();
+
+	if constexpr (TYPE == ExpressionType::COMPARE_EQUAL) {
+		return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel);
+	} else if constexpr (TYPE == ExpressionType::COMPARE_NOTEQUAL) {
+		return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel);
+	} else if constexpr (TYPE == ExpressionType::COMPARE_LESSTHAN) {
+		return VectorOperations::LessThan(left, right, sel, count, true_sel, false_sel);
+	} else if constexpr (TYPE == ExpressionType::COMPARE_GREATERTHAN) {
+		return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel);
+	} else if constexpr (TYPE == ExpressionType::COMPARE_LESSTHANOREQUALTO) {
+		return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, false_sel);
+	} else if constexpr (TYPE == ExpressionType::COMPARE_GREATERTHANOREQUALTO) {
+		return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+	} else if constexpr (TYPE == ExpressionType::COMPARE_DISTINCT_FROM) {
+		return VectorOperations::DistinctFrom(left, right, sel, count, true_sel, false_sel);
+	} else if constexpr (TYPE == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		return VectorOperations::NotDistinctFrom(left, right, sel, count, true_sel, false_sel);
+	} else {
+		throw InternalException("Unknown comparison type!");
+	}
+}
+#endif
+
+template <ExpressionType TYPE>
+ExpressionType ComparisonGetExpressionType(FunctionToStringInput &input) {
+	(void)input;
+	return TYPE;
+}
+
+template <ExpressionType TYPE>
+static ScalarFunction GetComparisonFunctionInternal(const string &name) {
+	ScalarFunction comparison_fun(name, {LogicalType::ANY, LogicalType::ANY}, LogicalType::BOOLEAN,
+	                              ComparisonFunction<TYPE>);
+	comparison_fun.SetGetExpressionTypeCallback(ComparisonGetExpressionType<TYPE>);
+	if constexpr (TYPE == ExpressionType::COMPARE_DISTINCT_FROM || TYPE == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+		comparison_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	}
+#ifndef DUCKDB_SMALLER_BINARY
+	comparison_fun.SetSelectCallback(ComparisonSelect<TYPE>);
+#endif
+	return comparison_fun;
+}
+
+static ScalarFunction GetComparisonFunction(ExpressionType type) {
+	switch (type) {
+	case ExpressionType::COMPARE_EQUAL:
+		return OperatorEqualFun::GetFunction();
+	case ExpressionType::COMPARE_NOTEQUAL:
+		return OperatorNotEqualFun::GetFunction();
+	case ExpressionType::COMPARE_LESSTHAN:
+		return OperatorLessThanFun::GetFunction();
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		return OperatorLessThanEqualsFun::GetFunction();
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return OperatorGreaterThanFun::GetFunction();
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return OperatorGreaterThanEqualsFun::GetFunction();
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		return IsDistinctFromFun::GetFunction();
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return IsNotDistinctFromFun::GetFunction();
 	default:
 		throw InternalException("Unknown comparison type!");
 	}
 }
 
-idx_t ComparisonSelect(DataChunk &args, ExpressionState &state, optional_ptr<const SelectionVector> sel,
-                       optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
-	auto expr_type = state.expr.GetExpressionType();
-	const auto &left = args.data[0];
-	const auto &right = args.data[1];
-	auto count = args.size();
+ScalarFunction OperatorEqualFun::GetFunction() {
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_EQUAL>(OperatorEqualFun::Name);
+}
 
-	switch (expr_type) {
-	case ExpressionType::COMPARE_EQUAL:
-		return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_NOTEQUAL:
-		return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_LESSTHAN:
-		return VectorOperations::LessThan(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_GREATERTHAN:
-		return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_DISTINCT_FROM:
-		return VectorOperations::DistinctFrom(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		return VectorOperations::NotDistinctFrom(left, right, sel, count, true_sel, false_sel);
-	default:
-		throw InternalException("Unknown comparison type!");
-	}
+ScalarFunction OperatorNotEqualFun::GetFunction() {
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_NOTEQUAL>(OperatorNotEqualFun::Name);
+}
+
+ScalarFunction OperatorLessThanFun::GetFunction() {
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_LESSTHAN>(OperatorLessThanFun::Name);
+}
+
+ScalarFunction OperatorLessThanEqualsFun::GetFunction() {
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_LESSTHANOREQUALTO>(OperatorLessThanEqualsFun::Name);
+}
+
+ScalarFunction OperatorGreaterThanFun::GetFunction() {
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_GREATERTHAN>(OperatorGreaterThanFun::Name);
+}
+
+ScalarFunction OperatorGreaterThanEqualsFun::GetFunction() {
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_GREATERTHANOREQUALTO>(
+	    OperatorGreaterThanEqualsFun::Name);
+}
+
+ScalarFunction IsDistinctFromFun::GetFunction() {
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_DISTINCT_FROM>(IsDistinctFromFun::Name);
+}
+
+ScalarFunction IsNotDistinctFromFun::GetFunction() {
+	return GetComparisonFunctionInternal<ExpressionType::COMPARE_NOT_DISTINCT_FROM>(IsNotDistinctFromFun::Name);
 }
 
 unique_ptr<FunctionData> BindComparisonFun(BindScalarFunctionInput &input) {
 	throw InvalidInputException("Comparison function cannot be called directly");
 }
 
-string ComparisonToString(FunctionToStringInput &input) {
+static unique_ptr<Expression> ComparisonBindExpression(FunctionBindExpressionInput &input) {
 	auto &comparison_data = input.bind_data->Cast<ComparisonFunctionData>();
-	return ComparisonExpression::ToString(comparison_data.expression_type, *input.children[0], *input.children[1]);
-}
-
-ExpressionType ComparisonGetExpressionType(FunctionToStringInput &input) {
-	auto &comparison_data = input.bind_data->Cast<ComparisonFunctionData>();
-	return comparison_data.expression_type;
-}
-
-unique_ptr<Expression> ComparisonLegacySerializeCallback(FunctionToStringInput &input) {
-	auto &comparison_data = input.bind_data->Cast<ComparisonFunctionData>();
-	return make_uniq<LegacyBoundComparisonExpression>(comparison_data.expression_type, input.GetChild(0).Copy(),
-	                                                  input.GetChild(1).Copy());
+	return BoundComparisonExpression::Create(comparison_data.expression_type, std::move(input.children[0]),
+	                                         std::move(input.children[1]));
 }
 
 void ComparisonFunctionSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
@@ -123,19 +181,12 @@ unique_ptr<FunctionData> ComparisonFunctionDeserialize(Deserializer &deserialize
 }
 
 ScalarFunction ComparisonFun::GetFunction() {
-	ScalarFunction Comparison_fun("__comparison", {LogicalType::ANY, LogicalType::ANY}, LogicalType::BOOLEAN,
-	                              ComparisonFunction, BindComparisonFun);
-	Comparison_fun.SetToStringCallback(ComparisonToString);
-	Comparison_fun.SetGetExpressionTypeCallback(ComparisonGetExpressionType);
-	Comparison_fun.SetLegacySerializeCallback(ComparisonLegacySerializeCallback);
-	Comparison_fun.SetSerializeCallback(ComparisonFunctionSerialize);
-	Comparison_fun.SetDeserializeCallback(ComparisonFunctionDeserialize);
-	// DISTINCT FROM / NOT DISTINCT FROM handle NULLs specially - they must not be short-circuited on NULL input
-	Comparison_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-#ifndef DUCKDB_SMALLER_BINARY
-	Comparison_fun.SetSelectCallback(ComparisonSelect);
-#endif
-	return Comparison_fun;
+	ScalarFunction comparison_fun(ComparisonFun::Name, {LogicalType::ANY, LogicalType::ANY}, LogicalType::BOOLEAN,
+	                              nullptr, BindComparisonFun);
+	comparison_fun.SetBindExpressionCallback(ComparisonBindExpression);
+	comparison_fun.SetSerializeCallback(ComparisonFunctionSerialize);
+	comparison_fun.SetDeserializeCallback(ComparisonFunctionDeserialize);
+	return comparison_fun;
 }
 
 //===--------------------------------------------------------------------===//
@@ -147,10 +198,8 @@ unique_ptr<Expression> BoundComparisonExpression::Create(ExpressionType type, un
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
 
-	auto function_data = make_uniq<ComparisonFunctionData>(type);
-
-	auto result = make_uniq<BoundFunctionExpression>(BoundScalarFunction(ComparisonFun::GetFunction()),
-	                                                 std::move(children), std::move(function_data), false);
+	auto result = make_uniq<BoundFunctionExpression>(BoundScalarFunction(GetComparisonFunction(type)),
+	                                                 std::move(children), nullptr, true);
 	return std::move(result);
 }
 
@@ -194,8 +243,15 @@ unique_ptr<Expression> &BoundComparisonExpression::RightMutable(BoundFunctionExp
 }
 
 void BoundComparisonExpression::SetType(BoundFunctionExpression &comparison_expr, ExpressionType new_type) {
+	auto arguments = comparison_expr.function.GetArguments();
+	auto original_arguments = comparison_expr.function.GetOriginalArguments();
+
 	comparison_expr.SetExpressionTypeUnsafe(new_type);
-	comparison_expr.bind_info->Cast<ComparisonFunctionData>().expression_type = new_type;
+	comparison_expr.function = BoundScalarFunction(GetComparisonFunction(new_type));
+	comparison_expr.function.GetArguments() = std::move(arguments);
+	comparison_expr.function.GetOriginalArguments() = std::move(original_arguments);
+	comparison_expr.bind_info.reset();
+	comparison_expr.is_operator = true;
 }
 
 void BoundComparisonExpression::FlipType(BoundFunctionExpression &comparison_expr) {
