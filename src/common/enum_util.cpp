@@ -10,6 +10,7 @@
 
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/common/box_renderer.hpp"
@@ -4434,6 +4435,25 @@ const char* EnumUtil::ToChars<RelationType>(RelationType value) {
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value) {
 	return static_cast<RelationType>(StringUtil::StringToEnum(GetRelationTypeValues(), 29, "RelationType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetRemoteCapabilityValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RemoteCapability::IS_REMOTE), "IS_REMOTE" },
+		{ static_cast<uint32_t>(RemoteCapability::EXECUTE_QUERY_NODE), "EXECUTE_QUERY_NODE" },
+		{ static_cast<uint32_t>(RemoteCapability::CONNECT), "CONNECT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RemoteCapability>(RemoteCapability value) {
+	return StringUtil::EnumToString(GetRemoteCapabilityValues(), 3, "RemoteCapability", static_cast<uint32_t>(value));
+}
+
+template<>
+RemoteCapability EnumUtil::FromString<RemoteCapability>(const char *value) {
+	return static_cast<RemoteCapability>(StringUtil::StringToEnum(GetRemoteCapabilityValues(), 3, "RemoteCapability", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRenderModeValues() {
