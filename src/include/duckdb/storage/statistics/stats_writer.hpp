@@ -140,6 +140,8 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 		auto size = value.GetSize();
 
 		if (is_bit && size > StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE) {
+			// BIT min/max must remain exact because truncation can change logical bit ordering.
+			// Once any value is too large, drop min/max for the whole stats block.
 			has_min_max = false;
 		}
 		if (!has_min_max) {
