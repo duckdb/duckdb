@@ -115,6 +115,10 @@ jobs:
         timestamp-rfc3161:            http://timestamp.acs.microsoft.com
         timestamp-digest:             SHA256
 
+    - name: Print platform
+      shell: bash
+      run: ./duckdb.exe -c "PRAGMA platform; PRAGMA version;"
+
     - name: Deploy
       shell: bash
       env:
@@ -225,6 +229,10 @@ jobs:
          file-digest:                  SHA256
          timestamp-rfc3161:            http://timestamp.acs.microsoft.com
          timestamp-digest:             SHA256
+
+     - name: Print platform
+       shell: bash
+       run: ./duckdb.exe -c "PRAGMA platform; PRAGMA version;"
 
      - name: Deploy
        shell: bash

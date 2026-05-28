@@ -128,7 +128,7 @@ jobs:
 
       - name: Print platform
         shell: bash
-        run: ./build/release/duckdb -c "PRAGMA platform;"
+        run: ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
 
         #     from https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development
       - name: Sign Binaries

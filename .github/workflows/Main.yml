@@ -624,7 +624,7 @@ jobs:
         "
 
     - name: Print platform
-      run: ./build/release/duckdb -c "PRAGMA platform;"
+      run: ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
 
     - name: Deploy
       env:
@@ -921,7 +921,7 @@ jobs:
 
       - name: Print platform
         shell: bash
-        run: ./build/release/duckdb -c "PRAGMA platform;"
+        run: ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
 
       - name: Deploy
         shell: bash
