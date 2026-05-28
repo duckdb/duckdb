@@ -954,7 +954,7 @@ bool PEGTransformerFactory::ExpressionIsEmptyStar(ParsedExpression &expr) {
 		return false;
 	}
 	auto &star = expr.Cast<StarExpression>();
-	if (!star.columns && star.exclude_list.empty() && star.replace_list.empty()) {
+	if (!star.IsColumns() && star.ExcludeList().empty() && star.ReplaceList().empty()) {
 		return true;
 	}
 	return false;

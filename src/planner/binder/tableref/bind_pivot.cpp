@@ -65,7 +65,7 @@ static void ExtractPivotExpressions(ParsedExpression &root_expr, case_insensitiv
 	ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
 	    root_expr, [&](const ColumnRefExpression &child_colref) {
 		    if (child_colref.IsQualified()) {
-			    if (child_colref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos && macro_binding &&
+			    if (child_colref.ColumnNames()[0].find(DummyBinding::DUMMY_NAME) != string::npos && macro_binding &&
 			        macro_binding->HasMatchingBinding(child_colref.GetName())) {
 				    throw ParameterNotResolvedException();
 			    }
@@ -335,7 +335,7 @@ static unique_ptr<SelectNode> PivotListAggregate(PivotBindState &bind_state, Piv
 
 void ReplacePivotColumnRef(ParsedExpression &root_expr, const string &name) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
-	    root_expr, [&](ColumnRefExpression &colref) { colref.column_names[0] = name; });
+	    root_expr, [&](ColumnRefExpression &colref) { colref.ColumnNamesMutable()[0] = name; });
 }
 
 static unique_ptr<SelectNode> PivotFinalOperator(PivotBindState &bind_state, PivotRef &ref,

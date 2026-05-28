@@ -80,7 +80,7 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::CONJUNCTION: {
 		auto &cast_expr = Cast<ConjunctionExpression>();
-		for (auto &child : cast_expr.children) {
+		for (auto &child : cast_expr.GetChildren()) {
 			result.Append(*child);
 		}
 		break;
@@ -112,18 +112,18 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::OPERATOR: {
 		auto &cast_expr = Cast<OperatorExpression>();
-		for (auto &child : cast_expr.children) {
+		for (auto &child : cast_expr.GetChildren()) {
 			result.Append(*child);
 		}
 		break;
 	}
 	case ExpressionClass::STAR: {
 		auto &cast_expr = Cast<StarExpression>();
-		for (auto &item : cast_expr.replace_list) {
+		for (auto &item : cast_expr.ReplaceList()) {
 			result.Append(*item.second);
 		}
-		if (cast_expr.expr) {
-			result.Append(*cast_expr.expr);
+		if (cast_expr.Expression()) {
+			result.Append(*cast_expr.Expression());
 		}
 		break;
 	}
@@ -222,7 +222,7 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::CONJUNCTION: {
 		auto &cast_expr = Cast<ConjunctionExpression>();
-		for (auto &child : cast_expr.children) {
+		for (auto &child : cast_expr.GetChildrenMutable()) {
 			result.Append(child);
 		}
 		break;
@@ -254,18 +254,18 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::OPERATOR: {
 		auto &cast_expr = Cast<OperatorExpression>();
-		for (auto &child : cast_expr.children) {
+		for (auto &child : cast_expr.GetChildrenMutable()) {
 			result.Append(child);
 		}
 		break;
 	}
 	case ExpressionClass::STAR: {
 		auto &cast_expr = Cast<StarExpression>();
-		for (auto &item : cast_expr.replace_list) {
+		for (auto &item : cast_expr.ReplaceListMutable()) {
 			result.Append(item.second);
 		}
-		if (cast_expr.expr) {
-			result.Append(cast_expr.expr);
+		if (cast_expr.ExpressionMutable()) {
+			result.Append(cast_expr.ExpressionMutable());
 		}
 		break;
 	}

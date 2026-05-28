@@ -30,10 +30,14 @@ public:
 	//! Specify a set of names
 	explicit ColumnRefExpression(vector<string> column_names);
 
-	//! The stack of names in order of which they appear (column_names[0].column_names[1].column_names[2]....)
-	vector<string> column_names;
-
 public:
+	const vector<string> &ColumnNames() const {
+		return column_names;
+	}
+	vector<string> &ColumnNamesMutable() {
+		return column_names;
+	}
+
 	bool IsQualified() const;
 	const string &GetColumnName() const;
 	const string &GetTableName() const;
@@ -51,6 +55,10 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
+
+private:
+	//! The stack of names in order of which they appear (column_names[0].column_names[1].column_names[2]....)
+	vector<string> column_names;
 
 private:
 	ColumnRefExpression();
