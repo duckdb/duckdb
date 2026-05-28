@@ -364,6 +364,10 @@ public:
 	}
 	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node);
 	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, const string &sql);
+	//! User-facing short identifier for this catalog (e.g. shown in the CLI prompt when CONNECT-ed).
+	//! Defaults to the AttachedDatabase name (the AS alias). Remote catalogs override to expose
+	//! backend-specific information — the URI for quack, host:port/dbname for postgres, etc.
+	DUCKDB_API virtual string GetConnectDisplay();
 
 	//! Whether or not this catalog should search a specific type with the standard priority
 	DUCKDB_API virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {

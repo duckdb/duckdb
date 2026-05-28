@@ -14,15 +14,18 @@ diff --git a/src/include/storage/quack_catalog.hpp b/src/include/storage/quack_c
 index 1389757..43a3e2f 100644
 --- a/src/include/storage/quack_catalog.hpp
 +++ b/src/include/storage/quack_catalog.hpp
-@@ -54,6 +54,12 @@ public:
+@@ -54,6 +54,15 @@ public:
  	bool InMemory() override;
  	string GetDBPath() override;
- 
+
 +	bool Supports(RemoteCapability) const override {
 +		return true;
 +	}
 +	unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node) override;
 +	unique_ptr<TableRef> RemoteExecute(ClientContext &context, const string &sql) override;
++	string GetConnectDisplay() override {
++		return GetDBPath();
++	}
 +
  	unique_ptr<ColumnDataCollection> ExecuteCommandInternal(ClientContext &context, const string &query);
  	const QuackUri &GetServerUri();

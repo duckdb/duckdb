@@ -353,6 +353,10 @@ unique_ptr<TableRef> Catalog::RemoteExecute(ClientContext &context, const string
 	throw NotImplementedException("RemoteExecute(string) not supported by this catalog");
 }
 
+string Catalog::GetConnectDisplay() {
+	return GetAttached().GetName();
+}
+
 //===--------------------------------------------------------------------===//
 // Lookup Structures
 //===--------------------------------------------------------------------===//

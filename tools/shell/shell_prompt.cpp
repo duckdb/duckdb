@@ -267,7 +267,7 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 		if (component.literal == "connect_suffix") {
 			auto connected = context.TryGetConnectedCatalog();
 			if (connected) {
-				return " @ " + connected->GetCatalog().GetDBPath();
+				return " @ " + connected->GetCatalog().GetConnectDisplay();
 			}
 			return string();
 		}
