@@ -122,10 +122,14 @@ void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.child_appends.push_back(std::move(child_append));
 }
 
-void StandardColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
-                                    idx_t count) {
-	ColumnData::AppendData(stats, state, vdata, count);
-	validity->AppendData(stats, state.child_appends[0], vdata, count);
+void StandardColumnData::AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
+	ColumnData::AppendData(state, vdata, count);
+	validity->AppendData(state.child_appends[0], vdata, count);
+}
+
+void StandardColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	ColumnData::FinalizeAppend(finalize_state, state);
+	validity->FinalizeAppendLocked(finalize_state, state.child_appends[0]);
 }
 
 void StandardColumnData::RevertAppend(row_t new_count) {
@@ -213,6 +217,11 @@ void StandardColumnData::SetValidityData(shared_ptr<ValidityColumnData> validity
 	}
 	validity_p->SetParent(this);
 	this->validity = std::move(validity_p);
+}
+
+ValidityColumnData &StandardColumnData::GetValidityData() {
+	D_ASSERT(validity);
+	return *validity;
 }
 
 struct StandardColumnCheckpointState : public ColumnCheckpointState {
@@ -322,11 +331,11 @@ void StandardColumnData::InitializeColumn(PersistentColumnData &column_data, Bas
 }
 
 void StandardColumnData::GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
-                                              vector<duckdb::idx_t> col_path,
-                                              vector<duckdb::ColumnSegmentInfo> &result) {
-	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result);
+                                              vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result,
+                                              const ColumnSegmentInfoScanOptions &options) {
+	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, std::move(col_path), result);
+	validity->GetColumnSegmentInfo(context, row_group_index, std::move(col_path), result, options);
 }
 
 void StandardColumnData::Verify(RowGroup &parent) {

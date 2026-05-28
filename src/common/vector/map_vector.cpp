@@ -23,7 +23,7 @@ const Vector &MapVector::GetValues(const Vector &vector) {
 	return GetValues((Vector &)vector);
 }
 
-MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel) {
+MapInvalidReason MapVector::CheckMapValidity(const Vector &map, idx_t count, const SelectionVector &sel) {
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
 
 	// unify the MAP vector, which is a physical LIST vector
@@ -61,7 +61,7 @@ MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const Sel
 	return MapInvalidReason::VALID;
 }
 
-void MapVector::MapConversionVerify(Vector &vector, idx_t count) {
+void MapVector::MapConversionVerify(const Vector &vector, idx_t count) {
 	auto reason = MapVector::CheckMapValidity(vector, count);
 	EvalMapInvalidReason(reason);
 }

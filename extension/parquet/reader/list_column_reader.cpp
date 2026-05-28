@@ -59,7 +59,7 @@ struct TemplatedListReader {
 		data.result_ptr[offset].length = 0;
 	}
 
-	static void AppendVector(optional_ptr<Vector> result_out, Vector &read_vector, idx_t child_idx) {
+	static void AppendVector(optional_ptr<Vector> result_out, const Vector &read_vector, idx_t child_idx) {
 		ListVector::Append(*result_out, read_vector, child_idx);
 	}
 };

@@ -2,12 +2,9 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 namespace duckdb {
-
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSchemaStmt(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
-	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
+                                                                             const bool &if_not_exists,
+                                                                             const QualifiedName &qualified_name) {
 	if (!qualified_name.catalog.empty()) {
 		throw ParserException("CREATE SCHEMA too many dots: expected \"catalog.schema\" or \"schema\"");
 	}

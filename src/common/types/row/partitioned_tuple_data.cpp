@@ -41,6 +41,12 @@ void PartitionedTupleData::InitializeAppendState(PartitionedTupleDataAppendState
 	InitializeAppendStateInternal(state, properties);
 }
 
+void PartitionedTupleData::ResetAppendState(PartitionedTupleDataAppendState &state,
+                                            TupleDataPinProperties properties) const {
+	// Default: fall back to full re-initialization (subclasses can override with a faster path)
+	InitializeAppendState(state, properties);
+}
+
 void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataChunk &input,
                                   const SelectionVector &append_sel, const idx_t append_count) {
 	TupleDataCollection::ToUnifiedFormat(state.chunk_state, input);

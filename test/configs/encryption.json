@@ -75,7 +75,11 @@
         "test/sql/trigger/drop_trigger_wal.test",
         "test/sql/trigger/trigger_after_delete.test",
         "test/sql/trigger/trigger_after_insert.test",
-        "test/sql/trigger/trigger_after_update.test"
+        "test/sql/trigger/trigger_after_insert_referencing.test",
+        "test/sql/trigger/trigger_after_update.test",
+        "test/sql/trigger/trigger_after_update_referencing.test",
+        "test/sql/trigger/trigger_after_delete_referencing.test",
+        "test/sql/trigger/trigger_referencing_validation.test"
       ]
     },
     {
@@ -83,6 +87,12 @@
       "paths": [
         "test/sql/attach/show_databases.test",
         "test/sql/attach/show_schemas.test"
+      ]
+    },
+    {
+      "reason": "Test relies on temp directory being required for dbgen, but with an encrypted persistent DB the buffer manager uses the DB file as external storage, so the invalid temp directory is never accessed.",
+      "paths": [
+        "test/sql/tpch/dbgen_error.test"
       ]
     }
   ]

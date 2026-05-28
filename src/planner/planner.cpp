@@ -19,6 +19,7 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/planner/planner_extension.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
 
@@ -52,10 +53,10 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	// first bind the tables and columns to the catalog
 	bool parameters_resolved = true;
 	try {
-		profiler.StartPhase(MetricType::PLANNER_BINDING);
+		auto binding_timer = profiler.StartTimer<MetricPlannerBindingTime>();
 		binder->SetParameters(bound_parameters);
 		auto bound_statement = binder->Bind(statement);
-		profiler.EndPhase();
+		binding_timer.EndTimer();
 
 		RunPostBindExtensions(context, *binder, bound_statement);
 
@@ -133,6 +134,9 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 
 void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement);
+	Optimizer optimizer(*binder, context);
+	optimizer.OptimizeStatement(statement);
+
 	switch (statement->type) {
 	case StatementType::SELECT_STATEMENT:
 	case StatementType::INSERT_STATEMENT:
@@ -160,6 +164,8 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::COPY_DATABASE_STATEMENT:
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 	case StatementType::MERGE_INTO_STATEMENT:
+	case StatementType::CONNECT_STATEMENT:
+	case StatementType::DISCONNECT_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
@@ -197,11 +203,11 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 		MemoryStream stream(Allocator::Get(context));
 
 		SerializationOptions options;
-		if (config.options.serialization_compatibility.manually_set) {
+		if (config.options.storage_compatibility.manually_set) {
 			// Override the default of 'latest' if this was manually set (for testing, mostly)
-			options.serialization_compatibility = config.options.serialization_compatibility;
+			options.storage_compatibility = config.options.storage_compatibility;
 		} else {
-			options.serialization_compatibility = SerializationCompatibility::Latest();
+			options.storage_compatibility = StorageCompatibility::Latest();
 		}
 
 		BinarySerializer::Serialize(*op, stream, options);

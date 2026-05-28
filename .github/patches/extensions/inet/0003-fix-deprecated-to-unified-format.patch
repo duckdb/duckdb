@@ -1,0 +1,6 @@
+diff --git a/src/inet_functions.cpp b/src/inet_functions.cpp
+--- a/src/inet_functions.cpp
++++ b/src/inet_functions.cpp
+@@ -49 +49 @@ bool INetFunctions::CastVarcharToINET(Vector &source, Vector &result,
+-  source.ToUnifiedFormat(count, vdata);
++  source.ToUnifiedFormat(vdata);

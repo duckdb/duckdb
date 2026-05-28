@@ -10,7 +10,7 @@ on:
         type: boolean
       run_all:
         type: boolean
-      runner_windows_2022_x64:
+      runners:
         type: string
   workflow_dispatch:
     inputs:
@@ -24,8 +24,11 @@ on:
       run_all:
         type: boolean
         default: true
-      runner_windows_2022_x64:
+      runners:
+        description: 'JSON object with runner labels, e.g. {"windows_2022_x64":"windows-2022","linux_slim":"ubuntu-latest"}'
         type: string
+        required: false
+        default: '{}'
 
 concurrency:
   group: windows-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
@@ -42,7 +45,7 @@ jobs:
  win-release-64:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
-    runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
+    runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
     env:
       GEN: ninja
     steps:
@@ -134,18 +137,12 @@ jobs:
           libduckdb-windows-amd64.zip
           duckdb_cli-windows-amd64.zip
 
-    - name: Set up MSVC environment for export check (x64)
-      uses: ./.github/actions/setup-msvc-env
-    - name: Duckdb.dll export symbols with C++ on Windows
-      shell: bash
-      run: cl /std:c++17 -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/duckdb.lib
-
  win-release-32:
     name: Windows (32 Bit)
     needs:
       - win-release-64
     if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
-    runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
+    runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
     env:
       GEN: ninja
 
@@ -186,7 +183,7 @@ jobs:
    needs:
     - win-release-64
    if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
-   runs-on: windows-latest
+   runs-on: windows-2025-vs2026
    env:
      GEN: ninja
 
@@ -256,7 +253,7 @@ jobs:
      needs:
       - win-release-64
      if: ${{ !inputs.skip_tests }}
-     runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
+     runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
      env:
        GEN: ninja
        ENABLE_EXTENSION_AUTOLOADING: 1
@@ -331,7 +328,7 @@ jobs:
          run: make unittest_release SKIP_BUILD=1
 
  win-packaged-upload:
-   runs-on: windows-latest
+   runs-on: ${{ fromJSON(inputs.runners).linux_slim || 'ubuntu-latest' }}
    needs:
      - win-release-64
      - win-release-arm64

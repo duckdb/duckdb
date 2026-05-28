@@ -32,6 +32,7 @@ add_library_unity(
   late_materialization_helper.cpp
   optimizer.cpp
   outer_join_simplification.cpp
+  partial_aggregate_pushdown.cpp
   partitioned_execution.cpp
   join_elimination.cpp
   regex_range_filter.cpp
@@ -46,7 +47,8 @@ add_library_unity(
   window_self_join.cpp
   row_number_rewriter.cpp
   sampling_pushdown.cpp
-  projection_pullup.cpp)
+  projection_pullup.cpp
+  remote_pushdown_optimizer.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>
     PARENT_SCOPE)

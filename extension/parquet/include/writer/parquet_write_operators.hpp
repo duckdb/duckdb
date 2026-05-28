@@ -319,6 +319,22 @@ struct ParquetTimeTZOperator : public BaseParquetOperator {
 	static TGT Operation(SRC input) {
 		return input.time().micros;
 	}
+
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return make_uniq<NumericStatisticsState<TGT, TGT, BaseParquetOperator>>();
+	}
+
+	template <class SRC, class TGT>
+	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
+		auto &numeric_stats = stats->Cast<NumericStatisticsState<TGT, TGT, BaseParquetOperator>>();
+		if (LessThan::Operation(target_value, numeric_stats.min)) {
+			numeric_stats.min = target_value;
+		}
+		if (GreaterThan::Operation(target_value, numeric_stats.max)) {
+			numeric_stats.max = target_value;
+		}
+	}
 };
 
 struct ParquetHugeintOperator : public BaseParquetOperator {

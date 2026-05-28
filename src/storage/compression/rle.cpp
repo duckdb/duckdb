@@ -2,6 +2,7 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -83,7 +84,7 @@ public:
 
 template <class T>
 struct RLEAnalyzeState : public AnalyzeState {
-	explicit RLEAnalyzeState(const CompressionInfo &info) : AnalyzeState(info) {
+	explicit RLEAnalyzeState(BlockManager &block_manager) : AnalyzeState(block_manager) {
 	}
 
 	RLEState<T> state;
@@ -91,18 +92,17 @@ struct RLEAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager());
-	return make_uniq<RLEAnalyzeState<T>>(info);
+	return make_uniq<RLEAnalyzeState<T>>(col_data.GetBlockManager());
 }
 
 template <class T>
-bool RLEAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
+bool RLEAnalyze(AnalyzeState &state, const Vector &input) {
 	auto &rle_state = state.template Cast<RLEAnalyzeState<T>>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(vdata);
 
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < input.size(); i++) {
 		auto idx = vdata.sel->get_index(i);
 		rle_state.state.Update(data, vdata.validity, idx);
 	}
@@ -123,7 +123,15 @@ struct RLEConstants {
 };
 
 template <class T, bool WRITE_STATISTICS>
-struct RLECompressState : public CompressionState {
+struct RLECompressState : public StandardCompressionState {
+	explicit RLECompressState(ColumnDataCheckpointData &checkpoint_data_p)
+	    : StandardCompressionState(checkpoint_data_p, CompressionType::COMPRESSION_RLE) {
+		CreateEmptySegment();
+
+		state.dataptr = (void *)this;
+		max_rle_count = MaxRLECount();
+	}
+
 	struct RLEWriter {
 		template <class VALUE_TYPE>
 		static void Operation(VALUE_TYPE value, rle_count_t count, void *dataptr, bool is_null) {
@@ -137,31 +145,17 @@ struct RLECompressState : public CompressionState {
 		return AlignValueFloor((info.GetBlockSize() - RLEConstants::RLE_HEADER_SIZE) / entry_size);
 	}
 
-	RLECompressState(ColumnDataCheckpointData &checkpoint_data_p, const CompressionInfo &info)
-	    : CompressionState(info), checkpoint_data(checkpoint_data_p),
-	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_RLE)) {
-		CreateEmptySegment();
-
-		state.dataptr = (void *)this;
-		max_rle_count = MaxRLECount();
-	}
-
 	void CreateEmptySegment() {
-		auto &db = checkpoint_data.GetDatabase();
-		auto &type = checkpoint_data.GetType();
-
-		auto column_segment =
-		    ColumnSegment::CreateTransientSegment(db, function, type, info.GetBlockSize(), info.GetBlockManager());
-		current_segment = std::move(column_segment);
-
-		auto &buffer_manager = BufferManager::GetBufferManager(db);
-		handle = buffer_manager.Pin(current_segment->block);
+		CreateAndPinNewSegment();
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
 		auto data = UnifiedVectorFormat::GetData<T>(vdata);
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
+			if (WRITE_STATISTICS && !vdata.validity.RowIsValid(idx)) {
+				stats_writer.SetHasNull();
+			}
 			state.template Update<RLECompressState<T, WRITE_STATISTICS>::RLEWriter>(data, vdata.validity, idx);
 		}
 	}
@@ -178,10 +172,9 @@ struct RLECompressState : public CompressionState {
 		// update meta data
 		if (WRITE_STATISTICS) {
 			if (!is_null) {
-				current_segment->stats.statistics.SetHasNoNullFast();
-				current_segment->stats.statistics.UpdateNumericStats<T>(value);
+				stats_writer.Update(value);
 			} else {
-				current_segment->stats.statistics.SetHasNullFast();
+				stats_writer.SetHasNull();
 			}
 		}
 		current_segment->count += count;
@@ -209,10 +202,8 @@ struct RLECompressState : public CompressionState {
 		memmove(data_ptr + aligned_rle_offset, data_ptr + original_rle_offset, counts_size);
 		// store the final RLE offset within the segment
 		Store<uint64_t>(aligned_rle_offset, data_ptr);
-		handle.Destroy();
 
-		auto &state = checkpoint_data.GetCheckpointState();
-		state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
+		FlushCurrentSegment(stats_writer, total_segment_size);
 	}
 
 	void Finalize() {
@@ -222,12 +213,8 @@ struct RLECompressState : public CompressionState {
 		current_segment.reset();
 	}
 
-	ColumnDataCheckpointData &checkpoint_data;
-	const CompressionFunction &function;
-	unique_ptr<ColumnSegment> current_segment;
-	BufferHandle handle;
-
 	RLEState<T> state;
+	StatsWriter<T> stats_writer;
 	idx_t entry_count = 0;
 	idx_t max_rle_count;
 };
@@ -235,16 +222,16 @@ struct RLECompressState : public CompressionState {
 template <class T, bool WRITE_STATISTICS>
 unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                 unique_ptr<AnalyzeState> state) {
-	return make_uniq<RLECompressState<T, WRITE_STATISTICS>>(checkpoint_data, state->info);
+	return make_uniq<RLECompressState<T, WRITE_STATISTICS>>(checkpoint_data);
 }
 
 template <class T, bool WRITE_STATISTICS>
-void RLECompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+void RLECompress(CompressionState &state_p, const Vector &scan_vector) {
 	auto &state = state_p.Cast<RLECompressState<T, WRITE_STATISTICS>>();
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(vdata);
 
-	state.Append(vdata, count);
+	state.Append(vdata, scan_vector.size());
 }
 
 template <class T, bool WRITE_STATISTICS>
@@ -259,8 +246,8 @@ void RLEFinalizeCompress(CompressionState &state_p) {
 template <class T>
 struct RLEScanState : public SegmentScanState {
 	explicit RLEScanState(ColumnSegment &segment) {
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-		handle = buffer_manager.Pin(segment.block);
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
+		handle = buffer_manager.Pin(segment.GetBlockHandle());
 		entry_pos = 0;
 		position_in_entry = 0;
 		rle_count_offset =

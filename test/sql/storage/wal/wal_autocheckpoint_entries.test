@@ -135,7 +135,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/wal_replay.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"WAL_REPLAY_ENTRY_COUNT": "true"}';
+SET tracked_metrics = ['storage.wal_replay_entry_count'];
 
 statement ok
 SET profiling_coverage='ALL';
@@ -151,7 +151,7 @@ statement ok
 CREATE OR REPLACE TABLE replay_metrics AS SELECT * FROM '{TEST_DIR}/wal_replay.json';
 
 query I
-SELECT wal_replay_entry_count FROM replay_metrics;
+SELECT storage.wal_replay_entry_count FROM replay_metrics;
 ----
 101
 

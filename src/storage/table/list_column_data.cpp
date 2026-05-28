@@ -138,7 +138,6 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	state.last_offset = last_entry;
 
 	ListVector::SetListSize(result, child_scan_count);
-	FlatVector::SetSize(result, count_t(scan_count));
 	return scan_count;
 }
 
@@ -182,7 +181,7 @@ void ListColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.child_appends.push_back(std::move(child_append_state));
 }
 
-void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
+void ListColumnData::Append(ColumnAppendState &state, const Vector &vector, idx_t count) {
 	D_ASSERT(count > 0);
 
 	// construct the list_entry_t entries to append to the column data
@@ -235,13 +234,21 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 
 	// append the child vector
 	if (child_count > 0) {
-		child_column->Append(ListStats::GetChildStats(stats), state.child_appends[1], child_vector, child_count);
+		child_column->Append(state.child_appends[1], child_vector, child_count);
 	}
 	// append the list offsets
-	ColumnData::AppendData(stats, state, vdata, count);
+	ColumnData::AppendData(state, vdata, count);
 	// append the validity data
 	vdata.validity = append_mask;
-	validity->AppendData(stats, state.child_appends[0], vdata, count);
+	validity->AppendData(state.child_appends[0], vdata, count);
+}
+
+void ListColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	ColumnData::FinalizeAppend(finalize_state, state);
+	validity->FinalizeAppendLocked(finalize_state, state.child_appends[0]);
+
+	ColumnDataFinalizeAppendState child_finalize_state(finalize_state, LogicalTypeId::LIST);
+	child_column->FinalizeAppendLocked(child_finalize_state, state.child_appends[1]);
 }
 
 void ListColumnData::RevertAppend(row_t new_count) {
@@ -432,12 +439,13 @@ void ListColumnData::InitializeColumn(PersistentColumnData &column_data, BaseSta
 }
 
 void ListColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                          vector<ColumnSegmentInfo> &result) {
-	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result);
+                                          vector<ColumnSegmentInfo> &result,
+                                          const ColumnSegmentInfoScanOptions &options) {
+	ColumnData::GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	col_path.push_back(0);
-	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	validity->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 	col_path.back() = 1;
-	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result);
+	child_column->GetColumnSegmentInfo(context, row_group_index, col_path, result, options);
 }
 
 } // namespace duckdb

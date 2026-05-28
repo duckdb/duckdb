@@ -70,21 +70,13 @@ DUCKDB_API duckdb::string_t StringCast::Operation(timestamp_t input, StringHeap 
 template <>
 DUCKDB_API duckdb::string_t StringCast::Operation(timestamp_ns_t input, StringHeap &heap);
 
-//! Temporary casting for Time Zone types. TODO: turn casting into functions.
-struct StringCastTZ {
-	template <typename SRC>
-	static inline string_t Operation(SRC input, StringHeap &heap) {
-		return StringCast::Operation(input, heap);
-	}
-};
-
 template <>
-duckdb::string_t StringCastTZ::Operation(date_t input, StringHeap &heap);
+duckdb::string_t StringCast::Operation(date_t input, StringHeap &heap);
 template <>
-duckdb::string_t StringCastTZ::Operation(dtime_tz_t input, StringHeap &heap);
+duckdb::string_t StringCast::Operation(dtime_tz_t input, StringHeap &heap);
 template <>
-duckdb::string_t StringCastTZ::Operation(timestamp_t input, StringHeap &heap);
+duckdb::string_t StringCast::Operation(timestamp_tz_t input, StringHeap &heap);
 template <>
-duckdb::string_t StringCastTZ::Operation(timestamp_ns_t input, StringHeap &heap);
+duckdb::string_t StringCast::Operation(timestamp_tz_ns_t input, StringHeap &heap);
 
 } // namespace duckdb

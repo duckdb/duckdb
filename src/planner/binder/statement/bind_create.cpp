@@ -26,6 +26,9 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -50,6 +53,19 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
+
+static unique_ptr<CommonTableExpressionInfo> MakeTriggerValidationCTE(const TableCatalogEntry &table) {
+	auto alias_select = make_uniq<SelectNode>();
+	alias_select->select_list.push_back(make_uniq<StarExpression>());
+	auto alias_table_ref = make_uniq<BaseTableRef>();
+	alias_table_ref->table_name = table.name;
+	alias_table_ref->schema_name = table.schema.name;
+	alias_table_ref->catalog_name = table.catalog.GetName();
+	alias_select->from_table = std::move(alias_table_ref);
+	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
+	alias_cte->query_node = std::move(alias_select);
+	return alias_cte;
+}
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
 	auto &context = retriever.GetContext();
@@ -129,11 +145,11 @@ void Binder::SearchSchema(CreateInfo &info) {
 	if (!info.temporary) {
 		// non-temporary create: not read only
 		if (info.catalog == TEMP_CATALOG) {
-			throw ParserException("Only TEMPORARY table names can use the \"%s\" catalog", std::string(TEMP_CATALOG));
+			throw ParserException("Only TEMPORARY table names can use the \"%s\" catalog", TEMP_CATALOG);
 		}
 	} else {
 		if (info.catalog != TEMP_CATALOG) {
-			throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", std::string(TEMP_CATALOG));
+			throw ParserException("TEMPORARY table names can *only* use the \"%s\" catalog", TEMP_CATALOG);
 		}
 	}
 }
@@ -255,7 +271,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	if (attached.HasStorageManager()) {
 		// If DuckDB is used as a storage, we must check the version.
 		auto &storage_manager = attached.GetStorageManager();
-		const auto since = SerializationCompatibility::FromString("v1.4.0").serialization_version;
+		const auto since = StorageCompatibility::FromString("v1.4.0").storage_version;
 		store_types = info.temporary || attached.IsTemporary() || storage_manager.InMemory() ||
 		              storage_manager.GetStorageVersion() >= since;
 	}
@@ -369,8 +385,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		ErrorData error;
 		if (info.type == CatalogType::MACRO_ENTRY) {
 			BoundSelectNode sel_node;
-			BoundGroupInformation group_info;
-			SelectBinder binder(*this, context, sel_node, group_info);
+			SelectBinder binder(*this, context, sel_node);
 			if (should_create_dependencies) {
 				binder.SetCatalogLookupCallback(binder_callback);
 			}
@@ -488,7 +503,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	auto &attached = catalog.GetAttached();
 	if (attached.HasStorageManager()) {
 		auto &storage_manager = attached.GetStorageManager();
-		const auto since = SerializationCompatibility::FromString("v2.0.0").serialization_version;
+		const auto since = StorageVersion::V2_0_0;
 		if (!create_trigger_info.temporary && !attached.IsTemporary() && !storage_manager.InMemory() &&
 		    storage_manager.GetStorageVersion() < since) {
 			string msg = "CREATE TRIGGER is only supported for storage versions v2.0.0 and higher.\n";
@@ -508,7 +523,26 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	if (create_trigger_info.for_each == TriggerForEach::ROW) {
 		throw NotImplementedException("FOR EACH ROW triggers are not yet supported");
 	}
-
+	if ((!create_trigger_info.referencing_new_table.empty() || !create_trigger_info.referencing_old_table.empty()) &&
+	    create_trigger_info.timing != TriggerTiming::AFTER) {
+		throw BinderException("Transition tables can only be specified for AFTER triggers");
+	}
+	if ((!create_trigger_info.referencing_new_table.empty() || !create_trigger_info.referencing_old_table.empty()) &&
+	    !create_trigger_info.columns.empty()) {
+		throw BinderException("UPDATE OF is not valid with transition tables");
+	}
+	if (!create_trigger_info.referencing_old_table.empty()) {
+		if (create_trigger_info.event_type == TriggerEventType::INSERT_EVENT) {
+			throw BinderException("REFERENCING OLD TABLE AS is not valid for AFTER INSERT triggers");
+		}
+		if (create_trigger_info.event_type == TriggerEventType::UPDATE_EVENT) {
+			throw NotImplementedException("REFERENCING OLD TABLE AS is not yet supported for AFTER UPDATE triggers");
+		}
+	}
+	if (!create_trigger_info.referencing_new_table.empty() &&
+	    create_trigger_info.event_type == TriggerEventType::DELETE_EVENT) {
+		throw BinderException("REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers");
+	}
 	if (create_trigger_info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
 		table.ScanTriggers(table.ParentCatalog().GetCatalogTransaction(context), [&](CatalogEntry &entry) {
 			auto &t = entry.Cast<TriggerCatalogEntry>();
@@ -520,12 +554,18 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 
 	// Validate the trigger body using an isolated binder (own GlobalBinderState).
 	// Set up trigger_expanded_tables to match runtime behavior.
-	// Set up and trigger_creation_table to detect recursive triggers during the validation.
+	// Set up trigger_creation_table to detect recursive triggers during the validation.
 	auto validation_binder = Binder::CreateBinder(context);
 	validation_binder->global_binder_state->trigger_expanded_tables.insert(table);
 	validation_binder->global_binder_state->trigger_creation_table = &table;
 	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.trigger_name;
 	auto body_copy = create_trigger_info.trigger_action->Copy();
+
+	for (const auto &alias : {create_trigger_info.referencing_new_table, create_trigger_info.referencing_old_table}) {
+		if (!alias.empty() && body_copy->cte_map.map.find(alias) == body_copy->cte_map.map.end()) {
+			body_copy->cte_map.map[alias] = MakeTriggerValidationCTE(table);
+		}
+	}
 	validation_binder->Bind(*body_copy);
 
 	// Add table dependency

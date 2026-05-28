@@ -32,6 +32,7 @@
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 #include <algorithm>
 
@@ -58,8 +59,6 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType binder_type)
     : context(context), bind_context(*this), parent(std::move(parent_p)), binder_type(binder_type),
       global_binder_state(parent ? parent->global_binder_state : make_shared_ptr<GlobalBinderState>()),
-      query_binder_state(parent && binder_type == BinderType::REGULAR_BINDER ? parent->query_binder_state
-                                                                             : make_shared_ptr<QueryBinderState>()),
       entry_retriever(context), depth(parent ? parent->GetBinderDepth() : 1) {
 	IncreaseDepth();
 	if (parent) {
@@ -68,6 +67,10 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
 		lambda_bindings = parent->lambda_bindings;
+		if (binder_type != BinderType::VIEW_BINDER) {
+			// inherit expression binders from parent
+			active_binders = parent->active_binders;
+		}
 	}
 }
 
@@ -137,6 +140,10 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<UpdateExtensionsStatement>());
 	case StatementType::MERGE_INTO_STATEMENT:
 		return BindWithCTE(statement.Cast<MergeIntoStatement>());
+	case StatementType::CONNECT_STATEMENT:
+		return Bind(statement.Cast<ConnectStatement>());
+	case StatementType::DISCONNECT_STATEMENT:
+		return Bind(statement.Cast<DisconnectStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -245,18 +252,18 @@ void Binder::SetParameters(BoundParameterMap &parameters) {
 	global_binder_state->parameters = parameters;
 }
 
-void Binder::PushExpressionBinder(ExpressionBinder &binder) {
-	GetActiveBinders().push_back(binder);
+void Binder::BeginSubqueryBind(Binder &parent, ExpressionBinder &binder) {
+	// push all active expression binders
+	auto &active_binders = GetActiveBinders();
+	for (auto &active_binder : parent.GetActiveBinders()) {
+		active_binders.push_back(active_binder);
+	}
+	// finally push this binder
+	active_binders.push_back(binder);
 }
 
-void Binder::PopExpressionBinder() {
-	D_ASSERT(HasActiveBinder());
-	GetActiveBinders().pop_back();
-}
-
-void Binder::SetActiveBinder(ExpressionBinder &binder) {
-	D_ASSERT(HasActiveBinder());
-	GetActiveBinders().back() = binder;
+void Binder::FinishSubqueryBind() {
+	GetActiveBinders().clear();
 }
 
 ExpressionBinder &Binder::GetActiveBinder() {
@@ -268,7 +275,7 @@ bool Binder::HasActiveBinder() {
 }
 
 vector<reference<ExpressionBinder>> &Binder::GetActiveBinders() {
-	return query_binder_state->active_binders;
+	return active_binders;
 }
 
 void Binder::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
@@ -582,8 +589,6 @@ shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const string &catalog_name
 	return new_binder;
 }
 
-static constexpr const char *TRIGGER_BASE_CTE_NAME = "__duckdb_trigger_base";
-
 unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
                                                           vector<unique_ptr<ParsedExpression>> &returning_list,
                                                           TableCatalogEntry &table, TriggerEventType event_type) {
@@ -604,8 +609,34 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 	if (!returning_list.empty()) {
 		throw NotImplementedException("RETURNING is not yet supported on tables with AFTER triggers");
 	}
+	if (node.type == QueryNodeType::INSERT_QUERY_NODE) {
+		auto &insert_node = node.Cast<InsertQueryNode>();
+		if (insert_node.on_conflict_info && insert_node.on_conflict_info->action_type != OnConflictAction::NOTHING) {
+			for (auto &trigger : triggers) {
+				if (!trigger.get().referencing_new_table.empty()) {
+					throw NotImplementedException(
+					    "ON CONFLICT DO UPDATE is not yet supported with REFERENCING NEW TABLE AS triggers");
+				}
+			}
+		}
+	}
 	expanded_tables.insert(table);
 	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, triggers));
+}
+
+static constexpr const char *TRIGGER_BASE_CTE_PREFIX = "__duckdb_trigger_base_";
+static constexpr const char *TRIGGER_BODY_CTE_PREFIX = "__duckdb_trigger_1_";
+
+static unique_ptr<CommonTableExpressionInfo> MakeTransitionTableAliasCTE(const string &base_cte_name) {
+	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
+	auto alias_select = make_uniq<SelectNode>();
+	alias_select->select_list.push_back(make_uniq<StarExpression>());
+	auto alias_ref = make_uniq<BaseTableRef>();
+	alias_ref->table_name = base_cte_name;
+	alias_select->from_table = std::move(alias_ref);
+	alias_cte->query_node = std::move(alias_select);
+	alias_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+	return alias_cte;
 }
 
 BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
@@ -616,12 +647,15 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 	D_ASSERT(returning_list.empty());
 	returning_list.push_back(make_uniq<StarExpression>());
 
+	auto uuid_suffix = UUID::ToString(UUID::GenerateRandomUUID());
+	auto base_cte_name = TRIGGER_BASE_CTE_PREFIX + uuid_suffix;
+	auto body_cte_name = TRIGGER_BODY_CTE_PREFIX + uuid_suffix;
+
 	auto base_cte = make_uniq<CommonTableExpressionInfo>();
 	base_cte->query_node = node.Copy();
 	base_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 	base_cte->is_trigger_generated = true;
 
-	// Unreferenced DML CTE
 	auto &trigger = triggers[0].get();
 	auto trig_cte = make_uniq<CommonTableExpressionInfo>();
 	trig_cte->query_node = trigger.trigger_action->Copy();
@@ -632,10 +666,16 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 	auto outer = make_uniq<SelectNode>();
 	outer->select_list.push_back(make_uniq<FunctionExpression>("count_star", vector<unique_ptr<ParsedExpression>>()));
 	auto from_ref = make_uniq<BaseTableRef>();
-	from_ref->table_name = TRIGGER_BASE_CTE_NAME;
+	from_ref->table_name = base_cte_name;
 	outer->from_table = std::move(from_ref);
-	outer->cte_map.map[TRIGGER_BASE_CTE_NAME] = std::move(base_cte);
-	outer->cte_map.map["__duckdb_trigger_1"] = std::move(trig_cte);
+	outer->cte_map.map[base_cte_name] = std::move(base_cte);
+	if (!trigger.referencing_new_table.empty()) {
+		outer->cte_map.map[trigger.referencing_new_table] = MakeTransitionTableAliasCTE(base_cte_name);
+	}
+	if (!trigger.referencing_old_table.empty()) {
+		outer->cte_map.map[trigger.referencing_old_table] = MakeTransitionTableAliasCTE(base_cte_name);
+	}
+	outer->cte_map.map[body_cte_name] = std::move(trig_cte);
 
 	auto bound = Bind(*outer);
 	auto &properties = GetStatementProperties();
