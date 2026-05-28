@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/logging/log_manager.hpp"
 
@@ -87,11 +88,11 @@ static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const Func
 }
 
 static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).enable_optimizer = true;
+	Settings::Set<EnableOptimizerSetting>(context, SetScope::SESSION, Value::BOOLEAN(true));
 }
 
 static void PragmaDisableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).enable_optimizer = false;
+	Settings::Set<EnableOptimizerSetting>(context, SetScope::SESSION, Value::BOOLEAN(false));
 }
 
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
