@@ -1,4 +1,5 @@
 #include "shell_prompt.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
@@ -212,8 +213,9 @@ duckdb::Connection &Prompt::GetConnection(ShellState &state) {
 
 vector<string> Prompt::GetSupportedSettings() {
 	return vector<string> {"current_database", "current_schema", "current_database_and_schema",
-	                       "memory_limit",     "memory_usage",   "swap_usage",
-	                       "swap_max",         "bytes_written",  "bytes_read"};
+	                       "connect_suffix",   "memory_limit",   "memory_usage",
+	                       "swap_usage",       "swap_max",       "bytes_written",
+	                       "bytes_read"};
 }
 
 string Prompt::HandleSetting(ShellState &state, const PromptComponent &component) {
@@ -263,6 +265,16 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 			                  "SELECT CASE WHEN current_schema() = 'main' THEN current_database() "
 			                  "ELSE current_database() || '.' || current_schema() END");
 		}
+		if (component.literal == "connect_suffix") {
+			auto connected = context.TryGetConnectedCatalog();
+			if (connected) {
+				return " @ " + connected->GetCatalog().GetDBPath();
+			}
+			return string();
+		}
+	}
+	if (component.literal == "connect_suffix") {
+		return string();
 	}
 	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(context);
 	auto &current_schema = duckdb::ClientData::Get(*con.context).catalog_search_path->GetDefault().schema;
