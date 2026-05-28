@@ -693,7 +693,7 @@ void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> 
 		result.push_back(const_expr.GetValue());
 	} else if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref_expr = expr->Cast<ColumnRefExpression>();
-		for (auto &col : col_ref_expr.column_names) {
+		for (auto &col : col_ref_expr.ColumnNames()) {
 			result.push_back(Value(col));
 		}
 	} else if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
@@ -1236,7 +1236,7 @@ vector<OrderByNode> PEGTransformerFactory::TransformOrderByAll(PEGTransformer &t
 		order_by_null_type = transformer.Transform<OrderByNullType>(order_by_null_pr.GetResult());
 	}
 	auto star_expr = make_uniq<StarExpression>();
-	star_expr->columns = true;
+	star_expr->IsColumnsMutable() = true;
 	result.push_back(OrderByNode(order_type, order_by_null_type, std::move(star_expr)));
 	return result;
 }

@@ -17,8 +17,8 @@ static void AddChild(unique_ptr<ParsedExpression> &child, expression_list_t &new
 	}
 	auto &unpack = child->Cast<OperatorExpression>();
 	D_ASSERT(unpack.GetExpressionType() == ExpressionType::OPERATOR_UNPACK);
-	D_ASSERT(unpack.children.size() == 1);
-	auto &unpack_child = unpack.children[0];
+	D_ASSERT(unpack.GetChildren().size() == 1);
+	auto &unpack_child = unpack.GetChildrenMutable()[0];
 
 	// Replace the child with the replacement expression(s)
 	for (auto &replacement : replacements) {
@@ -94,10 +94,10 @@ static void ReplaceInOperator(unique_ptr<ParsedExpression> &expr, expression_lis
 
 	// Replace children
 	expression_list_t new_children;
-	for (auto &child : operator_expr.children) {
+	for (auto &child : operator_expr.GetChildrenMutable()) {
 		AddChild(child, new_children, star_list, star, regex);
 	}
-	operator_expr.children = std::move(new_children);
+	operator_expr.GetChildrenMutable() = std::move(new_children);
 }
 
 void Binder::ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr, expression_list_t &star_list,

@@ -46,14 +46,15 @@ BindResult AlterBinder::BindColumnReference(ColumnRefExpression &col_ref, idx_t 
 		}
 	}
 
-	if (col_ref.column_names.size() > 1) {
+	if (col_ref.ColumnNames().size() > 1) {
 		return BindQualifiedColumnName(col_ref, table.name);
 	}
 
-	auto idx = table.GetColumnIndex(col_ref.column_names[0], true);
+	auto col_name = col_ref.ColumnNames()[0];
+	auto idx = table.GetColumnIndex(col_name, true);
 	if (!idx.IsValid()) {
 		throw BinderException("Table does not contain column %s referenced in alter statement!",
-		                      col_ref.column_names[0]);
+		                      col_ref.ColumnNames()[0]);
 	}
 	if (table.GetColumn(idx).Generated()) {
 		throw BinderException("Using generated columns in alter statement not supported");

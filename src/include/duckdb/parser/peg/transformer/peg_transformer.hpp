@@ -11,6 +11,7 @@
 #include "duckdb/parser/peg/ast/create_table_as.hpp"
 #include "duckdb/parser/peg/ast/partition_sorted_options.hpp"
 #include "duckdb/parser/peg/ast/distinct_clause.hpp"
+#include "duckdb/parser/peg/ast/describe_target.hpp"
 #include "duckdb/parser/peg/ast/extension_repository_info.hpp"
 #include "duckdb/parser/peg/ast/generated_column_definition.hpp"
 #include "duckdb/parser/peg/ast/generic_copy_option.hpp"
@@ -263,20 +264,14 @@ public:
 	void RegisterComment();
 	void RegisterCommon();
 	void RegisterCopy();
-	void RegisterCreateIndex();
 	void RegisterCreateMacro();
-	void RegisterCreateSequence();
 	void RegisterCreateTable();
-	void RegisterCreateType();
-	void RegisterDescribe();
-	void RegisterDrop();
 	void RegisterExpression();
 	void RegisterInsert();
 	void RegisterConnect();
 	void RegisterMergeInto();
 	void RegisterPivot();
 	void RegisterSelect();
-	void RegisterSet();
 	void RegisterKeywordsAndIdentifiers();
 	void RegisterEnums();
 	void RegisterGenerated();
@@ -319,6 +314,7 @@ private:
 	// common.gram
 	static unique_ptr<ParsedExpression> TransformNumberLiteral(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformStringLiteral(PEGTransformer &transformer, ParseResult &parse_result);
+	static string TransformCollationName(PEGTransformer &transformer, ParseResult &parse_result);
 	static LogicalType TransformType(PEGTransformer &transformer, ParseResult &parse_result);
 	static int64_t TransformArrayBounds(PEGTransformer &transformer, ParseResult &parse_result);
 	static int64_t TransformSquareBracketsArray(PEGTransformer &transformer, ParseResult &parse_result);
@@ -338,6 +334,8 @@ private:
 	                                                                   ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformSimpleType(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName TransformQualifiedTypeName(PEGTransformer &transformer, ParseResult &parse_result);
+	static QualifiedName TransformSchemaReservedTypeName(PEGTransformer &transformer, ParseResult &parse_result);
+	static QualifiedName TransformCatalogReservedSchemaTypeName(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformCharacterType(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformMapType(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformRowType(PEGTransformer &transformer, ParseResult &parse_result);
@@ -382,25 +380,6 @@ private:
 	                                                                ParseResult &parse_result);
 	static GenericCopyOption TransformGenericCopyOption(PEGTransformer &transformer, ParseResult &parse_result);
 
-	// create_index.gram
-	static unique_ptr<CreateStatement> TransformCreateIndexStmt(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformIndexType(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformIndexElement(PEGTransformer &transformer, ParseResult &parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformWithList(PEGTransformer &transformer,
-	                                                                              ParseResult &parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformRelOptionOrOids(PEGTransformer &transformer,
-	                                                                                     ParseResult &parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformRelOptionList(PEGTransformer &transformer,
-	                                                                                   ParseResult &parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformOids(PEGTransformer &transformer,
-	                                                                          ParseResult &parse_result);
-	static string TransformRelOptionName(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformRelOptionArgumentOpt(PEGTransformer &transformer,
-	                                                                  ParseResult &parse_result);
-	static pair<string, unique_ptr<ParsedExpression>> TransformRelOption(PEGTransformer &transformer,
-	                                                                     ParseResult &parse_result);
-	static string TransformIndexName(PEGTransformer &transformer, ParseResult &parse_result);
-
 	// create_macro.gram
 	static unique_ptr<CreateStatement> TransformCreateMacroStmt(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<MacroFunction> TransformMacroDefinition(PEGTransformer &transformer, ParseResult &parse_result);
@@ -411,25 +390,6 @@ private:
 	static vector<MacroParameter> TransformMacroParameters(PEGTransformer &transformer, ParseResult &parse_result);
 	static MacroParameter TransformMacroParameter(PEGTransformer &transformer, ParseResult &parse_result);
 	static MacroParameter TransformSimpleParameter(PEGTransformer &transformer, ParseResult &parse_result);
-
-	// create_sequence.gram
-	static unique_ptr<CreateStatement> TransformCreateSequenceStmt(PEGTransformer &transformer,
-	                                                               ParseResult &parse_result);
-	static pair<string, unique_ptr<SequenceOption>> TransformSequenceOption(PEGTransformer &transformer,
-	                                                                        ParseResult &parse_result);
-	static pair<string, unique_ptr<SequenceOption>> TransformSeqSetCycle(PEGTransformer &transformer,
-	                                                                     ParseResult &parse_result);
-	static pair<string, unique_ptr<SequenceOption>> TransformSeqSetIncrement(PEGTransformer &transformer,
-	                                                                         ParseResult &parse_result);
-	static pair<string, unique_ptr<SequenceOption>> TransformSeqSetMinMax(PEGTransformer &transformer,
-	                                                                      ParseResult &parse_result);
-	static string TransformSeqMinOrMax(PEGTransformer &transformer, ParseResult &parse_result);
-	static pair<string, unique_ptr<SequenceOption>> TransformSeqNoMinMax(PEGTransformer &transformer,
-	                                                                     ParseResult &parse_result);
-	static pair<string, unique_ptr<SequenceOption>> TransformSeqStartWith(PEGTransformer &transformer,
-	                                                                      ParseResult &parse_result);
-	static pair<string, unique_ptr<SequenceOption>> TransformSeqOwnedBy(PEGTransformer &transformer,
-	                                                                    ParseResult &parse_result);
 
 	// create_table.gram
 	static unique_ptr<SQLStatement> TransformCreateStatement(PEGTransformer &transformer, ParseResult &parse_result);
@@ -494,51 +454,10 @@ private:
 	static bool TransformIfNotExists(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformOrReplace(PEGTransformer &transformer, ParseResult &parse_result);
 
-	// create_type.gram
-	static unique_ptr<CreateStatement> TransformCreateTypeStmt(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<CreateTypeInfo> TransformCreateType(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<SelectStatement> TransformEnumSelectType(PEGTransformer &transformer, ParseResult &parse_result);
-	static LogicalType TransformEnumStringLiteralList(PEGTransformer &transformer, ParseResult &parse_result);
-
 	// create_trigger.gram
 	static TriggerForEach TransformForEachClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static TriggerTiming TransformTriggerTiming(PEGTransformer &transformer, ParseResult &parse_result);
 	static TriggerEventInfo TransformTriggerEvent(PEGTransformer &transformer, ParseResult &parse_result);
-
-	// describe.gram
-	static unique_ptr<SelectStatement> TransformDescribeStatement(PEGTransformer &transformer,
-	                                                              ParseResult &parse_result);
-	static unique_ptr<QueryNode> TransformShowSelect(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<QueryNode> TransformShowTables(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<QueryNode> TransformShowAllTables(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<QueryNode> TransformShowQualifiedName(PEGTransformer &transformer, ParseResult &parse_result);
-	static ShowType TransformShowOrDescribeOrSummarize(PEGTransformer &transformer, ParseResult &parse_result);
-	static ShowType TransformShowOrDescribe(PEGTransformer &transformer, ParseResult &parse_result);
-	static ShowType TransformSummarize(PEGTransformer &transformer, ParseResult &parse_result);
-
-	// drop.gram
-	static unique_ptr<SQLStatement> TransformDropStatement(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<DropStatement> TransformDropEntries(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<DropStatement> TransformDropTable(PEGTransformer &transformer, ParseResult &parse_result);
-	static CatalogType TransformTableOrView(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<DropStatement> TransformDropTableFunction(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<DropStatement> TransformDropFunction(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<DropStatement> TransformDropSchema(PEGTransformer &transformer, ParseResult &parse_result);
-	static QualifiedName TransformQualifiedSchemaName(PEGTransformer &transformer, ParseResult &parse_result);
-	static QualifiedName TransformCatalogReservedSchema(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<DropStatement> TransformDropIndex(PEGTransformer &transformer, ParseResult &parse_result);
-	static QualifiedName TransformQualifiedIndexName(PEGTransformer &transformer, ParseResult &parse_result);
-	static QualifiedName TransformSchemaReservedIndex(PEGTransformer &transformer, ParseResult &parse_result);
-	static QualifiedName TransformCatalogReservedSchemaIndex(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<DropStatement> TransformDropSequence(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformCollationName(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<DropStatement> TransformDropCollation(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<DropStatement> TransformDropType(PEGTransformer &transformer, ParseResult &parse_result);
-	static bool TransformDropBehavior(PEGTransformer &transformer, ParseResult &parse_result);
-	static bool TransformIfExists(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<DropStatement> TransformDropSecret(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformDropSecretStorage(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<DropStatement> TransformDropTrigger(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// expression.gram
 	static unique_ptr<SQLStatement> TransformExpressionStatement(PEGTransformer &transformer,
@@ -617,8 +536,6 @@ private:
 	static Value TransformTrueLiteral(PEGTransformer &transformer, ParseResult &parse_result);
 	static Value TransformNullLiteral(PEGTransformer &transformer, ParseResult &parse_result);
 	static Value TransformUnknownLiteral(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ColumnRefExpression> TransformNestedColumnName(PEGTransformer &transformer,
-	                                                                 ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformColumnReference(PEGTransformer &transformer,
 	                                                             ParseResult &parse_result);
 	static unique_ptr<ColumnRefExpression> TransformCatalogReservedSchemaTableColumnName(PEGTransformer &transformer,
@@ -1059,23 +976,6 @@ private:
 	static SampleMethod TransformSampleFunction(PEGTransformer &transformer, ParseResult &parse_result);
 	static optional_idx TransformRepeatableSample(PEGTransformer &transformer, ParseResult &parse_result);
 
-	// set.gram
-	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformSetAssignment(PEGTransformer &transformer,
-	                                                                   ParseResult &parse_result);
-	static SettingInfo TransformSetSetting(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<SQLStatement> TransformSetStatement(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<SetStatement> TransformSetTimeZone(PEGTransformer &transformer, ParseResult &parse_result);
-	static SettingInfo TransformSetVariable(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformZoneValue(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformZoneIntervalWithInterval(PEGTransformer &transformer,
-	                                                                      ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformZoneIntervalWithPrecision(PEGTransformer &transformer,
-	                                                                       ParseResult &parse_result);
-	static unique_ptr<SetStatement> TransformStandardAssignment(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformVariableList(PEGTransformer &transformer,
-	                                                                  ParseResult &parse_result);
-
 	static string TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result);
 
 	//===--------------------------------------------------------------------===//
@@ -1212,6 +1112,7 @@ private:
 	                                                    const string &sequence_name);
 	static unique_ptr<TransformResultValue> TransformAlterSequenceOptionsInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
+	static unique_ptr<AlterInfo> TransformAlterSequenceOptions(PEGTransformer &transformer, ParseResult &choice_result);
 	static unique_ptr<TransformResultValue> TransformSetSequenceOptionInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static unique_ptr<AlterInfo>
@@ -1306,6 +1207,78 @@ private:
 	static unique_ptr<TransformResultValue> TransformDisconnectStatementInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformDisconnectStatement(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCreateIndexStmtInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static unique_ptr<CreateStatement> TransformCreateIndexStmt(
+	    PEGTransformer &transformer, const bool &unique_index, const bool &if_not_exists, const string &index_name,
+	    unique_ptr<BaseTableRef> base_table_name, const vector<string> &insert_column_list, const string &index_type,
+	    vector<unique_ptr<ParsedExpression>> index_element,
+	    case_insensitive_map_t<unique_ptr<ParsedExpression>> with_list, unique_ptr<ParsedExpression> where_clause);
+	static unique_ptr<TransformResultValue> TransformWithListInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
+	TransformWithList(PEGTransformer &transformer,
+	                  case_insensitive_map_t<unique_ptr<ParsedExpression>> rel_option_or_oids);
+	static unique_ptr<TransformResultValue> TransformRelOptionOrOidsInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformRelOptionListInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
+	TransformRelOptionList(PEGTransformer &transformer, vector<pair<string, unique_ptr<ParsedExpression>>> rel_option);
+	static unique_ptr<TransformResultValue> TransformOidsInternal(PEGTransformer &transformer,
+	                                                              ParseResult &parse_result);
+	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformOids(PEGTransformer &transformer,
+	                                                                          const bool &with_or_without_oids);
+	static unique_ptr<TransformResultValue> TransformWithOrWithoutOidsInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformWithOidsInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static bool TransformWithOids(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformWithoutOidsInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static bool TransformWithoutOids(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformIndexElementInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformIndexElement(PEGTransformer &transformer,
+	                                                          unique_ptr<ParsedExpression> expression,
+	                                                          const OrderType &desc_or_asc,
+	                                                          const OrderByNullType &nulls_first_or_last);
+	static unique_ptr<TransformResultValue> TransformUniqueIndexInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static bool TransformUniqueIndex(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformIndexTypeInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static string TransformIndexType(PEGTransformer &transformer, const string &identifier);
+	static unique_ptr<TransformResultValue> TransformRelOptionInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static pair<string, unique_ptr<ParsedExpression>>
+	TransformRelOption(PEGTransformer &transformer, const string &rel_option_name,
+	                   unique_ptr<ParsedExpression> rel_option_argument_opt);
+	static unique_ptr<TransformResultValue> TransformRelOptionNameInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformDottedIdentifierStringInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static string TransformDottedIdentifierString(PEGTransformer &transformer, const vector<string> &dotted_identifier);
+	static unique_ptr<TransformResultValue> TransformRelOptionArgumentOptInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformRelOptionArgumentOpt(PEGTransformer &transformer,
+	                                                                  unique_ptr<ParsedExpression> def_arg);
+	static unique_ptr<TransformResultValue> TransformDefArgInternal(PEGTransformer &transformer,
+	                                                                ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformDefArgNullInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformDefArgNull(PEGTransformer &transformer, const Value &null_literal);
+	static unique_ptr<TransformResultValue> TransformDefArgKeywordInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformDefArgKeyword(PEGTransformer &transformer,
+	                                                           const string &reserved_keyword);
+	static unique_ptr<TransformResultValue> TransformDefArgStringLiteralInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformDefArgStringLiteral(PEGTransformer &transformer,
+	                                                                 const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformNoneLiteralInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformNoneLiteral(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformCreateSchemaStmtInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<CreateStatement> TransformCreateSchemaStmt(PEGTransformer &transformer, const bool &if_not_exists,
@@ -1322,6 +1295,51 @@ private:
 	static unique_ptr<TransformResultValue> TransformSecretNameInternal(PEGTransformer &transformer,
 	                                                                    ParseResult &parse_result);
 	static string TransformSecretName(PEGTransformer &transformer, const string &col_id);
+	static unique_ptr<TransformResultValue> TransformCreateSequenceStmtInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<CreateStatement>
+	TransformCreateSequenceStmt(PEGTransformer &transformer, const bool &if_not_exists,
+	                            const QualifiedName &qualified_name,
+	                            vector<pair<string, unique_ptr<SequenceOption>>> sequence_option);
+	static unique_ptr<TransformResultValue> TransformSequenceOptionInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformSeqSetCycleInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformSeqCycleInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static pair<string, unique_ptr<SequenceOption>> TransformSeqCycle(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformSeqNoCycleInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static pair<string, unique_ptr<SequenceOption>> TransformSeqNoCycle(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformSeqSetIncrementInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static pair<string, unique_ptr<SequenceOption>> TransformSeqSetIncrement(PEGTransformer &transformer,
+	                                                                         unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformSeqSetMinMaxInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static pair<string, unique_ptr<SequenceOption>> TransformSeqSetMinMax(PEGTransformer &transformer,
+	                                                                      const string &seq_min_or_max,
+	                                                                      unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformSeqNoMinMaxInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static pair<string, unique_ptr<SequenceOption>> TransformSeqNoMinMax(PEGTransformer &transformer,
+	                                                                     const string &seq_min_or_max);
+	static unique_ptr<TransformResultValue> TransformSeqStartWithInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static pair<string, unique_ptr<SequenceOption>> TransformSeqStartWith(PEGTransformer &transformer,
+	                                                                      unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformSeqOwnedByInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static pair<string, unique_ptr<SequenceOption>> TransformSeqOwnedBy(PEGTransformer &transformer,
+	                                                                    const QualifiedName &qualified_name);
+	static unique_ptr<TransformResultValue> TransformSeqMinOrMaxInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformMinValueInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static string TransformMinValue(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformMaxValueInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static string TransformMaxValue(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformCreateTriggerStmtInternal(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static unique_ptr<CreateStatement>
@@ -1387,6 +1405,24 @@ private:
 	static unique_ptr<TransformResultValue> TransformForEachStatementInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static TriggerForEach TransformForEachStatement(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCreateTypeStmtInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<CreateStatement> TransformCreateTypeStmt(PEGTransformer &transformer, const bool &if_not_exists,
+	                                                           const QualifiedName &qualified_name,
+	                                                           unique_ptr<CreateTypeInfo> create_type);
+	static unique_ptr<TransformResultValue> TransformCreateTypeInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCreateTypeFromTypeInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<CreateTypeInfo> TransformCreateTypeFromType(PEGTransformer &transformer, const LogicalType &type);
+	static unique_ptr<TransformResultValue> TransformEnumSelectTypeInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<CreateTypeInfo> TransformEnumSelectType(PEGTransformer &transformer,
+	                                                          unique_ptr<SelectStatement> select_statement_internal);
+	static unique_ptr<TransformResultValue> TransformEnumStringLiteralListInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static unique_ptr<CreateTypeInfo> TransformEnumStringLiteralList(PEGTransformer &transformer,
+	                                                                 const vector<string> &string_literal);
 	static unique_ptr<TransformResultValue> TransformCreateViewStmtInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static unique_ptr<CreateStatement>
@@ -1425,10 +1461,165 @@ private:
 	                                                                           ParseResult &parse_result);
 	static vector<unique_ptr<TableRef>> TransformDeleteUsingClause(PEGTransformer &transformer,
 	                                                               vector<unique_ptr<TableRef>> table_ref);
+	static unique_ptr<TransformResultValue> TransformDescribeStatementInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<SelectStatement> TransformDescribeStatement(PEGTransformer &transformer,
+	                                                              unique_ptr<QueryNode> child);
+	static unique_ptr<TransformResultValue> TransformShowSelectInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<QueryNode> TransformShowSelect(PEGTransformer &transformer,
+	                                                 const ShowType &show_or_describe_or_summarize,
+	                                                 unique_ptr<SelectStatement> select_statement_internal);
+	static unique_ptr<TransformResultValue> TransformShowAllTablesInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<QueryNode> TransformShowAllTables(PEGTransformer &transformer, const ShowType &show_or_describe);
+	static unique_ptr<TransformResultValue> TransformShowQualifiedNameInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<QueryNode> TransformShowQualifiedName(PEGTransformer &transformer,
+	                                                        const ShowType &show_or_describe_or_summarize,
+	                                                        DescribeTarget describe_target);
+	static unique_ptr<TransformResultValue> TransformShowTablesInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<QueryNode> TransformShowTables(PEGTransformer &transformer, const ShowType &show_or_describe,
+	                                                 const QualifiedName &qualified_name);
+	static unique_ptr<TransformResultValue> TransformDescribeTargetInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformDescribeBaseTableNameInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static DescribeTarget TransformDescribeBaseTableName(PEGTransformer &transformer,
+	                                                     unique_ptr<BaseTableRef> base_table_name);
+	static unique_ptr<TransformResultValue> TransformDescribeStringLiteralInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static DescribeTarget TransformDescribeStringLiteral(PEGTransformer &transformer, const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformShowOrDescribeOrSummarizeInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformSummarizeInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformSummarizeRuleInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static ShowType TransformSummarizeRule(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformShowOrDescribeInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformShowRuleInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static ShowType TransformShowRule(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformDescribeRuleInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformDescribeLongRuleInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static ShowType TransformDescribeLongRule(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformDescRuleInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static ShowType TransformDescRule(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformDetachStatementInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformDetachStatement(PEGTransformer &transformer, const bool &if_exists,
 	                                                         const string &catalog_name);
+	static unique_ptr<TransformResultValue> TransformDropStatementInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformDropStatement(PEGTransformer &transformer,
+	                                                       unique_ptr<DropStatement> drop_entries,
+	                                                       const bool &drop_behavior);
+	static unique_ptr<TransformResultValue> TransformDropEntriesInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformDropTriggerInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<DropStatement> TransformDropTrigger(PEGTransformer &transformer, const bool &if_exists,
+	                                                      const string &trigger_name,
+	                                                      unique_ptr<BaseTableRef> base_table_name);
+	static unique_ptr<TransformResultValue> TransformDropTableInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<DropStatement> TransformDropTable(PEGTransformer &transformer, const CatalogType &table_or_view,
+	                                                    const bool &if_exists,
+	                                                    vector<unique_ptr<BaseTableRef>> base_table_name);
+	static unique_ptr<TransformResultValue> TransformDropTableFunctionInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<DropStatement> TransformDropTableFunction(PEGTransformer &transformer,
+	                                                            const CatalogType &comment_macro_table,
+	                                                            const bool &if_exists,
+	                                                            const vector<string> &table_function_name);
+	static unique_ptr<TransformResultValue> TransformDropFunctionInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<DropStatement> TransformDropFunction(PEGTransformer &transformer, const bool &function_type_macro,
+	                                                       const bool &if_exists,
+	                                                       const vector<QualifiedName> &function_identifier);
+	static unique_ptr<TransformResultValue> TransformDropSchemaInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<DropStatement> TransformDropSchema(PEGTransformer &transformer, const bool &if_exists,
+	                                                     const vector<QualifiedName> &qualified_schema_name);
+	static unique_ptr<TransformResultValue> TransformDropIndexInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<DropStatement> TransformDropIndex(PEGTransformer &transformer, const bool &if_exists,
+	                                                    const vector<QualifiedName> &qualified_index_name);
+	static unique_ptr<TransformResultValue> TransformQualifiedIndexNameInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformQualifiedIndexNameStringInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static QualifiedName TransformQualifiedIndexNameString(PEGTransformer &transformer, const string &index_name);
+	static unique_ptr<TransformResultValue> TransformSchemaReservedIndexInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static QualifiedName TransformSchemaReservedIndex(PEGTransformer &transformer, const string &schema_qualification,
+	                                                  const string &reserved_index_name);
+	static unique_ptr<TransformResultValue> TransformCatalogReservedSchemaIndexInternal(PEGTransformer &transformer,
+	                                                                                    ParseResult &parse_result);
+	static QualifiedName TransformCatalogReservedSchemaIndex(PEGTransformer &transformer,
+	                                                         const string &catalog_qualification,
+	                                                         const string &reserved_schema_qualification,
+	                                                         const string &reserved_index_name);
+	static unique_ptr<TransformResultValue> TransformDropSequenceInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<DropStatement> TransformDropSequence(PEGTransformer &transformer, const bool &if_exists,
+	                                                       const vector<QualifiedName> &qualified_sequence_name);
+	static unique_ptr<TransformResultValue> TransformDropCollationInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<DropStatement> TransformDropCollation(PEGTransformer &transformer, const bool &if_exists,
+	                                                        const vector<string> &collation_name);
+	static unique_ptr<TransformResultValue> TransformDropTypeInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static unique_ptr<DropStatement> TransformDropType(PEGTransformer &transformer, const bool &if_exists,
+	                                                   const vector<QualifiedName> &qualified_type_name);
+	static unique_ptr<TransformResultValue> TransformDropSecretInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<DropStatement> TransformDropSecret(PEGTransformer &transformer,
+	                                                     const SecretPersistType &temporary, const bool &if_exists,
+	                                                     const string &secret_name, const string &drop_secret_storage);
+	static unique_ptr<TransformResultValue> TransformTableOrViewInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformMaterializedViewEntryInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static CatalogType TransformMaterializedViewEntry(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformFunctionTypeMacroInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformFunctionTypeMacroKeywordInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static bool TransformFunctionTypeMacroKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformFunctionTypeFunctionInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static bool TransformFunctionTypeFunction(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformDropBehaviorInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCascadeDropBehaviorInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static bool TransformCascadeDropBehavior(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformRestrictDropBehaviorInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static bool TransformRestrictDropBehavior(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformIfExistsInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static bool TransformIfExists(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformQualifiedSchemaNameInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformQualifiedSchemaNameStringInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static QualifiedName TransformQualifiedSchemaNameString(PEGTransformer &transformer, const string &schema_name);
+	static unique_ptr<TransformResultValue> TransformCatalogReservedSchemaInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static QualifiedName TransformCatalogReservedSchema(PEGTransformer &transformer,
+	                                                    const string &catalog_qualification,
+	                                                    const string &reserved_schema_name);
+	static unique_ptr<TransformResultValue> TransformDropSecretStorageInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static string TransformDropSecretStorage(PEGTransformer &transformer, const string &identifier);
 	static unique_ptr<TransformResultValue> TransformExecuteStatementInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<SQLStatement>
@@ -1522,6 +1713,82 @@ private:
 	static unique_ptr<TransformResultValue> TransformTypeListInternal(PEGTransformer &transformer,
 	                                                                  ParseResult &parse_result);
 	static vector<LogicalType> TransformTypeList(PEGTransformer &transformer, const vector<LogicalType> &type);
+	static unique_ptr<TransformResultValue> TransformSetStatementInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformSetStatement(PEGTransformer &transformer,
+	                                                      unique_ptr<SetStatement> set_assignment_or_time_zone);
+	static unique_ptr<TransformResultValue> TransformSetAssignmentOrTimeZoneInternal(PEGTransformer &transformer,
+	                                                                                 ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformResetStatementInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformResetStatement(PEGTransformer &transformer,
+	                                                        const SettingInfo &set_variable_or_setting);
+	static unique_ptr<TransformResultValue> TransformStandardAssignmentInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<SetStatement> TransformStandardAssignment(PEGTransformer &transformer,
+	                                                            const SettingInfo &set_variable_or_setting,
+	                                                            vector<unique_ptr<ParsedExpression>> set_assignment);
+	static unique_ptr<TransformResultValue> TransformSetVariableOrSettingInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformSetTimeZoneInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<SetStatement> TransformSetTimeZone(PEGTransformer &transformer,
+	                                                     unique_ptr<ParsedExpression> zone_value);
+	static unique_ptr<TransformResultValue> TransformZoneValueInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformZoneLocalInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformZoneLocal(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformZoneDefaultInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformZoneDefault(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformZoneStringLiteralInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformZoneStringLiteral(PEGTransformer &transformer,
+	                                                               const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformZoneIdentifierInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformZoneIdentifier(PEGTransformer &transformer, const string &identifier);
+	static unique_ptr<TransformResultValue> TransformZoneIntervalWithIntervalInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformZoneIntervalWithInterval(PEGTransformer &transformer,
+	                                                                      const string &string_literal,
+	                                                                      const DatePartSpecifier &interval);
+	static unique_ptr<TransformResultValue> TransformZoneIntervalWithPrecisionInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformZoneIntervalWithPrecision(PEGTransformer &transformer,
+	                                                                       unique_ptr<ParsedExpression> number_literal,
+	                                                                       const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformSetSettingInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static SettingInfo TransformSetSetting(PEGTransformer &transformer, const SetScope &setting_scope,
+	                                       const string &setting_name);
+	static unique_ptr<TransformResultValue> TransformSetVariableInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static SettingInfo TransformSetVariable(PEGTransformer &transformer, const SetScope &variable_scope,
+	                                        const string &identifier);
+	static unique_ptr<TransformResultValue> TransformVariableScopeInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static SetScope TransformVariableScope(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformSettingScopeInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformLocalScopeInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static SetScope TransformLocalScope(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformSessionScopeInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static SetScope TransformSessionScope(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformGlobalScopeInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static SetScope TransformGlobalScope(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformSetAssignmentInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>>
+	TransformSetAssignment(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> variable_list);
+	static unique_ptr<TransformResultValue> TransformVariableListInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformVariableList(PEGTransformer &transformer,
+	                                                                  vector<unique_ptr<ParsedExpression>> expression);
 	static unique_ptr<TransformResultValue> TransformTransactionStatementInternal(PEGTransformer &transformer,
 	                                                                              ParseResult &parse_result);
 	static unique_ptr<TransformResultValue> TransformBeginTransactionInternal(PEGTransformer &transformer,
