@@ -168,7 +168,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		if (collation_index.IsValid()) {
 			child_list_t<Value> values;
 			values.push_back(make_pair("index", Value::UBIGINT(collation_index.GetIndex())));
-			values.push_back(make_pair("collation", Value(string(collation.Collation()))));
+			values.push_back(make_pair("collation", Value(collation.Collation())));
 			return make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(values)));
 		}
 		break;

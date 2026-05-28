@@ -1,0 +1,11 @@
+{
+  "description": "ThreadSanitizer-specific test config for CI runtime.",
+  "skip_tests": [
+    {
+      "reason": "Runtime-heavy under ThreadSanitizer.",
+      "paths": [
+        "test/sql/parallelism/intraquery/depth_first_evaluation.test_slow"
+      ]
+    }
+  ]
+}

@@ -81,6 +81,7 @@ class ParameterExpression;
 class PositionalReferenceExpression;
 class StarExpression;
 class SubqueryExpression;
+class TypeExpression;
 class WindowExpression;
 
 //===--------------------------------------------------------------------===//

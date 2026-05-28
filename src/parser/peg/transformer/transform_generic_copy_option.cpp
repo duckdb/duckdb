@@ -43,8 +43,8 @@ static void SetGenericCopyOptionExpression(GenericCopyOption &copy_option, uniqu
 		copy_option.children.push_back(Value("*"));
 	} else if (expression->GetExpressionType() == ExpressionType::OPERATOR_CAST) {
 		auto &cast_expr = expression->Cast<CastExpression>();
-		if (cast_expr.ChildMutable()->GetExpressionClass() == ExpressionClass::CONSTANT) {
-			auto &const_expr = cast_expr.ChildMutable()->Cast<ConstantExpression>();
+		if (cast_expr.Child().GetExpressionClass() == ExpressionClass::CONSTANT) {
+			auto &const_expr = cast_expr.Child().Cast<ConstantExpression>();
 			if (const_expr.GetValue().GetValue<string>() == "t") {
 				copy_option.children.push_back(Value(true));
 			} else if (const_expr.GetValue().GetValue<string>() == "f") {

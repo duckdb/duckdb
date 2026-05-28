@@ -99,8 +99,8 @@
         "id": 200,
         "name": "child",
         "type": "ParsedExpression*",
-        "accessor": "Child()",
-        "accessor_mut": "ChildMutable()"
+        "accessor_mut": "ChildMutable()",
+        "accessor": "Child()"
       },
       {
         "id": 201,
@@ -123,8 +123,8 @@
         "id": 200,
         "name": "child",
         "type": "ParsedExpression*",
-        "accessor": "Child()",
-        "accessor_mut": "ChildMutable()"
+        "accessor_mut": "ChildMutable()",
+        "accessor": "Child()"
       },
       {
         "id": 201,
@@ -195,8 +195,8 @@
         "id": 200,
         "name": "children",
         "type": "vector<ParsedExpression*>",
-        "accessor": "GetChildren()",
-        "accessor_mut": "GetChildrenMutable()"
+        "accessor_mut": "GetChildrenMutable()",
+        "accessor": "GetChildren()"
       }
     ],
     "constructor": [
@@ -309,8 +309,8 @@
         "id": 200,
         "name": "children",
         "type": "vector<ParsedExpression*>",
-        "accessor": "GetChildren()",
-        "accessor_mut": "GetChildrenMutable()"
+        "accessor_mut": "GetChildrenMutable()",
+        "accessor": "GetChildren()"
       }
     ],
     "constructor": [
@@ -362,8 +362,8 @@
         "id": 202,
         "name": "replace_list",
         "type": "case_insensitive_map_t<ParsedExpression*>",
-        "accessor": "ReplaceList()",
-        "accessor_mut": "ReplaceListMutable()"
+        "accessor_mut": "ReplaceListMutable()",
+        "accessor": "ReplaceList()"
       },
       {
         "id": 203,
@@ -374,8 +374,8 @@
         "id": 204,
         "name": "expr",
         "type": "ParsedExpression*",
-        "accessor": "Expression()",
         "accessor_mut": "ExpressionMutable()",
+        "accessor": "Expression()",
         "nullable": true
       },
       {

@@ -2237,12 +2237,45 @@ PEGTransformerFactory::TransformSubstringExpressionList(PEGTransformer &transfor
 
 vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSubstringParameters(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
+	// SubstringParameters <- Expression SubstringFromFor
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	vector<unique_ptr<ParsedExpression>> results;
-	// SubstringParameters <- Expression FromExpression ForExpression
 	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0)));
-	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1)));
-	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2)));
+	auto from_for = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.GetChild(1));
+	for (auto &arg : from_for) {
+		results.push_back(std::move(arg));
+	}
+	return results;
+}
+
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSubstringFromFor(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	// SubstringFromFor <- SubstringFromOptionalFor / SubstringFor
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+}
+
+vector<unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformSubstringFromOptionalFor(PEGTransformer &transformer, ParseResult &parse_result) {
+	// SubstringFromOptionalFor <- FromExpression ForExpression?
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> results;
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0)));
+	auto &for_opt = list_pr.Child<OptionalParseResult>(1);
+	if (for_opt.HasResult()) {
+		results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(for_opt.GetResult()));
+	}
+	return results;
+}
+
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSubstringFor(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	// SubstringFor <- ForExpression
+	// SUBSTRING(str FOR len) => substring(str, 1, len)
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<unique_ptr<ParsedExpression>> results;
+	results.push_back(make_uniq<ConstantExpression>(Value::INTEGER(1)));
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0)));
 	return results;
 }
 

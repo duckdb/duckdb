@@ -506,6 +506,9 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformSubstringArguments);
 	REGISTER_TRANSFORM(TransformSubstringExpressionList);
 	REGISTER_TRANSFORM(TransformSubstringParameters);
+	REGISTER_TRANSFORM(TransformSubstringFromFor);
+	REGISTER_TRANSFORM(TransformSubstringFromOptionalFor);
+	REGISTER_TRANSFORM(TransformSubstringFor);
 	REGISTER_TRANSFORM(TransformTrimExpression);
 	REGISTER_TRANSFORM(TransformTrimDirection);
 	REGISTER_TRANSFORM(TransformTrimSource);
