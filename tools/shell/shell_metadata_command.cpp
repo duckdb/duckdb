@@ -12,17 +12,14 @@
 namespace duckdb_shell {
 
 MetadataResult ToggleAbout(ShellState &state, const vector<string> &args) {
-	string about_text = "DuckDB is an in-process analytical database management system designed for fast "
-	                    "execution of complex SQL queries. It runs embedded within its host process with "
-	                    "no external dependencies, and is optimized for OLAP workloads using a columnar, "
-	                    "vectorized execution engine.\n\n"
-	                    "Developed and maintained by the DuckDB Foundation, "
-	                    "available under the MIT License.\n"
-	                    "For more information, visit https://duckdb.org or "
-	                    "https://github.com/duckdb/duckdb.\n\n";
+	string about_text = "SereneDB is a PostgreSQL-wire-compatible analytical database "
+	                    "that pairs DuckDB's execution engine with search built on IResearch.\n\n"
+	                    "Developed and maintained by SereneDB GmbH, "
+	                    "available under the Apache License 2.0.\n"
+	                    "For more information, visit https://serenedb.com or "
+	                    "https://github.com/serenedb/serenedb\n\n";
 
-	state.PrintF(PrintOutput::STDOUT, "DuckDB %s (%s)\n\n", duckdb::DuckDB::LibraryVersion(),
-	             duckdb::DuckDB::ReleaseCodename());
+	state.PrintF(PrintOutput::STDOUT, "SereneDB %s\n\n", SERENEDB_SHELL_VERSION);
 	state.Print(PrintOutput::STDOUT, about_text);
 	return MetadataResult::SUCCESS;
 }
@@ -503,8 +500,7 @@ MetadataResult SetStartupText(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult ShowVersion(ShellState &state, const vector<string> &args) {
-	state.PrintF("DuckDB %s (%s) %s\n" /*extra-version-info*/, duckdb::DuckDB::LibraryVersion(),
-	             duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
+	state.PrintF("SereneDB %s\n", SERENEDB_SHELL_VERSION);
 #define CTIMEOPT_VAL_(opt) #opt
 #define CTIMEOPT_VAL(opt)  CTIMEOPT_VAL_(opt)
 #if defined(__clang__) && defined(__clang_major__)
@@ -819,7 +815,7 @@ MetadataResult SetPager(ShellState &state, const vector<string> &args) {
 }
 
 static const MetadataCommand metadata_commands[] = {
-    {"about", 0, ToggleAbout, "", "Show information about DuckDB", 0, ""},
+    {"about", 0, ToggleAbout, "", "Show information about SereneDB", 0, ""},
 #ifdef HAVE_LINENOISE
     {"auto_format", 2, ToggleAutoFormat, "on|off", "Automatically format SQL before execution.  Default OFF", 3, ""},
 #endif

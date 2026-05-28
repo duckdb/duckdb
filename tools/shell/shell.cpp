@@ -3088,7 +3088,7 @@ void ShellState::Initialize() {
 	showHeader = true;
 	main_prompt = make_uniq<Prompt>();
 	string default_prompt;
-	default_prompt = "{max_length:40}{highlight_element:prompt}{setting:current_database_and_schema}{color:reset} D ";
+	default_prompt = "{max_length:40}{highlight_element:prompt}{setting:current_database_and_schema}{color:reset} S ";
 	main_prompt->ParsePrompt(default_prompt);
 	vector<string> default_components;
 	default_components.push_back("{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}");
@@ -3308,13 +3308,7 @@ int RunShell(int argc, const char **argv) {
 			const char *zHistory;
 			ShellHighlight highlight(data);
 
-			auto startup_version = StringUtil::Format("DuckDB %s (%s", duckdb::DuckDB::LibraryVersion(),
-			                                          duckdb::DuckDB::ReleaseCodename());
-			if (StringUtil::Contains(duckdb::DuckDB::ReleaseCodename(), "Development")) {
-				startup_version += ", ";
-				startup_version += duckdb::DuckDB::SourceID();
-			}
-			startup_version += ")\n";
+			auto startup_version = StringUtil::Format("SereneDB %s\n", SERENEDB_SHELL_VERSION);
 			if (data.startup_text != StartupText::NONE) {
 				highlight.PrintText(startup_version, PrintOutput::STDOUT, HighlightElementType::STARTUP_VERSION);
 			}
@@ -3362,21 +3356,7 @@ int RunShell(int argc, const char **argv) {
 	return rc;
 }
 
-#if !((defined(_WIN32) || defined(WIN32)) && defined(_MSC_VER))
-int main(int argc, const char **argv) {
-#else
-int wmain(int argc, wchar_t **wargv) {
-	vector<string> utf8_args;
-	utf8_args.resize(argc);
-	vector<const char *> utf8_args_ptrs;
-	utf8_args_ptrs.resize(argc);
-	const char **argv = utf8_args_ptrs.data();
-	for (int i = 0; i < argc; i++) {
-		utf8_args[i] = ShellState::Win32UnicodeToUtf8(wargv[i]);
-		utf8_args_ptrs[i] = utf8_args[i].c_str();
-	}
-#endif
-
+int RunShellEntry(int argc, const char **argv) {
 	auto &shell_state = ShellState::GetReference();
 	int rc = 0;
 	try {

@@ -1,4 +1,4 @@
-if(NOT SUN AND BUILD_SHELL)
+if(NOT SUN AND (BUILD_SHELL OR BUILD_SHELL_STATIC_LIB))
   add_subdirectory(shell)
 endif()
 

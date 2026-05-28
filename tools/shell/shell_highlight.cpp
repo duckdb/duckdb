@@ -14,7 +14,7 @@ static HighlightElement highlight_elements[] = {
     {"numeric_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
     {"string_constant", PrintColor::YELLOW, PrintIntensity::STANDARD},
     {"line_indicator", PrintColor::STANDARD, PrintIntensity::BOLD},
-    {"database_name", PrintColor::ORANGE3, PrintIntensity::STANDARD},
+    {"database_name", PrintColor::MEDIUMORCHID, PrintIntensity::STANDARD},
     {"schema_name", PrintColor::DEEPSKYBLUE1, PrintIntensity::STANDARD},
     {"table_name", PrintColor::STANDARD, PrintIntensity::BOLD},
     {"column_name", PrintColor::STANDARD, PrintIntensity::STANDARD},
@@ -31,7 +31,7 @@ static HighlightElement highlight_elements[] = {
     {"continuation_selected", PrintColor::GREEN, PrintIntensity::STANDARD},
     {"bracket", PrintColor::STANDARD, PrintIntensity::UNDERLINE},
     {"comment", PrintColor::GRAY, PrintIntensity::STANDARD},
-    {"suggestion_catalog_name", PrintColor::ORANGE3, PrintIntensity::STANDARD},
+    {"suggestion_catalog_name", PrintColor::MEDIUMORCHID, PrintIntensity::STANDARD},
     {"suggestion_schema_name", PrintColor::DEEPSKYBLUE1, PrintIntensity::STANDARD},
     {"suggestion_table_name", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"suggestion_column_name", PrintColor::STANDARD, PrintIntensity::STANDARD},
@@ -42,7 +42,7 @@ static HighlightElement highlight_elements[] = {
     {"table_layout", PrintColor::GRAY, PrintIntensity::STANDARD},
     {"view_layout", PrintColor::STANDARD, PrintIntensity::STANDARD},
     {"primary_key_column", PrintColor::STANDARD, PrintIntensity::UNDERLINE},
-    {"prompt", PrintColor::DARKORANGE, PrintIntensity::BOLD},
+    {"prompt", PrintColor::MEDIUMPURPLE2, PrintIntensity::BOLD},
     {"error_emphasis", PrintColor::RED, PrintIntensity::BOLD},
     {"error_suggestion", PrintColor::RED, PrintIntensity::BOLD},
     {"log_trace", PrintColor::BLUE, PrintIntensity::BOLD},
@@ -257,8 +257,9 @@ void ShellHighlight::ToggleMode(HighlightMode mode) {
 		SetColor(HighlightElementType::NUMERIC_CONSTANT, PrintColor::YELLOW, PrintIntensity::STANDARD, user_configured);
 		SetColor(HighlightElementType::CONTINUATION_SELECTED, PrintColor::GREEN, PrintIntensity::STANDARD,
 		         user_configured);
-		SetColor(HighlightElementType::PROMPT, PrintColor::DARKORANGE, PrintIntensity::BOLD, user_configured);
-		SetColor(HighlightElementType::DATABASE_NAME, PrintColor::ORANGE3, PrintIntensity::STANDARD, user_configured);
+		SetColor(HighlightElementType::PROMPT, PrintColor::MEDIUMPURPLE2, PrintIntensity::BOLD, user_configured);
+		SetColor(HighlightElementType::DATABASE_NAME, PrintColor::MEDIUMORCHID, PrintIntensity::STANDARD,
+		         user_configured);
 		SetColor(HighlightElementType::SCHEMA_NAME, PrintColor::DEEPSKYBLUE1, PrintIntensity::STANDARD,
 		         user_configured);
 	}
@@ -282,11 +283,11 @@ void ShellHighlight::ToggleMode(HighlightMode mode) {
 		         user_configured);
 		SetColor(HighlightElementType::CONTINUATION_SELECTED, PrintColor::DODGERBLUE2, PrintIntensity::STANDARD,
 		         user_configured);
-		SetColor(HighlightElementType::PROMPT, PrintColor::DARKORANGE4, PrintIntensity::BOLD, user_configured);
+		SetColor(HighlightElementType::PROMPT, PrintColor::DARKVIOLET1, PrintIntensity::BOLD, user_configured);
 		SetColor(HighlightElementType::ERROR_TOKEN, PrintColor::RED3, PrintIntensity::STANDARD, user_configured);
 		SetColor(HighlightElementType::ERROR_EMPHASIS, PrintColor::RED3, PrintIntensity::BOLD, user_configured);
 		SetColor(HighlightElementType::ERROR_SUGGESTION, PrintColor::RED3, PrintIntensity::BOLD, user_configured);
-		SetColor(HighlightElementType::DATABASE_NAME, PrintColor::DARKORANGE4, PrintIntensity::STANDARD,
+		SetColor(HighlightElementType::DATABASE_NAME, PrintColor::DARKVIOLET1, PrintIntensity::STANDARD,
 		         user_configured);
 		SetColor(HighlightElementType::SCHEMA_NAME, PrintColor::DEEPSKYBLUE6, PrintIntensity::STANDARD,
 		         user_configured);

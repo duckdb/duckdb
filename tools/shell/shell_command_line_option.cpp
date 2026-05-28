@@ -74,8 +74,7 @@ MetadataResult AllowUnsigned(ShellState &state, const vector<string> &args) {
 }
 
 MetadataResult ShowVersionAndExit(ShellState &state, const vector<string> &args) {
-	printf("%s (%s) %s\n", duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(),
-	       duckdb::DuckDB::SourceID());
+	printf("SereneDB %s\n", SERENEDB_SHELL_VERSION);
 	return MetadataResult::EXIT;
 }
 
@@ -231,7 +230,7 @@ static const CommandLineOption command_line_options[] = {
     {"ui", 0, "", nullptr, LaunchUI, "launches a web interface using the ui extension (configurable with .ui_command)"},
     {"unredacted", 0, "", AllowUnredacted, nullptr, "allow printing unredacted secrets"},
     {"unsigned", 0, "", AllowUnsigned, nullptr, "allow loading of unsigned extensions"},
-    {"version", 0, "", nullptr, ShowVersionAndExit, "show DuckDB version"},
+    {"version", 0, "", nullptr, ShowVersionAndExit, "show SereneDB version"},
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr}};
 
 optional_idx FindOption(const char *name) {
