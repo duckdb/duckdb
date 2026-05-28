@@ -136,15 +136,6 @@ struct JoinOrderUtil {
 		D_ASSERT(binding.table_index.IsValid());
 		return RelationIndex(binding.table_index.index);
 	}
-
-	static bool ContainsRelation(JoinRelationSet &set, RelationIndex relation) {
-		for (idx_t i = 0; i < set.count; i++) {
-			if (set.relations[i] == relation) {
-				return true;
-			}
-		}
-		return false;
-	}
 };
 
 class JoinPredicate {
@@ -279,7 +270,14 @@ struct JoinEqualityClass {
 };
 
 struct RelationPairEqualitySummary {
-	vector<idx_t> equality_class_indices;
+	vector<idx_t> direct_equality_class_indices;
+	column_binding_set_t first_relation_bindings;
+	column_binding_set_t second_relation_bindings;
+
+	bool HasDirectCompositeEquality() const {
+		return direct_equality_class_indices.size() >= 2 && first_relation_bindings.size() >= 2 &&
+		       second_relation_bindings.size() >= 2;
+	}
 };
 
 class JoinPredicateModel {
@@ -288,7 +286,8 @@ public:
 	JoinPredicate &RegisterPredicate(FilterInfo &filter, JoinPredicateClass predicate_class,
 	                                 ColumnBinding left_equality_binding, ColumnBinding right_equality_binding);
 	void AddEqualityClass(JoinEqualityClass equality_class);
-	void AddEqualityPairClass(JoinRelationSet &pair, idx_t equality_class_index);
+	void AddDirectEqualityPairClass(JoinRelationSet &pair, idx_t equality_class_index, ColumnBinding first_binding,
+	                                ColumnBinding second_binding);
 
 	const vector<reference<JoinPredicate>> &GetPredicates() const;
 	const vector<reference<JoinPredicate>> &GetEqualityJoinPredicates() const;
@@ -297,8 +296,7 @@ public:
 	const vector<JoinEqualityClass> &GetEqualityClasses() const;
 	bool HasLeftJoinPredicates() const;
 
-	bool EqualityClassConnectsPairInScope(idx_t class_index, JoinRelationSet &pair, JoinRelationSet &scope) const;
-	idx_t CountActiveEqualityClasses(JoinRelationSet &pair, JoinRelationSet &scope) const;
+	bool HasDirectCompositeEquality(JoinRelationSet &pair) const;
 
 private:
 	static bool ContainsClassIndex(const vector<idx_t> &class_indices, idx_t equality_class_index);

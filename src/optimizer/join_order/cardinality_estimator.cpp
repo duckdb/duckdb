@@ -87,7 +87,6 @@ static bool IsJoinOrFilter(const FilterInfo &filter) {
 void CardinalityEstimator::InitEquivalentRelations() {
 	relation_set_stats.clear();
 	or_filters.clear();
-	active_equality_class_count_cache.clear();
 
 	for (auto predicate_ref : predicate_model.GetPredicates()) {
 		auto &filter = predicate_ref.get().GetFilter();
@@ -129,17 +128,6 @@ void CardinalityEstimator::InitEquivalentRelations() {
 		relation_set_stats.back().predicates.push_back(predicate);
 	}
 	RemoveEmptyTotalDomains();
-}
-
-idx_t CardinalityEstimator::GetActiveEqualityClassCount(JoinRelationSet &pair, JoinRelationSet &scope) {
-	auto &scope_cache = active_equality_class_count_cache[scope];
-	auto entry = scope_cache.find(pair);
-	if (entry != scope_cache.end()) {
-		return entry->second;
-	}
-	auto count = predicate_model.CountActiveEqualityClasses(pair, scope);
-	scope_cache[pair] = count;
-	return count;
 }
 
 void CardinalityEstimator::RemoveEmptyTotalDomains() {
@@ -380,9 +368,9 @@ bool CardinalityEstimator::ApplyJoinPairCap(double &target_denom, JoinRelationSe
 		return false;
 	}
 	auto &first_d = stats.first_distinct_count;
-	if (cap > 0 && first_d != cap && first_d > 0) {
-		// Replace the first-edge D contribution with cap (FK/PK floor).
-		// target_denom = base * first_d -> new = base * cap
+	if (cap > 0 && first_d < cap && first_d > 0) {
+		// Raise weak same-pair composite evidence to the FK/PK denominator floor.
+		// If one key is already more selective than the FK/PK floor, keep that stronger denominator.
 		target_denom = target_denom / first_d * cap;
 		first_d = cap;
 	}
@@ -402,7 +390,8 @@ bool CardinalityEstimator::ApplyJoinIncrement(double &target_denom, FilterInfoWi
 		if (!target_pair) {
 			return false;
 		}
-		if (GetActiveEqualityClassCount(*target_pair, scope) < 2) {
+		if (!JoinRelationSet::IsSubset(scope, *target_pair) ||
+		    !predicate_model.HasDirectCompositeEquality(*target_pair)) {
 			return false;
 		}
 		if (capped_join_pairs.find(*target_pair) != capped_join_pairs.end()) {
@@ -434,7 +423,7 @@ bool CardinalityEstimator::ApplyCompositeJoinPairCaps(
 		if (!JoinRelationSet::IsSubset(scope, join_pair)) {
 			continue;
 		}
-		if (GetActiveEqualityClassCount(join_pair, scope) < 2) {
+		if (!predicate_model.HasDirectCompositeEquality(join_pair)) {
 			continue;
 		}
 		applied = ApplyJoinPairCap(target_denom, join_pair, join_pair_stats, capped_join_pairs) || applied;

@@ -58,11 +58,14 @@ bool JoinPredicateModel::ContainsClassIndex(const vector<idx_t> &class_indices, 
 	return std::find(class_indices.begin(), class_indices.end(), equality_class_index) != class_indices.end();
 }
 
-void JoinPredicateModel::AddEqualityPairClass(JoinRelationSet &pair, idx_t equality_class_index) {
+void JoinPredicateModel::AddDirectEqualityPairClass(JoinRelationSet &pair, idx_t equality_class_index,
+                                                    ColumnBinding first_binding, ColumnBinding second_binding) {
 	auto &summary = equality_pairs[pair];
-	if (!ContainsClassIndex(summary.equality_class_indices, equality_class_index)) {
-		summary.equality_class_indices.push_back(equality_class_index);
+	if (!ContainsClassIndex(summary.direct_equality_class_indices, equality_class_index)) {
+		summary.direct_equality_class_indices.push_back(equality_class_index);
 	}
+	summary.first_relation_bindings.insert(first_binding);
+	summary.second_relation_bindings.insert(second_binding);
 }
 
 const vector<reference<JoinPredicate>> &JoinPredicateModel::GetPredicates() const {
@@ -89,57 +92,12 @@ bool JoinPredicateModel::HasLeftJoinPredicates() const {
 	return has_left_join_predicates;
 }
 
-bool JoinPredicateModel::EqualityClassConnectsPairInScope(idx_t class_index, JoinRelationSet &pair,
-                                                          JoinRelationSet &scope) const {
-	if (class_index >= equality_classes.size() || pair.count != 2) {
-		return false;
-	}
-	auto left = pair.relations[0];
-	auto right = pair.relations[1];
-	if (!JoinOrderUtil::ContainsRelation(scope, left) || !JoinOrderUtil::ContainsRelation(scope, right)) {
-		return false;
-	}
-
-	vector<RelationIndex> stack;
-	unordered_set<RelationIndex> visited;
-	stack.push_back(left);
-	visited.insert(left);
-
-	const auto &equality_class = equality_classes[class_index];
-	while (!stack.empty()) {
-		auto relation = stack.back();
-		stack.pop_back();
-		if (relation == right) {
-			return true;
-		}
-		for (auto &edge : equality_class.edges) {
-			if (!JoinOrderUtil::ContainsRelation(scope, edge.left_relation) ||
-			    !JoinOrderUtil::ContainsRelation(scope, edge.right_relation)) {
-				continue;
-			}
-			if (edge.left_relation == relation && visited.insert(edge.right_relation).second) {
-				stack.push_back(edge.right_relation);
-			}
-			if (edge.right_relation == relation && visited.insert(edge.left_relation).second) {
-				stack.push_back(edge.left_relation);
-			}
-		}
-	}
-	return false;
-}
-
-idx_t JoinPredicateModel::CountActiveEqualityClasses(JoinRelationSet &pair, JoinRelationSet &scope) const {
+bool JoinPredicateModel::HasDirectCompositeEquality(JoinRelationSet &pair) const {
 	auto entry = equality_pairs.find(pair);
 	if (entry == equality_pairs.end()) {
-		return 0;
+		return false;
 	}
-	idx_t result = 0;
-	for (auto equality_class_index : entry->second.equality_class_indices) {
-		if (EqualityClassConnectsPairInScope(equality_class_index, pair, scope)) {
-			result++;
-		}
-	}
-	return result;
+	return entry->second.HasDirectCompositeEquality();
 }
 
 void QueryGraphManager::BuildPredicateModel() {
@@ -230,18 +188,18 @@ void QueryGraphManager::BuildPredicateModel() {
 	}
 
 	for (auto &equality_class : predicate_model.GetEqualityClasses()) {
-		vector<RelationIndex> relations;
-		relations.reserve(equality_class.relations.size());
-		for (auto &relation : equality_class.relations) {
-			relations.push_back(relation);
-		}
-		for (idx_t outer = 0; outer < relations.size(); outer++) {
-			for (idx_t inner = outer + 1; inner < relations.size(); inner++) {
-				auto &left = set_manager.GetJoinRelation(relations[outer]);
-				auto &right = set_manager.GetJoinRelation(relations[inner]);
-				auto &pair = set_manager.Union(left, right);
-				predicate_model.AddEqualityPairClass(pair, equality_class.index);
+		for (auto &edge : equality_class.edges) {
+			auto &left = set_manager.GetJoinRelation(edge.left_relation);
+			auto &right = set_manager.GetJoinRelation(edge.right_relation);
+			auto &pair = set_manager.Union(left, right);
+			auto first_binding = edge.left_binding;
+			auto second_binding = edge.right_binding;
+			if (pair.relations[0] != edge.left_relation) {
+				D_ASSERT(pair.relations[0] == edge.right_relation);
+				first_binding = edge.right_binding;
+				second_binding = edge.left_binding;
 			}
+			predicate_model.AddDirectEqualityPairClass(pair, equality_class.index, first_binding, second_binding);
 		}
 	}
 }

@@ -137,7 +137,6 @@ public:
 private:
 	vector<RelationsSetToStats> relation_set_stats;
 	reference_map_t<JoinRelationSet, CardinalityHelper> relation_set_2_cardinality;
-	reference_map_t<JoinRelationSet, reference_map_t<JoinRelationSet, idx_t>> active_equality_class_count_cache;
 	JoinRelationSetManager &set_manager;
 	const JoinPredicateModel &predicate_model;
 	vector<RelationStats> relation_stats;
@@ -175,7 +174,6 @@ private:
 	DenomInfo CreateDenominatorResult(JoinRelationSet &set, DenominatorState &state);
 	//! Applied outside the cardinality cache so stored values stay pre-OR.
 	double ApplyOrFilterSelectivities(JoinRelationSet &new_set, double cardinality) const;
-	idx_t GetActiveEqualityClassCount(JoinRelationSet &pair, JoinRelationSet &scope);
 
 	vector<optional_ptr<FilterInfo>> or_filters;
 
