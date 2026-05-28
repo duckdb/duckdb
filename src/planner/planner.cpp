@@ -19,6 +19,7 @@
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/planner/planner_extension.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
 
@@ -133,6 +134,9 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 
 void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	D_ASSERT(statement);
+	Optimizer optimizer(*binder, context);
+	optimizer.OptimizeStatement(statement);
+
 	switch (statement->type) {
 	case StatementType::SELECT_STATEMENT:
 	case StatementType::INSERT_STATEMENT:
