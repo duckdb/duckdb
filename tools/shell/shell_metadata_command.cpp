@@ -12,8 +12,7 @@
 namespace duckdb_shell {
 
 MetadataResult ToggleAbout(ShellState &state, const vector<string> &args) {
-	string about_text = "SereneDB is a PostgreSQL-wire-compatible analytical database "
-	                    "that pairs DuckDB's execution engine with search built on IResearch.\n\n"
+	string about_text = "SereneDB is a real-time search and analytics database with Postgres wire protocol support.\n\n"
 	                    "Developed and maintained by SereneDB GmbH, "
 	                    "available under the Apache License 2.0.\n"
 	                    "For more information, visit https://serenedb.com or "
