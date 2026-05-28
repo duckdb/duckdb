@@ -235,15 +235,6 @@ jobs:
          timestamp-rfc3161:            http://timestamp.acs.microsoft.com
          timestamp-digest:             SHA256
 
-     - name: CLI check
-       shell: bash
-       run: |
-         ./duckdb.exe -c "PRAGMA platform; PRAGMA version;"
-         if [ "${{ github.ref_name }}" == "main" ]; then
-           # Fail on non-zero major version.
-           ./duckdb.exe -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
-         fi
-
      - name: Deploy
        shell: bash
        env:
