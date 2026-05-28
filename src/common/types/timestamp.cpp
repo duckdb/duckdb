@@ -26,6 +26,35 @@ static inline T TemporalRound(T value, T scale) {
 	return UnsafeNumericCast<T>((value + negative) / scale - negative);
 }
 
+static bool CanStartTimestampSuffix(char c) {
+	return c == 'Z' || c == '+' || c == '-' || StringUtil::CharacterIsSpace(c);
+}
+
+static bool TryConvertTimestampTimePrefix(const char *str, idx_t len, idx_t &time_pos, dtime_t &time,
+                                          optional_ptr<int32_t> nanos) {
+	if (Time::TryConvertInterval(str, len, time_pos, time, false, nanos)) {
+		return true;
+	}
+
+	idx_t suffix_pos = 0;
+	while (suffix_pos < len && StringUtil::CharacterIsSpace(str[suffix_pos])) {
+		suffix_pos++;
+	}
+	while (suffix_pos < len && !CanStartTimestampSuffix(str[suffix_pos])) {
+		suffix_pos++;
+	}
+	if (suffix_pos == 0 || suffix_pos == len) {
+		return false;
+	}
+
+	// HH:MM is valid when it is followed by a timestamp suffix that is parsed below.
+	time_pos = 0;
+	if (!Time::TryConvertInterval(str, suffix_pos, time_pos, time, false, nanos)) {
+		return false;
+	}
+	return time_pos == suffix_pos;
+}
+
 // timestamp/datetime uses 64 bits, high 32 bits for date and low 32 bits for time
 // string format is YYYY-MM-DDThh:mm:ssZ
 // T may be a space
@@ -66,7 +95,7 @@ TimestampCastResult Timestamp::TryConvertTimestampTZ(const char *str, idx_t len,
 	// TryConvertTime may recursively call us, so we opt for a stricter
 	// operation. Note that we can't pass strict== true here because we
 	// want to process any suffix.
-	if (!Time::TryConvertInterval(str + pos, len - pos, time_pos, time, false, nanos)) {
+	if (!TryConvertTimestampTimePrefix(str + pos, len - pos, time_pos, time, nanos)) {
 		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
 	}
 	//	We parsed an interval, so make sure it is in range.
