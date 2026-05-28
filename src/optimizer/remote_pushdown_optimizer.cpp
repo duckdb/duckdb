@@ -737,8 +737,9 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const SubqueryExpression 
 
 CatalogPushdownResult RemotePushdownOptimizer::Rewrite(const CastExpression &cast_expr) {
 	CatalogPushdownResult result {CatalogReferenceType::NO_CATALOG_REFERENCED, nullptr};
-	if (cast_expr.cast_type.id() == LogicalTypeId::UNBOUND) {
-		result = Merge(result, Rewrite(cast_expr.cast_type));
+	auto &target_type = cast_expr.TargetType();
+	if (target_type.id() == LogicalTypeId::UNBOUND) {
+		result = Merge(result, Rewrite(target_type));
 	}
 	return result;
 }
@@ -912,10 +913,11 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 		// only visits the value being cast. For unbound (user-defined) types we must strip the catalog from the
 		// embedded TypeExpression and reconstruct the LogicalType::UNBOUND wrapper.
 		auto &cast_expr = expr.Cast<CastExpression>();
-		if (cast_expr.cast_type.id() == LogicalTypeId::UNBOUND) {
-			auto type_expr = UnboundType::GetTypeExpression(cast_expr.cast_type)->Copy();
+		auto &target_type = cast_expr.TargetTypeMutable();
+		if (target_type.id() == LogicalTypeId::UNBOUND) {
+			auto type_expr = UnboundType::GetTypeExpression(target_type)->Copy();
 			StripCatalogName(*type_expr, catalog_name);
-			cast_expr.cast_type = LogicalType::UNBOUND(std::move(type_expr));
+			target_type = LogicalType::UNBOUND(std::move(type_expr));
 		}
 		// Fall through to EnumerateChildren to strip catalog refs inside the cast argument
 	} else if (expr.GetExpressionClass() == ExpressionClass::TYPE) {
