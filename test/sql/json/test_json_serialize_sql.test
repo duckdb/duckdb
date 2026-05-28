@@ -143,6 +143,7 @@ WHERE json_exists(j, '$.statements[0]')
   AND json_deserialize_sql(j) IS NOT NULL;
 ----
 1
+
 # Invalid set operation nodes should throw a regular error instead of crashing
 statement error
 SELECT json_deserialize_sql('{"statements":[{"node":{"type":"SET_OPERATION_NODE","cte_map":{},"setop_type":"UNION","children":[null,null],"setop_all":false}}]}');
