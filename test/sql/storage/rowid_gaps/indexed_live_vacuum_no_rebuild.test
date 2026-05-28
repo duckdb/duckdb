@@ -3,7 +3,9 @@
 # group: [rowid_gaps]
 
 require json
+
 require vacuum_rebuild_indexes
+
 require skip_reload
 
 statement ok
