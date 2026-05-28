@@ -41,40 +41,6 @@ public:
 public:
 	WindowExpression(const string &catalog_name, const string &schema, const string &function_name);
 
-	//! Catalog of the aggregate function
-	string catalog;
-	//! Schema of the aggregate function
-	string schema;
-	//! Name of the aggregate function
-	string function_name;
-	//! The child expression of the main window function
-	vector<unique_ptr<ParsedExpression>> children;
-	//! The set of expressions to partition by
-	vector<unique_ptr<ParsedExpression>> partitions;
-	//! The set of ordering clauses
-	vector<OrderByNode> orders;
-	//! Expression representing a filter, only used for aggregates
-	unique_ptr<ParsedExpression> filter_expr;
-	//! True if we parsed IGNORE/RESPECT NULLS
-	bool has_ignore_nulls = false;
-	//! True to ignore NULL values
-	bool ignore_nulls = false;
-	//! Whether or not the aggregate function is distinct, only used for aggregates
-	bool distinct = false;
-	//! The window boundaries
-	WindowBoundary start = WindowBoundary::INVALID;
-	WindowBoundary end = WindowBoundary::INVALID;
-	//! The EXCLUDE clause
-	WindowExcludeMode exclude_clause = WindowExcludeMode::NO_OTHER;
-
-	unique_ptr<ParsedExpression> start_expr;
-	unique_ptr<ParsedExpression> end_expr;
-
-	//! The set of argument ordering clauses
-	//! These are distinct from the frame ordering clauses e.g., the "x" in
-	//! FIRST_VALUE(a ORDER BY x) OVER (PARTITION BY p ORDER BY s)
-	vector<OrderByNode> arg_orders;
-
 public:
 	bool IsWindow() const override {
 		return true;
@@ -99,6 +65,103 @@ public:
 	static ExpressionType WindowToExpressionType(const string &fun_name);
 
 public:
+	const string &Catalog() const {
+		return catalog;
+	}
+	string &CatalogMutable() {
+		return catalog;
+	}
+	const string &Schema() const {
+		return schema;
+	}
+	string &SchemaMutable() {
+		return schema;
+	}
+	const string &FunctionName() const {
+		return function_name;
+	}
+	string &FunctionNameMutable() {
+		return function_name;
+	}
+	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
+		return children;
+	}
+	vector<unique_ptr<ParsedExpression>> &GetChildrenMutable() {
+		return children;
+	}
+	const vector<unique_ptr<ParsedExpression>> &Partitions() const {
+		return partitions;
+	}
+	vector<unique_ptr<ParsedExpression>> &PartitionsMutable() {
+		return partitions;
+	}
+	const vector<OrderByNode> &OrderBy() const {
+		return orders;
+	}
+	vector<OrderByNode> &OrderByMutable() {
+		return orders;
+	}
+	const unique_ptr<ParsedExpression> &Filter() const {
+		return filter_expr;
+	}
+	unique_ptr<ParsedExpression> &FilterMutable() {
+		return filter_expr;
+	}
+	bool HasIgnoreNulls() const {
+		return has_ignore_nulls;
+	}
+	bool &HasIgnoreNullsMutable() {
+		return has_ignore_nulls;
+	}
+	bool IgnoreNulls() const {
+		return ignore_nulls;
+	}
+	bool &IgnoreNullsMutable() {
+		return ignore_nulls;
+	}
+	bool Distinct() const {
+		return distinct;
+	}
+	bool &DistinctMutable() {
+		return distinct;
+	}
+	WindowBoundary WindowStart() const {
+		return start;
+	}
+	WindowBoundary &WindowStartMutable() {
+		return start;
+	}
+	WindowBoundary WindowEnd() const {
+		return end;
+	}
+	WindowBoundary &WindowEndMutable() {
+		return end;
+	}
+	WindowExcludeMode WindowExclude() const {
+		return exclude_clause;
+	}
+	WindowExcludeMode &WindowExcludeMutable() {
+		return exclude_clause;
+	}
+	const unique_ptr<ParsedExpression> &StartExpr() const {
+		return start_expr;
+	}
+	unique_ptr<ParsedExpression> &StartExprMutable() {
+		return start_expr;
+	}
+	const unique_ptr<ParsedExpression> &EndExpr() const {
+		return end_expr;
+	}
+	unique_ptr<ParsedExpression> &EndExprMutable() {
+		return end_expr;
+	}
+	const vector<OrderByNode> &ArgOrders() const {
+		return arg_orders;
+	}
+	vector<OrderByNode> &ArgOrdersMutable() {
+		return arg_orders;
+	}
+
 	static inline string ToUnits(const WindowBoundary boundary, const WindowBoundary rows, const WindowBoundary range,
 	                             const WindowBoundary groups) {
 		if (boundary == rows) {
@@ -279,6 +342,41 @@ public:
 
 		return result;
 	}
+
+private:
+	//! Catalog of the aggregate function
+	string catalog;
+	//! Schema of the aggregate function
+	string schema;
+	//! Name of the aggregate function
+	string function_name;
+	//! The child expression of the main window function
+	vector<unique_ptr<ParsedExpression>> children;
+	//! The set of expressions to partition by
+	vector<unique_ptr<ParsedExpression>> partitions;
+	//! The set of ordering clauses
+	vector<OrderByNode> orders;
+	//! Expression representing a filter, only used for aggregates
+	unique_ptr<ParsedExpression> filter_expr;
+	//! True if we parsed IGNORE/RESPECT NULLS
+	bool has_ignore_nulls = false;
+	//! True to ignore NULL values
+	bool ignore_nulls = false;
+	//! Whether or not the aggregate function is distinct, only used for aggregates
+	bool distinct = false;
+	//! The window boundaries
+	WindowBoundary start = WindowBoundary::INVALID;
+	WindowBoundary end = WindowBoundary::INVALID;
+	//! The EXCLUDE clause
+	WindowExcludeMode exclude_clause = WindowExcludeMode::NO_OTHER;
+
+	unique_ptr<ParsedExpression> start_expr;
+	unique_ptr<ParsedExpression> end_expr;
+
+	//! The set of argument ordering clauses
+	//! These are distinct from the frame ordering clauses e.g., the "x" in
+	//! FIRST_VALUE(a ORDER BY x) OVER (PARTITION BY p ORDER BY s)
+	vector<OrderByNode> arg_orders;
 
 private:
 	WindowExpression();
