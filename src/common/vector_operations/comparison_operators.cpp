@@ -176,6 +176,10 @@ static bool TryPrimitiveComparisonExecute(const Vector &left, const Vector &righ
 		BinaryExecutor::Execute<interval_t, interval_t, bool, OP>(left, right, result);
 		return true;
 	case PhysicalType::VARCHAR:
+		if (left.GetType().id() == LogicalTypeId::BIT) {
+			BinaryExecutor::Execute<string_t, string_t, bool, BitComparisonOperation<OP>>(left, right, result);
+			return true;
+		}
 		BinaryExecutor::Execute<string_t, string_t, bool, OP>(left, right, result);
 		return true;
 	default:
@@ -252,14 +256,14 @@ void VectorOperations::LessThanEquals(const Vector &left, const Vector &right, V
 }
 
 struct StandardComparatorExecute {
-	template <class T>
+	template <class T, class OP = duckdb::Comparator>
 	static inline void Execute(const Vector &left, const Vector &right, Vector &result, idx_t count) {
-		BinaryExecutor::Execute<T, T, int8_t, duckdb::Comparator>(left, right, result, count);
+		BinaryExecutor::Execute<T, T, int8_t, OP>(left, right, result, count);
 	}
 };
 
 struct DistinctComparatorExecute {
-	template <class T>
+	template <class T, class OP = duckdb::DistinctComparator>
 	static void Execute(const Vector &left, const Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
 	                    const SelectionVector &rhs_sel, idx_t sel_count) {
 		UnifiedVectorFormat left_format, right_format;
@@ -272,7 +276,7 @@ struct DistinctComparatorExecute {
 			auto ridx = right_format.sel->get_index(rhs_sel.get_index(i));
 			bool left_null = !left_format.validity.RowIsValid(lidx);
 			bool right_null = !right_format.validity.RowIsValid(ridx);
-			result_data[i] = duckdb::DistinctComparator::Operation<T>(ldata[lidx], rdata[ridx], left_null, right_null);
+			result_data[i] = OP::template Operation<T>(ldata[lidx], rdata[ridx], left_null, right_null);
 		}
 	}
 };
@@ -633,6 +637,11 @@ static void DistinctComparatorTypeSwitchInternal(const Vector &left, const Vecto
 		DistinctComparatorExecute::Execute<interval_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::VARCHAR:
+		if (left.GetType().id() == LogicalTypeId::BIT) {
+			DistinctComparatorExecute::Execute<string_t, BitDistinctComparisonOperation<duckdb::DistinctComparator>>(
+			    left, right, result_data, lhs_sel, rhs_sel, sel_count);
+			break;
+		}
 		DistinctComparatorExecute::Execute<string_t>(left, right, result_data, lhs_sel, rhs_sel, sel_count);
 		break;
 	case PhysicalType::STRUCT:
@@ -704,6 +713,10 @@ static void ComparatorTypeSwitch(const Vector &left, const Vector &right, Vector
 		StandardComparatorExecute::Execute<interval_t>(left, right, result, count);
 		break;
 	case PhysicalType::VARCHAR:
+		if (left.GetType().id() == LogicalTypeId::BIT) {
+			StandardComparatorExecute::Execute<string_t, BitComparator>(left, right, result, count);
+			break;
+		}
 		StandardComparatorExecute::Execute<string_t>(left, right, result, count);
 		break;
 	case PhysicalType::STRUCT:
@@ -828,6 +841,10 @@ static bool TryPrimitiveDistinctComparatorExecute(const Vector &left, const Vect
 		DistinctExecute<interval_t, OP>(left, right, result, count);
 		return true;
 	case PhysicalType::VARCHAR:
+		if (left.GetType().id() == LogicalTypeId::BIT) {
+			DistinctExecute<string_t, BitDistinctComparisonOperation<OP>>(left, right, result, count);
+			return true;
+		}
 		DistinctExecute<string_t, OP>(left, right, result, count);
 		return true;
 	default:
