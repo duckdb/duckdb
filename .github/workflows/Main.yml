@@ -623,8 +623,14 @@ jobs:
           make -C \"$PWD\"
         "
 
-    - name: Print platform
-      run: ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+    - name: CLI check
+      shell: bash
+      run: |
+        ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+        if [ "${{ github.ref_name }}" == "main" ]; then
+          # Fail on non-zero major version.
+          ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
+        fi
 
     - name: Deploy
       env:
@@ -919,9 +925,14 @@ jobs:
           git config --global --add safe.directory "$PWD"
           make gather-libs
 
-      - name: Print platform
+      - name: CLI check
         shell: bash
-        run: ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+        run: |
+          ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            # Fail on non-zero major version.
+            ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
+          fi
 
       - name: Deploy
         shell: bash
