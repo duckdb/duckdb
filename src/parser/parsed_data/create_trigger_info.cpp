@@ -53,8 +53,14 @@ string CreateTriggerInfo::ToString() const {
 	}
 	ss << " ON ";
 	ss << base_table->ToString();
-	if (!referencing_new_table.empty()) {
-		ss << " REFERENCING NEW TABLE AS " << SQLIdentifier(referencing_new_table);
+	if (!referencing_new_table.empty() || !referencing_old_table.empty()) {
+		ss << " REFERENCING";
+		if (!referencing_new_table.empty()) {
+			ss << " NEW TABLE AS " << SQLIdentifier(referencing_new_table);
+		}
+		if (!referencing_old_table.empty()) {
+			ss << " OLD TABLE AS " << SQLIdentifier(referencing_old_table);
+		}
 	}
 	ss << " FOR EACH " << EnumUtil::ToString(for_each);
 	ss << " " << trigger_action->ToString();

@@ -77,12 +77,16 @@
       {
         "id": 200,
         "name": "case_checks",
-        "type": "vector<CaseCheck>"
+        "type": "vector<CaseCheck>",
+        "accessor_mut": "CaseChecksMutable()",
+        "accessor": "CaseChecks()"
       },
       {
         "id": 201,
         "name": "else_expr",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "ElseMutable()",
+        "accessor": "Else()"
       }
     ]
   },
@@ -94,7 +98,9 @@
       {
         "id": 200,
         "name": "child",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "ChildMutable()",
+        "accessor": "Child()"
       },
       {
         "id": 201,
@@ -116,7 +122,9 @@
       {
         "id": 200,
         "name": "child",
-        "type": "ParsedExpression*"
+        "type": "ParsedExpression*",
+        "accessor_mut": "ChildMutable()",
+        "accessor": "Child()"
       },
       {
         "id": 201,

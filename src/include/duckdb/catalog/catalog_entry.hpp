@@ -65,7 +65,7 @@ private:
 	//! Child entry
 	unique_ptr<CatalogEntry> child;
 	//! Parent entry (the node that dependents_map this node)
-	optional_ptr<CatalogEntry> parent;
+	atomic<CatalogEntry *> parent;
 
 public:
 	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info);

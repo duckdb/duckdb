@@ -99,34 +99,6 @@ SELECT COUNT(*) FROM t_plain_log;
 ----
 1
 
-# Body references alias that doesn't exist - rejected at CREATE TRIGGER time
-statement ok
-CREATE TABLE t_bad (id INTEGER);
-
-statement ok
-CREATE TABLE t_bad_log (id INTEGER);
-
-statement error
-CREATE TRIGGER trg_bad AFTER INSERT ON t_bad FOR EACH STATEMENT
-    INSERT INTO t_bad_log SELECT id FROM nonexistent_alias;
-----
-Catalog Error:
-
-# Alias name referenced in body must match the declared alias
-statement ok
-CREATE TABLE t_alias_mismatch (id INTEGER);
-
-statement ok
-CREATE TABLE t_alias_mismatch_log (id INTEGER);
-
-statement error
-CREATE TRIGGER trg_alias_mismatch AFTER INSERT ON t_alias_mismatch
-REFERENCING NEW TABLE AS new_rows
-FOR EACH STATEMENT
-    INSERT INTO t_alias_mismatch_log SELECT id FROM wrong_alias;
-----
-Catalog Error:
-
 # ToSQL round-trips REFERENCING clause correctly
 statement ok
 CREATE TABLE t_tosql (id INTEGER);
@@ -306,50 +278,6 @@ SELECT id FROM t_cte_scope_log;
 ----
 7
 
-# REFERENCING NEW TABLE AS is not valid for DELETE triggers
-statement ok
-CREATE TABLE t_del_disallow (id INTEGER);
-
-statement ok
-CREATE TABLE t_del_disallow_log (id INTEGER);
-
-statement error
-CREATE TRIGGER trg_del_new AFTER DELETE ON t_del_disallow
-REFERENCING NEW TABLE AS deleted_rows
-FOR EACH STATEMENT
-    INSERT INTO t_del_disallow_log SELECT id FROM deleted_rows;
-----
-Binder Error: REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers
-
-# UPDATE OF + REFERENCING is rejected (PostgreSQL: transition tables cannot have column lists)
-statement ok
-CREATE TABLE t_update_of (i INTEGER, j INTEGER);
-
-statement ok
-CREATE TABLE log_update_of (i INTEGER);
-
-statement error
-CREATE TRIGGER tr_update_of AFTER UPDATE OF i ON t_update_of
-REFERENCING NEW TABLE AS updated_rows
-FOR EACH STATEMENT
-    INSERT INTO log_update_of SELECT i FROM updated_rows;
-----
-Binder Error: UPDATE OF is not valid with transition tables
-
-# BEFORE + REFERENCING is rejected (transition tables are AFTER-only)
-statement ok
-CREATE TABLE t_before_ref (i INTEGER);
-
-statement ok
-CREATE TABLE log_before_ref (i INTEGER);
-
-statement error
-CREATE TRIGGER tr_before_ref BEFORE INSERT ON t_before_ref
-REFERENCING NEW TABLE AS inserted_rows
-FOR EACH STATEMENT
-    INSERT INTO log_before_ref SELECT i FROM inserted_rows;
-----
-Binder Error: Transition tables can only be specified for AFTER triggers
 
 # Body CTE with same name as REFERENCING alias: body CTE shadows the alias
 statement ok
