@@ -874,10 +874,10 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const str
 		// not catalog-qualified — so stripping would be wrong.
 		// For 3-part  catalog.table.col        → table.col   (one level stripped)
 		// For 4-part  catalog.schema.table.col → table.col   (catalog + schema stripped)
-		if (col_ref.column_names.size() >= 3 && StringUtil::CIEquals(col_ref.column_names[0], catalog_name)) {
-			string table_name = col_ref.column_names[col_ref.column_names.size() - 2];
-			string col_name = col_ref.column_names[col_ref.column_names.size() - 1];
-			col_ref.column_names = {std::move(table_name), std::move(col_name)};
+		if (col_ref.ColumnNames().size() >= 3 && StringUtil::CIEquals(col_ref.ColumnNames()[0], catalog_name)) {
+			string table_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 2];
+			string col_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 1];
+			col_ref.ColumnNamesMutable() = {std::move(table_name), std::move(col_name)};
 		}
 		return;
 	}

@@ -1,3 +1,14 @@
+From 854866dd0aa4d77d009057d22399ad80babfb08d Mon Sep 17 00:00:00 2001
+From: DuckDB Sync <sync@duckdb.org>
+Date: Thu, 28 May 2026 12:00:47 +0200
+Subject: [PATCH] Use accessor methods instead of private members of
+ ParsedExpression subclasses
+
+---
+ src/statement_generator.cpp  | 10 +++++-----
+ src/statement_simplifier.cpp | 10 +++++-----
+ 2 files changed, 10 insertions(+), 10 deletions(-)
+
 diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
 index add178e..c44c139 100644
 --- a/src/statement_generator.cpp
@@ -36,7 +47,7 @@ index add178e..c44c139 100644
  		}
  	}
 diff --git a/src/statement_simplifier.cpp b/src/statement_simplifier.cpp
-index a31ecf7..d059d90 100644
+index efbecfe..d059d90 100644
 --- a/src/statement_simplifier.cpp
 +++ b/src/statement_simplifier.cpp
 @@ -288,7 +288,7 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
@@ -57,21 +68,6 @@ index a31ecf7..d059d90 100644
  		break;
  	}
  	case ExpressionClass::CASE: {
-@@ -319,12 +319,12 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
- 	}
- 	case ExpressionClass::CAST: {
- 		auto &cast = expr->Cast<CastExpression>();
--		SimplifyChildExpression(expr, cast.child);
-+		SimplifyChildExpression(expr, cast.ChildMutable());
- 		break;
- 	}
- 	case ExpressionClass::COLLATE: {
- 		auto &collate = expr->Cast<CollateExpression>();
--		SimplifyChildExpression(expr, collate.child);
-+		SimplifyChildExpression(expr, collate.ChildMutable());
- 		break;
- 	}
- 	case ExpressionClass::SUBQUERY: {
 @@ -345,9 +345,9 @@ void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression
  	}
  	case ExpressionClass::STAR: {
@@ -85,3 +81,6 @@ index a31ecf7..d059d90 100644
  			SimplifyChildExpression(expr, entry.second);
  		}
  		break;
+-- 
+2.39.5 (Apple Git-154)
+
