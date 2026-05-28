@@ -360,6 +360,19 @@ idx_t Bit::BitCount(bitstring_t bits) {
 int8_t Bit::Compare(bitstring_t left, bitstring_t right) {
 	const auto left_len = BitLength(left);
 	const auto right_len = BitLength(right);
+	if (GetBitPadding(left) == GetBitPadding(right)) {
+		const auto left_bytes = left.GetSize() - 1;
+		const auto right_bytes = right.GetSize() - 1;
+		const auto shared_bytes = MinValue(left_bytes, right_bytes);
+		auto comparison = memcmp(left.GetData() + 1, right.GetData() + 1, shared_bytes);
+		if (comparison != 0) {
+			return comparison > 0 ? 1 : -1;
+		}
+		if (left_len == right_len) {
+			return 0;
+		}
+		return left_len > right_len ? 1 : -1;
+	}
 	const auto shared_len = MinValue(left_len, right_len);
 	for (idx_t bit_idx = 0; bit_idx < shared_len; bit_idx++) {
 		const auto left_bit = GetBit(left, bit_idx);
