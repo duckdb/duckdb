@@ -5,7 +5,6 @@
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
-#include "duckdb/common/types/bit.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 
 #include "duckdb/common/enums/order_type.hpp"
@@ -407,53 +406,6 @@ struct SortKeyBlobOperator {
 	}
 };
 
-struct SortKeyBitOperator {
-	using TYPE = string_t;
-
-	static idx_t GetEncodeLength(TYPE input) {
-		return Bit::BitLength(input) + 1;
-	}
-
-	static idx_t Encode(data_ptr_t result, TYPE input) {
-		return Encode<false>(result, input);
-	}
-
-	template <bool FLIP_BYTES>
-	static idx_t Encode(data_ptr_t result, TYPE input) {
-		const auto bit_length = Bit::BitLength(input);
-		for (idx_t r = 0; r < bit_length; r++) {
-			auto encoded_byte = static_cast<data_t>((Bit::GetBit(input, r) ? '1' : '0') + 1);
-			result[r] = FLIP_BYTES ? static_cast<data_t>(~encoded_byte) : encoded_byte;
-		}
-		auto delimiter = SortKeyVectorData::STRING_DELIMITER;
-		result[bit_length] = FLIP_BYTES ? static_cast<data_t>(~delimiter) : delimiter;
-		return bit_length + 1;
-	}
-
-	static idx_t Decode(const_data_ptr_t input, Vector &result, TYPE &result_value, bool flip_bytes) {
-		return flip_bytes ? Decode<true>(input, result, result_value) : Decode<false>(input, result, result_value);
-	}
-
-	template <bool FLIP_BYTES>
-	static idx_t Decode(const_data_ptr_t input, Vector &result, TYPE &result_value) {
-		data_t string_delimiter = SortKeyVectorData::STRING_DELIMITER;
-		if (FLIP_BYTES) {
-			string_delimiter = static_cast<data_t>(~string_delimiter);
-		}
-		idx_t pos;
-		for (pos = 0; input[pos] != string_delimiter; pos++) {
-		}
-		auto buffer = make_unsafe_uniq_array_uninitialized<char>(pos);
-		for (idx_t r = 0; r < pos; r++) {
-			auto encoded_byte = FLIP_BYTES ? static_cast<data_t>(~input[r]) : input[r];
-			buffer[r] = encoded_byte == static_cast<data_t>('1' + 1) ? '1' : '0';
-		}
-		result_value = StringVector::EmptyString(result, Bit::ComputeBitstringLen(pos));
-		Bit::ToBit(string_t(buffer.get(), UnsafeNumericCast<uint32_t>(pos)), result_value, nullptr);
-		return pos + 1;
-	}
-};
-
 struct SortKeyListEntry {
 	static bool IsArray() {
 		return false;
@@ -608,8 +560,6 @@ void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChunk chun
 	case PhysicalType::VARCHAR:
 		if (vector_data.vec.GetType().id() == LogicalTypeId::VARCHAR) {
 			TemplatedGetSortKeyLength<SortKeyVarcharOperator>(vector_data, chunk, result);
-		} else if (vector_data.vec.GetType().id() == LogicalTypeId::BIT) {
-			TemplatedGetSortKeyLength<SortKeyBitOperator>(vector_data, chunk, result);
 		} else {
 			TemplatedGetSortKeyLength<SortKeyBlobOperator>(vector_data, chunk, result);
 		}
@@ -826,8 +776,6 @@ void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chun
 	case PhysicalType::VARCHAR:
 		if (vector_data.vec.GetType().id() == LogicalTypeId::VARCHAR) {
 			TemplatedConstructSortKey<SortKeyVarcharOperator>(vector_data, chunk, info);
-		} else if (vector_data.vec.GetType().id() == LogicalTypeId::BIT) {
-			TemplatedConstructSortKey<SortKeyBitOperator>(vector_data, chunk, info);
 		} else {
 			TemplatedConstructSortKey<SortKeyBlobOperator>(vector_data, chunk, info);
 		}
@@ -1367,8 +1315,6 @@ void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVector
 	case PhysicalType::VARCHAR:
 		if (result.GetType().id() == LogicalTypeId::VARCHAR) {
 			TemplatedDecodeSortKey<SortKeyVarcharOperator>(decode_data, vector_data, result, result_offset, count);
-		} else if (result.GetType().id() == LogicalTypeId::BIT) {
-			TemplatedDecodeSortKey<SortKeyBitOperator>(decode_data, vector_data, result, result_offset, count);
 		} else {
 			TemplatedDecodeSortKey<SortKeyBlobOperator>(decode_data, vector_data, result, result_offset, count);
 		}

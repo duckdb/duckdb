@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
@@ -109,14 +108,12 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 	friend struct StringStats;
 
 	explicit StatsWriter(const LogicalType &type)
-	    : is_varchar(type.id() == LogicalTypeId::VARCHAR), is_bit(type.id() == LogicalTypeId::BIT),
-	      is_geometry(type.id() == LogicalTypeId::GEOMETRY) {
+	    : is_varchar(type.id() == LogicalTypeId::VARCHAR), is_geometry(type.id() == LogicalTypeId::GEOMETRY) {
 		Clear();
 	}
 
 	inline void Clear() {
 		ClearBase();
-		has_min_max = true;
 		if (is_geometry) {
 			geometry_stats.SetEmpty();
 		} else {
@@ -139,49 +136,18 @@ struct StatsWriter<string_t> : public BaseStatsWriter {
 		auto data = const_data_ptr_cast(value.GetData());
 		auto size = value.GetSize();
 
-		if (is_bit && size > StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE) {
-			// BIT min/max must remain exact because truncation can change logical bit ordering.
-			// Once any value is too large, drop min/max for the whole stats block.
-			has_min_max = false;
-		}
-		if (!has_min_max) {
-			if (size > max_string_length) {
-				max_string_length = UnsafeNumericCast<uint32_t>(size);
-			}
-			if (size < min_string_length) {
-				min_string_length = UnsafeNumericCast<uint32_t>(size);
-			}
-			total_string_length += size;
-			return;
-		}
-
 		auto copy_count = MinValue<idx_t>(size, StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
 		if (is_set) {
 			// compare to current min/max
-			int min_cmp;
-			int max_cmp;
-			if (is_bit) {
-				min_cmp =
-				    Bit::Compare(value, string_t(const_char_ptr_cast(min), UnsafeNumericCast<uint32_t>(min_size)));
-				max_cmp =
-				    Bit::Compare(value, string_t(const_char_ptr_cast(max), UnsafeNumericCast<uint32_t>(max_size)));
-			} else {
-				auto min_cmp_count = MinValue<idx_t>(copy_count, min_size);
-				auto max_cmp_count = MinValue<idx_t>(copy_count, max_size);
-				min_cmp = memcmp(data, min, min_cmp_count);
-				max_cmp = memcmp(data, max, max_cmp_count);
-				if (min_cmp == 0 && size < min_size) {
-					min_cmp = -1;
-				}
-				if (max_cmp == 0 && size > max_size) {
-					max_cmp = 1;
-				}
-			}
-			if (min_cmp < 0) {
+			auto min_cmp_count = MinValue<idx_t>(copy_count, min_size);
+			auto min_cmp = memcmp(data, min, min_cmp_count);
+			if (min_cmp < 0 || (min_cmp == 0 && size < min_size)) {
 				memcpy(min, data, copy_count);
 				min_size = size;
 			}
-			if (max_cmp > 0) {
+			auto max_cmp_count = MinValue<idx_t>(copy_count, max_size);
+			int max_cmp = memcmp(data, max, max_cmp_count);
+			if (max_cmp > 0 || (max_cmp == 0 && size > max_size)) {
 				memcpy(max, data, copy_count);
 				max_size = size;
 			}
@@ -225,13 +191,11 @@ private:
 	idx_t min_size;
 	idx_t max_size;
 	bool is_set;
-	bool has_min_max;
 	bool has_unicode;
 	uint32_t max_string_length;
 	uint32_t min_string_length;
 	idx_t total_string_length;
 	bool is_varchar;
-	bool is_bit;
 	bool is_geometry;
 	GeometryStatsData geometry_stats;
 };

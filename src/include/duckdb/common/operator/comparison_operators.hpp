@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/interval.hpp"
@@ -193,49 +192,6 @@ struct DistinctComparatorNullsFirst {
 	}
 };
 
-template <class OP>
-struct BitComparisonOperation {
-	template <class T>
-	static inline bool Operation(const T &left, const T &right) {
-		return OP::template Operation<int8_t>(Bit::Compare(left, right), 0);
-	}
-};
-
-struct BitComparator {
-	template <class T>
-	static inline int8_t Operation(const T &left, const T &right) {
-		return Bit::Compare(left, right);
-	}
-};
-
-template <class OP>
-struct BitDistinctComparisonOperation {
-	template <class T>
-	static inline int8_t Operation(const T &left, const T &right, bool left_null, bool right_null) {
-		if (DUCKDB_UNLIKELY(left_null || right_null)) {
-			return OP::template Operation<int8_t>(0, 0, left_null, right_null);
-		}
-		return OP::template Operation<int8_t>(Bit::Compare(left, right), 0, false, false);
-	}
-};
-
-struct BitDistinctFrom {
-	template <class T>
-	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
-		if (DUCKDB_UNLIKELY(left_null || right_null)) {
-			return left_null != right_null;
-		}
-		return Bit::Compare(left, right) != 0;
-	}
-};
-
-struct BitNotDistinctFrom {
-	template <class T>
-	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
-		return !BitDistinctFrom::template Operation<T>(left, right, left_null, right_null);
-	}
-};
-
 //===--------------------------------------------------------------------===//
 // Comparison Operator Wrappers (so (Not)DistinctFrom have the same API)
 //===--------------------------------------------------------------------===//
@@ -269,26 +225,6 @@ struct ComparisonOperationWrapper<NotDistinctFrom> {
 	template <class T>
 	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
 		return NotDistinctFrom::template Operation<T>(left, right, left_null, right_null);
-	}
-};
-
-template <>
-struct ComparisonOperationWrapper<BitDistinctFrom> {
-	static constexpr const bool COMPARE_NULL = true;
-
-	template <class T>
-	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
-		return BitDistinctFrom::template Operation<T>(left, right, left_null, right_null);
-	}
-};
-
-template <>
-struct ComparisonOperationWrapper<BitNotDistinctFrom> {
-	static constexpr const bool COMPARE_NULL = true;
-
-	template <class T>
-	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
-		return BitNotDistinctFrom::template Operation<T>(left, right, left_null, right_null);
 	}
 };
 

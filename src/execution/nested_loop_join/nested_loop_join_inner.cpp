@@ -130,36 +130,6 @@ idx_t NestedLoopJoinComparisonSwitch(const Vector &left, const Vector &right, id
                                      idx_t &lpos, idx_t &rpos, SelectionVector &lvector, SelectionVector &rvector,
                                      idx_t current_match_count, ExpressionType comparison_type) {
 	D_ASSERT(left.GetType() == right.GetType());
-	if (left.GetType().id() == LogicalTypeId::BIT) {
-		switch (comparison_type) {
-		case ExpressionType::COMPARE_EQUAL:
-			return NLTYPE::template Operation<string_t, BitComparisonOperation<Equals>>(
-			    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
-		case ExpressionType::COMPARE_NOTEQUAL:
-			return NLTYPE::template Operation<string_t, BitComparisonOperation<NotEquals>>(
-			    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
-		case ExpressionType::COMPARE_LESSTHAN:
-			return NLTYPE::template Operation<string_t, BitComparisonOperation<LessThan>>(
-			    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
-		case ExpressionType::COMPARE_GREATERTHAN:
-			return NLTYPE::template Operation<string_t, BitComparisonOperation<GreaterThan>>(
-			    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			return NLTYPE::template Operation<string_t, BitComparisonOperation<LessThanEquals>>(
-			    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			return NLTYPE::template Operation<string_t, BitComparisonOperation<GreaterThanEquals>>(
-			    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
-		case ExpressionType::COMPARE_DISTINCT_FROM:
-			return NLTYPE::template Operation<string_t, BitDistinctFrom>(left, right, left_size, right_size, lpos, rpos,
-			                                                             lvector, rvector, current_match_count);
-		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-			return NLTYPE::template Operation<string_t, BitNotDistinctFrom>(
-			    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
-		default:
-			throw NotImplementedException("Unimplemented comparison type for join!");
-		}
-	}
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		return NestedLoopJoinTypeSwitch<NLTYPE, Equals>(left, right, left_size, right_size, lpos, rpos, lvector,

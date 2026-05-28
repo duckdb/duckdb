@@ -91,11 +91,6 @@ static bool TryPrimitiveSelectOperation(const Vector &left, const Vector &right,
 		                                                            false_sel.get());
 		return true;
 	case PhysicalType::VARCHAR:
-		if (left.GetType().id() == LogicalTypeId::BIT) {
-			result = BinaryExecutor::Select<string_t, string_t, BitComparisonOperation<OP>>(
-			    left, right, sel.get(), count, true_sel.get(), false_sel.get());
-			return true;
-		}
 		result = BinaryExecutor::Select<string_t, string_t, OP>(left, right, sel.get(), count, true_sel.get(),
 		                                                        false_sel.get());
 		return true;

@@ -15,6 +15,14 @@ SELECT
 ----
 true	false	true	false	true	true	true	true
 
+query III
+SELECT
+	bitstring_byte_comparable('0'::BIT) < bitstring_byte_comparable('00'::BIT),
+	bitstring_byte_comparable('01'::BIT) < bitstring_byte_comparable('1'::BIT),
+	bitstring_byte_comparable('10101010'::BIT) > bitstring_byte_comparable('1'::BIT);
+----
+true	true	true
+
 statement ok
 CREATE TABLE bit_comparison_values(v BIT);
 

@@ -23,8 +23,6 @@ public:
 	DUCKDB_API static idx_t BitLength(bitstring_t bits);
 	//! Returns the number of set bits in the bit string
 	DUCKDB_API static idx_t BitCount(bitstring_t bits);
-	//! Compares two bit strings lexicographically by their logical bits
-	DUCKDB_API static int8_t Compare(bitstring_t left, bitstring_t right);
 	//! Returns the number of bytes in the bit string
 	DUCKDB_API static idx_t OctetLength(bitstring_t bits);
 	//! Extracts the nth bit from bit string; the first (leftmost) bit is indexed 0

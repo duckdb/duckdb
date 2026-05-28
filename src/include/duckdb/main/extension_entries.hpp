@@ -116,6 +116,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"bit_xor", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"bitstring", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"bitstring_agg", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"bitstring_byte_comparable", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"bool_and", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"bool_or", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"broadcast", "inet", CatalogType::SCALAR_FUNCTION_ENTRY},
