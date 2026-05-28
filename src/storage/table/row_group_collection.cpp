@@ -1240,8 +1240,6 @@ struct VacuumState {
 	//! Whether we are allowed to rebuild indexes after a vacuum (only true when vacuum_rebuild_indexes
 	//! threshold is set, the table's row count is within the threshold, and all indexes are bound ART's).
 	bool can_rebuild_indexes = false;
-	//! Whether checkpointing/vacuuming may remap rowids.
-	bool row_ids_changed = false;
 	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
 	vector<optional_idx> row_group_counts;
@@ -1430,7 +1428,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 	}
 	bool legacy_vacuum_with_stable_row_ids =
 	    !checkpoint_state.writer.CanPersistRowIdGaps() && !state.can_change_row_ids;
-	bool pending_old_storage_rowid_shift = false;
+	bool pending_legacy_storage_rowid_shift = false;
 	vector<idx_t> committed_counts;
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
@@ -1453,7 +1451,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 				}
 				// Index state allows rowid changes, so checkpointing can densely repack rowids for older storage if
 				// this dropped row group is followed by live rows.
-				pending_old_storage_rowid_shift = true;
+				pending_legacy_storage_rowid_shift = true;
 			}
 			// Drop the empty row group. Newer storage versions persist the resulting rowid gap; older storage reaches
 			// this path only when rowids may be densely rewritten.
@@ -1472,8 +1470,10 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			// Otherwise, the row group is fully live. We can still consider fully live row groups for merging as
 			// that does not change rowids.
 		}
-		if (pending_old_storage_rowid_shift) {
-			state.row_ids_changed = true;
+		if (pending_legacy_storage_rowid_shift) {
+			// Condition 1: legacy storage cannot persist the gap from the earlier dropped row group. Since this live
+			// row group follows it, legacy storage will write this group at a lower dense rowid.
+			checkpoint_state.writer.SetRowIdsChanged();
 		}
 		state.row_group_counts.push_back(row_group_num_rows);
 	}
@@ -1522,7 +1522,6 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	idx_t merge_count = 0;
 	idx_t target_count = 0;
 	bool perform_merge = false;
-	bool selected_merge_changes_row_ids = false;
 	// check if we can merge row groups adjacent to the current segment_idx
 	// we try merging row groups into batches of 1-3 row groups
 	// our goal is to reduce the amount of row groups
@@ -1535,6 +1534,11 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		merge_count = 0;
 		merge_rows = 0;
 		optional_idx expected_row_start;
+		// Conservative rowid-change tracking for the selected merge:
+		// 1) legacy dense repack after a dropped row group is handled in InitializeVacuumState
+		// 2) merging across a rowid gap shifts later rows downward
+		// 3) merging a partially deleted row group may compact surviving rows
+		// Fully-live contiguous merge windows preserve rowids and do not set this flag.
 		bool candidate_changes_row_ids = false;
 		for (next_idx = segment_idx; next_idx < checkpoint_state.SegmentCount(); next_idx++) {
 			if (!state.row_group_counts[next_idx].IsValid()) {
@@ -1563,18 +1567,18 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 			if (!expected_row_start.IsValid()) {
 				expected_row_start = next_segment->GetRowStart();
 			} else if (next_segment->GetRowStart() != expected_row_start.GetIndex()) {
-				// Crossing a rowid gap shifts rows from this point forward.
 				if (!state.can_change_row_ids) {
 					break;
 				}
+				// Condition 2: the merge output is written densely from the first merged row group. Crossing an
+				// existing gap shifts rowids down.
 				candidate_changes_row_ids = true;
 			}
 			if (next_row_count != next_total_count) {
-				// Partial deletes usually shift rows in the vacuumed output. This can over-approximate trailing
-				// deletes at the end of a merge window, but avoids inspecting delete positions during scheduling.
 				if (!state.can_change_row_ids) {
 					break;
 				}
+				// Condition 3: the vacuum task writes only committed rows. Partial deletes over-approximate this.
 				candidate_changes_row_ids = true;
 			}
 			expected_row_start = next_segment->GetRowStart() + next_total_count;
@@ -1603,7 +1607,9 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 			// we can reduce "merge_count" row groups to "target_count"
 			// perform the merge at this level
 			perform_merge = true;
-			selected_merge_changes_row_ids = candidate_changes_row_ids;
+			if (candidate_changes_row_ids) {
+				checkpoint_state.writer.SetRowIdsChanged();
+			}
 			break;
 		}
 	}
@@ -1616,10 +1622,6 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	auto vacuum_task =
 	    make_uniq<VacuumTask>(checkpoint_state, state, segment_idx, merge_count, target_count, merge_rows);
 	checkpoint_state.executor->ScheduleTask(std::move(vacuum_task));
-	if (selected_merge_changes_row_ids) {
-		state.row_ids_changed = true;
-		checkpoint_state.writer.SetRowIdsChanged();
-	}
 	// skip vacuuming by the row groups we have merged
 	state.next_vacuum_idx = next_idx;
 	state.row_start += merge_rows;
@@ -1646,9 +1648,6 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 	VacuumState vacuum_state;
 	InitializeVacuumState(checkpoint_state, vacuum_state, writer.GetRowGroupCount());
-	if (vacuum_state.row_ids_changed) {
-		writer.SetRowIdsChanged();
-	}
 
 	try {
 		// schedule tasks
@@ -1999,7 +1998,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	// and all the indexes are bound ART's),
 	// and
 	// 2) we have changed rowids.
-	if (vacuum_state.can_rebuild_indexes && vacuum_state.row_ids_changed) {
+	if (vacuum_state.can_rebuild_indexes && writer.RowIdsChanged()) {
 		writer.SetRebuildIndexes();
 	}
 }
