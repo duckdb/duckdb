@@ -47,8 +47,8 @@ void ExpressionBinder::QualifyColumnNames(ExpressionBinder &expression_binder, u
 }
 
 BindResult ExpressionBinder::BindExpression(LambdaRefExpression &lambda_ref, idx_t depth) {
-	D_ASSERT(lambda_bindings && lambda_ref.lambda_idx < lambda_bindings->size());
-	return (*lambda_bindings)[lambda_ref.lambda_idx].Bind(lambda_ref, depth);
+	D_ASSERT(lambda_bindings && lambda_ref.LambdaIndex() < lambda_bindings->size());
+	return (*lambda_bindings)[lambda_ref.LambdaIndex()].Bind(lambda_ref, depth);
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error) {

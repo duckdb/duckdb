@@ -123,14 +123,15 @@ pair<string, unique_ptr<SequenceOption>>
 PEGTransformerFactory::TransformSeqSetIncrement(PEGTransformer &transformer, unique_ptr<ParsedExpression> expression) {
 	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(expression));
-		if (func_expr->function_name != "-") {
-			throw InvalidInputException("Expected a minus function instead of %s", func_expr->function_name);
+		if (func_expr->FunctionName() != "-") {
+			throw InvalidInputException("Expected a minus function instead of %s", func_expr->FunctionName());
 		}
-		D_ASSERT(!func_expr->children.empty());
-		if (func_expr->children[0]->GetExpressionClass() != ExpressionClass::CONSTANT) {
+		D_ASSERT(!func_expr->GetChildren().empty());
+		if (func_expr->GetChildren()[0]->GetExpressionClass() != ExpressionClass::CONSTANT) {
 			throw InvalidInputException("Expected constant expression as child of minus function");
 		}
-		const auto const_value = func_expr->children[0]->Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
+		const auto const_value =
+		    func_expr->GetChildren()[0]->Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
 		expression = make_uniq<ConstantExpression>(Value::Numeric(LogicalType::BIGINT, -const_value));
 	}
 	if (expression->GetExpressionClass() != ExpressionClass::CONSTANT) {
@@ -145,14 +146,15 @@ PEGTransformerFactory::TransformSeqSetMinMax(PEGTransformer &transformer, const 
                                              unique_ptr<ParsedExpression> expression) {
 	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(expression));
-		if (func_expr->function_name != "-") {
-			throw InvalidInputException("Expected a minus function instead of %s", func_expr->function_name);
+		if (func_expr->FunctionName() != "-") {
+			throw InvalidInputException("Expected a minus function instead of %s", func_expr->FunctionName());
 		}
-		D_ASSERT(!func_expr->children.empty());
-		if (func_expr->children[0]->GetExpressionClass() != ExpressionClass::CONSTANT) {
+		D_ASSERT(!func_expr->GetChildren().empty());
+		if (func_expr->GetChildren()[0]->GetExpressionClass() != ExpressionClass::CONSTANT) {
 			throw InvalidInputException("Expected constant expression as child of minus function");
 		}
-		const auto const_value = func_expr->children[0]->Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
+		const auto const_value =
+		    func_expr->GetChildren()[0]->Cast<ConstantExpression>().GetValue().GetValue<hugeint_t>();
 		expression = make_uniq<ConstantExpression>(Value::Numeric(LogicalType::BIGINT, -const_value));
 	}
 
