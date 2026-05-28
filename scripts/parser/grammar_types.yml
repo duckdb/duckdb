@@ -20,9 +20,11 @@
 # Rules handled by RegisterEnum() are NOT listed here (they are auto-detected
 # by generate_transformer.py from peg_transformer_factory.cpp).
 #
-# excluded_rules: rules skipped during stub generation. When encountered as
-# children in auto-generated sequence rules they are treated as skip elements
-# (no semantic value extracted).
+# excluded_rules: rules intentionally skipped during stub generation. When
+# encountered as children in auto-generated sequence rules they are treated as
+# skip elements (no semantic value extracted). Keep this list for syntax-only
+# rules and temporary manual exceptions; matcher-provided rules belong in
+# matcher_rule_overrides instead.
 #
 # matcher_rule_overrides: named grammar rules that matcher.cpp replaces with a
 # specialized Matcher instead of constructing from the grammar rule body. The
@@ -1228,6 +1230,7 @@ matcher_rule_overrides:
 
 # ---------------------------------------------------------------------------
 # excluded_rules: no transformer stub generated, no semantic value extracted
+# for child references
 # ---------------------------------------------------------------------------
 
 excluded_rules:
@@ -1248,23 +1251,8 @@ excluded_rules:
   - PlainIdentifier
   - QuotedIdentifier
   - CreateTableColumnElement
-  - ReservedIdentifier
-  - CatalogName
-  - SchemaName
-  - ReservedSchemaName
-  - TableName
   - ConstraintName
   - IntervalNumber
-  - ReservedTableName
-  - ColumnName
-  - ReservedColumnName
-  - FunctionName
-  - ReservedFunctionName
-  - TableFunctionName
-  - TypeName
-  - PragmaName
-  - SettingName
-  - CopyOptionName
   - AtTimeZoneOperator
   - Generated
   - AlwaysOrByDefault
@@ -1285,4 +1273,3 @@ excluded_rules:
   - SetData
   - CTEBodyContent
   - SingleArrowPair
-  - OperatorLiteral
