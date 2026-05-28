@@ -172,48 +172,6 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 #endif
 }
 
-static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
-                                  Vector &result) {
-	if (expr.GetReturnType() != LogicalType::BOOLEAN) {
-		throw InvalidInputException("Function %s only has a select callback but returns %s", expr.function.GetName(),
-		                            expr.GetReturnType().ToString());
-	}
-	if (expr.function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING) {
-		throw InvalidInputException("Function %s only has a select callback with SPECIAL_HANDLING but projected "
-		                            "execution requires a scalar callback to produce NULL results",
-		                            expr.function.GetName());
-	}
-
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto count = args.size();
-	auto result_data = FlatVector::GetDataMutable<bool>(result);
-	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = false;
-	}
-
-	auto &result_validity = FlatVector::ValidityMutable(result);
-	result_validity.SetAllValid(count);
-	D_ASSERT(expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING);
-	for (const auto &arg : args.data) {
-		auto entries = arg.Validity();
-		if (!entries.CanHaveNull()) {
-			continue;
-		}
-		for (idx_t i = 0; i < count; i++) {
-			if (!entries.IsValid(i)) {
-				result_validity.SetInvalid(i);
-			}
-		}
-	}
-
-	SelectionVector true_sel(count);
-	auto true_count =
-	    expr.function.GetSelectCallback()(args, state, FlatVector::IncrementalSelectionVector(), &true_sel, nullptr);
-	for (idx_t i = 0; i < true_count; i++) {
-		result_data[true_sel.get_index(i)] = true;
-	}
-}
-
 static idx_t SelectBooleanResult(Vector &result, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                                  SelectionVector *false_sel) {
 	return UnaryExecutor::Select<bool>(
@@ -270,11 +228,10 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	if (!dictionary_executed) {
 		if (expr.function.HasFunctionCallback()) {
 			expr.function.GetFunctionCallback()(arguments, *state, result);
-		} else if (expr.function.HasSelectCallback()) {
-			ExecuteSelectFunction(expr, arguments, *state, result);
+		} else if (all_constant && expr.function.HasSelectCallback()) {
+			ExecuteConstantSelectFunction(expr, arguments, *state, result);
 		} else {
-			throw InternalException("Scalar function %s has neither an execution nor a select callback",
-			                        expr.function.GetName());
+			throw InternalException("Scalar function %s has no execution callback", expr.function.GetName());
 		}
 	}
 	if (all_constant) {
