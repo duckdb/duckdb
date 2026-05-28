@@ -214,6 +214,24 @@ static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk
 	}
 }
 
+static idx_t SelectBooleanResult(Vector &result, const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
+                                 SelectionVector *false_sel) {
+	return UnaryExecutor::Select<bool>(
+	    result, sel, count, [](bool value) { return value; }, true_sel, false_sel);
+}
+
+static void ExecuteConstantSelectFunction(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
+                                          Vector &result) {
+	D_ASSERT(args.size() == 1);
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	ConstantVector::Validity(result).SetAllValid(1);
+
+	SelectionVector true_sel(1);
+	SelectionVector false_sel(1);
+	auto true_count = expr.function.GetSelectCallback()(args, state, nullptr, &true_sel, &false_sel);
+	*ConstantVector::GetData<bool>(result) = true_count == 1;
+}
+
 void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	state->intermediate_chunk.Reset();
@@ -284,15 +302,53 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	if (!expr.function.HasSelectCallback()) {
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
-	// FIXME: push constant handling in here similar to Execute
 	state->intermediate_chunk.Reset();
 	auto &arguments = state->intermediate_chunk;
+	bool all_constant = true;
+	if (expr.function.GetStability() == FunctionStability::VOLATILE) {
+		all_constant = false;
+	}
+	auto default_null_handling = expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	for (idx_t i = 0; i < expr.children.size(); i++) {
 		D_ASSERT(state->types[i] == expr.children[i]->GetReturnType());
 		Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
+		if (arguments.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			all_constant = false;
+		} else if (default_null_handling && ConstantVector::IsNull(arguments.data[i])) {
+			Vector result(LogicalType::BOOLEAN);
+			ConstantVector::SetNull(result, count_t(1));
+			return SelectBooleanResult(result, sel, count, true_sel, false_sel);
+		}
 	}
-	arguments.SetCardinality(count);
+	if (all_constant) {
+		arguments.SetChildCardinality(1ULL);
+	} else {
+		arguments.SetCardinality(count);
+	}
 	arguments.Verify(context);
+	if (all_constant) {
+		Vector result(LogicalType::BOOLEAN);
+		if (expr.function.HasFunctionCallback()) {
+			expr.function.GetFunctionCallback()(arguments, *state, result);
+			if (result.GetVectorType() != VectorType::FLAT_VECTOR &&
+			    result.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+				result.Flatten();
+			}
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		} else {
+			ExecuteConstantSelectFunction(expr, arguments, *state, result);
+		}
+		return SelectBooleanResult(result, sel, count, true_sel, false_sel);
+	}
+	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
+	if (expr.function.HasFunctionCallback()) {
+		Vector result(LogicalType::BOOLEAN);
+		auto dictionary_executed =
+		    execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
+		if (dictionary_executed) {
+			return SelectBooleanResult(result, sel, count, true_sel, false_sel);
+		}
+	}
 	return expr.function.GetSelectCallback()(arguments, *state, sel, true_sel, false_sel);
 }
 
