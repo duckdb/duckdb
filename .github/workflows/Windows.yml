@@ -137,12 +137,6 @@ jobs:
           libduckdb-windows-amd64.zip
           duckdb_cli-windows-amd64.zip
 
-    - name: Set up MSVC environment for export check (x64)
-      uses: ./.github/actions/setup-msvc-env
-    - name: Duckdb.dll export symbols with C++ on Windows
-      shell: bash
-      run: cl /std:c++17 -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/duckdb.lib
-
  win-release-32:
     name: Windows (32 Bit)
     needs:

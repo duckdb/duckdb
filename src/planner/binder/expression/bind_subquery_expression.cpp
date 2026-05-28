@@ -145,7 +145,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		    TypeIsUnnamedStruct(child_expressions[0]->GetReturnType())) {
 			// The child is a struct with N elements, and the subquery returns N columns
 			// This is allowed - the subquery columns will be matched against the struct during execution
-			expected_columns = bound_subquery.bound_node.types.size();
+			expected_columns = StructType::GetChildCount(child_expressions[0]->GetReturnType());
 		}
 		if (bound_subquery.bound_node.types.size() != expected_columns) {
 			throw BinderException(expr, "Subquery returns %zu columns - expected %d",
