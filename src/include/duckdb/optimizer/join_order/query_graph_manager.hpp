@@ -23,8 +23,10 @@ namespace duckdb {
 class QueryGraphEdges;
 
 struct GenerateJoinRelation {
+public:
 	GenerateJoinRelation(optional_ptr<JoinRelationSet> set, unique_ptr<LogicalOperator> op_p);
 
+public:
 	optional_ptr<JoinRelationSet> set;
 	unique_ptr<LogicalOperator> op;
 };

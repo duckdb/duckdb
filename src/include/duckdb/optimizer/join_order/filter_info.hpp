@@ -23,6 +23,7 @@ class FilterInfo {
 public:
 	FilterInfo(unique_ptr<Expression> filter, JoinRelationSet &set, idx_t filter_index,
 	           JoinType join_type = JoinType::INNER);
+	~FilterInfo();
 
 public:
 	void SetLeftSet(optional_ptr<JoinRelationSet> left_set_new);
