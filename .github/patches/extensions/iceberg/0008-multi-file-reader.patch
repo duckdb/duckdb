@@ -1,8 +1,27 @@
-diff --git a/src/iceberg_functions/iceberg_multi_file_reader.cpp b/src/iceberg_functions/iceberg_multi_file_reader.cpp
-index 7d0598a8..0d391b6d 100644
---- a/src/iceberg_functions/iceberg_multi_file_reader.cpp
-+++ b/src/iceberg_functions/iceberg_multi_file_reader.cpp
-@@ -533,10 +533,9 @@ static unique_ptr<Expression> ConstructVirtualRowIdExpression(ClientContext &con
+diff --git a/src/include/planning/iceberg_multi_file_reader.hpp b/src/include/planning/iceberg_multi_file_reader.hpp
+index 26fe7790..9fe0955b 100644
+--- a/src/include/planning/iceberg_multi_file_reader.hpp
++++ b/src/include/planning/iceberg_multi_file_reader.hpp
+@@ -71,11 +71,10 @@ public:
+ 	                          const vector<MultiFileColumnDefinition> &local_columns);
+ 	bool ParseOption(const string &key, const Value &val, MultiFileOptions &options, ClientContext &context) override;
+ 
+-	unique_ptr<Expression>
++	MultiFileReaderVirtualColumnBinding
+ 	GetVirtualColumnExpression(ClientContext &context, MultiFileReaderData &reader_data,
+-	                           const vector<MultiFileColumnDefinition> &local_columns, idx_t &column_id,
+-	                           const LogicalType &type, MultiFileLocalIndex local_idx,
+-	                           optional_ptr<MultiFileColumnDefinition> &global_column_reference) override;
++	                           const vector<MultiFileColumnDefinition> &local_columns, const idx_t column_id,
++	                           const LogicalType &type, MultiFileLocalIndex local_idx) override;
+ 
+ public:
+ 	shared_ptr<TableFunctionInfo> function_info;
+diff --git a/src/planning/iceberg_multi_file_reader.cpp b/src/planning/iceberg_multi_file_reader.cpp
+index 35dffb59..578fca53 100644
+--- a/src/planning/iceberg_multi_file_reader.cpp
++++ b/src/planning/iceberg_multi_file_reader.cpp
+@@ -536,10 +536,9 @@ static unique_ptr<Expression> ConstructVirtualRowIdExpression(ClientContext &con
  	return function_expr;
  }
  
@@ -15,7 +34,7 @@ index 7d0598a8..0d391b6d 100644
  	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
  		// row id column
  		// this is computed as row_id_start + file_row_number OR read from the file
-@@ -555,13 +554,8 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
+@@ -558,13 +557,8 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
  			if (col.identifier.GetValue<int32_t>() == MultiFileReader::ROW_ID_FIELD_ID) {
  				if (entry == options.end()) {
  					//! There is no parent 'first_row_id' to inherit, simply reference the existing column
@@ -30,13 +49,13 @@ index 7d0598a8..0d391b6d 100644
  
  				auto computed_row_id =
  				    ConstructVirtualRowIdExpression(context, type, entry->second, local_idx.GetIndex() + 1);
-@@ -571,19 +565,20 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
+@@ -574,19 +568,20 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
  				coalesce_expr->children.push_back(std::move(file_row_id));
  				coalesce_expr->children.push_back(std::move(computed_row_id));
  
 -				// Transform virtual column to file_row_number for the reference
 -				column_id = MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER;
--				return coalesce_expr;
+-				return std::move(coalesce_expr);
 +				vector<idx_t> column_ids;
 +				column_ids.push_back(i);
 +				column_ids.push_back(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
@@ -58,7 +77,7 @@ index 7d0598a8..0d391b6d 100644
  	}
  	if (column_id == COLUMN_IDENTIFIER_LAST_SEQUENCE_NUMBER) {
  		// get the row id start for this file
-@@ -600,16 +595,13 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
+@@ -603,16 +598,13 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
  			if (col.identifier.GetValue<int32_t>() == MultiFileReader::LAST_UPDATED_SEQUENCE_NUMBER_ID) {
  				if (entry == options.end()) {
  					//! There is no parent 'sequence_number' to inherit, simply reference the existing column
@@ -76,13 +95,13 @@ index 7d0598a8..0d391b6d 100644
  				auto computed_sequence_number = make_uniq<BoundConstantExpression>(entry->second);
  				// Create COALESCE(_last_updated_sequence_number, computed_sequence_number)
  				auto coalesce_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, type);
-@@ -617,18 +609,18 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
+@@ -620,18 +612,18 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
  				coalesce_expr->children.push_back(std::move(sequence_number));
  				coalesce_expr->children.push_back(std::move(computed_sequence_number));
  
 -				// Transform virtual column to file_row_number for the reference
 -				column_id = MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER;
--				return coalesce_expr;
+-				return std::move(coalesce_expr);
 +				vector<idx_t> column_ids;
 +				column_ids.push_back(i);
 +				column_ids.push_back(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
@@ -102,22 +121,107 @@ index 7d0598a8..0d391b6d 100644
  }
  
  vector<PartitionStatistics> IcebergMultiFileReader::IcebergGetPartitionStats(ClientContext &context,
-diff --git a/src/include/iceberg_multi_file_reader.hpp b/src/include/iceberg_multi_file_reader.hpp
-index 7470d9cb..c204552d 100644
---- a/src/include/iceberg_multi_file_reader.hpp
-+++ b/src/include/iceberg_multi_file_reader.hpp
-@@ -71,11 +71,10 @@ public:
- 	                          const vector<MultiFileColumnDefinition> &local_columns);
- 	bool ParseOption(const string &key, const Value &val, MultiFileOptions &options, ClientContext &context) override;
+diff --git a/src/planning/metadata_io/manifest_list/iceberg_manifest_list_reader.cpp b/src/planning/metadata_io/manifest_list/iceberg_manifest_list_reader.cpp
+index 3c6ef640..f057805a 100644
+--- a/src/planning/metadata_io/manifest_list/iceberg_manifest_list_reader.cpp
++++ b/src/planning/metadata_io/manifest_list/iceberg_manifest_list_reader.cpp
+@@ -175,9 +175,9 @@ void ManifestListReader::ReadChunk(DataChunk &chunk, idx_t iceberg_version, vect
+ 		}
  
--	unique_ptr<Expression>
-+	MultiFileReaderVirtualColumnBinding
- 	GetVirtualColumnExpression(ClientContext &context, MultiFileReaderData &reader_data,
--	                           const vector<MultiFileColumnDefinition> &local_columns, idx_t &column_id,
--	                           const LogicalType &type, MultiFileLocalIndex local_idx,
--	                           optional_ptr<MultiFileColumnDefinition> &global_column_reference) override;
-+	                           const vector<MultiFileColumnDefinition> &local_columns, const idx_t column_id,
-+	                           const LogicalType &type, MultiFileLocalIndex local_idx) override;
+ 		if (iceberg_version >= 3) {
+-			int64_t first_row_id;
+-			if (ReadOptionalField<int64_t>(first_row_id_format, i, first_row_id)) {
+-				manifest.first_row_id = first_row_id;
++			int64_t first_row_id_value;
++			if (ReadOptionalField<int64_t>(first_row_id_format, i, first_row_id_value)) {
++				manifest.first_row_id = first_row_id_value;
+ 				manifest.has_first_row_id = true;
+ 			}
+ 		}
+diff --git a/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test b/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test
+index 3ce08b8b..1a22d863 100644
+--- a/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test
++++ b/test/sql/local/catalog_test_config_setup/catalog_agnostic/alter/table_properties/test_upgrade_format_version_2_to_3.test
+@@ -22,14 +22,20 @@ DROP TABLE IF EXISTS my_datalake.default.v2_to_v3_upgrade;
  
- public:
- 	shared_ptr<TableFunctionInfo> function_info;
+ # Create table explicitly as V2
+ statement ok
+-CREATE TABLE my_datalake.default.v2_to_v3_upgrade (id INT, val VARCHAR) WITH ('format-version'=2);
+-
++CREATE TABLE my_datalake.default.v2_to_v3_upgrade (
++	id INT,
++	val VARCHAR
++) WITH (
++	'format-version'=2
++);
+ 
+ # insert data and delete some with positional delete files
+ # Insert 10 rows into one parquet file (snapshot 1, sequence 1)
+ statement ok
+-INSERT INTO my_datalake.default.v2_to_v3_upgrade
+-    SELECT range AS id, 'row_' || range::VARCHAR AS val FROM range(10);
++INSERT INTO my_datalake.default.v2_to_v3_upgrade SELECT
++	range AS id,
++	'row_' || range::VARCHAR AS val
++FROM range(10);
+ 
+ query II
+ SELECT id, val FROM my_datalake.default.v2_to_v3_upgrade ORDER BY id;
+@@ -93,7 +99,9 @@ SELECT _last_updated_sequence_number, _row_id, id FROM my_datalake.default.v2_to
+ 
+ # Upgrade to V3
+ statement ok
+-ALTER TABLE my_datalake.default.v2_to_v3_upgrade SET ('format-version'=3);
++ALTER TABLE my_datalake.default.v2_to_v3_upgrade SET (
++	'format-version'=3
++);
+ 
+ # Immediately after upgrade — no V3 snapshot written yet — row IDs are still NULL
+ query III
+@@ -114,8 +122,10 @@ SELECT _last_updated_sequence_number, _row_id, id FROM my_datalake.default.v2_to
+ # 0-based positions within that file as row IDs: 1, 3, 5, 7, 9.
+ # The 5 new V3 rows continue from row_id 10: row_ids 10–14.
+ statement ok
+-INSERT INTO my_datalake.default.v2_to_v3_upgrade
+-    SELECT 10 + range AS id, 'new_row_' || range::VARCHAR AS val FROM range(5);
++INSERT INTO my_datalake.default.v2_to_v3_upgrade SELECT
++	10 + range AS id,
++	'new_row_' || range::VARCHAR AS val
++FROM range(5);
+ 
+ # 10 rows total: 5 pre-upgrade + 5 post-upgrade
+ query II
+diff --git a/test/sql/local/catalog_test_config_setup/catalog_agnostic/test_row_lineage_read_from_upgraded.test b/test/sql/local/catalog_test_config_setup/catalog_agnostic/test_row_lineage_read_from_upgraded.test
+index f5c7d910..c648d64a 100644
+--- a/test/sql/local/catalog_test_config_setup/catalog_agnostic/test_row_lineage_read_from_upgraded.test
++++ b/test/sql/local/catalog_test_config_setup/catalog_agnostic/test_row_lineage_read_from_upgraded.test
+@@ -2,9 +2,6 @@
+ # description: test integration with iceberg catalog read
+ # group: [catalog_agnostic]
+ 
+-# TODO: Needs https://github.com/duckdblabs/duckdb-internal/issues/9393
+-mode skip
+-
+ require-env CATALOG_TEST_CONFIG_SETUP
+ 
+ require avro
+@@ -105,8 +102,15 @@ select _last_updated_sequence_number, _row_id, id, data from my_datalake.default
+ 5	NULL	6	replaced
+ 7	NULL	7	g_new
+ 
+-# Filter on the '_row_id' can't be pushed down
+-statement error
++query II
+ select id, data from my_datalake.default.row_lineage_test_upgraded_insert where _row_id is NULL order by id;
+ ----
+-INTERNAL Error: Expected an expression that only references a single column, but found multiple!
++
++query II
++select id, data from my_datalake.default.row_lineage_test_upgraded_insert where _row_id is NOT NULL order by id;
++----
++1	replaced
++2	replaced_again
++4	d_u1
++6	replaced_again
++7	g_new
+\ No newline at end of file
