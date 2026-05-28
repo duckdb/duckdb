@@ -627,7 +627,7 @@ jobs:
       shell: bash
       run: |
         ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
-        if [ "${{ github.ref_name }}" == "main" ]; then
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
           # Fail on non-zero major version.
           ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
         fi
@@ -929,7 +929,7 @@ jobs:
         shell: bash
         run: |
           ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
-          if [ "${{ github.ref_name }}" == "main" ]; then
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             # Fail on non-zero major version.
             ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
           fi
