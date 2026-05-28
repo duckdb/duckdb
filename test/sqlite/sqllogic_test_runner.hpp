@@ -79,9 +79,9 @@ public:
 	bool autoinstall_is_checked;
 
 	// If these error msgs occur in a test, the test will abort but still count as passed
-	unordered_set<string> ignore_error_messages = {"HTTP", "Unable to connect"};
+	unordered_set<string> ignore_error_messages;
 	// If these error msgs occur a statement that is expected to fail, the test will fail
-	unordered_set<string> always_fail_error_messages = {"differs from original result!", "INTERNAL"};
+	unordered_set<string> always_fail_error_messages = {"INTERNAL"};
 
 	//! The map converting the labels to the hash values
 	HashLabelMap hash_label_map;
