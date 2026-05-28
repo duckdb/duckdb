@@ -864,6 +864,8 @@ String:
     - ExplainOptionAnalyze
     - DropNullability
     - SetNullability
+    - MinValue
+    - MaxValue
 
 Bool:
   type: "bool"
@@ -1100,6 +1102,8 @@ overrides:
   # create_sequence.gram
   SequenceOption: "pair<string, unique_ptr<SequenceOption>>"
   SeqSetCycle: "pair<string, unique_ptr<SequenceOption>>"
+  SeqCycle: "pair<string, unique_ptr<SequenceOption>>"
+  SeqNoCycle: "pair<string, unique_ptr<SequenceOption>>"
   SeqSetIncrement: "pair<string, unique_ptr<SequenceOption>>"
   SeqSetMinMax: "pair<string, unique_ptr<SequenceOption>>"
   SeqNoMinMax: "pair<string, unique_ptr<SequenceOption>>"

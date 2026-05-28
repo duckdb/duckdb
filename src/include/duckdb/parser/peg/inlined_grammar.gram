@@ -1592,7 +1592,9 @@ SequenceOption <-
 	SeqStartWith /
 	SeqOwnedBy
 
-SeqSetCycle <- 'NO'? 'CYCLE'
+SeqSetCycle <- SeqCycle / SeqNoCycle
+SeqCycle <- 'CYCLE'
+SeqNoCycle <- 'NO' 'CYCLE'
 SeqSetIncrement <- 'INCREMENT' 'BY'? Expression
 SeqSetMinMax <- SeqMinOrMax Expression
 SeqNoMinMax <- 'NO' SeqMinOrMax
@@ -1602,6 +1604,7 @@ SeqOwnedBy <- 'OWNED' 'BY' QualifiedName
 SeqMinOrMax <- MinValue / MaxValue
 MinValue <- 'MINVALUE'
 MaxValue <- 'MAXVALUE'
+
 ExplainStatement <- 'EXPLAIN' ExplainAnalyze? ExplainOptionList? ExplainableStatements
 ExplainAnalyze <- 'ANALYZE'
 ExplainOptionList <- Parens(List(ExplainOption))

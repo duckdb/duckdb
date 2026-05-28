@@ -1180,7 +1180,7 @@ def main():
         # 'create_macro.gram',
         'create_schema.gram',
         'create_secret.gram',
-        # 'create_sequence.gram',
+        'create_sequence.gram',
         # 'create_table.gram',
         'create_trigger.gram',
         # 'create_type.gram',

@@ -226,18 +226,6 @@ void PEGTransformerFactory::RegisterCreateMacro() {
 	REGISTER_TRANSFORM(TransformSimpleParameter);
 }
 
-void PEGTransformerFactory::RegisterCreateSequence() {
-	REGISTER_TRANSFORM(TransformCreateSequenceStmt);
-	REGISTER_TRANSFORM(TransformSequenceOption);
-	REGISTER_TRANSFORM(TransformSeqSetCycle);
-	REGISTER_TRANSFORM(TransformSeqSetIncrement);
-	REGISTER_TRANSFORM(TransformSeqSetMinMax);
-	REGISTER_TRANSFORM(TransformSeqMinOrMax);
-	REGISTER_TRANSFORM(TransformSeqNoMinMax);
-	REGISTER_TRANSFORM(TransformSeqStartWith);
-	REGISTER_TRANSFORM(TransformSeqOwnedBy);
-}
-
 void PEGTransformerFactory::RegisterCreateTable() {
 	// create_table.gram
 	REGISTER_TRANSFORM(TransformCreateStatement);
@@ -302,10 +290,6 @@ void PEGTransformerFactory::RegisterCreateType() {
 	REGISTER_TRANSFORM(TransformCreateType);
 	REGISTER_TRANSFORM(TransformEnumSelectType);
 	REGISTER_TRANSFORM(TransformEnumStringLiteralList);
-}
-
-void PEGTransformerFactory::RegisterDescribe() {
-	// describe.gram
 }
 
 void PEGTransformerFactory::RegisterDrop() {
@@ -780,9 +764,6 @@ void PEGTransformerFactory::RegisterEnums() {
 
 	RegisterEnum<CatalogType>("MaterializedViewEntry", CatalogType::VIEW_ENTRY);
 
-	RegisterEnum<string>("MinValue", "minvalue");
-	RegisterEnum<string>("MaxValue", "maxvalue");
-
 	RegisterEnum<string>("MinusPrefixOperator", "-");
 	RegisterEnum<string>("PlusPrefixOperator", "+");
 	RegisterEnum<string>("TildePrefixOperator", "~");
@@ -858,7 +839,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCommon();
 	RegisterCopy();
 	RegisterCreateMacro();
-	RegisterCreateSequence();
 	RegisterCreateTable();
 	RegisterCreateType();
 	RegisterDescribe();

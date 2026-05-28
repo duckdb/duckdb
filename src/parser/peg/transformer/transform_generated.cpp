@@ -766,6 +766,114 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSecretNameInter
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateSequenceStmtInternal(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool if_not_exists {};
+	transformer.TransformOptional(list_pr, 1, if_not_exists);
+	auto qualified_name = transformer.Transform<QualifiedName>(list_pr, 2);
+	auto &sequence_option_opt = list_pr.Child<OptionalParseResult>(3);
+	vector<pair<string, unique_ptr<SequenceOption>>> sequence_option;
+	if (sequence_option_opt.HasResult()) {
+		auto &sequence_option_repeat = sequence_option_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &sequence_option_item : sequence_option_repeat.GetChildren()) {
+			sequence_option.push_back(
+			    transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(sequence_option_item));
+		}
+	}
+	auto result = TransformCreateSequenceStmt(transformer, if_not_exists, qualified_name, std::move(sequence_option));
+	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSequenceOptionInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<pair<string, unique_ptr<SequenceOption>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSeqSetCycleInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<pair<string, unique_ptr<SequenceOption>>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<pair<string, unique_ptr<SequenceOption>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSeqCycleInternal(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	auto result = TransformSeqCycle(transformer);
+	return make_uniq<TypedTransformResult<pair<string, unique_ptr<SequenceOption>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSeqNoCycleInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto result = TransformSeqNoCycle(transformer);
+	return make_uniq<TypedTransformResult<pair<string, unique_ptr<SequenceOption>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSeqSetIncrementInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr, 2);
+	auto result = TransformSeqSetIncrement(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<pair<string, unique_ptr<SequenceOption>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSeqSetMinMaxInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto seq_min_or_max = transformer.Transform<string>(list_pr, 0);
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr, 1);
+	auto result = TransformSeqSetMinMax(transformer, seq_min_or_max, std::move(expression));
+	return make_uniq<TypedTransformResult<pair<string, unique_ptr<SequenceOption>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSeqNoMinMaxInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto seq_min_or_max = transformer.Transform<string>(list_pr, 1);
+	auto result = TransformSeqNoMinMax(transformer, seq_min_or_max);
+	return make_uniq<TypedTransformResult<pair<string, unique_ptr<SequenceOption>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSeqStartWithInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr, 2);
+	auto result = TransformSeqStartWith(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<pair<string, unique_ptr<SequenceOption>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSeqOwnedByInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto qualified_name = transformer.Transform<QualifiedName>(list_pr, 2);
+	auto result = TransformSeqOwnedBy(transformer, qualified_name);
+	return make_uniq<TypedTransformResult<pair<string, unique_ptr<SequenceOption>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSeqMinOrMaxInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<string>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMinValueInternal(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	auto result = TransformMinValue(transformer);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformMaxValueInternal(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	auto result = TransformMaxValue(transformer);
+	return make_uniq<TypedTransformResult<string>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCreateTriggerStmtInternal(PEGTransformer &transformer,
                                                                                            ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -1924,6 +2032,19 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CreateSecretStmt", &PEGTransformerFactory::TransformCreateSecretStmtInternal},
 	    {"SecretStorageSpecifier", &PEGTransformerFactory::TransformSecretStorageSpecifierInternal},
 	    {"SecretName", &PEGTransformerFactory::TransformSecretNameInternal},
+	    {"CreateSequenceStmt", &PEGTransformerFactory::TransformCreateSequenceStmtInternal},
+	    {"SequenceOption", &PEGTransformerFactory::TransformSequenceOptionInternal},
+	    {"SeqSetCycle", &PEGTransformerFactory::TransformSeqSetCycleInternal},
+	    {"SeqCycle", &PEGTransformerFactory::TransformSeqCycleInternal},
+	    {"SeqNoCycle", &PEGTransformerFactory::TransformSeqNoCycleInternal},
+	    {"SeqSetIncrement", &PEGTransformerFactory::TransformSeqSetIncrementInternal},
+	    {"SeqSetMinMax", &PEGTransformerFactory::TransformSeqSetMinMaxInternal},
+	    {"SeqNoMinMax", &PEGTransformerFactory::TransformSeqNoMinMaxInternal},
+	    {"SeqStartWith", &PEGTransformerFactory::TransformSeqStartWithInternal},
+	    {"SeqOwnedBy", &PEGTransformerFactory::TransformSeqOwnedByInternal},
+	    {"SeqMinOrMax", &PEGTransformerFactory::TransformSeqMinOrMaxInternal},
+	    {"MinValue", &PEGTransformerFactory::TransformMinValueInternal},
+	    {"MaxValue", &PEGTransformerFactory::TransformMaxValueInternal},
 	    {"CreateTriggerStmt", &PEGTransformerFactory::TransformCreateTriggerStmtInternal},
 	    {"TriggerBody", &PEGTransformerFactory::TransformTriggerBodyInternal},
 	    {"TriggerName", &PEGTransformerFactory::TransformTriggerNameInternal},
