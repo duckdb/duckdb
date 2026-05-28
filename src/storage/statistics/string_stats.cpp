@@ -1,4 +1,5 @@
 #include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/value.hpp"
 
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -619,10 +620,19 @@ void StringStats::MergeStats(BaseStatistics &stats, string_t &target, StringStat
 	}
 	// both min/max stats are there - compare
 	bool new_is_more_extreme;
-	if (is_min) {
-		new_is_more_extreme = LessThan::Operation(source, target);
+	if (stats.GetType().id() == LogicalTypeId::BIT) {
+		if (source_type != StringStatsType::EXACT_STATS || target_type != StringStatsType::EXACT_STATS) {
+			target_type = StringStatsType::NO_STATS;
+			return;
+		}
+		auto comparison = Bit::Compare(source, target);
+		new_is_more_extreme = is_min ? comparison < 0 : comparison > 0;
 	} else {
-		new_is_more_extreme = GreaterThan::Operation(source, target);
+		if (is_min) {
+			new_is_more_extreme = LessThan::Operation(source, target);
+		} else {
+			new_is_more_extreme = GreaterThan::Operation(source, target);
+		}
 	}
 	if (!new_is_more_extreme) {
 		// old value is more extreme - bail
@@ -683,8 +693,13 @@ void StringStats::Merge(BaseStatistics &stats, const StatsWriter<string_t> &stat
 	}
 	// construct string stats data from the writer
 	StringStatsData other_data;
-	other_data.min = ReadWriterStats(stats_writer.min, stats_writer.min_size, other_data.min_type);
-	other_data.max = ReadWriterStats(stats_writer.max, stats_writer.max_size, other_data.max_type);
+	if (stats_writer.has_min_max) {
+		other_data.min = ReadWriterStats(stats_writer.min, stats_writer.min_size, other_data.min_type);
+		other_data.max = ReadWriterStats(stats_writer.max, stats_writer.max_size, other_data.max_type);
+	} else {
+		other_data.min_type = StringStatsType::NO_STATS;
+		other_data.max_type = StringStatsType::NO_STATS;
+	}
 	other_data.has_unicode = stats_writer.has_unicode;
 	other_data.has_max_string_length = true;
 	other_data.max_string_length = stats_writer.max_string_length;
@@ -694,6 +709,8 @@ void StringStats::Merge(BaseStatistics &stats, const StatsWriter<string_t> &stat
 	other_data.total_string_length = stats_writer.total_string_length;
 	Merge(stats, other_data);
 }
+
+static FilterPropagateResult CheckZonemapComparisons(int8_t min_comp, int8_t max_comp, ExpressionType comparison_type);
 
 FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
                                                 array_ptr<const Value> constants) {
@@ -705,8 +722,18 @@ FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, Exp
 		auto &constant = StringValue::Get(constant_value);
 		FilterPropagateResult prune_result;
 		if (HasMinMax(stats)) {
-			prune_result = CheckZonemap(string_data.min, string_data.min_type, string_data.max, string_data.max_type,
-			                            comparison_type, constant);
+			if (stats.GetType().id() == LogicalTypeId::BIT) {
+				if (string_data.min_type != StringStatsType::EXACT_STATS ||
+				    string_data.max_type != StringStatsType::EXACT_STATS) {
+					prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+				} else {
+					prune_result = CheckZonemapComparisons(Bit::Compare(constant, string_data.min),
+					                                       Bit::Compare(constant, string_data.max), comparison_type);
+				}
+			} else {
+				prune_result = CheckZonemap(string_data.min, string_data.min_type, string_data.max,
+				                            string_data.max_type, comparison_type, constant);
+			}
 		} else {
 			prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
@@ -727,11 +754,7 @@ int8_t CompareStringStats(string_t input, string_t stats, StringStatsType type) 
 	return Comparator::Operation(input, stats);
 }
 
-FilterPropagateResult StringStats::CheckZonemap(string_t min, StringStatsType min_type, string_t max,
-                                                StringStatsType max_type, ExpressionType comparison_type,
-                                                string_t constant) {
-	auto min_comp = CompareStringStats(constant, min, min_type);
-	auto max_comp = CompareStringStats(constant, max, max_type);
+static FilterPropagateResult CheckZonemapComparisons(int8_t min_comp, int8_t max_comp, ExpressionType comparison_type) {
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
@@ -763,6 +786,14 @@ FilterPropagateResult StringStats::CheckZonemap(string_t min, StringStatsType mi
 	default:
 		throw InternalException("Expression type not implemented for string statistics zone map");
 	}
+}
+
+FilterPropagateResult StringStats::CheckZonemap(string_t min, StringStatsType min_type, string_t max,
+                                                StringStatsType max_type, ExpressionType comparison_type,
+                                                string_t constant) {
+	auto min_comp = CompareStringStats(constant, min, min_type);
+	auto max_comp = CompareStringStats(constant, max, max_type);
+	return CheckZonemapComparisons(min_comp, max_comp, comparison_type);
 }
 
 child_list_t<Value> StringStats::ToStruct(const BaseStatistics &stats) {
