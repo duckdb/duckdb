@@ -347,7 +347,8 @@ public:
 	virtual bool IsRemoteCatalog() const {
 		return false;
 	}
-	virtual unique_ptr<TableRef> RemotePushdown(ClientContext &context, unique_ptr<QueryNode> node);
+	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node);
+	virtual unique_ptr<TableRef> RemoteExecute(ClientContext &context, const string &sql);
 
 	//! Whether or not this catalog should search a specific type with the standard priority
 	DUCKDB_API virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {
@@ -414,16 +415,6 @@ public:
 
 	//! Called when the catalog is detached
 	DUCKDB_API virtual void OnDetach(ClientContext &context);
-
-	//! Name of a catalog-registered table function `(catalog_name, sql_string) -> rows` that handles
-	//! routed SQL while CONNECT-ed to this catalog. When non-empty, the CONNECT dispatch rewrites
-	//! routed SQL as `SELECT * FROM <name>('cat', '<sql>')`. Default empty (= CONNECT not supported);
-	//! backends opt in by overriding this to return a registered function name. Resolved ONCE at
-	//! CONNECT time and cached on the ClientContext — per-context variation (e.g. picking a variant
-	//! based on session SETtings) only takes effect across DISCONNECT/CONNECT cycles. Must be
-	//! answerable without I/O / without forcing initialization. May throw for misconfiguration /
-	//! runtime fault, in which case the CONNECT fails and the client remains unbound.
-	DUCKDB_API virtual string GetConnectFunctionName(ClientContext &context);
 
 protected:
 	//! Reference to the database

@@ -347,13 +347,10 @@ private:
 	QueryProgress query_progress;
 	//! The connection corresponding to this client context
 	connection_t connection_id;
-	//! Routing target for SQL execution while CONNECT-ed (CONNECT/DISCONNECT).
-	//! When is_connected is true and connected_to_database can be locked, non-control SQL is rewritten
-	//! at the chokepoint as `SELECT * FROM <connected_function_name>('cat', '<sql>')` and runs through
-	//! the normal pipeline. The function name is resolved once at ConnectToCatalog and cached here —
-	//! see Catalog::GetConnectFunctionName for the resolution contract.
+	//! Routing target for SQL execution while CONNECT-ed (CONNECT/DISCONNECT). When is_connected is
+	//! true and connected_to_database can be locked, the chokepoint dispatches non-control SQL via
+	//! `Catalog::RemoteExecute(string)` and wraps the returned TableRef into a SelectStatement.
 	weak_ptr<AttachedDatabase> connected_to_database;
-	string connected_function_name;
 	bool is_connected = false;
 };
 

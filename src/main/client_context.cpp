@@ -223,21 +223,18 @@ unique_ptr<ClientContextLock> ClientContext::LockContext() {
 
 void ClientContext::ConnectToCatalog(const shared_ptr<AttachedDatabase> &target) {
 	D_ASSERT(target);
-	// Resolve and validate the dispatch function name up-front; mutations below only run on success
-	// (so a throw leaves the client unbound). The cached name is the single source of truth for the
-	// chokepoint until DISCONNECT — see the field comment on connected_function_name.
-	auto fn_name = target->GetCatalog().GetConnectFunctionName(*this);
-	if (fn_name.empty()) {
+	// Pre-flight: IsRemoteCatalog() is the capability declaration; catalogs that return true MUST
+	// implement RemoteExecute(string). Validation runs before mutation so a throw leaves the client
+	// unbound.
+	if (!target->GetCatalog().IsRemoteCatalog()) {
 		throw InvalidInputException("Database \"%s\" does not support CONNECT", target->GetName());
 	}
 	connected_to_database = target;
-	connected_function_name = std::move(fn_name);
 	is_connected = true;
 }
 
 void ClientContext::DisconnectFromCatalog() {
 	connected_to_database.reset();
-	connected_function_name.clear();
 	is_connected = false;
 }
 
@@ -254,19 +251,11 @@ static bool IsConnectControlStatement(StatementType type) {
 	return type == StatementType::CONNECT_STATEMENT || type == StatementType::DISCONNECT_STATEMENT;
 }
 
-//! Build `SELECT * FROM <fn>(<catalog>, <sql>)` for the CONNECT rewrite.
-static unique_ptr<SQLStatement> BuildConnectSelect(const string &function_name, const string &catalog_name,
-                                                   const string &sql) {
-	vector<unique_ptr<ParsedExpression>> args;
-	args.push_back(make_uniq<ConstantExpression>(Value(catalog_name)));
-	args.push_back(make_uniq<ConstantExpression>(Value(sql)));
-
-	auto func_ref = make_uniq<TableFunctionRef>();
-	func_ref->function = make_uniq<FunctionExpression>(function_name, std::move(args));
-
+//! Wrap a TableRef returned from Catalog::RemoteExecute into `SELECT * FROM <ref>` for the chokepoint.
+static unique_ptr<SQLStatement> WrapAsSelect(unique_ptr<TableRef> from_ref) {
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = std::move(func_ref);
+	select_node->from_table = std::move(from_ref);
 
 	auto select_stmt = make_uniq<SelectStatement>();
 	select_stmt->node = std::move(select_node);
@@ -1030,9 +1019,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 				        "DISCONNECT to clear the connection before running further SQL.")),
 				    query);
 			}
-			// Function name was resolved and validated at CONNECT time — see ConnectToCatalog.
-			statement = BuildConnectSelect(connected_function_name, live->GetName(), query);
-			// statement is now SELECT * FROM <fn>('cat', '<sql>'); fall through.
+			// Dispatch via the catalog — IsRemoteCatalog() was validated at CONNECT time, so RemoteExecute
+			// is contracted to be implemented. Wrap the returned TableRef into a SelectStatement.
+			auto remote_ref = live->GetCatalog().RemoteExecute(*this, query);
+			statement = WrapAsSelect(std::move(remote_ref));
+			// statement is now SELECT * FROM <remote-ref>; fall through.
 		}
 	}
 	unique_ptr<PendingQueryResult> pending;

@@ -816,7 +816,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(ParsedExpression &expr) {
 
 unique_ptr<TableRef> RemotePushdownOptimizer::CreateRemoteFunctionRef(CatalogPushdownResult &result,
                                                                       unique_ptr<QueryNode> node) {
-	return result.catalog->RemotePushdown(binder.context, std::move(node));
+	return result.catalog->RemoteExecute(binder.context, std::move(node));
 }
 
 void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const string &catalog_name) {
