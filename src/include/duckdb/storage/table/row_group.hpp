@@ -175,8 +175,8 @@ public:
 	RowGroupWriteData WriteToDisk(RowGroupWriteInfo &info) const;
 	//! Returns the number of committed rows (count - committed deletes)
 	idx_t GetCommittedRowCount();
-	//! Returns a conservative visible row count (count - all rows with a delete marker)
-	idx_t GetNonDeletedRowCount();
+	//! Returns the number of rows visible to the given transaction
+	idx_t GetVisibleRowCount(TransactionData transaction);
 	bool CanReuseMetadata(RowGroupWriter &writer) const;
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats,

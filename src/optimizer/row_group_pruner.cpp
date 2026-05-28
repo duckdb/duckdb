@@ -131,7 +131,7 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 	const auto &primary_order = logical_order.orders[0];
 	auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
 
-	vector<JoinFilterPushdownColumn> columns {JoinFilterPushdownColumn {colref.binding}};
+	vector<JoinFilterPushdownColumn> columns {JoinFilterPushdownColumn {colref.binding, colref.return_type}};
 	vector<PushdownFilterTarget> pushdown_targets;
 	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*logical_order.children[0], std::move(columns),
 	                                                      pushdown_targets);

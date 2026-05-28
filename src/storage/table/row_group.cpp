@@ -1211,12 +1211,19 @@ idx_t RowGroup::GetCommittedRowCount() {
 	return count - vinfo->GetCommittedDeletedCount(count);
 }
 
-idx_t RowGroup::GetNonDeletedRowCount() {
+idx_t RowGroup::GetVisibleRowCount(TransactionData transaction) {
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return count;
 	}
-	return count - vinfo->GetDeletedCount(count);
+	ScanOptions options(transaction);
+	idx_t visible_count = 0;
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
+		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
+		visible_count += vinfo->GetSelVector(options, i, sel, max_count);
+	}
+	return visible_count;
 }
 
 bool RowGroup::HasUnloadedDeletes() const {

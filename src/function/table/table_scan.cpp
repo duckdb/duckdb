@@ -293,8 +293,10 @@ public:
 		}
 
 		if (bind_data.order_options) {
-			l_state->scan_state.table_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
-			l_state->scan_state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
+			l_state->scan_state.table_state.reorderer =
+			    make_uniq<RowGroupReorderer>(*bind_data.order_options, TransactionData(tx));
+			l_state->scan_state.local_state.reorderer =
+			    make_uniq<RowGroupReorderer>(*bind_data.order_options, TransactionData(tx));
 		}
 
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
@@ -405,8 +407,9 @@ unique_ptr<GlobalTableFunctionState> DuckTableScanInitGlobal(ClientContext &cont
                                                              DataTable &storage, const TableScanBindData &bind_data) {
 	auto g_state = make_uniq<DuckTableScanState>(context, input.bind_data.get());
 	if (bind_data.order_options) {
-		g_state->state.scan_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
-		g_state->state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options);
+		auto transaction = TransactionData(DuckTransaction::Get(context, storage.GetAttached()));
+		g_state->state.scan_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options, transaction);
+		g_state->state.local_state.reorderer = make_uniq<RowGroupReorderer>(*bind_data.order_options, transaction);
 	}
 
 	storage.InitializeParallelScan(context, g_state->state, input.column_indexes);
