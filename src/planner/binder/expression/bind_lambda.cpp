@@ -108,9 +108,9 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		// The arrow_expr now might contain bound nodes.
 		// Restore the original expression.
 		if (bind_result.HasError()) {
-			D_ASSERT(arrow_expr.children.size() == 2);
-			expr.lhs = std::move(arrow_expr.children[0]);
-			expr.expr = std::move(arrow_expr.children[1]);
+			D_ASSERT(arrow_expr.GetChildrenMutable().size() == 2);
+			expr.lhs = std::move(arrow_expr.GetChildrenMutable()[0]);
+			expr.expr = std::move(arrow_expr.GetChildrenMutable()[1]);
 		}
 		return bind_result;
 	}

@@ -111,8 +111,7 @@ public:
 				}
 			}
 			if (children.size() == 4) {
-				return children[0]->ToString() + "[" + begin + ":" + end + ":" + children[3]->ToString() +
-				       "]";
+				return children[0]->ToString() + "[" + begin + ":" + end + ":" + children[3]->ToString() + "]";
 			}
 			return children[0]->ToString() + "[" + begin + ":" + end + "]";
 		}

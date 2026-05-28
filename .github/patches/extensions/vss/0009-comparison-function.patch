@@ -1,5 +1,5 @@
 diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
-index 21a907f..39bb0e8 100644
+index 36c220f..39bb0e8 100644
 --- a/src/hnsw/hnsw_optimize_join.cpp
 +++ b/src/hnsw/hnsw_optimize_join.cpp
 @@ -448,11 +448,11 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,

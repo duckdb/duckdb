@@ -12,7 +12,7 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 	if (!parameters) {
 		throw BinderException("Unexpected prepared parameter. This type of statement can't be prepared!");
 	}
-	auto parameter_id = expr.identifier;
+	auto parameter_id = expr.Identifier();
 
 	// Check if a parameter value has already been supplied
 	auto &parameter_data = parameters->GetParameterData();

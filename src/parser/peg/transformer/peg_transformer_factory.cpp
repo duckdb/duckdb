@@ -949,7 +949,7 @@ bool PEGTransformerFactory::ExpressionIsEmptyStar(ParsedExpression &expr) {
 		return false;
 	}
 	auto &star = expr.Cast<StarExpression>();
-	if (!star.columns && star.exclude_list.empty() && star.replace_list.empty()) {
+	if (!star.IsColumns() && star.ExcludeList().empty() && star.ReplaceList().empty()) {
 		return true;
 	}
 	return false;
@@ -1071,14 +1071,14 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 	case ExpressionType::OPERATOR_CAST: {
 		auto &cast = expr.Cast<CastExpression>();
 		Value dummy_value;
-		if (!ConstructConstantFromExpression(*cast.child, dummy_value)) {
+		if (!ConstructConstantFromExpression(cast.Child(), dummy_value)) {
 			return false;
 		}
 
 		string error_message;
-		if (!dummy_value.DefaultTryCastAs(cast.cast_type, value, &error_message)) {
+		if (!dummy_value.DefaultTryCastAs(cast.TargetType(), value, &error_message)) {
 			throw ConversionException("Unable to cast %s to %s", dummy_value.ToString(),
-			                          EnumUtil::ToString(cast.cast_type.id()));
+			                          EnumUtil::ToString(cast.TargetType().id()));
 		}
 		return true;
 	}

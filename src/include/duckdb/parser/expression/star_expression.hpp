@@ -62,7 +62,6 @@ public:
 		return columns;
 	}
 
-
 	string ToString() const override;
 
 	bool Equals(const ParsedExpression &other) const override;

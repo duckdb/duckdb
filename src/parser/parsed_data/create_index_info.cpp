@@ -17,7 +17,7 @@ CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
 static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &root_expr, const string &table_name) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
 	    *root_expr, [&](ColumnRefExpression &col_ref) {
-		    auto &col_names = col_ref.column_names;
+		    auto &col_names = col_ref.ColumnNamesMutable();
 		    if (col_ref.IsQualified() && col_ref.GetTableName() == table_name) {
 			    col_names.erase(col_names.begin());
 		    }

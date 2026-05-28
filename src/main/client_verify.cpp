@@ -57,7 +57,7 @@ void PreparedStatementVerification::ConvertConstants(unique_ptr<ParsedExpression
 
 		// replace it with an expression
 		auto parameter = make_uniq<ParameterExpression>();
-		parameter->identifier = identifier;
+		parameter->IdentifierMutable() = identifier;
 		parameter->SetAlias(alias);
 		expr = std::move(parameter);
 		return;

@@ -32,12 +32,12 @@ string CheckBinder::UnsupportedAggregateMessage() {
 
 BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name) {
 	idx_t struct_start = 0;
-	if (colref.column_names[0] == table_name) {
+	if (colref.ColumnNames()[0] == table_name) {
 		struct_start++;
 	}
-	auto result = make_uniq_base<ParsedExpression, ColumnRefExpression>(colref.column_names.back());
-	for (idx_t i = struct_start; i + 1 < colref.column_names.size(); i++) {
-		result = CreateStructExtract(std::move(result), colref.column_names[i]);
+	auto result = make_uniq_base<ParsedExpression, ColumnRefExpression>(colref.ColumnNames().back());
+	for (idx_t i = struct_start; i + 1 < colref.ColumnNames().size(); i++) {
+		result = CreateStructExtract(std::move(result), colref.ColumnNames()[i]);
 	}
 	return BindExpression(result, 0);
 }
@@ -56,14 +56,14 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 		}
 	}
 
-	if (colref.column_names.size() > 1) {
+	if (colref.ColumnNames().size() > 1) {
 		return BindQualifiedColumnName(colref, table);
 	}
-	if (!columns.ColumnExists(colref.column_names[0])) {
+	if (!columns.ColumnExists(colref.ColumnNames()[0])) {
 		throw BinderException("Table does not contain column %s referenced in check constraint!",
-		                      colref.column_names[0]);
+		                      colref.ColumnNames()[0]);
 	}
-	auto &col = columns.GetColumn(colref.column_names[0]);
+	auto &col = columns.GetColumn(colref.ColumnNames()[0]);
 	if (col.Generated()) {
 		auto bound_expression = col.GeneratedExpression().Copy();
 		return BindExpression(bound_expression, 0, false);

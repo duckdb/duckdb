@@ -31,13 +31,13 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 		if (binder.macro_binding && binder.macro_binding->HasMatchingBinding(col_ref.GetName())) {
 			throw ParameterNotResolvedException();
 		}
-	} else if (col_ref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos && binder.macro_binding &&
+	} else if (col_ref.ColumnNames()[0].find(DummyBinding::DUMMY_NAME) != string::npos && binder.macro_binding &&
 	           binder.macro_binding->HasMatchingBinding(col_ref.GetName())) {
 		throw ParameterNotResolvedException();
 	}
 
 	auto query_location = col_ref.GetQueryLocation();
-	auto column_names = col_ref.column_names;
+	auto column_names = col_ref.ColumnNames();
 	auto result_name = StringUtil::Join(column_names, ".");
 	if (!table_function_name.empty()) {
 		// check if this is a lateral join column/parameter
