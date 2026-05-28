@@ -681,6 +681,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 						throw InternalException("GetVirtualColumnExpression is only allowed to return one virtual "
 						                        "column id for the EXPRESSION result");
 					}
+					seen_virtual_column = true;
 					MultiFileLocalColumnId local_id(reader.columns.size());
 					auto local_index = global_id.RemapRootIndex(local_id.GetId());
 
@@ -1059,21 +1060,23 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 	return make_uniq<ExpressionFilter>(std::move(rewritten_expr));
 }
 
-static void SetIndexToZero(unique_ptr<Expression> &root_expr) {
-#ifdef DEBUG
-	optional_idx index;
-	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(root_expr, [&](BoundReferenceExpression &ref,
-	                                                                                    unique_ptr<Expression> &expr) {
-		if (index.IsValid() && index.GetIndex() != ref.index) {
-			throw InternalException("Expected an expression that only references a single column, but found multiple!");
-		}
-		index = ref.index;
-		ref.index = 0;
-	});
-#else
+static idx_t StartIndexAtZero(unique_ptr<Expression> &root_expr) {
+	map<idx_t, vector<reference<BoundReferenceExpression>>> reference_map;
+
+	//! First gather all references, sorted by their index
 	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
-	    root_expr, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) { ref.index = 0; });
-#endif
+	    root_expr, [&reference_map](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) {
+		    reference_map[ref.index].push_back(ref);
+	    });
+	idx_t new_index = 0;
+	//! Then assign all the references a new index, starting at 0
+	for (auto &[_, references] : reference_map) {
+		auto index = new_index++;
+		for (auto &ref : references) {
+			ref.get().index = index;
+		}
+	}
+	return new_index;
 }
 
 unique_ptr<TableFilterSet>
@@ -1086,6 +1089,8 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 	auto &global_to_local = mapping.global_to_local;
 	auto result = make_uniq<TableFilterSet>();
 	map<idx_t, MultiFileGlobalIndex> local_to_global;
+
+	idx_t local_offset = 0;
 	for (auto &it : filters) {
 		auto &global_index = it.first;
 		auto &global_filter = it.second.get().Cast<ExpressionFilter>();
@@ -1096,7 +1101,7 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 			    "Error in 'EvaluateConstantFilters', this filter should not end up in CreateFilters!");
 		}
 		auto &map_entry = local_it->second;
-		auto local_id = map_entry.mapping.index;
+		auto local_id = MultiFileLocalIndex(map_entry.mapping.index.GetIndex() - local_offset);
 		auto filter_idx = reader.column_indexes[local_id].GetPrimaryIndex();
 		auto &local_type = map_entry.local_type;
 		auto &global_type = map_entry.global_type;
@@ -1125,8 +1130,15 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 			// add the expression to the expression map - we are now evaluating this inside the reader directly
 			// we need to set the index of the references inside the expression to 0
 			auto &expr = reader_data.expressions[global_index.GetIndex()];
-			SetIndexToZero(expr);
-			reader.expression_map[filter_idx] = std::move(expr);
+			auto unique_ref_count = StartIndexAtZero(expr);
+
+			vector<ColumnIndex> expression_column_indexes;
+			for (idx_t i = 0; i < unique_ref_count; i++) {
+				auto index = local_id + i;
+				expression_column_indexes.push_back(reader.column_indexes[index]);
+			}
+			reader.expression_map.emplace(filter_idx,
+			                              BaseFileReaderExpression(std::move(expr), expression_column_indexes));
 
 			// reset the expression - since we are evaluating it in the reader we can just reference it
 			expr = make_uniq<BoundReferenceExpression>(global_type, local_id);

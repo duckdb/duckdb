@@ -391,7 +391,8 @@ public:
 			if (cast_entry != reader.cast_map.end()) {
 				intermediate_chunk_types.push_back(cast_entry->second);
 			} else if (expr_entry != reader.expression_map.end()) {
-				intermediate_chunk_types.push_back(expr_entry->second->GetReturnType());
+				auto &expression = expr_entry->second.expression;
+				intermediate_chunk_types.push_back(expression->GetReturnType());
 			} else if (local_id.IsRowIdColumn()) {
 				//! FIXME: should this generically check for all virtual columns??
 				intermediate_chunk_types.push_back(LogicalType::ROW_TYPE);
