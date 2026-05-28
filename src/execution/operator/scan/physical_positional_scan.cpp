@@ -61,8 +61,6 @@ public:
 	}
 
 	idx_t Refill(ExecutionContext &context) {
-		// Use source_count (not source.size()) to avoid corruption from shared buffers after
-		// Reference+SetChildCardinality
 		if (source_offset >= source_count) {
 			if (!exhausted) {
 				source.Reset();
