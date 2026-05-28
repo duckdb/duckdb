@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -29,7 +30,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 
 	// Identify streaming windows and partitioned windows
 	using Columns = vector<column_t>;
-	const bool enable_optimizer = ClientConfig::GetConfig(context).enable_optimizer;
+	const bool enable_optimizer = Settings::Get<EnableOptimizerSetting>(context);
 	vector<idx_t> blocking_windows;
 	vector<idx_t> streaming_windows;
 	vector<idx_t> partitioned_windows;

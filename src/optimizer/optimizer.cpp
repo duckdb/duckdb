@@ -51,6 +51,7 @@
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -98,6 +99,10 @@ bool Optimizer::OptimizerDisabled(OptimizerType type) {
 }
 
 bool Optimizer::OptimizerDisabled(ClientContext &context_p, OptimizerType type) {
+	if (!Settings::Get<EnableOptimizerSetting>(context_p)) {
+		// all optimizes are disabled
+		return true;
+	}
 	auto &config = DBConfig::GetConfig(context_p);
 	return config.options.disabled_optimizers.find(type) != config.options.disabled_optimizers.end();
 }
@@ -149,8 +154,7 @@ static bool CTEContainsDML(const LogicalOperator &op) {
 }
 
 void Optimizer::OptimizeStatement(unique_ptr<SQLStatement> &statement) {
-	auto &config = ClientConfig::GetConfig(context);
-	if (!config.enable_optimizer) {
+	if (!Settings::Get<EnableOptimizerSetting>(context)) {
 		return;
 	}
 	if (DatabaseManager::Get(context).GetRemoteCatalogCount() > 0) {
@@ -414,8 +418,7 @@ void Optimizer::RunBuiltInOptimizers() {
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
-	auto &config = ClientConfig::GetConfig(context);
-	if (!config.enable_optimizer) {
+	if (!Settings::Get<EnableOptimizerSetting>(context)) {
 		return plan_p;
 	}
 	Verify(*plan_p);
