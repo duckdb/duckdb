@@ -19,6 +19,12 @@
         "test/sql/index/art/constraints/test_art_eager_constraint_checking.test",
         "test/sql/index/art/constraints/test_art_tx_deletes_list.test"
       ]
+    },
+    {
+      "reason": "Test expects an out-of-memory error from a specific persistent index loading pattern.",
+      "paths": [
+        "test/sql/storage/constraints/foreignkey/foreign_key_persistent_memory_limit.test"
+      ]
     }
   ]
 }
