@@ -1572,16 +1572,16 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 				if (!state.can_change_row_ids) {
 					break;
 				}
-				// Condition 1 candidate: if this merge is selected, its dense output crosses an existing rowid gap and
-				// shifts later rowids down.
+				// Condition 1 candidate: this candidate vacuum task will compact across a rowid gap, which will shift
+				// rowids within the selected row groups.
 				candidate_changes_row_ids = true;
 			}
 			if (next_row_count != next_total_count) {
 				if (!state.can_change_row_ids) {
 					break;
 				}
-				// Condition 2 candidate: if this merge is selected, it includes a partially deleted row group. The
-				// vacuum task writes only committed rows, so surviving rows may be compacted into lower rowids.
+				// Condition 2 candidate: if this merge is selected, it includes a partially deleted row group, which
+				// may mean shifting row-ids (over-approximation).
 				candidate_changes_row_ids = true;
 			}
 			expected_row_start = next_segment->GetRowStart() + next_total_count;
