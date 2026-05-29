@@ -46,11 +46,12 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
                              const vector<JoinCondition> &conditions_p, vector<LogicalType> btypes, JoinType type_p,
                              const idx_t initial_radix_bits, const vector<idx_t> &output_columns_p,
                              unique_ptr<ResidualPredicateInfo> residual_p, optional_ptr<Expression> predicate_ptr,
-                             const vector<idx_t> &output_in_probe)
+                             const vector<idx_t> &output_in_probe, bool mark_nulls_are_false_p)
     : context(context_p), op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
-      vfound(Value::BOOLEAN(false), count_t(STANDARD_VECTOR_SIZE)), join_type(type_p), finalized(false),
-      has_null(false), residual_predicate(predicate_ptr), radix_bits(initial_radix_bits) {
+      vfound(Value::BOOLEAN(false), count_t(STANDARD_VECTOR_SIZE)), join_type(type_p),
+      mark_nulls_are_false(mark_nulls_are_false_p), finalized(false), has_null(false),
+      residual_predicate(predicate_ptr), radix_bits(initial_radix_bits) {
 	// store residual predicate information
 	residual_info = std::move(residual_p);
 	lhs_output_in_probe = output_in_probe;
@@ -82,6 +83,8 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	}
 	// at least one equality is necessary
 	D_ASSERT(!equality_types.empty());
+	mark_join_post_processor.Initialize(context, buffer_manager, join_type, mark_nulls_are_false, conditions.size(),
+	                                    equality_predicates, condition_types);
 
 	// Types for the layout
 	auto layout = make_shared_ptr<TupleDataLayout>();
@@ -140,6 +143,14 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 JoinHashTable::~JoinHashTable() {
 }
 
+bool JoinHashTable::UsesCorrelatedMarkCounts() const {
+	return mark_join_post_processor.UsesCorrelatedCounts();
+}
+
+void JoinHashTable::InitializeCorrelatedMarkJoin(const vector<LogicalType> &correlated_types) {
+	mark_join_post_processor.InitializeCorrelatedCounts(correlated_types);
+}
+
 void JoinHashTable::Merge(JoinHashTable &other) {
 	{
 		lock_guard<mutex> guard(data_lock);
@@ -147,13 +158,8 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 	}
 
 	if (join_type == JoinType::MARK) {
-		auto &info = correlated_mark_join_info;
-		lock_guard<mutex> mj_lock(info.mj_lock);
 		has_null = has_null || other.has_null;
-		if (!info.correlated_types.empty()) {
-			auto &other_info = other.correlated_mark_join_info;
-			info.correlated_counts->Combine(*other_info.correlated_counts);
-		}
+		mark_join_post_processor.Merge(other.mark_join_post_processor, has_null);
 	}
 
 	if (bloom_filter.IsInitialized() && other.bloom_filter.IsInitialized()) {
@@ -397,27 +403,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	if (keys.size() == 0) {
 		return;
 	}
-	// special case: correlated mark join
-	if (join_type == JoinType::MARK && !correlated_mark_join_info.correlated_types.empty()) {
-		auto &info = correlated_mark_join_info;
-		lock_guard<mutex> mj_lock(info.mj_lock);
-		// Correlated MARK join
-		// for the correlated mark join we need to keep track of COUNT(*) and COUNT(COLUMN) for each of the correlated
-		// columns push into the aggregate hash table
-		D_ASSERT(info.correlated_counts);
-		for (idx_t i = 0; i < info.correlated_types.size(); i++) {
-			info.group_chunk.data[i].Reference(keys.data[i]);
-		}
-		info.group_chunk.SetCardinality(keys);
-		if (info.correlated_payload.data.empty()) {
-			vector<LogicalType> types;
-			types.push_back(keys.data[info.correlated_types.size()].GetType());
-			info.correlated_payload.InitializeEmpty(types);
-		}
-		info.correlated_payload.data[0].Reference(keys.data[info.correlated_types.size()]);
-		info.correlated_payload.SetCardinality(keys);
-		info.correlated_counts->AddChunk(info.group_chunk, info.correlated_payload, AggregateType::NON_DISTINCT);
-	}
+	mark_join_post_processor.SinkBuildKeys(keys);
 
 	// build a chunk to append to the data collection [keys, payload, (optional "found" boolean), hash]
 	DataChunk source_chunk;
@@ -482,7 +468,7 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> 
 
 	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
 		// see internal issue 3717.
-		if (join_type == JoinType::MARK && !correlated_mark_join_info.correlated_types.empty()) {
+		if (UsesCorrelatedMarkCounts()) {
 			continue;
 		}
 		if (null_values_are_equal[col_idx]) {
@@ -920,6 +906,13 @@ void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleD
 		GetRowPointers(keys, key_state, probe_state, hashes, current_sel, scan_structure.count, scan_structure.pointers,
 		               scan_structure.sel_vector, scan_structure.has_null_value_filter);
 	}
+}
+
+void JoinHashTable::ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) {
+	D_ASSERT(join_type == JoinType::MARK);
+	D_ASSERT(result.ColumnCount() == probe_data.ColumnCount() + 1);
+	mark_join_post_processor.ConstructEmptyResult(join_keys, probe_data, result, lhs_output_in_probe,
+	                                              null_values_are_equal, has_null);
 }
 
 bool JoinHashTable::TryProbeDictionary(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
@@ -1618,51 +1611,8 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_da
 }
 
 void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) {
-	// extract OUTPUT columns from probe_data
-	result.SetCardinality(probe_data.size());
-	for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
-		idx_t probe_col_idx = ht.lhs_output_in_probe[i];
-		result.data[i].Reference(probe_data.data[probe_col_idx]);
-	}
-
-	auto &mark_vector = result.data.back();
-	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::SetSize(mark_vector, count_t(probe_data.size()));
-
-	// first we set the NULL values from the join keys
-	// if there is any NULL in the keys, the result is NULL
-	auto bool_result = FlatVector::GetDataMutable<bool>(mark_vector);
-	auto &mask = FlatVector::ValidityMutable(mark_vector);
-	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
-		if (ht.null_values_are_equal[col_idx]) {
-			continue;
-		}
-		UnifiedVectorFormat jdata;
-		join_keys.data[col_idx].ToUnifiedFormat(jdata);
-		if (jdata.validity.CanHaveNull()) {
-			for (idx_t i = 0; i < join_keys.size(); i++) {
-				auto jidx = jdata.sel->get_index(i);
-				if (!jdata.validity.RowIsValidUnsafe(jidx)) {
-					mask.SetInvalid(i);
-				}
-			}
-		}
-	}
-
-	// now set the remaining entries to either true or false based on whether a match was found
-	D_ASSERT(found_match);
-	for (idx_t i = 0; i < probe_data.size(); i++) {
-		bool_result[i] = found_match[i];
-	}
-
-	// if the right side contains NULL values, the result of any FALSE becomes NULL
-	if (ht.has_null) {
-		for (idx_t i = 0; i < probe_data.size(); i++) {
-			if (!bool_result[i]) {
-				mask.SetInvalid(i);
-			}
-		}
-	}
+	ht.mark_join_post_processor.ConstructResult(join_keys, probe_data, result, ht.lhs_output_in_probe,
+	                                            ht.null_values_are_equal, found_match.get(), ht.has_null);
 }
 
 void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result) {
@@ -1673,74 +1623,11 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 
 	ScanKeyMatches(keys, probe_data);
 
-	if (ht.correlated_mark_join_info.correlated_types.empty()) {
+	if (!ht.UsesCorrelatedMarkCounts()) {
 		ConstructMarkJoinResult(keys, probe_data, result);
 	} else {
-		auto &info = ht.correlated_mark_join_info;
-		lock_guard<mutex> mj_lock(info.mj_lock);
-
-		// there are correlated columns
-		// first we fetch the counts from the aggregate hashtable corresponding to these entries
-		D_ASSERT(keys.ColumnCount() == info.group_chunk.ColumnCount() + 1);
-		for (idx_t i = 0; i < info.group_chunk.ColumnCount(); i++) {
-			info.group_chunk.data[i].Reference(keys.data[i]);
-		}
-		info.group_chunk.SetCardinality(keys);
-		info.correlated_counts->FetchAggregates(info.group_chunk, info.result_chunk);
-
-		// extract OUTPUT columns from probe_data
-		result.SetCardinality(probe_data.size());
-		for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
-			idx_t probe_col_idx = ht.lhs_output_in_probe[i];
-			result.data[i].Reference(probe_data.data[probe_col_idx]);
-		}
-
-		// create the result matching vector
-		auto &last_key = keys.data.back();
-		auto &result_vector = result.data.back();
-		// first set the null mask based on whether there were NULL values in the join key
-		result_vector.SetVectorType(VectorType::FLAT_VECTOR);
-		auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
-		auto &mask = FlatVector::ValidityMutable(result_vector);
-
-		// Set null mask based on NULL values in join key
-		switch (last_key.GetVectorType()) {
-		case VectorType::CONSTANT_VECTOR:
-			if (ConstantVector::IsNull(last_key)) {
-				mask.SetAllInvalid(probe_data.size());
-			}
-			break;
-		case VectorType::FLAT_VECTOR:
-			mask.Copy(FlatVector::ValidityMutable(last_key), probe_data.size());
-			break;
-		default: {
-			UnifiedVectorFormat kdata;
-			last_key.ToUnifiedFormat(kdata);
-			for (idx_t i = 0; i < probe_data.size(); i++) {
-				auto kidx = kdata.sel->get_index(i);
-				mask.Set(i, kdata.validity.RowIsValid(kidx));
-			}
-			break;
-		}
-		}
-
-		auto count_star = FlatVector::GetData<int64_t>(info.result_chunk.data[0]);
-		auto count = FlatVector::GetData<int64_t>(info.result_chunk.data[1]);
-
-		// set the entries to either true or false based on whether a match was found
-		for (idx_t i = 0; i < probe_data.size(); i++) {
-			D_ASSERT(count_star[i] >= count[i]);
-			bool_result[i] = found_match ? found_match[i] : false;
-			if (!bool_result[i] && count_star[i] > count[i]) {
-				// RHS has NULL value and result is false: set to null
-				mask.SetInvalid(i);
-			}
-			if (count_star[i] == 0) {
-				// count == 0, set null mask to false (we know the result is false now)
-				mask.SetValid(i);
-			}
-		}
-		FlatVector::SetSize(result_vector, count_t(probe_data.size()));
+		ht.mark_join_post_processor.ConstructCorrelatedMarkResult(keys, probe_data, result, ht.lhs_output_in_probe,
+		                                                          found_match.get());
 	}
 	finished = true;
 }
@@ -2119,28 +2006,6 @@ void JoinHashTable::Reset() {
 	finalized = false;
 }
 
-static void ResetCorrelatedMarkJoinInfo(JoinHashTable &ht) {
-	auto &info = ht.correlated_mark_join_info;
-	if (info.correlated_types.empty()) {
-		return;
-	}
-	vector<AggregateObject> correlated_aggregates;
-	vector<LogicalType> payload_types;
-	correlated_aggregates.reserve(info.correlated_aggregates.size());
-	payload_types.reserve(info.correlated_aggregates.size());
-	for (auto &expr : info.correlated_aggregates) {
-		auto &aggr = expr->Cast<BoundAggregateExpression>();
-		correlated_aggregates.emplace_back(aggr);
-		payload_types.push_back(aggr.GetReturnType());
-	}
-	auto &allocator = BufferAllocator::Get(ht.context);
-	info.correlated_counts = make_uniq<GroupedAggregateHashTable>(ht.context, allocator, info.correlated_types,
-	                                                              payload_types, std::move(correlated_aggregates));
-	info.group_chunk.Reset();
-	info.correlated_payload.Reset();
-	info.result_chunk.Reset();
-}
-
 void JoinHashTable::ResetForNewIterationSinglePartition() {
 	data_collection->Reset();
 	// Always use a single partition (radix_bits=0) to avoid per-iteration overhead of resetting
@@ -2164,7 +2029,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	bloom_filter.Reset();
 	prefix_range_filter.reset();
 	should_build_prefix_range_filter = false;
-	ResetCorrelatedMarkJoinInfo(*this);
+	mark_join_post_processor.Reset();
 }
 
 bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {

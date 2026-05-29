@@ -1,0 +1,18 @@
+# name: test/sql/subquery/any_all/test_row_not_equal_any_null_semantics.test
+# description: Regression tests for row-valued <> ANY with NULLs in non-hash MARK joins
+# group: [any_all]
+
+query I
+SELECT (1, 2) <> ANY (SELECT * FROM (VALUES (1, NULL)) t(x, y))
+----
+false
+
+query I
+SELECT (1, 2) <> ANY (SELECT * FROM (VALUES (1, NULL), (1, 2)) t(x, y))
+----
+false
+
+query I
+SELECT (1, 2) <> ANY (SELECT * FROM (VALUES (NULL, 2)) t(x, y))
+----
+false
