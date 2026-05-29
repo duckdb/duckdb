@@ -16,3 +16,23 @@ query I
 SELECT i FROM integers ORDER BY i NULLS LAST LIMIT 1 OFFSET 122880;
 ----
 NULL
+
+statement ok
+CREATE TABLE t1 (id INT, col1 INT);
+
+statement ok
+INSERT INTO t1 SELECT i, i FROM generate_series(1000) s(i);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO t1 SELECT i + 2000, i + 2000 FROM generate_series(1000) s(i);
+
+statement ok
+DELETE FROM t1 WHERE id > 1500;
+
+query II
+SELECT * FROM t1 ORDER BY col1 DESC LIMIT 1;
+----
+1000	1000

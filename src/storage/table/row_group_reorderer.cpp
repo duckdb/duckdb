@@ -22,9 +22,14 @@ bool CompareValues(const Value &v1, const Value &v2, const OrderByStatistics ord
 	return (order == OrderByStatistics::MAX && v1 < v2) || (order == OrderByStatistics::MIN && v1 > v2);
 }
 
-idx_t GetQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats, const OrderByColumnType type) {
+idx_t GetQualifyingTupleCount(SegmentNode<RowGroup> &node, BaseStatistics &stats, const OrderByColumnType type) {
+	auto partition_stats = RowGroup::GetPartitionStats(node);
+	if (partition_stats.count_type == CountType::COUNT_APPROXIMATE) {
+		return 0;
+	}
+
 	if (!stats.CanHaveNull()) {
-		return row_group.count;
+		return partition_stats.count;
 	}
 
 	if (type == OrderByColumnType::NUMERIC) {
@@ -56,8 +61,7 @@ bool AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It i
 	idx_t qualifying_tuples = 0;
 	idx_t qualify_later = 0;
 
-	idx_t last_unresolved_row_group_sum =
-	    GetQualifyingTupleCount(it->second.row_group.get().GetNode(), *last_stats, column_type);
+	idx_t last_unresolved_row_group_sum = GetQualifyingTupleCount(it->second.row_group.get(), *last_stats, column_type);
 	for (; it != end; ++it) {
 		auto &current_key = it->first;
 		auto &row_group = it->second.row_group;
@@ -79,7 +83,7 @@ bool AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It i
 			// Row groups do not overlap: we can guarantee that the tuples qualify
 			qualifying_tuples = last_unresolved_row_group_sum;
 			++last_unresolved_entry;
-			auto &upcoming_row_group = last_unresolved_entry->second.row_group.get().GetNode();
+			auto &upcoming_row_group = last_unresolved_entry->second.row_group.get();
 			auto &upcoming_stats = *last_unresolved_entry->second.stats;
 
 			last_unresolved_row_group_sum += GetQualifyingTupleCount(upcoming_row_group, upcoming_stats, column_type);
