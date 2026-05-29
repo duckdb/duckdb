@@ -65,8 +65,15 @@ void OptimisticDataWriter::WriteNewRowGroup(OptimisticWriteCollection &row_group
 		return;
 	}
 
-	row_groups.unflushed_row_groups.insert(row_groups.complete_row_groups);
-	row_groups.complete_row_groups++;
+	// Mark every row group except the last one as complete (and thus flushable). In the normal append loop
+	// complete_row_groups lags the last index by exactly one, so this marks the single just-completed row group.
+	// The loop only diverges when we appended into an already-completed row group (e.g. indexed tables that ignore
+	// SUGGEST_NEW), which is the buggy case.
+	const auto row_group_count = row_groups.collection->GetRowGroupCount();
+	while (row_groups.complete_row_groups + 1 < row_group_count) {
+		row_groups.unflushed_row_groups.insert(row_groups.complete_row_groups);
+		row_groups.complete_row_groups++;
+	}
 	auto allocated_size = row_groups.collection->GetAllocationSize();
 	if (row_groups.prev_allocated_size > allocated_size) {
 		throw InternalException("Row group prev allocated size is larger than currently allocated size");
