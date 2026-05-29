@@ -1120,11 +1120,31 @@ overrides:
   RenameEntry: "pair<QualifiedColumnName, string>"
   # insert.gram
   OrAction: "OnConflictAction"
-  OnConflictTarget: "OnConflictExpressionTarget"
-  OnConflictExpressionTarget: "OnConflictExpressionTarget"
-  OnConflictIndexTarget: "OnConflictExpressionTarget"
-  InsertValues: "InsertValues"
+  InsertOrReplace: "OnConflictAction"
+  InsertOrIgnore: "OnConflictAction"
+  OnConflictTarget:
+    type: "OnConflictExpressionTarget"
+    by_value: true
+  OnConflictExpressionTarget:
+    type: "OnConflictExpressionTarget"
+    by_value: true
+  OnConflictIndexTarget:
+    type: "OnConflictExpressionTarget"
+    by_value: true
+  InsertValues:
+    type: "InsertValues"
+    by_value: true
+  SelectInsertValues:
+    type: "InsertValues"
+    by_value: true
+  DefaultValues:
+    type: "InsertValues"
+    by_value: true
   ByNameOrPosition: "InsertColumnOrder"
+  InsertByNameOrder: "InsertColumnOrder"
+  InsertByPositionOrder: "InsertColumnOrder"
+  InsertByName: "InsertColumnOrder"
+  InsertByPosition: "InsertColumnOrder"
   # load.gram
   FromSource: "ExtensionRepositoryInfo"
   FromSourceIdentifier: "ExtensionRepositoryInfo"
@@ -1260,7 +1280,6 @@ excluded_rules:
   - VariableAssign
   - ColLabel
   - GroupingOrGroupingId
-  - DefaultValues
   - RowOrRows
   - Recursive
   - StarSymbol

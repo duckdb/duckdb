@@ -1370,7 +1370,7 @@ def main():
         'explain.gram',
         'export.gram',
         # 'expression.gram',
-        # 'insert.gram',
+        'insert.gram',
         'load.gram',
         'merge_into.gram',
         # 'pivot.gram',

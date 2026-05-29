@@ -1231,8 +1231,12 @@ UpdateSetColumnTarget <- ColumnName DotIdentifier*
 
 InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
 
-OrAction <- 'OR' 'REPLACE' / 'IGNORE'
-ByNameOrPosition <- 'BY' InsertByName / InsertByPosition
+OrAction <- InsertOrReplace / InsertOrIgnore
+InsertOrReplace <- 'OR' 'REPLACE'
+InsertOrIgnore <- 'IGNORE'
+ByNameOrPosition <- InsertByNameOrder / InsertByPositionOrder
+InsertByNameOrder <- 'BY' InsertByName
+InsertByPositionOrder <- 'BY' InsertByPosition
 InsertByName <- 'NAME'
 InsertByPosition <- 'POSITION'
 
@@ -1242,7 +1246,8 @@ InsertAlias <- 'AS' Identifier
 ColumnList <- List(ColId)
 InsertColumnList <- Parens(ColumnList)
 
-InsertValues <- SelectStatementInternal / DefaultValues
+InsertValues <- SelectInsertValues / DefaultValues
+SelectInsertValues <- SelectStatementInternal
 DefaultValues <- 'DEFAULT' 'VALUES'
 
 OnConflictClause <- 'ON' 'CONFLICT' OnConflictTarget? OnConflictAction

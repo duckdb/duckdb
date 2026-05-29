@@ -466,26 +466,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformIgnoreOrRespectNulls);
 }
 
-void PEGTransformerFactory::RegisterInsert() {
-	// insert.gram
-	REGISTER_TRANSFORM(TransformInsertStatement);
-	REGISTER_TRANSFORM(TransformOrAction);
-	REGISTER_TRANSFORM(TransformInsertTarget);
-	REGISTER_TRANSFORM(TransformInsertAlias);
-	REGISTER_TRANSFORM(TransformOnConflictClause);
-	REGISTER_TRANSFORM(TransformOnConflictTarget);
-	REGISTER_TRANSFORM(TransformOnConflictExpressionTarget);
-	REGISTER_TRANSFORM(TransformOnConflictIndexTarget);
-	REGISTER_TRANSFORM(TransformOnConflictAction);
-	REGISTER_TRANSFORM(TransformOnConflictUpdate);
-	REGISTER_TRANSFORM(TransformOnConflictNothing);
-	REGISTER_TRANSFORM(TransformInsertValues);
-	REGISTER_TRANSFORM(TransformByNameOrPosition);
-	REGISTER_TRANSFORM(TransformInsertColumnList);
-	REGISTER_TRANSFORM(TransformColumnList);
-	REGISTER_TRANSFORM(TransformReturningClause);
-}
-
 void PEGTransformerFactory::RegisterConnect() {
 	// connect.gram — both rules are hand-written; the generator skips them because of the
 	// optional SessionTarget sub-rule.
@@ -708,9 +688,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("PlusPrefixOperator", "+");
 	RegisterEnum<string>("TildePrefixOperator", "~");
 
-	RegisterEnum<InsertColumnOrder>("InsertByName", InsertColumnOrder::INSERT_BY_NAME);
-	RegisterEnum<InsertColumnOrder>("InsertByPosition", InsertColumnOrder::INSERT_BY_POSITION);
-
 	RegisterEnum<OrderType>("DescendingOrder", OrderType::DESCENDING);
 	RegisterEnum<OrderType>("AscendingOrder", OrderType::ASCENDING);
 	RegisterEnum<OrderByNullType>("NullsFirst", OrderByNullType::NULLS_FIRST);
@@ -778,7 +755,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCreateMacro();
 	RegisterCreateTable();
 	RegisterExpression();
-	RegisterInsert();
 	RegisterConnect();
 	RegisterPivot();
 	RegisterSelect();
