@@ -636,6 +636,10 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 					                            provided_option);
 				}
 				auto &original_value = provided_entry.second[0];
+				if (original_value.IsNull()) {
+					throw BinderException("NULL is not supported as a valid option for COPY option \"%s\"",
+					                      provided_option);
+				}
 				if (copy_option.type == original_value.type()) {
 					// types match
 					continue;

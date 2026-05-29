@@ -535,7 +535,9 @@ TEST_CONFIGS := \
 	test/configs/variant_vector.json \
 	test/configs/compressed_in_memory.json \
 	test/configs/prefetch_all_storage.json \
-	test/configs/encryption.json
+	test/configs/encryption.json \
+	test/configs/v1_storage.json \
+	test/configs/v1_storage_block_size_16kB.json
 
 test_configs:
 	$(PYTHON) scripts/ci/run_tests.py $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg)) ./build/release/$(UNITTEST_BINARY)
