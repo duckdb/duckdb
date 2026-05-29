@@ -1,13 +1,21 @@
-CopyStatement <- 'COPY' (CopyTable / CopySelect / CopyFromDatabase)
+CopyStatement <- 'COPY' CopyVariations
+CopyVariations <- CopyTable / CopySelect / CopyFromDatabase
 
 CopyTable <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyOptions?
-FromOrTo <- 'FROM' / 'TO'
+FromOrTo <- CopyFrom / CopyTo
+CopyFrom <- 'FROM'
+CopyTo <- 'TO'
 
 CopySelect <- Parens(SelectStatementInternal) 'TO' CopyFileName CopyOptions?
 
-CopyFileName <- Parameter / ParensExpression / StringLiteral / Identifier / IdentifierColId
+CopyFileName <- CopyFileNameExpression / CopyFileNameStringLiteral / CopyFileNameIdentifier / CopyFileNameIdentifierColId
+CopyFileNameExpression <- Parameter / ParensExpression
+CopyFileNameStringLiteral <- StringLiteral
+CopyFileNameIdentifier <- Identifier
+CopyFileNameIdentifierColId <- IdentifierColId
 IdentifierColId <- Identifier '.' ColId
-CopyOptions <- 'WITH'? GenericCopyOptionList / SpecializedOptionList
+CopyOptions <- 'WITH'? CopyOptionList
+CopyOptionList <- GenericCopyOptionList / SpecializedOptionList
 SpecializedOptionList <- SpecializedOption*
 SpecializedOption <- SingleOption / NullAsOption / DelimiterAsOption / EscapeAsOption /
 	EncodingOption / QuoteAsOption / ForceQuoteOption / PartitionByOption / ForceNullOption
@@ -23,17 +31,24 @@ DelimiterAsOption <- 'DELIMITER' 'AS'? StringLiteral
 QuoteAsOption <- 'QUOTE' 'AS'? StringLiteral
 EscapeAsOption <- 'ESCAPE' 'AS'? StringLiteral
 EncodingOption <- 'ENCODING' StringLiteral
-ForceQuoteOption <- 'FORCE'? 'QUOTE' (StarSymbol / ColumnList)
-PartitionByOption <- 'PARTITION' 'BY' (StarSymbol / ColumnList)
-ForceNullOption <- 'FORCE' 'NOT'? 'NULL' ColumnList
+ForceQuoteOption <- ForceQuote? 'QUOTE' StarSymbolColumnList
+StarSymbolColumnList <- StarSymbol / ColumnList
+ForceQuote <- 'FORCE'
+PartitionByOption <- 'PARTITION' 'BY' StarSymbolColumnList
+ForceNullOption <- 'FORCE' ForceNotNull? 'NULL' ColumnList
+ForceNotNull <- 'NOT'
 StarSymbol <- '*'
 
 GenericCopyOptionList <- Parens(List(GenericCopyOption))
 GenericCopyOption <- CopyOptionName GenericCopyOptionValue?
-GenericCopyOptionValue <- GenericCopyOptionParenthesizedExpressionList / Expression
+GenericCopyOptionValue <- GenericCopyOptionOrderList / GenericCopyOptionExpression
+GenericCopyOptionOrderList <- GenericCopyOptionParenthesizedExpressionList
+GenericCopyOptionExpression <- Expression
 GenericCopyOptionParenthesizedExpressionList <- Parens(OrderByExpressionList)
 
-CopyFromDatabase <- 'FROM' 'DATABASE' ColId 'TO' ColId CopyDatabaseFlag?
+CopyFromDatabase <- CopyFromDatabaseWithFlag / CopyFromDatabaseWithoutFlag
+CopyFromDatabaseWithFlag <- 'FROM' 'DATABASE' ColId 'TO' ColId CopyDatabaseFlag
+CopyFromDatabaseWithoutFlag <- 'FROM' 'DATABASE' ColId 'TO' ColId
 
 CopyDatabaseFlag <- Parens(SchemaOrData)
 SchemaOrData <- CopySchema / CopyData

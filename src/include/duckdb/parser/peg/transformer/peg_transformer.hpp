@@ -15,6 +15,7 @@
 #include "duckdb/parser/peg/ast/extension_repository_info.hpp"
 #include "duckdb/parser/peg/ast/generated_column_definition.hpp"
 #include "duckdb/parser/peg/ast/generic_copy_option.hpp"
+#include "duckdb/parser/peg/ast/generic_copy_option_value.hpp"
 #include "duckdb/parser/peg/ast/insert_values.hpp"
 #include "duckdb/parser/peg/ast/create_pivot_entry.hpp"
 #include "duckdb/parser/peg/ast/join_prefix.hpp"
@@ -263,7 +264,6 @@ public:
 	// Registration methods
 	void RegisterComment();
 	void RegisterCommon();
-	void RegisterCopy();
 	void RegisterCreateMacro();
 	void RegisterCreateTable();
 	void RegisterExpression();
@@ -304,8 +304,6 @@ private:
 	// connect.gram — both rules have optional sub-clauses, so the generator skips them and we
 	// hand-write the (PEGTransformer&, ParseResult&) entry points.
 	static unique_ptr<SQLStatement> TransformConnectStatement(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<OrderByNode> TransformGenericCopyOptionParenthesizedExpressionList(PEGTransformer &transformer,
-	                                                                                 ParseResult &parse_result);
 	// comment.gram
 	static Value TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result);
 
@@ -349,33 +347,7 @@ private:
 	static DatePartSpecifier TransformIntervalToInterval(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformSetofType(PEGTransformer &transformer, ParseResult &parse_result);
 
-	// copy.gram
-	static unique_ptr<SQLStatement> TransformCopyStatement(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<SQLStatement> TransformCopySelect(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<SQLStatement> TransformCopyFromDatabase(PEGTransformer &transformer, ParseResult &parse_result);
-	static CopyDatabaseType TransformCopyDatabaseFlag(PEGTransformer &transformer, ParseResult &parse_result);
 	static string ExtractFormat(const string &file_path);
-	static unique_ptr<SQLStatement> TransformCopyTable(PEGTransformer &transformer, ParseResult &parse_result);
-	static bool TransformFromOrTo(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformCopyFileName(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformIdentifierColId(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<GenericCopyOption> TransformCopyOptions(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<GenericCopyOption> TransformSpecializedOptionList(PEGTransformer &transformer,
-	                                                                ParseResult &parse_result);
-	static GenericCopyOption TransformSpecializedOption(PEGTransformer &transformer, ParseResult &parse_result);
-	static GenericCopyOption TransformSingleOption(PEGTransformer &transformer, ParseResult &parse_result);
-	static GenericCopyOption TransformEncodingOption(PEGTransformer &transformer, ParseResult &parse_result);
-	static GenericCopyOption TransformForceQuoteOption(PEGTransformer &transformer, ParseResult &parse_result);
-	static GenericCopyOption TransformQuoteAsOption(PEGTransformer &transformer, ParseResult &parse_result);
-	static GenericCopyOption TransformForceNullOption(PEGTransformer &transformer, ParseResult &parse_result);
-	static GenericCopyOption TransformPartitionByOption(PEGTransformer &transformer, ParseResult &parse_result);
-	static GenericCopyOption TransformNullAsOption(PEGTransformer &transformer, ParseResult &parse_result);
-	static GenericCopyOption TransformDelimiterAsOption(PEGTransformer &transformer, ParseResult &parse_result);
-	static GenericCopyOption TransformEscapeAsOption(PEGTransformer &transformer, ParseResult &parse_result);
-	static CopyDatabaseType TransformSchemaOrData(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<GenericCopyOption> TransformGenericCopyOptionList(PEGTransformer &transformer,
-	                                                                ParseResult &parse_result);
-	static GenericCopyOption TransformGenericCopyOption(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// create_table.gram
 	static unique_ptr<SQLStatement> TransformCreateStatement(PEGTransformer &transformer, ParseResult &parse_result);
@@ -1138,6 +1110,164 @@ private:
 	static unique_ptr<TransformResultValue> TransformDisconnectStatementInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformDisconnectStatement(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCopyStatementInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformCopyStatement(PEGTransformer &transformer,
+	                                                       unique_ptr<SQLStatement> copy_variations);
+	static unique_ptr<TransformResultValue> TransformCopyVariationsInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCopyTableInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformCopyTable(PEGTransformer &transformer,
+	                                                   unique_ptr<BaseTableRef> base_table_name,
+	                                                   const vector<string> &insert_column_list, const bool &from_or_to,
+	                                                   unique_ptr<ParsedExpression> copy_file_name,
+	                                                   const vector<GenericCopyOption> &copy_options);
+	static unique_ptr<TransformResultValue> TransformFromOrToInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCopyFromInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static bool TransformCopyFrom(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCopyToInternal(PEGTransformer &transformer,
+	                                                                ParseResult &parse_result);
+	static bool TransformCopyTo(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCopySelectInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformCopySelect(PEGTransformer &transformer,
+	                                                    unique_ptr<SelectStatement> select_statement_internal,
+	                                                    unique_ptr<ParsedExpression> copy_file_name,
+	                                                    const vector<GenericCopyOption> &copy_options);
+	static unique_ptr<TransformResultValue> TransformCopyFileNameInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCopyFileNameExpressionInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCopyFileNameStringLiteralInternal(PEGTransformer &transformer,
+	                                                                                   ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformCopyFileNameStringLiteral(PEGTransformer &transformer,
+	                                                                       const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformCopyFileNameIdentifierInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformCopyFileNameIdentifier(PEGTransformer &transformer,
+	                                                                    const string &identifier);
+	static unique_ptr<TransformResultValue> TransformCopyFileNameIdentifierColIdInternal(PEGTransformer &transformer,
+	                                                                                     ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformCopyFileNameIdentifierColId(PEGTransformer &transformer,
+	                                                                         const string &identifier_col_id);
+	static unique_ptr<TransformResultValue> TransformIdentifierColIdInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static string TransformIdentifierColId(PEGTransformer &transformer, const string &identifier, const string &col_id);
+	static unique_ptr<TransformResultValue> TransformCopyOptionsInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static vector<GenericCopyOption> TransformCopyOptions(PEGTransformer &transformer,
+	                                                      const vector<GenericCopyOption> &copy_option_list);
+	static unique_ptr<TransformResultValue> TransformCopyOptionListInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformSpecializedOptionListInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static vector<GenericCopyOption>
+	TransformSpecializedOptionList(PEGTransformer &transformer, const vector<GenericCopyOption> &specialized_option);
+	static unique_ptr<TransformResultValue> TransformSpecializedOptionInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformSingleOptionInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformBinaryOptionInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static GenericCopyOption TransformBinaryOption(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformFreezeOptionInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static GenericCopyOption TransformFreezeOption(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformOidsOptionInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static GenericCopyOption TransformOidsOption(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCsvOptionInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static GenericCopyOption TransformCsvOption(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformHeaderOptionInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static GenericCopyOption TransformHeaderOption(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformNullAsOptionInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static GenericCopyOption TransformNullAsOption(PEGTransformer &transformer, const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformDelimiterAsOptionInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static GenericCopyOption TransformDelimiterAsOption(PEGTransformer &transformer, const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformQuoteAsOptionInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static GenericCopyOption TransformQuoteAsOption(PEGTransformer &transformer, const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformEscapeAsOptionInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static GenericCopyOption TransformEscapeAsOption(PEGTransformer &transformer, const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformEncodingOptionInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static GenericCopyOption TransformEncodingOption(PEGTransformer &transformer, const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformForceQuoteOptionInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static GenericCopyOption TransformForceQuoteOption(PEGTransformer &transformer, const bool &force_quote,
+	                                                   const vector<string> &star_symbol_column_list);
+	static unique_ptr<TransformResultValue> TransformStarSymbolColumnListInternal(PEGTransformer &transformer,
+	                                                                              ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformForceQuoteInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static bool TransformForceQuote(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformPartitionByOptionInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static GenericCopyOption TransformPartitionByOption(PEGTransformer &transformer,
+	                                                    const vector<string> &star_symbol_column_list);
+	static unique_ptr<TransformResultValue> TransformForceNullOptionInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static GenericCopyOption TransformForceNullOption(PEGTransformer &transformer, const bool &force_not_null,
+	                                                  const vector<string> &column_list);
+	static unique_ptr<TransformResultValue> TransformForceNotNullInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static bool TransformForceNotNull(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformGenericCopyOptionListInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static vector<GenericCopyOption>
+	TransformGenericCopyOptionList(PEGTransformer &transformer, const vector<GenericCopyOption> &generic_copy_option);
+	static unique_ptr<TransformResultValue> TransformGenericCopyOptionInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static GenericCopyOption TransformGenericCopyOption(PEGTransformer &transformer, const string &copy_option_name,
+	                                                    GenericCopyOptionValue generic_copy_option_value);
+	static unique_ptr<TransformResultValue> TransformGenericCopyOptionValueInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformGenericCopyOptionOrderListInternal(PEGTransformer &transformer,
+	                                                                                    ParseResult &parse_result);
+	static GenericCopyOptionValue
+	TransformGenericCopyOptionOrderList(PEGTransformer &transformer,
+	                                    vector<OrderByNode> generic_copy_option_parenthesized_expression_list);
+	static unique_ptr<TransformResultValue> TransformGenericCopyOptionExpressionInternal(PEGTransformer &transformer,
+	                                                                                     ParseResult &parse_result);
+	static GenericCopyOptionValue TransformGenericCopyOptionExpression(PEGTransformer &transformer,
+	                                                                   unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue>
+	TransformGenericCopyOptionParenthesizedExpressionListInternal(PEGTransformer &transformer,
+	                                                              ParseResult &parse_result);
+	static vector<OrderByNode>
+	TransformGenericCopyOptionParenthesizedExpressionList(PEGTransformer &transformer,
+	                                                      vector<OrderByNode> order_by_expression_list);
+	static unique_ptr<TransformResultValue> TransformCopyFromDatabaseInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCopyFromDatabaseWithFlagInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformCopyFromDatabaseWithFlag(PEGTransformer &transformer, const string &col_id,
+	                                                                  const string &col_id_1,
+	                                                                  const CopyDatabaseType &copy_database_flag);
+	static unique_ptr<TransformResultValue> TransformCopyFromDatabaseWithoutFlagInternal(PEGTransformer &transformer,
+	                                                                                     ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformCopyFromDatabaseWithoutFlag(PEGTransformer &transformer,
+	                                                                     const string &col_id, const string &col_id_1);
+	static unique_ptr<TransformResultValue> TransformCopyDatabaseFlagInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static CopyDatabaseType TransformCopyDatabaseFlag(PEGTransformer &transformer,
+	                                                  const CopyDatabaseType &schema_or_data);
+	static unique_ptr<TransformResultValue> TransformSchemaOrDataInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCopySchemaInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static CopyDatabaseType TransformCopySchema(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCopyDataInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static CopyDatabaseType TransformCopyData(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformCreateIndexStmtInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<CreateStatement> TransformCreateIndexStmt(

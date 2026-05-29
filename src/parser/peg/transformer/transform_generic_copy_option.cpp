@@ -8,16 +8,10 @@
 
 namespace duckdb {
 
-vector<GenericCopyOption> PEGTransformerFactory::TransformGenericCopyOptionList(PEGTransformer &transformer,
-                                                                                ParseResult &parse_result) {
-	vector<GenericCopyOption> result;
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	auto option_list = ExtractParseResultsFromList(extract_parens);
-	for (auto &option : option_list) {
-		result.push_back(transformer.Transform<GenericCopyOption>(option));
-	}
-	return result;
+vector<GenericCopyOption>
+PEGTransformerFactory::TransformGenericCopyOptionList(PEGTransformer &transformer,
+                                                      const vector<GenericCopyOption> &generic_copy_option) {
+	return generic_copy_option;
 }
 
 static void SetGenericCopyOptionExpression(GenericCopyOption &copy_option, unique_ptr<ParsedExpression> expression) {
@@ -84,19 +78,16 @@ static unique_ptr<ParsedExpression> CreateExpressionRowFunction(vector<OrderByNo
 }
 
 GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer,
-                                                                    ParseResult &parse_result) {
+                                                                    const string &copy_option_name,
+                                                                    GenericCopyOptionValue generic_copy_option_value) {
 	GenericCopyOption copy_option;
-
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	copy_option.name = StringUtil::Lower(list_pr.Child<IdentifierParseResult>(0).identifier);
-	auto &option_value = list_pr.Child<OptionalParseResult>(1);
-	if (!option_value.HasResult()) {
+	copy_option.name = StringUtil::Lower(copy_option_name);
+	if (!generic_copy_option_value.has_value) {
 		return copy_option;
 	}
 
-	auto &value_choice = option_value.GetResult().Cast<ListParseResult>().Child<ChoiceParseResult>(0).GetResult();
-	if (value_choice.name == "GenericCopyOptionParenthesizedExpressionList") {
-		auto orders = transformer.Transform<vector<OrderByNode>>(value_choice);
+	if (generic_copy_option_value.is_order_list) {
+		auto &orders = generic_copy_option_value.order_list;
 		bool has_order_modifier = false;
 		for (auto &order : orders) {
 			if (order.type != OrderType::ORDER_DEFAULT || order.null_order != OrderByNullType::ORDER_DEFAULT) {
@@ -112,21 +103,35 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 		} else if (orders.size() == 1) {
 			SetGenericCopyOptionExpression(copy_option, std::move(orders[0].expression));
 		} else {
-			copy_option.expression = CreateExpressionRowFunction(orders);
+			copy_option.expression = CreateExpressionRowFunction(generic_copy_option_value.order_list);
 		}
 	} else {
-		auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(value_choice);
-		SetGenericCopyOptionExpression(copy_option, std::move(expression));
+		SetGenericCopyOptionExpression(copy_option, std::move(generic_copy_option_value.expression));
 	}
 	return copy_option;
 }
 
-vector<OrderByNode>
-PEGTransformerFactory::TransformGenericCopyOptionParenthesizedExpressionList(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	return transformer.Transform<vector<OrderByNode>>(extract_parens);
+GenericCopyOptionValue PEGTransformerFactory::TransformGenericCopyOptionOrderList(
+    PEGTransformer &transformer, vector<OrderByNode> generic_copy_option_parenthesized_expression_list) {
+	GenericCopyOptionValue result;
+	result.has_value = true;
+	result.is_order_list = true;
+	result.order_list = std::move(generic_copy_option_parenthesized_expression_list);
+	return result;
+}
+
+GenericCopyOptionValue
+PEGTransformerFactory::TransformGenericCopyOptionExpression(PEGTransformer &transformer,
+                                                            unique_ptr<ParsedExpression> expression) {
+	GenericCopyOptionValue result;
+	result.has_value = true;
+	result.expression = std::move(expression);
+	return result;
+}
+
+vector<OrderByNode> PEGTransformerFactory::TransformGenericCopyOptionParenthesizedExpressionList(
+    PEGTransformer &transformer, vector<OrderByNode> order_by_expression_list) {
+	return order_by_expression_list;
 }
 
 } // namespace duckdb

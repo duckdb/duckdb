@@ -190,34 +190,6 @@ void PEGTransformerFactory::RegisterCommon() {
 	Register("DecType", &TransformDecimalType);
 }
 
-void PEGTransformerFactory::RegisterCopy() {
-	// copy.gram
-	REGISTER_TRANSFORM(TransformCopyStatement);
-	REGISTER_TRANSFORM(TransformCopySelect);
-	REGISTER_TRANSFORM(TransformCopyFromDatabase);
-	REGISTER_TRANSFORM(TransformCopyDatabaseFlag);
-	REGISTER_TRANSFORM(TransformCopyTable);
-	REGISTER_TRANSFORM(TransformFromOrTo);
-	REGISTER_TRANSFORM(TransformCopyFileName);
-	REGISTER_TRANSFORM(TransformIdentifierColId);
-	REGISTER_TRANSFORM(TransformCopyOptions);
-	REGISTER_TRANSFORM(TransformSpecializedOptionList);
-	REGISTER_TRANSFORM(TransformSpecializedOption);
-	REGISTER_TRANSFORM(TransformSingleOption);
-	REGISTER_TRANSFORM(TransformEncodingOption);
-	REGISTER_TRANSFORM(TransformForceQuoteOption);
-	REGISTER_TRANSFORM(TransformQuoteAsOption);
-	REGISTER_TRANSFORM(TransformForceNullOption);
-	REGISTER_TRANSFORM(TransformPartitionByOption);
-	REGISTER_TRANSFORM(TransformNullAsOption);
-	REGISTER_TRANSFORM(TransformDelimiterAsOption);
-	REGISTER_TRANSFORM(TransformEscapeAsOption);
-	REGISTER_TRANSFORM(TransformSchemaOrData);
-	REGISTER_TRANSFORM(TransformGenericCopyOptionList);
-	REGISTER_TRANSFORM(TransformGenericCopyOption);
-	REGISTER_TRANSFORM(TransformGenericCopyOptionParenthesizedExpressionList);
-}
-
 void PEGTransformerFactory::RegisterCreateMacro() {
 	// create_macro.gram
 }
@@ -650,9 +622,6 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 }
 
 void PEGTransformerFactory::RegisterEnums() {
-	RegisterEnum<CopyDatabaseType>("CopySchema", CopyDatabaseType::COPY_SCHEMA);
-	RegisterEnum<CopyDatabaseType>("CopyData", CopyDatabaseType::COPY_DATA);
-
 	RegisterEnum<string>("IntType", LogicalTypeIdToString(LogicalTypeId::INTEGER));
 	RegisterEnum<string>("IntegerType", LogicalTypeIdToString(LogicalTypeId::INTEGER));
 	RegisterEnum<string>("SmallintType", LogicalTypeIdToString(LogicalTypeId::SMALLINT));
@@ -729,12 +698,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<WindowExcludeMode>("ExcludeTies", WindowExcludeMode::TIES);
 	RegisterEnum<WindowExcludeMode>("ExcludeNoOthers", WindowExcludeMode::NO_OTHER);
 
-	RegisterEnum<GenericCopyOption>("BinaryOption", GenericCopyOption("format", Value("binary")));
-	RegisterEnum<GenericCopyOption>("FreezeOption", GenericCopyOption("freeze", Value()));
-	RegisterEnum<GenericCopyOption>("OidsOption", GenericCopyOption("oids", Value()));
-	RegisterEnum<GenericCopyOption>("CsvOption", GenericCopyOption("format", Value("csv")));
-	RegisterEnum<GenericCopyOption>("HeaderOption", GenericCopyOption("header", Value(true)));
-
 	RegisterEnum<bool>("SamplePercentage", true);
 	RegisterEnum<bool>("SampleRows", false);
 
@@ -753,7 +716,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformStatement);
 	RegisterComment();
 	RegisterCommon();
-	RegisterCopy();
 	RegisterCreateMacro();
 	RegisterCreateTable();
 	RegisterExpression();

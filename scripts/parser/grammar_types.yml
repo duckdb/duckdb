@@ -59,8 +59,11 @@ SQLStatement:
     - CommentStatement
     - ConnectStatement
     - CopyStatement
+    - CopyVariations
     - CopySelect
     - CopyFromDatabase
+    - CopyFromDatabaseWithFlag
+    - CopyFromDatabaseWithoutFlag
     - CopyTable
     - CreateStatement
     - DeallocateStatement
@@ -470,6 +473,10 @@ Expression:
     - DecType
     - NumericModType
     - CopyFileName
+    - CopyFileNameExpression
+    - CopyFileNameStringLiteral
+    - CopyFileNameIdentifier
+    - CopyFileNameIdentifierColId
     - DatabasePath
     - UsingExpression
     - IndexElement
@@ -580,6 +587,7 @@ OrderByNodeList:
     - OrderByExpressionList
     - OrderByAll
     - WithinGroupClause
+    - GenericCopyOptionParenthesizedExpressionList
 
 MacroParameterList:
   type: "vector<MacroParameter>"
@@ -598,6 +606,7 @@ StringList:
     - DottedIdentifier
     - ColumnAliases
     - TriggerColumnList
+    - StarSymbolColumnList
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
@@ -606,6 +615,7 @@ GenericCopyOptionList:
     - AttachOptions
     - GenericCopyOptionList
     - CopyOptions
+    - CopyOptionList
     - SpecializedOptionList
     - ExplainOptionList
 
@@ -748,6 +758,7 @@ GenericCopyOption:
   type: "GenericCopyOption"
   by_value: false
   rules:
+    - GenericCopyOption
     - SpecializedOption
     - SingleOption
     - EncodingOption
@@ -759,6 +770,14 @@ GenericCopyOption:
     - DelimiterAsOption
     - EscapeAsOption
     - ExplainOption
+
+GenericCopyOptionValue:
+  type: "GenericCopyOptionValue"
+  by_value: true
+  rules:
+    - GenericCopyOptionValue
+    - GenericCopyOptionOrderList
+    - GenericCopyOptionExpression
 
 MacroParameter:
   type: "MacroParameter"
@@ -899,6 +918,7 @@ String:
     - SetNullability
     - MinValue
     - MaxValue
+    - IdentifierColId
 
 Bool:
   type: "bool"
@@ -940,6 +960,10 @@ Bool:
     - WithOids
     - WithoutOids
     - UniqueIndex
+    - CopyFrom
+    - CopyTo
+    - ForceQuote
+    - ForceNotNull
 
 
 Int64:
@@ -1099,6 +1123,15 @@ overrides:
   DescribeRule: "ShowType"
   DescribeLongRule: "ShowType"
   DescRule: "ShowType"
+  # copy.gram
+  CopySchema: "CopyDatabaseType"
+  CopyData: "CopyDatabaseType"
+  BinaryOption: "GenericCopyOption"
+  FreezeOption: "GenericCopyOption"
+  OidsOption: "GenericCopyOption"
+  CsvOption: "GenericCopyOption"
+  HeaderOption: "GenericCopyOption"
+
   # expression.gram
   ComparisonOperator: "ExpressionType"
   IsDistinctFromOp: "ExpressionType"

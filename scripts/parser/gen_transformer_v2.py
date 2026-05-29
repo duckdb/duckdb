@@ -219,11 +219,11 @@ def to_snake_case(name):
 
 
 def manual_body_exists(gram_stem, rule_name):
-    cpp_path = transformer_dir / f"transform_{gram_stem}.cpp"
-    if not cpp_path.exists():
-        return False
-    text = cpp_path.read_text()
-    return re.search(rf'\bPEGTransformerFactory::Transform{re.escape(rule_name)}\s*\(', text) is not None
+    pattern = re.compile(rf'\bPEGTransformerFactory::Transform{re.escape(rule_name)}\s*\(')
+    preferred_path = transformer_dir / f"transform_{gram_stem}.cpp"
+    paths = [preferred_path] if preferred_path.exists() else []
+    paths.extend(path for path in transformer_dir.glob("transform_*.cpp") if path != preferred_path)
+    return any(pattern.search(path.read_text()) for path in paths)
 
 
 def generate_internal_declaration(rule_name):
@@ -1196,34 +1196,38 @@ def _norm_ws(s):
 
 
 def _check_implementations(gram_stem, body_stubs):
-    """Check which body stubs are implemented in transform_{gram_stem}.cpp.
+    """Check which body stubs are implemented in any transform_*.cpp file.
 
     Compares from PEGTransformerFactory:: onwards (normalized whitespace) so that return types
     split across lines and multi-line param lists are handled correctly.
 
     Returns (implemented, mismatched):
       implemented: set of rule_names whose signature exactly matches the stub
-      mismatched:  set of rule_names that exist in the file but with a different signature
+      mismatched:  set of rule_names that exist but only with a different signature
     """
-    cpp_path = transformer_dir / f"transform_{gram_stem}.cpp"
-    if not cpp_path.exists():
-        return set(), set()
-    text = cpp_path.read_text()
+    preferred_path = transformer_dir / f"transform_{gram_stem}.cpp"
+    paths = [preferred_path] if preferred_path.exists() else []
+    paths.extend(path for path in transformer_dir.glob("transform_*.cpp") if path != preferred_path)
     prefix = 'PEGTransformerFactory::'
     implemented = set()
     mismatched = set()
     for rule_name, stub_cpp in body_stubs:
-        actual = _extract_func_signature(text, f'Transform{rule_name}')
-        if actual is None:
-            continue
         first_line = stub_cpp.split('\n')[0]
         expected = _norm_ws(first_line.rstrip('{').rstrip())
-        actual = _norm_ws(actual)
         expected_norm = expected[expected.find(prefix) :] if prefix in expected else expected
-        actual_norm = actual[actual.find(prefix) :] if prefix in actual else actual
-        if expected_norm == actual_norm:
-            implemented.add(rule_name)
-        else:
+        found_mismatch = False
+        for path in paths:
+            actual = _extract_func_signature(path.read_text(), f'Transform{rule_name}')
+            if actual is None:
+                continue
+            actual = _norm_ws(actual)
+            actual_norm = actual[actual.find(prefix) :] if prefix in actual else actual
+            if expected_norm == actual_norm:
+                implemented.add(rule_name)
+                found_mismatch = False
+                break
+            found_mismatch = True
+        if found_mismatch and rule_name not in implemented:
             mismatched.add(rule_name)
     return implemented, mismatched
 
@@ -1351,7 +1355,7 @@ def main():
         'comment.gram',
         # 'common.gram',
         'connect.gram',
-        # 'copy.gram',
+        'copy.gram',
         'create_index.gram',
         'create_macro.gram',
         'create_schema.gram',
