@@ -51,7 +51,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 			order_matters = true;
 		}
 		auto partition_info = sink->RequiredPartitionInfo();
-		if (partition_info.batch_index) {
+		if (partition_info.batch_index && !force_parallel_union_all) {
 			order_matters = true;
 		}
 		if (!sink->ParallelSink()) {
@@ -81,9 +81,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 		if (order_matters || can_saturate_threads) {
 			// we add dependencies if order matters: union_pipeline comes after all pipelines created by building
 			// current
-			if (sink->SinkOrderDependent()) {
-				dependencies = meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false);
-			}
+			dependencies = meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false);
 			// we also add dependencies if the LHS child can saturate all available threads
 			// in that case, we recursively make all RHS children depend on the LHS.
 			// This prevents breadth-first plan evaluation
