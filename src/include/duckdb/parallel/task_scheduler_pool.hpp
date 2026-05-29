@@ -17,6 +17,7 @@ namespace duckdb {
 
 class TaskScheduler;
 class DatabaseInstance;
+struct LightWeightSemaphoreWrapper;
 struct QueueProducerToken;
 struct TaskSchedulerThread;
 
@@ -29,6 +30,11 @@ public:
 	void SetThreads(idx_t n);
 	int32_t NumberOfThreads();
 	void RelaunchThreads(TaskScheduler &scheduler, bool destroy);
+	void Signal(idx_t n);
+#ifndef DUCKDB_NO_THREADS
+	void Wait();
+	bool Wait(int64_t timeout_usecs);
+#endif
 
 private:
 	DatabaseInstance &db;
@@ -42,6 +48,10 @@ private:
 	atomic<int32_t> requested_thread_count;
 	//! The amount of threads currently running
 	atomic<int32_t> current_thread_count;
+#ifndef DUCKDB_NO_THREADS
+	//! Semaphore to signal threads in this pool to wake up and execute a task
+	unique_ptr<LightWeightSemaphoreWrapper> semaphore;
+#endif
 };
 
 }; // namespace duckdb

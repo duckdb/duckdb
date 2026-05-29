@@ -108,7 +108,7 @@ private:
 	TaskSchedulerQueue *queue;
 };
 
-TaskSchedulerQueue::TaskSchedulerQueue(TaskSchedulerPoolType pool_type_p) : pool_type(pool_type_p) {
+TaskSchedulerQueue::TaskSchedulerQueue(TaskSchedulerType pool_type_p) : pool_type(pool_type_p) {
 }
 
 void TaskSchedulerQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {

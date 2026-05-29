@@ -11,7 +11,6 @@
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
 #include "duckdb/common/thread.hpp"
-#include "lightweightsemaphore.h"
 
 #include <thread>
 #endif
@@ -28,22 +27,11 @@
 
 namespace duckdb {
 
-#ifndef DUCKDB_NO_THREADS
-typedef duckdb_moodycamel::LightweightSemaphore lightweight_semaphore_t;
-
-struct LightWeightSemaphoreWrapper {
-	lightweight_semaphore_t s;
-};
-#endif
-
 TaskScheduler::TaskScheduler(DatabaseInstance &db) : db(db) {
 	for (uint8_t i = 0; i < TASK_SCHEDULER_TYPE_COUNT; i++) {
 		pools[i] = make_uniq<TaskSchedulerPool>(db, static_cast<TaskSchedulerType>(i));
 		queues[i] = make_uniq<TaskSchedulerQueue>(static_cast<TaskSchedulerType>(i));
 	}
-#ifndef DUCKDB_NO_THREADS
-	semaphore = make_uniq<LightWeightSemaphoreWrapper>();
-#endif
 }
 
 TaskScheduler::~TaskScheduler() {
@@ -101,13 +89,13 @@ void TaskScheduler::SetThreadsInternal(TaskSchedulerType pool_type, idx_t n) {
 
 void TaskScheduler::ScheduleTask(ProducerToken &token, shared_ptr<Task> task, TaskSchedulerType pool_type) {
 	GetQueue(pool_type).Enqueue(token, std::move(task));
-	Signal(1);
+	SignalForTaskType(pool_type, 1);
 }
 
 void TaskScheduler::ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks,
                                   TaskSchedulerType pool_type) {
 	GetQueue(pool_type).EnqueueBulk(producer, tasks);
-	Signal(tasks.size());
+	SignalForTaskType(pool_type, tasks.size());
 }
 
 bool TaskScheduler::GetTaskInternal(shared_ptr<Task> &task) {
@@ -127,8 +115,8 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	ExecuteForever(marker, TaskSchedulerType::REGULAR);
 }
 
-static void TryDequeueAndProcessTask(TaskScheduler &scheduler, const DBConfig &config, TaskSchedulerQueue &queue,
-                                     shared_ptr<Task> &task) {
+void TaskScheduler::TryDequeueAndProcessTask(const DBConfig &config, TaskSchedulerQueue &queue,
+                                             shared_ptr<Task> &task) {
 	if (queue.Dequeue(task)) {
 		auto process_mode = TaskExecutionMode::PROCESS_ALL;
 		if (Settings::Get<SchedulerProcessPartialSetting>(config)) {
@@ -145,6 +133,7 @@ static void TryDequeueAndProcessTask(TaskScheduler &scheduler, const DBConfig &c
 			// task is not finished - reschedule immediately
 			auto &token = *task->token;
 			queue.Enqueue(token, std::move(task));
+			SignalForTaskType(queue.GetPoolType(), 1);
 			break;
 		}
 		case TaskExecutionResult::TASK_BLOCKED:
@@ -154,7 +143,7 @@ static void TryDequeueAndProcessTask(TaskScheduler &scheduler, const DBConfig &c
 		}
 	} else if (queue.GetTasksInQueue() > 0) {
 		// failed to dequeue but there are still tasks remaining - signal again to retry
-		scheduler.Signal(1);
+		SignalForTaskType(queue.GetPoolType(), 1);
 	}
 }
 
@@ -164,14 +153,15 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType
 
 	const auto &block_allocator = BlockAllocator::Get(db);
 	const auto &config = DBConfig::GetConfig(db);
+	auto &pool = GetPool(pool_type);
 
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
 		if (!block_allocator.SupportsFlush()) {
 			// allocator can't flush, just start an untimed wait
-			semaphore->s.wait();
-		} else if (!semaphore->s.wait(INITIAL_FLUSH_WAIT)) {
+			pool.Wait();
+		} else if (!pool.Wait(INITIAL_FLUSH_WAIT)) {
 			// allocator can flush, we flush this threads outstanding allocations after it was idle for 0.5s
 			block_allocator.ThreadFlush(
 			    Settings::Get<AllocatorBackgroundThreadsSetting>(db),
@@ -180,14 +170,13 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType
 			auto decay_delay = Allocator::DecayDelay();
 			if (!decay_delay.IsValid()) {
 				// no decay delay specified - just wait
-				semaphore->s.wait();
+				pool.Wait();
 			} else {
-				if (!semaphore->s.wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 -
-				                       INITIAL_FLUSH_WAIT)) {
+				if (!pool.Wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 - INITIAL_FLUSH_WAIT)) {
 					// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
 					// mark it as idle and start an untimed wait
 					Allocator::ThreadIdle();
-					semaphore->s.wait();
+					pool.Wait();
 				}
 			}
 		}
@@ -195,10 +184,10 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType
 		if (pool_type == TaskSchedulerType::REGULAR) {
 			// Regular thread pool picks up tasks from all pools
 			for (auto &queue : queues) {
-				TryDequeueAndProcessTask(*this, config, *queue, task);
+				TryDequeueAndProcessTask(config, *queue, task);
 			}
 		} else {
-			TryDequeueAndProcessTask(*this, config, GetQueue(pool_type), task);
+			TryDequeueAndProcessTask(config, GetQueue(pool_type), task);
 		}
 	}
 	// this thread will exit, flush all of its outstanding allocations
@@ -247,7 +236,7 @@ void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
 #ifndef DUCKDB_NO_THREADS
 	shared_ptr<Task> task;
 	for (idx_t i = 0; i < max_tasks; i++) {
-		semaphore->s.wait(TASK_TIMEOUT_USECS);
+		GetPool(TaskSchedulerType::REGULAR).Wait(TASK_TIMEOUT_USECS);
 		if (!GetTaskInternal(task)) {
 			return;
 		}
@@ -316,10 +305,25 @@ void TaskScheduler::SetAsyncThreads(idx_t n) {
 }
 
 void TaskScheduler::Signal(idx_t n) {
-#ifndef DUCKDB_NO_THREADS
-	typedef std::make_signed<std::size_t>::type ssize_t;
-	semaphore->s.signal(NumericCast<ssize_t>(n));
-#endif
+	Signal(TaskSchedulerType::REGULAR, n);
+}
+
+void TaskScheduler::Signal(TaskSchedulerType pool_type, idx_t n) {
+	GetPool(pool_type).Signal(n);
+}
+
+void TaskScheduler::SignalAllPools(idx_t n) {
+	for (auto &pool : pools) {
+		pool->Signal(n);
+	}
+}
+
+void TaskScheduler::SignalForTaskType(TaskSchedulerType task_type, idx_t n) {
+	if (task_type == TaskSchedulerType::REGULAR) {
+		Signal(TaskSchedulerType::REGULAR, n);
+	} else {
+		SignalAllPools(n);
+	}
 }
 
 void TaskScheduler::YieldThread() {

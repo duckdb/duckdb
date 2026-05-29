@@ -3,8 +3,15 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/storage/block_allocator.hpp"
+
+#ifndef DUCKDB_NO_THREADS
+#include "lightweightsemaphore.h"
+
+#include <type_traits>
+#endif
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -18,6 +25,14 @@
 
 namespace duckdb {
 
+#ifndef DUCKDB_NO_THREADS
+typedef duckdb_moodycamel::LightweightSemaphore lightweight_semaphore_t;
+
+struct LightWeightSemaphoreWrapper {
+	lightweight_semaphore_t s;
+};
+#endif
+
 struct TaskSchedulerThread {
 #ifndef DUCKDB_NO_THREADS
 	explicit TaskSchedulerThread(unique_ptr<thread> thread_p) : internal_thread(std::move(thread_p)) {
@@ -30,6 +45,9 @@ struct TaskSchedulerThread {
 TaskSchedulerPool::TaskSchedulerPool(DatabaseInstance &db_p, TaskSchedulerType pool_type_p)
     : db(db_p), pool_type(pool_type_p), requested_thread_count(0),
       current_thread_count(pool_type == TaskSchedulerType::REGULAR ? 1 : 0) {
+#ifndef DUCKDB_NO_THREADS
+	semaphore = make_uniq<LightWeightSemaphoreWrapper>();
+#endif
 }
 
 TaskSchedulerPool::~TaskSchedulerPool() {
@@ -42,6 +60,26 @@ void TaskSchedulerPool::SetThreads(idx_t n) {
 int32_t TaskSchedulerPool::NumberOfThreads() {
 	return current_thread_count.load();
 }
+
+void TaskSchedulerPool::Signal(idx_t n) {
+#ifndef DUCKDB_NO_THREADS
+	if (n == 0) {
+		return;
+	}
+	typedef std::make_signed<std::size_t>::type ssize_t;
+	semaphore->s.signal(NumericCast<ssize_t>(n));
+#endif
+}
+
+#ifndef DUCKDB_NO_THREADS
+void TaskSchedulerPool::Wait() {
+	semaphore->s.wait();
+}
+
+bool TaskSchedulerPool::Wait(int64_t timeout_usecs) {
+	return semaphore->s.wait(timeout_usecs);
+}
+#endif
 
 #ifndef DUCKDB_NO_THREADS
 static vector<int> GetProcessCPUMask() {
@@ -110,7 +148,7 @@ void TaskSchedulerPool::RelaunchThreads(TaskScheduler &scheduler, bool destroy) 
 		for (idx_t i = 0; i < threads.size(); i++) {
 			*markers[i] = false;
 		}
-		scheduler.Signal(threads.size());
+		Signal(threads.size());
 		// now join the threads to ensure they are fully stopped before erasing them
 		for (idx_t i = 0; i < threads.size(); i++) {
 			threads[i]->internal_thread->join();

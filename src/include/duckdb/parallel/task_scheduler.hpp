@@ -18,9 +18,9 @@
 
 namespace duckdb {
 
-struct LightWeightSemaphoreWrapper;
 struct QueueProducerToken;
 class ClientContext;
+struct DBConfig;
 class DatabaseInstance;
 class TaskScheduler;
 class TaskSchedulerPool;
@@ -102,8 +102,12 @@ private:
 	//! Fetches a task, returns true if successful or false if no tasks were available
 	bool GetTaskInternal(shared_ptr<Task> &task);
 	bool GetTaskInternal(shared_ptr<Task> &task, TaskSchedulerType pool_type);
+	void TryDequeueAndProcessTask(const DBConfig &config, TaskSchedulerQueue &queue, shared_ptr<Task> &task);
 
 	void SetThreadsInternal(TaskSchedulerType pool_type, idx_t n);
+	void Signal(TaskSchedulerType pool_type, idx_t n);
+	void SignalAllPools(idx_t n);
+	void SignalForTaskType(TaskSchedulerType task_type, idx_t n);
 
 private:
 	DatabaseInstance &db;
@@ -113,10 +117,6 @@ private:
 	array<unique_ptr<TaskSchedulerPool>, TASK_SCHEDULER_TYPE_COUNT> pools;
 	//! The task queues
 	array<unique_ptr<TaskSchedulerQueue>, TASK_SCHEDULER_TYPE_COUNT> queues;
-#ifndef DUCKDB_NO_THREADS
-	//! Semaphore to signal threads to wake up and execute a task
-	unique_ptr<LightWeightSemaphoreWrapper> semaphore;
-#endif
 };
 
 } // namespace duckdb
