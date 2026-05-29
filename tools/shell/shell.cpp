@@ -3150,7 +3150,9 @@ void ShellState::DetectDarkLightMode() {
 #endif
 }
 
-int RunShell(int argc, const char **argv) {
+namespace duckdb_shell {
+
+int RunShell(int argc, char **argv, ShellSubcommand subcommand) {
 	int rc = 0;
 	vector<string> extra_commands;
 
@@ -3164,6 +3166,32 @@ int RunShell(int argc, const char **argv) {
 	data.stderr_is_console = isatty(2);
 
 	data.Initialize();
+	// Honour the NO_COLOR convention (https://no-color.org/): when the
+	// variable is present and non-empty, suppress ANSI colour output
+	// across all three paths -- the master highlighter (help text,
+	// section headers), result rendering, and error rendering.
+	if (const char *v = std::getenv("NO_COLOR"); v && *v) {
+		data.highlighting_enabled = false;
+		data.highlight_results = OptionType::OFF;
+		data.highlight_errors = OptionType::OFF;
+	}
+	data.subcommand = subcommand;
+	if (subcommand == duckdb_shell::ShellSubcommand::PSQL) {
+		// Seed psql connection params from PG* env vars. Explicit flags
+		// (-h/-p/-d/-U or positionals) parsed later overwrite these.
+		if (const char *v = std::getenv("PGHOST"); v && *v) {
+			data.psql_host = v;
+		}
+		if (const char *v = std::getenv("PGPORT"); v && *v) {
+			data.psql_port = v;
+		}
+		if (const char *v = std::getenv("PGDATABASE"); v && *v) {
+			data.psql_dbname = v;
+		}
+		if (const char *v = std::getenv("PGUSER"); v && *v) {
+			data.psql_user = v;
+		}
+	}
 
 	/* On Windows, we must translate command-line arguments into UTF-8.
 	 */
@@ -3185,10 +3213,32 @@ int RunShell(int argc, const char **argv) {
 	** the size of the alternative malloc heap,
 	** and the first command to execute.
 	*/
+	int psql_positional_count = 0;
 	vector<CommandLineCall> command_line_calls;
 	for (int i = 1; i < argc; i++) {
 		auto z = argv[i];
 		if (z[0] != '-') {
+			// Positional argument. In psql mode, psql convention is
+			// `psql [OPTION]... [DBNAME [USERNAME]]` -- treat the first
+			// positional as DBNAME, the second as USERNAME (unless those
+			// have already been set via flags). Anything beyond falls
+			// through to the normal "extra commands" path.
+			if (data.subcommand == ShellSubcommand::PSQL) {
+				if (psql_positional_count == 0) {
+					if (data.psql_dbname.empty()) {
+						data.psql_dbname = z;
+					}
+					psql_positional_count++;
+					continue;
+				}
+				if (psql_positional_count == 1) {
+					if (data.psql_user.empty()) {
+						data.psql_user = z;
+					}
+					psql_positional_count++;
+					continue;
+				}
+			}
 			if (data.zDbFilename.empty()) {
 				data.zDbFilename = z;
 			} else {
@@ -3200,14 +3250,43 @@ int RunShell(int argc, const char **argv) {
 			}
 			continue;
 		}
+		const string raw_arg = argv[i]; // preserved for error display
 		z++;
 		if (z[0] == '-') {
 			// allow for double dashes, i.e. --init and -init are both valid
 			z++;
 		}
+		// `-` or `--` after stripping leave an empty option name. Error
+		// out explicitly so the user sees what they typed, not a stale
+		// suggestion for "-".
+		if (z[0] == '\0') {
+			string err = StringUtil::Format("Invalid Option Error: '%s' has empty option name\n", raw_arg);
+			data.PrintDatabaseError(err);
+			return 1;
+		}
+
+		// Try the raw token first so that option names with a literal '='
+		// (e.g. psql's `--help=interactive`) match before we fall back to
+		// the long-form `--foo=value` split.
+		string option_name(z);
+		string inline_value;
+		bool has_inline_value = false;
 
 		string error_msg;
-		auto command_line_option = data.FindCommandLineOption(z, error_msg);
+		auto command_line_option = data.FindCommandLineOption(option_name, raw_arg, error_msg);
+		if (!command_line_option) {
+			if (auto eq = option_name.find('='); eq != string::npos) {
+				string short_name = option_name.substr(0, eq);
+				string err2;
+				if (auto opt = data.FindCommandLineOption(short_name, raw_arg, err2)) {
+					command_line_option = opt;
+					inline_value = option_name.substr(eq + 1);
+					option_name = std::move(short_name);
+					has_inline_value = true;
+					error_msg.clear();
+				}
+			}
+		}
 		if (!command_line_option) {
 			data.PrintDatabaseError(error_msg);
 			return 1;
@@ -3216,18 +3295,29 @@ int RunShell(int argc, const char **argv) {
 		// parse arguments
 		vector<string> arguments;
 		arguments.push_back(option.option);
-		for (idx_t arg_idx = 0; arg_idx < option.argument_count; arg_idx++) {
-			if (i + 1 >= argc) {
-				string error =
-				    StringUtil::Format("Missing Argument Error: Argument '-%s' needs %llu arguments, but got %llu\n",
-				                       option.option, option.argument_count, arg_idx);
-				error += StringUtil::Format("OPTION:\n  -%s %s    %s\n\n", option.option, option.arguments,
-				                            option.description);
-				error += StringUtil::Format("Run '%s -help' for a list of options.\n", data.program_name);
+		if (has_inline_value) {
+			if (option.argument_count != 1) {
+				string error = StringUtil::Format(
+				    "Invalid Argument Error: option '--%s' uses inline value syntax but takes %llu arguments\n",
+				    option.option, option.argument_count);
 				data.PrintDatabaseError(error);
 				return 1;
 			}
-			arguments.emplace_back(argv[++i]);
+			arguments.emplace_back(std::move(inline_value));
+		} else {
+			for (idx_t arg_idx = 0; arg_idx < option.argument_count; arg_idx++) {
+				if (i + 1 >= argc) {
+					string error = StringUtil::Format(
+					    "Missing Argument Error: Argument '-%s' needs %llu arguments, but got %llu\n", option.option,
+					    option.argument_count, arg_idx);
+					error += StringUtil::Format("OPTION:\n  -%s %s    %s\n\n", option.option, option.arguments,
+					                            option.description);
+					error += StringUtil::Format("Run '%s -help' for a list of options.\n", data.program_name);
+					data.PrintDatabaseError(error);
+					return 1;
+				}
+				arguments.emplace_back(argv[++i]);
+			}
 		}
 		if (option.pre_init_callback) {
 			// invoke the pre-init callback (if any)
@@ -3265,6 +3355,80 @@ int RunShell(int argc, const char **argv) {
 	}
 
 	data.DetectDarkLightMode();
+
+	// PSQL auto-attach: with all connection params now resolved (env vars,
+	// then flags, then positionals all populated psql_*), synthesise an
+	// ATTACH against the remote pg-wire endpoint and run it before the
+	// user's -c / -cmd / -f commands so they see the alias as the
+	// current database.
+	//
+	// Skip the attach when an exit-style option is queued (-V/-?/-help)
+	// -- those callbacks run in the second pass and would have made the
+	// attach attempt pointless (or worse, fail the invocation that the
+	// user explicitly asked to short-circuit).
+	bool psql_skip_attach = false;
+	if (data.subcommand == ShellSubcommand::PSQL) {
+		for (auto &call : command_line_calls) {
+			const string opt(call.option.option);
+			if (opt == "?" || opt == "V" || opt == "help" || opt == "version" || opt == "help=interactive" ||
+			    opt == "help=interactive-all") {
+				psql_skip_attach = true;
+				break;
+			}
+		}
+	}
+	if (!psql_skip_attach && data.subcommand == ShellSubcommand::PSQL) {
+		if (data.psql_user.empty()) {
+			if (const char *v = std::getenv("USER"); v && *v) {
+				data.psql_user = v;
+			} else {
+				data.psql_user = "postgres";
+			}
+		}
+		if (data.psql_dbname.empty()) {
+			data.psql_dbname = data.psql_user;
+		}
+		string attach = "SET pg_use_text_protocol = true;";
+		attach += "SET pg_use_binary_copy = false;";
+		attach += "ATTACH 'host=" + data.psql_host + " port=" + data.psql_port + " dbname=" + data.psql_dbname +
+		          " user=" + data.psql_user + "' AS \"" + data.psql_dbname + "\" (TYPE postgres);";
+		attach += "USE \"" + data.psql_dbname + "\";";
+		auto rc = data.RunInitialCommand(attach.c_str(), /*bail=*/true);
+		if (rc != 0) {
+			ShellState::Exit(rc);
+			return rc;
+		}
+	}
+
+	// psql `-1`/`--single-transaction`: wrap the queued -c/-f batch in
+	// BEGIN/COMMIT. Only kicks in when something non-interactive is queued
+	// (matches psql, which docs the flag as "if non-interactive"). BEGIN
+	// runs eagerly here; COMMIT is appended to the option-call queue so
+	// the existing post-init dispatch fires it after the -c/-f body even
+	// though -c sets readStdin=false. CommandLineCall holds a reference
+	// member, so we can only append (no insert at begin).
+	if (data.psql_single_transaction) {
+		bool has_runner = false;
+		for (auto &call : command_line_calls) {
+			const string opt(call.option.option);
+			if (opt == "c" || opt == "f" || opt == "command" || opt == "file" || opt == "s") {
+				has_runner = true;
+				break;
+			}
+		}
+		if (has_runner) {
+			rc = data.RunInitialCommand("BEGIN;", /*bail=*/true);
+			if (rc != 0) {
+				ShellState::Exit(rc);
+				return rc;
+			}
+			string err;
+			auto cmd_opt = data.FindCommandLineOption("cmd", /*raw_arg=*/"--cmd", err);
+			if (cmd_opt) {
+				command_line_calls.emplace_back(*cmd_opt, vector<string> {"cmd", "COMMIT;"});
+			}
+		}
+	}
 
 	/* Make a second pass through the command-line argument and set
 	** options.  This second pass is delayed until after the initialization
@@ -3356,11 +3520,11 @@ int RunShell(int argc, const char **argv) {
 	return rc;
 }
 
-int RunShellEntry(int argc, const char **argv) {
+int Run(int argc, char **argv, ShellSubcommand subcommand) {
 	auto &shell_state = ShellState::GetReference();
 	int rc = 0;
 	try {
-		rc = RunShell(argc, argv);
+		rc = RunShell(argc, argv, subcommand);
 	} catch (std::exception &ex) {
 		rc = 1;
 		ErrorData error(ex);
@@ -3379,3 +3543,5 @@ int RunShellEntry(int argc, const char **argv) {
 	}
 	return rc;
 }
+
+} // namespace duckdb_shell
