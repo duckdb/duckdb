@@ -522,7 +522,8 @@ bool RowGroupCollection::CanFetch(TransactionData transaction, const row_t row_i
 	}
 	auto &current_row_group = row_group->GetNode();
 	auto offset_in_row_group = UnsafeNumericCast<idx_t>(row_id) - row_group->GetRowStart();
-	return current_row_group.Fetch(transaction, offset_in_row_group);
+	SelectionVector visible_sel(1);
+	return current_row_group.Fetch(transaction, &offset_in_row_group, /*count=*/ 1, visible_sel) == 1;
 }
 
 //===--------------------------------------------------------------------===//

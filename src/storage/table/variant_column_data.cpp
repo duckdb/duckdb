@@ -433,12 +433,16 @@ unique_ptr<BaseStatistics> VariantColumnData::GetUpdateStatistics() {
 
 void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
                                  const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
+	const idx_t offset = NumericCast<idx_t>(row_id);
+	const SelectionVector identity_sel;
+
 	if (storage_index.IsPushdownExtract() && IsShredded()) {
 		StorageIndex struct_extract;
 		if (PushdownShreddedFieldExtract(storage_index.GetChildIndex(0), struct_extract)) {
 			//! Shredded field exists and is fully shredded,
 			//! add the storage index to create a pushed-down 'struct_extract' to get the leaf
-			sub_columns[1]->FetchRow(transaction, state, struct_extract, row_id, result, result_idx);
+			sub_columns[1]->FetchRows(transaction, state, struct_extract, &offset, identity_sel, /*count=*/ 1, result,
+			                          result_idx);
 			return;
 		}
 	}
@@ -451,7 +455,8 @@ void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &
 		// fetch the sub-column states
 		StorageIndex empty(0);
 		for (idx_t i = 0; i < sub_columns.size(); i++) {
-			sub_columns[i]->FetchRow(transaction, state, empty, row_id, child_vectors[i], result_idx);
+			sub_columns[i]->FetchRows(transaction, state, empty, &offset, identity_sel, /*count=*/ 1, child_vectors[i],
+			                          result_idx);
 		}
 		if (result_idx) {
 			intermediate.SetValue(0, intermediate.GetValue(result_idx));
@@ -462,7 +467,7 @@ void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &
 		VariantUtils::UnshredVariantData(intermediate, unshredded, 1);
 		variant_vec.SetValue(0, unshredded.GetValue(0));
 	} else {
-		sub_columns[0]->FetchRow(transaction, state, storage_index, row_id, variant_vec, result_idx);
+		sub_columns[0]->FetchRows(transaction, state, storage_index, &offset, identity_sel, /*count=*/ 1, variant_vec, result_idx);
 		if (result_idx) {
 			variant_vec.SetValue(0, variant_vec.GetValue(result_idx));
 		}

@@ -195,17 +195,6 @@ unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 	return stats;
 }
 
-void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state,
-                                  const StorageIndex &storage_index, row_t row_id, Vector &result, idx_t result_idx) {
-	// find the segment the row belongs to
-	if (state.child_states.empty()) {
-		auto child_state = make_uniq<ColumnFetchState>();
-		state.child_states.push_back(std::move(child_state));
-	}
-	ColumnData::FetchRow(transaction, state, storage_index, row_id, result, result_idx);
-	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
-}
-
 void StandardColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
                                    const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
                                    idx_t fetch_count, Vector &result, idx_t result_offset) {

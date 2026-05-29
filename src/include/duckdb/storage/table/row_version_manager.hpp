@@ -27,7 +27,6 @@ public:
 	idx_t GetRowCount(ScanOptions options, idx_t count);
 
 	idx_t GetSelVector(ScanOptions options, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
-	bool Fetch(TransactionData transaction, idx_t row);
 	//! Bulk visibility check. Returns the number of visible rows.
 	idx_t GetVisibleRows(TransactionData transaction, const idx_t *offsets, idx_t count, SelectionVector &visible_sel);
 

@@ -142,16 +142,19 @@ idx_t GeoColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result)
 
 void GeoColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
                              row_t row_id, Vector &result, idx_t result_idx) {
+	const idx_t offset = NumericCast<idx_t>(row_id);
+	const SelectionVector identity_sel;
+
 	// Not a shredded column, so just emit the binary format immediately
 	if (storage_type == GeometryStorageType::WKB) {
-		return base_column->FetchRow(transaction, state, storage_index, row_id, result, result_idx);
+		return base_column->FetchRows(transaction, state, storage_index, &offset, identity_sel, /*count=*/ 1, result, result_idx);
 	}
 
 	// Otherwise, we need to fetch and reassemble
 	DataChunk chunk;
 	chunk.Initialize(Allocator::DefaultAllocator(), {base_column->GetType()}, 1);
 
-	base_column->FetchRow(transaction, state, storage_index, row_id, chunk.data[0], 0);
+	base_column->FetchRows(transaction, state, storage_index, &offset, identity_sel, /*count=*/ 1, chunk.data[0], 0);
 
 	Reassemble(chunk.data[0], result, 1, storage_type, result_idx);
 }

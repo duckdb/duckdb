@@ -327,6 +327,9 @@ unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 
 void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
                                 row_t row_id, Vector &result, idx_t result_idx) {
+	const idx_t offset = NumericCast<idx_t>(row_id);
+	const SelectionVector identity_sel;
+
 	// fetch the validity state
 	validity->FetchRow(transaction, state, storage_index, row_id, result, result_idx);
 	if (storage_index.IsPushdownExtract()) {
@@ -339,13 +342,13 @@ void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &s
 		if (!child_storage_index.HasChildren() && child_storage_index.HasType() &&
 		    child_storage_index.GetType() != child_type) {
 			Vector intermediate(child_type, 1);
-			sub_column.FetchRow(transaction, state, child_storage_index, row_id, intermediate, 0);
+			sub_column.FetchRows(transaction, state, child_storage_index, &offset, identity_sel, /*count=*/ 1, intermediate, 0);
 			auto context = transaction.transaction->context.lock();
 			auto fetched_row = intermediate.GetValue(0).CastAs(*context, result.GetType());
 			result.SetValue(result_idx, fetched_row);
 			return;
 		} else {
-			sub_column.FetchRow(transaction, state, child_storage_index, row_id, result, result_idx);
+			sub_column.FetchRows(transaction, state, child_storage_index, &offset, identity_sel, /*count=*/ 1, result, result_idx);
 			return;
 		}
 	}
@@ -353,7 +356,8 @@ void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &s
 	auto &child_entries = StructVector::GetEntries(result);
 	// fetch the sub-column states
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->FetchRow(transaction, state, storage_index, row_id, child_entries[i], result_idx);
+		sub_columns[i]->FetchRows(transaction, state, storage_index, &offset, identity_sel, /*count=*/ 1, child_entries[i],
+		                          result_idx);
 	}
 }
 

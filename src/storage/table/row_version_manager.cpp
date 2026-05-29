@@ -48,16 +48,6 @@ idx_t RowVersionManager::GetSelVector(ScanOptions options, idx_t vector_idx, Sel
 	return chunk_info->GetSelVector(options, sel_vector, max_count);
 }
 
-bool RowVersionManager::Fetch(TransactionData transaction, idx_t row) {
-	lock_guard<mutex> lock(version_lock);
-	idx_t vector_index = row / STANDARD_VECTOR_SIZE;
-	auto info = GetChunkInfo(vector_index);
-	if (!info) {
-		return true;
-	}
-	return info->Fetch(transaction, UnsafeNumericCast<row_t>(row - vector_index * STANDARD_VECTOR_SIZE));
-}
-
 idx_t RowVersionManager::GetVisibleRows(TransactionData transaction, const idx_t *offsets, idx_t count,
                                         SelectionVector &visible_sel) {
 	if (count == 0) {
