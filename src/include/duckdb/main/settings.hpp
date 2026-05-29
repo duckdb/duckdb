@@ -315,6 +315,17 @@ struct AsofLoopJoinThresholdSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct AsyncThreadsSetting {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "async_threads";
+	static constexpr const char *Description =
+	    "The number of total async threads used by the system for tasks like I/O.";
+	static constexpr const char *InputType = "BIGINT";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AutoCheckpointSkipWalThresholdSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "auto_checkpoint_skip_wal_threshold";

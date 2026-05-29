@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/enums/task_scheduler_pool_type.hpp"
+#include "duckdb/common/enums/task_scheduler_type.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/atomic.hpp"
@@ -22,7 +22,7 @@ struct TaskSchedulerThread;
 
 class TaskSchedulerPool {
 public:
-	explicit TaskSchedulerPool(DatabaseInstance &db, TaskSchedulerPoolType pool_type);
+	explicit TaskSchedulerPool(DatabaseInstance &db, TaskSchedulerType pool_type);
 	~TaskSchedulerPool();
 
 public:
@@ -33,7 +33,7 @@ public:
 private:
 	DatabaseInstance &db;
 	//! The type of this pool
-	const TaskSchedulerPoolType pool_type;
+	const TaskSchedulerType pool_type;
 	//! The active background threads of the task scheduler
 	vector<unique_ptr<TaskSchedulerThread>> threads;
 	//! Markers used by the various threads, if the markers are set to "false" the thread execution is stopped

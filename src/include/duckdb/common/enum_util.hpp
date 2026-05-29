@@ -488,6 +488,8 @@ enum class TaskExecutionMode : uint8_t;
 
 enum class TaskExecutionResult : uint8_t;
 
+enum class TaskSchedulerType : uint8_t;
+
 enum class TemporaryBufferSize : uint64_t;
 
 enum class TemporaryCompressionLevel : int;
@@ -1228,6 +1230,9 @@ const char* EnumUtil::ToChars<TaskExecutionMode>(TaskExecutionMode value);
 
 template<>
 const char* EnumUtil::ToChars<TaskExecutionResult>(TaskExecutionResult value);
+
+template<>
+const char* EnumUtil::ToChars<TaskSchedulerType>(TaskSchedulerType value);
 
 template<>
 const char* EnumUtil::ToChars<TemporaryBufferSize>(TemporaryBufferSize value);
@@ -1997,6 +2002,9 @@ TaskExecutionMode EnumUtil::FromString<TaskExecutionMode>(const char *value);
 
 template<>
 TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value);
+
+template<>
+TaskSchedulerType EnumUtil::FromString<TaskSchedulerType>(const char *value);
 
 template<>
 TemporaryBufferSize EnumUtil::FromString<TemporaryBufferSize>(const char *value);

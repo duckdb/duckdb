@@ -14,7 +14,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/common/array.hpp"
-#include "duckdb/common/enums/task_scheduler_pool_type.hpp"
+#include "duckdb/common/enums/task_scheduler_type.hpp"
 
 namespace duckdb {
 
@@ -28,17 +28,17 @@ class TaskSchedulerQueue;
 
 struct ProducerToken {
 public:
-	explicit ProducerToken(array<unique_ptr<TaskSchedulerQueue>, TASK_SCHEDULER_POOL_TYPE_COUNT> &queues);
+	explicit ProducerToken(array<unique_ptr<TaskSchedulerQueue>, TASK_SCHEDULER_TYPE_COUNT> &queues);
 	~ProducerToken();
 
 public:
-	QueueProducerToken &GetQueueProducerToken(TaskSchedulerPoolType pool_type);
+	QueueProducerToken &GetQueueProducerToken(TaskSchedulerType pool_type);
 
 public:
 	mutex producer_lock;
 
 private:
-	array<unique_ptr<QueueProducerToken>, TASK_SCHEDULER_POOL_TYPE_COUNT> tokens;
+	array<unique_ptr<QueueProducerToken>, TASK_SCHEDULER_TYPE_COUNT> tokens;
 };
 
 //! The TaskScheduler is responsible for managing tasks and threads
@@ -62,14 +62,17 @@ public:
 	idx_t GetProducerCount() const;
 	idx_t GetTaskCountForProducer(ProducerToken &token) const;
 
-	//! Schedule a task to be executed by the task scheduler
+	//! Schedule a task to be executed by the task scheduler in the given pool
+	void ScheduleTask(ProducerToken &producer, shared_ptr<Task> task, TaskSchedulerType pool_type);
+	void ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks, TaskSchedulerType pool_type);
+	//! Helpers for regular tasks
 	void ScheduleTask(ProducerToken &producer, shared_ptr<Task> task);
 	void ScheduleTasks(ProducerToken &producer, vector<shared_ptr<Task>> &tasks);
 	//! Fetches a task from a specific producer, returns true if successful or false if no tasks were available
 	bool GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task);
 	//! Run tasks forever until "marker" is set to false, "marker" must remain valid until the thread is joined
 	void ExecuteForever(atomic<bool> *marker);
-	void ExecuteForever(atomic<bool> *marker, TaskSchedulerPoolType pool_type);
+	void ExecuteForever(atomic<bool> *marker, TaskSchedulerType pool_type);
 	//! Run tasks until `marker` is set to false, `max_tasks` have been completed, or until there are no more tasks
 	//! available. Returns the number of tasks that were completed.
 	idx_t ExecuteTasks(atomic<bool> *marker, idx_t max_tasks);
@@ -82,6 +85,7 @@ public:
 	//! and the number of external threads. External threads, e.g. the main thread, will also be used for execution.
 	//! Launches `total_threads - external_threads` background worker threads.
 	void SetThreads(idx_t total_threads, idx_t external_threads);
+	void SetAsyncThreads(idx_t n);
 	void RelaunchThreads();
 
 	//! Yield to other threads
@@ -92,28 +96,23 @@ public:
 	static idx_t GetEstimatedCPUId();
 
 private:
-	TaskSchedulerPool &GetPool(TaskSchedulerPoolType pool_type);
-	TaskSchedulerQueue &GetQueue(TaskSchedulerPoolType pool_type) const;
-
-	//! Schedule a task to be executed by the task scheduler
-	void ScheduleTaskInternal(ProducerToken &producer, shared_ptr<Task> task, TaskSchedulerPoolType pool_type);
-	void ScheduleTasksInternal(ProducerToken &producer, vector<shared_ptr<Task>> &tasks,
-	                           TaskSchedulerPoolType pool_type);
+	TaskSchedulerPool &GetPool(TaskSchedulerType pool_type);
+	TaskSchedulerQueue &GetQueue(TaskSchedulerType pool_type) const;
 
 	//! Fetches a task, returns true if successful or false if no tasks were available
 	bool GetTaskInternal(shared_ptr<Task> &task);
-	bool GetTaskInternal(shared_ptr<Task> &task, TaskSchedulerPoolType pool_type);
+	bool GetTaskInternal(shared_ptr<Task> &task, TaskSchedulerType pool_type);
 
-	void SetThreadsInternal(TaskSchedulerPoolType pool_type, idx_t n);
+	void SetThreadsInternal(TaskSchedulerType pool_type, idx_t n);
 
 private:
 	DatabaseInstance &db;
 	//! Lock for modifying the thread count
 	mutex thread_lock;
 	//! The thread pools
-	array<unique_ptr<TaskSchedulerPool>, TASK_SCHEDULER_POOL_TYPE_COUNT> pools;
+	array<unique_ptr<TaskSchedulerPool>, TASK_SCHEDULER_TYPE_COUNT> pools;
 	//! The task queues
-	array<unique_ptr<TaskSchedulerQueue>, TASK_SCHEDULER_POOL_TYPE_COUNT> queues;
+	array<unique_ptr<TaskSchedulerQueue>, TASK_SCHEDULER_TYPE_COUNT> queues;
 #ifndef DUCKDB_NO_THREADS
 	//! Semaphore to signal threads to wake up and execute a task
 	unique_ptr<LightWeightSemaphoreWrapper> semaphore;

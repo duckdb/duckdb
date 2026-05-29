@@ -1586,6 +1586,34 @@ Value ThreadsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Async Threads
+//===----------------------------------------------------------------------===//
+void AsyncThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_val = input.GetValue<int64_t>();
+	if (new_val < 0) {
+		throw SyntaxException("Cannot have negative async_threads!");
+	}
+	auto new_async_threads = NumericCast<idx_t>(new_val);
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAsyncThreads(new_async_threads);
+	}
+	config.options.async_threads = new_async_threads;
+}
+
+void AsyncThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	idx_t new_async_threads = config.GetSystemMaxThreads(*config.file_system);
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAsyncThreads(new_async_threads);
+	}
+	config.options.maximum_threads = new_async_threads;
+}
+
+Value AsyncThreadsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BIGINT(NumericCast<int64_t>(config.options.async_threads));
+}
+
+//===----------------------------------------------------------------------===//
 // Warnings As Errors
 //===----------------------------------------------------------------------===//
 

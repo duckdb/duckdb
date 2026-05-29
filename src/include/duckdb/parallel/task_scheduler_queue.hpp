@@ -13,7 +13,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/reference_map.hpp"
-#include "duckdb/common/enums/task_scheduler_pool_type.hpp"
+#include "duckdb/common/enums/task_scheduler_type.hpp"
 
 #ifdef DUCKDB_NO_THREADS
 #include <queue>
@@ -29,11 +29,11 @@ struct QueueProducerToken;
 
 class TaskSchedulerQueue {
 public:
-	explicit TaskSchedulerQueue(TaskSchedulerPoolType pool_type_p);
+	explicit TaskSchedulerQueue(TaskSchedulerType pool_type_p);
 	~TaskSchedulerQueue();
 
 public:
-	TaskSchedulerPoolType GetPoolType();
+	TaskSchedulerType GetPoolType();
 	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
 	void EnqueueBulk(ProducerToken &token, vector<shared_ptr<Task>> &tasks);
 	bool DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task);
@@ -50,7 +50,7 @@ public:
 #endif
 
 private:
-	const TaskSchedulerPoolType pool_type;
+	const TaskSchedulerType pool_type;
 #ifndef DUCKDB_NO_THREADS
 	unique_ptr<ConcurrentQueueWrapper> queue;
 	atomic<idx_t> tasks_in_queue {0};

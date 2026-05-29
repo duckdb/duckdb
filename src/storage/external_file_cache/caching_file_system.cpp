@@ -248,7 +248,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	// Schedule block fetch tasks for all blocks.
 	vector<BufferHandle> pins(num_blocks);
 	auto &scheduler = TaskScheduler::GetScheduler(caching_file_system.db);
-	TaskExecutor executor(scheduler);
+	TaskExecutor executor(scheduler, TaskSchedulerType::ASYNC);
 
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
 		executor.ScheduleTask(make_uniq<FetchBlockTask>(*this, executor, context,

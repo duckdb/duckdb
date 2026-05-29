@@ -151,6 +151,13 @@
         "default_value": "64"
     },
     {
+        "name": "async_threads",
+        "description": "The number of total async threads used by the system for tasks like I/O.",
+        "type": "BIGINT",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "auto_checkpoint_skip_wal_threshold",
         "description": "The estimated WAL write size at which point we will skip writing to the WAL and only checkpoint. Skipping writing to the WAL means concurrent commits are blocked while the checkpoint is happening.",
         "type": "UBIGINT",

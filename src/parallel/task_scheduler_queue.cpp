@@ -10,7 +10,7 @@
 
 namespace duckdb {
 
-TaskSchedulerPoolType TaskSchedulerQueue::GetPoolType() {
+TaskSchedulerType TaskSchedulerQueue::GetPoolType() {
 	return pool_type;
 }
 
@@ -30,7 +30,7 @@ public:
 	duckdb_moodycamel::ProducerToken token;
 };
 
-TaskSchedulerQueue::TaskSchedulerQueue(TaskSchedulerPoolType pool_type_p)
+TaskSchedulerQueue::TaskSchedulerQueue(TaskSchedulerType pool_type_p)
     : pool_type(pool_type_p), queue(make_uniq<ConcurrentQueueWrapper>()) {
 }
 
@@ -181,8 +181,8 @@ void TaskSchedulerQueue::RemoveToken(QueueProducerToken &token) {
 TaskSchedulerQueue::~TaskSchedulerQueue() {
 }
 
-ProducerToken::ProducerToken(array<unique_ptr<TaskSchedulerQueue>, TASK_SCHEDULER_POOL_TYPE_COUNT> &queues) {
-	for (uint8_t i = 0; i < TASK_SCHEDULER_POOL_TYPE_COUNT; i++) {
+ProducerToken::ProducerToken(array<unique_ptr<TaskSchedulerQueue>, TASK_SCHEDULER_TYPE_COUNT> &queues) {
+	for (uint8_t i = 0; i < TASK_SCHEDULER_TYPE_COUNT; i++) {
 		tokens[i] = make_uniq<QueueProducerToken>(*queues[i]);
 	}
 }
@@ -190,7 +190,7 @@ ProducerToken::ProducerToken(array<unique_ptr<TaskSchedulerQueue>, TASK_SCHEDULE
 ProducerToken::~ProducerToken() {
 }
 
-QueueProducerToken &ProducerToken::GetQueueProducerToken(TaskSchedulerPoolType pool_type) {
+QueueProducerToken &ProducerToken::GetQueueProducerToken(TaskSchedulerType pool_type) {
 	return *tokens[static_cast<uint8_t>(pool_type)];
 }
 

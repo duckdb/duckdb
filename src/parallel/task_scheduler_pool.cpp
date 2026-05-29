@@ -27,9 +27,9 @@ struct TaskSchedulerThread {
 #endif
 };
 
-TaskSchedulerPool::TaskSchedulerPool(DatabaseInstance &db_p, TaskSchedulerPoolType pool_type_p)
+TaskSchedulerPool::TaskSchedulerPool(DatabaseInstance &db_p, TaskSchedulerType pool_type_p)
     : db(db_p), pool_type(pool_type_p), requested_thread_count(0),
-      current_thread_count(pool_type == TaskSchedulerPoolType::REGULAR ? 1 : 0) {
+      current_thread_count(pool_type == TaskSchedulerType::REGULAR ? 1 : 0) {
 }
 
 TaskSchedulerPool::~TaskSchedulerPool() {
@@ -80,7 +80,7 @@ static void SetThreadAffinity(thread &thread, const vector<int> &available_cpus,
 #endif
 
 #ifndef DUCKDB_NO_THREADS
-static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker, const TaskSchedulerPoolType pool_type) {
+static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker, const TaskSchedulerType pool_type) {
 	scheduler->ExecuteForever(marker, pool_type);
 }
 #endif
@@ -100,7 +100,7 @@ void TaskSchedulerPool::RelaunchThreads(TaskScheduler &scheduler, bool destroy) 
 
 	if (threads.size() == new_thread_count) {
 		current_thread_count =
-		    NumericCast<int32_t>(threads.size() + (pool_type == TaskSchedulerPoolType::REGULAR ? external_threads : 0));
+		    NumericCast<int32_t>(threads.size() + (pool_type == TaskSchedulerType::REGULAR ? external_threads : 0));
 		return;
 	}
 	if (threads.size() != new_thread_count) {
@@ -126,7 +126,7 @@ void TaskSchedulerPool::RelaunchThreads(TaskScheduler &scheduler, bool destroy) 
 		// Whether to pin threads to cores
 		static constexpr idx_t THREAD_PIN_THRESHOLD = 64;
 		const auto pin_threads =
-		    pool_type == TaskSchedulerPoolType::REGULAR && // Only pin regular threads!
+		    pool_type == TaskSchedulerType::REGULAR && // Only pin regular threads!
 		    (pin_thread_mode == ThreadPinMode::ON ||
 		     (pin_thread_mode == ThreadPinMode::AUTO && std::thread::hardware_concurrency() > THREAD_PIN_THRESHOLD));
 		const auto available_cpus = pin_threads ? GetProcessCPUMask() : vector<int>();
@@ -153,7 +153,7 @@ void TaskSchedulerPool::RelaunchThreads(TaskScheduler &scheduler, bool destroy) 
 		}
 	}
 	current_thread_count =
-	    NumericCast<int32_t>(threads.size() + (pool_type == TaskSchedulerPoolType::REGULAR ? external_threads : 0));
+	    NumericCast<int32_t>(threads.size() + (pool_type == TaskSchedulerType::REGULAR ? external_threads : 0));
 	BlockAllocator::Get(db).FlushAll();
 #endif
 }
