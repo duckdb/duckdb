@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/helper.hpp"
 #include "duckdb/common/types.hpp"
+
+#include <atomic>
 
 namespace duckdb {
 
@@ -21,32 +22,40 @@ struct PrefetchCostModel {
 	double bandwidth_bytes_per_s;
 
 	//! Floor for the coalescing gap
-	static constexpr uint64_t GAP_MIN = 1ULL << 12; // 4 KiB
+	static constexpr uint64_t GAP_MIN = 1ULL << 12; //! 4 KiB
 	//! Ceiling for the coalescing gap
-	static constexpr uint64_t GAP_MAX = 32ULL << 20; // 32 MiB
+	static constexpr uint64_t GAP_MAX = 32ULL << 20; //! 32 MiB
 
-	static PrefetchCostModel LocalProfile() {
-		return {1e-5, 2e9}; // 10 us, 2 GB/s -> ~20 KB
-	}
-	static PrefetchCostModel RemoteProfile() {
-		return {5e-2, 64e6}; // 50 ms, 64 MB/s -> ~3.2 MB
-	}
+	//! Per-medium seeds used before any read has been measured
+	static PrefetchCostModel LocalProfile();  //! ~20 KiB gap
+	static PrefetchCostModel RemoteProfile(); //! ~3.2 MiB gap
 
 	//! The coalescing gap implied by this model, clamped to [GAP_MIN, GAP_MAX]
-	uint64_t CoalesceGap() const {
-		const double bdp = latency_seconds * bandwidth_bytes_per_s;
-		if (!(bdp > 0)) { // also catches NaN
-			return GAP_MIN;
-		}
-		if (bdp >= static_cast<double>(GAP_MAX)) {
-			return GAP_MAX;
-		}
-		return MaxValue<uint64_t>(GAP_MIN, static_cast<uint64_t>(bdp));
+	uint64_t GetColumnGapSize() const;
+};
+
+//! Measured Network Stats
+class NetworkPrefetchStats {
+public:
+	explicit NetworkPrefetchStats(PrefetchCostModel seed)
+	    : latency_seconds(seed.latency_seconds), bandwidth_bytes_per_s(seed.bandwidth_bytes_per_s) {
 	}
 
-	static uint64_t CoalesceGap(bool on_disk) {
-		return (on_disk ? LocalProfile() : RemoteProfile()).CoalesceGap();
+	//! Record number of bytes and time (s) that take to get it
+	void RecordRead(idx_t bytes, double seconds);
+
+	//! Snapshot of the current estimate
+	PrefetchCostModel GetModel() const;
+
+private:
+	static constexpr double ALPHA = 0.25;
+	//! Running average that weights new samples at 0.25
+	static double WeightedAVG(double prev, double sample) {
+		return ALPHA * sample + (1.0 - ALPHA) * prev;
 	}
+
+	std::atomic<double> latency_seconds;
+	std::atomic<double> bandwidth_bytes_per_s;
 };
 
 } // namespace duckdb
