@@ -50,16 +50,22 @@ struct ReadHead {
 	}
 };
 
-// Comparator for ReadHeads that are either overlapping, adjacent, or within ALLOW_GAP bytes from each other
 struct ReadHeadComparator {
-	static constexpr uint64_t ALLOW_GAP = 1 << 14; // 16 KiB
+	static constexpr uint64_t DEFAULT_ACCEPTED_COLUMN_GAP = 1 << 14; // 16 KiB
+
+	ReadHeadComparator() = default;
+	explicit ReadHeadComparator(uint64_t accepted_column_gap_p) : accepted_column_gap(accepted_column_gap_p) {
+	}
+
+	uint64_t accepted_column_gap = DEFAULT_ACCEPTED_COLUMN_GAP;
+
 	bool operator()(const ReadHead *a, const ReadHead *b) const {
 		auto a_start = a->location;
 		auto a_end = a->location + a->size;
 		auto b_start = b->location;
 
-		if (a_end <= NumericLimits<idx_t>::Maximum() - ALLOW_GAP) {
-			a_end += ALLOW_GAP;
+		if (a_end <= NumericLimits<idx_t>::Maximum() - accepted_column_gap) {
+			a_end += accepted_column_gap;
 		}
 
 		return a_start < b_start && a_end < b_start;
@@ -70,7 +76,9 @@ struct ReadHeadComparator {
 // 1: register all ranges that will be read, merging ranges that are consecutive
 // 2: prefetch all registered ranges
 struct ReadAheadBuffer {
-	explicit ReadAheadBuffer(CachingFileHandle &file_handle_p) : file_handle(file_handle_p) {
+	explicit ReadAheadBuffer(CachingFileHandle &file_handle_p,
+	                         uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP)
+	    : merge_set(ReadHeadComparator(accepted_column_gap)), file_handle(file_handle_p) {
 	}
 
 	// The list of read heads
@@ -141,9 +149,10 @@ class ThriftFileTransport : public duckdb_apache::thrift::transport::TVirtualTra
 public:
 	static constexpr uint64_t PREFETCH_FALLBACK_BUFFERSIZE = 1000000;
 
-	ThriftFileTransport(CachingFileHandle &file_handle_p, bool prefetch_mode_p)
+	ThriftFileTransport(CachingFileHandle &file_handle_p, bool prefetch_mode_p,
+	                    uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP)
 	    : file_handle(file_handle_p), location(0), size(file_handle.GetFileSize()),
-	      ra_buffer(ReadAheadBuffer(file_handle)), prefetch_mode(prefetch_mode_p) {
+	      ra_buffer(ReadAheadBuffer(file_handle, accepted_column_gap)), prefetch_mode(prefetch_mode_p) {
 	}
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
