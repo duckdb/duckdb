@@ -99,11 +99,11 @@ SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('rowid_gap_live_vac
 ----
 4
 
-# The row group count proves vacuum merged fully-live row groups. If that merge also rebuilt the indexes,
-# storage.total_vacuum_time includes the index rebuild work and should exceed this threshold.
+# The row group count proves vacuum merged fully-live row groups. With threads=1, rebuilding these indexes
+# takes around a second locally; hopefully 0.4s prevents any flakiness on CI.
 
 query T
-SELECT CASE WHEN vacuum_time < 0.1 THEN 'ok'
+SELECT CASE WHEN vacuum_time < 0.4 THEN 'ok'
 	ELSE 'vacuum_time=' || CAST(vacuum_time AS VARCHAR) ||
 		', checkpoint_latency=' || CAST(checkpoint_latency AS VARCHAR) ||
 		', total_time=' || CAST(total_time AS VARCHAR) END
