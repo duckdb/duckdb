@@ -74,10 +74,24 @@ struct Settings {
 		return StringUtil::ToDouble(OP::DefaultValue);
 	}
 
+	template <class SOURCE>
+	static void Set(SOURCE &source, idx_t setting_index, SetScope scope, Value target_value) {
+		SetSettingInternal(source, setting_index, scope, std::move(target_value));
+	}
+
+	template <class OP, class SOURCE>
+	static void Set(SOURCE &source, SetScope scope, Value target_value) {
+		Set(source, OP::SettingIndex, scope, std::move(target_value));
+	}
+
 private:
 	static bool TryGetSettingInternal(const DatabaseInstance &db, idx_t setting_index, Value &result);
 	static bool TryGetSettingInternal(const DBConfig &config, idx_t setting_index, Value &result);
 	static bool TryGetSettingInternal(const ClientContext &context, idx_t setting_index, Value &result);
+
+	static void SetSettingInternal(DatabaseInstance &db, idx_t setting_index, SetScope scope, Value target_value);
+	static void SetSettingInternal(DBConfig &config, idx_t setting_index, SetScope scope, Value target_value);
+	static void SetSettingInternal(ClientContext &context, idx_t setting_index, SetScope scope, Value target_value);
 };
 
 static constexpr idx_t SETTING_INDEX_BASE = __COUNTER__ + 1;
@@ -900,6 +914,16 @@ struct EnableObjectCacheSetting {
 	static constexpr const char *Description = "[PLACEHOLDER] Legacy setting - does nothing";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct EnableOptimizerSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_optimizer";
+	static constexpr const char *Description = "Whether or not query optimization is enabled";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };

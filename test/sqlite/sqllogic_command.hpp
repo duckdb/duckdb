@@ -156,7 +156,7 @@ public:
 	bool SupportsConcurrent() const override;
 
 private:
-	bool ForEachTokenReplace(Connection &con, const string &parameter, vector<string> &result) const;
+	bool ForEachTokenReplace(const string &parameter, vector<string> &result) const;
 };
 
 class ContinueCommand : public Command {

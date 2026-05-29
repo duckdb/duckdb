@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 
 namespace duckdb {
@@ -15,6 +15,15 @@ namespace duckdb {
 struct NeighborInfo;
 
 class DPJoinNode {
+public:
+	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
+	DPJoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinRelationSet &left, JoinRelationSet &right,
+	           double cost);
+	//! Create a leaf node in the join tree
+	//! set cost to 0 for leaf nodes
+	//! cost will be the cost to *produce* an intermediate table
+	explicit DPJoinNode(JoinRelationSet &set);
+
 public:
 	//! Represents a node in the join plan
 	JoinRelationSet &set;
@@ -31,16 +40,7 @@ public:
 	//! the whole Join Order Optimizer can start exhibiting undesired behavior.
 	double cost;
 	//! used only to populate logical operators with estimated cardinalities after the best join plan has been found.
-	idx_t cardinality;
-
-	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
-	DPJoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinRelationSet &left, JoinRelationSet &right,
-	           double cost);
-
-	//! Create a leaf node in the join tree
-	//! set cost to 0 for leaf nodes
-	//! cost will be the cost to *produce* an intermediate table
-	explicit DPJoinNode(JoinRelationSet &set);
+	idx_t cardinality = DConstants::INVALID_INDEX;
 };
 
 } // namespace duckdb

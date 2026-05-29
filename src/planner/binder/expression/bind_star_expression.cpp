@@ -161,10 +161,10 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		return;
 	}
 	auto &function = expr->Cast<FunctionExpression>();
-	if (function.children.size() < 2 || function.children.size() > 3) {
+	if (function.GetChildren().size() < 2 || function.GetChildren().size() > 3) {
 		return;
 	}
-	auto &left = function.children[0];
+	auto &left = function.GetChildrenMutable()[0];
 	// expression must have a star on the LHS, and a literal on the RHS
 	if (left->GetExpressionClass() != ExpressionClass::STAR) {
 		return;
@@ -185,11 +185,11 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	                                     "ilike_escape",
 	                                     "not_ilike_escape",
 	                                     "like_escape"};
-	if (supported_ops.count(function.function_name) == 0) {
+	if (supported_ops.count(function.FunctionName()) == 0) {
 		// unsupported op for * expression
-		throw BinderException(*root, "Function \"%s\" cannot be applied to a star expression", function.function_name);
+		throw BinderException(*root, "Function \"%s\" cannot be applied to a star expression", function.FunctionName());
 	}
-	auto &right = function.children[1];
+	auto &right = function.GetChildrenMutable()[1];
 	if (right->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw BinderException(*root, "Pattern applied to a star expression must be a constant");
 	}
@@ -202,7 +202,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	auto original_alias = root->GetAlias();
 	auto star_expr = std::move(left);
 	unique_ptr<ParsedExpression> child_expr;
-	if (!inverse && function.function_name == "regexp_full_match" && star.ExcludeList().empty()) {
+	if (!inverse && function.FunctionName() == "regexp_full_match" && star.ExcludeList().empty()) {
 		// * SIMILAR TO '[regex]' is equivalent to COLUMNS('[regex]') so we can just move the expression directly
 		child_expr = std::move(right);
 	} else {
@@ -211,8 +211,8 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		// -> COLUMNS(list_filter(*, x -> x LIKE '%literal%'))
 		vector<string> named_parameters;
 		named_parameters.push_back("__lambda_col");
-		function.children[0] = make_uniq<ColumnRefExpression>("__lambda_col");
-		function.children[1] = std::move(right);
+		function.GetChildrenMutable()[0] = make_uniq<ColumnRefExpression>("__lambda_col");
+		function.GetChildrenMutable()[1] = std::move(right);
 
 		unique_ptr<ParsedExpression> lambda_body = std::move(expr);
 		if (inverse) {

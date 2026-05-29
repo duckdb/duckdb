@@ -105,8 +105,8 @@ void TemplatedHandlePivotAggregate(ClientContext &context, unique_ptr<ParsedExpr
 		auto &aggr_function = expr->Cast<FunctionExpression>();
 
 		// check if this is an aggregate to ensure it is an aggregate and not a scalar function
-		EntryLookupInfo lookup_info(CatalogType::AGGREGATE_FUNCTION_ENTRY, aggr_function.function_name, *expr);
-		auto &entry = Catalog::GetEntry(context, aggr_function.catalog, aggr_function.schema, lookup_info);
+		EntryLookupInfo lookup_info(CatalogType::AGGREGATE_FUNCTION_ENTRY, aggr_function.FunctionName(), *expr);
+		auto &entry = Catalog::GetEntry(context, aggr_function.Catalog(), aggr_function.Schema(), lookup_info);
 		if (entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			// aggregate
 			OP::HandleAggregate(expr, aggr_function, aggregates);
@@ -194,7 +194,7 @@ static unique_ptr<SelectNode> PivotFilteredAggregate(ClientContext &context, Piv
 			D_ASSERT(aggregates.size() == 1);
 
 			auto &aggr = aggregates[0].get().Cast<FunctionExpression>();
-			aggr.filter = filter->Copy();
+			aggr.FilterMutable() = filter->Copy();
 			auto &aggr_name = aggregate->GetAlias();
 			auto name = pivot_value.name;
 			if (ref.aggregates.size() > 1 || !aggr_name.empty()) {
@@ -522,10 +522,10 @@ static void BindPivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &v
 	} break;
 	case ExpressionType::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
-		if (function.function_name != "row") {
+		if (function.FunctionName() != "row") {
 			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain columns or lists of columns");
 		}
-		for (auto &child : function.children) {
+		for (auto &child : function.GetChildrenMutable()) {
 			BindPivotInList(child, values, binder);
 		}
 	} break;

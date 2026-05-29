@@ -1,0 +1,370 @@
+# name: test/optimizer/joins/left_join_reordering/complex_left_joins.test
+# description: Complex combinations of LEFT/SEMI/ANTI/INNER joins with equality, inequality, and arbitrary predicates
+# group: [left_join_reordering]
+
+statement ok
+pragma disabled_optimizers='build_side_probe_side';
+
+# t1(a): {1,2,3,4}   t2(b): {1,2,3}   t3(c): {2,3,4}   t4(d): {2,3}
+
+statement ok
+create table t1 as from values (1), (2), (3), (4) t(a);
+
+statement ok
+create table t2 as from values (1), (2), (3) t(b);
+
+statement ok
+create table t3 as from values (2), (3), (4) t(c);
+
+statement ok
+create table t4 as from values (2), (3) t(d);
+
+# ===== INNER then LEFT: (t1 ⨝ t2) ⟕ t3 =====
+
+# Basic: inner join first, then left join
+query III
+SELECT * FROM t1 JOIN t2 ON a=b LEFT JOIN t3 ON b=c ORDER BY ALL;
+----
+1	1	NULL
+2	2	2
+3	3	3
+
+# Inner then left, predicate references LHS of inner
+query III
+SELECT * FROM t1 JOIN t2 ON a=b LEFT JOIN t3 ON a=c ORDER BY ALL;
+----
+1	1	NULL
+2	2	2
+3	3	3
+
+# ===== LEFT then INNER: (t1 ⟕ t2) ⨝ t3 =====
+
+# Inner join references LOJ RHS (b=c): forces LOJ to be preserved
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a=b JOIN t3 ON b=c ORDER BY ALL;
+----
+2	2	2
+3	3	3
+
+# Inner join references only LOJ LHS (a=c): can be freely reordered
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a=b JOIN t3 ON a=c ORDER BY ALL;
+----
+2	2	2
+3	3	3
+4	NULL	4
+
+# ===== Chained LEFT JOINs: (t1 ⟕ t2) ⟕ t3 =====
+
+# Both chained on adjacent columns (b=c)
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a=b LEFT JOIN t3 ON b=c ORDER BY ALL;
+----
+1	1	NULL
+2	2	2
+3	3	3
+4	NULL	NULL
+
+# Second LOJ predicate references only top-level LHS (a=c)
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a=b LEFT JOIN t3 ON a=c ORDER BY ALL;
+----
+1	1	NULL
+2	2	2
+3	3	3
+4	NULL	4
+
+# ===== LEFT + LEFT + INNER =====
+
+# ((t1 ⟕ t2) ⟕ t3) ⨝ t4 ON c=d
+query IIII
+SELECT * FROM t1 LEFT JOIN t2 ON a=b LEFT JOIN t3 ON b=c JOIN t4 ON c=d ORDER BY ALL;
+----
+2	2	2	2
+3	3	3	3
+
+# ((t1 ⟕ t2) ⟕ t3) ⨝ t4 ON a=d: inner references the outermost LHS
+query IIII
+SELECT * FROM t1 LEFT JOIN t2 ON a=b LEFT JOIN t3 ON b=c JOIN t4 ON a=d ORDER BY ALL;
+----
+2	2	2	2
+3	3	3	3
+
+# ===== FOUR-WAY: (t1 ⟕ t2) ⟕ t3 ⟕ t4 =====
+
+query IIII
+SELECT * FROM t1 LEFT JOIN t2 ON a=b LEFT JOIN t3 ON b=c LEFT JOIN t4 ON c=d ORDER BY ALL;
+----
+1	1	NULL	NULL
+2	2	2	2
+3	3	3	3
+4	NULL	NULL	NULL
+
+# Second and third LOJ both reference the outermost LHS
+query IIII
+SELECT * FROM t1 LEFT JOIN t2 ON a=b LEFT JOIN t3 ON a=c LEFT JOIN t4 ON a=d ORDER BY ALL;
+----
+1	1	NULL	NULL
+2	2	2	2
+3	3	3	3
+4	NULL	4	NULL
+
+# ===== CROSS PRODUCT PATTERNS =====
+
+# (t1 ⟕ t2) ×⨝ t3 WHERE b=c: cross product filter references LOJ RHS
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a=b, t3 WHERE b=c ORDER BY ALL;
+----
+2	2	2
+3	3	3
+
+# (t1 ⟕ t2) ×⨝ t3 WHERE a=c: cross product filter references only LOJ LHS
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a=b, t3 WHERE a=c ORDER BY ALL;
+----
+2	2	2
+3	3	3
+4	NULL	4
+
+# (t1 ⟕ t2) ×⨝ t3 ×⨝ t4 WHERE b=c AND c=d: multi-table cross product
+query IIII
+SELECT * FROM t1 LEFT JOIN t2 ON a=b, t3, t4 WHERE b=c AND c=d ORDER BY ALL;
+----
+2	2	2	2
+3	3	3	3
+
+# LOJ followed by cross product with single-side filter
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a=b, t3 WHERE a > 2 AND b=c ORDER BY ALL;
+----
+3	3	3
+
+# ===== INEQUALITY PREDICATES =====
+
+# LOJ with inequality, then another LOJ (b < c)
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a=b LEFT JOIN t3 ON b < c ORDER BY ALL;
+----
+1	1	2
+1	1	3
+1	1	4
+2	2	3
+2	2	4
+3	3	4
+4	NULL	NULL
+
+# LOJ with equality, then inner join with inequality (b < c)
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a=b JOIN t3 ON b < c ORDER BY ALL;
+----
+1	1	2
+1	1	3
+1	1	4
+2	2	3
+2	2	4
+3	3	4
+
+# Inner join with inequality, then LOJ (b < c)
+query III
+SELECT * FROM t1 JOIN t2 ON a=b LEFT JOIN t3 ON b < c ORDER BY ALL;
+----
+1	1	2
+1	1	3
+1	1	4
+2	2	3
+2	2	4
+3	3	4
+
+# LOJ with inequality predicate, inner join with equality
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a < b JOIN t4 ON a=d ORDER BY ALL;
+----
+2	3	2
+3	NULL	3
+
+# ===== ARBITRARY (NON-EQUALITY) JOIN PREDICATES =====
+
+# LOJ with single-side filter in ON clause, followed by INNER JOIN
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a=b AND b > 1 JOIN t3 ON b=c ORDER BY ALL;
+----
+2	2	2
+3	3	3
+
+# LOJ with multi-column arithmetic predicate (a + b = 4), then INNER JOIN
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a + b = 4 JOIN t3 ON b=c ORDER BY ALL;
+----
+1	3	3
+2	2	2
+
+# LOJ with multi-column arithmetic predicate, then LOJ
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a + b = 4 LEFT JOIN t3 ON b=c ORDER BY ALL;
+----
+1	3	3
+2	2	2
+3	1	NULL
+4	NULL	NULL
+
+# Inner join with arithmetic predicate, then LOJ
+query III
+SELECT * FROM t1 JOIN t2 ON a + b = 4 LEFT JOIN t3 ON b=c ORDER BY ALL;
+----
+1	3	3
+2	2	2
+3	1	NULL
+
+# LOJ ON clause with residual (non-column-bound) predicate
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a=b AND (a + b) > 3 JOIN t3 ON b=c ORDER BY ALL;
+----
+2	2	2
+3	3	3
+
+# ===== SEMI JOINS (IN / EXISTS) =====
+
+# LOJ followed by semi join via IN
+query II
+SELECT * FROM t1 LEFT JOIN t2 ON a=b WHERE a IN (SELECT c FROM t3) ORDER BY ALL;
+----
+2	2
+3	3
+4	NULL
+
+# Inner join followed by semi join via EXISTS
+query II
+SELECT * FROM t1 JOIN t2 ON a=b WHERE EXISTS (SELECT 1 FROM t3 WHERE b=c) ORDER BY ALL;
+----
+2	2
+3	3
+
+# LOJ followed by semi join via EXISTS
+query II
+SELECT * FROM t1 LEFT JOIN t2 ON a=b WHERE EXISTS (SELECT 1 FROM t3 WHERE a=c) ORDER BY ALL;
+----
+2	2
+3	3
+4	NULL
+
+# Semi join followed by LOJ
+query II
+SELECT * FROM t1 LEFT JOIN t2 ON a=b WHERE a IN (SELECT c FROM t3) AND b IS NOT NULL ORDER BY ALL;
+----
+2	2
+3	3
+
+# ===== ANTI JOINS (NOT IN / NOT EXISTS) =====
+
+# LOJ followed by anti join via NOT IN (no NULLs in subquery)
+query II
+SELECT * FROM t1 LEFT JOIN t2 ON a=b WHERE a NOT IN (SELECT c FROM t3) ORDER BY ALL;
+----
+1	1
+
+# Inner join followed by anti join via NOT EXISTS
+query II
+SELECT * FROM t1 JOIN t2 ON a=b WHERE NOT EXISTS (SELECT 1 FROM t3 WHERE b=c) ORDER BY ALL;
+----
+1	1
+
+# LOJ followed by anti join via NOT EXISTS
+query II
+SELECT * FROM t1 LEFT JOIN t2 ON a=b WHERE NOT EXISTS (SELECT 1 FROM t3 WHERE a=c) ORDER BY ALL;
+----
+1	1
+
+# ===== MIXED SEMI/ANTI WITH THREE TABLES =====
+
+# Inner join + semi join + LOJ combination
+query III
+SELECT * FROM t1 JOIN t2 ON a=b LEFT JOIN t3 ON b=c WHERE a IN (SELECT d FROM t4) ORDER BY ALL;
+----
+2	2	2
+3	3	3
+
+# LOJ + inner join + anti join
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a=b JOIN t3 ON a=c WHERE a NOT IN (SELECT d FROM t4) ORDER BY ALL;
+----
+4	NULL	4
+
+# ===== CHAINS WITH MIXED JOIN TYPES =====
+
+# (a ⨝ b) ⟕ c ⨝ d: inner, left, inner
+query IIII
+SELECT * FROM t1 JOIN t2 ON a=b LEFT JOIN t3 ON b=c JOIN t4 ON b=d ORDER BY ALL;
+----
+2	2	2	2
+3	3	3	3
+
+# (a ⟕ b) ⨝ c ⟕ d: left, inner (on RHS), left
+query IIII
+SELECT * FROM t1 LEFT JOIN t2 ON a=b JOIN t3 ON b=c LEFT JOIN t4 ON c=d ORDER BY ALL;
+----
+2	2	2	2
+3	3	3	3
+
+# (a ⟕ b) ⨝ c ⨝ d: left, inner (on LHS), inner
+query IIII
+SELECT * FROM t1 LEFT JOIN t2 ON a=b JOIN t3 ON a=c JOIN t4 ON c=d ORDER BY ALL;
+----
+2	2	2	2
+3	3	3	3
+
+# (a ⟕ b ⟕ c) ⨝ d: two lefts then inner on the last left's column
+query IIII
+SELECT * FROM t1 LEFT JOIN t2 ON a=b LEFT JOIN t3 ON b=c JOIN t4 ON b=d ORDER BY ALL;
+----
+2	2	2	2
+3	3	3	3
+
+# ===== NON-COMPARISON ON-CLAUSE CONDITIONS =====
+# These test the assertion-fix: non-comparison conditions (AND true, AND false) must not crash.
+
+# LOJ with AND true: behaves like a normal LEFT join
+query II
+SELECT * FROM t1 LEFT JOIN t2 ON a=b AND true ORDER BY ALL;
+----
+1	1
+2	2
+3	3
+4	NULL
+
+# LOJ with AND false: right side always fails, all right cols are NULL
+query II
+SELECT * FROM t1 LEFT JOIN t2 ON a=b AND false ORDER BY ALL;
+----
+1	NULL
+2	NULL
+3	NULL
+4	NULL
+
+# ===== MULTI-CONDITION LEFT JOINS =====
+# These test the cardinality fix: multi-condition LEFT joins should not blow up estimates.
+
+# LOJ with two equality conditions on the same column pair (redundant but valid)
+query II
+SELECT * FROM t1 LEFT JOIN t2 ON a=b AND a=b ORDER BY ALL;
+----
+1	1
+2	2
+3	3
+4	NULL
+
+# LOJ with equality plus range condition, then INNER JOIN
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a=b AND a < 3 JOIN t3 ON a=c ORDER BY ALL;
+----
+2	2	2
+3	NULL	3
+4	NULL	4
+
+# Chained LOJs each with multi-condition ON clause
+query III
+SELECT * FROM t1 LEFT JOIN t2 ON a=b AND a > 1 LEFT JOIN t3 ON b=c AND b > 2 ORDER BY ALL;
+----
+1	NULL	NULL
+2	2	NULL
+3	3	3
+4	NULL	NULL

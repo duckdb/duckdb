@@ -110,6 +110,14 @@ QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransform
 	return result;
 }
 
+unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceOptions(PEGTransformer &transformer,
+                                                                           ParseResult &choice_result) {
+	if (choice_result.name == "RenameAlter") {
+		return transformer.Transform<unique_ptr<AlterTableInfo>>(choice_result);
+	}
+	return transformer.Transform<unique_ptr<AlterInfo>>(choice_result);
+}
+
 unique_ptr<AlterInfo>
 PEGTransformerFactory::TransformSetSequenceOption(PEGTransformer &transformer,
                                                   vector<pair<string, unique_ptr<SequenceOption>>> sequence_option) {
