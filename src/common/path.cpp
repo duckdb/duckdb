@@ -42,14 +42,14 @@ static void SegmentAndNormalizePath(string::const_iterator begin, string::const_
 
 Path Path::FromString(const string &raw) {
 	Path parsed;
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(DUCKDB_WIN32_COMPAT)
 	const auto first_slash_pos = raw.find_first_of(R"(/\)");
 #else
 	const auto first_slash_pos = raw.find('/');
 #endif
 	const auto scheme_pos = raw.find("://");
 	const auto drive_leads = (false
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(DUCKDB_WIN32_COMPAT)
 	                          || (first_slash_pos == 1 && StringUtil::CharacterIsAlpha(raw[0]))
 #endif
 	);
@@ -59,7 +59,7 @@ Path Path::FromString(const string &raw) {
 	if (StringUtil::StartsWith(raw, "file:/")) {
 		path_offset = ParseFileSchemes(raw, parsed);
 	}
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(DUCKDB_WIN32_COMPAT)
 	else if (raw.size() >= 5 && StringUtil::StartsWith(raw, R"(\\)") && raw.find_first_of('\\', 3) != string::npos) {
 		path_offset = ParseUNCScheme(raw, parsed);
 	}
@@ -74,8 +74,12 @@ Path Path::FromString(const string &raw) {
 		parsed.has_trailing_separator = true;
 	}
 	D_ASSERT(parsed.HasScheme() || !parsed.HasAuthority());
-	D_ASSERT(parsed.anchor.size() <= 4);
+	D_ASSERT(parsed.anchor.size() <= 3);
 	return parsed;
+}
+
+Path Path::CanonicalFromString(const string &raw) {
+	return FromString(raw).ToCanonical();
 }
 
 string Path::ToString() const {
@@ -119,37 +123,31 @@ bool Path::HasDrive() const {
 
 char Path::GetDriveChar() const {
 	const auto size = anchor.size();
-	D_ASSERT(size <= 4);
-	// must be one of {"C:", "C:\" or "\C:", "\C:\"}; switch on size & ':'
-	if (size <= 1) {
-		D_ASSERT(size == 0 || IsPathSeparator(anchor[0]));
-		return 0;
-	} else if (size == 2) {
-		return anchor[0];
-	} else if (size == 3) {
-		return anchor[anchor[1] == ':' ? 0 : 1];
-	} else /* (size == 4) */ {
-		return anchor[1];
+	D_ASSERT(size <= 3);
+	// anchor is one of: "" / "/" / "\" (<=1, no drive), "C:" (2), "C:/" or "C:\" (3)
+	return size <= 1 ? '\0' : anchor[0];
+}
+
+Path::SchemeKind Path::GetSchemeKind() const {
+	if (scheme.empty()) {
+		return SchemeKind::None;
 	}
+	if (StringUtil::StartsWith(scheme, "file:")) {
+		return SchemeKind::File;
+	}
+	// Check Windows UNC/Verbatim purely by stored scheme value — works cross-platform
+	// so that Windows-shaped paths parsed on non-Windows (future FromString variant) are handled correctly.
+	if (StringUtil::StartsWith(scheme, R"(\\?)")) {
+		return SchemeKind::Verbatim;
+	}
+	if (StringUtil::StartsWith(scheme, R"(\\)")) {
+		return SchemeKind::UNC;
+	}
+	return SchemeKind::URI;
 }
 
 Path Path::Join(const Path &rhs) const {
 	Path lhs = *this;
-#if defined(_WIN32)
-	const bool win_local = (lhs.separator == '\\') || lhs.HasDrive();
-	const auto auth_is_eq =
-	    win_local ? StringUtil::CIEquals(lhs.authority, rhs.authority) : (lhs.authority == rhs.authority);
-	const auto seg_prefix =
-	    win_local ? (rhs.segments.size() >= lhs.segments.size() &&
-	                 std::equal(lhs.segments.begin(), lhs.segments.end(), rhs.segments.begin(),
-	                            [](const string &a, const string &b) { return StringUtil::CIEquals(a, b); }))
-	              : (rhs.segments.size() >= lhs.segments.size() &&
-	                 std::equal(lhs.segments.begin(), lhs.segments.end(), rhs.segments.begin()));
-#else
-	const auto auth_is_eq = (lhs.authority == rhs.authority);
-	const auto seg_prefix = (rhs.segments.size() >= lhs.segments.size() &&
-	                         std::equal(lhs.segments.begin(), lhs.segments.end(), rhs.segments.begin()));
-#endif
 	if (!rhs.IsAbsolute() && !rhs.HasDrive()) {
 		lhs.segments.insert(lhs.segments.end(), rhs.segments.begin(), rhs.segments.end());
 		vector<string> result;
@@ -165,10 +163,8 @@ Path Path::Join(const Path &rhs) const {
 			result.erase(result.begin());
 		}
 		lhs.segments = std::move(result);
-	} else if (auth_is_eq && seg_prefix && lhs.scheme == rhs.scheme && lhs.anchor == rhs.anchor) {
-		if (lhs.segments.size() < rhs.segments.size()) {
-			lhs.segments = rhs.segments;
-		}
+	} else if (rhs.IsRelativeTo(lhs)) {
+		lhs.segments = rhs.segments;
 	} else {
 		throw InvalidInputException("Path: cannot join incompatible paths: \"%s\" onto \"%s\"", rhs.ToString(),
 		                            lhs.ToString());
@@ -194,14 +190,156 @@ Path Path::Parent(int n) const {
 	return Join(dots);
 }
 
+bool Path::IsRelativeTo(const Path &base) const {
+	if (scheme != base.scheme || anchor != base.anchor) {
+		return false;
+	}
+	// UNC authority (server\share) is case-insensitive for Windows-shaped paths
+	const bool ci_auth = IsLocalWindows() && !authority.empty();
+	if (ci_auth ? !StringUtil::CIEquals(authority, base.authority) : (authority != base.authority)) {
+		return false;
+	}
+	if (base.segments.size() > segments.size()) {
+		return false;
+	}
+	return SegmentsEqual(base.segments.begin(), base.segments.end(), segments.begin());
+}
+
+Path Path::RelativeTo(const Path &base) const {
+	if (!IsRelativeTo(base)) {
+		throw InvalidInputException("Path: '%s' is not relative to '%s'", ToString(), base.ToString());
+	}
+	Path result;
+	result.separator = separator;
+	result.segments = vector<string>(segments.begin() + static_cast<ptrdiff_t>(base.segments.size()), segments.end());
+	result.has_trailing_separator = has_trailing_separator;
+	return result;
+}
+
+Path Path::ToBareLocal() const {
+	if (!IsLocal()) {
+		throw InvalidInputException("Path: cannot convert non-local path to bare notation: %s", ToString());
+	}
+	Path dst = *this;
+	dst.scheme.clear();
+	dst.authority.clear();
+	return dst;
+}
+
+// to file:/// form
+Path Path::ToFileURI() const {
+	if (!IsLocal()) {
+		throw InvalidInputException("Path: cannot convert non-local path to file URI: %s", ToString());
+	}
+	if (!IsAbsolute()) {
+		throw InvalidInputException("Path: cannot convert relative path to file URI: %s", ToString());
+	}
+	Path dst = *this;
+	dst.scheme = "file://"; // reminder: "/" path slash is in anchor
+	dst.authority.clear();  // localhost be gone
+	return dst;
+}
+
+Path Path::ToCanonical() const {
+	if (!IsAbsolute()) {
+		throw InvalidInputException("Path: cannot canonicalize relative path: %s", ToString());
+	}
+	Path dst = *this;
+	if (GetSchemeKind() == SchemeKind::Verbatim) {
+		// \\?\UNC\server\share\... strips to \\server\share\...
+		// \\?\C:\...              strips to C:\... (anchor already holds C:\, just clear scheme)
+		if (HasDrive()) {
+			dst.scheme.clear();
+		} else {
+			dst.scheme = R"(\\)";
+		}
+		return dst;
+	}
+	if (IsLocal()) {
+		// Collapse file: scheme variants (file:/, file:///, file://localhost/) to bare local path.
+		dst.scheme.clear();
+		dst.authority.clear();
+	}
+	return dst;
+}
+
+bool Path::Equals(const Path &other) const {
+	if (is_absolute != other.is_absolute || segments.size() != other.segments.size()) {
+		return false;
+	}
+	if (scheme != other.scheme || anchor != other.anchor || authority != other.authority) {
+		return false;
+	}
+	return std::equal(segments.begin(), segments.end(), other.segments.begin());
+}
+
+bool Path::EqualsCI(const Path &other) const {
+	if (is_absolute != other.is_absolute || segments.size() != other.segments.size()) {
+		return false;
+	}
+	bool (*ci)(const string &, const string &) = StringUtil::CIEquals;
+	return ci(scheme, other.scheme) && ci(authority, other.authority) && ci(anchor, other.anchor) &&
+	       std::equal(segments.begin(), segments.end(), other.segments.begin(), ci);
+}
+
+bool Path::EqualsFS(const Path &other) const {
+	if (is_absolute != other.is_absolute || segments.size() != other.segments.size()) {
+		return false;
+	}
+	if (scheme != other.scheme || anchor != other.anchor) {
+		return false;
+	}
+	const bool ci = IsLocalWindows();
+	if (ci ? !StringUtil::CIEquals(authority, other.authority) : (authority != other.authority)) {
+		return false;
+	}
+	return SegmentsEqual(segments.begin(), segments.end(), other.segments.begin());
+}
+
+bool Path::IsLocalWindows() const {
+	// All Windows native path forms (local, UNC, Verbatim) use case-insensitive comparison.
+	// Pure URI schemes (s3://, az://, etc.) do not, regardless of platform.
+	// On non-Windows, infer from path structure for cross-platform correctness on recorded paths.
+	switch (GetSchemeKind()) {
+	case SchemeKind::UNC:
+	case SchemeKind::Verbatim:
+		return true;
+	case SchemeKind::None:
+#if defined(_WIN32) || defined(DUCKDB_WIN32_COMPAT)
+		return true; // all bare paths on Windows are CI
+#else
+		return HasDrive(); // off-platform: drive letter identifies a Windows-shaped path
+#endif
+	case SchemeKind::File:
+#if defined(_WIN32) || defined(DUCKDB_WIN32_COMPAT)
+		return true; // file:// paths resolve to the local CI filesystem on Windows
+#else
+		return false;
+#endif
+	default:
+		return false;
+	}
+}
+
+bool Path::SegmentsEqual(vector<string>::const_iterator a, vector<string>::const_iterator a_end,
+                         vector<string>::const_iterator b) const {
+	if (IsLocalWindows()) {
+		bool (*ci_eq)(const string &, const string &) = StringUtil::CIEquals; // pins overload
+		return std::equal(a, a_end, b, ci_eq);
+	}
+	return std::equal(a, a_end, b);
+}
+
 // ---------------------------------------------------------------------------
 // Private methods (order matches path.hpp)
 // ---------------------------------------------------------------------------
 
 void Path::NormalizeSegments(const string &raw, size_t path_offset) {
-	// normalize URI schemes to lowercase; UNC prefixes (\\, \\?, \\?\UNC\) are not URI schemes
+	// normalize URI schemes and hostnames to lowercase (RFC 3986 §6.2.2.1);
+	// UNC prefixes (\\, \\?, \\?\UNC\) are not URI schemes and their authority is left as-is.
 	if (!scheme.empty() && !IsPathSeparator(scheme[0])) {
 		scheme = StringUtil::Lower(scheme);
+		authority = StringUtil::Lower(authority);
 	}
 
 	if (HasAnchor()) {
@@ -253,7 +391,7 @@ size_t Path::ParseURIScheme(const string &input, Path &parsed) {
 size_t Path::ParseFilePathTail(const string &input, size_t start, Path &parsed) {
 	size_t pos = start;
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(DUCKDB_WIN32_COMPAT)
 	if (input.size() >= pos + 2 && input[pos + 1] == ':' && StringUtil::CharacterIsAlpha(input[pos])) {
 		parsed.anchor.append(1, input[pos]);
 		parsed.anchor.append(1, ':');
@@ -315,13 +453,12 @@ size_t Path::ParseFileSchemes(const string &input, Path &parsed) {
 	return ParseFilePathTail(input, path_begin, parsed);
 }
 
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(DUCKDB_WIN32_COMPAT)
 //
-// UNC Scheme as we handle it:
-// - scheme = "\\"
-// - authority = server\share
-// - anchor = "\"
-// - path = < the rest >
+// UNC/Verbatim scheme forms parsed here:
+//   \\server\share\p   →  scheme="\\"      authority="server\share"  anchor="\"  path="p"
+//   \\?\UNC\s\sh\p     →  scheme="\\?\UNC\" authority="s\sh"          anchor="\"  path="p"
+//   \\?\C:\p           →  scheme="\\?\"    authority=""              anchor="C:\" path="p"
 //
 size_t Path::ParseUNCScheme(const string &input, Path &parsed) {
 	D_ASSERT(input.size() >= 4 && input[0] == '\\' && input[1] == '\\');
@@ -334,8 +471,7 @@ size_t Path::ParseUNCScheme(const string &input, Path &parsed) {
 	parsed.separator = '\\';
 
 	if (extended && !extended_unc) {
-		parsed.anchor = '\\';
-		parsed.scheme = R"(\\?)";
+		parsed.scheme = R"(\\?\)"; // trailing \ consumed by prefix; anchor starts empty for ParseFilePathTail
 		return ParseFilePathTail(input, 4, parsed);
 	}
 
