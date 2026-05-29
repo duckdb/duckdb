@@ -3,6 +3,9 @@
 # group: [statistics]
 
 statement ok
+SET decimal_arithmetic = 'DOUBLE';
+
+statement ok
 SET default_null_order='nulls_first';
 
 statement ok

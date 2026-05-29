@@ -1,7 +1,6 @@
 # name: test/sql/types/decimal/decimal_division.test
 # description: test decimal division via the / operator
-# group: [sql]
-
+# group: [decimal]
 
 query I
 SELECT (10.00 / 4.00)::DECIMAL(10,6);

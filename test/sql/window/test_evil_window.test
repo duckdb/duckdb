@@ -2,6 +2,9 @@
 # description: More evil cases
 # group: [window]
 
+statement ok
+SET decimal_arithmetic = 'DOUBLE';
+
 # negative lag
 query II
 select *

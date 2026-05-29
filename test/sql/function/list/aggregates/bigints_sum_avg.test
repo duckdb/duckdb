@@ -3,6 +3,9 @@
 # group: [aggregates]
 
 statement ok
+SET decimal_arithmetic = 'DOUBLE';
+
+statement ok
 CREATE TABLE bigints (i BIGINT[]);
 
 statement ok

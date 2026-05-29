@@ -1,9 +1,12 @@
 #include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/sum_helpers.hpp"
+#include "duckdb/common/enums/decimal_arithmetic.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
@@ -57,20 +60,20 @@ struct KahanAvgState {
 	}
 };
 
-struct AverageDecimalBindData : public FunctionData {
-	explicit AverageDecimalBindData(double scale) : scale(scale) {
+struct DecimalAvgBindData : public FunctionData {
+	explicit DecimalAvgBindData(uint8_t scale_diff) : scale_diff(scale_diff) {
 	}
 
-	double scale;
+	uint8_t scale_diff;
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<AverageDecimalBindData>(scale);
+		return make_uniq<DecimalAvgBindData>(scale_diff);
 	};
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = other_p.Cast<AverageDecimalBindData>();
-		return scale == other.scale;
+		auto &other = other_p.Cast<DecimalAvgBindData>();
+		return scale_diff == other.scale_diff;
 	}
 };
 
@@ -89,24 +92,13 @@ struct AverageSetOperation {
 	}
 };
 
-template <class T>
-static T GetAverageDivident(uint64_t count, optional_ptr<FunctionData> bind_data) {
-	T divident = T(count);
-	if (bind_data) {
-		auto &avg_bind_data = bind_data->Cast<AverageDecimalBindData>();
-		divident *= avg_bind_data.scale;
-	}
-	return divident;
-}
-
 struct IntegerAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (state.count == 0) {
 			finalize_data.ReturnNull();
 		} else {
-			double divident = GetAverageDivident<double>(state.count, finalize_data.input.bind_data);
-			target = double(state.value) / divident;
+			target = double(state.value) / double(state.count);
 		}
 	}
 };
@@ -117,9 +109,22 @@ struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperat
 		if (state.count == 0) {
 			finalize_data.ReturnNull();
 		} else {
-			long double divident = GetAverageDivident<long double>(state.count, finalize_data.input.bind_data);
-			target = Hugeint::Cast<long double>(state.value) / divident;
+			target = Hugeint::Cast<long double>(state.value) / (long double)(state.count);
 		}
+	}
+};
+
+struct DecimalAverageOperation : public BaseSumOperation<AverageSetOperation, AddToHugeint> {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
+			return;
+		}
+		auto &bind_data = finalize_data.input.bind_data->Cast<DecimalAvgBindData>();
+		hugeint_t numerator = state.value * Hugeint::POWERS_OF_TEN[bind_data.scale_diff];
+		hugeint_t remainder;
+		target = Hugeint::Cast<T>(Hugeint::DivMod(numerator, hugeint_t(state.count), remainder));
 	}
 };
 
@@ -143,8 +148,7 @@ struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, Hu
 		if (state.count == 0) {
 			finalize_data.ReturnNull();
 		} else {
-			long double divident = GetAverageDivident<long double>(state.count, finalize_data.input.bind_data);
-			target = Hugeint::Cast<long double>(state.value) / divident;
+			target = Hugeint::Cast<long double>(state.value) / (long double)(state.count);
 		}
 	}
 };
@@ -286,16 +290,69 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 	}
 }
 
+template <class INPUT_TYPE, class RESULT_TYPE>
+static AggregateFunction MakeDecimalAvgAggregate() {
+	return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, INPUT_TYPE, RESULT_TYPE, DecimalAverageOperation>(
+	           LogicalTypeId::DECIMAL, LogicalTypeId::DECIMAL)
+	    .SetStructStateExport(GetAvgStateType);
+}
+
+template <class INPUT_TYPE>
+static AggregateFunction GetDecimalAvgForResult(PhysicalType result_physical) {
+	switch (result_physical) {
+	case PhysicalType::INT16:
+		return MakeDecimalAvgAggregate<INPUT_TYPE, int16_t>();
+	case PhysicalType::INT32:
+		return MakeDecimalAvgAggregate<INPUT_TYPE, int32_t>();
+	case PhysicalType::INT64:
+		return MakeDecimalAvgAggregate<INPUT_TYPE, int64_t>();
+	default:
+		return MakeDecimalAvgAggregate<INPUT_TYPE, hugeint_t>();
+	}
+}
+
+static AggregateFunction GetDecimalAverageAggregate(PhysicalType input_physical, PhysicalType result_physical) {
+	switch (input_physical) {
+	case PhysicalType::INT16:
+		return GetDecimalAvgForResult<int16_t>(result_physical);
+	case PhysicalType::INT32:
+		return GetDecimalAvgForResult<int32_t>(result_physical);
+	case PhysicalType::INT64:
+		return GetDecimalAvgForResult<int64_t>(result_physical);
+	default:
+		return GetDecimalAvgForResult<hugeint_t>(result_physical);
+	}
+}
+
 unique_ptr<FunctionData> BindDecimalAvg(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
+
+	if (Settings::Get<DecimalArithmeticSetting>(input.GetClientContext()) == DecimalArithmetic::DOUBLE) {
+		function.ReplaceImplementation(
+		    AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
+		        LogicalType::DOUBLE, LogicalType::DOUBLE)
+		        .SetStructStateExport(GetAvgStateType));
+		function.SetName("avg");
+		function.GetArguments()[0] = LogicalType::DOUBLE;
+		function.SetReturnType(LogicalType::DOUBLE);
+		return nullptr;
+	}
+
 	auto decimal_type = arguments[0]->GetReturnType();
-	function.ReplaceImplementation(GetAverageAggregate(decimal_type.InternalType()));
+	uint8_t p, s;
+	decimal_type.GetDecimalProperties(p, s);
+	uint8_t result_scale = MaxValue<uint8_t>(6, s);
+	// Extend width only by the extra fractional digits needed, preserving the integer part.
+	// For s >= 6 this is a no-op (same width as input); for s < 6 we add (6 - s) digits.
+	uint8_t result_width = MinValue<uint8_t>(Decimal::MAX_WIDTH_DECIMAL, p + (result_scale - s));
+
+	LogicalType result_type = LogicalType::DECIMAL(result_width, result_scale);
+	function.ReplaceImplementation(GetDecimalAverageAggregate(decimal_type.InternalType(), result_type.InternalType()));
 	function.SetName("avg");
 	function.GetArguments()[0] = decimal_type;
-	function.SetReturnType(LogicalType::DOUBLE);
-	return make_uniq<AverageDecimalBindData>(
-	    Hugeint::Cast<double>(Hugeint::POWERS_OF_TEN[DecimalType::GetScale(decimal_type)]));
+	function.SetReturnType(result_type);
+	return make_uniq<DecimalAvgBindData>(result_scale - s);
 }
 
 } // namespace

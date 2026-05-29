@@ -2,6 +2,9 @@
 # description: Test to ensure TRY inside a filter does not mutate the output data
 # group: [filter]
 
+statement ok
+SET decimal_arithmetic = 'DOUBLE';
+
 # Reproduction of the bug
 statement ok
 CREATE TABLE t0(c0 INT, c1 INT);

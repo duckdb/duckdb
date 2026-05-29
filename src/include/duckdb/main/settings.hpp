@@ -643,6 +643,19 @@ struct DebugWindowModeSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DecimalArithmeticSetting {
+	using RETURN_TYPE = DecimalArithmetic;
+	static constexpr const char *Name = "decimal_arithmetic";
+	static constexpr const char *Description =
+	    "Controls the return type of decimal division and avg: DECIMAL (default) returns a decimal result, DOUBLE "
+	    "enables legacy behavior that returns a double.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "DECIMAL";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct DefaultBlockSizeSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "default_block_size";

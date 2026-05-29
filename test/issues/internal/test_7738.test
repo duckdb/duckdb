@@ -3,6 +3,9 @@
 # group: [internal]
 
 statement ok
+SET decimal_arithmetic = 'DOUBLE';
+
+statement ok
 SET prefer_range_joins=false;
 
 statement ok

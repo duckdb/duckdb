@@ -106,6 +106,13 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 }
 
 //===----------------------------------------------------------------------===//
+// Decimal Arithmetic
+//===----------------------------------------------------------------------===//
+void DecimalArithmeticSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<DecimalArithmetic>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Default Transaction Invalidation Policy
 //===----------------------------------------------------------------------===//
 void DefaultTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

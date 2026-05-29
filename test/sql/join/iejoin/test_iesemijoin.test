@@ -3,6 +3,9 @@
 # group: [iejoin]
 
 statement ok
+SET decimal_arithmetic = 'DOUBLE';
+
+statement ok
 PRAGMA explain_output = PHYSICAL_ONLY;
 
 statement ok

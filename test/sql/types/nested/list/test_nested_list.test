@@ -88,6 +88,9 @@ SELECT g, LIST(e) l1, LIST(e) l2 from list_data GROUP BY g ORDER BY g
 3	[6]	[6]
 5	[NULL]	[NULL]
 
+statement ok
+SET decimal_arithmetic='DOUBLE';
+
 query IT
 SELECT g, LIST(e/2.0) from list_data GROUP BY g order by g
 ----

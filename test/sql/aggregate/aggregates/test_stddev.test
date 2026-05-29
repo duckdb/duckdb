@@ -3,6 +3,9 @@
 # group: [aggregates]
 
 statement ok
+SET decimal_arithmetic = 'DOUBLE';
+
+statement ok
 create table stddev_test(val integer, grp integer)
 
 statement ok

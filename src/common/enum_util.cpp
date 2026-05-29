@@ -32,6 +32,7 @@
 #include "duckdb/common/enums/debug_statement_verification.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
 #include "duckdb/common/enums/debug_verification_mode.hpp"
+#include "duckdb/common/enums/decimal_arithmetic.hpp"
 #include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/explain_format.hpp"
@@ -1653,6 +1654,24 @@ const char* EnumUtil::ToChars<DebugVerificationMode>(DebugVerificationMode value
 template<>
 DebugVerificationMode EnumUtil::FromString<DebugVerificationMode>(const char *value) {
 	return static_cast<DebugVerificationMode>(StringUtil::StringToEnum(GetDebugVerificationModeValues(), 4, "DebugVerificationMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDecimalArithmeticValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DecimalArithmetic::DECIMAL), "DECIMAL" },
+		{ static_cast<uint32_t>(DecimalArithmetic::DOUBLE), "DOUBLE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DecimalArithmetic>(DecimalArithmetic value) {
+	return StringUtil::EnumToString(GetDecimalArithmeticValues(), 2, "DecimalArithmetic", static_cast<uint32_t>(value));
+}
+
+template<>
+DecimalArithmetic EnumUtil::FromString<DecimalArithmetic>(const char *value) {
+	return static_cast<DecimalArithmetic>(StringUtil::StringToEnum(GetDecimalArithmeticValues(), 2, "DecimalArithmetic", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDecimalBitWidthValues() {

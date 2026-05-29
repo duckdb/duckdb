@@ -3,6 +3,9 @@
 # group: [joins]
 
 statement ok
+SET decimal_arithmetic = 'DOUBLE';
+
+statement ok
 CREATE TABLE df (x NUMERIC, y NUMERIC);
 
 statement ok

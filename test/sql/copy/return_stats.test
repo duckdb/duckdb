@@ -5,6 +5,9 @@
 require parquet
 
 statement ok
+SET decimal_arithmetic = 'DOUBLE';
+
+statement ok
 CREATE TABLE integers AS SELECT range i FROM range(200000);
 
 statement ok

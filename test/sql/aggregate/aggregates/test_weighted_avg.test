@@ -2,6 +2,9 @@
 # description: Test weighted_avg operator
 # group: [aggregates]
 
+statement ok
+SET decimal_arithmetic = 'DOUBLE';
+
 # scalar weighted average with NULLs
 query RRRR
 SELECT weighted_avg(3, 3), weighted_avg(3, NULL), weighted_avg(NULL, 3), weighted_avg(NULL, NULL)

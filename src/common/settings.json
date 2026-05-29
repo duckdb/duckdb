@@ -395,6 +395,13 @@
         "default_value": "WINDOW"
     },
     {
+        "name": "decimal_arithmetic",
+        "description": "Controls the return type of decimal division and avg: DECIMAL (default) returns a decimal result, DOUBLE enables legacy behavior that returns a double.",
+        "type": "ENUM<DecimalArithmetic>",
+        "default_scope": "local",
+        "default_value": "DECIMAL"
+    },
+    {
         "name": "default_block_size",
         "description": "The default block size for new duckdb database files (new as-in, they do not yet exist).",
         "type": "UBIGINT",

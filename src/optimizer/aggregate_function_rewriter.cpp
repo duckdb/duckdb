@@ -263,6 +263,7 @@ public:
 private:
 	struct RewriteInfo {
 		idx_t count_idx;
+		LogicalType original_type;
 		vector<unique_ptr<Expression>> additional_expressions;
 	};
 
@@ -325,6 +326,7 @@ private:
 			}
 
 			RewriteInfo rewrite_info;
+			rewrite_info.original_type = expr->GetReturnType();
 			auto count_arg = rule.Rewrite(expr, bindings, rewrite_info.additional_expressions);
 
 			// Add COUNT([x]) to the aggregate list
@@ -381,6 +383,10 @@ private:
 			rewrite_info.additional_expressions.push_back(std::move(count_ref));
 			auto final_result = rule.CreateProjectionExpression(aggr_type, std::move(aggr_ref),
 			                                                    std::move(rewrite_info.additional_expressions));
+			if (final_result->GetReturnType() != rewrite_info.original_type) {
+				final_result = BoundCastExpression::AddCastToType(optimizer.context, std::move(final_result),
+				                                                  rewrite_info.original_type);
+			}
 			projection_expressions.push_back(std::move(final_result));
 		}
 

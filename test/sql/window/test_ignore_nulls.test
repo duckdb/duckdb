@@ -2,6 +2,9 @@
 # description: Test IGNORE NULLS window syntax
 # group: [window]
 
+statement ok
+SET decimal_arithmetic = 'DOUBLE';
+
 # Issue #2549
 statement ok
 CREATE TABLE issue2549 AS SELECT * FROM (VALUES

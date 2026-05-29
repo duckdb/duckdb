@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/enums/allow_parser_override.hpp"
+#include "duckdb/common/enums/decimal_arithmetic.hpp"
 #include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "test_helpers.hpp"
 
@@ -116,6 +117,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"enable_progress_bar_print", {false}},
 	    {"scalar_subquery_error_on_multiple_rows", {false}},
 	    {"ieee_floating_point_ops", {false}},
+	    {"decimal_arithmetic", {EnumUtil::ToString(DecimalArithmetic::DOUBLE)}},
 	    {"progress_bar_time", {0}},
 	    {"temp_directory", {"tmp"}},
 	    {"wal_autocheckpoint", {"4.0 GiB"}},
