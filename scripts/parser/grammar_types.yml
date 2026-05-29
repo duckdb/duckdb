@@ -27,7 +27,7 @@
 # for syntax-only rules and temporary manual exceptions; matcher-provided rules
 # belong in matcher_rule_overrides instead.
 # Note: some entries (e.g. CTEBodyContent, SingleArrowPair, CommentValue,
-# ConstraintName, IntervalNumber, Program) also appear in type categories because
+# IntervalNumber, Program) also appear in type categories because
 # they are manually implemented and referenced as children by auto-generated
 # rules. The excluded status only suppresses Internal auto-generation.
 #
@@ -899,7 +899,6 @@ String:
     - SetNullability
     - MinValue
     - MaxValue
-    - ConstraintName
 
 Bool:
   type: "bool"
