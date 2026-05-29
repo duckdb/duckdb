@@ -14,6 +14,20 @@
 
 namespace duckdb {
 
+bool ExpressionBinding::FoundExpression() const {
+	return expression;
+}
+
+bool ExpressionBinding::FoundColumnRef() const {
+	if (!FoundExpression()) {
+		return false;
+	}
+	return expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF;
+}
+
+RelationStats::RelationStats() : cardinality(1), filter_strength(1), stats_initialized(false) {
+}
+
 static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	auto ret = ExpressionBinding();
 	switch (expr.GetExpressionClass()) {
@@ -154,6 +168,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			cardinality_after_filters = 0;
 		}
 	}
+
 	return_stats.cardinality = cardinality_after_filters;
 	// update the estimated cardinality of the get as well.
 	// This is not updated during plan reconstruction.

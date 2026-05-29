@@ -7,6 +7,7 @@
 #include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/optimizer/rule/ordered_aggregate_optimizer.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -63,7 +64,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
 			                                          std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
 			first_aggregate->order_bys = op.order_by ? op.order_by->Copy() : nullptr;
 
-			if (ClientConfig::GetConfig(context).enable_optimizer) {
+			if (Settings::Get<EnableOptimizerSetting>(context)) {
 				bool changes_made = false;
 				auto new_expr =
 				    OrderedAggregateOptimizer::Apply(context, *first_aggregate, groups, nullptr, changes_made);

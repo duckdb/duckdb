@@ -107,27 +107,27 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		} else if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
 			auto &func_expr = expr->Cast<FunctionExpression>();
 
-			if (func_expr.filter) {
-				throw BinderException(func_expr.filter->GetQueryLocation(),
+			if (func_expr.Filter()) {
+				throw BinderException(func_expr.Filter()->GetQueryLocation(),
 				                      "FILTER clause is not yet supported for aggregates in USING KEY");
 			}
 
-			if (!func_expr.order_bys->orders.empty()) {
+			if (!func_expr.OrderBy()->orders.empty()) {
 				throw BinderException(func_expr.GetQueryLocation(),
 				                      "ORDER BY clause is not yet supported for aggregates in USING KEY");
 			}
 
-			if (func_expr.distinct) {
+			if (func_expr.Distinct()) {
 				throw BinderException(func_expr.GetQueryLocation(),
 				                      "DISTINCT is not yet supported for aggregates in USING KEY");
 			}
 
 			QueryErrorContext error_context(expr->GetQueryLocation());
 
-			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, func_expr.function_name,
+			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, func_expr.FunctionName(),
 			                                error_context);
 			auto entry =
-			    GetCatalogEntry(func_expr.catalog, DEFAULT_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
+			    GetCatalogEntry(func_expr.Catalog(), DEFAULT_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
 
 			if (!entry || entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 				throw BinderException(
@@ -141,7 +141,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			vector<LogicalType> aggregation_input_types;
 			vector<unique_ptr<Expression>> bound_children;
 			// Bind the children of the aggregate function
-			for (auto &child : func_expr.children) {
+			for (auto &child : func_expr.GetChildrenMutable()) {
 				auto bound_child = expression_binder.Bind(child);
 				aggregation_input_types.push_back(bound_child->GetReturnType());
 				bound_children.push_back(std::move(bound_child));

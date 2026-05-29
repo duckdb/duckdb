@@ -107,6 +107,8 @@ public:
 	static string GetSkipReasonSummary();
 	NewDatabaseConnection CreateDatabase(const string &db_path, bool load_database);
 	unique_ptr<Connection> ConnectToDatabase(DuckDB &db_ref);
+	bool IsVariableReplacement(const string &token_name);
+	Value GetVariableReplacement(const string &token_name, string &variable_name);
 
 private:
 	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);
