@@ -252,6 +252,8 @@ MergeIntoAction:
     - MatchedClauseAction
     - UpdateMatchClause
     - UpdateMatchInfo
+    - UpdateMatchSetAction
+    - UpdateByNameOrPosition
     - DeleteMatchClause
     - InsertMatchClause
     - DoNothingMatchClause
@@ -269,6 +271,7 @@ UpdateSetInfo:
     - UpdateSetTuple
     - UpdateSetElementList
     - UpdateMatchSetClause
+    - UpdateMatchSetInfo
 
 Constraint:
   type: "unique_ptr<Constraint>"
@@ -710,7 +713,7 @@ JoinPrefix:
 
 JoinQualifier:
   type: "JoinQualifier"
-  by_value: false
+  by_value: true
   rules:
     - JoinQualifier
     - OnClause
@@ -1131,6 +1134,8 @@ overrides:
   MatchedClause: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"
   NotMatchedClause: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"
   BySourceOrTarget: "MergeActionCondition"
+  BySource: "MergeActionCondition"
+  ByTarget: "MergeActionCondition"
   # pivot.gram
   UnpivotHeader: "vector<string>"
   UnpivotHeaderSingle: "vector<string>"

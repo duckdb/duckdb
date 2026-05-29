@@ -247,16 +247,18 @@ def is_pure_reference_choice(ast):
     return isinstance(ast, ChoiceNode) and all(isinstance(a, ReferenceNode) for a in ast.alternatives)
 
 
-def classify_choice_alternatives(alternatives, rule_types, identifier_override_rules):
+def classify_choice_alternatives(alternatives, rule_types, excluded_rules, identifier_override_rules):
     """
     Split choice alternatives into three groups:
       - transformer_alts: names with a registered transformer (in rule_types)
       - identifier_alts:  names that are identifier overrides (produce IdentifierParseResult)
+      - excluded_alts:    syntax-only alternatives with no semantic value
       - unknown_alts:     neither registered nor known overrides -- need manual handling
-    Returns (transformer_alts, identifier_alts, unknown_alts).
+    Returns (transformer_alts, identifier_alts, excluded_alts, unknown_alts).
     """
     transformer_alts = []
     identifier_alts = []
+    excluded_alts = []
     unknown_alts = []
     for ref in alternatives:
         assert isinstance(ref, ReferenceNode)
@@ -265,9 +267,11 @@ def classify_choice_alternatives(alternatives, rule_types, identifier_override_r
             transformer_alts.append(name)
         elif name in identifier_override_rules:
             identifier_alts.append(name)
+        elif name in excluded_rules:
+            excluded_alts.append(name)
         else:
             unknown_alts.append(name)
-    return transformer_alts, identifier_alts, unknown_alts
+    return transformer_alts, identifier_alts, excluded_alts, unknown_alts
 
 
 def _box_result(return_type, return_by_value):
@@ -294,6 +298,22 @@ def generate_choice_internal_full(rule_name, return_type, return_by_value):
         f"\tauto result = transformer.Transform<{return_type}>(choice_pr.GetResult());\n"
         + _box_result(return_type, return_by_value)
         + f"}}\n"
+    )
+
+
+def generate_choice_internal_with_default_alternatives(rule_name, return_type, return_by_value, excluded_alts):
+    """Choice wrapper where syntax-only alternatives map to a default-constructed result."""
+    excluded_conditions = " || ".join([f'choice_result.name == "{alt}"' for alt in excluded_alts])
+    return (
+        f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
+        f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
+        f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
+        f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
+        f"\tauto &choice_result = choice_pr.GetResult();\n"
+        f"\t{return_type} result {{}};\n"
+        f"\tif (!({excluded_conditions})) {{\n"
+        f"\t\tresult = transformer.Transform<{return_type}>(choice_result);\n"
+        f"\t}}\n" + _box_result(return_type, return_by_value) + f"}}\n"
     )
 
 
@@ -879,7 +899,7 @@ class GramFileResult:
     body_stubs: list  # cpp definition stubs for bodies that need hand-implementation
 
 
-def collect_generated(gram_stem, rules, rule_types, excluded_rules, matcher_rule_names, identifier_override_rules):
+def collect_generated(gram_stem, rules, rule_types, excluded_rules, provided_rule_names, identifier_override_rules):
     """Classify all rules; return a GramFileResult."""
     declarations = []
     implementations = []
@@ -890,7 +910,7 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, matcher_rule
     body_stubs = []
 
     for rule_name, rule in rules.items():
-        if rule_name in matcher_rule_names:
+        if rule_name in provided_rule_names:
             skipped.append((rule_name, "provided by matcher_rule_overrides"))
             continue
 
@@ -912,8 +932,8 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, matcher_rule
         return_by_value = _is_by_value(rule_name, rule_types)
 
         if is_pure_reference_choice(ast):
-            transformer_alts, identifier_alts, unknown_alts = classify_choice_alternatives(
-                ast.alternatives, rule_types, identifier_override_rules
+            transformer_alts, identifier_alts, excluded_alts, unknown_alts = classify_choice_alternatives(
+                ast.alternatives, rule_types, excluded_rules, identifier_override_rules
             )
             if unknown_alts:
                 skipped.append((rule_name, f"choice has unknown alternatives: {unknown_alts}"))
@@ -923,7 +943,7 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, matcher_rule
             registrations.append(generate_registration(rule_name))
             generated_rule_names.append(rule_name)
 
-            if not identifier_alts:
+            if not identifier_alts and not excluded_alts:
                 alt_types = {rule_types[alt].cpp_type for alt in transformer_alts}
                 if len(alt_types) == 1 and return_type in alt_types:
                     implementations.append(generate_choice_internal_full(rule_name, return_type, return_by_value))
@@ -947,10 +967,33 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules, matcher_rule
                     implementations.append(generate_choice_internal_with_body(rule_name, return_type, return_by_value))
                     manual_bodies.append((rule_name, f"choice body; alternative return types: {sorted(alt_types)}"))
                     body_stubs.append((rule_name, generate_choice_body_stub(rule_name, return_type)))
+            elif excluded_alts and not identifier_alts:
+                alt_types = {rule_types[alt].cpp_type for alt in transformer_alts}
+                if len(alt_types) == 1 and return_type in alt_types:
+                    implementations.append(
+                        generate_choice_internal_with_default_alternatives(
+                            rule_name, return_type, return_by_value, excluded_alts
+                        )
+                    )
+                else:
+                    declarations.append(generate_choice_body_declaration(rule_name, return_type))
+                    implementations.append(generate_choice_internal_with_body(rule_name, return_type, return_by_value))
+                    manual_bodies.append(
+                        (
+                            rule_name,
+                            f"choice body; syntax-only alternatives: {excluded_alts}, alternative return types: {sorted(alt_types)}",
+                        )
+                    )
+                    body_stubs.append((rule_name, generate_choice_body_stub(rule_name, return_type)))
             else:
                 declarations.append(generate_choice_body_declaration(rule_name, return_type))
                 implementations.append(generate_choice_internal_with_body(rule_name, return_type, return_by_value))
-                manual_bodies.append((rule_name, f"choice body; identifier alternatives: {identifier_alts}"))
+                reason_parts = []
+                if identifier_alts:
+                    reason_parts.append(f"identifier alternatives: {identifier_alts}")
+                if excluded_alts:
+                    reason_parts.append(f"syntax-only alternatives: {excluded_alts}")
+                manual_bodies.append((rule_name, f"choice body; {', '.join(reason_parts)}"))
                 body_stubs.append((rule_name, generate_choice_body_stub(rule_name, return_type)))
             continue
 
@@ -1192,7 +1235,8 @@ def _find_stale_manual_internals(gram_stem, generated_rule_names):
         return []
     text = cpp_path.read_text()
     return [
-        name for name in sorted(generated_rule_names)
+        name
+        for name in sorted(generated_rule_names)
         if re.search(rf'\bPEGTransformerFactory::Transform{re.escape(name)}Internal\s*\(', text)
     ]
 
@@ -1202,7 +1246,12 @@ def print_manual_steps(all_results):
 
     step = 1
 
-    all_skipped = [(r.gram_stem, rule_name, reason) for r in all_results for rule_name, reason in r.skipped]
+    all_skipped = [
+        (r.gram_stem, rule_name, reason)
+        for r in all_results
+        for rule_name, reason in r.skipped
+        if not reason.startswith("provided by ")
+    ]
     if all_skipped:
         print(f"\n  {step}. Skipped rules (not auto-generated):")
         current_stem = None
@@ -1270,7 +1319,7 @@ def print_manual_steps(all_results):
             step += 1
 
 
-def process_gram_file(gram_filename, rule_types, excluded_rules, matcher_rule_names, identifier_override_rules):
+def process_gram_file(gram_filename, rule_types, excluded_rules, provided_rule_names, identifier_override_rules):
     """Parse a .gram file and classify all its rules into a GramFileResult."""
     gram_stem = gram_filename.removesuffix('.gram')
     gram_path = statements_dir / gram_filename
@@ -1284,7 +1333,7 @@ def process_gram_file(gram_filename, rule_types, excluded_rules, matcher_rule_na
             rules[rule_name].return_type = info.cpp_type
 
     return collect_generated(
-        gram_stem, rules, rule_types, excluded_rules, matcher_rule_names, identifier_override_rules
+        gram_stem, rules, rule_types, excluded_rules, provided_rule_names, identifier_override_rules
     )
 
 
@@ -1323,7 +1372,7 @@ def main():
         # 'expression.gram',
         # 'insert.gram',
         'load.gram',
-        # 'merge_into.gram',
+        'merge_into.gram',
         # 'pivot.gram',
         'pragma.gram',
         'prepare.gram',

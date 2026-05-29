@@ -21,8 +21,8 @@ GRAMMAR_REGEX = re.compile(r"^(\w+)\s*<-")
 # Matches: PEGTransformerFactory::TransformRuleName(
 TRANSFORMER_REGEX = re.compile(r"PEGTransformerFactory::Transform(\w+)\s*\(")
 
-# Matches: RegisterEnum<...>("RuleName", ...);
-ENUM_RULE_REGEX = re.compile(r'RegisterEnum<[^>]+>\s*\(\s*"(\w+)"\s*,')
+# Matches: RegisterEnum<CppType>("RuleName", ...);
+ENUM_RULE_REGEX = re.compile(r'RegisterEnum<([^>]+)>\s*\(\s*"(\w+)"\s*,')
 
 # Matches: REGISTER_TRANSFORM(TransformRuleName)
 REGISTER_TRANSFORM_REGEX = re.compile(r"REGISTER_TRANSFORM\s*\(\s*Transform(\w+)\s*\)")
@@ -255,7 +255,7 @@ def find_factory_registrations(factory_file_path):
             content = f.read()
 
             for match in ENUM_RULE_REGEX.finditer(content):
-                enum_rules.add(match.group(1))
+                enum_rules.add(match.group(2))
 
             for match in REGISTER_TRANSFORM_REGEX.finditer(content):
                 registered_rules.add(match.group(1))

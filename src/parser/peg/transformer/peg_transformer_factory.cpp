@@ -492,29 +492,6 @@ void PEGTransformerFactory::RegisterConnect() {
 	REGISTER_TRANSFORM(TransformConnectStatement);
 }
 
-void PEGTransformerFactory::RegisterMergeInto() {
-	// merge_into.gram
-	REGISTER_TRANSFORM(TransformMergeIntoStatement);
-	REGISTER_TRANSFORM(TransformMergeIntoUsingClause);
-	REGISTER_TRANSFORM(TransformMergeMatch);
-	REGISTER_TRANSFORM(TransformMatchedClause);
-	REGISTER_TRANSFORM(TransformMatchedClauseAction);
-	REGISTER_TRANSFORM(TransformUpdateMatchClause);
-	REGISTER_TRANSFORM(TransformUpdateMatchInfo);
-	REGISTER_TRANSFORM(TransformDeleteMatchClause);
-	REGISTER_TRANSFORM(TransformInsertMatchClause);
-	REGISTER_TRANSFORM(TransformDoNothingMatchClause);
-	REGISTER_TRANSFORM(TransformErrorMatchClause);
-	REGISTER_TRANSFORM(TransformUpdateMatchSetClause);
-	REGISTER_TRANSFORM(TransformAndExpression);
-	REGISTER_TRANSFORM(TransformNotMatchedClause);
-	REGISTER_TRANSFORM(TransformBySourceOrTarget);
-	REGISTER_TRANSFORM(TransformInsertMatchInfo);
-	REGISTER_TRANSFORM(TransformInsertDefaultValues);
-	REGISTER_TRANSFORM(TransformInsertByNameOrPosition);
-	REGISTER_TRANSFORM(TransformInsertValuesList);
-}
-
 void PEGTransformerFactory::RegisterPivot() {
 	// pivot.gram
 	REGISTER_TRANSFORM(TransformPivotStatement);
@@ -768,9 +745,6 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("NotLikeOp", "!~~");
 	RegisterEnum<string>("NotSimilarToOp", "!~");
 
-	RegisterEnum<MergeActionCondition>("BySource", MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE);
-	RegisterEnum<MergeActionCondition>("ByTarget", MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET);
-
 	RegisterEnum<WindowExcludeMode>("ExcludeCurrentRow", WindowExcludeMode::CURRENT_ROW);
 	RegisterEnum<WindowExcludeMode>("ExcludeGroup", WindowExcludeMode::GROUP);
 	RegisterEnum<WindowExcludeMode>("ExcludeTies", WindowExcludeMode::TIES);
@@ -806,7 +780,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterExpression();
 	RegisterInsert();
 	RegisterConnect();
-	RegisterMergeInto();
 	RegisterPivot();
 	RegisterSelect();
 	RegisterKeywordsAndIdentifiers();
