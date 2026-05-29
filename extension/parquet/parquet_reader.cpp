@@ -184,7 +184,8 @@ static void LogRowGroupPrefetch(ClientContext &context, const string &file_path,
 	}
 	DUCKDB_LOG(context, ParquetPrefetchLogType, file_path, row_group_id, fully_filtered,
 	           ParquetPrefetchStrategyToString(state.prefetch_metrics.logger.strategy),
-	           state.prefetch_metrics.logger.prefetch_groups, minimal_filters);
+	           state.prefetch_metrics.logger.prefetch_groups, minimal_filters,
+	           state.prefetch_metrics.logger.accepted_column_gap);
 }
 
 using duckdb_parquet::ColumnChunk;
@@ -1730,6 +1731,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				} else {
 					ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
 				}
+			}
+			if (log_prefetch) {
+				state.prefetch_metrics.logger.accepted_column_gap = trans.GetAcceptedColumnGap();
 			}
 		}
 		result.Reset();

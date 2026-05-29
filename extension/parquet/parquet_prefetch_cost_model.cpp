@@ -28,7 +28,9 @@ uint64_t PrefetchCostModel::GetColumnGapSize() const {
 }
 
 void NetworkPrefetchStats::RecordRead(idx_t bytes, double seconds) {
-	if (seconds <= 0 || bytes == 0) {
+
+	static constexpr double MIN_SAMPLE_SECONDS = 1e-6;
+	if (bytes == 0 || seconds < MIN_SAMPLE_SECONDS) {
 		return;
 	}
 	const double latency = latency_seconds.load();
@@ -36,16 +38,22 @@ void NetworkPrefetchStats::RecordRead(idx_t bytes, double seconds) {
 	const double expected_transfer_time = static_cast<double>(bytes) / bandwidth;
 	// lets figure out if this read is dominated by either latency or bandwidth
 	if (expected_transfer_time < latency) {
-		// Latency-dominated sample
+		// Latency-dominated sample: the fixed per-request cost should be most of the time.
 		const double observed_latency = seconds - expected_transfer_time;
 		if (observed_latency > 0) {
 			latency_seconds.store(WeightedAVG(latency, observed_latency));
+		} else {
+			// bandwidth was underestimated, so raise it.
+			bandwidth_bytes_per_s.store(WeightedAVG(bandwidth, static_cast<double>(bytes) / seconds));
 		}
 	} else {
-		// Bandwidth-dominated sample
+		// Bandwidth-dominated sample: streaming the bytes should be most of the time.
 		const double transfer_time = seconds - latency;
 		if (transfer_time > 0) {
 			bandwidth_bytes_per_s.store(WeightedAVG(bandwidth, static_cast<double>(bytes) / transfer_time));
+		} else {
+			// latency was overestimated, so lower it.
+			latency_seconds.store(WeightedAVG(latency, seconds));
 		}
 	}
 }

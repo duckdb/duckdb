@@ -178,6 +178,11 @@ public:
 		ra_buffer.SetAcceptedColumnGap(accepted_column_gap);
 	}
 
+	// The accepted column gap currently used to coalesce adjacent ranges.
+	uint64_t GetAcceptedColumnGap() const {
+		return ra_buffer.merge_set.key_comp().accepted_column_gap;
+	}
+
 	uint32_t read(uint8_t *buf, uint32_t len) {
 		auto prefetch_buffer = ra_buffer.GetReadHead(location);
 		if (prefetch_buffer != nullptr && location - prefetch_buffer->location + len <= prefetch_buffer->size) {

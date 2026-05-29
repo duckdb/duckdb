@@ -148,11 +148,14 @@ struct ParquetLoggerPrefetchMetrics {
 	vector<bool> filters_used;
 	//! Prefetch strategy chosen for the current row group
 	ParquetPrefetchStrategy strategy = ParquetPrefetchStrategy::NONE;
+	//! Accepted column gap (bytes)
+	uint64_t accepted_column_gap = 0;
 
 	void Reset() {
 		prefetch_groups.clear();
 		std::fill(filters_used.begin(), filters_used.end(), false);
 		strategy = ParquetPrefetchStrategy::NONE;
+		accepted_column_gap = 0;
 	}
 
 	//! Build a prefetch group
