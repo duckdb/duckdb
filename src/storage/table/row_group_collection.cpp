@@ -1529,11 +1529,10 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 	// we greedily prefer to merge to the lowest target_count
 	// i.e. we prefer to merge 2 row groups into 1, than 3 row groups into 2
 	//
-	// RowIdsChanged conditions for scheduled vacuum merges:
-	// 1) the selected merge crosses an existing rowid gap
-	// 2) the selected merge includes a partially deleted row group
-	// Condition 3 is conservative because this planning pass does not inspect delete positions. A selected merge of
-	// fully-live, contiguous row groups preserves rowids.
+	// RowIdsChanged conditions for scheduled vacuum merges (over-approximation, not exact):
+	// 0) rowids are allowed to change in the first place.
+	// 1) the selected merge crosses an existing rowid gap.
+	// 2) the selected merge includes a partially deleted row group.
 	const idx_t target_row_group_size = GetRowGroupSize();
 	for (target_count = 1; target_count <= MAX_MERGE_COUNT; target_count++) {
 		auto total_target_size = target_count * target_row_group_size;
@@ -1551,8 +1550,8 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 			auto next_row_count = state.row_group_counts[next_idx].GetIndex();
 			if (next_row_count == 0) {
 				if (!state.can_change_row_ids) {
-					// This row group was dropped under a storage format that can persist rowid gaps. Stable-rowid
-					// vacuum should not extend the current merge window across that gap.
+					// This row group was dropped under a storage format that can persist rowid gaps, but we are not
+					// allowed to change rowids. Do not schedule vacuuming across this row group.
 					break;
 				}
 				continue;
