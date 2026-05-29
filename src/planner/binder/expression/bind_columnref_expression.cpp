@@ -19,7 +19,7 @@
 namespace duckdb {
 
 unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const string &column_name) {
-	return ColumnQualifier::GetSQLValueFunction(column_name);
+	return binder.GetSQLValueFunction(column_name);
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<ParsedExpression> base,
@@ -47,8 +47,8 @@ void ExpressionBinder::QualifyColumnNames(ExpressionBinder &expression_binder, u
 }
 
 BindResult ExpressionBinder::BindExpression(LambdaRefExpression &lambda_ref, idx_t depth) {
-	D_ASSERT(lambda_bindings && lambda_ref.lambda_idx < lambda_bindings->size());
-	return (*lambda_bindings)[lambda_ref.lambda_idx].Bind(lambda_ref, depth);
+	D_ASSERT(lambda_bindings && lambda_ref.LambdaIndex() < lambda_bindings->size());
+	return (*lambda_bindings)[lambda_ref.LambdaIndex()].Bind(lambda_ref, depth);
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error) {
@@ -118,7 +118,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 
 	// we bound the column reference
 	BoundColumnReferenceInfo ref;
-	ref.name = col_ref.column_names.back();
+	ref.name = col_ref.ColumnNames().back();
 	ref.query_location = col_ref.GetQueryLocation();
 	bound_columns.push_back(std::move(ref));
 	return result;

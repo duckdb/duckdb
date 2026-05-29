@@ -24,6 +24,10 @@ DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.05
 # Leave some CPU headroom so parallel test execution does not fully saturate CI runners.
 DEFAULT_WORKERS = "75%"
 DEFAULT_MAX_RETRIES = 4
+STABILIZE_SLOW_TOTAL_RUNS = 3
+STABILIZE_FAST_TOTAL_RUNS = 10
+STABILIZE_FAST_TOTAL_RUNS_LARGE = 3
+STABILIZE_CHANGED_TEST_THRESHOLD = 500
 STOP_REQUESTED = threading.Event()
 
 
@@ -148,6 +152,20 @@ def compute_batch_size(test_count: int, config: TestRunnerConfig):
     if test_count == 0:
         return 1
     return max(1, min(config.batch_size, (test_count + config.workers - 1) // config.workers))
+
+
+def split_fast_slow_tests(tests: list[TestCase]):
+    fast_tests = [test for test in tests if not test.is_slow]
+    slow_tests = [test for test in tests if test.is_slow]
+    return fast_tests, slow_tests
+
+
+def stabilization_extra_runs(candidate_count: int):
+    fast_total_runs = STABILIZE_FAST_TOTAL_RUNS
+    if candidate_count > STABILIZE_CHANGED_TEST_THRESHOLD:
+        fast_total_runs = STABILIZE_FAST_TOTAL_RUNS_LARGE
+    slow_total_runs = STABILIZE_SLOW_TOTAL_RUNS
+    return max(0, fast_total_runs - 1), max(0, slow_total_runs - 1)
 
 
 def load_tests(path: Path):
@@ -522,7 +540,7 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
 
 def report_batch_metrics(ctx: RunContext, batch_info, result, elapsed: float):
     if ctx.config.runtime_threshold_seconds is not None and elapsed >= ctx.config.runtime_threshold_seconds:
-        ctx.progress.print_message(f"{batch_info['batch'][0]} took {elapsed:.2f}s")
+        ctx.progress.print_message(f"warn: {batch_info['batch'][0]} took {elapsed:.2f}s")
     if (
         ctx.config.rss_memory_threshold_mib is not None
         and format_mib(result["peak_rss_bytes"]) >= ctx.config.rss_memory_threshold_mib
@@ -538,6 +556,11 @@ def parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--test-list", type=Path)
     parser.add_argument("--changed-tests", type=Path, help="extra test list file; requires --test-list")
+    parser.add_argument(
+        "--stabilize-tests",
+        action="store_true",
+        help="rerun selected tests with stabilization logic (fast/slow repetition policy)",
+    )
     parser.add_argument("--workers", default=DEFAULT_WORKERS)
     parser.add_argument(
         "--test-config",
@@ -685,11 +708,20 @@ def run_single_config(
         tests = load_tests(config.test_list)
         if stop_requested():
             return ConfigRunResult(returncode=130, passed_tests=0, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0)
+        if len(tests) == 0:
+            print(f"error: no tests selected for config '{invocation.label}'")
+            return ConfigRunResult(returncode=1, passed_tests=0, failed_tests=1, skipped_tests=0, elapsed_seconds=0.0)
+        stabilization_tests = []
         if args.changed_tests is not None:
             merged_names = {test.name for test in tests}
             base_names = {test.name for test in load_tests(args.test_list)}
-            added_test_count = len(merged_names - base_names)
+            changed_test_names = merged_names - base_names
+            added_test_count = len(changed_test_names)
             print(f"added {added_test_count} tests from --changed-tests file to the smoke test run")
+            changed_test_name_set = set(changed_test_names)
+            stabilization_tests = [test for test in tests if test.name in changed_test_name_set]
+        elif args.stabilize_tests:
+            stabilization_tests = tests
         computed_batch_size = compute_batch_size(len(tests), config)
 
         config_values = asdict(config)
@@ -702,7 +734,48 @@ def run_single_config(
         print(f"config: {config_output}")
 
         batches = list(chunked(tests, computed_batch_size))
-        return run_tests(config, batches, len(tests))
+        initial_run_result = run_tests(config, batches, len(tests))
+        if initial_run_result.returncode != 0 or not stabilization_tests:
+            return initial_run_result
+
+        fast_tests, slow_tests = split_fast_slow_tests(stabilization_tests)
+        fast_extra_runs, slow_extra_runs = stabilization_extra_runs(len(stabilization_tests))
+        print(
+            "stabilizing tests: "
+            f"{len(stabilization_tests)} changed/selected tests "
+            f"({len(fast_tests)} fast, {len(slow_tests)} slow), "
+            f"extra reruns fast={fast_extra_runs}, slow={slow_extra_runs}"
+        )
+
+        stabilization_failed = False
+        for rerun_idx in range(max(fast_extra_runs, slow_extra_runs)):
+            rerun_round = rerun_idx + 1
+            if rerun_idx < fast_extra_runs and fast_tests:
+                print(f"stabilization rerun {rerun_round}/{fast_extra_runs} for fast tests")
+                fast_batches = list(chunked(fast_tests, computed_batch_size))
+                fast_result = run_tests(config, fast_batches, len(fast_tests))
+                if fast_result.returncode != 0:
+                    stabilization_failed = True
+            if rerun_idx < slow_extra_runs and slow_tests:
+                print(f"stabilization rerun {rerun_round}/{slow_extra_runs} for slow tests")
+                slow_batches = list(chunked(slow_tests, computed_batch_size))
+                slow_result = run_tests(config, slow_batches, len(slow_tests))
+                if slow_result.returncode != 0:
+                    stabilization_failed = True
+            if stabilization_failed:
+                break
+
+        if stabilization_failed:
+            print("error: stabilization rerun failure detected")
+            return ConfigRunResult(
+                returncode=1,
+                passed_tests=initial_run_result.passed_tests,
+                failed_tests=max(1, initial_run_result.failed_tests),
+                skipped_tests=initial_run_result.skipped_tests,
+                elapsed_seconds=initial_run_result.elapsed_seconds,
+            )
+
+        return initial_run_result
     finally:
         if generated_test_list is not None:
             generated_test_list.unlink(missing_ok=True)

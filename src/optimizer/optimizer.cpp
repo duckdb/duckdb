@@ -49,6 +49,9 @@
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
+#include "duckdb/optimizer/remote_pushdown_optimizer.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -96,6 +99,10 @@ bool Optimizer::OptimizerDisabled(OptimizerType type) {
 }
 
 bool Optimizer::OptimizerDisabled(ClientContext &context_p, OptimizerType type) {
+	if (!Settings::Get<EnableOptimizerSetting>(context_p)) {
+		// all optimizes are disabled
+		return true;
+	}
 	auto &config = DBConfig::GetConfig(context_p);
 	return config.options.disabled_optimizers.find(type) != config.options.disabled_optimizers.end();
 }
@@ -110,9 +117,10 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 		return;
 	}
 	auto &profiler = QueryProfiler::Get(context);
-	profiler.StartPhase(MetricsUtils::GetOptimizerMetricByType(type));
-	callback();
-	profiler.EndPhase();
+	{
+		auto optimizer_timer = profiler.StartTimerInternal("optimizer." + StringUtil::Lower(EnumUtil::ToString(type)));
+		callback();
+	}
 	if (plan) {
 		Verify(*plan);
 	}
@@ -143,6 +151,19 @@ static bool CTEContainsDML(const LogicalOperator &op) {
 		}
 	}
 	return false;
+}
+
+void Optimizer::OptimizeStatement(unique_ptr<SQLStatement> &statement) {
+	if (!Settings::Get<EnableOptimizerSetting>(context)) {
+		return;
+	}
+	if (DatabaseManager::Get(context).GetRemoteCatalogCount() > 0) {
+		// if we have any remote catalogs attached then pushdown into remote
+		RunOptimizer(OptimizerType::REMOTE_PUSHDOWN, [&]() {
+			RemotePushdownOptimizer optimizer(binder);
+			optimizer.Rewrite(statement);
+		});
+	}
 }
 
 void Optimizer::RunBuiltInOptimizers() {
@@ -397,6 +418,9 @@ void Optimizer::RunBuiltInOptimizers() {
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {
+	if (!Settings::Get<EnableOptimizerSetting>(context)) {
+		return plan_p;
+	}
 	Verify(*plan_p);
 
 	this->plan = std::move(plan_p);

@@ -25,15 +25,24 @@ public:
 	//! because we use dummy tables to bind lambda parameters
 	LambdaRefExpression(idx_t lambda_idx, string column_name_p);
 
-	//! The index of the lambda parameter in the lambda_bindings vector
-	idx_t lambda_idx;
-	//! The name of the lambda parameter (in a specific Binding in lambda_bindings)
-	string column_name;
-
 public:
+	idx_t LambdaIndex() const {
+		return lambda_idx;
+	}
+	idx_t &LambdaIndexMutable() {
+		return lambda_idx;
+	}
+	const string &ColumnName() const {
+		return column_name;
+	}
+	string &ColumnNameMutable() {
+		return column_name;
+	}
+
 	bool IsScalar() const override;
 	string GetName() const override;
 	string ToString() const override;
+	bool Equals(const ParsedExpression &other) const override;
 	hash_t Hash() const override;
 	unique_ptr<ParsedExpression> Copy() const override;
 
@@ -43,5 +52,11 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
+
+private:
+	//! The index of the lambda parameter in the lambda_bindings vector
+	idx_t lambda_idx;
+	//! The name of the lambda parameter (in a specific Binding in lambda_bindings)
+	string column_name;
 };
 } // namespace duckdb

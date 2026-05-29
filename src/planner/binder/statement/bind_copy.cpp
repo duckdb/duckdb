@@ -470,8 +470,8 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 	if (expr->GetExpressionType() == ExpressionType::STAR) {
 		auto &star = expr->Cast<StarExpression>();
 		// for compatibility with previous copy implementation - turn a raw * into a * string literal
-		if (star.relation_name.empty() && star.exclude_list.empty() && star.replace_list.empty() &&
-		    star.rename_list.empty() && !star.expr && !star.columns) {
+		if (star.RelationName().empty() && star.ExcludeList().empty() && star.ReplaceList().empty() &&
+		    star.RenameList().empty() && !star.Expression() && !star.IsColumns()) {
 			result.push_back("*");
 			return result;
 		}
@@ -636,6 +636,10 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 					                            provided_option);
 				}
 				auto &original_value = provided_entry.second[0];
+				if (original_value.IsNull()) {
+					throw BinderException("NULL is not supported as a valid option for COPY option \"%s\"",
+					                      provided_option);
+				}
 				if (copy_option.type == original_value.type()) {
 					// types match
 					continue;

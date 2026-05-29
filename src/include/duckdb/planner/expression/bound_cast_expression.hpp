@@ -29,6 +29,15 @@ public:
 	BoundCastInfo bound_cast;
 
 public:
+	const LogicalType &TargetType() const {
+		return return_type;
+	}
+	const Expression &Child() const {
+		return *child;
+	}
+	bool IsTryCast() const {
+		return try_cast;
+	}
 	LogicalType source_type() const { // NOLINT: allow casing for legacy reasons
 		D_ASSERT(child->GetReturnType().IsValid());
 		return child->GetReturnType();

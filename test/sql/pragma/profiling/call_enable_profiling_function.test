@@ -20,7 +20,7 @@ SELECT CURRENT_SETTING('enable_profiling');
 NULL
 
 #########################################################################################################################
-#            enable_profiling()	without args		
+#            enable_profiling()	without args
 #########################################################################################################################
 
 statement ok
@@ -71,7 +71,7 @@ CALL enable_profiling(coverage='i dont exist hehe')
 Not implemented Error
 
 #########################################################################################################################
-#            test setting save location				
+#            test setting save location
 #########################################################################################################################
 
 query I
@@ -94,7 +94,7 @@ CALL enable_profiling(save_location='{TEST_DIR}/other_file.db')
 Parser Error: Invalid output file type: db
 
 #########################################################################################################################
-#            test setting mode	
+#            test setting mode
 #########################################################################################################################
 
 query I
@@ -124,58 +124,67 @@ Parser Error
 #            test setting metrics
 #########################################################################################################################
 
+# Invalid type for metrics
 statement error
-CALL enable_profiling(metrics = "hello");
+CALL enable_profiling(metrics = 42);
 ----
-IO Error: Could not parse the custom profiler settings file due to incorrect JSON
-
-# Set metrics from JSON
-statement ok
-CALL enable_profiling(metrics = {"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"})
-
-query I
-SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings'))
-----
-CUMULATIVE_CARDINALITY
-CUMULATIVE_ROWS_SCANNED
-OPERATOR_CARDINALITY
-OPERATOR_ROWS_SCANNED
-
-# Set metrics from STRUCT
-statement ok
-CALL enable_profiling(metrics = {'QUERY_NAME': true, 'EXTRA_INFO': true, 'OPERATOR_ROWS_SCANNED': false})
-
-query I
-SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings'))
-----
-EXTRA_INFO
-QUERY_NAME
+Invalid Input Error: EnableProfiling: metrics must be a list of strings or a VARCHAR pattern
 
 # Set metrics from LIST
 statement ok
-CALL enable_profiling(metrics = ['LATENCY', 'RESULT_SET_SIZE']);
+CALL enable_profiling(metrics = ['operator.intermediate_rows', 'operator.rows_scanned', 'query.total_intermediate_rows', 'query.total_rows_scanned'])
 
 query I
-SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
+SELECT UNNEST(CURRENT_SETTING('tracked_metrics')) ORDER BY ALL;
 ----
-LATENCY
-RESULT_SET_SIZE
+operator.intermediate_rows
+operator.rows_scanned
+query.total_intermediate_rows
+query.total_rows_scanned
 
-# Set metrics from JSON STRING
+# Set metrics from LIST (subset, some disabled)
 statement ok
-CALL enable_profiling(metrics = '{"CPU_TIME": "true", "BLOCKED_THREAD_TIME": "true"}');
+CALL enable_profiling(metrics = ['query.sql', 'operator.extra_info'])
 
 query I
-SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
+SELECT UNNEST(CURRENT_SETTING('tracked_metrics')) ORDER BY ALL;
 ----
-BLOCKED_THREAD_TIME
-CPU_TIME
+operator.extra_info
+query.sql
+
+# Set metrics from LIST
+statement ok
+CALL enable_profiling(metrics = ['query.total_time', 'operator.intermediate_size_bytes']);
+
+query I
+SELECT UNNEST(CURRENT_SETTING('tracked_metrics')) ORDER BY ALL;
+----
+operator.intermediate_size_bytes
+query.total_time
+
+# Set metrics from glob pattern string
+statement ok
+CALL enable_profiling(metrics = 'query.*');
+
+query I
+SELECT UNNEST(CURRENT_SETTING('tracked_metrics')) ORDER BY ALL;
+----
+query.*
+
+# Set metrics from wildcard
+statement ok
+CALL enable_profiling(metrics = '*');
+
+query I
+SELECT UNNEST(CURRENT_SETTING('tracked_metrics')) ORDER BY ALL;
+----
+*
 
 # Can't mix types though
 statement error
 CALL enable_profiling(metrics = ['LATENCY', 'RESULT_SET_SIZE' = true]);
 ----
-Conversion Error: 
+Conversion Error:
 
 statement error
 CALL enable_profiling(metrics = 'QUERY_NAME': true, 'EXTRA_INFO': true, 'OPERATOR_ROWS_SCANNED': false, "CUMULATIVE_CARDINALITY": "true");
@@ -183,57 +192,32 @@ CALL enable_profiling(metrics = 'QUERY_NAME': true, 'EXTRA_INFO': true, 'OPERATO
 Parser Error:
 
 statement ok
-RESET custom_profiling_settings;
+RESET tracked_metrics;
 
 query I
-SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
+SELECT UNNEST(CURRENT_SETTING('tracked_metrics')) ORDER BY ALL;
 ----
-ATTACH_LOAD_STORAGE_LATENCY
-ATTACH_REPLAY_WAL_LATENCY
-BLOCKED_THREAD_TIME
-CHECKPOINT_LATENCY
-COMMIT_LOCAL_STORAGE_LATENCY
-CPU_TIME
-CUMULATIVE_CARDINALITY
-CUMULATIVE_ROWS_SCANNED
-EXTRA_INFO
-LATENCY
-OPERATOR_CARDINALITY
-OPERATOR_NAME
-OPERATOR_ROWS_SCANNED
-OPERATOR_TIMING
-OPERATOR_TYPE
-QUERY_NAME
-RESULT_SET_SIZE
-ROWS_RETURNED
-SYSTEM_PEAK_BUFFER_MEMORY
-SYSTEM_PEAK_TEMP_DIR_SIZE
-TOTAL_BYTES_READ
-TOTAL_BYTES_WRITTEN
-TOTAL_MEMORY_ALLOCATED
-WAITING_TO_ATTACH_LATENCY
-WAL_REPLAY_ENTRY_COUNT
-WRITE_TO_WAL_LATENCY
+*
 
 # Set metrics straight into function
 statement ok
-CALL enable_profiling(['LATENCY', 'RESULT_SET_SIZE']);
+CALL enable_profiling(['query.total_time', 'operator.intermediate_size_bytes']);
 
 query I
-SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
+SELECT UNNEST(CURRENT_SETTING('tracked_metrics')) ORDER BY ALL;
 ----
-LATENCY
-RESULT_SET_SIZE
+operator.intermediate_size_bytes
+query.total_time
 
 # Set metrics straight into function with other settings too
 statement ok
-CALL enable_profiling(['TOTAL_BYTES_READ', 'TOTAL_BYTES_WRITTEN'], mode = 'detailed');
+CALL enable_profiling(['io.total_bytes_read', 'io.total_bytes_written'], mode = 'detailed');
 
 query I
-SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
+SELECT UNNEST(CURRENT_SETTING('tracked_metrics')) ORDER BY ALL;
 ----
-TOTAL_BYTES_READ
-TOTAL_BYTES_WRITTEN
+io.total_bytes_read
+io.total_bytes_written
 
 query I
 SELECT CURRENT_SETTING('profiling_mode');
@@ -247,7 +231,7 @@ CALL enable_profiling(mode = 'detailed', ['LATENCY', 'RESULT_SET_SIZE']);
 Invalid Error: Unnamed parameters cannot come after named parameters
 
 #########################################################################################################################
-#            test setting format AND save location	
+#            test setting format AND save location
 #########################################################################################################################
 
 # Set profiling format and save location to json file
@@ -271,11 +255,11 @@ CALL enable_profiling(format='query_tree', save_location='{TEST_DIR}/test.json')
 Invalid Input Error: EnableProfiling: the save_location must be a .txt file or match the specified format.
 
 #########################################################################################################################
-#            test all													
+#            test all
 #########################################################################################################################
 
 statement ok
-CALL enable_profiling(format='query_tree', save_location='{TEST_DIR}/test.txt', coverage='select', mode='standard', metrics=['QUERY_NAME', 'LATENCY'])
+CALL enable_profiling(format='query_tree', save_location='{TEST_DIR}/test.txt', coverage='select', mode='standard', metrics=['query.sql', 'query.total_time'])
 
 query I
 SELECT CURRENT_SETTING('enable_profiling');
@@ -298,13 +282,13 @@ SELECT CURRENT_SETTING('profiling_mode');
 standard
 
 query I
-SELECT UNNEST(CURRENT_SETTING('custom_profiling_settings')) ORDER BY ALL;
+SELECT UNNEST(CURRENT_SETTING('tracked_metrics')) ORDER BY ALL;
 ----
-LATENCY
-QUERY_NAME
+query.sql
+query.total_time
 
 #########################################################################################################################
-#            Invalid input		
+#            Invalid input
 #########################################################################################################################
 
 # Invalid parameter

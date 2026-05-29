@@ -19,6 +19,33 @@ static void ThrowJSONCopyParameterException(const string &loption) {
 	throw BinderException("COPY (FORMAT JSON) parameter %s expects a single argument.", loption);
 }
 
+static void ThrowJSONCopyNullException(const string &loption) {
+	throw BinderException("COPY (FORMAT JSON) parameter \"%s\" cannot be NULL.", loption);
+}
+
+static void ThrowJSONCopyTypeException(const string &loption, const Value &value, const string &expected_type) {
+	throw BinderException("COPY (FORMAT JSON) parameter \"%s\" expects a %s argument, but got %s.", loption,
+	                      expected_type, value.type());
+}
+
+static const Value &GetSingleJSONCopyValue(const string &loption, const vector<Value> &values) {
+	if (values.size() != 1) {
+		ThrowJSONCopyParameterException(loption);
+	}
+	if (values.back().IsNull()) {
+		ThrowJSONCopyNullException(loption);
+	}
+	return values.back();
+}
+
+static string GetSingleJSONCopyString(const string &loption, const vector<Value> &values) {
+	auto &value = GetSingleJSONCopyValue(loption, values);
+	if (value.type().id() != LogicalTypeId::VARCHAR) {
+		ThrowJSONCopyTypeException(loption, value, "VARCHAR");
+	}
+	return StringValue::Get(value);
+}
+
 static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	static const unordered_set<string> SUPPORTED_BASE_OPTIONS {
 	    "compression", "encoding", "use_tmp_file", "overwrite_or_ignore", "overwrite", "append", "filename_pattern",
@@ -37,18 +64,15 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	for (const auto &kv : copy_info.options) {
 		const auto &loption = StringUtil::Lower(kv.first);
 		if (loption == "dateformat" || loption == "date_format") {
-			if (kv.second.size() != 1) {
-				ThrowJSONCopyParameterException(loption);
-			}
-			date_format = StringValue::Get(kv.second.back());
+			date_format = GetSingleJSONCopyString(loption, kv.second);
 		} else if (loption == "timestampformat" || loption == "timestamp_format") {
-			if (kv.second.size() != 1) {
-				ThrowJSONCopyParameterException(loption);
-			}
-			timestamp_format = StringValue::Get(kv.second.back());
+			timestamp_format = GetSingleJSONCopyString(loption, kv.second);
 		} else if (loption == "array") {
 			if (kv.second.size() > 1) {
 				ThrowJSONCopyParameterException(loption);
+			}
+			if (!kv.second.empty() && kv.second.back().IsNull()) {
+				ThrowJSONCopyNullException(loption);
 			}
 			if (kv.second.empty() || BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN))) {
 				csv_copy_options["prefix"] = {"[\n\t"};
@@ -57,8 +81,11 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 			}
 		} else if (loption == "file_extension") {
 			// Since we set the file extension to "json" above, we need to override it
-			csv_copy_options["file_extension"] = {StringValue::Get(kv.second.back())};
+			csv_copy_options["file_extension"] = {GetSingleJSONCopyString(loption, kv.second)};
 		} else if (SUPPORTED_BASE_OPTIONS.find(loption) != SUPPORTED_BASE_OPTIONS.end()) {
+			if (!kv.second.empty() && kv.second.back().IsNull()) {
+				ThrowJSONCopyNullException(loption);
+			}
 			// We support these base options
 			csv_copy_options.insert(kv);
 		} else {
@@ -81,7 +108,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 
 		unique_ptr<ParsedExpression> expr;
 		auto columns_star = make_uniq<StarExpression>();
-		columns_star->columns = true;
+		columns_star->IsColumnsMutable() = true;
 		expr = std::move(columns_star);
 		if (!date_format.empty()) {
 			// apply date format
@@ -113,9 +140,9 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	select_node.from_table = std::move(source_ref);
 
 	auto columns_star = make_uniq<StarExpression>();
-	columns_star->columns = true;
+	columns_star->IsColumnsMutable() = true;
 	auto unpack = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
-	unpack->children.push_back(std::move(columns_star));
+	unpack->GetChildrenMutable().push_back(std::move(columns_star));
 
 	vector<unique_ptr<ParsedExpression>> struct_pack_args;
 	struct_pack_args.push_back(std::move(unpack));

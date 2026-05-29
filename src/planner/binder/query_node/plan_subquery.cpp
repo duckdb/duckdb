@@ -251,7 +251,7 @@ static bool PerformDelimOnType(const LogicalType &type) {
 }
 
 static bool PerformDuplicateElimination(Binder &binder, CorrelatedColumns &correlated_columns) {
-	if (!ClientConfig::GetConfig(binder.context).enable_optimizer) {
+	if (!Settings::Get<EnableOptimizerSetting>(binder.context)) {
 		// if optimizations are disabled we always do a delim join
 		return true;
 	}

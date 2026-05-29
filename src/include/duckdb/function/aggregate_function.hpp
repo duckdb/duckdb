@@ -508,7 +508,7 @@ public:
 	template <class STATE, class INPUT_TYPE, class OP>
 	static aggregate_cluster_update_t UnaryClusterUpdateCallback() {
 		if constexpr (AggregateExecutor::HasClusteredLocalState<OP, STATE>::value ||
-		              AggregateExecutor::HasClusteredOperation<OP>::value) {
+		              AggregateExecutor::HasClusteredOperation<OP, INPUT_TYPE, STATE>::value) {
 			return AggregateFunction::UnaryClusterUpdate<STATE, INPUT_TYPE, OP>;
 		} else {
 			return nullptr;

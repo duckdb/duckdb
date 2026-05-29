@@ -39,6 +39,7 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'vergesort')]
     includes += [os.path.join('third_party', 'yyjson', 'include')]
     includes += [os.path.join('third_party', 'zstd', 'include')]
+    includes += [os.path.join('third_party', 'jemalloc', 'include')]
     return includes
 
 
@@ -55,6 +56,7 @@ def third_party_sources():
     sources += [os.path.join('third_party', 'mbedtls')]
     sources += [os.path.join('third_party', 'yyjson')]
     sources += [os.path.join('third_party', 'zstd')]
+    sources += [os.path.join('third_party', 'jemalloc')]
     return sources
 
 

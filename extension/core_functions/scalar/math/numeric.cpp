@@ -978,14 +978,26 @@ namespace {
 struct PowOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA base, TB exponent) {
+		if (base == 0.0 && exponent < 0.0) {
+			throw OutOfRangeException("zero raised to a negative power is undefined");
+		}
+		return std::pow(base, exponent);
+	}
+};
+
+struct IEEEPowOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA base, TB exponent) {
 		return std::pow(base, exponent);
 	}
 };
 
 } // namespace
 ScalarFunction PowOperatorFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::BinaryFunction<double, double, double, PowOperator>);
+	ScalarFunction function({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingBinary<PowOperator, IEEEPowOperator>);
+	function.SetFallible();
+	return function;
 }
 
 //===--------------------------------------------------------------------===//

@@ -1827,10 +1827,10 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	row_groups->Checkpoint(writer, global_stats);
 	row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	if (writer.GetRebuildIndexes()) {
-		ActiveTimer timer;
+		MetricsTimer timer;
 		auto context = writer.TryGetClientContext();
 		if (context) {
-			timer = QueryProfiler::Get(*context).StartTimer(MetricType::CUMULATIVE_VACUUM_TIME);
+			timer = QueryProfiler::Get(*context).StartTimer<MetricStorageTotalVacuumTime>();
 		}
 		RebuildIndexes();
 		timer.EndTimer();
@@ -1882,8 +1882,17 @@ idx_t DataTable::GetRowGroupCountWithLocalStorage(ClientContext &context) {
 // Column Segment Info
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo(const QueryContext &context,
-                                                          ColumnSegmentInfoScanType scan_type) {
-	return row_groups->GetColumnSegmentInfo(context, scan_type);
+                                                          const ColumnSegmentInfoScanOptions &options) {
+	return row_groups->GetColumnSegmentInfo(context, options);
+}
+
+void DataTable::InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) {
+	row_groups->InitializeColumnSegmentInfoScan(state);
+}
+
+bool DataTable::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+                                      vector<ColumnSegmentInfo> &result) {
+	return row_groups->ScanColumnSegmentInfo(context, state, result);
 }
 
 //===--------------------------------------------------------------------===//

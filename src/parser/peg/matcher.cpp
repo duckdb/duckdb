@@ -457,6 +457,9 @@ public:
 		if (IsQuoted(text)) {
 			return true;
 		}
+		if (BaseTokenizer::CharacterIsInitialNumber(text[0])) {
+			return false;
+		}
 		return BaseTokenizer::CharacterIsKeyword(text[0]);
 	}
 
@@ -1022,6 +1025,7 @@ private:
 	Matcher &ReservedColumnName() const;
 	Matcher &ReservedScalarFunctionName() const;
 	Matcher &ReservedVariable() const;
+	Matcher &ReservedTypeName() const;
 
 	void AddKeywordOverride(const char *name, int32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
@@ -1101,6 +1105,10 @@ Matcher &MatcherFactory::ReservedColumnName() const {
 
 Matcher &MatcherFactory::TypeName() const {
 	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME));
+}
+
+Matcher &MatcherFactory::ReservedTypeName() const {
+	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME));
 }
 
 Matcher &MatcherFactory::ScalarFunctionName() const {
@@ -1445,6 +1453,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddRuleOverride("TableFunctionName", TableFunctionName());
 
 	AddRuleOverride("TypeName", TypeName());
+	AddRuleOverride("ReservedTypeName", ReservedTypeName());
 	AddRuleOverride("PragmaName", PragmaName());
 	AddRuleOverride("SettingName", SettingName());
 	AddRuleOverride("CopyOptionName", CopyOptionName());

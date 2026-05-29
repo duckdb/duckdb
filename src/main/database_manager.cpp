@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/extension_helper.hpp"
@@ -18,7 +19,7 @@ namespace duckdb {
 // Oids are started at 20000 to avoid colliding with Postgres builtin types, which end at 16383:
 // https://github.com/postgres/postgres/blob/db93988ab0e78396f2ed9e96c826ff988d12b9f2/src/include/access/transam.h#L156-L197
 DatabaseManager::DatabaseManager(DatabaseInstance &db)
-    : db(db), next_oid(20000), current_query_number(1), current_transaction_id(0) {
+    : db(db), next_oid(20000), current_query_number(1), current_transaction_id(0), remote_catalog_count(0) {
 	system = make_shared_ptr<AttachedDatabase>(db);
 	auto &config = DBConfig::GetConfig(db);
 	path_manager = config.path_manager;
@@ -147,7 +148,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 
 	if (requires_tracking_attaches) {
 		// Start timing the ATTACH-delay step.
-		auto timer = context.client_data->profiler->StartTimer(MetricType::WAITING_TO_ATTACH_LATENCY);
+		auto timer = context.client_data->profiler->StartTimer<MetricStorageWaitingToAttachLatency>();
 		// Start trying to attach.
 		while (InsertDatabasePath(info, options) == InsertDatabasePathResult::ALREADY_EXISTS) {
 			// database with this name and path already exists
@@ -232,9 +233,15 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 	}
 	auto &meta_transaction = MetaTransaction::Get(context);
 	if (detached_db) {
+		if (detached_db->GetCatalog().IsRemoteCatalog()) {
+			--remote_catalog_count;
+		}
 		meta_transaction.DetachDatabase(*detached_db);
 		detached_db->OnDetach(context);
 		detached_db.reset();
+	}
+	if (attached_db->GetCatalog().IsRemoteCatalog()) {
+		++remote_catalog_count;
 	}
 	auto &db_ref = meta_transaction.UseDatabase(attached_db);
 	auto &transaction = DuckTransaction::Get(context, *system);
@@ -322,6 +329,9 @@ shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const string &name)
 		}
 		attached_db = std::move(entry->second);
 		databases.erase(entry);
+	}
+	if (attached_db && attached_db->GetCatalog().IsRemoteCatalog()) {
+		--remote_catalog_count;
 	}
 	return attached_db;
 }

@@ -1,0 +1,135 @@
+diff --git a/src/include/quack_scan.hpp b/src/include/quack_scan.hpp
+index 4fa94f5..fbf8c48 100644
+--- a/src/include/quack_scan.hpp
++++ b/src/include/quack_scan.hpp
+@@ -27,6 +27,7 @@ struct QuackScanBindData : FunctionData {
+ 	vector<LogicalType> column_types;
+ 	vector<unique_ptr<DataChunkWrapper>> results;
+ 	shared_ptr<QuackClientConnection> client_connection;
++	optional_ptr<TableCatalogEntry> table_entry;
+ 	bool needs_more_fetch = true;
+ 	hugeint_t result_uuid;
+ };
+diff --git a/src/include/storage/quack_catalog.hpp b/src/include/storage/quack_catalog.hpp
+index 1389757..43a3e2f 100644
+--- a/src/include/storage/quack_catalog.hpp
++++ b/src/include/storage/quack_catalog.hpp
+@@ -54,6 +54,12 @@ public:
+ 	bool InMemory() override;
+ 	string GetDBPath() override;
+ 
++	bool IsRemoteCatalog() const override {
++		return true;
++	}
++	unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node) override;
++	unique_ptr<TableRef> RemoteExecute(ClientContext &context, const string &sql) override;
++
+ 	unique_ptr<ColumnDataCollection> ExecuteCommandInternal(ClientContext &context, const string &query);
+ 	const QuackUri &GetServerUri();
+ 	const string &GetConnectionId();
+diff --git a/src/quack_scan.cpp b/src/quack_scan.cpp
+index 6ecfb78..cfbab78 100644
+--- a/src/quack_scan.cpp
++++ b/src/quack_scan.cpp
+@@ -365,6 +365,15 @@ unique_ptr<FunctionData> QuackScanDeserialize(Deserializer &deserializer, TableF
+ 	throw NotImplementedException("Quack scans cannot be deserialized (yet?)");
+ }
+ 
++
++BindInfo QuackScanGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
++	auto &bind_data = bind_data_p->CastNoConst<QuackScanBindData>();
++	if (bind_data.table_entry) {
++		return BindInfo(*bind_data.table_entry);
++	}
++	return BindInfo(ScanType::EXTERNAL);
++}
++
+ TableFunction QuackScanFunction::GetFunction() {
+ 	auto fun = TableFunction("quack_query", {LogicalType::VARCHAR, LogicalType::VARCHAR}, QuackScan, QuackScanBind,
+ 	                         QuackScanInitGlobal, QuackScanInitLocal);
+@@ -376,6 +385,7 @@ TableFunction QuackScanFunction::GetFunction() {
+ 	fun.to_string = QuackScanToString;
+ 	fun.serialize = QuackScanSerialize;
+ 	fun.deserialize = QuackScanDeserialize;
++	fun.get_bind_info = QuackScanGetBindInfo;
+ 	// fun.filter_pushdown = true;
+ 	// fun.filter_prune = true;
+ 	return fun;
+@@ -389,6 +399,7 @@ TableFunction QuackScanByNameFunction::GetFunction() {
+ 	fun.to_string = QuackScanToString;
+ 	fun.serialize = QuackScanSerialize;
+ 	fun.deserialize = QuackScanDeserialize;
++	fun.get_bind_info = QuackScanGetBindInfo;
+ 	// fun.filter_pushdown = true;
+ 	// fun.filter_prune = true;
+ 	return fun;
+diff --git a/src/storage/quack_catalog.cpp b/src/storage/quack_catalog.cpp
+index f5b1f92..f43dea5 100644
+--- a/src/storage/quack_catalog.cpp
++++ b/src/storage/quack_catalog.cpp
+@@ -7,6 +7,9 @@
+ #include "duckdb/parser/parsed_data/drop_info.hpp"
+ #include "duckdb/planner/operator/logical_insert.hpp"
+ #include "duckdb/storage/database_size.hpp"
++#include "duckdb/parser/tableref/table_function_ref.hpp"
++#include "duckdb/parser/expression/constant_expression.hpp"
++#include "duckdb/parser/expression/function_expression.hpp"
+ 
+ #include "storage/quack_catalog.hpp"
+ #include "storage/quack_table.hpp"
+@@ -121,6 +124,19 @@ DatabaseSize QuackCatalog::GetDatabaseSize(ClientContext &context) {
+ 	throw NotImplementedException("GetDatabaseSize not implemented yet");
+ }
+ 
++unique_ptr<TableRef> QuackCatalog::RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node) {
++	return RemoteExecute(context, node->ToString());
++}
++
++unique_ptr<TableRef> QuackCatalog::RemoteExecute(ClientContext &context, const string &sql) {
++	vector<unique_ptr<ParsedExpression>> args;
++	args.push_back(make_uniq<ConstantExpression>(Value(GetName())));
++	args.push_back(make_uniq<ConstantExpression>(Value(sql)));
++	auto func_ref = make_uniq<TableFunctionRef>();
++	func_ref->function = make_uniq<FunctionExpression>("quack_query_by_name", std::move(args));
++	return func_ref;
++}
++
+ //! Whether or not this is an in-memory SQLite database
+ bool QuackCatalog::InMemory() {
+ 	throw NotImplementedException("InMemory not implemented yet");
+diff --git a/src/storage/quack_insert.cpp b/src/storage/quack_insert.cpp
+index d093676..ee9b01f 100644
+--- a/src/storage/quack_insert.cpp
++++ b/src/storage/quack_insert.cpp
+@@ -83,8 +83,8 @@ SinkFinalizeType QuackInsert::Finalize(Pipeline &pipeline, Event &event, ClientC
+ SourceResultType QuackInsert::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                               OperatorSourceInput &input) const {
+ 	auto &insert_gstate = sink_state->Cast<QuackInsertGlobalState>();
++	chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(insert_gstate.insert_count)));
+ 	chunk.SetCardinality(1);
+-	chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(insert_gstate.insert_count)));
+ 	return SourceResultType::FINISHED;
+ }
+ 
+@@ -103,6 +103,9 @@ InsertionOrderPreservingMap<string> QuackInsert::ParamsToString() const {
+ 
+ PhysicalOperator &QuackCatalog::PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op,
+                                            optional_ptr<PhysicalOperator> plan) {
++	if (op.return_chunk) {
++		throw NotImplementedException("RETURNING not yet supported for QUACK_INSERT");
++	}
+ 	D_ASSERT(plan);
+ 	if (!op.column_index_map.empty()) {
+ 		plan = planner.ResolveDefaultsProjection(op, *plan);
+diff --git a/src/storage/quack_table.cpp b/src/storage/quack_table.cpp
+index 6258ea7..8f1da8d 100644
+--- a/src/storage/quack_table.cpp
++++ b/src/storage/quack_table.cpp
+@@ -84,6 +84,7 @@ TableFunction QuackTableCatalogEntry::GetScanFunction(ClientContext &context, un
+ 		bind_data->column_names.push_back(col.Name());
+ 		bind_data->column_types.push_back(col.Type());
+ 	}
++	bind_data->table_entry = this;
+ 	bind_data_p = std::move(bind_data);
+ 	return QuackScanFunction::GetFunction();
+ }

@@ -10,6 +10,24 @@ build_loadable_extension_directory(
   loadable_extension_demo.cpp)
 
 build_loadable_extension_directory(
+  explicit_extension_schema
+  "CPP"
+  test/extension
+  "default-version"
+  ""
+  ${PARAMETERS}
+  explicit_extension_schema.cpp)
+
+build_loadable_extension_directory(
+  explicit_extension_schema_alias
+  "CPP"
+  test/extension
+  "default-version"
+  ""
+  ${PARAMETERS}
+  explicit_extension_schema_alias.cpp)
+
+build_loadable_extension_directory(
   loadable_extension_demo_double
   "CPP"
   test/extension

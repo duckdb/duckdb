@@ -684,13 +684,13 @@ void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> 
 		result.push_back(const_expr.GetValue());
 	} else if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref_expr = expr->Cast<ColumnRefExpression>();
-		for (auto &col : col_ref_expr.column_names) {
+		for (auto &col : col_ref_expr.ColumnNames()) {
 			result.push_back(Value(col));
 		}
 	} else if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func_expr = expr->Cast<FunctionExpression>();
-		if (func_expr.function_name == "row") {
-			for (auto &col : func_expr.children) {
+		if (func_expr.FunctionName() == "row") {
+			for (auto &col : func_expr.GetChildrenMutable()) {
 				GetValueFromExpression(col, result);
 			}
 		}
@@ -709,10 +709,10 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 	}
 	case ExpressionType::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
-		if (function.function_name != "row") {
+		if (function.FunctionName() != "row") {
 			return false;
 		}
-		for (auto &child : function.children) {
+		for (auto &child : function.GetChildrenMutable()) {
 			if (!TransformPivotInList(child, entry)) {
 				return false;
 			}
@@ -792,7 +792,7 @@ PivotColumn PEGTransformerFactory::TransformPivotValueList(PEGTransformer &trans
 		return result;
 	}
 	auto &func_expr = pivot_expression->Cast<FunctionExpression>();
-	if (func_expr.function_name != "row") {
+	if (func_expr.FunctionName() != "row") {
 		result.pivot_expressions.push_back(std::move(pivot_expression));
 		return result;
 	}
@@ -807,7 +807,7 @@ PivotColumn PEGTransformerFactory::TransformPivotValueList(PEGTransformer &trans
 		}
 	}
 	if (has_tuple_entries) {
-		result.pivot_expressions = std::move(func_expr.children);
+		result.pivot_expressions = std::move(func_expr.GetChildrenMutable());
 	} else {
 		result.pivot_expressions.push_back(std::move(pivot_expression));
 	}
@@ -1225,7 +1225,7 @@ vector<OrderByNode> PEGTransformerFactory::TransformOrderByAll(PEGTransformer &t
 		order_by_null_type = transformer.Transform<OrderByNullType>(order_by_null_pr.GetResult());
 	}
 	auto star_expr = make_uniq<StarExpression>();
-	star_expr->columns = true;
+	star_expr->IsColumnsMutable() = true;
 	result.push_back(OrderByNode(order_type, order_by_null_type, std::move(star_expr)));
 	return result;
 }
@@ -1409,8 +1409,8 @@ void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> ex
                                                  GroupByNode &result, vector<ProjectionIndex> &result_set) {
 	if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &func = expression->Cast<FunctionExpression>();
-		if (func.function_name == "row") {
-			for (auto &child : func.children) {
+		if (func.FunctionName() == "row") {
+			for (auto &child : func.GetChildrenMutable()) {
 				AddGroupByExpression(std::move(child), map, result, result_set);
 			}
 			return;

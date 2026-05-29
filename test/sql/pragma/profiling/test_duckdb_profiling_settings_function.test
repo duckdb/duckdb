@@ -5,11 +5,11 @@
 query I
 SELECT * EXCLUDE(value, description) FROM duckdb_profiling_settings();
 ----
-custom_profiling_settings
 enable_profiling
 profiling_coverage
 profiling_mode
 profiling_output
+tracked_metrics
 
 statement ok
 PRAGMA enable_profiling='json';
@@ -24,13 +24,13 @@ statement ok
 PRAGMA profiling_mode='DETAILED';
 
 statement ok
-pragma custom_profiling_settings='{"CPU_TIME": "true"}';
+SET tracked_metrics = ['query.cpu_time'];
 
 query II
 SELECT * EXCLUDE(description) FROM duckdb_profiling_settings();
 ----
-custom_profiling_settings	[CPU_TIME]
 enable_profiling	json
 profiling_coverage	ALL
 profiling_mode	detailed
 profiling_output	{TEST_DIR}/test_profiling_output.json
+tracked_metrics	[query.cpu_time]

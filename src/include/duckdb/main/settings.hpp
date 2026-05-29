@@ -74,10 +74,24 @@ struct Settings {
 		return StringUtil::ToDouble(OP::DefaultValue);
 	}
 
+	template <class SOURCE>
+	static void Set(SOURCE &source, idx_t setting_index, SetScope scope, Value target_value) {
+		SetSettingInternal(source, setting_index, scope, std::move(target_value));
+	}
+
+	template <class OP, class SOURCE>
+	static void Set(SOURCE &source, SetScope scope, Value target_value) {
+		Set(source, OP::SettingIndex, scope, std::move(target_value));
+	}
+
 private:
 	static bool TryGetSettingInternal(const DatabaseInstance &db, idx_t setting_index, Value &result);
 	static bool TryGetSettingInternal(const DBConfig &config, idx_t setting_index, Value &result);
 	static bool TryGetSettingInternal(const ClientContext &context, idx_t setting_index, Value &result);
+
+	static void SetSettingInternal(DatabaseInstance &db, idx_t setting_index, SetScope scope, Value target_value);
+	static void SetSettingInternal(DBConfig &config, idx_t setting_index, SetScope scope, Value target_value);
+	static void SetSettingInternal(ClientContext &context, idx_t setting_index, SetScope scope, Value target_value);
 };
 
 static constexpr idx_t SETTING_INDEX_BASE = __COUNTER__ + 1;
@@ -916,6 +930,16 @@ struct EnableObjectCacheSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct EnableOptimizerSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_optimizer";
+	static constexpr const char *Description = "Whether or not query optimization is enabled";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct EnableProfilingSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "enable_profiling";
@@ -1289,6 +1313,17 @@ struct LateMaterializationMaxRowsSetting {
 	    "The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "50";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct LegacyMetricsFormatSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "legacy_metrics_format";
+	static constexpr const char *Description =
+	    "When enabled, profiling output uses the legacy flat format instead of the current grouped format";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
@@ -1752,6 +1787,17 @@ struct ThreadsSetting {
 	static constexpr const char *InputType = "BIGINT";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct TrackedMetricsSetting {
+	using RETURN_TYPE = vector<string>;
+	static constexpr const char *Name = "tracked_metrics";
+	static constexpr const char *Description =
+	    "A list of metric glob patterns to enable for collection (e.g. ['query.*', 'optimizer.*'])";
+	static constexpr const char *InputType = "VARCHAR[]";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
 };
 

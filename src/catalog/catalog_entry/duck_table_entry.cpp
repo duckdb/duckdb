@@ -332,8 +332,8 @@ void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 
 static void RenameExpression(ParsedExpression &root_expr, RenameColumnInfo &info) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
-		if (colref.column_names.back() == info.old_name) {
-			colref.column_names.back() = info.new_name;
+		if (colref.ColumnNames().back() == info.old_name) {
+			colref.ColumnNamesMutable().back() = info.new_name;
 		}
 	});
 }
@@ -1359,8 +1359,17 @@ TableFunction DuckTableEntry::GetScanFunction(ClientContext &context, unique_ptr
 }
 
 vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo(const QueryContext &context,
-                                                               ColumnSegmentInfoScanType scan_type) {
-	return storage->GetColumnSegmentInfo(context, scan_type);
+                                                               const ColumnSegmentInfoScanOptions &options) {
+	return storage->GetColumnSegmentInfo(context, options);
+}
+
+void DuckTableEntry::InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) {
+	storage->InitializeColumnSegmentInfoScan(state);
+}
+
+bool DuckTableEntry::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+                                           vector<ColumnSegmentInfo> &result) {
+	return storage->ScanColumnSegmentInfo(context, state, result);
 }
 
 TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {

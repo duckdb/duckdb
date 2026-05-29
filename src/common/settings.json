@@ -603,6 +603,13 @@
         "default_value": "false"
     },
     {
+        "name": "enable_optimizer",
+        "description": "Whether or not query optimization is enabled",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "true"
+    },
+    {
         "name": "enable_profiling",
         "description": "Enables profiling, and sets the output format (JSON, QUERY_TREE, QUERY_TREE_OPTIMIZER)",
         "type": "VARCHAR",
@@ -880,6 +887,13 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "50"
+    },
+    {
+        "name": "legacy_metrics_format",
+        "description": "When enabled, profiling output uses the legacy flat format instead of the current grouped format",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "lock_configuration",
@@ -1208,6 +1222,13 @@
         "aliases": [
             "worker_threads"
         ]
+    },
+    {
+        "name": "tracked_metrics",
+        "description": "A list of metric glob patterns to enable for collection (e.g. ['query.*', 'optimizer.*'])",
+        "type": "VARCHAR[]",
+        "scope": "local",
+        "custom_implementation": true
     },
     {
         "name": "username",

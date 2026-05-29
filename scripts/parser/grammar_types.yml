@@ -60,6 +60,7 @@ SQLStatement:
     - ExecuteStatement
     - ExplainStatement
     - ExplainableStatements
+    - ExplainSelectStatement
     - ExportStatement
     - ExpressionStatement
     - ImportStatement
@@ -83,6 +84,7 @@ SQLStatement:
     - UpdateStatement
     - UseStatement
     - VacuumStatement
+    - PragmaAssignOrFunction
 
 SelectStatement:
   type: "unique_ptr<SelectStatement>"
@@ -100,7 +102,6 @@ SelectStatement:
     - OptionalParensSimpleSelect
     - SimpleSelectParens
     - SimpleSelect
-    - EnumSelectType
     - ValuesClause
     - TableStatement
 
@@ -108,6 +109,7 @@ SetStatement:
   type: "unique_ptr<SetStatement>"
   by_value: true
   rules:
+    - SetAssignmentOrTimeZone
     - SetTimeZone
     - StandardAssignment
 
@@ -209,6 +211,9 @@ CreateTypeInfo:
   by_value: true
   rules:
     - CreateType
+    - CreateTypeFromType
+    - EnumSelectType
+    - EnumStringLiteralList
 
 MacroFunction:
   type: "unique_ptr<MacroFunction>"
@@ -260,14 +265,7 @@ Constraint:
     - TopLevelConstraintList
     - TopPrimaryKeyConstraint
     - TopUniqueConstraint
-    - CheckConstraint
     - TopForeignKeyConstraint
-
-ForeignKeyConstraint:
-  type: "unique_ptr<ForeignKeyConstraint>"
-  by_value: true
-  rules:
-    - ForeignKeyConstraint
 
 WindowExpression:
   type: "unique_ptr<WindowExpression>"
@@ -280,6 +278,16 @@ WindowExpression:
     - WindowFrameContentsParens
     - WindowFrameNameContentsParens
     - WindowFrameContents
+
+SetScope:
+  type: "SetScope"
+  by_value: false
+  rules:
+    - LocalScope
+    - GlobalScope
+    - SessionScope
+    - VariableScope
+    - SettingScope
 
 SampleOptions:
   type: "unique_ptr<SampleOptions>"
@@ -415,6 +423,15 @@ Expression:
     - ZoneValue
     - ZoneIntervalWithInterval
     - ZoneIntervalWithPrecision
+    - ZoneLocal
+    - ZoneDefault
+    - ZoneStringLiteral
+    - ZoneIdentifier
+    - DefArg
+    - DefArgNull
+    - DefArgKeyword
+    - DefArgStringLiteral
+    - NoneLiteral
     - NumberLiteral
     - TimeType
     - NumericType
@@ -438,8 +455,6 @@ Expression:
     - NumericModType
     - CopyFileName
     - DatabasePath
-    - DefaultValue
-    - ColumnCollation
     - UsingExpression
     - IndexElement
     - RelOptionArgumentOpt
@@ -542,7 +557,7 @@ ResultModifierList:
 
 OrderByNodeList:
   type: "vector<OrderByNode>"
-  by_value: false
+  by_value: true
   rules:
     - OrderByClause
     - OrderByExpressions
@@ -614,6 +629,11 @@ QualifiedName:
     - QualifiedName
     - QualifiedSchemaName
     - QualifiedIndexName
+    - QualifiedSchemaNameString
+    - QualifiedIndexNameString
+    - CatalogReservedSchema
+    - SchemaReservedIndex
+    - CatalogReservedSchemaIndex
     - FunctionIdentifier
     - SchemaReservedFunctionName
     - CatalogReservedSchemaFunctionName
@@ -742,6 +762,15 @@ TriggerEventInfo:
     - TriggerEventUpdate
     - TriggerEventUpdateOf
 
+TriggerTableReferencingInfo:
+  type: "TriggerTableReferencingInfo"
+  by_value: false
+  rules:
+    - ReferencingClause
+    - ReferencingItem
+    - ReferencingNewTableAs
+    - ReferencingOldTableAs
+
 VacuumOptions:
   type: "VacuumOptions"
   by_value: false
@@ -754,6 +783,7 @@ SettingInfo:
   type: "SettingInfo"
   by_value: false
   rules:
+    - SetVariableOrSetting
     - SetSetting
     - SetVariable
 
@@ -787,6 +817,7 @@ String:
     - CollationName
     - IndexType
     - RelOptionName
+    - DottedIdentifierString
     - IndexName
     - ColId
     - ColIdOrString
@@ -794,6 +825,7 @@ String:
     - TypeFuncName
     - Identifier
     - ExportSource
+    - ReservedKeyword
     - VersionNumber
     - LikeVariations
     - OtherOperator
@@ -810,6 +842,9 @@ String:
     - PrefixOperator
     - TableQualification
     - ReservedTableQualification
+    - CatalogQualification
+    - SchemaQualification
+    - ReservedSchemaQualification
     - BaseWindowName
     - Framing
     - AtUnit
@@ -836,11 +871,18 @@ String:
     - ExplainOptionName
     - OperatorLiteral
     - DotIdentifier
+    - IdentifierDot
     - VacuumOption
     - OptAnalyze
     - OptFull
     - OptFreeze
     - OptVerbose
+    - ExtensionAlias
+    - ExplainOptionAnalyze
+    - DropNullability
+    - SetNullability
+    - MinValue
+    - MaxValue
 
 Bool:
   type: "bool"
@@ -858,6 +900,8 @@ Bool:
     - Materialized
     - SampleUnit
     - DropBehavior
+    - CascadeDropBehavior
+    - RestrictDropBehavior
     - AnyOrAll
     - IgnoreOrRespectNulls
     - PrecedingOrFollowing
@@ -867,8 +911,16 @@ Bool:
     - CheckpointForce
     - IfNotExists
     - OrReplace
+    - FunctionTypeMacro
+    - FunctionTypeMacroKeyword
+    - FunctionTypeFunction
     - DeallocatePrepare
     - CreateRecursive
+    - ExplainAnalyze
+    - WithOrWithoutOids
+    - WithOids
+    - WithoutOids
+    - UniqueIndex
 
 
 Int64:
@@ -883,7 +935,12 @@ LogicalType:
   by_value: false
   rules:
     - Type
-    - EnumStringLiteralList
+
+LogicalTypeList:
+  type: "vector<LogicalType>"
+  by_value: false
+  rules:
+    - TypeList
 
 TransactionModifierType:
   type: "TransactionModifierType"
@@ -896,11 +953,82 @@ TransactionModifierType:
 # Structs passed by value (contain move-only members like unique_ptr<T>)
 # ---------------------------------------------------------------------------
 
+AddColumnEntry:
+  type: "AddColumnEntry"
+  by_value: true
+  rules:
+    - AddColumnEntry
+
+ColumnConstraintEntry:
+  type: "ColumnConstraintEntry"
+  by_value: true
+  rules:
+    - ColumnConstraint
+    - NotNullConstraint
+    - UniqueConstraint
+    - PrimaryKeyConstraint
+    - DefaultValue
+    - CheckConstraint
+    - ForeignKeyConstraint
+    - ColumnCollation
+    - ColumnCompression
+
 AnalyzeTarget:
   type: "AnalyzeTarget"
   by_value: true
   rules:
     - AnalyzeTarget
+
+CommonTableExpressionMap:
+  type: "CommonTableExpressionMap"
+  by_value: true
+  rules:
+    - WithClause
+
+CatalogType:
+  type: "CatalogType"
+  by_value: false
+  rules:
+    - CommentOnType
+    - CommentTable
+    - CommentSequence
+    - CommentFunction
+    - CommentMacroTable
+    - CommentMacro
+    - CommentView
+    - CommentDatabase
+    - CommentIndex
+    - CommentSchema
+    - CommentType
+    - CommentColumn
+    - TableOrView
+    - MaterializedViewEntry
+
+
+Value:
+  type: "Value"
+  by_value: false
+  rules:
+    - CommentValue
+    - NullLiteral
+    - UnknownLiteral
+    - TrueLiteral
+    - FalseLiteral
+
+TriggerTiming:
+  type: "TriggerTiming"
+  by_value: false
+  rules:
+    - TriggerBefore
+    - TriggerAfter
+    - TriggerInsteadOf
+
+TriggerForEach:
+  type: "TriggerForEach"
+  by_value: false
+  rules:
+    - ForEachRow
+    - ForEachStatement
 
 # ---------------------------------------------------------------------------
 # Overrides: rules with unique or complex return types that don't share a
@@ -914,9 +1042,6 @@ overrides:
   TimeOrTimestamp: "LogicalTypeId"
   Interval: "DatePartSpecifier"
   IntervalToInterval: "DatePartSpecifier"
-  # comment.gram
-  CommentOnType: "CatalogType"
-  CommentValue: "Value"
   # copy.gram
   CopyDatabaseFlag: "CopyDatabaseType"
   SchemaOrData: "CopyDatabaseType"
@@ -927,12 +1052,7 @@ overrides:
   RelOptionList: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   Oids: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   # create_table.gram
-  AddColumnEntry: "AddColumnEntry"
   ColumnDefinition: "ConstraintColumnDefinition"
-  ColumnCompression: "CompressionType"
-  PrimaryKeyConstraint: "pair<bool, ConstraintType>"
-  UniqueConstraint: "pair<bool, ConstraintType>"
-  NotNullConstraint: "pair<bool, ConstraintType>"
   KeyActions: "KeyActions"
   GeneratedColumn: "GeneratedColumnDefinition"
   CreateTableAs: "CreateTableAs"
@@ -943,11 +1063,23 @@ overrides:
   TriggerTiming: "TriggerTiming"
   # create_type.gram (EnumSelectType is already in SelectStatement category)
   # describe.gram
+  DescribeTarget:
+    type: "DescribeTarget"
+    by_value: true
+  DescribeBaseTableName:
+    type: "DescribeTarget"
+    by_value: true
+  DescribeStringLiteral:
+    type: "DescribeTarget"
+    by_value: true
   ShowOrDescribeOrSummarize: "ShowType"
   ShowOrDescribe: "ShowType"
   Summarize: "ShowType"
-  # drop.gram
-  TableOrView: "CatalogType"
+  SummarizeRule: "ShowType"
+  ShowRule: "ShowType"
+  DescribeRule: "ShowType"
+  DescribeLongRule: "ShowType"
+  DescRule: "ShowType"
   # expression.gram
   ComparisonOperator: "ExpressionType"
   IsDistinctFromOp: "ExpressionType"
@@ -976,6 +1108,8 @@ overrides:
   ByNameOrPosition: "InsertColumnOrder"
   # load.gram
   FromSource: "ExtensionRepositoryInfo"
+  FromSourceIdentifier: "ExtensionRepositoryInfo"
+  FromSourceString: "ExtensionRepositoryInfo"
   # merge_into.gram
   MergeMatch: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"
   MatchedClause: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"
@@ -989,6 +1123,8 @@ overrides:
   # create_sequence.gram
   SequenceOption: "pair<string, unique_ptr<SequenceOption>>"
   SeqSetCycle: "pair<string, unique_ptr<SequenceOption>>"
+  SeqCycle: "pair<string, unique_ptr<SequenceOption>>"
+  SeqNoCycle: "pair<string, unique_ptr<SequenceOption>>"
   SeqSetIncrement: "pair<string, unique_ptr<SequenceOption>>"
   SeqSetMinMax: "pair<string, unique_ptr<SequenceOption>>"
   SeqNoMinMax: "pair<string, unique_ptr<SequenceOption>>"
@@ -996,7 +1132,6 @@ overrides:
   SeqOwnedBy: "pair<string, unique_ptr<SequenceOption>>"
   # select.gram
   SetopType: "SetOperationType"
-  WithClause: "CommonTableExpressionMap"
   WithStatement: "pair<string, unique_ptr<CommonTableExpressionInfo>>"
   JoinType: "JoinType"
   SampleProperties: "pair<SampleMethod, optional_idx>"
@@ -1012,13 +1147,14 @@ overrides:
   # update.gram
   UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
   UpdateSetColumnTarget: "string"
+
 # ---------------------------------------------------------------------------
 # excluded_rules: no transformer stub generated, no semantic value extracted
 # ---------------------------------------------------------------------------
 
 excluded_rules:
+  - CommentValue
   - Program
-  - FunctionType
   - Database
   - AbortOrRollback
   - CommitOrEnd
@@ -1026,7 +1162,6 @@ excluded_rules:
   - Transaction
   - VariableAssign
   - MacroOrFunction
-  - SettingScope
   - ColLabel
   - GroupingOrGroupingId
   - DefaultValues
@@ -1055,14 +1190,11 @@ excluded_rules:
   - CopyOptionName
   - AtTimeZoneOperator
   - Generated
-  - ColumnConstraint
   - AlwaysOrByDefault
   - Lateral
   - ConstraintNameClause
-  - ReservedSchemaQualification
   - UsingSample
   - TableSample
-  - TypeList
   - NamedParameterAssignment
   - WithOrdinality
   - ByName
@@ -1072,11 +1204,7 @@ excluded_rules:
   - PivotKeyword
   - UnpivotKeyword
   - Unique
-  - DefArg
-  - NoneLiteral
   - RowOrStruct
-  - ForEachRow
-  - ForEachStatement
   - SetData
   - CTEBodyContent
   - SingleArrowPair

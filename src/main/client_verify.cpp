@@ -57,7 +57,7 @@ void PreparedStatementVerification::ConvertConstants(unique_ptr<ParsedExpression
 
 		// replace it with an expression
 		auto parameter = make_uniq<ParameterExpression>();
-		parameter->identifier = identifier;
+		parameter->IdentifierMutable() = identifier;
 		parameter->SetAlias(alias);
 		expr = std::move(parameter);
 		return;
@@ -244,6 +244,14 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		}
 		auto explain_q = "EXPLAIN " + query;
 		auto explain_stmt = make_uniq<ExplainStatement>(statement->Copy());
+		// Disable the profiler during the verification EXPLAIN to prevent it from consuming the profiler context
+		// (which would lose parser timing captured before StatementVerification was called) and from
+		// overwriting the profiling output file with the EXPLAIN's profiling data.
+		auto &client_config = ClientConfig::GetConfig(*this);
+		bool saved_profiler = client_config.enable_profiler;
+		ScopedConfigSetting suppress_profiling(
+		    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
+		    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
 		auto explain_result = RunStatementInternal(lock, explain_q, std::move(explain_stmt), query_parameters);
 		if (explain_result->HasError()) {
 			explain_result->ThrowError();

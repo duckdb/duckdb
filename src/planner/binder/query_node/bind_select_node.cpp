@@ -178,7 +178,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 			auto &order_binders = order_binder.GetBinders();
 			if (order.orders.size() == 1 && order.orders[0].expression->GetExpressionType() == ExpressionType::STAR) {
 				auto &star = order.orders[0].expression->Cast<StarExpression>();
-				if (star.exclude_list.empty() && star.replace_list.empty() && !star.expr) {
+				if (star.ExcludeList().empty() && star.ReplaceList().empty() && !star.Expression()) {
 					// ORDER BY ALL
 					// replace the order list with the all elements in the SELECT list
 					auto order_type = config.ResolveOrder(context, order.orders[0].type);
@@ -395,14 +395,14 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	// expand any expressions in the upper AND recursively
 	if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conj = expr->Cast<ConjunctionExpression>();
-		for (auto &child : conj.children) {
+		for (auto &child : conj.GetChildrenMutable()) {
 			BindWhereStarExpression(child);
 		}
 		return;
 	}
 	if (expr->GetExpressionType() == ExpressionType::STAR) {
 		auto &star = expr->Cast<StarExpression>();
-		if (!star.columns) {
+		if (!star.IsColumns()) {
 			throw ParserException("STAR expression is not allowed in the WHERE clause. Use COLUMNS(*) instead.");
 		}
 	}
@@ -420,6 +420,13 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 		                                                 std::move(new_conditions[i]));
 		expr = std::move(and_conj);
 	}
+}
+
+string Binder::GetExpressionName(const ParsedExpression &expr) {
+	if (!expr.GetAlias().empty()) {
+		return expr.GetAlias();
+	}
+	return expr.GetName();
 }
 
 BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from_table) {
@@ -453,7 +460,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	auto &bind_state = result.bind_state;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
-		result.names.push_back(expr->GetName());
+		result.names.push_back(GetExpressionName(*expr));
 		ExpressionBinder::QualifyColumnNames(*this, expr);
 		if (!expr->GetAlias().empty()) {
 			bind_state.alias_map[expr->GetAlias()] = i;
