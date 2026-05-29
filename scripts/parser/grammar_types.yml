@@ -899,6 +899,7 @@ String:
     - SetNullability
     - MinValue
     - MaxValue
+    - ConstraintName
 
 Bool:
   type: "bool"
@@ -1286,7 +1287,6 @@ excluded_rules:
   - PlainIdentifier
   - QuotedIdentifier
   - CreateTableColumnElement
-  - ConstraintName
   - IntervalNumber
   - AtTimeZoneOperator
   - Generated

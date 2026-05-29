@@ -1156,7 +1156,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?\n"
 	"OrAction <- InsertOrReplace / InsertOrIgnore\n"
 	"InsertOrReplace <- 'OR' 'REPLACE'\n"
-	"InsertOrIgnore <- 'IGNORE'\n"
+	"InsertOrIgnore <- 'OR' 'IGNORE'\n"
 	"ByNameOrPosition <- InsertByNameOrder / InsertByPositionOrder\n"
 	"InsertByNameOrder <- 'BY' InsertByName\n"
 	"InsertByPositionOrder <- 'BY' InsertByPosition\n"

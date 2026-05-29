@@ -1233,7 +1233,7 @@ InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPo
 
 OrAction <- InsertOrReplace / InsertOrIgnore
 InsertOrReplace <- 'OR' 'REPLACE'
-InsertOrIgnore <- 'IGNORE'
+InsertOrIgnore <- 'OR' 'IGNORE'
 ByNameOrPosition <- InsertByNameOrder / InsertByPositionOrder
 InsertByNameOrder <- 'BY' InsertByName
 InsertByPositionOrder <- 'BY' InsertByPosition
