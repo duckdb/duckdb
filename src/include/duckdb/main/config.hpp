@@ -122,8 +122,6 @@ struct DBConfigOptions {
 	case_insensitive_map_t<Value> user_options;
 	//! The set of unrecognized (other) options
 	case_insensitive_map_t<Value> unrecognized_options;
-	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
-	idx_t allocator_flush_threshold = 134217728ULL;
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
 	idx_t allocator_bulk_deallocation_flush_threshold = 536870912ULL;
 	//! Delta Only! - Fall back to recognizing Variant columns structurally
