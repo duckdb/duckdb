@@ -918,7 +918,7 @@ private:
 		}
 		sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 
-		// both finalize paths finish writing the chains before reaching here,
+		// Both finalize paths finish writing the chains before reaching here,
 		// so dictionary emission is safe on either path
 		if (sink.hash_table->CanUseDictionaryEmission(sink.op, sink.external,
 		                                              sink.op.children[0].get().estimated_cardinality)) {
