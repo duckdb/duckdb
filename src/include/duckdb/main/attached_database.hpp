@@ -163,6 +163,11 @@ public:
 	CatalogMode GetCatalogMode() const {
 		return catalog_mode;
 	}
+	//! True when the database does not appear in catalog enumeration (HIDDEN, or NONE which has
+	//! no tables to expose anyway).
+	bool IsHidden() const {
+		return catalog_mode == CatalogMode::HIDDEN || catalog_mode == CatalogMode::NONE;
+	}
 	ConnectMode GetConnectMode() const {
 		return connect_mode;
 	}

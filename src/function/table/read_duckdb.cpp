@@ -252,6 +252,7 @@ AttachedDatabase &DuckDBReader::GetAttachedDatabase() {
 		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		unordered_map<string, Value> attach_kv;
 		AttachOptions attach_options(attach_kv, AccessMode::READ_ONLY);
+		attach_options.catalog_mode = CatalogMode::HIDDEN;
 		attach_options.visibility = AttachVisibility::HIDDEN;
 
 		auto attached = db_manager.AttachDatabase(context, info, attach_options);

@@ -1192,7 +1192,7 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 	auto &db_manager = DatabaseManager::Get(context);
 	auto databases = db_manager.GetDatabases(context);
 	for (auto &database : databases) {
-		if (database->GetVisibility() == AttachVisibility::HIDDEN) {
+		if (database->IsHidden()) {
 			continue;
 		}
 		auto &catalog = database->GetCatalog();
