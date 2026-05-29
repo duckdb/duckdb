@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
@@ -31,7 +32,16 @@ struct UnaryOperatorWrapper {
 struct UnaryLambdaWrapper {
 	template <class FUNC, class INPUT_TYPE, class RESULT_TYPE, class DATA_TYPE>
 	static inline RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, DATA_TYPE &data) {
-		return data(input);
+		if constexpr (std::is_same<decltype(data(input)), optional<RESULT_TYPE>>::value) {
+			auto result = data(input);
+			if (!result.has_value()) {
+				mask.SetInvalid(idx);
+				return RESULT_TYPE();
+			}
+			return result.value();
+		} else {
+			return data(input);
+		}
 	}
 };
 
@@ -39,13 +49,6 @@ struct GenericUnaryWrapper {
 	template <class OP, class INPUT_TYPE, class RESULT_TYPE, class DATA_TYPE>
 	static inline RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, DATA_TYPE &data) {
 		return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, mask, idx, data);
-	}
-};
-
-struct UnaryLambdaWrapperWithNulls {
-	template <class FUNC, class INPUT_TYPE, class RESULT_TYPE, class DATA_TYPE>
-	static inline RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, DATA_TYPE &data) {
-		return data(input, mask, idx);
 	}
 };
 
@@ -142,16 +145,20 @@ private:
 #endif
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
-	static inline void ExecuteStandard(Vector &input, Vector &result, idx_t count, DATA_TYPE &data, bool adds_nulls,
+	static inline void ExecuteStandard(const Vector &input, Vector &result, idx_t count, DATA_TYPE &data,
+	                                   bool adds_nulls,
 	                                   FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 		switch (input.GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR: {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			if (result.size() != count) {
+				FlatVector::SetSize(result, count);
+			}
 			auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
 			auto ldata = ConstantVector::GetData<INPUT_TYPE>(input);
 
 			if (ConstantVector::IsNull(input)) {
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, count_t(count));
 			} else {
 				ConstantVector::SetNull(result, false);
 				*result_data = OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(
@@ -162,6 +169,9 @@ private:
 #ifndef DUCKDB_SMALLER_BINARY
 		case VectorType::FLAT_VECTOR: {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
+			if (result.size() != count) {
+				FlatVector::SetSize(result, count);
+			}
 			auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 
@@ -201,9 +211,12 @@ private:
 #endif
 		default: {
 			UnifiedVectorFormat vdata;
-			input.ToUnifiedFormat(count, vdata);
+			input.ToUnifiedFormat(vdata);
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
+			if (result.size() != count) {
+				FlatVector::SetSize(result, count);
+			}
 			auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			auto ldata = UnifiedVectorFormat::GetData<INPUT_TYPE>(vdata);
 
@@ -216,32 +229,52 @@ private:
 
 public:
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void Execute(Vector &input, Vector &result, idx_t count) {
+	static void Execute(const Vector &input, Vector &result, idx_t count) {
 		std::nullptr_t no_data = nullptr;
 		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryOperatorWrapper, OP>(input, result, count, no_data, false);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
-	static void Execute(Vector &input, Vector &result, idx_t count, FUNC fun,
+	static void Execute(const Vector &input, Vector &result, idx_t count, FUNC fun,
 	                    FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, FUNC>(input, result, count, fun, false, errors);
+		constexpr bool adds_nulls =
+		    std::is_same<decltype(fun(std::declval<INPUT_TYPE>())), optional<RESULT_TYPE>>::value;
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, FUNC>(input, result, count, fun, adds_nulls,
+		                                                                   errors);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP, class DATA_TYPE>
-	static void GenericExecute(Vector &input, Vector &result, idx_t count, DATA_TYPE &data, bool adds_nulls = false) {
+	static void GenericExecute(const Vector &input, Vector &result, idx_t count, DATA_TYPE &data,
+	                           bool adds_nulls = false) {
 		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, GenericUnaryWrapper, OP>(input, result, count, data, adds_nulls);
 	}
 
-	template <class INPUT_TYPE, class RESULT_TYPE,
-	          class FUNC = std::function<RESULT_TYPE(INPUT_TYPE, ValidityMask &, idx_t)>>
-	static void ExecuteWithNulls(Vector &input, Vector &result, idx_t count, FUNC fun) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapperWithNulls, FUNC>(input, result, count, fun, true);
+	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
+	static void ExecuteString(const Vector &input, Vector &result, idx_t count) {
+		auto &heap = StringVector::GetStringHeap(result);
+		UnaryExecutor::GenericExecute<INPUT_TYPE, RESULT_TYPE, UnaryStringOperator<OP>>(input, result, count, heap);
+	}
+
+	//! Convenience overloads without explicit count - count is derived from input.size().
+	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
+	static void Execute(const Vector &input, Vector &result) {
+		Execute<INPUT_TYPE, RESULT_TYPE, OP>(input, result, input.size());
+	}
+
+	template <class INPUT_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
+	static void Execute(const Vector &input, Vector &result, FUNC fun,
+	                    FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
+		Execute<INPUT_TYPE, RESULT_TYPE, FUNC>(input, result, input.size(), fun, errors);
+	}
+
+	template <class INPUT_TYPE, class RESULT_TYPE, class OP, class DATA_TYPE>
+	static void GenericExecute(const Vector &input, Vector &result, DATA_TYPE &data, bool adds_nulls = false) {
+		GenericExecute<INPUT_TYPE, RESULT_TYPE, OP, DATA_TYPE>(input, result, input.size(), data, adds_nulls);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void ExecuteString(Vector &input, Vector &result, idx_t count) {
-		auto &heap = StringVector::GetStringHeap(result);
-		UnaryExecutor::GenericExecute<INPUT_TYPE, RESULT_TYPE, UnaryStringOperator<OP>>(input, result, count, heap);
+	static void ExecuteString(const Vector &input, Vector &result) {
+		ExecuteString<INPUT_TYPE, RESULT_TYPE, OP>(input, result, input.size());
 	}
 
 private:
@@ -250,7 +283,7 @@ private:
 	          bool HAS_FALSE_SEL>
 	static inline idx_t SelectLoop(const INPUT_TYPE *__restrict input_data, const SelectionVector *result_sel,
 	                               const idx_t count, FUNC fun, const SelectionVector &input_sel,
-	                               ValidityMask &input_validity, SelectionVector *true_sel,
+	                               const ValidityMask &input_validity, SelectionVector *true_sel,
 	                               SelectionVector *false_sel) {
 		idx_t true_count = 0, false_count = 0;
 		for (idx_t i = 0; i < count; i++) {
@@ -305,13 +338,13 @@ private:
 
 public:
 	template <class INPUT_TYPE, class FUNC = std::function<bool(INPUT_TYPE)>>
-	static idx_t Select(Vector &input, const SelectionVector *sel, const idx_t count, FUNC fun,
+	static idx_t Select(const Vector &input, const SelectionVector *sel, const idx_t count, FUNC fun,
 	                    SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (!sel) {
 			sel = FlatVector::IncrementalSelectionVector();
 		}
 		UnifiedVectorFormat input_data;
-		input.ToUnifiedFormat(count, input_data);
+		input.ToUnifiedFormat(input_data);
 
 		return SelectLoopSwitch<INPUT_TYPE, FUNC>(input_data, sel, count, fun, true_sel, false_sel);
 	}

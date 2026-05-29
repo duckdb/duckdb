@@ -109,7 +109,7 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 		// Fill the chunk_types (only contains the payload of the distinct aggregates)
 		vector<LogicalType> chunk_types;
 		for (auto &child_p : aggregate.children) {
-			chunk_types.push_back(child_p->return_type);
+			chunk_types.push_back(child_p->GetReturnType());
 		}
 	}
 }

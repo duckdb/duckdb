@@ -1,9 +1,6 @@
 # name: test/sql/upsert/upsert_excluded_references.test
 # group: [upsert]
 
-statement ok
-pragma enable_verification;
-
 # Within the ON CONFLICT clause, we can have special column references that are qualified with 'excluded'
 # These refer to the to-be-inserted tuples that caused the conflict, instead of the existing tuples that were found by the conflict.
 

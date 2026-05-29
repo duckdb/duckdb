@@ -73,7 +73,7 @@ WindowCustomAggregatorLocalState::WindowCustomAggregatorLocalState(ExecutionCont
                                                                    const AggregateObject &aggr,
                                                                    const WindowExcludeMode exclude_mode)
     : WindowAggregatorLocalState(context), aggr(aggr), state(aggr.function.GetStateSizeCallback()(aggr.function)),
-      statef(Value::POINTER(CastPointerToValue(state.data()))), frames(3, {0, 0}) {
+      statef(Value::POINTER(CastPointerToValue(state.data())), count_t(1)), frames(3, {0, 0}) {
 	// if we have a frame-by-frame method, share the single state
 	aggr.function.GetStateInitCallback()(aggr.function, state.data());
 
@@ -150,6 +150,22 @@ void WindowCustomAggregator::Evaluate(ExecutionContext &context, const DataChunk
 	auto &stats = gcsink.stats;
 	WindowPartitionInput partition(context, inputs, collection->size(), child_idx, all_valids, filter_packed, stats,
 	                               sink.interrupt_state);
+
+	// Batched window callback path: if the aggregate installs a batch callback,
+	// collect all `count` rows' subframes into a contiguous array and hand them
+	// off in a single call. This lets implementations amortise per-call
+	// overhead (e.g., RPC extensions that would otherwise fire one call per
+	// output row).
+	if (aggr.function.HasWindowBatchCallback()) {
+		vector<SubFrames> all_frames;
+		all_frames.reserve(count);
+		EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) { all_frames.push_back(frames); });
+		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lcstate.allocator);
+		aggr.function.GetWindowBatchCallback()(aggr_input_data, partition, gstate_p, lcstate.state.data(),
+		                                       all_frames.data(), count, result, row_idx);
+		return;
+	}
+
 	EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		// Extract the range
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lcstate.allocator);

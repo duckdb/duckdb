@@ -43,7 +43,7 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 	bool has_standard_table_function = false;
 	bool has_table_parameter = false;
 	for (idx_t function_idx = 0; function_idx < table_function.functions.Size(); function_idx++) {
-		const auto &function = table_function.functions.GetFunctionReferenceByOffset(function_idx);
+		const auto &function = table_function.functions.GetFunctionByOffset(function_idx);
 		for (auto &arg : function.GetArguments()) {
 			if (arg.id() == LogicalTypeId::TABLE) {
 				has_table_parameter = true;
@@ -105,11 +105,11 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		if (child->GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
 			// comparison, check if the LHS is a columnref
 			auto &comp = child->Cast<ComparisonExpression>();
-			if (comp.left->GetExpressionType() == ExpressionType::COLUMN_REF) {
-				auto &colref = comp.left->Cast<ColumnRefExpression>();
+			if (comp.Left().GetExpressionType() == ExpressionType::COLUMN_REF) {
+				auto &colref = comp.Left().Cast<ColumnRefExpression>();
 				if (!colref.IsQualified()) {
 					parameter_name = colref.GetColumnName();
-					child = std::move(comp.right);
+					child = std::move(comp.RightMutable());
 				}
 			}
 		} else if (!child->GetAlias().empty()) {
@@ -119,11 +119,11 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		if (bind_type == TableFunctionBindType::TABLE_PARAMETER_FUNCTION &&
 		    child->GetExpressionType() == ExpressionType::SUBQUERY) {
 			D_ASSERT(table_function.functions.Size() == 1);
-			auto fun = table_function.functions.GetFunctionByOffset(0);
+			const auto &fun = table_function.functions.GetFunctionByOffset(0);
 			if (table_function.functions.Size() != 1 || fun.GetArguments().empty()) {
 				throw BinderException(
 				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
-				    fun.name);
+				    fun.GetName());
 			}
 			if (seen_subquery) {
 				error = ErrorData("Table function can have at most one subquery parameter");
@@ -132,7 +132,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			auto binder = Binder::CreateBinder(this->context, this);
 			binder->can_contain_nulls = true;
 			auto &se = child->Cast<SubqueryExpression>();
-			subquery = binder->BindNode(*se.subquery->node);
+			subquery = binder->BindNode(*se.Subquery()->node);
 			MoveCorrelatedExpressions(*binder);
 			seen_subquery = true;
 			arguments.emplace_back(LogicalTypeId::TABLE);
@@ -172,9 +172,18 @@ static string GetAlias(const TableFunctionRef &ref) {
 	}
 	if (ref.function && ref.function->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function_expr = ref.function->Cast<FunctionExpression>();
-		return function_expr.function_name;
+		return function_expr.FunctionName();
 	}
 	return string();
+}
+
+static void ApplyPostgresSetofAliasCompatibility(const TableFunction &table_function, const TableFunctionRef &ref,
+                                                 vector<string> &return_names) {
+	if (table_function.return_type != TableFunctionReturnType::SET_RETURNING_FUNCTION || ref.alias.empty() ||
+	    !ref.column_name_alias.empty() || return_names.size() != 1) {
+		return;
+	}
+	return_names[0] = ref.alias;
 }
 
 BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
@@ -210,6 +219,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 						    table_function.name);
 					}
 				}
+				ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
 				BoundStatement result;
 				bind_context.AddGenericBinding(bind_index, function_name, return_names, new_plan->types);
 				result.names = return_names;
@@ -270,6 +280,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
 		                        table_function.name);
 	}
+	ApplyPostgresSetofAliasCompatibility(table_function, ref, return_names);
 	// overwrite the names with any supplied aliases
 	for (idx_t i = 0; i < column_name_alias.size() && i < return_names.size(); i++) {
 		return_names[i] = column_name_alias[i];
@@ -305,17 +316,15 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
-		auto row_number_func = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
-		auto row_number =
-		    make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(row_number_func), nullptr);
+		auto row_number = RowNumberFun::GetFunction().Bind(context);
 		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
 		string ordinality_alias = ordinality_column_name;
 		if (return_names.size() < column_name_alias.size()) {
-			row_number->alias = column_name_alias[return_names.size()];
+			row_number->SetAlias(column_name_alias[return_names.size()]);
 			ordinality_alias = column_name_alias[return_names.size()];
 		} else {
-			row_number->alias = ordinality_column_name;
+			row_number->SetAlias(ordinality_column_name);
 		}
 		return_names.push_back(ordinality_alias);
 		return_types.push_back(LogicalType::BIGINT);
@@ -358,13 +367,13 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->GetExpressionType() == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
-	string catalog = fexpr.catalog;
-	string schema = fexpr.schema;
+	string catalog = fexpr.Catalog();
+	string schema = fexpr.Schema();
 	Binder::BindSchemaOrCatalog(context, catalog, schema);
 
 	// fetch the function from the catalog
 
-	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, fexpr.function_name, error_context);
+	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, fexpr.FunctionName(), error_context);
 	auto &func_catalog = *GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
@@ -403,8 +412,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	named_parameter_map_t named_parameters;
 	BoundStatement subquery;
 	ErrorData error;
-	if (!BindTableFunctionParameters(function, fexpr.children, arguments, parameters, named_parameters, subquery,
-	                                 error)) {
+	if (!BindTableFunctionParameters(function, fexpr.GetChildrenMutable(), arguments, parameters, named_parameters,
+	                                 subquery, error)) {
 		error.AddQueryLocation(ref);
 		error.Throw();
 	}

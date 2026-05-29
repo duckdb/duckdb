@@ -2,9 +2,6 @@
 # description: Test usage of the INF value
 # group: [float]
 
-statement ok
-PRAGMA enable_verification
-
 foreach type FLOAT DOUBLE
 
 foreach key UNIQUE CHECK(1)

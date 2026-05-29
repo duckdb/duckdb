@@ -1,0 +1,8 @@
+LoadStatement <- 'LOAD' ColIdOrString ExtensionAlias?
+ExtensionAlias <- 'AS' Identifier
+InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?
+UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?
+FromSource <- FromSourceIdentifier / FromSourceString
+FromSourceIdentifier <- 'FROM' Identifier
+FromSourceString <- 'FROM' StringLiteral
+VersionNumber <- 'VERSION' IdentifierOrStringLiteral

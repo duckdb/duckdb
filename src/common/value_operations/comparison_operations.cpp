@@ -122,13 +122,13 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		if (left_type.id() == LogicalTypeId::VARIANT) {
 			Vector left_vec(left.type());
 			Vector right_vec(right.type());
-			left_vec.Reference(left);
-			right_vec.Reference(right);
+			left_vec.Reference(left, count_t(1));
+			right_vec.Reference(right, count_t(1));
 
 			RecursiveUnifiedVectorFormat left_format;
 			RecursiveUnifiedVectorFormat right_format;
-			Vector::RecursiveToUnifiedFormat(left_vec, 1, left_format);
-			Vector::RecursiveToUnifiedFormat(right_vec, 1, right_format);
+			Vector::RecursiveToUnifiedFormat(left_vec, left_format);
+			Vector::RecursiveToUnifiedFormat(right_vec, right_format);
 
 			UnifiedVariantVectorData left_variant_data(left_format);
 			UnifiedVariantVectorData right_variant_data(right_format);

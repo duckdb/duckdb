@@ -107,7 +107,7 @@ WindowNaiveLocalState::WindowNaiveLocalState(ExecutionContext &context, const Wi
 	data_ptr_t state_ptr = state.data();
 	D_ASSERT(statef.GetVectorType() == VectorType::FLAT_VECTOR);
 	statef.SetVectorType(VectorType::CONSTANT_VECTOR);
-	statef.Flatten(STANDARD_VECTOR_SIZE);
+	statef.Flatten();
 	auto fdata = FlatVector::GetDataMutable<data_ptr_t>(statef);
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; ++i) {
 		fdata[i] = state_ptr;
@@ -135,7 +135,7 @@ void WindowNaiveLocalState::Finalize(ExecutionContext &context, WindowAggregator
 		vector<BoundOrderByNode> orders;
 		for (const auto &order_by : aggregator.wexpr.arg_orders) {
 			auto order = order_by.Copy();
-			const auto &type = order.expression->return_type;
+			const auto &type = order.expression->GetReturnType();
 			order.expression = make_uniq<BoundReferenceExpression>(type, orders.size());
 			orders.emplace_back(std::move(order));
 		}

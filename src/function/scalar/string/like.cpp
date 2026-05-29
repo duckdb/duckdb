@@ -358,7 +358,8 @@ unique_ptr<FunctionData> LikeBindFunction(BindScalarFunctionInput &input) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	for (auto &arg : arguments) {
-		if (arg->return_type.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(arg->return_type).empty()) {
+		if (arg->GetReturnType().id() == LogicalTypeId::VARCHAR &&
+		    !StringType::GetCollation(arg->GetReturnType()).empty()) {
 			return nullptr;
 		}
 	}
@@ -495,12 +496,12 @@ struct GlobOperator {
 // This can be moved to the scalar_function class
 template <typename FUNC>
 void LikeEscapeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &str = args.data[0];
-	auto &pattern = args.data[1];
-	auto &escape = args.data[2];
+	const auto &str = args.data[0];
+	const auto &pattern = args.data[1];
+	const auto &escape = args.data[2];
 
 	TernaryExecutor::Execute<string_t, string_t, string_t, bool>(
-	    str, pattern, escape, result, args.size(), FUNC::template Operation<string_t, string_t, string_t>);
+	    str, pattern, escape, result, FUNC::template Operation<string_t, string_t, string_t>);
 }
 
 template <class ASCII_OP>
@@ -521,13 +522,12 @@ void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector &resul
 	if (func_expr.bind_info) {
 		auto &matcher = func_expr.bind_info->Cast<LikeMatcher>();
 		// use fast like matcher
-		UnaryExecutor::Execute<string_t, bool>(input.data[0], result, input.size(), [&](string_t input) {
+		UnaryExecutor::Execute<string_t, bool>(input.data[0], result, [&](string_t input) {
 			return INVERT ? !matcher.Match(input) : matcher.Match(input);
 		});
 	} else {
 		// use generic like matcher
-		BinaryExecutor::ExecuteStandard<string_t, string_t, bool, OP>(input.data[0], input.data[1], result,
-		                                                              input.size());
+		BinaryExecutor::ExecuteStandard<string_t, string_t, bool, OP>(input.data[0], input.data[1], result);
 	}
 }
 

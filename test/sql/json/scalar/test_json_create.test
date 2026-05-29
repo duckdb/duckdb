@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # issue #7727
 query T
 SELECT TRY_CAST('{{P{P{{{{ASD{AS{D{' AS JSON);
@@ -23,6 +20,22 @@ query T
 select to_json({n: 42})
 ----
 {"n":42}
+
+# issue #22828
+query T
+select to_json(42::VARIANT)
+----
+42
+
+query T
+select json_array(42::VARIANT)
+----
+[42]
+
+query T
+select json_object('x', 42::VARIANT)
+----
+{"x":42}
 
 statement error
 select to_json({n: 42}, {extra: 'argument'})

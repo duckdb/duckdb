@@ -256,21 +256,17 @@ int mk_city(int nTable, char **dest) {
 int city_hash(int nTable, char *name) {
 	char *cp;
 	long long hash_value = 0, res = 0; // changed to long long from int
+	const long long twothirtytwo = ((long long)1 << 32);
 
 	for (cp = name; *cp; cp++) {
 		hash_value *= 26;
-        // simulate the overflow as if it were an int
-        if (hash_value > MAXINT) {
-            hash_value %= MAXINT;
-            hash_value -= MAXINT;
-            hash_value -= 2;
-        } else if (hash_value < -MAXINT) {
-            hash_value %= MAXINT;
-            hash_value += MAXINT;
-            hash_value += 2;
-        }
 		hash_value -= 'A';
 		hash_value += *cp;
+		// simulate the overflow as if it were an int
+		if ((hash_value > (long long)MAXINT) || (hash_value < -(long long)MAXINT))
+			hash_value = (twothirtytwo * 27 + hash_value) % twothirtytwo;
+		if (hash_value > (long long)MAXINT)
+			hash_value -= twothirtytwo;
 		if (hash_value > 1000000) {
 			hash_value %= 10000;
 			res += hash_value;

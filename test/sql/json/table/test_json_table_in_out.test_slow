@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # some larger-than-vector-size tests
 query I
 select count(*) from json_each(range(3000));

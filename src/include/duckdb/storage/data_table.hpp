@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/column_segment_info_scan_type.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
@@ -45,10 +46,13 @@ struct ConstraintState;
 struct TableUpdateState;
 struct OptimisticWriteCollection;
 struct ColumnFetchState;
+struct ColumnSegmentInfo;
+struct ColumnSegmentInfoScanState;
 struct DataTableInfo;
 struct LocalAppendState;
 struct ParallelTableScanState;
 struct TableAppendState;
+class CommitDropState;
 
 enum class DataTableVersion {
 	MAIN_TABLE, // this is the newest version of the table - it has not been altered or dropped
@@ -238,13 +242,22 @@ public:
 	unique_ptr<StorageLockKey> GetCheckpointLock();
 	//! Checkpoint the table to the specified table data writer
 	void Checkpoint(TableDataWriter &writer, Serializer &serializer);
-	void CommitDropTable();
-	void CommitDropColumn(const idx_t column_index);
+	//! Accumulates the table's on-disk blocks for reclamation into the drop state.
+	void CommitDropTable(CommitDropState &drop_state);
+	//! Accumulates the column's on-disk blocks for reclamation into the drop state.
+	void CommitDropColumn(const idx_t column_index, CommitDropState &drop_state);
 
 	idx_t ColumnCount() const;
 	idx_t GetTotalRows() const;
+	idx_t GetRowGroupCount() const;
+	idx_t GetRowGroupCountWithLocalStorage(ClientContext &context);
 
-	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
+	vector<ColumnSegmentInfo>
+	GetColumnSegmentInfo(const QueryContext &context,
+	                     const ColumnSegmentInfoScanOptions &options = ColumnSegmentInfoScanOptions {});
+	void InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state);
+	bool ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+	                           vector<ColumnSegmentInfo> &result);
 
 	//! Scans the next chunk for the CREATE INDEX operator
 	bool CreateIndexScan(TableScanState &state, DataChunk &result);
@@ -260,6 +273,12 @@ public:
 	                             optional_ptr<LocalTableStorage> local_storage, optional_ptr<ConflictManager> manager);
 
 	shared_ptr<DataTableInfo> &GetDataTableInfo();
+
+	//! Direct access to the row group collection. Intended for extensions that need to walk storage internals;
+	//! prefer the higher-level DataTable API for normal use.
+	const shared_ptr<RowGroupCollection> &GetRowGroupCollection() const {
+		return row_groups;
+	}
 
 	void BindIndexes(ClientContext &context);
 	bool HasIndexes() const;

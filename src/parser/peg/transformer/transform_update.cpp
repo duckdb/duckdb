@@ -1,0 +1,94 @@
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+
+namespace duckdb {
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformUpdateStatement(
+    PEGTransformer &transformer, CommonTableExpressionMap with_clause, unique_ptr<TableRef> update_target,
+    unique_ptr<UpdateSetInfo> update_set_clause, unique_ptr<TableRef> from_clause,
+    unique_ptr<ParsedExpression> where_clause, vector<unique_ptr<ParsedExpression>> returning_clause) {
+	auto result = make_uniq<UpdateStatement>();
+	auto &node = *result->node;
+	node.cte_map = std::move(with_clause);
+	node.table = std::move(update_target);
+	node.set_info = std::move(update_set_clause);
+	node.from_table = std::move(from_clause);
+	node.set_info->condition = std::move(where_clause);
+	node.returning_list = std::move(returning_clause);
+	return std::move(result);
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableSet(PEGTransformer &transformer,
+                                                                  unique_ptr<BaseTableRef> base_table_name) {
+	return std::move(base_table_name);
+}
+
+unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableAliasSet(PEGTransformer &transformer,
+                                                                       unique_ptr<BaseTableRef> base_table_name,
+                                                                       const string &update_alias) {
+	base_table_name->alias = update_alias;
+	return std::move(base_table_name);
+}
+
+string PEGTransformerFactory::TransformUpdateAlias(PEGTransformer &transformer, const string &col_id) {
+	return col_id;
+}
+
+unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetTuple(PEGTransformer &transformer,
+                                                                         const vector<string> &column_name,
+                                                                         unique_ptr<ParsedExpression> expression) {
+	auto result = make_uniq<UpdateSetInfo>();
+	result->columns = column_name;
+
+	bool is_row_assignment = false;
+	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
+		auto &func_ref = expression->Cast<FunctionExpression>();
+		if (StringUtil::CIEquals(func_ref.FunctionName(), "row")) {
+			is_row_assignment = true;
+		}
+	}
+
+	if (is_row_assignment) {
+		auto &func_expr = expression->Cast<FunctionExpression>();
+		if (func_expr.GetChildren().size() != result->columns.size()) {
+			throw ParserException("Could not perform assignment, expected %d values, got %d", result->columns.size(),
+			                      func_expr.GetChildren().size());
+		}
+		result->expressions = std::move(func_expr.GetChildrenMutable());
+	} else {
+		result->expressions.reserve(result->columns.size());
+		for (idx_t i = 0; i < result->columns.size(); i++) {
+			result->expressions.push_back(expression->Copy());
+		}
+	}
+
+	return result;
+}
+
+unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetElementList(
+    PEGTransformer &transformer, vector<pair<string, unique_ptr<ParsedExpression>>> update_set_element) {
+	auto result = make_uniq<UpdateSetInfo>();
+	for (auto &element : update_set_element) {
+		result->columns.push_back(std::move(element.first));
+		result->expressions.push_back(std::move(element.second));
+	}
+	return result;
+}
+
+pair<string, unique_ptr<ParsedExpression>>
+PEGTransformerFactory::TransformUpdateSetElement(PEGTransformer &transformer, const string &update_set_column_target,
+                                                 unique_ptr<ParsedExpression> expression) {
+	return {update_set_column_target, std::move(expression)};
+}
+
+string PEGTransformerFactory::TransformUpdateSetColumnTarget(PEGTransformer &transformer, const string &column_name,
+                                                             const vector<string> &dot_identifier) {
+	if (!dot_identifier.empty()) {
+		throw ParserException("Qualified column names in UPDATE .. SET not supported");
+	}
+	return column_name;
+}
+
+} // namespace duckdb

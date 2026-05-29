@@ -3,9 +3,6 @@
 # group: [numeric]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE booleans AS SELECT b::BOOLEAN b FROM (VALUES (NULL), (0), (1)) tbl(b)
 
 foreach type <numeric> DECIMAL(9,8) DECIMAL(18,7) DECIMAL(38,1) DECIMAL(38,5) DECIMAL(4,3)

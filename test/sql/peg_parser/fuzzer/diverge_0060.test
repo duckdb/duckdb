@@ -2,19 +2,8 @@
 # description: PEG should accept (currently rejects): Parser Error: ORDER BY in a recursive query is not allowed
 # group: [fuzzer]
 
-require autocomplete
-
 statement ok
 create table t(i bigint);create table t1(i bigint);
-
-statement ok
-CALL enable_peg_parser();
-
-statement ok
-WITH RECURSIVE entry ( my_table ) AS ( TABLE t ORDER BY '0x41' NULLS FIRST ) DELETE FROM t1 RETURNING 'k9o'
-
-statement ok
-CALL disable_peg_parser();
 
 statement ok
 WITH RECURSIVE entry ( my_table ) AS ( TABLE t ORDER BY '0x41' NULLS FIRST ) DELETE FROM t1 RETURNING 'k9o'

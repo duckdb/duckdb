@@ -2,10 +2,9 @@
 # description: Test TPC-H SF0.1
 # group: [tpch]
 
-require tpch
+set variable sf 0.1
 
-statement ok
-CALL dbgen(sf=0.1);
+include test/sql/tpch/tpch_setup.test_template
 
 loop i 1 9
 

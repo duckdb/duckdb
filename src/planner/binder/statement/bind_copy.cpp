@@ -22,6 +22,7 @@
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/common/algorithm.hpp"
 
 #include "duckdb/main/extension_entries.hpp"
@@ -38,7 +39,7 @@ void IsFormatExtensionKnown(const string &format) {
 			// It's a match, we must throw
 			throw CatalogException(
 			    "Copy Function with name \"%s\" is not in the catalog, but it exists in the %s extension.", format,
-			    std::string(file_postfixes.extension));
+			    file_postfixes.extension);
 		}
 	}
 }
@@ -80,6 +81,7 @@ case_insensitive_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunc
 		copy_options["row_groups_per_file"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
 		copy_options["file_size_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 		copy_options["partition_by"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+		copy_options["order_by"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 		copy_options["return_files"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 		copy_options["preserve_order"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 		copy_options["return_stats"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
@@ -133,6 +135,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	optional_idx file_size_bytes;
 	optional_idx batches_per_file;
 	vector<idx_t> partition_cols;
+	vector<BoundOrderByNode> order_columns;
 	bool seen_overwrite_mode = false;
 	bool seen_filepattern = false;
 	bool write_partition_columns = false;
@@ -199,6 +202,9 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			if (option.second.empty()) {
 				throw BinderException("FILE_SIZE_BYTES cannot be empty");
 			}
+			if (!function.file_size_bytes) {
+				throw BinderException("FILE_SIZE_BYTES not implemented for %s", function.name);
+			}
 			file_size_bytes = ParseBytesArg(loption, option.second[0]);
 		} else if (loption == "batches_per_file" || loption == "row_groups_per_file") {
 			if (option.second.empty()) {
@@ -208,6 +214,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 		} else if (loption == "partition_by") {
 			auto converted = ConvertVectorToValue(std::move(option.second));
 			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
+		} else if (loption == "order_by") {
+			order_columns = ParseOrderByColumns(*this, option.second, select_node, loption);
 		} else if (loption == "return_files") {
 			if (GetBooleanArg(context, option.second)) {
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
@@ -295,7 +303,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			select_node.types.clear();
 			for (auto &expr : projection->expressions) {
 				select_node.names.push_back(expr->GetName());
-				select_node.types.push_back(expr->return_type);
+				select_node.types.push_back(expr->GetReturnType());
 			}
 			select_node.plan = std::move(projection);
 		}
@@ -338,6 +346,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 		throw NotImplementedException("RETURN_STATS is not supported for the \"%s\" copy format", stmt.info->format);
 	}
 
+	if (!order_columns.empty() && partition_cols.empty()) {
+		throw NotImplementedException("ORDER_BY is not supported without PARTITION_BY");
+	}
+
 	// now create the copy information
 	auto copy = make_uniq<LogicalCopyToFile>(function, std::move(function_data), std::move(stmt.info));
 	copy->file_path = file_path;
@@ -358,6 +370,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	copy->return_type = return_type;
 	copy->preserve_order = preserve_order;
 	copy->hive_file_pattern = hive_file_pattern;
+	copy->order_columns = std::move(order_columns);
 
 	copy->names = unique_column_names;
 	copy->expected_types = select_node.types;
@@ -454,11 +467,11 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 	if (!expr) {
 		return result;
 	}
-	if (expr->type == ExpressionType::STAR) {
+	if (expr->GetExpressionType() == ExpressionType::STAR) {
 		auto &star = expr->Cast<StarExpression>();
 		// for compatibility with previous copy implementation - turn a raw * into a * string literal
-		if (star.relation_name.empty() && star.exclude_list.empty() && star.replace_list.empty() &&
-		    star.rename_list.empty() && !star.expr && !star.columns) {
+		if (star.RelationName().empty() && star.ExcludeList().empty() && star.ReplaceList().empty() &&
+		    star.RenameList().empty() && !star.Expression() && !star.IsColumns()) {
 			result.push_back("*");
 			return result;
 		}
@@ -606,8 +619,8 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 			// check if this matches the mode
 			if (copy_option.mode != CopyOptionMode::READ_WRITE && copy_option.mode != copy_mode) {
 				throw InvalidInputException("Option \"%s\" is not supported for %s - only for %s", provided_option,
-				                            std::string(stmt.info->is_from ? "reading" : "writing"),
-				                            std::string(stmt.info->is_from ? "writing" : "reading"));
+				                            stmt.info->is_from ? "reading" : "writing",
+				                            stmt.info->is_from ? "writing" : "reading");
 			}
 			if (copy_option.type.id() != LogicalTypeId::ANY) {
 				if (provided_entry.second.empty()) {
@@ -623,6 +636,10 @@ BoundStatement Binder::Bind(CopyStatement &stmt, CopyToType copy_to_type) {
 					                            provided_option);
 				}
 				auto &original_value = provided_entry.second[0];
+				if (original_value.IsNull()) {
+					throw BinderException("NULL is not supported as a valid option for COPY option \"%s\"",
+					                      provided_option);
+				}
 				if (copy_option.type == original_value.type()) {
 					// types match
 					continue;

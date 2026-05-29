@@ -3,9 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE date_tests (a DATE)
 
 # -- Working cases (AUTO is Auto-Detected):

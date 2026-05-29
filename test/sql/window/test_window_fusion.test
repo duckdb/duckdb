@@ -2,9 +2,6 @@
 # description: Prefix sort fusion
 # group: [window]
 
-statement ok
-PRAGMA enable_verification
-
 # Subset of lineitem with only two partitions
 statement ok
 create table lineitem (

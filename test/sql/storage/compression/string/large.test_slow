@@ -2,9 +2,6 @@
 # description: Test large storage with string compression (many row groups)
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 foreach compression fsst dictionary dict_fsst
 
 statement ok

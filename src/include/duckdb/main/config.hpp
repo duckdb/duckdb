@@ -36,7 +36,8 @@
 #include "duckdb/main/user_settings.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/types/type_manager.hpp"
-#include "duckdb/common/serialization_compatibility.hpp"
+#include "duckdb/common/storage_compatibility.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
 
 namespace duckdb {
 
@@ -101,7 +102,7 @@ struct DBConfigOptions {
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
 	bool checkpoint_on_shutdown = true;
 	//! Serialize the metadata on checkpoint with compatibility for a given DuckDB version.
-	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
+	StorageCompatibility storage_compatibility = StorageCompatibility::Default();
 	//! Initialize the database with the standard set of DuckDB functions
 	//! You should probably not touch this unless you know what you are doing
 	bool initialize_default_database = true;
@@ -121,8 +122,6 @@ struct DBConfigOptions {
 	case_insensitive_map_t<Value> user_options;
 	//! The set of unrecognized (other) options
 	case_insensitive_map_t<Value> unrecognized_options;
-	//! Whether to print bindings when printing the plan (debug mode only)
-	static bool debug_print_bindings; // NOLINT: debug setting
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
 	idx_t allocator_flush_threshold = 134217728ULL;
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
@@ -131,6 +130,8 @@ struct DBConfigOptions {
 	bool variant_legacy_encoding = false;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
+	//! HTTP proxy host (defaults to the HTTP_PROXY environment variable when unset)
+	string http_proxy;
 	//! The default block header size for new duckdb database files.
 	idx_t default_block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
@@ -145,6 +146,12 @@ struct DBConfigOptions {
 	LogConfig log_config = LogConfig();
 	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
 	idx_t block_allocator_size = 0;
+	//! Memory limit for the write buffer per row group (optional)
+	optional_idx write_buffer_row_group_memory_limit;
+	//! Whether to print bindings when printing the plan (debug mode only)
+	static bool debug_print_bindings; // NOLINT: debug setting
+	//! The global verification mode
+	static DebugVerificationMode global_verification_mode; // NOLINT: debug setting
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -289,6 +296,7 @@ public:
 	string SanitizeAllowedPath(const string &path) const;
 	ExtensionCallbackManager &GetCallbackManager();
 	const ExtensionCallbackManager &GetCallbackManager() const;
+
 	void SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util);
 	HTTPUtil &GetHTTPUtil() const;
 

@@ -2,6 +2,7 @@
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/helper/physical_streaming_limit.hpp"
 #include "duckdb/main/config.hpp"
@@ -213,17 +214,10 @@ bool PhysicalLimit::HandleOffset(DataChunk &input, idx_t &current_offset, idx_t 
 		}
 	} else {
 		// have to copy either the entire chunk or part of it
-		idx_t chunk_count;
 		if (current_offset + input.size() >= max_element) {
 			// have to limit the count of the chunk
-			chunk_count = max_element - current_offset;
-		} else {
-			// we copy the entire chunk
-			chunk_count = input.size();
+			input.Slice(0, max_element - current_offset);
 		}
-		// instead of copying we just change the pointer in the current chunk
-		input.Reference(input);
-		input.SetCardinality(chunk_count);
 	}
 
 	current_offset += input_size;
@@ -232,14 +226,18 @@ bool PhysicalLimit::HandleOffset(DataChunk &input, idx_t &current_offset, idx_t 
 
 Value PhysicalLimit::GetDelimiter(ExecutionContext &context, DataChunk &input, const Expression &expr) {
 	DataChunk limit_chunk;
-	vector<LogicalType> types {expr.return_type};
+	vector<LogicalType> types {expr.GetReturnType()};
 	auto &allocator = Allocator::Get(context.client);
 	limit_chunk.Initialize(allocator, types);
 	ExpressionExecutor limit_executor(context.client, &expr);
-	auto input_size = input.size();
-	input.SetCardinality(1);
-	limit_executor.Execute(input, limit_chunk);
-	input.SetCardinality(input_size);
+	// only evaluate the expression on the first row of the input
+	DataChunk single_row_input;
+	single_row_input.InitializeEmpty(input.GetTypes());
+	for (idx_t c = 0; c < input.ColumnCount(); c++) {
+		ConstantVector::Reference(single_row_input.data[c], count_t(1), input.data[c], 0, input.size());
+	}
+	single_row_input.SetCardinality(1);
+	limit_executor.Execute(single_row_input, limit_chunk);
 	auto limit_value = limit_chunk.GetValue(0, 0);
 	return limit_value;
 }

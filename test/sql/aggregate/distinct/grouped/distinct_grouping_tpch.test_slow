@@ -8,13 +8,10 @@ require ram 8gb
 require disk_space 40gb
 
 statement ok
-pragma enable_verification
-
-statement ok
 pragma verify_parallelism
 
 statement ok
-PRAGMA verify_external
+SET debug_force_external=true;
 
 statement ok
 CALL dbgen(sf=1);

@@ -1,5 +1,6 @@
 #include "duckdb/function/window/window_constant_aggregator.hpp"
 
+#include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/window/window_aggregate_states.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
@@ -103,7 +104,7 @@ public:
 
 WindowConstantAggregatorLocalState::WindowConstantAggregatorLocalState(
     ExecutionContext &context, const WindowConstantAggregatorGlobalState &gstate)
-    : WindowAggregatorLocalState(context), gstate(gstate), statep(Value::POINTER(0)),
+    : WindowAggregatorLocalState(context), gstate(gstate), statep(Value::POINTER(0), count_t(1)),
       statef(context.client, gstate.statef.aggr), partition(0) {
 	matches.Initialize();
 
@@ -290,9 +291,13 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 		//	Aggregate the filtered rows into a single state
 		const auto count = inputs.size();
 		auto state = state_f_data[partition];
-		if (aggr.function.HasStateSimpleUpdateCallback()) {
-			aggr.function.GetStateSimpleUpdateCallback()(inputs.data.data(), aggr_input_data, inputs.ColumnCount(),
-			                                             state, count);
+		auto cluster_update = aggr.function.GetStateClusterUpdateCallback();
+		if (cluster_update) {
+			ClusteredAggr clustered;
+			clustered.SetSingleRun(state, count);
+			aggr_input_data.clustered = &clustered;
+			cluster_update(inputs.data.data(), aggr_input_data, inputs.ColumnCount(), clustered, count);
+			aggr_input_data.clustered = nullptr;
 		} else {
 			state_p_data[0] = state_f_data[partition];
 			aggr.function.GetStateUpdateCallback()(inputs.data.data(), aggr_input_data, inputs.ColumnCount(), statep,

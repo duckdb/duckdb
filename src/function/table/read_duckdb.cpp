@@ -527,7 +527,7 @@ static bool DuckDBScanPushdownExpression(ClientContext &context, const LogicalGe
 
 TableFunction ReadDuckDBTableFunction::GetFunction() {
 	MultiFileFunction<DuckDBMultiFileInfo> read_duckdb("read_duckdb");
-	read_duckdb.statistics = MultiFileFunction<DuckDBMultiFileInfo>::MultiFileScanStats;
+	read_duckdb.statistics_extended = MultiFileFunction<DuckDBMultiFileInfo>::MultiFileScanStatsExtended;
 	read_duckdb.get_row_id_columns = DuckDBGetRowIdColumns;
 	read_duckdb.pushdown_expression = DuckDBScanPushdownExpression;
 	read_duckdb.filter_pushdown = true;

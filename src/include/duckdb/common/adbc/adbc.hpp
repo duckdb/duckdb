@@ -25,6 +25,12 @@ public:
 		auto created = duckdb_appender(nullptr);
 		if (duckdb_appender_create_ext(conn, catalog, schema, table, &created) != DuckDBSuccess) {
 			if (created) {
+				auto error_data = duckdb_appender_error_data(created);
+				auto error_message = duckdb_error_data_message(error_data);
+				if (error_message) {
+					create_error = error_message;
+				}
+				duckdb_destroy_error_data(&error_data);
 				duckdb_appender_destroy(&created);
 			}
 			return;
@@ -43,9 +49,13 @@ public:
 	bool Valid() const {
 		return appender != nullptr;
 	}
+	const std::string &CreateError() const {
+		return create_error;
+	}
 
 private:
 	duckdb_appender appender;
+	std::string create_error;
 };
 
 class DataChunkWrapper {

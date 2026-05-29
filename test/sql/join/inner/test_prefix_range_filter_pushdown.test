@@ -3,9 +3,6 @@
 # group: [inner]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 SET disabled_optimizers = 'join_order,build_side_probe_side';
 
 statement ok

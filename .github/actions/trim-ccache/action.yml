@@ -1,0 +1,25 @@
+name: 'Trim ccache'
+description: 'Trim old ccache entries on older ccache versions before post-job cache save'
+inputs:
+  older-than:
+    description: 'Age threshold passed to find -newermt (for example: 2 hours ago)'
+    required: false
+    default: '2 hours ago'
+runs:
+  using: "composite"
+  steps:
+    - name: Trim ccache
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if ccache --help 2>&1 | grep -q "evict-older-than"; then
+          exit 0
+        fi
+
+        cache_dir="$(ccache --get-config=cache_dir 2>/dev/null || true)"
+        if [[ -z "${cache_dir}" || ! -d "${cache_dir}" ]]; then
+          exit 0
+        fi
+
+        find "${cache_dir}" -type f ! -newermt "${{ inputs.older-than }}" -delete

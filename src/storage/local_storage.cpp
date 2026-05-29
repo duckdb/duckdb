@@ -1,4 +1,5 @@
 #include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -286,14 +287,16 @@ OptimisticDataWriter &LocalTableStorage::GetOptimisticWriter() {
 void LocalTableStorage::Rollback() {
 	optimistic_writer.Rollback();
 
+	CommitDropState drop_state(&row_groups->collection->GetBlockManager());
 	for (auto &collection : optimistic_collections) {
 		if (!collection) {
 			continue;
 		}
-		collection->collection->CommitDropTable();
+		collection->collection->CommitDropTable(drop_state);
 	}
 	optimistic_collections.clear();
-	row_groups->collection->CommitDropTable();
+	row_groups->collection->CommitDropTable(drop_state);
+	drop_state.FinalizeCommit();
 }
 
 //===--------------------------------------------------------------------===//
@@ -439,7 +442,7 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	// Only committed row IDs (< MAX_ROW_ID) belong in the delete indexes.
 	// Local row IDs (>= MAX_ROW_ID) live in transaction-local storage and are
 	// handled directly by LocalStorage::Delete.
-	row_ids.Flatten(delete_chunk.size());
+	row_ids.Flatten();
 	auto flat_row_ids = FlatVector::GetData<row_t>(row_ids);
 	idx_t committed_count = 0;
 	SelectionVector committed_sel(delete_chunk.size());
@@ -458,7 +461,7 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 	committed_chunk.Slice(delete_chunk, committed_sel, committed_count);
 
 	Vector committed_row_ids(row_ids, committed_sel, committed_count);
-	committed_row_ids.Flatten(committed_count);
+	committed_row_ids.Flatten();
 
 	for (auto &index : delete_indexes.Indexes()) {
 		D_ASSERT(index.IsBound());

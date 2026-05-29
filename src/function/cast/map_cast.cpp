@@ -26,17 +26,18 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	auto varchar_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	Vector varchar_map(varchar_type, count);
+	FlatVector::SetSize(varchar_map, count);
 
 	// since map's physical type is a list, the ListCast can be utilized
 	ListCast::ListToListCast(source, varchar_map, count, parameters);
 
-	varchar_map.Flatten(count);
+	varchar_map.Flatten();
 	auto &validity = FlatVector::ValidityMutable(varchar_map);
 	auto &key_str = MapVector::GetKeys(varchar_map);
 	auto &val_str = MapVector::GetValues(varchar_map);
 
-	key_str.Flatten(ListVector::GetListSize(source));
-	val_str.Flatten(ListVector::GetListSize(source));
+	key_str.Flatten();
+	val_str.Flatten();
 
 	auto list_data = FlatVector::GetData<list_entry_t>(varchar_map);
 	auto key_data = FlatVector::GetData<string_t>(key_str);
@@ -164,15 +165,14 @@ static bool MapToMapCast(Vector &source, Vector &result, idx_t count, CastParame
 	// We're in TRY_CAST mode: child cast failures may have produced NULL keys in the result maps.
 	// NULL keys are not allowed, so NULL out those map entries.
 	auto &keys = MapVector::GetKeys(result);
-	auto maps_length = ListVector::GetListSize(result);
-	auto key_validity = keys.Validity(maps_length);
+	auto key_validity = keys.Validity();
 
 	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (!ConstantVector::IsNull(result)) {
 			auto list_data = ConstantVector::GetData<list_entry_t>(result);
 			for (idx_t j = 0; j < list_data->length; j++) {
 				if (!key_validity.IsValid(list_data->offset + j)) {
-					ConstantVector::SetNull(result);
+					ConstantVector::SetNull(result, count_t(count));
 					break;
 				}
 			}

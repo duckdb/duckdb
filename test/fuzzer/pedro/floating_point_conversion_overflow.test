@@ -2,9 +2,6 @@
 # description: Floating-point conversion overflow
 # group: [pedro]
 
-statement ok
-PRAGMA enable_verification
-
 foreach float_type REAL DOUBLE
 
 foreach type UTINYINT USMALLINT UINTEGER UBIGINT

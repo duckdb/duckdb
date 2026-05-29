@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb.h"
 #include "fast_float/fast_float.h"
 #include "duckdb/common/string_util.hpp"
 

@@ -4,9 +4,6 @@
 
 require vector_size 512
 
-statement ok
-PRAGMA enable_verification;
-
 query I
 select list_resize(c, 3) from test_vector_types(NULL::INT[], false) t(c);
 ----

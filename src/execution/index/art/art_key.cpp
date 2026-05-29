@@ -63,11 +63,12 @@ void ARTKey::CreateARTKey(ArenaAllocator &allocator, ARTKey &key, const char *va
 	ARTKey::CreateARTKey(allocator, key, string_t(value, UnsafeNumericCast<uint32_t>(strlen(value))));
 }
 
-ARTKey ARTKey::CreateKey(ArenaAllocator &allocator, Value &value, optional_idx storage_version) {
+ARTKey ARTKey::CreateKey(ArenaAllocator &allocator, Value &value, StorageVersion storage_version) {
 	const auto &type = value.type();
 	D_ASSERT(type.InternalType() == value.type().InternalType());
 
-	if (type.id() == LogicalTypeId::GEOMETRY && (!storage_version.IsValid() || (storage_version.GetIndex() < 7))) {
+	if (type.id() == LogicalTypeId::GEOMETRY &&
+	    (storage_version == StorageVersion::INVALID || (storage_version < StorageVersion::V1_5_0))) {
 		// Convert to old-style geometry for older storage versions.
 		string buffer;
 		Geometry::ToSpatialGeometry(value.GetValueUnsafe<string>(), buffer);

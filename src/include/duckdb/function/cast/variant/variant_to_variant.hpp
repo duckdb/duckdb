@@ -93,6 +93,9 @@ struct VariantToVariantSizeAnalyzer {
 	static uint32_t VisitTimestampTZ(timestamp_tz_t, AnalyzeState &state) {
 		return sizeof(timestamp_tz_t);
 	}
+	static uint32_t VisitTimestampTZNanos(timestamp_tz_ns_t, AnalyzeState &state) {
+		return sizeof(timestamp_tz_ns_t);
+	}
 
 	static uint32_t VisitString(const string_t &str, AnalyzeState &state) {
 		auto length = static_cast<uint32_t>(str.GetSize());
@@ -192,6 +195,9 @@ struct VariantToVariantDataWriter {
 	static void VisitTimestampTZ(timestamp_tz_t val, WriteState &state) {
 		VisitInteger(val, state);
 	}
+	static void VisitTimestampTZNanos(timestamp_tz_ns_t val, WriteState &state) {
+		VisitInteger(val, state);
+	}
 
 	static void VisitString(const string_t &str, WriteState &state) {
 		auto length = str.GetSize();
@@ -252,7 +258,7 @@ bool ConvertVariantToVariant(ToVariantSourceData &source_data, ToVariantGlobalRe
 	auto blob_offset_data = OffsetData::GetBlob(result_data.offsets);
 
 	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(source_data.vec, source_data.source_size, source_format);
+	Vector::RecursiveToUnifiedFormat(source_data.vec, source_format);
 	UnifiedVariantVectorData source(source_format);
 
 	auto &result = result_data.variant;

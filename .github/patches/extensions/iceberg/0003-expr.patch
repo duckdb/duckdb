@@ -1,0 +1,151 @@
+diff --git a/src/iceberg_functions/iceberg_multi_file_reader.cpp b/src/iceberg_functions/iceberg_multi_file_reader.cpp
+index 6693bcab..7d0598a8 100644
+--- a/src/iceberg_functions/iceberg_multi_file_reader.cpp
++++ b/src/iceberg_functions/iceberg_multi_file_reader.cpp
+@@ -391,7 +391,7 @@ void IcebergMultiFileReader::ApplyEqualityDeletes(ClientContext &context, DataCh
+ 
+ 				//! This means that if the expression is 'IS_NOT_NULL', the result is False for this column, otherwise
+ 				//! it's True (because nothing compares equal to NULL)
+-				if (expression->type == ExpressionType::OPERATOR_IS_NOT_NULL) {
++				if (expression->GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
+ 					equalities.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(false)));
+ 				} else {
+ 					equalities.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(true)));
+diff --git a/src/iceberg_predicate.cpp b/src/iceberg_predicate.cpp
+index d986603b..c6fa6b3c 100644
+--- a/src/iceberg_predicate.cpp
++++ b/src/iceberg_predicate.cpp
+@@ -27,7 +27,7 @@ public:
+ 		if (expr.index != 0) {
+ 			return nullptr;
+ 		}
+-		auto &return_type = expr.return_type;
++		auto &return_type = expr.GetReturnType();
+ 		return make_uniq<BoundConstantExpression>(val.DefaultCastAs(return_type, true));
+ 	}
+ 
+@@ -185,7 +185,7 @@ bool MatchBoundsTemplated(ClientContext &context, const TableFilter &filter, con
+ 		auto &expression_filter = filter.Cast<ExpressionFilter>();
+ 		auto &expr = *expression_filter.expr;
+ 
+-		switch (expr.type) {
++		switch (expr.GetExpressionType()) {
+ 		case ExpressionType::OPERATOR_IS_NULL:
+ 		case ExpressionType::OPERATOR_IS_NOT_NULL: {
+ 			D_ASSERT(expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR);
+@@ -193,15 +193,15 @@ bool MatchBoundsTemplated(ClientContext &context, const TableFilter &filter, con
+ 
+ 			D_ASSERT(bound_operator_expr.children.size() == 1);
+ 			auto &child_expr = bound_operator_expr.children[0];
+-			if (child_expr->type != ExpressionType::BOUND_REF) {
++			if (child_expr->GetExpressionType() != ExpressionType::BOUND_REF) {
+ 				//! We can't evaluate expressions that aren't direct column references
+ 				return true;
+ 			}
+ 
+-			if (expr.type == ExpressionType::OPERATOR_IS_NULL) {
++			if (expr.GetExpressionType() == ExpressionType::OPERATOR_IS_NULL) {
+ 				return MatchBoundsIsNullFilter<TRANSFORM>(stats, transform);
+ 			}
+-			D_ASSERT(expr.type == ExpressionType::OPERATOR_IS_NOT_NULL);
++			D_ASSERT(expr.GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL);
+ 			return MatchBoundsIsNotNullFilter<TRANSFORM>(stats, transform);
+ 		}
+ 		case ExpressionType::COMPARE_GREATERTHAN:
+@@ -224,9 +224,9 @@ bool MatchBoundsTemplated(ClientContext &context, const TableFilter &filter, con
+ 				}
+ 
+ 				if (left_foldable) {
+-					return MatchTransformedBounds<TRANSFORM>(context, expr.type, right, left, stats, transform);
++					return MatchTransformedBounds<TRANSFORM>(context, expr.GetExpressionType(), right, left, stats, transform);
+ 				} else {
+-					return MatchTransformedBounds<TRANSFORM>(context, expr.type, left, right, stats, transform);
++					return MatchTransformedBounds<TRANSFORM>(context, expr.GetExpressionType(), left, right, stats, transform);
+ 				}
+ 				return true;
+ 			}
+diff --git a/src/storage/catalog/iceberg_schema_entry.cpp b/src/storage/catalog/iceberg_schema_entry.cpp
+index 32fc8d55..19cf9597 100644
+--- a/src/storage/catalog/iceberg_schema_entry.cpp
++++ b/src/storage/catalog/iceberg_schema_entry.cpp
+@@ -128,7 +128,7 @@ optional_ptr<CatalogEntry> IcebergSchemaEntry::CreateFunction(CatalogTransaction
+ }
+ 
+ void ICUnqualifyColumnRef(ParsedExpression &expr) {
+-	if (expr.type == ExpressionType::COLUMN_REF) {
++	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
+ 		auto &colref = expr.Cast<ColumnRefExpression>();
+ 		auto name = std::move(colref.column_names.back());
+ 		colref.column_names = {std::move(name)};
+diff --git a/src/storage/iceberg_insert.cpp b/src/storage/iceberg_insert.cpp
+index 469de632..9290d91b 100644
+--- a/src/storage/iceberg_insert.cpp
++++ b/src/storage/iceberg_insert.cpp
+@@ -606,7 +606,7 @@ static void GeneratePartitionExpressions(ClientContext &context, IcebergCopyInpu
+ 
+ 		auto expr = GetPartitionExpression(context, copy_input, field);
+ 		projection_names.push_back(field.name);
+-		projection_types.push_back(expr->return_type);
++		projection_types.push_back(expr->GetReturnType());
+ 		projection_expressions.push_back(std::move(expr));
+ 	}
+ 
+@@ -677,7 +677,7 @@ PhysicalOperator &IcebergInsert::PlanCopyForInsert(ClientContext &context, Physi
+ 			// Build the projection types from the expressions
+ 			vector<LogicalType> proj_types;
+ 			for (auto &expr : projection_expressions) {
+-				proj_types.push_back(expr->return_type);
++				proj_types.push_back(expr->GetReturnType());
+ 			}
+ 			auto &proj = planner.Make<PhysicalProjection>(std::move(proj_types), std::move(projection_expressions),
+ 			                                              plan->estimated_cardinality);
+diff --git a/src/storage/iceberg_table_information.cpp b/src/storage/iceberg_table_information.cpp
+index acc5d517..1b5682eb 100644
+--- a/src/storage/iceberg_table_information.cpp
++++ b/src/storage/iceberg_table_information.cpp
+@@ -336,19 +336,19 @@ void IcebergTableInformation::SetPartitionedBy(IcebergTransaction &transaction,
+ 		string transform_name = "identity";
+ 		idx_t bucket_modulo_val;
+ 
+-		if (key->type == ExpressionType::COLUMN_REF) {
++		if (key->GetExpressionType() == ExpressionType::COLUMN_REF) {
+ 			auto &colref = key->Cast<ColumnRefExpression>();
+ 			column_name = colref.column_names.back();
+-		} else if (key->type == ExpressionType::FUNCTION) {
++		} else if (key->GetExpressionType() == ExpressionType::FUNCTION) {
+ 			auto &funcexpr = key->Cast<FunctionExpression>();
+ 			transform_name = funcexpr.function_name;
+ 			if (funcexpr.children.empty()) {
+ 				throw NotImplementedException("Unrecognized transform ('%s')", transform_name);
+ 			} else if (!IcebergTransform::TransformFunctionSupported(transform_name)) {
+ 				throw NotImplementedException("Unrecognized transform ('%s')", transform_name);
+-			} else if (funcexpr.children[0]->type != ExpressionType::COLUMN_REF) {
++			} else if (funcexpr.children[0]->GetExpressionType() != ExpressionType::COLUMN_REF) {
+ 				throw NotImplementedException("Transforms are only supported on column references, not %s",
+-				                              EnumUtil::ToChars(funcexpr.children[0]->type));
++				                              EnumUtil::ToChars(funcexpr.children[0]->GetExpressionType()));
+ 			}
+ 			auto &colref = funcexpr.children[0]->Cast<ColumnRefExpression>();
+ 			column_name = colref.column_names.back();
+@@ -358,7 +358,7 @@ void IcebergTableInformation::SetPartitionedBy(IcebergTransaction &transaction,
+ 					                            transform_name);
+ 				}
+ 				auto &param_expr = *funcexpr.children[1];
+-				if (param_expr.type != ExpressionType::VALUE_CONSTANT) {
++				if (param_expr.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+ 					throw InvalidInputException("%s second argument must be a constant integer", transform_name);
+ 				}
+ 				auto &const_expr = param_expr.Cast<ConstantExpression>();
+diff --git a/src/storage/iceberg_update.cpp b/src/storage/iceberg_update.cpp
+index 7964c7c7..363816d0 100644
+--- a/src/storage/iceberg_update.cpp
++++ b/src/storage/iceberg_update.cpp
+@@ -49,7 +49,7 @@ public:
+ 		vector<LogicalType> update_types;
+ 		update_types.reserve(expressions.size());
+ 		for (auto &expr : expressions) {
+-			update_types.push_back(expr->return_type);
++			update_types.push_back(expr->GetReturnType());
+ 		}
+ 		update_chunk.Initialize(allocator, update_types);
+ 	}

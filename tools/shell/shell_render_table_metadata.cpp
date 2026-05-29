@@ -20,7 +20,8 @@ bool ShellState::UseDescribeRenderMode(const duckdb::SQLStatement &statement, st
 		return false;
 	}
 	auto &select_node = select.node->Cast<duckdb::SelectNode>();
-	if (select_node.select_list.size() != 1 || select_node.select_list[0]->type != duckdb::ExpressionType::STAR) {
+	if (select_node.select_list.size() != 1 ||
+	    select_node.select_list[0]->GetExpressionType() != duckdb::ExpressionType::STAR) {
 		return false;
 	}
 	if (select_node.from_table->type != duckdb::TableReferenceType::SHOW_REF) {

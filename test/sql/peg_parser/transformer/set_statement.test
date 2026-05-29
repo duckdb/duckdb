@@ -2,12 +2,7 @@
 # description: Test lambda syntax in peg parser
 # group: [transformer]
 
-require autocomplete
-
 require icu
-
-statement ok
-call enable_peg_parser();
 
 statement ok
 SET threads=1;
@@ -47,7 +42,7 @@ SET TIME ZONE LOCAL;
 statement error
 SET TIME ZONE INTERVAL '01:30' HOUR TO MINUTE;
 ----
-Not implemented Error: Unknown TimeZone
+<REGEX>:.*HOUR TO MINUTE is not supported.*
 
 statement error
 SET TIME ZONE INTERVAL '01:30';

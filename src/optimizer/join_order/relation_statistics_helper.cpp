@@ -1,7 +1,6 @@
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -14,6 +13,20 @@
 #include <math.h>
 
 namespace duckdb {
+
+bool ExpressionBinding::FoundExpression() const {
+	return expression;
+}
+
+bool ExpressionBinding::FoundColumnRef() const {
+	if (!FoundExpression()) {
+		return false;
+	}
+	return expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF;
+}
+
+RelationStats::RelationStats() : cardinality(1), filter_strength(1), stats_initialized(false) {
+}
 
 static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	auto ret = ExpressionBinding();
@@ -139,7 +152,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
 			}
 
-			if (entry.Filter().filter_type != TableFilterType::OPTIONAL_FILTER) {
+			if (!ExpressionFilter::IsOptionalFilter(entry.Filter())) {
 				has_non_optional_filters = true;
 			}
 		}
@@ -155,6 +168,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			cardinality_after_filters = 0;
 		}
 	}
+
 	return_stats.cardinality = cardinality_after_filters;
 	// update the estimated cardinality of the get as well.
 	// This is not updated during plan reconstruction.
@@ -449,9 +463,9 @@ RelationStats RelationStatisticsHelper::ExtractEmptyResultStats(LogicalEmptyResu
 idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const TableFilter &filter,
                                                    BaseStatistics &base_stats) {
 	auto cardinality_after_filters = cardinality;
-	auto expr_filter = ExpressionFilter::FromTableFilter(filter, base_stats.GetType());
-	auto &expr = *expr_filter->expr;
-	if (expr.type == ExpressionType::CONJUNCTION_AND) {
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RelationStatisticsHelper::InspectTableFilter");
+	auto &expr = *expr_filter.expr;
+	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conj = expr.Cast<BoundConjunctionExpression>();
 		for (auto &child : conj.children) {
 			ExpressionFilter child_filter(child->Copy());
@@ -460,11 +474,11 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const Tabl
 		}
 		return cardinality_after_filters;
 	}
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
+	if (!BoundComparisonExpression::IsComparison(expr)) {
 		return cardinality_after_filters;
 	}
-	auto &comparison = expr.Cast<BoundComparisonExpression>();
-	if (comparison.type != ExpressionType::COMPARE_EQUAL) {
+	auto &comparison = expr.Cast<BoundFunctionExpression>();
+	if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 		return cardinality_after_filters;
 	}
 	auto column_count = base_stats.GetDistinctCount();

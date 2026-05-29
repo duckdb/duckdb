@@ -42,7 +42,7 @@ static void RepeatFunction(ClientContext &context, TableFunctionInput &data_p, D
 	auto &state = data_p.global_state->Cast<RepeatOperatorData>();
 
 	idx_t remaining = MinValue<idx_t>(bind_data.target_count - state.current_count, STANDARD_VECTOR_SIZE);
-	output.data[0].Reference(bind_data.value);
+	output.data[0].Reference(bind_data.value, count_t(remaining));
 	output.SetCardinality(remaining);
 	state.current_count += remaining;
 }

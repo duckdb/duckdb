@@ -411,7 +411,7 @@ unique_ptr<FunctionData> BindEquiWidthFunction(BindScalarFunctionInput &input) {
 	// while internally the bins are computed over a unified type
 	// the equi_width_bins function returns the same type as the input MAX
 	LogicalType child_type;
-	switch (arguments[1]->return_type.id()) {
+	switch (arguments[1]->GetReturnType().id()) {
 	case LogicalTypeId::UNKNOWN:
 	case LogicalTypeId::SQLNULL:
 		return nullptr;
@@ -420,7 +420,7 @@ unique_ptr<FunctionData> BindEquiWidthFunction(BindScalarFunctionInput &input) {
 		child_type = LogicalType::DOUBLE;
 		break;
 	default:
-		child_type = arguments[1]->return_type;
+		child_type = arguments[1]->GetReturnType();
 		break;
 	}
 	bound_function.SetReturnType(LogicalType::LIST(child_type));
@@ -430,15 +430,15 @@ unique_ptr<FunctionData> BindEquiWidthFunction(BindScalarFunctionInput &input) {
 template <class T, class OP>
 void EquiWidthBinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	static constexpr int64_t MAX_BIN_COUNT = 1000000;
-	auto &min_arg = args.data[0];
-	auto &max_arg = args.data[1];
-	auto &bin_count = args.data[2];
-	auto &nice_rounding = args.data[3];
+	const auto &min_arg = args.data[0];
+	const auto &max_arg = args.data[1];
+	const auto &bin_count = args.data[2];
+	const auto &nice_rounding = args.data[3];
 
 	Vector intermediate_result(LogicalType::LIST(OP::LOGICAL_TYPE));
 	GenericExecutor::ExecuteQuaternary<PrimitiveType<T>, PrimitiveType<T>, PrimitiveType<int64_t>, PrimitiveType<bool>,
 	                                   GenericListType<PrimitiveType<T>>>(
-	    min_arg, max_arg, bin_count, nice_rounding, intermediate_result, args.size(),
+	    min_arg, max_arg, bin_count, nice_rounding, intermediate_result,
 	    [&](PrimitiveType<T> min_p, PrimitiveType<T> max_p, PrimitiveType<int64_t> bins_p,
 	        PrimitiveType<bool> nice_rounding_p) {
 		    if (max_p.val < min_p.val) {
@@ -474,11 +474,11 @@ void UnsupportedEquiWidth(DataChunk &args, ExpressionState &state, Vector &) {
 	throw BinderException(state.expr, "Unsupported type \"%s\" for equi_width_bins", args.data[0].GetType());
 }
 
-void EquiWidthBinSerialize(Serializer &, const optional_ptr<FunctionData>, const ScalarFunction &) {
+void EquiWidthBinSerialize(Serializer &, const optional_ptr<FunctionData>, const BoundScalarFunction &) {
 	return;
 }
 
-unique_ptr<FunctionData> EquiWidthBinDeserialize(Deserializer &deserializer, ScalarFunction &function) {
+unique_ptr<FunctionData> EquiWidthBinDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 	function.SetReturnType(deserializer.Get<const LogicalType &>());
 	return nullptr;
 }

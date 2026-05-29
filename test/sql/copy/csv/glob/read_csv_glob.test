@@ -2,9 +2,6 @@
 # description: Test globbing CSVs
 # group: [glob]
 
-statement ok
-PRAGMA enable_verification
-
 query IIIII
 select typeof(#1),typeof(#2),typeof(#3),typeof(#4),typeof(#5) FROM read_csv('{DATA_DIR}/csv/per_thread/*.csv') limit 1
 ----

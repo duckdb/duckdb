@@ -327,7 +327,7 @@ void StatisticsPropagator::CreateFilterFromJoinStats(unique_ptr<LogicalOperator>
                                                      const BaseStatistics &stats_before,
                                                      const BaseStatistics &stats_after) {
 	// Only do this for integral colref's that have stats
-	if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF || !expr->return_type.IsIntegral() ||
+	if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF || !expr->GetReturnType().IsIntegral() ||
 	    !NumericStats::HasMinMax(stats_before) || !NumericStats::HasMinMax(stats_after)) {
 		return;
 	}
@@ -341,13 +341,13 @@ void StatisticsPropagator::CreateFilterFromJoinStats(unique_ptr<LogicalOperator>
 	vector<unique_ptr<Expression>> filter_exprs;
 	if (min_after > min_before) {
 		filter_exprs.emplace_back(
-		    make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, expr->Copy(),
-		                                         make_uniq<BoundConstantExpression>(std::move(min_after))));
+		    BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHANOREQUALTO, expr->Copy(),
+		                                      make_uniq<BoundConstantExpression>(std::move(min_after))));
 	}
 	if (max_after < max_before) {
 		filter_exprs.emplace_back(
-		    make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, expr->Copy(),
-		                                         make_uniq<BoundConstantExpression>(std::move(max_after))));
+		    BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHANOREQUALTO, expr->Copy(),
+		                                      make_uniq<BoundConstantExpression>(std::move(max_after))));
 	}
 
 	if (filter_exprs.empty()) {

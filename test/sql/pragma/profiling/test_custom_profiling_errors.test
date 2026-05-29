@@ -1,28 +1,37 @@
 # name: test/sql/pragma/profiling/test_custom_profiling_errors.test
-# description: Test different errors for custom_profiling_settings.
+# description: Test that custom_profiling_settings is deprecated and errors on use.
 # group: [profiling]
 
 require json
 
+statement error
+PRAGMA custom_profiling_settings='}}}}}}';
+----
+<REGEX>:Invalid Input Error.*deprecated.*tracked_metrics.*
+
+statement error
+PRAGMA custom_profiling_settings=BONJOUR;
+----
+<REGEX>:Invalid Input Error.*deprecated.*tracked_metrics.*
+
+statement error
+PRAGMA configure_profiling='{"INVALID_SETTING": "true"}';
+----
+<REGEX>:Invalid Input Error.*deprecated.*tracked_metrics.*
+
+statement error
+SET configure_metrics = 'hello';
+----
+<REGEX>:Invalid Input Error.*deprecated.*tracked_metrics.*
+
+# Verify tracked_metrics is the new way
 statement ok
-PRAGMA enable_verification;
+SET tracked_metrics = ['*'];
 
-statement error
-PRAGMA custom_profiling_settings='}}}}}}'
+query I
+SELECT unnest(current_setting('tracked_metrics'));
 ----
-<REGEX>:IO Error.*Could not parse the custom profiler settings file due to incorrect JSON: "}}}}}}".*
+*
 
-statement error
-PRAGMA custom_profiling_settings=BONJOUR
-----
-<REGEX>:IO Error.*Could not parse the custom profiler settings file due to incorrect JSON: "BONJOUR".*
-
-statement error
-PRAGMA custom_profiling_settings=[NOT_A_JSON]
-----
-<REGEX>:Binder Error.*SET value cannot contain column names.*
-
-statement error
-PRAGMA custom_profiling_settings='{"INVALID_SETTING": "true"}'
-----
-<REGEX>:IO Error.*Invalid custom profiler settings: "INVALID_SETTING".*
+statement ok
+RESET tracked_metrics;

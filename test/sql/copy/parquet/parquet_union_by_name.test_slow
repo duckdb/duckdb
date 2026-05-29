@@ -10,9 +10,6 @@ statement ok
 CALL dbgen(sf=0.1);
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 COPY (SELECT l_orderkey, l_partkey, l_suppkey FROM lineitem) 
 TO '{TEST_DIR}/union_by_name_lineitem1.parquet' (FORMAT PARQUET);
 

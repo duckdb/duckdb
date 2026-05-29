@@ -1207,6 +1207,10 @@ public:
 	}
 
 	bool RequiresQuotes(const duckdb::LogicalType &type) {
+		// Booleans are cast to VARCHAR ("true"/"false") in ConvertChunk; emit them as JSON booleans, not strings.
+		if (type.id() == duckdb::LogicalTypeId::BOOLEAN) {
+			return false;
+		}
 		if (!type.IsNumeric()) {
 			return true;
 		}

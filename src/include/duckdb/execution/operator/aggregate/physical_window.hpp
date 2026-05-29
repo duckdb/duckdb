@@ -21,7 +21,9 @@ public:
 
 public:
 	PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-	               idx_t estimated_cardinality, PhysicalOperatorType type = PhysicalOperatorType::WINDOW);
+	               idx_t estimated_cardinality, vector<column_t> partitions);
+	PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
+	               idx_t estimated_cardinality);
 
 	//! The projection list of the WINDOW statement (may contain aggregates)
 	vector<unique_ptr<Expression>> select_list;
@@ -30,6 +32,8 @@ public:
 	//! Whether or not the window is order dependent (only true if ANY window function contains neither an order nor a
 	//! partition clause)
 	bool is_order_dependent;
+	//! The partitions over which this is grouped (if any)
+	OperatorPartitionInfo partition_info;
 
 public:
 	// Source interface
@@ -56,6 +60,7 @@ public:
 
 public:
 	// Sink interface
+	SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -65,6 +70,8 @@ public:
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+
+	OperatorPartitionInfo RequiredPartitionInfo() const override;
 
 	bool IsSink() const override {
 		return true;

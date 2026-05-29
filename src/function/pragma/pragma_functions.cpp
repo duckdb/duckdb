@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/logging/log_manager.hpp"
 
@@ -54,37 +55,10 @@ static void PragmaDisablePrintProgressBar(ClientContext &context, const Function
 }
 
 static void PragmaEnableVerification(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).query_verification_enabled = true;
-	ClientConfig::GetConfig(context).verify_serializer = true;
+	Printer::PrintF("PRAGMA enable_verification has been deprecated - there is no need to set this anymore");
 }
 
 static void PragmaDisableVerification(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).query_verification_enabled = false;
-	ClientConfig::GetConfig(context).verify_serializer = false;
-}
-
-static void PragmaVerifySerializer(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).verify_serializer = true;
-}
-
-static void PragmaDisableVerifySerializer(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).verify_serializer = false;
-}
-
-static void PragmaEnableExternalVerification(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).verify_external = true;
-}
-
-static void PragmaDisableExternalVerification(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).verify_external = false;
-}
-
-static void PragmaEnableFetchRowVerification(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).verify_fetch_row = true;
-}
-
-static void PragmaDisableFetchRowVerification(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).verify_fetch_row = false;
 }
 
 static void PragmaEnableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
@@ -114,11 +88,11 @@ static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const Func
 }
 
 static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).enable_optimizer = true;
+	Settings::Set<EnableOptimizerSetting>(context, SetScope::SESSION, Value::BOOLEAN(true));
 }
 
 static void PragmaDisableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).enable_optimizer = false;
+	Settings::Set<EnableOptimizerSetting>(context, SetScope::SESSION, Value::BOOLEAN(false));
 }
 
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
@@ -133,15 +107,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_verification", PragmaEnableVerification));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verification", PragmaDisableVerification));
-
-	set.AddFunction(PragmaFunction::PragmaStatement("verify_external", PragmaEnableExternalVerification));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_external", PragmaDisableExternalVerification));
-
-	set.AddFunction(PragmaFunction::PragmaStatement("verify_fetch_row", PragmaEnableFetchRowVerification));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_fetch_row", PragmaDisableFetchRowVerification));
-
-	set.AddFunction(PragmaFunction::PragmaStatement("verify_serializer", PragmaVerifySerializer));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_serializer", PragmaDisableVerifySerializer));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("verify_parallelism", PragmaEnableForceParallelism));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_parallelism", PragmaDisableForceParallelism));

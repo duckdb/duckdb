@@ -16,9 +16,9 @@ static void AddChild(unique_ptr<ParsedExpression> &child, expression_list_t &new
 		return;
 	}
 	auto &unpack = child->Cast<OperatorExpression>();
-	D_ASSERT(unpack.type == ExpressionType::OPERATOR_UNPACK);
-	D_ASSERT(unpack.children.size() == 1);
-	auto &unpack_child = unpack.children[0];
+	D_ASSERT(unpack.GetExpressionType() == ExpressionType::OPERATOR_UNPACK);
+	D_ASSERT(unpack.GetChildren().size() == 1);
+	auto &unpack_child = unpack.GetChildrenMutable()[0];
 
 	// Replace the child with the replacement expression(s)
 	for (auto &replacement : replacements) {
@@ -46,23 +46,23 @@ static void ReplaceInFunction(unique_ptr<ParsedExpression> &expr, expression_lis
 
 	// Replace children
 	expression_list_t new_children;
-	for (auto &child : function_expr.children) {
+	for (auto &child : function_expr.GetChildrenMutable()) {
 		AddChild(child, new_children, star_list, star, regex);
 	}
-	function_expr.children = std::move(new_children);
+	function_expr.GetChildrenMutable() = std::move(new_children);
 
 	// Replace ORDER_BY
-	if (function_expr.order_bys) {
+	if (function_expr.OrderBy()) {
 		expression_list_t new_orders;
-		for (auto &order : function_expr.order_bys->orders) {
+		for (auto &order : function_expr.OrderByMutable()->orders) {
 			AddChild(order.expression, new_orders, star_list, star, regex);
 		}
-		if (new_orders.size() != function_expr.order_bys->orders.size()) {
+		if (new_orders.size() != function_expr.OrderBy()->orders.size()) {
 			throw NotImplementedException("*COLUMNS(...) is not supported in the order expression");
 		}
 		for (idx_t i = 0; i < new_orders.size(); i++) {
 			auto &new_order = new_orders[i];
-			function_expr.order_bys->orders[i].expression = std::move(new_order);
+			function_expr.OrderByMutable()->orders[i].expression = std::move(new_order);
 		}
 	}
 }
@@ -79,21 +79,21 @@ static void ReplaceInOperator(unique_ptr<ParsedExpression> &expr, expression_lis
 	bool allowed = false;
 	for (idx_t i = 0; i < allowed_types.size() && !allowed; i++) {
 		auto &type = allowed_types[i];
-		if (operator_expr.type == type) {
+		if (operator_expr.GetExpressionType() == type) {
 			allowed = true;
 		}
 	}
 	if (!allowed) {
 		throw BinderException("*COLUMNS() can not be used together with the '%s' operator",
-		                      EnumUtil::ToString(operator_expr.type));
+		                      EnumUtil::ToString(operator_expr.GetExpressionType()));
 	}
 
 	// Replace children
 	expression_list_t new_children;
-	for (auto &child : operator_expr.children) {
+	for (auto &child : operator_expr.GetChildrenMutable()) {
 		AddChild(child, new_children, star_list, star, regex);
 	}
-	operator_expr.children = std::move(new_children);
+	operator_expr.GetChildrenMutable() = std::move(new_children);
 }
 
 void Binder::ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr, expression_list_t &star_list,

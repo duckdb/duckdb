@@ -2,11 +2,6 @@
 # description: Test values list mismatch error
 # group: [parser]
 
-require autocomplete
-
-statement ok
-CALL enable_peg_parser();
-
 statement error
 FROM (VALUES ('1', '2'), ('1'))
 ----

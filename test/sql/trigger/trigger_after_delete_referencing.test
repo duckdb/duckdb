@@ -1,0 +1,140 @@
+# name: test/sql/trigger/trigger_after_delete_referencing.test
+# description: Test AFTER DELETE trigger with REFERENCING OLD TABLE AS <alias>
+# group: [trigger]
+
+require noforcestorage
+
+# Basic: alias exposes the deleted row to the trigger body
+statement ok
+CREATE TABLE target (id INTEGER, val VARCHAR);
+
+statement ok
+CREATE TABLE audit (id INTEGER, val VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_ref AFTER DELETE ON target
+REFERENCING OLD TABLE AS deleted
+FOR EACH STATEMENT
+    INSERT INTO audit SELECT id, val FROM deleted;
+
+statement ok
+INSERT INTO target VALUES (1, 'a'), (2, 'b'), (3, 'c');
+
+statement ok
+DELETE FROM target WHERE id = 1;
+
+query II rowsort
+SELECT id, val FROM audit;
+----
+1	a
+
+# Multi-row DELETE: all deleted rows visible through alias
+statement ok
+DELETE FROM target WHERE id IN (2, 3);
+
+query II rowsort
+SELECT id, val FROM audit;
+----
+1	a
+2	b
+3	c
+
+# Only rows deleted in the current statement are in alias (not all previously deleted rows)
+statement ok
+CREATE TABLE t_rows (id INTEGER);
+
+statement ok
+CREATE TABLE t_rows_log (n INTEGER);
+
+statement ok
+CREATE TRIGGER trg_rows AFTER DELETE ON t_rows
+REFERENCING OLD TABLE AS old_rows
+FOR EACH STATEMENT
+    INSERT INTO t_rows_log SELECT COUNT(*) FROM old_rows;
+
+statement ok
+INSERT INTO t_rows VALUES (1), (2), (3), (4), (5);
+
+statement ok
+DELETE FROM t_rows WHERE id <= 3;
+
+query I
+SELECT n FROM t_rows_log;
+----
+3
+
+statement ok
+DELETE FROM t_rows WHERE id > 3;
+
+query I rowsort
+SELECT n FROM t_rows_log;
+----
+2
+3
+
+# Aggregate over alias
+statement ok
+CREATE TABLE t_agg (val INTEGER);
+
+statement ok
+CREATE TABLE t_agg_log (total INTEGER, cnt INTEGER);
+
+statement ok
+CREATE TRIGGER trg_agg AFTER DELETE ON t_agg
+REFERENCING OLD TABLE AS old_vals
+FOR EACH STATEMENT
+    INSERT INTO t_agg_log SELECT SUM(val), COUNT(*) FROM old_vals;
+
+statement ok
+INSERT INTO t_agg VALUES (10), (20), (30);
+
+statement ok
+DELETE FROM t_agg WHERE val <= 20;
+
+query II
+SELECT total, cnt FROM t_agg_log;
+----
+30	2
+
+# ToSQL round-trips REFERENCING OLD TABLE AS correctly
+statement ok
+CREATE TABLE t_tosql (id INTEGER);
+
+statement ok
+CREATE TABLE t_tosql_log (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_tosql AFTER DELETE ON t_tosql
+REFERENCING OLD TABLE AS del
+FOR EACH STATEMENT
+    INSERT INTO t_tosql_log SELECT id FROM del;
+
+query I
+SELECT sql LIKE '%REFERENCING OLD TABLE AS del%' FROM duckdb_triggers() WHERE trigger_name = 'trg_tosql';
+----
+true
+
+# Body CTE with same name as OLD alias shadows the alias
+statement ok
+CREATE TABLE t_old_alias_shadow (i INTEGER);
+
+statement ok
+CREATE TABLE log_old_alias_shadow (s VARCHAR);
+
+statement ok
+CREATE TRIGGER tr_old_alias_shadow AFTER DELETE ON t_old_alias_shadow
+REFERENCING OLD TABLE AS o
+FOR EACH STATEMENT
+    WITH o AS (SELECT 'local' AS s)
+    INSERT INTO log_old_alias_shadow SELECT s FROM o;
+
+statement ok
+INSERT INTO t_old_alias_shadow VALUES (1);
+
+statement ok
+DELETE FROM t_old_alias_shadow;
+
+query I
+SELECT s FROM log_old_alias_shadow;
+----
+local

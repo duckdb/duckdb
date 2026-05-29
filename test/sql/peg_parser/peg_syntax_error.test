@@ -2,11 +2,6 @@
 # description: Test analyze and vacuum statements in peg parser
 # group: [peg_parser]
 
-require autocomplete
-
-statement ok 
-call enable_peg_parser();
-
 statement error
 SELECT (1 + (2 * 3);
 ----
@@ -120,3 +115,28 @@ query I
 SELECT ('abcd'::VARCHAR)[1:3];
 ----
 abc
+
+# Identifiers must not start with a digit
+statement error
+SELECT * FROM 1e5;
+----
+Parser Error: syntax error at or near "1e5"
+
+statement error
+CREATE TABLE 1 (id INTEGER);
+----
+Parser Error: syntax error at or near "1"
+
+statement error
+SELECT 1 AS 1col;
+----
+Parser Error: syntax error at or near "1"
+
+statement error
+SELECT 0 10;
+----
+Parser Error: syntax error at or near "10"
+
+# Quoted identifiers starting with a digit are allowed
+statement ok
+CREATE TABLE "1abc" (id INTEGER);

@@ -40,12 +40,8 @@ using namespace duckdb; // NOLINT
 //===--------------------------------------------------------------------===//
 // Scalar function
 //===--------------------------------------------------------------------===//
-static inline int32_t hello_fun(string_t what) {
-	return UnsafeNumericCast<int32_t>(what.GetSize() + 5);
-}
-
 static inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
-	result.Reference(Value("Hello Alias!"));
+	result.Reference(Value("Hello Alias!"), count_t(args.size()));
 }
 
 static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -59,8 +55,8 @@ static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vec
 
 	UnifiedVectorFormat lhs_data;
 	UnifiedVectorFormat rhs_data;
-	left_vector.ToUnifiedFormat(count, lhs_data);
-	right_vector.ToUnifiedFormat(count, rhs_data);
+	left_vector.ToUnifiedFormat(lhs_data);
+	right_vector.ToUnifiedFormat(rhs_data);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &child_entries = StructVector::GetEntries(result);
@@ -86,7 +82,7 @@ static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vec
 	if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-	result.Verify(count);
+	result.Verify();
 }
 
 static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -99,8 +95,8 @@ static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vec
 	args.Flatten();
 	UnifiedVectorFormat lhs_data;
 	UnifiedVectorFormat rhs_data;
-	left_vector.ToUnifiedFormat(count, lhs_data);
-	right_vector.ToUnifiedFormat(count, rhs_data);
+	left_vector.ToUnifiedFormat(lhs_data);
+	right_vector.ToUnifiedFormat(rhs_data);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &child_entries = StructVector::GetEntries(result);
@@ -126,7 +122,7 @@ static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vec
 	if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-	result.Verify(count);
+	result.Verify();
 }
 
 //===--------------------------------------------------------------------===//
@@ -218,9 +214,9 @@ public:
 	    : WindowFunction("duckweed", {LogicalType::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FUNCTION, Bind,
 	                     GetBounds, GetSharing, GetGlobal, GetLocal, nullptr, Finalizer, GetData) {
 		//	Not implemented
-		can_order_by = false;
+		SetCanOrderBy(false);
 		//	We are filling in NULLs
-		can_ignore_nulls = false;
+		SetCanIgnoreNulls(false);
 
 		SetCanStreamCallback(CanStream);
 		SetStreamingStateCallback(GetStreamingState);
@@ -231,7 +227,7 @@ public:
 	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function.SetReturnType(arguments[0]->return_type);
+		function.SetReturnType(arguments[0]->GetReturnType());
 		return nullptr;
 	}
 
@@ -292,8 +288,8 @@ public:
 	class StreamingState : public WindowExecutorStreamingState {
 	public:
 		StreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
-		    : wexpr(wexpr), filler(Value(wexpr.children[0]->return_type)), executor(client),
-		      arg(wexpr.children[0]->return_type) {
+		    : wexpr(wexpr), filler(Value(wexpr.children[0]->GetReturnType()), count_t(STANDARD_VECTOR_SIZE)),
+		      executor(client), arg(wexpr.children[0]->GetReturnType()) {
 			executor.AddExpression(*wexpr.children[0]);
 		}
 		//! The window expression
@@ -324,12 +320,12 @@ public:
 		//	Evaluate the argument
 		sstate.executor.ExecuteExpression(input, arg);
 		UnifiedVectorFormat unified;
-		arg.ToUnifiedFormat(count, unified);
+		arg.ToUnifiedFormat(unified);
 		const auto &validity = unified.validity;
 		for (idx_t i = 0; i < count; ++i) {
 			const auto idx = unified.sel->get_index(i);
 			if (validity.RowIsValid(idx)) {
-				filler.Reference(arg.GetValue(i));
+				filler.Reference(arg.GetValue(i), count_t(count));
 			}
 			result.SetValue(i, filler.GetValue(0));
 		}
@@ -504,7 +500,7 @@ static inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &st
 		}
 		result_str += ext;
 	}
-	result.Reference(Value(result_str));
+	result.Reference(Value(result_str), count_t(args.size()));
 }
 //===--------------------------------------------------------------------===//
 // Bounded type
@@ -555,14 +551,14 @@ struct BoundedType {
 };
 
 static void BoundedMaxFunc(DataChunk &args, ExpressionState &state, Vector &result) {
-	result.Reference(BoundedType::GetMaxValue(args.data[0].GetType()));
+	result.Reference(Value::INTEGER(BoundedType::GetMaxValue(args.data[0].GetType())), count_t(args.size()));
 }
 
 static unique_ptr<FunctionData> BoundedMaxBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (arguments[0]->return_type == BoundedType::GetDefault()) {
-		bound_function.GetArguments()[0] = arguments[0]->return_type;
+	if (arguments[0]->GetReturnType() == BoundedType::GetDefault()) {
+		bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 	} else {
 		throw BinderException("bounded_max expects a BOUNDED type");
 	}
@@ -572,22 +568,21 @@ static unique_ptr<FunctionData> BoundedMaxBind(BindScalarFunctionInput &input) {
 static void BoundedAddFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
-	const auto count = args.size();
-	BinaryExecutor::Execute<int32_t, int32_t, int32_t>(left_vector, right_vector, result, count,
+	BinaryExecutor::Execute<int32_t, int32_t, int32_t>(left_vector, right_vector, result,
 	                                                   [&](int32_t left, int32_t right) { return left + right; });
 }
 
 static unique_ptr<FunctionData> BoundedAddBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (BoundedType::GetDefault() == arguments[0]->return_type &&
-	    BoundedType::GetDefault() == arguments[1]->return_type) {
-		auto left_max_val = BoundedType::GetMaxValue(arguments[0]->return_type);
-		auto right_max_val = BoundedType::GetMaxValue(arguments[1]->return_type);
+	if (BoundedType::GetDefault() == arguments[0]->GetReturnType() &&
+	    BoundedType::GetDefault() == arguments[1]->GetReturnType()) {
+		auto left_max_val = BoundedType::GetMaxValue(arguments[0]->GetReturnType());
+		auto right_max_val = BoundedType::GetMaxValue(arguments[1]->GetReturnType());
 
 		auto new_max_val = left_max_val + right_max_val;
-		bound_function.GetArguments()[0] = arguments[0]->return_type;
-		bound_function.GetArguments()[1] = arguments[1]->return_type;
+		bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
+		bound_function.GetArguments()[1] = arguments[1]->GetReturnType();
 		bound_function.SetReturnType(BoundedType::Get(new_max_val));
 	} else {
 		throw BinderException("bounded_add expects two BOUNDED types");
@@ -613,9 +608,9 @@ struct BoundedFunctionData : public FunctionData {
 static unique_ptr<FunctionData> BoundedInvertBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (arguments[0]->return_type == BoundedType::GetDefault()) {
-		bound_function.GetArguments()[0] = arguments[0]->return_type;
-		bound_function.SetReturnType(arguments[0]->return_type);
+	if (arguments[0]->GetReturnType() == BoundedType::GetDefault()) {
+		bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
+		bound_function.SetReturnType(arguments[0]->GetReturnType());
 	} else {
 		throw BinderException("bounded_invert expects a BOUNDED type");
 	}
@@ -626,27 +621,22 @@ static unique_ptr<FunctionData> BoundedInvertBind(BindScalarFunctionInput &input
 
 static void BoundedInvertFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &source_vector = args.data[0];
-	const auto count = args.size();
-
 	auto result_type = result.GetType();
 	auto output_max_val = BoundedType::GetMaxValue(result_type);
 
-	UnaryExecutor::Execute<int32_t, int32_t>(source_vector, result, count,
+	UnaryExecutor::Execute<int32_t, int32_t>(source_vector, result,
 	                                         [&](int32_t input) { return std::min(-input, output_max_val); });
 }
 
 static void BoundedEvenFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &source_vector = args.data[0];
-	const auto count = args.size();
-	UnaryExecutor::Execute<int32_t, bool>(source_vector, result, count, [&](int32_t input) { return input % 2 == 0; });
+	UnaryExecutor::Execute<int32_t, bool>(source_vector, result, [&](int32_t input) { return input % 2 == 0; });
 }
 
 static void BoundedToAsciiFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &source_vector = args.data[0];
-	const auto count = args.size();
-
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::Execute<int32_t, string_t>(source_vector, result, count, [&](int32_t input) {
+	UnaryExecutor::Execute<int32_t, string_t>(source_vector, result, [&](int32_t input) {
 		if (input < 0) {
 			throw NotImplementedException("Negative values not supported");
 		}
@@ -765,7 +755,7 @@ static void MinMaxRangeFunc(DataChunk &args, ExpressionState &state, Vector &res
 	auto &ty = args.data[0].GetType();
 	auto min_val = MinMaxType::GetMinValue(ty);
 	auto max_val = MinMaxType::GetMaxValue(ty);
-	result.Reference(Value::INTEGER(max_val - min_val));
+	result.Reference(Value::INTEGER(max_val - min_val), count_t(args.size()));
 }
 
 //===--------------------------------------------------------------------===//
@@ -822,7 +812,7 @@ static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector 
 	idx_t count = args.size();
 
 	UnifiedVectorFormat vdata;
-	input_vec.ToUnifiedFormat(count, vdata);
+	input_vec.ToUnifiedFormat(vdata);
 	auto row_ids = UnifiedVectorFormat::GetData<int64_t>(vdata);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -883,7 +873,9 @@ public:
 		// Construct the bound expression (column index 0: the filter chunk contains only the filtered column)
 		vector<unique_ptr<Expression>> children;
 		children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, 0));
-		auto expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, func, std::move(children),
+
+		BoundScalarFunction bound_func(func);
+		auto expr = make_uniq<BoundFunctionExpression>(std::move(bound_func), std::move(children),
 		                                               make_uniq<RowIdFilterBindData>(vector<int64_t> {3, 4, 5, 7, 9}));
 
 		// Ensure ROW_ID is in the scan's column list
@@ -916,8 +908,6 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	auto &client_context = *con.context;
 	auto &catalog = Catalog::GetSystemCatalog(client_context);
 	con.BeginTransaction();
-	con.CreateScalarFunction<int32_t, string_t>("hello", {LogicalType(LogicalTypeId::VARCHAR)},
-	                                            LogicalType(LogicalTypeId::INTEGER), &hello_fun);
 	catalog.CreateFunction(client_context, hello_alias_info);
 
 	// Add alias POINT type
@@ -1002,6 +992,11 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	PlannerExtension::Register(config, AddColumnExtension());
 	config.AddExtensionOption("add_column_enabled", "enable adding extra column to queries", LogicalType::BOOLEAN,
 	                          Value::BOOLEAN(false));
+
+	// Global-default extension option used to exercise RESET on GLOBAL-scoped
+	// extension options across multiple connections.
+	config.AddExtensionOption("demo_global_setting", "demo GLOBAL-default extension option", LogicalType::VARCHAR,
+	                          Value("default"), nullptr, SetScope::GLOBAL);
 
 	// Bounded type
 	auto bounded_type = BoundedType::GetDefault();

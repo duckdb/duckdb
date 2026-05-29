@@ -72,6 +72,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBTriggersInit(ClientContext &context, 
 	auto result = make_uniq<DuckDBTriggersData>();
 
 	auto schemas = Catalog::GetAllSchemas(context);
+	vector<reference<DuckTableEntry>> tables;
 	for (auto &schema : schemas) {
 		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.type != CatalogType::TABLE_ENTRY) {
@@ -82,9 +83,14 @@ unique_ptr<GlobalTableFunctionState> DuckDBTriggersInit(ClientContext &context, 
 				return;
 			}
 			auto &duck_table = entry.Cast<DuckTableEntry>();
-			duck_table.ScanTriggers(schema.get().GetCatalogTransaction(context), [&](CatalogEntry &trigger) {
-				result->entries.push_back(trigger.Cast<TriggerCatalogEntry>());
-			});
+			tables.push_back(duck_table);
+		});
+	}
+	for (auto &table : tables) {
+		auto &duck_table = table.get();
+		auto transaction = CatalogTransaction(duck_table.ParentCatalog(), context);
+		duck_table.ScanTriggers(transaction, [&](CatalogEntry &trigger) {
+			result->entries.push_back(trigger.Cast<TriggerCatalogEntry>());
 		});
 	}
 	return std::move(result);

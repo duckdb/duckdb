@@ -15,7 +15,10 @@
         "test/sql/storage/temp_directory/max_swap_space_inmemory.test",
         "test/sql/storage/temp_directory/max_swap_space_error.test",
         "test/sql/storage/buffer_manager_temp_dir.test",
-        "test/sql/pg_catalog/system_functions.test"
+        "test/sql/pg_catalog/system_functions.test",
+        "test/sql/storage/concurrent_wal/concurrent_checkpoint_empty_checkpoint.test_slow",
+        "test/sql/storage/concurrent_wal/concurrent_checkpoint_abort_autocheckpoint.test_slow",
+        "test/sql/index/art/constraints/test_art_concurrent_loop.test_slow"
       ]
     },
     {

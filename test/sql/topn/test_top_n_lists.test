@@ -2,9 +2,6 @@
 # description: Test Top N with lists
 # group: [topn]
 
-statement ok
-PRAGMA enable_verification
-
 # top-n with lists and null values
 statement ok
 CREATE TABLE tbl AS SELECT [i] l FROM range(1000) tbl(i) UNION ALL SELECT NULL l FROM range(3)

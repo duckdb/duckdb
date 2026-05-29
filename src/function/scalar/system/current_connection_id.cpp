@@ -30,7 +30,7 @@ unique_ptr<FunctionData> CurrentConnectionIdBind(BindScalarFunctionInput &input)
 void CurrentConnectionIdFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.bind_info->Cast<CurrentConnectionIdData>();
-	result.Reference(info.connection_id);
+	result.Reference(info.connection_id, count_t(args.size()));
 }
 
 } // namespace

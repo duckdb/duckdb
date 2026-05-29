@@ -29,7 +29,9 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/common/enums/copy_option_mode.hpp"
+#include "duckdb/common/enums/trigger_type.hpp"
 
 //! fwd declare
 namespace duckdb_re2 {
@@ -96,7 +98,7 @@ struct CorrelatedColumnInfo {
 	    : binding(binding), type(std::move(type_p)), name(std::move(name_p)), depth(depth) {
 	}
 	explicit CorrelatedColumnInfo(BoundColumnRefExpression &expr)
-	    : CorrelatedColumnInfo(expr.binding, expr.return_type, expr.GetName(), expr.depth) {
+	    : CorrelatedColumnInfo(expr.binding, expr.GetReturnType(), expr.GetName(), expr.depth) {
 	}
 
 	bool operator==(const CorrelatedColumnInfo &rhs) const {
@@ -183,12 +185,12 @@ struct GlobalBinderState {
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
 	//! The set of parameter expressions bound by this binder
 	optional_ptr<BoundParameterMap> parameters;
-};
-
-// QueryBinderState is state shared WITHIN a query, a new query-binder state is created when binding inside e.g. a view
-struct QueryBinderState {
-	//! The vector of active binders
-	vector<reference<ExpressionBinder>> active_binders;
+	//! Tables whose triggers have already been expanded in this query (recursion detection)
+	reference_set_t<TableCatalogEntry> trigger_expanded_tables;
+	//! Set during CREATE TRIGGER body validation to detect self-recursive writes
+	optional_ptr<TableCatalogEntry> trigger_creation_table;
+	//! Name of the trigger being created (for error messages)
+	string trigger_creation_name;
 };
 
 //! Bind the parsed query tree to the actual columns present in the catalog.
@@ -198,6 +200,7 @@ struct QueryBinderState {
   all expressions.
 */
 class Binder : public enable_shared_from_this<Binder> {
+	friend class ColumnQualifier;
 	friend class ExpressionBinder;
 	friend class RecursiveDependentJoinPlanner;
 
@@ -280,11 +283,10 @@ public:
 	//! Add the view to the set of currently bound views - used for detecting recursive view definitions
 	void AddBoundView(ViewCatalogEntry &view);
 
-	void PushExpressionBinder(ExpressionBinder &binder);
-	void PopExpressionBinder();
-	void SetActiveBinder(ExpressionBinder &binder);
+	void BeginSubqueryBind(Binder &parent, ExpressionBinder &binder);
 	ExpressionBinder &GetActiveBinder();
 	bool HasActiveBinder();
+	void FinishSubqueryBind();
 
 	vector<reference<ExpressionBinder>> &GetActiveBinders();
 
@@ -342,6 +344,8 @@ public:
 
 	void BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
 	                      const string &catalog = "", const string &schema = "");
+	unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
+	string GetExpressionName(const ParsedExpression &expr);
 
 private:
 	//! The parent binder (if any)
@@ -350,8 +354,8 @@ private:
 	BinderType binder_type = BinderType::REGULAR_BINDER;
 	//! Global binder state
 	shared_ptr<GlobalBinderState> global_binder_state;
-	//! Query binder state
-	shared_ptr<QueryBinderState> query_binder_state;
+	//! Active binders
+	vector<reference<ExpressionBinder>> active_binders;
 	//! Whether or not the binder has any unplanned dependent joins that still need to be planned/flattened
 	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
@@ -417,6 +421,8 @@ private:
 	BoundStatement Bind(CopyDatabaseStatement &stmt);
 	BoundStatement Bind(UpdateExtensionsStatement &stmt);
 	BoundStatement Bind(MergeIntoStatement &stmt);
+	BoundStatement Bind(ConnectStatement &stmt);
+	BoundStatement Bind(DisconnectStatement &stmt);
 
 	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
@@ -453,6 +459,11 @@ private:
 	BoundStatement BindNode(QueryNode &node);
 	BoundStatement BindNode(StatementNode &node);
 	BoundStatement BindNode(InsertQueryNode &node);
+	unique_ptr<BoundStatement> TryExpandAfterTriggers(QueryNode &node,
+	                                                  vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                                  TableCatalogEntry &table, TriggerEventType event_type);
+	BoundStatement ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                   const vector<const_reference<TriggerCatalogEntry>> &triggers);
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 

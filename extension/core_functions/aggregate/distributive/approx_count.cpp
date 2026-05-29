@@ -34,27 +34,12 @@ struct ApproxCountDistinctFunction {
 	}
 };
 
-void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count, data_ptr_t state,
-                                             idx_t count) {
-	D_ASSERT(input_count == 1);
-	auto &input = inputs[0];
-
-	if (count > STANDARD_VECTOR_SIZE) {
-		throw InternalException("ApproxCountDistinct - count must be at most vector size");
-	}
-	Vector hash_vec(LogicalType::HASH, count);
-	VectorOperations::Hash(input, hash_vec, count);
-
-	auto agg_state = reinterpret_cast<ApproxDistinctCountState *>(state);
-	agg_state->hll.Update(input, hash_vec, count);
-}
-
 void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector,
                                        idx_t count) {
 	D_ASSERT(input_count == 1);
 	auto &input = inputs[0];
 
-	auto input_validity = input.Validity(count);
+	auto input_validity = input.Validity();
 
 	if (count > STANDARD_VECTOR_SIZE) {
 		throw InternalException("ApproxCountDistinct - count must be at most vector size");
@@ -62,8 +47,8 @@ void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, id
 	Vector hash_vec(LogicalType::HASH, count);
 	VectorOperations::Hash(input, hash_vec, count);
 
-	auto states = state_vector.Values<ApproxDistinctCountState *>(count);
-	auto hashes = hash_vec.Values<hash_t>(count);
+	auto states = state_vector.Values<ApproxDistinctCountState *>();
+	auto hashes = hash_vec.Values<hash_t>();
 	for (idx_t i = 0; i < count; i++) {
 		if (!input_validity.IsValid(i)) {
 			continue;
@@ -80,8 +65,7 @@ AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) 
 	    AggregateFunction::StateInitialize<ApproxDistinctCountState, ApproxCountDistinctFunction>,
 	    ApproxCountDistinctUpdateFunction,
 	    AggregateFunction::StateCombine<ApproxDistinctCountState, ApproxCountDistinctFunction>,
-	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>,
-	    ApproxCountDistinctSimpleUpdateFunction);
+	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>, nullptr);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

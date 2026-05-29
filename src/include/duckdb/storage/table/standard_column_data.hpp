@@ -37,7 +37,8 @@ public:
 	            SelectionVector &sel, idx_t sel_count) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
-	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
+	void AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
+	void FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) override;
 	void RevertAppend(row_t new_count) override;
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index, row_t row_id,
@@ -59,7 +60,8 @@ public:
 	                    Vector &scan_vector) const override;
 
 	void GetColumnSegmentInfo(const QueryContext &context, duckdb::idx_t row_group_index,
-	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result) override;
+	                          vector<duckdb::idx_t> col_path, vector<duckdb::ColumnSegmentInfo> &result,
+	                          const ColumnSegmentInfoScanOptions &options) override;
 
 	bool IsPersistent() override;
 	bool HasAnyChanges() const override;
@@ -69,6 +71,8 @@ public:
 	void Verify(RowGroup &parent) override;
 
 	void SetValidityData(shared_ptr<ValidityColumnData> validity);
+	//! Direct access to the validity column data. Intended for extensions that need to walk storage internals.
+	ValidityColumnData &GetValidityData();
 
 protected:
 	//! The validity column data

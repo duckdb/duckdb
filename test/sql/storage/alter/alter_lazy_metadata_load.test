@@ -1,0 +1,49 @@
+# name: test/sql/storage/alter/alter_lazy_metadata_load.test
+# description: Test ALTER with lazy metadata
+# group: [alter]
+
+# load the DB from disk
+load {TEST_DIR}/alter_lazy_metadata.db
+
+statement ok
+create table t as select i, i // 2 as j, i // 4 as k from range(1_000_000) t(i);
+
+restart
+
+statement ok
+alter table t add column l integer;
+
+query I
+select count(*) from t;
+----
+1000000
+
+query II
+select min(j), max(j) from t
+----
+0	499999
+
+query II
+select min(i), max(i) from t
+----
+0	999999
+
+restart
+
+statement ok
+alter table t drop column j;
+
+query II
+select min(k), max(k) from t
+----
+0	249999
+
+query II
+select min(i), max(i) from t
+----
+0	999999
+
+query II
+select min(l), max(l) from t
+----
+NULL	NULL

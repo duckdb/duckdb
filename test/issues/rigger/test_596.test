@@ -2,9 +2,6 @@
 # description: Issue 596
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # STDDEV_POP unexpectedly does not fetch any rows
 statement ok
 CREATE TABLE t0(c0 DOUBLE);

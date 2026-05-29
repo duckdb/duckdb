@@ -97,7 +97,7 @@ void DoUpdateSetQualify(unique_ptr<ParsedExpression> &expr, const string &table_
 
 void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &table_name,
                                 vector<unordered_set<string>> &lambda_params) {
-	for (auto &child : function.children) {
+	for (auto &child : function.GetChildrenMutable()) {
 		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
 			DoUpdateSetQualify(child, table_name, lambda_params);
 			continue;
@@ -111,12 +111,12 @@ void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &tabl
 
 		if (!error_message.empty()) {
 			// Possibly a JSON function, qualify both LHS and RHS.
-			ParsedExpressionIterator::EnumerateChildren(*lambda_expr.lhs, [&](unique_ptr<ParsedExpression> &child) {
-				DoUpdateSetQualify(child, table_name, lambda_params);
-			});
-			ParsedExpressionIterator::EnumerateChildren(*lambda_expr.expr, [&](unique_ptr<ParsedExpression> &child) {
-				DoUpdateSetQualify(child, table_name, lambda_params);
-			});
+			ParsedExpressionIterator::EnumerateChildren(
+			    *lambda_expr.LeftMutable(),
+			    [&](unique_ptr<ParsedExpression> &child) { DoUpdateSetQualify(child, table_name, lambda_params); });
+			ParsedExpressionIterator::EnumerateChildren(
+			    *lambda_expr.RightMutable(),
+			    [&](unique_ptr<ParsedExpression> &child) { DoUpdateSetQualify(child, table_name, lambda_params); });
 			continue;
 		}
 
@@ -128,9 +128,9 @@ void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &tabl
 		}
 
 		// Only qualify in the RHS of the expression.
-		ParsedExpressionIterator::EnumerateChildren(*lambda_expr.expr, [&](unique_ptr<ParsedExpression> &child) {
-			DoUpdateSetQualify(child, table_name, lambda_params);
-		});
+		ParsedExpressionIterator::EnumerateChildren(
+		    *lambda_expr.RightMutable(),
+		    [&](unique_ptr<ParsedExpression> &child) { DoUpdateSetQualify(child, table_name, lambda_params); });
 
 		lambda_params.pop_back();
 	}
@@ -261,6 +261,25 @@ void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<string> &colu
 			expected_types.push_back(col.Type());
 		}
 	}
+}
+
+static unordered_set<string> GetConflictColumnNames(const TableStorageInfo &storage_info, TableCatalogEntry &table) {
+	unordered_set<column_t> conflict_column_ids;
+	for (auto &index : storage_info.index_info) {
+		if (!index.is_unique) {
+			continue;
+		}
+		for (auto &col_id : index.column_set) {
+			conflict_column_ids.insert(col_id);
+		}
+	}
+	unordered_set<string> conflict_column_names;
+	for (auto &col : table.GetColumns().Physical()) {
+		if (conflict_column_ids.count(col.Physical().index)) {
+			conflict_column_names.insert(col.Name());
+		}
+	}
+	return conflict_column_names;
 }
 
 unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, TableCatalogEntry &table) {
@@ -486,6 +505,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	if (on_conflict_info.action_type == OnConflictAction::UPDATE) {
 		// when doing UPDATE set up the when matched action
 		auto update_action = make_uniq<MergeIntoAction>();
+		update_action->exclude_columns = GetConflictColumnNames(storage_info, table);
 		update_action->action_type = MergeActionType::MERGE_UPDATE;
 		update_action->column_order = node.column_order;
 		if (on_conflict_info.set_info) {
@@ -521,6 +541,11 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 
 	BindSchemaOrCatalog(node.catalog, node.schema);
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, node.catalog, node.schema, node.table);
+
+	if (auto expanded = TryExpandAfterTriggers(node, node.returning_list, table, TriggerEventType::INSERT_EVENT)) {
+		return std::move(*expanded);
+	}
+
 	if (node.on_conflict_info) {
 		// generate a MERGE INTO statement and bind it instead
 		auto merge_into = GenerateMergeInto(node, table);

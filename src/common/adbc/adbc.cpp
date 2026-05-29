@@ -478,10 +478,10 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const
 
 	std::string query = "SELECT * FROM ";
 	if (catalog != nullptr && strlen(catalog) > 0) {
-		query += duckdb::KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
+		query += duckdb::SQLIdentifier(catalog) + ".";
 	}
-	query += duckdb::KeywordHelper::WriteOptionallyQuoted(db_schema) + ".";
-	query += duckdb::KeywordHelper::WriteOptionallyQuoted(table_name) + " LIMIT 0;";
+	query += duckdb::SQLIdentifier(db_schema) + ".";
+	query += duckdb::SQLIdentifier(table_name) + " LIMIT 0;";
 
 	auto success = QueryInternal(connection, &arrow_stream, query.c_str(), error);
 	if (success != ADBC_STATUS_OK) {
@@ -550,7 +550,7 @@ static AdbcStatusCode ConnectionSetOptionCurrentValue(duckdb::DuckDBAdbcConnecti
 		return ADBC_STATUS_INVALID_STATE;
 	}
 	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
-	std::string query = sql_prefix + duckdb::KeywordHelper::WriteOptionallyQuoted(value);
+	std::string query = sql_prefix + duckdb::SQLIdentifier(value);
 	return ExecuteQuery(conn, query.c_str(), error);
 }
 
@@ -1193,15 +1193,15 @@ static std::string BuildCreateTableSQL(const char *catalog, const char *schema, 
 	// the table is automatically placed in the temp catalog.
 	if (!temporary) {
 		if (catalog) {
-			create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(catalog) << ".";
+			create_table << duckdb::SQLIdentifier(catalog) << ".";
 		}
 		if (schema) {
-			create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(schema) << ".";
+			create_table << duckdb::SQLIdentifier(schema) << ".";
 		}
 	}
-	create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(table_name) << " (";
+	create_table << duckdb::SQLIdentifier(table_name) << " (";
 	for (idx_t i = 0; i < types.size(); i++) {
-		create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(names[i]);
+		create_table << duckdb::SQLIdentifier(names[i]);
 		create_table << " " << types[i].ToString();
 		if (i + 1 < types.size()) {
 			create_table << ", ";
@@ -1226,6 +1226,14 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		SetError(error, "Missing database object name");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+	const auto missing_table_error = std::string("Table \"") + table_name + "\" does not exist";
+	auto set_ingest_error = [&](const std::string &msg) {
+		if (msg.find("could not be found") != std::string::npos) {
+			SetError(error, missing_table_error);
+		} else {
+			SetError(error, msg);
+		}
+	};
 	if (schema && temporary) {
 		// Temporary option is not supported with ADBC_INGEST_OPTION_TARGET_DB_SCHEMA
 		SetError(error, "Temporary option is not supported with schema");
@@ -1349,6 +1357,11 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 	}
 	AppenderWrapper appender(connection, effective_catalog, effective_schema, table_name);
 	if (!appender.Valid()) {
+		if (!appender.CreateError().empty()) {
+			set_ingest_error(appender.CreateError());
+		} else {
+			SetError(error, missing_table_error);
+		}
 		return ADBC_STATUS_INTERNAL;
 	}
 	duckdb::ArrowArrayWrapper arrow_array_wrapper;
@@ -1373,7 +1386,11 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		if (duckdb_append_data_chunk(appender.Get(), out_chunk.chunk) != DuckDBSuccess) {
 			auto error_data = duckdb_appender_error_data(appender.Get());
 			auto err = duckdb_error_data_message(error_data);
-			SetError(error, err);
+			if (err && err[0] != '\0') {
+				set_ingest_error(err);
+			} else {
+				SetError(error, missing_table_error);
+			}
 			bool interrupted = IsInterruptError(err);
 			duckdb_destroy_error_data(&error_data);
 			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
@@ -2098,8 +2115,7 @@ AdbcStatusCode StatementSetOptionDouble(struct AdbcStatement *statement, const c
 
 std::string createFilter(const char *input) {
 	if (input) {
-		auto quoted = duckdb::KeywordHelper::WriteQuoted(input, '\'');
-		return quoted;
+		return duckdb::SQLString::ToString(input);
 	}
 	return "'%'";
 }

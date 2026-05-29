@@ -202,6 +202,7 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(string &format) {
 		unique_ptr<ArrowTypeInfo> type_info;
 		if (format[2] == 'n') {
 			type_info = make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::NANOSECONDS);
+			return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ_NS, std::move(type_info));
 		} else if (format[2] == 'u') {
 			type_info = make_uniq<ArrowDateTimeInfo>(ArrowDateTimeType::MICROSECONDS);
 		} else if (format[2] == 'm') {

@@ -23,6 +23,8 @@ public:
 	}
 
 public:
+	bool compute_reverse_partition_sel = false;
+
 	Vector partition_indices;
 	SelectionVector partition_sel;
 	SelectionVector reverse_partition_sel;
@@ -30,6 +32,7 @@ public:
 	static constexpr idx_t MAP_THRESHOLD = 256;
 	perfect_map_t<list_entry_t> partition_entries;
 	fixed_size_map_t<list_entry_t> fixed_partition_entries;
+	unsafe_vector<idx_t> partition_offsets;
 
 	unsafe_vector<TupleDataPinState> partition_pin_states;
 	TupleDataChunkState chunk_state;
@@ -89,6 +92,10 @@ public:
 	//! Initializes a local state for parallel partitioning that can be merged into this PartitionedTupleData
 	void InitializeAppendState(PartitionedTupleDataAppendState &state,
 	                           TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
+	//! Reuses an existing append state for a new iteration - faster than InitializeAppendState when the
+	//! append state already has pre-allocated buffers (selection vectors, partition pin states, chunk state)
+	virtual void ResetAppendState(PartitionedTupleDataAppendState &state,
+	                              TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
 	//! Appends a DataChunk to this PartitionedTupleData
 	void Append(PartitionedTupleDataAppendState &state, DataChunk &input,
 	            const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
@@ -170,12 +177,12 @@ protected:
 	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx
 	void BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
 	                       const idx_t append_count) const;
-	template <bool fixed>
+	template <bool FIXED>
 	static void BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
 	                              const idx_t append_count, const idx_t max_partition_idx);
 	//! Builds out the buffer space in the partitions
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
-	template <bool fixed>
+	template <bool FIXED>
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	//! Create a collection for a specific a partition
 	unique_ptr<TupleDataCollection> CreatePartitionCollection() {

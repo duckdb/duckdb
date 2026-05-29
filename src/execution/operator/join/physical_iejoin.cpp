@@ -5,6 +5,7 @@
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -25,8 +26,8 @@ PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoi
 	D_ASSERT(conditions.size() >= 2);
 	for (idx_t i = 0; i < 2; ++i) {
 		auto &cond = conditions[i];
-		D_ASSERT(cond.GetLHS().return_type == cond.GetRHS().return_type);
-		join_key_types.push_back(cond.GetLHS().return_type);
+		D_ASSERT(cond.GetLHS().GetReturnType() == cond.GetRHS().GetReturnType());
+		join_key_types.push_back(cond.GetLHS().GetReturnType());
 
 		// Convert the conditions to sort orders
 		auto left = cond.GetLHS().Copy();
@@ -55,8 +56,8 @@ PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoi
 
 	for (idx_t i = 2; i < conditions.size(); ++i) {
 		auto &cond = conditions[i];
-		D_ASSERT(cond.GetLHS().return_type == cond.GetRHS().return_type);
-		join_key_types.push_back(cond.GetLHS().return_type);
+		D_ASSERT(cond.GetLHS().GetReturnType() == cond.GetRHS().GetReturnType());
+		join_key_types.push_back(cond.GetLHS().GetReturnType());
 	}
 }
 
@@ -373,7 +374,7 @@ public:
 	//! Read a typed cell
 	const T &operator[](idx_t row_idx) {
 		auto index = Seek(row_idx);
-		auto &source = chunk.data[0];
+		const auto &source = chunk.data[0];
 		const auto data_ptr = reinterpret_cast<const T *>(FlatVector::GetData<VECTOR_TYPE>(source));
 		return data_ptr[index];
 	}
@@ -576,7 +577,7 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 	auto local_sort_state = sort.GetLocalSinkState(context);
 	vector<LogicalType> types;
 	for (const auto &expr : executor.expressions) {
-		types.emplace_back(expr->return_type);
+		types.emplace_back(expr->GetReturnType());
 	}
 	const idx_t rid_idx = types.size();
 	types.emplace_back(LogicalType::BIGINT);
@@ -598,7 +599,7 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 				;
 			} else {
 				scan_count = valid - table_idx;
-				scanned.SetCardinality(scan_count);
+				scanned.SetChildCardinality(scan_count);
 			}
 		}
 		if (scan_count == 0) {
@@ -884,11 +885,11 @@ IEJoinGlobalSourceState::IEJoinGlobalSourceState(const PhysicalIEJoin &op, Clien
 	//		X/X', Y/Y', R/R'/Li
 	// The first position is the sort key.
 	vector<LogicalType> types;
-	types.emplace_back(order2.expression->return_type);
+	types.emplace_back(order2.expression->GetReturnType());
 	types.emplace_back(LogicalType::BIGINT);
 
 	// Sort on the first expression
-	auto ref = make_uniq<BoundReferenceExpression>(order1.expression->return_type, 0U);
+	auto ref = make_uniq<BoundReferenceExpression>(order1.expression->GetReturnType(), 0U);
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(order1.type, order1.null_order, std::move(ref));
 	// The goal is to make i (from the left table) < j (from the right table),
@@ -923,7 +924,7 @@ IEJoinGlobalSourceState::IEJoinGlobalSourceState(const PhysicalIEJoin &op, Clien
 
 	// Sort on the first expression
 	orders.clear();
-	ref = make_uniq<BoundReferenceExpression>(order2.expression->return_type, 0U);
+	ref = make_uniq<BoundReferenceExpression>(order2.expression->GetReturnType(), 0U);
 	orders.emplace_back(order2.type, order2.null_order, std::move(ref));
 
 	l2 = make_uniq<SortedTable>(client, orders, types, op);
@@ -998,10 +999,10 @@ public:
 		for (idx_t i = 2; i < op.conditions.size(); ++i) {
 			const auto &cond = op.conditions[i];
 
-			left_types.push_back(cond.GetLHS().return_type);
+			left_types.push_back(cond.GetLHS().GetReturnType());
 			left_executor.AddExpression(cond.GetLHS());
 
-			right_types.push_back(cond.GetLHS().return_type);
+			right_types.push_back(cond.GetLHS().GetReturnType());
 			right_executor.AddExpression(cond.GetRHS());
 		}
 
@@ -1052,20 +1053,28 @@ public:
 	void SplitPayloads(DataChunk &chunk);
 	// Apply any arbitrary predicate and return the new SV
 	const SelectionVector *ApplyArbitraryPredicate(DataChunk &chunk);
+	// resolve joins that can potentially output N elements (SEMI, ANTI, MARK)
+	void ResolveSimpleJoin(ExecutionContext &context);
 	// Use the given SV to strip out LHS duplicates. Return the number of unique rows
 	idx_t FilterSemiJoin(const SelectionVector *sel);
+	//	Build a set of values and matches fror ANTI and MARK joins
+	idx_t FindSimpleMatches(ExecutionContext &context, bool *found_match = nullptr);
 	// 	Resolve SEMI joins
 	void ResolveSemiJoin(ExecutionContext &context, DataChunk &result);
 	// 	Resolve ANTI joins
 	void ResolveAntiJoin(ExecutionContext &context, DataChunk &result);
+	// 	Resolve MARK joins
+	void ResolveMarkJoin(ExecutionContext &context, DataChunk &result);
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, RIGHT, FULL)
 	void ResolveComplexJoin(ExecutionContext &context, DataChunk &result);
 	//	Resolve left join results
 	void ExecuteLeftTask(ExecutionContext &context, DataChunk &result);
 	//	Resolve right join results
 	void ExecuteRightTask(ExecutionContext &context, DataChunk &result);
-	//	Resolve anti join results from NULL columns.
+	//	Resolve ANTI join results from NULL columns.
 	void ExecuteAntiTask(ExecutionContext &context, DataChunk &result);
+	//	Resolve MARK join results from NULL columns.
+	void ExecuteMarkTask(ExecutionContext &context, DataChunk &result);
 	//	Execute the current task
 	void ExecuteTask(ExecutionContext &context, DataChunk &result, InterruptState &interrupt);
 
@@ -1256,7 +1265,7 @@ void IEJoinLocalSourceState::ExecuteSinkL2Task(ExecutionContext &context, Interr
 
 	auto &op = gsource.op;
 	const auto &order2 = op.lhs_orders[1];
-	auto ref = make_uniq<BoundReferenceExpression>(order2.expression->return_type, 0U);
+	auto ref = make_uniq<BoundReferenceExpression>(order2.expression->GetReturnType(), 0U);
 
 	ExpressionExecutor executor(context.client);
 	executor.AddExpression(*ref);
@@ -1313,7 +1322,11 @@ void IEJoinLocalSourceState::ExecuteTask(ExecutionContext &context, DataChunk &r
 		}
 		break;
 	case IEJoinSourceStage::ANTI:
-		ExecuteAntiTask(context, result);
+		if (gsource.op.join_type == JoinType::ANTI) {
+			ExecuteAntiTask(context, result);
+		} else {
+			ExecuteMarkTask(context, result);
+		}
 		break;
 	}
 }
@@ -1326,6 +1339,9 @@ void IEJoinLocalSourceState::ResolveInnerJoin(ExecutionContext &context, DataChu
 		break;
 	case JoinType::ANTI:
 		ResolveAntiJoin(context, result);
+		break;
+	case JoinType::MARK:
+		ResolveMarkJoin(context, result);
 		break;
 	case JoinType::LEFT:
 	case JoinType::INNER:
@@ -1458,13 +1474,15 @@ idx_t IEJoinLocalSourceState::FilterSemiJoin(const SelectionVector *sel) {
 	return unique_count;
 }
 
-void IEJoinLocalSourceState::ResolveSemiJoin(ExecutionContext &context, DataChunk &result) {
+void IEJoinLocalSourceState::ResolveSimpleJoin(ExecutionContext &context) {
 	auto &op = gsource.op;
 	const auto &conditions = op.conditions;
 	D_ASSERT(conditions.size() >= 2);
 
 	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
 	auto &left_table = *ie_sink.tables[0];
+
+	lpayload.Reset();
 
 	do {
 		auto result_count = joiner->JoinBlocks(lsel, rsel);
@@ -1541,11 +1559,63 @@ void IEJoinLocalSourceState::ResolveSemiJoin(ExecutionContext &context, DataChun
 		if (joiner->lrid > 0 && lsel[result_count - 1] == UnsafeNumericCast<idx_t>(joiner->lrid - 1)) {
 			joiner->FinishRow();
 		}
+	} while (lpayload.size() == 0);
+}
 
-		//	SEMI JOINs return all the columns from the LHS
-		result.Reference(lpayload);
-		result.Verify(context.client.db);
-	} while (result.size() == 0);
+void IEJoinLocalSourceState::ResolveSemiJoin(ExecutionContext &context, DataChunk &result) {
+	//	SEMI JOINs return all the columns from the LHS
+	ResolveSimpleJoin(context);
+	result.Reference(lpayload);
+	result.Verify(context.client.db);
+}
+
+idx_t IEJoinLocalSourceState::FindSimpleMatches(ExecutionContext &context, bool *found_match) {
+	//	Merge lsel and unmatched LHS rids into (the unused) rsel, tracking the matches
+	auto &msel = rsel;
+	idx_t result_count = 0;
+	msel.resize(STANDARD_VECTOR_SIZE);
+
+	//	Scan through Li, merging anything in lsel.
+	//	They are both ordered in the same way, so we can ratchet
+	const auto i = MinValue(joiner->i, joiner->n);
+	auto &anti_i = joiner->anti_i;
+	auto &p = joiner->p;
+	auto &li = joiner->li;
+
+	//	Scan through the SEMI JOIN rids
+	//	Note that if there are no more matches, then lsel will be empty()
+	//	and i will be at the end of the range
+	while (anti_i < i) {
+		//	Get the next lrid
+		auto pos = p[anti_i++];
+		auto rid = li[pos];
+		if (rid <= 0) {
+			continue;
+		}
+		const auto lrid = UnsafeNumericCast<idx_t>(rid - 1);
+
+		//	If the lrid is in the SEMI JOIN, then merge it and mark the row as matched.
+		if (anti_lsel < lsel.size() && lsel[anti_lsel] == lrid) {
+			++anti_lsel;
+			//	If we are not tracking matches, then only keep the unmatched rows
+			if (!found_match) {
+				continue;
+			}
+			found_match[result_count] = true;
+		} else if (found_match) {
+			//	Found an unmatched rid, so mark it as unmatched
+			found_match[result_count] = false;
+		}
+		msel[result_count++] = lrid;
+
+		//	If we have a full vector, stop
+		if (result_count >= STANDARD_VECTOR_SIZE) {
+			break;
+		}
+	}
+	msel.resize(result_count);
+
+	return result_count;
 }
 
 void IEJoinLocalSourceState::ResolveAntiJoin(ExecutionContext &context, DataChunk &result) {
@@ -1559,49 +1629,12 @@ void IEJoinLocalSourceState::ResolveAntiJoin(ExecutionContext &context, DataChun
 	//	when we run out of anti-matches
 	do {
 		if (anti_lsel >= lsel.size()) {
-			ResolveSemiJoin(context, result);
-			result.Reset();
+			ResolveSimpleJoin(context);
 			anti_lsel = 0;
 		}
 
-		//	Scan through Li, skipping anything in lsel.
-		//	They are both ordered in the same way, so we can ratchet
-		const auto i = MinValue(joiner->i, joiner->n);
-		auto &anti_i = joiner->anti_i;
-		auto &p = joiner->p;
-		auto &li = joiner->li;
-
-		//	Put the results in rsel (as that is no longer needed)
-		idx_t result_count = 0;
-		rsel.resize(STANDARD_VECTOR_SIZE);
-
-		//	Scan through the SEMI JOIN rids
-		//	Note that if there are no more matches, then lsel will be empty()
-		//	and i will be at the end of the range
-		while (anti_i < i) {
-			//	Get the next lrid
-			auto pos = p[anti_i++];
-			auto rid = li[pos];
-			if (rid <= 0) {
-				continue;
-			}
-			const auto lrid = UnsafeNumericCast<idx_t>(rid - 1);
-
-			//	If the lrid is in the SEMI JOIN, then skip it
-			if (anti_lsel < lsel.size() && lsel[anti_lsel] == lrid) {
-				++anti_lsel;
-				continue;
-			}
-
-			//	Found an unmatched rid, so remember it
-			rsel[result_count++] = lrid;
-
-			//	If we have a full vector, stop
-			if (result_count >= STANDARD_VECTOR_SIZE) {
-				break;
-			}
-		}
-		rsel.resize(result_count);
+		//	Put all the non-matches into rsel
+		const idx_t result_count = FindSimpleMatches(context);
 
 		if (result_count == 0) {
 			//	If there were no SEMI rows and we didn't find any past the last one,
@@ -1621,6 +1654,42 @@ void IEJoinLocalSourceState::ResolveAntiJoin(ExecutionContext &context, DataChun
 		result.Reference(lpayload);
 		result.Verify(context.client.db);
 	} while (result.size() == 0);
+}
+
+void IEJoinLocalSourceState::ResolveMarkJoin(ExecutionContext &context, DataChunk &result) {
+	//	MARK JOINs return all the columns from the LHS plus the mark column
+	auto &op = gsource.op;
+	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
+	auto &left_table = *ie_sink.tables[0];
+	auto &right_table = *ie_sink.tables[1];
+
+	//	We need to have _all_ the rows, so we perform the SEMI JOIN,
+	//	then go back and merge in the ANTI JOIN rows.
+	//	This means we might not consume all the SEMI rows, so only get more when we have run out.
+	if (anti_lsel >= lsel.size()) {
+		ResolveSimpleJoin(context);
+		anti_lsel = 0;
+	}
+
+	//	Merge lsel and unmatched LHS rids into (the unused) rsel, tracking the matches
+	bool found_match[STANDARD_VECTOR_SIZE];
+	const idx_t result_count = FindSimpleMatches(context, found_match);
+
+	//	Read the lhs rows
+	left_table.Repin(*left_iterator);
+	op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, rsel,
+	                      *left_scan_state);
+	lpayload.SetCardinality(result_count);
+
+	//	Compute the residual keys
+	//	We know here that the two sort columns are not NULL, so the tail columns are all we need
+	left_executor.Execute(&lpayload, left_keys);
+
+	//	Now hand it off to code that knows the rules...
+	//	Note that it can handle left_keys.ColumnCount().empty()
+	PhysicalJoin::ConstructMarkJoinResult(left_keys, lpayload, result, found_match, right_table.has_null);
+
+	result.Verify(context.client.db);
 }
 
 void IEJoinLocalSourceState::ResolveComplexJoin(ExecutionContext &context, DataChunk &result) {
@@ -1732,7 +1801,7 @@ void IEJoinGlobalSourceState::Initialize() {
 	stage_tasks.emplace_back(left_outers + right_outers);
 
 	//	ANTI
-	if (op.join_type == JoinType::ANTI) {
+	if (op.join_type == JoinType::ANTI || op.join_type == JoinType::MARK) {
 		auto &left_table = *gsink.tables[0];
 		const auto null_block = (left_table.count - left_table.has_null) / STANDARD_VECTOR_SIZE;
 		stage_tasks.emplace_back(left_blocks - null_block);
@@ -1966,7 +2035,7 @@ void IEJoinLocalSourceState::ExecuteLeftTask(ExecutionContext &context, DataChun
 		if (col_idx < left_cols) {
 			chunk.data[col_idx].Reference(lpayload.data[col_idx]);
 		} else {
-			ConstantVector::SetNull(chunk.data[col_idx]);
+			ConstantVector::SetNull(chunk.data[col_idx], count_t(count));
 		}
 	}
 
@@ -1997,7 +2066,7 @@ void IEJoinLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChu
 	chunk.Reset();
 	for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
 		if (col_idx < left_cols) {
-			ConstantVector::SetNull(chunk.data[col_idx]);
+			ConstantVector::SetNull(chunk.data[col_idx], count_t(count));
 		} else {
 			chunk.data[col_idx].Reference(rpayload.data[col_idx - left_cols]);
 		}
@@ -2030,6 +2099,43 @@ void IEJoinLocalSourceState::ExecuteAntiTask(ExecutionContext &context, DataChun
 	left_table.Repin(*left_iterator);
 	op.SliceSortedPayload(result, left_table, *left_iterator, left_chunk_state, left_block_index, outer_sel,
 	                      *left_scan_state);
+	result.Verify(context.client.db);
+}
+
+void IEJoinLocalSourceState::ExecuteMarkTask(ExecutionContext &context, DataChunk &result) {
+	auto &op = gsource.op;
+	auto &ie_sink = op.sink_state->Cast<IEJoinGlobalState>();
+
+	outer_sel.reserve(STANDARD_VECTOR_SIZE);
+	outer_sel.resize(0);
+	while (outer_idx < outer_count) {
+		outer_sel.emplace_back(outer_idx++);
+		if (outer_sel.size() >= STANDARD_VECTOR_SIZE) {
+			break;
+		}
+	}
+	const idx_t count = outer_sel.size();
+	if (!count) {
+		return;
+	}
+
+	auto &left_table = *ie_sink.tables[0];
+	left_table.Repin(*left_iterator);
+	op.SliceSortedPayload(lpayload, left_table, *left_iterator, left_chunk_state, left_block_index, outer_sel,
+	                      *left_scan_state);
+
+	// for the initial set of columns we just reference the left side
+	result.SetCardinality(lpayload);
+	for (idx_t i = 0; i < lpayload.ColumnCount(); i++) {
+		result.data[i].Reference(lpayload.data[i]);
+	}
+
+	//	One of the two main keys is NULL, so the result is NULL
+	auto &mark_vector = result.data.back();
+	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
+	auto &mask = FlatVector::ValidityMutable(mark_vector);
+	mask.SetAllInvalid(count);
+
 	result.Verify(context.client.db);
 }
 

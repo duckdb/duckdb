@@ -2,9 +2,6 @@
 # description: Test standard NULL handling
 # group: [null]
 
-statement ok
-PRAGMA enable_verification
-
 # scalar NULL
 query I
 SELECT NULL

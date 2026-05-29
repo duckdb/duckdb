@@ -5,8 +5,9 @@
 
 namespace duckdb {
 
-RowGroupWriter::RowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager)
-    : table(table), partial_block_manager(partial_block_manager) {
+RowGroupWriter::RowGroupWriter(TableDataWriter &writer, TableCatalogEntry &table,
+                               PartialBlockManager &partial_block_manager)
+    : writer(writer), table(table), partial_block_manager(partial_block_manager) {
 	for (auto &col : table.GetColumns().Physical()) {
 		compression_types.push_back(col.CompressionType());
 	}
@@ -22,7 +23,7 @@ AttachedDatabase &RowGroupWriter::GetAttachedDatabase() {
 
 SingleFileRowGroupWriter::SingleFileRowGroupWriter(TableCatalogEntry &table, PartialBlockManager &partial_block_manager,
                                                    TableDataWriter &writer, MetadataWriter &table_data_writer)
-    : RowGroupWriter(table, partial_block_manager), writer(writer), table_data_writer(table_data_writer) {
+    : RowGroupWriter(writer, table, partial_block_manager), table_data_writer(table_data_writer) {
 }
 
 CheckpointOptions SingleFileRowGroupWriter::GetCheckpointOptions() const {

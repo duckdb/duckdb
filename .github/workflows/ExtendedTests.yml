@@ -7,14 +7,12 @@ on:
       - 'feature'
       - 'v*.*-*'
       - 'gh-readonly-queue/**'
-    paths-ignore:
-      - '**'
-      - '!.github/workflows/ExtendedTests.yml'
+    paths:
+      - '.github/workflows/ExtendedTests.yml'
   pull_request:
     types: [opened, reopened, ready_for_review]
-    paths-ignore:
-      - '**'
-      - '!.github/workflows/ExtendedTests.yml'
+    paths:
+      - '.github/workflows/ExtendedTests.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -44,10 +42,7 @@ jobs:
         python-version: '3.12'
 
     - name: Install
-      shell: bash
-      run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq libcurl4-openssl-dev
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
@@ -244,7 +239,6 @@ jobs:
          run: |
            python3 scripts/ci/retry.py -- make toolsci
            python3 scripts/ci/retry.py -- sudo apt-get install -y -qq llvm
-           python3 scripts/ci/retry.py -- pip install requests
 
        - uses: ./.github/actions/ccache-action
 
@@ -327,7 +321,6 @@ jobs:
          shell: bash
          run: |
            python3 scripts/ci/retry.py -- make toolsci
-           python3 scripts/ci/retry.py -- pip install requests
 
        - uses: ./.github/actions/ccache-action
 

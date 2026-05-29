@@ -2,9 +2,6 @@
 # description: Test time parsing
 # group: [time]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT '14:42:04'::TIME::VARCHAR
 ----

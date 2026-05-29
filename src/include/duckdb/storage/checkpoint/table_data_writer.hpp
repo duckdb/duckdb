@@ -52,9 +52,20 @@ public:
 	void SetRebuildIndexes() {
 		rebuild_indexes = true;
 	}
+	bool RequireLegacyStartRow() const {
+		return require_legacy_start_row;
+	}
+	void SetRowIdsChanged() {
+		row_ids_changed = true;
+	}
+	bool RowIdsChanged() const {
+		return row_ids_changed;
+	}
 
+	AttachedDatabase &GetAttached();
 	DatabaseInstance &GetDatabase();
 	unique_ptr<TaskExecutor> CreateTaskExecutor();
+	optional_ptr<ClientContext> TryGetClientContext() const;
 
 protected:
 	DuckTableEntry &table;
@@ -64,6 +75,8 @@ protected:
 
 	optional_idx row_group_count;
 	bool rebuild_indexes = false;
+	bool require_legacy_start_row = false;
+	atomic<bool> row_ids_changed {false};
 };
 
 class SingleFileTableDataWriter : public TableDataWriter {

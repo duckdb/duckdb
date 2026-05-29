@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -20,6 +21,12 @@ namespace duckdb {
 TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, QueryContext context)
     : table(table_p.Cast<DuckTableEntry>()), context(context.GetClientContext()) {
 	D_ASSERT(table_p.IsDuckTable());
+
+	auto storage_version = StorageCompatibility::FromDatabase(table_p.ParentCatalog().GetAttached());
+	if (storage_version.storage_version < StorageCompatibility::FromString("v1.4.4").storage_version) {
+		// older storage versions require legacy start row to be written
+		require_legacy_start_row = true;
+	}
 }
 
 TableDataWriter::~TableDataWriter() {
@@ -34,6 +41,10 @@ void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_pt
 	row_group_pointers.push_back(std::move(row_group_pointer));
 }
 
+AttachedDatabase &TableDataWriter::GetAttached() {
+	return table.ParentCatalog().GetAttached();
+}
+
 DatabaseInstance &TableDataWriter::GetDatabase() {
 	return table.ParentCatalog().GetDatabase();
 }
@@ -43,6 +54,10 @@ unique_ptr<TaskExecutor> TableDataWriter::CreateTaskExecutor() {
 		return make_uniq<TaskExecutor>(*context);
 	}
 	return make_uniq<TaskExecutor>(TaskScheduler::GetScheduler(GetDatabase()));
+}
+
+optional_ptr<ClientContext> TableDataWriter::TryGetClientContext() const {
+	return context;
 }
 
 SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager,
@@ -82,6 +97,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	idx_t total_rows;
 	auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetDatabase());
 	if (!existing_pointer.IsValid()) {
+		auto supports_per_column_writes = collection.SupportsPerColumnWrites();
 		// write the metadata
 		// store the current position in the metadata writer
 		// this is where the row groups for this table start
@@ -107,7 +123,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 			// Each RowGroup is its own unit
 			BinarySerializer row_group_serializer(table_data_writer, serializer.GetOptions());
 			row_group_serializer.Begin();
-			RowGroup::Serialize(row_group_pointer, row_group_serializer);
+			RowGroup::Serialize(row_group_pointer, row_group_serializer, supports_per_column_writes);
 			row_group_serializer.End();
 		}
 		table_data_writer.SetWrittenPointers(nullptr);
@@ -164,7 +180,9 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	auto v1_0_0_storage = serializer.GetOptions().serialization_compatibility.serialization_version < 3;
+	// prior: ser version 3
+	auto v1_0_0_storage = StorageManager::IsPriorToVersion(
+	    StorageVersion::V1_2_0, serializer.GetOptions().storage_compatibility.storage_version);
 	IndexSerializationInfo serialization_info;
 	if (!v1_0_0_storage) {
 		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);

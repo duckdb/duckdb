@@ -90,7 +90,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &l_state = input.local_state.Cast<DeleteLocalState>();
 
 	auto &row_ids = chunk.data[row_id_index];
-	row_ids.Flatten(chunk.size());
+	row_ids.Flatten();
 
 	// Fast path: no RETURNING and no unique indexes
 	if (!return_chunk && !g_state.has_unique_indexes) {
@@ -162,7 +162,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 			l_state.delete_chunk.data[i].Reference(chunk.data[return_columns[i]]);
 		} else {
 			// Column not in scan (sparse mapping for index-only case) - use NULL placeholder
-			l_state.delete_chunk.data[i].Reference(Value(types[i]));
+			l_state.delete_chunk.data[i].Reference(Value(types[i]), count_t(chunk.size()));
 		}
 	}
 	// Add virtual columns (e.g., rowid) after table columns

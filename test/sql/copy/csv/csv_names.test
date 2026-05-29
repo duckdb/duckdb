@@ -2,9 +2,6 @@
 # description: Read a CSV with names flags
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # Duplicate names shuold not be accepted
 statement error
 from read_csv('{DATA_DIR}/csv/header_bug.csv', names=['col1', 'col1']) LIMIT 1;

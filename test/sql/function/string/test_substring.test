@@ -3,9 +3,6 @@
 # group: [string]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);
 
 statement ok
@@ -301,3 +298,31 @@ SELECT {FUN}(s, 0, -4294967297) FROM strings
 Out of Range Error: Substring length outside of supported range (< -4294967296)
 
 endloop
+
+# SUBSTRING with FROM only (no FOR)
+query I
+SELECT substring(s from off) FROM strings
+----
+hello
+orld
+b
+NULL
+
+# SUBSTRING with FOR only (no FROM) - starts at position 1
+query I
+SELECT substring(s for length) FROM strings
+----
+he
+wor
+b
+NULL
+
+query I
+SELECT SUBSTRING('hello' FROM 2)
+----
+ello
+
+query I
+SELECT SUBSTRING('hello' FOR 3)
+----
+hel

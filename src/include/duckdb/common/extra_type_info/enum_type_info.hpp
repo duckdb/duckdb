@@ -9,12 +9,12 @@ namespace duckdb {
 
 template <class T>
 struct EnumTypeInfoTemplated : public EnumTypeInfo {
-	explicit EnumTypeInfoTemplated(Vector &values_insert_order_p, idx_t size_p)
+	explicit EnumTypeInfoTemplated(const Vector &values_insert_order_p, idx_t size_p)
 	    : EnumTypeInfo(values_insert_order_p, size_p) {
 		D_ASSERT(values_insert_order_p.GetType().InternalType() == PhysicalType::VARCHAR);
 
 		UnifiedVectorFormat vdata;
-		values_insert_order.ToUnifiedFormat(size_p, vdata);
+		values_insert_order.ToUnifiedFormat(vdata);
 
 		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 		for (idx_t i = 0; i < size_p; i++) {

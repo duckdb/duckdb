@@ -45,7 +45,7 @@ static void RepeatRowFunction(ClientContext &context, TableFunctionInput &data_p
 
 	idx_t remaining = MinValue<idx_t>(bind_data.target_count - state.current_count, STANDARD_VECTOR_SIZE);
 	for (idx_t val_idx = 0; val_idx < bind_data.values.size(); val_idx++) {
-		output.data[val_idx].Reference(bind_data.values[val_idx]);
+		output.data[val_idx].Reference(bind_data.values[val_idx], count_t(remaining));
 	}
 	output.SetCardinality(remaining);
 	state.current_count += remaining;

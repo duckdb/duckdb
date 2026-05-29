@@ -5,6 +5,7 @@
 #include "duckdb/function/window_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -23,7 +24,7 @@ public:
 			//	then we can just use the partition ordering.
 			auto &wexpr = executor.wexpr;
 			auto &arg_orders = executor.wexpr.arg_orders;
-			const auto optimize = ClientConfig::GetConfig(client).enable_optimizer;
+			const auto optimize = Settings::Get<EnableOptimizerSetting>(client);
 			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
 				//	"The ROW_NUMBER function can be computed by disambiguating duplicate elements based on their
 				//	position in the input data, such that two elements never compare as equal."
@@ -88,7 +89,7 @@ void WindowRowNumberLocalState::Finalizer(ExecutionContext &context, CollectionP
 //===--------------------------------------------------------------------===//
 class WindowRowNumberStreamingState : public WindowExecutorStreamingState {
 public:
-	WindowRowNumberStreamingState() : vec(Value((int64_t)1)) {
+	WindowRowNumberStreamingState() : vec(Value((int64_t)1), count_t(1)) {
 	}
 
 	void Evaluate(idx_t count, Vector &result) {

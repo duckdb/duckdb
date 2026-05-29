@@ -28,19 +28,16 @@ void ValidityColumnData::UpdateWithBase(TransactionData transaction, DuckTableEn
 	    CompressionType::COMPRESSION_EMPTY) {
 		// The validity is actually covered by the data, so we read it to get the validity for UpdateInternal.
 		ColumnScanState data_scan_state(nullptr);
-		auto fetch_count =
-		    base.Fetch(data_scan_state, row_ids[0] - UnsafeNumericCast<row_t>(row_group_start), base_vector);
-		base_vector.Flatten(fetch_count);
+		base.Fetch(data_scan_state, row_ids[0] - UnsafeNumericCast<row_t>(row_group_start), base_vector);
+		base_vector.Flatten();
 	}
 
 	UpdateInternal(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,
 	               row_group_start);
 }
 
-void ValidityColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
-                                    idx_t count) {
-	lock_guard<mutex> l(stats_lock);
-	ColumnData::AppendData(stats, state, vdata, count);
+void ValidityColumnData::AppendData(ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
+	ColumnData::AppendData(state, vdata, count);
 }
 
 struct ValidityColumnCheckpointState : public ColumnCheckpointState {

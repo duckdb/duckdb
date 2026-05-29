@@ -1,1 +1,0 @@
-%type <transactiontype> opt_transaction_type

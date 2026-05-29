@@ -33,7 +33,7 @@ public:
 };
 
 inline bool TryGetStructExtractChildIndex(const BoundFunctionExpression &func, idx_t &child_idx) {
-	if (func.function.name == "struct_extract_at") {
+	if (func.function.GetName() == "struct_extract_at") {
 		if (func.bind_info) {
 			child_idx = func.bind_info->Cast<StructExtractBindData>().index;
 			return true;
@@ -52,16 +52,16 @@ inline bool TryGetStructExtractChildIndex(const BoundFunctionExpression &func, i
 		}
 		return false;
 	}
-	if (func.function.name != "struct_extract" || func.children.size() <= 1 ||
+	if (func.function.GetName() != "struct_extract" || func.children.size() <= 1 ||
 	    func.children[1]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT ||
-	    func.children[0]->return_type.id() != LogicalTypeId::STRUCT) {
+	    func.children[0]->GetReturnType().id() != LogicalTypeId::STRUCT) {
 		return false;
 	}
 	auto &field_value = func.children[1]->Cast<BoundConstantExpression>().value;
 	if (field_value.IsNull() || field_value.type().id() != LogicalTypeId::VARCHAR) {
 		return false;
 	}
-	child_idx = StructType::GetChildIndexUnsafe(func.children[0]->return_type, field_value.GetValue<string>());
+	child_idx = StructType::GetChildIndexUnsafe(func.children[0]->GetReturnType(), field_value.GetValue<string>());
 	return true;
 }
 

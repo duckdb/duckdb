@@ -195,6 +195,7 @@ add_library_unity(
 )
 
 disable_target_warnings(duckdb_icu_i18n)
+disable_target_warnings(duckdb_icu_i18n_unity)
 set(ICU_LIBRARY_FILES
     ${ICU_LIBRARY_FILES} $<TARGET_OBJECTS:duckdb_icu_i18n> $<TARGET_OBJECTS:duckdb_icu_i18n_unity>
     PARENT_SCOPE)

@@ -11,10 +11,12 @@
 
 #include "duckdb/main/settings.hpp"
 
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -341,192 +343,20 @@ Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 // Configure Profiling
 //===----------------------------------------------------------------------===//
-bool IsEnabledOptimizer(MetricType metric, const set<OptimizerType> &disabled_optimizers) {
-	auto matching_optimizer_type = MetricsUtils::GetOptimizerTypeByMetric(metric);
-	return matching_optimizer_type != OptimizerType::INVALID &&
-	       disabled_optimizers.find(matching_optimizer_type) == disabled_optimizers.end();
-}
-
-template <typename ExtractFromType>
-static profiler_settings_t ExtractSettings(ExtractFromType extract_from, const set<OptimizerType> &disabled_optimizers,
-                                           vector<std::string> &invalid_settings) {
-	profiler_settings_t enabled_metrics;
-
-	auto insert_if_enabled = [&](MetricType m) {
-		if (!MetricsUtils::IsOptimizerMetric(m) || IsEnabledOptimizer(m, disabled_optimizers)) {
-			enabled_metrics.insert(m);
-		}
-	};
-
-	extract_from([&](const std::string &metric) {
-		const auto upper = StringUtil::Upper(metric);
-		try {
-			insert_if_enabled(EnumUtil::FromString<MetricType>(upper));
-		} catch (std::exception &) {
-			try {
-				auto group = EnumUtil::FromString<MetricGroup>(upper);
-				for (auto &converted_metric : MetricsUtils::GetMetricsByGroupType(group)) {
-					insert_if_enabled(converted_metric);
-				}
-			} catch (std::exception &) {
-				invalid_settings.push_back(metric);
-			}
-		}
-	});
-	return enabled_metrics;
-}
-
-void AddOptimizerMetrics(profiler_settings_t &settings, const set<OptimizerType> &disabled_optimizers) {
-	if (settings.find(MetricType::ALL_OPTIMIZERS) != settings.end()) {
-		auto optimizer_metrics = MetricsUtils::GetOptimizerMetrics();
-		for (auto &metric : optimizer_metrics) {
-			if (IsEnabledOptimizer(metric, disabled_optimizers)) {
-				settings.insert(metric);
-			}
-		}
-	}
-}
-
-void ExtractFromList(ClientConfig &config, profiler_settings_t &enabled_metrics, vector<string> &invalid_settings,
-                     const Value &input, const set<OptimizerType> &disabled_optimizers) {
-	config.profiler_settings_type = LogicalTypeId::LIST;
-
-	enabled_metrics = ExtractSettings(
-	    [&](const std::function<void(const std::string &)> &func) {
-		    for (auto &val : ListValue::GetChildren(input)) {
-			    func(val.GetValue<string>());
-		    }
-	    },
-	    disabled_optimizers, invalid_settings);
-}
-
-void ExtractFromStruct(ClientConfig &config, profiler_settings_t &enabled_metrics, vector<string> &invalid_settings,
-                       const Value &input, const set<OptimizerType> &disabled_optimizers) {
-	config.profiler_settings_type = LogicalTypeId::STRUCT;
-
-	enabled_metrics = ExtractSettings(
-	    [&](const std::function<void(const std::string &)> &func) {
-		    auto &children = StructValue::GetChildren(input);
-		    for (idx_t i = 0; i < children.size(); i++) {
-			    auto child_val = children[i];
-			    if ((child_val.type() == LogicalType::BOOLEAN && child_val.GetValue<bool>() == true) ||
-			        StringUtil::Lower(child_val.ToString()) == "true") {
-				    func(StructType::GetChildName(input.type(), i));
-			    }
-		    }
-	    },
-	    disabled_optimizers, invalid_settings);
-}
-
-void ExtractFromJSON(ClientConfig &config, profiler_settings_t &enabled_metrics, vector<string> &invalid_settings,
-                     const Value &input, const set<OptimizerType> &disabled_optimizers) {
-	config.profiler_settings_type = LogicalTypeId::VARCHAR;
-
-	// JSON string: parse, then accept entries with value == "true"
-	std::unordered_map<std::string, std::string> json;
-	try {
-		json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
-	} catch (std::exception &ex) {
-		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\".  Make "
-		                  "sure all the keys and values start with a quote. (error: %s)",
-		                  input.ToString(), ex.what());
-	}
-
-	enabled_metrics = ExtractSettings(
-	    [&](const std::function<void(const std::string &)> &func) {
-		    for (auto &entry : json) {
-			    if (StringUtil::Lower(entry.second) == "true") {
-				    func(entry.first);
-			    }
-		    }
-	    },
-	    disabled_optimizers, invalid_settings);
-}
-
-void ConstructInvalidSettingsAndThrow(const vector<string> &invalid_settings) {
-	string invalid_settings_str;
-	for (auto &invalid_setting : invalid_settings) {
-		if (!invalid_settings_str.empty()) {
-			invalid_settings_str += ", ";
-		}
-		invalid_settings_str += invalid_setting;
-	}
-	throw IOException("Invalid custom profiler settings: \"%s\"", invalid_settings_str);
-}
-
 void ConfigureProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-
-	auto &db_config = DBConfig::GetConfig(context);
-	auto &disabled_optimizers = db_config.options.disabled_optimizers;
-
-	vector<string> invalid_settings;
-	profiler_settings_t enabled_metrics;
-	if (input.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
-		ExtractFromList(config, enabled_metrics, invalid_settings, input, disabled_optimizers);
-	} else if (input.type().id() == LogicalTypeId::STRUCT) {
-		ExtractFromStruct(config, enabled_metrics, invalid_settings, input, disabled_optimizers);
-	} else if (input.type() == LogicalType::VARCHAR) {
-		ExtractFromJSON(config, enabled_metrics, invalid_settings, input, disabled_optimizers);
-	} else {
-		throw ParserException("Invalid custom profiler settings type \"%s\", expected LIST(VARCHAR) or JSON",
-		                      input.type().ToString());
-	}
-
-	if (!invalid_settings.empty()) {
-		ConstructInvalidSettingsAndThrow(invalid_settings);
-	}
-
-	AddOptimizerMetrics(enabled_metrics, disabled_optimizers);
-	config.enable_profiler = true;
-	config.profiler_settings = enabled_metrics;
+	throw InvalidInputException(
+	    "configure_profiling (and its aliases configure_metrics, custom_profiling_settings) is deprecated. "
+	    "Use SET tracked_metrics = '...' instead. "
+	    "For example: SET tracked_metrics = '*' to track all metrics, "
+	    "or SET tracked_metrics = ['query.total_time', 'operator.*'] to track specific metrics.");
 }
 
 void ConfigureProfilingSetting::ResetLocal(ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.enable_profiler = ClientConfig().enable_profiler;
-	config.profiler_settings = MetricsUtils::GetDefaultMetrics();
-	config.profiler_settings_type = LogicalTypeId::VARCHAR;
+	ClientConfig::GetConfig(context).tracked_metrics = ClientConfig().tracked_metrics;
 }
 
 Value ConfigureProfilingSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-
-	set<string> enabled_settings;
-	for (auto &entry : config.profiler_settings) {
-		enabled_settings.insert(EnumUtil::ToString(entry));
-	}
-
-	switch (config.profiler_settings_type) {
-	case LogicalTypeId::VARCHAR: {
-		// i.e. JSON
-		string profiling_settings_str;
-		for (auto &entry : enabled_settings) {
-			if (!profiling_settings_str.empty()) {
-				profiling_settings_str += ", ";
-			}
-			profiling_settings_str += "\"" + entry + "\": \"true\"";
-		}
-
-		return Value(StringUtil::Format("{%s}", profiling_settings_str));
-	}
-	case LogicalTypeId::STRUCT: {
-		child_list_t<Value> children;
-		for (auto &entry : enabled_settings) {
-			children.emplace_back(entry, Value::BOOLEAN(true));
-		}
-		return Value::STRUCT(std::move(children));
-	}
-	case LogicalTypeId::LIST: {
-		vector<Value> children;
-		for (auto &entry : enabled_settings) {
-			children.emplace_back(entry);
-		}
-		return Value::LIST(std::move(children));
-	}
-	default:
-		throw InternalException("Invalid custom profiler settings type");
-	}
+	return TrackedMetricsSetting::GetSetting(context);
 }
 
 //===----------------------------------------------------------------------===//
@@ -546,6 +376,22 @@ void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 		throw InvalidInputException("Cannot change custom_user_agent setting while database is running");
 	}
 	config.options.custom_user_agent = DBConfigOptions().custom_user_agent;
+}
+
+//===----------------------------------------------------------------------===//
+// Debug Verification Mode
+//===----------------------------------------------------------------------===//
+void DebugVerificationModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.global_verification_mode = EnumUtil::FromString<DebugVerificationMode>(input.ToString());
+}
+
+void DebugVerificationModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.global_verification_mode = DebugVerificationMode::NONE;
+}
+
+Value DebugVerificationModeSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return EnumUtil::ToString(config.options.global_verification_mode);
 }
 
 //===----------------------------------------------------------------------===//
@@ -775,6 +621,31 @@ void EnableExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &inp
 }
 
 //===----------------------------------------------------------------------===//
+// External File Cache Block Sizes
+//===----------------------------------------------------------------------===//
+void ExternalFileCacheLocalBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	const auto bytes = input.GetValue<uint64_t>();
+	if (bytes == 0) {
+		throw InvalidInputException("Invalid option for %s: value must be positive", string(Name));
+	}
+	if (!IsPowerOfTwo(bytes)) {
+		throw InvalidInputException("Invalid option for %s: block size must be a power of two, got %llu", string(Name),
+		                            bytes);
+	}
+}
+
+void ExternalFileCacheRemoteBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	const auto bytes = input.GetValue<uint64_t>();
+	if (bytes == 0) {
+		throw InvalidInputException("Invalid option for %s: value must be positive", string(Name));
+	}
+	if (!IsPowerOfTwo(bytes)) {
+		throw InvalidInputException("Invalid option for %s: block size must be a power of two, got %llu", string(Name),
+		                            bytes);
+	}
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Logging
 //===----------------------------------------------------------------------===//
 Value EnableLogging::GetSetting(const ClientContext &context) {
@@ -839,6 +710,7 @@ void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, con
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::TIME_TZ:
 		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_SEC:
 		case LogicalTypeId::TIMESTAMP_MS:
@@ -1027,18 +899,6 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
 	} else if (parameter == "query_tree_optimizer") {
 		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
-
-		// add optimizer settings to the profiler settings
-		auto optimizer_settings = MetricsUtils::GetOptimizerMetrics();
-		for (auto &setting : optimizer_settings) {
-			config.profiler_settings.insert(setting);
-		}
-
-		// add the phase timing settings to the profiler settings
-		auto phase_timing_settings = MetricsUtils::GetPhaseTimingMetrics();
-		for (auto &setting : phase_timing_settings) {
-			config.profiler_settings.insert(setting);
-		}
 	} else if (parameter == "no_output") {
 		config.profiler_print_format = ProfilerPrintFormat::NO_OUTPUT;
 		config.emit_profiler_output = false;
@@ -1058,7 +918,6 @@ void EnableProfilingSetting::ResetLocal(ClientContext &context) {
 	config.profiler_print_format = ClientConfig().profiler_print_format;
 	config.enable_profiler = ClientConfig().enable_profiler;
 	config.emit_profiler_output = ClientConfig().emit_profiler_output;
-	config.profiler_settings = ClientConfig().profiler_settings;
 }
 
 Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
@@ -1262,12 +1121,37 @@ Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// HTTP Proxy
+//===----------------------------------------------------------------------===//
+void HTTPProxySetting::SetGlobal(DatabaseInstance *, DBConfig &config, const Value &input) {
+	config.options.http_proxy = input.GetValue<string>();
+}
+
+void HTTPProxySetting::ResetGlobal(DatabaseInstance *, DBConfig &config) {
+	config.options.http_proxy = FileSystem::GetEnvVariable("HTTP_PROXY");
+}
+
+//===----------------------------------------------------------------------===//
 // Index Scan Percentage
 //===----------------------------------------------------------------------===//
 void IndexScanPercentageSetting::OnSet(SettingCallbackInfo &, Value &input) {
 	auto index_scan_percentage = input.GetValue<double>();
 	if (index_scan_percentage < 0 || index_scan_percentage > 1.0) {
 		throw InvalidInputException("the index scan percentage must be within [0, 1]");
+	}
+}
+
+//===----------------------------------------------------------------------===//
+// Initial Column Segment Size
+//===----------------------------------------------------------------------===//
+void InitialColumnSegmentSizeSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	auto initial_column_segment_size = input.GetValue<uint64_t>();
+	if (initial_column_segment_size < DEFAULT_BLOCK_HEADER_STORAGE_SIZE) {
+		throw InvalidInputException(
+		    "The initial column segment size must be at least 8 bytes (default block header storage size)");
+	}
+	if (!IsPowerOfTwo(initial_column_segment_size)) {
+		throw InvalidInputException("The initial column segment size must be a power of two");
 	}
 }
 
@@ -1455,34 +1339,19 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 	} else if (parameter == "detailed") {
 		config.enable_profiler = true;
 		config.enable_detailed_profiling = true;
-
-		// add optimizer settings to the profiler settings
-		auto optimizer_settings = MetricsUtils::GetOptimizerMetrics();
-		for (auto &setting : optimizer_settings) {
-			config.profiler_settings.insert(setting);
-		}
-
-		// add the phase timing settings to the profiler settings
-		auto phase_timing_settings = MetricsUtils::GetPhaseTimingMetrics();
-		for (auto &setting : phase_timing_settings) {
-			config.profiler_settings.insert(setting);
-		}
 	} else if (parameter == "all") {
 		config.enable_profiler = true;
-		auto all_metrics = MetricsUtils::GetAllMetrics();
-		for (auto &metric : all_metrics) {
-			config.profiler_settings.insert(metric);
-		}
 	} else {
-		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed]", parameter);
+		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed, all]",
+		                      parameter);
 	}
 }
 
 void ProfilingModeSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).enable_profiler = ClientConfig().enable_profiler;
-	ClientConfig::GetConfig(context).enable_detailed_profiling = ClientConfig().enable_detailed_profiling;
-	ClientConfig::GetConfig(context).emit_profiler_output = ClientConfig().emit_profiler_output;
-	ClientConfig::GetConfig(context).profiler_settings = ClientConfig().profiler_settings;
+	auto &config = ClientConfig::GetConfig(context);
+	config.enable_profiler = ClientConfig().enable_profiler;
+	config.enable_detailed_profiling = ClientConfig().enable_detailed_profiling;
+	config.emit_profiler_output = ClientConfig().emit_profiler_output;
 }
 
 Value ProfilingModeSetting::GetSetting(const ClientContext &context) {
@@ -1595,18 +1464,18 @@ Value SecretDirectorySetting::GetSetting(const ClientContext &context) {
 //===----------------------------------------------------------------------===//
 void StorageCompatibilityVersionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto version_string = input.GetValue<string>();
-	auto serialization_compatibility = SerializationCompatibility::FromString(version_string);
-	config.options.serialization_compatibility = serialization_compatibility;
+	auto storage_compatibility = StorageCompatibility::FromString(version_string);
+	config.options.storage_compatibility = storage_compatibility;
 }
 
 void StorageCompatibilityVersionSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.serialization_compatibility = DBConfigOptions().serialization_compatibility;
+	config.options.storage_compatibility = DBConfigOptions().storage_compatibility;
 }
 
 Value StorageCompatibilityVersionSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 
-	auto &version_name = config.options.serialization_compatibility.duckdb_version;
+	auto &version_name = config.options.storage_compatibility.duckdb_version;
 	return Value(version_name);
 }
 
@@ -1675,6 +1544,35 @@ void TempFileEncryptionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 }
 
 //===----------------------------------------------------------------------===//
+// Tracked Metrics
+//===----------------------------------------------------------------------===//
+void TrackedMetricsSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.tracked_metrics.clear();
+	if (input.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
+		for (auto &child : ListValue::GetChildren(input)) {
+			config.tracked_metrics.push_back(child.GetValue<string>());
+		}
+	} else {
+		throw InvalidInputException("Invalid tracked_metrics type \"%s\", expected LIST(VARCHAR)",
+		                            input.type().ToString());
+	}
+}
+
+void TrackedMetricsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).tracked_metrics = ClientConfig().tracked_metrics;
+}
+
+Value TrackedMetricsSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	vector<Value> children;
+	for (const auto &pattern : config.tracked_metrics) {
+		children.emplace_back(pattern);
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(children));
+}
+
+//===----------------------------------------------------------------------===//
 // Threads
 //===----------------------------------------------------------------------===//
 void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -1713,6 +1611,32 @@ void WarningsAsErrorsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 		    ExceptionType::SETTINGS,
 		    "Can not set 'warnings_as_errors=true'; no logger is available. To solve, run: 'SET enable_logging=true;'");
 	}
+}
+
+//===----------------------------------------------------------------------===//
+// Streaming Buffer Size
+//===----------------------------------------------------------------------===//
+void WriteBufferRowGroupMemoryLimitSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull() || input.ToString().empty()) {
+		config.options.write_buffer_row_group_memory_limit = optional_idx();
+	} else {
+		config.options.write_buffer_row_group_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
+	}
+}
+
+void WriteBufferRowGroupMemoryLimitSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.write_buffer_row_group_memory_limit = optional_idx();
+}
+
+Value WriteBufferRowGroupMemoryLimitSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	idx_t bytes = 0;
+	if (config.options.write_buffer_row_group_memory_limit.IsValid()) {
+		bytes = config.options.write_buffer_row_group_memory_limit.GetIndex();
+	} else {
+		bytes = config.options.maximum_memory / 5 / (config.options.maximum_threads + 1);
+	}
+	return Value(StringUtil::BytesToHumanReadableString(bytes));
 }
 
 void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &input) {

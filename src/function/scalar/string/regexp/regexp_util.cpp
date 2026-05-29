@@ -19,7 +19,8 @@ bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &c
 	return false;
 }
 
-void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace) {
+void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace,
+                       bool *no_match_returns_input) {
 	for (idx_t i = 0; i < options.size(); i++) {
 		switch (options[i]) {
 		case 'c':
@@ -52,6 +53,14 @@ void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, 
 				throw InvalidInputException("Option 'g' (global replace) is only valid for regexp_replace");
 			}
 			break;
+		case 'k':
+			// keep (return) the input on no match instead of an empty string (regexp_extract only)
+			if (no_match_returns_input) {
+				*no_match_returns_input = true;
+			} else {
+				throw InvalidInputException("Option 'k' (keep input on no match) is only valid for regexp_extract");
+			}
+			break;
 		case ' ':
 		case '\t':
 		case '\n':
@@ -63,7 +72,8 @@ void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, 
 	}
 }
 
-void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace) {
+void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace,
+                       bool *no_match_returns_input) {
 	if (expr.HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -77,7 +87,7 @@ void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &t
 	if (options_str.type().id() != LogicalTypeId::VARCHAR) {
 		throw InvalidInputException("Regex options field must be a string");
 	}
-	ParseRegexOptions(StringValue::Get(options_str), target, global_replace);
+	ParseRegexOptions(StringValue::Get(options_str), target, global_replace, no_match_returns_input);
 }
 
 void ParseGroupNameList(ClientContext &context, const string &function_name, Expression &group_expr,

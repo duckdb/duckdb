@@ -80,7 +80,7 @@ static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorS
 	chunk.data[0].Reference(lists_indices);
 	chunk.data[1].Reference(slice);
 	chunk.data[2].Reference(payload_vector);
-	chunk.SetCardinality(offset_lists_indices);
+	chunk.SetChildCardinality(offset_lists_indices);
 	chunk.Verify(context.client.db);
 
 	// sink
@@ -92,7 +92,7 @@ static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorS
 static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() >= 1 && args.ColumnCount() <= 3);
 	auto count = args.size();
-	Vector &input_lists = args.data[0];
+	const Vector &input_lists = args.data[0];
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &result_validity = FlatVector::ValidityMutable(result);
@@ -123,7 +123,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &child_vector = ListVector::GetChildMutable(sort_result_vec);
 
 	// get the lists data
-	auto list_entries = sort_result_vec.Values<list_entry_t>(count);
+	auto list_entries = sort_result_vec.Values<list_entry_t>();
 
 	// create the lists_indices vector, this contains an element for each list's entry,
 	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4]
@@ -244,16 +244,16 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			}
 		} else {
 			child_vector.Slice(sel_sorted, sel_sorted_idx);
-			child_vector.Flatten(sel_sorted_idx);
+			child_vector.Flatten();
 		}
 	}
 }
 
-static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> ListSortBind(ClientContext &context, BoundScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments, OrderType &order,
                                              OrderByNullType &null_order) {
 	LogicalType child_type;
-	if (arguments[0]->return_type == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->GetReturnType() == LogicalTypeId::UNKNOWN) {
 		bound_function.GetArguments()[0] = LogicalTypeId::UNKNOWN;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
 		child_type = bound_function.GetReturnType();
@@ -262,10 +262,10 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 	}
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-	child_type = ListType::GetChildType(arguments[0]->return_type);
+	child_type = ListType::GetChildType(arguments[0]->GetReturnType());
 
-	bound_function.GetArguments()[0] = arguments[0]->return_type;
-	bound_function.SetReturnType(arguments[0]->return_type);
+	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
+	bound_function.SetReturnType(arguments[0]->GetReturnType());
 
 	return make_uniq<ListSortBindData>(order, null_order, false, bound_function.GetReturnType(), child_type, context);
 }
@@ -302,9 +302,9 @@ static unique_ptr<FunctionData> ListGradeUpBind(BindScalarFunctionInput &input) 
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
-	bound_function.GetArguments()[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 	bound_function.SetReturnType(LogicalType::LIST(LogicalTypeId::BIGINT));
-	auto child_type = ListType::GetChildType(arguments[0]->return_type);
+	auto child_type = ListType::GetChildType(arguments[0]->GetReturnType());
 	return make_uniq<ListSortBindData>(order, null_order, true, bound_function.GetReturnType(), child_type, context);
 }
 
