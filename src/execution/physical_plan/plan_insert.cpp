@@ -11,6 +11,8 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/settings.hpp"
 
+#include "duckdb/function/scalar/struct_functions.hpp"
+
 namespace duckdb {
 
 OrderPreservationType PhysicalPlanGenerator::OrderPreservationRecursive(PhysicalOperator &op) {
@@ -87,8 +89,44 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveDefaultsProjection(LogicalInsert
 			// push default value
 			select_list.push_back(std::move(op.bound_defaults[storage_idx]));
 		} else {
-			// push reference
-			select_list.push_back(make_uniq<BoundReferenceExpression>(col.Type(), mapped_index));
+			//! Column is present
+			if (col.Type().id() == LogicalTypeId::STRUCT) {
+				auto &original_type = child.children[0].get().types[mapped_index];
+				//! Column is of type STRUCT, create a COALESCE of the default with the input
+				vector<unique_ptr<Expression>> children;
+				auto &struct_children = StructType::GetChildTypes(original_type);
+				auto &bound_default = op.bound_defaults[storage_idx]->Cast<BoundConstantExpression>();
+				if (!bound_default.value.IsNull()) {
+					//! input
+					children.push_back(make_uniq<BoundReferenceExpression>(col.Type(), mapped_index));
+					//! target_type
+					children.push_back(make_uniq<BoundConstantExpression>(Value(col.Type())));
+					//! mapping
+					child_list_t<Value> mapping_children;
+					for (auto &[child_name, _] : struct_children) {
+						mapping_children.emplace_back(child_name, Value(child_name));
+					}
+					children.push_back(make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(mapping_children))));
+					//! defaults
+					child_list_t<Value> default_children;
+					auto &struct_default_children = StructValue::GetChildren(bound_default.value);
+					auto &struct_default_type_children = StructType::GetChildTypes(bound_default.value.type());
+					for (idx_t i = 0; i < struct_default_children.size(); i++) {
+						auto &child_default = struct_default_children[i];
+						if (child_default.IsNull()) {
+							continue;
+						}
+						default_children.emplace_back(struct_default_type_children[i].first, child_default);
+					}
+					children.push_back(make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(default_children))));
+					select_list.push_back(RemapStructFun::GetFunction().Bind(context, std::move(children)));
+				} else {
+					select_list.push_back(make_uniq<BoundReferenceExpression>(col.Type(), mapped_index));
+				}
+			} else {
+				// push reference
+				select_list.push_back(make_uniq<BoundReferenceExpression>(col.Type(), mapped_index));
+			}
 		}
 		types.push_back(col.Type());
 	}
