@@ -540,10 +540,10 @@ static bool TryExtractUnpivotList(ParsedExpression &expr, vector<string> &column
 	}
 	case ExpressionType::FUNCTION: {
 		auto &function = expr.Cast<FunctionExpression>();
-		if (function.function_name != "row") {
+		if (function.FunctionName() != "row") {
 			return false;
 		}
-		for (auto &child : function.children) {
+		for (auto &child : function.GetChildrenMutable()) {
 			if (!TryExtractUnpivotList(*child, column_names)) {
 				column_names.resize(initial_size);
 				return false;
