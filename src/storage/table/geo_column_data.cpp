@@ -147,14 +147,15 @@ void GeoColumnData::FetchRow(TransactionData transaction, ColumnFetchState &stat
 
 	// Not a shredded column, so just emit the binary format immediately
 	if (storage_type == GeometryStorageType::WKB) {
-		return base_column->FetchRows(transaction, state, storage_index, &offset, identity_sel, /*count=*/ 1, result, result_idx);
+		return base_column->FetchRows(transaction, state, storage_index, &offset, identity_sel, /*count=*/1, result,
+		                              result_idx);
 	}
 
 	// Otherwise, we need to fetch and reassemble
 	DataChunk chunk;
 	chunk.Initialize(Allocator::DefaultAllocator(), {base_column->GetType()}, 1);
 
-	base_column->FetchRows(transaction, state, storage_index, &offset, identity_sel, /*count=*/ 1, chunk.data[0], 0);
+	base_column->FetchRows(transaction, state, storage_index, &offset, identity_sel, /*count=*/1, chunk.data[0], 0);
 
 	Reassemble(chunk.data[0], result, 1, storage_type, result_idx);
 }
