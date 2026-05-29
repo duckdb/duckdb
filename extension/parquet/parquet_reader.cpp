@@ -199,8 +199,10 @@ using duckdb_parquet::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
 CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, bool prefetch_mode,
-                         uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP) {
-	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(file_handle, prefetch_mode, accepted_column_gap);
+                         uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP,
+                         optional_ptr<NetworkPrefetchStats> prefetch_stats = nullptr) {
+	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(file_handle, prefetch_mode, accepted_column_gap,
+	                                                                   prefetch_stats);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
@@ -1034,6 +1036,8 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
 		    "metadata is located at the end of the file. Write the stream to disk first and read from there instead.");
 	}
+	network_stats = make_uniq<NetworkPrefetchStats>(file_handle->OnDiskFile() ? PrefetchCostModel::LocalProfile()
+	                                                                          : PrefetchCostModel::RemoteProfile());
 
 	// read the extended file open info (if any)
 	optional_idx footer_size;
@@ -1452,10 +1456,10 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		state.filter_eliminated_all_rows.assign(state.scan_filters.size(), false);
 	}
 
-	auto accepted_column_gap = state.prefetch_mode ? PrefetchCostModel::CoalesceGap(state.file_handle->OnDiskFile())
+	auto accepted_column_gap = state.prefetch_mode ? network_stats->GetModel().GetColumnGapSize()
 	                                               : ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
-	state.thrift_file_proto =
-	    CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode, accepted_column_gap);
+	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode,
+	                                                   accepted_column_gap, network_stats.get());
 
 	state.column_readers.resize(column_indexes.size());
 	for (idx_t i = 0; i < column_indexes.size(); i++) {
@@ -1661,6 +1665,10 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
 		trans.ClearPrefetch();
 		state.current_group_prefetched = false;
+
+		if (state.prefetch_mode) {
+			trans.SetAcceptedColumnGap(network_stats->GetModel().GetColumnGapSize());
+		}
 
 		if (log_prefetch && state.prefetch_metrics.filter_ran && state.current_group > 0) {
 			LogRowGroupPrefetch(context, file.path, state.group_idx_list[state.current_group - 1], state);

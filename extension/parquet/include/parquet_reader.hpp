@@ -29,6 +29,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "column_reader.hpp"
+#include "parquet_prefetch_cost_model.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_types.h"
@@ -390,6 +391,7 @@ private:
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;
+	unique_ptr<NetworkPrefetchStats> network_stats;
 };
 
 } // namespace duckdb

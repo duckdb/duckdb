@@ -17,6 +17,8 @@
 #include "duckdb/storage/external_file_cache/file_buffer_handle_group.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/profiler.hpp"
+#include "parquet_prefetch_cost_model.hpp"
 
 namespace duckdb {
 
@@ -77,8 +79,10 @@ struct ReadHeadComparator {
 // 2: prefetch all registered ranges
 struct ReadAheadBuffer {
 	explicit ReadAheadBuffer(CachingFileHandle &file_handle_p,
-	                         uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP)
-	    : merge_set(ReadHeadComparator(accepted_column_gap)), file_handle(file_handle_p) {
+	                         uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP,
+	                         optional_ptr<NetworkPrefetchStats> prefetch_stats = nullptr)
+	    : merge_set(ReadHeadComparator(accepted_column_gap)), file_handle(file_handle_p),
+	      prefetch_stats(prefetch_stats) {
 	}
 
 	// The list of read heads
@@ -88,7 +92,15 @@ struct ReadAheadBuffer {
 
 	CachingFileHandle &file_handle;
 
+	// Network latency/bandwidth, fed by completed prefetch reads
+	optional_ptr<NetworkPrefetchStats> prefetch_stats;
+
 	idx_t total_size = 0;
+
+	void SetAcceptedColumnGap(uint64_t accepted_column_gap) {
+		D_ASSERT(merge_set.empty());
+		merge_set = std::set<ReadHead *, ReadHeadComparator>(ReadHeadComparator(accepted_column_gap));
+	}
 
 	// Add a read head to the prefetching list
 	void AddReadHead(idx_t pos, uint64_t len, bool merge_buffers = true) {
@@ -138,7 +150,13 @@ struct ReadAheadBuffer {
 			if (read_head.GetEnd() > file_handle.GetFileSize()) {
 				throw std::runtime_error("Prefetch registered requested for bytes outside file");
 			}
+			Profiler profiler;
+			profiler.Start();
 			read_head.handle_group = file_handle.Read(read_head.size, read_head.location);
+			profiler.End();
+			if (prefetch_stats) {
+				prefetch_stats->RecordRead(read_head.size, profiler.Elapsed());
+			}
 			read_head.Materialize();
 			read_head.data_isset = true;
 		}
@@ -150,9 +168,14 @@ public:
 	static constexpr uint64_t PREFETCH_FALLBACK_BUFFERSIZE = 1000000;
 
 	ThriftFileTransport(CachingFileHandle &file_handle_p, bool prefetch_mode_p,
-	                    uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP)
+	                    uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP,
+	                    optional_ptr<NetworkPrefetchStats> prefetch_stats = nullptr)
 	    : file_handle(file_handle_p), location(0), size(file_handle.GetFileSize()),
-	      ra_buffer(ReadAheadBuffer(file_handle, accepted_column_gap)), prefetch_mode(prefetch_mode_p) {
+	      ra_buffer(ReadAheadBuffer(file_handle, accepted_column_gap, prefetch_stats)), prefetch_mode(prefetch_mode_p) {
+	}
+
+	void SetAcceptedColumnGap(uint64_t accepted_column_gap) {
+		ra_buffer.SetAcceptedColumnGap(accepted_column_gap);
 	}
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
