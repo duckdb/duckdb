@@ -123,7 +123,9 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, DataChunk &chunk, 
 	}
 	auto max_cardinality = max_element - state.current_offset;
 	if (max_cardinality < chunk.size()) {
-		chunk.SetChildCardinality(max_cardinality);
+		// truncate the chunk to the first max_cardinality rows - use Slice since the chunk may contain
+		// non-flat (e.g. dictionary) vectors that SetChildCardinality cannot resize
+		chunk.Slice(0, max_cardinality);
 	}
 	state.data.Append(chunk, state.partition_info.batch_index.GetIndex());
 	state.current_offset += chunk.size();

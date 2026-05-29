@@ -62,13 +62,16 @@ public:
 	void CheckCardinality(idx_t count_p);
 	//! Sets the cardinality of all child vectors of this chunk
 	void SetChildCardinality(idx_t count_p);
-	//! Deprecated: use SetChildCardinality instead
+	//! Deprecated: use SetChildCardinality instead.
+	//! NOTE: this only sets the chunk's cardinality, it does NOT resize the child vectors (matching the historical
+	//! behavior on main). Callers that mutate the child vectors directly (e.g. Vector::Append/SetValue) and then call
+	//! SetCardinality rely on this - forwarding to SetChildCardinality would resize/overwrite their data.
 	[[deprecated("Use SetChildCardinality instead")]] DUCKDB_API void SetCardinality(idx_t count_p) {
-		SetChildCardinality(count_p);
+		this->count = count_p;
 	}
 	//! Deprecated: use SetChildCardinality instead
 	[[deprecated("Use SetChildCardinality instead")]] DUCKDB_API void SetCardinality(const DataChunk &chunk) {
-		SetChildCardinality(chunk.size());
+		this->count = chunk.size();
 	}
 
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;

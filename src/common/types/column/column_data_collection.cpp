@@ -1457,6 +1457,8 @@ unique_ptr<ColumnDataCollection> ColumnDataCollection::Deserialize(Deserializer 
 		for (idx_t c = 0; c < types.size(); c++) {
 			chunk.data[c].Append(values[c][r]);
 		}
+		// the appends grow the child vectors - record the new cardinality on the chunk
+		chunk.SetChildCardinality(chunk.size() + 1);
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {
 			collection->Append(chunk);
 			chunk.Reset();

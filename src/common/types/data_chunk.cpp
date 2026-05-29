@@ -91,8 +91,8 @@ idx_t DataChunk::GetAllocationSize() const {
 }
 
 void DataChunk::Reset() {
+	count = 0;
 	if (data.empty()) {
-		count_ = 0;
 		return;
 	}
 	if (vector_caches.empty()) {
@@ -115,6 +115,7 @@ void DataChunk::Reset() {
 void DataChunk::Destroy() {
 	data.clear();
 	vector_caches.clear();
+	count = 0;
 }
 
 Value DataChunk::GetValue(idx_t col_idx, idx_t index) const {
@@ -343,6 +344,7 @@ void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
 	for (idx_t c = 0; c < ColumnCount(); c++) {
 		data[c].Slice(sel_vector, count_p, merge_cache);
 	}
+	count = count_p;
 }
 
 void DataChunk::Slice(const DataChunk &other, idx_t offset, idx_t end) {

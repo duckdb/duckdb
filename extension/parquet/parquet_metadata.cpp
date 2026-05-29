@@ -1120,6 +1120,7 @@ void ParquetMetaDataOperator::Function(ClientContext &context, TableFunctionInpu
 			break;
 		}
 	}
+	output.SetChildCardinality(output_count);
 }
 
 OperatorPartitionData ParquetMetaDataOperator::GetPartitionData(ClientContext &context,

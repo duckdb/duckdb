@@ -208,14 +208,15 @@ void UngroupedAggregateExecuteState::Sink(LocalUngroupedAggregateState &state, D
 			chunk_count = filtered_data.ApplyFilter(input);
 
 			child_executor.SetChunk(filtered_data.filtered_payload);
-			payload_chunk.SetChildCardinality(chunk_count);
 		} else {
 			chunk_count = input.size();
 			child_executor.SetChunk(input);
-			payload_chunk.SetChildCardinality(chunk_count);
 		}
 
 		// resolve the child expressions of the aggregate (if any)
+		// NOTE: we do not set the cardinality of payload_chunk here - it is shared across all aggregates (which may
+		// have differing cardinalities due to filters), and the per-aggregate row count is passed to state.Sink
+		// explicitly. ExecuteExpression sizes the written child vectors themselves.
 		for (idx_t i = 0; i < aggregate.children.size(); ++i) {
 			child_executor.ExecuteExpression(payload_idx + payload_cnt, payload_chunk.data[payload_idx + payload_cnt]);
 			payload_cnt++;
