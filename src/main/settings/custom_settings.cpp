@@ -1605,7 +1605,7 @@ void AsyncThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetAsyncThreads(new_async_threads);
 	}
-	config.options.maximum_threads = new_async_threads;
+	config.options.async_threads = new_async_threads;
 }
 
 Value AsyncThreadsSetting::GetSetting(const ClientContext &context) {
