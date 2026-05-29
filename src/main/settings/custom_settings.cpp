@@ -79,9 +79,7 @@ bool AccessModeSetting::OnGlobalSet(DatabaseInstance *db, DBConfig &config, cons
 // Allocator Background Threads
 //===----------------------------------------------------------------------===//
 void AllocatorBackgroundThreadsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
-	if (info.db) {
-		Allocator::SetBackgroundThreads(input.GetValue<bool>());
-	}
+	Allocator::SetBackgroundThreads(input.GetValue<bool>());
 }
 
 //===----------------------------------------------------------------------===//
@@ -1601,7 +1599,7 @@ void AsyncThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 }
 
 void AsyncThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	idx_t new_async_threads = config.GetSystemMaxThreads(*config.file_system);
+	idx_t new_async_threads = config.GetSystemMaxAsyncThreads(*config.file_system);
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetAsyncThreads(new_async_threads);
 	}

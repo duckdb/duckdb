@@ -127,7 +127,6 @@ void TaskSchedulerQueue::EnqueueBulk(ProducerToken &token, vector<shared_ptr<Tas
 
 bool TaskSchedulerQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	lock_guard<mutex> lock(qlock);
-	D_ASSERT(!q.empty());
 
 	const auto it = q.find(token.GetQueueProducerToken(pool_type));
 	if (it == q.end() || it->second.empty()) {

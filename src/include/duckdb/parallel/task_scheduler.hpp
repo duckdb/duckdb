@@ -102,7 +102,7 @@ private:
 	//! Fetches a task, returns true if successful or false if no tasks were available
 	bool GetTaskInternal(shared_ptr<Task> &task);
 	bool GetTaskInternal(shared_ptr<Task> &task, TaskSchedulerType pool_type);
-	void TryDequeueAndProcessTask(const DBConfig &config, TaskSchedulerQueue &queue, shared_ptr<Task> &task);
+	bool TryDequeueAndProcessTask(const DBConfig &config, TaskSchedulerQueue &queue, shared_ptr<Task> &task);
 
 	void SetThreadsInternal(TaskSchedulerType pool_type, idx_t n);
 	void Signal(TaskSchedulerType pool_type, idx_t n);

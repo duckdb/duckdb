@@ -115,7 +115,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	ExecuteForever(marker, TaskSchedulerType::REGULAR);
 }
 
-void TaskScheduler::TryDequeueAndProcessTask(const DBConfig &config, TaskSchedulerQueue &queue,
+bool TaskScheduler::TryDequeueAndProcessTask(const DBConfig &config, TaskSchedulerQueue &queue,
                                              shared_ptr<Task> &task) {
 	if (queue.Dequeue(task)) {
 		auto process_mode = TaskExecutionMode::PROCESS_ALL;
@@ -141,10 +141,14 @@ void TaskScheduler::TryDequeueAndProcessTask(const DBConfig &config, TaskSchedul
 			task.reset();
 			break;
 		}
-	} else if (queue.GetTasksInQueue() > 0) {
+		return true;
+	}
+
+	if (queue.GetTasksInQueue() > 0) {
 		// failed to dequeue but there are still tasks remaining - signal again to retry
 		SignalForTaskType(queue.GetPoolType(), 1);
 	}
+	return false;
 }
 
 void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType pool_type) {
@@ -184,7 +188,9 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType
 		if (pool_type == TaskSchedulerType::REGULAR) {
 			// Regular thread pool picks up tasks from all pools
 			for (auto &queue : queues) {
-				TryDequeueAndProcessTask(config, *queue, task);
+				if (TryDequeueAndProcessTask(config, *queue, task)) {
+					break;
+				}
 			}
 		} else {
 			TryDequeueAndProcessTask(config, GetQueue(pool_type), task);
@@ -268,10 +274,15 @@ int32_t TaskScheduler::NumberOfThreads() {
 }
 
 idx_t TaskScheduler::GetNumberOfTasks() const {
-	return GetQueue(TaskSchedulerType::REGULAR).GetTasksInQueue();
+	idx_t num_tasks = 0;
+	for (auto &queue : queues) {
+		num_tasks += queue->GetTasksInQueue();
+	}
+	return num_tasks;
 }
 
 idx_t TaskScheduler::GetProducerCount() const {
+	// We always create a producer in all queues, so we can just get the producer count of the regular queue here
 	return GetQueue(TaskSchedulerType::REGULAR).GetProducerCount();
 }
 
@@ -301,6 +312,12 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 }
 
 void TaskScheduler::SetAsyncThreads(idx_t n) {
+#ifdef DUCKDB_NO_THREADS
+	if (n != 0) {
+		throw NotImplementedException(
+		    "DuckDB was compiled without threads! Setting async threads != 0 is not allowed.");
+	}
+#endif
 	GetPool(TaskSchedulerType::ASYNC).SetThreads(n);
 }
 
