@@ -1472,7 +1472,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			// that does not change rowids.
 		}
 		if (rowid_gap_seen) {
-			// dense checkpointing shifts this live row group down.
+			// checkpointing will later re-number rowids densely.
 			checkpoint_state.writer.SetRowIdsChanged();
 		}
 		state.row_group_counts.push_back(row_group_num_rows);
