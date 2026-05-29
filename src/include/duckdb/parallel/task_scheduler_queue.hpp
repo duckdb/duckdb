@@ -24,22 +24,8 @@ namespace duckdb {
 class Task;
 class TaskSchedulerQueue;
 struct ConcurrentQueueWrapper;
+struct ProducerToken;
 struct QueueProducerToken;
-
-struct ProducerToken {
-public:
-	explicit ProducerToken(array<unique_ptr<TaskSchedulerQueue>, TASK_SCHEDULER_POOL_TYPE_COUNT> &queues);
-	~ProducerToken();
-
-public:
-	QueueProducerToken &GetQueueProducerToken(TaskSchedulerPoolType pool_type);
-
-public:
-	mutex producer_lock;
-
-private:
-	array<unique_ptr<QueueProducerToken>, TASK_SCHEDULER_POOL_TYPE_COUNT> tokens;
-};
 
 class TaskSchedulerQueue {
 public:

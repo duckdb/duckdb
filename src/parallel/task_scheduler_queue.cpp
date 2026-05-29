@@ -2,6 +2,7 @@
 
 #include "duckdb/common/operator/numeric_cast.hpp"
 #include "duckdb/parallel/task.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
