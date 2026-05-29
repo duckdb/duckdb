@@ -33,8 +33,14 @@ public:
 	const vector<BoundCaseCheck> &CaseChecks() const {
 		return case_checks;
 	}
+	vector<BoundCaseCheck> &CaseChecksMutable() {
+		return case_checks;
+	}
 	const Expression &Else() const {
 		return *else_expr;
+	}
+	unique_ptr<Expression> &ElseMutable() {
+		return else_expr;
 	}
 
 public:

@@ -15,9 +15,9 @@ AggregateObject::AggregateObject(BoundAggregateFunction function, FunctionData *
 }
 
 AggregateObject::AggregateObject(BoundAggregateExpression &aggr)
-    : AggregateObject(aggr.function, aggr.bind_info.get(), aggr.children.size(),
-                      AlignValue(aggr.function.GetStateSizeCallback()(aggr.function)), aggr.aggr_type,
-                      aggr.GetReturnType().InternalType(), aggr.filter.get()) {
+    : AggregateObject(aggr.Function(), aggr.BindInfo(), aggr.GetChildren().size(),
+                      AlignValue(aggr.Function().GetStateSizeCallback()(aggr.Function())), aggr.GetAggregateType(),
+                      aggr.GetReturnType().InternalType(), const_cast<Expression *>(aggr.GetFilter())) {
 }
 
 AggregateObject::AggregateObject(BoundAggregateExpression *aggr) : AggregateObject(*aggr) {

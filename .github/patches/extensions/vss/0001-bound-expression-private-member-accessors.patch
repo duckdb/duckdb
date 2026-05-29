@@ -1,0 +1,215 @@
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index c78e728..9756d93 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -620,12 +620,12 @@ static void TryBindIndexExpressionInternal(Expression &expr, TableIndex table_id
+ 		auto &ref = expr.Cast<BoundColumnRefExpression>();
+ 
+ 		// Rewrite the column reference to fit in the current set of bound column ids
+-		ref.binding.table_index = table_idx;
++		ref.BindingMutable().table_index = table_idx;
+ 
+-		const auto referenced_column = index_columns[ref.binding.column_index];
++		const auto referenced_column = index_columns[ref.Binding().column_index];
+ 		for (idx_t i = 0; i < table_columns.size(); i++) {
+ 			if (table_columns[i].GetPrimaryIndex() == referenced_column) {
+-				ref.binding.column_index = ProjectionIndex(i);
++				ref.BindingMutable().column_index = ProjectionIndex(i);
+ 				return;
+ 			}
+ 		}
+diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
+index cda5f09..d8203fc 100644
+--- a/src/hnsw/hnsw_optimize_join.cpp
++++ b/src/hnsw/hnsw_optimize_join.cpp
+@@ -466,10 +466,10 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 		return false;
+ 	}
+ 	auto &filter_ref_expr = BoundComparisonExpression::Left(compare_expr).Cast<BoundColumnRefExpression>();
+-	if (filter_ref_expr.binding.table_index != window.window_index) {
++	if (filter_ref_expr.Binding().table_index != window.window_index) {
+ 		return false;
+ 	}
+-	if (filter_ref_expr.binding.column_index != ProjectionIndex(0)) {
++	if (filter_ref_expr.Binding().column_index != ProjectionIndex(0)) {
+ 		return false;
+ 	}
+ 
+@@ -492,13 +492,13 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 	}
+ 	const auto &distance_ref_expr = window_expr.orders.back().expression->Cast<BoundColumnRefExpression>();
+ 	// Verify that this column ref references the distance expression in the projection
+-	if (distance_ref_expr.binding.table_index != inner_proj.table_index) {
++	if (distance_ref_expr.Binding().table_index != inner_proj.table_index) {
+ 		return false;
+ 	}
+-	if (distance_ref_expr.binding.column_index >= inner_proj.expressions.size()) {
++	if (distance_ref_expr.Binding().column_index >= inner_proj.expressions.size()) {
+ 		return false;
+ 	}
+-	auto &distance_expr_ptr = *inner_proj.expressions[distance_ref_expr.binding.column_index];
++	auto &distance_expr_ptr = *inner_proj.expressions[distance_ref_expr.Binding().column_index];
+ 
+ 	//------------------------------------------------------------------------------
+ 	// Match the index
+@@ -535,8 +535,8 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 		ExpressionIterator::EnumerateExpression(bound_index_expr, [&](Expression &child) {
+ 			if (child.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+ 				auto &bound_colref_expr = child.Cast<BoundColumnRefExpression>();
+-				if (bound_colref_expr.binding.table_index == outer_get.table_index) {
+-					bound_colref_expr.binding.table_index = delim_get.table_index;
++				if (bound_colref_expr.Binding().table_index == outer_get.table_index) {
++					bound_colref_expr.BindingMutable().table_index = delim_get.table_index;
+ 				}
+ 			}
+ 		});
+@@ -573,7 +573,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 	const auto &inner_ref_expr = bindings[2].get().Cast<BoundColumnRefExpression>();
+ 
+ 	// Sanity check
+-	if (inner_ref_expr.binding.table_index != inner_get.table_index) {
++	if (inner_ref_expr.Binding().table_index != inner_get.table_index) {
+ 		// Well, we have to reference the rhs
+ 		return false;
+ 	}
+@@ -590,8 +590,8 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 	index_join->inner_returned_types = inner_get.returned_types;
+ 
+ 	// TODO: this is kind of unsafe, column_index != physical index
+-	index_join->outer_vector_column = outer_ref_expr.binding.column_index;
+-	index_join->inner_vector_column = inner_ref_expr.binding.column_index;
++	index_join->outer_vector_column = outer_ref_expr.Binding().column_index;
++	index_join->inner_vector_column = inner_ref_expr.Binding().column_index;
+ 
+ 	ColumnBindingReplacer replacer;
+ 
+@@ -636,31 +636,31 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 		auto &ref = expr->Cast<BoundColumnRefExpression>();
+ 
+ 		// If this references the inner table scan, reference the index join instead
+-		if (ref.binding.table_index == inner_get.table_index) {
+-			ref.binding.table_index = index_join->table_index;
++		if (ref.Binding().table_index == inner_get.table_index) {
++			ref.BindingMutable().table_index = index_join->table_index;
+ 		}
+ 
+ 		// If this references the outer proj, replace it with the inner proj
+ 		if (outer_proj_ptr) {
+ 			auto &outer_proj = outer_proj_ptr->get()->Cast<LogicalProjection>();
+-			if (ref.binding.table_index == outer_proj.table_index) {
++			if (ref.Binding().table_index == outer_proj.table_index) {
+ 				// assert that this can only be bound column ref
+-				const auto &outer_expr = outer_proj.GetExpression(ref.binding);
++				const auto &outer_expr = outer_proj.GetExpression(ref.Binding());
+ 				const auto &outer_ref = outer_expr.Cast<BoundColumnRefExpression>();
+ 
+-				ref.binding = outer_ref.binding;
++				ref.BindingMutable() = outer_ref.Binding();
+ 			}
+ 		}
+ 
+ 		// If this references the inner proj, replace it with the actual expression
+-		if (ref.binding.table_index == inner_proj.table_index) {
+-			const auto &inner_expr = inner_proj.GetExpression(ref.binding);
++		if (ref.Binding().table_index == inner_proj.table_index) {
++			const auto &inner_expr = inner_proj.GetExpression(ref.Binding());
+ 			expr = inner_expr.Copy();
+ 			// These can still reference the delim_get, but we replace them in the next step.
+ 		}
+ 
+ 		// Special case: the window row number expression. Forward this to the index join
+-		else if (ref.binding.table_index == window.window_index) {
++		else if (ref.Binding().table_index == window.window_index) {
+ 			// The special "row_number" expression is always the last column of the index_join itself
+ 			ColumnBinding index_row_number_binding(index_join->table_index, ProjectionIndex(index_join->inner_column_ids.size()));
+ 			expr = make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, index_row_number_binding);
+diff --git a/src/hnsw/hnsw_optimize_scan.cpp b/src/hnsw/hnsw_optimize_scan.cpp
+index 2aba1fa..b6e39a9 100644
+--- a/src/hnsw/hnsw_optimize_scan.cpp
++++ b/src/hnsw/hnsw_optimize_scan.cpp
+@@ -64,7 +64,7 @@ public:
+ 		auto &projection = top_n.children.front()->Cast<LogicalProjection>();
+ 
+ 		// This the expression that is referenced by the order by expression
+-		auto &projection_expr = *projection.expressions[bound_column_ref.binding.column_index];
++		auto &projection_expr = *projection.expressions[bound_column_ref.Binding().column_index];
+ 
+ 		// The projection must sit on top of a get
+ 		if (projection.children.size() != 1 || projection.children.front()->type != LogicalOperatorType::LOGICAL_GET) {
+@@ -214,7 +214,7 @@ public:
+ 						ExpressionIterator::EnumerateExpression(expr, [&](Expression &expr_ref) {
+ 							if (expr_ref.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+ 								auto &bound_column_ref = expr_ref.Cast<BoundColumnRefExpression>();
+-								referenced_bindings.insert(bound_column_ref.binding);
++								referenced_bindings.insert(bound_column_ref.Binding());
+ 							}
+ 						});
+ 					}
+diff --git a/src/hnsw/hnsw_optimize_topk.cpp b/src/hnsw/hnsw_optimize_topk.cpp
+index aea075b..8fa7a3b 100644
+--- a/src/hnsw/hnsw_optimize_topk.cpp
++++ b/src/hnsw/hnsw_optimize_topk.cpp
+@@ -40,9 +40,9 @@ static unique_ptr<Expression> CreateListOrderByExpr(ClientContext &context, uniq
+ 
+ 	// We also need to order the list items by the distance
+ 	BoundOrderByNode order_by_node(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(order_expr));
+-	new_agg_expr->order_bys = make_uniq<BoundOrderModifier>();
+-	new_agg_expr->order_bys->orders.push_back(std::move(order_by_node));
+-	new_agg_expr->filter = std::move(filter_expr);
++	new_agg_expr->GetOrderBysMutable() = make_uniq<BoundOrderModifier>();
++	new_agg_expr->GetOrderBysMutable()->orders.push_back(std::move(order_by_node));
++	new_agg_expr->GetFilterMutable() = std::move(filter_expr);
+ 
+ 	return std::move(new_agg_expr);
+ }
+@@ -79,18 +79,18 @@ public:
+ 			return false;
+ 		}
+ 		auto &agg_func_expr = agg_expr->Cast<BoundAggregateExpression>();
+-		if (agg_func_expr.function.GetName() != "min_by") {
++		if (agg_func_expr.Function().GetName() != "min_by") {
+ 			return false;
+ 		}
+-		if (agg_func_expr.children.size() != 3) {
++		if (agg_func_expr.GetChildren().size() != 3) {
+ 			return false;
+ 		}
+-		if (agg_func_expr.children[2]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
++		if (agg_func_expr.GetChildren()[2]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+ 			return false;
+ 		}
+-		const auto &col_expr = agg_func_expr.children[0];
+-		auto &dist_expr = *agg_func_expr.children[1];
+-		const auto &limit_expr = agg_func_expr.children[2];
++		const auto &col_expr = agg_func_expr.GetChildren()[0];
++		auto &dist_expr = *agg_func_expr.GetChildren()[1];
++		const auto &limit_expr = agg_func_expr.GetChildren()[2];
+ 
+ 		// we need the aggregate to be on top of a projection
+ 		if (agg.children.size() != 1) {
+@@ -190,7 +190,7 @@ public:
+ 
+ 		// Replace the aggregate with a list() aggregate function ordered by the distance
+ 		agg.expressions[0] = CreateListOrderByExpr(context, col_expr->Copy(), dist_expr.Copy(),
+-		                                           agg_func_expr.filter ? agg_func_expr.filter->Copy() : nullptr);
++		                                           agg_func_expr.GetFilter() ? agg_func_expr.GetFilter()->Copy() : nullptr);
+ 
+ 		if (!get.table_filters.HasFilters()) {
+ 			return true;
+diff --git a/src/include/aggregate_function_matcher.hpp b/src/include/aggregate_function_matcher.hpp
+index 8393e68..bc72571 100644
+--- a/src/include/aggregate_function_matcher.hpp
++++ b/src/include/aggregate_function_matcher.hpp
+@@ -24,10 +24,10 @@ inline bool AggregateFunctionExpressionMatcher::Match(Expression &expr_p, vector
+ 		return false;
+ 	}
+ 	auto &expr = expr_p.Cast<BoundAggregateExpression>();
+-	if (!FunctionMatcher::Match(function, expr.function.name)) {
++	if (!FunctionMatcher::Match(function, expr.Function().name)) {
+ 		return false;
+ 	}
+-	if (!SetMatcher::Match(matchers, expr.children, bindings, policy)) {
++	if (!SetMatcher::Match(matchers, expr.GetChildrenMutable(), bindings, policy)) {
+ 		return false;
+ 	}
+ 	return true;

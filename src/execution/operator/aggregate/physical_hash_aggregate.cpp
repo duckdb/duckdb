@@ -155,10 +155,10 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i];
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		aggregate_input_idx += aggr.children.size();
-		if (aggr.aggr_type == AggregateType::DISTINCT) {
+		aggregate_input_idx += aggr.GetChildren().size();
+		if (aggr.GetAggregateType() == AggregateType::DISTINCT) {
 			distinct_filter.push_back(i);
-		} else if (aggr.aggr_type == AggregateType::NON_DISTINCT) {
+		} else if (aggr.GetAggregateType() == AggregateType::NON_DISTINCT) {
 			non_distinct_filter.push_back(i);
 		} else { // LCOV_EXCL_START
 			throw NotImplementedException("AggregateType not implemented in PhysicalHashAggregate");
@@ -168,11 +168,12 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i];
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		if (aggr.filter) {
-			auto &bound_ref_expr = aggr.filter->Cast<BoundReferenceExpression>();
-			if (!filter_indexes.count(aggr.filter.get())) {
+		if (aggr.GetFilter()) {
+			auto *filter_ptr = const_cast<Expression *>(aggr.GetFilter());
+			auto &bound_ref_expr = filter_ptr->Cast<BoundReferenceExpression>();
+			if (!filter_indexes.count(filter_ptr)) {
 				// Replace the bound reference expression's index with the corresponding index of the payload chunk
-				filter_indexes[aggr.filter.get()] = bound_ref_expr.index;
+				filter_indexes[filter_ptr] = bound_ref_expr.index;
 				bound_ref_expr.index = aggregate_input_idx;
 			}
 			aggregate_input_idx++;
@@ -201,11 +202,11 @@ public:
 		vector<LogicalType> filter_types;
 		for (auto &aggr : op.grouped_aggregate_data.aggregates) {
 			auto &aggregate = aggr->Cast<BoundAggregateExpression>();
-			for (auto &child : aggregate.children) {
+			for (auto &child : aggregate.GetChildren()) {
 				payload_types.push_back(child->GetReturnType());
 			}
-			if (aggregate.filter) {
-				filter_types.push_back(aggregate.filter->GetReturnType());
+			if (aggregate.GetFilter()) {
+				filter_types.push_back(aggregate.GetFilter()->GetReturnType());
 			}
 		}
 		payload_types.reserve(payload_types.size() + filter_types.size());
@@ -355,16 +356,17 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 		InterruptState interrupt_state;
 		OperatorSinkInput sink_input {radix_global_sink, radix_local_sink, interrupt_state};
 
-		if (aggregate.filter) {
+		if (aggregate.GetFilter()) {
 			DataChunk filter_chunk;
 			auto &filtered_data = sink.filter_set.GetFilterData(idx);
 			filter_chunk.InitializeEmpty(filtered_data.filtered_payload.GetTypes());
 
 			// Add the filter Vector (BOOL)
-			auto it = filter_indexes.find(aggregate.filter.get());
+			auto *filter_ptr = const_cast<Expression *>(aggregate.GetFilter());
+			auto it = filter_indexes.find(filter_ptr);
 			D_ASSERT(it != filter_indexes.end());
 			D_ASSERT(it->second < chunk.data.size());
-			auto &filter_bound_ref = aggregate.filter->Cast<BoundReferenceExpression>();
+			auto &filter_bound_ref = filter_ptr->Cast<BoundReferenceExpression>();
 			filter_chunk.data[filter_bound_ref.index].Reference(chunk.data[it->second]);
 			filter_chunk.SetCardinality(chunk.size());
 
@@ -389,8 +391,8 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 				col.Reference(chunk.data[bound_ref.index]);
 				col.Slice(sel_vec, count);
 			}
-			for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
-				auto &child = aggregate.children[child_idx];
+			for (idx_t child_idx = 0; child_idx < aggregate.GetChildren().size(); child_idx++) {
+				auto &child = aggregate.GetChildren()[child_idx];
 				auto &bound_ref = child->Cast<BoundReferenceExpression>();
 				auto &col = filtered_input.data[bound_ref.index];
 				col.Reference(chunk.data[bound_ref.index]);
@@ -431,7 +433,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 	// Populate the aggregate child vectors
 	for (auto &aggregate : aggregates) {
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		for (auto &child_expr : aggr.children) {
+		for (auto &child_expr : aggr.GetChildren()) {
 			D_ASSERT(child_expr->GetExpressionType() == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = child_expr->Cast<BoundReferenceExpression>();
 			D_ASSERT(bound_ref_expr.index < chunk.data.size());
@@ -441,8 +443,8 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 	// Populate the filter vectors
 	for (auto &aggregate : aggregates) {
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		if (aggr.filter) {
-			auto it = filter_indexes.find(aggr.filter.get());
+		if (aggr.GetFilter()) {
+			auto it = filter_indexes.find(const_cast<Expression *>(aggr.GetFilter()));
 			D_ASSERT(it != filter_indexes.end());
 			D_ASSERT(it->second < chunk.data.size());
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[it->second]);
@@ -749,7 +751,7 @@ TaskExecutionResult HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping
 		if (!blocked) {
 			// Forward the payload idx
 			payload_idx = next_payload_idx;
-			next_payload_idx = payload_idx + aggregate.children.size();
+			next_payload_idx = payload_idx + aggregate.GetChildren().size();
 		}
 
 		// If aggregate is not distinct, skip it
@@ -1028,8 +1030,8 @@ InsertionOrderPreservingMap<string> PhysicalHashAggregate::ParamsToString() cons
 			aggregate_info += "\n";
 		}
 		aggregate_info += aggregates[i]->GetName();
-		if (aggregate.filter) {
-			aggregate_info += " Filter: " + aggregate.filter->GetName();
+		if (aggregate.GetFilter()) {
+			aggregate_info += " Filter: " + aggregate.GetFilter()->GetName();
 		}
 	}
 	result["Aggregates"] = aggregate_info;

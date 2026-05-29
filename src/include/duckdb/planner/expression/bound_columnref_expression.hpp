@@ -32,6 +32,19 @@ public:
 		return false;
 	}
 
+	const ColumnBinding &Binding() const {
+		return binding;
+	}
+	ColumnBinding &BindingMutable() {
+		return binding;
+	}
+	idx_t Depth() const {
+		return depth;
+	}
+	idx_t &DepthMutable() {
+		return depth;
+	}
+
 	string ToString() const override;
 	string GetName() const override;
 

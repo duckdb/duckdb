@@ -28,6 +28,43 @@ public:
 		return aggr_type == AggregateType::DISTINCT;
 	}
 
+	const BoundAggregateFunction &Function() const {
+		return function;
+	}
+	BoundAggregateFunction &FunctionMutable() {
+		return function;
+	}
+	const vector<unique_ptr<Expression>> &GetChildren() const {
+		return children;
+	}
+	vector<unique_ptr<Expression>> &GetChildrenMutable() {
+		return children;
+	}
+	FunctionData *BindInfo() const {
+		return bind_info.get();
+	}
+	unique_ptr<FunctionData> &BindInfoMutable() {
+		return bind_info;
+	}
+	AggregateType GetAggregateType() const {
+		return aggr_type;
+	}
+	AggregateType &GetAggregateTypeMutable() {
+		return aggr_type;
+	}
+	const Expression *GetFilter() const {
+		return filter.get();
+	}
+	unique_ptr<Expression> &GetFilterMutable() {
+		return filter;
+	}
+	const BoundOrderModifier *GetOrderBys() const {
+		return order_bys.get();
+	}
+	unique_ptr<BoundOrderModifier> &GetOrderBysMutable() {
+		return order_bys;
+	}
+
 	bool IsAggregate() const override {
 		return true;
 	}

@@ -148,7 +148,7 @@ unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> root_ex
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
 		    expr = make_uniq<BoundReferenceExpression>(expr->GetReturnType(),
-		                                               column_ids[bound_colref.binding.column_index]);
+		                                               column_ids[bound_colref.Binding().column_index]);
 	    });
 	return root_expr;
 }

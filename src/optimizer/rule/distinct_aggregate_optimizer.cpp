@@ -17,9 +17,9 @@ unique_ptr<Expression> DistinctAggregateOptimizer::Apply(ClientContext &context,
 		// no DISTINCT defined
 		return nullptr;
 	}
-	if (aggr.function.GetDistinctDependent() == AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT) {
+	if (aggr.Function().GetDistinctDependent() == AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT) {
 		// not a distinct-sensitive aggregate but we have an DISTINCT modifier - remove it
-		aggr.aggr_type = AggregateType::NON_DISTINCT;
+		aggr.GetAggregateTypeMutable() = AggregateType::NON_DISTINCT;
 		changes_made = true;
 		return nullptr;
 	}

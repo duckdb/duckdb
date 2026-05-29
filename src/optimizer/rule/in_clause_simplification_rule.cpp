@@ -20,7 +20,7 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 		return nullptr;
 	}
 	auto &cast_expression = expr.children[0]->Cast<BoundCastExpression>();
-	if (cast_expression.child->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+	if (cast_expression.Child().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 		return nullptr;
 	}
 	//! The goal here is to remove the cast from the probe expression
@@ -57,7 +57,7 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 		//		expr->children[i] = std::move(new_constant_expr);
 	}
 	//! We can cast the full list, so we move the column
-	expr.children[0] = std::move(cast_expression.child);
+	expr.children[0] = std::move(cast_expression.ChildMutable());
 	return nullptr;
 }
 

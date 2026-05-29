@@ -28,8 +28,17 @@ public:
 	const Expression &Child() const {
 		return *child;
 	}
+	unique_ptr<Expression> &ChildMutable() {
+		return child;
+	}
 	bool IsTryCast() const {
 		return try_cast;
+	}
+	const BoundCastInfo &GetBoundCast() const {
+		return bound_cast;
+	}
+	BoundCastInfo &GetBoundCastMutable() {
+		return bound_cast;
 	}
 	LogicalType source_type() const { // NOLINT: allow casing for legacy reasons
 		D_ASSERT(child->GetReturnType().IsValid());

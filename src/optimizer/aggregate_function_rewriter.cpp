@@ -74,7 +74,7 @@ public:
 		FunctionBinder function_binder(optimizer.context);
 
 		// Move the child out of AVG(x)
-		auto avg_child = std::move(bindings[0].get().Cast<BoundAggregateExpression>().children[0]);
+		auto avg_child = std::move(bindings[0].get().Cast<BoundAggregateExpression>().GetChildrenMutable()[0]);
 
 		// Replace AVG(x) with SUM(x)
 		auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, DEFAULT_SCHEMA, "sum");
@@ -135,7 +135,7 @@ public:
 		auto main_expr = std::move(addition.children[1 - const_idx]);
 
 		// Turn SUM(x + C) into SUM(x)
-		sum.children[0] = main_expr->Copy();
+		sum.GetChildrenMutable()[0] = main_expr->Copy();
 
 		additional_expressions.push_back(std::move(const_expr));
 		return main_expr;
@@ -180,20 +180,20 @@ public:
 			return false;
 		}
 		auto &expr = expr_p.Cast<BoundAggregateExpression>();
-		if (!FunctionMatcher::Match(function, expr.function.GetName())) {
+		if (!FunctionMatcher::Match(function, expr.Function().GetName())) {
 			return false;
 		}
-		if (!SetMatcher::Match(matchers, expr.children, bindings, policy)) {
+		if (!SetMatcher::Match(matchers, expr.GetChildrenMutable(), bindings, policy)) {
 			return false;
 		}
-		if (!expr.order_bys && !order_bys.empty()) {
+		if (!expr.GetOrderBys() && !order_bys.empty()) {
 			return false;
 		}
-		if (order_bys.size() != expr.order_bys->orders.size()) {
+		if (order_bys.size() != expr.GetOrderBys()->orders.size()) {
 			return false;
 		}
 		for (idx_t i = 0; i < order_bys.size(); ++i) {
-			if (!order_bys[i]->Match(*expr.order_bys->orders[i].expression, bindings)) {
+			if (!order_bys[i]->Match(*expr.GetOrderBys()->orders[i].expression, bindings)) {
 				return false;
 			}
 		}
@@ -239,7 +239,7 @@ unique_ptr<Expression> ListRewriteRule::Rewrite(unique_ptr<Expression> &expr, ve
                                                 vector<unique_ptr<Expression>> &additional_expressions) {
 	auto &aggr = bindings[0].get().Cast<BoundAggregateExpression>();
 
-	auto &order_bys = aggr.order_bys;
+	auto &order_bys = aggr.GetOrderBysMutable();
 	auto &order_by = order_bys->orders[0];
 
 	auto sense = make_uniq<BoundConstantExpression>(EnumUtil::ToChars(order_by.type));
@@ -302,9 +302,9 @@ private:
 	}
 
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *) override {
-		const auto entry = aggregate_map.find(expr.binding);
+		const auto entry = aggregate_map.find(expr.Binding());
 		if (entry != aggregate_map.end()) {
-			expr.binding = entry->second;
+			expr.BindingMutable() = entry->second;
 		}
 		return nullptr;
 	}

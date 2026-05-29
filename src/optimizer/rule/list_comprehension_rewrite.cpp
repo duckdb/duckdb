@@ -43,7 +43,7 @@ bool IsStructPack(const BoundFunctionExpression &expr) {
 optional_ptr<Expression> UnwrapCasts(optional_ptr<Expression> expr) {
 	while (expr->GetExpressionClass() == ExpressionClass::BOUND_CAST) {
 		auto &cast_expr = expr->Cast<BoundCastExpression>();
-		expr = cast_expr.child.get();
+		expr = cast_expr.ChildMutable().get();
 	}
 	return expr;
 }
