@@ -358,7 +358,7 @@ private:
 	static unique_ptr<SQLStatement> TransformCopyTable(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformFromOrTo(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformCopyFileName(PEGTransformer &transformer, ParseResult &parse_result);
-	string TransformIdentifierColId(PEGTransformer &transformer, ParseResult &parse_result);
+	static string TransformIdentifierColId(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<GenericCopyOption> TransformCopyOptions(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<GenericCopyOption> TransformSpecializedOptionList(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
