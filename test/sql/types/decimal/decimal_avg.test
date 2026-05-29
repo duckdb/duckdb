@@ -2,46 +2,42 @@
 # description: Test that avg() on decimal inputs returns decimal
 # group: [decimal]
 
-# Return type: DECIMAL(p + max(0, 6-s), max(6, s))
-# s >= 6: same width as input, same scale
+# Return type matches input: DECIMAL(p, s)
 query I
 SELECT typeof(avg(x)) FROM (VALUES (1.5::DECIMAL(18,8))) t(x)
 ----
 DECIMAL(18,8)
 
-# s < 6: width grows by (6 - s) to preserve integer part, scale becomes 6
 query I
 SELECT typeof(avg(x)) FROM (VALUES (1.5::DECIMAL(18,2))) t(x)
 ----
-DECIMAL(22,6)
+DECIMAL(18,2)
 
 query I
 SELECT typeof(avg(x)) FROM (VALUES (1.5::DECIMAL(9,2))) t(x)
 ----
-DECIMAL(13,6)
+DECIMAL(9,2)
 
-# Small input: integer part preserved even when scale bumped to 6
 query I
 SELECT typeof(avg(x)) FROM (VALUES (1.5::DECIMAL(4,2))) t(x)
 ----
-DECIMAL(8,6)
+DECIMAL(4,2)
 
-# Width capped at 38
 query I
 SELECT typeof(avg(x)) FROM (VALUES (1.5::DECIMAL(38,2))) t(x)
 ----
-DECIMAL(38,6)
+DECIMAL(38,2)
 
 # Correct values
 query I
 SELECT avg(x) FROM (VALUES (1.00::DECIMAL(18,2)), (2.00::DECIMAL(18,2)), (3.00::DECIMAL(18,2))) t(x)
 ----
-2.000000
+2.00
 
 query I
 SELECT avg(x) FROM (VALUES (1.5::DECIMAL(18,2)), (2.5::DECIMAL(18,2))) t(x)
 ----
-2.000000
+2.00
 
 query I
 SELECT avg(x) FROM (VALUES (0.1::DECIMAL(9,8)), (0.3::DECIMAL(9,8))) t(x)
@@ -58,24 +54,24 @@ NULL
 query I
 SELECT avg(x) FROM (VALUES (2.00::DECIMAL(18,2)), (NULL::DECIMAL(18,2)), (4.00::DECIMAL(18,2))) t(x)
 ----
-3.000000
+3.00
 
 # Negative values
 query I
 SELECT avg(x) FROM (VALUES (-1.00::DECIMAL(18,2)), (3.00::DECIMAL(18,2))) t(x)
 ----
-1.000000
+1.00
 
 # Group-by preserves decimal return type
 query II
 SELECT grp, typeof(avg(x)) FROM (VALUES (1, 1.0::DECIMAL(9,2)), (1, 3.0::DECIMAL(9,2)), (2, 5.0::DECIMAL(9,2))) t(grp, x) GROUP BY grp ORDER BY grp
 ----
-1	DECIMAL(13,6)
-2	DECIMAL(13,6)
+1	DECIMAL(9,2)
+2	DECIMAL(9,2)
 
 # Group-by correct values
 query II
 SELECT grp, avg(x) FROM (VALUES (1, 1.0::DECIMAL(9,2)), (1, 3.0::DECIMAL(9,2)), (2, 5.0::DECIMAL(9,2))) t(grp, x) GROUP BY grp ORDER BY grp
 ----
-1	2.000000
-2	5.000000
+1	2.00
+2	5.00

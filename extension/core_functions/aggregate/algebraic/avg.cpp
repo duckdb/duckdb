@@ -1,7 +1,6 @@
 #include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/sum_helpers.hpp"
 #include "duckdb/common/enums/decimal_arithmetic.hpp"
-#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/exception.hpp"
@@ -340,19 +339,12 @@ unique_ptr<FunctionData> BindDecimalAvg(BindAggregateFunctionInput &input) {
 	}
 
 	auto decimal_type = arguments[0]->GetReturnType();
-	uint8_t p, s;
-	decimal_type.GetDecimalProperties(p, s);
-	uint8_t result_scale = MaxValue<uint8_t>(6, s);
-	// Extend width only by the extra fractional digits needed, preserving the integer part.
-	// For s >= 6 this is a no-op (same width as input); for s < 6 we add (6 - s) digits.
-	uint8_t result_width = MinValue<uint8_t>(Decimal::MAX_WIDTH_DECIMAL, p + (result_scale - s));
-
-	LogicalType result_type = LogicalType::DECIMAL(result_width, result_scale);
-	function.ReplaceImplementation(GetDecimalAverageAggregate(decimal_type.InternalType(), result_type.InternalType()));
+	auto physical = decimal_type.InternalType();
+	function.ReplaceImplementation(GetDecimalAverageAggregate(physical, physical));
 	function.SetName("avg");
 	function.GetArguments()[0] = decimal_type;
-	function.SetReturnType(result_type);
-	return make_uniq<DecimalAvgBindData>(result_scale - s);
+	function.SetReturnType(decimal_type);
+	return make_uniq<DecimalAvgBindData>(0);
 }
 
 } // namespace
