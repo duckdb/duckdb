@@ -92,9 +92,9 @@ TimestampCastResult Timestamp::TryConvertTimestampTZ(const char *str, idx_t len,
 		pos++;
 	}
 	idx_t time_pos = 0;
-	// TryConvertTime may recursively call us, so we opt for a stricter
-	// operation. Note that we can't pass strict== true here because we
-	// want to process any suffix.
+	// TryConvertTime may recursively call us, so TryConvertTimestampTimePrefix
+	// uses TryConvertInterval. Note that we can't pass strict== true here
+	// because we want to process any suffix.
 	if (!TryConvertTimestampTimePrefix(str + pos, len - pos, time_pos, time, nanos)) {
 		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
 	}
