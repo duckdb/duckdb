@@ -54,8 +54,6 @@ public:
 
 	//! Detach an existing database
 	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
-	//! Drop an existing database
-	void DropDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
 	//! Alter operation dispatcher
 	void Alter(ClientContext &context, AlterInfo &info);
 	//! Rollback the attach of a database

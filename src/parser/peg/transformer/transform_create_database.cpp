@@ -18,11 +18,10 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCreateDatabaseStatement
 	return std::move(result);
 }
 
-// DROP DATABASE foo [(FORCE)] -> DETACH foo with is_drop=true so duckdb routes
-// through DatabaseManager::DropDatabase (PG-compatible "database X does not
-// exist" error and storage-extension drop_database callback). FORCE is parsed
-// for grammar compatibility but currently ignored (serenedb's drop is
-// already synchronous).
+// DROP DATABASE foo [(FORCE)] -> DETACH foo. serenedb has no detach-without-drop
+// semantics, so the resulting DETACH drops the database via
+// SereneDBCatalog::OnDetach. FORCE is parsed for grammar compatibility but
+// currently ignored (serenedb's drop is already synchronous).
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformDropDatabaseStatement(PEGTransformer &transformer,
                                                                                const bool &if_exists,
                                                                                const string &catalog_name,
@@ -32,7 +31,6 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformDropDatabaseStatement(P
 	auto info = make_uniq<DetachInfo>();
 	info->name = catalog_name;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	info->is_drop = true;
 	result->info = std::move(info);
 	return std::move(result);
 }
