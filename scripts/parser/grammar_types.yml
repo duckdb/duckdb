@@ -607,6 +607,7 @@ StringList:
     - ColumnAliases
     - TriggerColumnList
     - StarSymbolColumnList
+    - PivotGroupByList
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
@@ -629,7 +630,7 @@ WindowBoundaryExpressionList:
 
 PivotColumnList:
   type: "vector<PivotColumn>"
-  by_value: false
+  by_value: true
   rules:
     - PivotColumnList
     - PivotOn
@@ -746,13 +747,19 @@ WindowBoundaryExpression:
 
 PivotColumn:
   type: "PivotColumn"
-  by_value: false
+  by_value: true
   rules:
     - PivotColumnEntry
     - PivotColumnSubquery
-    - PivotColumnEntryInternal
+    - PivotColumnExpression
     - PivotValueList
     - UnpivotValueList
+
+UnpivotNameValues:
+  type: "UnpivotNameValues"
+  by_value: true
+  rules:
+    - IntoNameValues
 
 GenericCopyOption:
   type: "GenericCopyOption"
@@ -940,6 +947,8 @@ Bool:
     - RestrictDropBehavior
     - AnyOrAll
     - IgnoreOrRespectNulls
+    - IncludeNulls
+    - ExcludeNulls
     - PrecedingOrFollowing
     - IfExists
     - IncludeOrExcludeNulls
@@ -1193,7 +1202,6 @@ overrides:
   UnpivotHeader: "vector<string>"
   UnpivotHeaderSingle: "vector<string>"
   UnpivotHeaderList: "vector<string>"
-  IntoNameValues: "UnpivotNameValues"
   # create_sequence.gram
   SequenceOption: "pair<string, unique_ptr<SequenceOption>>"
   SeqSetCycle: "pair<string, unique_ptr<SequenceOption>>"
@@ -1303,6 +1311,8 @@ matcher_rule_overrides:
 # ---------------------------------------------------------------------------
 
 excluded_rules:
+  - PivotStatement
+  - UnpivotStatement
   - CommentValue
   - Program
   - Database

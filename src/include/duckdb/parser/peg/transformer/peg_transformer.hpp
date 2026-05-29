@@ -684,21 +684,8 @@ private:
 
 	// pivot.gram
 	static unique_ptr<SelectStatement> TransformPivotStatement(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformPivotUsing(PEGTransformer &transformer,
-	                                                                ParseResult &parse_result);
-	static vector<PivotColumn> TransformPivotOn(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<PivotColumn> TransformPivotColumnList(PEGTransformer &transformer, ParseResult &parse_result);
-	static PivotColumn TransformPivotColumnEntry(PEGTransformer &transformer, ParseResult &parse_result);
-	static PivotColumn TransformPivotColumnSubquery(PEGTransformer &transformer, ParseResult &parse_result);
-	static PivotColumn TransformPivotColumnEntryInternal(PEGTransformer &transformer, ParseResult &parse_result);
-
-	static vector<string> TransformUnpivotHeader(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<string> TransformUnpivotHeaderSingle(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<string> TransformUnpivotHeaderList(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<SelectStatement> TransformUnpivotStatement(PEGTransformer &transformer,
 	                                                             ParseResult &parse_result);
-	static UnpivotNameValues TransformIntoNameValues(PEGTransformer &transformer, ParseResult &parse_result);
-	static bool TransformIncludeOrExcludeNulls(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// select.gram
 	static unique_ptr<SQLStatement> TransformSelectStatement(PEGTransformer &transformer, ParseResult &parse_result);
@@ -1952,6 +1939,49 @@ private:
 	static unique_ptr<TransformResultValue> TransformByTargetInternal(PEGTransformer &transformer,
 	                                                                  ParseResult &parse_result);
 	static MergeActionCondition TransformByTarget(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformPivotOnInternal(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
+	static vector<PivotColumn> TransformPivotOn(PEGTransformer &transformer, vector<PivotColumn> pivot_column_list);
+	static unique_ptr<TransformResultValue> TransformPivotUsingInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformPivotUsing(PEGTransformer &transformer,
+	                                                                vector<unique_ptr<ParsedExpression>> target_list);
+	static unique_ptr<TransformResultValue> TransformPivotColumnListInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static vector<PivotColumn> TransformPivotColumnList(PEGTransformer &transformer,
+	                                                    vector<PivotColumn> pivot_column_entry);
+	static unique_ptr<TransformResultValue> TransformPivotColumnEntryInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformPivotColumnExpressionInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static PivotColumn TransformPivotColumnExpression(PEGTransformer &transformer,
+	                                                  unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformPivotColumnSubqueryInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static PivotColumn TransformPivotColumnSubquery(PEGTransformer &transformer,
+	                                                unique_ptr<ParsedExpression> base_expression,
+	                                                unique_ptr<SelectStatement> select_statement_internal);
+	static unique_ptr<TransformResultValue> TransformIntoNameValuesInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static UnpivotNameValues TransformIntoNameValues(PEGTransformer &transformer, const string &col_id_or_string,
+	                                                 const vector<string> &identifier);
+	static unique_ptr<TransformResultValue> TransformIncludeOrExcludeNullsInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformIncludeNullsInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static bool TransformIncludeNulls(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformExcludeNullsInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static bool TransformExcludeNulls(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformUnpivotHeaderInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformUnpivotHeaderSingleInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static vector<string> TransformUnpivotHeaderSingle(PEGTransformer &transformer, const string &col_id_or_string);
+	static unique_ptr<TransformResultValue> TransformUnpivotHeaderListInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static vector<string> TransformUnpivotHeaderList(PEGTransformer &transformer,
+	                                                 const vector<string> &col_id_or_string);
 	static unique_ptr<TransformResultValue> TransformPragmaStatementInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformPragmaStatement(PEGTransformer &transformer,

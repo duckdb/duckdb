@@ -1377,7 +1377,7 @@ def main():
         'insert.gram',
         'load.gram',
         'merge_into.gram',
-        # 'pivot.gram',
+        'pivot.gram',
         'pragma.gram',
         'prepare.gram',
         # 'select.gram',

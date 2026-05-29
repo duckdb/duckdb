@@ -2706,6 +2706,122 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformByTargetInterna
 	return make_uniq<TypedTransformResult<MergeActionCondition>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPivotOnInternal(PEGTransformer &transformer,
+                                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto pivot_column_list = transformer.Transform<vector<PivotColumn>>(list_pr, 1);
+	auto result = TransformPivotOn(transformer, std::move(pivot_column_list));
+	return make_uniq<TypedTransformResult<vector<PivotColumn>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPivotUsingInternal(PEGTransformer &transformer,
+                                                                                    ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr, 1);
+	auto result = TransformPivotUsing(transformer, std::move(target_list));
+	return make_uniq<TypedTransformResult<vector<unique_ptr<ParsedExpression>>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPivotColumnListInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<PivotColumn> pivot_column_entry;
+	auto pivot_column_entry_items = ExtractParseResultsFromList(list_pr.GetChild(0));
+	for (auto &pivot_column_entry_item : pivot_column_entry_items) {
+		pivot_column_entry.push_back(transformer.Transform<PivotColumn>(pivot_column_entry_item));
+	}
+	auto result = TransformPivotColumnList(transformer, std::move(pivot_column_entry));
+	return make_uniq<TypedTransformResult<vector<PivotColumn>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPivotColumnEntryInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<PivotColumn>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<PivotColumn>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformPivotColumnExpressionInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr, 0);
+	auto result = TransformPivotColumnExpression(transformer, std::move(expression));
+	return make_uniq<TypedTransformResult<PivotColumn>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformPivotColumnSubqueryInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto base_expression = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr, 0);
+	auto select_statement_internal =
+	    transformer.Transform<unique_ptr<SelectStatement>>(ExtractResultFromParens(list_pr.GetChild(2)));
+	auto result =
+	    TransformPivotColumnSubquery(transformer, std::move(base_expression), std::move(select_statement_internal));
+	return make_uniq<TypedTransformResult<PivotColumn>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIntoNameValuesInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_id_or_string = transformer.Transform<string>(list_pr, 2);
+	vector<string> identifier;
+	auto identifier_items = ExtractParseResultsFromList(list_pr.GetChild(4));
+	for (auto &identifier_item : identifier_items) {
+		identifier.push_back(identifier_item.get().Cast<IdentifierParseResult>().identifier);
+	}
+	auto result = TransformIntoNameValues(transformer, col_id_or_string, identifier);
+	return make_uniq<TypedTransformResult<UnpivotNameValues>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformIncludeOrExcludeNullsInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<bool>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformIncludeNullsInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto result = TransformIncludeNulls(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExcludeNullsInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto result = TransformExcludeNulls(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformUnpivotHeaderInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<vector<string>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformUnpivotHeaderSingleInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto col_id_or_string = transformer.Transform<string>(list_pr, 0);
+	auto result = TransformUnpivotHeaderSingle(transformer, col_id_or_string);
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformUnpivotHeaderListInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	vector<string> col_id_or_string;
+	auto col_id_or_string_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(0)));
+	for (auto &col_id_or_string_item : col_id_or_string_items) {
+		col_id_or_string.push_back(transformer.Transform<string>(col_id_or_string_item));
+	}
+	auto result = TransformUnpivotHeaderList(transformer, col_id_or_string);
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformPragmaStatementInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -3558,6 +3674,19 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"BySourceOrTarget", &PEGTransformerFactory::TransformBySourceOrTargetInternal},
 	    {"BySource", &PEGTransformerFactory::TransformBySourceInternal},
 	    {"ByTarget", &PEGTransformerFactory::TransformByTargetInternal},
+	    {"PivotOn", &PEGTransformerFactory::TransformPivotOnInternal},
+	    {"PivotUsing", &PEGTransformerFactory::TransformPivotUsingInternal},
+	    {"PivotColumnList", &PEGTransformerFactory::TransformPivotColumnListInternal},
+	    {"PivotColumnEntry", &PEGTransformerFactory::TransformPivotColumnEntryInternal},
+	    {"PivotColumnExpression", &PEGTransformerFactory::TransformPivotColumnExpressionInternal},
+	    {"PivotColumnSubquery", &PEGTransformerFactory::TransformPivotColumnSubqueryInternal},
+	    {"IntoNameValues", &PEGTransformerFactory::TransformIntoNameValuesInternal},
+	    {"IncludeOrExcludeNulls", &PEGTransformerFactory::TransformIncludeOrExcludeNullsInternal},
+	    {"IncludeNulls", &PEGTransformerFactory::TransformIncludeNullsInternal},
+	    {"ExcludeNulls", &PEGTransformerFactory::TransformExcludeNullsInternal},
+	    {"UnpivotHeader", &PEGTransformerFactory::TransformUnpivotHeaderInternal},
+	    {"UnpivotHeaderSingle", &PEGTransformerFactory::TransformUnpivotHeaderSingleInternal},
+	    {"UnpivotHeaderList", &PEGTransformerFactory::TransformUnpivotHeaderListInternal},
 	    {"PragmaStatement", &PEGTransformerFactory::TransformPragmaStatementInternal},
 	    {"PragmaAssignOrFunction", &PEGTransformerFactory::TransformPragmaAssignOrFunctionInternal},
 	    {"PragmaAssign", &PEGTransformerFactory::TransformPragmaAssignInternal},
