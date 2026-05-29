@@ -23,20 +23,6 @@ public:
 	                         unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info,
 	                         AggregateType aggr_type);
 
-	//! The bound function expression
-	BoundAggregateFunction function;
-	//! List of arguments to the function
-	vector<unique_ptr<Expression>> children;
-	//! The bound function data (if any)
-	unique_ptr<FunctionData> bind_info;
-	//! The aggregate type (distinct or non-distinct)
-	AggregateType aggr_type;
-
-	//! Filter for this aggregate
-	unique_ptr<Expression> filter;
-	//! The order by expression for this aggregate - if any
-	unique_ptr<BoundOrderModifier> order_bys;
-
 public:
 	bool IsDistinct() const {
 		return aggr_type == AggregateType::DISTINCT;
@@ -58,5 +44,20 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	//! The bound function expression
+	BoundAggregateFunction function;
+	//! List of arguments to the function
+	vector<unique_ptr<Expression>> children;
+	//! The bound function data (if any)
+	unique_ptr<FunctionData> bind_info;
+	//! The aggregate type (distinct or non-distinct)
+	AggregateType aggr_type;
+
+	//! Filter for this aggregate
+	unique_ptr<Expression> filter;
+	//! The order by expression for this aggregate - if any
+	unique_ptr<BoundOrderModifier> order_bys;
 };
 } // namespace duckdb

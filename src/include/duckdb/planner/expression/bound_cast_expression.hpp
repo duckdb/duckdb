@@ -21,13 +21,6 @@ public:
 	BoundCastExpression(unique_ptr<Expression> child, LogicalType target_type, BoundCastInfo bound_cast,
 	                    bool try_cast = false);
 
-	//! The child type
-	unique_ptr<Expression> child;
-	//! Whether to use try_cast or not. try_cast converts cast failures into NULLs instead of throwing an error.
-	bool try_cast;
-	//! The bound cast info
-	BoundCastInfo bound_cast;
-
 public:
 	const LogicalType &TargetType() const {
 		return return_type;
@@ -70,5 +63,13 @@ public:
 
 private:
 	BoundCastExpression(ClientContext &context, unique_ptr<Expression> child, LogicalType target_type);
+
+private:
+	//! The child type
+	unique_ptr<Expression> child;
+	//! Whether to use try_cast or not. try_cast converts cast failures into NULLs instead of throwing an error.
+	bool try_cast;
+	//! The bound cast info
+	BoundCastInfo bound_cast;
 };
 } // namespace duckdb
