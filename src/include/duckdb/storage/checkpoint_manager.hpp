@@ -150,7 +150,7 @@ public:
 	BlockManager &GetBlockManager();
 	PartialBlockManager &GetIndexPartialBlockManager() {
 		return index_partial_block_manager;
-	};
+	}
 	CheckpointOptions GetCheckpointOptions() const {
 		return options;
 	}
