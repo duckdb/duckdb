@@ -215,7 +215,7 @@ TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, t
 
 string Timestamp::FormatError(const string &str) {
 	return StringUtil::Format("invalid timestamp field format: \"%s\", "
-	                          "expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH[:MM[:SS]]| ZONE])",
+	                          "expected format is (YYYY-MM-DD HH:MM[:SS[.US]][±HH[:MM[:SS]]| ZONE])",
 	                          str);
 }
 
