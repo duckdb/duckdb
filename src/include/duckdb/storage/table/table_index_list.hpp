@@ -107,7 +107,8 @@ public:
 	//! Get the combined column ids of the indexes.
 	unordered_set<column_t> GetRequiredColumns();
 	//! Serialize all indexes of the table.
-	IndexSerializationResult SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
+	IndexSerializationResult SerializeToDisk(const IndexSerializationInfo &info,
+	                                         PartialBlockManager &partial_block_manager);
 
 public:
 	//! Initialize an index_chunk from a table.

@@ -311,7 +311,8 @@ unordered_set<column_t> TableIndexList::GetRequiredColumns() {
 	return column_ids;
 }
 
-IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, const IndexSerializationInfo &info) {
+IndexSerializationResult TableIndexList::SerializeToDisk(const IndexSerializationInfo &info,
+                                                         PartialBlockManager &partial_block_manager) {
 	lock_guard<mutex> lock(index_entries_lock);
 
 	IndexSerializationResult result;
@@ -334,7 +335,7 @@ IndexSerializationResult TableIndexList::SerializeToDisk(QueryContext context, c
 		}
 		// Bound: move new storage info into bound_infos, then reference it
 		auto &bound_index = index.Cast<BoundIndex>();
-		auto storage_info = bound_index.SerializeToDisk(context, info.options);
+		auto storage_info = bound_index.SerializeToDisk(info.options, partial_block_manager);
 		D_ASSERT(storage_info.IsValid() && !storage_info.name.empty());
 		result.bound_infos.push_back(std::move(storage_info));
 		result.ordered_infos.push_back(result.bound_infos.back());
