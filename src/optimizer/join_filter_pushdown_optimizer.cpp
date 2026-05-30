@@ -20,23 +20,35 @@ namespace duckdb {
 JoinFilterPushdownOptimizer::JoinFilterPushdownOptimizer(Optimizer &optimizer) : optimizer(optimizer) {
 }
 
-static bool ContainsJoin(LogicalOperator &op) {
+static bool DistinctHasUnsafeJoinPath(LogicalOperator &op) {
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_JOIN:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
 		return true;
-	default:
-		for (auto &child : op.children) {
-			if (ContainsJoin(*child)) {
-				return true;
-			}
+	case LogicalOperatorType::LOGICAL_LIMIT:
+	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+	case LogicalOperatorType::LOGICAL_TOP_N:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+	case LogicalOperatorType::LOGICAL_UNNEST:
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+		return DistinctHasUnsafeJoinPath(*op.children[0]);
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		switch (join.join_type) {
+		case JoinType::INNER:
+		case JoinType::SEMI:
+		case JoinType::RIGHT_SEMI:
+			return DistinctHasUnsafeJoinPath(*op.children[0]);
+		default:
+			return true;
 		}
+	}
+	default:
 		return false;
 	}
 }
@@ -92,7 +104,7 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
 		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
-		if (ContainsJoin(*probe_child.children[0])) {
+		if (DistinctHasUnsafeJoinPath(*probe_child.children[0])) {
 			// DISTINCT can be generated from complex subtrees (e.g. joins), and pushing
 			// dynamic join filters below it can lead to incorrect results.
 			return;
