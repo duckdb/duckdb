@@ -230,6 +230,11 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 	return result;
 }
 
+idx_t ExternalFileCache::GetCachedFileCount() const {
+	const lock_guard<mutex> files_guard(lock);
+	return cached_files.size();
+}
+
 ExternalFileCache &ExternalFileCache::Get(DatabaseInstance &db) {
 	return db.GetExternalFileCache();
 }
@@ -242,13 +247,16 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 	return buffer_manager;
 }
 
-ExternalFileCache::CachedFile &ExternalFileCache::GetOrCreateCachedFile(const string &path) {
+shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFile(const string &path) {
 	lock_guard<mutex> guard(lock);
+	if (!enable) {
+		return make_shared_ptr<CachedFile>(path);
+	}
 	auto &entry = cached_files[path];
 	if (!entry) {
-		entry = make_uniq<CachedFile>(path);
+		entry = make_shared_ptr<CachedFile>(path);
 	}
-	return *entry;
+	return entry;
 }
 
 } // namespace duckdb

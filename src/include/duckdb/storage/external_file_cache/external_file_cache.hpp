@@ -70,6 +70,8 @@ public:
 	bool IsEnabled() const;
 	void SetEnabled(bool enable);
 	vector<CachedFileInformation> GetCachedFileInformation() const;
+	//! Number of files tracked in the cache map, expose for testing purpose.
+	idx_t GetCachedFileCount() const;
 
 	//! Re-index to `current_block_size` if it differs from the cache block size.
 	//! Return the blocks cached for the given range.
@@ -77,8 +79,9 @@ public:
 	                                                       idx_t first_block, idx_t num_blocks);
 
 	BufferManager &GetBufferManager() const;
-	//! Gets the cached file, or creates it if is not yet present
-	CachedFile &GetOrCreateCachedFile(const string &path);
+	//! Gets the shared cached file for the given path, creating it if not yet present.
+	//! When caching is disabled, returns a transient CachedFile that is not tracked in the cached file map.
+	shared_ptr<CachedFile> GetOrCreateCachedFile(const string &path);
 
 	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
 	                               const string &current_version_tag, timestamp_t current_last_modified);
@@ -93,7 +96,7 @@ private:
 	//! Whether or not file caching is enabled
 	atomic<bool> enable;
 	//! Mapping from file path to cached file with cached blocks
-	unordered_map<string, unique_ptr<CachedFile>> cached_files;
+	unordered_map<string, shared_ptr<CachedFile>> cached_files;
 	//! Lock for accessing the cached files
 	mutable mutex lock;
 };
