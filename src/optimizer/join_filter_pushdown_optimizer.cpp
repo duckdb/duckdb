@@ -20,6 +20,27 @@ namespace duckdb {
 JoinFilterPushdownOptimizer::JoinFilterPushdownOptimizer(Optimizer &optimizer) : optimizer(optimizer) {
 }
 
+static bool ContainsJoin(LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
+		return true;
+	default:
+		for (auto &child : op.children) {
+			if (ContainsJoin(*child)) {
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
 bool PushdownJoinFilterExpression(Expression &expr, JoinFilterPushdownColumn &filter) {
 	if (expr.return_type.IsNested()) {
 		// nested columns are not supported for pushdown
@@ -71,9 +92,13 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
 		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
-		// DISTINCT can be generated from complex subtrees (e.g. joins), and pushing
-		// dynamic join filters below it can lead to incorrect results.
-		return;
+		if (ContainsJoin(*probe_child.children[0])) {
+			// DISTINCT can be generated from complex subtrees (e.g. joins), and pushing
+			// dynamic join filters below it can lead to incorrect results.
+			return;
+		}
+		GetPushdownFilterTargets(*probe_child.children[0], std::move(columns), targets);
+		break;
 	case LogicalOperatorType::LOGICAL_UNNEST: {
 		auto &unnest = probe_child.Cast<LogicalUnnest>();
 		// check if the filters apply to the unnest index
