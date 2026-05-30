@@ -71,8 +71,8 @@ static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(string column_
 	CaseCheck check;
 	check.when_expr = std::move(comp_expr);
 	check.then_expr = std::move(percentage_x);
-	case_expr->case_checks.push_back(std::move(check));
-	case_expr->else_expr = make_uniq<ConstantExpression>(Value());
+	case_expr->CaseChecksMutable().push_back(std::move(check));
+	case_expr->ElseMutable() = make_uniq<ConstantExpression>(Value());
 
 	return make_uniq<CastExpression>(LogicalType::DECIMAL(9, 2), std::move(case_expr));
 }

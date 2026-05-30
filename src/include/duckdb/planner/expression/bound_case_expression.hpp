@@ -33,6 +33,14 @@ public:
 	unique_ptr<Expression> else_expr;
 
 public:
+	const vector<BoundCaseCheck> &CaseChecks() const {
+		return case_checks;
+	}
+	const Expression &Else() const {
+		return *else_expr;
+	}
+
+public:
 	string ToString() const override;
 
 	bool Equals(const BaseExpression &other) const override;

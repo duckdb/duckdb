@@ -332,8 +332,8 @@ void DuckTableEntry::UndoAlter(ClientContext &context, AlterInfo &info) {
 
 static void RenameExpression(ParsedExpression &root_expr, RenameColumnInfo &info) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
-		if (colref.column_names.back() == info.old_name) {
-			colref.column_names.back() = info.new_name;
+		if (colref.ColumnNames().back() == info.old_name) {
+			colref.ColumnNamesMutable().back() = info.new_name;
 		}
 	});
 }

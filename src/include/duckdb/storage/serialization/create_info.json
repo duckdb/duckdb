@@ -382,6 +382,16 @@
         "id": 208,
         "name": "trigger_action",
         "type": "QueryNode*"
+      },
+      {
+        "id": 209,
+        "name": "referencing_new_table",
+        "type": "string"
+      },
+      {
+        "id": 210,
+        "name": "referencing_old_table",
+        "type": "string"
       }
     ]
   }

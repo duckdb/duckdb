@@ -102,7 +102,6 @@ SelectStatement:
     - OptionalParensSimpleSelect
     - SimpleSelectParens
     - SimpleSelect
-    - EnumSelectType
     - ValuesClause
     - TableStatement
 
@@ -110,6 +109,7 @@ SetStatement:
   type: "unique_ptr<SetStatement>"
   by_value: true
   rules:
+    - SetAssignmentOrTimeZone
     - SetTimeZone
     - StandardAssignment
 
@@ -211,6 +211,9 @@ CreateTypeInfo:
   by_value: true
   rules:
     - CreateType
+    - CreateTypeFromType
+    - EnumSelectType
+    - EnumStringLiteralList
 
 MacroFunction:
   type: "unique_ptr<MacroFunction>"
@@ -275,6 +278,16 @@ WindowExpression:
     - WindowFrameContentsParens
     - WindowFrameNameContentsParens
     - WindowFrameContents
+
+SetScope:
+  type: "SetScope"
+  by_value: false
+  rules:
+    - LocalScope
+    - GlobalScope
+    - SessionScope
+    - VariableScope
+    - SettingScope
 
 SampleOptions:
   type: "unique_ptr<SampleOptions>"
@@ -410,6 +423,15 @@ Expression:
     - ZoneValue
     - ZoneIntervalWithInterval
     - ZoneIntervalWithPrecision
+    - ZoneLocal
+    - ZoneDefault
+    - ZoneStringLiteral
+    - ZoneIdentifier
+    - DefArg
+    - DefArgNull
+    - DefArgKeyword
+    - DefArgStringLiteral
+    - NoneLiteral
     - NumberLiteral
     - TimeType
     - NumericType
@@ -607,6 +629,11 @@ QualifiedName:
     - QualifiedName
     - QualifiedSchemaName
     - QualifiedIndexName
+    - QualifiedSchemaNameString
+    - QualifiedIndexNameString
+    - CatalogReservedSchema
+    - SchemaReservedIndex
+    - CatalogReservedSchemaIndex
     - FunctionIdentifier
     - SchemaReservedFunctionName
     - CatalogReservedSchemaFunctionName
@@ -735,6 +762,15 @@ TriggerEventInfo:
     - TriggerEventUpdate
     - TriggerEventUpdateOf
 
+TriggerTableReferencingInfo:
+  type: "TriggerTableReferencingInfo"
+  by_value: false
+  rules:
+    - ReferencingClause
+    - ReferencingItem
+    - ReferencingNewTableAs
+    - ReferencingOldTableAs
+
 VacuumOptions:
   type: "VacuumOptions"
   by_value: false
@@ -747,6 +783,7 @@ SettingInfo:
   type: "SettingInfo"
   by_value: false
   rules:
+    - SetVariableOrSetting
     - SetSetting
     - SetVariable
 
@@ -780,6 +817,7 @@ String:
     - CollationName
     - IndexType
     - RelOptionName
+    - DottedIdentifierString
     - IndexName
     - ColId
     - ColIdOrString
@@ -787,6 +825,7 @@ String:
     - TypeFuncName
     - Identifier
     - ExportSource
+    - ReservedKeyword
     - VersionNumber
     - LikeVariations
     - OtherOperator
@@ -805,6 +844,7 @@ String:
     - ReservedTableQualification
     - CatalogQualification
     - SchemaQualification
+    - ReservedSchemaQualification
     - BaseWindowName
     - Framing
     - AtUnit
@@ -841,6 +881,8 @@ String:
     - ExplainOptionAnalyze
     - DropNullability
     - SetNullability
+    - MinValue
+    - MaxValue
 
 Bool:
   type: "bool"
@@ -858,6 +900,8 @@ Bool:
     - Materialized
     - SampleUnit
     - DropBehavior
+    - CascadeDropBehavior
+    - RestrictDropBehavior
     - AnyOrAll
     - IgnoreOrRespectNulls
     - PrecedingOrFollowing
@@ -867,9 +911,16 @@ Bool:
     - CheckpointForce
     - IfNotExists
     - OrReplace
+    - FunctionTypeMacro
+    - FunctionTypeMacroKeyword
+    - FunctionTypeFunction
     - DeallocatePrepare
     - CreateRecursive
     - ExplainAnalyze
+    - WithOrWithoutOids
+    - WithOids
+    - WithoutOids
+    - UniqueIndex
 
 
 Int64:
@@ -884,7 +935,6 @@ LogicalType:
   by_value: false
   rules:
     - Type
-    - EnumStringLiteralList
 
 LogicalTypeList:
   type: "vector<LogicalType>"
@@ -1013,9 +1063,23 @@ overrides:
   TriggerTiming: "TriggerTiming"
   # create_type.gram (EnumSelectType is already in SelectStatement category)
   # describe.gram
+  DescribeTarget:
+    type: "DescribeTarget"
+    by_value: true
+  DescribeBaseTableName:
+    type: "DescribeTarget"
+    by_value: true
+  DescribeStringLiteral:
+    type: "DescribeTarget"
+    by_value: true
   ShowOrDescribeOrSummarize: "ShowType"
   ShowOrDescribe: "ShowType"
   Summarize: "ShowType"
+  SummarizeRule: "ShowType"
+  ShowRule: "ShowType"
+  DescribeRule: "ShowType"
+  DescribeLongRule: "ShowType"
+  DescRule: "ShowType"
   # expression.gram
   ComparisonOperator: "ExpressionType"
   IsDistinctFromOp: "ExpressionType"
@@ -1059,6 +1123,8 @@ overrides:
   # create_sequence.gram
   SequenceOption: "pair<string, unique_ptr<SequenceOption>>"
   SeqSetCycle: "pair<string, unique_ptr<SequenceOption>>"
+  SeqCycle: "pair<string, unique_ptr<SequenceOption>>"
+  SeqNoCycle: "pair<string, unique_ptr<SequenceOption>>"
   SeqSetIncrement: "pair<string, unique_ptr<SequenceOption>>"
   SeqSetMinMax: "pair<string, unique_ptr<SequenceOption>>"
   SeqNoMinMax: "pair<string, unique_ptr<SequenceOption>>"
@@ -1081,6 +1147,7 @@ overrides:
   # update.gram
   UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
   UpdateSetColumnTarget: "string"
+
 # ---------------------------------------------------------------------------
 # excluded_rules: no transformer stub generated, no semantic value extracted
 # ---------------------------------------------------------------------------
@@ -1088,7 +1155,6 @@ overrides:
 excluded_rules:
   - CommentValue
   - Program
-  - FunctionType
   - Database
   - AbortOrRollback
   - CommitOrEnd
@@ -1096,7 +1162,6 @@ excluded_rules:
   - Transaction
   - VariableAssign
   - MacroOrFunction
-  - SettingScope
   - ColLabel
   - GroupingOrGroupingId
   - DefaultValues
@@ -1128,7 +1193,6 @@ excluded_rules:
   - AlwaysOrByDefault
   - Lateral
   - ConstraintNameClause
-  - ReservedSchemaQualification
   - UsingSample
   - TableSample
   - NamedParameterAssignment
@@ -1140,8 +1204,6 @@ excluded_rules:
   - PivotKeyword
   - UnpivotKeyword
   - Unique
-  - DefArg
-  - NoneLiteral
   - RowOrStruct
   - SetData
   - CTEBodyContent

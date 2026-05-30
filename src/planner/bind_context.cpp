@@ -383,16 +383,16 @@ optional_ptr<Binding> BindContext::GetBinding(const string &name, ErrorData &out
 }
 
 BindingAlias GetBindingAlias(ColumnRefExpression &colref) {
-	if (colref.column_names.size() <= 1 || colref.column_names.size() > 4) {
+	if (colref.ColumnNames().size() <= 1 || colref.ColumnNames().size() > 4) {
 		throw InternalException("Cannot get binding alias from column ref unless it has 2..4 entries");
 	}
-	if (colref.column_names.size() >= 4) {
-		return BindingAlias(colref.column_names[0], colref.column_names[1], colref.column_names[2]);
+	if (colref.ColumnNames().size() >= 4) {
+		return BindingAlias(colref.ColumnNames()[0], colref.ColumnNames()[1], colref.ColumnNames()[2]);
 	}
-	if (colref.column_names.size() == 3) {
-		return BindingAlias(colref.column_names[0], colref.column_names[1]);
+	if (colref.ColumnNames().size() == 3) {
+		return BindingAlias(colref.ColumnNames()[0], colref.ColumnNames()[1]);
 	}
-	return BindingAlias(colref.column_names[0]);
+	return BindingAlias(colref.ColumnNames()[0]);
 }
 
 BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
@@ -411,12 +411,12 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 
 string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table_name, string &column_name) {
 	idx_t total_columns = 0;
-	idx_t current_position = ref.index - 1;
+	idx_t current_position = ref.Index() - 1;
 	for (auto &entry : bindings_list) {
 		auto &binding = *entry;
 		auto &column_names = binding.GetColumnNames();
 		idx_t entry_column_count = column_names.size();
-		if (ref.index == 0) {
+		if (ref.Index() == 0) {
 			// this is a row id
 			table_name = binding.GetAlias();
 			column_name = "rowid";
@@ -431,7 +431,7 @@ string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table
 			current_position -= entry_column_count;
 		}
 	}
-	return StringUtil::Format("Positional reference %d out of range (total %d columns)", ref.index, total_columns);
+	return StringUtil::Format("Positional reference %d out of range (total %d columns)", ref.Index(), total_columns);
 }
 
 unique_ptr<ColumnRefExpression> BindContext::PositionToColumn(PositionalReferenceExpression &ref) {
@@ -456,7 +456,7 @@ struct ExclusionListInfo {
 };
 
 bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualified_name, ExclusionListInfo &info) {
-	if (expr.exclude_list.find(qualified_name) != expr.exclude_list.end()) {
+	if (expr.ExcludeList().find(qualified_name) != expr.ExcludeList().end()) {
 		info.excluded_qualified_columns.insert(qualified_name);
 		return true;
 	}
@@ -465,8 +465,8 @@ bool CheckExclusionList(StarExpression &expr, const QualifiedColumnName &qualifi
 
 bool HandleRename(StarExpression &expr, const QualifiedColumnName &qualified_name,
                   unique_ptr<ParsedExpression> &new_expr, ExclusionListInfo &info) {
-	auto replace_entry = expr.replace_list.find(qualified_name.column);
-	if (replace_entry != expr.replace_list.end()) {
+	auto replace_entry = expr.ReplaceList().find(qualified_name.column);
+	if (replace_entry != expr.ReplaceList().end()) {
 		if (info.replaced_columns.find(replace_entry->first) == info.replaced_columns.end()) {
 			new_expr = replace_entry->second->Copy();
 			new_expr->SetAlias(replace_entry->first);
@@ -476,8 +476,8 @@ bool HandleRename(StarExpression &expr, const QualifiedColumnName &qualified_nam
 			return false;
 		}
 	}
-	auto rename_entry = expr.rename_list.find(qualified_name);
-	if (rename_entry != expr.rename_list.end()) {
+	auto rename_entry = expr.RenameList().find(qualified_name);
+	if (rename_entry != expr.RenameList().end()) {
 		new_expr->SetAlias(rename_entry->second);
 	}
 	return true;
@@ -489,7 +489,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		throw BinderException("* expression without FROM clause!");
 	}
 	ExclusionListInfo exclusion_info(new_select_list);
-	if (expr.relation_name.empty()) {
+	if (expr.RelationName().empty()) {
 		// SELECT * case
 		// bind all expressions of each table in-order
 		reference_set_t<UsingColumnSet> handled_using_columns;
@@ -518,7 +518,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 						auto coalesce =
 						    make_uniq_base<ParsedExpression, OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 						for (auto &child_binding : using_binding.bindings) {
-							coalesce->Cast<OperatorExpression>().children.push_back(
+							coalesce->Cast<OperatorExpression>().GetChildrenMutable().push_back(
 							    make_uniq<ColumnRefExpression>(column_name, child_binding));
 						}
 						coalesce->SetAlias(column_name);
@@ -547,10 +547,10 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		// SELECT tbl.* case
 		// SELECT struct.* case
 		ErrorData error;
-		auto binding = GetBinding(expr.relation_name, error);
+		auto binding = GetBinding(expr.RelationName(), error);
 		bool is_struct_ref = false;
 		if (!binding) {
-			binding = GetMatchingBinding(expr.relation_name, expr);
+			binding = GetMatchingBinding(expr.RelationName(), expr);
 			if (!binding) {
 				error.Throw();
 			}
@@ -561,7 +561,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		auto &column_types = binding->GetColumnTypes();
 
 		if (is_struct_ref) {
-			auto col_idx = binding->GetBindingIndex(expr.relation_name);
+			auto col_idx = binding->GetBindingIndex(expr.RelationName());
 			auto col_type = column_types[col_idx];
 			if (col_type.id() != LogicalTypeId::STRUCT) {
 				throw BinderException(StringUtil::Format(
@@ -570,7 +570,7 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			auto &struct_children = StructType::GetChildTypes(col_type);
 			vector<string> column_names(3);
 			column_names[0] = binding->GetAlias();
-			column_names[1] = expr.relation_name;
+			column_names[1] = expr.RelationName();
 			for (auto &child : struct_children) {
 				QualifiedColumnName qualified_name(child.first);
 				if (CheckExclusionList(expr, qualified_name, exclusion_info)) {
@@ -601,24 +601,24 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		//! We only care about extracting the names of the referenced columns
 		//! remove the exclude + replace lists
-		expr.exclude_list.clear();
-		expr.replace_list.clear();
+		expr.ExcludeListMutable().clear();
+		expr.ReplaceListMutable().clear();
 	}
 
 	//! Verify correctness of the exclude list
-	for (auto &excluded : expr.exclude_list) {
+	for (auto &excluded : expr.ExcludeList()) {
 		if (exclusion_info.excluded_qualified_columns.find(excluded) ==
 		    exclusion_info.excluded_qualified_columns.end()) {
 			throw BinderException("Column \"%s\" in EXCLUDE list not found in %s", excluded.ToString(),
-			                      expr.relation_name.empty() ? "FROM clause" : expr.relation_name.c_str());
+			                      expr.RelationName().empty() ? "FROM clause" : expr.RelationName().c_str());
 		}
 	}
 
 	//! Verify correctness of the replace list
-	for (auto &entry : expr.replace_list) {
+	for (auto &entry : expr.ReplaceList()) {
 		if (exclusion_info.excluded_columns.find(entry.first) == exclusion_info.excluded_columns.end()) {
 			throw BinderException("Column \"%s\" in REPLACE list not found in %s", entry.first,
-			                      expr.relation_name.empty() ? "FROM clause" : expr.relation_name.c_str());
+			                      expr.RelationName().empty() ? "FROM clause" : expr.RelationName().c_str());
 		}
 	}
 }
