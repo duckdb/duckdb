@@ -35,7 +35,6 @@ CompressionAvailabilityResult CompressionTypeIsAvailable(CompressionType compres
 	     {CompressionType::COMPRESSION_CHIMP, StorageVersion::INVALID, StorageVersion::V0_10_2}, // phased out
 	     {CompressionType::COMPRESSION_DICTIONARY, StorageVersion::V0_10_2, StorageVersion::V1_2_0},
 	     {CompressionType::COMPRESSION_FSST, StorageVersion::V0_10_2, StorageVersion::V1_2_0},
-	     // why was max storage version invalid for compression_dict_fsst?
 	     {CompressionType::COMPRESSION_DICT_FSST, StorageVersion::V1_3_0, StorageVersion::LATEST}});
 
 	StorageVersion current_storage_version = StorageVersion::INVALID;
