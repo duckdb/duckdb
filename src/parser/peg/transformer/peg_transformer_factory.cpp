@@ -596,6 +596,12 @@ void PEGTransformerFactory::RegisterCreatePublication() {
 	REGISTER_TRANSFORM(TransformCreatePublicationStatement);
 }
 
+void PEGTransformerFactory::RegisterCreateSubscription() {
+	// create_subscription.gram — optional CONNECTION clause with nested PUBLICATION list requires a hand-written
+	// transformer.
+	REGISTER_TRANSFORM(TransformCreateSubscriptionStatement);
+}
+
 void PEGTransformerFactory::RegisterCreateTextSearchDictionary() {
 	// create_text_search_dictionary.gram — Parens(List(...)) bodies are not auto-extractable.
 	REGISTER_TRANSFORM(TransformCreateTSDictionaryStatement);
@@ -970,6 +976,7 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterConnect();
 	RegisterDelete();
 	RegisterCreatePublication();
+	RegisterCreateSubscription();
 	RegisterCreateTextSearchDictionary();
 	RegisterMergeInto();
 	RegisterPivot();

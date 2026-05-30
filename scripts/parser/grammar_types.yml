@@ -63,6 +63,7 @@ SQLStatement:
     - DisconnectStatement
     - DropStatement
     - CreatePublicationStatement
+    - CreateSubscriptionStatement
     - ExecuteStatement
     - ExplainStatement
     - ExplainableStatements
@@ -1164,6 +1165,8 @@ excluded_rules:
   - PublicationFor
   - PublicationForAllTables
   - PublicationForTable
+  - SubscriptionConnection
+  - SubscriptionPublication
   - AlwaysOrByDefault
   - Lateral
   - ReservedSchemaQualification

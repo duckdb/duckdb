@@ -1,0 +1,3 @@
+CreateSubscriptionStatement <- 'CREATE' 'SUBSCRIPTION' Identifier SubscriptionConnection?
+SubscriptionConnection <- 'CONNECTION' StringLiteral SubscriptionPublication?
+SubscriptionPublication <- 'PUBLICATION' List(Identifier)
