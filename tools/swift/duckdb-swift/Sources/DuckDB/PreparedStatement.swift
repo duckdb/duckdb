@@ -433,6 +433,33 @@ public extension PreparedStatement {
       }
     }
   }
+
+  /// Binds a fixed-size `FLOAT[]` array value at the specified parameter index.
+  ///
+  /// The bound value is a DuckDB ARRAY value whose element count equals the
+  /// number of elements in `value`, so it casts cleanly to a fixed-size
+  /// `FLOAT[N]` column.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the array of floats to bind (or `nil` to bind NULL)
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  func bind(_ value: [Float]?, at index: Int) throws {
+    guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
+    let elemType = duckdb_create_logical_type(DUCKDB_TYPE_FLOAT)
+    var elemTypePtr: duckdb_logical_type? = elemType
+    defer { duckdb_destroy_logical_type(&elemTypePtr) }
+
+    var children: [duckdb_value?] = value.map { duckdb_create_float($0) }
+    defer { for i in children.indices { duckdb_destroy_value(&children[i]) } }
+
+    var arrayValue: duckdb_value? = children.withUnsafeMutableBufferPointer { buf in
+      duckdb_create_array_value(elemType, buf.baseAddress, .init(value.count))
+    }
+    defer { duckdb_destroy_value(&arrayValue) }
+
+    try withThrowingCommand { duckdb_bind_value(ptr.pointee, .init(index), arrayValue) }
+  }
 }
 
 private extension PreparedStatement {

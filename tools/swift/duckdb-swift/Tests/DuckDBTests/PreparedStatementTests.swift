@@ -267,6 +267,19 @@ final class PreparedStatementTests: XCTestCase {
       cast: { $0.cast(to: Decimal.self) }
     )
   }
+
+  func test_float_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "FLOAT[3]",
+      expected: [
+        [Float(1.0), 2.0, 3.0],
+        [Float(-1.0), 0.0, 1.0],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [Float].self) }
+    )
+  }
 }
 
 private extension PreparedStatementTests {

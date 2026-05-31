@@ -389,6 +389,18 @@ final class LogicalTypeTests: XCTestCase {
       }
     )
   }
+
+  func test_array() throws {
+    try logicalTypeTest(
+      dataType: "FLOAT[4]",
+      cast: { $0.cast(to: [Float?].self) },
+      validate: {
+        XCTAssertEqual($0.dataType, .array)
+        XCTAssertEqual($0.underlyingDataType, .array)
+        XCTAssertEqual($0.arrayChildType?.dataType, .float)
+      }
+    )
+  }
 }
 
 private extension LogicalTypeTests {

@@ -419,6 +419,19 @@ final class TypeConversionTests: XCTestCase {
     try extractTest(
       testColumnName: "map", expected: expected) { $0.cast(to: [String: String].self) }
   }
+
+  func test_extract_from_float_array() throws {
+    let connection = try Database(store: .inMemory).connect()
+    try connection.execute(
+      "CREATE TABLE t1(arr FLOAT[3]);")
+    try connection.execute(
+      "INSERT INTO t1 VALUES (ARRAY[1.0, 2.0, 3.0]), (ARRAY[-1.0, 0.0, 1.0]), (NULL);")
+    let result = try connection.query("SELECT arr FROM t1;")
+    let column = result[0].cast(to: [Float?].self)
+    XCTAssertEqual(column[0], [1.0, 2.0, 3.0])
+    XCTAssertEqual(column[1], [-1.0, 0.0, 1.0])
+    XCTAssertEqual(column[2], nil as [Float?]?)
+  }
 }
 
 private extension TypeConversionTests {
