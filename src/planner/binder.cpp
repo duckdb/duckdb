@@ -668,18 +668,23 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 		auto &trigger = triggers[i].get();
 		auto body_cte_name = string(TRIGGER_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix;
 
-		// Alias CTEs must precede the body CTE: cte_map is insertion-order-preserving.
-		if (!trigger.referencing_new_table.empty()) {
-			outer->cte_map.map[trigger.referencing_new_table] = MakeTransitionTableAliasCTE(base_cte_name);
-		}
-		if (!trigger.referencing_old_table.empty()) {
-			outer->cte_map.map[trigger.referencing_old_table] = MakeTransitionTableAliasCTE(base_cte_name);
-		}
-
 		auto trig_cte = make_uniq<CommonTableExpressionInfo>();
 		trig_cte->query_node = trigger.trigger_action->Copy();
 		trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 		trig_cte->is_trigger_generated = true;
+
+		// Inject alias CTEs into the trigger body's own CTE map so each trigger' aliases won't be visible
+		// a local WITH shadows the alias
+		auto &body_map = trig_cte->query_node->cte_map.map;
+		if (!trigger.referencing_new_table.empty() &&
+		    body_map.find(trigger.referencing_new_table) == body_map.end()) {
+			body_map[trigger.referencing_new_table] = MakeTransitionTableAliasCTE(base_cte_name);
+		}
+		if (!trigger.referencing_old_table.empty() &&
+		    body_map.find(trigger.referencing_old_table) == body_map.end()) {
+			body_map[trigger.referencing_old_table] = MakeTransitionTableAliasCTE(base_cte_name);
+		}
+
 		outer->cte_map.map[body_cte_name] = std::move(trig_cte);
 	}
 
