@@ -169,11 +169,11 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
 		auto &aggregate = aggregates[i];
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		if (aggr.GetFilter()) {
-			auto *filter_ptr = const_cast<Expression *>(aggr.GetFilter());
-			auto &bound_ref_expr = filter_ptr->Cast<BoundReferenceExpression>();
-			if (!filter_indexes.count(filter_ptr)) {
+			auto &filter_ref = *aggr.GetFilter();
+			auto &bound_ref_expr = filter_ref.Cast<BoundReferenceExpression>();
+			if (!filter_indexes.count(filter_ref)) {
 				// Replace the bound reference expression's index with the corresponding index of the payload chunk
-				filter_indexes[filter_ptr] = bound_ref_expr.index;
+				filter_indexes[filter_ref] = bound_ref_expr.index;
 				bound_ref_expr.index = aggregate_input_idx;
 			}
 			aggregate_input_idx++;
@@ -362,11 +362,11 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 			filter_chunk.InitializeEmpty(filtered_data.filtered_payload.GetTypes());
 
 			// Add the filter Vector (BOOL)
-			auto *filter_ptr = const_cast<Expression *>(aggregate.GetFilter());
-			auto it = filter_indexes.find(filter_ptr);
+			auto &filter_ref = *aggregate.GetFilter();
+			auto it = filter_indexes.find(filter_ref);
 			D_ASSERT(it != filter_indexes.end());
 			D_ASSERT(it->second < chunk.data.size());
-			auto &filter_bound_ref = filter_ptr->Cast<BoundReferenceExpression>();
+			auto &filter_bound_ref = filter_ref.Cast<BoundReferenceExpression>();
 			filter_chunk.data[filter_bound_ref.index].Reference(chunk.data[it->second]);
 			filter_chunk.SetCardinality(chunk.size());
 
@@ -444,7 +444,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 	for (auto &aggregate : aggregates) {
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		if (aggr.GetFilter()) {
-			auto it = filter_indexes.find(const_cast<Expression *>(aggr.GetFilter()));
+			auto it = filter_indexes.find(*aggr.GetFilter());
 			D_ASSERT(it != filter_indexes.end());
 			D_ASSERT(it->second < chunk.data.size());
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[it->second]);

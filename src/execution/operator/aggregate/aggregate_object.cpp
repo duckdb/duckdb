@@ -7,7 +7,7 @@ namespace duckdb {
 
 AggregateObject::AggregateObject(BoundAggregateFunction function, FunctionData *bind_data, idx_t child_count,
                                  idx_t payload_size, AggregateType aggr_type, PhysicalType return_type,
-                                 Expression *filter)
+                                 optional_ptr<const Expression> filter)
     : function(std::move(function)),
       bind_data_wrapper(bind_data ? make_shared_ptr<FunctionDataWrapper>(bind_data->Copy()) : nullptr),
       child_count(child_count), payload_size(payload_size), aggr_type(aggr_type), return_type(return_type),
@@ -17,7 +17,7 @@ AggregateObject::AggregateObject(BoundAggregateFunction function, FunctionData *
 AggregateObject::AggregateObject(BoundAggregateExpression &aggr)
     : AggregateObject(aggr.Function(), aggr.BindInfo(), aggr.GetChildren().size(),
                       AlignValue(aggr.Function().GetStateSizeCallback()(aggr.Function())), aggr.GetAggregateType(),
-                      aggr.GetReturnType().InternalType(), const_cast<Expression *>(aggr.GetFilter())) {
+                      aggr.GetReturnType().InternalType(), aggr.GetFilter().get()) {
 }
 
 AggregateObject::AggregateObject(BoundAggregateExpression *aggr) : AggregateObject(*aggr) {
@@ -39,7 +39,7 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<Bou
 	return aggregates;
 }
 
-AggregateFilterData::AggregateFilterData(ClientContext &context, Expression &filter_expr,
+AggregateFilterData::AggregateFilterData(ClientContext &context, const Expression &filter_expr,
                                          const vector<LogicalType> &payload_types)
     : filter_executor(context, &filter_expr), true_sel(STANDARD_VECTOR_SIZE) {
 	if (payload_types.empty()) {

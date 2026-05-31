@@ -59,11 +59,11 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(PhysicalPlan &physica
 	for (auto &aggregate : aggregates) {
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		if (aggr.GetFilter()) {
-			auto *filter_ptr = const_cast<Expression *>(aggr.GetFilter());
-			auto &bound_ref_expr = filter_ptr->Cast<BoundReferenceExpression>();
-			auto it = filter_indexes.find(filter_ptr);
+			auto &filter_ref = *aggr.GetFilter();
+			auto &bound_ref_expr = filter_ref.Cast<BoundReferenceExpression>();
+			auto it = filter_indexes.find(filter_ref);
 			if (it == filter_indexes.end()) {
-				filter_indexes[filter_ptr] = bound_ref_expr.index;
+				filter_indexes[filter_ref] = bound_ref_expr.index;
 				bound_ref_expr.index = aggregate_input_idx++;
 			} else {
 				++aggregate_input_idx;
@@ -141,7 +141,7 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 	for (auto &aggregate : aggregates) {
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		if (aggr.GetFilter()) {
-			auto it = filter_indexes.find(const_cast<Expression *>(aggr.GetFilter()));
+			auto it = filter_indexes.find(*aggr.GetFilter());
 			D_ASSERT(it != filter_indexes.end());
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[it->second]);
 		}

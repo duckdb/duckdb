@@ -52,14 +52,14 @@ public:
 	AggregateType &GetAggregateTypeMutable() {
 		return aggr_type;
 	}
-	const Expression *GetFilter() const {
-		return filter.get();
+	const unique_ptr<Expression> &GetFilter() const {
+		return filter;
 	}
 	unique_ptr<Expression> &GetFilterMutable() {
 		return filter;
 	}
-	const BoundOrderModifier *GetOrderBys() const {
-		return order_bys.get();
+	const unique_ptr<BoundOrderModifier> &GetOrderBys() const {
+		return order_bys;
 	}
 	unique_ptr<BoundOrderModifier> &GetOrderBysMutable() {
 		return order_bys;
