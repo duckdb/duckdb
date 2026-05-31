@@ -434,31 +434,34 @@ public extension PreparedStatement {
     }
   }
 
-  /// Binds a fixed-size `FLOAT[]` array value at the specified parameter index.
-  ///
-  /// The bound value is a DuckDB ARRAY value whose element count equals the
-  /// number of elements in `value`, so it casts cleanly to a fixed-size
-  /// `FLOAT[N]` column.
+  /// Binds a `FLOAT[]` array value at the specified parameter index.
   ///
   /// - Important: Prepared statement parameters use one-based indexing
   /// - Parameter value: the array of floats to bind (or `nil` to bind NULL)
   /// - Parameter index: the one-based parameter index
   /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
   func bind(_ value: [Float]?, at index: Int) throws {
-    guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
-    let elemType = duckdb_create_logical_type(DUCKDB_TYPE_FLOAT)
-    var elemTypePtr: duckdb_logical_type? = elemType
-    defer { duckdb_destroy_logical_type(&elemTypePtr) }
+    try _bindArray(value, at: index)
+  }
 
-    var children: [duckdb_value?] = value.map { duckdb_create_float($0) }
-    defer { for i in children.indices { duckdb_destroy_value(&children[i]) } }
+  /// Binds an `INTEGER[]` array value at the specified parameter index.
+  func bind(_ value: [Int32]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
 
-    var arrayValue: duckdb_value? = children.withUnsafeMutableBufferPointer { buf in
-      duckdb_create_array_value(elemType, buf.baseAddress, .init(value.count))
-    }
-    defer { duckdb_destroy_value(&arrayValue) }
+  /// Binds a `DOUBLE[]` array value at the specified parameter index.
+  func bind(_ value: [Double]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
 
-    try withThrowingCommand { duckdb_bind_value(ptr.pointee, .init(index), arrayValue) }
+  /// Binds a `BOOLEAN[]` array value at the specified parameter index.
+  func bind(_ value: [Bool]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `VARCHAR[]` array value at the specified parameter index.
+  func bind(_ value: [String]?, at index: Int) throws {
+    try _bindArray(value, at: index)
   }
 }
 
@@ -485,5 +488,26 @@ private extension PreparedStatement {
   
   func preparedStatementError() -> String? {
     duckdb_prepare_error(ptr.pointee).map(String.init(cString:))
+  }
+}
+
+extension PreparedStatement {
+
+  /// Internal generic implementation for binding an array value.
+  func _bindArray<T: DuckDBArrayElement>(_ value: [T]?, at index: Int) throws {
+    guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
+    let elemType = duckdb_create_logical_type(T.duckdbType)
+    var elemTypePtr: duckdb_logical_type? = elemType
+    defer { duckdb_destroy_logical_type(&elemTypePtr) }
+
+    var children: [duckdb_value?] = value.map { $0.createDuckDBValue() }
+    defer { for i in children.indices { duckdb_destroy_value(&children[i]) } }
+
+    var arrayValue: duckdb_value? = children.withUnsafeMutableBufferPointer { buf in
+      duckdb_create_array_value(elemType, buf.baseAddress, .init(value.count))
+    }
+    defer { duckdb_destroy_value(&arrayValue) }
+
+    try withThrowingCommand { duckdb_bind_value(ptr.pointee, .init(index), arrayValue) }
   }
 }

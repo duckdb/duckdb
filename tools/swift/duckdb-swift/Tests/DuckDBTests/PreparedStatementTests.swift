@@ -280,6 +280,58 @@ final class PreparedStatementTests: XCTestCase {
       cast: { $0.cast(to: [Float].self) }
     )
   }
+
+  func test_int_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "INTEGER[3]",
+      expected: [
+        [Int32(1), 2, 3],
+        [Int32(-1), 0, 1],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [Int32].self) }
+    )
+  }
+
+  func test_double_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "DOUBLE[2]",
+      expected: [
+        [Double(1.5), 2.5],
+        [Double(-1.5), 0.0],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [Double].self) }
+    )
+  }
+
+  func test_bool_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "BOOLEAN[2]",
+      expected: [
+        [true, false],
+        [false, true],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [Bool].self) }
+    )
+  }
+
+  func test_varchar_array_round_trip() throws {
+    try roundTripTest(
+      dataType: "VARCHAR[2]",
+      expected: [
+        ["hello", "world"],
+        ["", "🦆"],
+        nil,
+      ],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: [String].self) }
+    )
+  }
 }
 
 private extension PreparedStatementTests {
