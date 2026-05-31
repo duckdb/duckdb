@@ -20,7 +20,7 @@ static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector
 
 	auto &starting_types = StructType::GetChildTypes(starting_vec.GetType());
 
-	auto &func_args = state.expr.Cast<BoundFunctionExpression>().children;
+	auto &func_args = state.expr.Cast<BoundFunctionExpression>().GetChildren();
 	auto new_entries = case_insensitive_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(args.ColumnCount(), true);
 
@@ -115,11 +115,11 @@ static unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, Func
 	auto &expr = input.expr;
 
 	auto incoming_children = case_insensitive_tree_t<idx_t>();
-	auto is_new_field = vector<bool>(expr.children.size(), true);
+	auto is_new_field = vector<bool>(expr.GetChildren().size(), true);
 	auto new_stats = StructStats::CreateUnknown(expr.GetReturnType());
 
-	for (idx_t arg_idx = 1; arg_idx < expr.children.size(); arg_idx++) {
-		auto &new_child = expr.children[arg_idx];
+	for (idx_t arg_idx = 1; arg_idx < expr.GetChildren().size(); arg_idx++) {
+		auto &new_child = expr.GetChildren()[arg_idx];
 		incoming_children.emplace(new_child->GetAlias(), arg_idx);
 	}
 
@@ -138,7 +138,7 @@ static unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, Func
 		}
 	}
 
-	for (idx_t arg_idx = 1, field_idx = existing_count; arg_idx < expr.children.size(); arg_idx++) {
+	for (idx_t arg_idx = 1, field_idx = existing_count; arg_idx < expr.GetChildren().size(); arg_idx++) {
 		if (is_new_field[arg_idx]) {
 			StructStats::SetChildStats(new_stats, field_idx++, child_stats[arg_idx]);
 		}

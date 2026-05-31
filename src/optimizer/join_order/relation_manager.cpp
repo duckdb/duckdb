@@ -698,15 +698,15 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					if (cond.IsComparison()) {
 						auto comparison = BoundComparisonExpression::Create(cond.GetComparisonType(),
 						                                                    cond.GetLHS().Copy(), cond.GetRHS().Copy());
-						conjunction_expression->children.push_back(std::move(comparison));
+						conjunction_expression->GetChildrenMutable().push_back(std::move(comparison));
 					}
 				}
 
-				if (!conjunction_expression->children.empty()) {
+				if (!conjunction_expression->GetChildrenMutable().empty()) {
 					// create the filter info so all required LHS relations are present when reconstructing the join
 					optional_ptr<JoinRelationSet> left_set;
 					optional_ptr<JoinRelationSet> right_set;
-					for (auto &bound_expr : conjunction_expression->children) {
+					for (auto &bound_expr : conjunction_expression->GetChildrenMutable()) {
 						unordered_set<RelationIndex> right_bindings, left_bindings;
 						auto &comp = bound_expr->Cast<BoundFunctionExpression>();
 						auto &left = BoundComparisonExpression::Left(comp);

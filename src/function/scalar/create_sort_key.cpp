@@ -948,7 +948,7 @@ void CreateSortKeyHelpers::CreateSortKeyWithValidity(const Vector &input, Vector
 }
 
 static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<SortKeyBindData>();
+	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<SortKeyBindData>();
 
 	// prepare the sort key data
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
@@ -1356,7 +1356,7 @@ void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, DataChunk &result, i
 }
 
 static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<SortKeyBindData>();
+	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<SortKeyBindData>();
 
 	const auto count = args.size();
 	const auto &sort_key_vec = args.data[0];

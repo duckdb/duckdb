@@ -53,7 +53,7 @@ unique_ptr<FunctionData> SwitchBindReturnType(BindScalarFunctionInput &input) {
 		throw BinderException("SWITCH expected a constant map for the cases");
 	}
 	auto &func = cases->Cast<BoundFunctionExpression>();
-	if (func.function.GetName() != "map") {
+	if (func.Function().GetName() != "map") {
 		throw BinderException("SWITCH expected a constant map for the cases");
 	}
 	auto map_value = ExpressionExecutor::EvaluateScalar(context, *cases);
@@ -66,13 +66,13 @@ void ExtractConstantExprFromList(unique_ptr<Expression> &expr, vector<unique_ptr
 		throw BinderException("Expected a function for the cases");
 	}
 	auto &list_function = expr->Cast<BoundFunctionExpression>();
-	if (list_function.function.GetName() != "list_value") {
+	if (list_function.Function().GetName() != "list_value") {
 		throw BinderException("Expected a list function");
 	}
-	if (list_function.children.empty()) {
+	if (list_function.GetChildren().empty()) {
 		throw BinderException("No values provided for SWITCH expression");
 	}
-	for (auto &list_child : list_function.children) {
+	for (auto &list_child : list_function.GetChildrenMutable()) {
 		if (list_child->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 			throw NotImplementedException("Only constant expressions are supported for keys inside SWITCH");
 		}
@@ -108,12 +108,12 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 		throw BinderException("SWITCH expected a map function for the cases");
 	}
 	auto &cases_func = cases->Cast<BoundFunctionExpression>();
-	D_ASSERT(cases_func.children.size() == 2);
+	D_ASSERT(cases_func.GetChildren().size() == 2);
 
 	vector<unique_ptr<Expression>> keys_unpacked;
 	vector<unique_ptr<Expression>> values_unpacked;
-	ExtractConstantExprFromList(cases_func.children[0], keys_unpacked);
-	ExtractConstantExprFromList(cases_func.children[1], values_unpacked);
+	ExtractConstantExprFromList(cases_func.GetChildrenMutable()[0], keys_unpacked);
+	ExtractConstantExprFromList(cases_func.GetChildrenMutable()[1], values_unpacked);
 
 	result->CaseChecksMutable().reserve(keys_unpacked.size());
 	for (idx_t i = 0; i < keys_unpacked.size(); i++) {

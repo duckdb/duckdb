@@ -14,17 +14,17 @@ namespace duckdb {
 
 AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), execute_interval(20), warmup(true) {
 	auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
-	D_ASSERT(conj_expr.children.size() > 1);
-	for (idx_t idx = 0; idx < conj_expr.children.size(); idx++) {
+	D_ASSERT(conj_expr.GetChildren().size() > 1);
+	for (idx_t idx = 0; idx < conj_expr.GetChildren().size(); idx++) {
 		permutation.push_back(idx);
-		if (conj_expr.children[idx]->CanThrow()) {
+		if (conj_expr.GetChildren()[idx]->CanThrow()) {
 			disable_permutations = true;
 		}
-		if (idx != conj_expr.children.size() - 1) {
+		if (idx != conj_expr.GetChildren().size() - 1) {
 			swap_likeliness.push_back(100);
 		}
 	}
-	right_random_border = 100 * (conj_expr.children.size() - 1);
+	right_random_border = 100 * (conj_expr.GetChildren().size() - 1);
 }
 
 AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, vector<idx_t> filter_global_pos_p)

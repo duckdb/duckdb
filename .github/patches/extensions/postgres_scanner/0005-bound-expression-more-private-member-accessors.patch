@@ -1,0 +1,63 @@
+diff --git a/src/postgres_filter_pushdown.cpp b/src/postgres_filter_pushdown.cpp
+index 7b1f375..34cbfd3 100644
+--- a/src/postgres_filter_pushdown.cpp
++++ b/src/postgres_filter_pushdown.cpp
+@@ -92,14 +92,14 @@ string PostgresFilterPushdown::TransformExpressionSubject(const string &column_n
+ 	case ExpressionClass::BOUND_FUNCTION: {
+ 		auto &func = expr.Cast<BoundFunctionExpression>();
+ 		idx_t child_idx;
+-		if (!TryGetStructExtractChildIndex(func, child_idx) || func.children.empty()) {
++		if (!TryGetStructExtractChildIndex(func, child_idx) || func.GetChildren().empty()) {
+ 			return string();
+ 		}
+-		auto parent_name = TransformExpressionSubject(column_name, *func.children[0]);
++		auto parent_name = TransformExpressionSubject(column_name, *func.GetChildren()[0]);
+ 		if (parent_name.empty()) {
+ 			return string();
+ 		}
+-		auto &struct_type = func.children[0]->GetReturnType();
++		auto &struct_type = func.GetChildren()[0]->GetReturnType();
+ 		if (struct_type.id() != LogicalTypeId::STRUCT || StructType::IsUnnamed(struct_type)) {
+ 			return string();
+ 		}
+@@ -121,11 +121,11 @@ string PostgresFilterPushdown::TransformExpression(const string &column_name, co
+ 		auto subject = TransformExpressionSubject(column_name, left);
+ 		const Value *constant = nullptr;
+ 		if (!subject.empty() && right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+-			constant = &right.Cast<BoundConstantExpression>().value;
++			constant = &right.Cast<BoundConstantExpression>().GetValue();
+ 		} else {
+ 			subject = TransformExpressionSubject(column_name, right);
+ 			if (!subject.empty() && left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+-				constant = &left.Cast<BoundConstantExpression>().value;
++				constant = &left.Cast<BoundConstantExpression>().GetValue();
+ 				comparison_type = FlipComparisonExpression(comparison_type);
+ 			}
+ 		}
+@@ -167,7 +167,7 @@ string PostgresFilterPushdown::TransformExpression(const string &column_name, co
+ 				if (!in_list.empty()) {
+ 					in_list += ", ";
+ 				}
+-				auto &constant = op.children[i]->Cast<BoundConstantExpression>().value;
++				auto &constant = op.children[i]->Cast<BoundConstantExpression>().GetValue();
+ 				in_list += IsVirtualColumn(column_id) ? "FALSE" : TransformLiteral(constant);
+ 			}
+ 			return IsVirtualColumn(column_id) ? "FALSE" : subject + " IN (" + in_list + ")";
+@@ -178,13 +178,13 @@ string PostgresFilterPushdown::TransformExpression(const string &column_name, co
+ 	}
+ 	case ExpressionClass::BOUND_FUNCTION: {
+ 		auto &func = expr.Cast<BoundFunctionExpression>();
+-		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
+-			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
++		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.BindInfo()) {
++			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
+ 			return data.child_filter_expr ? TransformExpression(column_name, *data.child_filter_expr, column_id)
+ 			                              : string();
+ 		}
+-		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
+-			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
++		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
++			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
+ 			return data.child_filter_expr ? TransformExpression(column_name, *data.child_filter_expr, column_id)
+ 			                              : string();
+ 		}

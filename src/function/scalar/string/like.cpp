@@ -511,7 +511,7 @@ unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, FunctionS
 	D_ASSERT(child_stats.size() >= 1);
 	// can only propagate stats if the children have stats
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
-		expr.function.SetFunctionCallback(ScalarFunction::BinaryFunction<string_t, string_t, bool, ASCII_OP>);
+		expr.FunctionMutable().SetFunctionCallback(ScalarFunction::BinaryFunction<string_t, string_t, bool, ASCII_OP>);
 	}
 	return nullptr;
 }
@@ -519,8 +519,8 @@ unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, FunctionS
 template <class OP, bool INVERT>
 void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	if (func_expr.bind_info) {
-		auto &matcher = func_expr.bind_info->Cast<LikeMatcher>();
+	if (func_expr.BindInfo()) {
+		auto &matcher = func_expr.BindInfo()->Cast<LikeMatcher>();
 		// use fast like matcher
 		UnaryExecutor::Execute<string_t, bool>(input.data[0], result, [&](string_t input) {
 			return INVERT ? !matcher.Match(input) : matcher.Match(input);

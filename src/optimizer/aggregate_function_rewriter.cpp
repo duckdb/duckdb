@@ -130,9 +130,9 @@ public:
 	                               vector<unique_ptr<Expression>> &additional_expressions) override {
 		auto &sum = bindings[0].get().Cast<BoundAggregateExpression>();
 		auto &addition = bindings[1].get().Cast<BoundFunctionExpression>();
-		idx_t const_idx = addition.children[0]->GetExpressionType() == ExpressionType::VALUE_CONSTANT ? 0 : 1;
-		auto const_expr = std::move(addition.children[const_idx]);
-		auto main_expr = std::move(addition.children[1 - const_idx]);
+		idx_t const_idx = addition.GetChildren()[0]->GetExpressionType() == ExpressionType::VALUE_CONSTANT ? 0 : 1;
+		auto const_expr = std::move(addition.GetChildrenMutable()[const_idx]);
+		auto main_expr = std::move(addition.GetChildrenMutable()[1 - const_idx]);
 
 		// Turn SUM(x + C) into SUM(x)
 		sum.GetChildrenMutable()[0] = main_expr->Copy();

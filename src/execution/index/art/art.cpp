@@ -175,7 +175,7 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 		// 		bindings[1] = the index expression
 		// 		bindings[2] = the constant
 		auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
-		auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
+		auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().GetValue();
 		auto comparison_type = comparison.GetExpressionType();
 
 		auto &left = BoundComparisonExpression::Left(comparison);
@@ -215,10 +215,10 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 
 		auto lower_inclusive = BoundBetweenExpression::LowerInclusive(between);
 		auto upper_inclusive = BoundBetweenExpression::UpperInclusive(between);
-		low_value = lower_bound.Cast<BoundConstantExpression>().value;
+		low_value = lower_bound.Cast<BoundConstantExpression>().GetValue();
 		low_comparison_type =
 		    lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
-		high_value = (upper_bound.Cast<BoundConstantExpression>()).value;
+		high_value = (upper_bound.Cast<BoundConstantExpression>()).GetValue();
 		high_comparison_type =
 		    upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
 	}

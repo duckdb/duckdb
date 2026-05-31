@@ -1,0 +1,23 @@
+diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
+index 355d687..5ae282d 100644
+--- a/src/delta_utils.cpp
++++ b/src/delta_utils.cpp
+@@ -1062,14 +1062,14 @@ uintptr_t PredicateVisitor::VisitFilterExpression(const string &col_name, const
+ 	}
+ 	case ExpressionClass::BOUND_FUNCTION: {
+ 		auto &func = expr.Cast<BoundFunctionExpression>();
+-		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
+-			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
++		if (func.Function().GetName() == OptionalFilterScalarFun::NAME && func.BindInfo()) {
++			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
+ 			if (data.child_filter_expr) {
+ 				return VisitFilterExpression(col_name, *data.child_filter_expr, state);
+ 			}
+ 		}
+-		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
+-			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
++		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
++			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
+ 			if (data.child_filter_expr) {
+ 				return VisitFilterExpression(col_name, *data.child_filter_expr, state);
+ 			}
