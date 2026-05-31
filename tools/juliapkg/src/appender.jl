@@ -38,6 +38,7 @@ DuckDB.close(appender)
 ```
 """
 mutable struct Appender
+    connection::Connection
     handle::duckdb_appender
 
     function Appender(con::Connection, table::AbstractString, schema::Union{AbstractString, Nothing} = nothing)
@@ -47,31 +48,32 @@ mutable struct Appender
             if error_ptr == C_NULL
                 error_message = string("Opening of Appender for table \"", table, "\" failed: unknown error")
             else
-                error_message = string(error_ptr)
+                error_message = unsafe_string(error_ptr)
             end
             duckdb_appender_destroy(handle)
             throw(QueryException(error_message))
         end
-        con = new(handle[])
-        finalizer(_close_appender, con)
-        return con
+        app = new(con, handle[])
+        finalizer(_close_appender, app)
+        return app
     end
+
     function Appender(db::DB, table::AbstractString, schema::Union{AbstractString, Nothing} = nothing)
         return Appender(db.main_connection, table, schema)
     end
 end
 
 function _close_appender(appender::Appender)
+    res = DuckDBSuccess
     if appender.handle != C_NULL
-        duckdb_appender_destroy(appender.handle)
+        res = duckdb_appender_destroy(appender.handle)
     end
     appender.handle = C_NULL
-    return
+    return res
 end
 
 function close(appender::Appender)
-    _close_appender(appender)
-    return
+    return _close_appender(appender)
 end
 
 append(appender::Appender, val::AbstractFloat) = duckdb_append_double(appender.handle, Float64(val));
@@ -106,11 +108,10 @@ append(appender::Appender, val::DateTime) =
 function append(appender::Appender, val::AbstractVector{T}) where {T}
     value = create_value(val)
     if length(val) == 0
-        duckdb_append_null(appender.handle)
+        return duckdb_append_null(appender.handle)
     else
-        duckdb_append_value(appender.handle, value.handle)
+        return duckdb_append_value(appender.handle, value.handle)
     end
-    return
 end
 
 function append(appender::Appender, val::Any)
@@ -119,13 +120,11 @@ function append(appender::Appender, val::Any)
 end
 
 function end_row(appender::Appender)
-    duckdb_appender_end_row(appender.handle)
-    return
+    return duckdb_appender_end_row(appender.handle)
 end
 
 function flush(appender::Appender)
-    duckdb_appender_flush(appender.handle)
-    return
+    return duckdb_appender_flush(appender.handle)
 end
 
 DBInterface.close!(appender::Appender) = _close_appender(appender)
