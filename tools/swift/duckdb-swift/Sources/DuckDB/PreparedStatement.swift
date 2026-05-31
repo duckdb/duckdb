@@ -463,6 +463,41 @@ public extension PreparedStatement {
   func bind(_ value: [String]?, at index: Int) throws {
     try _bindArray(value, at: index)
   }
+
+  /// Binds a `TINYINT[]` array value at the specified parameter index.
+  func bind(_ value: [Int8]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `SMALLINT[]` array value at the specified parameter index.
+  func bind(_ value: [Int16]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `BIGINT[]` array value at the specified parameter index.
+  func bind(_ value: [Int64]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `UTINYINT[]` array value at the specified parameter index.
+  func bind(_ value: [UInt8]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `USMALLINT[]` array value at the specified parameter index.
+  func bind(_ value: [UInt16]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `UINTEGER[]` array value at the specified parameter index.
+  func bind(_ value: [UInt32]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
+
+  /// Binds a `UBIGINT[]` array value at the specified parameter index.
+  func bind(_ value: [UInt64]?, at index: Int) throws {
+    try _bindArray(value, at: index)
+  }
 }
 
 private extension PreparedStatement {
