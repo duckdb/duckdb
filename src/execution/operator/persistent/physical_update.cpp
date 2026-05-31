@@ -134,7 +134,9 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	// Regular in-place update.
 	if (!update_is_del_and_insert) {
 		if (return_chunk) {
-			mock_chunk.SetChildCardinality(update_chunk.size());
+			// only set the cardinality (do NOT resize): mock_chunk is not reset here and may still hold non-flat
+			// references from a previous call - the relevant columns are (re)referenced below.
+			mock_chunk.SetCardinality(update_chunk.size());
 			for (idx_t i = 0; i < columns.size(); i++) {
 				mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 			}
@@ -194,7 +196,9 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	table.Delete(delete_state, context.client, tableref, del_row_ids, update_count);
 
 	// Arrange the columns in the standard table order.
-	mock_chunk.SetChildCardinality(update_count);
+	// only set the cardinality (do NOT resize): mock_chunk is not reset here and may still hold non-flat references
+	// from a previous call - the relevant columns are (re)referenced below.
+	mock_chunk.SetCardinality(update_count);
 	for (idx_t i = 0; i < columns.size(); i++) {
 		mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
 	}

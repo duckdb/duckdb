@@ -1619,7 +1619,6 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_da
 
 void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) {
 	// extract OUTPUT columns from probe_data
-	result.SetChildCardinality(probe_data.size());
 	for (idx_t i = 0; i < ht.lhs_output_in_probe.size(); i++) {
 		idx_t probe_col_idx = ht.lhs_output_in_probe[i];
 		result.data[i].Reference(probe_data.data[probe_col_idx]);
@@ -1628,6 +1627,10 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 	auto &mark_vector = result.data.back();
 	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
 	FlatVector::SetSize(mark_vector, count_t(probe_data.size()));
+
+	// set the cardinality AFTER referencing the probe columns: a referenced probe column may be a constant vector
+	// (e.g. a constant join key) whose size must be aligned to the chunk cardinality
+	result.SetChildCardinality(probe_data.size());
 
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL

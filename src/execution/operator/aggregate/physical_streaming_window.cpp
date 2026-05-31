@@ -421,8 +421,9 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	} else if (delayed.size()) {
 		//	We have enough delayed rows so flush them
 		ExecuteDelayed(context, delayed, input, output, gstate_p);
-		// Defer resetting delayed as it may be referenced.
-		delayed.SetChildCardinality(0);
+		// Defer resetting delayed as it may be referenced: only clear the cardinality, do NOT resize the child
+		// vectors (the output chunk references delayed's buffers, so resizing them would corrupt the output).
+		delayed.SetCardinality(0);
 		// Come back to process the input
 		return OperatorResultType::HAVE_MORE_OUTPUT;
 	} else {
