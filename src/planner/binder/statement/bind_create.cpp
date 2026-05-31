@@ -543,14 +543,6 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	    create_trigger_info.event_type == TriggerEventType::DELETE_EVENT) {
 		throw BinderException("REFERENCING NEW TABLE AS is not valid for AFTER DELETE triggers");
 	}
-	if (create_trigger_info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
-		table.ScanTriggers(table.ParentCatalog().GetCatalogTransaction(context), [&](CatalogEntry &entry) {
-			auto &t = entry.Cast<TriggerCatalogEntry>();
-			if (t.timing == create_trigger_info.timing && t.event_type == create_trigger_info.event_type) {
-				throw NotImplementedException("Multiple triggers per table event are not yet supported");
-			}
-		});
-	}
 
 	// Validate the trigger body using an isolated binder (own GlobalBinderState).
 	// Set up trigger_expanded_tables to match runtime behavior.

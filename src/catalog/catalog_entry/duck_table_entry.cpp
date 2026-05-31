@@ -1385,6 +1385,11 @@ optional_ptr<CatalogEntry> DuckTableEntry::CreateTrigger(CatalogTransaction tran
 		if (old_entry) {
 			return nullptr;
 		}
+	} else if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		auto old_entry = triggers->GetEntry(transaction, entry_name);
+		if (old_entry) {
+			triggers->DropEntry(transaction, entry_name, false);
+		}
 	}
 	if (!triggers->CreateEntry(transaction, entry_name, std::move(trigger), dependencies)) {
 		throw CatalogException::EntryAlreadyExists(CatalogType::TRIGGER_ENTRY, entry_name);

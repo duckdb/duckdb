@@ -1,0 +1,421 @@
+# name: test/sql/trigger/trigger_multiple_per_event.test
+# description: Test multiple triggers per table event
+# group: [trigger]
+
+require noforcestorage
+
+# Two triggers on same INSERT event - both fire
+statement ok
+CREATE TABLE t1 (id INTEGER);
+
+statement ok
+CREATE TABLE audit1 (msg VARCHAR);
+
+statement ok
+CREATE TABLE audit2 (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg1 AFTER INSERT ON t1 FOR EACH STATEMENT
+    INSERT INTO audit1 VALUES ('trg1 fired');
+
+statement ok
+CREATE TRIGGER trg2 AFTER INSERT ON t1 FOR EACH STATEMENT
+    INSERT INTO audit2 VALUES ('trg2 fired');
+
+statement ok
+INSERT INTO t1 VALUES (1);
+
+query I
+SELECT COUNT(*) FROM audit1;
+----
+1
+
+query I
+SELECT COUNT(*) FROM audit2;
+----
+1
+
+# Alphabetical order wins over creation order - b_trg created first, a_trg fires first
+statement ok
+CREATE TABLE t2 (id INTEGER);
+
+statement ok
+CREATE SEQUENCE order_seq START 1;
+
+statement ok
+CREATE TABLE order_audit (seq_val INTEGER, name VARCHAR);
+
+statement ok
+CREATE TRIGGER b_trg AFTER INSERT ON t2 FOR EACH STATEMENT
+    INSERT INTO order_audit VALUES (nextval('order_seq'), 'b_trg');
+
+statement ok
+CREATE TRIGGER a_trg AFTER INSERT ON t2 FOR EACH STATEMENT
+    INSERT INTO order_audit VALUES (nextval('order_seq'), 'a_trg');
+
+statement ok
+INSERT INTO t2 VALUES (1);
+
+query II
+SELECT seq_val, name FROM order_audit ORDER BY seq_val;
+----
+1	a_trg
+2	b_trg
+
+# Alphabetical order holds when creation order matches it too - a_trg created first, a_trg fires first,
+# making sure it's not LIFO for some reason
+statement ok
+CREATE TABLE t2b (id INTEGER);
+
+statement ok
+CREATE SEQUENCE order_seq2 START 1;
+
+statement ok
+CREATE TABLE order_audit2 (seq_val INTEGER, name VARCHAR);
+
+statement ok
+CREATE TRIGGER a_trg2 AFTER INSERT ON t2b FOR EACH STATEMENT
+    INSERT INTO order_audit2 VALUES (nextval('order_seq2'), 'a_trg2');
+
+statement ok
+CREATE TRIGGER b_trg2 AFTER INSERT ON t2b FOR EACH STATEMENT
+    INSERT INTO order_audit2 VALUES (nextval('order_seq2'), 'b_trg2');
+
+statement ok
+INSERT INTO t2b VALUES (1);
+
+query II
+SELECT seq_val, name FROM order_audit2 ORDER BY seq_val;
+----
+1	a_trg2
+2	b_trg2
+
+# Three triggers on same event - all fire
+statement ok
+CREATE TABLE t3 (id INTEGER);
+
+statement ok
+CREATE TABLE count3 (n INTEGER);
+
+statement ok
+INSERT INTO count3 VALUES (0);
+
+statement ok
+CREATE TRIGGER trg3_a AFTER INSERT ON t3 FOR EACH STATEMENT
+    UPDATE count3 SET n = n + 1;
+
+statement ok
+CREATE TRIGGER trg3_b AFTER INSERT ON t3 FOR EACH STATEMENT
+    UPDATE count3 SET n = n + 1;
+
+statement ok
+CREATE TRIGGER trg3_c AFTER INSERT ON t3 FOR EACH STATEMENT
+    UPDATE count3 SET n = n + 1;
+
+statement ok
+INSERT INTO t3 VALUES (1);
+
+query I
+SELECT n FROM count3;
+----
+3
+
+# Mixed events - two on INSERT, one on DELETE: only INSERT pair fires on INSERT
+statement ok
+CREATE TABLE t4 (id INTEGER);
+
+statement ok
+CREATE TABLE mixed_audit (event VARCHAR);
+
+statement ok
+CREATE TRIGGER t4_ins1 AFTER INSERT ON t4 FOR EACH STATEMENT
+    INSERT INTO mixed_audit VALUES ('insert1');
+
+statement ok
+CREATE TRIGGER t4_ins2 AFTER INSERT ON t4 FOR EACH STATEMENT
+    INSERT INTO mixed_audit VALUES ('insert2');
+
+statement ok
+CREATE TRIGGER t4_del AFTER DELETE ON t4 FOR EACH STATEMENT
+    INSERT INTO mixed_audit VALUES ('delete');
+
+statement ok
+INSERT INTO t4 VALUES (1), (2);
+
+query I
+SELECT COUNT(*) FROM mixed_audit WHERE event LIKE 'insert%';
+----
+2
+
+query I
+SELECT COUNT(*) FROM mixed_audit WHERE event = 'delete';
+----
+0
+
+statement ok
+DELETE FROM t4;
+
+query I
+SELECT COUNT(*) FROM mixed_audit WHERE event = 'delete';
+----
+1
+
+# REFERENCING aliases with multiple triggers - each trigger uses its own alias
+statement ok
+CREATE TABLE t5 (id INTEGER);
+
+statement ok
+CREATE TABLE ref_audit (val INTEGER);
+
+statement ok
+CREATE TRIGGER t5_ref1 AFTER INSERT ON t5
+    REFERENCING NEW TABLE AS new_rows1
+    FOR EACH STATEMENT
+    INSERT INTO ref_audit SELECT id FROM new_rows1;
+
+statement ok
+CREATE TRIGGER t5_ref2 AFTER INSERT ON t5
+    REFERENCING NEW TABLE AS new_rows2
+    FOR EACH STATEMENT
+    INSERT INTO ref_audit SELECT id * 10 FROM new_rows2;
+
+statement ok
+INSERT INTO t5 VALUES (1), (2);
+
+query I
+SELECT COUNT(*) FROM ref_audit;
+----
+4
+
+query I
+SELECT SUM(val) FROM ref_audit;
+----
+33
+
+# Same REFERENCING alias name across two triggers - both resolve to the same base CTE
+statement ok
+CREATE TABLE t6 (id INTEGER);
+
+statement ok
+CREATE TABLE same_alias_audit (val INTEGER);
+
+statement ok
+CREATE TRIGGER t6_a AFTER INSERT ON t6
+    REFERENCING NEW TABLE AS inserted
+    FOR EACH STATEMENT
+    INSERT INTO same_alias_audit SELECT id FROM inserted;
+
+statement ok
+CREATE TRIGGER t6_b AFTER INSERT ON t6
+    REFERENCING NEW TABLE AS inserted
+    FOR EACH STATEMENT
+    INSERT INTO same_alias_audit SELECT id * 100 FROM inserted;
+
+statement ok
+INSERT INTO t6 VALUES (3);
+
+query I
+SELECT COUNT(*) FROM same_alias_audit;
+----
+2
+
+query I
+SELECT SUM(val) FROM same_alias_audit;
+----
+303
+
+# REFERENCING alias from one trigger is not visible to a sibling trigger that did not declare it
+statement ok
+CREATE TABLE t6b (id INTEGER);
+
+statement ok
+CREATE TABLE t6b_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER t6b_with_ref AFTER INSERT ON t6b
+    REFERENCING NEW TABLE AS new_rows
+    FOR EACH STATEMENT
+    INSERT INTO t6b_audit VALUES ('fired');
+
+statement error
+CREATE TRIGGER t6b_no_ref AFTER INSERT ON t6b FOR EACH STATEMENT
+    INSERT INTO t6b_audit SELECT id FROM new_rows;
+----
+<REGEX>:.*[Cc]atalog.*
+
+# Chained triggers - t7 has 2 triggers, one inserts into t7b which has its own trigger
+statement ok
+CREATE TABLE t7 (id INTEGER);
+
+statement ok
+CREATE TABLE t7b (id INTEGER);
+
+statement ok
+CREATE TABLE chain_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER t7b_trg AFTER INSERT ON t7b FOR EACH STATEMENT
+    INSERT INTO chain_audit VALUES ('t7b fired');
+
+statement ok
+CREATE TRIGGER t7_direct AFTER INSERT ON t7 FOR EACH STATEMENT
+    INSERT INTO chain_audit VALUES ('t7 direct');
+
+statement ok
+CREATE TRIGGER t7_chain AFTER INSERT ON t7 FOR EACH STATEMENT
+    INSERT INTO t7b VALUES (99);
+
+statement ok
+INSERT INTO t7 VALUES (1);
+
+# t7_direct and t7b_trg (via t7_chain -> t7b) both write to chain_audit
+query I
+SELECT COUNT(*) FROM chain_audit;
+----
+2
+
+# t7b got a row from t7_chain, confirming the chain fired
+query I
+SELECT COUNT(*) FROM t7b;
+----
+1
+
+# Triggers on distinct unrelated tables both fire independently
+statement ok
+CREATE TABLE ta (id INTEGER);
+
+statement ok
+CREATE TABLE tb (id INTEGER);
+
+statement ok
+CREATE TABLE ta_audit (msg VARCHAR);
+
+statement ok
+CREATE TABLE tb_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER ta_trg AFTER INSERT ON ta FOR EACH STATEMENT
+    INSERT INTO ta_audit VALUES ('ta fired');
+
+statement ok
+CREATE TRIGGER tb_trg AFTER INSERT ON tb FOR EACH STATEMENT
+    INSERT INTO tb_audit VALUES ('tb fired');
+
+statement ok
+INSERT INTO ta VALUES (1);
+
+statement ok
+INSERT INTO tb VALUES (2);
+
+query I
+SELECT COUNT(*) FROM ta_audit;
+----
+1
+
+query I
+SELECT COUNT(*) FROM tb_audit;
+----
+1
+
+# Recursive trigger still blocked
+statement ok
+CREATE TABLE t8 (id INTEGER);
+
+statement error
+CREATE TRIGGER t8_recursive AFTER INSERT ON t8 FOR EACH STATEMENT
+    INSERT INTO t8 VALUES (1);
+----
+<REGEX>:.*[Rr]ecurs.*
+
+# Cycle through a multi-trigger chain is blocked: A has two triggers (one chains to B),
+# creating a trigger on B that inserts back into A is blocked
+statement ok
+CREATE TABLE t_cycle_a (id INTEGER);
+
+statement ok
+CREATE TABLE t_cycle_b (id INTEGER);
+
+statement ok
+CREATE TABLE t_cycle_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER t_cycle_a_harmless AFTER INSERT ON t_cycle_a FOR EACH STATEMENT
+    INSERT INTO t_cycle_audit VALUES ('harmless');
+
+statement ok
+CREATE TRIGGER t_cycle_a_to_b AFTER INSERT ON t_cycle_a FOR EACH STATEMENT
+    INSERT INTO t_cycle_b VALUES (1);
+
+statement error
+CREATE TRIGGER t_cycle_b_to_a AFTER INSERT ON t_cycle_b FOR EACH STATEMENT
+    INSERT INTO t_cycle_a VALUES (1);
+----
+<REGEX>:.*[Rr]ecurs.*
+
+# DROP one trigger - other still fires
+statement ok
+CREATE TABLE t9 (id INTEGER);
+
+statement ok
+CREATE TABLE drop_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER t9_keep AFTER INSERT ON t9 FOR EACH STATEMENT
+    INSERT INTO drop_audit VALUES ('keep');
+
+statement ok
+CREATE TRIGGER t9_drop AFTER INSERT ON t9 FOR EACH STATEMENT
+    INSERT INTO drop_audit VALUES ('drop');
+
+statement ok
+DROP TRIGGER t9_drop ON t9;
+
+statement ok
+INSERT INTO t9 VALUES (1);
+
+query I
+SELECT COUNT(*) FROM drop_audit WHERE msg = 'keep';
+----
+1
+
+query I
+SELECT COUNT(*) FROM drop_audit WHERE msg = 'drop';
+----
+0
+
+# OR REPLACE on one trigger - other is unaffected
+statement ok
+CREATE TABLE t10 (id INTEGER);
+
+statement ok
+CREATE TABLE replace_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER t10_a AFTER INSERT ON t10 FOR EACH STATEMENT
+    INSERT INTO replace_audit VALUES ('original_a');
+
+statement ok
+CREATE TRIGGER t10_b AFTER INSERT ON t10 FOR EACH STATEMENT
+    INSERT INTO replace_audit VALUES ('b');
+
+statement ok
+CREATE OR REPLACE TRIGGER t10_a AFTER INSERT ON t10 FOR EACH STATEMENT
+    INSERT INTO replace_audit VALUES ('replaced_a');
+
+statement ok
+INSERT INTO t10 VALUES (1);
+
+query I
+SELECT COUNT(*) FROM replace_audit WHERE msg = 'original_a';
+----
+0
+
+query I
+SELECT COUNT(*) FROM replace_audit WHERE msg = 'replaced_a';
+----
+1
+
+query I
+SELECT COUNT(*) FROM replace_audit WHERE msg = 'b';
+----
+1
