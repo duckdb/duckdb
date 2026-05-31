@@ -282,20 +282,28 @@ static bool SubqueryPlanHasVolatileExpression(LogicalOperator &op) {
 }
 
 static bool PerformDuplicateElimination(Binder &binder, CorrelatedColumns &correlated_columns,
-                                        LogicalOperator &subquery_plan) {
+                                        LogicalOperator &subquery_plan, bool is_any = false) {
 	if (!Settings::Get<EnableOptimizerSetting>(binder.context)) {
 		// if optimizations are disabled we always do a delim join
 		return true;
 	}
-	bool perform_delim = true;
+	bool delim_supported_for_types = true;
 	for (auto &col : correlated_columns) {
 		if (!PerformDelimOnType(col.type)) {
-			perform_delim = false;
+			delim_supported_for_types = false;
 			break;
 		}
 	}
-	if (perform_delim && SubqueryPlanHasVolatileExpression(subquery_plan)) {
-		// duckdb#17011: see SubqueryPlanHasVolatileExpression above.
+	bool perform_delim = true;
+	if (!delim_supported_for_types && !is_any) {
+		// SCALAR/EXISTS fall back to the delim_index (non-dedup) path for types that cannot be
+		// duplicate-eliminated. ANY cannot use that path for such types (e.g. LIST), so it keeps
+		// duplicate-elimination in that case (see the existing FIXME on ANY decorrelation).
+		perform_delim = false;
+	} else if (delim_supported_for_types && SubqueryPlanHasVolatileExpression(subquery_plan)) {
+		// duckdb#17011 (+ ANY sibling): a correlated subquery containing a VOLATILE expression must
+		// be re-evaluated per outer row. Only disable dedup when the delim_index path is usable for
+		// these correlated types; for ANY with an unsupported type, dedup is kept.
 		perform_delim = false;
 	}
 	if (perform_delim) {
@@ -314,9 +322,12 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
                                                      unique_ptr<LogicalOperator> &root,
                                                      unique_ptr<LogicalOperator> plan) {
 	auto &correlated_columns = expr.binder->correlated_columns;
-	// FIXME: there should be a way of disabling decorrelation for ANY queries as well, but not for now...
+	// ANY/IN, like SCALAR/EXISTS, must not duplicate-eliminate a correlated subquery that contains a
+	// VOLATILE expression (it would evaluate the volatile once and reuse it across duplicate outer
+	// rows -- observably wrong vs PostgreSQL, same class as duckdb#17011). The is_any flag preserves
+	// the existing ANY behavior for correlated types the delim_index path does not support (e.g. LIST).
 	bool perform_delim =
-	    expr.subquery_type == SubqueryType::ANY ? true : PerformDuplicateElimination(binder, correlated_columns, *plan);
+	    PerformDuplicateElimination(binder, correlated_columns, *plan, expr.subquery_type == SubqueryType::ANY);
 	D_ASSERT(expr.IsCorrelated());
 	// correlated subquery
 	// for a more in-depth explanation of this code, read the paper "Unnesting Arbitrary Subqueries"

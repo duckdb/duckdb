@@ -1,0 +1,33 @@
+# name: test/sql/subquery/scalar/test_correlated_any_volatile.test
+# description: Correlated ANY/IN subqueries with volatile functions must re-evaluate per outer row (duckdb#17011 sibling)
+# group: [scalar]
+
+statement ok
+CREATE SEQUENCE seq;
+
+# A correlated IN/ANY subquery containing a VOLATILE expression (here nextval) must be evaluated
+# once per outer row, not duplicate-eliminated across repeated correlation keys.
+# 5 duplicate outer rows -> 5 nextval() calls (was 1 before the fix, due to ANY caching).
+statement ok
+SELECT r, r IN (SELECT nextval('seq') + r) FROM (VALUES (1), (1), (1), (1), (1)) _(r);
+
+query I
+SELECT currval('seq');
+----
+5
+
+# Regression guard: LIST-typed correlated ANY keeps working. Its decorrelation cannot use the
+# delim_index (non-dedup) path, so duplicate-elimination is preserved for non-volatile and
+# delim-unsupported-type cases (this is the case that rejected the naive one-line fix).
+statement ok
+CREATE TABLE lst(l INTEGER[])
+
+statement ok
+INSERT INTO lst VALUES (ARRAY[1]), (ARRAY[2]), (NULL)
+
+query I
+SELECT l IN (SELECT i1.l FROM lst i1 WHERE i1.l = lst.l) FROM lst ORDER BY l NULLS LAST
+----
+true
+true
+false
