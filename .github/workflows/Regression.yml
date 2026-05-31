@@ -48,7 +48,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
+  BASE_BRANCH: ${{ github.base_ref || vars.DUCKDB_GIT_BASE_BRANCH || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
   BASE_HASH: ${{ inputs.base_hash }}
 
 jobs:
