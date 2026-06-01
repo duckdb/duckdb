@@ -891,6 +891,69 @@ void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
 	FinalizeSortData(result, row_count, key_lengths, offsets);
 }
 
+#ifdef DEBUG
+static void AssertSortKeyRoundTrip(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
+                                   const vector<OrderModifiers> &modifiers, const Vector &result, idx_t row_count) {
+	D_ASSERT(sort_key_data.size() == modifiers.size());
+	UnifiedVectorFormat result_format;
+	result.ToUnifiedFormat(result_format);
+	const auto result_is_blob = result.GetType() == LogicalType::BLOB;
+	const auto result_blob_data = result_is_blob ? UnifiedVectorFormat::GetData<string_t>(result_format) : nullptr;
+	const auto result_int_data = result_is_blob ? nullptr : UnifiedVectorFormat::GetData<int64_t>(result_format);
+	idx_t constant_encoded_size = 0;
+	if (!result_is_blob) {
+		for (auto &column : sort_key_data) {
+			constant_encoded_size += 1 + GetTypeIdSize(column->vec.GetType().InternalType());
+		}
+		D_ASSERT(constant_encoded_size <= sizeof(int64_t));
+	}
+
+	vector<Vector> decoded_columns;
+	decoded_columns.reserve(sort_key_data.size());
+	for (auto &column : sort_key_data) {
+		decoded_columns.emplace_back(column->vec.GetType());
+	}
+
+	for (idx_t r = 0; r < row_count; r++) {
+		auto key_idx = result_format.sel->get_index(r);
+		D_ASSERT(result_format.validity.RowIsValid(key_idx));
+
+		string_t full_key;
+		int64_t bswapped_key = 0;
+		if (result_is_blob) {
+			full_key = result_blob_data[key_idx];
+		} else {
+			bswapped_key = BSwapIfLE(result_int_data[key_idx]);
+			full_key = string_t(const_char_ptr_cast(reinterpret_cast<const char *>(&bswapped_key)), sizeof(int64_t));
+		}
+
+		const auto full_key_data = full_key.GetData();
+		const auto full_key_size = full_key.GetSize();
+		const auto expected_size = result_is_blob ? full_key_size : constant_encoded_size;
+		D_ASSERT(expected_size <= full_key_size);
+		idx_t offset = 0;
+		for (idx_t c = 0; c < sort_key_data.size(); c++) {
+			D_ASSERT(offset <= expected_size);
+			const auto sliced_data = full_key_data + offset;
+			const auto sliced_size = expected_size - offset;
+			auto sliced_key = string_t(sliced_data, UnsafeNumericCast<uint32_t>(sliced_size));
+			offset += CreateSortKeyHelpers::DecodeSortKey(sliced_key, decoded_columns[c], r, modifiers[c]);
+		}
+		D_ASSERT(offset <= expected_size);
+
+		for (idx_t c = 0; c < sort_key_data.size(); c++) {
+			auto &source_column = sort_key_data[c];
+			auto source_val = source_column->vec.GetValue(r);
+			auto decoded_val = decoded_columns[c].GetValue(r);
+			D_ASSERT(source_val.IsNull() == decoded_val.IsNull());
+			if (!source_val.IsNull()) {
+				D_ASSERT(source_val == decoded_val);
+			}
+		}
+	}
+}
+#endif
+
 } // namespace
 
 void CreateSortKeyHelpers::CreateSortKey(const Vector &input, OrderModifiers order_modifier, Vector &result) {
@@ -960,6 +1023,9 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(args.data[c], args.size(), bind_data.modifiers[c / 2]));
 	}
 	CreateSortKeyInternal(sort_key_data, bind_data.modifiers, bind_data.all_constant, result, args.size());
+#ifdef DEBUG
+	AssertSortKeyRoundTrip(sort_key_data, bind_data.modifiers, result, args.size());
+#endif
 }
 
 //===--------------------------------------------------------------------===//
