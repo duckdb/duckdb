@@ -26,15 +26,15 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 		bindings.push_back(&aggr);
 
 		aggregate_return_types.push_back(aggr.GetReturnType());
-		for (auto &child : aggr.children) {
+		for (auto &child : aggr.GetChildren()) {
 			payload_types.push_back(child->GetReturnType());
 		}
-		if (aggr.filter) {
+		if (aggr.GetFilter()) {
 			filter_count++;
-			payload_types_filters.push_back(aggr.filter->GetReturnType());
+			payload_types_filters.push_back(aggr.GetFilter()->GetReturnType());
 		}
-		if (!aggr.function.HasStateCombineCallback()) {
-			throw InternalException("Aggregate function %s is missing a combine method", aggr.function.GetName());
+		if (!aggr.Function().HasStateCombineCallback()) {
+			throw InternalException("Aggregate function %s is missing a combine method", aggr.Function().GetName());
 		}
 		aggregates.push_back(std::move(expr));
 	}
@@ -54,17 +54,17 @@ void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggr
 	// bindings.push_back(&aggr);
 	filter_count = 0;
 	aggregate_return_types.push_back(aggr.GetReturnType());
-	for (idx_t i = 0; i < aggr.children.size(); i++) {
-		auto &child = aggr.children[i];
+	for (idx_t i = 0; i < aggr.GetChildren().size(); i++) {
+		auto &child = aggr.GetChildren()[i];
 		group_types.push_back(child->GetReturnType());
 		groups.push_back(child->Copy());
 		payload_types.push_back(child->GetReturnType());
-		if (aggr.filter) {
+		if (aggr.GetFilter()) {
 			filter_count++;
 		}
 	}
-	if (!aggr.function.HasStateCombineCallback()) {
-		throw InternalException("Aggregate function %s is missing a combine method", aggr.function.GetName());
+	if (!aggr.Function().HasStateCombineCallback()) {
+		throw InternalException("Aggregate function %s is missing a combine method", aggr.Function().GetName());
 	}
 }
 

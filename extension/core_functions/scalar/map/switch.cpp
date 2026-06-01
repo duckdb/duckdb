@@ -100,10 +100,10 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 		cases = std::move(input.children[map_index]);
 	} else if (input.children[map_index]->GetExpressionClass() == ExpressionClass::BOUND_CAST) {
 		auto &cast_expr = input.children[map_index]->Cast<BoundCastExpression>();
-		if (cast_expr.child->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		if (cast_expr.Child().GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 			throw BinderException("SWITCH expected a map function for the cases");
 		}
-		cases = std::move(cast_expr.child);
+		cases = std::move(cast_expr.ChildMutable());
 	} else {
 		throw BinderException("SWITCH expected a map function for the cases");
 	}
@@ -115,7 +115,7 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 	ExtractConstantExprFromList(cases_func.children[0], keys_unpacked);
 	ExtractConstantExprFromList(cases_func.children[1], values_unpacked);
 
-	result->case_checks.reserve(keys_unpacked.size());
+	result->CaseChecksMutable().reserve(keys_unpacked.size());
 	for (idx_t i = 0; i < keys_unpacked.size(); i++) {
 		BoundCaseCheck case_check;
 		if (base_expr) {
@@ -136,12 +136,12 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 			    function_data.return_type.ToString(), then_type.ToString());
 		}
 		case_check.then_expr = std::move(values_unpacked[i]);
-		result->case_checks.push_back(std::move(case_check));
+		result->CaseChecksMutable().push_back(std::move(case_check));
 	}
 	if (default_expr) {
-		result->else_expr = std::move(default_expr);
+		result->ElseMutable() = std::move(default_expr);
 	} else {
-		result->else_expr = BoundCastExpression::AddCastToType(
+		result->ElseMutable() = BoundCastExpression::AddCastToType(
 		    input.context, make_uniq<BoundConstantExpression>(Value()), function_data.return_type);
 	}
 	return std::move(result);

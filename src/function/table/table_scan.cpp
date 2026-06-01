@@ -686,8 +686,8 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
 
 			// If the bound column references the index column, use updated_index_column
-			if (bound_column_ref_expr.binding.column_index == indexed_columns[0]) {
-				bound_column_ref_expr.binding.column_index = updated_index_column;
+			if (bound_column_ref_expr.Binding().column_index == indexed_columns[0]) {
+				bound_column_ref_expr.BindingMutable().column_index = updated_index_column;
 			}
 		});
 	}

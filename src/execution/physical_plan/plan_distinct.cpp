@@ -62,7 +62,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
 			auto first_aggregate =
 			    function_binder.BindAggregateFunction(FirstFunctionGetter::GetFunction(logical_type),
 			                                          std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
-			first_aggregate->order_bys = op.order_by ? op.order_by->Copy() : nullptr;
+			first_aggregate->GetOrderBysMutable() = op.order_by ? op.order_by->Copy() : nullptr;
 
 			if (Settings::Get<EnableOptimizerSetting>(context)) {
 				bool changes_made = false;
