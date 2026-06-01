@@ -16,9 +16,15 @@ statement ok
 INSERT INTO transactions VALUES
     (1, 100.0, '2024-01-01 10:00:00'),
     (1, 200.0, '2024-01-02 14:00:00'),
-    (2, 50.0,  '2024-01-01 09:00:00'),
-    (2, 75.0,  '2024-01-03 11:00:00'),
-    (3, 300.0, '2024-01-02 16:00:00');
+    (1,  50.0, '2024-01-04 09:00:00'),
+    (2,  50.0, '2024-01-01 09:00:00'),
+    (2,  75.0, '2024-01-03 11:00:00'),
+    (2, 120.0, '2024-01-05 17:00:00'),
+    (3, 300.0, '2024-01-02 16:00:00'),
+    (3, 150.0, '2024-01-03 08:00:00'),
+    (4,  10.0, '2024-01-01 06:00:00'),
+    (4,  20.0, '2024-01-01 22:00:00'),
+    (4,  30.0, '2024-01-02 07:00:00');
 
 # ============================================================
 # SUM feature: PIT-correct windowed aggregation
@@ -28,25 +34,48 @@ CREATE FEATURE total_spend ON transactions ENTITY user_id TIMESTAMP ts GRANULARI
 
 # PIT-correct results — no future data leakage:
 # Bucket labels are ceiling (start of NEXT period), i.e. value available FROM that timestamp.
-# user 1 @ bucket 01-02: only 100.0 (Jan 1 event; the 200.0 on Jan 2 is not yet available)
-# user 1 @ bucket 01-03: 100.0 + 200.0 = 300.0 (both Jan 1 and Jan 2 events available)
-# user 2 @ bucket 01-02: only 50.0
-# user 2 @ bucket 01-04: 50.0 + 75.0 = 125.0
-# user 3 @ bucket 01-03: 300.0
+# user 1 @ bucket 01-02: 100.0 (only Jan 1 event)
+# user 1 @ bucket 01-03: 300.0 (Jan 1 + Jan 2)
+# user 1 @ bucket 01-05: 350.0 (Jan 1 + Jan 2 + Jan 4; all within 7-day window from Jan 4)
+# user 2 @ bucket 01-02: 50.0  (only Jan 1 event)
+# user 2 @ bucket 01-04: 125.0 (Jan 1 + Jan 3)
+# user 2 @ bucket 01-06: 245.0 (Jan 1 + Jan 3 + Jan 5)
+# user 3 @ bucket 01-03: 300.0 (only Jan 2 event)
+# user 3 @ bucket 01-04: 450.0 (Jan 2 + Jan 3)
+# user 4 @ bucket 01-02: 30.0  (two Jan 1 events)
+# user 4 @ bucket 01-03: 60.0  (both Jan 1 events + Jan 2)
 query ITRI rowsort
 SELECT * FROM total_spend;
 ----
 1	2024-01-02 00:00:00	100.0	1
 1	2024-01-03 00:00:00	300.0	1
+1	2024-01-05 00:00:00	350.0	1
 2	2024-01-02 00:00:00	50.0	1
 2	2024-01-04 00:00:00	125.0	1
+2	2024-01-06 00:00:00	245.0	1
 3	2024-01-03 00:00:00	300.0	1
+3	2024-01-04 00:00:00	450.0	1
+4	2024-01-02 00:00:00	30.0	1
+4	2024-01-03 00:00:00	60.0	1
 
 # Row count
 query I
 SELECT COUNT(*) FROM total_spend;
 ----
-5
+10
+
+# Verify individual entity full timelines
+query TR rowsort
+SELECT feature_timestamp, total FROM total_spend WHERE user_id = 3;
+----
+2024-01-03 00:00:00	300.0
+2024-01-04 00:00:00	450.0
+
+query TR rowsort
+SELECT feature_timestamp, total FROM total_spend WHERE user_id = 4;
+----
+2024-01-02 00:00:00	30.0
+2024-01-03 00:00:00	60.0
 
 # ============================================================
 # AVG feature: different aggregate on same source
@@ -59,9 +88,19 @@ SELECT * FROM avg_spend;
 ----
 1	2024-01-02 00:00:00	100.0	1
 1	2024-01-03 00:00:00	150.0	1
+1	2024-01-05 00:00:00	116.66666666666667	1
 2	2024-01-02 00:00:00	50.0	1
 2	2024-01-04 00:00:00	62.5	1
+2	2024-01-06 00:00:00	81.66666666666667	1
 3	2024-01-03 00:00:00	300.0	1
+3	2024-01-04 00:00:00	225.0	1
+4	2024-01-02 00:00:00	15.0	1
+4	2024-01-03 00:00:00	20.0	1
+
+query I
+SELECT COUNT(*) FROM avg_spend;
+----
+10
 
 # ============================================================
 # Multiple aggregates in one feature
@@ -75,6 +114,44 @@ SELECT * FROM multi_agg WHERE user_id = 1 AND feature_timestamp = '2024-01-03'::
 ----
 1	2024-01-03 00:00:00	300.0	2	150.0	1
 
+# user 1 @ bucket 01-05: total=350, cnt=3, avg≈116.67 (Jan 1 + Jan 2 + Jan 4 events)
+query ITRIRI
+SELECT * FROM multi_agg WHERE user_id = 1 AND feature_timestamp = '2024-01-05'::TIMESTAMP;
+----
+1	2024-01-05 00:00:00	350.0	3	116.66666666666667	1
+
+# user 4 @ bucket 01-02: total=30, cnt=2, avg=15 (two Jan 1 events)
+query ITRIRI
+SELECT * FROM multi_agg WHERE user_id = 4 AND feature_timestamp = '2024-01-02'::TIMESTAMP;
+----
+4	2024-01-02 00:00:00	30.0	2	15.0	1
+
+# user 4 @ bucket 01-03: total=60, cnt=3, avg=20 (two Jan 1 + one Jan 2)
+query ITRIRI
+SELECT * FROM multi_agg WHERE user_id = 4 AND feature_timestamp = '2024-01-03'::TIMESTAMP;
+----
+4	2024-01-03 00:00:00	60.0	3	20.0	1
+
+# ============================================================
+# COUNT feature: verify row counts per bucket
+# ============================================================
+statement ok
+CREATE FEATURE event_count ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, COUNT(*) AS cnt FROM transactions GROUP BY user_id);
+
+query ITI rowsort
+SELECT user_id, feature_timestamp, cnt FROM event_count;
+----
+1	2024-01-02 00:00:00	1
+1	2024-01-03 00:00:00	2
+1	2024-01-05 00:00:00	3
+2	2024-01-02 00:00:00	1
+2	2024-01-04 00:00:00	2
+2	2024-01-06 00:00:00	3
+3	2024-01-03 00:00:00	1
+3	2024-01-04 00:00:00	2
+4	2024-01-02 00:00:00	2
+4	2024-01-03 00:00:00	3
+
 # ============================================================
 # Window boundary: data outside window excluded
 # ============================================================
@@ -86,24 +163,59 @@ INSERT INTO narrow_window_src VALUES
     ('a', 10, '2024-01-01 08:00:00'),
     ('a', 20, '2024-01-02 08:00:00'),
     ('a', 30, '2024-01-03 08:00:00'),
-    ('a', 40, '2024-01-04 08:00:00');
+    ('a', 40, '2024-01-04 08:00:00'),
+    ('a', 50, '2024-01-05 08:00:00'),
+    ('b', 100, '2024-01-01 08:00:00'),
+    ('b', 200, '2024-01-03 08:00:00'),
+    ('b', 300, '2024-01-05 08:00:00');
 
 # Window of 2 days: bucket at 01-04 should only include 01-03 and 01-04 data
 statement ok
 CREATE FEATURE narrow_feat ON narrow_window_src ENTITY eid TIMESTAMP ts GRANULARITY DAY WINDOW 2 REFRESH FULL RETAIN 1 AS (SELECT eid, SUM(val) AS total FROM narrow_window_src GROUP BY eid);
 
 # With ceiling bucketing (bucket = DATE_TRUNC('day', ts) + 1 day):
-# bucket 01-02: ts < 01-02, ts >= 12-31 -> only 01-01 event -> 10
-# bucket 01-03: ts < 01-03, ts >= 01-01 -> 01-01 + 01-02 events -> 30
-# bucket 01-04: ts < 01-04, ts >= 01-02 -> 01-02 + 01-03 events -> 50
-# bucket 01-05: ts < 01-05, ts >= 01-03 -> 01-03 + 01-04 events -> 70
-query IR rowsort
-SELECT feature_timestamp, total FROM narrow_feat;
+# entity 'a':
+#   bucket 01-02: ts < 01-02, ts >= 12-31 -> only 01-01 event -> 10
+#   bucket 01-03: ts < 01-03, ts >= 01-01 -> 01-01 + 01-02 events -> 30
+#   bucket 01-04: ts < 01-04, ts >= 01-02 -> 01-02 + 01-03 events -> 50
+#   bucket 01-05: ts < 01-05, ts >= 01-03 -> 01-03 + 01-04 events -> 70
+#   bucket 01-06: ts < 01-06, ts >= 01-04 -> 01-04 + 01-05 events -> 90
+# entity 'b':
+#   bucket 01-02: ts < 01-02, ts >= 12-31 -> only 01-01 event -> 100
+#   bucket 01-04: ts < 01-04, ts >= 01-02 -> 01-03 event -> 200
+#   bucket 01-06: ts < 01-06, ts >= 01-04 -> 01-05 event -> 300
+query TIR rowsort
+SELECT eid, feature_timestamp, total FROM narrow_feat;
 ----
-2024-01-02 00:00:00	10
-2024-01-03 00:00:00	30
-2024-01-04 00:00:00	50
-2024-01-05 00:00:00	70
+a	2024-01-02 00:00:00	10
+a	2024-01-03 00:00:00	30
+a	2024-01-04 00:00:00	50
+a	2024-01-05 00:00:00	70
+a	2024-01-06 00:00:00	90
+b	2024-01-02 00:00:00	100
+b	2024-01-04 00:00:00	200
+b	2024-01-06 00:00:00	300
+
+# ============================================================
+# MIN/MAX features: non-sum aggregates
+# ============================================================
+statement ok
+CREATE FEATURE max_spend ON transactions ENTITY user_id TIMESTAMP ts GRANULARITY DAY WINDOW 7 REFRESH FULL RETAIN 1 AS (SELECT user_id, MAX(amount) AS peak FROM transactions GROUP BY user_id);
+
+# user 1: peak at each bucket
+query TR rowsort
+SELECT feature_timestamp, peak FROM max_spend WHERE user_id = 1;
+----
+2024-01-02 00:00:00	100.0
+2024-01-03 00:00:00	200.0
+2024-01-05 00:00:00	200.0
+
+# user 4: peak at each bucket (two events on Jan 1 = 20.0; adding Jan 2 = 30.0)
+query TR rowsort
+SELECT feature_timestamp, peak FROM max_spend WHERE user_id = 4;
+----
+2024-01-02 00:00:00	20.0
+2024-01-03 00:00:00	30.0
 
 # ============================================================
 # Cleanup
@@ -121,7 +233,7 @@ SELECT * FROM total_spend;
 query I
 SELECT COUNT(*) FROM avg_spend;
 ----
-5
+10
 
 statement ok
 DROP TABLE transactions CASCADE;
