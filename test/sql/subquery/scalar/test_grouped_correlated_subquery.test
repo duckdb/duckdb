@@ -121,13 +121,21 @@ SELECT (SELECT MIN(ColID) FROM tbl_ProductSales INNER JOIN another_T t2 ON t1.co
 1
 1
 
-# LEFT JOIN between correlated columns not supported for now
-statement error
+# LEFT JOIN conditions can reference correlated columns
+query I
+WITH outer_t(x) AS (SELECT 1)
+SELECT (SELECT count(*) FROM range(1, 3) t(i) LEFT JOIN range(1, 2) u(j) ON t.i = outer_t.x) FROM outer_t;
+----
+2
+
+query I
 SELECT CASE WHEN NOT col1 NOT IN (SELECT (SELECT MAX(col7)) UNION (SELECT MIN(ColID) FROM tbl_ProductSales LEFT JOIN another_T t2 ON t2.col5 = t1.col1)) THEN 1 ELSE 2 END FROM another_T t1 GROUP BY col1 ORDER BY 1;
 ----
-<REGEX>:.*Not implemented Error.*Non-inner join on correlated columns not supported.*
+1
+2
+2
+2
 
-# REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 2, 2}));
 # correlated columns in window functions not supported yet
 statement error
 SELECT EXISTS (SELECT RANK() OVER (PARTITION BY SUM(DISTINCT col5))) FROM another_T t1;
