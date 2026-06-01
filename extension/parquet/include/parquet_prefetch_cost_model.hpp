@@ -27,24 +27,18 @@ struct PrefetchCostModel {
 	//! Ceiling for the coalescing gap
 	static constexpr uint64_t GAP_MAX = 32ULL << 20; //! 32 MiB
 
-	//! Per-medium seeds used before any read has been measured
-	static PrefetchCostModel LocalProfile();  //! ~20 KiB gap
-	static PrefetchCostModel RemoteProfile(); //! ~3.2 MiB gap
-
 	//! The coalescing gap implied by this model, clamped to [GAP_MIN, GAP_MAX]
 	uint64_t GetColumnGapSize() const;
 };
 
 class PrefetchCostModelState {
 public:
-	explicit PrefetchCostModelState(PrefetchCostModel seed) : model(seed) {
-	}
+	PrefetchCostModelState() = default;
 
 	//! Refine the model from a measured network throughput estimate.
 	void RefineFromEstimate(const NetworkThroughputEstimate &estimate);
 
-	//! Snapshot of the current model
-	PrefetchCostModel GetModel() const;
+bool TryGetColumnGapSize(uint64_t &result) const;
 
 private:
 	//! Number of minimal measured network samples
@@ -53,7 +47,8 @@ private:
 	static constexpr double ALPHA = 0.5;
 
 	mutable mutex lock;
-	PrefetchCostModel model;
+	//! Measured cost model
+	PrefetchCostModel model = {0, 0};
 	//! Whether we have switched from the seed to measured values
 	bool measured_adopted = false;
 };

@@ -10,14 +10,6 @@ constexpr uint64_t PrefetchCostModel::GAP_MAX;
 constexpr idx_t PrefetchCostModelState::MIN_SAMPLES;
 constexpr double PrefetchCostModelState::ALPHA;
 
-PrefetchCostModel PrefetchCostModel::LocalProfile() {
-	return {1e-5, 2e9}; // 10 us, 2 GB/s -> ~20 KB
-}
-
-PrefetchCostModel PrefetchCostModel::RemoteProfile() {
-	return {5e-2, 64e6}; // 50 ms, 64 MB/s -> ~3.2 MB
-}
-
 uint64_t PrefetchCostModel::GetColumnGapSize() const {
 	const double column_gap_size = latency_seconds * bandwidth_bytes_per_s;
 	if (!(column_gap_size > 0)) { // also catches NaN
@@ -53,9 +45,13 @@ void PrefetchCostModelState::RefineFromEstimate(const NetworkThroughputEstimate 
 	}
 }
 
-PrefetchCostModel PrefetchCostModelState::GetModel() const {
+bool PrefetchCostModelState::TryGetColumnGapSize(uint64_t &result) const {
 	lock_guard<mutex> guard(lock);
-	return model;
+	if (!measured_adopted) {
+		return false;
+	}
+	result = model.GetColumnGapSize();
+	return true;
 }
 
 } // namespace duckdb

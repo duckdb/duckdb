@@ -752,22 +752,27 @@ bool ParquetReader::TryInitializeScan(ClientContext &context, GlobalTableFunctio
 	return true;
 }
 
-static PrefetchCostModelState &GetScanCostModel(ParquetReadGlobalState &gstate, bool on_disk_file) {
+
+static void AttachScanCostModel(ParquetReadGlobalState &gstate, ParquetReaderScanState &scan_state, bool on_disk_file) {
+	if (on_disk_file) {
+		scan_state.cost_model_state = nullptr;
+		return;
+	}
+	if (scan_state.cost_model_state) {
+		return;
+	}
 	lock_guard<mutex> guard(gstate.cost_model_lock);
 	if (!gstate.cost_model_state) {
-		gstate.cost_model_state = make_uniq<PrefetchCostModelState>(
-		    on_disk_file ? PrefetchCostModel::LocalProfile() : PrefetchCostModel::RemoteProfile());
+		gstate.cost_model_state = make_uniq<PrefetchCostModelState>();
 	}
-	return *gstate.cost_model_state;
+	scan_state.cost_model_state = gstate.cost_model_state.get();
 }
 
 void ParquetReader::PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
                                 LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
-	if (!lstate.scan_state.cost_model_state) {
-		lstate.scan_state.cost_model_state = &GetScanCostModel(gstate, file_handle->OnDiskFile());
-	}
+	AttachScanCostModel(gstate, lstate.scan_state, file_handle->OnDiskFile());
 	InitializeScan(context, lstate.scan_state, lstate.group_indexes);
 }
 
@@ -789,9 +794,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	local_state.scan_state.op = gstate.op;
-	if (!local_state.scan_state.cost_model_state) {
-		local_state.scan_state.cost_model_state = &GetScanCostModel(gstate, file_handle->OnDiskFile());
-	}
+	AttachScanCostModel(gstate, local_state.scan_state, file_handle->OnDiskFile());
 	return Scan(context, local_state.scan_state, chunk);
 }
 
