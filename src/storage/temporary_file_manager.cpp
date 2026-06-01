@@ -6,6 +6,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/storage/storage_options.hpp"
 #include "zstd.h"
 
 namespace duckdb {
