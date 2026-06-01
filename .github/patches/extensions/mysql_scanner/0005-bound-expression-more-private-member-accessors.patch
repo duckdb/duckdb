@@ -82,3 +82,16 @@ index f6ad7ea..0b8ccdd 100644
  			return string();
  		}
  		return string();
+diff --git a/src/storage/mysql_execute_query.cpp b/src/storage/mysql_execute_query.cpp
+index 4508f70..22fb1ff 100644
+--- a/src/storage/mysql_execute_query.cpp
++++ b/src/storage/mysql_execute_query.cpp
+@@ -200,7 +200,7 @@ string ConstructUpdateStatement(LogicalUpdate &op, PhysicalOperator &child) {
+ 		auto &expr = proj.select_list[ref.index];
+ 		if (expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+ 			auto &bound_const_expr = expr->Cast<BoundConstantExpression>();
+-			result += MySQLUtils::TransformConstant(bound_const_expr.value);
++			result += MySQLUtils::TransformConstant(bound_const_expr.GetValue());
+ 		} else {
+ 			result += expr->ToString();
+ 		}

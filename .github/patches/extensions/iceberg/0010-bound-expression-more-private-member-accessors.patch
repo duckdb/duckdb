@@ -1,5 +1,5 @@
 diff --git a/src/iceberg_functions/iceberg_multi_file_list.cpp b/src/iceberg_functions/iceberg_multi_file_list.cpp
-index 7f29dc3b..dbffcedd 100644
+index 7f29dc3b..f71fa28e 100644
 --- a/src/iceberg_functions/iceberg_multi_file_list.cpp
 +++ b/src/iceberg_functions/iceberg_multi_file_list.cpp
 @@ -60,10 +60,10 @@ static bool TryGetFilterPath(const Expression &expr, vector<idx_t> &path) {
@@ -21,18 +21,18 @@ index 7f29dc3b..dbffcedd 100644
  		auto &func = expr.Cast<BoundFunctionExpression>();
 -		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
 -			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
-+		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.BindInfo()) {
++		if (func.Function().GetName() == OptionalFilterScalarFun::NAME && func.BindInfo()) {
 +			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
  			return data.child_filter_expr ? ExtractFilterExpressionForPath(*data.child_filter_expr, path) : nullptr;
  		}
 -		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
 -			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
-+		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
++		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
 +			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
  			return data.child_filter_expr ? ExtractFilterExpressionForPath(*data.child_filter_expr, path) : nullptr;
  		}
  	}
-@@ -126,7 +126,7 @@ static unique_ptr<Expression> ExtractFilterExpressionForPath(const Expression &e
+@@ -126,13 +126,13 @@ static unique_ptr<Expression> ExtractFilterExpressionForPath(const Expression &e
  	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
  		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
  		auto result = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
@@ -40,9 +40,17 @@ index 7f29dc3b..dbffcedd 100644
 +		for (auto &child : conjunction.GetChildren()) {
  			auto extracted_child = ExtractFilterExpressionForPath(*child, path);
  			if (extracted_child) {
- 				result->children.push_back(std::move(extracted_child));
+-				result->children.push_back(std::move(extracted_child));
++				result->GetChildrenMutable().push_back(std::move(extracted_child));
+ 			}
+ 		}
+-		if (result->children.empty()) {
++		if (result->GetChildren().empty()) {
+ 			return nullptr;
+ 		}
+ 		if (result->children.size() == 1) {
 diff --git a/src/iceberg_predicate.cpp b/src/iceberg_predicate.cpp
-index de61589b..5de1ee83 100644
+index de61589b..e29aa075 100644
 --- a/src/iceberg_predicate.cpp
 +++ b/src/iceberg_predicate.cpp
 @@ -137,11 +137,11 @@ static bool MatchBoundsExpression(ClientContext &context, const Expression &expr
@@ -102,7 +110,7 @@ index de61589b..5de1ee83 100644
  		auto &func = expr.Cast<BoundFunctionExpression>();
 -		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
 -			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
-+		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.BindInfo()) {
++		if (func.Function().GetName() == OptionalFilterScalarFun::NAME && func.BindInfo()) {
 +			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
  			if (data.child_filter_expr) {
  				return MatchBoundsExpression<TRANSFORM>(context, *data.child_filter_expr, stats, transform);
@@ -112,7 +120,7 @@ index de61589b..5de1ee83 100644
  		}
 -		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
 -			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
-+		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
++		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
 +			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
  			if (data.child_filter_expr) {
  				return MatchBoundsExpression<TRANSFORM>(context, *data.child_filter_expr, stats, transform);

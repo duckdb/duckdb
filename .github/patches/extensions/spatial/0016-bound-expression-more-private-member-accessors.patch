@@ -1,3 +1,86 @@
+diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
+index 56f081f..d90d148 100644
+--- a/src/spatial/modules/gdal/gdal_module.cpp
++++ b/src/spatial/modules/gdal/gdal_module.cpp
+@@ -743,12 +743,12 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 			continue;
+ 		}
+ 		const auto &func = expr->Cast<BoundFunctionExpression>();
+-		if (func.children.size() != 2) {
++		if (func.GetChildren().size() != 2) {
+ 			continue;
+ 		}
+ 
+-		if (func.children[0]->GetReturnType().id() != LogicalTypeId::GEOMETRY ||
+-		    func.children[1]->GetReturnType().id() != LogicalTypeId::GEOMETRY) {
++		if (func.GetChildren()[0]->GetReturnType().id() != LogicalTypeId::GEOMETRY ||
++		    func.GetChildren()[1]->GetReturnType().id() != LogicalTypeId::GEOMETRY) {
+ 			continue;
+ 		}
+ 
+@@ -759,7 +759,7 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 
+ 		auto found = false;
+ 		for (const auto &name : geometry_predicates) {
+-			if (StringUtil::CIEquals(func.function.GetName().c_str(), name)) {
++			if (StringUtil::CIEquals(func.Function().GetName().c_str(), name)) {
+ 				found = true;
+ 				break;
+ 			}
+@@ -769,8 +769,8 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 			continue;
+ 		}
+ 
+-		const auto lhs_kind = func.children[0]->GetExpressionType();
+-		const auto rhs_kind = func.children[1]->GetExpressionType();
++		const auto lhs_kind = func.GetChildren()[0]->GetExpressionType();
++		const auto rhs_kind = func.GetChildren()[1]->GetExpressionType();
+ 
+ 		const auto lhs_is_const = lhs_kind == ExpressionType::VALUE_CONSTANT;
+ 		const auto rhs_is_const = rhs_kind == ExpressionType::VALUE_CONSTANT;
+@@ -780,8 +780,8 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 			continue;
+ 		}
+ 
+-		auto &constant_expr = func.children[lhs_is_const ? 0 : 1]->Cast<BoundConstantExpression>();
+-		auto &geometry_expr = func.children[lhs_is_const ? 1 : 0];
++		auto &constant_expr = func.GetChildren()[lhs_is_const ? 0 : 1]->Cast<BoundConstantExpression>();
++		auto &geometry_expr = func.GetChildren()[lhs_is_const ? 1 : 0];
+ 
+ 		auto found_geom_expr = false;
+ 		auto multi_geom_expr = false;
+@@ -813,11 +813,11 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 			continue;
+ 		}
+ 
+-		if (constant_expr.value.type().id() != LogicalTypeId::GEOMETRY) {
++		if (constant_expr.GetValue().type().id() != LogicalTypeId::GEOMETRY) {
+ 			// Constant is not geometry
+ 			continue;
+ 		}
+-		if (constant_expr.value.IsNull()) {
++		if (constant_expr.GetValue().IsNull()) {
+ 			// Constant is NULL
+ 			continue;
+ 		}
+@@ -827,7 +827,7 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 		}
+ 
+ 		auto geom_extent = GeometryExtent::Empty();
+-		auto geom_binary = string_t(StringValue::Get(constant_expr.value));
++		auto geom_binary = string_t(StringValue::Get(constant_expr.GetValue()));
+ 
+ 		if (Geometry::GetExtent(geom_binary, geom_extent)) {
+ 			bdata.has_filter = true;
+@@ -841,7 +841,7 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 		// We can __ONLY__ do this if the filter predicate is "&&" or "st_intersects_extent"
+ 		// as other predicates may require exact geometry evaluation, the filter cannot be fully removed
+ 		for (auto &name : {"&&", "ST_Intersects_Extent"}) {
+-			if (StringUtil::CIEquals(func.function.GetName().c_str(), name)) {
++			if (StringUtil::CIEquals(func.Function().GetName().c_str(), name)) {
+ 				geom_filter_idx = expr_idx;
+ 				break;
+ 			}
 diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
 index c1611b8..dd74e23 100644
 --- a/src/spatial/modules/geos/geos_module.cpp
@@ -163,8 +246,27 @@ index 6760597..8262a8c 100644
  
  		if (bdata.always_xy) {
  			GenericExecutor::ExecuteTernary<POINT_TYPE, POINT_TYPE, DISTANCE_TYPE, BOOL_TYPE>(
+diff --git a/src/spatial/operators/spatial_join_logical.cpp b/src/spatial/operators/spatial_join_logical.cpp
+index 48596c5..34aa834 100644
+--- a/src/spatial/operators/spatial_join_logical.cpp
++++ b/src/spatial/operators/spatial_join_logical.cpp
+@@ -38,12 +38,12 @@ void LogicalSpatialJoin::ResolveColumnBindings(ColumnBindingResolver &res, vecto
+ 	auto &cond = spatial_predicate->Cast<BoundFunctionExpression>();
+ 
+ 	res.VisitOperator(*children[0]);
+-	res.VisitExpression(&cond.children[0]);
++	res.VisitExpression(&cond.GetChildrenMutable()[0]);
+ 
+ 	// TODO: Duplicate eliminated joins?
+ 
+ 	res.VisitOperator(*children[1]);
+-	res.VisitExpression(&cond.children[1]);
++	res.VisitExpression(&cond.GetChildrenMutable()[1]);
+ 
+ 	// Finally, update the bindings
+ 	bindings = GetColumnBindings();
 diff --git a/src/spatial/operators/spatial_join_optimizer.cpp b/src/spatial/operators/spatial_join_optimizer.cpp
-index b3db4c1..01a865a 100644
+index b3db4c1..cabbe23 100644
 --- a/src/spatial/operators/spatial_join_optimizer.cpp
 +++ b/src/spatial/operators/spatial_join_optimizer.cpp
 @@ -56,11 +56,11 @@ static bool HasInversePredicate(const string &func_name) {
@@ -202,7 +304,7 @@ index b3db4c1..01a865a 100644
  		return false;
  	}
  
-@@ -104,7 +104,7 @@ static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const uno
+@@ -104,12 +104,12 @@ static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const uno
  	}
  
  	// The function must be a recognized spatial predicate
@@ -211,6 +313,13 @@ index b3db4c1..01a865a 100644
  		return false;
  	}
  
+-	const auto left_side = JoinSide::GetJoinSide(*func.children[0], left_bindings, right_bindings);
+-	const auto right_side = JoinSide::GetJoinSide(*func.children[1], left_bindings, right_bindings);
++	const auto left_side = JoinSide::GetJoinSide(*func.GetChildren()[0], left_bindings, right_bindings);
++	const auto right_side = JoinSide::GetJoinSide(*func.GetChildren()[1], left_bindings, right_bindings);
+ 
+ 	// Can the condition can be cleanly split into two sides?
+ 	if (left_side == JoinSide::BOTH || right_side == JoinSide::BOTH) {
 @@ -117,7 +117,7 @@ static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const uno
  	}
  
@@ -246,3 +355,29 @@ index b3db4c1..01a865a 100644
  	}
  
  	if (spatial_join->join_type == JoinType::INNER && !extra_predicates.empty()) {
+diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
+index a04b74b..2664d41 100644
+--- a/src/spatial/operators/spatial_join_physical.cpp
++++ b/src/spatial/operators/spatial_join_physical.cpp
+@@ -415,8 +415,8 @@ PhysicalSpatialJoin::PhysicalSpatialJoin(PhysicalPlan &physical_plan, LogicalOpe
+ 	auto &func = condition->Cast<BoundFunctionExpression>();
+ 
+ 	// Extract the probe side and build side join keys
+-	probe_side_key = func.children[0].get();
+-	build_side_key = func.children[1].get();
++	probe_side_key = func.GetChildren()[0].get();
++	build_side_key = func.GetChildren()[1].get();
+ 
+ 	// Only simple join types are supported
+ 	D_ASSERT(join_type == JoinType::INNER || join_type == JoinType::LEFT || join_type == JoinType::OUTER ||
+@@ -839,8 +839,8 @@ unique_ptr<OperatorState> PhysicalSpatialJoin::GetOperatorState(ExecutionContext
+ 	// Create a match expression using the condition, that will be used to filter the results
+ 	lstate->match_expr = condition->Copy();
+ 	auto &func_expr = lstate->match_expr->Cast<BoundFunctionExpression>();
+-	func_expr.children[0] = make_uniq<BoundReferenceExpression>(probe_side_key->GetReturnType(), 0);
+-	func_expr.children[1] = make_uniq<BoundReferenceExpression>(build_side_key->GetReturnType(), 1);
++	func_expr.GetChildrenMutable()[0] = make_uniq<BoundReferenceExpression>(probe_side_key->GetReturnType(), 0);
++	func_expr.GetChildrenMutable()[1] = make_uniq<BoundReferenceExpression>(build_side_key->GetReturnType(), 1);
+ 
+ 	lstate->join_match_executor.AddExpression(*lstate->match_expr);
+ 

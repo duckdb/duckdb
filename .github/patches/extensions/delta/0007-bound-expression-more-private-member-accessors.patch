@@ -1,7 +1,20 @@
 diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
-index 355d687..5ae282d 100644
+index 355d687..c9ebb23 100644
 --- a/src/delta_utils.cpp
 +++ b/src/delta_utils.cpp
+@@ -1022,10 +1022,10 @@ uintptr_t PredicateVisitor::VisitFilterExpression(const string &col_name, const
+ 		auto &right = BoundComparisonExpression::Right(comparison);
+ 		if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT && IsSupportedFilterSubject(right)) {
+ 			return VisitConstantFilter(col_name, FlipComparisonExpression(comparison_type),
+-			                           left.Cast<BoundConstantExpression>().value, state);
++			                           left.Cast<BoundConstantExpression>().GetValue(), state);
+ 		}
+ 		if (right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT && IsSupportedFilterSubject(left)) {
+-			return VisitConstantFilter(col_name, comparison_type, right.Cast<BoundConstantExpression>().value, state);
++			return VisitConstantFilter(col_name, comparison_type, right.Cast<BoundConstantExpression>().GetValue(), state);
+ 		}
+ 		return ~0;
+ 	}
 @@ -1062,14 +1062,14 @@ uintptr_t PredicateVisitor::VisitFilterExpression(const string &col_name, const
  	}
  	case ExpressionClass::BOUND_FUNCTION: {
