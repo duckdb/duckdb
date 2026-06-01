@@ -579,6 +579,8 @@ jobs:
     - uses: actions/checkout@v6
       with:
         ref: ${{ needs.prepare.outputs.git_sha }}
+        fetch-depth: 0
+        fetch-tags: true
 
     - name: Install tools
       timeout-minutes: 10
@@ -623,8 +625,14 @@ jobs:
           make -C \"$PWD\"
         "
 
-    - name: Print platform
-      run: ./build/release/duckdb -c "PRAGMA platform;"
+    - name: CLI check
+      shell: bash
+      run: |
+        ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          # Fail on non-zero major version.
+          ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
+        fi
 
     - name: Deploy
       env:
@@ -681,6 +689,8 @@ jobs:
     - uses: actions/checkout@v6
       with:
         ref: ${{ needs.prepare.outputs.git_sha }}
+        fetch-depth: 0
+        fetch-tags: true
 
     - name: Install tools
       timeout-minutes: 10
@@ -919,9 +929,14 @@ jobs:
           git config --global --add safe.directory "$PWD"
           make gather-libs
 
-      - name: Print platform
+      - name: CLI check
         shell: bash
-        run: ./build/release/duckdb -c "PRAGMA platform;"
+        run: |
+          ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Fail on non-zero major version.
+            ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
+          fi
 
       - name: Deploy
         shell: bash
