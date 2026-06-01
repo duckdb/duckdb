@@ -7,7 +7,6 @@ namespace duckdb {
 
 constexpr uint64_t PrefetchCostModel::GAP_MIN;
 constexpr uint64_t PrefetchCostModel::GAP_MAX;
-constexpr idx_t PrefetchCostModelState::MIN_SAMPLES;
 constexpr double PrefetchCostModelState::ALPHA;
 
 uint64_t PrefetchCostModel::GetColumnGapSize() const {
@@ -22,10 +21,6 @@ uint64_t PrefetchCostModel::GetColumnGapSize() const {
 }
 
 void PrefetchCostModelState::RefineFromEstimate(const NetworkThroughputEstimate &estimate) {
-	// Keep the per-medium seed until the underlying handle has measured enough requests.
-	if (estimate.sample_count < MIN_SAMPLES) {
-		return;
-	}
 	const double latency = estimate.latency_seconds;
 	const double bandwidth = estimate.bandwidth_bytes_per_s;
 	// Ignore degenerate estimates (also catches NaN).

@@ -77,8 +77,6 @@ struct NetworkThroughputEstimate {
 	double latency_seconds = 0;
 	//! Single-stream throughput, in bytes per second
 	double bandwidth_bytes_per_s = 0;
-	//! Number of network samples behind this estimate
-	idx_t sample_count = 0;
 };
 
 struct FileHandle {

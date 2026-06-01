@@ -1,8 +1,8 @@
 diff --git a/src/httpfs.cpp b/src/httpfs.cpp
-index 1a9c466..348feb0 100644
+index 1a9c466..973a3a5 100644
 --- a/src/httpfs.cpp
 +++ b/src/httpfs.cpp
-@@ -365,6 +365,18 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
+@@ -365,6 +365,19 @@ unique_ptr<HTTPResponse> HTTPFileSystem::GetRangeRequest(FileHandle &handle, str
  	auto response = http_util.Request(get_request, http_client);
  
  	hfh.StoreClient(std::move(http_client));
@@ -16,12 +16,13 @@ index 1a9c466..348feb0 100644
 +			    static_cast<double>(get_request.request_end.value - get_request.request_start.value) / 1e6;
 +		}
 +		const idx_t bytes = get_request.bytes_received != 0 ? get_request.bytes_received : buffer_out_len;
-+		hfh.RecordNetworkSample(total_seconds, bytes, get_request.have_ttfb, get_request.ttfb_seconds);
++		hfh.RecordNetworkSample(total_seconds, bytes, get_request.have_time_to_fst_byte,
++		                        get_request.time_to_fst_byte_sec);
 +	}
  	return response;
  }
  
-@@ -462,9 +474,43 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFileExtended(const OpenFileInfo &file
+@@ -462,9 +475,42 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFileExtended(const OpenFileInfo &file
  }
  
  void HTTPFileHandle::AddStatistics(idx_t read_offset, idx_t read_length, idx_t read_duration) {
@@ -58,7 +59,6 @@ index 1a9c466..348feb0 100644
 +	}
 +	result.latency_seconds = tp_latency_seconds;
 +	result.bandwidth_bytes_per_s = tp_bandwidth_bps;
-+	result.sample_count = tp_sample_count;
 +	return true;
 +}
 +
@@ -66,7 +66,7 @@ index 1a9c466..348feb0 100644
  	D_ASSERT(!SkipBuffer());
  	if (range_request_statistics.empty()) {
 diff --git a/src/httpfs_curl_client.cpp b/src/httpfs_curl_client.cpp
-index efdc87d..992ba63 100644
+index efdc87d..3852958 100644
 --- a/src/httpfs_curl_client.cpp
 +++ b/src/httpfs_curl_client.cpp
 @@ -254,6 +254,16 @@ public:
@@ -79,8 +79,8 @@ index efdc87d..992ba63 100644
 +		double starttransfer_seconds = 0;
 +		if (curl_easy_getinfo(*curl, CURLINFO_STARTTRANSFER_TIME, &starttransfer_seconds) == CURLE_OK &&
 +		    starttransfer_seconds > 0) {
-+			info.have_ttfb = true;
-+			info.ttfb_seconds = starttransfer_seconds;
++			info.have_time_to_fst_byte = true;
++			info.time_to_fst_byte_sec = starttransfer_seconds;
 +		}
 +
  		if (!request_info->header_collection.empty() &&
@@ -122,7 +122,7 @@ index efdc87d..992ba63 100644
  		AddUserAgentIfAvailable(static_cast<HTTPFSParams &>(info.params), info.headers);
  		ResetRequestInfo();
 diff --git a/src/httpfs_httplib_client.cpp b/src/httpfs_httplib_client.cpp
-index f4e01f7..d3f9e39 100644
+index f4e01f7..9e197d1 100644
 --- a/src/httpfs_httplib_client.cpp
 +++ b/src/httpfs_httplib_client.cpp
 @@ -54,18 +54,32 @@ public:
@@ -143,9 +143,9 @@ index f4e01f7..d3f9e39 100644
  			    [&](const char *data, size_t data_length) {
 +				    if (first_chunk) {
 +					    first_chunk = false;
-+					    info.have_ttfb = true;
++					    info.have_time_to_fst_byte = true;
 +			            // We calculate the time to first byte as the time from when the request was issues to the chunk arrived.
-+					    info.ttfb_seconds =
++					    info.time_to_fst_byte_sec =
 +					        static_cast<double>(Timestamp::GetCurrentTimestamp().value - request_start.value) / 1e6;
 +				    }
 +				    total_bytes += data_length;

@@ -21,13 +21,13 @@ SELECT count(*)
 FROM read_parquet('http://blobs.duckdb.org/data/train-services-window-self-join-benchmark.parquet') t(c0, c1)
 WHERE c1 > 500000
 
-# The first row group is sized from the remote seed, before enough network samples have been measured
+# The first row group is sized from the default, before enough network samples have been measured
 query I
 SELECT accepted_column_gap
 FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%train-services%' AND row_group_id = 0
 ----
-3200000
+16384
 
 query I
 SELECT count(*)
@@ -36,7 +36,7 @@ WHERE file_path LIKE '%train-services%' AND (accepted_column_gap < 4096 OR accep
 ----
 0
 
-# Once enough network samples accumulate, the gap moves off the seed: the cost model adapted to real measurements
+# Once enough network samples accumulate, the gap moves off the default: the cost model adapted to real measurements
 query I
 SELECT count(DISTINCT accepted_column_gap) > 1
 FROM duckdb_logs_parsed('ParquetPrefetch')

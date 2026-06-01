@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/parquet_prefetch_cost_model.test
-# description: Check Parquet Prefetching gap uses the local cost-model seed (network refinement is remote-only)
+# description: Check Parquet Prefetching gap stays at the default for local files (cost model is remote-only)
 # group: [parquet]
 
 require parquet
@@ -33,13 +33,13 @@ SELECT sum(b + j) FROM read_parquet('{TEST_DIR}/cost_model_gap.parquet') WHERE a
 ----
 52350266
 
-# Starts of with the seed
+# Local files have no network to measure, so they use the default gap (DEFAULT_ACCEPTED_COLUMN_GAP = 16 KiB)
 query I
 SELECT accepted_column_gap
 FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%cost_model_gap.parquet' AND row_group_id = 0
 ----
-20000
+16384
 
 # values are between the limits
 query I
@@ -49,10 +49,10 @@ WHERE file_path LIKE '%cost_model_gap.parquet' AND (accepted_column_gap < 4096 O
 ----
 0
 
-# Local files are not network-measured, so every row group keeps the local seed gap (1e-5 s * 2e9 B/s = 20000)
+# The cost model is remote-only: local (on-disk) files keep the default gap (DEFAULT_ACCEPTED_COLUMN_GAP = 16 KiB)
 query I
 SELECT DISTINCT accepted_column_gap
 FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%cost_model_gap.parquet'
 ----
-20000
+16384

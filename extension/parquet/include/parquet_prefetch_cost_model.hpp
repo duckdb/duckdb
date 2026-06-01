@@ -41,8 +41,6 @@ public:
 bool TryGetColumnGapSize(uint64_t &result) const;
 
 private:
-	//! Number of minimal measured network samples
-	static constexpr idx_t MIN_SAMPLES = 4;
 	//! Weight applied to an estimate
 	static constexpr double ALPHA = 0.5;
 
