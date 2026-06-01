@@ -411,6 +411,18 @@ final class PreparedStatementTests: XCTestCase {
     )
   }
 
+  func test_uuid_round_trip() throws {
+    let u1 = UUID(uuidString: "00112233-4455-6677-8899-AABBCCDDEEFF")!
+    let u2 = UUID(uuidString: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF")!
+    let u3 = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+    try roundTripTest(
+      dataType: "UUID",
+      expected: [u1, u2, u3, UUID(), nil],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: UUID.self) }
+    )
+  }
+
   func test_ubigint_array_round_trip() throws {
     try roundTripTest(
       dataType: "UBIGINT[3]",

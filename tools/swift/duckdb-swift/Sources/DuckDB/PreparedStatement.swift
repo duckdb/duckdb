@@ -498,6 +498,23 @@ public extension PreparedStatement {
   func bind(_ value: [UInt64]?, at index: Int) throws {
     try _bindArray(value, at: index)
   }
+
+  /// Binds a UUID value at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind (or `nil` to bind NULL)
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
+  func bind(_ value: UUID?, at index: Int) throws {
+    guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
+    var uuidValue: duckdb_value? = duckdb_create_uuid(duckdb_uhugeint(uuid: value))
+    defer { duckdb_destroy_value(&uuidValue) }
+    try withThrowingCommand { duckdb_bind_value(ptr.pointee, .init(index), uuidValue) }
+  }
 }
 
 private extension PreparedStatement {
