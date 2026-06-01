@@ -243,6 +243,42 @@ CREATE TRIGGER t6b_no_ref AFTER INSERT ON t6b FOR EACH STATEMENT
 ----
 <REGEX>:.*[Cc]atalog.*
 
+# REFERENCING alias does not shadow a real table with the same name in a sibling trigger
+statement ok
+CREATE TABLE alias_parent (id INTEGER);
+
+statement ok
+CREATE TABLE shadow_alias (id INTEGER);
+
+statement ok
+CREATE TABLE alias_audit (id INTEGER);
+
+statement ok
+INSERT INTO shadow_alias VALUES (1000);
+
+statement ok
+CREATE TRIGGER a_alias AFTER INSERT ON alias_parent
+    REFERENCING NEW TABLE AS shadow_alias
+    FOR EACH STATEMENT
+    INSERT INTO alias_audit SELECT id FROM shadow_alias;
+
+statement ok
+CREATE TRIGGER b_plain AFTER INSERT ON alias_parent FOR EACH STATEMENT
+    INSERT INTO alias_audit SELECT id FROM shadow_alias;
+
+statement ok
+INSERT INTO alias_parent VALUES (7);
+
+query I
+SELECT COUNT(*) FROM alias_audit WHERE id = 7;
+----
+1
+
+query I
+SELECT COUNT(*) FROM alias_audit WHERE id = 1000;
+----
+1
+
 # Two parent triggers both chain to the same child - child's trigger fires twice (once per parent chain)
 statement ok
 CREATE TABLE t_chain2_parent (id INTEGER);
