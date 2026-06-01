@@ -166,6 +166,9 @@ public:
 	DataChunk delayed;
 	//! A buffer for shifting delayed input
 	DataChunk shifted;
+	//! Set when `delayed` has been flushed into the output by reference - we must defer resetting (resizing) it
+	//! until the next call, by which point the referencing output chunk has been consumed.
+	bool flushed_delayed = false;
 };
 
 StreamingWindowGlobalState::StreamingWindowGlobalState(ClientContext &client) {
@@ -400,8 +403,11 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	}
 
 	auto &delayed = state.delayed;
-	// We can Reset delayed now that no one can be referencing it.
-	if (!delayed.size()) {
+	// We can Reset delayed now that no one can be referencing it (the previous output has been consumed).
+	if (state.flushed_delayed) {
+		state.ResetChunk(delayed);
+		state.flushed_delayed = false;
+	} else if (!delayed.size()) {
 		state.ResetChunk(delayed);
 	}
 	if (delayed.size() < state.lead_count) {
@@ -421,9 +427,9 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	} else if (delayed.size()) {
 		//	We have enough delayed rows so flush them
 		ExecuteDelayed(context, delayed, input, output, gstate_p);
-		// Defer resetting delayed as it may be referenced: only clear the cardinality, do NOT resize the child
-		// vectors (the output chunk references delayed's buffers, so resizing them would corrupt the output).
-		delayed.SetCardinality(0);
+		// delayed has been flushed into the output by reference. Defer resetting it until the next call (when the
+		// output has been consumed), since resizing its buffers now would corrupt the referencing output chunk.
+		state.flushed_delayed = true;
 		// Come back to process the input
 		return OperatorResultType::HAVE_MORE_OUTPUT;
 	} else {
