@@ -11,8 +11,8 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
                                                                               ParseResult &parse_result) {
 	// CreateFeatureStmt <- 'FEATURE' IfNotExists? IdentifierOrStringLiteral 'ON' IdentifierOrStringLiteral
 	//                      'ENTITY' IdentifierOrStringLiteral 'TIMESTAMP' IdentifierOrStringLiteral
-	//                      'GRANULARITY' FeatureGranularity 'WINDOW' NumberLiteral
-	//                      'REFRESH' FeatureRefreshMode 'RETAIN' NumberLiteral
+	//                      FeatureGranularityClause? 'WINDOW' NumberLiteral
+	//                      FeatureRefreshClause? FeatureRetainClause?
 	//                      'AS' Parens(SelectStatementInternal)
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 
@@ -25,18 +25,36 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateFeatureStmt(PE
 	auto entity_column = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(6)).name;
 	// index 7: 'TIMESTAMP' keyword
 	auto timestamp_column = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(8)).name;
-	// index 9: 'GRANULARITY' keyword
-	auto granularity = transformer.Transform<FeatureGranularity>(list_pr.Child<ListParseResult>(10));
-	// index 11: 'WINDOW' keyword
-	auto &window_num = list_pr.Child<NumberParseResult>(12);
-	int64_t window_size = std::stoll(window_num.number);
-	// index 13: 'REFRESH' keyword
-	auto refresh_mode = transformer.Transform<FeatureRefreshMode>(list_pr.Child<ListParseResult>(14));
-	// index 15: 'RETAIN' keyword
-	auto &retain_num = list_pr.Child<NumberParseResult>(16);
-	int64_t retain_versions = std::stoll(retain_num.number);
-	// index 17: 'AS' keyword
-	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(18));
+	// index 9: FeatureGranularityClause? (default: DAY)
+	FeatureGranularity granularity = FeatureGranularity::DAY;
+	auto &granularity_opt = list_pr.Child<OptionalParseResult>(9);
+	if (granularity_opt.HasResult()) {
+		auto &clause = granularity_opt.GetResult().Cast<ListParseResult>();
+		granularity = transformer.Transform<FeatureGranularity>(clause.Child<ListParseResult>(1));
+	}
+	// index 10: FeatureWindowClause? (default: 1)
+	int64_t window_size = 1;
+	auto &window_opt = list_pr.Child<OptionalParseResult>(10);
+	if (window_opt.HasResult()) {
+		auto &clause = window_opt.GetResult().Cast<ListParseResult>();
+		window_size = std::stoll(clause.Child<NumberParseResult>(1).number);
+	}
+	// index 11: FeatureRefreshClause? (default: INCREMENTAL)
+	FeatureRefreshMode refresh_mode = FeatureRefreshMode::INCREMENTAL;
+	auto &refresh_opt = list_pr.Child<OptionalParseResult>(11);
+	if (refresh_opt.HasResult()) {
+		auto &clause = refresh_opt.GetResult().Cast<ListParseResult>();
+		refresh_mode = transformer.Transform<FeatureRefreshMode>(clause.Child<ListParseResult>(1));
+	}
+	// index 12: FeatureRetainClause? (default: 1)
+	int64_t retain_versions = 1;
+	auto &retain_opt = list_pr.Child<OptionalParseResult>(12);
+	if (retain_opt.HasResult()) {
+		auto &clause = retain_opt.GetResult().Cast<ListParseResult>();
+		retain_versions = std::stoll(clause.Child<NumberParseResult>(1).number);
+	}
+	// index 13: 'AS' keyword
+	auto &select_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(14));
 	auto query = transformer.Transform<unique_ptr<SelectStatement>>(select_parens);
 
 	auto result = make_uniq<CreateStatement>();
