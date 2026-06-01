@@ -137,6 +137,9 @@ void OptimisticDataWriter::WriteUnflushedRowGroups(OptimisticWriteCollection &ro
 	}
 	row_groups.unflushed_row_groups.clear();
 	row_groups.partial_block_managers.clear();
+	// any new append to the row group collection needs to append a new row group
+	// otherwise we append to an already flushed row group
+	row_groups.collection->SetRowGroupAppendMode(RowGroupAppendMode::REQUIRE_NEW);
 }
 
 void OptimisticWriteCollection::MergeStorage(OptimisticWriteCollection &merge_collection) {
