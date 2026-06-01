@@ -79,18 +79,18 @@ static string BuildPITQuery(const FeatureCatalogEntry &feat, const string &spine
 	auto window_interval = StringUtil::Format("%d %s", feat.window_size, gran);
 
 	string pit_sql = StringUtil::Format("SELECT spine.%s, spine.bucket AS feature_timestamp, %s "
-	                                    "FROM (SELECT DISTINCT %s, DATE_TRUNC('%s', %s) AS bucket FROM %s%s) AS spine "
+	                                    "FROM (SELECT DISTINCT %s, DATE_TRUNC('%s', %s) + INTERVAL '1 %s' AS bucket FROM %s%s) AS spine "
 	                                    "JOIN %s ON %s.%s = spine.%s "
-	                                    "AND DATE_TRUNC('%s', %s.%s) <= spine.bucket "
-	                                    "AND DATE_TRUNC('%s', %s.%s) > spine.bucket - INTERVAL '%s' "
+	                                    "AND %s.%s < spine.bucket "
+	                                    "AND %s.%s >= spine.bucket - INTERVAL '%s' "
 	                                    "GROUP BY spine.%s, spine.bucket "
 	                                    "ORDER BY spine.%s, spine.bucket",
-	                                    entity, agg_exprs,                     // outer SELECT
-	                                    entity, gran, ts, table, spine_filter, // spine subquery
-	                                    table, table, entity, entity,          // JOIN
-	                                    gran, table, ts,                       // AND <=
-	                                    gran, table, ts, window_interval,      // AND >
-	                                    entity, entity);                       // GROUP BY, ORDER BY
+	                                    entity, agg_exprs,                          // outer SELECT
+	                                    entity, gran, ts, gran, table, spine_filter, // spine subquery
+	                                    table, table, entity, entity,               // JOIN
+	                                    table, ts,                                  // AND <
+	                                    table, ts, window_interval,                 // AND >=
+	                                    entity, entity);                            // GROUP BY, ORDER BY
 
 	return pit_sql;
 }
@@ -211,14 +211,15 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 				}
 				did_work = true;
 			} else {
-				// Step 2: Find the range of new source data (buckets > watermark)
+				// Step 2: Find the range of new source data (ceiling buckets > watermark,
+				//         i.e. floor bucket >= watermark since watermark is a ceiling boundary)
 				auto range_sql = "SELECT MIN(DATE_TRUNC('" + gran + "', " + ts_col +
 				                 ")), "
 				                 "MAX(DATE_TRUNC('" +
 				                 gran + "', " + ts_col +
 				                 ")) "
 				                 "FROM " +
-				                 src_table + " WHERE DATE_TRUNC('" + gran + "', " + ts_col + ") > '" + watermark +
+				                 src_table + " WHERE DATE_TRUNC('" + gran + "', " + ts_col + ") >= '" + watermark +
 				                 "'::TIMESTAMP";
 				auto range_result = con.Query(range_sql);
 
@@ -239,15 +240,23 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 					state.rows_affected = 0;
 				} else {
 					// Step 3: Compute affected bucket range
+					// With ceiling bucketing, earliest affected ceiling = earliest_new + 1 gran
+					// (feature_timestamp > earliest_new), and the upper ceiling bound extends by 1
+					// extra gran to cover lookback from the last new ceiling bucket.
 					auto window_interval = StringUtil::Format("%d %s", feat.window_size, gran);
 					string upper_bound = "'" + latest_new + "'::TIMESTAMP + INTERVAL '" + window_interval + "'";
+					// upper_bound_ceiling = latest_new + (window_size + 1) gran
+					auto window_plus_one = StringUtil::Format("%d %s", feat.window_size + 1, gran);
+					string upper_bound_ceiling = "'" + latest_new + "'::TIMESTAMP + INTERVAL '" + window_plus_one + "'";
 
 					// Step 4: Copy unaffected rows from current version to new version
+					// Preserve rows with feature_timestamp <= earliest_new (ceiling <= earliest_ceiling - 1 gran)
+					// or feature_timestamp >= upper_bound_ceiling (beyond affected range).
 					auto copy_sql = "INSERT INTO " + table_id + " SELECT * REPLACE (" + duckdb::to_string(new_version) +
 					                " AS __feature_version) FROM " + table_id +
 					                " WHERE __feature_version = " + duckdb::to_string(feat.current_version) +
-					                " AND NOT (feature_timestamp >= '" + earliest_new +
-					                "'::TIMESTAMP AND feature_timestamp < " + upper_bound + ")";
+					                " AND NOT (feature_timestamp > '" + earliest_new +
+					                "'::TIMESTAMP AND feature_timestamp < " + upper_bound_ceiling + ")";
 					auto copy_result = con.Query(copy_sql);
 					if (copy_result->HasError()) {
 						throw InternalException("Failed to copy unaffected rows for '%s': %s", feature_name,

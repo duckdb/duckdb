@@ -62,9 +62,9 @@ SELECT COUNT(*) FROM total_spend WHERE user_id = 'charlie';
 ----
 1
 
-# Alice's 01-03 bucket: 100+200+300 = 600 (all within 7-day window)
+# Alice's 01-04 bucket: 100+200+300 = 600 (all within 7-day window; Jan 3 event -> ceiling 01-04)
 query R
-SELECT total_amount FROM total_spend WHERE user_id = 'alice' AND feature_timestamp = '2024-01-03'::TIMESTAMP;
+SELECT total_amount FROM total_spend WHERE user_id = 'alice' AND feature_timestamp = '2024-01-04'::TIMESTAMP;
 ----
 600.00
 
@@ -137,22 +137,22 @@ REFRESH FEATURE event_sum;
 ----
 2
 
-# 01-01 untouched (below affected range)
+# 01-02 untouched (below affected ceiling range; Jan 1 events have ceiling bucket 01-02)
 query II
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-01'::TIMESTAMP ORDER BY customer;
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-02'::TIMESTAMP ORDER BY customer;
 ----
 x	10
 y	30
 
-# 01-02 untouched (new data at 01-03 cannot affect earlier buckets)
+# 01-03 untouched (Jan 2 events have ceiling bucket 01-03; new Jan 3 data creates 01-04, cannot affect 01-03)
 query II
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-02'::TIMESTAMP ORDER BY customer;
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-03'::TIMESTAMP ORDER BY customer;
 ----
 x	30
 
-# 01-03 new bucket: x sees 10+20+40=70, y sees 30+50=80 (7-day window lookback)
+# 01-04 new bucket: x sees 10+20+40=70, y sees 30+50=80 (7-day window lookback)
 query II
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-03'::TIMESTAMP ORDER BY customer;
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-04'::TIMESTAMP ORDER BY customer;
 ----
 x	70
 y	80
@@ -176,15 +176,15 @@ REFRESH FEATURE event_sum;
 ----
 1
 
-# 01-05 bucket: x sees 10+20+40+100 = 170 (all within 7-day lookback from 01-05)
+# 01-06 bucket: x sees 10+20+40+100 = 170 (all within 7-day lookback from 01-06)
 query II
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-05'::TIMESTAMP ORDER BY customer;
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-06'::TIMESTAMP ORDER BY customer;
 ----
 x	170
 
-# 01-01 and 01-02 still untouched from original
+# 01-02 and 01-03 still untouched from original
 query II
-SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-01'::TIMESTAMP AND customer = 'x';
+SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-02'::TIMESTAMP AND customer = 'x';
 ----
 x	10
 

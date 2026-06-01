@@ -43,7 +43,7 @@ SELECT DISTINCT __feature_version FROM versioned_full ORDER BY __feature_version
 
 # All rows are version 1
 query III rowsort
-SELECT customer, total_value, __feature_version FROM versioned_full WHERE feature_timestamp = '2024-01-01'::TIMESTAMP;
+SELECT customer, total_value, __feature_version FROM versioned_full WHERE feature_timestamp = '2024-01-02'::TIMESTAMP;
 ----
 x	10	1
 y	30	1
@@ -94,7 +94,7 @@ SELECT COUNT(*) FROM versioned_full WHERE __feature_version = 1;
 
 # Latest version has correct data
 query II rowsort
-SELECT customer, total_value FROM versioned_full WHERE __feature_version = 4 AND feature_timestamp = '2024-01-01'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_full WHERE __feature_version = 4 AND feature_timestamp = '2024-01-02'::TIMESTAMP;
 ----
 x	10
 y	30
@@ -184,9 +184,9 @@ SELECT DISTINCT __feature_version FROM versioned_incr ORDER BY __feature_version
 1
 2
 
-# Version 2 has the new bucket (01-03) plus copied-forward old rows
+# Version 2 has the new bucket (01-04) plus copied-forward old rows
 query II rowsort
-SELECT customer, total_value FROM versioned_incr WHERE __feature_version = 2 AND feature_timestamp = '2024-01-03'::TIMESTAMP;
+SELECT customer, total_value FROM versioned_incr WHERE __feature_version = 2 AND feature_timestamp = '2024-01-04'::TIMESTAMP;
 ----
 x	70
 y	80
