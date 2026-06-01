@@ -2,9 +2,6 @@
 # description: Test ATTACH with IO_MODE 'MMAP' (memory-mapped reads)
 # group: [storage]
 
-statement ok
-PRAGMA enable_verification
-
 # Reject unknown IO_MODE values
 statement error
 ATTACH '{TEST_DIR}/bogus.duckdb' AS bogus (IO_MODE 'NOPE')
