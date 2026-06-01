@@ -1,4 +1,5 @@
 #include "duckdb/function/copy_function.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
@@ -48,17 +49,21 @@ static string GetSingleJSONCopyString(const string &loption, const vector<Value>
 
 static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	static const unordered_set<string> SUPPORTED_BASE_OPTIONS {
-	    "compression", "encoding", "use_tmp_file", "overwrite_or_ignore", "overwrite", "append", "filename_pattern",
-	    "file_extension", "per_thread_output", "file_size_bytes",
-	    // "partition_by", unsupported
-	    "return_files", "preserve_order", "return_stats", "write_partition_columns", "write_empty_file",
-	    "hive_file_pattern"};
+	    "compression",      "encoding",         "use_tmp_file",   "overwrite_or_ignore", "overwrite",
+	    "append",           "filename_pattern", "file_extension", "per_thread_output",   "file_size_bytes",
+	    "partition_by",     "return_files",     "preserve_order", "return_stats",        "write_partition_columns",
+	    "write_empty_file", "hive_file_pattern"};
 
 	auto &copy_info = *stmt.info;
 
 	// Parse the options, creating options for the CSV writer while doing so
 	string date_format;
 	string timestamp_format;
+	// Partition columns are kept as separate columns (instead of being packed into the JSON object), so that the
+	// COPY writer can partition on them. By default they are excluded from the written JSON, matching the behavior
+	// of the other formats. WRITE_PARTITION_COLUMNS keeps them inside the JSON object instead.
+	vector<string> partition_columns;
+	bool write_partition_columns = false;
 	// We insert the JSON file extension here so it works properly with PER_THREAD_OUTPUT/FILE_SIZE_BYTES etc.
 	case_insensitive_map_t<vector<Value>> csv_copy_options {{"file_extension", {"json"}}};
 	for (const auto &kv : copy_info.options) {
@@ -82,6 +87,24 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 		} else if (loption == "file_extension") {
 			// Since we set the file extension to "json" above, we need to override it
 			csv_copy_options["file_extension"] = {GetSingleJSONCopyString(loption, kv.second)};
+		} else if (loption == "partition_by") {
+			// Remember the partition columns so we can keep them as separate columns below
+			for (const auto &val : kv.second) {
+				if (val.IsNull()) {
+					ThrowJSONCopyNullException(loption);
+				}
+				partition_columns.push_back(val.ToString());
+			}
+			// Pass the option through to the CSV writer
+			csv_copy_options.insert(kv);
+		} else if (loption == "write_partition_columns") {
+			if (!kv.second.empty() && kv.second.back().IsNull()) {
+				ThrowJSONCopyNullException(loption);
+			}
+			// Handled below by keeping the partition columns inside the JSON object. We do not forward this to the
+			// CSV writer, as that would write the (separate) partition columns as their own JSON lines.
+			write_partition_columns =
+			    kv.second.empty() || BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
 		} else if (SUPPORTED_BASE_OPTIONS.find(loption) != SUPPORTED_BASE_OPTIONS.end()) {
 			if (!kv.second.empty() && kv.second.back().IsNull()) {
 				ThrowJSONCopyNullException(loption);
@@ -141,6 +164,12 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 
 	auto columns_star = make_uniq<StarExpression>();
 	columns_star->IsColumnsMutable() = true;
+	if (!write_partition_columns) {
+		// Exclude the partition columns from the JSON object - they are kept as separate columns below
+		for (const auto &partition_column : partition_columns) {
+			columns_star->ExcludeListMutable().insert(QualifiedColumnName(partition_column));
+		}
+	}
 	auto unpack = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
 	unpack->GetChildrenMutable().push_back(std::move(columns_star));
 
@@ -151,6 +180,13 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	vector<unique_ptr<ParsedExpression>> to_json_args;
 	to_json_args.push_back(std::move(struct_pack));
 	select_node.select_list.push_back(make_uniq<FunctionExpression>("to_json", std::move(to_json_args)));
+
+	// Keep the partition columns as separate columns so the COPY writer can partition on them. The writer routes rows
+	// into the right files based on these columns but does not write them to disk (WRITE_PARTITION_COLUMNS is handled
+	// above by keeping the columns inside the JSON object instead).
+	for (const auto &partition_column : partition_columns) {
+		select_node.select_list.push_back(make_uniq<ColumnRefExpression>(partition_column));
+	}
 
 	// Now we can just use the CSV writer
 	copy_info.format = "csv";

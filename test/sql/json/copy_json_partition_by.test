@@ -1,0 +1,54 @@
+# name: test/sql/json/copy_json_partition_by.test
+# description: Test PARTITION_BY with COPY ... TO ... (FORMAT JSON) (issue #14927)
+# group: [json]
+
+require json
+
+# Basic partitioned write: the partition column drives the directory layout and (by default) is NOT written into
+# the JSON files themselves. One row per partition keeps the file contents deterministic.
+statement ok
+COPY (SELECT i AS part, 'v' || i AS val FROM range(2) t(i))
+TO '{TEST_DIR}/json_partition_basic' (FORMAT JSON, PARTITION_BY (part));
+
+query II
+SELECT filename, trim(content, chr(10))
+FROM read_text('{TEST_DIR}/json_partition_basic/*/*.json') ORDER BY filename;
+----
+{TEST_DIR}/json_partition_basic/part=0/data_0.json	{"val":"v0"}
+{TEST_DIR}/json_partition_basic/part=1/data_0.json	{"val":"v1"}
+
+# WRITE_PARTITION_COLUMNS keeps the partition column inside the JSON object
+statement ok
+COPY (SELECT i AS part, 'v' || i AS val FROM range(2) t(i))
+TO '{TEST_DIR}/json_partition_written' (FORMAT JSON, PARTITION_BY (part), WRITE_PARTITION_COLUMNS true);
+
+query II
+SELECT filename, trim(content, chr(10))
+FROM read_text('{TEST_DIR}/json_partition_written/*/*.json') ORDER BY filename;
+----
+{TEST_DIR}/json_partition_written/part=0/data_0.json	{"part":0,"val":"v0"}
+{TEST_DIR}/json_partition_written/part=1/data_0.json	{"part":1,"val":"v1"}
+
+# Multiple partition columns
+statement ok
+COPY (SELECT i AS a, i + 10 AS b, 'v' || i AS val FROM range(2) t(i))
+TO '{TEST_DIR}/json_partition_multi' (FORMAT JSON, PARTITION_BY (a, b));
+
+query II
+SELECT filename, trim(content, chr(10))
+FROM read_text('{TEST_DIR}/json_partition_multi/*/*/*.json') ORDER BY filename;
+----
+{TEST_DIR}/json_partition_multi/a=0/b=10/data_0.json	{"val":"v0"}
+{TEST_DIR}/json_partition_multi/a=1/b=11/data_0.json	{"val":"v1"}
+
+# PARTITION_BY combined with date formatting still applies the format inside the JSON object
+statement ok
+COPY (SELECT DATE '2024-01-01' AS d, i AS val FROM range(2) t(i))
+TO '{TEST_DIR}/json_partition_dateformat' (FORMAT JSON, PARTITION_BY (val), dateformat '%Y/%m/%d');
+
+query II
+SELECT filename, trim(content, chr(10))
+FROM read_text('{TEST_DIR}/json_partition_dateformat/*/*.json') ORDER BY filename;
+----
+{TEST_DIR}/json_partition_dateformat/val=0/data_0.json	{"d":"2024/01/01"}
+{TEST_DIR}/json_partition_dateformat/val=1/data_0.json	{"d":"2024/01/01"}
