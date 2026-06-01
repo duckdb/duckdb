@@ -74,18 +74,6 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
 	}
 }
 
-template <class T>
-BoundStatement Binder::BindWithCTE(T &statement) {
-	auto &cte_map = statement.cte_map;
-	if (cte_map.map.empty()) {
-		return Bind(statement);
-	}
-
-	auto stmt_node = make_uniq<StatementNode>(statement);
-	stmt_node->cte_map = cte_map.Copy();
-	return Bind(*stmt_node);
-}
-
 BoundStatement Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:

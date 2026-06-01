@@ -391,8 +391,6 @@ private:
 	//! Tries to bind the table name with replacement scans
 	BoundStatement BindWithReplacementScan(ClientContext &context, BaseTableRef &ref);
 
-	template <class T>
-	BoundStatement BindWithCTE(T &statement);
 	BoundStatement Bind(SelectStatement &stmt);
 	BoundStatement Bind(InsertStatement &stmt);
 	BoundStatement Bind(CopyStatement &stmt, CopyToType copy_to_type);
