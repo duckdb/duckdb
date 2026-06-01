@@ -172,6 +172,8 @@ void PEGTransformerFactory::RegisterCommon() {
 	REGISTER_TRANSFORM(TransformTypeModifiers);
 	REGISTER_TRANSFORM(TransformSimpleType);
 	REGISTER_TRANSFORM(TransformQualifiedTypeName);
+	REGISTER_TRANSFORM(TransformSchemaReservedTypeName);
+	REGISTER_TRANSFORM(TransformCatalogReservedSchemaTypeName);
 	REGISTER_TRANSFORM(TransformCharacterType);
 	REGISTER_TRANSFORM(TransformMapType);
 	REGISTER_TRANSFORM(TransformRowType);
@@ -742,7 +744,7 @@ bool PEGTransformerFactory::ExpressionIsEmptyStar(ParsedExpression &expr) {
 		return false;
 	}
 	auto &star = expr.Cast<StarExpression>();
-	if (!star.columns && star.exclude_list.empty() && star.replace_list.empty()) {
+	if (!star.IsColumns() && star.ExcludeList().empty() && star.ReplaceList().empty()) {
 		return true;
 	}
 	return false;
@@ -799,11 +801,11 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 	switch (expr.GetExpressionType()) {
 	case ExpressionType::FUNCTION: {
 		auto &function = expr.Cast<FunctionExpression>();
-		if (function.function_name == "struct_pack") {
+		if (function.FunctionName() == "struct_pack") {
 			unordered_set<string> unique_names;
 			child_list_t<Value> values;
-			values.reserve(function.children.size());
-			for (const auto &child : function.children) {
+			values.reserve(function.GetChildren().size());
+			for (const auto &child : function.GetChildren()) {
 				if (!unique_names.insert(child->GetAlias()).second) {
 					throw BinderException("Duplicate struct entry name \"%s\"", child->GetAlias());
 				}
@@ -815,10 +817,10 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			}
 			value = Value::STRUCT(std::move(values));
 			return true;
-		} else if (function.function_name == "list_value") {
+		} else if (function.FunctionName() == "list_value") {
 			vector<Value> values;
-			values.reserve(function.children.size());
-			for (const auto &child : function.children) {
+			values.reserve(function.GetChildren().size());
+			for (const auto &child : function.GetChildren()) {
 				Value child_value;
 				if (!ConstructConstantFromExpression(*child, child_value)) {
 					return false;
@@ -835,14 +837,14 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 			// finally create the list
 			value = Value::LIST(child_type, values);
 			return true;
-		} else if (function.function_name == "map") {
+		} else if (function.FunctionName() == "map") {
 			Value keys;
-			if (!ConstructConstantFromExpression(*function.children[0], keys)) {
+			if (!ConstructConstantFromExpression(*function.GetChildren()[0], keys)) {
 				return false;
 			}
 
 			Value values;
-			if (!ConstructConstantFromExpression(*function.children[1], values)) {
+			if (!ConstructConstantFromExpression(*function.GetChildren()[1], values)) {
 				return false;
 			}
 

@@ -1286,6 +1286,9 @@ matcher_rule_overrides:
   TypeName:
     matcher: identifier
     suggestion: SUGGEST_TYPE_NAME
+  ReservedTypeName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_TYPE_NAME
   PragmaName:
     matcher: identifier
     suggestion: SUGGEST_PRAGMA_NAME

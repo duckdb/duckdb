@@ -80,7 +80,7 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 			break;
 		}
 
-		string alias_name = colref.column_names.back();
+		string alias_name = colref.ColumnNames().back();
 		// check the alias list
 		auto entry = bind_state.alias_map.find(alias_name);
 		if (entry != bind_state.alias_map.end()) {
@@ -108,7 +108,7 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 	}
 	case ExpressionClass::POSITIONAL_REFERENCE: {
 		auto &posref = expr.Cast<PositionalReferenceExpression>();
-		return posref.index - 1;
+		return posref.Index() - 1;
 	}
 	default:
 		break;

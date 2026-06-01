@@ -194,16 +194,16 @@ static optional_ptr<const BaseStatistics> TryGetFilterStats(const Expression &ex
 		return &stats;
 	case ExpressionClass::BOUND_CAST: {
 		auto &cast_expr = expr.Cast<BoundCastExpression>();
-		auto child_stats = TryGetFilterStats(*cast_expr.child, stats, owned_stats);
+		auto child_stats = TryGetFilterStats(cast_expr.Child(), stats, owned_stats);
 		if (!child_stats) {
 			return nullptr;
 		}
-		auto cast_stats = StatisticsPropagator::TryPropagateCast(*child_stats, cast_expr.child->GetReturnType(),
+		auto cast_stats = StatisticsPropagator::TryPropagateCast(*child_stats, cast_expr.Child().GetReturnType(),
 		                                                         cast_expr.GetReturnType());
 		if (!cast_stats) {
 			return nullptr;
 		}
-		if (cast_expr.try_cast) {
+		if (cast_expr.IsTryCast()) {
 			cast_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 		}
 		owned_stats.push_back(std::move(cast_stats));

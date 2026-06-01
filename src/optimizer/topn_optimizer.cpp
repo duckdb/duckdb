@@ -82,7 +82,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	auto &colref = op.orders[0].expression->Cast<BoundColumnRefExpression>();
 	vector<JoinFilterPushdownColumn> columns;
 	JoinFilterPushdownColumn column;
-	column.probe_column_index = colref.binding;
+	column.probe_column_index = colref.Binding();
 	columns.emplace_back(column);
 	vector<PushdownFilterTarget> pushdown_targets;
 	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*op.children[0], std::move(columns), pushdown_targets);

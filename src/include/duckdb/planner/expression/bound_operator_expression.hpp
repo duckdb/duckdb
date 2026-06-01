@@ -22,6 +22,9 @@ public:
 	vector<unique_ptr<Expression>> children;
 
 public:
+	const vector<unique_ptr<Expression>> &GetChildren() const {
+		return children;
+	}
 	string ToString() const override;
 
 	bool Equals(const BaseExpression &other) const override;

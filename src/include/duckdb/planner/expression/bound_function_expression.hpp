@@ -32,6 +32,10 @@ public:
 	//! Whether or not the function is an operator, only used for rendering
 	bool is_operator;
 
+	const vector<unique_ptr<Expression>> &GetChildren() const {
+		return children;
+	}
+
 public:
 	bool IsVolatile() const override;
 	bool IsConsistent() const override;

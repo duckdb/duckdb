@@ -1,5 +1,5 @@
 diff --git a/src/httpfs_connection_caching.cpp b/src/httpfs_connection_caching.cpp
-index 6db8f28..bb0ea67 100644
+index 210abd4..e2bf406 100644
 --- a/src/httpfs_connection_caching.cpp
 +++ b/src/httpfs_connection_caching.cpp
 @@ -149,7 +149,7 @@ unique_ptr<HTTPResponse> HTTPFSCurlUtil::CachingSendRequest(BaseRequest &request
@@ -12,7 +12,7 @@ index 6db8f28..bb0ea67 100644
  
  unique_ptr<HTTPResponse> HTTPFSCurlUtil::SendRequest(BaseRequest &request, unique_ptr<HTTPClient> &client) {
 diff --git a/src/s3fs.cpp b/src/s3fs.cpp
-index b4f3f59..933302f 100644
+index 95b4342..c21b5b0 100644
 --- a/src/s3fs.cpp
 +++ b/src/s3fs.cpp
 @@ -359,7 +359,6 @@ void S3FileHandle::Close() {

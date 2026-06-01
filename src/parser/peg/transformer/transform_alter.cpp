@@ -254,13 +254,13 @@ unique_ptr<AlterTableInfo>
 PEGTransformerFactory::TransformDropColumn(PEGTransformer &transformer, const bool &if_exists,
                                            unique_ptr<ColumnRefExpression> nested_column_name,
                                            const bool &drop_behavior) {
-	if (nested_column_name->column_names.size() == 1) {
-		auto result = make_uniq<RemoveColumnInfo>(AlterEntryData(), nested_column_name->column_names[0], if_exists,
+	if (nested_column_name->ColumnNames().size() == 1) {
+		auto result = make_uniq<RemoveColumnInfo>(AlterEntryData(), nested_column_name->ColumnNames()[0], if_exists,
 		                                          drop_behavior);
 		return std::move(result);
 	}
 	auto result =
-	    make_uniq<RemoveFieldInfo>(AlterEntryData(), nested_column_name->column_names, if_exists, drop_behavior);
+	    make_uniq<RemoveFieldInfo>(AlterEntryData(), nested_column_name->ColumnNames(), if_exists, drop_behavior);
 	return std::move(result);
 }
 
@@ -271,19 +271,19 @@ PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer,
 	if (alter_column_entry->alter_table_type == AlterTableType::SET_DEFAULT) {
 		auto set_default_entry = unique_ptr_cast<AlterTableInfo, SetDefaultInfo>(std::move(alter_column_entry));
 		// TODO(Dtenwolde) Figure out with nested names;
-		set_default_entry->column_name = nested_column_name->column_names[0];
+		set_default_entry->column_name = nested_column_name->ColumnNames()[0];
 		return std::move(set_default_entry);
 	} else if (alter_column_entry->alter_table_type == AlterTableType::DROP_NOT_NULL) {
 		auto drop_not_null = unique_ptr_cast<AlterTableInfo, DropNotNullInfo>(std::move(alter_column_entry));
-		drop_not_null->column_name = nested_column_name->column_names[0];
+		drop_not_null->column_name = nested_column_name->ColumnNames()[0];
 		return std::move(drop_not_null);
 	} else if (alter_column_entry->alter_table_type == AlterTableType::SET_NOT_NULL) {
 		auto set_not_null = unique_ptr_cast<AlterTableInfo, SetNotNullInfo>(std::move(alter_column_entry));
-		set_not_null->column_name = nested_column_name->column_names[0];
+		set_not_null->column_name = nested_column_name->ColumnNames()[0];
 		return std::move(set_not_null);
 	} else if (alter_column_entry->alter_table_type == AlterTableType::ALTER_COLUMN_TYPE) {
 		auto change_column_type = unique_ptr_cast<AlterTableInfo, ChangeColumnTypeInfo>(std::move(alter_column_entry));
-		change_column_type->column_name = nested_column_name->column_names[0];
+		change_column_type->column_name = nested_column_name->ColumnNames()[0];
 		if (!change_column_type->expression) {
 			change_column_type->expression =
 			    make_uniq<CastExpression>(change_column_type->target_type, std::move(nested_column_name));
@@ -329,11 +329,11 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddDefault(PEGTransfo
 
 unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformRenameColumn(
     PEGTransformer &transformer, unique_ptr<ColumnRefExpression> nested_column_name, const string &identifier) {
-	if (nested_column_name->column_names.size() == 1) {
-		auto result = make_uniq<RenameColumnInfo>(AlterEntryData(), nested_column_name->column_names[0], identifier);
+	if (nested_column_name->ColumnNames().size() == 1) {
+		auto result = make_uniq<RenameColumnInfo>(AlterEntryData(), nested_column_name->ColumnNames()[0], identifier);
 		return std::move(result);
 	}
-	auto result = make_uniq<RenameFieldInfo>(AlterEntryData(), nested_column_name->column_names, identifier);
+	auto result = make_uniq<RenameFieldInfo>(AlterEntryData(), nested_column_name->ColumnNames(), identifier);
 	return std::move(result);
 }
 

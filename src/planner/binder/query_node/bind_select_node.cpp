@@ -178,7 +178,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 			auto &order_binders = order_binder.GetBinders();
 			if (order.orders.size() == 1 && order.orders[0].expression->GetExpressionType() == ExpressionType::STAR) {
 				auto &star = order.orders[0].expression->Cast<StarExpression>();
-				if (star.exclude_list.empty() && star.replace_list.empty() && !star.expr) {
+				if (star.ExcludeList().empty() && star.ReplaceList().empty() && !star.Expression()) {
 					// ORDER BY ALL
 					// replace the order list with the all elements in the SELECT list
 					auto order_type = config.ResolveOrder(context, order.orders[0].type);
@@ -319,7 +319,7 @@ static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_inde
 		return;
 	}
 	auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-	bound_colref.SetReturnType(sql_types[bound_colref.binding.column_index]);
+	bound_colref.SetReturnType(sql_types[bound_colref.Binding().column_index]);
 }
 
 void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<string> &names,
@@ -395,14 +395,14 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	// expand any expressions in the upper AND recursively
 	if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conj = expr->Cast<ConjunctionExpression>();
-		for (auto &child : conj.children) {
+		for (auto &child : conj.GetChildrenMutable()) {
 			BindWhereStarExpression(child);
 		}
 		return;
 	}
 	if (expr->GetExpressionType() == ExpressionType::STAR) {
 		auto &star = expr->Cast<StarExpression>();
-		if (!star.columns) {
+		if (!star.IsColumns()) {
 			throw ParserException("STAR expression is not allowed in the WHERE clause. Use COLUMNS(*) instead.");
 		}
 	}

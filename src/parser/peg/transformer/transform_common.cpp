@@ -263,22 +263,35 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSimpleType(PEGTrans
 QualifiedName PEGTransformerFactory::TransformQualifiedTypeName(PEGTransformer &transformer,
                                                                 ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	vector<string> qualified_typename;
-	auto &opt_identifiers = list_pr.Child<OptionalParseResult>(0);
-	if (opt_identifiers.HasResult()) {
-		auto &repeat_identifiers = opt_identifiers.GetResult().Cast<RepeatParseResult>();
-		for (auto &child : repeat_identifiers.GetChildren()) {
-			auto &repeat_list = child.get().Cast<ListParseResult>();
-			qualified_typename.push_back(repeat_list.Child<IdentifierParseResult>(0).identifier);
-		}
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		QualifiedName result;
+		result.catalog = INVALID_CATALOG;
+		result.schema = INVALID_SCHEMA;
+		result.name = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier;
+		return result;
 	}
+	return transformer.Transform<QualifiedName>(choice_pr.GetResult());
+}
 
-	if (list_pr.GetChild(1).type == ParseResultType::IDENTIFIER) {
-		qualified_typename.push_back(list_pr.Child<IdentifierParseResult>(1).identifier);
-	} else {
-		qualified_typename.push_back(transformer.Transform<string>(list_pr.Child<ListParseResult>(2)));
-	}
-	return StringToQualifiedName(qualified_typename);
+QualifiedName PEGTransformerFactory::TransformSchemaReservedTypeName(PEGTransformer &transformer,
+                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	QualifiedName result;
+	result.catalog = INVALID_CATALOG;
+	result.schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	result.name = list_pr.Child<IdentifierParseResult>(1).identifier;
+	return result;
+}
+
+QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaTypeName(PEGTransformer &transformer,
+                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	QualifiedName result;
+	result.catalog = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	result.schema = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
+	result.name = list_pr.Child<IdentifierParseResult>(2).identifier;
+	return result;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCharacterType(PEGTransformer &transformer,

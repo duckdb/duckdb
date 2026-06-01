@@ -21,7 +21,7 @@ static void SetGenericCopyOptionExpression(GenericCopyOption &copy_option, uniqu
 		copy_option.children.push_back(Value(expression->Cast<ColumnRefExpression>().GetColumnName()));
 	} else if (expression->GetExpressionType() == ExpressionType::PLACEHOLDER) {
 		auto &op_expr = expression->Cast<OperatorExpression>();
-		for (auto &child : op_expr.children) {
+		for (auto &child : op_expr.GetChildren()) {
 			if (child->GetExpressionClass() == ExpressionClass::CONSTANT) {
 				copy_option.children.push_back(Value(child->Cast<ConstantExpression>().GetValue()));
 			} else if (child->GetExpressionClass() == ExpressionClass::COLUMN_REF) {

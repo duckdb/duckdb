@@ -14,6 +14,20 @@
 
 namespace duckdb {
 
+bool ExpressionBinding::FoundExpression() const {
+	return expression;
+}
+
+bool ExpressionBinding::FoundColumnRef() const {
+	if (!FoundExpression()) {
+		return false;
+	}
+	return expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF;
+}
+
+RelationStats::RelationStats() : cardinality(1), filter_strength(1), stats_initialized(false) {
+}
+
 static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	auto ret = ExpressionBinding();
 	switch (expr.GetExpressionClass()) {
@@ -31,7 +45,7 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	case ExpressionClass::BOUND_COLUMN_REF: {
 		ret.expression = expr;
 		auto &new_col_ref = expr.Cast<BoundColumnRefExpression>();
-		ret.child_binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
+		ret.child_binding = ColumnBinding(new_col_ref.Binding().table_index, new_col_ref.Binding().column_index);
 		return ret;
 	}
 	case ExpressionClass::BOUND_LAMBDA_REF:
@@ -154,6 +168,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			cardinality_after_filters = 0;
 		}
 	}
+
 	return_stats.cardinality = cardinality_after_filters;
 	// update the estimated cardinality of the get as well.
 	// This is not updated during plan reconstruction.
@@ -369,7 +384,7 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 				continue;
 			}
 			auto &bound_col = group.Cast<BoundColumnRefExpression>();
-			auto col_index = bound_col.binding.column_index;
+			auto col_index = bound_col.Binding().column_index;
 			if (col_index >= child_stats.column_distinct_count.size()) {
 				// it is possible the column index of the grouping_set is not in the child stats.
 				// this can happen when delim joins are present, since delim scans are not currently
