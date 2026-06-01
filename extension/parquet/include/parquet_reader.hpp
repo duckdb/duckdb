@@ -394,7 +394,7 @@ private:
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;
-	unique_ptr<NetworkPrefetchStats> network_stats;
+	unique_ptr<PrefetchCostModelState> cost_model_state;
 };
 
 } // namespace duckdb

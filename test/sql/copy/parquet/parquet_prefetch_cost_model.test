@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/parquet_prefetch_cost_model.test
-# description: Check Parquet Prefetching gap values change with cost model
+# description: Check Parquet Prefetching gap uses the local cost-model seed (network refinement is remote-only)
 # group: [parquet]
 
 require parquet
@@ -49,9 +49,10 @@ WHERE file_path LIKE '%cost_model_gap.parquet' AND (accepted_column_gap < 4096 O
 ----
 0
 
+# Local files are not network-measured, so every row group keeps the local seed gap (1e-5 s * 2e9 B/s = 20000)
 query I
-SELECT count(DISTINCT accepted_column_gap) > 1
+SELECT DISTINCT accepted_column_gap
 FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%cost_model_gap.parquet'
 ----
-true
+20000

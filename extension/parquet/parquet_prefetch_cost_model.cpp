@@ -1,12 +1,14 @@
 #include "parquet_prefetch_cost_model.hpp"
 
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/file_system.hpp"
 
 namespace duckdb {
 
 constexpr uint64_t PrefetchCostModel::GAP_MIN;
 constexpr uint64_t PrefetchCostModel::GAP_MAX;
-constexpr double NetworkPrefetchStats::ALPHA;
+constexpr idx_t PrefetchCostModelState::MIN_SAMPLES;
+constexpr double PrefetchCostModelState::ALPHA;
 
 PrefetchCostModel PrefetchCostModel::LocalProfile() {
 	return {1e-5, 2e9}; // 10 us, 2 GB/s -> ~20 KB
@@ -27,39 +29,33 @@ uint64_t PrefetchCostModel::GetColumnGapSize() const {
 	return MaxValue<uint64_t>(GAP_MIN, static_cast<uint64_t>(column_gap_size));
 }
 
-void NetworkPrefetchStats::RecordRead(idx_t bytes, double seconds) {
-
-	static constexpr double MIN_SAMPLE_SECONDS = 1e-6;
-	if (bytes == 0 || seconds < MIN_SAMPLE_SECONDS) {
+void PrefetchCostModelState::RefineFromEstimate(const NetworkThroughputEstimate &estimate) {
+	// Keep the per-medium seed until the underlying handle has measured enough requests.
+	if (estimate.sample_count < MIN_SAMPLES) {
 		return;
 	}
-	const double latency = latency_seconds.load();
-	const double bandwidth = bandwidth_bytes_per_s.load();
-	const double expected_transfer_time = static_cast<double>(bytes) / bandwidth;
-	// lets figure out if this read is dominated by either latency or bandwidth
-	if (expected_transfer_time < latency) {
-		// Latency-dominated sample: the fixed per-request cost should be most of the time.
-		const double observed_latency = seconds - expected_transfer_time;
-		if (observed_latency > 0) {
-			latency_seconds.store(WeightedAVG(latency, observed_latency));
-		} else {
-			// bandwidth was underestimated, so raise it.
-			bandwidth_bytes_per_s.store(WeightedAVG(bandwidth, static_cast<double>(bytes) / seconds));
-		}
+	const double latency = estimate.latency_seconds;
+	const double bandwidth = estimate.bandwidth_bytes_per_s;
+	// Ignore degenerate estimates (also catches NaN).
+	if (!(latency > 0) || !(bandwidth > 0)) {
+		return;
+	}
+
+	lock_guard<mutex> guard(lock);
+	if (!measured_adopted) {
+		model.latency_seconds = latency;
+		model.bandwidth_bytes_per_s = bandwidth;
+		measured_adopted = true;
 	} else {
-		// Bandwidth-dominated sample: streaming the bytes should be most of the time.
-		const double transfer_time = seconds - latency;
-		if (transfer_time > 0) {
-			bandwidth_bytes_per_s.store(WeightedAVG(bandwidth, static_cast<double>(bytes) / transfer_time));
-		} else {
-			// latency was overestimated, so lower it.
-			latency_seconds.store(WeightedAVG(latency, seconds));
-		}
+
+		model.latency_seconds = ALPHA * latency + (1.0 - ALPHA) * model.latency_seconds;
+		model.bandwidth_bytes_per_s = ALPHA * bandwidth + (1.0 - ALPHA) * model.bandwidth_bytes_per_s;
 	}
 }
 
-PrefetchCostModel NetworkPrefetchStats::GetModel() const {
-	return {latency_seconds.load(), bandwidth_bytes_per_s.load()};
+PrefetchCostModel PrefetchCostModelState::GetModel() const {
+	lock_guard<mutex> guard(lock);
+	return model;
 }
 
 } // namespace duckdb

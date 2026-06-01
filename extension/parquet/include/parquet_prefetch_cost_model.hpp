@@ -9,10 +9,11 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
-
-#include <atomic>
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
+
+struct NetworkThroughputEstimate;
 
 //! Cost model that decides how large a gap between two needed byte ranges may be
 struct PrefetchCostModel {
@@ -34,28 +35,27 @@ struct PrefetchCostModel {
 	uint64_t GetColumnGapSize() const;
 };
 
-//! Measured Network Stats
-class NetworkPrefetchStats {
+class PrefetchCostModelState {
 public:
-	explicit NetworkPrefetchStats(PrefetchCostModel seed)
-	    : latency_seconds(seed.latency_seconds), bandwidth_bytes_per_s(seed.bandwidth_bytes_per_s) {
+	explicit PrefetchCostModelState(PrefetchCostModel seed) : model(seed) {
 	}
 
-	//! Record number of bytes and time (s) that take to get it
-	void RecordRead(idx_t bytes, double seconds);
+	//! Refine the model from a measured network throughput estimate.
+	void RefineFromEstimate(const NetworkThroughputEstimate &estimate);
 
-	//! Snapshot of the current estimate
+	//! Snapshot of the current model
 	PrefetchCostModel GetModel() const;
 
 private:
-	static constexpr double ALPHA = 0.25;
-	//! Running average that weights new samples at 0.25
-	static double WeightedAVG(double prev, double sample) {
-		return ALPHA * sample + (1.0 - ALPHA) * prev;
-	}
+	//! Number of minimal measured network samples
+	static constexpr idx_t MIN_SAMPLES = 4;
+	//! Weight applied to an estimate
+	static constexpr double ALPHA = 0.5;
 
-	std::atomic<double> latency_seconds;
-	std::atomic<double> bandwidth_bytes_per_s;
+	mutable mutex lock;
+	PrefetchCostModel model;
+	//! Whether we have switched from the seed to measured values
+	bool measured_adopted = false;
 };
 
 } // namespace duckdb

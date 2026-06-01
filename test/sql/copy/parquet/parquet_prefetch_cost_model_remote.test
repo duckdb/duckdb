@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/parquet_prefetch_cost_model_remote.test
-# description: Check Parquet Prefetching gap values change with cost model (over remote files)
+# description: Check Parquet Prefetching gap adapts to measured network latency/bandwidth (over remote files)
 # group: [parquet]
 
 require parquet
@@ -11,6 +11,9 @@ statement ok
 SET threads=1
 
 statement ok
+SET enable_external_file_cache=false
+
+statement ok
 CALL enable_logging('ParquetPrefetch')
 
 statement ok
@@ -18,6 +21,7 @@ SELECT count(*)
 FROM read_parquet('http://blobs.duckdb.org/data/train-services-window-self-join-benchmark.parquet') t(c0, c1)
 WHERE c1 > 500000
 
+# The first row group is sized from the remote seed, before enough network samples have been measured
 query I
 SELECT accepted_column_gap
 FROM duckdb_logs_parsed('ParquetPrefetch')
@@ -32,6 +36,7 @@ WHERE file_path LIKE '%train-services%' AND (accepted_column_gap < 4096 OR accep
 ----
 0
 
+# Once enough network samples accumulate, the gap moves off the seed: the cost model adapted to real measurements
 query I
 SELECT count(DISTINCT accepted_column_gap) > 1
 FROM duckdb_logs_parsed('ParquetPrefetch')
