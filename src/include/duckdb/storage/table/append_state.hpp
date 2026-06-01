@@ -70,7 +70,7 @@ struct RowGroupAppendState {
 	//! The parent append state
 	TableAppendState &parent;
 	//! The current row_group we are appending to
-	RowGroup *row_group;
+	optional_ptr<SegmentNode<RowGroup>> row_group;
 	//! The column append states
 	unsafe_unique_array<ColumnAppendState> states;
 	//! Offset within the row_group

@@ -41,8 +41,7 @@ static void FillChunk(DataChunk &chunk, int64_t base) {
 	}
 }
 
-TEST_CASE("exaforce#42 - flushing the active append row group must not dangle the append state",
-          "[storage][.]") {
+TEST_CASE("exaforce#42 - flushing the active append row group must not dangle the append state", "[storage][.]") {
 	auto db_path = TestCreatePath("rowgroup_append_uaf.db");
 	DeleteDatabase(db_path);
 
@@ -87,7 +86,7 @@ TEST_CASE("exaforce#42 - flushing the active append row group must not dangle th
 		collection.FinalizeAppend(tdata, state);
 	}
 	writer->WriteUnflushedRowGroups(*coll);
-	REQUIRE(coll->complete_row_groups == collection.GetRowGroupCount());
+	writer->FinalFlush();
 
 	// Phase 2: a fresh append (mimicking a subsequent PhysicalInsert::Combine re-append).
 	// The first chunk overflows the full last row group and creates a new row group whose
@@ -99,9 +98,10 @@ TEST_CASE("exaforce#42 - flushing the active append row group must not dangle th
 		collection.InitializeAppend(tdata, state);
 
 		FillChunk(chunk, 0);
-		bool new_row_group = collection.Append(chunk, state);
-		if (new_row_group) {
-			writer->WriteNewRowGroup(*coll); // <-- on buggy code this frees the active row group
+		auto new_row_group_idx = collection.Append(chunk, state);
+		if (new_row_group_idx.IsValid()) {
+			writer->WriteNewRowGroup(*coll,
+			                         new_row_group_idx.GetIndex()); // <-- on buggy code this frees the active row group
 		}
 
 		// On buggy code, this Append reads the dangling RowGroup* -> ASAN heap-use-after-free.

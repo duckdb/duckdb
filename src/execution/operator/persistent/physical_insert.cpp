@@ -663,9 +663,9 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &insert
 
 	auto &optimistic_collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
 	auto &collection = *optimistic_collection.collection;
-	auto new_row_group = collection.Append(insert_chunk, lstate.local_append_state);
-	if (new_row_group) {
-		lstate.optimistic_writer->WriteNewRowGroup(optimistic_collection);
+	auto flushed_row_group_idx = collection.Append(insert_chunk, lstate.local_append_state);
+	if (flushed_row_group_idx.IsValid()) {
+		lstate.optimistic_writer->WriteNewRowGroup(optimistic_collection, flushed_row_group_idx.GetIndex());
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -707,8 +707,6 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		storage.FinalizeLocalAppend(append_state);
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
-		lstate.optimistic_writer->WriteUnflushedRowGroups(optimistic_collection);
-		lstate.optimistic_writer->FinalFlush();
 		gstate.table.GetStorage().LocalMerge(context.client, gstate.table, optimistic_collection);
 		auto &optimistic_writer = gstate.table.GetStorage().GetOptimisticWriter(context.client);
 		optimistic_writer.Merge(*lstate.optimistic_writer);

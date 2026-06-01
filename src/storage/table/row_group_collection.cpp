@@ -554,7 +554,7 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	state.start_row_group = state.row_groups->GetLastSegment(l);
 	D_ASSERT(state.row_groups->GetBaseRowId() + next_row_id ==
 	         state.start_row_group->GetRowStart() + state.start_row_group->GetNode().count);
-	state.start_row_group->GetNode().InitializeAppend(state.row_group_append_state);
+	RowGroup::InitializeAppend(*state.start_row_group, state.row_group_append_state);
 	state.transaction = transaction;
 	state.row_group_start = state.start_row_group->GetRowStart();
 
@@ -568,16 +568,17 @@ void RowGroupCollection::InitializeAppend(TableAppendState &state) {
 	InitializeAppend(tdata, state);
 }
 
-bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
+optional_idx RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
+	const idx_t row_group_size = GetRowGroupSize();
 	D_ASSERT(chunk.ColumnCount() == types.size());
 	chunk.Verify(GetDatabase());
 
-	bool new_row_group = false;
+	optional_idx flushed_row_group_idx;
 	idx_t total_append_count = chunk.size();
 	idx_t remaining = chunk.size();
 	state.total_append_count += total_append_count;
 	while (true) {
-		auto &current_row_group = *state.row_group_append_state.row_group;
+		auto &current_row_group = state.row_group_append_state.row_group->GetNode();
 		// check how much we can fit into the current row_group
 		idx_t append_count =
 		    MinValue<idx_t>(remaining, row_group_size - state.row_group_append_state.offset_in_row_group);
@@ -585,6 +586,8 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			auto previous_allocation_size = current_row_group.GetAllocationSize();
 			current_row_group.Append(state.row_group_append_state, chunk, append_count);
 			allocation_size += current_row_group.GetAllocationSize() - previous_allocation_size;
+			// merge the stats
+			current_row_group.MergeIntoStatistics(stats);
 		}
 		remaining -= append_count;
 		if (remaining == 0) {
@@ -600,14 +603,14 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 			chunk.Slice(append_count, remaining);
 		}
 		// append a new row_group
-		new_row_group = true;
+		flushed_row_group_idx = state.row_group_append_state.row_group->GetIndex();
 		auto next_start = state.row_group_start + state.row_group_append_state.offset_in_row_group;
 
 		auto l = state.row_groups->Lock();
 		AppendRowGroup(l, next_start);
 		// set up the append state for this row_group
 		auto last_row_group = state.row_groups->GetLastSegment(l);
-		last_row_group->GetNode().InitializeAppend(state.row_group_append_state);
+		RowGroup::InitializeAppend(*last_row_group, state.row_group_append_state);
 		state.row_group_start = next_start;
 	}
 	state.current_row += row_t(total_append_count);
@@ -619,12 +622,12 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		column_stats.UpdateDistinctStatistics(chunk.data[col_idx], chunk.size(), state.hashes);
 	}
 
-	return new_row_group;
+	return flushed_row_group_idx;
 }
 
 void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppendState &state) {
 	// first finalize the append of the final row group we appended to
-	auto &last_row_group = *state.row_group_append_state.row_group;
+	auto &last_row_group = state.row_group_append_state.row_group->GetNode();
 	last_row_group.FinalizeAppend(state.row_group_append_state);
 
 	// now push version info into all row groups
@@ -1277,14 +1280,14 @@ public:
 		auto &types = collection.GetTypes();
 
 		// create the new set of target row groups (initially empty)
-		vector<unique_ptr<RowGroup>> new_row_groups;
+		vector<unique_ptr<SegmentNode<RowGroup>>> new_row_groups;
 		vector<idx_t> append_counts;
 		idx_t row_group_rows = merge_rows;
 		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
 			idx_t current_row_group_rows = MinValue<idx_t>(row_group_rows, row_group_size);
-			auto new_row_group = make_uniq<RowGroup>(collection, current_row_group_rows);
+			auto new_row_group = make_shared_ptr<RowGroup>(collection, current_row_group_rows);
 			new_row_group->InitializeEmpty(types, ColumnDataType::MAIN_TABLE);
-			new_row_groups.push_back(std::move(new_row_group));
+			new_row_groups.push_back(make_uniq<SegmentNode<RowGroup>>(0ULL, std::move(new_row_group), target_idx));
 			append_counts.push_back(0);
 			row_group_rows -= current_row_group_rows;
 		}
@@ -1301,7 +1304,8 @@ public:
 
 		// fill the new row group with the merged rows
 		TableAppendState append_state;
-		new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
+		auto &initial_append_row_group = *new_row_groups[current_append_idx];
+		RowGroup::InitializeAppend(initial_append_row_group, append_state.row_group_append_state);
 
 		TableScanState scan_state;
 		scan_state.Initialize(column_ids);
@@ -1333,20 +1337,21 @@ public:
 				scan_chunk.Flatten();
 				idx_t remaining = scan_chunk.size();
 				while (remaining > 0) {
+					auto &current_append_row_group = new_row_groups[current_append_idx]->GetNode();
 					idx_t append_count = MinValue<idx_t>(remaining, row_group_size - append_counts[current_append_idx]);
-					new_row_groups[current_append_idx]->Append(append_state.row_group_append_state, scan_chunk,
-					                                           append_count);
+					current_append_row_group.Append(append_state.row_group_append_state, scan_chunk, append_count);
 					append_counts[current_append_idx] += append_count;
 					remaining -= append_count;
 					const bool row_group_full = append_counts[current_append_idx] == row_group_size;
 					const bool last_row_group = current_append_idx + 1 >= new_row_groups.size();
 					if (remaining > 0 || (row_group_full && !last_row_group)) {
 						// finalize the last append
-						new_row_groups[current_append_idx]->FinalizeAppend(append_state.row_group_append_state);
+						new_row_groups[current_append_idx]->GetNode().FinalizeAppend(append_state.row_group_append_state);
 
 						// move to the next row group
 						current_append_idx++;
-						new_row_groups[current_append_idx]->InitializeAppend(append_state.row_group_append_state);
+						RowGroup::InitializeAppend(*new_row_groups[current_append_idx],
+						                           append_state.row_group_append_state);
 						// slice chunk for the next append
 						scan_chunk.Slice(append_count, remaining);
 					}
@@ -1357,11 +1362,11 @@ public:
 			checkpoint_state.DropSegment(c_idx);
 		}
 		// finalize the final append
-		new_row_groups[current_append_idx]->FinalizeAppend(append_state.row_group_append_state);
+		new_row_groups[current_append_idx]->GetNode().FinalizeAppend(append_state.row_group_append_state);
 
 		idx_t total_append_count = 0;
 		for (idx_t target_idx = 0; target_idx < target_count; target_idx++) {
-			auto &row_group = new_row_groups[target_idx];
+			auto row_group = new_row_groups[target_idx]->MoveNode();
 			row_group->Verify();
 
 			// assign the new row group to the current segment
