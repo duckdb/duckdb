@@ -44,7 +44,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformInsertStatement(
 		node.table_ref = std::move(insert_target);
 	}
 	node.returning_list = std::move(returning_clause);
-	return result;
+	return std::move(result);
 }
 
 OnConflictAction PEGTransformerFactory::TransformInsertOrReplace(PEGTransformer &transformer) {

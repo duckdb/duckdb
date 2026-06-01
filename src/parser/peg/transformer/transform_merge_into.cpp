@@ -37,7 +37,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(
 		result->actions[action_condition].push_back(std::move(action));
 	}
 	result->returning_list = std::move(returning_clause);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformMergeIntoUsingClause(PEGTransformer &transformer,

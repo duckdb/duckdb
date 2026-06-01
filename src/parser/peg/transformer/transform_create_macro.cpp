@@ -81,7 +81,7 @@ PEGTransformerFactory::TransformTableMacroDefinition(PEGTransformer &transformer
                                                      unique_ptr<SelectStatement> select_statement_internal) {
 	auto result = make_uniq<TableMacroFunction>();
 	result->query_node = std::move(select_statement_internal->node);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<MacroFunction>
@@ -89,7 +89,7 @@ PEGTransformerFactory::TransformScalarMacroDefinition(PEGTransformer &transforme
                                                       unique_ptr<ParsedExpression> expression) {
 	auto result = make_uniq<ScalarMacroFunction>();
 	result->expression = std::move(expression);
-	return result;
+	return std::move(result);
 }
 
 vector<MacroParameter> PEGTransformerFactory::TransformMacroParameters(PEGTransformer &transformer,

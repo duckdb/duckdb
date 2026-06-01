@@ -82,7 +82,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopySelect(
 	SetCopyOptions(info, options);
 	info->select_statement = std::move(select_statement_internal->node);
 	result->info = std::move(info);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<SQLStatement>
@@ -99,7 +99,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyFromDatabaseWithout
 	result->info->name = "copy_database";
 	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(col_id)));
 	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(col_id_1)));
-	return result;
+	return std::move(result);
 }
 
 CopyDatabaseType PEGTransformerFactory::TransformCopyDatabaseFlag(PEGTransformer &transformer,
@@ -148,7 +148,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCopyTable(PEGTransforme
 	SetCopyOptions(info, generic_options);
 
 	result->info = std::move(info);
-	return result;
+	return std::move(result);
 }
 
 bool PEGTransformerFactory::TransformCopyFrom(PEGTransformer &transformer) {
