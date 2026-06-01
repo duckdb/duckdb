@@ -288,6 +288,17 @@ unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
 	return make_uniq<T>(std::move(error));
 }
 
+int64_t ClientContext::GetTimeoutValue() const {
+	auto max_execution_time = Settings::Get<MaxExecutionTimeSetting>(*this);
+	auto global_timeout = Settings::Get<GlobalTimeoutSetting>(*this);
+
+	if (max_execution_time > 0 && global_timeout > 0) {
+		return MinValue(max_execution_time, global_timeout);
+	} else {
+		return MaxValue(max_execution_time, global_timeout);
+	}
+}
+
 void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &query) {
 	// check if we are on AutoCommit. In this case we should start a transaction
 	D_ASSERT(!active_query);
@@ -305,15 +316,9 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	active_query->query = query;
 
 	query_progress.Initialize();
-	// Set query deadline from the tighter of max_execution_time (session) and global_timeout (global)
-	auto max_execution_time = Settings::Get<MaxExecutionTimeSetting>(*this);
-	auto global_timeout = Settings::Get<GlobalTimeoutSetting>(*this);
-	int64_t effective_timeout;
-	if (max_execution_time > 0 && global_timeout > 0) {
-		effective_timeout = MinValue(max_execution_time, global_timeout);
-	} else {
-		effective_timeout = max_execution_time > 0 ? max_execution_time : global_timeout;
-	}
+
+	auto effective_timeout = GetTimeoutValue();
+
 	if (effective_timeout > 0) {
 		auto now = steady_clock::now();
 		auto deadline_tp = now + milliseconds(effective_timeout);

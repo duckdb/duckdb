@@ -14,10 +14,10 @@ SELECT COUNT(*) FROM range(100000000) t1, range(1000) t2
 ----
 Query exceeded maximum execution time
 
-# Recursive CTE (tight loop in ExecuteRecursivePipelines)
 statement ok
 SET global_timeout=100
 
+# recursive cte
 statement error
 WITH RECURSIVE cte AS (
     SELECT 1 as n
@@ -28,7 +28,7 @@ SELECT COUNT(*) FROM cte
 ----
 Query exceeded maximum execution time
 
-# Complex aggregation with many groups (hash table operations)
+# Complex aggregation
 statement ok
 SET global_timeout=5000
 

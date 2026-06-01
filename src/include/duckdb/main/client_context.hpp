@@ -307,6 +307,7 @@ private:
 
 	unique_ptr<ClientContextLock> LockContext();
 
+	int64_t GetTimeoutValue() const;
 	void BeginQueryInternal(ClientContextLock &lock, const string &query);
 	ErrorData EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
 	                           optional_ptr<ErrorData> previous_error);

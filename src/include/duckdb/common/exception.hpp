@@ -89,7 +89,7 @@ enum class ExceptionType : uint8_t {
 	SEQUENCE = 41,
 	INVALID_CONFIGURATION =
 	    42, // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
-	TIMEOUT = 43 // query exceeded its maximum execution time
+	TIMEOUT = 43
 };
 
 class Exception : public std::runtime_error {
