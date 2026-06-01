@@ -16,7 +16,7 @@ void OuterJoinSimplification::HandleExpression(const Expression &expr) {
 		return;
 	}
 	auto &colref = expr.Cast<BoundColumnRefExpression>();
-	null_filtered_columns.insert(colref.binding);
+	null_filtered_columns.insert(colref.Binding());
 }
 
 void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
@@ -96,7 +96,7 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 			if (null_filtered_columns.find(binding) == null_filtered_columns.end()) {
 				continue;
 			}
-			null_filtered_columns.insert(expr.Cast<BoundColumnRefExpression>().binding);
+			null_filtered_columns.insert(expr.Cast<BoundColumnRefExpression>().Binding());
 		}
 		VisitOperatorChildren(op);
 		return;

@@ -189,21 +189,22 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 
 unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr,
                                                            unique_ptr<Expression> *expr_ptr) {
-	D_ASSERT(expr.depth == 0);
+	D_ASSERT(expr.Depth() == 0);
 	// check the current set of column bindings to see which index corresponds to the column reference
 	for (idx_t i = 0; i < bindings.size(); i++) {
-		if (expr.binding == bindings[i]) {
+		if (expr.Binding() == bindings[i]) {
 			if (!types.empty()) {
 				if (bindings.size() != types.size()) {
 					throw InternalException(
 					    "Failed to bind column reference \"%s\" [%d.%d]: inequal num bindings/types (%llu != %llu)",
-					    expr.GetAlias(), expr.binding.table_index.index, expr.binding.column_index, bindings.size(),
+					    expr.GetAlias(), expr.Binding().table_index.index, expr.Binding().column_index, bindings.size(),
 					    types.size());
 				}
 				if (expr.GetReturnType() != types[i]) {
 					throw InternalException("Failed to bind column reference \"%s\" [%d.%d]: inequal types (%s != %s)",
-					                        expr.GetAlias(), expr.binding.table_index.index, expr.binding.column_index,
-					                        expr.GetReturnType().ToString(), types[i].ToString());
+					                        expr.GetAlias(), expr.Binding().table_index.index,
+					                        expr.Binding().column_index, expr.GetReturnType().ToString(),
+					                        types[i].ToString());
 				}
 			}
 			if (verify_only) {
@@ -217,7 +218,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// could not bind the column reference, this should never happen and indicates a bug in the code
 	// generate an error message
 	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.GetAlias(),
-	                        expr.binding.table_index.index, expr.binding.column_index,
+	                        expr.Binding().table_index.index, expr.Binding().column_index,
 	                        LogicalOperator::ColumnBindingsToString(bindings));
 	// LCOV_EXCL_STOP
 }

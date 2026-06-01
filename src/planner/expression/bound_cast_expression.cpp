@@ -43,7 +43,7 @@ static unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> e
 		}
 	}
 	auto result = make_uniq<BoundCastExpression>(std::move(expr), target_type, std::move(bound_cast), try_cast);
-	result->SetQueryLocation(result->child->GetQueryLocation());
+	result->SetQueryLocation(result->Child().GetQueryLocation());
 	return std::move(result);
 }
 

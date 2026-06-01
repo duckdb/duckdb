@@ -231,9 +231,9 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 
 		auto window_bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
-		aggregate = make_uniq<BoundAggregateFunction>(window_bound_aggregate->function);
-		bind_info = std::move(window_bound_aggregate->bind_info);
-		children = std::move(window_bound_aggregate->children);
+		aggregate = make_uniq<BoundAggregateFunction>(window_bound_aggregate->Function());
+		bind_info = std::move(window_bound_aggregate->BindInfoMutable());
+		children = std::move(window_bound_aggregate->GetChildrenMutable());
 		sql_type = window_bound_aggregate->GetReturnType();
 	} else {
 		auto &func = entry->Cast<WindowFunctionCatalogEntry>();

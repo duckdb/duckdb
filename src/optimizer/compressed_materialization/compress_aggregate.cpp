@@ -14,10 +14,10 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 			continue;
 		}
 		auto &colref = group->Cast<BoundColumnRefExpression>();
-		if (group_binding_set.find(colref.binding) != group_binding_set.end()) {
+		if (group_binding_set.find(colref.Binding()) != group_binding_set.end()) {
 			return; // Duplicate group - don't compress
 		}
-		group_binding_set.insert(colref.binding);
+		group_binding_set.insert(colref.Binding());
 	}
 	auto &group_stats = aggregate.group_stats;
 
@@ -39,7 +39,7 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 		auto &group_expr = *groups[group_idx];
 		if (group_expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 			auto &colref = group_expr.Cast<BoundColumnRefExpression>();
-			group_bindings[group_idx] = colref.binding;
+			group_bindings[group_idx] = colref.Binding();
 			continue; // Will be compressed generically
 		}
 
@@ -66,14 +66,14 @@ void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &o
 		const auto &expr = *aggregate.expressions[expr_idx];
 		D_ASSERT(expr.GetExpressionType() == ExpressionType::BOUND_AGGREGATE);
 		const auto &aggr_expr = expr.Cast<BoundAggregateExpression>();
-		for (const auto &child : aggr_expr.children) {
+		for (const auto &child : aggr_expr.GetChildren()) {
 			GetReferencedBindings(*child, referenced_bindings);
 		}
-		if (aggr_expr.filter) {
-			GetReferencedBindings(*aggr_expr.filter, referenced_bindings);
+		if (aggr_expr.GetFilter()) {
+			GetReferencedBindings(*aggr_expr.GetFilter(), referenced_bindings);
 		}
-		if (aggr_expr.order_bys) {
-			for (const auto &order : aggr_expr.order_bys->orders) {
+		if (aggr_expr.GetOrderBys()) {
+			for (const auto &order : aggr_expr.GetOrderBys()->orders) {
 				const auto &order_expr = *order.expression;
 				if (order_expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 					GetReferencedBindings(order_expr, referenced_bindings);
@@ -133,7 +133,7 @@ void CompressedMaterialization::UpdateAggregateStats(unique_ptr<LogicalOperator>
 		if (colref.GetReturnType() == group_stats[group_idx]->GetType()) {
 			continue;
 		}
-		auto it = statistics_map.find(colref.binding);
+		auto it = statistics_map.find(colref.Binding());
 		if (it != statistics_map.end() && it->second) {
 			group_stats[group_idx] = it->second->ToUnique();
 		}
