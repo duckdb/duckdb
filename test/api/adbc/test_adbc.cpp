@@ -4587,4 +4587,50 @@ TEST_CASE("ADBC - regression test for #21772", "[adbc]") {
 	}
 }
 
+TEST_CASE("ADBC - StatementExecuteSchema", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	ADBCTestDatabase db;
+	AdbcStatement stmt;
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+
+	SECTION("basic SELECT") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT 42 AS answer, 'hello' AS greeting", &db.adbc_error)));
+
+		ArrowSchema schema;
+		schema.release = nullptr;
+		REQUIRE(SUCCESS(AdbcStatementExecuteSchema(&stmt, &schema, &db.adbc_error)));
+
+		REQUIRE(schema.n_children == 2);
+		REQUIRE(string(schema.children[0]->name) == "answer");
+		REQUIRE(string(schema.children[1]->name) == "greeting");
+		schema.release(&schema);
+	}
+
+	SECTION("no query set") {
+		ArrowSchema schema;
+		schema.release = nullptr;
+		REQUIRE(!SUCCESS(AdbcStatementExecuteSchema(&stmt, &schema, &db.adbc_error)));
+		REQUIRE(string(db.adbc_error.message).find("StatementSetSqlQuery") != string::npos);
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	SECTION("missing schema pointer") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT 1", &db.adbc_error)));
+		REQUIRE(!SUCCESS(AdbcStatementExecuteSchema(&stmt, nullptr, &db.adbc_error)));
+		if (db.adbc_error.release) {
+			db.adbc_error.release(&db.adbc_error);
+		}
+		InitializeADBCError(&db.adbc_error);
+	}
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+}
+
 } // namespace duckdb
