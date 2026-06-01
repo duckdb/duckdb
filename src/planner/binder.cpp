@@ -139,7 +139,7 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	case StatementType::UPDATE_EXTENSIONS_STATEMENT:
 		return Bind(statement.Cast<UpdateExtensionsStatement>());
 	case StatementType::MERGE_INTO_STATEMENT:
-		return BindWithCTE(statement.Cast<MergeIntoStatement>());
+		return Bind(statement.Cast<MergeIntoStatement>());
 	case StatementType::CONNECT_STATEMENT:
 		return Bind(statement.Cast<ConnectStatement>());
 	case StatementType::DISCONNECT_STATEMENT:

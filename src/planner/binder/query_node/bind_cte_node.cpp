@@ -2,6 +2,7 @@
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/parser/query_node/list.hpp"
@@ -27,7 +28,7 @@ static bool IsDMLQueryNode(const CommonTableExpressionInfo &cte) {
 	}
 	auto t = cte.query_node->type;
 	return t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
-	       t == QueryNodeType::DELETE_QUERY_NODE;
+	       t == QueryNodeType::DELETE_QUERY_NODE || t == QueryNodeType::MERGE_QUERY_NODE;
 }
 
 BoundStatement Binder::BindNode(QueryNode &node) {
@@ -67,6 +68,9 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 		break;
 	case QueryNodeType::INSERT_QUERY_NODE:
 		result = current_binder.get().BindNode(node.Cast<InsertQueryNode>());
+		break;
+	case QueryNodeType::MERGE_QUERY_NODE:
+		result = current_binder.get().BindNode(node.Cast<MergeQueryNode>());
 		break;
 	default:
 		throw InternalException("Unsupported query node type");

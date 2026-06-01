@@ -1,6 +1,7 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 
 namespace duckdb {
 
@@ -8,14 +9,15 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(PEGT
                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = make_uniq<MergeIntoStatement>();
-	transformer.TransformOptional<CommonTableExpressionMap>(list_pr, 0, result->cte_map);
-	result->target = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(3));
-	result->source = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(4));
+	auto &node = *result->node;
+	transformer.TransformOptional<CommonTableExpressionMap>(list_pr, 0, node.cte_map);
+	node.target = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(3));
+	node.source = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(4));
 	auto join_condition = transformer.Transform<JoinQualifier>(list_pr.Child<ListParseResult>(5));
 	if (join_condition.on_clause) {
-		result->join_condition = std::move(join_condition.on_clause);
+		node.join_condition = std::move(join_condition.on_clause);
 	} else {
-		result->using_columns = std::move(join_condition.using_columns);
+		node.using_columns = std::move(join_condition.using_columns);
 	}
 
 	auto &merge_match_repeat = list_pr.Child<RepeatParseResult>(6);
@@ -29,7 +31,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(PEGT
 		// of the same condition type are allowed - they would be unreachable. preserve declaration
 		// order so that the first matching clause wins, matching the SQL standard.
 		if (unconditional_actions.count(action_condition)) {
-			string action_condition_str = MergeIntoStatement::ActionConditionToString(action_condition);
+			string action_condition_str = MergeQueryNode::ActionConditionToString(action_condition);
 			throw ParserException(
 			    "Unconditional %s clause was already defined - any following %s clause would be unreachable",
 			    action_condition_str, action_condition_str);
@@ -37,9 +39,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(PEGT
 		if (!action->condition) {
 			unconditional_actions.insert(action_condition);
 		}
-		result->actions[action_condition].push_back(std::move(action));
+		node.actions[action_condition].push_back(std::move(action));
 	}
-	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 7, result->returning_list);
+	transformer.TransformOptional<vector<unique_ptr<ParsedExpression>>>(list_pr, 7, node.returning_list);
 	return std::move(result);
 }
 
