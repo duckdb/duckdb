@@ -837,20 +837,20 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto table = SQLIdentifier::ToString(feature_info.source_table);
 		auto window_interval = StringUtil::Format("%d %s", feature_info.window_size, gran);
 
-		string pit_sql =
-		    StringUtil::Format("SELECT spine.%s, spine.bucket AS feature_timestamp, %s "
-		                       "FROM (SELECT DISTINCT %s, DATE_TRUNC('%s', %s) + INTERVAL '1 %s' AS bucket FROM %s) AS spine "
-		                       "JOIN %s ON %s.%s = spine.%s "
-		                       "AND %s.%s < spine.bucket "
-		                       "AND %s.%s >= spine.bucket - INTERVAL '%s' "
-		                       "GROUP BY spine.%s, spine.bucket "
-		                       "ORDER BY spine.%s, spine.bucket",
-		                       entity, agg_exprs,                     // outer SELECT
-		                       entity, gran, ts, gran, table,         // spine subquery
-		                       table, table, entity, entity,          // JOIN
-		                       table, ts,                             // AND <
-		                       table, ts, window_interval,            // AND >=
-		                       entity, entity);                       // GROUP BY, ORDER BY
+		string pit_sql = StringUtil::Format(
+		    "SELECT spine.%s, spine.bucket AS feature_timestamp, %s "
+		    "FROM (SELECT DISTINCT %s, DATE_TRUNC('%s', %s) + INTERVAL '1 %s' AS bucket FROM %s) AS spine "
+		    "JOIN %s ON %s.%s = spine.%s "
+		    "AND %s.%s < spine.bucket "
+		    "AND %s.%s >= spine.bucket - INTERVAL '%s' "
+		    "GROUP BY spine.%s, spine.bucket "
+		    "ORDER BY spine.%s, spine.bucket",
+		    entity, agg_exprs,             // outer SELECT
+		    entity, gran, ts, gran, table, // spine subquery
+		    table, table, entity, entity,  // JOIN
+		    table, ts,                     // AND <
+		    table, ts, window_interval,    // AND >=
+		    entity, entity);               // GROUP BY, ORDER BY
 
 		// Parse and bind the PIT query
 		Parser parser(context.GetParserOptions());
