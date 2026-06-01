@@ -70,7 +70,6 @@ public:
 	SingleFileBlockManager(AttachedDatabase &db_p, const string &path_p, const StorageManagerOptions &options_p);
 	~SingleFileBlockManager() override;
 
-	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
 	void CreateNewDatabase(QueryContext context);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
@@ -162,9 +161,6 @@ private:
 	                     bool skip_block_header = false) const;
 	void ChecksumAndWrite(QueryContext context, FileBuffer &handle, uint64_t location,
 	                      bool skip_block_header = false) const;
-
-	//! Open `mmap_handle` (only handle opened in MAP mode). [create_new] mirrors GetFileFlags.
-	void OpenMemoryMappedFile(bool create_new);
 
 	idx_t GetBlockLocation(block_id_t block_id) const;
 

@@ -14,11 +14,16 @@
 #include "duckdb/common/memory_mapped_file.hpp"
 
 namespace duckdb {
+struct StorageManagerOptions;
+
+enum class DatabaseOpenMode { OPEN_EXISTING, CREATE_NEW };
 
 struct DatabaseHandle {
 	explicit DatabaseHandle(unique_ptr<FileHandle> handle);
 	explicit DatabaseHandle(unique_ptr<MemoryMappedFile> mmap_handle);
 
+	static unique_ptr<DatabaseHandle> Open(AttachedDatabase &db, const string &path,
+	                                       const StorageManagerOptions &options, DatabaseOpenMode open_mode);
 	bool OnDiskFile() const;
 
 	void CheckMagicBytes(QueryContext context);
@@ -34,6 +39,11 @@ struct DatabaseHandle {
 private:
 	//! Throws if a write at [required_size] would exceed the mmap reserve. No-op otherwise.
 	void EnsureMappedSize(idx_t required_size) const;
+
+	static unique_ptr<DatabaseHandle> OpenMemoryMap(AttachedDatabase &db, const string &path,
+	                                                const StorageManagerOptions &options, DatabaseOpenMode open_mode);
+	static unique_ptr<DatabaseHandle> OpenFile(AttachedDatabase &db, const string &path,
+	                                           const StorageManagerOptions &options, DatabaseOpenMode open_mode);
 
 private:
 	//! The file handle

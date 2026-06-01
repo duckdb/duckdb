@@ -400,26 +400,6 @@ SingleFileBlockManager::~SingleFileBlockManager() {
 	this->in_destruction = true;
 }
 
-FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
-	FileOpenFlags result;
-	if (options.read_only) {
-		D_ASSERT(!create_new);
-		result = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS | FileLockType::READ_LOCK;
-	} else {
-		result = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ | FileLockType::WRITE_LOCK;
-		if (create_new) {
-			result |= FileFlags::FILE_FLAGS_FILE_CREATE;
-		}
-	}
-	if (options.io_mode == FileIOMode::DIRECT_IO) {
-		result |= FileFlags::FILE_FLAGS_DIRECT_IO;
-	}
-	// database files can be read from in parallel
-	result |= FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
-	result |= FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS;
-	return result;
-}
-
 void SingleFileBlockManager::AddStorageVersionTag() {
 	db.tags["storage_version"] = GetStorageVersionName(options.storage_version, true);
 }
@@ -534,8 +514,6 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header) {
 }
 
 void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
-	auto flags = GetFileFlags(true);
-
 	auto encryption_enabled = options.encryption_options.encryption_enabled;
 	if (encryption_enabled) {
 		// Check if we can read/write the encrypted database
@@ -543,12 +521,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	}
 
 	// MAP mode opens only the mmap; other modes open the FileHandle.
-	auto &fs = FileSystem::Get(db);
-	if (options.io_mode == FileIOMode::MMAP) {
-		OpenMemoryMappedFile(true);
-	} else {
-		handle = make_uniq<DatabaseHandle>(fs.OpenFile(path, flags));
-	}
+	handle = DatabaseHandle::Open(db, path, options, DatabaseOpenMode::CREATE_NEW);
 	header_buffer.Clear();
 
 	if (options.storage_version == StorageVersion::INVALID) {
@@ -650,21 +623,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 }
 
 void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
-	auto flags = GetFileFlags(false);
-
-	// MAP mode opens only the mmap; other modes open the FileHandle.
-	auto &fs = FileSystem::Get(db);
-	if (options.io_mode == FileIOMode::MMAP) {
-		OpenMemoryMappedFile(false);
-	} else {
-		auto file_handle = fs.OpenFile(path, flags);
-		if (!file_handle) {
-			// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
-			throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
-		}
-		handle = make_uniq<DatabaseHandle>(std::move(file_handle));
-	}
-
+	handle = DatabaseHandle::Open(db, path, options, DatabaseOpenMode::OPEN_EXISTING);
 	handle->CheckMagicBytes(context);
 
 	// otherwise, we check the metadata of the file
@@ -839,7 +798,7 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 
 	Store<uint64_t>(checksum, block.InternalBuffer() + delta);
 
-	// Encryption is mutually exclusive with MAP mode.
+	// encrypt if required
 	unique_ptr<FileBuffer> temp_buffer_manager;
 	if (options.encryption_options.encryption_enabled && !skip_block_header) {
 		auto key_id = options.encryption_options.derived_key_id;
@@ -850,38 +809,6 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 	} else {
 		handle->Write(context, block, location);
 	}
-}
-
-void SingleFileBlockManager::OpenMemoryMappedFile(bool create_new) {
-	if (options.io_mode != FileIOMode::MMAP) {
-		return;
-	}
-	if (options.encryption_options.encryption_enabled) {
-		// In-place decryption would write decrypted bytes back through the mapping.
-		throw InvalidInputException("MMAP=true is not supported for encrypted databases");
-	}
-	// Default reserve covers the bulk of analytical databases; users override via MMAP_RESERVE_SIZE.
-	static constexpr idx_t MMAP_DEFAULT_RESERVE_SIZE = idx_t(256) * 1024 * 1024 * 1024; // 256 GiB
-	MMapOptions mmap_options;
-	mmap_options.reserve_size =
-	    options.mmap_reserve_size.IsValid() ? options.mmap_reserve_size.GetIndex() : MMAP_DEFAULT_RESERVE_SIZE;
-	FileOpenFlags mmap_flags;
-	if (options.read_only) {
-		D_ASSERT(!create_new);
-		mmap_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS | FileLockType::READ_LOCK;
-	} else {
-		mmap_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileLockType::WRITE_LOCK;
-		if (create_new) {
-			mmap_flags |= FileFlags::FILE_FLAGS_FILE_CREATE;
-		}
-	}
-	auto &fs = FileSystem::Get(db);
-	auto mmap_handle = fs.MemoryMapFile(path, mmap_flags, mmap_options);
-	if (!mmap_handle) {
-		// Only happens in read-only mode, where FILE_FLAGS_NULL_IF_NOT_EXISTS is set.
-		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
-	}
-	handle = make_uniq<DatabaseHandle>(std::move(mmap_handle));
 }
 
 void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size) {
