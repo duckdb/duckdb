@@ -17,7 +17,7 @@ JoinDependentFilterRule::JoinDependentFilterRule(ExpressionRewriter &rewriter) :
 
 static void GetTableIndices(const Expression &root_expr, unordered_set<TableIndex> &table_idxs) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-	    root_expr, [&](const BoundColumnRefExpression &colref) { table_idxs.insert(colref.binding.table_index); });
+	    root_expr, [&](const BoundColumnRefExpression &colref) { table_idxs.insert(colref.Binding().table_index); });
 }
 
 static inline bool ExpressionReferencesMultipleTables(const Expression &binding) {

@@ -46,7 +46,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 		if (distinct.distinct_targets[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			break;
 		}
-		auto table_idx = distinct.distinct_targets[0]->Cast<BoundColumnRefExpression>().binding.table_index;
+		auto table_idx = distinct.distinct_targets[0]->Cast<BoundColumnRefExpression>().Binding().table_index;
 		bool can_add = true;
 		for (auto &target : distinct.distinct_targets) {
 			if (target->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
@@ -54,8 +54,8 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 				break;
 			}
 			auto &col_ref = target->Cast<BoundColumnRefExpression>();
-			distinct_group.insert(col_ref.binding);
-			D_ASSERT(table_idx == col_ref.binding.table_index);
+			distinct_group.insert(col_ref.Binding());
+			D_ASSERT(table_idx == col_ref.Binding().table_index);
 		}
 		if (can_add) {
 			pipe_info.distinct_groups[table_idx] = std::move(distinct_group);
@@ -94,7 +94,7 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 				break;
 			}
 			bool could_add = true;
-			auto ref_id = start_expr.Cast<BoundColumnRefExpression>().binding.table_index;
+			auto ref_id = start_expr.Cast<BoundColumnRefExpression>().Binding().table_index;
 			for (auto &col : it->second) {
 				auto &expression = projection.GetExpression(col);
 				if (expression.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
@@ -103,11 +103,11 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 					break;
 				}
 				auto &col_ref = expression.Cast<BoundColumnRefExpression>();
-				if (ref_id != col_ref.binding.table_index) {
+				if (ref_id != col_ref.Binding().table_index) {
 					could_add = false;
 					break;
 				}
-				new_distinct_group.insert(col_ref.binding);
+				new_distinct_group.insert(col_ref.Binding());
 			}
 			if (could_add) {
 				pipe_info.distinct_groups[ref_id] = std::move(new_distinct_group);
@@ -147,20 +147,20 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 			auto &expression = projection.expressions.get(proj_idx);
 			if (expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				auto &col_ref = expression->Cast<BoundColumnRefExpression>();
-				auto distinct_group_it = pipe_info.distinct_groups.find(col_ref.binding.table_index);
+				auto distinct_group_it = pipe_info.distinct_groups.find(col_ref.Binding().table_index);
 				if (distinct_group_it == pipe_info.distinct_groups.end()) {
 					continue;
 				}
-				if (ref_table_columns.find(col_ref.binding.table_index) == ref_table_columns.end()) {
+				if (ref_table_columns.find(col_ref.Binding().table_index) == ref_table_columns.end()) {
 					auto ref = DistinctGroupRef();
 					for (auto &col : distinct_group_it->second) {
 						ref.ref_column_ids.insert(col.column_index);
 					}
-					ref_table_columns[col_ref.binding.table_index] = ref;
+					ref_table_columns[col_ref.Binding().table_index] = ref;
 				}
-				ref_table_columns[col_ref.binding.table_index].distinct_group.insert(
+				ref_table_columns[col_ref.Binding().table_index].distinct_group.insert(
 				    ColumnBinding(projection.table_index, ProjectionIndex(proj_idx)));
-				ref_table_columns[col_ref.binding.table_index].ref_column_ids.erase(col_ref.binding.column_index);
+				ref_table_columns[col_ref.Binding().table_index].ref_column_ids.erase(col_ref.Binding().column_index);
 			}
 		}
 		for (auto &refs : ref_table_columns) {
@@ -270,8 +270,8 @@ unique_ptr<LogicalOperator> JoinElimination::TryEliminateJoin() {
 				is_output_unique = false;
 				break;
 			}
-			auto inner_binding = inner_idx == 0 ? condition.GetLHS().Cast<BoundColumnRefExpression>().binding
-			                                    : condition.GetRHS().Cast<BoundColumnRefExpression>().binding;
+			auto inner_binding = inner_idx == 0 ? condition.GetLHS().Cast<BoundColumnRefExpression>().Binding()
+			                                    : condition.GetRHS().Cast<BoundColumnRefExpression>().Binding();
 			col_bindings.push_back(inner_binding);
 		}
 		if (is_output_unique && !ContainDistinctGroup(col_bindings)) {
@@ -310,7 +310,7 @@ bool JoinElimination::ContainDistinctGroup(vector<ColumnBinding> &column_binding
 }
 
 unique_ptr<Expression> JoinElimination::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
-	pipe_info.ref_table_ids.insert(expr.binding.table_index);
+	pipe_info.ref_table_ids.insert(expr.Binding().table_index);
 	return nullptr;
 }
 

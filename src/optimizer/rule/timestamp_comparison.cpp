@@ -46,8 +46,8 @@ static BoundCastExpression *GetTimestampCast(Expression &expr) {
 	if (cast_expr.GetReturnType().id() != LogicalTypeId::DATE) {
 		return nullptr;
 	}
-	if (cast_expr.child->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
-	    cast_expr.child->GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
+	if (cast_expr.Child().GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+	    cast_expr.Child().GetReturnType().id() != LogicalTypeId::TIMESTAMP) {
 		return nullptr;
 	}
 	return &cast_expr;
@@ -72,7 +72,7 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 	}
 
 	auto cast_constant = constant_expr->Copy();
-	auto cast_columnref = cast_expr->child->Copy();
+	auto cast_columnref = cast_expr->Child().Copy();
 	auto new_expr = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 
 	Value result;
