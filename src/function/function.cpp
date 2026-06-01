@@ -10,7 +10,7 @@ namespace duckdb {
 
 bool FunctionProperties::operator==(const FunctionProperties &rhs) const {
 	return stability == rhs.stability && null_handling == rhs.null_handling && errors == rhs.errors &&
-	       collation_handling == rhs.collation_handling;
+	       collation_handling == rhs.collation_handling && capture_argument_aliases == rhs.capture_argument_aliases;
 }
 
 bool FunctionProperties::operator!=(const FunctionProperties &rhs) const {

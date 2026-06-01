@@ -224,7 +224,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		expr->SchemaMutable() = qualified_function.schema;
 		expr->SetFunctionName(lowercase_name);
 
-
 		for (auto &arg : function_children) {
 			if (arg.HasName()) {
 				throw ParserException("Named arguments are not supported in window functions");

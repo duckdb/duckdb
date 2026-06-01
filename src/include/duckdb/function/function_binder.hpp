@@ -102,9 +102,11 @@ public:
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
 
+	//! Bind a scalar function from a catalog entry given the full list of (maybe-named) bound arguments. The
+	//! positional/named split is resolved per candidate overload (overloads flagged to capture argument aliases
+	//! treat every argument as positional and keep its alias).
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const ScalarFunctionCatalogEntry &function,
-	                                                     vector<unique_ptr<Expression>> regular_args,
-	                                                     vector<pair<string, unique_ptr<Expression>>> keyword_args,
+	                                                     vector<pair<string, unique_ptr<Expression>>> arguments,
 	                                                     ErrorData &error, bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
 
@@ -125,8 +127,8 @@ public:
 	                      AggregateType aggr_type);
 
 	DUCKDB_API unique_ptr<BoundAggregateExpression>
-	BindAggregateFunction(const AggregateFunctionCatalogEntry &function, vector<unique_ptr<Expression>> regular_args,
-	                      vector<pair<string, unique_ptr<Expression>>> keyword_args, ErrorData &error,
+	BindAggregateFunction(const AggregateFunctionCatalogEntry &function,
+	                      vector<pair<string, unique_ptr<Expression>>> arguments, ErrorData &error,
 	                      unique_ptr<Expression> filter = nullptr,
 	                      AggregateType aggr_type = AggregateType::NON_DISTINCT);
 
@@ -190,6 +192,11 @@ private:
 	optional_idx BindFunctionFromArguments(const string &name, const FunctionSet<T> &functions,
 	                                       const vector<LogicalType> &arguments,
 	                                       const vector<pair<string, LogicalType>> &named_arguments, ErrorData &error);
+
+	//! Select the best matching overload for the given full (maybe-named) argument list.
+	template <class T>
+	optional_idx BindFunctionFromArguments(const string &name, const FunctionSet<T> &functions,
+	                                       vector<pair<string, unique_ptr<Expression>>> &arguments, ErrorData &error);
 
 	pair<vector<LogicalType>, vector<pair<string, LogicalType>>>
 	GetArgumentsFromExpressions(const vector<unique_ptr<Expression>> &regular_arguments,

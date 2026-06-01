@@ -316,7 +316,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// bind the children of the function expression
 	ErrorData error;
 
-	// bind of each child
+	// bind each child
 	for (idx_t i = 0; i < function.GetArguments().size(); i++) {
 		BindChild(function.GetArgumentsMutable()[i].GetExpressionMutable(), depth, error);
 	}
@@ -329,42 +329,26 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
 
-	// all children bound successfully
-	// extract the children and types
-	vector<unique_ptr<Expression>> children;
-	vector<pair<string, unique_ptr<Expression>>> keyword_children;
-
+	// all children bound successfully - collect them (with their explicit names, if any) into the full argument list.
+	// The positional/named split (and, for capturing functions, the alias capture) is resolved later per candidate
+	// overload.
+	vector<pair<string, unique_ptr<Expression>>> arguments;
+	arguments.reserve(function.GetArguments().size());
 	for (auto &arg : function.GetArgumentsMutable()) {
 		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
-
 		if (function.IsLegacyFunctionCall()) {
 			// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
-			// But we do alias them by their name, so that if we serialize the bound function expression and
-			// deserialize it on an older version of DuckDB, we can still match the arguments by name during binding
-			// (as old DuckDB uses the argument names as aliases for legacy function calls)
+			// and pass them all positionally. We do alias them by their name though, so that alias-capturing functions
+			// (e.g. struct_pack) still work and so that re-serializing to the old format can match arguments by name.
 			bound_arg->SetAlias(arg.GetName());
-			children.push_back(std::move(bound_arg));
-			continue;
+			arguments.emplace_back(string(), std::move(bound_arg));
+		} else {
+			arguments.emplace_back(arg.GetName(), std::move(bound_arg));
 		}
-
-		if (arg.HasName()) {
-			keyword_children.emplace_back(arg.GetName(), std::move(bound_arg));
-			continue;
-		}
-
-		if (keyword_children.empty()) {
-			children.push_back(std::move(bound_arg));
-			continue;
-		}
-
-		throw BinderException(bound_arg->GetQueryLocation(),
-		                      "Positional argument '%s' cannot follow named arguments in a function call.",
-		                      bound_arg->ToString());
 	}
 
 	FunctionBinder function_binder(binder);
-	auto result = function_binder.BindScalarFunction(func, std::move(children), std::move(keyword_children), error,
-	                                                 function.IsOperator(), &binder);
+	auto result = function_binder.BindScalarFunction(func, std::move(arguments), error, function.IsOperator(), &binder);
 	if (!result) {
 		error.AddQueryLocation(function);
 		error.Throw();

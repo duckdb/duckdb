@@ -443,6 +443,13 @@ public:
 		collation_handling = value;
 	}
 
+	auto GetCaptureArgumentAliases() const -> bool {
+		return capture_argument_aliases;
+	}
+	auto SetCaptureArgumentAliases(bool value) -> void {
+		capture_argument_aliases = value;
+	}
+
 	// Helpers
 	auto SetFallible() -> void {
 		errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
@@ -462,6 +469,10 @@ public:
 	FunctionErrors errors = FunctionErrors::CANNOT_ERROR;
 	//! Collation handling of the function
 	FunctionCollationHandling collation_handling = FunctionCollationHandling::PROPAGATE_COLLATIONS;
+	//! Whether the binder should capture argument expression aliases as named-argument names when binding this
+	//! function. This preserves the legacy behavior of functions such as struct_pack/row, which derived their
+	//! (struct field) names from argument aliases and therefore allowed positional arguments after named ones.
+	bool capture_argument_aliases = false;
 };
 
 class BoundSimpleFunction {

@@ -86,6 +86,10 @@ static ScalarFunction GetStructPackFunction() {
 	                   StructPackBind<IS_STRUCT_PACK>, StructPackStats);
 	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	// struct_pack/row derive their (struct field) names from argument aliases, so the binder must capture argument
+	// expression aliases as named-argument names. This also preserves the legacy behavior of allowing positional
+	// arguments after named ones (the positional arguments simply take their expression's name as the field name).
+	fun.SetCaptureArgumentAliases(true);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;

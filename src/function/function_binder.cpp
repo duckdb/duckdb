@@ -23,6 +23,51 @@ FunctionBinder::FunctionBinder(ClientContext &context_p) : binder(nullptr), cont
 FunctionBinder::FunctionBinder(Binder &binder_p) : binder(&binder_p), context(binder_p.context) {
 }
 
+// Split the full (maybe-named) argument list into positional types + named (name, type) pairs.
+// Returns false if a positional argument follows a named one, which is not allowed.
+static bool TrySplitArgumentTypes(const vector<pair<string, unique_ptr<Expression>>> &arguments,
+                                  vector<LogicalType> &positional, vector<pair<string, LogicalType>> &named) {
+	for (auto &arg : arguments) {
+		auto type = ExpressionBinder::GetExpressionReturnType(*arg.second);
+		if (!arg.first.empty()) {
+			named.emplace_back(arg.first, std::move(type));
+			continue;
+		}
+		if (named.empty()) {
+			positional.push_back(std::move(type));
+			continue;
+		}
+		// a positional argument cannot follow a named one
+		return false;
+	}
+	return true;
+}
+
+// Split the full (maybe-named) argument list into the positional + named (keyword) children.
+static auto SplitArguments(vector<pair<string, unique_ptr<Expression>>> arguments)
+    -> pair<vector<unique_ptr<Expression>>, vector<pair<string, unique_ptr<Expression>>>> {
+	vector<unique_ptr<Expression>> regular_args;
+	vector<pair<string, unique_ptr<Expression>>> keyword_args;
+
+	for (auto &arg : arguments) {
+		if (!arg.first.empty()) {
+			keyword_args.push_back(std::move(arg));
+			continue;
+		}
+		if (keyword_args.empty()) {
+			regular_args.push_back(std::move(arg.second));
+			continue;
+		}
+		// Defensive: a positional argument following a named one should already have been rejected during binding
+		// (see TrySplitArgumentTypes / BindFunctionWithImplicitNaming).
+		throw BinderException(arg.second->GetQueryLocation(),
+		                      "Positional argument '%s' cannot follow named arguments in a function call.",
+		                      arg.second->ToString());
+	}
+
+	return {std::move(regular_args), std::move(keyword_args)};
+}
+
 optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments,
                                               const vector<pair<string, LogicalType>> &named_arguments) {
 	const auto &sig = func.GetSignature();
@@ -275,6 +320,68 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const string &name, const
 	return candidate_functions[0];
 }
 
+template <class T>
+static bool AnyOverloadSupportsImplicitArgumentNames(const FunctionSet<T> &functions) {
+	for (auto &func : functions.functions) {
+		if (func.GetProperties().GetCaptureArgumentAliases()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static optional_idx PositionalAfterNamedArgumentError(const vector<pair<string, unique_ptr<Expression>>> &arguments,
+                                                      ErrorData &error) {
+	bool seen_named = false;
+	for (const auto &[name, expr] : arguments) {
+		if (!name.empty()) {
+			seen_named = true;
+			continue;
+		}
+		if (seen_named) {
+			error = ErrorData(BinderException(
+			    expr->GetQueryLocation(), "Positional argument '%s' cannot follow named arguments in function call.",
+			    expr->ToString()));
+			return optional_idx();
+		}
+	}
+	throw InternalException("ThrowPositionalAfterNamed called without a positional-after-named argument");
+}
+
+template <class T>
+optional_idx FunctionBinder::BindFunctionFromArguments(const string &name, const FunctionSet<T> &functions,
+                                                       vector<pair<string, unique_ptr<Expression>>> &arguments,
+                                                       ErrorData &error) {
+	// First, attempt a regular bind, splitting the arguments into positional + named just once for all overloads.
+	vector<LogicalType> positional;
+	vector<pair<string, LogicalType>> named;
+
+	if (TrySplitArgumentTypes(arguments, positional, named)) {
+		return BindFunctionFromArguments(name, functions, positional, named, error);
+	}
+
+	// The split failed because a positional argument follows a named one.
+	// Check if there is any overload that supports implicit argument names.
+	if (AnyOverloadSupportsImplicitArgumentNames(functions)) {
+		// If so, we can attempt to salvage the call by implicitly naming the positional arguments and retrying again
+		for (auto &[name, expr] : arguments) {
+			if (name.empty()) {
+				name = expr->GetAlias();
+			}
+		}
+
+		positional.clear();
+		named.clear();
+
+		if (TrySplitArgumentTypes(arguments, positional, named)) {
+			return BindFunctionFromArguments(name, functions, positional, named, error);
+		}
+	}
+
+	// No overload could rescue the positional-after-named call, give a clear error.
+	return PositionalAfterNamedArgumentError(arguments, error);
+}
+
 optional_idx FunctionBinder::BindFunction(const string &name, const ScalarFunctionSet &functions,
                                           const vector<LogicalType> &regular_args,
                                           const vector<pair<string, LogicalType>> &keyword_args, ErrorData &error) {
@@ -449,21 +556,30 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCatalogEntry &func,
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
                                                           bool is_operator, optional_ptr<Binder> binder) {
-	return BindScalarFunction(func, std::move(children), {}, error, is_operator, binder);
+	vector<pair<string, unique_ptr<Expression>>> arguments;
+	arguments.reserve(children.size());
+	for (auto &child : children) {
+		arguments.emplace_back(string(), std::move(child));
+	}
+	return BindScalarFunction(func, std::move(arguments), error, is_operator, binder);
 }
+
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCatalogEntry &func,
-                                                          vector<unique_ptr<Expression>> regular_args,
-                                                          vector<pair<string, unique_ptr<Expression>>> keyword_args,
+                                                          vector<pair<string, unique_ptr<Expression>>> arguments,
                                                           ErrorData &error, bool is_operator,
                                                           optional_ptr<Binder> binder) {
-	// bind the function
-	auto best_function = BindFunction(func.name, func.functions, regular_args, keyword_args, error);
+	// select the best matching overload (this may name positional arguments by their alias for functions that opt
+	// into implicit argument naming, e.g. struct_pack/row)
+	auto best_function = BindFunctionFromArguments(func.name, func.functions, arguments, error);
 	if (!best_function.IsValid()) {
 		return nullptr;
 	}
 
 	// found a matching function!
 	const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+
+	// now that the overload is fixed, split the arguments into their final positional/named children
+	auto [regular_args, keyword_args] = SplitArguments(std::move(arguments));
 
 	// If any of the parameters are NULL, the function will just be replaced with a NULL constant.
 	// We try to give the NULL constant the correct type, but we have to do this without binding the function,
@@ -1009,17 +1125,20 @@ FunctionBinder::BindAggregateFunction(const AggregateFunction &function, vector<
 
 unique_ptr<BoundAggregateExpression>
 FunctionBinder::BindAggregateFunction(const AggregateFunctionCatalogEntry &func,
-                                      vector<unique_ptr<Expression>> regular_args,
-                                      vector<pair<string, unique_ptr<Expression>>> keyword_args, ErrorData &error,
+                                      vector<pair<string, unique_ptr<Expression>>> arguments, ErrorData &error,
                                       unique_ptr<Expression> filter, AggregateType aggr_type) {
-	// bind the function
-	auto best_function = BindFunction(func.name, func.functions, regular_args, keyword_args, error);
+	// select the best matching overload (this may name positional arguments by their alias for functions that opt
+	// into implicit argument naming, e.g. struct_pack/row)
+	auto best_function = BindFunctionFromArguments(func.name, func.functions, arguments, error);
 	if (!best_function.IsValid()) {
 		return nullptr;
 	}
 
 	// found a matching function!
 	const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+
+	// now that the overload is fixed, split the arguments into their final positional/named children
+	auto [regular_args, keyword_args] = SplitArguments(std::move(arguments));
 
 	return BindAggregateFunction(bound_function, std::move(regular_args), std::move(keyword_args), std::move(filter),
 	                             aggr_type);

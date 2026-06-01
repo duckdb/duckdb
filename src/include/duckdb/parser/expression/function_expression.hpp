@@ -196,8 +196,8 @@ private:
 	//! Whether this function is a legacy function call, which means it was parsed from a function call that does not
 	//! use the new function argument syntax. This is used to determine how to handle named arguments during binding.
 	bool is_legacy_function_call = false;
+
 private:
 	FunctionExpression();
-
 };
 } // namespace duckdb

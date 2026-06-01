@@ -21,7 +21,7 @@
 
 namespace duckdb {
 
-static bool IsFunctionallyDependent(const unique_ptr<Expression> &expr, const vector<unique_ptr<Expression>> &deps) {
+static bool IsFunctionallyDependent(const unique_ptr<Expression> &expr, const vector<reference<Expression>> &deps) {
 	//	Volatile expressions can't depend on anything else
 	if (expr->IsVolatile()) {
 		return false;
@@ -33,7 +33,7 @@ static bool IsFunctionallyDependent(const unique_ptr<Expression> &expr, const ve
 	// If the expression matches ANY of the dependencies, then it is FD on them
 	for (const auto &dep : deps) {
 		// We don't need to check volatility of the dependencies because we checked it for the expression.
-		if (expr->Equals(*dep)) {
+		if (expr->Equals(dep.get())) {
 			return true;
 		}
 	}
@@ -236,22 +236,20 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		bound_filter = BoundCastExpression::AddCastToType(context, std::move(child), LogicalType::BOOLEAN);
 	}
 
-	// all children bound successfully
-	// extract the children and types
-	vector<unique_ptr<Expression>> children;
-	vector<pair<string, unique_ptr<Expression>>> keyword_children;
+	// all children bound successfully - collect them (with their explicit names, if any) into the full argument list.
+	// The positional/named split and (for legacy calls) the alias capture are resolved later, per candidate overload.
+	vector<pair<string, unique_ptr<Expression>>> arguments;
 
 	if (ordered_set_agg) {
 		const bool order_sensitive = (aggr.FunctionName() == "mode");
-		// Inject missing ordering arguments
+		// Inject missing ordering arguments as positional arguments
 		if (aggr.GetArguments().size() < ordered_set_agg) {
 			for (auto &order : aggr.OrderByMutable()->orders) {
 				auto &child = BoundExpression::GetExpression(*order.expression);
-				// types.push_back(child->GetReturnType());
 				if (order_sensitive) {
-					children.push_back(child->Copy());
+					arguments.emplace_back(string(), child->Copy());
 				} else {
-					children.push_back(std::move(child));
+					arguments.emplace_back(string(), std::move(child));
 				}
 			}
 		}
@@ -262,30 +260,14 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	for (auto &arg : aggr.GetArgumentsMutable()) {
 		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
-
 		if (aggr.IsLegacyFunctionCall()) {
 			// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
-			// But we do alias them by their name, so that if we serialize the bound function expression and
-			// deserialize it on an older version of DuckDB, we can still match the arguments by name during binding
-			// (as old DuckDB uses the argument names as aliases for legacy function calls)
+			// and pass them all positionally, aliasing them by their name (see BindFunction for the rationale)
 			bound_arg->SetAlias(arg.GetName());
-			children.push_back(std::move(bound_arg));
-			continue;
+			arguments.emplace_back(string(), std::move(bound_arg));
+		} else {
+			arguments.emplace_back(arg.GetName(), std::move(bound_arg));
 		}
-
-		if (arg.HasName()) {
-			keyword_children.emplace_back(arg.GetName(), std::move(bound_arg));
-			continue;
-		}
-
-		if (keyword_children.empty()) {
-			children.push_back(std::move(bound_arg));
-			continue;
-		}
-
-		throw BinderException(bound_arg->GetQueryLocation(),
-		                      "Positional argument '%s' cannot follow named arguments in a function call.",
-		                      bound_arg->ToString());
 	}
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
@@ -304,9 +286,14 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// If the aggregate is DISTINCT then the ORDER BYs need to be functional dependencies of the arguments.
 	if (aggr.Distinct() && order_bys) {
+		vector<reference<Expression>> arg_refs;
+		arg_refs.reserve(arguments.size());
+		for (auto &arg : arguments) {
+			arg_refs.emplace_back(*arg.second);
+		}
 		bool in_args = true;
 		for (const auto &order_by : order_bys->orders) {
-			in_args &= IsFunctionallyDependent(order_by.expression, children);
+			in_args &= IsFunctionallyDependent(order_by.expression, arg_refs);
 		}
 
 		if (!in_args) {
@@ -316,9 +303,9 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// Bind the function
 	FunctionBinder function_binder(binder);
-	auto aggregate = function_binder.BindAggregateFunction(
-	    func, std::move(children), std::move(keyword_children), error, std::move(bound_filter),
-	    aggr.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
+	auto aggregate =
+	    function_binder.BindAggregateFunction(func, std::move(arguments), error, std::move(bound_filter),
+	                                          aggr.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
 	// No function found, throw an error
 	if (!aggregate) {
 		error.AddQueryLocation(aggr);
