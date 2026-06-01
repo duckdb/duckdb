@@ -38,13 +38,14 @@ public:
 	//! Cached files
 	struct CachedFile {
 	public:
-		explicit CachedFile(string path_p);
+		CachedFile(string path_p, idx_t generation_p);
 
 	public:
 		//! Whether the CachedFile is still valid given the current modified/version tag
 		bool IsValid(bool validate, const string &current_version_tag, timestamp_t current_last_modified);
 
 		const string path;
+		const idx_t generation;
 
 		mutable annotated_mutex map_lock;
 		//! The block size used to index the current block map. Invalid if no blocks have been cached yet.
@@ -69,6 +70,7 @@ public:
 
 	bool IsEnabled() const;
 	void SetEnabled(bool enable);
+	idx_t GetGeneration() const;
 	vector<CachedFileInformation> GetCachedFileInformation() const;
 	//! Number of files tracked in the cache map, expose for testing purpose.
 	idx_t GetCachedFileCount() const;
@@ -95,6 +97,8 @@ private:
 	BufferManager &buffer_manager;
 	//! Whether or not file caching is enabled
 	atomic<bool> enable;
+	//! Generation counter, incremented whenever cache enablement changes.
+	atomic<idx_t> generation;
 	//! Mapping from file path to cached file with cached blocks
 	unordered_map<string, shared_ptr<CachedFile>> cached_files;
 	//! Lock for accessing the cached files

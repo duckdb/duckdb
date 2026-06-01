@@ -146,7 +146,8 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(Cached
 	return blocks;
 }
 
-ExternalFileCache::CachedFile::CachedFile(string path_p) : path(std::move(path_p)) {
+ExternalFileCache::CachedFile::CachedFile(string path_p, idx_t generation_p)
+    : path(std::move(path_p)), generation(generation_p) {
 }
 
 bool ExternalFileCache::CachedFile::IsValid(bool validate, const string &current_version_tag,
@@ -192,7 +193,7 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 }
 
 ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)
-    : buffer_manager(BufferManager::GetBufferManager(db)), enable(enable_p) {
+    : buffer_manager(BufferManager::GetBufferManager(db)), enable(enable_p), generation(0) {
 }
 
 bool ExternalFileCache::IsEnabled() const {
@@ -201,10 +202,18 @@ bool ExternalFileCache::IsEnabled() const {
 
 void ExternalFileCache::SetEnabled(bool enable_p) {
 	lock_guard<mutex> guard(lock);
+	if (enable == enable_p) {
+		return;
+	}
 	enable = enable_p;
+	generation++;
 	if (!enable) {
 		cached_files.clear();
 	}
+}
+
+idx_t ExternalFileCache::GetGeneration() const {
+	return generation;
 }
 
 vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() const {
@@ -250,11 +259,11 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFile(const string &path) {
 	lock_guard<mutex> guard(lock);
 	if (!enable) {
-		return make_shared_ptr<CachedFile>(path);
+		return make_shared_ptr<CachedFile>(path, generation);
 	}
 	auto &entry = cached_files[path];
 	if (!entry) {
-		entry = make_shared_ptr<CachedFile>(path);
+		entry = make_shared_ptr<CachedFile>(path, generation);
 	}
 	return entry;
 }

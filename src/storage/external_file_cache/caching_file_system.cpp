@@ -161,6 +161,26 @@ bool CachingFileHandle::StripForceFullDownloadIfPresent() {
 	return true;
 }
 
+shared_ptr<CachingFileHandle::CachedFile> CachingFileHandle::EnsureCachedFileCurrent() {
+	bool needs_reopen = false;
+	{
+		annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
+		if (cached_file && cached_file->generation == external_file_cache.GetGeneration()) {
+			return cached_file;
+		}
+		needs_reopen = file_handle != nullptr;
+		if (needs_reopen) {
+			file_handle.reset();
+		}
+		cached_file = external_file_cache.GetOrCreateCachedFile(path.path);
+	}
+
+	if (needs_reopen) {
+		GetFileHandle();
+	}
+	return cached_file;
+}
+
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
                                      const OpenFileInfo &path_p, FileOpenFlags flags_p,
                                      optional_ptr<FileOpener> opener_p)
@@ -168,7 +188,8 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
       external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(flags_p), opener(opener_p),
       validate(
           ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetClientContext(), caching_file_system_p.db)),
-      cached_file(external_file_cache.GetOrCreateCachedFile(path_p.path)), position(0) {
+      cached_file(nullptr), position(0) {
+	cached_file = external_file_cache.GetOrCreateCachedFile(path_p.path);
 	if (!external_file_cache.IsEnabled() || Validate()) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();
@@ -235,13 +256,15 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		return FileBufferHandleGroup(std::move(mem_handles));
 	}
 
-	const idx_t block_size = external_file_cache.GetCacheBlockSize(cached_file->path);
+	auto current_cached_file = EnsureCachedFileCurrent();
+	const idx_t block_size = external_file_cache.GetCacheBlockSize(current_cached_file->path);
 	const idx_t first_block = location / block_size;
 	const idx_t last_block = (location + nr_bytes - 1) / block_size;
 	const idx_t num_blocks = last_block - first_block + 1;
 
 	// Atomically reindex (if needed) and acquire the block range.
-	auto blocks = external_file_cache.ReindexAndAcquireBlocks(*cached_file, block_size, first_block, num_blocks);
+	auto blocks =
+	    external_file_cache.ReindexAndAcquireBlocks(*current_cached_file, block_size, first_block, num_blocks);
 
 	// Schedule block fetch tasks for all blocks.
 	vector<BufferHandle> pins(num_blocks);
@@ -277,9 +300,9 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 
 	// After all tasks complete, check if the cache was invalidated by another thread.
 	if (Validate()) {
-		const annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
-		if (!ExternalFileCache::IsValid(true, cached_file->version_tag, cached_file->last_modified, version_tag,
-		                                last_modified)) {
+		const annotated_lock_guard<annotated_mutex> meta_guard(current_cached_file->meta_lock);
+		if (!ExternalFileCache::IsValid(true, current_cached_file->version_tag, current_cached_file->last_modified,
+		                                version_tag, last_modified)) {
 			for (auto &block : blocks) {
 				block->Reinit();
 			}
@@ -312,21 +335,23 @@ FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
 }
 
 string CachingFileHandle::GetPath() const {
-	return cached_file->path;
+	return path.path;
 }
 
 idx_t CachingFileHandle::GetFileSize() {
 	if (!Validate()) {
-		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
-		return cached_file->file_size;
+		auto current_cached_file = EnsureCachedFileCurrent();
+		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
+		return current_cached_file->file_size;
 	}
 	return GetFileHandle().GetFileSize();
 }
 
 timestamp_t CachingFileHandle::GetLastModifiedTime() {
 	if (!Validate()) {
-		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
-		return cached_file->last_modified;
+		auto current_cached_file = EnsureCachedFileCurrent();
+		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
+		return current_cached_file->last_modified;
 	}
 	GetFileHandle();
 	return last_modified;
@@ -334,8 +359,9 @@ timestamp_t CachingFileHandle::GetLastModifiedTime() {
 
 string CachingFileHandle::GetVersionTag() {
 	if (!Validate()) {
-		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
-		return cached_file->version_tag;
+		auto current_cached_file = EnsureCachedFileCurrent();
+		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
+		return current_cached_file->version_tag;
 	}
 	GetFileHandle();
 	return version_tag;
@@ -346,7 +372,7 @@ bool CachingFileHandle::Validate() const {
 	case CacheValidationMode::VALIDATE_ALL:
 		return true;
 	case CacheValidationMode::VALIDATE_REMOTE:
-		return FileSystem::IsRemoteFile(cached_file->path);
+		return FileSystem::IsRemoteFile(path.path);
 	case CacheValidationMode::NO_VALIDATION:
 		return false;
 	default:
@@ -356,20 +382,22 @@ bool CachingFileHandle::Validate() const {
 
 bool CachingFileHandle::CanSeek() {
 	if (!Validate()) {
-		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
-		return cached_file->can_seek;
+		auto current_cached_file = EnsureCachedFileCurrent();
+		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
+		return current_cached_file->can_seek;
 	}
 	return GetFileHandle().CanSeek();
 }
 
 bool CachingFileHandle::IsRemoteFile() const {
-	return FileSystem::IsRemoteFile(cached_file->path);
+	return FileSystem::IsRemoteFile(path.path);
 }
 
 bool CachingFileHandle::OnDiskFile() {
 	if (!Validate()) {
-		annotated_lock_guard<annotated_mutex> guard(cached_file->meta_lock);
-		return cached_file->on_disk_file;
+		auto current_cached_file = EnsureCachedFileCurrent();
+		annotated_lock_guard<annotated_mutex> guard(current_cached_file->meta_lock);
+		return current_cached_file->on_disk_file;
 	}
 	return GetFileHandle().OnDiskFile();
 }

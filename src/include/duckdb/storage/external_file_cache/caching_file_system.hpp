@@ -62,6 +62,8 @@ public:
 private:
 	//! Remove the 'force_full_download' option from the file handle if present, and return whether it was present
 	bool StripForceFullDownloadIfPresent();
+	//! Refresh the cached file if the global cache state has changed.
+	shared_ptr<CachedFile> EnsureCachedFileCurrent();
 
 private:
 	QueryContext context;
