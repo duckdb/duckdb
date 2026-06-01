@@ -45,11 +45,11 @@ mutable struct Appender
         handle = Ref{duckdb_appender}()
         if duckdb_appender_create(con.handle, something(schema, C_NULL), table, handle) != DuckDBSuccess
             error_ptr = duckdb_appender_error(handle)
-            if error_ptr == C_NULL
-                error_message = string("Opening of Appender for table \"", table, "\" failed: unknown error")
-            else
-                error_message = unsafe_string(error_ptr)
+            error_s = "unknown error"
+            if error_ptr != C_NULL
+                error_s = unsafe_string(error_ptr)
             end
+            error_message = "Opening of Appender for table \"$table\" failed: $error_s"
             duckdb_appender_destroy(handle)
             throw(QueryException(error_message))
         end
@@ -66,7 +66,23 @@ end
 function _close_appender(appender::Appender)
     res = DuckDBSuccess
     if appender.handle != C_NULL
-        res = duckdb_appender_destroy(appender.handle)
+        # After duckdb_appender_destroy() is called any error message can't be retrieved
+        # anymore with duckdb_appender_error(). So ..._close() it first, check for error,
+        # and retrieve the error message if needed, before calling ..._destroy(). We could
+        # return the error if case it occurs, but raising an exception here matches other
+        # calls of Appender.
+        res = duckdb_appender_close(appender.handle)
+        if res != DuckDBSuccess
+            error_ptr = duckdb_appender_error(appender.handle)
+            error_s = "unknown error"
+            if error_ptr != C_NULL
+                error_s = unsafe_string(error_ptr)
+            end
+            error_message = "Closing of Appender failed: $error_s"
+            duckdb_appender_destroy(handle)
+            throw(ConnectionException(error_message))
+        end
+        duckdb_appender_destroy(appender.handle)
     end
     appender.handle = C_NULL
     return res
@@ -115,8 +131,7 @@ function append(appender::Appender, val::AbstractVector{T}) where {T}
 end
 
 function append(appender::Appender, val::Any)
-    println(val)
-    throw(NotImplementedException("unsupported type for append"))
+    throw(NotImplementedException("unsupported type for append: $(typeof(val))"))
 end
 
 function end_row(appender::Appender)
