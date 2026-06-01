@@ -25,8 +25,17 @@ bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source
 		collation = str_collation;
 	}
 	collation = StringUtil::Lower(collation);
-	// bind the collation
-	if (collation.empty() || collation == "binary" || collation == "c" || collation == "posix") {
+
+	// PG-compat: collations can be schema-qualified ("pg_catalog.default",
+	// "pg_catalog.C", ...).
+	static constexpr std::string_view kPgCatalogPrefix = "pg_catalog.";
+	if (collation.starts_with(kPgCatalogPrefix)) {
+		collation = collation.substr(kPgCatalogPrefix.size());
+	}
+
+	// bind
+	if (collation.empty() || collation == "binary" || collation == "c" || collation == "posix" ||
+	    collation == "default") {
 		// no collation or binary collation: skip
 		return false;
 	}

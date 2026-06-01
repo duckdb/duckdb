@@ -194,7 +194,8 @@ InetOperator <- '>>=' / '<<='
 JsonOperator <- '->>' / '#>>' / '#>'
 ListOperator <- '&&' / '@>' / '<@'
 StringOperator <- '^@' / '||'
-QualifiedOperator <- 'OPERATOR' Parens(AnyOp)
+QualifiedOperator <- 'OPERATOR' Parens(OperatorSchemaQualifier? AnyOp)
+OperatorSchemaQualifier <- Identifier '.'
 AnyOp <- '!~~*' / '>>=' / '<<=' / '->>' / '!~~' / '~~*' / '~~~' / '!~' / '^@' / '||' / '&&' / '@>' / '<@' / '<=' / '>=' / '<>' / '!=' / '==' / '<<' / '>>' / '//' / '**' / '->' / '~~' / '+' / '-' / '*' / '/' / '%' / '^' / '<' / '>' / '=' / '&' / '|' / '~' / '!'
 # LEVEL 9
 BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*

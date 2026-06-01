@@ -387,6 +387,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionArgument(PE
 	if (choice_pr.name == "NamedParameter") {
 		auto parameter = transformer.Transform<MacroParameter>(choice_pr);
 		parameter.expression->SetAlias(parameter.name);
+		// Distinguish "user wrote name := value" from "alias set for display"
+		// so the macro binder doesn't misclassify args whose alias is an
+		// auto-derived output label (e.g. ARRAY(subquery) sets alias="array").
+		parameter.expression->SetNamedParameter();
 		return std::move(parameter.expression);
 	}
 	return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);

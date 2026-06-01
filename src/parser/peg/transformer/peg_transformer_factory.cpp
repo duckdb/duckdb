@@ -919,13 +919,13 @@ void PEGTransformerFactory::RegisterEnums() {
 	RegisterEnum<string>("LikeToken", "~~");
 	RegisterEnum<string>("ILikeToken", "~~*");
 	RegisterEnum<string>("GlobToken", "~~~");
-	// PG compat: SIMILAR TO uses SQL wildcards (%, _) that get rewritten to a
-	// real regex via similar_to_escape in TransformLikeClause. The `~` operator
-	// stays a raw regex match. `~*` / `!~*` are case-insensitive variants:
-	// TransformLikeClause appends an "i" flag arg for them.
+	// PG compat: SIMILAR TO is anchored (rewritten to a real regex via
+	// similar_to_escape in TransformLikeClause); `~`/`!~` are unanchored
+	// `regexp_matches`; `~*`/`!~*` are the case-insensitive variants -- the
+	// "i" flag is appended by TransformLikeClause.
 	RegisterEnum<string>("SimilarToToken", "regexp_full_match_similar");
-	RegisterEnum<string>("RegexMatchToken", "regexp_full_match");
-	RegisterEnum<string>("IRegexMatchToken", "regexp_full_match_i");
+	RegisterEnum<string>("RegexMatchToken", "regexp_matches");
+	RegisterEnum<string>("IRegexMatchToken", "regexp_match_i");
 	RegisterEnum<string>("NotIRegexMatchOp", "!~*");
 	RegisterEnum<string>("NotILikeOp", "!~~*");
 	RegisterEnum<string>("NotLikeOp", "!~~");

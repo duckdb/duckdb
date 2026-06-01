@@ -172,6 +172,10 @@ buffer_ptr<VectorBuffer> VectorStringBuffer::FlattenSliceInternal(const LogicalT
 	return result;
 }
 
+string_t StringVector::AddString(Vector &vector, std::string_view data) {
+	return StringVector::AddString(vector, string_t(data.data(), UnsafeNumericCast<uint32_t>(data.size())));
+}
+
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
 	return StringVector::AddString(vector, string_t(data, UnsafeNumericCast<uint32_t>(len)));
 }

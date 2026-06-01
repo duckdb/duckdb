@@ -818,7 +818,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeExpres
 				expr = std::move(func_expr);
 			}
 		} else if (func_expr->function_name == "!~") {
-			func_expr->function_name = "regexp_full_match";
+			// PG `!~` is "does NOT match"; the partial-match counterpart of `~`.
+			func_expr->function_name = "regexp_matches";
 			func_expr->is_operator = false;
 			expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(func_expr));
 		} else {
@@ -968,9 +969,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLikeClause(PEGTrans
 		                                                  std::move(similar_args));
 		like_children[0] = std::move(similar_call);
 		like_variation = "regexp_full_match";
-	} else if (like_variation == "regexp_full_match_i") {
+	} else if (like_variation == "regexp_match_i") {
+		// PG `~*` is unanchored case-insensitive; same target as `~` with 'i'.
 		case_insensitive_regex = true;
-		like_variation = "regexp_full_match";
+		like_variation = "regexp_matches";
 	} else if (like_variation == "!~*") {
 		case_insensitive_regex = true;
 		like_variation = "!~";
@@ -1156,6 +1158,22 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformOtherOperatorExpres
 				expr = std::move(func_expr);
 				continue;
 			}
+			// PG regex operators reached this path via OPERATOR(schema.op), rewrite to the same regexp_matches call
+			if (other_operator == "~" || other_operator == "~*" || other_operator == "!~" || other_operator == "!~*") {
+				const bool negate = other_operator.starts_with('!');
+				const bool case_insensitive = other_operator.ends_with('*');
+				if (case_insensitive) {
+					children_function.push_back(make_uniq<ConstantExpression>(Value("i")));
+				}
+				auto func_expr = make_uniq<FunctionExpression>("regexp_matches", std::move(children_function));
+				func_expr->is_operator = !negate;
+				if (negate) {
+					expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(func_expr));
+				} else {
+					expr = std::move(func_expr);
+				}
+				continue;
+			}
 			auto func_expr = make_uniq<FunctionExpression>(std::move(other_operator), std::move(children_function));
 			func_expr->is_operator = true;
 			expr = std::move(func_expr);
@@ -1174,11 +1192,14 @@ string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer
 	return transformer.Transform<string>(child);
 }
 
-// QualifiedOperator <- 'OPERATOR' Parens(AnyOp)
+// QualifiedOperator <- 'OPERATOR' Parens(OperatorSchemaQualifier? AnyOp)
+// PG allows OPERATOR(schema.op); we currently only have pg_catalog operators,
+// so the schema qualifier is parsed and discarded.
 string PEGTransformerFactory::TransformQualifiedOperator(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &any_op_pr = ExtractResultFromParens(list_pr.GetChild(1));
-	return transformer.Transform<string>(any_op_pr);
+	auto &parens_inner = ExtractResultFromParens(list_pr.GetChild(1));
+	auto &inner_list = parens_inner.Cast<ListParseResult>();
+	return transformer.Transform<string>(inner_list.GetChild(1));
 }
 
 // AnyOp <- '!~~*' / '>>=' / ... / '!'

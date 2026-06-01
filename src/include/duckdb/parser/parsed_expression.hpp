@@ -41,6 +41,17 @@ public:
 	bool Equals(const BaseExpression &other) const override;
 	hash_t Hash() const override;
 
+	//! True iff this expression appears as a function-call argument written
+	//! with the `name := value` (or `name => value`) named-parameter syntax.
+	//! Distinct from `alias` (which is also used for output-column labels and
+	//! display, and so cannot reliably indicate the user's intent).
+	bool IsNamedParameter() const {
+		return is_named_parameter;
+	}
+	void SetNamedParameter(bool v = true) {
+		is_named_parameter = v;
+	}
+
 	//! Create a copy of this expression
 	virtual unique_ptr<ParsedExpression> Copy() const = 0;
 
@@ -52,6 +63,11 @@ public:
 	                       const vector<unique_ptr<ParsedExpression>> &right);
 
 protected:
+	//! Set only by the parser for `name := value` / `name => value` argument
+	//! syntax. Not serialized: the flag is consumed during binding (macro and
+	//! scalar-function argument classification) and irrelevant after.
+	bool is_named_parameter = false;
+
 	//! Copy base Expression properties from another expression to this one,
 	//! used in Copy method
 	void CopyProperties(const ParsedExpression &other) {
@@ -59,6 +75,7 @@ protected:
 		expression_class = other.expression_class;
 		alias = other.alias;
 		query_location = other.query_location;
+		is_named_parameter = other.is_named_parameter;
 	}
 };
 
