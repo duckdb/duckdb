@@ -18,6 +18,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/storage/database_handle.hpp"
 
 namespace duckdb {
 
@@ -164,8 +165,6 @@ private:
 
 	//! Open `mmap_handle` (only handle opened in MAP mode). [create_new] mirrors GetFileFlags.
 	void OpenMemoryMappedFile(bool create_new);
-	//! Throws if a write at [required_size] would exceed the mmap reserve. No-op otherwise.
-	void EnsureMappedSize(idx_t required_size) const;
 
 	idx_t GetBlockLocation(block_id_t block_id) const;
 
@@ -202,10 +201,8 @@ private:
 	uint8_t active_header;
 	//! The path where the file is stored
 	string path;
-	//! The file handle
-	unique_ptr<FileHandle> handle;
-	//! Memory-mapped view of the file in MAP mode. Mutually exclusive with `handle`.
-	unique_ptr<MemoryMappedFile> mmap_handle;
+	//! The database handle
+	unique_ptr<DatabaseHandle> handle;
 	//! The buffer used to read/write to the headers
 	FileBuffer header_buffer;
 	//! The list of free blocks that can be written to currently
