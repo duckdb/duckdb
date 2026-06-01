@@ -376,6 +376,10 @@ bool CachingFileHandle::OnDiskFile() {
 	return GetFileHandle().OnDiskFile();
 }
 
+bool CachingFileHandle::TryGetNetworkThroughput(NetworkThroughputEstimate &result) {
+	return GetFileHandle().TryGetNetworkThroughput(result);
+}
+
 idx_t CachingFileHandle::SeekPosition() {
 	return position;
 }

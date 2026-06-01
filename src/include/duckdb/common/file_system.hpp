@@ -71,6 +71,16 @@ struct FileMetadata {
 	unordered_map<string, Value> extended_file_info;
 };
 
+//! Measured network throughput for a (remote) file handle. Used to size prefetch coalescing gaps.
+struct NetworkThroughputEstimate {
+	//! Round-trip latency + request setup, in seconds
+	double latency_seconds = 0;
+	//! Single-stream throughput, in bytes per second
+	double bandwidth_bytes_per_s = 0;
+	//! Number of network samples behind this estimate
+	idx_t sample_count = 0;
+};
+
 struct FileHandle {
 public:
 	DUCKDB_API FileHandle(FileSystem &file_system, string path, FileOpenFlags flags);
@@ -102,6 +112,8 @@ public:
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsPipe();
 	DUCKDB_API bool OnDiskFile();
+	//! Try to obtain a network throughput estimate (Local files return false).
+	DUCKDB_API bool TryGetNetworkThroughput(NetworkThroughputEstimate &result);
 	DUCKDB_API idx_t GetFileSize();
 	DUCKDB_API FileType GetType();
 	DUCKDB_API FileMetadata Stats();
@@ -295,6 +307,9 @@ public:
 	//! Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads
 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
 	DUCKDB_API virtual bool OnDiskFile(FileHandle &handle);
+	//! Try to obtain a measured network throughput estimate. Default: not supported (returns false).
+	//! Used for file systems
+	DUCKDB_API virtual bool TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result);
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
 	                                                             bool write);
