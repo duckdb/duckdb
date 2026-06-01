@@ -1035,11 +1035,6 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
 		    "metadata is located at the end of the file. Write the stream to disk first and read from there instead.");
 	}
-	// Seed the prefetch cost model from a per-medium profile. Remote files refine this from real
-	// network measurements during the scan (HTTPFileSystem::TryGetNetworkThroughput); local files keep the seed.
-	cost_model_state = make_uniq<PrefetchCostModelState>(
-	    file_handle->OnDiskFile() ? PrefetchCostModel::LocalProfile() : PrefetchCostModel::RemoteProfile());
-
 	// read the extended file open info (if any)
 	optional_idx footer_size;
 	if (file.extended_info) {
@@ -1458,12 +1453,12 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	}
 
 	uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
-	if (state.prefetch_mode) {
+	if (state.prefetch_mode && state.cost_model_state) {
 		NetworkThroughputEstimate estimate;
 		if (state.file_handle->TryGetNetworkThroughput(estimate)) {
-			cost_model_state->RefineFromEstimate(estimate);
+			state.cost_model_state->RefineFromEstimate(estimate);
 		}
-		accepted_column_gap = cost_model_state->GetModel().GetColumnGapSize();
+		accepted_column_gap = state.cost_model_state->GetModel().GetColumnGapSize();
 	}
 	state.thrift_file_proto =
 	    CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode, accepted_column_gap);
@@ -1673,12 +1668,12 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		trans.ClearPrefetch();
 		state.current_group_prefetched = false;
 
-		if (state.prefetch_mode) {
+		if (state.prefetch_mode && state.cost_model_state) {
 			NetworkThroughputEstimate estimate;
 			if (state.file_handle->TryGetNetworkThroughput(estimate)) {
-				cost_model_state->RefineFromEstimate(estimate);
+				state.cost_model_state->RefineFromEstimate(estimate);
 			}
-			trans.SetAcceptedColumnGap(cost_model_state->GetModel().GetColumnGapSize());
+			trans.SetAcceptedColumnGap(state.cost_model_state->GetModel().GetColumnGapSize());
 		}
 
 		if (log_prefetch && state.prefetch_metrics.filter_ran && state.current_group > 0) {

@@ -221,6 +221,9 @@ public:
 
 	//! (optional) pointer to the PhysicalOperator for logging
 	optional_ptr<const PhysicalOperator> op;
+
+	//! Prefetch cost model for this scan
+	optional_ptr<PrefetchCostModelState> cost_model_state;
 };
 
 struct ParquetColumnDefinition {
@@ -394,7 +397,6 @@ private:
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;
-	unique_ptr<PrefetchCostModelState> cost_model_state;
 };
 
 } // namespace duckdb
