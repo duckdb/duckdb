@@ -621,7 +621,12 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 		}
 	}
 	expanded_tables.insert(table);
-	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, triggers));
+	auto bound = ExpandAfterTriggers(node, returning_list, triggers);
+
+	// Erasing from the set, so we will track expanded tables only while we're on the same node in the recursive stack,
+	// meaning we're on the same "trigger" in the trigger chain.
+	expanded_tables.erase(table);
+	return make_uniq<BoundStatement>(std::move(bound));
 }
 
 static constexpr const char *TRIGGER_BASE_CTE_PREFIX = "__duckdb_trigger_base_";

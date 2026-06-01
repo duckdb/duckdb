@@ -243,6 +243,41 @@ CREATE TRIGGER t6b_no_ref AFTER INSERT ON t6b FOR EACH STATEMENT
 ----
 <REGEX>:.*[Cc]atalog.*
 
+# Two parent triggers both chain to the same child - child's trigger fires twice (once per parent chain)
+statement ok
+CREATE TABLE t_chain2_parent (id INTEGER);
+
+statement ok
+CREATE TABLE t_chain2_child (id INTEGER);
+
+statement ok
+CREATE TABLE t_chain2_audit (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER t_chain2_child_trg AFTER INSERT ON t_chain2_child FOR EACH STATEMENT
+    INSERT INTO t_chain2_audit VALUES ('child fired');
+
+statement ok
+CREATE TRIGGER t_chain2_parent_a AFTER INSERT ON t_chain2_parent FOR EACH STATEMENT
+    INSERT INTO t_chain2_child VALUES (1);
+
+statement ok
+CREATE TRIGGER t_chain2_parent_b AFTER INSERT ON t_chain2_parent FOR EACH STATEMENT
+    INSERT INTO t_chain2_child VALUES (2);
+
+statement ok
+INSERT INTO t_chain2_parent VALUES (99);
+
+query I
+SELECT COUNT(*) FROM t_chain2_child;
+----
+2
+
+query I
+SELECT COUNT(*) FROM t_chain2_audit;
+----
+2
+
 # Chained triggers - t7 has 2 triggers, one inserts into t7b which has its own trigger
 statement ok
 CREATE TABLE t7 (id INTEGER);
@@ -349,6 +384,31 @@ CREATE TRIGGER t_cycle_a_to_b AFTER INSERT ON t_cycle_a FOR EACH STATEMENT
 statement error
 CREATE TRIGGER t_cycle_b_to_a AFTER INSERT ON t_cycle_b FOR EACH STATEMENT
     INSERT INTO t_cycle_a VALUES (1);
+----
+<REGEX>:.*[Rr]ecurs.*
+
+# Cycle detectable only through one of two triggers on A: T1 (A->B) is harmless,
+# T2 (A->C) creates the path that makes C->A a cycle - blocked because of T2
+statement ok
+CREATE TABLE t_cycle2_a (id INTEGER);
+
+statement ok
+CREATE TABLE t_cycle2_b (id INTEGER);
+
+statement ok
+CREATE TABLE t_cycle2_c (id INTEGER);
+
+statement ok
+CREATE TRIGGER t_cycle2_a_to_b AFTER INSERT ON t_cycle2_a FOR EACH STATEMENT
+    INSERT INTO t_cycle2_b VALUES (1);
+
+statement ok
+CREATE TRIGGER t_cycle2_a_to_c AFTER INSERT ON t_cycle2_a FOR EACH STATEMENT
+    INSERT INTO t_cycle2_c VALUES (1);
+
+statement error
+CREATE TRIGGER t_cycle2_c_to_a AFTER INSERT ON t_cycle2_c FOR EACH STATEMENT
+    INSERT INTO t_cycle2_a VALUES (1);
 ----
 <REGEX>:.*[Rr]ecurs.*
 
