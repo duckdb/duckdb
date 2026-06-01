@@ -237,7 +237,7 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 	case ExpressionType::FUNCTION: {
 		// Special-handling for lambdas, which are inside function expressions.
 		auto &function = expr->Cast<FunctionExpression>();
-		if (!ExpressionBinder::IsUnnestFunction(function.function_name)) {
+		if (!ExpressionBinder::IsUnnestFunction(function.FunctionName())) {
 			QualifyFunction(function);
 		}
 		if (function.IsLambdaFunction()) {
@@ -258,20 +258,20 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 }
 
 optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &function) {
-	D_ASSERT(!ExpressionBinder::IsUnnestFunction(function.function_name));
+	D_ASSERT(!ExpressionBinder::IsUnnestFunction(function.FunctionName()));
 	// lookup the function in the catalog
 	QueryErrorContext error_context(function.GetQueryLocation());
-	binder.BindSchemaOrCatalog(function.catalog, function.schema);
+	binder.BindSchemaOrCatalog(function.CatalogMutable(), function.SchemaMutable());
 
-	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.function_name, error_context);
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.FunctionName(), error_context);
 	auto func =
-	    binder.GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
+	    binder.GetCatalogEntry(function.Catalog(), function.Schema(), function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (func) {
 		// found the function - we are done
 		return func;
 	}
 	// not a table function - check if the schema is set
-	if (function.schema.empty()) {
+	if (function.Schema().empty()) {
 		// schema is not set - leave it as-is
 		return nullptr;
 	}
@@ -285,10 +285,10 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	// the function exists in the system catalog - turn this into a dot call
 	ErrorData error;
 	unique_ptr<ColumnRefExpression> colref;
-	if (function.catalog.empty()) {
-		colref = make_uniq<ColumnRefExpression>(function.schema);
+	if (function.Catalog().empty()) {
+		colref = make_uniq<ColumnRefExpression>(function.Schema());
 	} else {
-		colref = make_uniq<ColumnRefExpression>(function.schema, function.catalog);
+		colref = make_uniq<ColumnRefExpression>(function.Schema(), function.Catalog());
 	}
 	auto new_colref = QualifyColumnName(*colref, error);
 	if (!new_colref) {
@@ -297,8 +297,8 @@ optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &
 	// we can! transform this into a function call on the column
 	// i.e. "x.lower()" becomes "lower(x)"
 	function.GetArgumentsMutable().insert(function.GetArgumentsMutable().begin(), std::move(new_colref));
-	function.catalog = INVALID_CATALOG;
-	function.schema = INVALID_SCHEMA;
+	function.CatalogMutable() = INVALID_CATALOG;
+	function.SchemaMutable() = INVALID_SCHEMA;
 	return func;
 }
 
@@ -319,8 +319,8 @@ void ColumnQualifier::QualifyColumnNamesInLambda(FunctionExpression &function,
 
 		if (!error_message.empty()) {
 			// possibly a JSON function, qualify both LHS and RHS
-			QualifyColumnNames(lambda_expr.lhs, lambda_params, true);
-			QualifyColumnNames(lambda_expr.expr, lambda_params, true);
+			QualifyColumnNames(lambda_expr.LeftMutable(), lambda_params, true);
+			QualifyColumnNames(lambda_expr.RightMutable(), lambda_params, true);
 			continue;
 		}
 
@@ -334,7 +334,7 @@ void ColumnQualifier::QualifyColumnNamesInLambda(FunctionExpression &function,
 		}
 
 		// only qualify in RHS
-		QualifyColumnNames(lambda_expr.expr, lambda_params, true);
+		QualifyColumnNames(lambda_expr.RightMutable(), lambda_params, true);
 
 		// pop this level
 		lambda_params.pop_back();

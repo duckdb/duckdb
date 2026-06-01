@@ -698,7 +698,7 @@ void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> 
 		}
 	} else if (expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func_expr = expr->Cast<FunctionExpression>();
-		if (func_expr.function_name == "row") {
+		if (func_expr.FunctionName() == "row") {
 			for (auto &col : func_expr.GetArgumentsMutable()) {
 				GetValueFromExpression(col.GetExpressionMutable(), result);
 			}
@@ -718,7 +718,7 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 	}
 	case ExpressionType::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
-		if (function.function_name != "row") {
+		if (function.FunctionName() != "row") {
 			return false;
 		}
 		for (auto &child : function.GetArgumentsMutable()) {
@@ -801,7 +801,7 @@ PivotColumn PEGTransformerFactory::TransformPivotValueList(PEGTransformer &trans
 		return result;
 	}
 	auto &func_expr = pivot_expression->Cast<FunctionExpression>();
-	if (func_expr.function_name != "row") {
+	if (func_expr.FunctionName() != "row") {
 		result.pivot_expressions.push_back(std::move(pivot_expression));
 		return result;
 	}
@@ -1420,7 +1420,7 @@ void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> ex
                                                  GroupByNode &result, vector<ProjectionIndex> &result_set) {
 	if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &func = expression->Cast<FunctionExpression>();
-		if (func.function_name == "row") {
+		if (func.FunctionName() == "row") {
 			for (auto &child : func.GetArgumentsMutable()) {
 				AddGroupByExpression(std::move(child.GetExpressionMutable()), map, result, result_set);
 			}

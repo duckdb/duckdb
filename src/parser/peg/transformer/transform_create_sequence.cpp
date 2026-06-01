@@ -123,8 +123,8 @@ pair<string, unique_ptr<SequenceOption>>
 PEGTransformerFactory::TransformSeqSetIncrement(PEGTransformer &transformer, unique_ptr<ParsedExpression> expression) {
 	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(expression));
-		if (func_expr->function_name != "-") {
-			throw InvalidInputException("Expected a minus function instead of %s", func_expr->function_name);
+		if (func_expr->FunctionName() != "-") {
+			throw InvalidInputException("Expected a minus function instead of %s", func_expr->FunctionName());
 		}
 		D_ASSERT(!func_expr->GetArguments().empty());
 		if (func_expr->GetArguments()[0].GetExpression().GetExpressionClass() != ExpressionClass::CONSTANT) {
@@ -146,8 +146,8 @@ PEGTransformerFactory::TransformSeqSetMinMax(PEGTransformer &transformer, const 
                                              unique_ptr<ParsedExpression> expression) {
 	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(expression));
-		if (func_expr->function_name != "-") {
-			throw InvalidInputException("Expected a minus function instead of %s", func_expr->function_name);
+		if (func_expr->FunctionName() != "-") {
+			throw InvalidInputException("Expected a minus function instead of %s", func_expr->FunctionName());
 		}
 		D_ASSERT(!func_expr->GetArguments().empty());
 		if (func_expr->GetArguments()[0].GetExpression().GetExpressionClass() != ExpressionClass::CONSTANT) {

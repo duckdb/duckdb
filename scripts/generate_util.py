@@ -549,6 +549,20 @@ def generate_member_children_appends(member, expr_var):
                 f'\t\t\tresult.Append(arg.GetExpressionMutable());',
                 f'\t\t}}',
             ]
+        if type_str == 'vector<OrderByNode>':
+            return [
+                f'\t\tfor (auto &order : {access}) {{',
+                f'\t\t\tresult.Append(order.expression);',
+                f'\t\t}}',
+            ]
+        if is_order_modifier_ptr(type_str):
+            return [
+                f'\t\tif ({access}) {{',
+                f'\t\t\tfor (auto &order : {access}->orders) {{',
+                f'\t\t\t\tresult.Append(order.expression);',
+                f'\t\t\t}}',
+                f'\t\t}}',
+            ]
         return []
 
     access = f'{expr_var}.{field}'
@@ -629,6 +643,20 @@ def generate_member_const_children_appends(member, expr_var):
             return [
                 f'\t\tfor (auto &item : {access}) {{',
                 f'\t\t\tresult.Append(*item.second);',
+                f'\t\t}}',
+            ]
+        if type_str == 'vector<OrderByNode>':
+            return [
+                f'\t\tfor (auto &order : {access}) {{',
+                f'\t\t\tresult.Append(*order.expression);',
+                f'\t\t}}',
+            ]
+        if is_order_modifier_ptr(type_str):
+            return [
+                f'\t\tif ({access}) {{',
+                f'\t\t\tfor (auto &order : {access}->orders) {{',
+                f'\t\t\t\tresult.Append(*order.expression);',
+                f'\t\t\t}}',
                 f'\t\t}}',
             ]
         if type_str == 'vector<FunctionArgument>':

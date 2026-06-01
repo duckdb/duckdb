@@ -14,14 +14,15 @@ diff --git a/src/include/storage/quack_catalog.hpp b/src/include/storage/quack_c
 index 1389757..43a3e2f 100644
 --- a/src/include/storage/quack_catalog.hpp
 +++ b/src/include/storage/quack_catalog.hpp
-@@ -54,6 +54,11 @@ public:
+@@ -54,6 +54,12 @@ public:
  	bool InMemory() override;
  	string GetDBPath() override;
  
 +	bool IsRemoteCatalog() const override {
 +		return true;
 +	}
-+	unique_ptr<TableRef> RemotePushdown(ClientContext &context, unique_ptr<QueryNode> node) override;
++	unique_ptr<TableRef> RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node) override;
++	unique_ptr<TableRef> RemoteExecute(ClientContext &context, const string &sql) override;
 +
  	unique_ptr<ColumnDataCollection> ExecuteCommandInternal(ClientContext &context, const string &query);
  	const QuackUri &GetServerUri();
@@ -76,14 +77,18 @@ index f5b1f92..f43dea5 100644
  
  #include "storage/quack_catalog.hpp"
  #include "storage/quack_table.hpp"
-@@ -121,6 +124,15 @@ DatabaseSize QuackCatalog::GetDatabaseSize(ClientContext &context) {
+@@ -121,6 +124,19 @@ DatabaseSize QuackCatalog::GetDatabaseSize(ClientContext &context) {
  	throw NotImplementedException("GetDatabaseSize not implemented yet");
  }
  
-+unique_ptr<TableRef> QuackCatalog::RemotePushdown(ClientContext &context, unique_ptr<QueryNode> node) {
++unique_ptr<TableRef> QuackCatalog::RemoteExecute(ClientContext &context, unique_ptr<QueryNode> node) {
++	return RemoteExecute(context, node->ToString());
++}
++
++unique_ptr<TableRef> QuackCatalog::RemoteExecute(ClientContext &context, const string &sql) {
 +	vector<unique_ptr<ParsedExpression>> args;
 +	args.push_back(make_uniq<ConstantExpression>(Value(GetName())));
-+	args.push_back(make_uniq<ConstantExpression>(Value(node->ToString())));
++	args.push_back(make_uniq<ConstantExpression>(Value(sql)));
 +	auto func_ref = make_uniq<TableFunctionRef>();
 +	func_ref->function = make_uniq<FunctionExpression>("quack_query_by_name", std::move(args));
 +	return func_ref;

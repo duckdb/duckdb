@@ -45,7 +45,7 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetTuple(PEGTran
 	bool is_row_assignment = false;
 	if (expression->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &func_ref = expression->Cast<FunctionExpression>();
-		if (StringUtil::CIEquals(func_ref.function_name, "row")) {
+		if (StringUtil::CIEquals(func_ref.FunctionName(), "row")) {
 			is_row_assignment = true;
 		}
 	}

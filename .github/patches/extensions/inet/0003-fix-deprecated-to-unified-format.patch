@@ -1,12 +1,3 @@
-From 58ff655970268c0319108b6b24b0a57ba6bd05f6 Mon Sep 17 00:00:00 2001
-From: Mytherin <mark.raasveldt@gmail.com>
-Date: Thu, 28 May 2026 11:58:58 +0200
-Subject: [PATCH] 0003-fix-deprecated-to-unified-format.patch
-
----
- src/inet_functions.cpp | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
-
 diff --git a/src/inet_functions.cpp b/src/inet_functions.cpp
 index f0466e1..748994d 100644
 --- a/src/inet_functions.cpp
@@ -20,6 +11,3 @@ index f0466e1..748994d 100644
  
    auto &entries = StructVector::GetEntries(result);
    auto ip_type = FlatVector::GetDataMutable<uint8_t>(entries[0]);
--- 
-2.39.5 (Apple Git-154)
-

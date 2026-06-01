@@ -111,12 +111,12 @@ void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &tabl
 
 		if (!error_message.empty()) {
 			// Possibly a JSON function, qualify both LHS and RHS.
-			ParsedExpressionIterator::EnumerateChildren(*lambda_expr.lhs, [&](unique_ptr<ParsedExpression> &child) {
-				DoUpdateSetQualify(child, table_name, lambda_params);
-			});
-			ParsedExpressionIterator::EnumerateChildren(*lambda_expr.expr, [&](unique_ptr<ParsedExpression> &child) {
-				DoUpdateSetQualify(child, table_name, lambda_params);
-			});
+			ParsedExpressionIterator::EnumerateChildren(
+			    *lambda_expr.LeftMutable(),
+			    [&](unique_ptr<ParsedExpression> &child) { DoUpdateSetQualify(child, table_name, lambda_params); });
+			ParsedExpressionIterator::EnumerateChildren(
+			    *lambda_expr.RightMutable(),
+			    [&](unique_ptr<ParsedExpression> &child) { DoUpdateSetQualify(child, table_name, lambda_params); });
 			continue;
 		}
 
@@ -128,9 +128,9 @@ void DoUpdateSetQualifyInLambda(FunctionExpression &function, const string &tabl
 		}
 
 		// Only qualify in the RHS of the expression.
-		ParsedExpressionIterator::EnumerateChildren(*lambda_expr.expr, [&](unique_ptr<ParsedExpression> &child) {
-			DoUpdateSetQualify(child, table_name, lambda_params);
-		});
+		ParsedExpressionIterator::EnumerateChildren(
+		    *lambda_expr.RightMutable(),
+		    [&](unique_ptr<ParsedExpression> &child) { DoUpdateSetQualify(child, table_name, lambda_params); });
 
 		lambda_params.pop_back();
 	}

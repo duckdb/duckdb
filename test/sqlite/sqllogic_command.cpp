@@ -421,7 +421,47 @@ static void ParallelExecuteLoop(ParallelExecuteContext *execute_context) {
 	}
 }
 
-bool LoopCommand::ForEachTokenReplace(Connection &con, const string &parameter, vector<string> &result) const {
+bool SQLLogicTestRunner::IsVariableReplacement(const string &token_name) {
+	return StringUtil::StartsWith(token_name, "<variable:");
+}
+
+Value SQLLogicTestRunner::GetVariableReplacement(const string &token_name, string &variable_name) {
+	// variable - get variable name
+	auto var_size = string("<variable:").size();
+	if (token_name.back() != '>') {
+		throw InvalidInputException("Expected <variable:var_name>, got %s", token_name);
+	}
+	auto var_section = token_name.substr(var_size, token_name.size() - var_size - 1);
+	auto variable_components = StringUtil::Split(var_section, ":");
+	optional_ptr<Connection> var_con;
+	string connection_name;
+	if (variable_components.size() == 1) {
+		// no connection specified
+		connection_name = "main connection";
+		var_con = con.get();
+		variable_name = var_section;
+	} else if (variable_components.size() == 2) {
+		connection_name = variable_components[0];
+		variable_name = variable_components[1];
+		auto entry = named_connection_map.find(connection_name);
+		if (entry == named_connection_map.end()) {
+			throw InvalidInputException(
+			    "Attempting to find variable %s in connection %s - but could not find this connection", variable_name,
+			    connection_name);
+		}
+		var_con = entry->second.get();
+	} else {
+		throw InvalidInputException("Expected either <variable:variable_name> or <variable:connection:variable_name>");
+	}
+	Value value;
+	if (!ClientConfig::GetConfig(*var_con->context).GetUserVariable(variable_name, value)) {
+		throw InvalidInputException("Variable with name \"%s\" was not defined in connection %s", variable_name,
+		                            connection_name);
+	}
+	return value;
+}
+
+bool LoopCommand::ForEachTokenReplace(const string &parameter, vector<string> &result) const {
 	if (parameter.empty()) {
 		return true;
 	}
@@ -435,7 +475,6 @@ bool LoopCommand::ForEachTokenReplace(Connection &con, const string &parameter, 
 	bool is_signed = is_integral || token_name == "<signed>";
 	bool is_unsigned = is_integral || token_name == "<unsigned>";
 	bool is_all_types_column = token_name == "<all_types_columns>";
-	bool is_variable = StringUtil::StartsWith(token_name, "<variable:");
 	if (token_name[0] == '!') {
 		// !token tries to remove the token from the list of tokens
 		auto entry = std::find(result.begin(), result.end(), parameter.substr(1));
@@ -447,21 +486,13 @@ bool LoopCommand::ForEachTokenReplace(Connection &con, const string &parameter, 
 		result.erase(entry);
 		collection = true;
 	}
-	if (is_variable) {
-		// variable - get variable name
-		auto var_size = string("<variable:").size();
-		if (token_name.back() != '>') {
-			throw InvalidInputException("Expected <variable:var_name>, got %s", token_name);
-		}
-		auto variable_name = token_name.substr(var_size, token_name.size() - var_size - 1);
-		Value value;
-		if (!ClientConfig::GetConfig(*con.context).GetUserVariable(variable_name, value)) {
-			throw InvalidInputException("Variable with name \"%s\" was not defined", variable_name);
-		}
+	if (runner.IsVariableReplacement(token_name)) {
+		string variable_name;
+		auto value = runner.GetVariableReplacement(token_name, variable_name);
 		if (value.IsNull()) {
 			throw InvalidInputException("Variable with name \"%s\" is NULL - cannot iterate over this", variable_name);
 		}
-		auto list_val = value.CastAs(*con.context, LogicalType::LIST(LogicalType::VARCHAR));
+		auto list_val = value.CastAs(*runner.con->context, LogicalType::LIST(LogicalType::VARCHAR));
 		for (auto &val : ListValue::GetChildren(list_val)) {
 			result.push_back(StringValue::Get(val));
 		}
@@ -573,7 +604,7 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 		loop_def.tokens.clear();
 		// expand any parameters in the loop definition
 		for (auto &token : definition.tokens) {
-			if (!ForEachTokenReplace(*runner.con, token, loop_def.tokens)) {
+			if (!ForEachTokenReplace(token, loop_def.tokens)) {
 				loop_def.tokens.push_back(token);
 			}
 		}

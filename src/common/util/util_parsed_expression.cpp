@@ -70,12 +70,8 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::COMPARISON: {
 		auto &cast_expr = Cast<ComparisonExpression>();
-		if (cast_expr.left) {
-			result.Append(*cast_expr.left);
-		}
-		if (cast_expr.right) {
-			result.Append(*cast_expr.right);
-		}
+		result.Append(cast_expr.Left());
+		result.Append(cast_expr.Right());
 		break;
 	}
 	case ExpressionClass::CONJUNCTION: {
@@ -87,11 +83,11 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &cast_expr = Cast<FunctionExpression>();
-		if (cast_expr.filter) {
-			result.Append(*cast_expr.filter);
+		if (cast_expr.Filter()) {
+			result.Append(*cast_expr.Filter());
 		}
-		if (cast_expr.order_bys) {
-			for (auto &order : cast_expr.order_bys->orders) {
+		if (cast_expr.OrderBy()) {
+			for (auto &order : cast_expr.OrderBy()->orders) {
 				result.Append(*order.expression);
 			}
 		}
@@ -102,12 +98,8 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::LAMBDA: {
 		auto &cast_expr = Cast<LambdaExpression>();
-		if (cast_expr.lhs) {
-			result.Append(*cast_expr.lhs);
-		}
-		if (cast_expr.expr) {
-			result.Append(*cast_expr.expr);
-		}
+		result.Append(cast_expr.Left());
+		result.Append(cast_expr.Right());
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
@@ -129,32 +121,32 @@ ConstChildrenView ParsedExpression::Children() const {
 	}
 	case ExpressionClass::SUBQUERY: {
 		auto &cast_expr = Cast<SubqueryExpression>();
-		if (cast_expr.child) {
-			result.Append(*cast_expr.child);
+		if (cast_expr.GetChild()) {
+			result.Append(*cast_expr.GetChild());
 		}
 		break;
 	}
 	case ExpressionClass::WINDOW: {
 		auto &cast_expr = Cast<WindowExpression>();
-		for (auto &child : cast_expr.children) {
+		for (auto &child : cast_expr.GetChildren()) {
 			result.Append(*child);
 		}
-		for (auto &child : cast_expr.partitions) {
+		for (auto &child : cast_expr.Partitions()) {
 			result.Append(*child);
 		}
-		for (auto &order : cast_expr.orders) {
+		for (auto &order : cast_expr.OrderBy()) {
 			result.Append(*order.expression);
 		}
-		if (cast_expr.start_expr) {
-			result.Append(*cast_expr.start_expr);
+		if (cast_expr.StartExpr()) {
+			result.Append(*cast_expr.StartExpr());
 		}
-		if (cast_expr.end_expr) {
-			result.Append(*cast_expr.end_expr);
+		if (cast_expr.EndExpr()) {
+			result.Append(*cast_expr.EndExpr());
 		}
-		if (cast_expr.filter_expr) {
-			result.Append(*cast_expr.filter_expr);
+		if (cast_expr.Filter()) {
+			result.Append(*cast_expr.Filter());
 		}
-		for (auto &order : cast_expr.arg_orders) {
+		for (auto &order : cast_expr.ArgOrders()) {
 			result.Append(*order.expression);
 		}
 		break;
@@ -212,12 +204,8 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::COMPARISON: {
 		auto &cast_expr = Cast<ComparisonExpression>();
-		if (cast_expr.left) {
-			result.Append(cast_expr.left);
-		}
-		if (cast_expr.right) {
-			result.Append(cast_expr.right);
-		}
+		result.Append(cast_expr.LeftMutable());
+		result.Append(cast_expr.RightMutable());
 		break;
 	}
 	case ExpressionClass::CONJUNCTION: {
@@ -229,11 +217,11 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::FUNCTION: {
 		auto &cast_expr = Cast<FunctionExpression>();
-		if (cast_expr.filter) {
-			result.Append(cast_expr.filter);
+		if (cast_expr.FilterMutable()) {
+			result.Append(cast_expr.FilterMutable());
 		}
-		if (cast_expr.order_bys) {
-			for (auto &order : cast_expr.order_bys->orders) {
+		if (cast_expr.OrderByMutable()) {
+			for (auto &order : cast_expr.OrderByMutable()->orders) {
 				result.Append(order.expression);
 			}
 		}
@@ -244,12 +232,8 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::LAMBDA: {
 		auto &cast_expr = Cast<LambdaExpression>();
-		if (cast_expr.lhs) {
-			result.Append(cast_expr.lhs);
-		}
-		if (cast_expr.expr) {
-			result.Append(cast_expr.expr);
-		}
+		result.Append(cast_expr.LeftMutable());
+		result.Append(cast_expr.RightMutable());
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
@@ -271,32 +255,32 @@ ChildrenView ParsedExpression::ChildrenMutable() {
 	}
 	case ExpressionClass::SUBQUERY: {
 		auto &cast_expr = Cast<SubqueryExpression>();
-		if (cast_expr.child) {
-			result.Append(cast_expr.child);
+		if (cast_expr.GetChildMutable()) {
+			result.Append(cast_expr.GetChildMutable());
 		}
 		break;
 	}
 	case ExpressionClass::WINDOW: {
 		auto &cast_expr = Cast<WindowExpression>();
-		for (auto &child : cast_expr.children) {
+		for (auto &child : cast_expr.GetChildrenMutable()) {
 			result.Append(child);
 		}
-		for (auto &child : cast_expr.partitions) {
+		for (auto &child : cast_expr.PartitionsMutable()) {
 			result.Append(child);
 		}
-		for (auto &order : cast_expr.orders) {
+		for (auto &order : cast_expr.OrderByMutable()) {
 			result.Append(order.expression);
 		}
-		if (cast_expr.start_expr) {
-			result.Append(cast_expr.start_expr);
+		if (cast_expr.StartExprMutable()) {
+			result.Append(cast_expr.StartExprMutable());
 		}
-		if (cast_expr.end_expr) {
-			result.Append(cast_expr.end_expr);
+		if (cast_expr.EndExprMutable()) {
+			result.Append(cast_expr.EndExprMutable());
 		}
-		if (cast_expr.filter_expr) {
-			result.Append(cast_expr.filter_expr);
+		if (cast_expr.FilterMutable()) {
+			result.Append(cast_expr.FilterMutable());
 		}
-		for (auto &order : cast_expr.arg_orders) {
+		for (auto &order : cast_expr.ArgOrdersMutable()) {
 			result.Append(order.expression);
 		}
 		break;

@@ -375,10 +375,10 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	minmax_func.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 
 	auto expr = minmax_func.Bind(context, std::move(arguments));
-	arguments = std::move(expr->children);
+	arguments = std::move(expr->GetChildrenMutable());
 
-	function = std::move(expr->function);
-	return std::move(expr->bind_info);
+	function = std::move(expr->FunctionMutable());
+	return std::move(expr->BindInfoMutable());
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>

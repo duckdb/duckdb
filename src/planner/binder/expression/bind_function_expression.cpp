@@ -254,18 +254,20 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 	auto func = qualifier.QualifyFunction(function);
 	if (!func) {
 		// function was not found - check if we this is a table function (to throw a more helpful error message)
-		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.function_name, error_context);
+		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.FunctionName(),
+		                                      error_context);
 		auto table_func =
-		    GetCatalogEntry(function.catalog, function.schema, table_function_lookup, OnEntryNotFound::RETURN_NULL);
+		    GetCatalogEntry(function.Catalog(), function.Schema(), table_function_lookup, OnEntryNotFound::RETURN_NULL);
 		if (table_func) {
 			throw BinderException(function,
 			                      "Function \"%s\" is a table function but it was used as a scalar function. This "
 			                      "function has to be called in a FROM clause (similar to a table).",
-			                      function.function_name);
+			                      function.FunctionName());
 		}
 		// not a table function - rebind to throw an error
-		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.function_name, error_context);
-		func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.FunctionName(), error_context);
+		func =
+		    GetCatalogEntry(function.Catalog(), function.Schema(), function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	return *func;
 }
@@ -279,10 +281,10 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	case CatalogType::WINDOW_FUNCTION_ENTRY:
 		break;
 	default:
-		if (function.distinct || function.filter || !function.order_bys->orders.empty()) {
+		if (function.Distinct() || function.Filter() || !function.OrderBy()->orders.empty()) {
 			throw InvalidInputException("Function \"%s\" is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
 			                            "applicable to window and aggregate functions.",
-			                            function.function_name, CatalogTypeToString(func.type));
+			                            function.FunctionName(), CatalogTypeToString(func.type));
 		}
 		break;
 	}
@@ -291,7 +293,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	case CatalogType::SCALAR_FUNCTION_ENTRY: {
 		auto child = function.IsLambdaFunction();
 		if (child) {
-			auto syntax_type = child->Cast<LambdaExpression>().syntax_type;
+			auto syntax_type = child->Cast<LambdaExpression>().GetLambdaSyntaxType();
 			return TryBindLambdaOrJson(function, depth, func, syntax_type);
 		}
 		return BindFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
@@ -362,7 +364,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 	FunctionBinder function_binder(binder);
 	auto result = function_binder.BindScalarFunction(func, std::move(children), std::move(keyword_children), error,
-	                                                 function.is_operator, &binder);
+	                                                 function.IsOperator(), &binder);
 	if (!result) {
 		error.AddQueryLocation(function);
 		error.Throw();
@@ -496,7 +498,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	FunctionBinder function_binder(binder);
 	unique_ptr<Expression> result =
-	    function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
+	    function_binder.BindScalarFunction(func, std::move(children), error, function.IsOperator(), &binder);
 	if (!result) {
 		error.AddQueryLocation(function);
 		error.Throw();

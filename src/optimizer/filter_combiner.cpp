@@ -197,7 +197,7 @@ static bool TryGetProjectionIndex(const Expression &expr, ProjectionIndex &resul
 	switch (expr.GetExpressionType()) {
 	case ExpressionType::BOUND_COLUMN_REF: {
 		auto &ref = expr.Cast<BoundColumnRefExpression>();
-		result = ref.binding.column_index;
+		result = ref.Binding().column_index;
 		return true;
 	}
 	case ExpressionType::BOUND_FUNCTION: {
@@ -396,7 +396,7 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 		// empty prefix - skip
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	auto filter_idx = column_ref.binding.column_index;
+	auto filter_idx = column_ref.Binding().column_index;
 	//! Replace prefix with a set of comparisons
 	auto lower_bound = CreateComparisonExpression(*func.children[0], ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 	                                              Value(prefix_string));
@@ -429,7 +429,7 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	//! This is a like function.
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 	auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
-	auto proj_index = column_ref.binding.column_index;
+	auto proj_index = column_ref.Binding().column_index;
 
 	// constant value expr can sometimes be null. if so, push is not null filter, which will
 	// make the filter unsatisfiable and return no results.
@@ -483,7 +483,7 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
-	auto proj_index = column_ref.binding.column_index;
+	auto proj_index = column_ref.Binding().column_index;
 
 	//! check if all children are const expr
 	bool children_constant = true;
@@ -580,9 +580,9 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 		if (!proj_id.IsValid()) {
-			proj_id = column_ref->binding.column_index;
+			proj_id = column_ref->Binding().column_index;
 			col_type = column_ref->GetReturnType();
-		} else if (proj_id != column_ref->binding.column_index) {
+		} else if (proj_id != column_ref->Binding().column_index) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 
@@ -795,7 +795,7 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 
 	// the child of the cast must resolve to a column ref
 	ProjectionIndex proj_index;
-	if (!TryGetProjectionIndex(*cast_expr.child, proj_index)) {
+	if (!TryGetProjectionIndex(cast_expr.Child(), proj_index)) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 
@@ -813,7 +813,7 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	}
 
 	auto push_optional = [&](ExpressionType filter_type, Value filter_val) {
-		auto filter_expr = CreateComparisonExpression(*cast_expr.child, filter_type, std::move(filter_val));
+		auto filter_expr = CreateComparisonExpression(cast_expr.Child(), filter_type, std::move(filter_val));
 		table_filters.PushFilter(proj_index, CreateOptionalExpressionFilter(std::move(filter_expr), source_type));
 	};
 
@@ -1132,27 +1132,27 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundFunctionExpression &compa
 			break;
 		}
 		auto &bound_cast_expr = right_node.get().Cast<BoundCastExpression>();
-		if (bound_cast_expr.child->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		if (bound_cast_expr.Child().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			break;
 		}
-		auto &col_ref = bound_cast_expr.child->Cast<BoundColumnRefExpression>();
+		auto &col_ref = bound_cast_expr.Child().Cast<BoundColumnRefExpression>();
 		for (auto &stored_exp : stored_expressions) {
 			const_reference<Expression> expr = stored_exp.first;
 			if (expr.get().GetExpressionType() == ExpressionType::OPERATOR_CAST) {
-				expr = *(right_node.get().Cast<BoundCastExpression>().child);
+				expr = right_node.get().Cast<BoundCastExpression>().Child();
 			}
 			if (expr.get().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				continue;
 			}
 			auto &st_col_ref = expr.get().Cast<BoundColumnRefExpression>();
-			if (st_col_ref.binding != col_ref.binding) {
+			if (st_col_ref.Binding() != col_ref.Binding()) {
 				continue;
 			}
 			if (bound_cast_expr.GetReturnType() != stored_exp.second->GetReturnType()) {
 				continue;
 			}
-			bound_cast_expr.child = stored_exp.second->Copy();
-			right_node = GetNode(*bound_cast_expr.child);
+			bound_cast_expr.ChildMutable() = stored_exp.second->Copy();
+			right_node = GetNode(*bound_cast_expr.ChildMutable());
 			break;
 		}
 	} while (false);

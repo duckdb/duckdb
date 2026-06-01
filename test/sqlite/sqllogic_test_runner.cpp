@@ -983,7 +983,12 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					parser.Fail("set variable requires two parameters (name value)");
 				}
 				auto &var_name = token.parameters[1];
-				auto &var_value = token.parameters[2];
+				auto var_value = token.parameters[2];
+				if (IsVariableReplacement(var_value)) {
+					string variable_name;
+					auto val = GetVariableReplacement(var_value, variable_name);
+					var_value = val.ToString();
+				}
 				environment_variables[var_name] = var_value;
 			} else {
 				parser.Fail("unrecognized set parameter: %s", token.parameters[0]);

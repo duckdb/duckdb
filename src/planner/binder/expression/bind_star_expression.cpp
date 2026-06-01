@@ -185,9 +185,9 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	                                     "ilike_escape",
 	                                     "not_ilike_escape",
 	                                     "like_escape"};
-	if (supported_ops.count(function.function_name) == 0) {
+	if (supported_ops.count(function.FunctionName()) == 0) {
 		// unsupported op for * expression
-		throw BinderException(*root, "Function \"%s\" cannot be applied to a star expression", function.function_name);
+		throw BinderException(*root, "Function \"%s\" cannot be applied to a star expression", function.FunctionName());
 	}
 	auto &right = function.GetArgumentsMutable()[1];
 	if (right.GetExpression().GetExpressionClass() != ExpressionClass::CONSTANT) {
@@ -202,7 +202,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	auto original_alias = root->GetAlias();
 	auto star_expr = std::move(left);
 	unique_ptr<ParsedExpression> child_expr;
-	if (!inverse && function.function_name == "regexp_full_match" && star.ExcludeList().empty()) {
+	if (!inverse && function.FunctionName() == "regexp_full_match" && star.ExcludeList().empty()) {
 		// * SIMILAR TO '[regex]' is equivalent to COLUMNS('[regex]') so we can just move the expression directly
 		child_expr = std::move(right.GetExpressionMutable());
 	} else {

@@ -47,7 +47,7 @@ void LogicalRecursiveCTE::ResolveTypes() {
 	for (auto &key_target : key_targets) {
 		D_ASSERT(key_target->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF);
 		auto &bound_ref = key_target->Cast<BoundColumnRefExpression>();
-		key_idx.insert(bound_ref.binding.column_index);
+		key_idx.insert(bound_ref.Binding().column_index);
 	}
 
 	idx_t pay_idx = 0;

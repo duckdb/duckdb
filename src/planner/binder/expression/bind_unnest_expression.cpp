@@ -75,7 +75,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		return BindResult(BinderException(function, UnsupportedUnnestMessage()));
 	}
 
-	if (function.distinct || function.filter || !function.order_bys->orders.empty()) {
+	if (function.Distinct() || function.Filter() || !function.OrderBy()->orders.empty()) {
 		throw InvalidInputException("\"DISTINCT\", \"FILTER\", and \"ORDER BY\" are not "
 		                            "applicable to \"UNNEST\"");
 	}

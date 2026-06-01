@@ -131,8 +131,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	this->inside_aggregate = true;
 	auto initial_bound_column_count = GetBoundColumns().size();
 	// Now we bind the filter (if any)
-	if (aggr.filter) {
-		BindChild(aggr.filter, 0, error);
+	if (aggr.Filter()) {
+		BindChild(aggr.FilterMutable(), 0, error);
 	}
 	inside_aggregate_filter = false;
 
@@ -142,15 +142,15 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	// and only inject the ordering expression if there are too few.
 	idx_t ordered_set_agg = 0;
 	bool negate_fractions = false;
-	if (aggr.order_bys && aggr.order_bys->orders.size() == 1) {
-		const auto &func_name = aggr.function_name;
+	if (aggr.OrderBy() && aggr.OrderBy()->orders.size() == 1) {
+		const auto &func_name = aggr.FunctionName();
 		if (func_name == "mode") {
 			ordered_set_agg = 1;
 		} else if (func_name == "quantile_cont" || func_name == "quantile_disc") {
 			ordered_set_agg = 2;
 
 			auto &config = DBConfig::GetConfig(context);
-			const auto &order = aggr.order_bys->orders[0];
+			const auto &order = aggr.OrderBy()->orders[0];
 			const auto sense = config.ResolveOrder(context, order.type);
 			negate_fractions = (sense == OrderType::DESCENDING);
 		}
@@ -166,8 +166,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	}
 
 	// Bind the ORDER BYs, if any
-	if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
-		for (auto &order : aggr.order_bys->orders) {
+	if (aggr.OrderBy() && !aggr.OrderBy()->orders.empty()) {
+		for (auto &order : aggr.OrderByMutable()->orders) {
 			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &const_expr = order.expression->Cast<ConstantExpression>();
 				if (!const_expr.GetValue().type().IsIntegral()) {
@@ -204,17 +204,17 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				ExtractCorrelatedExpressions(binder, *bound_expr);
 			}
 
-			if (aggr.filter) {
-				auto result = BindCorrelatedColumns(aggr.filter, error);
+			if (aggr.Filter()) {
+				auto result = BindCorrelatedColumns(aggr.FilterMutable(), error);
 				// if there is still an error after this, we could not successfully bind the aggregate
 				if (result.HasError()) {
 					result.error.Throw();
 				}
-				auto &bound_expr = BoundExpression::GetExpression(*aggr.filter);
+				auto &bound_expr = BoundExpression::GetExpression(*aggr.Filter());
 				ExtractCorrelatedExpressions(binder, *bound_expr);
 			}
-			if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
-				for (auto &order : aggr.order_bys->orders) {
+			if (aggr.OrderBy() && !aggr.OrderBy()->orders.empty()) {
+				for (auto &order : aggr.OrderByMutable()->orders) {
 					auto result = BindCorrelatedColumns(order.expression, error);
 					if (result.HasError()) {
 						result.error.Throw();
@@ -231,8 +231,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		return BindResult("Aggregate with only constant parameters has to be bound in the root subquery");
 	}
 
-	if (aggr.filter) {
-		auto &child = BoundExpression::GetExpression(*aggr.filter);
+	if (aggr.Filter()) {
+		auto &child = BoundExpression::GetExpression(*aggr.Filter());
 		bound_filter = BoundCastExpression::AddCastToType(context, std::move(child), LogicalType::BOOLEAN);
 	}
 
@@ -242,10 +242,10 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	vector<pair<string, unique_ptr<Expression>>> keyword_children;
 
 	if (ordered_set_agg) {
-		const bool order_sensitive = (aggr.function_name == "mode");
+		const bool order_sensitive = (aggr.FunctionName() == "mode");
 		// Inject missing ordering arguments
 		if (aggr.GetArguments().size() < ordered_set_agg) {
-			for (auto &order : aggr.order_bys->orders) {
+			for (auto &order : aggr.OrderByMutable()->orders) {
 				auto &child = BoundExpression::GetExpression(*order.expression);
 				// types.push_back(child->GetReturnType());
 				if (order_sensitive) {
@@ -256,7 +256,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 			}
 		}
 		if (!order_sensitive) {
-			aggr.order_bys->orders.clear();
+			aggr.OrderByMutable()->orders.clear();
 		}
 	}
 
@@ -290,10 +290,10 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
 	unique_ptr<BoundOrderModifier> order_bys;
-	if (!aggr.order_bys->orders.empty()) {
+	if (!aggr.OrderBy()->orders.empty()) {
 		order_bys = make_uniq<BoundOrderModifier>();
 		auto &config = DBConfig::GetConfig(context);
-		for (auto &order : aggr.order_bys->orders) {
+		for (auto &order : aggr.OrderByMutable()->orders) {
 			auto &order_expr = BoundExpression::GetExpression(*order.expression);
 			PushCollation(context, order_expr, order_expr->GetReturnType());
 			const auto sense = config.ResolveOrder(context, order.type);
@@ -303,7 +303,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	}
 
 	// If the aggregate is DISTINCT then the ORDER BYs need to be functional dependencies of the arguments.
-	if (aggr.distinct && order_bys) {
+	if (aggr.Distinct() && order_bys) {
 		bool in_args = true;
 		for (const auto &order_by : order_bys->orders) {
 			in_args &= IsFunctionallyDependent(order_by.expression, children);
@@ -318,7 +318,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	FunctionBinder function_binder(binder);
 	auto aggregate = function_binder.BindAggregateFunction(
 	    func, std::move(children), std::move(keyword_children), error, std::move(bound_filter),
-	    aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
+	    aggr.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
 	// No function found, throw an error
 	if (!aggregate) {
 		error.AddQueryLocation(aggr);
@@ -327,17 +327,17 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// If the function cannot be used as an aggregate, but can be used as a window function, throw a specific error
 	// message
-	if (!aggregate->function.CanAggregate() && aggregate->function.CanWindow()) {
+	if (!aggregate->Function().CanAggregate() && aggregate->Function().CanWindow()) {
 		auto msg = StringUtil::Format("Function '%s' can only be used as a window function", func.name);
 		error = BinderException(msg);
 		error.AddQueryLocation(aggr);
 		error.Throw();
 	}
 
-	if (aggr.export_state) {
+	if (aggr.ExportState()) {
 		aggregate = ExportAggregateFunction::Bind(std::move(aggregate));
 	}
-	aggregate->order_bys = std::move(order_bys);
+	aggregate->GetOrderBysMutable() = std::move(order_bys);
 
 	// check for all the aggregates if this aggregate already exists
 	ProjectionIndex aggr_index;
