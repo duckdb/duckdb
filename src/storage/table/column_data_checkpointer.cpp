@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/storage/compression/standard_compression_state.hpp"
 
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
@@ -88,7 +89,7 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpoint
 	CreateIntermediateVector(checkpoint_states, intermediate);
 }
 
-void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
+void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &)> &callback) {
 	auto &first_state = checkpoint_states[0];
 	auto &col_data = first_state.get().original_column;
 
@@ -107,7 +108,8 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 			scan_state.offset_in_column = segment_node.GetRowStart() + base_row_index;
 
 			col_data.CheckpointScan(segment, scan_state, count, scan_vector);
-			callback(scan_vector, count);
+			scan_vector.BufferMutable().SetVectorSize(count);
+			callback(scan_vector);
 		}
 	}
 }
@@ -190,7 +192,7 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 	InitAnalyze();
 
 	// scan over all the segments and run the analyze step
-	ScanSegments([&](Vector &scan_vector, idx_t count) {
+	ScanSegments([&](Vector &scan_vector) {
 		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 			auto &functions = compression_functions[i];
 			auto &states = analyze_states[i];
@@ -201,7 +203,7 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 				if (!state) {
 					continue;
 				}
-				if (!func->analyze(*state, scan_vector, count)) {
+				if (!func->analyze(*state, scan_vector)) {
 					state = nullptr;
 					func = nullptr;
 				}
@@ -336,11 +338,11 @@ void ColumnDataCheckpointer::WriteToDisk() { // Analyze the candidate functions 
 	}
 
 	// Scan over the existing segment + changes and compress the data
-	ScanSegments([&](Vector &scan_vector, idx_t count) {
+	ScanSegments([&](Vector &scan_vector) {
 		for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 			auto &function = analyze_result[i].function;
 			auto &compression_state = compression_states[i];
-			function->compress(*compression_state, scan_vector, count);
+			function->compress(*compression_state, scan_vector);
 		}
 	});
 
@@ -378,7 +380,7 @@ void ColumnDataCheckpointer::WritePersistentSegments(ColumnCheckpointState &stat
 		current_row += segment.count;
 
 		// merge the persistent stats into the global column stats
-		state.global_stats->Merge(segment.stats.statistics);
+		state.global_stats->Merge(segment.GetStats());
 		state.data_pointers.push_back(std::move(pointer));
 	}
 	if (error_segment_start.IsValid()) {

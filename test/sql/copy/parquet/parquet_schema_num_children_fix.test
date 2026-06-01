@@ -28,9 +28,6 @@
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 # Test 1: Verify the schema with EMPTY GROUP is correctly parsed
 # The file has an empty group 'inner' with num_children=0 and no type set
 # Old code would fail to recognize this as an inner node

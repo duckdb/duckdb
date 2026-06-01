@@ -793,7 +793,7 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 	input_data.get_next(&input_data, &prepared_array);
 
 	// Create the schema
-	db.Query("CREATE SCHEMA " + KeywordHelper::WriteOptionallyQuoted(schema_name));
+	db.Query("CREATE SCHEMA " + SQLIdentifier(schema_name));
 
 	// Create ADBC statement that will create a table called "test"
 	AdbcStatement adbc_stmt;
@@ -827,8 +827,7 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 	}
 
 	// Check we can query
-	auto schema_table =
-	    KeywordHelper::WriteOptionallyQuoted(schema_name) + "." + KeywordHelper::WriteOptionallyQuoted(table_name);
+	auto schema_table = SQLIdentifier(schema_name) + "." + SQLIdentifier(table_name);
 	auto res = db.Query("select * from " + schema_table);
 	for (size_t i = 0; i < column_names.size(); i++) {
 		REQUIRE((res->ColumnName(i) == column_names.at(i)));
@@ -3171,7 +3170,7 @@ TEST_CASE("Test AdbcConnectionGetObjects - empty list not NULL", "[adbc]") {
 		                                         "nonexistent_table", nullptr, nullptr, &arrow_stream, &adbc_error)));
 		db.CreateTable("result", arrow_stream);
 		auto res = db.Query(R"(
-			SELECT list_transform(catalog_db_schemas, s -> s.db_schema_tables) AS tables
+			SELECT list_transform(catalog_db_schemas, lambda s: s.db_schema_tables) AS tables
 			FROM result WHERE catalog_name = 'test_empty_list'
 		)");
 		REQUIRE(res->RowCount() == 1);

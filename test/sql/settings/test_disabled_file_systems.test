@@ -4,9 +4,6 @@
 
 require skip_reload
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT current_setting('disabled_filesystems')
 ----

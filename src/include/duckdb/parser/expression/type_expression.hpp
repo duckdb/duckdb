@@ -28,8 +28,14 @@ public:
 	const string &GetSchema() const {
 		return schema;
 	}
+	void SetSchema(string new_schema) {
+		schema = std::move(new_schema);
+	}
 	const string &GetCatalog() const {
 		return catalog;
+	}
+	void SetCatalog(string new_catalog) {
+		catalog = std::move(new_catalog);
 	}
 	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
 		return children;
@@ -43,7 +49,7 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	static bool Equal(const TypeExpression &a, const TypeExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
 	hash_t Hash() const override;
 
 	void Serialize(Serializer &serializer) const override;

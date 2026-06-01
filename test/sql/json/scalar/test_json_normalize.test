@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # Simple object key sorting
 query T
 SELECT json_normalize('{"z":1,"a":2,"m":3}')

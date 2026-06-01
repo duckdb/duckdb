@@ -66,7 +66,7 @@ public:
 					}
 					const idx_t to_read = MinValue(block_size, file_size - offset);
 					auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, to_read);
-					file_handle.Read(context, buf.Ptr(), to_read, offset);
+					file_handle.Read(context, buf.GetDataMutable(), to_read, offset);
 
 					lk.lock();
 					block->block_handle = buf.GetBlockHandle();
@@ -140,6 +140,29 @@ unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(QueryContext context, 
 // CachingFileHandle
 //===----------------------------------------------------------------------===//
 
+bool CachingFileHandle::StripForceFullDownloadIfPresent() {
+	auto &extended_info_p = path.extended_info;
+	if (!extended_info_p) {
+		return false;
+	}
+
+	auto &extended_info = *extended_info_p;
+	const bool contains_force_full_download = extended_info.options.count("force_full_download");
+	if (!contains_force_full_download) {
+		return false;
+	}
+
+	//! We do have 'force_full_download' - strip it
+	auto new_extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	*new_extended_info = extended_info;
+	new_extended_info->options.erase("force_full_download");
+	if (!new_extended_info->options.count("file_size")) {
+		new_extended_info->options["file_size"] = Value::UBIGINT(GetFileSize());
+	}
+	path.extended_info = new_extended_info;
+	return true;
+}
+
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
                                      const OpenFileInfo &path_p, FileOpenFlags flags_p,
                                      optional_ptr<FileOpener> opener_p, CachedFile &cached_file_p)
@@ -161,6 +184,10 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
 	}
 	if (needs_open) {
 		GetFileHandle();
+	}
+	auto needs_full_download = StripForceFullDownloadIfPresent();
+	if (needs_full_download) {
+		Read(GetFileSize(), 0);
 	}
 }
 
@@ -185,6 +212,7 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 			                                last_modified)) {
 				annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
 				cached_file.blocks.clear();
+				cached_file.cached_block_size.SetInvalid();
 			}
 			cached_file.file_size = file_handle->GetFileSize();
 			cached_file.last_modified = last_modified;
@@ -203,29 +231,19 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 
 	if (!external_file_cache.IsEnabled()) {
 		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-		GetFileHandle().Read(context, buf.Ptr(), nr_bytes, location);
+		GetFileHandle().Read(context, buf.GetDataMutable(), nr_bytes, location);
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});
 		return FileBufferHandleGroup(std::move(mem_handles));
 	}
 
-	const idx_t block_size = ExternalFileCache::GetCacheBlockSize(cached_file.path);
+	const idx_t block_size = external_file_cache.GetCacheBlockSize(cached_file.path);
 	const idx_t first_block = location / block_size;
 	const idx_t last_block = (location + nr_bytes - 1) / block_size;
 	const idx_t num_blocks = last_block - first_block + 1;
 
-	vector<shared_ptr<CacheBlock>> blocks(num_blocks);
-	{
-		annotated_lock_guard<annotated_mutex> guard(cached_file.map_lock);
-		for (idx_t idx = 0; idx < num_blocks; idx++) {
-			const idx_t block_idx = first_block + idx;
-			auto &entry = cached_file.blocks[block_idx];
-			if (!entry) {
-				entry = make_shared_ptr<CacheBlock>();
-			}
-			blocks[idx] = entry;
-		}
-	}
+	// Atomically reindex (if needed) and acquire the block range.
+	auto blocks = external_file_cache.ReindexAndAcquireBlocks(cached_file, block_size, first_block, num_blocks);
 
 	// Schedule block fetch tasks for all blocks.
 	vector<BufferHandle> pins(num_blocks);
@@ -276,7 +294,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
 	if (!external_file_cache.IsEnabled() || !CanSeek()) {
 		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buf.Ptr(), nr_bytes));
+		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buf.GetDataMutable(), nr_bytes));
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});
 		position += nr_bytes;

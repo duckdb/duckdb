@@ -3,7 +3,7 @@
 namespace duckdb {
 
 //! Pretty Print a given JSON Document
-string_t PrettyPrint(yyjson_val *val, yyjson_alc *alc, Vector &, ValidityMask &, idx_t) {
+optional<string_t> PrettyPrint(yyjson_val *val, yyjson_alc *alc, Vector &) {
 	D_ASSERT(alc);
 	size_t len_size_t;
 	auto data = yyjson_val_write_opts(val, JSONCommon::WRITE_PRETTY_FLAG, alc, &len_size_t, nullptr);

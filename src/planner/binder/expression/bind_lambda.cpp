@@ -66,18 +66,19 @@ static bool IsDoubleArrowRHS(const ParsedExpression &expr) {
 		return false;
 	}
 	auto &func = expr.Cast<FunctionExpression>();
-	return func.is_operator && func.function_name == "->>" && func.children.size() == 2;
+	return func.IsOperator() && func.FunctionName() == "->>" && func.GetChildren().size() == 2;
 }
 
 static unique_ptr<ParsedExpression> RestructureArrowChain(LambdaExpression &expr) {
-	auto &rhs_func = expr.expr->Cast<FunctionExpression>();
-	auto inner_lambda = make_uniq<LambdaExpression>(std::move(expr.lhs), std::move(rhs_func.children[0]));
-	inner_lambda->syntax_type = expr.syntax_type;
+	auto &rhs_func = expr.RightMutable()->Cast<FunctionExpression>();
+	auto inner_lambda =
+	    make_uniq<LambdaExpression>(std::move(expr.LeftMutable()), std::move(rhs_func.GetChildrenMutable()[0]));
+	inner_lambda->GetLambdaSyntaxTypeMutable() = expr.GetLambdaSyntaxType();
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(inner_lambda));
-	children.push_back(std::move(rhs_func.children[1]));
+	children.push_back(std::move(rhs_func.GetChildrenMutable()[1]));
 	auto restructured = make_uniq<FunctionExpression>("->>", std::move(children));
-	restructured->is_operator = true;
+	restructured->IsOperatorMutable() = true;
 	return std::move(restructured);
 }
 
@@ -85,32 +86,33 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
                                             const vector<LogicalType> &function_child_types,
                                             optional_ptr<bind_lambda_function_t> bind_lambda_function,
                                             optional_ptr<BindLambdaContext> bind_lambda_context) {
-	if (expr.syntax_type == LambdaSyntaxType::LAMBDA_KEYWORD && !bind_lambda_function) {
+	if (expr.GetLambdaSyntaxType() == LambdaSyntaxType::LAMBDA_KEYWORD && !bind_lambda_function) {
 		return BindResult("invalid lambda expression");
 	}
 
 	if (!bind_lambda_function) {
 		// The PEG parser produces A -> (B ->> C) where the standard parser left-associates to (A -> B) ->> C.
 		// Restructure to match standard behavior before binding.
-		if (IsDoubleArrowRHS(*expr.expr)) {
+		if (IsDoubleArrowRHS(expr.Right())) {
 			unique_ptr<ParsedExpression> restructured = RestructureArrowChain(expr);
 			return BindExpression(restructured, depth);
 		}
 
 		// This is not a lambda expression, but the JSON arrow operator.
 		// Remember the original expression in case of a binding error.
-		if (!expr.copied_expr) {
-			expr.copied_expr = expr.expr->Copy();
+		if (!expr.CopiedExprMutable()) {
+			expr.CopiedExprMutable() = expr.Right().Copy();
 		}
-		OperatorExpression arrow_expr(ExpressionType::ARROW, std::move(expr.lhs), std::move(expr.expr));
+		OperatorExpression arrow_expr(ExpressionType::ARROW, std::move(expr.LeftMutable()),
+		                              std::move(expr.RightMutable()));
 		auto bind_result = BindExpression(arrow_expr, depth);
 
 		// The arrow_expr now might contain bound nodes.
 		// Restore the original expression.
 		if (bind_result.HasError()) {
-			D_ASSERT(arrow_expr.children.size() == 2);
-			expr.lhs = std::move(arrow_expr.children[0]);
-			expr.expr = std::move(arrow_expr.children[1]);
+			D_ASSERT(arrow_expr.GetChildrenMutable().size() == 2);
+			expr.LeftMutable() = std::move(arrow_expr.GetChildrenMutable()[0]);
+			expr.RightMutable() = std::move(arrow_expr.GetChildrenMutable()[1]);
 		}
 		return bind_result;
 	}
@@ -138,10 +140,10 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	DummyBinding new_lambda_binding(column_types, column_names, table_alias);
 	lambda_bindings->push_back(new_lambda_binding);
 
-	if (expr.copied_expr) {
-		expr.expr = std::move(expr.copied_expr);
+	if (expr.CopiedExprMutable()) {
+		expr.RightMutable() = std::move(expr.CopiedExprMutable());
 	}
-	auto result = BindExpression(expr.expr, depth, false);
+	auto result = BindExpression(expr.RightMutable(), depth, false);
 	lambda_bindings->pop_back();
 
 	// successfully bound a subtree of nested lambdas, set this to nullptr in case other parts of the
@@ -207,7 +209,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 	offset += bound_lambda_expr.parameter_count;
 	offset += bound_lambda_expr.captures.size();
 
-	replacement = make_uniq<BoundReferenceExpression>(original->GetAlias(), original->return_type, offset);
+	replacement = make_uniq<BoundReferenceExpression>(original->GetAlias(), original->GetReturnType(), offset);
 	bound_lambda_expr.captures.push_back(std::move(original));
 }
 
@@ -234,7 +236,7 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
 	    expr->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA_REF) {
 		if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 			// Search for UNNEST.
-			auto &column_binding = expr->Cast<BoundColumnRefExpression>().binding;
+			auto &column_binding = expr->Cast<BoundColumnRefExpression>().Binding();
 			ThrowIfUnnestInLambda(column_binding);
 		}
 

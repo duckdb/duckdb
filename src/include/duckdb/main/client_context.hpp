@@ -29,11 +29,13 @@
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/main/query_context.hpp"
 #include "duckdb/main/query_parameters.hpp"
 
 namespace duckdb {
 
 class Appender;
+class AttachedDatabase;
 class Catalog;
 class CatalogSearchPath;
 class ColumnDataCollection;
@@ -97,6 +99,20 @@ public:
 	TransactionContext transaction;
 
 public:
+	//! Connect this client to a remote-style AttachedDatabase. Subsequent non-control SQL routes via
+	//! Catalog::GetConnectFunctionName. Use DisconnectFromCatalog() to revert to LOCAL.
+	DUCKDB_API void ConnectToCatalog(const shared_ptr<AttachedDatabase> &target);
+	//! Clear any active CONNECT; subsequent SQL goes through the normal DuckDB pipeline.
+	DUCKDB_API void DisconnectFromCatalog();
+	//! True iff a CONNECT is currently active (even if the target was detached out from under us).
+	DUCKDB_API bool IsConnected() const {
+		return is_connected;
+	}
+	//! Resolve the currently-connected AttachedDatabase. Returns nullptr if not connected or if the
+	//! target has been detached out from under us (in that case IsConnected() is still true — call it
+	//! directly to disambiguate "never connected" from "was connected, target was detached elsewhere").
+	DUCKDB_API shared_ptr<AttachedDatabase> TryGetConnectedCatalog() const;
+
 	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
 	}
@@ -254,10 +270,8 @@ private:
 
 	//! Parse statements from a query
 	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
-	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
-	//! true.
-	ErrorData VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                      PendingQueryParameters parameters);
+	void StatementVerification(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> &statement,
+	                           PendingQueryParameters query_parameters);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
@@ -333,6 +347,11 @@ private:
 	QueryProgress query_progress;
 	//! The connection corresponding to this client context
 	connection_t connection_id;
+	//! Routing target for SQL execution while CONNECT-ed (CONNECT/DISCONNECT). When is_connected is
+	//! true and connected_to_database can be locked, the chokepoint dispatches non-control SQL via
+	//! `Catalog::RemoteExecute(string)` and wraps the returned TableRef into a SelectStatement.
+	weak_ptr<AttachedDatabase> connected_to_database;
+	bool is_connected = false;
 };
 
 class ClientContextLock {
@@ -345,29 +364,6 @@ public:
 
 private:
 	lock_guard<mutex> client_guard;
-};
-
-//! The QueryContext wraps an optional client context.
-//! It makes query-related information available to operations.
-class QueryContext {
-public:
-	QueryContext() : context(nullptr) {
-	}
-	QueryContext(optional_ptr<ClientContext> context) : context(context) { // NOLINT: allow implicit construction
-	}
-	QueryContext(ClientContext &context) : context(&context) { // NOLINT: allow implicit construction
-	}
-
-public:
-	bool Valid() const {
-		return context != nullptr;
-	}
-	optional_ptr<ClientContext> GetClientContext() const {
-		return context;
-	}
-
-private:
-	optional_ptr<ClientContext> context;
 };
 
 } // namespace duckdb

@@ -19,7 +19,7 @@ static unique_ptr<FunctionData> ListTransformBind(BindScalarFunctionInput &input
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-	bound_function.SetReturnType(LogicalType::LIST(bound_lambda_expr.lambda_expr->return_type));
+	bound_function.SetReturnType(LogicalType::LIST(bound_lambda_expr.lambda_expr->GetReturnType()));
 	auto has_index = bound_lambda_expr.parameter_count == 2;
 	return LambdaFunctions::ListLambdaBind(context, bound_function, arguments, has_index);
 }

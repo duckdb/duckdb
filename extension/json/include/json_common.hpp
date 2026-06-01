@@ -326,13 +326,12 @@ public:
 
 public:
 	//! Same as BigQuery json_value
-	static inline string_t JSONValue(yyjson_val *val, yyjson_alc *alc, Vector &, ValidityMask &mask, idx_t idx) {
+	static inline optional<string_t> JSONValue(yyjson_val *val, yyjson_alc *alc, Vector &) {
 		switch (yyjson_get_tag(val)) {
 		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
 		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
 		case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
-			mask.SetInvalid(idx);
-			return string_t {};
+			return nullopt;
 		default:
 			return JSONCommon::WriteVal<yyjson_val>(val, alc);
 		}

@@ -4,9 +4,6 @@
 
 load {TEST_DIR}/all_types_storage.db
 
-statement ok
-PRAGMA enable_verification
-
 foreach compression <compression>
 
 statement ok

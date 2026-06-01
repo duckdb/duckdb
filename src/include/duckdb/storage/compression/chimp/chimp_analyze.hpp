@@ -25,7 +25,7 @@ unique_ptr<AnalyzeState> ChimpInitAnalyze(ColumnData &col_data, PhysicalType typ
 }
 
 template <class T>
-bool ChimpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
+bool ChimpAnalyze(AnalyzeState &state, const Vector &input) {
 	throw InternalException("Chimp has been deprecated, can no longer be used to compress data");
 	return false;
 }

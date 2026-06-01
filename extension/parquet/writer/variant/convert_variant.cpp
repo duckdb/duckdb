@@ -173,6 +173,8 @@ static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type)
 		return {VariantLogicalType::TIME_MICROS};
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return {VariantLogicalType::TIMESTAMP_MICROS_TZ};
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return {VariantLogicalType::TIMESTAMP_NANOS_TZ};
 	case LogicalTypeId::TIMESTAMP:
 		return {VariantLogicalType::TIMESTAMP_MICROS};
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -563,9 +565,18 @@ static void WritePrimitiveValueData(const UnifiedVariantVectorData &variant, idx
 	case VariantLogicalType::DECIMAL: {
 		auto decimal_data = VariantUtils::DecodeDecimalData(variant, row, values_index);
 
-		if (decimal_data.width <= 4 || decimal_data.width > 38) {
+		if (decimal_data.width > 38) {
 			throw InvalidInputException("Can't convert VARIANT DECIMAL(%d, %d) to Parquet VARIANT", decimal_data.width,
 			                            decimal_data.scale);
+		} else if (decimal_data.width <= 4) {
+			// DuckDB uses INT16 to store small decimals, but parquet only supports DECIMAL4 at minimum, so here we
+			// promote to INT32.
+			WritePrimitiveTypeHeader<VariantPrimitiveType::DECIMAL4>(value_data);
+			Store<int8_t>(NumericCast<int8_t>(decimal_data.scale), value_data);
+			value_data++;
+			const int32_t promoted = Load<int16_t>(decimal_data.value_ptr);
+			Store<int32_t>(promoted, value_data);
+			value_data += sizeof(int32_t);
 		} else if (decimal_data.width <= 9) {
 			WritePrimitiveTypeHeader<VariantPrimitiveType::DECIMAL4>(value_data);
 			Store<int8_t>(NumericCast<int8_t>(decimal_data.scale), value_data);
@@ -898,11 +909,11 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	// - metadata = BLOB
 	// - value = BLOB
 
-	auto &variant_vec = input.data[0];
+	const auto &variant_vec = input.data[0];
 	auto count = input.size();
 
 	RecursiveUnifiedVectorFormat recursive_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, count, recursive_format);
+	Vector::RecursiveToUnifiedFormat(variant_vec, recursive_format);
 	UnifiedVariantVectorData variant(recursive_format);
 
 	auto &result_vectors = StructVector::GetEntries(result);

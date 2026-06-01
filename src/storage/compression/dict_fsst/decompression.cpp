@@ -43,7 +43,7 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t
 }
 
 void CompressedStringScanState::Initialize(bool initialize_dictionary) {
-	baseptr = handle->Ptr() + segment.GetBlockOffset();
+	baseptr = handle->GetDataMutable() + segment.GetBlockOffset();
 
 	// Load header values
 	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(baseptr);
@@ -101,7 +101,7 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 		return;
 	}
 
-	dictionary = DictionaryVector::CreateReusableDictionary(segment.type, dict_count);
+	dictionary = DictionaryVector::CreateReusableDictionary(segment.GetType(), dict_count);
 	auto &dict_data = dictionary->data;
 	auto dict_child_data = FlatVector::GetDataMutable<string_t>(dict_data);
 	auto &validity = FlatVector::ValidityMutable(dict_data);
@@ -187,7 +187,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 			result_data.WriteStringRef(FetchStringFromDict(result, decompress_offset, string_number));
 		}
 	}
-	result.Verify(result_offset + scan_count);
+	result.Verify();
 }
 
 void CompressedStringScanState::Select(Vector &result, idx_t start, const SelectionVector &sel, idx_t sel_count) {
@@ -228,7 +228,7 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 
 	auto &selvec = GetSelVec(start, scan_count);
 	result.Dictionary(dictionary, selvec, scan_count);
-	result.Verify(result_offset + scan_count);
+	result.Verify();
 }
 
 } // namespace dict_fsst

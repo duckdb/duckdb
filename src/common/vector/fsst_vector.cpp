@@ -14,7 +14,7 @@ void VectorFSSTStringBuffer::SetVectorType(VectorType new_vector_type) {
 	throw InternalException("SetVectorType not supported for FSST vector");
 }
 
-void VectorFSSTStringBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+void VectorFSSTStringBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(type.InternalType() == PhysicalType::VARCHAR);
 	D_ASSERT(vector_type == VectorType::FSST_VECTOR);
 }
@@ -113,11 +113,6 @@ void FSSTVector::Create(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder, c
 void FSSTVector::SetCount(Vector &vector, idx_t count) {
 	auto &fsst_string_buffer = GetFSSTBuffer(vector);
 	fsst_string_buffer.SetCount(count);
-}
-
-idx_t FSSTVector::GetCount(const Vector &vector) {
-	auto &fsst_string_buffer = GetFSSTBuffer(vector);
-	return fsst_string_buffer.GetCount();
 }
 
 } // namespace duckdb

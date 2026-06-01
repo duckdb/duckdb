@@ -21,6 +21,18 @@ namespace duckdb {
 Parser::Parser(ParserOptions options_p) : options(options_p) {
 }
 
+Parser::~Parser() = default;
+
+ParserCache &Parser::GetCache() {
+	if (options.parser_cache) {
+		return *options.parser_cache;
+	}
+	if (!local_cache) {
+		local_cache = make_uniq<ParserCache>();
+	}
+	return *local_cache;
+}
+
 static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<UnicodeSpace> &unicode_spaces) {
 	if (unicode_spaces.empty()) {
 		// no unicode spaces found
@@ -247,14 +259,16 @@ void Parser::ParseQuery(const string &query) {
 		}
 	}
 	// PEG parser: tokenize then transform
-	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
+	auto &cache = GetCache();
+	auto peg_matcher = cache.GetMatcher();
+	auto peg_factory = cache.GetTransformerFactory();
 
 	vector<MatcherToken> tokens;
 	ParserTokenizer tokenizer(query, tokens);
 	tokenizer.TokenizeInput();
 	if (!tokens.empty()) {
 		try {
-			auto peg_statements = PEGTransformerFactory::Transform(tokens, options, peg_matcher->Root());
+			auto peg_statements = peg_factory->Transform(tokens, options, peg_matcher->Root());
 			for (auto &stmt : peg_statements) {
 				statements.push_back(std::move(stmt));
 			}

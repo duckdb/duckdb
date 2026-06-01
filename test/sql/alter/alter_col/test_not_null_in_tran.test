@@ -2,9 +2,6 @@
 # description: Test Set/Drop NOT NULL in transaction
 # group: [alter_col]
 
-statement ok
-PRAGMA enable_verification
-
 # Scenario #1, alter with uncommitted data
 statement ok
 CREATE TABLE t(i INTEGER, j INTEGER)
@@ -229,7 +226,7 @@ COMMIT
 statement ok
 INSERT INTO t VALUES(NULL)
 
-mode skip
+mode skip instable
 # Scenario #5, Insert null, delete null locally, then alter
 statement ok
 DROP TABLE IF EXISTS t

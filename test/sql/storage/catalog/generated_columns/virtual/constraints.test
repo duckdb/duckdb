@@ -2,9 +2,6 @@
 # description: Constraints combined with generated columns
 # group: [virtual]
 
-statement ok
-PRAGMA enable_verification
-
 # load the DB from disk
 load {TEST_DIR}/generated_column_storage.db
 

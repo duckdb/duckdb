@@ -17,7 +17,7 @@ CreateIndexInfo::CreateIndexInfo(const duckdb::CreateIndexInfo &info)
 static void RemoveTableQualificationRecursive(unique_ptr<ParsedExpression> &root_expr, const string &table_name) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
 	    *root_expr, [&](ColumnRefExpression &col_ref) {
-		    auto &col_names = col_ref.column_names;
+		    auto &col_names = col_ref.ColumnNamesMutable();
 		    if (col_ref.IsQualified() && col_ref.GetTableName() == table_name) {
 			    col_names.erase(col_names.begin());
 		    }
@@ -69,12 +69,12 @@ string CreateIndexInfo::ToString() const {
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		result += "IF NOT EXISTS ";
 	}
-	result += KeywordHelper::WriteOptionallyQuoted(index_name);
+	result += SQLIdentifier(index_name);
 	result += " ON ";
 	result += QualifierToString(temporary ? "" : catalog, schema, table);
 	if (index_type != "ART") {
 		result += " USING ";
-		result += KeywordHelper::WriteOptionallyQuoted(index_type);
+		result += SQLIdentifier(index_type);
 		result += " ";
 	}
 	result += "(";
@@ -84,9 +84,13 @@ string CreateIndexInfo::ToString() const {
 		result += " WITH (";
 		idx_t i = 0;
 		for (auto &opt : options) {
-			result += StringUtil::Format("%s = %s", opt.first, opt.second.ToString());
 			if (i > 0) {
 				result += ", ";
+			}
+			if (opt.second.IsNull()) {
+				result += opt.first;
+			} else {
+				result += StringUtil::Format("%s = %s", opt.first, opt.second.ToString());
 			}
 			i++;
 		}

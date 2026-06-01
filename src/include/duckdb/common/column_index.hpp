@@ -43,6 +43,7 @@ public:
 	      child_indexes(std::move(child_indexes_p)) {
 	}
 
+public:
 	inline bool operator==(const ColumnIndex &rhs) const {
 		if (has_index != rhs.has_index) {
 			return false;
@@ -128,11 +129,30 @@ public:
 		return child_indexes;
 	}
 
+	ColumnIndex RemapRootIndex(idx_t new_index) const {
+		auto res = *this;
+		if (!has_index) {
+			throw InternalException("Can't perform 'RemapRootIndex' on ColumnIndex without a primary index!");
+		}
+		res.index = new_index;
+		return res;
+	}
+
 	bool IsPushdownExtract() const {
 		return index_type == ColumnIndexType::PUSHDOWN_EXTRACT;
 	}
 	void SetType(const LogicalType &type_information) {
 		type = type_information;
+	}
+	void SetPushdownExtract() {
+		if (!HasType()) {
+			throw InternalException("Can't set pushdown-extract on a ColumnIndex without type information");
+		}
+		if (child_indexes.size() != 1) {
+			throw InternalException("Can't set pushdown-extract on a ColumnIndex with %d children, expected 1",
+			                        child_indexes.size());
+		}
+		index_type = ColumnIndexType::PUSHDOWN_EXTRACT;
 	}
 	void SetPushdownExtractType(const LogicalType &type_information,
 	                            optional_ptr<const LogicalType> cast_type = nullptr);

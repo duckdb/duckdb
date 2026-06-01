@@ -5,6 +5,13 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/main/config.hpp"
+
 #include <numeric>
 
 namespace duckdb {
@@ -69,7 +76,7 @@ vector<bool> ParseColumnList(const Value &value, vector<string> &names, const st
 	return ParseColumnList(children, names, loption);
 }
 
-vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, vector<string> &names, const string &loption) {
+vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<string> &names, const string &loption) {
 	vector<idx_t> result;
 
 	if (set.empty()) {
@@ -77,9 +84,12 @@ vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, vector<string> &name
 	}
 
 	// Maps option to bool indicating if its found and the index in the original set
-	case_insensitive_map_t<std::pair<bool, idx_t>> option_map;
+	case_insensitive_map_t<pair<bool, idx_t>> option_map;
 	for (idx_t i = 0; i < set.size(); i++) {
-		option_map[set[i].ToString()] = {false, i};
+		const auto [it, inserted] = option_map.emplace(make_pair(set[i].ToString(), make_pair(false, i)));
+		if (!inserted) {
+			throw BinderException("\"%s\" does now allow duplicate columns (found: %s)", loption, set[i].ToString());
+		}
 	}
 	result.resize(option_map.size());
 
@@ -99,7 +109,7 @@ vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, vector<string> &name
 	return result;
 }
 
-vector<idx_t> ParseColumnsOrdered(const Value &value, vector<string> &names, const string &loption) {
+vector<idx_t> ParseColumnsOrdered(const Value &value, const vector<string> &names, const string &loption) {
 	vector<idx_t> result;
 
 	// Only accept a list of arguments
@@ -121,6 +131,58 @@ vector<idx_t> ParseColumnsOrdered(const Value &value, vector<string> &names, con
 		return result;
 	}
 	return ParseColumnsOrdered(children, names, loption);
+}
+
+vector<BoundOrderByNode> ParseOrderByColumns(Binder &binder, const vector<Value> &set,
+                                             const BoundStatement &bound_statement, const string &loption) {
+	// Parse
+	vector<string> order_by_strings;
+	for (auto &value : set) {
+		order_by_strings.push_back(value.ToString());
+	}
+	const auto order_by_clause = StringUtil::Join(order_by_strings, ", ");
+	auto parsed_orders = Parser::ParseOrderList(order_by_clause);
+
+	// Bind
+	auto &config = DBConfig::GetConfig(binder.context);
+	auto child_binder = Binder::CreateBinder(binder.context, &binder);
+	auto table_index = binder.GenerateTableIndex();
+	child_binder->bind_context.AddGenericBinding(table_index, "__copy_input", bound_statement.names,
+	                                             bound_statement.types);
+	ExpressionBinder expr_binder(*child_binder, binder.context);
+	vector<BoundOrderByNode> bound_orders;
+	for (auto &parsed_order : parsed_orders) {
+		const auto order_type = config.ResolveOrder(binder.context, parsed_order.type);
+		const auto null_order = config.ResolveNullOrder(binder.context, order_type, parsed_order.null_order);
+		bound_orders.emplace_back(order_type, null_order, expr_binder.Bind(parsed_order.expression));
+	}
+
+	// Convert BoundColumnRefExpression to BoundReferenceExpression
+	vector<Value> name_set;
+	case_insensitive_map_t<pair<idx_t, vector<reference<unique_ptr<Expression>>>>> name_map;
+	for (auto &bound_order : bound_orders) {
+		ExpressionIterator::VisitExpressionClassMutable(
+		    bound_order.expression, ExpressionClass::BOUND_COLUMN_REF, [&](unique_ptr<Expression> &child) {
+			    auto [it, inserted] = name_map.emplace(make_pair(
+			        child->ToString(), make_pair(name_set.size(), vector<reference<unique_ptr<Expression>>>())));
+			    it->second.second.push_back(child);
+			    if (inserted) {
+				    // Ensure we only add unique values
+				    name_set.emplace_back(child->ToString());
+			    }
+		    });
+	}
+	const auto indices = ParseColumnsOrdered(name_set, bound_statement.names, loption);
+	D_ASSERT(name_set.size() == indices.size());
+	for (const auto &name_value : name_set) {
+		auto name = name_value.ToString();
+		const auto &[idx, expressions] = name_map[name];
+		for (auto &expr : expressions) {
+			expr.get() = make_uniq<BoundReferenceExpression>(name, expr.get()->GetReturnType(), indices[idx]);
+		}
+	}
+
+	return bound_orders;
 }
 
 } // namespace duckdb

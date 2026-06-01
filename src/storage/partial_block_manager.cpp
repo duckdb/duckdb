@@ -28,10 +28,10 @@ void PartialBlock::FlushInternal(const idx_t free_space_left) {
 
 		// memset any uninitialized regions
 		for (auto &uninitialized : uninitialized_regions) {
-			memset(buffer_handle.Ptr() + uninitialized.start, 0, uninitialized.end - uninitialized.start);
+			memset(buffer_handle.GetDataMutable() + uninitialized.start, 0, uninitialized.end - uninitialized.start);
 		}
 		// memset any free space at the end of the block to 0 prior to writing to disk
-		memset(buffer_handle.Ptr() + block_manager.GetBlockSize() - free_space_left, 0, free_space_left);
+		memset(buffer_handle.GetDataMutable() + block_manager.GetBlockSize() - free_space_left, 0, free_space_left);
 	}
 }
 

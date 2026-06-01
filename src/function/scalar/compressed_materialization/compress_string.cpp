@@ -75,7 +75,7 @@ inline uint8_t StringCompress(const string_t &input) {
 template <class RESULT_TYPE>
 void StringCompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::Execute<string_t, RESULT_TYPE>(
-	    args.data[0], result, args.size(), StringCompress<RESULT_TYPE>,
+	    args.data[0], result, StringCompress<RESULT_TYPE>,
 #if defined(D_ASSERT_IS_ENABLED)
 	    FunctionErrors::CAN_THROW_RUNTIME_ERROR); // Can only throw a runtime error when assertions are enabled
 #else
@@ -179,8 +179,7 @@ void StringDecompressFunction(DataChunk &args, ExpressionState &state, Vector &r
 	auto &allocator = ExecuteFunctionState::GetFunctionState(state)->Cast<StringDecompressLocalState>().allocator;
 	allocator.Reset();
 	UnaryExecutor::Execute<INPUT_TYPE, string_t>(
-	    args.data[0], result, args.size(),
-	    [&](const INPUT_TYPE &input) { return StringDecompress<INPUT_TYPE>(input, allocator); },
+	    args.data[0], result, [&](const INPUT_TYPE &input) { return StringDecompress<INPUT_TYPE>(input, allocator); },
 	    FunctionErrors::CANNOT_ERROR);
 }
 
@@ -209,12 +208,12 @@ scalar_function_t GetStringDecompressFunctionSwitch(const LogicalType &input_typ
 }
 
 void CMStringCompressSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                               const ScalarFunction &function) {
+                               const BoundScalarFunction &function) {
 	serializer.WriteProperty(100, "arguments", function.GetArguments());
 	serializer.WriteProperty(101, "return_type", function.GetReturnType());
 }
 
-unique_ptr<FunctionData> CMStringCompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
+unique_ptr<FunctionData> CMStringCompressDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 	function.GetArguments() = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
 	function.SetFunctionCallback(GetStringCompressFunctionSwitch(return_type));
@@ -222,11 +221,11 @@ unique_ptr<FunctionData> CMStringCompressDeserialize(Deserializer &deserializer,
 }
 
 void CMStringDecompressSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                                 const ScalarFunction &function) {
+                                 const BoundScalarFunction &function) {
 	serializer.WriteProperty(100, "arguments", function.GetArguments());
 }
 
-unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
+unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 	function.GetArguments() = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	function.SetFunctionCallback(GetStringDecompressFunctionSwitch(function.GetArguments()[0]));
 	function.SetReturnType(deserializer.Get<const LogicalType &>());

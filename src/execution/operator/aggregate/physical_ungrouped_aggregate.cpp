@@ -2,7 +2,9 @@
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
@@ -45,11 +47,12 @@ UngroupedAggregateState::UngroupedAggregateState(const vector<unique_ptr<Express
 		auto &aggregate = aggregate_expressions[i];
 		D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-		auto state = make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.GetStateSizeCallback()(aggr.function));
-		aggr.function.GetStateInitCallback()(aggr.function, state.get());
+		auto state =
+		    make_unsafe_uniq_array_uninitialized<data_t>(aggr.Function().GetStateSizeCallback()(aggr.Function()));
+		aggr.Function().GetStateInitCallback()(aggr.Function(), state.get());
 		aggregate_data.push_back(std::move(state));
-		bind_data.push_back(aggr.bind_info.get());
-		destructors.push_back(aggr.function.GetStateDestructorCallback());
+		bind_data.push_back(aggr.BindInfo() ? aggr.BindInfo()->Copy() : nullptr);
+		destructors.push_back(aggr.Function().GetStateDestructorCallback());
 #ifdef DEBUG
 		counts[i] = 0;
 #endif
@@ -65,13 +68,14 @@ UngroupedAggregateState::~UngroupedAggregateState() {
 		state_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
 		ArenaAllocator allocator(Allocator::DefaultAllocator());
-		AggregateInputData aggr_input_data(bind_data[i], allocator);
+		AggregateInputData aggr_input_data(bind_data[i].get(), allocator);
 		destructors[i](state_vector, aggr_input_data, 1);
 	}
 }
 
 void UngroupedAggregateState::Move(UngroupedAggregateState &other) {
 	other.aggregate_data = std::move(aggregate_data);
+	other.bind_data = std::move(bind_data);
 	other.destructors = std::move(destructors);
 }
 
@@ -113,13 +117,12 @@ void GlobalUngroupedAggregateState::Combine(LocalUngroupedAggregateState &other)
 		Vector source_state(Value::POINTER(CastPointerToValue(other.state.aggregate_data[aggr_idx].get())), count_t(1));
 		Vector dest_state(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())), count_t(1));
 
-		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator,
-		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
-		if (!aggregate.function.HasStateCombineCallback()) {
-			throw InternalException("Aggregate function " + aggregate.function.name +
+		AggregateInputData aggr_input_data(aggregate.BindInfo(), allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
+		if (!aggregate.Function().HasStateCombineCallback()) {
+			throw InternalException("Aggregate function " + aggregate.Function().GetName() +
 			                        " does not support combining of states");
 		}
-		aggregate.function.GetStateCombineCallback()(source_state, dest_state, aggr_input_data, 1);
+		aggregate.Function().GetStateCombineCallback()(source_state, dest_state, aggr_input_data, 1);
 #ifdef DEBUG
 		state.counts[aggr_idx] += other.state.counts[aggr_idx];
 #endif
@@ -135,16 +138,15 @@ void GlobalUngroupedAggregateState::CombineDistinct(LocalUngroupedAggregateState
 		}
 
 		auto &aggregate = state.aggregate_expressions[aggr_idx]->Cast<BoundAggregateExpression>();
-		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator,
-		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
+		AggregateInputData aggr_input_data(aggregate.BindInfo(), allocator, AggregateCombineType::ALLOW_DESTRUCTIVE);
 
 		Vector state_vec(Value::POINTER(CastPointerToValue(other.state.aggregate_data[aggr_idx].get())), count_t(1));
 		Vector combined_vec(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())), count_t(1));
-		if (!aggregate.function.HasStateCombineCallback()) {
-			throw InternalException("Aggregate function " + aggregate.function.name +
+		if (!aggregate.Function().HasStateCombineCallback()) {
+			throw InternalException("Aggregate function " + aggregate.Function().GetName() +
 			                        " does not support combining of states");
 		}
-		aggregate.function.GetStateCombineCallback()(state_vec, combined_vec, aggr_input_data, 1);
+		aggregate.Function().GetStateCombineCallback()(state_vec, combined_vec, aggr_input_data, 1);
 #ifdef DEBUG
 		state.counts[aggr_idx] += other.state.counts[aggr_idx];
 #endif
@@ -165,8 +167,8 @@ UngroupedAggregateExecuteState::UngroupedAggregateExecuteState(ClientContext &co
 		D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		// initialize the payload chunk
-		for (auto &child : aggr.children) {
-			payload_types.push_back(child->return_type);
+		for (auto &child : aggr.GetChildren()) {
+			payload_types.push_back(child->GetReturnType());
 			child_executor.AddExpression(*child);
 		}
 		aggregate_objects.emplace_back(&aggr);
@@ -191,7 +193,7 @@ void UngroupedAggregateExecuteState::Sink(LocalUngroupedAggregateState &state, D
 		auto &aggregate = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
 
 		payload_idx = next_payload_idx;
-		next_payload_idx = payload_idx + aggregate.children.size();
+		next_payload_idx = payload_idx + aggregate.GetChildren().size();
 
 		if (aggregate.IsDistinct()) {
 			continue;
@@ -199,7 +201,7 @@ void UngroupedAggregateExecuteState::Sink(LocalUngroupedAggregateState &state, D
 
 		idx_t payload_cnt = 0;
 		// resolve the filter (if any)
-		if (aggregate.filter) {
+		if (aggregate.GetFilter()) {
 			auto &filtered_data = filter_set.GetFilterData(aggr_idx);
 			auto count = filtered_data.ApplyFilter(input);
 
@@ -211,7 +213,7 @@ void UngroupedAggregateExecuteState::Sink(LocalUngroupedAggregateState &state, D
 		}
 
 		// resolve the child expressions of the aggregate (if any)
-		for (idx_t i = 0; i < aggregate.children.size(); ++i) {
+		for (idx_t i = 0; i < aggregate.GetChildren().size(); ++i) {
 			child_executor.ExecuteExpression(payload_idx + payload_cnt, payload_chunk.data[payload_idx + payload_cnt]);
 			payload_cnt++;
 		}
@@ -224,7 +226,8 @@ void UngroupedAggregateExecuteState::Sink(LocalUngroupedAggregateState &state, D
 // Local State
 //===--------------------------------------------------------------------===//
 LocalUngroupedAggregateState::LocalUngroupedAggregateState(GlobalUngroupedAggregateState &gstate)
-    : allocator(gstate.CreateAllocator()), state(gstate.state.aggregate_expressions) {
+    : allocator(gstate.CreateAllocator()), state(gstate.state.aggregate_expressions),
+      repeated_state_vector(LogicalType::POINTER) {
 }
 
 class UngroupedAggregateLocalSinkState : public LocalSinkState {
@@ -276,7 +279,7 @@ public:
 bool PhysicalUngroupedAggregate::SinkOrderDependent() const {
 	for (auto &expr : aggregates) {
 		auto &aggr = expr->Cast<BoundAggregateExpression>();
-		if (aggr.function.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
+		if (aggr.Function().GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
 			return true;
 		}
 	}
@@ -320,7 +323,7 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, DataChu
 		auto &radix_local_sink = *sink.radix_states[table_idx];
 		OperatorSinkInput sink_input {radix_global_sink, radix_local_sink, input.interrupt_state};
 
-		if (aggregate.filter) {
+		if (aggregate.GetFilter()) {
 			// The hashtable can apply a filter, but only on the payload
 			// And in our case, we need to filter the groups (the distinct aggr children)
 
@@ -356,12 +359,26 @@ void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_
 	state.counts[aggr_idx] += payload_chunk.size();
 #endif
 	auto &aggregate = state.aggregate_expressions[aggr_idx]->Cast<BoundAggregateExpression>();
-	idx_t payload_cnt = aggregate.children.size();
+	idx_t payload_cnt = aggregate.GetChildren().size();
 	D_ASSERT(payload_idx + payload_cnt <= payload_chunk.data.size());
 	auto start_of_input = payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx];
-	AggregateInputData aggr_input_data(state.bind_data[aggr_idx], allocator);
-	aggregate.function.GetStateSimpleUpdateCallback()(start_of_input, aggr_input_data, payload_cnt,
-	                                                  state.aggregate_data[aggr_idx].get(), payload_chunk.size());
+	AggregateInputData aggr_input_data(state.bind_data[aggr_idx].get(), allocator);
+	auto cluster_update = aggregate.Function().GetStateClusterUpdateCallback();
+	if (cluster_update) {
+		ClusteredAggr clustered;
+		clustered.SetSingleRun(state.aggregate_data[aggr_idx].get(), payload_chunk.size());
+		aggr_input_data.clustered = &clustered;
+		cluster_update(start_of_input, aggr_input_data, payload_cnt, clustered, payload_chunk.size());
+	} else {
+		auto count = payload_chunk.size();
+		auto state_ptr = CastPointerToValue(state.aggregate_data[aggr_idx].get());
+		auto state_data = FlatVector::Writer<uintptr_t>(repeated_state_vector, count);
+		for (idx_t i = 0; i < count; i++) {
+			state_data.WriteValue(state_ptr);
+		}
+		aggregate.Function().GetStateUpdateCallback()(start_of_input, aggr_input_data, payload_cnt,
+		                                              repeated_state_vector, count);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -484,7 +501,7 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 
 		// Forward the payload idx
 		payload_idx = next_payload_idx;
-		next_payload_idx = payload_idx + aggregate.children.size();
+		next_payload_idx = payload_idx + aggregate.GetChildren().size();
 
 		// If aggregate is not distinct, skip it
 		if (!distinct_data.IsDistinct(agg_idx)) {
@@ -579,7 +596,7 @@ TaskExecutionResult UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() 
 			}
 
 			// We dont need to resolve the filter, we already did this in Sink
-			idx_t payload_cnt = aggregate.children.size();
+			idx_t payload_cnt = aggregate.GetChildren().size();
 			for (idx_t i = 0; i < payload_cnt; i++) {
 				payload_chunk.data[i].Reference(output_chunk.data[i]);
 			}
@@ -635,10 +652,10 @@ void VerifyNullHandling(DataChunk &chunk, UngroupedAggregateState &state,
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggr = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
 		if (state.counts[aggr_idx] == 0 &&
-		    aggr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
+		    aggr.Function().GetProperties().GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 			// Default is when 0 values go in, NULL comes out
 			UnifiedVectorFormat vdata;
-			chunk.data[aggr_idx].ToUnifiedFormat(1, vdata);
+			chunk.data[aggr_idx].ToUnifiedFormat(vdata);
 			D_ASSERT(!vdata.validity.RowIsValid(vdata.sel->get_index(0)));
 		}
 	}
@@ -651,9 +668,10 @@ void GlobalUngroupedAggregateState::Finalize(DataChunk &result, idx_t column_off
 		auto &aggregate = state.aggregate_expressions[aggr_idx]->Cast<BoundAggregateExpression>();
 
 		Vector state_vector(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())), count_t(1));
-		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator);
-		aggregate.function.GetStateFinalizeCallback()(state_vector, aggr_input_data,
-		                                              result.data[column_offset + aggr_idx], 1, 0);
+		AggregateInputData aggr_input_data(aggregate.BindInfo(), allocator);
+		aggregate.Function().GetStateFinalizeCallback()(state_vector, aggr_input_data,
+		                                                result.data[column_offset + aggr_idx], 1, 0);
+		FlatVector::SetSize(result.data[column_offset + aggr_idx], count_t(1));
 	}
 }
 
@@ -678,8 +696,8 @@ InsertionOrderPreservingMap<string> PhysicalUngroupedAggregate::ParamsToString()
 			aggregate_info += "\n";
 		}
 		aggregate_info += aggregates[i]->GetName();
-		if (aggregate.filter) {
-			aggregate_info += " Filter: " + aggregate.filter->GetName();
+		if (aggregate.GetFilter()) {
+			aggregate_info += " Filter: " + aggregate.GetFilter()->GetName();
 		}
 	}
 	result["Aggregates"] = aggregate_info;

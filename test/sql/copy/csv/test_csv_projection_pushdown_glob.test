@@ -3,9 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 COPY (SELECT DATE '1992-01-01' d, 42 i, 'hello' s) TO '{TEST_DIR}/projection_pushdown_f1.csv' (HEADER, DELIMITER '|')
 
 statement ok

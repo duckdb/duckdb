@@ -704,7 +704,7 @@ void ReservoirSample::UpdateSampleAppend(DataChunk &this_, DataChunk &other, Sel
 	auto types = reservoir_chunk->chunk.GetTypes();
 
 	for (idx_t i = 0; i < reservoir_chunk->chunk.ColumnCount(); i++) {
-		auto col_type = types[i];
+		const auto &col_type = types[i];
 		if (ValidSampleType(col_type) || !stats_sample) {
 			D_ASSERT(this_.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 			VectorOperations::Copy(other.data[i], this_.data[i], other_sel, append_count, 0, this_.size());

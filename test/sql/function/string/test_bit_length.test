@@ -2,9 +2,6 @@
 # description: BIT_LENGTH test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # test on scalars
 query IIIIII
 select BIT_LENGTH(NULL), BIT_LENGTH(''), BIT_LENGTH('$'), BIT_LENGTH('¢'), BIT_LENGTH('€'), BIT_LENGTH('𐍈')

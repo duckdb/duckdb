@@ -34,7 +34,6 @@ jobs:
       shell: bash
       run: |
         python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- pip install requests
 
     - uses: ./.github/actions/ccache-action
 

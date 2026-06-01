@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT typeof(arg_min({foo: 'bar'}::JSON, 1));
 ----

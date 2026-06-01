@@ -317,10 +317,8 @@ private:
 		if (op.type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = op.Cast<LogicalGet>();
 			for (auto &entry : get.table_filters) {
-				if (entry.Filter().filter_type != TableFilterType::EXPRESSION_FILTER) {
-					continue;
-				}
-				auto &expression_filter = entry.Filter().Cast<ExpressionFilter>();
+				auto &expression_filter =
+				    ExpressionFilter::GetExpressionFilter(entry.Filter(), "CommonSubplanOptimizer::ConvertExpressions");
 				ConvertExpression<TYPE>(*expression_filter.expr, info_idx, can_materialize);
 			}
 		}
@@ -334,30 +332,30 @@ private:
 
 		// Replace column binding
 		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-			auto &column_binding = expr.Cast<BoundColumnRefExpression>().binding;
+			auto &col_ref = expr.Cast<BoundColumnRefExpression>();
 			const auto lookup_idx = TYPE == ConversionType::TO_CANONICAL
-			                            ? column_binding.table_index
-			                            : restore_original_table_index.at(column_binding.table_index);
+			                            ? col_ref.Binding().table_index
+			                            : restore_original_table_index.at(col_ref.Binding().table_index);
 			auto &table_map = table_index_map.at(lookup_idx);
 			if (!table_map.Empty<TYPE>()) {
 				// Replace column index
-				column_binding.column_index = table_map.Get<TYPE>(column_binding.column_index);
+				col_ref.BindingMutable().column_index = table_map.Get<TYPE>(col_ref.Binding().column_index);
 			}
 			// Replace table index
-			column_binding.table_index = table_index_mapping.at(column_binding.table_index);
+			col_ref.BindingMutable().table_index = table_index_mapping.at(col_ref.Binding().table_index);
 		}
 
 		// Replace default fields
 		switch (TYPE) {
 		case ConversionType::TO_CANONICAL:
-			expression_info.emplace_back(std::move(expr.alias), expr.query_location);
-			expr.alias.clear();
-			expr.query_location.SetInvalid();
+			expression_info.emplace_back(expr.GetAlias(), expr.GetQueryLocation());
+			expr.ClearAlias();
+			expr.SetQueryLocation(optional_idx());
 			break;
 		case ConversionType::RESTORE_ORIGINAL:
 			auto &info = expression_info[info_idx++];
-			expr.alias = std::move(info.first);
-			expr.query_location = info.second;
+			expr.SetAlias(std::move(info.first));
+			expr.SetQueryLocation(info.second);
 			break;
 		}
 		if (expr.IsVolatile()) {

@@ -18,6 +18,14 @@ class Optimizer;
 class ClientContext;
 class LogicalOperator;
 
+enum class CompressedMaterializationType : uint8_t {
+	INVALID = 0,
+	//! Use the opaque internal (de-)compress functions
+	FUNCTION = 1,
+	//! Use down- and upcasts that are transparent to subsequent optimizers
+	CAST = 2
+};
+
 struct CMChildInfo {
 public:
 	CMChildInfo(LogicalOperator &op, const column_binding_set_t &referenced_bindings);
@@ -42,7 +50,7 @@ public:
 
 	//! Type before compressing
 	LogicalType type;
-	bool needs_decompression;
+	CompressedMaterializationType materialization_type;
 	unique_ptr<BaseStatistics> stats;
 };
 
@@ -62,11 +70,13 @@ public:
 
 struct CompressExpression {
 public:
-	CompressExpression(unique_ptr<Expression> expression, unique_ptr<BaseStatistics> stats);
+	CompressExpression(unique_ptr<Expression> expression, unique_ptr<BaseStatistics> stats,
+	                   CompressedMaterializationType materialization_type);
 
 public:
 	unique_ptr<Expression> expression;
 	unique_ptr<BaseStatistics> stats;
+	CompressedMaterializationType materialization_type;
 };
 
 typedef column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map_t;
@@ -103,7 +113,8 @@ private:
 	//! Adds bindings referenced in expression to referenced_bindings
 	static void GetReferencedBindings(const Expression &expression, column_binding_set_t &referenced_bindings);
 	//! Updates CMBindingInfo in the binding_map in info
-	void UpdateBindingInfo(CompressedMaterializationInfo &info, const ColumnBinding &binding, bool needs_decompression);
+	void UpdateBindingInfo(CompressedMaterializationInfo &info, const ColumnBinding &binding,
+	                       CompressedMaterializationType materialization_type);
 
 	//! Create (de)compress projections around the operator
 	void CreateProjections(unique_ptr<LogicalOperator> &op, CompressedMaterializationInfo &info);
@@ -113,6 +124,8 @@ private:
 	                              vector<unique_ptr<CompressExpression>> compress_exprs,
 	                              CompressedMaterializationInfo &info, CMChildInfo &child_info);
 	void CreateDecompressProjection(unique_ptr<LogicalOperator> &op, CompressedMaterializationInfo &info);
+	unique_ptr<Expression> CreateRestoreExpression(unique_ptr<Expression> input, const CMBindingInfo &binding_info,
+	                                               const BaseStatistics &stats);
 
 	//! Create expressions that apply a scalar compression function
 	unique_ptr<CompressExpression> GetCompressExpression(const ColumnBinding &binding, const LogicalType &type,

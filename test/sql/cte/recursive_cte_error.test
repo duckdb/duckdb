@@ -3,9 +3,6 @@
 # group: [cte]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tag(id int, name string, subclassof int);
 
 statement ok

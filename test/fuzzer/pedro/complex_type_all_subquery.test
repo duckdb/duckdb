@@ -2,14 +2,16 @@
 # description: Use complex types in ALL clause
 # group: [pedro]
 
-statement ok
-PRAGMA enable_verification
-
 # cast from struct to int not supported
 statement error
 VALUES((0, 0) = ALL(SELECT 2));
 ----
 Subquery returns 1 columns - expected 2
+
+statement error
+SELECT (1, 0, 0) < ANY(SELECT 1, 0,  );
+----
+Binder Error: Subquery returns 2 columns - expected 3
 
 # use ALL with complex types
 statement error

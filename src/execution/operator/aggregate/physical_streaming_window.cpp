@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/aggregate/physical_streaming_window.hpp"
 
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
@@ -39,12 +40,12 @@ public:
 			D_ASSERT(wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE);
 			auto &aggregate = *wexpr.aggregate;
 			bind_data = wexpr.bind_info.get();
-			dtor = aggregate.GetStateDestructorCallback();
-			state.resize(aggregate.GetStateSizeCallback()(aggregate));
+			dtor = aggregate.GetCallbacks().GetStateDestructorCallback();
+			state.resize(aggregate.GetCallbacks().GetStateSizeCallback()(aggregate));
 			state_ptr = state.data();
-			aggregate.GetStateInitCallback()(aggregate, state.data());
+			aggregate.GetCallbacks().GetStateInitCallback()(aggregate, state.data());
 			for (auto &child : wexpr.children) {
-				arg_types.push_back(child->return_type);
+				arg_types.push_back(child->GetReturnType());
 				executor.AddExpression(*child);
 			}
 			if (!arg_types.empty()) {
@@ -147,7 +148,7 @@ public:
 		initialized = true;
 	}
 
-	static inline void Reset(DataChunk &chunk) {
+	static inline void ResetChunk(DataChunk &chunk) {
 		chunk.Reset();
 	}
 
@@ -171,8 +172,7 @@ StreamingWindowGlobalState::StreamingWindowGlobalState(ClientContext &client) {
 	local_state = make_uniq<StreamingWindowState>(client);
 }
 
-bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &client, unique_ptr<Expression> &expr) {
-	auto &wexpr = expr->Cast<BoundWindowExpression>();
+bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &client, BoundWindowExpression &wexpr) {
 	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || !wexpr.arg_orders.empty() ||
 	    wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
 		return false;
@@ -276,7 +276,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	// is not copied to the children when you slice
 	vector<column_t> structs;
 	for (column_t col_idx = 0; col_idx < arg_chunk.ColumnCount(); ++col_idx) {
-		auto &col_vec = arg_cursor.data[col_idx];
+		const auto &col_vec = arg_cursor.data[col_idx];
 		if (col_vec.GetType().InternalType() == PhysicalType::STRUCT) {
 			structs.emplace_back(col_idx);
 		} else {
@@ -319,6 +319,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 		} else {
 			throw NotImplementedException("GetStreamingData for %s", ExpressionTypeToString(expr.GetExpressionType()));
 		}
+		FlatVector::SetSize(result, count_t(output.size()));
 	}
 }
 
@@ -327,10 +328,6 @@ void PhysicalStreamingWindow::ExecuteInput(ExecutionContext &context, DataChunk 
 	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
 	auto &state = gstate.local_state->Cast<StreamingWindowState>();
 
-	// Put payload columns in place
-	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
-		output.data[col_idx].Reference(input.data[col_idx]);
-	}
 	idx_t count = input.size();
 
 	//	Handle LEAD
@@ -338,6 +335,12 @@ void PhysicalStreamingWindow::ExecuteInput(ExecutionContext &context, DataChunk 
 		//	Nothing delayed yet, so just truncate and copy the delayed values
 		count -= state.lead_count;
 		input.Copy(delayed, count);
+	}
+
+	// Put payload columns in place (ensuring they match the new cardinality)
+	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
+		output.data[col_idx].Reference(input.data[col_idx]);
+		FlatVector::SetSize(output.data[col_idx], count_t(count));
 	}
 	output.SetCardinality(count);
 
@@ -355,30 +358,34 @@ void PhysicalStreamingWindow::ExecuteShifted(ExecutionContext &context, DataChun
 	idx_t delay = delayed.size();
 	D_ASSERT(out <= delay);
 
-	state.Reset(shifted);
+	state.ResetChunk(shifted);
 	// shifted = delayed
 	delayed.Copy(shifted);
-	state.Reset(delayed);
+	state.ResetChunk(delayed);
+	const idx_t new_delayed_count = delay - out + in;
 	for (idx_t col_idx = 0; col_idx < delayed.data.size(); ++col_idx) {
 		// output[0:out] = delayed[0:out]
 		output.data[col_idx].Reference(shifted.data[col_idx]);
+		FlatVector::SetSize(output.data[col_idx], count_t(out));
 		// delayed[0:out] = delayed[out:delay-out]
 		VectorOperations::Copy(shifted.data[col_idx], delayed.data[col_idx], delay, out, 0);
 		// delayed[delay-out:delay-out+in] = input[0:in]
 		VectorOperations::Copy(input.data[col_idx], delayed.data[col_idx], in, 0, delay - out);
+		FlatVector::SetSize(delayed.data[col_idx], count_t(new_delayed_count));
 	}
-	delayed.SetCardinality(delay - out + in);
+	delayed.SetCardinality(new_delayed_count);
 
 	ExecuteFunctions(context, output, delayed, gstate_p);
 }
 
 void PhysicalStreamingWindow::ExecuteDelayed(ExecutionContext &context, DataChunk &delayed, DataChunk &input,
                                              DataChunk &output, GlobalOperatorState &gstate_p) const {
+	idx_t count = delayed.size();
 	// Put payload columns in place
 	for (idx_t col_idx = 0; col_idx < delayed.data.size(); col_idx++) {
 		output.data[col_idx].Reference(delayed.data[col_idx]);
+		FlatVector::SetSize(output.data[col_idx], count_t(count));
 	}
-	idx_t count = delayed.size();
 	output.SetCardinality(count);
 
 	ExecuteFunctions(context, output, input, gstate_p);
@@ -395,7 +402,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	auto &delayed = state.delayed;
 	// We can Reset delayed now that no one can be referencing it.
 	if (!delayed.size()) {
-		state.Reset(delayed);
+		state.ResetChunk(delayed);
 	}
 	if (delayed.size() < state.lead_count) {
 		//	If we don't have enough to produce a single row,
@@ -434,7 +441,7 @@ OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContex
 		auto &delayed = state.delayed;
 		//	There are no more input rows
 		auto &input = state.shifted;
-		state.Reset(input);
+		state.ResetChunk(input);
 
 		if (delayed.size() > STANDARD_VECTOR_SIZE) {
 			//	More than one output buffer was delayed, so shift in what we can

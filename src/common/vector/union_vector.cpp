@@ -1,5 +1,6 @@
 #include "duckdb/common/vector/union_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 
 namespace duckdb {
@@ -49,7 +50,7 @@ void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &mem
 
 	} else {
 		// otherwise flatten and set to flatvector
-		member_vector.Flatten(count);
+		member_vector.Flatten();
 		union_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
 		if (FlatVector::ValidityMutable(member_vector).CannotHaveNull()) {
@@ -81,6 +82,7 @@ void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &mem
 			ConstantVector::SetNull(member, true);
 		}
 	}
+	FlatVector::SetSize(union_vector, count_t(count));
 }
 
 bool UnionVector::TryGetTag(const Vector &vector, idx_t index, union_tag_t &result) {
@@ -122,15 +124,15 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector, idx_t count, 
 		return UnionInvalidReason::NO_MEMBERS;
 	}
 
-	auto vector_validity = vector.Validity(count);
+	auto vector_validity = vector.Validity();
 
 	auto &entries = StructVector::GetEntries(vector);
 	duckdb::vector<VectorValidityIterator> child_validity;
 	for (idx_t entry_idx = 1; entry_idx < entries.size(); entry_idx++) {
 		auto &child = entries[entry_idx];
-		child_validity.push_back(child.Validity(count));
+		child_validity.push_back(child.Validity());
 	}
-	auto tag_data = entries[0].Values<union_tag_t>(count);
+	auto tag_data = entries[0].Values<union_tag_t>();
 
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto mapped_idx = sel.get_index(row_idx);

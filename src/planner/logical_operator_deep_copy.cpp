@@ -85,7 +85,12 @@ void LogicalOperatorDeepCopy::ReplaceTableIndexMulti(LogicalOperator &op) {
 }
 
 void LogicalOperatorDeepCopy::VisitOperator(LogicalOperator &op) {
-	VisitOperatorChildren(op);
+	// Because we are changing table bindings, VisitOperatorChildren will clear projection maps
+	// Therefore, the recursion is implemented here to avoid that
+	for (auto &child : op.children) {
+		VisitOperator(*child);
+	}
+
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		ReplaceTableIndex<LogicalProjection>(op);
@@ -233,7 +238,11 @@ void TableBindingReplacer::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 
-	VisitOperatorChildren(op);
+	// Because we are changing table bindings, VisitOperatorChildren will clear projection maps
+	// Therefore, the recursion is implemented here to avoid that
+	for (auto &child : op.children) {
+		VisitOperator(*child);
+	}
 	VisitOperatorExpressions(op);
 }
 
@@ -241,9 +250,9 @@ void TableBindingReplacer::VisitExpression(unique_ptr<Expression> *expression) {
 	auto &expr = *expression;
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
-		auto entry = table_idx_replacements.find(bound_column_ref.binding.table_index);
+		auto entry = table_idx_replacements.find(bound_column_ref.Binding().table_index);
 		if (entry != table_idx_replacements.end()) {
-			bound_column_ref.binding.table_index = entry->second;
+			bound_column_ref.BindingMutable().table_index = entry->second;
 		}
 	} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_PARAMETER) {
 		// we have to replace the parameter data if it is a bound parameter

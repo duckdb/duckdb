@@ -2,9 +2,6 @@
 # description: utinyint try cast
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 # tinyint casts
 statement ok
 CREATE TABLE utinyints AS SELECT i::UTINYINT i FROM (VALUES (0), (255)) tbl(i)

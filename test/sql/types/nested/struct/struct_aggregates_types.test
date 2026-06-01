@@ -2,9 +2,6 @@
 # description: Test structs with aggregations
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 foreach type <integral>
 
 statement ok

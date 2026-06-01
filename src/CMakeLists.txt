@@ -69,7 +69,6 @@ add_subdirectory(main)
 add_subdirectory(parallel)
 add_subdirectory(storage)
 add_subdirectory(transaction)
-add_subdirectory(verification)
 
 set(DUCKDB_LINK_LIBS
     duckdb_fsst
@@ -83,6 +82,10 @@ set(DUCKDB_LINK_LIBS
     duckdb_mbedtls
     duckdb_yyjson
     duckdb_zstd)
+
+if(JEMALLOC_ENABLED)
+  list(APPEND DUCKDB_LINK_LIBS duckdb_jemalloc)
+endif()
 
 foreach(LINK_LIB ${DUCKDB_LINK_LIBS})
   list(APPEND LINK_OBJECTS $<TARGET_OBJECTS:${LINK_LIB}>)

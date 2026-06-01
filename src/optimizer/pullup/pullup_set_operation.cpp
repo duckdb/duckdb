@@ -8,9 +8,9 @@ namespace duckdb {
 static void ReplaceFilterTableIndex(Expression &expr, LogicalSetOperation &setop) {
 	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expr.Cast<BoundColumnRefExpression>();
-		D_ASSERT(colref.depth == 0);
+		D_ASSERT(colref.Depth() == 0);
 
-		colref.binding.table_index = setop.table_index;
+		colref.BindingMutable().table_index = setop.table_index;
 		return;
 	}
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ReplaceFilterTableIndex(child, setop); });

@@ -3,7 +3,7 @@
 # group: [transactions]
 
 statement ok
-PRAGMA enable_verification
+SET default_transaction_invalidation_policy='SYNTACTIC_ERRORS_DO_NOT_INVALIDATE';
 
 # set up a table
 statement ok

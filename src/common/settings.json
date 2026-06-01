@@ -283,6 +283,13 @@
         "default_value": "0"
     },
     {
+        "name": "debug_disable_optimizer",
+        "description": "DEBUG SETTING: disable optimizer for most queries",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "debug_eviction_queue_sleep_micro_seconds",
         "description": "DEBUG SETTING: time for the eviction queue to sleep before acquiring shared ownership of block memory",
         "type": "UBIGINT",
@@ -293,8 +300,15 @@
         "name": "debug_force_external",
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "BOOLEAN",
-        "scope": "local",
-        "internal_setting": "force_external"
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_force_fetch_row",
+        "description": "DEBUG SETTING: force per-row fetching during scans, used for testing",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "debug_force_no_cross_product",
@@ -318,8 +332,50 @@
         "default_value": "false"
     },
     {
+        "name": "debug_verification_mode",
+        "description": "DEBUG SETTING: toggle the verification mode.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "debug_verification_projection",
+        "description": "DEBUG SETTING: add internal verification projections to stress optimizers",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_verify_blocks",
         "description": "DEBUG SETTING: verify block metadata during checkpointing",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_column_bindings",
+        "description": "DEBUG SETTING: run extra internal verification of column bindings",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_serializer",
+        "description": "DEBUG SETTING: verify logical plan serializer",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_statement",
+        "description": "DEBUG SETTING: the type of statement verification to perform",
+        "type": "ENUM<DebugStatementVerification>",
+        "default_scope": "global",
+        "default_value": "NONE"
+    },
+    {
+        "name": "debug_verify_stats",
+        "description": "DEBUG SETTING: verify statistics are correct during execution, instead of assuming",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
@@ -396,6 +452,13 @@
         "custom_implementation": true
     },
     {
+        "name": "default_transaction_invalidation_policy",
+        "description": "When to invalidate transactions when errors occur (SYNTACTIC_ERRORS_DO_NOT_INVALIDATE, i.e. parser and binder exceptions do not invalidate, or ALL_ERRORS_INVALIDATE_TRANSACTION)",
+        "type": "ENUM<TransactionInvalidationPolicy>",
+        "default_scope": "global",
+        "default_value": "ALL_ERRORS_INVALIDATE_TRANSACTION"
+    },
+    {
         "name": "deprecated_using_key_syntax",
         "description": "Configures the use of the deprecated union syntax for USING KEY CTEs.",
         "type": "ENUM<DeprecatedUsingKeySyntax>",
@@ -470,7 +533,8 @@
         "name": "enable_caching_operators",
         "description": "Enables caching operators that cache intermediate results",
         "type": "BOOLEAN",
-        "scope": "local"
+        "default_scope": "local",
+        "default_value": "true"
     },
     {
         "name": "enable_external_access",
@@ -537,6 +601,13 @@
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
+    },
+    {
+        "name": "enable_optimizer",
+        "description": "Whether or not query optimization is enabled",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "true"
     },
     {
         "name": "enable_profiling",
@@ -614,6 +685,32 @@
         "default_value": ""
     },
     {
+        "name": "external_file_cache_local_block_size",
+        "description": "Block size in bytes for the external file cache when reading local (non-remote) files.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "16384",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "external_file_cache_remote_block_size",
+        "description": "Block size in bytes for the external file cache when reading remote files (e.g. HTTP/S3).",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "2097152",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "external_threads",
         "description": "The number of external threads that work on DuckDB tasks.",
         "type": "UBIGINT",
@@ -636,6 +733,13 @@
         "type": "ENUM<BitpackingMode>",
         "scope": "global",
         "default_value": "AUTO"
+    },
+    {
+        "name": "force_column_metadata_reuse",
+        "description": "Force re-use of row group metadata on a column-level when checkpointing on older storage versions 6 and 7. This breaks storage backward-compatibility with older DuckDB versions.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
     },
     {
         "name": "force_compression",
@@ -690,11 +794,14 @@
     },
     {
         "name": "http_proxy",
-        "description": "HTTP proxy host",
+        "description": "HTTP proxy host (defaults to the HTTP_PROXY environment variable when unset)",
         "type": "VARCHAR",
         "scope": "global",
-        "default_value": "",
-        "struct": "HTTPProxySetting"
+        "struct": "HTTPProxySetting",
+        "custom_implementation": [
+            "set",
+            "reset"
+        ]
     },
     {
         "name": "http_proxy_password",
@@ -751,6 +858,16 @@
         ]
     },
     {
+        "name": "initial_column_segment_size",
+        "description": "The initial memory (in bytes) reserved for the first transient column segment. Must be a power of two. Internally, we subtract the block header size (typically 8 bytes) for segments with or exceeding 1024 bytes. Subsequent segments double in size until reaching the block size.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "2048",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "integer_division",
         "description": "Whether or not the / operator defaults to integer division, or to floating point division",
         "type": "BOOLEAN",
@@ -770,6 +887,13 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "50"
+    },
+    {
+        "name": "legacy_metrics_format",
+        "description": "When enabled, profiling output uses the legacy flat format instead of the current grouped format",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "lock_configuration",
@@ -894,6 +1018,13 @@
         "on_callbacks": [
             "set"
         ]
+    },
+    {
+        "name": "parallelize_sequential_sources",
+        "description": "Whether to automatically parallelize sequential sources",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true"
     },
     {
         "name": "partitioned_write_flush_threshold",
@@ -1093,6 +1224,13 @@
         ]
     },
     {
+        "name": "tracked_metrics",
+        "description": "A list of metric glob patterns to enable for collection (e.g. ['query.*', 'optimizer.*'])",
+        "type": "VARCHAR[]",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "username",
         "description": "The username to use. Ignored for legacy compatibility.",
         "type": "VARCHAR",
@@ -1149,6 +1287,13 @@
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "5"
+    },
+    {
+        "name": "write_buffer_row_group_memory_limit",
+        "description": "The maximum data to buffer in row groups (in bytes) to buffer prior to flushing them together. When either this limit is reached, or write_buffer_row_group_count is reached, we flush the data to disk. Defaults to 20% of memory limit divided by thread count.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "zstd_min_string_length",

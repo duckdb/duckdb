@@ -157,19 +157,20 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 	}
 }
 
-void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &right, ExpressionType comparison_type) {
+void StatisticsPropagator::UpdateFilterStatistics(const Expression &left, const Expression &right,
+                                                  ExpressionType comparison_type) {
 	// first check if either side is a bound column ref
 	// any column ref involved in a comparison will not be null after the comparison
 	bool compare_distinct = IsCompareDistinct(comparison_type);
 	if (!compare_distinct && left.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		SetStatisticsNotNull((left.Cast<BoundColumnRefExpression>()).binding);
+		SetStatisticsNotNull((left.Cast<BoundColumnRefExpression>()).Binding());
 	}
 	if (!compare_distinct && right.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-		SetStatisticsNotNull((right.Cast<BoundColumnRefExpression>()).binding);
+		SetStatisticsNotNull((right.Cast<BoundColumnRefExpression>()).Binding());
 	}
 	// check if this is a comparison between a constant and a column ref
-	optional_ptr<BoundConstantExpression> constant;
-	optional_ptr<BoundColumnRefExpression> columnref;
+	optional_ptr<const BoundConstantExpression> constant;
+	optional_ptr<const BoundColumnRefExpression> columnref;
 	if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT &&
 	    right.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		constant = &left.Cast<BoundConstantExpression>();
@@ -184,8 +185,8 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 		// comparison between two column refs
 		auto &left_column_ref = left.Cast<BoundColumnRefExpression>();
 		auto &right_column_ref = right.Cast<BoundColumnRefExpression>();
-		auto lentry = statistics_map.find(left_column_ref.binding);
-		auto rentry = statistics_map.find(right_column_ref.binding);
+		auto lentry = statistics_map.find(left_column_ref.Binding());
+		auto rentry = statistics_map.find(right_column_ref.Binding());
 		if (lentry == statistics_map.end() || rentry == statistics_map.end()) {
 			return;
 		}
@@ -196,7 +197,7 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 	}
 	if (constant && columnref) {
 		// comparison between columnref
-		auto entry = statistics_map.find(columnref->binding);
+		auto entry = statistics_map.find(columnref->Binding());
 		if (entry == statistics_map.end()) {
 			return;
 		}
@@ -204,23 +205,24 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 	}
 }
 
-void StatisticsPropagator::UpdateFilterStatistics(Expression &condition) {
+void StatisticsPropagator::UpdateFilterStatistics(const Expression &condition) {
 	// in filters, we check for constant comparisons with bound columns
 	// if we find a comparison in the form of e.g. "i=3", we can update our statistics for that column
-	switch (condition.GetExpressionClass()) {
-	case ExpressionClass::BOUND_BETWEEN: {
-		auto &between = condition.Cast<BoundBetweenExpression>();
-		UpdateFilterStatistics(*between.input, *between.lower, between.LowerComparisonType());
-		UpdateFilterStatistics(*between.input, *between.upper, between.UpperComparisonType());
-		break;
+	if (condition.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
+		auto &between = condition.Cast<BoundFunctionExpression>();
+		auto &input = BoundBetweenExpression::Input(between);
+		auto &lower_bound = BoundBetweenExpression::LowerBound(between);
+		auto &upper_bound = BoundBetweenExpression::UpperBound(between);
+		auto lower_comparison = BoundBetweenExpression::LowerComparisonType(between);
+		auto upper_comparison = BoundBetweenExpression::UpperComparisonType(between);
+		UpdateFilterStatistics(input, lower_bound, lower_comparison);
+		UpdateFilterStatistics(input, upper_bound, upper_comparison);
 	}
-	case ExpressionClass::BOUND_COMPARISON: {
-		auto &comparison = condition.Cast<BoundComparisonExpression>();
-		UpdateFilterStatistics(*comparison.left, *comparison.right, comparison.GetExpressionType());
-		break;
-	}
-	default:
-		break;
+	if (BoundComparisonExpression::IsComparison(condition)) {
+		auto &comparison = condition.Cast<BoundFunctionExpression>();
+		auto &left = BoundComparisonExpression::Left(comparison);
+		auto &right = BoundComparisonExpression::Right(comparison);
+		UpdateFilterStatistics(left, right, comparison.GetExpressionType());
 	}
 }
 

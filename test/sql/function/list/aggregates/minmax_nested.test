@@ -2,9 +2,6 @@
 # description: Test the min/max functions on complex nested types aggregate function
 # group: [aggregates]
 
-statement ok
-pragma enable_verification
-
 # structs
 statement ok
 CREATE TABLE structs AS SELECT {'i': i} s FROM range(1000) t(i);

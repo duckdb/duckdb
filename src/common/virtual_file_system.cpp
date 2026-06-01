@@ -121,6 +121,14 @@ unique_ptr<MemoryMappedFile> VirtualFileSystem::MemoryMapFile(const OpenFileInfo
 	return internal_filesystem.MemoryMapFile(path, flags, options, opener);
 }
 
+FileSystem &VirtualFileSystem::GetDefaultFileSystem() {
+	auto &fs = *file_system_registry->default_fs->file_system;
+	if (SubSystemIsDisabled(fs.GetName())) {
+		throw PermissionException("File system %s has been disabled by configuration", fs.GetName());
+	}
+	return fs;
+}
+
 unique_ptr<FileHandle> VirtualFileSystem::OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
                                                            optional_ptr<FileOpener> opener) {
 	auto compression = flags.Compression();

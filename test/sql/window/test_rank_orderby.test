@@ -2,9 +2,6 @@
 # description: Test argument ordering for RANK and PERCENT_RANK
 # group: [window]
 
-statement ok
-PRAGMA enable_verification
-
 query IIII
 SELECT 
 	i,

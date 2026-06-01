@@ -60,6 +60,10 @@ public:
 	DUCKDB_API void Seek(idx_t location);
 
 private:
+	//! Remove the 'force_full_download' option from the file handle if present, and return whether it was present
+	bool StripForceFullDownloadIfPresent();
+
+private:
 	QueryContext context;
 
 	//! The client caching file system that was used to create this CachingFileHandle

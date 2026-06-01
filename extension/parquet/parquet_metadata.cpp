@@ -854,7 +854,7 @@ void ParquetBloomProbeProcessor::InitializeInternal(ClientContext &context, Parq
 	protocol = make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 	allocator = &BufferAllocator::Get(context);
 	auto column_type = reader.GetColumns()[probe_column_idx.GetIndex()].type;
-	auto comparison = make_uniq<BoundComparisonExpression>(
+	auto comparison = BoundComparisonExpression::Create(
 	    ExpressionType::COMPARE_EQUAL, make_uniq<BoundReferenceExpression>(probe_column_name, column_type, 0),
 	    make_uniq<BoundConstantExpression>(probe_constant.CastAs(context, column_type)));
 	filter = make_uniq<ExpressionFilter>(std::move(comparison));
@@ -909,7 +909,6 @@ void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &proce
 	auto &result_struct = ListVector::GetChildMutable(output);
 	auto &result_struct_entries = StructVector::GetEntries(result_struct);
 
-	ListVector::SetListSize(output, count);
 	ListVector::Reserve(output, count);
 
 	auto output_idx = output.size();
@@ -930,6 +929,7 @@ void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &proce
 	for (idx_t i = 0; i < count; i++) {
 		processor.ReadRow(vectors, i, reader);
 	}
+	ListVector::SetListSize(output, count);
 }
 
 template <>

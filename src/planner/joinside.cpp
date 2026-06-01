@@ -30,9 +30,9 @@ JoinCondition JoinCondition::Copy() const {
 
 unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
 	if (cond.IsComparison()) {
-		auto bound_comparison = make_uniq<BoundComparisonExpression>(
+		auto bound_comparison = BoundComparisonExpression::Create(
 		    cond.GetComparisonType(), std::move(cond.LeftReference()), std::move(cond.RightReference()));
-		return std::move(bound_comparison);
+		return bound_comparison;
 	}
 	return std::move(cond.JoinExpressionReference());
 }
@@ -78,14 +78,14 @@ JoinSide JoinSide::GetJoinSide(TableIndex table_binding, const unordered_set<Tab
 	}
 }
 
-JoinSide JoinSide::GetJoinSide(Expression &expression, const unordered_set<TableIndex> &left_bindings,
+JoinSide JoinSide::GetJoinSide(const Expression &expression, const unordered_set<TableIndex> &left_bindings,
                                const unordered_set<TableIndex> &right_bindings) {
 	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
-		if (colref.depth > 0) {
+		if (colref.Depth() > 0) {
 			throw NotImplementedException("Non-inner join on correlated columns not supported");
 		}
-		return GetJoinSide(colref.binding.table_index, left_bindings, right_bindings);
+		return GetJoinSide(colref.Binding().table_index, left_bindings, right_bindings);
 	}
 	D_ASSERT(expression.GetExpressionType() != ExpressionType::BOUND_REF);
 	if (expression.GetExpressionType() == ExpressionType::SUBQUERY) {
@@ -109,7 +109,7 @@ JoinSide JoinSide::GetJoinSide(Expression &expression, const unordered_set<Table
 		return side;
 	}
 	JoinSide join_side = JoinSide::NONE;
-	ExpressionIterator::EnumerateChildren(expression, [&](Expression &child) {
+	ExpressionIterator::EnumerateChildren(expression, [&](const Expression &child) {
 		auto child_side = GetJoinSide(child, left_bindings, right_bindings);
 		join_side = CombineJoinSide(child_side, join_side);
 	});

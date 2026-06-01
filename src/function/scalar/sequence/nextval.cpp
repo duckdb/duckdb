@@ -93,7 +93,7 @@ void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 unique_ptr<FunctionData> NextValBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 
-	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->HasParameter() || arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 	if (!arguments[0]->IsFoldable()) {
@@ -111,12 +111,12 @@ unique_ptr<FunctionData> NextValBind(BindScalarFunctionInput &input) {
 	return make_uniq<NextvalBindData>(seq);
 }
 
-void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data, const ScalarFunction &) {
+void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data, const BoundScalarFunction &) {
 	auto &next_val_bind_data = bind_data->Cast<NextvalBindData>();
 	serializer.WritePropertyWithDefault(100, "sequence_create_info", next_val_bind_data.create_info);
 }
 
-unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &) {
+unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &) {
 	auto create_info = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<CreateInfo>>(100, "sequence_create_info",
 	                                                                                        unique_ptr<CreateInfo>());
 	if (!create_info) {

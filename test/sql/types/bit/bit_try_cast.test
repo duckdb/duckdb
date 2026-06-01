@@ -2,9 +2,6 @@
 # description: TRY_CAST from BIT to numeric types
 # group: [bit]
 
-statement ok
-PRAGMA enable_verification
-
 # TRY_CAST returns NULL for oversized bitstrings
 query I
 SELECT try_cast(1::BIT as TINYINT);

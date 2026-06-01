@@ -20,9 +20,9 @@ unique_ptr<SQLStatement> CopyDatabaseStatement::Copy() const {
 string CopyDatabaseStatement::ToString() const {
 	string result;
 	result = "COPY FROM DATABASE ";
-	result += KeywordHelper::WriteOptionallyQuoted(from_database);
+	result += SQLIdentifier(from_database);
 	result += " TO ";
-	result += KeywordHelper::WriteOptionallyQuoted(to_database);
+	result += SQLIdentifier(to_database);
 	result += " (";
 	switch (copy_type) {
 	case CopyDatabaseType::COPY_DATA:

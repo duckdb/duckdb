@@ -43,8 +43,8 @@ ConversionException TryCast::UnimplementedErrorMessage(PhysicalType source, Phys
 		if (parameters->cast_source && parameters->cast_target) {
 			auto &source_expr = *parameters->cast_source;
 			auto &target_expr = *parameters->cast_target;
-			return ConversionException(query_location,
-			                           UnimplementedCastMessage(source_expr.return_type, target_expr.return_type));
+			return ConversionException(
+			    query_location, UnimplementedCastMessage(source_expr.GetReturnType(), target_expr.GetReturnType()));
 		}
 	}
 	return ConversionException(query_location, "Unimplemented type for cast (%s -> %s)", source, target);
@@ -1087,6 +1087,39 @@ bool TryCast::Operation(dtime_tz_t input, dtime_t &result, bool strict) {
 //===--------------------------------------------------------------------===//
 // Cast From Timestamps
 //===--------------------------------------------------------------------===//
+template <typename SRC, typename DST>
+static bool TryCastTimebase(const SRC &input, DST &result, bool strict = true) {
+	if (SRC::PRECISION == DST::PRECISION || !input.IsFinite()) {
+		result.value = input.value;
+		return true;
+	} else if (SRC::PRECISION < DST::PRECISION) {
+		const int64_t scaling = DST::PRECISION / SRC::PRECISION;
+		return TryMultiplyOperator::Operation(input.value, scaling, result.value);
+	} else {
+		//	Round away from the epoch.
+		//	Scale first so we don't overflow.
+		const int64_t power_of_ten = SRC::PRECISION / DST::PRECISION;
+		const int64_t scaling = power_of_ten / 2;
+		result.value = input.value / scaling; // NOLINT: power_of_ten >= 10 so scaling >= 5
+		if (result.value < 0) {
+			--result.value;
+		} else {
+			++result.value;
+		}
+		result.value /= 2;
+		return true;
+	}
+}
+
+template <typename SRC, typename DST>
+static DST CastTimebase(const SRC &input) {
+	DST result;
+	if (!TryCastTimebase(input, result)) {
+		throw ConversionException("Could not convert Timestamp  to higher precision.");
+	}
+	return result;
+}
+
 template <>
 bool TryCast::Operation(timestamp_t input, date_t &result, bool strict) {
 	result = Timestamp::GetDate(input);
@@ -1095,7 +1128,7 @@ bool TryCast::Operation(timestamp_t input, date_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(timestamp_t input, dtime_t &result, bool strict) {
-	if (!Timestamp::IsFinite(input)) {
+	if (!input.IsFinite()) {
 		return false;
 	}
 	result = Timestamp::GetTime(input);
@@ -1104,66 +1137,72 @@ bool TryCast::Operation(timestamp_t input, dtime_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(timestamp_t input, timestamp_t &result, bool strict) {
-	result = input;
-	return true;
+	return TryCastTimebase<timestamp_t, timestamp_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(timestamp_sec_t input, timestamp_sec_t &result, bool strict) {
-	result.value = input.value;
-	return true;
+	return TryCastTimebase<timestamp_sec_t, timestamp_sec_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(timestamp_t input, timestamp_sec_t &result, bool strict) {
-	D_ASSERT(Timestamp::IsFinite(input));
-	result.value = input.value / Interval::MICROS_PER_SEC;
-	return true;
+	return TryCastTimebase<timestamp_t, timestamp_sec_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(timestamp_ms_t input, timestamp_ms_t &result, bool strict) {
-	result.value = input.value;
-	return true;
+	return TryCastTimebase<timestamp_ms_t, timestamp_ms_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(timestamp_t input, timestamp_ms_t &result, bool strict) {
-	D_ASSERT(Timestamp::IsFinite(input));
-	result.value = input.value / Interval::MICROS_PER_MSEC;
-	return true;
+	return TryCastTimebase<timestamp_t, timestamp_ms_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(timestamp_ns_t input, timestamp_ns_t &result, bool strict) {
-	result.value = input.value;
-	return true;
+	return TryCastTimebase<timestamp_ns_t, timestamp_ns_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(timestamp_t input, timestamp_ns_t &result, bool strict) {
-	D_ASSERT(Timestamp::IsFinite(input));
-	if (!TryMultiplyOperator::Operation(input.value, Interval::NANOS_PER_MSEC, result.value)) {
-		throw ConversionException("Could not convert TIMESTAMP to TIMESTAMP_NS");
-	}
-	return true;
+	return TryCastTimebase<timestamp_t, timestamp_ns_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(timestamp_tz_t input, timestamp_tz_t &result, bool strict) {
-	result.value = input.value;
-	return true;
+	return TryCastTimebase<timestamp_tz_t, timestamp_tz_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_t input, timestamp_t &result, bool strict) {
+	return TryCastTimebase<timestamp_tz_t, timestamp_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_tz_ns_t &result, bool strict) {
+	return TryCastTimebase<timestamp_tz_ns_t, timestamp_tz_ns_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_ns_t input, timestamp_tz_ns_t &result, bool strict) {
+	return TryCastTimebase<timestamp_ns_t, timestamp_tz_ns_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_ns_t &result, bool strict) {
+	return TryCastTimebase<timestamp_tz_ns_t, timestamp_ns_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(timestamp_t input, timestamp_tz_t &result, bool strict) {
-	result.value = input.value;
-	return true;
+	return TryCastTimebase<timestamp_t, timestamp_tz_t>(input, result, strict);
 }
 
 template <>
 bool TryCast::Operation(timestamp_t input, dtime_tz_t &result, bool strict) {
-	if (!Timestamp::IsFinite(input)) {
+	if (!input.IsFinite()) {
 		return false;
 	}
 	result = dtime_tz_t(Timestamp::GetTime(input), 0);
@@ -1187,198 +1226,165 @@ duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_ns_t input, St
 	return StringCast::Operation<timestamp_ns_t>(input, heap);
 }
 template <>
-duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_t input, StringHeap &heap) {
-	return StringCast::Operation<timestamp_t>(CastTimestampMsToUs::Operation<timestamp_t, timestamp_t>(input), heap);
+duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_ms_t input, StringHeap &heap) {
+	return StringCast::Operation<timestamp_t>(Cast::Operation<timestamp_ms_t, timestamp_t>(input), heap);
 }
 template <>
-duckdb::string_t CastFromTimestampSec::Operation(duckdb::timestamp_t input, StringHeap &heap) {
-	return StringCast::Operation<timestamp_t>(CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input), heap);
-}
-
-template <>
-timestamp_t CastTimestampUsToMs::Operation(timestamp_t input) {
-	if (!Timestamp::IsFinite(input)) {
-		return input;
-	}
-	timestamp_t cast_timestamp(Timestamp::GetEpochRounded(input, Interval::MICROS_PER_MSEC));
-	return cast_timestamp;
+duckdb::string_t CastFromTimestampSec::Operation(duckdb::timestamp_sec_t input, StringHeap &heap) {
+	return StringCast::Operation<timestamp_t>(Cast::Operation<timestamp_sec_t, timestamp_t>(input), heap);
 }
 
 template <>
-timestamp_t CastTimestampUsToNs::Operation(timestamp_t input) {
-	if (!Timestamp::IsFinite(input)) {
-		return input;
-	}
-	timestamp_t cast_timestamp(Timestamp::GetEpochNanoSeconds(input));
-	return cast_timestamp;
+timestamp_ms_t Cast::Operation(timestamp_t input) {
+	return CastTimebase<timestamp_t, timestamp_ms_t>(input);
 }
 
 template <>
-timestamp_t CastTimestampUsToSec::Operation(timestamp_t input) {
-	if (!Timestamp::IsFinite(input)) {
-		return input;
-	}
-	timestamp_t cast_timestamp(Timestamp::GetEpochRounded(input, Interval::MICROS_PER_SEC));
-	return cast_timestamp;
+timestamp_ns_t Cast::Operation(timestamp_t input) {
+	return CastTimebase<timestamp_t, timestamp_ns_t>(input);
 }
 
 template <>
-timestamp_t CastTimestampMsToUs::Operation(timestamp_t input) {
-	if (!Timestamp::IsFinite(input)) {
-		return input;
-	}
-	return Timestamp::FromEpochMs(input.value);
+timestamp_sec_t Cast::Operation(timestamp_t input) {
+	return CastTimebase<timestamp_t, timestamp_sec_t>(input);
 }
 
 template <>
-date_t CastTimestampMsToDate::Operation(timestamp_t input) {
-	return Timestamp::GetDate(Timestamp::FromEpochMs(input.value));
+timestamp_t Cast::Operation(timestamp_ms_t input) {
+	return CastTimebase<timestamp_ms_t, timestamp_t>(input);
 }
 
 template <>
-dtime_t CastTimestampMsToTime::Operation(timestamp_t input) {
-	return Timestamp::GetTime(Timestamp::FromEpochMs(input.value));
+date_t Cast::Operation(timestamp_ms_t input) {
+	return Timestamp::GetDate(CastTimebase<timestamp_ms_t, timestamp_t>(input));
 }
 
 template <>
-timestamp_t CastTimestampMsToNs::Operation(timestamp_t input) {
-	if (!Timestamp::IsFinite(input)) {
-		return input;
-	}
-	auto us = CastTimestampMsToUs::Operation<timestamp_t, timestamp_t>(input);
-	return CastTimestampUsToNs::Operation<timestamp_t, timestamp_t>(us);
+dtime_t Cast::Operation(timestamp_ms_t input) {
+	return Timestamp::GetTime(CastTimebase<timestamp_ms_t, timestamp_t>(input));
 }
 
 template <>
-timestamp_t CastTimestampNsToUs::Operation(timestamp_t input) {
-	if (!Timestamp::IsFinite(input)) {
-		return input;
-	}
-	return Timestamp::FromEpochNanoSeconds(input.value);
+timestamp_ns_t Cast::Operation(timestamp_ms_t input) {
+	return CastTimebase<timestamp_ms_t, timestamp_ns_t>(input);
 }
 
 template <>
-timestamp_t CastTimestampSecToUs::Operation(timestamp_t input) {
-	if (!Timestamp::IsFinite(input)) {
-		return input;
-	}
-	return Timestamp::FromEpochSeconds(input.value);
+bool TryCast::Operation(timestamp_ms_t input, timestamp_sec_t &result, bool strict) {
+	return TryCastTimebase<timestamp_ms_t, timestamp_sec_t>(input, result, strict);
 }
 
 template <>
-date_t CastTimestampNsToDate::Operation(timestamp_t input) {
-	if (input == timestamp_t::infinity()) {
-		return date_t::infinity();
-	} else if (input == timestamp_t::ninfinity()) {
-		return date_t::ninfinity();
-	}
-	const auto us = CastTimestampNsToUs::Operation<timestamp_t, timestamp_t>(input);
-	return Timestamp::GetDate(us);
+bool TryCast::Operation(timestamp_ns_t input, timestamp_ms_t &result, bool strict) {
+	return TryCastTimebase<timestamp_ns_t, timestamp_ms_t>(input, result, strict);
 }
 
 template <>
-dtime_t CastTimestampNsToTime::Operation(timestamp_t input) {
-	const auto us = CastTimestampNsToUs::Operation<timestamp_t, timestamp_t>(input);
-	return Timestamp::GetTime(us);
+bool TryCast::Operation(timestamp_ns_t input, timestamp_t &result, bool strict) {
+	return TryCastTimebase<timestamp_ns_t, timestamp_t>(input, result, strict);
 }
 
 template <>
-dtime_ns_t CastTimestampNsToTimeNs::Operation(timestamp_ns_t input) {
+bool TryCast::Operation(timestamp_ms_t input, timestamp_t &result, bool strict) {
+	return TryCastTimebase<timestamp_ms_t, timestamp_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_sec_t input, timestamp_t &result, bool strict) {
+	return TryCastTimebase<timestamp_sec_t, timestamp_t>(input, result, strict);
+}
+
+template <>
+timestamp_t Cast::Operation(timestamp_ns_t input) {
+	return CastTimebase<timestamp_ns_t, timestamp_t>(input);
+}
+
+template <>
+timestamp_t Cast::Operation(timestamp_sec_t input) {
+	return CastTimebase<timestamp_sec_t, timestamp_t>(input);
+}
+
+template <>
+date_t Cast::Operation(timestamp_ns_t input) {
+	return Timestamp::GetDate(CastTimebase<timestamp_ns_t, timestamp_t>(input));
+}
+
+template <>
+dtime_t Cast::Operation(timestamp_ns_t input) {
+	return Timestamp::GetTime(CastTimebase<timestamp_ns_t, timestamp_t>(input));
+}
+
+template <>
+dtime_ns_t Cast::Operation(timestamp_ns_t input) {
 	return Timestamp::GetTimeNs(input);
 }
 
 template <>
-timestamp_t CastTimestampSecToMs::Operation(timestamp_t input) {
-	if (!Timestamp::IsFinite(input)) {
-		return input;
-	}
-	auto us = CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input);
-	return CastTimestampUsToMs::Operation<timestamp_t, timestamp_t>(us);
+timestamp_ms_t Cast::Operation(timestamp_sec_t input) {
+	return CastTimebase<timestamp_sec_t, timestamp_ms_t>(input);
 }
 
 template <>
-timestamp_t CastTimestampSecToNs::Operation(timestamp_t input) {
-	if (!Timestamp::IsFinite(input)) {
-		return input;
-	}
-	auto us = CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input);
-	return CastTimestampUsToNs::Operation<timestamp_t, timestamp_t>(us);
+timestamp_ns_t Cast::Operation(timestamp_sec_t input) {
+	return CastTimebase<timestamp_sec_t, timestamp_ns_t>(input);
 }
 
 template <>
-date_t CastTimestampSecToDate::Operation(timestamp_t input) {
-	const auto us = CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input);
-	return Timestamp::GetDate(us);
+date_t Cast::Operation(timestamp_sec_t input) {
+	return Timestamp::GetDate(CastTimebase<timestamp_sec_t, timestamp_t>(input));
 }
 
 template <>
-dtime_t CastTimestampSecToTime::Operation(timestamp_t input) {
-	const auto us = CastTimestampSecToUs::Operation<timestamp_t, timestamp_t>(input);
-	return Timestamp::GetTime(us);
+dtime_t Cast::Operation(timestamp_sec_t input) {
+	return Timestamp::GetTime(CastTimebase<timestamp_sec_t, timestamp_t>(input));
 }
 
 //===--------------------------------------------------------------------===//
 // Cast To Timestamp
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCastToTimestampNS::Operation(string_t input, timestamp_ns_t &result, bool strict) {
-	return TryCast::Operation<string_t, timestamp_ns_t>(input, result, strict);
+bool TryCast::Operation(string_t input, timestamp_ms_t &result, bool strict) {
+	timestamp_t us;
+	if (!TryCast::Operation<string_t, timestamp_t>(input, us, strict)) {
+		return false;
+	}
+	return TryCastTimebase<timestamp_t, timestamp_ms_t>(us, result, strict);
 }
 
 template <>
-bool TryCastToTimestampMS::Operation(string_t input, timestamp_t &result, bool strict) {
-	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
+bool TryCast::Operation(string_t input, timestamp_sec_t &result, bool strict) {
+	timestamp_t us;
+	if (!TryCast::Operation<string_t, timestamp_t>(input, us, strict)) {
 		return false;
 	}
-	result = CastTimestampUsToMs::Operation<timestamp_t, timestamp_t>(result);
-	return true;
+	return TryCastTimebase<timestamp_t, timestamp_sec_t>(us, result, strict);
 }
 
 template <>
-bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool strict) {
-	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
+bool TryCast::Operation(date_t input, timestamp_ns_t &result, bool strict) {
+	timestamp_t us;
+	if (!TryCast::Operation<date_t, timestamp_t>(input, us, strict)) {
 		return false;
 	}
-	result = CastTimestampUsToSec::Operation<timestamp_t, timestamp_t>(result);
-	return true;
+	return TryCastTimebase<timestamp_t, timestamp_ns_t>(us, result, strict);
 }
 
 template <>
-bool TryCastToTimestampNS::Operation(date_t input, timestamp_ns_t &result, bool strict) {
-	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
+bool TryCast::Operation(date_t input, timestamp_ms_t &result, bool strict) {
+	timestamp_t us;
+	if (!TryCast::Operation<date_t, timestamp_t>(input, us, strict)) {
 		return false;
 	}
-	if (!Timestamp::IsFinite(result)) {
-		return true;
-	}
-	if (!TryMultiplyOperator::Operation(result.value, Interval::NANOS_PER_MICRO, result.value)) {
-		return false;
-	}
-	return true;
+	return TryCastTimebase<timestamp_t, timestamp_ms_t>(us, result, strict);
 }
 
 template <>
-bool TryCastToTimestampMS::Operation(date_t input, timestamp_t &result, bool strict) {
-	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
+bool TryCast::Operation(date_t input, timestamp_sec_t &result, bool strict) {
+	timestamp_t us;
+	if (!TryCast::Operation<date_t, timestamp_t>(input, us, strict)) {
 		return false;
 	}
-	if (!Timestamp::IsFinite(result)) {
-		return true;
-	}
-	result.value /= Interval::MICROS_PER_MSEC;
-	return true;
-}
-
-template <>
-bool TryCastToTimestampSec::Operation(date_t input, timestamp_t &result, bool strict) {
-	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
-		return false;
-	}
-	if (!Timestamp::IsFinite(result)) {
-		return true;
-	}
-	result.value /= Interval::MICROS_PER_MSEC * Interval::MSECS_PER_SEC;
-	return true;
+	return TryCastTimebase<timestamp_t, timestamp_sec_t>(us, result, strict);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1605,7 +1611,7 @@ template <>
 bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
 	// Pass the query location of the cast source if available.
 	return Geometry::FromString(input, result, StringVector::GetStringHeap(result_vector), parameters.strict,
-	                            parameters.cast_source ? parameters.cast_source->query_location : optional_idx());
+	                            parameters.cast_source ? parameters.cast_source->GetQueryLocation() : optional_idx());
 }
 
 //===--------------------------------------------------------------------===//
@@ -1751,10 +1757,33 @@ bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, CastPar
 
 template <>
 bool TryCastErrorMessage::Operation(string_t input, timestamp_tz_t &result, CastParameters &parameters) {
-	switch (Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result, true)) {
+	timestamp_t us;
+	switch (Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), us, true)) {
 	case TimestampCastResult::SUCCESS:
 	case TimestampCastResult::STRICT_UTC:
-		return true;
+		return TryCastTimebase<timestamp_t, timestamp_tz_t>(us, result, true);
+		;
+	case TimestampCastResult::ERROR_INCORRECT_FORMAT:
+		HandleCastError::AssignError(Timestamp::FormatError(input), parameters);
+		break;
+	case TimestampCastResult::ERROR_NON_UTC_TIMEZONE:
+		HandleCastError::AssignError(Timestamp::UnsupportedTimezoneError(input), parameters);
+		break;
+	case TimestampCastResult::ERROR_RANGE:
+		HandleCastError::AssignError(Timestamp::RangeError(input), parameters);
+		break;
+	}
+	return false;
+}
+
+template <>
+bool TryCastErrorMessage::Operation(string_t input, timestamp_tz_ns_t &result, CastParameters &parameters) {
+	timestamp_ns_t ns;
+	switch (Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), ns, true)) {
+	case TimestampCastResult::SUCCESS:
+	case TimestampCastResult::STRICT_UTC:
+		return TryCastTimebase<timestamp_ns_t, timestamp_tz_ns_t>(ns, result, true);
+		;
 	case TimestampCastResult::ERROR_INCORRECT_FORMAT:
 		HandleCastError::AssignError(Timestamp::FormatError(input), parameters);
 		break;
@@ -1775,14 +1804,23 @@ bool TryCast::Operation(string_t input, timestamp_t &result, bool strict) {
 }
 
 template <>
-bool TryCast::Operation(string_t input, timestamp_tz_t &result, bool strict) {
-	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result, true) ==
+bool TryCast::Operation(string_t input, timestamp_ns_t &result, bool strict) {
+	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result, false) ==
 	       TimestampCastResult::SUCCESS;
 }
 
 template <>
-bool TryCast::Operation(string_t input, timestamp_ns_t &result, bool strict) {
-	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result) == TimestampCastResult::SUCCESS;
+bool TryCast::Operation(string_t input, timestamp_tz_t &result, bool strict) {
+	timestamp_t us;
+	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), us, true) == TimestampCastResult::SUCCESS &&
+	       TryCastTimebase<timestamp_t, timestamp_tz_t>(us, result, strict);
+}
+
+template <>
+bool TryCast::Operation(string_t input, timestamp_tz_ns_t &result, bool strict) {
+	timestamp_ns_t ns;
+	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), ns, true) == TimestampCastResult::SUCCESS &&
+	       TryCastTimebase<timestamp_ns_t, timestamp_tz_ns_t>(ns, result, strict);
 }
 
 template <>
@@ -1792,7 +1830,19 @@ timestamp_t Cast::Operation(string_t input) {
 
 template <>
 timestamp_tz_t Cast::Operation(string_t input) {
-	return timestamp_tz_t(Timestamp::FromCString(input.GetData(), input.GetSize(), true));
+	const auto us = Timestamp::FromCString(input.GetData(), input.GetSize(), true);
+	return CastTimebase<timestamp_t, timestamp_tz_t>(us);
+}
+
+template <>
+timestamp_tz_ns_t Cast::Operation(string_t input) {
+	int32_t nanos;
+	const auto us = Timestamp::FromCString(input.GetData(), input.GetSize(), false, &nanos);
+	timestamp_ns_t ns;
+	if (!Timestamp::TryFromTimestampNanos(us, nanos, ns)) {
+		throw ConversionException(Timestamp::RangeError(input));
+	}
+	return CastTimebase<timestamp_ns_t, timestamp_tz_ns_t>(ns);
 }
 
 template <>
@@ -2904,42 +2954,77 @@ bool IsRepresentableExactly(hugeint_t input, double dst) {
 	return (input <= MAX_INT_REPRESENTABLE_IN_DOUBLE && input >= -MAX_INT_REPRESENTABLE_IN_DOUBLE);
 }
 
+template <class SRC, class DST>
+static bool CanUseDecimalFloatingPointFastPath(SRC input, uint8_t scale) {
+	return duckdb_fast_float::binary_format<DST>::min_exponent_fast_path() <= -scale &&
+	       -scale <= duckdb_fast_float::binary_format<DST>::max_exponent_fast_path() &&
+	       IsRepresentableExactly<SRC, DST>(input, DST(0.0));
+}
+
+template <class UNSIGNED>
+static void FillDecimalDigits(UNSIGNED input, duckdb_fast_float::decimal &decimal) {
+	uint8_t digits[DecimalWidth<hugeint_t>::max];
+	while (input > 0) {
+		digits[decimal.num_digits++] = UnsafeNumericCast<uint8_t>(input % 10);
+		input /= 10;
+	}
+	for (uint32_t i = 0; i < decimal.num_digits; i++) {
+		decimal.digits[i] = digits[decimal.num_digits - i - 1];
+	}
+}
+
 template <class SRC>
-static SRC GetPowerOfTen(SRC input, uint8_t scale) {
-	return static_cast<SRC>(NumericHelper::POWERS_OF_TEN[scale]);
+static void FillDecimalDigits(SRC input, duckdb_fast_float::decimal &decimal, bool &negative) {
+	using UNSIGNED = typename MakeUnsigned<SRC>::type;
+	if (input < 0) {
+		negative = true;
+		auto unsigned_input = UnsafeNumericCast<UNSIGNED>(-(input + 1));
+		FillDecimalDigits<UNSIGNED>(unsigned_input + 1, decimal);
+	} else {
+		negative = false;
+		FillDecimalDigits<UNSIGNED>(UnsafeNumericCast<UNSIGNED>(input), decimal);
+	}
 }
 
-template <>
-hugeint_t GetPowerOfTen(hugeint_t input, uint8_t scale) {
-	return Hugeint::POWERS_OF_TEN[scale];
-}
-
-template <class SRC>
-static void GetDivMod(SRC lhs, SRC rhs, SRC &div, SRC &mod) {
-	div = lhs / rhs;
-	mod = lhs % rhs;
-}
-
-template <>
-void GetDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &div, hugeint_t &mod) {
-	div = Hugeint::DivMod(lhs, rhs, mod);
+static void FillDecimalDigits(hugeint_t input, duckdb_fast_float::decimal &decimal, bool &negative) {
+	if (input < 0) {
+		negative = true;
+		Hugeint::NegateInPlace(input);
+	} else {
+		negative = false;
+	}
+	uint8_t digits[DecimalWidth<hugeint_t>::max];
+	while (input > 0) {
+		uint64_t remainder;
+		input = Hugeint::DivModPositive(input, 10, remainder);
+		digits[decimal.num_digits++] = UnsafeNumericCast<uint8_t>(remainder);
+	}
+	for (uint32_t i = 0; i < decimal.num_digits; i++) {
+		decimal.digits[i] = digits[decimal.num_digits - i - 1];
+	}
 }
 
 template <class SRC, class DST>
-bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t scale) {
-	if (IsRepresentableExactly<SRC, DST>(input, DST(0.0)) || scale == 0) {
-		// Fast path, integer is representable exactly as a float/double
+bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t width, uint8_t scale) {
+	if (scale == 0 || CanUseDecimalFloatingPointFastPath<SRC, DST>(input, scale)) {
+		// Fast path, integer and decimal exponent are representable exactly as a float/double
 		result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
 		return true;
 	}
-	auto power_of_ten = GetPowerOfTen(input, scale);
 
-	SRC div = 0;
-	SRC mod = 0;
-	GetDivMod(input, power_of_ten, div, mod);
+	duckdb_fast_float::decimal decimal;
+	bool negative;
+	FillDecimalDigits(input, decimal, negative);
+	decimal.decimal_point = UnsafeNumericCast<int32_t>(decimal.num_digits) - UnsafeNumericCast<int32_t>(scale);
+	while (decimal.num_digits > 0 && decimal.digits[decimal.num_digits - 1] == 0) {
+		decimal.num_digits--;
+	}
+	for (uint32_t i = decimal.num_digits; i < duckdb_fast_float::max_digit_without_overflow; i++) {
+		decimal.digits[i] = 0;
+	}
 
-	result = Cast::Operation<SRC, DST>(div) +
-	         Cast::Operation<SRC, DST>(mod) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
+	auto adjusted_mantissa = duckdb_fast_float::compute_float<duckdb_fast_float::binary_format<DST>>(decimal);
+	duckdb_fast_float::detail::to_float(negative, adjusted_mantissa, result);
 	return true;
 }
 
@@ -2947,50 +3032,50 @@ bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t scale) {
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, float &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<int16_t, float>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<int16_t, float>(input, result, width, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(int32_t input, float &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<int32_t, float>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<int32_t, float>(input, result, width, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(int64_t input, float &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<int64_t, float>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<int64_t, float>(input, result, width, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, float &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<hugeint_t, float>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<hugeint_t, float>(input, result, width, scale);
 }
 
 // DECIMAL -> DOUBLE
 template <>
 bool TryCastFromDecimal::Operation(int16_t input, double &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<int16_t, double>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<int16_t, double>(input, result, width, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(int32_t input, double &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<int32_t, double>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<int32_t, double>(input, result, width, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(int64_t input, double &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<int64_t, double>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<int64_t, double>(input, result, width, scale);
 }
 
 template <>
 bool TryCastFromDecimal::Operation(hugeint_t input, double &result, CastParameters &parameters, uint8_t width,
                                    uint8_t scale) {
-	return TryCastDecimalToFloatingPoint<hugeint_t, double>(input, result, scale);
+	return TryCastDecimalToFloatingPoint<hugeint_t, double>(input, result, width, scale);
 }
 
 } // namespace duckdb

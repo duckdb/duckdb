@@ -224,15 +224,19 @@ uint64_t JsonDeserializer::ReadUnsignedInt64() {
 }
 
 float JsonDeserializer::ReadFloat() {
-	auto val = GetNextValue();
-	if (!yyjson_is_real(val)) {
-		ThrowTypeError(val, "float");
-	}
-	return yyjson_get_real(val);
+	return LossyNumericCast<float>(ReadDouble());
 }
 
 double JsonDeserializer::ReadDouble() {
 	auto val = GetNextValue();
+	if (yyjson_is_raw(val)) {
+		double res;
+		string_t input(yyjson_get_raw(val));
+		if (!TryCast::Operation<string_t, double>(input, res)) {
+			throw InvalidInputException("Expected a floating point number, but got the string %s", input.GetString());
+		}
+		return res;
+	}
 	if (!yyjson_is_real(val)) {
 		ThrowTypeError(val, "double");
 	}

@@ -2,9 +2,6 @@
 # description: TopN window elimination should preserve mixed-type partition bindings through CTE/projection rewrites
 # group: [optimizer]
 
-statement ok
-PRAGMA enable_verification
-
 query TT
 WITH
 	src(name, date) AS (

@@ -5,8 +5,8 @@
 
 namespace duckdb {
 
-SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
-    : BaseSelectBinder(binder, context, node, info) {
+SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node)
+    : BaseSelectBinder(binder, context, node) {
 }
 
 bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
@@ -16,7 +16,7 @@ bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t d
 		return false;
 	}
 
-	const auto &alias_name = colref.column_names.back();
+	const auto &alias_name = colref.ColumnNames().back();
 	auto entry = node.bind_state.alias_map.find(alias_name);
 	if (entry == node.bind_state.alias_map.end()) {
 		return false;
@@ -27,7 +27,7 @@ bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t d
 	if (alias_index >= node.bound_column_count) {
 		throw BinderException("Column \"%s\" referenced that exists in the SELECT clause - but this column "
 		                      "cannot be referenced before it is defined",
-		                      colref.column_names.back());
+		                      colref.ColumnNames().back());
 	}
 
 	if (node.bind_state.AliasHasSubquery(alias_index)) {
@@ -39,21 +39,6 @@ bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t d
 	auto copied_unbound = node.bind_state.BindAlias(alias_index);
 	result = BindExpression(copied_unbound, depth, false);
 	return true;
-}
-
-bool SelectBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) {
-	// Using `back()` to support both qualified and unqualified aliasing
-	auto alias_name = colref.column_names.back();
-	return node.bind_state.alias_map.find(alias_name) != node.bind_state.alias_map.end();
-}
-
-unique_ptr<ParsedExpression> SelectBinder::GetSQLValueFunction(const string &column_name) {
-	auto alias_entry = node.bind_state.alias_map.find(column_name);
-	if (alias_entry != node.bind_state.alias_map.end()) {
-		// don't replace SQL value functions if they are in the alias map
-		return nullptr;
-	}
-	return ExpressionBinder::GetSQLValueFunction(column_name);
 }
 
 } // namespace duckdb

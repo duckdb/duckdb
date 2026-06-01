@@ -2,9 +2,6 @@
 # description: Test ART index on table with multiple columns and connections
 # group: [multi_column]
 
-statement ok
-PRAGMA enable_verification
-
 require skip_reload
 
 # create a table

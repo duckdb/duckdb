@@ -30,31 +30,67 @@ public:
 	                              unique_ptr<OrderModifier> order_bys = nullptr, bool distinct = false,
 	                              bool is_operator = false, bool export_state = false);
 
-	//! Catalog of the function
-	string catalog;
-	//! Schema of the function
-	string schema;
-	//! Function name
-	string function_name;
-	//! Whether or not the function is an operator, only used for rendering
-	bool is_operator;
-	//! List of arguments to the function
-	vector<unique_ptr<ParsedExpression>> children;
-	//! Whether or not the aggregate function is distinct, only used for aggregates
-	bool distinct;
-	//! Expression representing a filter, only used for aggregates
-	unique_ptr<ParsedExpression> filter;
-	//! Modifier representing an ORDER BY, only used for aggregates
-	unique_ptr<OrderModifier> order_bys;
-	//! whether this function should export its state or not
-	bool export_state;
-
 public:
+	const string &Catalog() const {
+		return catalog;
+	}
+	string &CatalogMutable() {
+		return catalog;
+	}
+	const string &Schema() const {
+		return schema;
+	}
+	string &SchemaMutable() {
+		return schema;
+	}
+	const string &FunctionName() const {
+		return function_name;
+	}
+	string &FunctionNameMutable() {
+		return function_name;
+	}
+	bool IsOperator() const {
+		return is_operator;
+	}
+	bool &IsOperatorMutable() {
+		return is_operator;
+	}
+	const vector<unique_ptr<ParsedExpression>> &GetChildren() const {
+		return children;
+	}
+	vector<unique_ptr<ParsedExpression>> &GetChildrenMutable() {
+		return children;
+	}
+	bool Distinct() const {
+		return distinct;
+	}
+	bool &DistinctMutable() {
+		return distinct;
+	}
+	const unique_ptr<ParsedExpression> &Filter() const {
+		return filter;
+	}
+	unique_ptr<ParsedExpression> &FilterMutable() {
+		return filter;
+	}
+	const unique_ptr<OrderModifier> &OrderBy() const {
+		return order_bys;
+	}
+	unique_ptr<OrderModifier> &OrderByMutable() {
+		return order_bys;
+	}
+	bool ExportState() const {
+		return export_state;
+	}
+	bool &ExportStateMutable() {
+		return export_state;
+	}
+
 	string ToString() const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	static bool Equal(const FunctionExpression &a, const FunctionExpression &b);
+	bool Equals(const ParsedExpression &other) const override;
 	hash_t Hash() const override;
 
 	void Serialize(Serializer &serializer) const override;
@@ -73,39 +109,40 @@ public:
 		if (is_operator) {
 			// built-in operator
 			D_ASSERT(!distinct);
-			if (entry.children.size() == 1) {
+			if (entry.GetChildren().size() == 1) {
 				if (StringUtil::Contains(function_name, "__postfix")) {
-					return "((" + entry.children[0]->ToString() + ")" +
+					return "((" + entry.GetChildren()[0]->ToString() + ")" +
 					       StringUtil::Replace(function_name, "__postfix", "") + ")";
 				} else {
-					return function_name + "(" + entry.children[0]->ToString() + ")";
+					return function_name + "(" + entry.GetChildren()[0]->ToString() + ")";
 				}
-			} else if (entry.children.size() == 2) {
-				return StringUtil::Format("(%s %s %s)", entry.children[0]->ToString(), function_name,
-				                          entry.children[1]->ToString());
+			} else if (entry.GetChildren().size() == 2) {
+				return StringUtil::Format("(%s %s %s)", entry.GetChildren()[0]->ToString(), function_name,
+				                          entry.GetChildren()[1]->ToString());
 			}
 		}
 		// standard function call
 		string result;
 		if (!catalog.empty()) {
-			result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
+			result += SQLIdentifier(catalog) + ".";
 		}
 		if (!schema.empty()) {
-			result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+			result += SQLIdentifier(schema) + ".";
 		}
-		result += KeywordHelper::WriteOptionallyQuoted(function_name);
+		result += SQLIdentifier(function_name);
 		result += "(";
 		if (distinct) {
 			result += "DISTINCT ";
 		}
-		result += StringUtil::Join(entry.children, entry.children.size(), ", ", [&](const unique_ptr<BASE> &child) {
-			return child->GetAlias().empty() || !add_alias
-			           ? child->ToString()
-			           : StringUtil::Format("%s := %s", SQLIdentifier(child->GetAlias()), child->ToString());
-		});
+		result +=
+		    StringUtil::Join(entry.GetChildren(), entry.GetChildren().size(), ", ", [&](const unique_ptr<BASE> &child) {
+			    return child->GetAlias().empty() || !add_alias
+			               ? child->ToString()
+			               : StringUtil::Format("%s := %s", SQLIdentifier(child->GetAlias()), child->ToString());
+		    });
 		// ordered aggregate
 		if (order_bys && !order_bys->orders.empty()) {
-			if (entry.children.empty()) {
+			if (entry.GetChildren().empty()) {
 				result += ") WITHIN GROUP (";
 			}
 			result += " ORDER BY ";
@@ -129,6 +166,26 @@ public:
 
 		return result;
 	}
+
+private:
+	//! Catalog of the function
+	string catalog;
+	//! Schema of the function
+	string schema;
+	//! Function name
+	string function_name;
+	//! Whether or not the function is an operator, only used for rendering
+	bool is_operator;
+	//! List of arguments to the function
+	vector<unique_ptr<ParsedExpression>> children;
+	//! Whether or not the aggregate function is distinct, only used for aggregates
+	bool distinct;
+	//! Expression representing a filter, only used for aggregates
+	unique_ptr<ParsedExpression> filter;
+	//! Modifier representing an ORDER BY, only used for aggregates
+	unique_ptr<OrderModifier> order_bys;
+	//! whether this function should export its state or not
+	bool export_state;
 
 private:
 	FunctionExpression();

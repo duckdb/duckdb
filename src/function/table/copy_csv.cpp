@@ -341,8 +341,6 @@ static void WriteCSVChunkInternal(CSVWriter &writer, CSVWriterState &writer_loca
 
 	executor.Execute(input, cast_chunk);
 
-	cast_chunk.Flatten();
-
 	writer.WriteChunk(cast_chunk, writer_local_state);
 }
 

@@ -19,7 +19,7 @@ explain select count(*) from t where b <=3 and b>=0;
 ----
 physical_plan	<REGEX>:.*Filters:.*
 
-mode skip
+mode skip instable
 # FIXME
 
 #   2) In-clause based on in-clause range/boundary zonemap check

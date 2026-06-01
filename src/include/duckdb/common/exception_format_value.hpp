@@ -10,34 +10,14 @@
 
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 
+#include <ostream>
 #include <vector>
 
 namespace duckdb {
 
 class String;
-
-// Helper class to support custom overloading
-// Escaping " and quoting the value with "
-class SQLIdentifier {
-public:
-	explicit SQLIdentifier(const string &raw_string) : raw_string(raw_string) {
-	}
-
-public:
-	string raw_string;
-};
-
-// Helper class to support custom overloading
-// Escaping ' and quoting the value with '
-class SQLString {
-public:
-	explicit SQLString(const string &raw_string) : raw_string(raw_string) {
-	}
-
-public:
-	string raw_string;
-};
 
 enum class PhysicalType : uint8_t;
 struct LogicalType;
@@ -67,6 +47,11 @@ public:
 	template <class T>
 	static ExceptionFormatValue CreateFormatValue(const T &value) {
 		return int64_t(value);
+	}
+	template <size_t N>
+	static ExceptionFormatValue CreateFormatValue(const char (&value)[N]) {
+		const char *ptr = value;
+		return CreateFormatValue<const char *>(ptr);
 	}
 	static string Format(const string &msg, std::vector<ExceptionFormatValue> &values);
 };

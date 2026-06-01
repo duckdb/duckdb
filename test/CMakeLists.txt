@@ -19,7 +19,6 @@ if(${ENABLE_UNITTEST_CPP_TESTS})
   add_subdirectory(common)
   add_subdirectory(logging)
   add_subdirectory(memoryleak)
-  add_subdirectory(parallel_csv)
   add_subdirectory(secrets)
   add_subdirectory(optimizer)
   add_subdirectory(serialize)
@@ -63,6 +62,10 @@ else()
   # On Windows, tests require internal DuckDB symbols that are not DLL-exported.
   target_link_libraries(unittest duckdb_static test_helpers)
   link_extension_libraries(unittest "")
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_link_libraries(unittest atomic)
 endif()
 
 duckdb_codesign_for_debugging(unittest)

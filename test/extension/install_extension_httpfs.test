@@ -2,9 +2,6 @@
 # description: Test various ways of installing extensions (with httpfs available)
 # group: [extension]
 
-statement ok
-PRAGMA enable_verification
-
 # Now httpfs might be already loaded or not, we keep the test agnostic via REGEX https? that matches both http AND https
 
 statement ok

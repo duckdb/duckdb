@@ -1,0 +1,36 @@
+# name: test/sql/optimizer/plan/test_recursive_join_order_guard.test
+# description: Keep recursive residual/range predicates out of broad join reordering to preserve the equality hash join
+# group: [plan]
+
+statement ok
+pragma explain_output='physical_only'
+
+query II
+explain with recursive
+	field(x, y, v) as (
+		values (0, 0, 'S'), (1, 0, '.'), (0, 1, '.'), (1, 1, '#')
+	),
+	directions(dx, dy) as (
+		values (1, 0), (-1, 0), (0, 1), (0, -1)
+	),
+	maxlen(maxlen) as (
+		select 3
+	),
+	flood(step, x, y, lx, ly) as (
+		select 0::smallint, x, y, -1::smallint, -1::smallint
+		from field
+		where v = 'S'
+		union all
+		select distinct
+			step + 1::smallint,
+			f.x,
+			f.y,
+			l.x,
+			l.y
+		from (flood l cross join directions)
+		join field f on l.x + dx = f.x and l.y + dy = f.y, maxlen
+		where v != '#' and (f.x != lx or f.y != ly) and step < maxlen
+	)
+select * from flood
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*

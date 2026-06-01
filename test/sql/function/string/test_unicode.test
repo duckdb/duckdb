@@ -2,9 +2,6 @@
 # description: UNICODE test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # test on scalars
 query IIIIII
 select UNICODE(NULL), UNICODE(''), UNICODE('$'), UNICODE('¢'), UNICODE('€'), UNICODE('𐍈')

@@ -3,9 +3,6 @@
 # group: [general]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE OR REPLACE TABLE t (id INTEGER, x VARCHAR, y DOUBLE);
 
 statement ok

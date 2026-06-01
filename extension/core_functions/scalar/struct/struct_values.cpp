@@ -9,7 +9,7 @@ namespace duckdb {
 
 static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1);
-	auto &input = args.data[0];
+	const auto &input = args.data[0];
 	const idx_t count = args.size();
 
 	auto &input_children = StructVector::GetEntries(input);
@@ -38,7 +38,7 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 		result.BufferMutable().SetVectorTypeOnly(VectorType::FLAT_VECTOR);
 
 		// Make result validity to mirror input's nulls
-		auto validity_entries = input.Validity(count);
+		auto validity_entries = input.Validity();
 
 		if (validity_entries.CanHaveNull()) {
 			auto &validity = FlatVector::ValidityMutable(result);
@@ -56,7 +56,7 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 static unique_ptr<FunctionData> StructValuesBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	const auto arg_type = arguments[0]->return_type;
+	const auto arg_type = arguments[0]->GetReturnType();
 	if (arg_type == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
@@ -67,7 +67,7 @@ static unique_ptr<FunctionData> StructValuesBind(BindScalarFunctionInput &input)
 
 	// Build unnamed children list using only types, with empty names
 	child_list_t<LogicalType> unnamed_children;
-	auto &children = StructType::GetChildTypes(arguments[0]->return_type);
+	auto &children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 	unnamed_children.reserve(children.size());
 	for (auto &child : children) {
 		unnamed_children.emplace_back("", child.second);

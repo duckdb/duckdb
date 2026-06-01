@@ -3,9 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 FROM read_csv('{DATA_DIR}/csv/test/test.csv', encoding = 'utf-8')
 
 statement ok

@@ -28,18 +28,42 @@ static void ValidateMergeColumns(const Expression &expr, MergeActionCondition co
 	}
 
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
-		bool is_target_column = (colref.binding.table_index == target_table_index);
-		bool is_source_column = source_table_indices.count(colref.binding.table_index.index) > 0;
+		bool is_target_column = (colref.Binding().table_index == target_table_index);
+		bool is_source_column = source_table_indices.count(colref.Binding().table_index.index) > 0;
 
 		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET && is_target_column) {
 			throw BinderException("Target column '%s' cannot be referenced in a WHEN NOT MATCHED BY TARGET clause",
-			                      colref.alias.empty() ? colref.ToString() : colref.alias);
+			                      colref.GetAlias().empty() ? colref.ToString() : colref.GetAlias());
 		}
 		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE && is_source_column) {
 			throw BinderException("Source column '%s' cannot be referenced in a WHEN NOT MATCHED BY SOURCE clause",
-			                      colref.alias.empty() ? colref.ToString() : colref.alias);
+			                      colref.GetAlias().empty() ? colref.ToString() : colref.GetAlias());
 		}
 	});
+}
+
+static void InlineProjectionReferences(unique_ptr<Expression> &expr, TableIndex proj_index,
+                                       const vector<unique_ptr<Expression>> &expressions, idx_t expr_index) {
+	if (!expr) {
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+		InlineProjectionReferences(child, proj_index, expressions, expr_index);
+	});
+	if (expr->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+		return;
+	}
+
+	auto &colref = expr->Cast<BoundColumnRefExpression>();
+	if (colref.Binding().table_index != proj_index) {
+		return;
+	}
+	auto column_index = colref.Binding().column_index.GetIndex();
+	if (column_index >= expr_index || !expressions[column_index]) {
+		throw InternalException("Projection expression cannot reference itself");
+	}
+	expr = expressions[column_index]->Copy();
+	InlineProjectionReferences(expr, proj_index, expressions, expr_index);
 }
 
 vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, const vector<BindingAlias> &aliases,
@@ -70,7 +94,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			WhereBinder where_binder(*this, context);
 			auto cond = where_binder.Bind(action.condition);
 			PlanSubqueries(cond, root);
-			auto cond_type = cond->return_type;
+			auto cond_type = cond->GetReturnType();
 			auto cond_idx = ColumnBinding::PushExpression(expressions, std::move(cond));
 			result->condition = make_uniq<BoundColumnRefExpression>(cond_type, ColumnBinding(proj_index, cond_idx));
 		} else {
@@ -169,7 +193,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 		}
 
 		for (auto &insert_expr : insert_expressions) {
-			auto insert_type = insert_expr->return_type;
+			auto insert_type = insert_expr->GetReturnType();
 			auto expr_index = ColumnBinding::PushExpression(expressions, std::move(insert_expr));
 			result->expressions.push_back(
 			    make_uniq<BoundColumnRefExpression>(insert_type, ColumnBinding(proj_index, expr_index)));
@@ -196,6 +220,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 
 	for (idx_t i = expr_start_idx; i < expressions.size(); i++) {
 		if (expressions[i]) {
+			InlineProjectionReferences(expressions[i], proj_index, expressions, i);
 			ValidateMergeColumns(*expressions[i], condition, get.table_index, source_table_indices);
 		}
 	}
@@ -207,9 +232,9 @@ void RewriteMergeBindings(unique_ptr<Expression> &expr, const vector<ColumnBindi
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
 		    for (idx_t i = 0; i < source_bindings.size(); i++) {
-			    if (bound_colref.binding == source_bindings[i]) {
-				    bound_colref.binding.table_index = new_table_index;
-				    bound_colref.binding.column_index = ProjectionIndex(i);
+			    if (bound_colref.Binding() == source_bindings[i]) {
+				    bound_colref.BindingMutable().table_index = new_table_index;
+				    bound_colref.BindingMutable().column_index = ProjectionIndex(i);
 			    }
 		    }
 	    });
@@ -383,7 +408,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 
 		// insert the source marker
 		auto marker = make_uniq<BoundConstantExpression>(Value::INTEGER(42));
-		marker->alias = "source_marker";
+		marker->SetAlias("source_marker");
 		ColumnBinding source_marker;
 		auto source_marker_idx = ColumnBinding::PushExpression(select_list, std::move(marker));
 		source_marker = ColumnBinding(new_proj_index, source_marker_idx);
@@ -404,7 +429,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		// push a reference
 		merge_into->source_marker = projection_expressions.size();
 		auto marker_ref = make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, source_marker);
-		marker_ref->alias = "source_marker";
+		marker_ref->SetAlias("source_marker");
 		projection_expressions.push_back(std::move(marker_ref));
 	}
 

@@ -768,6 +768,8 @@ typedef struct {
 	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
 	duckdb_value (*duckdb_create_time_ns)(duckdb_time_ns input);
 	duckdb_time_ns (*duckdb_get_time_ns)(duckdb_value val);
+	duckdb_value (*duckdb_create_timestamp_tz_ns)(duckdb_timestamp_ns input);
+	duckdb_timestamp_ns (*duckdb_get_timestamp_tz_ns)(duckdb_value val);
 #endif
 
 // API to create and manipulate vector types
@@ -1372,10 +1374,12 @@ typedef struct {
 #define duckdb_table_function_get_client_context duckdb_ext_api.duckdb_table_function_get_client_context
 
 // Version unstable_new_value_functions
-#define duckdb_create_time_ns     duckdb_ext_api.duckdb_create_time_ns
-#define duckdb_get_time_ns        duckdb_ext_api.duckdb_get_time_ns
-#define duckdb_create_map_value   duckdb_ext_api.duckdb_create_map_value
-#define duckdb_create_union_value duckdb_ext_api.duckdb_create_union_value
+#define duckdb_create_time_ns         duckdb_ext_api.duckdb_create_time_ns
+#define duckdb_create_timestamp_tz_ns duckdb_ext_api.duckdb_create_timestamp_tz_ns
+#define duckdb_get_time_ns            duckdb_ext_api.duckdb_get_time_ns
+#define duckdb_get_timestamp_tz_ns    duckdb_ext_api.duckdb_get_timestamp_tz_ns
+#define duckdb_create_map_value       duckdb_ext_api.duckdb_create_map_value
+#define duckdb_create_union_value     duckdb_ext_api.duckdb_create_union_value
 
 // Version unstable_new_vector_functions
 #define duckdb_create_vector                           duckdb_ext_api.duckdb_create_vector

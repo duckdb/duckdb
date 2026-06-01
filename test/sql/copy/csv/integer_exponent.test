@@ -2,9 +2,6 @@
 # description: Test exponents without decimal points
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query III
 from '{DATA_DIR}/csv/integer_exponent.csv'
 ----

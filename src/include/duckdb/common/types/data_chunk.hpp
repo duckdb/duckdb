@@ -22,6 +22,7 @@ class ExecutionContext;
 class VectorCache;
 class Serializer;
 class Deserializer;
+enum class DebugVerificationMode : uint8_t;
 
 //!  A Data Chunk represents a set of vectors.
 /*!
@@ -61,6 +62,8 @@ public:
 	inline void SetCardinality(const DataChunk &other) {
 		SetCardinality(other.size());
 	}
+	//! Sets the cardinality of all child vectors of this chunk
+	void SetChildCardinality(idx_t count_p);
 
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
 	[[deprecated("Use Vector::Append on data[col_idx] instead (or Vector::SetValue for write-at-index "
@@ -159,12 +162,19 @@ public:
 
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
-	DUCKDB_API void Verify(optional_ptr<DatabaseInstance> database_instance = nullptr);
+	DUCKDB_API void Verify(DatabaseInstance &db);
+	DUCKDB_API void Verify(shared_ptr<DatabaseInstance> &db);
+	DUCKDB_API void Verify(ClientContext &context);
+	DUCKDB_API void Verify(optional_ptr<ClientContext> context);
+	DUCKDB_API void Verify();
 
 private:
 	//! The amount of tuples stored in the data chunk
 	idx_t count;
 	//! Vector caches, used to store data when ::Initialize is called
 	vector<VectorCache> vector_caches;
+
+private:
+	void VerifyInternal(DebugVerificationMode mode, optional_ptr<DatabaseInstance> db);
 };
 } // namespace duckdb

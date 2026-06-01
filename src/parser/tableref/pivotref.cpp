@@ -22,14 +22,14 @@ string PivotColumn::ToString() const {
 		D_ASSERT(pivot_expressions.empty());
 		// unpivot
 		if (unpivot_names.size() == 1) {
-			result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[0]);
+			result += SQLIdentifier(unpivot_names[0]);
 		} else {
 			result += "(";
 			for (idx_t n = 0; n < unpivot_names.size(); n++) {
 				if (n > 0) {
 					result += ", ";
 				}
-				result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[n]);
+				result += SQLIdentifier(unpivot_names[n]);
 			}
 			result += ")";
 		}
@@ -68,12 +68,12 @@ string PivotColumn::ToString() const {
 				result += ")";
 			}
 			if (!entry.alias.empty()) {
-				result += " AS " + KeywordHelper::WriteOptionallyQuoted(entry.alias);
+				result += " AS " + SQLIdentifier(entry.alias);
 			}
 		}
 		result += ")";
 	} else {
-		result += KeywordHelper::WriteOptionallyQuoted(pivot_enum);
+		result += SQLIdentifier(pivot_enum);
 	}
 	return result;
 }
@@ -142,11 +142,11 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 	switch (expr.GetExpressionType()) {
 	case ExpressionType::FUNCTION: {
 		auto &function = expr.Cast<FunctionExpression>();
-		if (function.function_name == "struct_pack") {
+		if (function.FunctionName() == "struct_pack") {
 			unordered_set<string> unique_names;
 			child_list_t<Value> values;
-			values.reserve(function.children.size());
-			for (const auto &child : function.children) {
+			values.reserve(function.GetChildren().size());
+			for (const auto &child : function.GetChildren()) {
 				if (!unique_names.insert(child->GetAlias()).second) {
 					return false;
 				}
@@ -158,10 +158,10 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 			}
 			value = Value::STRUCT(std::move(values));
 			return true;
-		} else if (function.function_name == "list_value") {
+		} else if (function.FunctionName() == "list_value") {
 			vector<Value> values;
-			values.reserve(function.children.size());
-			for (const auto &child : function.children) {
+			values.reserve(function.GetChildren().size());
+			for (const auto &child : function.GetChildren()) {
 				Value child_value;
 				if (!TryFoldConstantForBackwardsCompatibility(*child, child_value)) {
 					return false;
@@ -178,14 +178,14 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 			// finally create the list
 			value = Value::LIST(child_type, values);
 			return true;
-		} else if (function.function_name == "map") {
+		} else if (function.FunctionName() == "map") {
 			Value keys;
-			if (!TryFoldConstantForBackwardsCompatibility(*function.children[0], keys)) {
+			if (!TryFoldConstantForBackwardsCompatibility(*function.GetChildren()[0], keys)) {
 				return false;
 			}
 
 			Value values;
-			if (!TryFoldConstantForBackwardsCompatibility(*function.children[1], values)) {
+			if (!TryFoldConstantForBackwardsCompatibility(*function.GetChildren()[1], values)) {
 				return false;
 			}
 
@@ -201,20 +201,20 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 	}
 	case ExpressionType::VALUE_CONSTANT: {
 		auto &constant = expr.Cast<ConstantExpression>();
-		value = constant.value;
+		value = constant.GetValue();
 		return true;
 	}
 	case ExpressionType::OPERATOR_CAST: {
 		auto &cast = expr.Cast<CastExpression>();
 		Value dummy_value;
-		if (!TryFoldConstantForBackwardsCompatibility(*cast.child, dummy_value)) {
+		if (!TryFoldConstantForBackwardsCompatibility(cast.Child(), dummy_value)) {
 			return false;
 		}
 
 		// Try to default bind cast
 		LogicalType cast_type;
 		try {
-			cast_type = UnboundType::TryDefaultBind(cast.cast_type);
+			cast_type = UnboundType::TryDefaultBind(cast.TargetType());
 		} catch (...) {
 			return false;
 		}
@@ -250,10 +250,10 @@ static bool TryFoldForBackwardsCompatibility(const unique_ptr<ParsedExpression> 
 	}
 	case ExpressionType::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
-		if (function.function_name != "row") {
+		if (function.FunctionName() != "row") {
 			return false;
 		}
-		for (auto &child : function.children) {
+		for (auto &child : function.GetChildren()) {
 			if (!TryFoldForBackwardsCompatibility(child, values)) {
 				return false;
 			}
@@ -274,7 +274,7 @@ static bool TryFoldForBackwardsCompatibility(const unique_ptr<ParsedExpression> 
 vector<PivotColumnEntry> PivotColumn::GetEntriesForSerialization(Serializer &serializer) const {
 	vector<PivotColumnEntry> result;
 
-	if (serializer.ShouldSerialize(7)) {
+	if (serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		// Latest version, serialize as is.
 		// Unfortunately, we have to make a deep copy to return vector by value.
 		for (auto &entry : entries) {
@@ -312,7 +312,7 @@ vector<PivotColumnEntry> PivotColumn::GetEntriesForSerialization(Serializer &ser
 
 		// Otherwise this is a PIVOT with an expression we could not fold.
 		// Older versions of DuckDB do not support this, so throw an exception.
-		const auto target_version = serializer.GetOptions().serialization_compatibility.duckdb_version;
+		const auto target_version = serializer.GetOptions().storage_compatibility.duckdb_version;
 
 		throw SerializationException(
 		    "Cannot serialize non-constant expression '%s' in pivot list when targeting database storage version '%s'",
@@ -337,7 +337,7 @@ string PivotRef::ToString() const {
 			}
 			result += aggregates[aggr_idx]->ToString();
 			if (!aggregates[aggr_idx]->GetAlias().empty()) {
-				result += " AS " + KeywordHelper::WriteOptionallyQuoted(aggregates[aggr_idx]->GetAlias());
+				result += " AS " + SQLIdentifier(aggregates[aggr_idx]->GetAlias());
 			}
 		}
 	} else {
@@ -348,14 +348,14 @@ string PivotRef::ToString() const {
 		}
 		result += "(";
 		if (unpivot_names.size() == 1) {
-			result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[0]);
+			result += SQLIdentifier(unpivot_names[0]);
 		} else {
 			result += "(";
 			for (idx_t n = 0; n < unpivot_names.size(); n++) {
 				if (n > 0) {
 					result += ", ";
 				}
-				result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[n]);
+				result += SQLIdentifier(unpivot_names[n]);
 			}
 			result += ")";
 		}
@@ -376,14 +376,14 @@ string PivotRef::ToString() const {
 	}
 	result += ")";
 	if (!alias.empty()) {
-		result += " AS " + KeywordHelper::WriteOptionallyQuoted(alias);
+		result += " AS " + SQLIdentifier(alias);
 		if (!column_name_alias.empty()) {
 			result += "(";
 			for (idx_t i = 0; i < column_name_alias.size(); i++) {
 				if (i > 0) {
 					result += ", ";
 				}
-				result += KeywordHelper::WriteOptionallyQuoted(column_name_alias[i]);
+				result += SQLIdentifier(column_name_alias[i]);
 			}
 			result += ")";
 		}

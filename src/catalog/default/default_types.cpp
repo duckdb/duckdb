@@ -461,7 +461,7 @@ struct DefaultType {
 	bind_logical_type_function_t bind_function;
 };
 
-using builtin_type_array = std::array<DefaultType, 81>;
+using builtin_type_array = std::array<DefaultType, 82>;
 
 const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, BindDecimalType},
                                            {"dec", LogicalTypeId::DECIMAL, BindDecimalType},
@@ -477,6 +477,7 @@ const builtin_type_array BUILTIN_TYPES = {{{"decimal", LogicalTypeId::DECIMAL, B
                                            {"timestamp_s", LogicalTypeId::TIMESTAMP_SEC, nullptr},
                                            {"timestamptz", LogicalTypeId::TIMESTAMP_TZ, nullptr},
                                            {"timestamp with time zone", LogicalTypeId::TIMESTAMP_TZ, nullptr},
+                                           {"timestamptz_ns", LogicalTypeId::TIMESTAMP_TZ_NS, nullptr},
                                            {"timetz", LogicalTypeId::TIME_TZ, nullptr},
                                            {"time with time zone", LogicalTypeId::TIME_TZ, nullptr},
                                            {"interval", LogicalTypeId::INTERVAL, BindIntervalType},

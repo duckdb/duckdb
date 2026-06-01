@@ -2,9 +2,6 @@
 # description: Rounding half up in float => decimal casts
 # group: [cast]
 
-statement ok
-PRAGMA enable_verification
-
 # PG does NOT use statistical ("Banker's") rounding for floating point => decimal
 
 foreach src FLOAT DOUBLE

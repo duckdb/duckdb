@@ -2,9 +2,6 @@
 # description: Issue 528
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Incorrect result for query that uses REGEXP_MATCHES()
 statement ok
 CREATE TABLE t0(c0 VARCHAR);

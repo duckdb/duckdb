@@ -2,9 +2,6 @@
 # description: Test for issue #17738
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 FROM read_csv('{DATA_DIR}/csv/17738_rn.csv',header=False,skip=3, delim = ';');
 ----
