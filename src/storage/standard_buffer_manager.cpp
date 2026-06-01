@@ -25,7 +25,7 @@ static void WriteGarbageIntoBuffer(BlockLock &lock, BlockHandle &block) {
 		// this would directly be written back into the file
 		return;
 	}
-	memset(buffer.GetDataMutable(), 0xa5, buffer->Size()); // 0xa5 is default memory in debug mode
+	memset(buffer.GetDataMutable(), 0xa5, buffer.Size()); // 0xa5 is default memory in debug mode
 }
 
 static void WriteGarbageIntoBuffer(BlockHandle &block) {
