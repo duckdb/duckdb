@@ -69,7 +69,7 @@ function _close_appender(appender::Appender)
         # After duckdb_appender_destroy() is called any error message can't be retrieved
         # anymore with duckdb_appender_error(). So ..._close() it first, check for error,
         # and retrieve the error message if needed, before calling ..._destroy(). We could
-        # return the error if case it occurs, but raising an exception here matches other
+        # return the error in case it occurs, but raising an exception here matches other
         # calls of Appender.
         res = duckdb_appender_close(appender.handle)
         if res != DuckDBSuccess
