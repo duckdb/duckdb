@@ -417,9 +417,7 @@ static void TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileO
 			}
 		}
 	}
-	if (close(fd) == -1) {
-		extended_error += ". Also, failed closing file";
-	}
+	CloseFileAndAppendError(fd, extended_error);
 	extended_error += ". See also https://duckdb.org/docs/current/connect/concurrency";
 	throw IOException({{"errno", std::to_string(retained_errno)}}, "Could not set lock on file \"%s\": %s", path,
 	                  extended_error);
