@@ -526,7 +526,6 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 	}
 
 	// move over extra properties
-	merge_into->node->cte_map = std::move(node.cte_map);
 	merge_into->node->returning_list = std::move(node.returning_list);
 	return merge_into;
 }
