@@ -367,7 +367,8 @@ BoundStatement Binder::Bind(JoinRef &ref) {
 	if (ref.condition) {
 		WhereBinder binder(*this, context);
 		result->condition = binder.Bind(ref.condition);
-		if (result->type != JoinType::INNER && HasLateralCorrelatedColumns(*result->condition, *this)) {
+		if (result->type != JoinType::INNER && result->type != JoinType::LEFT &&
+		    HasLateralCorrelatedColumns(*result->condition, *this)) {
 			throw NotImplementedException("Non-inner join on correlated columns not supported");
 		}
 	}
