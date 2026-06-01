@@ -1004,7 +1004,26 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformOtherOperatorExpres
 			vector<unique_ptr<ParsedExpression>> children_function;
 			children_function.push_back(std::move(expr));
 			children_function.push_back(std::move(right_expr));
-			auto func_expr = make_uniq<FunctionExpression>(std::move(other_operator), std::move(children_function));
+			vector split_operator = StringUtil::Split(other_operator, ".");
+			string catalog_name = INVALID_CATALOG;
+			string schema_name = INVALID_SCHEMA;
+			string func_name = "";
+			if (split_operator.size() == 1) {
+				func_name = split_operator[0];
+			} else if (split_operator.size() == 2) {
+				schema_name = split_operator[0];
+				func_name = split_operator[1];
+			} else if (split_operator.size() == 3) {
+				catalog_name = split_operator[0];
+				schema_name = split_operator[1];
+				func_name = split_operator[2];
+			} else {
+				throw ParserException(
+				    "Too many identifiers found, expected catalog.schema.operator or schema.operator");
+			}
+
+			auto func_expr = make_uniq<FunctionExpression>(std::move(catalog_name), std::move(schema_name),
+			                                               std::move(func_name), std::move(children_function));
 			func_expr->IsOperatorMutable() = true;
 			expr = std::move(func_expr);
 		}

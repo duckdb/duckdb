@@ -1,0 +1,13 @@
+# name: test/sql/peg_parser/peg_syntax_error.test
+# description: Test analyze and vacuum statements in peg parser
+# group: [peg_parser]
+
+query I
+select 1 OPERATOR(main.+) 2;
+----
+3
+
+statement error
+select 1 OPERATOR(foo.bar.main.+) 2;
+----
+Parser Error: Too many identifiers found
