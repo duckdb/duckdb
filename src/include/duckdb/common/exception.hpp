@@ -88,7 +88,8 @@ enum class ExceptionType : uint8_t {
 	AUTOLOAD = 40,          // Thrown when an extension fails to autoload
 	SEQUENCE = 41,
 	INVALID_CONFIGURATION =
-	    42 // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
+	    42, // An invalid configuration was detected (e.g. a Secret param was missing, or a required setting not found)
+	TIMEOUT = 43 // query exceeded its maximum execution time
 };
 
 class Exception : public std::runtime_error {
@@ -303,6 +304,11 @@ class InterruptException : public Exception {
 public:
 	static constexpr const char *INTERRUPT_MESSAGE = "Interrupted!";
 	DUCKDB_API InterruptException();
+};
+
+class QueryTimeoutException : public Exception {
+public:
+	DUCKDB_API explicit QueryTimeoutException(const string &msg);
 };
 
 class FatalException : public Exception {

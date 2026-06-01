@@ -768,6 +768,13 @@
         "struct": "GeometryMinimumShreddingSize"
     },
     {
+        "name": "global_timeout",
+        "description": "The global maximum execution time per query in milliseconds (0 = no limit). Applies to all connections.",
+        "type": "BIGINT",
+        "scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "home_directory",
         "description": "Sets the home directory used by the system",
         "type": "VARCHAR",

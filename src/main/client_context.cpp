@@ -305,11 +305,18 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	active_query->query = query;
 
 	query_progress.Initialize();
-	// Set query deadline if max_execution_time is configured
+	// Set query deadline from the tighter of max_execution_time (session) and global_timeout (global)
 	auto max_execution_time = Settings::Get<MaxExecutionTimeSetting>(*this);
-	if (max_execution_time > 0) {
+	auto global_timeout = Settings::Get<GlobalTimeoutSetting>(*this);
+	int64_t effective_timeout;
+	if (max_execution_time > 0 && global_timeout > 0) {
+		effective_timeout = MinValue(max_execution_time, global_timeout);
+	} else {
+		effective_timeout = max_execution_time > 0 ? max_execution_time : global_timeout;
+	}
+	if (effective_timeout > 0) {
 		auto now = steady_clock::now();
-		auto deadline_tp = now + milliseconds(max_execution_time);
+		auto deadline_tp = now + milliseconds(effective_timeout);
 		query_deadline = NumericCast<idx_t>(duration_cast<milliseconds>(deadline_tp.time_since_epoch()).count());
 	} else {
 		query_deadline.SetInvalid();
@@ -745,10 +752,9 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 		return query_result;
 	} catch (std::exception &ex) {
 		auto error = ErrorData(ex);
-		if (error.Type() == ExceptionType::INTERRUPT) {
+		if (error.Type() == ExceptionType::INTERRUPT || error.Type() == ExceptionType::TIMEOUT) {
 			auto &executor = *active_query->executor;
 			if (!executor.HasError()) {
-				// Interrupted by the user
 				result.SetError(ex);
 				invalidate_transaction = true;
 			} else {
@@ -1276,7 +1282,7 @@ void ClientContext::InterruptCheck() const {
 	if (query_deadline.IsValid() && ++timeout_check_counter % TIMEOUT_CHECK_INTERVAL == 0) {
 		auto now = NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
 		if (now >= query_deadline.GetIndex()) {
-			throw InterruptException();
+			throw QueryTimeoutException("Query exceeded maximum execution time");
 		}
 	}
 }

@@ -1145,6 +1145,17 @@ struct GeometryMinimumShreddingSize {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct GlobalTimeoutSetting {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "global_timeout";
+	static constexpr const char *Description =
+	    "The global maximum execution time per query in milliseconds (0 = no limit). Applies to all connections.";
+	static constexpr const char *InputType = "BIGINT";
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct HomeDirectorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "home_directory";
