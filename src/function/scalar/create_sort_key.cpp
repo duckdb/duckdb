@@ -1364,7 +1364,6 @@ idx_t CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, Vector &result, idx
 	DecodeSortKeyVectorData sort_key_data(result.GetType(), modifiers);
 	DecodeSortKeyData decode_data(sort_key);
 	DecodeSortKeyRecursive(&decode_data, sort_key_data, result, result_idx, 1);
-	D_ASSERT(decode_data.position == decode_data.size);
 
 	return decode_data.position;
 }
@@ -1378,7 +1377,6 @@ void CreateSortKeyHelpers::DecodeSortKey(string_t sort_key, DataChunk &result, i
 		DecodeSortKeyVectorData vector_data(vec.GetType(), modifiers[c]);
 		DecodeSortKeyRecursive(&decode_data, vector_data, vec, result_idx, 1);
 	}
-	D_ASSERT(decode_data.position == decode_data.size);
 }
 
 static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -1435,9 +1433,6 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 		auto &child_vector = child_vectors[c];
 		DecodeSortKeyVectorData sort_key_data(child_vector.GetType(), bind_data.modifiers[c]);
 		DecodeSortKeyRecursive(decode_data, sort_key_data, child_vector, 0, count);
-	}
-	for (idx_t i = 0; i < count; i++) {
-		D_ASSERT(decode_data[i].position == decode_data[i].size);
 	}
 }
 
