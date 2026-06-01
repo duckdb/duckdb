@@ -20,8 +20,7 @@ class Serializer;
 class Deserializer;
 class MergeIntoAction;
 
-//! MergeQueryNode represents a MERGE INTO DML statement as a QueryNode,
-//! enabling serialization and use as a CTE body.
+//! MergeQueryNode represents a MERGE INTO statement
 class MergeQueryNode : public QueryNode {
 public:
 	static constexpr const QueryNodeType TYPE = QueryNodeType::MERGE_QUERY_NODE;
