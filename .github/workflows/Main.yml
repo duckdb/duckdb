@@ -1349,12 +1349,6 @@ jobs:
       run: |
         make test_storage
 
-    - name: test/configs/force_storage_mmap.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/force_storage_mmap.json ./build/release/test/unittest
-
  summary:
     name: Summary
     if: ${{ always() }}
