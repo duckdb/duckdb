@@ -1,6 +1,5 @@
 #include "duckdb/parallel/task_scheduler_queue.hpp"
 
-#include "duckdb/common/operator/numeric_cast.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
