@@ -8,11 +8,39 @@ EXPLAIN SELECT column00 FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv',
 ----
 physical_plan	<!REGEX>:.*PROJECTION.*
 
+query I
+SELECT column00 FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|') ORDER BY 1;
+----
+1
+1
+1
+1
+1
+1
+2
+3
+3
+3
+
 # Column is used casted
 query II
 EXPLAIN SELECT column00::UTINYINT FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|');
 ----
 physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT column00::UTINYINT FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|') ORDER BY 1;
+----
+1
+1
+1
+1
+1
+1
+2
+3
+3
+3
 
 # Column is used casted and uncasted
 query II
@@ -20,12 +48,41 @@ EXPLAIN SELECT column00, column00::UTINYINT FROM read_csv('{DATA_DIR}/csv/real/l
 ----
 physical_plan	<REGEX>:.*PROJECTION.*
 
+query II
+SELECT column00, column00::UTINYINT FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|') ORDER BY 1, 2;
+----
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+2	2
+3	3
+3	3
+3	3
+
 # Column is used uncasted with filter
 query II
 EXPLAIN SELECT column00 FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|')
 WHERE column00 > 0;
 ----
 physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT column00 FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|')
+WHERE column00 > 0 ORDER BY 1;
+----
+1
+1
+1
+1
+1
+1
+2
+3
+3
+3
 
 # Column is used uncasted with filter on casted.
 # CSV reader doesn't support CAST expression pushdown.
@@ -35,6 +92,21 @@ WHERE column00::UTINYINT > 0;
 ----
 physical_plan	<REGEX>:.*FILTER.*
 
+query I
+SELECT column00 FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|')
+WHERE column00::UTINYINT > 0 ORDER BY 1;
+----
+1
+1
+1
+1
+1
+1
+2
+3
+3
+3
+
 # Same cast in SELECT and ORDER BY: no conflict
 query II
 EXPLAIN SELECT column00::UTINYINT
@@ -43,9 +115,152 @@ ORDER BY column00::UTINYINT;
 ----
 physical_plan	<!REGEX>:.*PROJECTION.*
 
+query I
+SELECT column00::UTINYINT
+FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|')
+ORDER BY column00::UTINYINT;
+----
+1
+1
+1
+1
+1
+1
+2
+3
+3
+3
+
 # Two different casts of the same column: conflict
 query II
 EXPLAIN SELECT column00::UTINYINT, column00::USMALLINT
 FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|');
 ----
 physical_plan	<REGEX>:.*PROJECTION.*
+
+query II
+SELECT column00::UTINYINT, column00::USMALLINT
+FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|') ORDER BY 1, 2;
+----
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+2	2
+3	3
+3	3
+3	3
+
+# TRY_CAST: column is only used with try_cast
+query II
+EXPLAIN SELECT TRY_CAST(column00 AS UTINYINT) FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|');
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT TRY_CAST(column00 AS UTINYINT) FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|') ORDER BY 1;
+----
+1
+1
+1
+1
+1
+1
+2
+3
+3
+3
+
+# TRY_CAST: column used uncasted with try_cast filter.
+# CSV reader doesn't support TRY_CAST expression pushdown.
+query II
+EXPLAIN SELECT column00 FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|')
+WHERE TRY_CAST(column00 AS UTINYINT) > 0;
+----
+physical_plan	<REGEX>:.*FILTER.*
+
+query I
+SELECT column00 FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|')
+WHERE TRY_CAST(column00 AS UTINYINT) > 0 ORDER BY 1;
+----
+1
+1
+1
+1
+1
+1
+2
+3
+3
+3
+
+# TRY_CAST: same try_cast in SELECT and WHERE; type pushed down so filter uses column index
+query II
+EXPLAIN SELECT TRY_CAST(column00 AS UTINYINT)
+FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|')
+WHERE TRY_CAST(column00 AS UTINYINT) > 0;
+----
+physical_plan	<!REGEX>:.*CAST.*
+
+query I
+SELECT TRY_CAST(column00 AS UTINYINT)
+FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|')
+WHERE TRY_CAST(column00 AS UTINYINT) > 0 ORDER BY 1;
+----
+1
+1
+1
+1
+1
+1
+2
+3
+3
+3
+
+# CAST and TRY_CAST of the same target type: no conflict, both pushed down;
+# PROJECTION remains only to duplicate the column, no cast expressions in the plan
+query II
+EXPLAIN SELECT column00::UTINYINT, TRY_CAST(column00 AS UTINYINT)
+FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|');
+----
+physical_plan	<!REGEX>:.*CAST.*
+
+query II
+SELECT column00::UTINYINT, TRY_CAST(column00 AS UTINYINT)
+FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|') ORDER BY 1, 2;
+----
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+2	2
+3	3
+3	3
+3	3
+
+# CAST and TRY_CAST of different target types: conflict, pushdown blocked
+query II
+EXPLAIN SELECT column00::UTINYINT, TRY_CAST(column00 AS USMALLINT)
+FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|');
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+query II
+SELECT column00::UTINYINT, TRY_CAST(column00 AS USMALLINT)
+FROM read_csv('{DATA_DIR}/csv/real/lineitem_sample.csv', delim='|') ORDER BY 1, 2;
+----
+1	1
+1	1
+1	1
+1	1
+1	1
+1	1
+2	2
+3	3
+3	3
+3	3
