@@ -18,7 +18,7 @@ static bool IsCompareDistinct(ExpressionType type) {
 bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, const Value &val) {
 	Value expr_value;
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		expr_value = expr.Cast<BoundConstantExpression>().value;
+		expr_value = expr.Cast<BoundConstantExpression>().GetValue();
 	} else if (expr.IsFoldable()) {
 		if (!ExpressionExecutor::TryEvaluateScalar(context, expr, expr_value)) {
 			return false;
@@ -201,7 +201,7 @@ void StatisticsPropagator::UpdateFilterStatistics(const Expression &left, const 
 		if (entry == statistics_map.end()) {
 			return;
 		}
-		UpdateFilterStatistics(*entry->second, comparison_type, constant->value);
+		UpdateFilterStatistics(*entry->second, comparison_type, constant->GetValue());
 	}
 }
 

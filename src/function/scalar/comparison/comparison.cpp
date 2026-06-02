@@ -178,31 +178,31 @@ bool BoundComparisonExpression::IsComparison(const Expression &expr) {
 }
 
 const Expression &BoundComparisonExpression::Left(const BoundFunctionExpression &comparison_expr) {
-	return *comparison_expr.children[0];
+	return *comparison_expr.GetChildren()[0];
 }
 
 const Expression &BoundComparisonExpression::Right(const BoundFunctionExpression &comparison_expr) {
-	return *comparison_expr.children[1];
+	return *comparison_expr.GetChildren()[1];
 }
 
 unique_ptr<Expression> &BoundComparisonExpression::LeftMutable(BoundFunctionExpression &comparison_expr) {
-	return comparison_expr.children[0];
+	return comparison_expr.GetChildrenMutable()[0];
 }
 
 unique_ptr<Expression> &BoundComparisonExpression::RightMutable(BoundFunctionExpression &comparison_expr) {
-	return comparison_expr.children[1];
+	return comparison_expr.GetChildrenMutable()[1];
 }
 
 void BoundComparisonExpression::SetType(BoundFunctionExpression &comparison_expr, ExpressionType new_type) {
-	auto arguments = comparison_expr.function.GetArguments();
-	auto original_arguments = comparison_expr.function.GetOriginalArguments();
+	auto arguments = comparison_expr.FunctionMutable().GetArguments();
+	auto original_arguments = comparison_expr.FunctionMutable().GetOriginalArguments();
 
 	comparison_expr.SetExpressionTypeUnsafe(new_type);
-	comparison_expr.function = BoundScalarFunction(GetComparisonFunction(new_type));
-	comparison_expr.function.GetArguments() = std::move(arguments);
-	comparison_expr.function.GetOriginalArguments() = std::move(original_arguments);
-	comparison_expr.bind_info.reset();
-	comparison_expr.is_operator = true;
+	comparison_expr.FunctionMutable() = BoundScalarFunction(GetComparisonFunction(new_type));
+	comparison_expr.FunctionMutable().GetArguments() = std::move(arguments);
+	comparison_expr.FunctionMutable().GetOriginalArguments() = std::move(original_arguments);
+	comparison_expr.BindInfoMutable().reset();
+	comparison_expr.IsOperatorMutable() = true;
 }
 
 void BoundComparisonExpression::FlipType(BoundFunctionExpression &comparison_expr) {

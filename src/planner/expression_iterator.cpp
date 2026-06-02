@@ -49,21 +49,21 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
-		for (auto &child : conj_expr.children) {
+		for (auto &child : conj_expr.GetChildrenMutable()) {
 			callback(child);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &func_expr = expr.Cast<BoundFunctionExpression>();
-		for (auto &child : func_expr.children) {
+		for (auto &child : func_expr.GetChildrenMutable()) {
 			callback(child);
 		}
 		break;
 	}
 	case ExpressionClass::BOUND_OPERATOR: {
 		auto &op_expr = expr.Cast<BoundOperatorExpression>();
-		for (auto &child : op_expr.children) {
+		for (auto &child : op_expr.GetChildrenMutable()) {
 			callback(child);
 		}
 		break;

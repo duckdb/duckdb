@@ -147,8 +147,8 @@ LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
 		}
 		if (expr.GetReturnType().IsIntegral()) {
 			auto &constant = expr.Cast<BoundConstantExpression>();
-			if (!constant.value.IsNull()) {
-				return LogicalType::INTEGER_LITERAL(constant.value);
+			if (!constant.GetValue().IsNull()) {
+				return LogicalType::INTEGER_LITERAL(constant.GetValue());
 			}
 		}
 	}
