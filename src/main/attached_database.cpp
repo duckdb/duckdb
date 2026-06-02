@@ -69,8 +69,10 @@ AttachOptions::AttachOptions(const unordered_map<string, Value> &attach_options,
 		}
 
 		if (entry.first == "type") {
-			// Extract the database type.
-			db_type = StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR));
+			// Extract the database type. Normalize case so that
+			// `TYPE sqlite` and `TYPE 'SQLite'` are equivalent.
+			// `TYPE sqlite` and `TYPE 'sqlite3'` are NOT equivalent, aliasing to be applied on comparison
+			db_type = StringUtil::Lower(StringValue::Get(entry.second.DefaultCastAs(LogicalType::VARCHAR)));
 			continue;
 		}
 
