@@ -84,7 +84,6 @@ struct SortKeyLeastGreatest {
 		for (idx_t c_idx = 0; c_idx < args.ColumnCount(); c_idx++) {
 			CreateSortKeyHelpers::CreateSortKey(args.data[c_idx], lstate.modifiers, lstate.sort_keys.data[c_idx]);
 		}
-		lstate.sort_keys.SetChildCardinality(args.size());
 		return lstate.sort_keys;
 	}
 

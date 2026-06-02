@@ -76,7 +76,6 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 		// At least verify that the file exist
 		// The globbing behavior in remote filesystems can lead to files being listed that do not actually exist
 		if (FileSystem::IsRemoteFile(file.path) && !fs.FileExists(file.path)) {
-			output.SetChildCardinality(0);
 			done = true;
 			return SourceResultType::FINISHED;
 		}

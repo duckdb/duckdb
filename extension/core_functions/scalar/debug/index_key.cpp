@@ -200,7 +200,6 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	for (idx_t i = 0; i < bind_data.key_types.size(); i++) {
 		key_chunk.data[i].Reference(args.data[INDEX_KEY_FIXED_ARGS + i]);
 	}
-	key_chunk.SetChildCardinality(count);
 
 	auto &art = bind_data.art;
 	unsafe_vector<ARTKey> keys(count);

@@ -91,23 +91,15 @@ idx_t DataChunk::GetAllocationSize() const {
 }
 
 void DataChunk::Reset() {
-	count = 0;
-	if (data.empty()) {
-		return;
-	}
-	if (vector_caches.empty()) {
-		// InitializeEmpty chunk - vectors reference external buffers, drop references to avoid aliasing.
-		// Calling SetChildCardinality(0) would modify shared buffers, corrupting the original owner's view.
-		for (auto &v : data) {
-			v.SetBuffer(buffer_ptr<VectorBuffer>());
-		}
+	count = optional_idx();
+	if (data.empty() || vector_caches.empty()) {
+		count = 0;
 		return;
 	}
 	if (vector_caches.size() != data.size()) {
 		throw InternalException("VectorCache and column count mismatch in DataChunk::Reset");
 	}
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		// ResetFromCache resets vector type to FLAT and size to 0
 		data[i].ResetFromCache(vector_caches[i]);
 	}
 }
@@ -115,7 +107,7 @@ void DataChunk::Reset() {
 void DataChunk::Destroy() {
 	data.clear();
 	vector_caches.clear();
-	count = 0;
+	count = optional_idx();
 }
 
 Value DataChunk::GetValue(idx_t col_idx, idx_t index) const {
@@ -143,7 +135,7 @@ void DataChunk::CheckCardinality(idx_t count_p) {
 			                        count_p);
 		}
 	}
-	this->count = count_p;
+	this->count = optional_idx();
 }
 
 void DataChunk::SetChildCardinality(idx_t count_p) {
@@ -187,8 +179,9 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) const {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], size(), offset, 0);
+		FlatVector::SetSize(other.data[i], target_count);
 	}
-	other.SetChildCardinality(target_count);
+	other.count = optional_idx();
 }
 
 void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count, const idx_t offset) const {
@@ -200,8 +193,9 @@ void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t s
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], sel, source_count, offset, 0);
+		FlatVector::SetSize(other.data[i], target_count);
 	}
-	other.SetChildCardinality(target_count);
+	other.count = optional_idx();
 }
 
 void DataChunk::Split(DataChunk &other, idx_t split_idx) {
@@ -268,7 +262,8 @@ void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t
 			data[i].Append(other.data[i], other.size(), append_mode);
 		}
 	}
-	count += sel_count;
+	CheckCardinality(current_size + sel_count);
+	count = optional_idx();
 }
 
 void DataChunk::Flatten() {
@@ -344,7 +339,7 @@ void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
 	for (idx_t c = 0; c < ColumnCount(); c++) {
 		data[c].Slice(sel_vector, count_p, merge_cache);
 	}
-	count = count_p;
+	count = optional_idx();
 }
 
 void DataChunk::Slice(const DataChunk &other, idx_t offset, idx_t end) {
@@ -354,7 +349,7 @@ void DataChunk::Slice(const DataChunk &other, idx_t offset, idx_t end) {
 	for (idx_t c = 0; c < other.ColumnCount(); c++) {
 		data[c].Slice(other.data[c], offset, end);
 	}
-	count = end - offset;
+	count = optional_idx();
 }
 
 void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
@@ -369,7 +364,7 @@ void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t 
 			data[col_offset + c].Slice(other.data[c], sel, count_p);
 		}
 	}
-	count = count_p;
+	count = optional_idx();
 }
 
 void DataChunk::Slice(idx_t offset, idx_t slice_count) {
@@ -394,18 +389,20 @@ unsafe_unique_array<UnifiedVectorFormat> DataChunk::ToUnifiedFormat() {
 
 void DataChunk::Hash(Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
-	VectorOperations::Hash(data[0], result, count);
+	auto hash_count = size();
+	VectorOperations::Hash(data[0], result, hash_count);
 	for (idx_t i = 1; i < ColumnCount(); i++) {
-		VectorOperations::CombineHash(result, data[i], count);
+		VectorOperations::CombineHash(result, data[i], hash_count);
 	}
 }
 
 void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
 	D_ASSERT(!column_ids.empty());
-	VectorOperations::Hash(data[column_ids[0]], result, count);
+	auto hash_count = size();
+	VectorOperations::Hash(data[column_ids[0]], result, hash_count);
 	for (idx_t i = 1; i < column_ids.size(); i++) {
-		VectorOperations::CombineHash(result, data[column_ids[i]], count);
+		VectorOperations::CombineHash(result, data[column_ids[i]], hash_count);
 	}
 }
 

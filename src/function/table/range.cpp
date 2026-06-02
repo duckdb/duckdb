@@ -148,7 +148,6 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 		}
 		if (state.empty_range) {
 			// empty range
-			output.SetChildCardinality(0);
 			state.current_input_row++;
 			state.initialized_row = false;
 			return OperatorResultType::HAVE_MORE_OUTPUT;

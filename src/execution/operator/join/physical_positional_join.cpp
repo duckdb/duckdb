@@ -158,7 +158,6 @@ void PositionalJoinGlobalState::GetData(DataChunk &output) {
 	//	LHS exhausted
 	if (exhausted) {
 		//	RHS exhausted too, so we are done
-		output.SetChildCardinality(0);
 		return;
 	}
 

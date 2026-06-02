@@ -53,7 +53,15 @@ public:
 
 public:
 	inline idx_t size() const {
-		return count;
+		if (count.IsValid()) {
+			return count.GetIndex();
+		}
+		for (const auto &v : data) {
+			if (v.GetBufferRef()) {
+				return v.size();
+			}
+		}
+		throw InternalException("DataChunk::size() called but neither count was set, nor any vectors with valid counts were set");
 	}
 	inline idx_t ColumnCount() const {
 		return data.size();
@@ -66,11 +74,11 @@ public:
 	//! NOTE: this only sets the chunk's cardinality, it does NOT resize the child vectors (matching the historical
 	//! behavior on main). Callers that mutate the child vectors directly (e.g. Vector::Append/SetValue) and then call
 	//! SetCardinality rely on this - forwarding to SetChildCardinality would resize/overwrite their data.
-	[[deprecated("Use SetChildCardinality instead")]] DUCKDB_API void SetCardinality(idx_t count_p) {
+	[[deprecated("Use CheckCardinality (preferred) or SetChildCardinality instead")]] DUCKDB_API void SetCardinality(idx_t count_p) {
 		this->count = count_p;
 	}
 	//! Deprecated: use SetChildCardinality instead
-	[[deprecated("Use SetChildCardinality instead")]] DUCKDB_API void SetCardinality(const DataChunk &chunk) {
+	[[deprecated("Use CheckCardinality (preferred) or SetChildCardinality instead")]] DUCKDB_API void SetCardinality(const DataChunk &chunk) {
 		this->count = chunk.size();
 	}
 
@@ -178,7 +186,7 @@ public:
 	DUCKDB_API void Verify();
 
 private:
-	idx_t count = 0;
+	optional_idx count;
 
 private:
 	//! Vector caches, used to store data when ::Initialize is called

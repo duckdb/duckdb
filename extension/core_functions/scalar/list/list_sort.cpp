@@ -211,7 +211,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		for (;;) {
 			DataChunk result_chunk;
 			result_chunk.Initialize(Allocator::DefaultAllocator(), {LogicalType::UINTEGER});
-			result_chunk.SetChildCardinality(0);
 			info.sort->GetData(execution_context, result_chunk, source_input);
 			if (result_chunk.size() == 0) {
 				break;

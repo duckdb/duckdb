@@ -238,7 +238,6 @@ Value PhysicalLimit::GetDelimiter(ExecutionContext &context, DataChunk &input, c
 	for (idx_t c = 0; c < input.ColumnCount(); c++) {
 		ConstantVector::Reference(single_row_input.data[c], count_t(1), input.data[c], 0, input.size());
 	}
-	single_row_input.SetChildCardinality(1);
 	limit_executor.Execute(single_row_input, limit_chunk);
 	auto limit_value = limit_chunk.GetValue(0, 0);
 	return limit_value;
