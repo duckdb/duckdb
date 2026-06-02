@@ -147,9 +147,9 @@ bool ExpressionContainsColumnRef(const Expression &root_expr) {
 	// Here you have a filter on a single column in a table. Return a binding for the column
 	// being filtered on so the filter estimator knows what HLL count to pull
 #ifdef DEBUG
-		                                                              (void)colref.depth;
-		                                                              D_ASSERT(colref.depth == 0);
-		                                                              D_ASSERT(colref.binding.table_index.IsValid());
+		                                                              (void)colref.Depth();
+		                                                              D_ASSERT(colref.Depth() == 0);
+		                                                              D_ASSERT(colref.Binding().table_index.IsValid());
 #endif
 		                                                              // map the base table index to the relation index
 		                                                              // used by the JoinOrderOptimizer
@@ -581,15 +581,15 @@ void RelationManager::GetColumnBindingsFromExpression(const Expression &expressi
 		// Here you have a filter on a single column in a table. Return a binding for the column
 		// being filtered on so the filter estimator knows what HLL count to pull
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
-		D_ASSERT(colref.depth == 0);
-		D_ASSERT(colref.binding.table_index.IsValid());
+		D_ASSERT(colref.Depth() == 0);
+		D_ASSERT(colref.Binding().table_index.IsValid());
 		// only add column bindings that map to relations.
-		if (relation_mapping.find(colref.binding.table_index) == relation_mapping.end()) {
+		if (relation_mapping.find(colref.Binding().table_index) == relation_mapping.end()) {
 			return;
 		}
 		// map the base table index to the relation index used by the JoinOrderOptimizer
-		column_bindings.insert(
-		    ColumnBinding(TableIndex(relation_mapping[colref.binding.table_index].index), colref.binding.column_index));
+		column_bindings.insert(ColumnBinding(TableIndex(relation_mapping[colref.Binding().table_index].index),
+		                                     colref.Binding().column_index));
 	}
 
 	// TODO: handle inequality filters with functions.
@@ -634,19 +634,19 @@ optional_ptr<JoinRelationSet> RelationManager::GetJoinRelations(column_binding_s
 bool RelationManager::ExtractBindings(const Expression &expression, unordered_set<RelationIndex> &bindings) {
 	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
-		D_ASSERT(colref.depth == 0);
-		D_ASSERT(colref.binding.table_index.IsValid());
+		D_ASSERT(colref.Depth() == 0);
+		D_ASSERT(colref.Binding().table_index.IsValid());
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		if (expression.GetAlias() == "SUBQUERY" &&
-		    relation_mapping.find(colref.binding.table_index) == relation_mapping.end()) {
+		    relation_mapping.find(colref.Binding().table_index) == relation_mapping.end()) {
 			// most likely a BoundSubqueryExpression that was created from an uncorrelated subquery
 			// Here we return true and don't fill the bindings, the expression can be reordered.
 			// A filter will be created using this expression, and pushed back on top of the parent
 			// operator during plan reconstruction
 			return true;
 		}
-		if (relation_mapping.find(colref.binding.table_index) != relation_mapping.end()) {
-			bindings.insert(relation_mapping[colref.binding.table_index]);
+		if (relation_mapping.find(colref.Binding().table_index) != relation_mapping.end()) {
+			bindings.insert(relation_mapping[colref.Binding().table_index]);
 		}
 	}
 	if (expression.GetExpressionType() == ExpressionType::BOUND_REF) {

@@ -64,8 +64,8 @@ static bool DependsOnCorrelatedWalk(LogicalOperator &op, Binder &binder,
 			}
 			ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
 			    **expr_ptr, [&](const BoundColumnRefExpression &bound_colref) {
-				    result |= bound_colref.depth > 0 &&
-				              correlated_aliases.find(bound_colref.binding) != correlated_aliases.end();
+				    result |= bound_colref.Depth() > 0 &&
+				              correlated_aliases.find(bound_colref.Binding()) != correlated_aliases.end();
 			    });
 		});
 	}
@@ -606,7 +606,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownAggregate(unique_ptr<Logica
 	}
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 		D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-		auto &bound_func = aggr.expressions[i]->Cast<BoundAggregateExpression>().function;
+		auto &bound_func = aggr.expressions[i]->Cast<BoundAggregateExpression>().Function();
 
 		auto count_fun = CountFunctionBase::GetFunction();
 		auto count_star_fun = CountStarFun::GetFunction();

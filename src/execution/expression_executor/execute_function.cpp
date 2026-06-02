@@ -1,8 +1,6 @@
-#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -241,11 +239,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 		}
 		arguments.SetChildCardinality(count);
 		// ensure the result type is constant
-		if (result.GetVectorType() != VectorType::FLAT_VECTOR &&
-		    result.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.Flatten();
-		}
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		result.FlattenAndSetConstant();
 	}
 	FlatVector::SetSize(result, count_t(count));
 
@@ -287,11 +281,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 		Vector result(LogicalType::BOOLEAN);
 		if (expr.function.HasFunctionCallback()) {
 			expr.function.GetFunctionCallback()(arguments, *state, result);
-			if (result.GetVectorType() != VectorType::FLAT_VECTOR &&
-			    result.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-				result.Flatten();
-			}
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			result.FlattenAndSetConstant();
 		} else {
 			ExecuteConstantSelectFunction(expr, arguments, *state, result);
 		}

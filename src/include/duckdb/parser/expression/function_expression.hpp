@@ -109,16 +109,16 @@ public:
 		if (is_operator) {
 			// built-in operator
 			D_ASSERT(!distinct);
-			if (entry.children.size() == 1) {
+			if (entry.GetChildren().size() == 1) {
 				if (StringUtil::Contains(function_name, "__postfix")) {
-					return "((" + entry.children[0]->ToString() + ")" +
+					return "((" + entry.GetChildren()[0]->ToString() + ")" +
 					       StringUtil::Replace(function_name, "__postfix", "") + ")";
 				} else {
-					return function_name + "(" + entry.children[0]->ToString() + ")";
+					return function_name + "(" + entry.GetChildren()[0]->ToString() + ")";
 				}
-			} else if (entry.children.size() == 2) {
-				return StringUtil::Format("(%s %s %s)", entry.children[0]->ToString(), function_name,
-				                          entry.children[1]->ToString());
+			} else if (entry.GetChildren().size() == 2) {
+				return StringUtil::Format("(%s %s %s)", entry.GetChildren()[0]->ToString(), function_name,
+				                          entry.GetChildren()[1]->ToString());
 			}
 		}
 		// standard function call
@@ -134,14 +134,15 @@ public:
 		if (distinct) {
 			result += "DISTINCT ";
 		}
-		result += StringUtil::Join(entry.children, entry.children.size(), ", ", [&](const unique_ptr<BASE> &child) {
-			return child->GetAlias().empty() || !add_alias
-			           ? child->ToString()
-			           : StringUtil::Format("%s := %s", SQLIdentifier(child->GetAlias()), child->ToString());
-		});
+		result +=
+		    StringUtil::Join(entry.GetChildren(), entry.GetChildren().size(), ", ", [&](const unique_ptr<BASE> &child) {
+			    return child->GetAlias().empty() || !add_alias
+			               ? child->ToString()
+			               : StringUtil::Format("%s := %s", SQLIdentifier(child->GetAlias()), child->ToString());
+		    });
 		// ordered aggregate
 		if (order_bys && !order_bys->orders.empty()) {
-			if (entry.children.empty()) {
+			if (entry.GetChildren().empty()) {
 				result += ") WITHIN GROUP (";
 			}
 			result += " ORDER BY ";

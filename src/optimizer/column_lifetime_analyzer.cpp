@@ -52,7 +52,7 @@ void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 
 void ColumnLifetimeAnalyzer::ExtractColumnBindings(const Expression &expr, vector<ColumnBinding> &bindings) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-	    expr, [&](const BoundColumnRefExpression &bound_ref) { bindings.push_back(bound_ref.binding); });
+	    expr, [&](const BoundColumnRefExpression &bound_ref) { bindings.push_back(bound_ref.Binding()); });
 }
 
 void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
@@ -268,7 +268,7 @@ void ColumnLifetimeAnalyzer::AddVerificationProjection(unique_ptr<LogicalOperato
 
 unique_ptr<Expression> ColumnLifetimeAnalyzer::VisitReplace(BoundColumnRefExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
-	column_references.insert(expr.binding);
+	column_references.insert(expr.Binding());
 	return nullptr;
 }
 
