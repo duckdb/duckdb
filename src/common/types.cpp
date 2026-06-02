@@ -935,9 +935,8 @@ static bool CombineUnequalTypes(optional_ptr<ClientContext> context, const Logic
 	}
 
 	// for other types - use implicit cast rules to check if we can combine the types.
-	// When a ClientContext is available, route through CastFunctionSet so that extensions
-	// that registered casts via RegisterCastFunction(..., implicit_cost) participate.
-	// Without a context (e.g. TryGetMaxLogicalTypeUnchecked) fall back to the raw rules.
+	// With a context: go through CastFunctionSet so that any registered casts are honored.
+	// Without a context: consult the built-in CastRules table directly.
 	auto left_to_right_cost =
 	    context ? CastFunctionSet::ImplicitCastCost(*context, left, right) : CastRules::ImplicitCast(left, right);
 	auto right_to_left_cost =
