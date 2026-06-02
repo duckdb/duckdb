@@ -103,7 +103,7 @@ private:
 	//! Attempts to erase the cached file entry at ObjectCache eviction.
 	void TryEraseCachedFile(const string &path, const weak_ptr<CachedFile> &cached_file);
 	//! Delete ObjectCache entries.
-	void DeleteObjectCacheEntries(vector<string> object_cache_keys);
+	void DeleteObjectCacheEntries(const vector<string> &object_cache_keys);
 
 	//! The BufferManager used to cache files
 	BufferManager &buffer_manager;

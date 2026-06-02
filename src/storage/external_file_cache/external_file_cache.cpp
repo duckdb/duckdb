@@ -248,7 +248,7 @@ void ExternalFileCache::SetEnabled(bool enable_p) {
 			cached_files.clear();
 		}
 	}
-	DeleteObjectCacheEntries(std::move(keys_to_delete));
+	DeleteObjectCacheEntries(keys_to_delete);
 }
 
 idx_t ExternalFileCache::GetGeneration() const {
@@ -313,7 +313,7 @@ void ExternalFileCache::RegisterObjectCacheEntry(const string &path, const share
 	object_cache.Put(key, std::move(entry));
 }
 
-void ExternalFileCache::DeleteObjectCacheEntries(vector<string> object_cache_keys_p) {
+void ExternalFileCache::DeleteObjectCacheEntries(const vector<string> &object_cache_keys_p) {
 	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
 	for (auto &key : object_cache_keys_p) {
 		object_cache.Delete(key);
