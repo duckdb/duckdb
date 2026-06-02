@@ -58,7 +58,9 @@ void Binder::BindUpdateSet(idx_t proj_index, unique_ptr<LogicalOperator> &root, 
 			UpdateBinder binder(*expr_binder_ptr, context);
 			binder.target_type = column.Type();
 			auto bound_expr = binder.Bind(expr);
-			PlanSubqueries(bound_expr, root);
+			if (root) {
+				PlanSubqueries(bound_expr, root);
+			}
 
 			update_expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    bound_expr->return_type, ColumnBinding(proj_index, projection_expressions.size())));
