@@ -70,7 +70,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<TypeExpression>(), depth);
 	case ExpressionClass::FUNCTION: {
 		auto &function = expr_ref.Cast<FunctionExpression>();
-		if (IsUnnestFunction(function.function_name)) {
+		if (IsUnnestFunction(function.FunctionName())) {
 			// special case, not in catalog
 			return BindUnnest(function, depth, root_expression);
 		}
@@ -221,7 +221,7 @@ void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth
 void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &expr) {
 	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
-		if (bound_colref.depth > 0) {
+		if (bound_colref.Depth() > 0) {
 			binder.AddCorrelatedColumn(CorrelatedColumnInfo(bound_colref));
 		}
 	}
@@ -400,7 +400,7 @@ bool ExpressionBinder::IsPotentialAlias(const ColumnRefExpression &colref) {
 	if (!colref.IsQualified()) {
 		return true;
 	}
-	if (colref.column_names.size() == 2) {
+	if (colref.ColumnNames().size() == 2) {
 		return StringUtil::CIEquals(colref.GetTableName(), "alias");
 	}
 	return false;

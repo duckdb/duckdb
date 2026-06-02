@@ -34,7 +34,7 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 	for (idx_t i = 0; i < op.payload_aggregates.size(); i++) {
 		D_ASSERT(op.payload_aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 		auto &bound_aggr_expr = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
-		for (auto &child_expr : bound_aggr_expr.children) {
+		for (auto &child_expr : bound_aggr_expr.GetChildren()) {
 			executor.AddExpression(*child_expr);
 			aggr_input_types.push_back(child_expr->GetReturnType());
 		}

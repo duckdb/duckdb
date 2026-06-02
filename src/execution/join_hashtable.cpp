@@ -2165,6 +2165,12 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	prefix_range_filter.reset();
 	should_build_prefix_range_filter = false;
 	ResetCorrelatedMarkJoinInfo(*this);
+	// The next iteration may rebuild a different small build side, so this iteration's dictionary
+	// state is stale. Keep in lock-step with BuildDictionaryArrays, which sets these four fields.
+	dict_arrays.clear();
+	aux_next_ptrs.Reset();
+	aux_next_ptrs_data = nullptr;
+	use_dict_emission = false;
 }
 
 bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {

@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/window/ranking_functions.hpp"
 #include "duckdb/function/window_function.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -23,7 +24,7 @@ public:
 			//	(and the optimizer is enabled), then we can just use the partition ordering.
 			auto &wexpr = executor.wexpr;
 			auto &arg_orders = executor.wexpr.arg_orders;
-			const auto optimize = ClientConfig::GetConfig(client).enable_optimizer;
+			const auto optimize = Settings::Get<EnableOptimizerSetting>(client);
 			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
 				token_tree = make_uniq<WindowTokenTree>(client, arg_orders, executor.arg_order_idx, payload_count);
 			}

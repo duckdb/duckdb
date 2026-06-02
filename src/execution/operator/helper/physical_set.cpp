@@ -3,17 +3,12 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
 void PhysicalSet::SetGenericVariable(ClientContext &context, idx_t setting_index, SetScope scope, Value target_value) {
-	if (scope == SetScope::GLOBAL) {
-		auto &config = DBConfig::GetConfig(context);
-		config.SetOption(setting_index, std::move(target_value));
-	} else {
-		auto &client_config = ClientConfig::GetConfig(context);
-		client_config.user_settings.SetUserSetting(setting_index, std::move(target_value));
-	}
+	Settings::Set(context, setting_index, scope, std::move(target_value));
 }
 
 void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const String &name,

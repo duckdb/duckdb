@@ -147,7 +147,7 @@ shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other,
 			if (colref.IsQualified()) {
 				throw ParserException("Expected unqualified column for column in USING clause");
 			}
-			using_columns.push_back(colref.column_names[0]);
+			using_columns.push_back(colref.ColumnNames()[0]);
 		}
 		return make_shared_ptr<JoinRelation>(shared_from_this(), other, std::move(using_columns), type, ref_type);
 	} else {

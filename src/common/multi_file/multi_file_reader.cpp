@@ -407,10 +407,10 @@ static string GetExtendedMultiFileError(const MultiFileBindData &bind_data, cons
 		return string();
 	}
 	auto &cast_expr = expr.Cast<BoundCastExpression>();
-	if (cast_expr.child->GetExpressionType() != ExpressionType::BOUND_REF) {
+	if (cast_expr.Child().GetExpressionType() != ExpressionType::BOUND_REF) {
 		return string();
 	}
-	auto &ref = cast_expr.child->Cast<BoundReferenceExpression>();
+	auto &ref = cast_expr.Child().Cast<BoundReferenceExpression>();
 	auto &source_type = ref.GetReturnType();
 	auto &target_type = cast_expr.GetReturnType();
 	auto &columns = reader.GetColumns();

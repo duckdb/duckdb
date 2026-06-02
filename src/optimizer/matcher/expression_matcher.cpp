@@ -53,7 +53,7 @@ bool CastExpressionMatcher::Match(Expression &expr_p, vector<reference<Expressio
 		return true;
 	}
 	auto &expr = expr_p.Cast<BoundCastExpression>();
-	return matcher->Match(*expr.child, bindings);
+	return matcher->Match(*expr.ChildMutable(), bindings);
 }
 
 bool InClauseExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
@@ -98,14 +98,14 @@ bool AggregateExpressionMatcher::Match(Expression &expr_p, vector<reference<Expr
 		return false;
 	}
 	auto &expr = expr_p.Cast<BoundAggregateExpression>();
-	if (!FunctionMatcher::Match(function, expr.function.GetName())) {
+	if (!FunctionMatcher::Match(function, expr.Function().GetName())) {
 		return false;
 	}
 	// we should create matchers for these in the future
-	if (expr.filter || expr.order_bys || expr.aggr_type != AggregateType::NON_DISTINCT) {
+	if (expr.GetFilter() || expr.GetOrderBys() || expr.GetAggregateType() != AggregateType::NON_DISTINCT) {
 		return false;
 	}
-	if (!SetMatcher::Match(matchers, expr.children, bindings, policy)) {
+	if (!SetMatcher::Match(matchers, expr.GetChildrenMutable(), bindings, policy)) {
 		return false;
 	}
 	return true;

@@ -596,6 +596,13 @@
         "default_value": "false"
     },
     {
+        "name": "enable_optimizer",
+        "description": "Whether or not query optimization is enabled",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "true"
+    },
+    {
         "name": "enable_profiling",
         "description": "Enables profiling, and sets the output format (JSON, QUERY_TREE, QUERY_TREE_OPTIMIZER)",
         "type": "VARCHAR",

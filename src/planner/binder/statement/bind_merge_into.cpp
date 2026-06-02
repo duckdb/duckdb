@@ -28,8 +28,8 @@ static void ValidateMergeColumns(const Expression &expr, MergeActionCondition co
 	}
 
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
-		bool is_target_column = (colref.binding.table_index == target_table_index);
-		bool is_source_column = source_table_indices.count(colref.binding.table_index.index) > 0;
+		bool is_target_column = (colref.Binding().table_index == target_table_index);
+		bool is_source_column = source_table_indices.count(colref.Binding().table_index.index) > 0;
 
 		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET && is_target_column) {
 			throw BinderException("Target column '%s' cannot be referenced in a WHEN NOT MATCHED BY TARGET clause",
@@ -55,10 +55,10 @@ static void InlineProjectionReferences(unique_ptr<Expression> &expr, TableIndex 
 	}
 
 	auto &colref = expr->Cast<BoundColumnRefExpression>();
-	if (colref.binding.table_index != proj_index) {
+	if (colref.Binding().table_index != proj_index) {
 		return;
 	}
-	auto column_index = colref.binding.column_index.GetIndex();
+	auto column_index = colref.Binding().column_index.GetIndex();
 	if (column_index >= expr_index || !expressions[column_index]) {
 		throw InternalException("Projection expression cannot reference itself");
 	}
@@ -232,9 +232,9 @@ void RewriteMergeBindings(unique_ptr<Expression> &expr, const vector<ColumnBindi
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
 		    for (idx_t i = 0; i < source_bindings.size(); i++) {
-			    if (bound_colref.binding == source_bindings[i]) {
-				    bound_colref.binding.table_index = new_table_index;
-				    bound_colref.binding.column_index = ProjectionIndex(i);
+			    if (bound_colref.Binding() == source_bindings[i]) {
+				    bound_colref.BindingMutable().table_index = new_table_index;
+				    bound_colref.BindingMutable().column_index = ProjectionIndex(i);
 			    }
 		    }
 	    });

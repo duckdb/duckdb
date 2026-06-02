@@ -49,17 +49,17 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExpressionStatement(PEG
 		// Single COLUMN_REF: treat as table scan
 		auto &col_expr = expressions[0]->Cast<ColumnRefExpression>();
 		if (col_expr.IsQualified()) {
-			if (col_expr.column_names.size() >= 4) {
+			if (col_expr.ColumnNames().size() >= 4) {
 				throw ParserException(
 				    "Too many qualifiers encountered. Expected \"catalog.schema.table\" or \"schema.table\"");
 			}
-			if (col_expr.column_names.size() == 3) {
+			if (col_expr.ColumnNames().size() == 3) {
 				auto table_description =
-				    TableDescription(col_expr.column_names[0], col_expr.column_names[1], col_expr.column_names[2]);
+				    TableDescription(col_expr.ColumnNames()[0], col_expr.ColumnNames()[1], col_expr.ColumnNames()[2]);
 				select_node->from_table = make_uniq<BaseTableRef>(table_description);
-			} else if (col_expr.column_names.size() == 2) {
+			} else if (col_expr.ColumnNames().size() == 2) {
 				auto table_description =
-				    TableDescription(INVALID_CATALOG, col_expr.column_names[0], col_expr.column_names[1]);
+				    TableDescription(INVALID_CATALOG, col_expr.ColumnNames()[0], col_expr.ColumnNames()[1]);
 				select_node->from_table = make_uniq<BaseTableRef>(table_description);
 			}
 		} else {
@@ -111,12 +111,12 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBaseExpression(PEGT
 				    "allowed). Wrap the cast in parentheses: (x::TYPE)[1:3]");
 			}
 			auto operator_expr = unique_ptr_cast<ParsedExpression, OperatorExpression>(std::move(indirection_expr));
-			operator_expr->children.insert(operator_expr->children.begin(), std::move(expr));
+			operator_expr->GetChildrenMutable().insert(operator_expr->GetChildrenMutable().begin(), std::move(expr));
 			expr = std::move(operator_expr);
 			prev_indirection_was_cast = false;
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 			auto function_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(indirection_expr));
-			function_expr->children.insert(function_expr->children.begin(), std::move(expr));
+			function_expr->GetChildrenMutable().insert(function_expr->GetChildrenMutable().begin(), std::move(expr));
 			expr = std::move(function_expr);
 			prev_indirection_was_cast = false;
 		} else if (indirection_expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
@@ -220,16 +220,16 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 
 		transformer.in_window_definition = true;
 		auto expr = transformer.Transform<unique_ptr<WindowExpression>>(over_opt.GetResult());
-		expr->catalog = qualified_function.catalog;
-		expr->schema = qualified_function.schema;
+		expr->CatalogMutable() = qualified_function.catalog;
+		expr->SchemaMutable() = qualified_function.schema;
 		expr->SetFunctionName(lowercase_name);
 
-		expr->children = std::move(function_children);
-		expr->has_ignore_nulls = has_ignore_nulls_result;
-		expr->ignore_nulls = ignore_nulls;
-		expr->filter_expr = std::move(filter_expr);
-		expr->arg_orders = std::move(order_modifier->orders);
-		expr->distinct = distinct;
+		expr->GetChildrenMutable() = std::move(function_children);
+		expr->HasIgnoreNullsMutable() = has_ignore_nulls_result;
+		expr->IgnoreNullsMutable() = ignore_nulls;
+		expr->FilterMutable() = std::move(filter_expr);
+		expr->ArgOrdersMutable() = std::move(order_modifier->orders);
+		expr->DistinctMutable() = distinct;
 		transformer.in_window_definition = false;
 		return std::move(expr);
 	}
@@ -253,18 +253,18 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 			throw ParserException("Wrong number of arguments to the UNPACK operator");
 		}
 		auto expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
-		expr->children = std::move(function_children);
+		expr->GetChildrenMutable() = std::move(function_children);
 		return std::move(expr);
 	} else if (lowercase_name == "try") {
 		if (function_children.size() != 1) {
 			throw ParserException("Wrong number of arguments provided to TRY expression");
 		}
 		auto try_expression = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
-		try_expression->children = std::move(function_children);
+		try_expression->GetChildrenMutable() = std::move(function_children);
 		return std::move(try_expression);
 	} else if (lowercase_name == "construct_array") {
 		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
-		construct_array->children = std::move(function_children);
+		construct_array->GetChildrenMutable() = std::move(function_children);
 		return std::move(construct_array);
 	} else if (lowercase_name == "ifnull") {
 		if (function_children.size() != 2) {
@@ -273,8 +273,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 
 		//  Two-argument COALESCE
 		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
-		coalesce_op->children.push_back(std::move(function_children[0]));
-		coalesce_op->children.push_back(std::move(function_children[1]));
+		coalesce_op->GetChildrenMutable().push_back(std::move(function_children[0]));
+		coalesce_op->GetChildrenMutable().push_back(std::move(function_children[1]));
 		return std::move(coalesce_op);
 	} else if (lowercase_name == "date") {
 		if (function_children.size() != 1) {
@@ -418,7 +418,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformParenthesisExpressi
 void PEGTransformerFactory::RemoveOrderQualificationRecursive(unique_ptr<ParsedExpression> &root_expr) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
 	    *root_expr, [&](ColumnRefExpression &col_ref) {
-		    auto &col_names = col_ref.column_names;
+		    auto &col_names = col_ref.ColumnNamesMutable();
 		    if (col_names.size() > 1) {
 			    col_names = vector<string> {col_names.back()};
 		    }
@@ -430,16 +430,16 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayParensSelect(P
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto subquery_expr = make_uniq<SubqueryExpression>();
-	subquery_expr->subquery = transformer.Transform<unique_ptr<SelectStatement>>(extract_parens);
+	subquery_expr->SubqueryMutable() = transformer.Transform<unique_ptr<SelectStatement>>(extract_parens);
 	// ARRAY expression
 	// wrap subquery into
 	// "SELECT CASE WHEN ARRAY_AGG(col) IS NULL THEN [] ELSE ARRAY_AGG(col) END FROM (...) tbl"
 	auto select_node = make_uniq<SelectNode>();
 	unique_ptr<ParsedExpression> array_agg_child;
 	optional_ptr<SelectNode> sub_select;
-	if (subquery_expr->subquery->node->type == QueryNodeType::SELECT_NODE) {
+	if (subquery_expr->Subquery()->node->type == QueryNodeType::SELECT_NODE) {
 		// easy case - subquery is a SELECT
-		sub_select = subquery_expr->subquery->node->Cast<SelectNode>();
+		sub_select = subquery_expr->Subquery()->node->Cast<SelectNode>();
 		if (sub_select->select_list.size() != 1) {
 			throw BinderException(*subquery_expr, "Subquery returns %zu columns - expected 1",
 			                      sub_select->select_list.size());
@@ -449,7 +449,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayParensSelect(P
 		// subquery is not a SELECT but a UNION or CTE
 		// we can still support this but it is more challenging since we can't push columns for the ORDER BY
 		auto columns_star = make_uniq<StarExpression>();
-		columns_star->columns = true;
+		columns_star->IsColumnsMutable() = true;
 		array_agg_child = std::move(columns_star);
 	}
 
@@ -458,16 +458,16 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayParensSelect(P
 	children.push_back(std::move(array_agg_child));
 	auto aggr = make_uniq<FunctionExpression>("array_agg", std::move(children));
 	// push ORDER BY modifiers into the array_agg
-	for (auto &modifier : subquery_expr->subquery->node->modifiers) {
+	for (auto &modifier : subquery_expr->SubqueryMutable()->node->modifiers) {
 		if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
-			aggr->order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(modifier->Copy());
+			aggr->OrderByMutable() = unique_ptr_cast<ResultModifier, OrderModifier>(modifier->Copy());
 			break;
 		}
 	}
 	// transform constants (e.g. ORDER BY 1) into positional references (ORDER BY #1)
 	idx_t array_idx = 0;
-	if (aggr->order_bys) {
-		for (auto &order : aggr->order_bys->orders) {
+	if (aggr->OrderBy()) {
+		for (auto &order : aggr->OrderByMutable()->orders) {
 			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &constant_expr = order.expression->Cast<ConstantExpression>();
 				Value bigint_value;
@@ -505,14 +505,14 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayParensSelect(P
 	select_node->select_list.push_back(std::move(case_expr));
 
 	// FROM (...) tbl
-	auto child_subquery = make_uniq<SubqueryRef>(std::move(subquery_expr->subquery));
+	auto child_subquery = make_uniq<SubqueryRef>(std::move(subquery_expr->SubqueryMutable()));
 	select_node->from_table = std::move(child_subquery);
 
 	auto new_subquery = make_uniq<SelectStatement>();
 	new_subquery->node = std::move(select_node);
-	subquery_expr->subquery = std::move(new_subquery);
+	subquery_expr->SubqueryMutable() = std::move(new_subquery);
 
-	subquery_expr->subquery_type = SubqueryType::SCALAR;
+	subquery_expr->GetSubqueryTypeMutable() = SubqueryType::SCALAR;
 	return std::move(subquery_expr);
 }
 
@@ -650,11 +650,11 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsExpression(PEGTra
 		auto is_expr = transformer.Transform<unique_ptr<ParsedExpression>>(is_test_expr);
 		if (is_expr->GetExpressionClass() == ExpressionClass::COMPARISON) {
 			auto compare_expr = unique_ptr_cast<ParsedExpression, ComparisonExpression>(std::move(is_expr));
-			compare_expr->left = make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(expr));
+			compare_expr->LeftMutable() = make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(expr));
 			expr = std::move(compare_expr);
 		} else if (is_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
 			auto operator_expr = unique_ptr_cast<ParsedExpression, OperatorExpression>(std::move(is_expr));
-			operator_expr->children.insert(operator_expr->children.begin(), std::move(expr));
+			operator_expr->GetChildrenMutable().insert(operator_expr->GetChildrenMutable().begin(), std::move(expr));
 			expr = std::move(operator_expr);
 		} else {
 			throw InternalException("Unexpected expression encountered in IsExpression: %s",
@@ -788,28 +788,28 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeExpres
 		}
 	} else if (between_in_like_expr->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto func_expr = unique_ptr_cast<ParsedExpression, FunctionExpression>(std::move(between_in_like_expr));
-		if (func_expr->function_name == "contains") {
-			func_expr->children.push_back(std::move(expr));
+		if (func_expr->FunctionName() == "contains") {
+			func_expr->GetChildrenMutable().push_back(std::move(expr));
 		} else {
-			func_expr->children.insert(func_expr->children.begin(), std::move(expr));
+			func_expr->GetChildrenMutable().insert(func_expr->GetChildrenMutable().begin(), std::move(expr));
 		}
 		if (has_not) {
-			if (!TryNegateLikeFunction(func_expr->function_name)) {
+			if (!TryNegateLikeFunction(func_expr->FunctionNameMutable())) {
 				// If it wasn't a special "Like" function, wrap it in a standard NOT operator
 				expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(func_expr));
 			} else {
 				expr = std::move(func_expr);
 			}
-		} else if (func_expr->function_name == "!~") {
-			func_expr->function_name = "regexp_full_match";
-			func_expr->is_operator = false;
+		} else if (func_expr->FunctionName() == "!~") {
+			func_expr->FunctionNameMutable() = "regexp_full_match";
+			func_expr->IsOperatorMutable() = false;
 			expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(func_expr));
 		} else {
 			expr = std::move(func_expr);
 		}
 	} else if (between_in_like_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
 		auto &operator_expr = between_in_like_expr->Cast<OperatorExpression>();
-		operator_expr.children.insert(operator_expr.children.begin(), std::move(expr));
+		operator_expr.GetChildrenMutable().insert(operator_expr.GetChildrenMutable().begin(), std::move(expr));
 		if (has_not) {
 			expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(between_in_like_expr));
 		} else {
@@ -817,7 +817,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeExpres
 		}
 	} else if (between_in_like_expr->GetExpressionClass() == ExpressionClass::SUBQUERY) {
 		auto &subquery_expr = between_in_like_expr->Cast<SubqueryExpression>();
-		subquery_expr.child = std::move(expr);
+		subquery_expr.GetChildMutable() = std::move(expr);
 		if (has_not) {
 			expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(between_in_like_expr));
 		} else {
@@ -867,9 +867,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInExpressionList(PE
 	if (in_children.size() == 1 && in_children[0]->GetExpressionClass() == ExpressionClass::SUBQUERY) {
 		auto &subquery_expr = in_children[0]->Cast<SubqueryExpression>();
 		auto result = make_uniq<SubqueryExpression>();
-		result->subquery_type = SubqueryType::ANY;
-		result->comparison_type = ExpressionType::COMPARE_EQUAL;
-		result->subquery = std::move(subquery_expr.subquery);
+		result->GetSubqueryTypeMutable() = SubqueryType::ANY;
+		result->GetComparisonTypeMutable() = ExpressionType::COMPARE_EQUAL;
+		result->SubqueryMutable() = std::move(subquery_expr.SubqueryMutable());
 		return std::move(result);
 	}
 	auto result = make_uniq<OperatorExpression>(ExpressionType::COMPARE_IN, std::move(in_children));
@@ -881,9 +881,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInSelectStatement(P
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
 	auto result = make_uniq<SubqueryExpression>();
-	result->subquery_type = SubqueryType::ANY;
-	result->comparison_type = ExpressionType::COMPARE_EQUAL;
-	result->subquery = transformer.Transform<unique_ptr<SelectStatement>>(extract_parens);
+	result->GetSubqueryTypeMutable() = SubqueryType::ANY;
+	result->GetComparisonTypeMutable() = ExpressionType::COMPARE_EQUAL;
+	result->SubqueryMutable() = transformer.Transform<unique_ptr<SelectStatement>>(extract_parens);
 	return std::move(result);
 }
 
@@ -913,7 +913,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLikeClause(PEGTrans
 	}
 	auto result = make_uniq<FunctionExpression>(like_variation, std::move(like_children));
 	if (like_variation != "regexp_full_match") {
-		result->is_operator = true;
+		result->IsOperatorMutable() = true;
 	}
 	return std::move(result);
 }
@@ -957,16 +957,17 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformOtherOperatorExpres
 				if (expression_type == ExpressionType::INVALID) {
 					throw ParserException("ANY and ALL operators require one of =,<>,>,<,>=,<= comparisons!");
 				}
-				subquery_expr->subquery_type = SubqueryType::ANY;
-				subquery_expr->comparison_type = expression_type;
+				subquery_expr->GetSubqueryTypeMutable() = SubqueryType::ANY;
+				subquery_expr->GetComparisonTypeMutable() = expression_type;
 				auto &right_expr_subquery = right_expr->Cast<SubqueryExpression>();
-				subquery_expr->subquery = std::move(right_expr_subquery.subquery);
-				subquery_expr->child = std::move(expr);
+				subquery_expr->SubqueryMutable() = std::move(right_expr_subquery.SubqueryMutable());
+				subquery_expr->GetChildMutable() = std::move(expr);
 				if (!is_any) {
 					// ALL sublink is equivalent to NOT(ANY) with inverted comparison
 					// e.g. [= ALL()] is equivalent to [NOT(<> ANY())]
 					// first invert the comparison type
-					subquery_expr->comparison_type = NegateComparisonExpression(subquery_expr->comparison_type);
+					subquery_expr->GetComparisonTypeMutable() =
+					    NegateComparisonExpression(subquery_expr->GetComparisonType());
 					return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(subquery_expr));
 				}
 				expr = std::move(subquery_expr);
@@ -984,15 +985,16 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformOtherOperatorExpres
 				select_node->select_list.push_back(make_uniq<FunctionExpression>("UNNEST", std::move(children)));
 				select_node->from_table = make_uniq<EmptyTableRef>();
 				select_statement->node = std::move(select_node);
-				subquery_expr->subquery = std::move(select_statement);
-				subquery_expr->subquery_type = SubqueryType::ANY;
-				subquery_expr->child = std::move(expr);
-				subquery_expr->comparison_type = expression_type;
+				subquery_expr->SubqueryMutable() = std::move(select_statement);
+				subquery_expr->GetSubqueryTypeMutable() = SubqueryType::ANY;
+				subquery_expr->GetChildMutable() = std::move(expr);
+				subquery_expr->GetComparisonTypeMutable() = expression_type;
 				if (!is_any) {
 					// ALL sublink is equivalent to NOT(ANY) with inverted comparison
 					// e.g. [= ALL()] is equivalent to [NOT(<> ANY())]
 					// first invert the comparison type
-					subquery_expr->comparison_type = NegateComparisonExpression(subquery_expr->comparison_type);
+					subquery_expr->GetComparisonTypeMutable() =
+					    NegateComparisonExpression(subquery_expr->GetComparisonType());
 					return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(subquery_expr));
 				}
 				return std::move(subquery_expr);
@@ -1002,8 +1004,21 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformOtherOperatorExpres
 			vector<unique_ptr<ParsedExpression>> children_function;
 			children_function.push_back(std::move(expr));
 			children_function.push_back(std::move(right_expr));
-			auto func_expr = make_uniq<FunctionExpression>(std::move(other_operator), std::move(children_function));
-			func_expr->is_operator = true;
+			vector split_operator = StringUtil::Split(other_operator, ".");
+			string schema_name = INVALID_SCHEMA;
+			string func_name = "";
+			if (split_operator.size() == 1) {
+				func_name = split_operator[0];
+			} else if (split_operator.size() == 2) {
+				schema_name = split_operator[0];
+				func_name = split_operator[1];
+			} else {
+				throw ParserException("Too many identifiers found, expected schema.operator or operator");
+			}
+
+			auto func_expr = make_uniq<FunctionExpression>(INVALID_CATALOG, std::move(schema_name),
+			                                               std::move(func_name), std::move(children_function));
+			func_expr->IsOperatorMutable() = true;
 			expr = std::move(func_expr);
 		}
 	}
@@ -1020,11 +1035,20 @@ string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer
 	return transformer.Transform<string>(child);
 }
 
-// QualifiedOperator <- 'OPERATOR' Parens(AnyOp)
+// QualifiedOperator <- 'OPERATOR' Parens(ColId* AnyOp)
 string PEGTransformerFactory::TransformQualifiedOperator(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &any_op_pr = ExtractResultFromParens(list_pr.GetChild(1));
-	return transformer.Transform<string>(any_op_pr);
+	auto &any_op_pr = ExtractResultFromParens(list_pr.GetChild(1)).Cast<ListParseResult>();
+	auto &repeat_colid_opt = any_op_pr.Child<OptionalParseResult>(0);
+	vector<string> result;
+	if (repeat_colid_opt.HasResult()) {
+		auto &repeat_colid = repeat_colid_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &colid : repeat_colid.GetChildren()) {
+			result.push_back(transformer.Transform<string>(colid));
+		}
+	}
+	result.push_back(transformer.Transform<string>(any_op_pr.GetChild(1)));
+	return StringUtil::Join(result, ".");
 }
 
 // AnyOp <- '!~~*' / '>>=' / ... / '!'
@@ -1089,7 +1113,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBitwiseExpression(P
 		bit_children.push_back(
 		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
 		auto func_expr = make_uniq<FunctionExpression>(std::move(bit), std::move(bit_children));
-		func_expr->is_operator = true;
+		func_expr->IsOperatorMutable() = true;
 		expr = std::move(func_expr);
 	}
 	return expr;
@@ -1120,7 +1144,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAdditiveExpression(
 		term_children.push_back(
 		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
 		auto func_expr = make_uniq<FunctionExpression>(std::move(term), std::move(term_children));
-		func_expr->is_operator = true;
+		func_expr->IsOperatorMutable() = true;
 		if (inner_list_pr.offset.IsValid()) {
 			transformer.SetQueryLocation(*func_expr, inner_list_pr.offset);
 		}
@@ -1157,7 +1181,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMultiplicativeExpre
 		factor_children.push_back(
 		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
 		auto func_expr = make_uniq<FunctionExpression>(std::move(factor), std::move(factor_children));
-		func_expr->is_operator = true;
+		func_expr->IsOperatorMutable() = true;
 		expr = std::move(func_expr);
 	}
 	return expr;
@@ -1187,7 +1211,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExponentiationExpre
 		exponent_children.push_back(
 		    transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1)));
 		auto func_expr = make_uniq<FunctionExpression>(std::move(exponent), std::move(exponent_children));
-		func_expr->is_operator = true;
+		func_expr->IsOperatorMutable() = true;
 		expr = std::move(func_expr);
 	}
 	return expr;
@@ -1220,7 +1244,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCollateExpression(P
 			collate_string = const_expr.GetValue().GetValue<string>();
 		} else if (collate_string_expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 			auto &col_ref = collate_string_expr->Cast<ColumnRefExpression>();
-			collate_string = StringUtil::Join(col_ref.column_names, ".");
+			collate_string = StringUtil::Join(col_ref.ColumnNames(), ".");
 		} else {
 			throw NotImplementedException("Unexpected expression encountered for collate, %s",
 			                              EnumUtil::ToString(collate_string_expr->GetExpressionClass()));
@@ -1332,7 +1356,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(std::move(expr));
 		auto func_expr = make_uniq<FunctionExpression>(prefix, std::move(children));
-		func_expr->is_operator = true;
+		func_expr->IsOperatorMutable() = true;
 		expr = std::move(func_expr);
 	}
 	return expr;
@@ -1366,7 +1390,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAnonymousParameter(
 	transformer.SetParam(identifier, known_param_index, PreparedParamType::AUTO_INCREMENT);
 	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
 
-	expr->identifier = identifier;
+	expr->IdentifierMutable() = identifier;
 	return std::move(expr);
 }
 
@@ -1394,7 +1418,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformQuestionMarkNumbere
 		transformer.SetParam(identifier, known_param_index, PreparedParamType::POSITIONAL);
 	}
 
-	expr->identifier = identifier;
+	expr->IdentifierMutable() = identifier;
 	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
 	return std::move(expr);
 }
@@ -1423,7 +1447,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformNumberedParameter(P
 		transformer.SetParam(identifier, known_param_index, PreparedParamType::POSITIONAL);
 	}
 
-	expr->identifier = identifier;
+	expr->IdentifierMutable() = identifier;
 	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
 	return std::move(expr);
 }
@@ -1445,7 +1469,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColLabelParameter(P
 		transformer.SetParam(identifier, known_param_index, PreparedParamType::NAMED);
 	}
 
-	expr->identifier = identifier;
+	expr->IdentifierMutable() = identifier;
 	transformer.SetParamCount(MaxValue<idx_t>(transformer.ParamCount(), known_param_index));
 	return std::move(expr);
 }
@@ -1604,11 +1628,11 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMethodExpression(PE
 	}
 	auto result =
 	    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, collabel, std::move(function_children));
-	result->distinct = distinct;
+	result->DistinctMutable() = distinct;
 	if (!order_by.empty()) {
 		auto order_by_modifier = make_uniq<OrderModifier>();
 		order_by_modifier->orders = std::move(order_by);
-		result->order_bys = std::move(order_by_modifier);
+		result->OrderByMutable() = std::move(order_by_modifier);
 	}
 	return std::move(result);
 }
@@ -1702,6 +1726,10 @@ string PEGTransformerFactory::TransformTableQualification(PEGTransformer &transf
 	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
 
+string PEGTransformerFactory::TransformColIdDot(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<string>(list_pr.GetChild(0));
+}
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGTransformer &transformer,
                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -1713,16 +1741,15 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 		if (repeat_colid.GetChildren().size() > 1) {
 			throw ParserException("Did not expect more than one column in front of a star expression");
 		}
-		auto &colid_list = repeat_colid.GetChildren()[0].get().Cast<ListParseResult>();
-		result->relation_name = transformer.Transform<string>(colid_list.Child<ListParseResult>(0));
+		result->RelationNameMutable() = transformer.Transform<string>(repeat_colid.Child<ListParseResult>(0));
 	}
-	transformer.TransformOptional<qualified_column_set_t>(list_pr, 2, result->exclude_list);
+	transformer.TransformOptional<qualified_column_set_t>(list_pr, 2, result->ExcludeListMutable());
 	auto &replace_list_opt = list_pr.Child<OptionalParseResult>(3);
 	if (replace_list_opt.HasResult()) {
-		result->replace_list =
+		result->ReplaceListMutable() =
 		    transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(replace_list_opt.GetResult());
-		for (auto &replace_entry : result->replace_list) {
-			if (result->exclude_list.find(QualifiedColumnName(replace_entry.first)) != result->exclude_list.end()) {
+		for (auto &replace_entry : result->ReplaceList()) {
+			if (result->ExcludeList().find(QualifiedColumnName(replace_entry.first)) != result->ExcludeList().end()) {
 				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and REPLACE list",
 				                      replace_entry.first);
 			}
@@ -1730,13 +1757,14 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 	}
 	auto &rename_list_opt = list_pr.Child<OptionalParseResult>(4);
 	if (rename_list_opt.HasResult()) {
-		result->rename_list = transformer.Transform<qualified_column_map_t<string>>(rename_list_opt.GetResult());
-		for (auto &rename_column : result->rename_list) {
-			if (result->exclude_list.find(rename_column.first) != result->exclude_list.end()) {
+		result->RenameListMutable() =
+		    transformer.Transform<qualified_column_map_t<string>>(rename_list_opt.GetResult());
+		for (auto &rename_column : result->RenameList()) {
+			if (result->ExcludeList().find(rename_column.first) != result->ExcludeList().end()) {
 				throw ParserException("Column \"%s\" cannot occur in both EXCLUDE and RENAME list",
 				                      rename_column.first.ToString());
 			}
-			if (result->replace_list.find(rename_column.first.column) != result->replace_list.end()) {
+			if (result->ReplaceList().find(rename_column.first.column) != result->ReplaceList().end()) {
 				throw ParserException("Column \"%s\" cannot occur in both REPLACE and RENAME list",
 				                      rename_column.first.ToString());
 			}
@@ -1814,8 +1842,8 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformParensIdentifier(PE
 	auto &extract_parens = ExtractResultFromParens(list_pr.GetChild(0));
 	auto window_name = extract_parens.Cast<IdentifierParseResult>().identifier;
 	auto window_clause = transformer.GetWindowClause(window_name);
-	if (window_clause->start_expr || window_clause->end_expr ||
-	    !transformer.IsWindowFrameDefault(window_clause->start, window_clause->end)) {
+	if (window_clause->StartExpr() || window_clause->EndExpr() ||
+	    !transformer.IsWindowFrameDefault(window_clause->WindowStart(), window_clause->WindowEnd())) {
 		throw ParserException("cannot copy window \"%s\" because it has a frame clause", window_name);
 	}
 	return window_clause;
@@ -1850,27 +1878,27 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrameNameCont
 		return window_frame_contents;
 	}
 	auto copied_window = transformer.GetWindowClause(window_name);
-	if (copied_window->start_expr || copied_window->end_expr ||
-	    !transformer.IsWindowFrameDefault(copied_window->start, copied_window->end)) {
+	if (copied_window->StartExpr() || copied_window->EndExpr() ||
+	    !transformer.IsWindowFrameDefault(copied_window->WindowStart(), copied_window->WindowEnd())) {
 		throw ParserException("cannot copy window \"%s\" because it has a frame clause", window_name);
 	}
-	copied_window->start = window_frame_contents->start;
-	copied_window->end = window_frame_contents->end;
-	copied_window->exclude_clause = window_frame_contents->exclude_clause;
-	copied_window->start_expr = std::move(window_frame_contents->start_expr);
-	copied_window->end_expr = std::move(window_frame_contents->end_expr);
+	copied_window->WindowStartMutable() = window_frame_contents->WindowStart();
+	copied_window->WindowEndMutable() = window_frame_contents->WindowEnd();
+	copied_window->WindowExcludeMutable() = window_frame_contents->WindowExclude();
+	copied_window->StartExprMutable() = std::move(window_frame_contents->StartExprMutable());
+	copied_window->EndExprMutable() = std::move(window_frame_contents->EndExprMutable());
 
-	if (!copied_window->orders.empty() && !window_frame_contents->orders.empty()) {
+	if (!copied_window->OrderBy().empty() && !window_frame_contents->OrderBy().empty()) {
 		throw ParserException("Cannot override ORDER BY clause of window \"%s\"", window_name);
 	}
-	if (copied_window->orders.empty()) {
-		copied_window->orders = std::move(window_frame_contents->orders);
+	if (copied_window->OrderBy().empty()) {
+		copied_window->OrderByMutable() = std::move(window_frame_contents->OrderByMutable());
 	}
-	if (!copied_window->partitions.empty() && !window_frame_contents->partitions.empty()) {
+	if (!copied_window->Partitions().empty() && !window_frame_contents->Partitions().empty()) {
 		throw ParserException("Cannot override PARTITION BY clause of window \"%s\"", window_name);
 	}
-	if (copied_window->partitions.empty()) {
-		copied_window->partitions = std::move(window_frame_contents->partitions);
+	if (copied_window->Partitions().empty()) {
+		copied_window->PartitionsMutable() = std::move(window_frame_contents->PartitionsMutable());
 	}
 	return copied_window;
 }
@@ -1887,15 +1915,16 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrameContents
 	auto result = make_uniq<WindowExpression>(INVALID_CATALOG, INVALID_SCHEMA, string());
 	auto &partition_opt = list_pr.Child<OptionalParseResult>(0);
 	if (partition_opt.HasResult()) {
-		result->partitions = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(partition_opt.GetResult());
+		result->PartitionsMutable() =
+		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(partition_opt.GetResult());
 	}
 	auto &order_by_opt = list_pr.Child<OptionalParseResult>(1);
 	if (order_by_opt.HasResult()) {
-		result->orders = transformer.Transform<vector<OrderByNode>>(order_by_opt.GetResult());
-		for (auto &order : result->orders) {
+		result->OrderByMutable() = transformer.Transform<vector<OrderByNode>>(order_by_opt.GetResult());
+		for (auto &order : result->OrderByMutable()) {
 			if (order.expression->GetExpressionType() == ExpressionType::STAR) {
 				auto &star = order.expression->Cast<StarExpression>();
-				if (!star.expr) {
+				if (!star.Expression()) {
 					throw ParserException("Cannot ORDER BY ALL in a window expression");
 				}
 			}
@@ -1904,14 +1933,14 @@ unique_ptr<WindowExpression> PEGTransformerFactory::TransformWindowFrameContents
 	auto &frame_opt = list_pr.Child<OptionalParseResult>(2);
 	if (frame_opt.HasResult()) {
 		auto window_frame = transformer.Transform<WindowFrame>(frame_opt.GetResult());
-		result->start = window_frame.start;
-		result->end = window_frame.end;
-		result->start_expr = std::move(window_frame.start_expr);
-		result->end_expr = std::move(window_frame.end_expr);
-		result->exclude_clause = window_frame.exclude_clause;
+		result->WindowStartMutable() = window_frame.start;
+		result->WindowEndMutable() = window_frame.end;
+		result->StartExprMutable() = std::move(window_frame.start_expr);
+		result->EndExprMutable() = std::move(window_frame.end_expr);
+		result->WindowExcludeMutable() = window_frame.exclude_clause;
 	} else {
-		result->start = WindowBoundary::UNBOUNDED_PRECEDING;
-		result->end = WindowBoundary::CURRENT_ROW_RANGE;
+		result->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+		result->WindowEndMutable() = WindowBoundary::CURRENT_ROW_RANGE;
 	}
 	return result;
 }
@@ -2086,7 +2115,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCoalesceExpression(
 	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto expr_list = ExtractParseResultsFromList(extract_parens);
 	for (auto expr : expr_list) {
-		result->children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
+		result->GetChildrenMutable().push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
 	}
 	return std::move(result);
 }
@@ -2096,7 +2125,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformUnpackExpression(PE
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto result = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
-	result->children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens));
+	result->GetChildrenMutable().push_back(transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens));
 	return std::move(result);
 }
 
@@ -2105,7 +2134,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTryExpression(PEGTr
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto result = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
-	result->children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens));
+	result->GetChildrenMutable().push_back(transformer.Transform<unique_ptr<ParsedExpression>>(extract_parens));
 	return std::move(result);
 }
 
@@ -2119,8 +2148,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnsExpression(P
 	    transformer.Transform<unique_ptr<ParsedExpression>>(ExtractResultFromParens(list_pr.Child<ListParseResult>(2)));
 	if (expr->GetExpressionType() == ExpressionType::STAR) {
 		auto star_expr = unique_ptr_cast<ParsedExpression, StarExpression>(std::move(expr));
-		if (star_expr->columns) {
-			result->expr = std::move(star_expr);
+		if (star_expr->IsColumns()) {
+			result->ExpressionMutable() = std::move(star_expr);
 		} else {
 			result = std::move(star_expr);
 		}
@@ -2129,11 +2158,11 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnsExpression(P
 		children.push_back(make_uniq<StarExpression>());
 		children.push_back(std::move(expr));
 		auto list_filter = make_uniq<FunctionExpression>("list_filter", std::move(children));
-		result->expr = std::move(list_filter);
+		result->ExpressionMutable() = std::move(list_filter);
 	} else {
-		result->expr = std::move(expr);
+		result->ExpressionMutable() = std::move(expr);
 	}
-	result->columns = true;
+	result->IsColumnsMutable() = true;
 	if (unpack) {
 		return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK, std::move(result));
 	}
@@ -2454,7 +2483,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTypeLiteral(PEGTran
 		throw ParserException("Cannot convert to type %s, requires exactly one type modifier",
 		                      EnumUtil::ToString(type.id()));
 	}
-	if (type == LogicalTypeId::UNBOUND) {
+	if (type == LogicalTypeId::UNBOUND || type.InternalType() == PhysicalType::INVALID) {
 		type = LogicalType::UNBOUND(make_uniq<TypeExpression>(colid, vector<unique_ptr<ParsedExpression>>()));
 	}
 	auto string_literal = list_pr.Child<StringLiteralParseResult>(1).result;
@@ -2513,20 +2542,20 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformSubqueryExpression(
 
 	auto result = make_uniq<SubqueryExpression>();
 	if (is_exists) {
-		result->subquery_type = SubqueryType::EXISTS;
+		result->GetSubqueryTypeMutable() = SubqueryType::EXISTS;
 	} else {
-		result->subquery_type = SubqueryType::SCALAR;
+		result->GetSubqueryTypeMutable() = SubqueryType::SCALAR;
 	}
 	if (subquery_reference->type == TableReferenceType::SUBQUERY) {
 		auto &subquery_ref = subquery_reference->Cast<SubqueryRef>();
-		result->subquery = std::move(subquery_ref.subquery);
+		result->SubqueryMutable() = std::move(subquery_ref.subquery);
 	} else {
 		auto select_statement = make_uniq<SelectStatement>();
 		auto select_node = make_uniq<SelectNode>();
 		select_node->select_list.push_back(make_uniq<StarExpression>());
 		select_node->from_table = std::move(subquery_reference);
 		select_statement->node = std::move(select_node);
-		result->subquery = std::move(select_statement);
+		result->SubqueryMutable() = std::move(select_statement);
 	}
 	if (is_not) {
 		vector<unique_ptr<ParsedExpression>> children;

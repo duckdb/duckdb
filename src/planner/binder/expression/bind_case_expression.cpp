@@ -40,9 +40,9 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		result_check.when_expr =
 		    BoundCastExpression::AddCastToType(context, std::move(when_expr), LogicalType::BOOLEAN);
 		result_check.then_expr = BoundCastExpression::AddCastToType(context, std::move(then_expr), return_type);
-		result->case_checks.push_back(std::move(result_check));
+		result->CaseChecksMutable().push_back(std::move(result_check));
 	}
-	result->else_expr = BoundCastExpression::AddCastToType(context, std::move(else_expr), return_type);
+	result->ElseMutable() = BoundCastExpression::AddCastToType(context, std::move(else_expr), return_type);
 	return BindResult(std::move(result));
 }
 } // namespace duckdb
