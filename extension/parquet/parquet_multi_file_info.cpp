@@ -308,6 +308,7 @@ static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserialize
 		file_path.emplace_back(path);
 	}
 	FileGlobInput input(FileGlobOptions::FALLBACK_GLOB, "parquet");
+	input.allow_empty = serialization.file_options.allow_empty;
 
 	auto multi_file_reader = MultiFileReader::Create(function);
 	auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path), input);
