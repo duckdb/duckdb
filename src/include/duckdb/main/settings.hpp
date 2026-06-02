@@ -680,6 +680,18 @@ struct DefaultCollationSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DefaultIoModeSetting {
+	using RETURN_TYPE = FileIOMode;
+	static constexpr const char *Name = "default_io_mode";
+	static constexpr const char *Description =
+	    "The default IO_MODE for newly attached database files when no explicit IO_MODE is given (BUFFERED_IO or MMAP)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "BUFFERED_IO";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct DefaultNullOrderSetting {
 	using RETURN_TYPE = DefaultOrderByNullType;
 	static constexpr const char *Name = "default_null_order";

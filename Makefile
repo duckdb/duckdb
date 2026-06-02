@@ -537,7 +537,8 @@ TEST_CONFIGS := \
 	test/configs/prefetch_all_storage.json \
 	test/configs/encryption.json \
 	test/configs/v1_storage.json \
-	test/configs/v1_storage_block_size_16kB.json
+	test/configs/v1_storage_block_size_16kB.json \
+	test/configs/force_storage_mmap.json
 
 test_configs:
 	$(PYTHON) scripts/ci/run_tests.py $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg)) ./build/release/$(UNITTEST_BINARY)
