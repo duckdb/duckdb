@@ -376,8 +376,7 @@ public:
 			return ParserExtensionParseResult();
 		}
 		// The triplet must end at a token boundary (i.e., 17 ∈ allowed_boundaries).
-		if (!std::binary_search(allowed_boundaries.begin(), allowed_boundaries.end(),
-		                         idx_t(kTriplet.size()))) {
+		if (!std::binary_search(allowed_boundaries.begin(), allowed_boundaries.end(), idx_t(kTriplet.size()))) {
 			return ParserExtensionParseResult();
 		}
 		auto result = ParserExtensionParseResult(make_uniq<QuackExtensionData>(3));

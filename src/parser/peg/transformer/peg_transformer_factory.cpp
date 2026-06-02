@@ -54,9 +54,8 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vector<MatcherToken> &tokens,
-                                                                            ParserOptions &options,
-                                                                            Matcher &root_matcher,
-                                                                            idx_t &token_cursor) {
+                                                                           ParserOptions &options,
+                                                                           Matcher &root_matcher, idx_t &token_cursor) {
 	if (token_cursor >= tokens.size()) {
 		return nullptr;
 	}

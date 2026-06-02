@@ -274,8 +274,7 @@ void Parser::ParseQuery(const string &query) {
 		} catch (ParserException &e) {
 			bool parsed = false;
 			if (options.extensions && options.extensions->HasParserExtensions()) {
-				idx_t failure_byte =
-				    token_cursor < tokens.size() ? tokens[token_cursor].offset : query.size();
+				idx_t failure_byte = token_cursor < tokens.size() ? tokens[token_cursor].offset : query.size();
 				string_view tail(query.data() + failure_byte, query.size() - failure_byte);
 				// Build allowed_boundaries: every token start AND token end, relative to `tail`,
 				// plus a final sentinel = tail.size(). Sorted and deduplicated so adjacent tokens
@@ -289,16 +288,15 @@ void Parser::ParseQuery(const string &query) {
 				allowed_boundaries.push_back(tail.size());
 				std::sort(allowed_boundaries.begin(), allowed_boundaries.end());
 				allowed_boundaries.erase(std::unique(allowed_boundaries.begin(), allowed_boundaries.end()),
-				                          allowed_boundaries.end());
+				                         allowed_boundaries.end());
 				for (auto &ext : options.extensions->ParserExtensions()) {
 					if (!ext.parse_function) {
 						continue;
 					}
 					auto result = ext.parse_function(ext.parser_info.get(), tail, allowed_boundaries);
-					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL &&
-					    result.consumed_chars > 0) {
+					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL && result.consumed_chars > 0) {
 						if (!std::binary_search(allowed_boundaries.begin(), allowed_boundaries.end(),
-						                         result.consumed_chars)) {
+						                        result.consumed_chars)) {
 							throw ParserException(
 							    "Extension returned consumed_chars=%llu — must be one of the allowed_boundaries",
 							    (unsigned long long)result.consumed_chars);

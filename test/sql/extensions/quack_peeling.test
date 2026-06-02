@@ -1,8 +1,9 @@
 # name: test/sql/extensions/quack_peeling.test
 # description: Demonstrate per-segment parse_function — the QUACK extension claims its own
+# group: [extensions]
+
 #              statement (three consecutive "quack"s), PEG handles SQL statements
 #              interleaved with it.
-# group: [extensions]
 
 require skip_reload
 
