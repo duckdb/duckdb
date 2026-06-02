@@ -84,6 +84,10 @@ public:
 		MultiFileReader::AddParameters(*this);
 	}
 
+	static bool IsEmptyResult(const MultiFileBindData &bind_data) {
+		return bind_data.file_options.allow_empty && bind_data.file_list->IsEmpty();
+	}
+
 	static unique_ptr<FunctionData> MultiFileBindInternal(ClientContext &context,
 	                                                      unique_ptr<MultiFileReader> multi_file_reader_p,
 	                                                      shared_ptr<MultiFileList> multi_file_list_p,
@@ -100,6 +104,15 @@ public:
 		result->file_options = std::move(file_options_p);
 		result->bind_data = interface.InitializeBindData(*result, std::move(options_p));
 		result->interface = std::move(interface_p);
+
+		if (IsEmptyResult(*result)) {
+			result->types.emplace_back(LogicalType::BOOLEAN);
+			result->names.emplace_back("empty");
+			result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
+			return_types = result->types;
+			names = result->names;
+			return std::move(result);
+		}
 
 		// now bind the readers
 		// there are two ways of binding the readers
@@ -172,11 +185,22 @@ public:
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
 
 		auto glob_input = multi_file_reader->GetGlobInput(*interface);
+
+		MultiFileOptions file_options;
+		for (auto &kv : input.named_parameters) {
+			auto loption = StringUtil::Lower(kv.first);
+			if (loption == "allow_empty") {
+				multi_file_reader->ParseOption(loption, kv.second, file_options, context);
+				if (file_options.allow_empty) {
+					glob_input.allow_empty = true;
+				}
+				break;
+			}
+		}
+
 		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0], glob_input);
 
 		interface->InitializeInterface(context, *multi_file_reader, *file_list);
-
-		MultiFileOptions file_options;
 
 		auto options = interface->InitializeOptions(context, input.info);
 		for (auto &kv : input.named_parameters) {
@@ -492,6 +516,10 @@ public:
 		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 		auto &gstate = gstate_p->Cast<MultiFileGlobalState>();
 
+		if (IsEmptyResult(bind_data)) {
+			return nullptr;
+		}
+
 		auto result = make_uniq<MultiFileLocalState>(context.client);
 		result->is_parallel = true;
 		result->batch_index = 0;
@@ -507,6 +535,17 @@ public:
 	                                                                TableFunctionInitInput &input) {
 		auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
 		unique_ptr<MultiFileGlobalState> result;
+
+		if (IsEmptyResult(bind_data)) {
+			result = make_uniq<MultiFileGlobalState>(*bind_data.file_list);
+			result->file_list.InitializeScan(result->file_list_scan);
+			result->file_index = 0;
+			result->column_indexes = input.column_indexes;
+			result->filters = input.filters.get();
+			result->op = input.op;
+			result->max_threads = 1;
+			return std::move(result);
+		}
 
 		// before instantiating a scan trigger a dynamic filter pushdown if possible
 		auto new_list = MultiFileFilterPushdown(context, bind_data, input.column_ids, input.filters);
@@ -808,6 +847,9 @@ public:
 
 	static unique_ptr<NodeStatistics> MultiFileCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = bind_data->Cast<MultiFileBindData>();
+		if (IsEmptyResult(data)) {
+			return make_uniq<NodeStatistics>(0);
+		}
 		auto file_list_cardinality_estimate = data.file_list->GetCardinality(context);
 		if (file_list_cardinality_estimate) {
 			return file_list_cardinality_estimate;
@@ -871,6 +913,9 @@ public:
 
 	static TablePartitionInfo MultiFileGetPartitionInfo(ClientContext &context, TableFunctionPartitionInput &input) {
 		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+		if (IsEmptyResult(bind_data)) {
+			return TablePartitionInfo::NOT_PARTITIONED;
+		}
 		return bind_data.multi_file_reader->GetPartitionInfo(context, bind_data.reader_bind, input);
 	}
 
@@ -878,6 +923,9 @@ public:
 	                                                       optional_ptr<FunctionData> bind_data_p) {
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 		virtual_column_map_t result;
+		if (IsEmptyResult(bind_data)) {
+			return result;
+		}
 		MultiFileReader::GetVirtualColumns(context, bind_data.reader_bind, result);
 
 		bind_data.interface->GetVirtualColumns(context, bind_data, result);

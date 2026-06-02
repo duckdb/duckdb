@@ -1,0 +1,63 @@
+# name: test/sql/aggregate/skewness_zero_variance.test
+# description: Test skewness returns NULL for zero-variance input (all identical values)
+# group: [aggregate]
+
+# All identical integer values - should return NULL
+query I
+SELECT skewness(x) FROM (VALUES (5), (5), (5)) t(x);
+----
+NULL
+
+# All zeros - should return NULL
+query I
+SELECT skewness(x) FROM (VALUES (0), (0), (0)) t(x);
+----
+NULL
+
+# All negative identical - should return NULL
+query I
+SELECT skewness(x) FROM (VALUES (-1), (-1), (-1)) t(x);
+----
+NULL
+
+# Four identical values - should return NULL
+query I
+SELECT skewness(x) FROM (VALUES (5), (5), (5), (5)) t(x);
+----
+NULL
+
+# Identical floats - should return NULL
+query I
+SELECT skewness(x) FROM (VALUES (1.5), (1.5), (1.5)) t(x);
+----
+NULL
+
+# Large identical values - should return NULL
+query I
+SELECT skewness(x) FROM (VALUES (1000000), (1000000), (1000000)) t(x);
+----
+NULL
+
+# Verify kurtosis also returns NULL (regression check)
+query I
+SELECT kurtosis(x) FROM (VALUES (5), (5), (5), (5)) t(x);
+----
+NULL
+
+# Verify normal skewness still works
+query I
+SELECT skewness(x) BETWEEN -0.001 AND 0.001 FROM (VALUES (1), (2), (3)) t(x);
+----
+true
+
+# Fewer than 3 values returns NULL
+query I
+SELECT skewness(x) FROM (VALUES (1), (2)) t(x);
+----
+NULL
+
+# Single value returns NULL
+query I
+SELECT skewness(x) FROM (VALUES (5)) t(x);
+----
+NULL
