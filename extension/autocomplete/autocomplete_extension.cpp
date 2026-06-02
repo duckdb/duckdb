@@ -528,7 +528,14 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	names.emplace_back("success");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
-	const auto sql = StringValue::Get(input.inputs[0]);
+	// CheckPEGParserBind feeds the input to `peg_matcher->Root().Match(state)`, which goes
+	// through `ListMatcher::Match`'s out-of-tokens autocomplete-suggestion path. That path
+	// returns FAIL whenever the next child is mandatory — and after the peeling refactor the
+	// last child is `(';'+ / EndOfInput)`, where `;'+` is mandatory. Without a `;` to consume,
+	// every well-formed query gets reported as a parse failure here. Append a `;` so the
+	// matcher reaches a clean state. The principled fix (two distinct sentinels for "real
+	// EOI" vs "autocomplete cursor") is tracked separately.
+	auto sql = StringValue::Get(input.inputs[0]) + ";";
 
 	vector<MatcherToken> root_tokens;
 	string clean_sql;
