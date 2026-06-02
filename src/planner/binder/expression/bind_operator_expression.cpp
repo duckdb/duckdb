@@ -48,7 +48,7 @@ LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector
 				case LogicalTypeId::STRING_LITERAL: {
 					//	ENUM (NOT) IN STRING_LITERAL
 					++literals;
-					auto s = child.Cast<BoundConstantExpression>().value.ToString();
+					auto s = child.Cast<BoundConstantExpression>().ToString();
 					auto it = enum_domain.find(s);
 					if (it != enum_domain.end()) {
 						//	The literal is in the ENUM domain, so translate it
