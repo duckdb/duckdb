@@ -82,6 +82,11 @@ select variant_exists(a, ['', 'c']) from struct_cast_data();
 [true, false]
 [true, true]
 
+statement error
+select variant_exists(a, [NULL, 'c']) from struct_cast_data();
+----
+Binder Error
+
 # FIXME: map type is currently casted into a shape inconsistent with respect to JSON (should produce true)
 
 query I
@@ -137,10 +142,12 @@ false
 statement error
 select variant_exists({'a': 1}::VARIANT, [1]);
 ----
+Binder Error
 
 statement error
 select variant_exists({'a': 1}::VARIANT, [NULL]);
 ----
+Binder Error
 
 # FIXME: malformed JSON object should result in an error
 
