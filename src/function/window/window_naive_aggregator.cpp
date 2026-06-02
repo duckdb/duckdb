@@ -13,7 +13,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 WindowNaiveAggregator::WindowNaiveAggregator(const WindowAggregateExecutor &executor, WindowSharedExpressions &shared)
     : WindowAggregator(executor.wexpr, shared), executor(executor) {
-	for (const auto &order : wexpr.arg_orders) {
+	for (const auto &order : wexpr.ArgOrders()) {
 		arg_order_idx.emplace_back(shared.RegisterCollection(order.expression, false));
 	}
 }
@@ -133,7 +133,7 @@ void WindowNaiveLocalState::Finalize(ExecutionContext &context, WindowAggregator
 
 		//	The sort expressions have already been computed, so we just need to reference them
 		vector<BoundOrderByNode> orders;
-		for (const auto &order_by : aggregator.wexpr.arg_orders) {
+		for (const auto &order_by : aggregator.wexpr.ArgOrders()) {
 			auto order = order_by.Copy();
 			const auto &type = order.expression->GetReturnType();
 			order.expression = make_uniq<BoundReferenceExpression>(type, orders.size());
@@ -373,7 +373,7 @@ void WindowNaiveAggregator::Evaluate(ExecutionContext &context, const DataChunk 
 }
 
 bool WindowNaiveAggregator::CanAggregate(const BoundWindowExpression &wexpr) {
-	if (!wexpr.aggregate || !wexpr.aggregate->CanAggregate()) {
+	if (!wexpr.AggregateFunction() || !wexpr.AggregateFunction()->CanAggregate()) {
 		return false;
 	}
 	return true;

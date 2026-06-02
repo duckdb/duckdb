@@ -64,7 +64,7 @@ void RemotePushdownOptimizer::FindRemoteCatalogsInSearchPath() {
 		if (!catalog_entry) {
 			continue;
 		}
-		if (!catalog_entry->IsRemoteCatalog()) {
+		if (!catalog_entry->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
 			pushdown_state.local_catalogs_in_search_path.push_back(entry);
 		} else {
 			if (seen_remote_catalogs.insert(catalog_entry->GetName()).second) {
@@ -479,17 +479,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	string schema_name = func_expr.Schema();
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
-	// If the function has an explicit catalog prefix, check if it's remote
+	// If the function has an explicit catalog prefix, skip pushdown for now
 	if (!catalog_name.empty()) {
-		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
-		if (catalog && catalog->IsRemoteCatalog()) {
-			// Check args: a local macro or UNKNOWN expression in args blocks pushdown
-			CatalogPushdownResult result {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
-			for (auto &arg : func_expr.GetChildren()) {
-				result = Merge(result, Rewrite(*arg));
-			}
-			return result;
-		}
 		TrackLocalTable(ref);
 		return {};
 	}
@@ -572,7 +563,7 @@ bool RemotePushdownOptimizer::IsLocalMacro(const FunctionExpression &func) {
 	// If explicitly qualified with a catalog, check whether that catalog is remote
 	if (!func.Catalog().empty()) {
 		auto catalog = Catalog::GetCatalogEntry(binder.context, func.Catalog());
-		if (catalog && catalog->IsRemoteCatalog()) {
+		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
 			return false;
 		}
 		// Local catalog - check if the function is a macro
@@ -642,7 +633,7 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(BaseTableRef &ref) {
 	// Case 1: catalog is explicitly specified - check if it's a remote catalog
 	if (!catalog_name.empty()) {
 		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
-		if (catalog && catalog->IsRemoteCatalog()) {
+		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
 			return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
 		}
 		// A local table always blocks pushdown of any query that contains it.
@@ -719,7 +710,7 @@ CatalogPushdownResult RemotePushdownOptimizer::CheckCatalogQualification(const s
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 	if (!catalog_name.empty()) {
 		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
-		if (catalog && catalog->IsRemoteCatalog()) {
+		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
 			return {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
 		}
 		// Explicitly local-catalog: block pushdown.

@@ -1,6 +1,7 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 
 namespace duckdb {
 
@@ -10,13 +11,14 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(
     vector<pair<MergeActionCondition, unique_ptr<MergeIntoAction>>> merge_match,
     vector<unique_ptr<ParsedExpression>> returning_clause) {
 	auto result = make_uniq<MergeIntoStatement>();
-	result->cte_map = std::move(with_clause);
-	result->target = std::move(target_opt_alias);
-	result->source = std::move(merge_into_using_clause);
+	auto &node = *result->node;
+	node.cte_map = std::move(with_clause);
+	node.target = std::move(target_opt_alias);
+	node.source = std::move(merge_into_using_clause);
 	if (join_qualifier.on_clause) {
-		result->join_condition = std::move(join_qualifier.on_clause);
+		node.join_condition = std::move(join_qualifier.on_clause);
 	} else {
-		result->using_columns = std::move(join_qualifier.using_columns);
+		node.using_columns = std::move(join_qualifier.using_columns);
 	}
 
 	set<MergeActionCondition> unconditional_actions;
@@ -26,7 +28,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(
 		// Once an unconditional clause has been seen for a condition type, no further clauses
 		// of the same type are allowed: they would be unreachable.
 		if (unconditional_actions.count(action_condition)) {
-			string action_condition_str = MergeIntoStatement::ActionConditionToString(action_condition);
+			string action_condition_str = MergeQueryNode::ActionConditionToString(action_condition);
 			throw ParserException(
 			    "Unconditional %s clause was already defined - any following %s clause would be unreachable",
 			    action_condition_str, action_condition_str);
@@ -34,9 +36,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformMergeIntoStatement(
 		if (!action->condition) {
 			unconditional_actions.insert(action_condition);
 		}
-		result->actions[action_condition].push_back(std::move(action));
+		node.actions[action_condition].push_back(std::move(action));
 	}
-	result->returning_list = std::move(returning_clause);
+	node.returning_list = std::move(returning_clause);
 	return std::move(result);
 }
 

@@ -1,0 +1,112 @@
+# name: test/sql/storage/rowid_gaps/indexed_live_vacuum_no_rebuild.test
+# description: stable-rowid vacuum does not rebuild indexes for fully-live contiguous merges
+# group: [rowid_gaps]
+
+require json
+
+require vacuum_rebuild_indexes
+
+require skip_reload
+
+statement ok
+SET wal_autocheckpoint = '1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+SET threads = 1;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_live_vacuum_no_rebuild.db' AS rowid_gap_live_vacuum (STORAGE_VERSION 'latest');
+
+statement ok
+SET max_vacuum_tasks = 0;
+
+statement ok
+CREATE TABLE rowid_gap_live_vacuum.t AS
+SELECT range::BIGINT AS i, (range * 2)::BIGINT AS j, (range * 3)::BIGINT AS k FROM range(368640);
+
+statement ok
+CHECKPOINT rowid_gap_live_vacuum;
+
+statement ok
+INSERT INTO rowid_gap_live_vacuum.t
+SELECT 368640 + range, (368640 + range) * 2, (368640 + range) * 3 FROM range(40000);
+
+statement ok
+CHECKPOINT rowid_gap_live_vacuum;
+
+statement ok
+INSERT INTO rowid_gap_live_vacuum.t
+SELECT 408640 + range, (408640 + range) * 2, (408640 + range) * 3 FROM range(40000);
+
+statement ok
+CHECKPOINT rowid_gap_live_vacuum;
+
+statement ok
+INSERT INTO rowid_gap_live_vacuum.t
+SELECT 448640 + range, (448640 + range) * 2, (448640 + range) * 3 FROM range(40000);
+
+statement ok
+CHECKPOINT rowid_gap_live_vacuum;
+
+statement ok
+CREATE INDEX t_i_idx ON rowid_gap_live_vacuum.t(i);
+
+statement ok
+CREATE INDEX t_j_idx ON rowid_gap_live_vacuum.t(j);
+
+statement ok
+CREATE INDEX t_k_idx ON rowid_gap_live_vacuum.t(k);
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('rowid_gap_live_vacuum.t');
+----
+6
+
+statement ok
+SET max_vacuum_tasks = 99;
+
+statement ok
+SET profiling_coverage = 'ALL';
+
+statement ok
+SET tracked_metrics = ['storage.total_vacuum_time', 'storage.checkpoint_latency', 'query.total_time'];
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/rowid_gap_live_vacuum_no_rebuild.json';
+
+statement ok
+FORCE CHECKPOINT rowid_gap_live_vacuum;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE TABLE rowid_gap_live_vacuum.metrics AS
+SELECT
+	storage.total_vacuum_time AS vacuum_time,
+	storage.checkpoint_latency AS checkpoint_latency,
+	query.total_time AS total_time
+FROM '{TEST_DIR}/rowid_gap_live_vacuum_no_rebuild.json';
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('rowid_gap_live_vacuum.t');
+----
+4
+
+# The row group count proves vacuum merged fully-live row groups. With threads=1, rebuilding these indexes
+# takes around a second locally; hopefully 0.4s prevents any flakiness on CI.
+
+query T
+SELECT CASE WHEN vacuum_time < 0.4 THEN 'ok'
+	ELSE 'vacuum_time=' || CAST(vacuum_time AS VARCHAR) ||
+		', checkpoint_latency=' || CAST(checkpoint_latency AS VARCHAR) ||
+		', total_time=' || CAST(total_time AS VARCHAR) END
+FROM rowid_gap_live_vacuum.metrics;
+----
+ok

@@ -24,10 +24,10 @@ AggregateObject::AggregateObject(BoundAggregateExpression *aggr) : AggregateObje
 }
 
 AggregateObject::AggregateObject(const BoundWindowExpression &window)
-    : AggregateObject(*window.aggregate, window.bind_info.get(), window.children.size(),
-                      AlignValue(window.aggregate->GetStateSizeCallback()(*window.aggregate)),
-                      window.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT,
-                      window.GetReturnType().InternalType(), window.filter_expr.get()) {
+    : AggregateObject(*window.AggregateFunction(), window.BindInfo().get(), window.GetChildren().size(),
+                      AlignValue(window.AggregateFunction()->GetStateSizeCallback()(*window.AggregateFunction())),
+                      window.Distinct() ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT,
+                      window.GetReturnType().InternalType(), window.Filter().get()) {
 }
 
 vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<BoundAggregateExpression *> &bindings) {

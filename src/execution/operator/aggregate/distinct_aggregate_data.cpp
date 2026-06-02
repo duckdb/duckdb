@@ -131,7 +131,7 @@ struct FindMatchingAggregate {
 		for (idx_t i = 0; i < aggr.GetChildren().size(); i++) {
 			auto &other_child = other.GetChildren()[i]->Cast<BoundReferenceExpression>();
 			auto &aggr_child = aggr.GetChildren()[i]->Cast<BoundReferenceExpression>();
-			if (other_child.index != aggr_child.index) {
+			if (other_child.Index() != aggr_child.Index()) {
 				return false;
 			}
 		}

@@ -55,7 +55,7 @@ bool PhysicalPlanGenerator::HasSingleValuePartitions(ClientContext &context,
 			return false;
 		}
 		auto &ref = group_expr->Cast<BoundReferenceExpression>();
-		partition_columns.push_back(ref.index);
+		partition_columns.push_back(ref.Index());
 	}
 	// traverse the children of the aggregate to find the source operator
 	reference<PhysicalOperator> child_ref(child);
@@ -73,7 +73,7 @@ bool PhysicalPlanGenerator::HasSingleValuePartitions(ClientContext &context,
 					return false;
 				}
 				auto &ref = expr->Cast<BoundReferenceExpression>();
-				new_columns.push_back(ref.index);
+				new_columns.push_back(ref.Index());
 			}
 			// continue into child node with new columns
 			partition_columns = std::move(new_columns);

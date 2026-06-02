@@ -224,6 +224,8 @@ enum class FileExpandResult : uint8_t;
 
 enum class FileGlobOptions : uint8_t;
 
+enum class FileIOMode : uint8_t;
+
 enum class FileLockType : uint8_t;
 
 enum class FileNameSegmentType : uint8_t;
@@ -400,6 +402,8 @@ enum class RecursiveProbeSidePreference : uint8_t;
 
 enum class RelationType : uint8_t;
 
+enum class RemoteCapability : uint8_t;
+
 enum class RenderMode : uint8_t;
 
 enum class RequestType : uint8_t;
@@ -421,6 +425,8 @@ enum class SecretDisplayType : uint8_t;
 enum class SecretPersistType : uint8_t;
 
 enum class SecretSerializationType : uint8_t;
+
+enum class SegmentTreeVerifyMode : uint8_t;
 
 enum class SelectivityOptionalFilterType : uint8_t;
 
@@ -836,6 +842,9 @@ template<>
 const char* EnumUtil::ToChars<FileGlobOptions>(FileGlobOptions value);
 
 template<>
+const char* EnumUtil::ToChars<FileIOMode>(FileIOMode value);
+
+template<>
 const char* EnumUtil::ToChars<FileLockType>(FileLockType value);
 
 template<>
@@ -1100,6 +1109,9 @@ template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
 
 template<>
+const char* EnumUtil::ToChars<RemoteCapability>(RemoteCapability value);
+
+template<>
 const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
 
 template<>
@@ -1131,6 +1143,9 @@ const char* EnumUtil::ToChars<SecretPersistType>(SecretPersistType value);
 
 template<>
 const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType value);
+
+template<>
+const char* EnumUtil::ToChars<SegmentTreeVerifyMode>(SegmentTreeVerifyMode value);
 
 template<>
 const char* EnumUtil::ToChars<SelectivityOptionalFilterType>(SelectivityOptionalFilterType value);
@@ -1608,6 +1623,9 @@ template<>
 FileGlobOptions EnumUtil::FromString<FileGlobOptions>(const char *value);
 
 template<>
+FileIOMode EnumUtil::FromString<FileIOMode>(const char *value);
+
+template<>
 FileLockType EnumUtil::FromString<FileLockType>(const char *value);
 
 template<>
@@ -1872,6 +1890,9 @@ template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);
 
 template<>
+RemoteCapability EnumUtil::FromString<RemoteCapability>(const char *value);
+
+template<>
 RenderMode EnumUtil::FromString<RenderMode>(const char *value);
 
 template<>
@@ -1903,6 +1924,9 @@ SecretPersistType EnumUtil::FromString<SecretPersistType>(const char *value);
 
 template<>
 SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value);
+
+template<>
+SegmentTreeVerifyMode EnumUtil::FromString<SegmentTreeVerifyMode>(const char *value);
 
 template<>
 SelectivityOptionalFilterType EnumUtil::FromString<SelectivityOptionalFilterType>(const char *value);

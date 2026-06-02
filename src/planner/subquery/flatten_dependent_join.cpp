@@ -293,10 +293,10 @@ static unique_ptr<LogicalWindow> CreateRowNumberWindow(Binder &binder, unique_pt
 	auto window = make_uniq<LogicalWindow>(table_index);
 
 	auto row_number = RowNumberFun::GetFunction().Bind(binder.context);
-	row_number->partitions = std::move(partitions);
-	row_number->orders = std::move(orders);
-	row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
-	row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+	row_number->PartitionsMutable() = std::move(partitions);
+	row_number->OrderByMutable() = std::move(orders);
+	row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+	row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
 	row_number->SetAlias("limit_rownum");
 
 	window->expressions.push_back(std::move(row_number));
@@ -781,7 +781,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownWindow(unique_ptr<LogicalOp
 	for (auto &expr : window.expressions) {
 		D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &w = expr->Cast<BoundWindowExpression>();
-		AppendCorrelatedColumns(w.partitions, state, false);
+		AppendCorrelatedColumns(w.PartitionsMutable(), state, false);
 	}
 	return state;
 }
