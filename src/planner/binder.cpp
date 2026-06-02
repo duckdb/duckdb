@@ -681,12 +681,10 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 		// Inject alias CTEs into the trigger body's own CTE map so each trigger' aliases won't be visible
 		// a local WITH shadows the alias
 		auto &body_map = trig_cte->query_node->cte_map.map;
-		if (!trigger.referencing_new_table.empty() &&
-		    body_map.find(trigger.referencing_new_table) == body_map.end()) {
+		if (!trigger.referencing_new_table.empty() && body_map.find(trigger.referencing_new_table) == body_map.end()) {
 			body_map[trigger.referencing_new_table] = MakeTransitionTableAliasCTE(base_cte_name);
 		}
-		if (!trigger.referencing_old_table.empty() &&
-		    body_map.find(trigger.referencing_old_table) == body_map.end()) {
+		if (!trigger.referencing_old_table.empty() && body_map.find(trigger.referencing_old_table) == body_map.end()) {
 			body_map[trigger.referencing_old_table] = MakeTransitionTableAliasCTE(base_cte_name);
 		}
 
