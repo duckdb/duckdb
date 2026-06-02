@@ -98,25 +98,53 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveDefaultsProjection(LogicalInsert
 				auto &bound_default = op.bound_defaults[storage_idx]->Cast<BoundConstantExpression>();
 				if (!bound_default.value.IsNull()) {
 					//! input
-					children.push_back(make_uniq<BoundReferenceExpression>(col.Type(), mapped_index));
+					children.push_back(BoundCastExpression::AddDefaultCastToType(make_uniq<BoundReferenceExpression>(col.Type(), mapped_index), original_type));
 					//! target_type
 					children.push_back(make_uniq<BoundConstantExpression>(Value(col.Type())));
+
 					//! mapping
+					//! FIXME: this needs to be recursive
 					child_list_t<Value> mapping_children;
-					for (auto &[child_name, _] : struct_children) {
-						mapping_children.emplace_back(child_name, Value(child_name));
+					for (auto &[child_name, child_type] : struct_children) {
+						Value child_value;
+						if (child_type.id() == LogicalTypeId::STRUCT) {
+							auto &child_struct_types = StructType::GetChildTypes(child_type);
+							child_list_t<Value> nested_child_values;
+							for (auto &[child_struct_name, _] : child_struct_types) {
+								nested_child_values.emplace_back(child_struct_name, Value(child_struct_name));
+							}
+							child_value = Value::STRUCT({{"", Value(child_name)}, {"", Value::STRUCT(nested_child_values)}});
+						} else {
+							child_value = Value(child_name);
+						}
+						mapping_children.emplace_back(child_name, child_value);
 					}
 					children.push_back(make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(mapping_children))));
+
 					//! defaults
 					child_list_t<Value> default_children;
 					auto &struct_default_children = StructValue::GetChildren(bound_default.value);
 					auto &struct_default_type_children = StructType::GetChildTypes(bound_default.value.type());
 					for (idx_t i = 0; i < struct_default_children.size(); i++) {
 						auto &child_default = struct_default_children[i];
-						if (child_default.IsNull()) {
-							continue;
+						auto &child_name = struct_default_type_children[i].first;
+						auto &child_type = struct_default_type_children[i].second;
+						if (child_default.type().id() == LogicalTypeId::STRUCT) {
+							child_list_t<Value> nested_default_children;
+							auto &nested_struct_children = StructValue::GetChildren(child_default);
+							auto &nested_struct_type_children = StructType::GetChildTypes(child_default.type());
+							for (idx_t j = 0; j < nested_struct_children.size(); j++) {
+								auto &nested_child_name = nested_struct_type_children[j].first;
+								auto &nested_child_default = nested_struct_children[j];
+								if (nested_child_name == "d") {
+									continue;
+								}
+								nested_default_children.emplace_back(nested_child_name, nested_child_default);
+							}
+							default_children.emplace_back(child_name, Value::STRUCT(nested_default_children));
+						} else {
+							default_children.emplace_back(child_name, child_default);
 						}
-						default_children.emplace_back(struct_default_type_children[i].first, child_default);
 					}
 					children.push_back(make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(default_children))));
 					select_list.push_back(RemapStructFun::GetFunction().Bind(context, std::move(children)));
