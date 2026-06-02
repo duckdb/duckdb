@@ -207,6 +207,13 @@ void MainHeader::CheckMagicBytes(QueryContext context, FileHandle &handle) {
 	}
 }
 
+void MainHeader::CheckMagicBytes(MemoryMappedFile &handle) {
+	auto magic_bytes = handle.GetData(MainHeader::MAGIC_BYTE_OFFSET, MainHeader::MAGIC_BYTE_SIZE);
+	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
+		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.GetPath());
+	}
+}
+
 MainHeader MainHeader::Read(ReadStream &source) {
 	data_t magic_bytes[MAGIC_BYTE_SIZE];
 
@@ -393,26 +400,6 @@ SingleFileBlockManager::~SingleFileBlockManager() {
 	this->in_destruction = true;
 }
 
-FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
-	FileOpenFlags result;
-	if (options.read_only) {
-		D_ASSERT(!create_new);
-		result = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS | FileLockType::READ_LOCK;
-	} else {
-		result = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ | FileLockType::WRITE_LOCK;
-		if (create_new) {
-			result |= FileFlags::FILE_FLAGS_FILE_CREATE;
-		}
-	}
-	if (options.use_direct_io) {
-		result |= FileFlags::FILE_FLAGS_DIRECT_IO;
-	}
-	// database files can be read from in parallel
-	result |= FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
-	result |= FileFlags::FILE_FLAGS_MULTI_CLIENT_ACCESS;
-	return result;
-}
-
 void SingleFileBlockManager::AddStorageVersionTag() {
 	db.tags["storage_version"] = GetStorageVersionName(options.storage_version, true);
 }
@@ -420,7 +407,7 @@ void SingleFileBlockManager::AddStorageVersionTag() {
 StorageVersion SingleFileBlockManager::GetVersionNumber() const {
 	auto storage_version = options.storage_version;
 	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version)) {
-		return static_cast<StorageVersion>(VERSION_NUMBER);
+		return StorageVersion::V0_10_2;
 	}
 	// Look up the matching version number.
 	auto version_name = GetStorageVersionName(storage_version, false);
@@ -527,17 +514,14 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header) {
 }
 
 void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
-	auto flags = GetFileFlags(true);
-
 	auto encryption_enabled = options.encryption_options.encryption_enabled;
 	if (encryption_enabled) {
 		// Check if we can read/write the encrypted database
 		db.GetDatabase().GetEncryptionUtil(options.read_only);
 	}
 
-	// open the RDBMS handle
-	auto &fs = FileSystem::Get(db);
-	handle = fs.OpenFile(path, flags);
+	// MAP mode opens only the mmap; other modes open the FileHandle.
+	handle = DatabaseHandle::Open(db, path, options, DatabaseOpenMode::CREATE_NEW_FILE);
 	header_buffer.Clear();
 
 	if (options.storage_version == StorageVersion::INVALID) {
@@ -639,17 +623,9 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 }
 
 void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
-	auto flags = GetFileFlags(false);
+	handle = DatabaseHandle::Open(db, path, options, DatabaseOpenMode::OPEN_EXISTING_FILE);
+	handle->CheckMagicBytes(context);
 
-	// open the RDBMS handle
-	auto &fs = FileSystem::Get(db);
-	handle = fs.OpenFile(path, flags);
-	if (!handle) {
-		// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
-		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
-	}
-
-	MainHeader::CheckMagicBytes(context, *handle);
 	// otherwise, we check the metadata of the file
 	ReadAndChecksum(context, header_buffer, 0, true);
 
@@ -790,7 +766,7 @@ void SingleFileBlockManager::CheckChecksum(FileBuffer &block, uint64_t location,
 void SingleFileBlockManager::ReadAndChecksum(QueryContext context, FileBuffer &block, uint64_t location,
                                              bool skip_block_header) const {
 	// read the buffer from disk
-	block.Read(context, *handle, location);
+	handle->Read(context, block, location);
 
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
@@ -829,9 +805,9 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 		temp_buffer_manager =
 		    make_uniq<FileBuffer>(BlockAllocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
 		EncryptionEngine::EncryptBlock(db, key_id, block, *temp_buffer_manager, delta);
-		temp_buffer_manager->Write(context, *handle, location);
+		temp_buffer_manager->Write(context, handle->GetFileHandle(), location);
 	} else {
-		block.Write(context, *handle, location);
+		handle->Write(context, block, location);
 	}
 }
 
@@ -1189,7 +1165,7 @@ void SingleFileBlockManager::ReadBlock(data_ptr_t internal_buffer, uint64_t bloc
 void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) const {
 	// read the buffer from disk
 	auto location = GetBlockLocation(block.id);
-	block.Read(QueryContext(), *handle, location);
+	handle->Read(QueryContext(), block, location);
 
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
@@ -1214,7 +1190,7 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 
 	// read the buffer from disk
 	auto location = GetBlockLocation(start_block);
-	buffer.Read(QueryContext(), *handle, location);
+	handle->Read(QueryContext(), buffer, location);
 
 	// for each of the blocks - verify the checksum
 	auto ptr = buffer.InternalBuffer();
@@ -1253,7 +1229,8 @@ void SingleFileBlockManager::Truncate() {
 	}
 	// truncate the file
 	free_list.erase(free_list.lower_bound(max_block), free_list.end());
-	handle->Truncate(NumericCast<int64_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize()));
+	auto new_size = NumericCast<idx_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize());
+	handle->Truncate(new_size);
 }
 
 vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
@@ -1448,7 +1425,9 @@ void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
 
 void SingleFileBlockManager::TrimFreeBlockRange(block_id_t start, block_id_t end) {
 	auto block_count = NumericCast<idx_t>(end + 1 - start);
-	handle->Trim(BLOCK_START + (NumericCast<idx_t>(start) * GetBlockAllocSize()), block_count * GetBlockAllocSize());
+	auto offset = BLOCK_START + (NumericCast<idx_t>(start) * GetBlockAllocSize());
+	auto length = block_count * GetBlockAllocSize();
+	handle->Trim(offset, length);
 }
 
 void SingleFileBlockManager::TrimFreeBlocks(const set<block_id_t> &blocks) {

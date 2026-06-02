@@ -37,9 +37,9 @@ void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 unique_ptr<Expression> CommonAggregateOptimizer::VisitReplace(BoundColumnRefExpression &expr,
                                                               unique_ptr<Expression> *expr_ptr) {
 	// check if this column ref points to an aggregate that was remapped; if it does we remap it
-	auto entry = aggregate_map.find(expr.binding);
+	auto entry = aggregate_map.find(expr.Binding());
 	if (entry != aggregate_map.end()) {
-		expr.binding = entry->second;
+		expr.BindingMutable() = entry->second;
 	}
 	return nullptr;
 }

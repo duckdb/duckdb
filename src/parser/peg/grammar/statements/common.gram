@@ -39,9 +39,6 @@ Statement <-
 ExpressionStatement <- List(ExpressionAlias)
 ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
 
-SemiList1(D) <- D (';' D)*
-SemiList(D) <- SemiList1(D) ';'?
-
 CatalogName <- Identifier
 SchemaName <- Identifier
 ReservedSchemaName <- Identifier
@@ -56,10 +53,10 @@ SettingName <- Identifier
 PragmaName <- Identifier
 FunctionName <- Identifier
 ReservedFunctionName <- Identifier
+ReservedTypeName <- Identifier
 TableFunctionName <- Identifier
 ConstraintName <- ColIdOrString
 SequenceName <- Identifier
-TriggerName <- Identifier
 CollationName <- Identifier
 CopyOptionName <- ColLabel
 
@@ -138,7 +135,9 @@ DecimalType <- 'DECIMAL' TypeModifiers?
 DecType <- 'DEC' TypeModifiers?
 NumericModType <- 'NUMERIC' TypeModifiers?
 
-QualifiedTypeName <- (Identifier '.')* TypeName
+QualifiedTypeName <- CatalogReservedSchemaTypeName / SchemaReservedTypeName / TypeName
+CatalogReservedSchemaTypeName <- CatalogQualification ReservedSchemaQualification ReservedTypeName
+SchemaReservedTypeName <- SchemaQualification ReservedTypeName
 TypeModifiers <- Parens(List(Expression)?)
 RowType <- RowOrStruct ColIdTypeList
 SetofType <- 'SETOF' Type

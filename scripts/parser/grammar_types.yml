@@ -20,9 +20,21 @@
 # Rules handled by RegisterEnum() are NOT listed here (they are auto-detected
 # by generate_transformer.py from peg_transformer_factory.cpp).
 #
-# excluded_rules: rules skipped during stub generation. When encountered as
-# children in auto-generated sequence rules they are treated as skip elements
-# (no semantic value extracted).
+# excluded_rules: rules intentionally skipped during auto-generation of Internal
+# wrappers. When encountered as children in auto-generated sequence rules they
+# are treated as skip elements UNLESS they also have a type entry, in which case
+# the type entry takes precedence and their value IS extracted. Keep this list
+# for syntax-only rules and temporary manual exceptions; matcher-provided rules
+# belong in matcher_rule_overrides instead.
+# Note: some entries (e.g. CTEBodyContent, SingleArrowPair, CommentValue,
+# IntervalNumber, Program) also appear in type categories because
+# they are manually implemented and referenced as children by auto-generated
+# rules. The excluded status only suppresses Internal auto-generation.
+#
+# matcher_rule_overrides: named grammar rules that matcher.cpp replaces with a
+# specialized Matcher instead of constructing from the grammar rule body. The
+# transformer generator should treat only `identifier` and `reserved_identifier`
+# entries as direct IdentifierParseResult-producing rules.
 
 # ---------------------------------------------------------------------------
 # unique_ptr<T> categories
@@ -47,8 +59,11 @@ SQLStatement:
     - CommentStatement
     - ConnectStatement
     - CopyStatement
+    - CopyVariations
     - CopySelect
     - CopyFromDatabase
+    - CopyFromDatabaseWithFlag
+    - CopyFromDatabaseWithoutFlag
     - CopyTable
     - CreateStatement
     - DeallocateStatement
@@ -60,6 +75,7 @@ SQLStatement:
     - ExecuteStatement
     - ExplainStatement
     - ExplainableStatements
+    - ExplainSelectStatement
     - ExportStatement
     - ExpressionStatement
     - ImportStatement
@@ -83,6 +99,7 @@ SQLStatement:
     - UpdateStatement
     - UseStatement
     - VacuumStatement
+    - PragmaAssignOrFunction
 
 SelectStatement:
   type: "unique_ptr<SelectStatement>"
@@ -100,7 +117,6 @@ SelectStatement:
     - OptionalParensSimpleSelect
     - SimpleSelectParens
     - SimpleSelect
-    - EnumSelectType
     - ValuesClause
     - TableStatement
 
@@ -108,6 +124,7 @@ SetStatement:
   type: "unique_ptr<SetStatement>"
   by_value: true
   rules:
+    - SetAssignmentOrTimeZone
     - SetTimeZone
     - StandardAssignment
 
@@ -209,12 +226,16 @@ CreateTypeInfo:
   by_value: true
   rules:
     - CreateType
+    - CreateTypeFromType
+    - EnumSelectType
+    - EnumStringLiteralList
 
 MacroFunction:
   type: "unique_ptr<MacroFunction>"
   by_value: true
   rules:
     - MacroDefinition
+    - MacroDefinitionBody
     - TableMacroDefinition
     - ScalarMacroDefinition
 
@@ -234,6 +255,8 @@ MergeIntoAction:
     - MatchedClauseAction
     - UpdateMatchClause
     - UpdateMatchInfo
+    - UpdateMatchSetAction
+    - UpdateByNameOrPosition
     - DeleteMatchClause
     - InsertMatchClause
     - DoNothingMatchClause
@@ -251,6 +274,7 @@ UpdateSetInfo:
     - UpdateSetTuple
     - UpdateSetElementList
     - UpdateMatchSetClause
+    - UpdateMatchSetInfo
 
 Constraint:
   type: "unique_ptr<Constraint>"
@@ -260,14 +284,7 @@ Constraint:
     - TopLevelConstraintList
     - TopPrimaryKeyConstraint
     - TopUniqueConstraint
-    - CheckConstraint
     - TopForeignKeyConstraint
-
-ForeignKeyConstraint:
-  type: "unique_ptr<ForeignKeyConstraint>"
-  by_value: true
-  rules:
-    - ForeignKeyConstraint
 
 WindowExpression:
   type: "unique_ptr<WindowExpression>"
@@ -280,6 +297,16 @@ WindowExpression:
     - WindowFrameContentsParens
     - WindowFrameNameContentsParens
     - WindowFrameContents
+
+SetScope:
+  type: "SetScope"
+  by_value: false
+  rules:
+    - LocalScope
+    - GlobalScope
+    - SessionScope
+    - VariableScope
+    - SettingScope
 
 SampleOptions:
   type: "unique_ptr<SampleOptions>"
@@ -415,6 +442,15 @@ Expression:
     - ZoneValue
     - ZoneIntervalWithInterval
     - ZoneIntervalWithPrecision
+    - ZoneLocal
+    - ZoneDefault
+    - ZoneStringLiteral
+    - ZoneIdentifier
+    - DefArg
+    - DefArgNull
+    - DefArgKeyword
+    - DefArgStringLiteral
+    - NoneLiteral
     - NumberLiteral
     - TimeType
     - NumericType
@@ -437,9 +473,11 @@ Expression:
     - DecType
     - NumericModType
     - CopyFileName
+    - CopyFileNameExpression
+    - CopyFileNameStringLiteral
+    - CopyFileNameIdentifier
+    - CopyFileNameIdentifierColId
     - DatabasePath
-    - DefaultValue
-    - ColumnCollation
     - UsingExpression
     - IndexElement
     - RelOptionArgumentOpt
@@ -542,17 +580,18 @@ ResultModifierList:
 
 OrderByNodeList:
   type: "vector<OrderByNode>"
-  by_value: false
+  by_value: true
   rules:
     - OrderByClause
     - OrderByExpressions
     - OrderByExpressionList
     - OrderByAll
     - WithinGroupClause
+    - GenericCopyOptionParenthesizedExpressionList
 
 MacroParameterList:
   type: "vector<MacroParameter>"
-  by_value: false
+  by_value: true
   rules:
     - MacroParameters
 
@@ -567,6 +606,8 @@ StringList:
     - DottedIdentifier
     - ColumnAliases
     - TriggerColumnList
+    - StarSymbolColumnList
+    - PivotGroupByList
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
@@ -575,6 +616,7 @@ GenericCopyOptionList:
     - AttachOptions
     - GenericCopyOptionList
     - CopyOptions
+    - CopyOptionList
     - SpecializedOptionList
     - ExplainOptionList
 
@@ -588,7 +630,7 @@ WindowBoundaryExpressionList:
 
 PivotColumnList:
   type: "vector<PivotColumn>"
-  by_value: false
+  by_value: true
   rules:
     - PivotColumnList
     - PivotOn
@@ -614,6 +656,11 @@ QualifiedName:
     - QualifiedName
     - QualifiedSchemaName
     - QualifiedIndexName
+    - QualifiedSchemaNameString
+    - QualifiedIndexNameString
+    - CatalogReservedSchema
+    - SchemaReservedIndex
+    - CatalogReservedSchemaIndex
     - FunctionIdentifier
     - SchemaReservedFunctionName
     - CatalogReservedSchemaFunctionName
@@ -677,7 +724,7 @@ JoinPrefix:
 
 JoinQualifier:
   type: "JoinQualifier"
-  by_value: false
+  by_value: true
   rules:
     - JoinQualifier
     - OnClause
@@ -700,18 +747,25 @@ WindowBoundaryExpression:
 
 PivotColumn:
   type: "PivotColumn"
-  by_value: false
+  by_value: true
   rules:
     - PivotColumnEntry
     - PivotColumnSubquery
-    - PivotColumnEntryInternal
+    - PivotColumnExpression
     - PivotValueList
     - UnpivotValueList
+
+UnpivotNameValues:
+  type: "UnpivotNameValues"
+  by_value: true
+  rules:
+    - IntoNameValues
 
 GenericCopyOption:
   type: "GenericCopyOption"
   by_value: false
   rules:
+    - GenericCopyOption
     - SpecializedOption
     - SingleOption
     - EncodingOption
@@ -724,9 +778,17 @@ GenericCopyOption:
     - EscapeAsOption
     - ExplainOption
 
+GenericCopyOptionValue:
+  type: "GenericCopyOptionValue"
+  by_value: true
+  rules:
+    - GenericCopyOptionValue
+    - GenericCopyOptionOrderList
+    - GenericCopyOptionExpression
+
 MacroParameter:
   type: "MacroParameter"
-  by_value: false
+  by_value: true
   rules:
     - MacroParameter
     - SimpleParameter
@@ -742,6 +804,15 @@ TriggerEventInfo:
     - TriggerEventUpdate
     - TriggerEventUpdateOf
 
+TriggerTableReferencingInfo:
+  type: "TriggerTableReferencingInfo"
+  by_value: false
+  rules:
+    - ReferencingClause
+    - ReferencingItem
+    - ReferencingNewTableAs
+    - ReferencingOldTableAs
+
 VacuumOptions:
   type: "VacuumOptions"
   by_value: false
@@ -754,6 +825,7 @@ SettingInfo:
   type: "SettingInfo"
   by_value: false
   rules:
+    - SetVariableOrSetting
     - SetSetting
     - SetVariable
 
@@ -787,6 +859,7 @@ String:
     - CollationName
     - IndexType
     - RelOptionName
+    - DottedIdentifierString
     - IndexName
     - ColId
     - ColIdOrString
@@ -794,6 +867,7 @@ String:
     - TypeFuncName
     - Identifier
     - ExportSource
+    - ReservedKeyword
     - VersionNumber
     - LikeVariations
     - OtherOperator
@@ -810,6 +884,9 @@ String:
     - PrefixOperator
     - TableQualification
     - ReservedTableQualification
+    - CatalogQualification
+    - SchemaQualification
+    - ReservedSchemaQualification
     - BaseWindowName
     - Framing
     - AtUnit
@@ -836,11 +913,19 @@ String:
     - ExplainOptionName
     - OperatorLiteral
     - DotIdentifier
+    - IdentifierDot
     - VacuumOption
     - OptAnalyze
     - OptFull
     - OptFreeze
     - OptVerbose
+    - ExtensionAlias
+    - ExplainOptionAnalyze
+    - DropNullability
+    - SetNullability
+    - MinValue
+    - MaxValue
+    - IdentifierColId
 
 Bool:
   type: "bool"
@@ -858,8 +943,12 @@ Bool:
     - Materialized
     - SampleUnit
     - DropBehavior
+    - CascadeDropBehavior
+    - RestrictDropBehavior
     - AnyOrAll
     - IgnoreOrRespectNulls
+    - IncludeNulls
+    - ExcludeNulls
     - PrecedingOrFollowing
     - IfExists
     - IncludeOrExcludeNulls
@@ -867,8 +956,23 @@ Bool:
     - CheckpointForce
     - IfNotExists
     - OrReplace
+    - FunctionTypeMacro
+    - FunctionTypeMacroKeyword
+    - FunctionTypeFunction
+    - MacroOrFunction
+    - MacroKeyword
+    - FunctionKeyword
     - DeallocatePrepare
     - CreateRecursive
+    - ExplainAnalyze
+    - WithOrWithoutOids
+    - WithOids
+    - WithoutOids
+    - UniqueIndex
+    - CopyFrom
+    - CopyTo
+    - ForceQuote
+    - ForceNotNull
 
 
 Int64:
@@ -883,7 +987,12 @@ LogicalType:
   by_value: false
   rules:
     - Type
-    - EnumStringLiteralList
+
+LogicalTypeList:
+  type: "vector<LogicalType>"
+  by_value: false
+  rules:
+    - TypeList
 
 TransactionModifierType:
   type: "TransactionModifierType"
@@ -896,11 +1005,82 @@ TransactionModifierType:
 # Structs passed by value (contain move-only members like unique_ptr<T>)
 # ---------------------------------------------------------------------------
 
+AddColumnEntry:
+  type: "AddColumnEntry"
+  by_value: true
+  rules:
+    - AddColumnEntry
+
+ColumnConstraintEntry:
+  type: "ColumnConstraintEntry"
+  by_value: true
+  rules:
+    - ColumnConstraint
+    - NotNullConstraint
+    - UniqueConstraint
+    - PrimaryKeyConstraint
+    - DefaultValue
+    - CheckConstraint
+    - ForeignKeyConstraint
+    - ColumnCollation
+    - ColumnCompression
+
 AnalyzeTarget:
   type: "AnalyzeTarget"
   by_value: true
   rules:
     - AnalyzeTarget
+
+CommonTableExpressionMap:
+  type: "CommonTableExpressionMap"
+  by_value: true
+  rules:
+    - WithClause
+
+CatalogType:
+  type: "CatalogType"
+  by_value: false
+  rules:
+    - CommentOnType
+    - CommentTable
+    - CommentSequence
+    - CommentFunction
+    - CommentMacroTable
+    - CommentMacro
+    - CommentView
+    - CommentDatabase
+    - CommentIndex
+    - CommentSchema
+    - CommentType
+    - CommentColumn
+    - TableOrView
+    - MaterializedViewEntry
+
+
+Value:
+  type: "Value"
+  by_value: false
+  rules:
+    - CommentValue
+    - NullLiteral
+    - UnknownLiteral
+    - TrueLiteral
+    - FalseLiteral
+
+TriggerTiming:
+  type: "TriggerTiming"
+  by_value: false
+  rules:
+    - TriggerBefore
+    - TriggerAfter
+    - TriggerInsteadOf
+
+TriggerForEach:
+  type: "TriggerForEach"
+  by_value: false
+  rules:
+    - ForEachRow
+    - ForEachStatement
 
 # ---------------------------------------------------------------------------
 # Overrides: rules with unique or complex return types that don't share a
@@ -914,9 +1094,6 @@ overrides:
   TimeOrTimestamp: "LogicalTypeId"
   Interval: "DatePartSpecifier"
   IntervalToInterval: "DatePartSpecifier"
-  # comment.gram
-  CommentOnType: "CatalogType"
-  CommentValue: "Value"
   # copy.gram
   CopyDatabaseFlag: "CopyDatabaseType"
   SchemaOrData: "CopyDatabaseType"
@@ -927,12 +1104,7 @@ overrides:
   RelOptionList: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   Oids: "case_insensitive_map_t<unique_ptr<ParsedExpression>>"
   # create_table.gram
-  AddColumnEntry: "AddColumnEntry"
   ColumnDefinition: "ConstraintColumnDefinition"
-  ColumnCompression: "CompressionType"
-  PrimaryKeyConstraint: "pair<bool, ConstraintType>"
-  UniqueConstraint: "pair<bool, ConstraintType>"
-  NotNullConstraint: "pair<bool, ConstraintType>"
   KeyActions: "KeyActions"
   GeneratedColumn: "GeneratedColumnDefinition"
   CreateTableAs: "CreateTableAs"
@@ -943,11 +1115,32 @@ overrides:
   TriggerTiming: "TriggerTiming"
   # create_type.gram (EnumSelectType is already in SelectStatement category)
   # describe.gram
+  DescribeTarget:
+    type: "DescribeTarget"
+    by_value: true
+  DescribeBaseTableName:
+    type: "DescribeTarget"
+    by_value: true
+  DescribeStringLiteral:
+    type: "DescribeTarget"
+    by_value: true
   ShowOrDescribeOrSummarize: "ShowType"
   ShowOrDescribe: "ShowType"
   Summarize: "ShowType"
-  # drop.gram
-  TableOrView: "CatalogType"
+  SummarizeRule: "ShowType"
+  ShowRule: "ShowType"
+  DescribeRule: "ShowType"
+  DescribeLongRule: "ShowType"
+  DescRule: "ShowType"
+  # copy.gram
+  CopySchema: "CopyDatabaseType"
+  CopyData: "CopyDatabaseType"
+  BinaryOption: "GenericCopyOption"
+  FreezeOption: "GenericCopyOption"
+  OidsOption: "GenericCopyOption"
+  CsvOption: "GenericCopyOption"
+  HeaderOption: "GenericCopyOption"
+
   # expression.gram
   ComparisonOperator: "ExpressionType"
   IsDistinctFromOp: "ExpressionType"
@@ -969,26 +1162,51 @@ overrides:
   RenameEntry: "pair<QualifiedColumnName, string>"
   # insert.gram
   OrAction: "OnConflictAction"
-  OnConflictTarget: "OnConflictExpressionTarget"
-  OnConflictExpressionTarget: "OnConflictExpressionTarget"
-  OnConflictIndexTarget: "OnConflictExpressionTarget"
-  InsertValues: "InsertValues"
+  InsertOrReplace: "OnConflictAction"
+  InsertOrIgnore: "OnConflictAction"
+  OnConflictTarget:
+    type: "OnConflictExpressionTarget"
+    by_value: true
+  OnConflictExpressionTarget:
+    type: "OnConflictExpressionTarget"
+    by_value: true
+  OnConflictIndexTarget:
+    type: "OnConflictExpressionTarget"
+    by_value: true
+  InsertValues:
+    type: "InsertValues"
+    by_value: true
+  SelectInsertValues:
+    type: "InsertValues"
+    by_value: true
+  DefaultValues:
+    type: "InsertValues"
+    by_value: true
   ByNameOrPosition: "InsertColumnOrder"
+  InsertByNameOrder: "InsertColumnOrder"
+  InsertByPositionOrder: "InsertColumnOrder"
+  InsertByName: "InsertColumnOrder"
+  InsertByPosition: "InsertColumnOrder"
   # load.gram
   FromSource: "ExtensionRepositoryInfo"
+  FromSourceIdentifier: "ExtensionRepositoryInfo"
+  FromSourceString: "ExtensionRepositoryInfo"
   # merge_into.gram
   MergeMatch: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"
   MatchedClause: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"
   NotMatchedClause: "pair<MergeActionCondition, unique_ptr<MergeIntoAction>>"
   BySourceOrTarget: "MergeActionCondition"
+  BySource: "MergeActionCondition"
+  ByTarget: "MergeActionCondition"
   # pivot.gram
   UnpivotHeader: "vector<string>"
   UnpivotHeaderSingle: "vector<string>"
   UnpivotHeaderList: "vector<string>"
-  IntoNameValues: "UnpivotNameValues"
   # create_sequence.gram
   SequenceOption: "pair<string, unique_ptr<SequenceOption>>"
   SeqSetCycle: "pair<string, unique_ptr<SequenceOption>>"
+  SeqCycle: "pair<string, unique_ptr<SequenceOption>>"
+  SeqNoCycle: "pair<string, unique_ptr<SequenceOption>>"
   SeqSetIncrement: "pair<string, unique_ptr<SequenceOption>>"
   SeqSetMinMax: "pair<string, unique_ptr<SequenceOption>>"
   SeqNoMinMax: "pair<string, unique_ptr<SequenceOption>>"
@@ -996,7 +1214,6 @@ overrides:
   SeqOwnedBy: "pair<string, unique_ptr<SequenceOption>>"
   # select.gram
   SetopType: "SetOperationType"
-  WithClause: "CommonTableExpressionMap"
   WithStatement: "pair<string, unique_ptr<CommonTableExpressionInfo>>"
   JoinType: "JoinType"
   SampleProperties: "pair<SampleMethod, optional_idx>"
@@ -1012,57 +1229,117 @@ overrides:
   # update.gram
   UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
   UpdateSetColumnTarget: "string"
+
+# ---------------------------------------------------------------------------
+# matcher.cpp rule overrides
+# ---------------------------------------------------------------------------
+
+matcher_rule_overrides:
+  Identifier:
+    allow_type_overlap: true
+    matcher: identifier
+    suggestion: SUGGEST_VARIABLE
+  ReservedIdentifier:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_VARIABLE
+  CatalogName:
+    matcher: identifier
+    suggestion: SUGGEST_CATALOG_NAME
+  SchemaName:
+    matcher: identifier
+    suggestion: SUGGEST_SCHEMA_NAME
+  ReservedSchemaName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_SCHEMA_NAME
+  TableName:
+    matcher: identifier
+    suggestion: SUGGEST_TABLE_NAME
+  ReservedTableName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_TABLE_NAME
+  ColumnName:
+    matcher: identifier
+    suggestion: SUGGEST_COLUMN_NAME
+  ReservedColumnName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_COLUMN_NAME
+  IndexName:
+    allow_type_overlap: true
+    matcher: identifier
+    suggestion: SUGGEST_VARIABLE
+  ReservedIndexName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_VARIABLE
+  SequenceName:
+    allow_type_overlap: true
+    matcher: identifier
+    suggestion: SUGGEST_VARIABLE
+  FunctionName:
+    matcher: identifier
+    suggestion: SUGGEST_SCALAR_FUNCTION_NAME
+  ReservedFunctionName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_SCALAR_FUNCTION_NAME
+  TableFunctionName:
+    matcher: identifier
+    suggestion: SUGGEST_TABLE_FUNCTION_NAME
+  TypeName:
+    matcher: identifier
+    suggestion: SUGGEST_TYPE_NAME
+  ReservedTypeName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_TYPE_NAME
+  PragmaName:
+    matcher: identifier
+    suggestion: SUGGEST_PRAGMA_NAME
+  SettingName:
+    matcher: identifier
+    suggestion: SUGGEST_SETTING_NAME
+  CopyOptionName:
+    matcher: reserved_identifier
+    suggestion: SUGGEST_VARIABLE
+  NumberLiteral:
+    allow_type_overlap: true
+    matcher: number_literal
+  StringLiteral:
+    allow_type_overlap: true
+    matcher: string_literal
+  OperatorLiteral:
+    allow_type_overlap: true
+    matcher: operator
+
 # ---------------------------------------------------------------------------
 # excluded_rules: no transformer stub generated, no semantic value extracted
+# for child references
 # ---------------------------------------------------------------------------
 
 excluded_rules:
+  - PivotStatement
+  - UnpivotStatement
+  - CommentValue
   - Program
-  - FunctionType
   - Database
   - AbortOrRollback
   - CommitOrEnd
   - StartOrBegin
   - Transaction
   - VariableAssign
-  - MacroOrFunction
-  - SettingScope
   - ColLabel
   - GroupingOrGroupingId
-  - DefaultValues
   - RowOrRows
   - Recursive
   - StarSymbol
   - PlainIdentifier
   - QuotedIdentifier
   - CreateTableColumnElement
-  - ReservedIdentifier
-  - CatalogName
-  - SchemaName
-  - ReservedSchemaName
-  - TableName
-  - ConstraintName
   - IntervalNumber
-  - ReservedTableName
-  - ColumnName
-  - ReservedColumnName
-  - FunctionName
-  - ReservedFunctionName
-  - TableFunctionName
-  - TypeName
-  - PragmaName
-  - SettingName
-  - CopyOptionName
   - AtTimeZoneOperator
   - Generated
-  - ColumnConstraint
   - AlwaysOrByDefault
   - Lateral
   - ConstraintNameClause
-  - ReservedSchemaQualification
   - UsingSample
   - TableSample
-  - TypeList
   - NamedParameterAssignment
   - WithOrdinality
   - ByName
@@ -1072,12 +1349,7 @@ excluded_rules:
   - PivotKeyword
   - UnpivotKeyword
   - Unique
-  - DefArg
-  - NoneLiteral
   - RowOrStruct
-  - ForEachRow
-  - ForEachStatement
   - SetData
   - CTEBodyContent
   - SingleArrowPair
-  - OperatorLiteral

@@ -41,6 +41,7 @@ enum class SQLLogicTokenType {
 	SQLLOGIC_UNZIP,
 	SQLLOGIC_TAGS,
 	SQLLOGIC_CONTINUE,
+	SQLLOGIC_INCLUDE
 };
 
 class SQLLogicToken {
@@ -60,6 +61,8 @@ public:
 	bool print_input = false;
 	//! Whether or not we have seen a statement
 	bool seen_statement = false;
+	//! Include files
+	unique_ptr<SQLLogicParser> current_include;
 
 public:
 	static bool EmptyOrComment(const string &line);
@@ -71,6 +74,8 @@ public:
 
 	//! Opens the file, returns whether or not reading was successful
 	bool OpenFile(const string &path);
+
+	void IncludeFile(const string &file_name);
 
 	//! Moves the current line to the beginning of the next statement
 	//! Returns false if there is no next statement (i.e. we reached the end of the file)

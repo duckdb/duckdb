@@ -477,7 +477,7 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 		D_ASSERT(group->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
 		// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
-		group_chunk.data[chunk_index++].Reference(input_chunk.data[bound_ref_expr.index]);
+		group_chunk.data[chunk_index++].Reference(input_chunk.data[bound_ref_expr.Index()]);
 	}
 	group_chunk.SetCardinality(input_chunk.size());
 	// the fake group for empty grouping_set was created with v_size=STANDARD_VECTOR_SIZE - resize to match
@@ -1073,17 +1073,17 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			for (idx_t i = 0; i < op.aggregates.size(); i++) {
 				D_ASSERT(op.aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 				auto &aggr = op.aggregates[i]->Cast<BoundAggregateExpression>();
-				auto aggr_state =
-				    make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.GetStateSizeCallback()(aggr.function));
-				aggr.function.GetStateInitCallback()(aggr.function, aggr_state.get());
+				auto aggr_state = make_unsafe_uniq_array_uninitialized<data_t>(
+				    aggr.Function().GetStateSizeCallback()(aggr.Function()));
+				aggr.Function().GetStateInitCallback()(aggr.Function(), aggr_state.get());
 
-				AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
+				AggregateInputData aggr_input_data(aggr.BindInfo(), allocator);
 				Vector state_vector(Value::POINTER(CastPointerToValue(aggr_state.get())), count_t(1));
 				auto &agg_result = chunk.data[null_groups.size() + i];
-				aggr.function.GetStateFinalizeCallback()(state_vector, aggr_input_data, agg_result, 1, 0);
+				aggr.Function().GetStateFinalizeCallback()(state_vector, aggr_input_data, agg_result, 1, 0);
 				FlatVector::SetSize(agg_result, count_t(1));
-				if (aggr.function.HasStateDestructorCallback()) {
-					aggr.function.GetStateDestructorCallback()(state_vector, aggr_input_data, 1);
+				if (aggr.Function().HasStateDestructorCallback()) {
+					aggr.Function().GetStateDestructorCallback()(state_vector, aggr_input_data, 1);
 				}
 			}
 			// Place the grouping values (all the groups of the grouping_set condensed into a single value)

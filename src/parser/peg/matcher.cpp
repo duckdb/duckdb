@@ -457,6 +457,9 @@ public:
 		if (IsQuoted(text)) {
 			return true;
 		}
+		if (BaseTokenizer::CharacterIsInitialNumber(text[0])) {
+			return false;
+		}
 		return BaseTokenizer::CharacterIsKeyword(text[0]);
 	}
 
@@ -1002,26 +1005,6 @@ private:
 	Matcher &Choice(vector<reference<Matcher>> matchers) const;
 	Matcher &Optional(Matcher &matcher) const;
 	Matcher &Repeat(Matcher &matcher) const;
-	Matcher &Variable() const;
-	Matcher &CatalogName() const;
-	Matcher &SchemaName() const;
-	Matcher &TypeName() const;
-	Matcher &TableName() const;
-	Matcher &ColumnName() const;
-	Matcher &StringLiteral() const;
-	Matcher &NumberLiteral() const;
-	Matcher &Operator() const;
-	Matcher &ArithmeticOperator() const;
-	Matcher &ScalarFunctionName() const;
-	Matcher &TableFunctionName() const;
-	Matcher &PragmaName() const;
-	Matcher &SettingName() const;
-	Matcher &CopyOptionName() const;
-	Matcher &ReservedSchemaName() const;
-	Matcher &ReservedTableName() const;
-	Matcher &ReservedColumnName() const;
-	Matcher &ReservedScalarFunctionName() const;
-	Matcher &ReservedVariable() const;
 
 	void AddKeywordOverride(const char *name, int32_t score, char extra_char = ' ');
 	void AddRuleOverride(const char *name, Matcher &matcher);
@@ -1062,85 +1045,6 @@ Matcher &MatcherFactory::Optional(Matcher &matcher) const {
 
 Matcher &MatcherFactory::Repeat(Matcher &matcher) const {
 	return allocator.Allocate(make_uniq<RepeatMatcher>(matcher));
-}
-
-Matcher &MatcherFactory::Variable() const {
-	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
-}
-
-Matcher &MatcherFactory::ReservedVariable() const {
-	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
-}
-Matcher &MatcherFactory::CatalogName() const {
-	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_CATALOG_NAME));
-}
-
-Matcher &MatcherFactory::SchemaName() const {
-	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME));
-}
-
-Matcher &MatcherFactory::ReservedSchemaName() const {
-	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME));
-}
-
-Matcher &MatcherFactory::TableName() const {
-	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME));
-}
-
-Matcher &MatcherFactory::ReservedTableName() const {
-	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME));
-}
-
-Matcher &MatcherFactory::ColumnName() const {
-	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME));
-}
-
-Matcher &MatcherFactory::ReservedColumnName() const {
-	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME));
-}
-
-Matcher &MatcherFactory::TypeName() const {
-	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME));
-}
-
-Matcher &MatcherFactory::ScalarFunctionName() const {
-	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME));
-}
-
-Matcher &MatcherFactory::ReservedScalarFunctionName() const {
-	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME));
-}
-
-Matcher &MatcherFactory::TableFunctionName() const {
-	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_FUNCTION_NAME));
-}
-
-Matcher &MatcherFactory::PragmaName() const {
-	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_PRAGMA_NAME));
-}
-
-Matcher &MatcherFactory::SettingName() const {
-	return allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SETTING_NAME));
-}
-
-Matcher &MatcherFactory::CopyOptionName() const {
-	return allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE));
-}
-
-Matcher &MatcherFactory::NumberLiteral() const {
-	return allocator.Allocate(make_uniq<NumberLiteralMatcher>());
-}
-
-Matcher &MatcherFactory::StringLiteral() const {
-	return allocator.Allocate(make_uniq<StringLiteralMatcher>());
-}
-
-Matcher &MatcherFactory::Operator() const {
-	return allocator.Allocate(make_uniq<OperatorMatcher>());
-}
-
-Matcher &MatcherFactory::ArithmeticOperator() const {
-	return allocator.Allocate(make_uniq<ArithmeticOperatorMatcher>());
 }
 
 Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
@@ -1426,32 +1330,51 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	AddKeywordOverride(".", 0, '\0');
 	AddKeywordOverride("(", 0, '\0');
 	// rule overrides
-	AddRuleOverride("Identifier", Variable());
-	AddRuleOverride("ReservedIdentifier", ReservedVariable());
-
-	AddRuleOverride("CatalogName", CatalogName());
-	AddRuleOverride("SchemaName", SchemaName());
-	AddRuleOverride("ReservedSchemaName", ReservedSchemaName());
-	AddRuleOverride("TableName", TableName());
-	AddRuleOverride("ReservedTableName", ReservedTableName());
-	AddRuleOverride("ColumnName", ColumnName());
-	AddRuleOverride("ReservedColumnName", ReservedColumnName());
-	AddRuleOverride("IndexName", Variable());
-	AddRuleOverride("ReservedIndexName", ReservedVariable());
-	AddRuleOverride("SequenceName", Variable());
-
-	AddRuleOverride("FunctionName", ScalarFunctionName());
-	AddRuleOverride("ReservedFunctionName", ReservedScalarFunctionName());
-	AddRuleOverride("TableFunctionName", TableFunctionName());
-
-	AddRuleOverride("TypeName", TypeName());
-	AddRuleOverride("PragmaName", PragmaName());
-	AddRuleOverride("SettingName", SettingName());
-	AddRuleOverride("CopyOptionName", CopyOptionName());
-
-	AddRuleOverride("NumberLiteral", NumberLiteral());
-	AddRuleOverride("StringLiteral", StringLiteral());
-	AddRuleOverride("OperatorLiteral", Operator());
+	//===--------------------------------------------------------------------===//
+	// START GENERATED RULE OVERRIDES
+	//===--------------------------------------------------------------------===//
+	AddRuleOverride("Identifier", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
+	AddRuleOverride("ReservedIdentifier",
+	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
+	AddRuleOverride("CatalogName",
+	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_CATALOG_NAME)));
+	AddRuleOverride("SchemaName",
+	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME)));
+	AddRuleOverride("ReservedSchemaName",
+	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_SCHEMA_NAME)));
+	AddRuleOverride("TableName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME)));
+	AddRuleOverride("ReservedTableName",
+	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_TABLE_NAME)));
+	AddRuleOverride("ColumnName",
+	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME)));
+	AddRuleOverride("ReservedColumnName",
+	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_COLUMN_NAME)));
+	AddRuleOverride("IndexName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
+	AddRuleOverride("ReservedIndexName",
+	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
+	AddRuleOverride("SequenceName",
+	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
+	AddRuleOverride("FunctionName",
+	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME)));
+	AddRuleOverride("ReservedFunctionName", allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(
+	                                            SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME)));
+	AddRuleOverride("TableFunctionName",
+	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TABLE_FUNCTION_NAME)));
+	AddRuleOverride("TypeName", allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME)));
+	AddRuleOverride("ReservedTypeName",
+	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_TYPE_NAME)));
+	AddRuleOverride("PragmaName",
+	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_PRAGMA_NAME)));
+	AddRuleOverride("SettingName",
+	                allocator.Allocate(make_uniq<IdentifierMatcher>(SuggestionState::SUGGEST_SETTING_NAME)));
+	AddRuleOverride("CopyOptionName",
+	                allocator.Allocate(make_uniq<ReservedIdentifierMatcher>(SuggestionState::SUGGEST_VARIABLE)));
+	AddRuleOverride("NumberLiteral", allocator.Allocate(make_uniq<NumberLiteralMatcher>()));
+	AddRuleOverride("StringLiteral", allocator.Allocate(make_uniq<StringLiteralMatcher>()));
+	AddRuleOverride("OperatorLiteral", allocator.Allocate(make_uniq<OperatorMatcher>()));
+	//===--------------------------------------------------------------------===//
+	// END GENERATED RULE OVERRIDES
+	//===--------------------------------------------------------------------===//
 
 	// suppress suggestions for catch-all rules that would pollute statement-level autocomplete
 	SuppressSuggestions("ExpressionStatement");

@@ -407,14 +407,14 @@ static string GetExtendedMultiFileError(const MultiFileBindData &bind_data, cons
 		return string();
 	}
 	auto &cast_expr = expr.Cast<BoundCastExpression>();
-	if (cast_expr.child->GetExpressionType() != ExpressionType::BOUND_REF) {
+	if (cast_expr.Child().GetExpressionType() != ExpressionType::BOUND_REF) {
 		return string();
 	}
-	auto &ref = cast_expr.child->Cast<BoundReferenceExpression>();
+	auto &ref = cast_expr.Child().Cast<BoundReferenceExpression>();
 	auto &source_type = ref.GetReturnType();
 	auto &target_type = cast_expr.GetReturnType();
 	auto &columns = reader.GetColumns();
-	auto local_col_id = reader.column_indexes[ref.index].GetPrimaryIndex();
+	auto local_col_id = reader.column_indexes[ref.Index()].GetPrimaryIndex();
 	auto &local_col = columns[local_col_id];
 
 	auto reader_type = reader.GetReaderType();
@@ -709,7 +709,7 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 		if (union_find != union_names_map.end()) {
 			// given same name , union_col's type must compatible with col's type
 			auto &current_type = union_col_types[union_find->second];
-			auto compatible_type = LogicalType::ForceMaxLogicalType(current_type, sql_types[col]);
+			auto compatible_type = LogicalType::DefaultForceMaxLogicalType(current_type, sql_types[col]);
 			union_col_types[union_find->second] = compatible_type;
 		} else {
 			union_names_map[col_names[col]] = union_col_names.size();

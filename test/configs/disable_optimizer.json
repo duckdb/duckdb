@@ -35,7 +35,9 @@
         "test/sql/window/test_window_constant_allocator.test",
         "test/parquet/variant/variant_stats_propagation.test",
         "test/sql/types/geo/geometry_compatability.test",
-        "test/sql/copy/parquet/parquet_glob_cache.test"
+        "test/sql/copy/parquet/parquet_glob_cache.test",
+        "test/optimizer/joins/fkpk_composite_key_ce.test",
+        "test/sql/cast/signed_cast_repro.test"
       ]
     },
     {
@@ -45,7 +47,8 @@
         "test/optimizer/joins/no_duplicate_elimination_join.test",
         "test/optimizer/joins/tpcds_nofail.test",
         "test/sql/limit/test_limit0.test",
-        "test/sql/optimizer/plan/test_filter_pushdown_large.test"
+        "test/sql/optimizer/plan/test_filter_pushdown_large.test",
+        "test/optimizer/joins/denominator_cardinality_estimation.test"
       ]
     },
     {
@@ -68,9 +71,18 @@
       "reason": "References explicit optimizer logging.",
       "paths": [
         "test/sql/pragma/profiling/test_custom_profiling_optimizer_settings.test",
+        "test/sql/pragma/profiling/test_custom_profiling_using_groups.test",
+        "test/sql/detailed_profiler/test_detailed_profiler.test",
+        "test/sql/copy/csv/parallel/csv_parallel_null_option.test",
         "test/sql/transactions/concurrent_drop_table.test",
         "test/sql/index/art/scan/test_art_prepared_scan.test",
-        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test"
+        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
+        "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
+        "test/sql/copy/parquet/parquet_prefetch_projection.test",
+        "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test",
+        "test/sql/copy/parquet/parquet_prefetch_strategy_option.test",
+        "test/sql/copy/parquet/parquet_prefetch_cost_model.test",
+        "test/sql/copy/parquet/parquet_prefetch_cost_model_remote.test"
       ]
     },
     {

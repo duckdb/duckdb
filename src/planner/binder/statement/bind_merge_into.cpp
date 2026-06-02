@@ -1,5 +1,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
@@ -28,8 +29,8 @@ static void ValidateMergeColumns(const Expression &expr, MergeActionCondition co
 	}
 
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
-		bool is_target_column = (colref.binding.table_index == target_table_index);
-		bool is_source_column = source_table_indices.count(colref.binding.table_index.index) > 0;
+		bool is_target_column = (colref.Binding().table_index == target_table_index);
+		bool is_source_column = source_table_indices.count(colref.Binding().table_index.index) > 0;
 
 		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET && is_target_column) {
 			throw BinderException("Target column '%s' cannot be referenced in a WHEN NOT MATCHED BY TARGET clause",
@@ -40,6 +41,30 @@ static void ValidateMergeColumns(const Expression &expr, MergeActionCondition co
 			                      colref.GetAlias().empty() ? colref.ToString() : colref.GetAlias());
 		}
 	});
+}
+
+static void InlineProjectionReferences(unique_ptr<Expression> &expr, TableIndex proj_index,
+                                       const vector<unique_ptr<Expression>> &expressions, idx_t expr_index) {
+	if (!expr) {
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+		InlineProjectionReferences(child, proj_index, expressions, expr_index);
+	});
+	if (expr->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+		return;
+	}
+
+	auto &colref = expr->Cast<BoundColumnRefExpression>();
+	if (colref.Binding().table_index != proj_index) {
+		return;
+	}
+	auto column_index = colref.Binding().column_index.GetIndex();
+	if (column_index >= expr_index || !expressions[column_index]) {
+		throw InternalException("Projection expression cannot reference itself");
+	}
+	expr = expressions[column_index]->Copy();
+	InlineProjectionReferences(expr, proj_index, expressions, expr_index);
 }
 
 vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, const vector<BindingAlias> &aliases,
@@ -196,6 +221,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 
 	for (idx_t i = expr_start_idx; i < expressions.size(); i++) {
 		if (expressions[i]) {
+			InlineProjectionReferences(expressions[i], proj_index, expressions, i);
 			ValidateMergeColumns(*expressions[i], condition, get.table_index, source_table_indices);
 		}
 	}
@@ -207,9 +233,9 @@ void RewriteMergeBindings(unique_ptr<Expression> &expr, const vector<ColumnBindi
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
 		    for (idx_t i = 0; i < source_bindings.size(); i++) {
-			    if (bound_colref.binding == source_bindings[i]) {
-				    bound_colref.binding.table_index = new_table_index;
-				    bound_colref.binding.column_index = ProjectionIndex(i);
+			    if (bound_colref.Binding() == source_bindings[i]) {
+				    bound_colref.BindingMutable().table_index = new_table_index;
+				    bound_colref.BindingMutable().column_index = ProjectionIndex(i);
 			    }
 		    }
 	    });
@@ -236,10 +262,14 @@ void CheckMergeAction(MergeActionCondition condition, MergeActionType action_typ
 }
 
 BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
+	return Bind(*stmt.node);
+}
+
+BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	// bind the target table
 	auto target_binder = Binder::CreateBinder(context, this);
-	string table_alias = stmt.target->alias;
-	auto bound_table = target_binder->Bind(*stmt.target);
+	string table_alias = node.target->alias;
+	auto bound_table = target_binder->Bind(*node.target);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
 		throw BinderException("Can only merge into base tables!");
 	}
@@ -262,7 +292,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		auto &properties = GetStatementProperties();
 		// modification type depends on actions
 		DatabaseModificationType modification;
-		for (auto &action_condition : stmt.actions) {
+		for (auto &action_condition : node.actions) {
 			for (auto &action : action_condition.second) {
 				switch (action->action_type) {
 				case MergeActionType::MERGE_UPDATE:
@@ -284,7 +314,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 
 	// bind the source
 	auto source_binder = Binder::CreateBinder(context, this);
-	auto source_binding = source_binder->Bind(*stmt.source);
+	auto source_binding = source_binder->Bind(*node.source);
 
 	// get the source names/types and collect source table indices for validation
 	vector<BindingAlias> source_aliases;
@@ -307,8 +337,8 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	// if we have both                                               -> FULL join
 	// if we only have WHEN MATCHED we only need matches             -> INNER join
 	JoinRef join;
-	auto has_not_matched_by_source = stmt.actions.count(MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE) > 0;
-	auto has_not_matched_by_target = stmt.actions.count(MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET) > 0;
+	auto has_not_matched_by_source = node.actions.count(MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE) > 0;
+	auto has_not_matched_by_target = node.actions.count(MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET) > 0;
 	if (has_not_matched_by_source && has_not_matched_by_target) {
 		join.type = JoinType::OUTER;
 	} else if (has_not_matched_by_source) {
@@ -321,10 +351,10 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	auto &get = bound_table.plan->Cast<LogicalGet>();
 	join.left = make_uniq<BoundRefWrapper>(std::move(source_binding), std::move(source_binder));
 	join.right = make_uniq<BoundRefWrapper>(std::move(bound_table), std::move(target_binder));
-	if (stmt.join_condition) {
-		join.condition = std::move(stmt.join_condition);
+	if (node.join_condition) {
+		join.condition = std::move(node.join_condition);
 	} else {
-		join.using_columns = std::move(stmt.using_columns);
+		join.using_columns = std::move(node.using_columns);
 	}
 	auto bound_join_node = Bind(join);
 
@@ -343,7 +373,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 
 	auto merge_into = make_uniq<LogicalMergeInto>(table);
 	merge_into->table_index = GenerateTableIndex();
-	if (!stmt.returning_list.empty()) {
+	if (!node.returning_list.empty()) {
 		merge_into->return_chunk = true;
 	}
 
@@ -358,7 +388,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	auto proj_index = GenerateTableIndex();
 	vector<unique_ptr<Expression>> projection_expressions;
 
-	for (auto &entry : stmt.actions) {
+	for (auto &entry : node.actions) {
 		vector<unique_ptr<BoundMergeIntoAction>> bound_actions;
 		for (auto &action : entry.second) {
 			CheckMergeAction(entry.first, action->action_type);
@@ -426,7 +456,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 	// so we can pass them through instead of fetching by row ID in PhysicalDelete.
 	// Generated columns will be computed in the RETURNING projection by the binder.
 	if (has_delete_action) {
-		if (!stmt.returning_list.empty()) {
+		if (!node.returning_list.empty()) {
 			// Use the overloaded helper to add physical columns to the scan and build projection expressions
 			auto &target_binding = join_ref.get().children[inverted ? 0 : 1];
 			BindDeleteReturningColumns(table, get, merge_into->delete_return_columns, projection_expressions,
@@ -451,14 +481,14 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 
 	merge_into->AddChild(std::move(proj));
 
-	if (!stmt.returning_list.empty()) {
+	if (!node.returning_list.empty()) {
 		auto merge_table_index = merge_into->table_index;
 		unique_ptr<LogicalOperator> index_as_logicaloperator = std::move(merge_into);
 
 		// add the merge_action virtual column
 		virtual_column_map_t virtual_columns;
 		virtual_columns.insert(make_pair(VIRTUAL_COLUMN_START, TableColumn("merge_action", LogicalType::VARCHAR)));
-		return BindReturning(std::move(stmt.returning_list), table, table_alias, merge_table_index,
+		return BindReturning(std::move(node.returning_list), table, table_alias, merge_table_index,
 		                     std::move(index_as_logicaloperator), std::move(virtual_columns));
 	}
 

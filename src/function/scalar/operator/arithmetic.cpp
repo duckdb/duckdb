@@ -232,7 +232,8 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
 			bind_data.check_overflow = false;
 		}
-		expr.function.SetFunctionCallback(GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
+		expr.FunctionMutable().SetFunctionCallback(
+		    GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
 	}
 	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
 	NumericStats::SetMin(result, new_min);
@@ -717,12 +718,12 @@ static unique_ptr<FunctionData> IntegerNegateBind(BindScalarFunctionInput &input
 		return nullptr;
 	}
 	auto &const_expr = arguments[0]->Cast<BoundConstantExpression>();
-	if (const_expr.value.IsNull()) {
+	if (const_expr.GetValue().IsNull()) {
 		return nullptr;
 	}
 	auto &type = bound_function.GetArguments()[0];
 	// only need to promote if the constant exactly equals the type's minimum value
-	if (const_expr.value != Value::MinimumValue(type)) {
+	if (const_expr.GetValue() != Value::MinimumValue(type)) {
 		return nullptr;
 	}
 	LogicalType promoted_type;

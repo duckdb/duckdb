@@ -44,6 +44,7 @@ class SampleOptions;
 struct MultiFileReader;
 struct OperatorPartitionData;
 struct OperatorPartitionInfo;
+struct OperatorMetrics;
 enum class OrderByColumnType : uint8_t;
 enum class OrderType : uint8_t;
 enum class OrderByStatistics : uint8_t;
@@ -202,20 +203,6 @@ struct TableFunctionToStringInput {
 	optional_ptr<const FunctionData> bind_data;
 };
 
-struct TableFunctionDynamicToStringInput {
-	TableFunctionDynamicToStringInput(const TableFunction &table_function_p,
-	                                  optional_ptr<const FunctionData> bind_data_p,
-	                                  optional_ptr<LocalTableFunctionState> local_state_p,
-	                                  optional_ptr<GlobalTableFunctionState> global_state_p)
-	    : table_function(table_function_p), bind_data(bind_data_p), local_state(local_state_p),
-	      global_state(global_state_p) {
-	}
-	const TableFunction &table_function;
-	optional_ptr<const FunctionData> bind_data;
-	optional_ptr<LocalTableFunctionState> local_state;
-	optional_ptr<GlobalTableFunctionState> global_state;
-};
-
 struct TableFunctionGetPartitionInput {
 public:
 	TableFunctionGetPartitionInput(optional_ptr<const FunctionData> bind_data_p,
@@ -251,6 +238,23 @@ struct GetPartitionStatsInput {
 
 	const TableFunction &table_function;
 	optional_ptr<const FunctionData> bind_data;
+};
+
+struct TableFunctionGetMetricsInput {
+public:
+	TableFunctionGetMetricsInput(ClientContext &context, optional_ptr<const FunctionData> bind_data_p,
+	                             optional_ptr<LocalTableFunctionState> local_state_p,
+	                             optional_ptr<GlobalTableFunctionState> global_state_p, OperatorMetrics &metrics_p)
+	    : context(context), bind_data(bind_data_p), local_state(local_state_p), global_state(global_state_p),
+	      operator_metrics(metrics_p) {
+	}
+
+public:
+	ClientContext &context;
+	optional_ptr<const FunctionData> bind_data;
+	optional_ptr<LocalTableFunctionState> local_state;
+	optional_ptr<GlobalTableFunctionState> global_state;
+	OperatorMetrics &operator_metrics;
 };
 
 enum class ScanType : uint8_t { TABLE, PARQUET, EXTERNAL };
@@ -332,19 +336,12 @@ typedef double (*table_function_progress_t)(ClientContext &context, const Functi
 typedef void (*table_function_dependency_t)(LogicalDependencyList &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);
-typedef idx_t (*table_function_rows_scanned_t)(GlobalTableFunctionState &global_state,
-                                               LocalTableFunctionState &local_state);
-typedef void (*table_function_get_metrics_t)(ClientContext &context, const FunctionData *bind_data,
-                                             GlobalTableFunctionState &global_state,
-                                             LocalTableFunctionState &local_state,
-                                             const profiler_settings_t &requested_metrics, profiler_metrics_t &metrics);
+typedef void (*table_function_get_metrics_t)(TableFunctionGetMetricsInput &input);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
 typedef bool (*table_function_pushdown_expression_t)(ClientContext &context, const LogicalGet &get, Expression &expr);
 typedef InsertionOrderPreservingMap<string> (*table_function_to_string_t)(TableFunctionToStringInput &input);
-typedef InsertionOrderPreservingMap<string> (*table_function_dynamic_to_string_t)(
-    TableFunctionDynamicToStringInput &input);
 
 typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                            const TableFunction &function);
@@ -457,8 +454,6 @@ public:
 	//! (Optional) cardinality function
 	//! Returns the expected cardinality of this scan
 	table_function_cardinality_t cardinality;
-	//! (Optional) returns the number of rows that have been scanned
-	table_function_rows_scanned_t rows_scanned;
 	//! (Optional) returns profiling metrics for this table scan operator
 	table_function_get_metrics_t get_metrics;
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
@@ -468,8 +463,6 @@ public:
 	table_function_pushdown_expression_t pushdown_expression;
 	//! (Optional) function for rendering the operator to a string in explain/profiling output (invoked pre-execution)
 	table_function_to_string_t to_string;
-	//! (Optional) function for rendering the operator to a string in profiling output (invoked post-execution)
-	table_function_dynamic_to_string_t dynamic_to_string;
 	//! (Optional) return how much of the table we have scanned up to this point (% of the data)
 	table_function_progress_t table_scan_progress;
 	//! (Optional) returns the partition info of the current scan operator

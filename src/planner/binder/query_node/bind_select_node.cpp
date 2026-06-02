@@ -178,7 +178,7 @@ void Binder::PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, B
 			auto &order_binders = order_binder.GetBinders();
 			if (order.orders.size() == 1 && order.orders[0].expression->GetExpressionType() == ExpressionType::STAR) {
 				auto &star = order.orders[0].expression->Cast<StarExpression>();
-				if (star.exclude_list.empty() && star.replace_list.empty() && !star.expr) {
+				if (star.ExcludeList().empty() && star.ReplaceList().empty() && !star.Expression()) {
 					// ORDER BY ALL
 					// replace the order list with the all elements in the SELECT list
 					auto order_type = config.ResolveOrder(context, order.orders[0].type);
@@ -272,10 +272,10 @@ static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression>
                                                           const vector<LogicalType> &sql_types,
                                                           const SelectBindState &bind_state) {
 	auto &constant = expr->Cast<BoundConstantExpression>();
-	switch (constant.value.type().id()) {
+	switch (constant.GetValue().type().id()) {
 	case LogicalTypeId::UBIGINT: {
 		// index
-		auto index = UBigIntValue::Get(constant.value);
+		auto index = UBigIntValue::Get(constant.GetValue());
 		return CreateOrderExpression(std::move(expr), names, sql_types, table_index, bind_state.GetFinalIndex(index));
 	}
 	case LogicalTypeId::VARCHAR: {
@@ -284,7 +284,7 @@ static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression>
 	}
 	case LogicalTypeId::STRUCT: {
 		// collation
-		auto &struct_values = StructValue::GetChildren(constant.value);
+		auto &struct_values = StructValue::GetChildren(constant.GetValue());
 		if (struct_values.size() > 2) {
 			throw InternalException("Expected one or two children: index and optional collation");
 		}
@@ -319,7 +319,7 @@ static void AssignReturnType(unique_ptr<Expression> &expr, TableIndex table_inde
 		return;
 	}
 	auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
-	bound_colref.SetReturnType(sql_types[bound_colref.binding.column_index]);
+	bound_colref.SetReturnType(sql_types[bound_colref.Binding().column_index]);
 }
 
 void Binder::BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<string> &names,
@@ -395,14 +395,14 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	// expand any expressions in the upper AND recursively
 	if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conj = expr->Cast<ConjunctionExpression>();
-		for (auto &child : conj.children) {
+		for (auto &child : conj.GetChildrenMutable()) {
 			BindWhereStarExpression(child);
 		}
 		return;
 	}
 	if (expr->GetExpressionType() == ExpressionType::STAR) {
 		auto &star = expr->Cast<StarExpression>();
-		if (!star.columns) {
+		if (!star.IsColumns()) {
 			throw ParserException("STAR expression is not allowed in the WHERE clause. Use COLUMNS(*) instead.");
 		}
 	}
@@ -420,6 +420,13 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 		                                                 std::move(new_conditions[i]));
 		expr = std::move(and_conj);
 	}
+}
+
+string Binder::GetExpressionName(const ParsedExpression &expr) {
+	if (!expr.GetAlias().empty()) {
+		return expr.GetAlias();
+	}
+	return expr.GetName();
 }
 
 BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from_table) {
@@ -453,7 +460,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	auto &bind_state = result.bind_state;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
-		result.names.push_back(expr->GetName());
+		result.names.push_back(GetExpressionName(*expr));
 		ExpressionBinder::QualifyColumnNames(*this, expr);
 		if (!expr->GetAlias().empty()) {
 			bind_state.alias_map[expr->GetAlias()] = i;
@@ -590,7 +597,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			}
 
 			auto &expanded = expr->Cast<BoundExpandedExpression>();
-			auto &struct_expressions = expanded.expanded_expressions;
+			auto &struct_expressions = expanded.GetChildrenMutable();
 			D_ASSERT(!struct_expressions.empty());
 
 			for (auto &struct_expr : struct_expressions) {

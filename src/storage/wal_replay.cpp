@@ -436,7 +436,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		auto client_context = context.GetClientContext();
 		if (client_context) {
 			auto &profiler = *client_context->client_data->profiler;
-			profiler.AddToCounter(MetricType::WAL_REPLAY_ENTRY_COUNT, replay_entry_count);
+			profiler.AddToMetricCounter(MetricStorageWALReplayEntryCount::Name, replay_entry_count);
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		ErrorData error(ex);
@@ -1150,7 +1150,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	}
 	auto &storage = state.current_table->GetStorage();
 	auto &table_info = storage.GetDataTableInfo();
-	auto base_row = storage.GetTotalRows();
+	auto base_row = storage.GetNextRowId();
 	RowGroupCollection new_row_groups(table_info, table_info->GetIOManager(), storage.GetTypes(), base_row);
 	new_row_groups.Initialize(data);
 
@@ -1164,7 +1164,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 			column_ids.emplace_back(col.StorageOid());
 		}
 		Vector row_id_vector(LogicalType::ROW_TYPE, STANDARD_VECTOR_SIZE);
-		auto current_row_id = storage.GetTotalRows();
+		auto current_row_id = storage.GetNextRowId();
 		for (auto &chunk : new_row_groups.Chunks(transaction, column_ids)) {
 			auto row_id_writer = FlatVector::Writer<row_t>(row_id_vector, chunk.size());
 			for (idx_t r = 0; r < chunk.size(); r++) {
@@ -1202,9 +1202,9 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 
 	// Delete the row IDs from the current table.
 	auto &storage = state.current_table->GetStorage();
-	auto total_rows = storage.GetTotalRows();
+	auto next_row_id = storage.GetNextRowId();
 	for (idx_t i = 0; i < chunk.size(); i++) {
-		if (source_ids[i] >= UnsafeNumericCast<row_t>(total_rows)) {
+		if (source_ids[i] >= UnsafeNumericCast<row_t>(next_row_id)) {
 			throw SerializationException("invalid row ID delete in WAL");
 		}
 	}

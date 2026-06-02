@@ -228,37 +228,37 @@ ScalarFunction BetweenFun::GetFunction() {
 // BoundBetweenExpression
 //===--------------------------------------------------------------------===//
 bool BoundBetweenExpression::LowerInclusive(const BoundFunctionExpression &between_expr) {
-	auto &data = between_expr.bind_info->Cast<BetweenFunctionData>();
+	auto &data = between_expr.BindInfo()->Cast<BetweenFunctionData>();
 	return data.lower_inclusive;
 }
 
 bool BoundBetweenExpression::UpperInclusive(const BoundFunctionExpression &between_expr) {
-	auto &data = between_expr.bind_info->Cast<BetweenFunctionData>();
+	auto &data = between_expr.BindInfo()->Cast<BetweenFunctionData>();
 	return data.upper_inclusive;
 }
 
 const Expression &BoundBetweenExpression::Input(const BoundFunctionExpression &between_expr) {
-	return *between_expr.children[0];
+	return *between_expr.GetChildren()[0];
 }
 
 const Expression &BoundBetweenExpression::LowerBound(const BoundFunctionExpression &between_expr) {
-	return *between_expr.children[1];
+	return *between_expr.GetChildren()[1];
 }
 
 const Expression &BoundBetweenExpression::UpperBound(const BoundFunctionExpression &between_expr) {
-	return *between_expr.children[2];
+	return *between_expr.GetChildren()[2];
 }
 
 unique_ptr<Expression> &BoundBetweenExpression::InputMutable(BoundFunctionExpression &between_expr) {
-	return between_expr.children[0];
+	return between_expr.GetChildrenMutable()[0];
 }
 
 unique_ptr<Expression> &BoundBetweenExpression::LowerBoundMutable(BoundFunctionExpression &between_expr) {
-	return between_expr.children[1];
+	return between_expr.GetChildrenMutable()[1];
 }
 
 unique_ptr<Expression> &BoundBetweenExpression::UpperBoundMutable(BoundFunctionExpression &between_expr) {
-	return between_expr.children[2];
+	return between_expr.GetChildrenMutable()[2];
 }
 
 } // namespace duckdb

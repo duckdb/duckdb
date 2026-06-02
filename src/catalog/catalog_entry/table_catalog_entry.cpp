@@ -266,8 +266,16 @@ void LogicalUpdate::BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, 
 }
 
 vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo(const QueryContext &context,
-                                                                  ColumnSegmentInfoScanType scan_type) {
+                                                                  const ColumnSegmentInfoScanOptions &options) {
 	return {};
+}
+
+void TableCatalogEntry::InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) {
+}
+
+bool TableCatalogEntry::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+                                              vector<ColumnSegmentInfo> &result) {
+	return false;
 }
 
 void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, LogicalProjection &proj,
@@ -368,6 +376,8 @@ vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEv
                                                                                     TriggerTiming timing,
                                                                                     TriggerEventType event_type) const {
 	vector<const_reference<TriggerCatalogEntry>> result;
+	// CatalogSet is backed by case_insensitive_tree_t (a map with case-insensitive comparator),
+	// so ScanTriggers yields entries in alphabetical order by name
 	ScanTriggers(transaction, [&](CatalogEntry &entry) {
 		auto &trigger = entry.Cast<TriggerCatalogEntry>();
 		if (trigger.timing == timing && trigger.event_type == event_type) {

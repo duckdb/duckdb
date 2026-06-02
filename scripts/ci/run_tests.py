@@ -18,12 +18,18 @@ from pathlib import Path
 
 DEFAULT_BATCH_SIZE = 10
 DEFAULT_BATCH_TIMEOUT_SECONDS = 600
+HIGH_WORKER_BATCH_TIMEOUT_SECONDS = 300
+HIGH_WORKER_BATCH_TIMEOUT_THRESHOLD = 10
 DEFAULT_RSS_MEMORY_THRESHOLD_MIB = 1024
 DEFAULT_RUNTIME_THRESHOLD_SECONDS = 10
 DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.05
 # Leave some CPU headroom so parallel test execution does not fully saturate CI runners.
 DEFAULT_WORKERS = "75%"
 DEFAULT_MAX_RETRIES = 4
+STABILIZE_SLOW_TOTAL_RUNS = 3
+STABILIZE_FAST_TOTAL_RUNS = 10
+STABILIZE_FAST_TOTAL_RUNS_LARGE = 3
+STABILIZE_CHANGED_TEST_THRESHOLD = 500
 STOP_REQUESTED = threading.Event()
 
 
@@ -150,6 +156,20 @@ def compute_batch_size(test_count: int, config: TestRunnerConfig):
     return max(1, min(config.batch_size, (test_count + config.workers - 1) // config.workers))
 
 
+def split_fast_slow_tests(tests: list[TestCase]):
+    fast_tests = [test for test in tests if not test.is_slow]
+    slow_tests = [test for test in tests if test.is_slow]
+    return fast_tests, slow_tests
+
+
+def stabilization_extra_runs(candidate_count: int):
+    fast_total_runs = STABILIZE_FAST_TOTAL_RUNS
+    if candidate_count > STABILIZE_CHANGED_TEST_THRESHOLD:
+        fast_total_runs = STABILIZE_FAST_TOTAL_RUNS_LARGE
+    slow_total_runs = STABILIZE_SLOW_TOTAL_RUNS
+    return max(0, fast_total_runs - 1), max(0, slow_total_runs - 1)
+
+
 def load_tests(path: Path):
     tests = []
     with path.open("r", encoding="utf8") as f:
@@ -241,6 +261,14 @@ def resolve_workers(workers: str):
     return max(1, int(workers))
 
 
+def resolve_batch_timeout(batch_timeout: float | None, workers: int):
+    if batch_timeout is not None:
+        return batch_timeout
+    if workers >= HIGH_WORKER_BATCH_TIMEOUT_THRESHOLD:
+        return HIGH_WORKER_BATCH_TIMEOUT_SECONDS
+    return DEFAULT_BATCH_TIMEOUT_SECONDS
+
+
 def generate_test_list(
     test_file,
     unittest_bin: str,
@@ -297,12 +325,10 @@ def format_batch_failure(
     stderr: str,
     message: str | None = None,
 ):
-    rerun_cmd = (
-        "printf '%s\\n' "
-        + " ".join(shlex.quote(test) for test in batch)
-        + " > /tmp/duckdb_test_batch.txt && "
-        + build_test_command(config, "/tmp/duckdb_test_batch.txt")
-    )
+    rerun_parts = [shlex.quote(config.unittest_bin)]
+    rerun_parts.extend(shlex.split(config.test_flags))
+    rerun_parts.append(",".join(batch))
+    rerun_cmd = shlex.join(rerun_parts)
     parts = [f"### failed test batch {batch_idx} ###", ""]
     if message is not None:
         parts.extend([message, ""])
@@ -328,14 +354,30 @@ def normalize_output(output):
     return output or ""
 
 
-SKIPPED_TESTS_PATTERN = re.compile(r"All tests passed \((\d+) skipped tests,")
+SKIPPED_TESTS_PATTERN = re.compile(
+    r"(?:All tests passed \(|All tests were skipped \(total skipped )(\d+)(?: skipped tests,|\))"
+)
 SKIP_REASON_PATTERN = re.compile(r"(.+):\s+(\d+)$")
 MODE_SKIP_REASON_PATTERN = re.compile(r"^mode skip(?:\s+(.*\S))?\s*$")
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+TEST_RUNTIME_PATTERN = re.compile(r"^\[\d+/\d+\] \(\d+%\): (.+) took ([0-9]+(?:\.[0-9]+)?)s\s*$")
 
 
 def strip_ansi(text: str):
     return ANSI_ESCAPE_PATTERN.sub("", text)
+
+
+def parse_test_runtimes(output: str):
+    runtimes = []
+    for line in strip_ansi(output).splitlines():
+        match = TEST_RUNTIME_PATTERN.match(line.strip())
+        if match:
+            runtimes.append((match.group(1), float(match.group(2))))
+    return runtimes
+
+
+def extract_test_runtimes(stdout: str, stderr: str):
+    return parse_test_runtimes(stdout) + parse_test_runtimes(stderr)
 
 
 def parse_skipped_tests_count(output: str):
@@ -521,8 +563,14 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
 
 
 def report_batch_metrics(ctx: RunContext, batch_info, result, elapsed: float):
-    if ctx.config.runtime_threshold_seconds is not None and elapsed >= ctx.config.runtime_threshold_seconds:
-        ctx.progress.print_message(f"{batch_info['batch'][0]} took {elapsed:.2f}s")
+    if ctx.config.runtime_threshold_seconds is not None:
+        test_runtimes = extract_test_runtimes(result["stdout"], result["stderr"])
+        if test_runtimes:
+            for test_name, test_elapsed in test_runtimes:
+                if test_elapsed >= ctx.config.runtime_threshold_seconds:
+                    ctx.progress.print_message(f"warn: {test_name} took {test_elapsed:.2f}s")
+        elif elapsed >= ctx.config.runtime_threshold_seconds:
+            ctx.progress.print_message(f"warn: {batch_info['batch'][0]} took {elapsed:.2f}s")
     if (
         ctx.config.rss_memory_threshold_mib is not None
         and format_mib(result["peak_rss_bytes"]) >= ctx.config.rss_memory_threshold_mib
@@ -538,6 +586,11 @@ def parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--test-list", type=Path)
     parser.add_argument("--changed-tests", type=Path, help="extra test list file; requires --test-list")
+    parser.add_argument(
+        "--stabilize-tests",
+        action="store_true",
+        help="rerun selected tests with stabilization logic (fast/slow repetition policy)",
+    )
     parser.add_argument("--workers", default=DEFAULT_WORKERS)
     parser.add_argument(
         "--test-config",
@@ -577,7 +630,7 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--retry", type=int, default=0)
     parser.add_argument("--max-retries", type=int, default=DEFAULT_MAX_RETRIES)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
-    parser.add_argument("--batch-timeout", type=float, default=DEFAULT_BATCH_TIMEOUT_SECONDS)
+    parser.add_argument("--batch-timeout", type=float)
     parser.add_argument(
         "--fail-require-skip",
         action="store_true",
@@ -685,11 +738,20 @@ def run_single_config(
         tests = load_tests(config.test_list)
         if stop_requested():
             return ConfigRunResult(returncode=130, passed_tests=0, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0)
+        if len(tests) == 0:
+            print(f"error: no tests selected for config '{invocation.label}'")
+            return ConfigRunResult(returncode=1, passed_tests=0, failed_tests=1, skipped_tests=0, elapsed_seconds=0.0)
+        stabilization_tests = []
         if args.changed_tests is not None:
             merged_names = {test.name for test in tests}
             base_names = {test.name for test in load_tests(args.test_list)}
-            added_test_count = len(merged_names - base_names)
+            changed_test_names = merged_names - base_names
+            added_test_count = len(changed_test_names)
             print(f"added {added_test_count} tests from --changed-tests file to the smoke test run")
+            changed_test_name_set = set(changed_test_names)
+            stabilization_tests = [test for test in tests if test.name in changed_test_name_set]
+        elif args.stabilize_tests:
+            stabilization_tests = tests
         computed_batch_size = compute_batch_size(len(tests), config)
 
         config_values = asdict(config)
@@ -702,7 +764,48 @@ def run_single_config(
         print(f"config: {config_output}")
 
         batches = list(chunked(tests, computed_batch_size))
-        return run_tests(config, batches, len(tests))
+        initial_run_result = run_tests(config, batches, len(tests))
+        if initial_run_result.returncode != 0 or not stabilization_tests:
+            return initial_run_result
+
+        fast_tests, slow_tests = split_fast_slow_tests(stabilization_tests)
+        fast_extra_runs, slow_extra_runs = stabilization_extra_runs(len(stabilization_tests))
+        print(
+            "stabilizing tests: "
+            f"{len(stabilization_tests)} changed/selected tests "
+            f"({len(fast_tests)} fast, {len(slow_tests)} slow), "
+            f"extra reruns fast={fast_extra_runs}, slow={slow_extra_runs}"
+        )
+
+        stabilization_failed = False
+        for rerun_idx in range(max(fast_extra_runs, slow_extra_runs)):
+            rerun_round = rerun_idx + 1
+            if rerun_idx < fast_extra_runs and fast_tests:
+                print(f"stabilization rerun {rerun_round}/{fast_extra_runs} for fast tests")
+                fast_batches = list(chunked(fast_tests, computed_batch_size))
+                fast_result = run_tests(config, fast_batches, len(fast_tests))
+                if fast_result.returncode != 0:
+                    stabilization_failed = True
+            if rerun_idx < slow_extra_runs and slow_tests:
+                print(f"stabilization rerun {rerun_round}/{slow_extra_runs} for slow tests")
+                slow_batches = list(chunked(slow_tests, computed_batch_size))
+                slow_result = run_tests(config, slow_batches, len(slow_tests))
+                if slow_result.returncode != 0:
+                    stabilization_failed = True
+            if stabilization_failed:
+                break
+
+        if stabilization_failed:
+            print("error: stabilization rerun failure detected")
+            return ConfigRunResult(
+                returncode=1,
+                passed_tests=initial_run_result.passed_tests,
+                failed_tests=max(1, initial_run_result.failed_tests),
+                skipped_tests=initial_run_result.skipped_tests,
+                elapsed_seconds=initial_run_result.elapsed_seconds,
+            )
+
+        return initial_run_result
     finally:
         if generated_test_list is not None:
             generated_test_list.unlink(missing_ok=True)
@@ -738,14 +841,11 @@ def main_impl(argv: list[str] | None = None):
         print("CI detected, enabling retry=2 per batch")
     max_retries = max(0, args.max_retries)
     workers = resolve_workers(args.workers)
+    args.batch_timeout = resolve_batch_timeout(args.batch_timeout, workers)
     unittest_bin = args.unittest_bin
     if os.name == "nt":
         unittest_bin = unittest_bin.replace("/", "\\")
-    if args.track_runtime is not None:
-        print("enabling runtime tracking forces batch_size=1")
-        batch_size = 1
-    else:
-        batch_size = args.batch_size
+    batch_size = args.batch_size
     failed_configs = []
     if len(config_invocations) > 1:
         print(f"running {len(config_invocations)} configs")

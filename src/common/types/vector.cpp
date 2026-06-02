@@ -2,36 +2,23 @@
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/fsst_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/sequence_vector.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
-#include "duckdb/common/vector/union_vector.hpp"
-#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
-
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/fsst.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/type_visitor.hpp"
-#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/types/value_map.hpp"
-#include "duckdb/common/types/bignum.hpp"
-#include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
-#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -845,6 +832,18 @@ void Vector::SetVectorType(VectorType new_vector_type) {
 		// FIXME: should we allow vectors without a buffer?
 		BufferMutable().SetVectorType(new_vector_type);
 	}
+}
+
+void Vector::FlattenAndSetConstant() {
+	if (GetVectorType() != VectorType::FLAT_VECTOR && GetVectorType() != VectorType::CONSTANT_VECTOR) {
+		Flatten();
+	}
+	// Struct buffers propagate vector type changes to their children. A flat or constant struct vector can still
+	// contain non-flat descendants, e.g. after slicing a list of structs, so normalize only those descendants first.
+	if (GetType().InternalType() == PhysicalType::STRUCT) {
+		BufferMutable().Cast<VectorStructBuffer>().PrepareChildrenForSetConstant();
+	}
+	SetVectorType(VectorType::CONSTANT_VECTOR);
 }
 
 void Vector::Verify(idx_t) const {

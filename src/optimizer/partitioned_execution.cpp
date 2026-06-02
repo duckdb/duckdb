@@ -32,7 +32,7 @@ struct PartitionedExecutionConfig {
 struct PartitionedExecutionColumn {
 	explicit PartitionedExecutionColumn(idx_t original_idx_p, Expression &expr,
 	                                    OrderType order_type_p = OrderType::ASCENDING)
-	    : original_idx(original_idx_p), column_binding(expr.Cast<BoundColumnRefExpression>().binding),
+	    : original_idx(original_idx_p), column_binding(expr.Cast<BoundColumnRefExpression>().Binding()),
 	      order_type(order_type_p) {
 	}
 
@@ -74,7 +74,7 @@ static bool PartitionedExecutionGetColumns(LogicalOperator &op, vector<Partition
 				return false;
 			}
 		}
-		for (auto &partition : expr.partitions) {
+		for (auto &partition : expr.Partitions()) {
 			if (partition->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 				columns.emplace_back(columns.size(), *partition);
 			}
@@ -115,7 +115,7 @@ static optional_ptr<LogicalGet> PartitionedExecutionTraceColumns(LogicalOperator
 			for (auto it = columns.begin(); it != columns.end();) {
 				auto &expr = *proj.expressions[it->column_binding.column_index.GetIndex()];
 				if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-					it->column_binding = expr.Cast<BoundColumnRefExpression>().binding;
+					it->column_binding = expr.Cast<BoundColumnRefExpression>().Binding();
 					it++;
 				} else {
 					it = PartitionedExecutionHandleColumnRemoval(op.type, columns, it);

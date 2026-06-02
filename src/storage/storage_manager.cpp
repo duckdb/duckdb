@@ -2,9 +2,12 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
@@ -123,6 +126,21 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 			}
 		} else if (entry.first == "debug_encryption_version") {
 			encryption_version = EncryptionTypes::StringToVersion(entry.second.ToString());
+		} else if (entry.first == "io_mode") {
+			auto io_mode_str = StringUtil::Upper(entry.second.ToString());
+			if (io_mode_str == "BUFFERED_IO") {
+				io_mode = FileIOMode::BUFFERED_IO;
+			} else if (io_mode_str == "MMAP") {
+				io_mode = FileIOMode::MMAP;
+			} else if (io_mode_str == "DIRECT_IO") {
+				io_mode = FileIOMode::DIRECT_IO;
+			} else {
+				throw BinderException(
+				    "Unrecognized IO_MODE \"%s\". Valid values are 'BUFFERED_IO', 'MMAP', or 'DIRECT_IO'.",
+				    entry.second.ToString());
+			}
+		} else if (entry.first == "mmap_reserve_size") {
+			mmap_reserve_size = DBConfig::ParseMemoryLimit(entry.second.ToString());
 		} else {
 			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
@@ -407,7 +425,17 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 
 	StorageManagerOptions options;
 	options.read_only = read_only;
-	options.use_direct_io = config.options.use_direct_io;
+	// MMAP + encryption would corrupt the file (in-place decryption); demote to BUFFERED_IO.
+	auto resolved_io_mode =
+	    storage_options.io_mode ? *storage_options.io_mode : Settings::Get<DefaultIoModeSetting>(config);
+	if (storage_options.encryption && resolved_io_mode == FileIOMode::MMAP) {
+		DUCKDB_LOG_WARNING(db.GetDatabase(),
+		                   "MMAP IO_MODE is incompatible with encryption; falling back to BUFFERED_IO for \"%s\"",
+		                   path);
+		resolved_io_mode = FileIOMode::BUFFERED_IO;
+	}
+	options.io_mode = resolved_io_mode;
+	options.mmap_reserve_size = storage_options.mmap_reserve_size;
 	options.debug_initialize = config.options.debug_initialize;
 	options.storage_version = storage_options.storage_version;
 
@@ -523,13 +551,13 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			}
 		}
 
-		unique_ptr<ActiveTimer> timer = nullptr;
+		unique_ptr<MetricsTimer> timer = nullptr;
 
 		// Start timing the storage load step.
 		auto client_context = context.GetClientContext();
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			timer = make_uniq<ActiveTimer>(profiler->StartTimer(MetricType::ATTACH_LOAD_STORAGE_LATENCY));
+			timer = make_uniq<MetricsTimer>(profiler->StartTimer<MetricStorageAttachLoadStorageLatency>());
 		}
 
 		// Load the checkpoint from storage.
@@ -544,7 +572,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		// Start timing the WAL replay step.
 		if (client_context) {
 			auto profiler = client_context->client_data->profiler;
-			timer = make_uniq<ActiveTimer>(profiler->StartTimer(MetricType::ATTACH_REPLAY_WAL_LATENCY));
+			timer = make_uniq<MetricsTimer>(profiler->StartTimer<MetricStorageAttachReplayWALLatency>());
 		}
 
 		// Replay the WAL.
@@ -728,9 +756,9 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 		try {
 			// Start timing the checkpoint.
 			auto client_context = context.GetClientContext();
-			ActiveTimer timer;
+			MetricsTimer timer;
 			if (client_context) {
-				timer = client_context->client_data->profiler->StartTimer(MetricType::CHECKPOINT_LATENCY);
+				timer = client_context->client_data->profiler->StartTimer<MetricStorageCheckpointLatency>();
 			}
 
 			// Write the checkpoint.

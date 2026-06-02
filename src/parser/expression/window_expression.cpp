@@ -4,6 +4,9 @@
 
 namespace duckdb {
 
+WindowExpression::WindowExpression() : ParsedExpression(ExpressionType::INVALID, ExpressionClass::WINDOW) {
+}
+
 WindowExpression::WindowExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children_p,
                                    unique_ptr<ParsedExpression> offset_expr, unique_ptr<ParsedExpression> default_expr)
     : ParsedExpression(type, ExpressionClass::WINDOW), children(std::move(children_p)) {
@@ -103,74 +106,6 @@ string WindowExpression::ToString() const {
 	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, schema, function_name);
 }
 
-bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &b) {
-	// check if the child expressions are equivalent
-	if (a.has_ignore_nulls != b.has_ignore_nulls) {
-		return false;
-	}
-	if (a.has_ignore_nulls && a.ignore_nulls != b.ignore_nulls) {
-		return false;
-	}
-	if (a.distinct != b.distinct) {
-		return false;
-	}
-	if (!ParsedExpression::ListEquals(a.children, b.children)) {
-		return false;
-	}
-	if (a.start != b.start || a.end != b.end) {
-		return false;
-	}
-	if (a.exclude_clause != b.exclude_clause) {
-		return false;
-	}
-	// check if the framing expressions are equivalent
-	if (!ParsedExpression::Equals(a.start_expr, b.start_expr) || !ParsedExpression::Equals(a.end_expr, b.end_expr)) {
-		return false;
-	}
-
-	// check if the argument orderings are equivalent
-	if (a.arg_orders.size() != b.arg_orders.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < a.arg_orders.size(); i++) {
-		if (a.arg_orders[i].type != b.arg_orders[i].type) {
-			return false;
-		}
-		if (a.arg_orders[i].null_order != b.arg_orders[i].null_order) {
-			return false;
-		}
-		if (!a.arg_orders[i].expression->Equals(*b.arg_orders[i].expression)) {
-			return false;
-		}
-	}
-
-	// check if the partitions are equivalent
-	if (!ParsedExpression::ListEquals(a.partitions, b.partitions)) {
-		return false;
-	}
-	// check if the orderings are equivalent
-	if (a.orders.size() != b.orders.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < a.orders.size(); i++) {
-		if (a.orders[i].type != b.orders[i].type) {
-			return false;
-		}
-		if (a.orders[i].null_order != b.orders[i].null_order) {
-			return false;
-		}
-		if (!a.orders[i].expression->Equals(*b.orders[i].expression)) {
-			return false;
-		}
-	}
-	// check if the filter clauses are equivalent
-	if (!ParsedExpression::Equals(a.filter_expr, b.filter_expr)) {
-		return false;
-	}
-
-	return true;
-}
-
 bool WindowExpression::HasBoundedParts() {
 	for (auto &child : children) {
 		if ((*child).GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
@@ -195,40 +130,6 @@ bool WindowExpression::HasBoundedParts() {
 		}
 	}
 	return false;
-}
-
-unique_ptr<ParsedExpression> WindowExpression::Copy() const {
-	auto new_window = make_uniq<WindowExpression>(catalog, schema, function_name);
-	new_window->CopyProperties(*this);
-
-	for (auto &child : children) {
-		new_window->children.push_back(child->Copy());
-	}
-
-	for (auto &e : partitions) {
-		new_window->partitions.push_back(e->Copy());
-	}
-
-	for (auto &o : orders) {
-		new_window->orders.emplace_back(o.type, o.null_order, o.expression->Copy());
-	}
-
-	for (auto &o : arg_orders) {
-		new_window->arg_orders.emplace_back(o.type, o.null_order, o.expression->Copy());
-	}
-
-	new_window->filter_expr = filter_expr ? filter_expr->Copy() : nullptr;
-
-	new_window->start = start;
-	new_window->end = end;
-	new_window->exclude_clause = exclude_clause;
-	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
-	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
-	new_window->has_ignore_nulls = has_ignore_nulls;
-	new_window->ignore_nulls = ignore_nulls;
-	new_window->distinct = distinct;
-
-	return std::move(new_window);
 }
 
 } // namespace duckdb

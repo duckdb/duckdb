@@ -15,14 +15,41 @@ ENABLE_PROFILING = "PRAGMA enable_profiling=json"
 PROFILE_OUTPUT = f"PRAGMA profile_output='{PROFILE_FILENAME}'"
 
 BANNER_SIZE = 52
+RETRIES = 2
+
+
+def run_with_retry(command, context, **kwargs):
+    attempts = RETRIES + 1
+    for attempt in range(1, attempts + 1):
+        completed = subprocess.run(command, shell=True, check=False, **kwargs)
+        if completed.returncode == 0:
+            return completed
+        if attempt < attempts:
+            print(
+                f"Retrying failure in {context} "
+                f"(attempt {attempt + 1}/{attempts}, return code {completed.returncode})"
+            )
+            continue
+        raise subprocess.CalledProcessError(
+            completed.returncode,
+            command,
+            output=completed.stdout,
+            stderr=completed.stderr,
+        )
 
 
 def init_db(cli, dbname, benchmark_dir):
     print(f"INITIALIZING {dbname} ...")
-    subprocess.run(
-        f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL
+    run_with_retry(
+        f"{cli} {dbname} < {benchmark_dir}/init/schema.sql",
+        context=f"init schema ({dbname})",
+        stdout=subprocess.DEVNULL,
     )
-    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
+    run_with_retry(
+        f"{cli} {dbname} < {benchmark_dir}/init/load.sql",
+        context=f"init load ({dbname})",
+        stdout=subprocess.DEVNULL,
+    )
     print("INITIALIZATION DONE")
 
 
@@ -63,26 +90,44 @@ class PlanCost:
         return self.total == other.total and self.build_side == other.build_side and self.probe_side == other.probe_side
 
 
-def get_operator_name(op) -> str:
-    # Old format used 'name', new format uses 'operator_name'
+def get_physical_operator_type(op) -> str:
+    # New format uses 'type' for the physical operator type (e.g. "HASH_JOIN")
+    if 'type' in op:
+        return op['type']
+    # Legacy format (legacy_metrics_format=true) uses 'operator_name'
     if 'operator_name' in op:
         return op['operator_name']
+    # Old format (pre-metricsrefactor) stored the physical type in 'name'
     return op.get('name', '')
 
 
+def get_operator_cardinality(op) -> int:
+    # New format uses 'intermediate_rows', old format uses 'operator_cardinality'
+    if 'intermediate_rows' in op:
+        return op['intermediate_rows']
+    return op.get('operator_cardinality', 0)
+
+
+def has_operator_cardinality(op) -> bool:
+    return 'intermediate_rows' in op or 'operator_cardinality' in op
+
+
 def get_root_operator(data) -> dict:
-    # Old binary (main) uses 'children', new binary uses 'operator_info'
+    if 'operator' in data:
+        return data['operator'][0]
+    # main branch (pre-rename) uses 'operator_info'
     if 'operator_info' in data:
         return data['operator_info'][0]
     return data['children'][0]
 
 
 def is_measured_join(op) -> bool:
-    if get_operator_name(op) != 'HASH_JOIN':
+    if get_physical_operator_type(op) != 'HASH_JOIN':
         return False
-    if 'Join Type' not in op['extra_info']:
+    extra_info = op.get('extra_info', {})
+    if 'Join Type' not in extra_info:
         return False
-    if op['extra_info']['Join Type'].startswith('MARK'):
+    if extra_info['Join Type'].startswith('MARK'):
         return False
     return True
 
@@ -90,11 +135,11 @@ def is_measured_join(op) -> bool:
 def op_inspect(op) -> PlanCost:
     cost = PlanCost()
     if is_measured_join(op):
-        cost.total = op['operator_cardinality']
-        if 'operator_cardinality' in op['children'][0]:
-            cost.probe_side += op['children'][0]['operator_cardinality']
-        if 'operator_cardinality' in op['children'][1]:
-            cost.build_side += op['children'][1]['operator_cardinality']
+        cost.total = get_operator_cardinality(op)
+        if has_operator_cardinality(op['children'][0]):
+            cost.probe_side += get_operator_cardinality(op['children'][0])
+        if has_operator_cardinality(op['children'][1]):
+            cost.build_side += get_operator_cardinality(op['children'][1])
 
         left_cost = op_inspect(op['children'][0])
         right_cost = op_inspect(op['children'][1])
@@ -111,10 +156,9 @@ def op_inspect(op) -> PlanCost:
 
 def query_plan_cost(cli, dbname, query):
     try:
-        subprocess.run(
+        run_with_retry(
             f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"",
-            shell=True,
-            check=True,
+            context=f"query profiling ({dbname})",
             capture_output=True,
         )
     except subprocess.CalledProcessError as e:

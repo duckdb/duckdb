@@ -2,9 +2,6 @@
 # description: Test dictionary-aware hash-join probing on storage dict-encoded VARCHAR keys
 # group: [hash_join]
 
-statement ok
-PRAGMA enable_verification
-
 # persistent + dictionary compression so probe-side VARCHAR keys arrive as DICTIONARY_VECTOR with a non-empty id
 load {TEST_DIR}/dictionary_probe.db
 

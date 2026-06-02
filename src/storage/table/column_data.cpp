@@ -40,10 +40,10 @@ static bool IsDirectNullCheckFilter(const TableFilter &filter) {
 	auto &op = expr->Cast<BoundOperatorExpression>();
 	if ((op.GetExpressionType() != ExpressionType::OPERATOR_IS_NULL &&
 	     op.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) ||
-	    op.children.size() != 1) {
+	    op.GetChildren().size() != 1) {
 		return false;
 	}
-	return op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
+	return op.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
 }
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
@@ -1238,7 +1238,7 @@ struct ListBlockIds : public BlockIdVisitor {
 };
 
 void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<idx_t> col_path,
-                                      vector<ColumnSegmentInfo> &result) {
+                                      vector<ColumnSegmentInfo> &result, const ColumnSegmentInfoScanOptions &options) {
 	D_ASSERT(!col_path.empty());
 
 	// convert the column path to a string
@@ -1290,7 +1290,9 @@ void ColumnData::GetColumnSegmentInfo(const QueryContext &context, idx_t row_gro
 				compression_function.visit_block_ids(segment, list_block_ids);
 			}
 		}
-		if (compression_function.get_segment_info) {
+		// get_segment_info can be expensive (e.g. for bitpacked segments it reads each block to
+		// gather per-segment compression mode counts). Skip it unless EXTENDED info is requested.
+		if (options.include_segment_info && compression_function.get_segment_info) {
 			auto segment_info = compression_function.get_segment_info(context, segment);
 			vector<string> sinfo;
 			for (auto &item : segment_info) {

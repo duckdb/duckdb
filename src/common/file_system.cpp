@@ -742,6 +742,10 @@ bool FileSystem::OnDiskFile(FileHandle &handle) {
 }
 // LCOV_EXCL_STOP
 
+bool FileSystem::TryGetNetworkThroughput(FileHandle &handle, NetworkThroughputEstimate &result) {
+	return false;
+}
+
 FileHandle::FileHandle(FileSystem &file_system, string path_p, FileOpenFlags flags)
     : file_system(file_system), path(std::move(path_p)), flags(flags) {
 }
@@ -755,7 +759,7 @@ int64_t FileHandle::Read(void *buffer, idx_t nr_bytes) {
 
 int64_t FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(nr_bytes);
 	}
 
 	return file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
@@ -771,7 +775,7 @@ int64_t FileHandle::Write(void *buffer, idx_t nr_bytes) {
 
 int64_t FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_WRITTEN, nr_bytes);
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(nr_bytes);
 	}
 
 	return file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes));
@@ -783,7 +787,7 @@ void FileHandle::Read(void *buffer, idx_t nr_bytes, idx_t location) {
 
 void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_READ, nr_bytes);
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesRead(nr_bytes);
 	}
 
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
@@ -791,7 +795,7 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
-		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_WRITTEN, nr_bytes);
+		QueryProfiler::Get(*context.GetClientContext()).TrackBytesWritten(nr_bytes);
 	}
 
 	file_system.Write(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
@@ -851,6 +855,10 @@ string FileHandle::ReadLine(QueryContext context) {
 
 bool FileHandle::OnDiskFile() {
 	return file_system.OnDiskFile(*this);
+}
+
+bool FileHandle::TryGetNetworkThroughput(NetworkThroughputEstimate &result) {
+	return file_system.TryGetNetworkThroughput(*this, result);
 }
 
 idx_t FileHandle::GetFileSize() {

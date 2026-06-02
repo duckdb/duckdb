@@ -1154,7 +1154,7 @@ void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state
 		                           GetTableName(), TableModification());
 	}
 	state.table_lock = transaction.SharedLockTable(*info);
-	state.row_start = NumericCast<row_t>(row_groups->GetTotalRows());
+	state.row_start = NumericCast<row_t>(row_groups->GetNextRowId());
 	state.current_row = state.row_start;
 	auto &transaction_manager = transaction.GetTransactionManager();
 	auto active_checkpoint = transaction_manager.GetActiveCheckpoint();
@@ -1323,7 +1323,9 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 		idx_t current_row_base = start_row;
 		row_t row_data[STANDARD_VECTOR_SIZE];
 		Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_data), STANDARD_VECTOR_SIZE);
-		idx_t scan_count = MinValue<idx_t>(count, row_groups->GetTotalRows() - start_row);
+		auto next_row_id = row_groups->GetNextRowId();
+		D_ASSERT(start_row <= next_row_id);
+		idx_t scan_count = MinValue<idx_t>(count, next_row_id - start_row);
 		ScanTableSegment(transaction, start_row, scan_count, [&](DataChunk &chunk) {
 			auto row_id_writer = FlatVector::Writer<row_t>(row_identifiers, chunk.size());
 			for (idx_t i = 0; i < chunk.size(); i++) {
@@ -1827,10 +1829,10 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	row_groups->Checkpoint(writer, global_stats);
 	row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	if (writer.GetRebuildIndexes()) {
-		ActiveTimer timer;
+		MetricsTimer timer;
 		auto context = writer.TryGetClientContext();
 		if (context) {
-			timer = QueryProfiler::Get(*context).StartTimer(MetricType::CUMULATIVE_VACUUM_TIME);
+			timer = QueryProfiler::Get(*context).StartTimer<MetricStorageTotalVacuumTime>();
 		}
 		RebuildIndexes();
 		timer.EndTimer();
@@ -1861,6 +1863,10 @@ idx_t DataTable::GetTotalRows() const {
 	return row_groups->GetTotalRows();
 }
 
+idx_t DataTable::GetNextRowId() const {
+	return row_groups->GetNextRowId();
+}
+
 void DataTable::CommitDropTable(CommitDropState &drop_state) {
 	row_groups->CommitDropTable(drop_state);
 }
@@ -1882,8 +1888,17 @@ idx_t DataTable::GetRowGroupCountWithLocalStorage(ClientContext &context) {
 // Column Segment Info
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo(const QueryContext &context,
-                                                          ColumnSegmentInfoScanType scan_type) {
-	return row_groups->GetColumnSegmentInfo(context, scan_type);
+                                                          const ColumnSegmentInfoScanOptions &options) {
+	return row_groups->GetColumnSegmentInfo(context, options);
+}
+
+void DataTable::InitializeColumnSegmentInfoScan(ColumnSegmentInfoScanState &state) {
+	row_groups->InitializeColumnSegmentInfoScan(state);
+}
+
+bool DataTable::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegmentInfoScanState &state,
+                                      vector<ColumnSegmentInfo> &result) {
+	return row_groups->ScanColumnSegmentInfo(context, state, result);
 }
 
 //===--------------------------------------------------------------------===//

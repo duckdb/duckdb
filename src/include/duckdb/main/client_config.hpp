@@ -38,9 +38,9 @@ struct ClientConfig {
 	//! The file to save query profiling information to, instead of printing it to the console
 	//! (empty = print to console)
 	string profiler_save_location;
-	//! The custom settings for the profiler
-	//! (empty = use the default settings)
-	profiler_settings_t profiler_settings = MetricsUtils::GetDefaultMetrics();
+	//! Glob patterns for tracked_metrics (controls which metrics are gathered and displayed).
+	//! Default "*" means all metrics are tracked.
+	vector<string> tracked_metrics = {"*"};
 
 	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
 	//! to output anything
@@ -55,8 +55,6 @@ struct ClientConfig {
 	//! The wait time before showing the progress bar
 	int wait_time = 2000;
 
-	//! Enable the running of optimizers
-	bool enable_optimizer = true;
 	//! Force parallelism of small tables, used for testing
 	bool verify_parallelism = false;
 	//! If this context should also try to use the available replacement scans
