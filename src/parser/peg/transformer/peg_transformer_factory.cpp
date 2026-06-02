@@ -155,41 +155,7 @@ void PEGTransformerFactory::RegisterCommon() {
 	// common.gram
 	REGISTER_TRANSFORM(TransformNumberLiteral);
 	REGISTER_TRANSFORM(TransformStringLiteral);
-	REGISTER_TRANSFORM(TransformConstraintName);
-	REGISTER_TRANSFORM(TransformCollationName);
-	REGISTER_TRANSFORM(TransformType);
-	REGISTER_TRANSFORM(TransformArrayBounds);
-	REGISTER_TRANSFORM(TransformSquareBracketsArray);
-	REGISTER_TRANSFORM(TransformTimeType);
-	REGISTER_TRANSFORM(TransformTimeZone);
-	REGISTER_TRANSFORM(TransformWithOrWithout);
-	REGISTER_TRANSFORM(TransformTimeOrTimestamp);
-	REGISTER_TRANSFORM(TransformNumericType);
-	REGISTER_TRANSFORM(TransformSimpleNumericType);
-	REGISTER_TRANSFORM(TransformDecimalNumericType);
-	REGISTER_TRANSFORM(TransformFloatType);
-	REGISTER_TRANSFORM(TransformDecimalType);
-	REGISTER_TRANSFORM(TransformTypeModifiers);
-	REGISTER_TRANSFORM(TransformSimpleType);
-	REGISTER_TRANSFORM(TransformQualifiedTypeName);
-	REGISTER_TRANSFORM(TransformSchemaReservedTypeName);
-	REGISTER_TRANSFORM(TransformCatalogReservedSchemaTypeName);
-	REGISTER_TRANSFORM(TransformCharacterType);
-	REGISTER_TRANSFORM(TransformMapType);
-	REGISTER_TRANSFORM(TransformRowType);
-	REGISTER_TRANSFORM(TransformGeometryType);
-	REGISTER_TRANSFORM(TransformVariantType);
-	REGISTER_TRANSFORM(TransformUnionType);
-	REGISTER_TRANSFORM(TransformColIdTypeList);
-	REGISTER_TRANSFORM(TransformColIdType);
-	REGISTER_TRANSFORM(TransformBitType);
-	REGISTER_TRANSFORM(TransformIntervalType);
-	REGISTER_TRANSFORM(TransformIntervalInterval);
-	REGISTER_TRANSFORM(TransformInterval);
-	REGISTER_TRANSFORM(TransformIntervalToInterval);
-	REGISTER_TRANSFORM(TransformSetofType);
-	Register("NumericModType", &TransformDecimalType);
-	Register("DecType", &TransformDecimalType);
+	REGISTER_TRANSFORM(TransformIntervalToIntervalAsType);
 }
 
 void PEGTransformerFactory::RegisterCreateMacro() {
@@ -256,8 +222,6 @@ void PEGTransformerFactory::RegisterCreateTable() {
 
 void PEGTransformerFactory::RegisterExpression() {
 	// expression.gram
-	REGISTER_TRANSFORM(TransformExpressionStatement);
-	REGISTER_TRANSFORM(TransformExpressionAlias);
 	REGISTER_TRANSFORM(TransformBaseExpression);
 	REGISTER_TRANSFORM(TransformExpression);
 	Register("ColumnDefaultExpr", &TransformExpression);
@@ -614,33 +578,6 @@ void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
 }
 
 void PEGTransformerFactory::RegisterEnums() {
-	RegisterEnum<string>("IntType", LogicalTypeIdToString(LogicalTypeId::INTEGER));
-	RegisterEnum<string>("IntegerType", LogicalTypeIdToString(LogicalTypeId::INTEGER));
-	RegisterEnum<string>("SmallintType", LogicalTypeIdToString(LogicalTypeId::SMALLINT));
-	RegisterEnum<string>("BigintType", LogicalTypeIdToString(LogicalTypeId::BIGINT));
-	RegisterEnum<string>("RealType", LogicalTypeIdToString(LogicalTypeId::FLOAT));
-	RegisterEnum<string>("DoubleType", LogicalTypeIdToString(LogicalTypeId::DOUBLE));
-	RegisterEnum<string>("BooleanType", LogicalTypeIdToString(LogicalTypeId::BOOLEAN));
-
-	RegisterEnum<DatePartSpecifier>("YearKeyword", DatePartSpecifier::YEAR);
-	RegisterEnum<DatePartSpecifier>("MonthKeyword", DatePartSpecifier::MONTH);
-	RegisterEnum<DatePartSpecifier>("DayKeyword", DatePartSpecifier::DAY);
-	RegisterEnum<DatePartSpecifier>("HourKeyword", DatePartSpecifier::HOUR);
-	RegisterEnum<DatePartSpecifier>("MinuteKeyword", DatePartSpecifier::MINUTE);
-	RegisterEnum<DatePartSpecifier>("SecondKeyword", DatePartSpecifier::SECOND);
-	RegisterEnum<DatePartSpecifier>("MillisecondKeyword", DatePartSpecifier::MILLISECONDS);
-	RegisterEnum<DatePartSpecifier>("MicrosecondKeyword", DatePartSpecifier::MICROSECONDS);
-	RegisterEnum<DatePartSpecifier>("WeekKeyword", DatePartSpecifier::WEEK);
-	RegisterEnum<DatePartSpecifier>("QuarterKeyword", DatePartSpecifier::QUARTER);
-	RegisterEnum<DatePartSpecifier>("DecadeKeyword", DatePartSpecifier::DECADE);
-	RegisterEnum<DatePartSpecifier>("CenturyKeyword", DatePartSpecifier::CENTURY);
-	RegisterEnum<DatePartSpecifier>("MillenniumKeyword", DatePartSpecifier::MILLENNIUM);
-
-	RegisterEnum<LogicalTypeId>("TimeTypeId", LogicalTypeId::TIME);
-	RegisterEnum<LogicalTypeId>("TimestampTypeId", LogicalTypeId::TIMESTAMP);
-	RegisterEnum<bool>("WithRule", true);
-	RegisterEnum<bool>("WithoutRule", false);
-
 	RegisterEnum<SecretPersistType>("TempPersistent", SecretPersistType::TEMPORARY);
 	RegisterEnum<SecretPersistType>("TemporaryPersistent", SecretPersistType::TEMPORARY);
 	RegisterEnum<SecretPersistType>("Persistent", SecretPersistType::PERSISTENT);

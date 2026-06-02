@@ -19,16 +19,10 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto expr_list = ExtractParseResultsFromList(list_pr.GetChild(0));
-
-	vector<unique_ptr<ParsedExpression>> expressions;
-	for (auto &expr : expr_list) {
-		expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
-	}
-
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
+                                                    vector<unique_ptr<ParsedExpression>> expression_alias) {
+	auto expressions = std::move(expression_alias);
 	auto select_statement = make_uniq<SelectStatement>();
 	auto select_node = make_uniq<SelectNode>();
 
@@ -2191,7 +2185,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExtractArgument(PEG
 	if (choice_pr.type == ParseResultType::STRING) {
 		return make_uniq<ConstantExpression>(Value(choice_pr.Cast<StringLiteralParseResult>().result));
 	}
-	auto date_part = transformer.TransformEnum<DatePartSpecifier>(choice_pr);
+	auto date_part = transformer.Transform<DatePartSpecifier>(choice_pr);
 	return make_uniq<ConstantExpression>(EnumUtil::ToString(date_part));
 }
 

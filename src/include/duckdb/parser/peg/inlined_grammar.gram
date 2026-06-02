@@ -63,8 +63,11 @@ CopyOptionName <- ColLabel
 NumberLiteral <- < [+-]?[0-9]*([.][0-9]*)? >
 StringLiteral <- '\'' [^\']* '\''
 
-Type <- (TimeType / IntervalType / BitType / RowType / VariantType / MapType / GeometryType / UnionType / NumericType / SetofType / SimpleType) ArrayBounds*
-SimpleType <- (CharacterType / QualifiedTypeName) TypeModifiers?
+Type <- TypeVariations ArrayBounds*
+TypeVariations <- TimeType / IntervalType / BitType / RowType / VariantType / MapType / GeometryType / UnionType / NumericType / SetofType / SimpleType
+SimpleType <- CharacterSimpleType / QualifiedSimpleType
+CharacterSimpleType <- CharacterType TypeModifiers?
+QualifiedSimpleType <- QualifiedTypeName TypeModifiers?
 CharacterType <- ('CHARACTER' 'VARYING'?) /
                  ('CHAR' 'VARYING'?) /
                  ('NATIONAL' 'CHARACTER' 'VARYING'?) /
@@ -73,7 +76,19 @@ CharacterType <- ('CHARACTER' 'VARYING'?) /
                  'VARCHAR'
 
 IntervalType <- IntervalInterval / IntervalNumber
-IntervalInterval <- 'INTERVAL' Interval?
+IntervalInterval <- IntervalWithSpecifier / IntervalWithoutSpecifier
+IntervalWithSpecifier <- IntervalWithRangeSpecifier / IntervalWithSimpleSpecifier
+IntervalWithRangeSpecifier <- 'INTERVAL' IntervalToIntervalAsType
+IntervalWithSimpleSpecifier <- 'INTERVAL' Interval
+IntervalWithoutSpecifier <- 'INTERVAL'
+
+IntervalToIntervalAsType <- (YearKeyword 'TO' MonthKeyword) /
+    (DayKeyword 'TO' HourKeyword) /
+    (DayKeyword 'TO' MinuteKeyword) /
+    (DayKeyword 'TO' SecondKeyword) /
+    (HourKeyword 'TO' MinuteKeyword) /
+    (HourKeyword 'TO' SecondKeyword) /
+    (MinuteKeyword 'TO' SecondKeyword)
 IntervalNumber <- 'INTERVAL' Parens(NumberLiteral)
 
 YearKeyword         <- 'YEAR' / 'YEARS'
@@ -105,13 +120,20 @@ Interval <- IntervalToInterval /
     CenturyKeyword /
     MillenniumKeyword
 
-IntervalToInterval <- (YearKeyword 'TO' MonthKeyword) /
-    (DayKeyword 'TO' HourKeyword) /
-    (DayKeyword 'TO' MinuteKeyword) /
-    (DayKeyword 'TO' SecondKeyword) /
-    (HourKeyword 'TO' MinuteKeyword) /
-    (HourKeyword 'TO' SecondKeyword) /
-    (MinuteKeyword 'TO' SecondKeyword)
+IntervalToInterval <- YearToMonth /
+    DayToHour /
+    DayToMinute /
+    DayToSecond /
+    HourToMinute /
+    HourToSecond /
+    MinuteToSecond
+YearToMonth <- YearKeyword 'TO' MonthKeyword
+DayToHour <- DayKeyword 'TO' HourKeyword
+DayToMinute <- DayKeyword 'TO' MinuteKeyword
+DayToSecond <- DayKeyword 'TO' SecondKeyword
+HourToMinute <- HourKeyword 'TO' MinuteKeyword
+HourToSecond <- HourKeyword 'TO' SecondKeyword
+MinuteToSecond <- MinuteKeyword 'TO' SecondKeyword
 
 BitType <- 'BIT' 'VARYING'? Parens(List(Expression))?
 GeometryType <- 'GEOMETRY' Parens(Expression)?
@@ -135,7 +157,8 @@ DecimalType <- 'DECIMAL' TypeModifiers?
 DecType <- 'DEC' TypeModifiers?
 NumericModType <- 'NUMERIC' TypeModifiers?
 
-QualifiedTypeName <- CatalogReservedSchemaTypeName / SchemaReservedTypeName / TypeName
+QualifiedTypeName <- CatalogReservedSchemaTypeName / SchemaReservedTypeName / TypeNameAsQualifiedName
+TypeNameAsQualifiedName <- TypeName
 CatalogReservedSchemaTypeName <- CatalogQualification ReservedSchemaQualification ReservedTypeName
 SchemaReservedTypeName <- SchemaQualification ReservedTypeName
 TypeModifiers <- Parens(List(Expression)?)
@@ -145,7 +168,8 @@ UnionType <- 'UNION' ColIdTypeList
 ColIdTypeList <- Parens(List(ColIdType))
 MapType <- 'MAP' Parens(List(Type))
 ColIdType <- ColId Type
-ArrayBounds <- SquareBracketsArray / 'ARRAY'
+ArrayBounds <- SquareBracketsArray / ArrayKeyword
+ArrayKeyword <- 'ARRAY'
 SquareBracketsArray <- '[' Expression? ']'
 TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
 TimeOrTimestamp <- TimeTypeId / TimestampTypeId
@@ -1747,7 +1771,9 @@ DetachStatement <- 'DETACH' Database? IfExists? CatalogName
 
 UseStatement <- 'USE' UseTarget
 
-UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
+UseTarget <- UseTargetCatalogSchema / SchemaNameAsUseTarget / CatalogNameAsUseTarget
+SchemaNameAsUseTarget <- SchemaName
+CatalogNameAsUseTarget <- CatalogName
 UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
 DotIdentifier <- '.' Identifier
 

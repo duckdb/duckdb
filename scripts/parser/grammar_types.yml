@@ -452,6 +452,7 @@ Expression:
     - DefArgStringLiteral
     - NoneLiteral
     - NumberLiteral
+    - TypeVariations
     - TimeType
     - NumericType
     - SimpleNumericType
@@ -459,7 +460,8 @@ Expression:
     - FloatType
     - DecimalType
     - SimpleType
-    - CharacterType
+    - CharacterSimpleType
+    - QualifiedSimpleType
     - MapType
     - RowType
     - GeometryType
@@ -468,6 +470,10 @@ Expression:
     - BitType
     - IntervalType
     - IntervalInterval
+    - IntervalWithSpecifier
+    - IntervalWithRangeSpecifier
+    - IntervalWithSimpleSpecifier
+    - IntervalWithoutSpecifier
     - IntervalNumber
     - SetofType
     - DecType
@@ -653,6 +659,9 @@ QualifiedName:
     - QualifiedSequenceName
     - IdentifierOrStringLiteral
     - QualifiedTypeName
+    - TypeNameAsQualifiedName
+    - SchemaReservedTypeName
+    - CatalogReservedSchemaTypeName
     - QualifiedName
     - QualifiedSchemaName
     - QualifiedIndexName
@@ -667,6 +676,8 @@ QualifiedName:
     - QualifiedTableFunction
     - UseTarget
     - UseTargetCatalogSchema
+    - SchemaNameAsUseTarget
+    - CatalogNameAsUseTarget
     - CatalogReservedSchemaIdentifier
     - SchemaReservedIdentifierOrStringLiteral
 
@@ -926,6 +937,14 @@ String:
     - MinValue
     - MaxValue
     - IdentifierColId
+    - CharacterType
+    - IntType
+    - IntegerType
+    - SmallintType
+    - BigintType
+    - RealType
+    - BooleanType
+    - DoubleType
 
 Bool:
   type: "bool"
@@ -973,6 +992,8 @@ Bool:
     - CopyTo
     - ForceQuote
     - ForceNotNull
+    - WithRule
+    - WithoutRule
 
 
 Int64:
@@ -981,6 +1002,7 @@ Int64:
   rules:
     - ArrayBounds
     - SquareBracketsArray
+    - ArrayKeyword
 
 LogicalType:
   type: "LogicalType"
@@ -1092,8 +1114,31 @@ overrides:
   ColIdType: "pair<string, LogicalType>"
   ColIdTypeList: "child_list_t<LogicalType>"
   TimeOrTimestamp: "LogicalTypeId"
+  TimeTypeId: "LogicalTypeId"
+  TimestampTypeId: "LogicalTypeId"
   Interval: "DatePartSpecifier"
   IntervalToInterval: "DatePartSpecifier"
+  IntervalToIntervalAsType: "DatePartSpecifier"
+  YearKeyword: "DatePartSpecifier"
+  MonthKeyword: "DatePartSpecifier"
+  DayKeyword: "DatePartSpecifier"
+  HourKeyword: "DatePartSpecifier"
+  MinuteKeyword: "DatePartSpecifier"
+  SecondKeyword: "DatePartSpecifier"
+  MillisecondKeyword: "DatePartSpecifier"
+  MicrosecondKeyword: "DatePartSpecifier"
+  WeekKeyword: "DatePartSpecifier"
+  QuarterKeyword: "DatePartSpecifier"
+  DecadeKeyword: "DatePartSpecifier"
+  CenturyKeyword: "DatePartSpecifier"
+  MillenniumKeyword: "DatePartSpecifier"
+  YearToMonth: "DatePartSpecifier"
+  DayToHour: "DatePartSpecifier"
+  DayToMinute: "DatePartSpecifier"
+  DayToSecond: "DatePartSpecifier"
+  HourToMinute: "DatePartSpecifier"
+  HourToSecond: "DatePartSpecifier"
+  MinuteToSecond: "DatePartSpecifier"
   # copy.gram
   CopyDatabaseFlag: "CopyDatabaseType"
   SchemaOrData: "CopyDatabaseType"
@@ -1318,6 +1363,7 @@ excluded_rules:
   - UnpivotStatement
   - CommentValue
   - Program
+  - Statement
   - Database
   - AbortOrRollback
   - CommitOrEnd

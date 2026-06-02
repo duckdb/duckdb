@@ -311,44 +311,7 @@ private:
 	// common.gram
 	static unique_ptr<ParsedExpression> TransformNumberLiteral(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformStringLiteral(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformConstraintName(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformCollationName(PEGTransformer &transformer, ParseResult &parse_result);
-	static LogicalType TransformType(PEGTransformer &transformer, ParseResult &parse_result);
-	static int64_t TransformArrayBounds(PEGTransformer &transformer, ParseResult &parse_result);
-	static int64_t TransformSquareBracketsArray(PEGTransformer &transformer, ParseResult &parse_result);
-
-	static unique_ptr<ParsedExpression> TransformTimeType(PEGTransformer &transformer, ParseResult &parse_result);
-	static bool TransformTimeZone(PEGTransformer &transformer, ParseResult &parse_result);
-	static bool TransformWithOrWithout(PEGTransformer &transformer, ParseResult &parse_result);
-	static LogicalTypeId TransformTimeOrTimestamp(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformNumericType(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformSimpleNumericType(PEGTransformer &transformer,
-	                                                               ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformDecimalNumericType(PEGTransformer &transformer,
-	                                                                ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformFloatType(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformDecimalType(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformTypeModifiers(PEGTransformer &transformer,
-	                                                                   ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformSimpleType(PEGTransformer &transformer, ParseResult &parse_result);
-	static QualifiedName TransformQualifiedTypeName(PEGTransformer &transformer, ParseResult &parse_result);
-	static QualifiedName TransformSchemaReservedTypeName(PEGTransformer &transformer, ParseResult &parse_result);
-	static QualifiedName TransformCatalogReservedSchemaTypeName(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformCharacterType(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformMapType(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformRowType(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformGeometryType(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformVariantType(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformUnionType(PEGTransformer &transformer, ParseResult &parse_result);
-	static child_list_t<LogicalType> TransformColIdTypeList(PEGTransformer &transformer, ParseResult &parse_result);
-	static pair<string, LogicalType> TransformColIdType(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformBitType(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformIntervalType(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformIntervalInterval(PEGTransformer &transformer,
-	                                                              ParseResult &parse_result);
-	static DatePartSpecifier TransformInterval(PEGTransformer &transformer, ParseResult &parse_result);
-	static DatePartSpecifier TransformIntervalToInterval(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformSetofType(PEGTransformer &transformer, ParseResult &parse_result);
+	static DatePartSpecifier TransformIntervalToIntervalAsType(PEGTransformer &transformer, ParseResult &parse_result);
 
 	static string ExtractFormat(const string &file_path);
 
@@ -1098,6 +1061,259 @@ private:
 	static unique_ptr<TransformResultValue> TransformCommentColumnInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static CatalogType TransformCommentColumn(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformExpressionStatementInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformExpressionStatement(PEGTransformer &transformer,
+	                                                             vector<unique_ptr<ParsedExpression>> expression_alias);
+	static unique_ptr<TransformResultValue> TransformExpressionAliasInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformConstraintNameInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static string TransformConstraintName(PEGTransformer &transformer, const string &col_id_or_string);
+	static unique_ptr<TransformResultValue> TransformCollationNameInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static string TransformCollationName(PEGTransformer &transformer, const string &identifier);
+	static unique_ptr<TransformResultValue> TransformTypeInternal(PEGTransformer &transformer,
+	                                                              ParseResult &parse_result);
+	static LogicalType TransformType(PEGTransformer &transformer, unique_ptr<ParsedExpression> type_variations,
+	                                 const vector<int64_t> &array_bounds);
+	static unique_ptr<TransformResultValue> TransformTypeVariationsInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformSimpleTypeInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformCharacterSimpleTypeInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformCharacterSimpleType(PEGTransformer &transformer, const string &character_type,
+	                             vector<unique_ptr<ParsedExpression>> type_modifiers);
+	static unique_ptr<TransformResultValue> TransformQualifiedSimpleTypeInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformQualifiedSimpleType(PEGTransformer &transformer, const QualifiedName &qualified_type_name,
+	                             vector<unique_ptr<ParsedExpression>> type_modifiers);
+	static unique_ptr<TransformResultValue> TransformCharacterTypeInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static string TransformCharacterType(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformIntervalTypeInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformIntervalIntervalInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformIntervalWithSpecifierInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformIntervalWithRangeSpecifierInternal(PEGTransformer &transformer,
+	                                                                                    ParseResult &parse_result);
+	static unique_ptr<ParsedExpression>
+	TransformIntervalWithRangeSpecifier(PEGTransformer &transformer,
+	                                    const DatePartSpecifier &interval_to_interval_as_type);
+	static unique_ptr<TransformResultValue> TransformIntervalWithSimpleSpecifierInternal(PEGTransformer &transformer,
+	                                                                                     ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformIntervalWithSimpleSpecifier(PEGTransformer &transformer,
+	                                                                         const DatePartSpecifier &interval);
+	static unique_ptr<TransformResultValue> TransformIntervalWithoutSpecifierInternal(PEGTransformer &transformer,
+	                                                                                  ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformIntervalWithoutSpecifier(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformYearKeywordInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static DatePartSpecifier TransformYearKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformMonthKeywordInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static DatePartSpecifier TransformMonthKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformDayKeywordInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static DatePartSpecifier TransformDayKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformHourKeywordInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static DatePartSpecifier TransformHourKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformMinuteKeywordInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static DatePartSpecifier TransformMinuteKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformSecondKeywordInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static DatePartSpecifier TransformSecondKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformMillisecondKeywordInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static DatePartSpecifier TransformMillisecondKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformMicrosecondKeywordInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static DatePartSpecifier TransformMicrosecondKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformWeekKeywordInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static DatePartSpecifier TransformWeekKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformQuarterKeywordInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static DatePartSpecifier TransformQuarterKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformDecadeKeywordInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static DatePartSpecifier TransformDecadeKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformCenturyKeywordInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static DatePartSpecifier TransformCenturyKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformMillenniumKeywordInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static DatePartSpecifier TransformMillenniumKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformIntervalInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformIntervalToIntervalInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformYearToMonthInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static DatePartSpecifier TransformYearToMonth(PEGTransformer &transformer, const DatePartSpecifier &year_keyword,
+	                                              const DatePartSpecifier &month_keyword);
+	static unique_ptr<TransformResultValue> TransformDayToHourInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static DatePartSpecifier TransformDayToHour(PEGTransformer &transformer, const DatePartSpecifier &day_keyword,
+	                                            const DatePartSpecifier &hour_keyword);
+	static unique_ptr<TransformResultValue> TransformDayToMinuteInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static DatePartSpecifier TransformDayToMinute(PEGTransformer &transformer, const DatePartSpecifier &day_keyword,
+	                                              const DatePartSpecifier &minute_keyword);
+	static unique_ptr<TransformResultValue> TransformDayToSecondInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static DatePartSpecifier TransformDayToSecond(PEGTransformer &transformer, const DatePartSpecifier &day_keyword,
+	                                              const DatePartSpecifier &second_keyword);
+	static unique_ptr<TransformResultValue> TransformHourToMinuteInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static DatePartSpecifier TransformHourToMinute(PEGTransformer &transformer, const DatePartSpecifier &hour_keyword,
+	                                               const DatePartSpecifier &minute_keyword);
+	static unique_ptr<TransformResultValue> TransformHourToSecondInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static DatePartSpecifier TransformHourToSecond(PEGTransformer &transformer, const DatePartSpecifier &hour_keyword,
+	                                               const DatePartSpecifier &second_keyword);
+	static unique_ptr<TransformResultValue> TransformMinuteToSecondInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static DatePartSpecifier TransformMinuteToSecond(PEGTransformer &transformer,
+	                                                 const DatePartSpecifier &minute_keyword,
+	                                                 const DatePartSpecifier &second_keyword);
+	static unique_ptr<TransformResultValue> TransformBitTypeInternal(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformBitType(PEGTransformer &transformer,
+	                                                     vector<unique_ptr<ParsedExpression>> expression);
+	static unique_ptr<TransformResultValue> TransformGeometryTypeInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformGeometryType(PEGTransformer &transformer,
+	                                                          unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformVariantTypeInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformVariantType(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformNumericTypeInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformSimpleNumericTypeInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformSimpleNumericType(PEGTransformer &transformer, const string &child);
+	static unique_ptr<TransformResultValue> TransformDecimalNumericTypeInternal(PEGTransformer &transformer,
+	                                                                            ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformIntTypeInternal(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
+	static string TransformIntType(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformIntegerTypeInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static string TransformIntegerType(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformSmallintTypeInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static string TransformSmallintType(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformBigintTypeInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static string TransformBigintType(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformRealTypeInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static string TransformRealType(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformBooleanTypeInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static string TransformBooleanType(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformDoubleTypeInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static string TransformDoubleType(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformFloatTypeInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformFloatType(PEGTransformer &transformer,
+	                                                       unique_ptr<ParsedExpression> number_literal);
+	static unique_ptr<TransformResultValue> TransformDecimalTypeInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformDecimalType(PEGTransformer &transformer,
+	                                                         vector<unique_ptr<ParsedExpression>> type_modifiers);
+	static unique_ptr<TransformResultValue> TransformDecTypeInternal(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformDecType(PEGTransformer &transformer,
+	                                                     vector<unique_ptr<ParsedExpression>> type_modifiers);
+	static unique_ptr<TransformResultValue> TransformNumericModTypeInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformNumericModType(PEGTransformer &transformer,
+	                                                            vector<unique_ptr<ParsedExpression>> type_modifiers);
+	static unique_ptr<TransformResultValue> TransformQualifiedTypeNameInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformTypeNameAsQualifiedNameInternal(PEGTransformer &transformer,
+	                                                                                 ParseResult &parse_result);
+	static QualifiedName TransformTypeNameAsQualifiedName(PEGTransformer &transformer, const string &type_name);
+	static unique_ptr<TransformResultValue> TransformCatalogReservedSchemaTypeNameInternal(PEGTransformer &transformer,
+	                                                                                       ParseResult &parse_result);
+	static QualifiedName TransformCatalogReservedSchemaTypeName(PEGTransformer &transformer,
+	                                                            const string &catalog_qualification,
+	                                                            const string &reserved_schema_qualification,
+	                                                            const string &reserved_type_name);
+	static unique_ptr<TransformResultValue> TransformSchemaReservedTypeNameInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static QualifiedName TransformSchemaReservedTypeName(PEGTransformer &transformer,
+	                                                     const string &schema_qualification,
+	                                                     const string &reserved_type_name);
+	static unique_ptr<TransformResultValue> TransformTypeModifiersInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformTypeModifiers(PEGTransformer &transformer,
+	                                                                   vector<unique_ptr<ParsedExpression>> expression);
+	static unique_ptr<TransformResultValue> TransformRowTypeInternal(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformRowType(PEGTransformer &transformer,
+	                                                     const child_list_t<LogicalType> &col_id_type_list);
+	static unique_ptr<TransformResultValue> TransformSetofTypeInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformSetofType(PEGTransformer &transformer, const LogicalType &type);
+	static unique_ptr<TransformResultValue> TransformUnionTypeInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformUnionType(PEGTransformer &transformer,
+	                                                       const child_list_t<LogicalType> &col_id_type_list);
+	static unique_ptr<TransformResultValue> TransformColIdTypeListInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static child_list_t<LogicalType> TransformColIdTypeList(PEGTransformer &transformer,
+	                                                        const vector<pair<string, LogicalType>> &col_id_type);
+	static unique_ptr<TransformResultValue> TransformMapTypeInternal(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformMapType(PEGTransformer &transformer, const vector<LogicalType> &type);
+	static unique_ptr<TransformResultValue> TransformColIdTypeInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static pair<string, LogicalType> TransformColIdType(PEGTransformer &transformer, const string &col_id,
+	                                                    const LogicalType &type);
+	static unique_ptr<TransformResultValue> TransformArrayBoundsInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformArrayKeywordInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static int64_t TransformArrayKeyword(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformSquareBracketsArrayInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static int64_t TransformSquareBracketsArray(PEGTransformer &transformer, unique_ptr<ParsedExpression> expression);
+	static unique_ptr<TransformResultValue> TransformTimeTypeInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformTimeType(PEGTransformer &transformer,
+	                                                      const LogicalTypeId &time_or_timestamp,
+	                                                      vector<unique_ptr<ParsedExpression>> type_modifiers,
+	                                                      const bool &time_zone);
+	static unique_ptr<TransformResultValue> TransformTimeOrTimestampInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformTimeTypeIdInternal(PEGTransformer &transformer,
+	                                                                    ParseResult &parse_result);
+	static LogicalTypeId TransformTimeTypeId(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformTimestampTypeIdInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static LogicalTypeId TransformTimestampTypeId(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformTimeZoneInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static bool TransformTimeZone(PEGTransformer &transformer, const bool &with_or_without);
+	static unique_ptr<TransformResultValue> TransformWithOrWithoutInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformWithRuleInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static bool TransformWithRule(PEGTransformer &transformer);
+	static unique_ptr<TransformResultValue> TransformWithoutRuleInternal(PEGTransformer &transformer,
+	                                                                     ParseResult &parse_result);
+	static bool TransformWithoutRule(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformDisconnectStatementInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformDisconnectStatement(PEGTransformer &transformer);
@@ -2159,7 +2375,12 @@ private:
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer, const QualifiedName &use_target);
 	static unique_ptr<TransformResultValue> TransformUseTargetInternal(PEGTransformer &transformer,
 	                                                                   ParseResult &parse_result);
-	static QualifiedName TransformUseTarget(PEGTransformer &transformer, ParseResult &choice_result);
+	static unique_ptr<TransformResultValue> TransformSchemaNameAsUseTargetInternal(PEGTransformer &transformer,
+	                                                                               ParseResult &parse_result);
+	static QualifiedName TransformSchemaNameAsUseTarget(PEGTransformer &transformer, const string &schema_name);
+	static unique_ptr<TransformResultValue> TransformCatalogNameAsUseTargetInternal(PEGTransformer &transformer,
+	                                                                                ParseResult &parse_result);
+	static QualifiedName TransformCatalogNameAsUseTarget(PEGTransformer &transformer, const string &catalog_name);
 	static unique_ptr<TransformResultValue> TransformUseTargetCatalogSchemaInternal(PEGTransformer &transformer,
 	                                                                                ParseResult &parse_result);
 	static QualifiedName TransformUseTargetCatalogSchema(PEGTransformer &transformer, const string &catalog_name,
