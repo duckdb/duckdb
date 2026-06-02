@@ -329,7 +329,7 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, DataChu
 
 			// Apply the filter before inserting into the hashtable
 			auto &filtered_data = sink.execute_state.filter_set.GetFilterData(idx);
-			idx_t count = filtered_data.ApplyFilter(chunk);
+			filtered_data.ApplyFilter(chunk);
 
 			radix_table.Sink(context, filtered_data.filtered_payload, sink_input, empty_chunk, distinct_filter);
 		} else {
