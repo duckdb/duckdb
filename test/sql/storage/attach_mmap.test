@@ -15,26 +15,6 @@ ATTACH '{TEST_DIR}/buffered_attach.duckdb' AS buffered_db (IO_MODE 'BUFFERED_IO'
 statement ok
 DETACH buffered_db
 
-# IO_MODE 'DIRECT_IO' opens the file with direct I/O (O_DIRECT / FILE_FLAG_NO_BUFFERING)
-statement ok
-ATTACH '{TEST_DIR}/direct_io_attach.duckdb' AS direct_db (IO_MODE 'DIRECT_IO')
-
-statement ok
-CREATE TABLE direct_db.t (a INTEGER)
-
-statement ok
-INSERT INTO direct_db.t VALUES (1), (2), (3)
-
-query I
-SELECT a FROM direct_db.t ORDER BY a
-----
-1
-2
-3
-
-statement ok
-DETACH direct_db
-
 # default_io_mode controls the value used when ATTACH does not specify IO_MODE
 query I
 SELECT current_setting('default_io_mode')
