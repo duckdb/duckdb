@@ -28,7 +28,7 @@ public:
 	      value_idx(executor.child_idx[0]) {
 		if (!executor.arg_order_idx.empty()) {
 			value_tree =
-			    make_uniq<WindowIndexTree>(client, executor.wexpr.arg_orders, executor.arg_order_idx, payload_count);
+			    make_uniq<WindowIndexTree>(client, executor.wexpr.ArgOrders(), executor.arg_order_idx, payload_count);
 		}
 	}
 
@@ -48,11 +48,11 @@ class WindowValueLocalState : public WindowExecutorLocalState {
 public:
 	WindowValueLocalState(ExecutionContext &context, const WindowValueGlobalState &gvstate)
 	    : WindowExecutorLocalState(context, gvstate), gvstate(gvstate), ignore_nulls(&all_valid) {
-		WindowAggregatorLocalState::InitSubFrames(frames, gvstate.executor.wexpr.exclude_clause);
+		WindowAggregatorLocalState::InitSubFrames(frames, gvstate.executor.wexpr.WindowExclude());
 
 		if (gvstate.value_tree) {
 			local_value = gvstate.value_tree->GetLocalState(context);
-			if (gvstate.executor.wexpr.ignore_nulls) {
+			if (gvstate.executor.wexpr.IgnoreNulls()) {
 				sort_nulls.Initialize();
 			}
 		}
@@ -96,7 +96,7 @@ void WindowValueLocalState::Sinker(ExecutionContext &context, DataChunk &sink_ch
 		const auto &values = coll_chunk.data[gvstate.value_idx];
 		auto validity = values.Validity();
 		auto &sort_nulls = lvstate.sort_nulls;
-		if (gvstate.executor.wexpr.ignore_nulls && validity.CanHaveNull()) {
+		if (gvstate.executor.wexpr.IgnoreNulls() && validity.CanHaveNull()) {
 			for (sel_t i = 0; i < coll_count; ++i) {
 				if (validity.IsValid(i)) {
 					sort_nulls[filtered++] = i;
@@ -116,7 +116,7 @@ void WindowValueLocalState::Finalizer(ExecutionContext &context, CollectionPtr c
 	const auto &value_idx = gvstate.value_idx;
 
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
-	if (value_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
+	if (value_idx != DConstants::INVALID_INDEX && executor.wexpr.IgnoreNulls()) {
 		lvstate.ignore_nulls = &collection->validities[value_idx];
 	}
 
@@ -141,9 +141,9 @@ public:
 	static Value GetFirstValue(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr) {
 		// Just execute the expression once
 		ExpressionExecutor executor(client);
-		executor.AddExpression(*wexpr.children[0]);
+		executor.AddExpression(*wexpr.GetChildren()[0]);
 		DataChunk result;
-		result.Initialize(client, {wexpr.children[0]->GetReturnType()});
+		result.Initialize(client, {wexpr.GetChildren()[0]->GetReturnType()});
 		executor.Execute(input, result);
 
 		return result.GetValue(0, 0);
@@ -151,8 +151,8 @@ public:
 
 	WindowValueStreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
 	    : wexpr(wexpr), vec(GetFirstValue(client, input, wexpr), count_t(STANDARD_VECTOR_SIZE)),
-	      sel(STANDARD_VECTOR_SIZE), eval(client), arg(wexpr.children[0]->GetReturnType()) {
-		eval.AddExpression(*wexpr.children[0]);
+	      sel(STANDARD_VECTOR_SIZE), eval(client), arg(wexpr.GetChildren()[0]->GetReturnType()) {
+		eval.AddExpression(*wexpr.GetChildren()[0]);
 	}
 
 	const BoundWindowExpression &wexpr;
@@ -204,19 +204,19 @@ void WindowValueExecutor::GetBounds(WindowBoundsSet &required, const BoundWindow
 void WindowValueExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
 	//	The children have to be handled separately because only the first one is global
 	const auto &wexpr = executor.wexpr;
-	D_ASSERT(!wexpr.children.empty());
+	D_ASSERT(!wexpr.GetChildren().empty());
 
 	auto &child_idx = executor.child_idx;
-	child_idx.emplace_back(shared.RegisterCollection(wexpr.children[0], wexpr.ignore_nulls));
+	child_idx.emplace_back(shared.RegisterCollection(wexpr.GetChildren()[0], wexpr.IgnoreNulls()));
 
-	if (wexpr.children.size() > 1) {
-		child_idx.emplace_back(shared.RegisterEvaluate(wexpr.children[1]));
+	if (wexpr.GetChildren().size() > 1) {
+		child_idx.emplace_back(shared.RegisterEvaluate(wexpr.GetChildren()[1]));
 	}
-	if (wexpr.children.size() > 2) {
-		child_idx.emplace_back(shared.RegisterEvaluate(wexpr.children[2]));
+	if (wexpr.GetChildren().size() > 2) {
+		child_idx.emplace_back(shared.RegisterEvaluate(wexpr.GetChildren()[2]));
 	}
 	auto &arg_order_idx = executor.arg_order_idx;
-	for (const auto &order : wexpr.arg_orders) {
+	for (const auto &order : wexpr.ArgOrders()) {
 		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 	}
 }
@@ -262,9 +262,9 @@ public:
 			//	If the argument order is prefix of the partition ordering,
 			//	then we can just use the partition ordering.
 			auto &wexpr = executor.wexpr;
-			auto &arg_orders = executor.wexpr.arg_orders;
+			auto &arg_orders = executor.wexpr.ArgOrders();
 			const auto optimize = Settings::Get<EnableOptimizerSetting>(client);
-			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
+			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.OrderBy(), arg_orders) != arg_orders.size()) {
 				//	"The ROW_NUMBER function can be computed by disambiguating duplicate elements based on their
 				//	position in the input data, such that two elements never compare as equal."
 				// 	Note: If the user specifies an partial secondary sort, the disambiguation will use the
@@ -297,7 +297,7 @@ public:
 	}
 
 	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-		if (wexpr.arg_orders.empty()) {
+		if (wexpr.ArgOrders().empty()) {
 			required.insert(PARTITION_BEGIN);
 			required.insert(PARTITION_END);
 		} else {
@@ -349,8 +349,8 @@ class WindowLeadLagStreamingState : public WindowExecutorStreamingState {
 public:
 	static bool ComputeOffset(ClientContext &client, const BoundWindowExpression &wexpr, int64_t &offset) {
 		offset = 1;
-		if (wexpr.children.size() > 1) {
-			auto &offset_expr = wexpr.children[1];
+		if (wexpr.GetChildren().size() > 1) {
+			auto &offset_expr = wexpr.GetChildren()[1];
 			if (offset_expr->HasParameter() || !offset_expr->IsFoldable()) {
 				return false;
 			}
@@ -373,12 +373,12 @@ public:
 	}
 
 	static bool ComputeDefault(ClientContext &client, const BoundWindowExpression &wexpr, Value &result) {
-		if (wexpr.children.size() < 3) {
+		if (wexpr.GetChildren().size() < 3) {
 			result = Value(wexpr.GetReturnType());
 			return true;
 		}
 
-		auto &default_expr = wexpr.children[2];
+		auto &default_expr = wexpr.GetChildren()[2];
 		if (default_expr && (default_expr->HasParameter() || !default_expr->IsFoldable())) {
 			return false;
 		}
@@ -387,8 +387,8 @@ public:
 	}
 
 	WindowLeadLagStreamingState(ClientContext &context, const BoundWindowExpression &wexpr)
-	    : wexpr(wexpr), executor(context, *wexpr.children[0]), prev(wexpr.GetReturnType()), temp(wexpr.GetReturnType()),
-	      sel(STANDARD_VECTOR_SIZE) {
+	    : wexpr(wexpr), executor(context, *wexpr.GetChildren()[0]), prev(wexpr.GetReturnType()),
+	      temp(wexpr.GetReturnType()), sel(STANDARD_VECTOR_SIZE) {
 		ComputeOffset(context, wexpr, offset);
 		ComputeDefault(context, wexpr, dflt);
 
@@ -516,7 +516,7 @@ public:
 	//! Streaming APIs
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
 		// We can stream LEAD/LAG if the arguments are constant and the delta is less than a block behind
-		if (!wexpr.ignore_nulls) {
+		if (!wexpr.IgnoreNulls()) {
 			Value dflt;
 			if (!WindowLeadLagStreamingState::ComputeDefault(client, wexpr, dflt)) {
 				return false;
@@ -700,10 +700,10 @@ void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_c
 	auto &ignore_nulls = llstate.ignore_nulls;
 	bool can_shift = ignore_nulls->CannotHaveNull() && !glstate.use_framing;
 	if (has_offset) {
-		can_shift = can_shift && wexpr.children[1]->IsFoldable();
+		can_shift = can_shift && wexpr.GetChildren()[1]->IsFoldable();
 	}
 	if (has_default) {
-		can_shift = can_shift && wexpr.children[2]->IsFoldable();
+		can_shift = can_shift && wexpr.GetChildren()[2]->IsFoldable();
 	}
 
 	const auto row_end = row_idx + count;
@@ -790,9 +790,10 @@ struct WindowFirstValueExecutor : public WindowValueExecutor {
 
 	//! Streaming APIs
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
-		if (wexpr.ignore_nulls) {
+		if (wexpr.IgnoreNulls()) {
 			// We can stream first values ignoring NULLs if they are "running totals"
-			return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
+			return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
+			       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
 		}
 		return true;
 	}
@@ -808,7 +809,7 @@ void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &
 
 	// If we are ignoring NULLs and we started with a NULL,
 	// then look for a non-NULL value and update it
-	if (wexpr.ignore_nulls && ConstantVector::IsNull(sstate.vec)) {
+	if (wexpr.IgnoreNulls() && ConstantVector::IsNull(sstate.vec)) {
 		//	Find the first non-NULL value
 		auto &executor = sstate.eval;
 		auto &arg = sstate.arg;
@@ -822,7 +823,7 @@ void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &
 			result.Reference(prev);
 		} else {
 			auto &sel = sstate.sel;
-			Vector split(wexpr.children[0]->GetReturnType());
+			Vector split(wexpr.GetChildren()[0]->GetReturnType());
 			split.SetValue(0, prev.GetValue(0));
 			sel_t s = 0;
 			for (sel_t i = 0; i < count; ++i) {
@@ -862,7 +863,7 @@ void WindowFirstValueExecutor::GetData(ExecutionContext &context, DataChunk &eva
 	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
 	auto &ignore_nulls = *lvstate.ignore_nulls;
-	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
+	auto exclude_mode = gvstate.executor.wexpr.WindowExclude();
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		if (gvstate.value_tree) {
 			idx_t frame_width = 0;
@@ -914,7 +915,8 @@ struct WindowLastValueExecutor : public WindowValueExecutor {
 	//! Streaming APIs
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
 		// We can stream last values if they are "running totals"
-		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
+		return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
+		       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
 	                       Vector &result, LocalSourceState &state);
@@ -927,7 +929,7 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 	auto &wexpr = sstate.wexpr;
 	const auto count = input.size();
 	auto &executor = sstate.eval;
-	if (wexpr.ignore_nulls) {
+	if (wexpr.IgnoreNulls()) {
 		auto &prev = sstate.vec;
 		auto &arg = sstate.arg;
 		executor.ExecuteExpression(input, arg);
@@ -938,7 +940,7 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 			VectorOperations::Copy(arg, result, count, 0, 0);
 		} else {
 			//	Copy the data as it may be a reference to the argument
-			Vector copy(wexpr.children[0]->GetReturnType());
+			Vector copy(wexpr.GetChildren()[0]->GetReturnType());
 			VectorOperations::Copy(arg, copy, count, 0, 0);
 			//	Overwrite the previous non-NULL value if the first one is NULL
 			if (!validity.RowIsValidUnsafe(0)) {
@@ -982,7 +984,7 @@ void WindowLastValueExecutor::GetData(ExecutionContext &context, DataChunk &eval
 	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
 	auto &ignore_nulls = *lvstate.ignore_nulls;
-	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
+	auto exclude_mode = gvstate.executor.wexpr.WindowExclude();
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		if (gvstate.value_tree) {
 			idx_t frame_width = 0;
@@ -1035,7 +1037,7 @@ void WindowLastValueExecutor::GetData(ExecutionContext &context, DataChunk &eval
 class WindowNthValueStreamingState : public WindowValueStreamingState {
 public:
 	static bool ComputeNthIndex(ClientContext &client, const BoundWindowExpression &wexpr, idx_t &nth_index) {
-		auto &nth_expr = wexpr.children[1];
+		auto &nth_expr = wexpr.GetChildren()[1];
 		if (nth_expr && (nth_expr->HasParameter() || !nth_expr->IsFoldable())) {
 			return false;
 		}
@@ -1081,7 +1083,8 @@ struct WindowNthValueExecutor : public WindowValueExecutor {
 		}
 
 		// We can stream Nth values if they are "running totals"
-		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
+		return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
+		       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
 	}
 	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
 	                                                      const BoundWindowExpression &wexpr) {
@@ -1096,7 +1099,7 @@ struct WindowNthValueExecutor : public WindowValueExecutor {
 void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChunk &input, Vector &result) {
 	//	If we haven't reached the chunk with the value yet, reference the current value
 	const auto count = input.size();
-	if (!wexpr.ignore_nulls && nth_count + count < nth_index) {
+	if (!wexpr.IgnoreNulls() && nth_count + count < nth_index) {
 		result.Reference(vec);
 		nth_count += count;
 		return;
@@ -1114,12 +1117,12 @@ void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChu
 	const auto &validity = unified.validity;
 
 	//	Split the result between NULLs and the Nth Value
-	Vector split(wexpr.children[0]->GetReturnType(), 2);
+	Vector split(wexpr.GetChildren()[0]->GetReturnType(), 2);
 	sel_t s = 0;
 	split.SetValue(s, vec.GetValue(0));
 
 	// If we are ignoring NULLS and there are NULLS, search for a non-NULL value.
-	const bool any_value = wexpr.ignore_nulls && !validity.CannotHaveNull();
+	const bool any_value = wexpr.IgnoreNulls() && !validity.CannotHaveNull();
 	for (idx_t i = 0; i < count; ++i) {
 		if (!any_value || validity.RowIsValidUnsafe(unified.sel->get_index(i))) {
 			++nth_count;
@@ -1156,7 +1159,7 @@ void WindowNthValueExecutor::GetData(ExecutionContext &context, DataChunk &eval_
 	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
 	auto &ignore_nulls = *lvstate.ignore_nulls;
-	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
+	auto exclude_mode = gvstate.executor.wexpr.WindowExclude();
 	D_ASSERT(cursor.chunk.ColumnCount() == 1);
 	const auto &child_idx = gvstate.executor.child_idx;
 	const auto nth_idx = child_idx[1];
@@ -1493,18 +1496,18 @@ unique_ptr<FunctionData> WindowFillExecutor::Bind(BindWindowFunctionInput &input
 
 void WindowFillExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
 	const auto &wexpr = executor.wexpr;
-	D_ASSERT(!wexpr.children.empty());
+	D_ASSERT(!wexpr.GetChildren().empty());
 
 	//! Never ignore nulls (that's the point!)
 	auto &child_idx = executor.child_idx;
-	child_idx.emplace_back(shared.RegisterCollection(wexpr.children[0], false));
+	child_idx.emplace_back(shared.RegisterCollection(wexpr.GetChildren()[0], false));
 
 	//	If the argument order is prefix of the partition ordering,
 	//	then we can just use the partition ordering.
-	auto &arg_orders = wexpr.arg_orders;
+	auto &arg_orders = wexpr.ArgOrders();
 	auto &arg_order_idx = executor.arg_order_idx;
-	if (BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
-		for (const auto &order : wexpr.arg_orders) {
+	if (BoundWindowExpression::GetSharedOrders(wexpr.OrderBy(), arg_orders) != arg_orders.size()) {
+		for (const auto &order : wexpr.ArgOrders()) {
 			arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 		}
 	}
@@ -1513,15 +1516,15 @@ void WindowFillExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpres
 	if (arg_order_idx.empty()) {
 		//	We use the range ordering, even if it has not been defined
 		if (executor.range_idx == DConstants::INVALID_INDEX) {
-			D_ASSERT(wexpr.orders.size() == 1);
+			D_ASSERT(wexpr.OrderBy().size() == 1);
 			//	We don't need the validity mask because we have also requested the valid range for the ordering.
-			executor.range_idx = shared.RegisterCollection(wexpr.orders[0].expression, false);
+			executor.range_idx = shared.RegisterCollection(wexpr.OrderBy()[0].expression, false);
 		}
 		executor.aux_idx.emplace_back(executor.range_idx);
 	} else {
 		//	For secondary sorts, we need the entire collection so we can interpolate using the values
 		D_ASSERT(arg_order_idx.size() == 1);
-		executor.aux_idx.emplace_back(shared.RegisterCollection(wexpr.arg_orders[0].expression, false));
+		executor.aux_idx.emplace_back(shared.RegisterCollection(wexpr.ArgOrders()[0].expression, false));
 	}
 }
 
@@ -1558,9 +1561,9 @@ public:
 		required.insert(FRAME_BEGIN);
 		required.insert(FRAME_END);
 
-		auto &arg_orders = wexpr.arg_orders;
-		const auto shared = BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) == arg_orders.size();
-		if (wexpr.arg_orders.empty() || shared) {
+		auto &arg_orders = wexpr.ArgOrders();
+		const auto shared = BoundWindowExpression::GetSharedOrders(wexpr.OrderBy(), arg_orders) == arg_orders.size();
+		if (wexpr.ArgOrders().empty() || shared) {
 			//	FILL uses the validity ranges to quickly eliminate indexes that can't be interpolated.
 			//	This only works for non-secondary orderings
 			required.insert(VALID_BEGIN);
@@ -1634,15 +1637,15 @@ void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 	idx_t next_valid = DConstants::INVALID_INDEX;
 
 	const auto &wexpr = gfstate.executor.wexpr;
-	auto interpolate_func = GetFillInterpolateFunction(wexpr.children[0]->GetReturnType());
-	auto value_func = GetFillValueFunction(wexpr.children[0]->GetReturnType());
+	auto interpolate_func = GetFillInterpolateFunction(wexpr.GetChildren()[0]->GetReturnType());
+	auto value_func = GetFillValueFunction(wexpr.GetChildren()[0]->GetReturnType());
 
 	//	Secondary sort - use the MSTs
 	if (gfstate.value_tree) {
 		//	Roughly what we need to do is find the previous and next non-null values
 		//	with non-null ordering values. This is essentially LEAD/LAG(IGNORE NULLS)
-		auto slope_func = GetFillSlopeFunction(wexpr.arg_orders[0].expression->GetReturnType());
-		auto order_value_func = GetFillValueFunction(wexpr.arg_orders[0].expression->GetReturnType());
+		auto slope_func = GetFillSlopeFunction(wexpr.ArgOrders()[0].expression->GetReturnType());
+		auto order_value_func = GetFillValueFunction(wexpr.ArgOrders()[0].expression->GetReturnType());
 		auto &frames = lfstate.frames;
 		frames.resize(1);
 		auto &frame = frames[0];
@@ -1753,8 +1756,8 @@ void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 	auto valid_begin = FlatVector::GetData<const idx_t>(bounds.data[VALID_BEGIN]);
 	auto valid_end = FlatVector::GetData<const idx_t>(bounds.data[VALID_END]);
 	idx_t prev_partition = DConstants::INVALID_INDEX;
-	auto slope_func = GetFillSlopeFunction(wexpr.orders[0].expression->GetReturnType());
-	auto order_value_func = GetFillValueFunction(wexpr.orders[0].expression->GetReturnType());
+	auto slope_func = GetFillSlopeFunction(wexpr.OrderBy()[0].expression->GetReturnType());
+	auto order_value_func = GetFillValueFunction(wexpr.OrderBy()[0].expression->GetReturnType());
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		//	Did we change partitions?

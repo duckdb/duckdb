@@ -55,36 +55,36 @@ static unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr,
 		auto &parameter = expr->Cast<BoundParameterExpression>();
 		if (!target_type.IsValid()) {
 			// invalidate the parameter
-			parameter.parameter_data->return_type = LogicalType::INVALID;
+			parameter.ParameterData()->return_type = LogicalType::INVALID;
 			parameter.SetReturnType(target_type);
 			return expr;
 		}
-		if (parameter.parameter_data->return_type.id() == LogicalTypeId::INVALID) {
+		if (parameter.ParameterData()->return_type.id() == LogicalTypeId::INVALID) {
 			// we don't know the type of this parameter
 			parameter.SetReturnType(target_type);
 			return expr;
 		}
-		if (parameter.parameter_data->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (parameter.ParameterData()->return_type.id() == LogicalTypeId::UNKNOWN) {
 			// prepared statement parameter cast - but there is no type, convert the type
-			parameter.parameter_data->return_type = target_type;
+			parameter.ParameterData()->return_type = target_type;
 			parameter.SetReturnType(target_type);
 			return expr;
 		}
 		// prepared statement parameter already has a type
-		if (parameter.parameter_data->return_type == target_type) {
+		if (parameter.ParameterData()->return_type == target_type) {
 			// this type! we are done
-			parameter.SetReturnType(parameter.parameter_data->return_type);
+			parameter.SetReturnType(parameter.ParameterData()->return_type);
 			return expr;
 		}
 		// If this occurrence's own return_type still matches parameter_data->return_type, the
 		// parameter was pinned by an inner cast on this same occurrence (e.g. CAST(CAST($1 AS A) AS B)).
 		// Add a regular cast on top instead of invalidating.
-		if (parameter.GetReturnType() == parameter.parameter_data->return_type) {
+		if (parameter.GetReturnType() == parameter.ParameterData()->return_type) {
 			auto cast_function = cast_functions.GetCastFunction(parameter.GetReturnType(), target_type, get_input);
 			return AddCastExpressionInternal(std::move(expr), target_type, std::move(cast_function), try_cast);
 		}
 		// invalidate the type
-		parameter.parameter_data->return_type = LogicalType::INVALID;
+		parameter.ParameterData()->return_type = LogicalType::INVALID;
 		parameter.SetReturnType(target_type);
 		return expr;
 	} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_DEFAULT) {

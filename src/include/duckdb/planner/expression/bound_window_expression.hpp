@@ -117,6 +117,18 @@ public:
 	vector<BoundOrderByNode> &ArgOrdersMutable() {
 		return arg_orders;
 	}
+	const vector<unique_ptr<BaseStatistics>> &PartitionsStats() const {
+		return partitions_stats;
+	}
+	vector<unique_ptr<BaseStatistics>> &PartitionsStatsMutable() {
+		return partitions_stats;
+	}
+	const vector<unique_ptr<BaseStatistics>> &ExprStats() const {
+		return expr_stats;
+	}
+	vector<unique_ptr<BaseStatistics>> &ExprStatsMutable() {
+		return expr_stats;
+	}
 
 	bool IsWindow() const override {
 		return true;

@@ -63,6 +63,12 @@ public:
 	vector<LogicalType> &ChildTargetsMutable() {
 		return child_targets;
 	}
+	ExpressionType ComparisonType() const {
+		return comparison_type;
+	}
+	ExpressionType &ComparisonTypeMutable() {
+		return comparison_type;
+	}
 	bool HasSubquery() const override {
 		return true;
 	}

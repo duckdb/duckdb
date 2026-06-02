@@ -19,8 +19,154 @@ BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr
 
 string BoundWindowExpression::ToString() const {
 	string function_name = aggregate.get() ? aggregate->GetName() : window->GetName();
-	return WindowExpression::ToString<BoundWindowExpression, Expression, BoundOrderByNode>(*this, string(),
-	                                                                                       function_name);
+	// Start with function call
+	string result = function_name + "(";
+	if (children.size()) {
+		int distincts = distinct ? 0 : 1;
+		result += StringUtil::Join(children, children.size(), ", ", [&](const unique_ptr<Expression> &child) {
+			return string(distincts++ ? "" : "DISTINCT ") + child->ToString();
+		});
+	}
+	// ORDER BY arguments
+	if (!arg_orders.empty()) {
+		result += " ORDER BY ";
+		result += StringUtil::Join(arg_orders, arg_orders.size(), ", ",
+		                           [](const BoundOrderByNode &order) { return order.ToString(); });
+	}
+	// IGNORE NULLS
+	if (ignore_nulls) {
+		result += " IGNORE NULLS";
+	}
+	// FILTER
+	if (filter_expr) {
+		result += ") FILTER (WHERE " + filter_expr->ToString();
+	}
+	// Over clause
+	result += ") OVER (";
+	string sep;
+	// Partitions
+	if (!partitions.empty()) {
+		result += "PARTITION BY ";
+		result += StringUtil::Join(partitions, partitions.size(), ", ",
+		                           [](const unique_ptr<Expression> &partition) { return partition->ToString(); });
+		sep = " ";
+	}
+	// Orders
+	if (!orders.empty()) {
+		result += sep;
+		result += "ORDER BY ";
+		result += StringUtil::Join(orders, orders.size(), ", ",
+		                           [](const BoundOrderByNode &order) { return order.ToString(); });
+		sep = " ";
+	}
+	// Rows/Range
+	string units = "ROWS";
+	string from;
+	switch (start) {
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_ROWS:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		from = "CURRENT ROW";
+		units = WindowExpression::ToUnits(start, WindowBoundary::CURRENT_ROW_ROWS, WindowBoundary::CURRENT_ROW_RANGE,
+		                                  WindowBoundary::CURRENT_ROW_GROUPS);
+		break;
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+		if (end != WindowBoundary::CURRENT_ROW_RANGE) {
+			from = "UNBOUNDED PRECEDING";
+		}
+		break;
+	case WindowBoundary::EXPR_PRECEDING_ROWS:
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+	case WindowBoundary::EXPR_PRECEDING_GROUPS:
+		from = start_expr->ToString() + " PRECEDING";
+		units = WindowExpression::ToUnits(start, WindowBoundary::EXPR_PRECEDING_ROWS,
+		                                  WindowBoundary::EXPR_PRECEDING_RANGE, WindowBoundary::EXPR_PRECEDING_GROUPS);
+		break;
+	case WindowBoundary::EXPR_FOLLOWING_ROWS:
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
+	case WindowBoundary::EXPR_FOLLOWING_GROUPS:
+		from = start_expr->ToString() + " FOLLOWING";
+		units = WindowExpression::ToUnits(start, WindowBoundary::EXPR_FOLLOWING_ROWS,
+		                                  WindowBoundary::EXPR_FOLLOWING_RANGE, WindowBoundary::EXPR_FOLLOWING_GROUPS);
+		break;
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+	case WindowBoundary::INVALID:
+		throw InternalException("Unrecognized FROM in BoundWindowExpression");
+	}
+	string to;
+	switch (end) {
+	case WindowBoundary::CURRENT_ROW_RANGE:
+		if (start != WindowBoundary::UNBOUNDED_PRECEDING) {
+			to = "CURRENT ROW";
+			units = "RANGE";
+		}
+		break;
+	case WindowBoundary::CURRENT_ROW_ROWS:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		to = "CURRENT ROW";
+		units = WindowExpression::ToUnits(end, WindowBoundary::CURRENT_ROW_ROWS, WindowBoundary::CURRENT_ROW_RANGE,
+		                                  WindowBoundary::CURRENT_ROW_GROUPS);
+		break;
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+		to = "UNBOUNDED PRECEDING";
+		break;
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		to = "UNBOUNDED FOLLOWING";
+		break;
+	case WindowBoundary::EXPR_PRECEDING_ROWS:
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+	case WindowBoundary::EXPR_PRECEDING_GROUPS:
+		to = end_expr->ToString() + " PRECEDING";
+		units = WindowExpression::ToUnits(end, WindowBoundary::EXPR_PRECEDING_ROWS,
+		                                  WindowBoundary::EXPR_PRECEDING_RANGE, WindowBoundary::EXPR_PRECEDING_GROUPS);
+		break;
+	case WindowBoundary::EXPR_FOLLOWING_ROWS:
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
+	case WindowBoundary::EXPR_FOLLOWING_GROUPS:
+		to = end_expr->ToString() + " FOLLOWING";
+		units = WindowExpression::ToUnits(end, WindowBoundary::EXPR_FOLLOWING_ROWS,
+		                                  WindowBoundary::EXPR_FOLLOWING_RANGE, WindowBoundary::EXPR_FOLLOWING_GROUPS);
+		break;
+	case WindowBoundary::INVALID:
+		throw InternalException("Unrecognized TO in BoundWindowExpression");
+	}
+	if (exclude_clause != WindowExcludeMode::NO_OTHER) {
+		if (from.empty()) {
+			from = "UNBOUNDED PRECEDING";
+		}
+		if (to.empty()) {
+			to = "CURRENT ROW";
+			units = "RANGE";
+		}
+	}
+	if (!from.empty() || !to.empty()) {
+		result += sep + units;
+	}
+	if (!from.empty() && !to.empty()) {
+		result += " BETWEEN " + from + " AND " + to;
+	} else if (!from.empty()) {
+		result += " " + from;
+	} else if (!to.empty()) {
+		result += " " + to;
+	}
+	if (exclude_clause != WindowExcludeMode::NO_OTHER) {
+		result += " EXCLUDE ";
+	}
+	switch (exclude_clause) {
+	case WindowExcludeMode::CURRENT_ROW:
+		result += "CURRENT ROW";
+		break;
+	case WindowExcludeMode::GROUP:
+		result += "GROUP";
+		break;
+	case WindowExcludeMode::TIES:
+		result += "TIES";
+		break;
+	default:
+		break;
+	}
+	result += ")";
+	return result;
 }
 
 bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
