@@ -200,7 +200,11 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 		return *file_handle;
 	}
 
-	file_handle = caching_file_system.file_system.OpenFile(path, flags, opener);
+	// The caching file handle can service parallel block fetch tasks against a single shared FileHandle.
+	// Request parallel access on the underlying filesystem handle to avoid races in implementations that
+	// require explicit opt-in for concurrent pread-style access (e.g., HTTPFS).
+	auto internal_flags = flags | FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
+	file_handle = caching_file_system.file_system.OpenFile(path, internal_flags, opener);
 	last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
 	version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 

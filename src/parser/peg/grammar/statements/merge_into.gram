@@ -4,7 +4,9 @@ MergeMatch <- MatchedClause / NotMatchedClause
 MatchedClause <- 'WHEN' 'MATCHED' AndExpression? 'THEN' MatchedClauseAction
 MatchedClauseAction <- UpdateMatchClause / DeleteMatchClause / InsertMatchClause / DoNothingMatchClause / ErrorMatchClause
 UpdateMatchClause <- 'UPDATE' UpdateMatchInfo?
-UpdateMatchInfo <- UpdateMatchSetClause / ByNameOrPosition
+UpdateMatchInfo <- UpdateMatchSetAction / UpdateByNameOrPosition
+UpdateMatchSetAction <- UpdateMatchSetClause
+UpdateByNameOrPosition <- ByNameOrPosition
 DeleteMatchClause <- 'DELETE'
 InsertMatchClause <- 'INSERT' InsertMatchInfo?
 InsertMatchInfo <- InsertValuesList / InsertDefaultValues / InsertByNameOrPosition
@@ -13,14 +15,13 @@ InsertByNameOrPosition <- ByNameOrPosition? '*'?
 InsertValuesList <- InsertColumnList? 'VALUES' Parens(List(Expression))
 DoNothingMatchClause <- 'DO' 'NOTHING'
 ErrorMatchClause <- 'ERROR' Expression?
-UpdateMatchSetClause <- 'SET' (UpdateSetClause / '*')
+UpdateMatchSetClause <- 'SET' UpdateMatchSetInfo
+UpdateMatchSetInfo <- UpdateSetClause / StarSymbol
 AndExpression <- 'AND' Expression
 NotMatchedClause <- 'WHEN' 'NOT' 'MATCHED' BySourceOrTarget? AndExpression? 'THEN' MatchedClauseAction
 BySourceOrTarget <- BySource / ByTarget
 BySource <- 'BY' 'SOURCE'
 ByTarget <- 'BY' 'TARGET'
-
-
 
 
 

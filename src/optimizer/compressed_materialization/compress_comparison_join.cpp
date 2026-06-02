@@ -75,13 +75,13 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 				// check if either side is referenced in residual predicate
 				auto &lhs_colref = condition.GetLHS().Cast<BoundColumnRefExpression>();
 				auto &rhs_colref = condition.GetRHS().Cast<BoundColumnRefExpression>();
-				bool lhs_referenced = referenced_bindings.count(lhs_colref.binding) > 0;
-				bool rhs_referenced = referenced_bindings.count(rhs_colref.binding) > 0;
+				bool lhs_referenced = referenced_bindings.count(lhs_colref.Binding()) > 0;
+				bool rhs_referenced = referenced_bindings.count(rhs_colref.Binding()) > 0;
 
 				if (!lhs_referenced && !rhs_referenced) {
 					// Both are bound column refs, see if both can be compressed generically to the same type
-					auto lhs_it = statistics_map.find(lhs_colref.binding);
-					auto rhs_it = statistics_map.find(rhs_colref.binding);
+					auto lhs_it = statistics_map.find(lhs_colref.Binding());
+					auto rhs_it = statistics_map.find(rhs_colref.Binding());
 					if (lhs_it != statistics_map.end() && rhs_it != statistics_map.end() && lhs_it->second &&
 					    rhs_it->second) {
 						// For joins we need to compress both using the same statistics, otherwise comparisons don't
@@ -96,7 +96,7 @@ void CompressedMaterialization::CompressComparisonJoin(unique_ptr<LogicalOperato
 							// This will be compressed generically, but we have to merge the stats
 							lhs_it->second->Merge(merged_stats);
 							rhs_it->second->Merge(merged_stats);
-							probe_compress_bindings.insert(lhs_colref.binding);
+							probe_compress_bindings.insert(lhs_colref.Binding());
 							continue;
 						}
 					}
@@ -155,8 +155,8 @@ void CompressedMaterialization::UpdateComparisonJoinStats(unique_ptr<LogicalOper
 
 		auto &lhs_colref = condition.GetLHS().Cast<BoundColumnRefExpression>();
 		auto &rhs_colref = condition.GetRHS().Cast<BoundColumnRefExpression>();
-		auto lhs_it = statistics_map.find(lhs_colref.binding);
-		auto rhs_it = statistics_map.find(rhs_colref.binding);
+		auto lhs_it = statistics_map.find(lhs_colref.Binding());
+		auto rhs_it = statistics_map.find(rhs_colref.Binding());
 		if (lhs_it != statistics_map.end() && lhs_it->second) {
 			condition.SetLeftStats(lhs_it->second->ToUnique());
 		}

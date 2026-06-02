@@ -45,8 +45,8 @@ static bool GetSingleColumnBinding(const Expression &expr, ColumnBinding &column
 	bool found_multiple = false;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
 		if (!ColumnBindingIsvalid(column_binding)) {
-			column_binding = colref.binding;
-		} else if (column_binding != colref.binding) {
+			column_binding = colref.Binding();
+		} else if (column_binding != colref.Binding()) {
 			found_multiple = true;
 		}
 	});

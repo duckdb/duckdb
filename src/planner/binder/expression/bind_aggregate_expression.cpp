@@ -317,7 +317,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	if (aggr.ExportState()) {
 		aggregate = ExportAggregateFunction::Bind(std::move(aggregate));
 	}
-	aggregate->order_bys = std::move(order_bys);
+	aggregate->GetOrderBysMutable() = std::move(order_bys);
 
 	// check for all the aggregates if this aggregate already exists
 	ProjectionIndex aggr_index;
