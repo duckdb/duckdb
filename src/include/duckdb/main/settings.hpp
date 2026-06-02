@@ -1385,7 +1385,7 @@ struct MaxExecutionTimeSetting {
 	static constexpr const char *Description = "The maximum execution time per query in milliseconds (0 = no limit)";
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr const char *DefaultValue = "0";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_ONLY;
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
