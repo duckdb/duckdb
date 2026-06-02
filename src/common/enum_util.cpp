@@ -2920,6 +2920,24 @@ LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value) {
 	return static_cast<LimitNodeType>(StringUtil::StringToEnum(GetLimitNodeTypeValues(), 5, "LimitNodeType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetLimitValueTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LimitValueType::ROW_COUNT), "ROW_COUNT" },
+		{ static_cast<uint32_t>(LimitValueType::PERCENTAGE), "PERCENTAGE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LimitValueType>(LimitValueType value) {
+	return StringUtil::EnumToString(GetLimitValueTypeValues(), 2, "LimitValueType", static_cast<uint32_t>(value));
+}
+
+template<>
+LimitValueType EnumUtil::FromString<LimitValueType>(const char *value) {
+	return static_cast<LimitValueType>(StringUtil::StringToEnum(GetLimitValueTypeValues(), 2, "LimitValueType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetLoadTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(LoadType::LOAD), "LOAD" },
@@ -4481,7 +4499,7 @@ const StringUtil::EnumStringLiteral *GetResultModifierTypeValues() {
 		{ static_cast<uint32_t>(ResultModifierType::LIMIT_MODIFIER), "LIMIT_MODIFIER" },
 		{ static_cast<uint32_t>(ResultModifierType::ORDER_MODIFIER), "ORDER_MODIFIER" },
 		{ static_cast<uint32_t>(ResultModifierType::DISTINCT_MODIFIER), "DISTINCT_MODIFIER" },
-		{ static_cast<uint32_t>(ResultModifierType::LIMIT_PERCENT_MODIFIER), "LIMIT_PERCENT_MODIFIER" }
+		{ static_cast<uint32_t>(ResultModifierType::LEGACY_LIMIT_PERCENT_MODIFIER), "LEGACY_LIMIT_PERCENT_MODIFIER" }
 	};
 	return values;
 }
