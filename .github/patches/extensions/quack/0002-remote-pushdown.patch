@@ -11,7 +11,7 @@ index 4fa94f5..fbf8c48 100644
  	hugeint_t result_uuid;
  };
 diff --git a/src/include/storage/quack_catalog.hpp b/src/include/storage/quack_catalog.hpp
-index 1389757..43a3e2f 100644
+index 1389757..afd92d5 100644
 --- a/src/include/storage/quack_catalog.hpp
 +++ b/src/include/storage/quack_catalog.hpp
 @@ -54,6 +54,12 @@ public:
@@ -64,7 +64,7 @@ index 6ecfb78..cfbab78 100644
  	// fun.filter_prune = true;
  	return fun;
 diff --git a/src/storage/quack_catalog.cpp b/src/storage/quack_catalog.cpp
-index f5b1f92..f43dea5 100644
+index f5b1f92..95b3e94 100644
 --- a/src/storage/quack_catalog.cpp
 +++ b/src/storage/quack_catalog.cpp
 @@ -7,6 +7,9 @@
