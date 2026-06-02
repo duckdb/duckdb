@@ -21,11 +21,11 @@ unique_ptr<DatabaseHandle> DatabaseHandle::OpenFile(AttachedDatabase &db, const 
                                                     const StorageManagerOptions &options, DatabaseOpenMode open_mode) {
 	FileOpenFlags file_flags;
 	if (options.read_only) {
-		D_ASSERT(open_mode == DatabaseOpenMode::OPEN_EXISTING);
+		D_ASSERT(open_mode == DatabaseOpenMode::OPEN_EXISTING_FILE);
 		file_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS | FileLockType::READ_LOCK;
 	} else {
 		file_flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ | FileLockType::WRITE_LOCK;
-		if (open_mode == DatabaseOpenMode::CREATE_NEW) {
+		if (open_mode == DatabaseOpenMode::CREATE_NEW_FILE) {
 			file_flags |= FileFlags::FILE_FLAGS_FILE_CREATE;
 		}
 	}
@@ -59,11 +59,11 @@ unique_ptr<DatabaseHandle> DatabaseHandle::OpenMemoryMap(AttachedDatabase &db, c
 	    options.mmap_reserve_size.IsValid() ? options.mmap_reserve_size.GetIndex() : MMAP_DEFAULT_RESERVE_SIZE;
 	FileOpenFlags mmap_flags;
 	if (options.read_only) {
-		D_ASSERT(open_mode == DatabaseOpenMode::OPEN_EXISTING);
+		D_ASSERT(open_mode == DatabaseOpenMode::OPEN_EXISTING_FILE);
 		mmap_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS | FileLockType::READ_LOCK;
 	} else {
 		mmap_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileLockType::WRITE_LOCK;
-		if (open_mode == DatabaseOpenMode::CREATE_NEW) {
+		if (open_mode == DatabaseOpenMode::CREATE_NEW_FILE) {
 			mmap_flags |= FileFlags::FILE_FLAGS_FILE_CREATE;
 		}
 	}

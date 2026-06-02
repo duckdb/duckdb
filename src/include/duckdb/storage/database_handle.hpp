@@ -16,7 +16,7 @@
 namespace duckdb {
 struct StorageManagerOptions;
 
-enum class DatabaseOpenMode { OPEN_EXISTING, CREATE_NEW };
+enum class DatabaseOpenMode { OPEN_EXISTING_FILE, CREATE_NEW_FILE };
 
 struct DatabaseHandle {
 	explicit DatabaseHandle(unique_ptr<FileHandle> handle);
