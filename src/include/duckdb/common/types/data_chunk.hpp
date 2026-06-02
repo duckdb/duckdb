@@ -65,7 +65,8 @@ public:
 			// a column-less chunk has nothing to derive a cardinality from; without an explicit count it is empty
 			return 0;
 		}
-		throw InternalException("DataChunk::size() called but neither count was set, nor any vectors with valid counts were set");
+		throw InternalException(
+		    "DataChunk::size() called but neither count was set, nor any vectors with valid counts were set");
 	}
 	inline idx_t ColumnCount() const {
 		return data.size();
@@ -78,11 +79,13 @@ public:
 	//! NOTE: this only sets the chunk's cardinality, it does NOT resize the child vectors (matching the historical
 	//! behavior on main). Callers that mutate the child vectors directly (e.g. Vector::Append/SetValue) and then call
 	//! SetCardinality rely on this - forwarding to SetChildCardinality would resize/overwrite their data.
-	[[deprecated("Use CheckCardinality (preferred) or SetChildCardinality instead")]] DUCKDB_API void SetCardinality(idx_t count_p) {
+	[[deprecated("Use CheckCardinality (preferred) or SetChildCardinality instead")]] DUCKDB_API void
+	SetCardinality(idx_t count_p) {
 		this->count = count_p;
 	}
 	//! Deprecated: use SetChildCardinality instead
-	[[deprecated("Use CheckCardinality (preferred) or SetChildCardinality instead")]] DUCKDB_API void SetCardinality(const DataChunk &chunk) {
+	[[deprecated("Use CheckCardinality (preferred) or SetChildCardinality instead")]] DUCKDB_API void
+	SetCardinality(const DataChunk &chunk) {
 		this->count = chunk.size();
 	}
 

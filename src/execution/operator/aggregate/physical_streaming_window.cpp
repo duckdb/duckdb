@@ -401,7 +401,8 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 
 	auto &delayed = state.delayed;
 	if (!state.lead_count) {
-		// Without LEAD nothing is ever delayed (the delayed buffer is not even initialized), so emit the input directly.
+		// Without LEAD nothing is ever delayed (the delayed buffer is not even initialized), so emit the input
+		// directly.
 		ExecuteInput(context, delayed, input, output, gstate_p);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}

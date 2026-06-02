@@ -455,7 +455,6 @@ static void ConvertKeyInput(DataChunk &input, DataChunk &result) {
 			result.data[i].Reference(input.data[i]);
 		}
 	}
-
 }
 
 void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,
