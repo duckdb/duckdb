@@ -3097,7 +3097,7 @@ void ShellState::Initialize() {
 	main_prompt = make_uniq<Prompt>();
 	string default_prompt;
 	default_prompt =
-	    "{max_length:50}{setting:connect_prefix}{highlight_element:prompt}{setting:current_database_and_schema}"
+	    "{max_length:50}{highlight_element:prompt_connect}{setting:connect_prefix}{highlight_element:prompt}{setting:current_database_and_schema}"
 	    "{color:reset} D ";
 	main_prompt->ParsePrompt(default_prompt);
 	vector<string> default_components;
