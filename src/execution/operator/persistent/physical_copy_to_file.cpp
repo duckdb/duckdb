@@ -139,9 +139,12 @@ public:
 	void Initialize();
 
 	void CreateDir(const string &dir_path) DUCKDB_REQUIRES(lock);
+	unique_ptr<GlobalFileState> CreateFileStateLocked(string output_path = string(),
+	                                                  optional_ptr<const vector<Value>> partition_values = nullptr)
+	    DUCKDB_REQUIRES(lock);
 	unique_ptr<GlobalFileState> CreateFileState(string output_path = string(),
 	                                            optional_ptr<const vector<Value>> partition_values = nullptr)
-	    DUCKDB_REQUIRES(lock);
+	    DUCKDB_EXCLUDES(lock);
 	unique_ptr<GlobalFileState> FinalizeFileStateLocked(unique_ptr<GlobalFileState> file_state) DUCKDB_REQUIRES(lock);
 	void FinalizeFileState(unique_ptr<GlobalFileState> file_state) DUCKDB_EXCLUDES(lock);
 
@@ -173,6 +176,7 @@ public:
 	unique_ptr<GlobalFileState> global_state;
 	//! Lambda to create a new global file state
 	const std::function<unique_ptr<GlobalFileState>()> create_file_state_fun;
+	bool creating_file_state DUCKDB_GUARDED_BY(lock) = false;
 
 	//! The final batch
 	mutable annotated_mutex last_batch_lock;
@@ -297,7 +301,7 @@ struct PartitionedCopyBatchState {
 	}
 
 	void StoreCollection(idx_t batch_idx, unique_ptr<ColumnDataCollection> collection) {
-		D_ASSERT(mode == PartitionedCopyBatchMode::BUFFERING);
+		D_ASSERT(mode == PartitionedCopyBatchMode::BUFFERING || mode == PartitionedCopyBatchMode::PREPARING);
 		D_ASSERT(batch_idx < collections.size());
 		collections[batch_idx].collection = std::move(collection);
 	}
@@ -306,10 +310,26 @@ struct PartitionedCopyBatchState {
 		return mode == PartitionedCopyBatchMode::BUFFERING && count >= flush_threshold && !has_delayed_partition;
 	}
 
-	void StartPreparing(PartitionWriteInfo &write_info_p) {
+	void StartPreparing() {
 		D_ASSERT(mode == PartitionedCopyBatchMode::BUFFERING);
 		mode = PartitionedCopyBatchMode::PREPARING;
+		batches.resize(collections.size());
+	}
+
+	bool TryReserveWriteInfo() {
+		D_ASSERT(mode == PartitionedCopyBatchMode::PREPARING);
+		if (write_info || write_info_requested) {
+			return false;
+		}
+		write_info_requested = true;
+		return true;
+	}
+
+	void SetWriteInfo(PartitionWriteInfo &write_info_p) {
+		D_ASSERT(mode == PartitionedCopyBatchMode::PREPARING);
+		D_ASSERT(!write_info || write_info == optional_ptr<PartitionWriteInfo>(write_info_p));
 		write_info = write_info_p;
+		write_info_requested = false;
 		batches.resize(collections.size());
 	}
 
@@ -334,8 +354,17 @@ struct PartitionedCopyBatchState {
 		return mode == PartitionedCopyBatchMode::DELAYED || mode == PartitionedCopyBatchMode::PREPARED;
 	}
 
+	bool NeedsWriteInfo() const {
+		return mode == PartitionedCopyBatchMode::PREPARING && !write_info;
+	}
+
+	bool IsWriteInfoReserved() const {
+		return write_info_requested;
+	}
+
 	bool NeedsPrepare(idx_t batch_idx) const {
 		D_ASSERT(mode == PartitionedCopyBatchMode::PREPARING);
+		D_ASSERT(write_info);
 		D_ASSERT(batch_idx < collections.size());
 		return collections[batch_idx].collection && (batch_idx >= batches.size() || !batches[batch_idx]);
 	}
@@ -347,7 +376,7 @@ struct PartitionedCopyBatchState {
 	}
 
 	void StorePreparedBatch(idx_t batch_idx, unique_ptr<PartitionedCopyBatch> batch) {
-		D_ASSERT(mode == PartitionedCopyBatchMode::PREPARING);
+		D_ASSERT(mode == PartitionedCopyBatchMode::PREPARING || mode == PartitionedCopyBatchMode::PREPARED);
 		D_ASSERT(batch_idx < batches.size());
 		batches[batch_idx] = std::move(batch);
 	}
@@ -367,6 +396,7 @@ struct PartitionedCopyBatchState {
 	vector<PartitionedCopyCollection> collections;
 	vector<unique_ptr<PartitionedCopyBatch>> batches;
 	idx_t count = 0;
+	bool write_info_requested = false;
 	PartitionedCopyBatchMode mode = PartitionedCopyBatchMode::BUFFERING;
 };
 
@@ -375,16 +405,61 @@ struct DelayedPartitionFlush {
 	PartitionedCopyCollection data;
 };
 
+struct DelayedPartitionState {
+	bool HasBufferedData() const {
+		return buffer.Count() > 0;
+	}
+
+	bool InFlight() const {
+		return in_flight > 0;
+	}
+
+	void Buffer(PartitionedCopyCollection data) {
+		if (!HasBufferedData()) {
+			buffer = std::move(data);
+			return;
+		}
+		D_ASSERT(buffer.schema == data.schema);
+		buffer.collection->Combine(*data.collection);
+	}
+
+	bool Ready(idx_t flush_threshold, bool force) const {
+		return HasBufferedData() && !InFlight() && (force || buffer.Count() >= flush_threshold);
+	}
+
+	DelayedPartitionFlush Take(const vector<Value> &values) {
+		D_ASSERT(HasBufferedData());
+		D_ASSERT(!InFlight());
+		DelayedPartitionFlush result;
+		result.values = values;
+		result.data = std::move(buffer);
+		in_flight++;
+		return result;
+	}
+
+	void Complete() {
+		D_ASSERT(in_flight > 0);
+		in_flight--;
+	}
+
+	bool Active() const {
+		return HasBufferedData() || InFlight();
+	}
+
+	PartitionedCopyCollection buffer;
+	idx_t in_flight = 0;
+};
+
 class DelayedPartitionBuffers {
 public:
 	bool Has(const vector<Value> &values) DUCKDB_EXCLUDES(lock) {
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		return buffers.find(values) != buffers.end();
+		return partitions.find(values) != partitions.end();
 	}
 
 	bool Empty() const DUCKDB_EXCLUDES(lock) {
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		return buffers.empty();
+		return partitions.empty();
 	}
 
 	optional<DelayedPartitionFlush> BufferOrTakeReady(const vector<Value> &values, PartitionedCopyCollection data,
@@ -398,23 +473,13 @@ public:
 		bool has_result = false;
 		{
 			annotated_lock_guard<annotated_mutex> guard(lock);
-			auto entry = buffers.find(values);
-			if (entry != buffers.end()) {
-				D_ASSERT(entry->second.schema == data.schema);
-				entry->second.collection->Combine(*data.collection);
-				if (force || entry->second.collection->Count() >= flush_threshold) {
-					result.values = values;
-					result.data = std::move(entry->second);
-					buffers.erase(entry);
-					has_result = true;
-				}
-			} else if (force || data.collection->Count() >= flush_threshold) {
-				result.values = values;
-				result.data = std::move(data);
+			auto &state = partitions[values];
+			state.Buffer(std::move(data));
+			if (state.Ready(flush_threshold, force)) {
+				result = state.Take(values);
 				has_result = true;
-			} else {
-				buffers.insert(make_pair(values, std::move(data)));
 			}
+			EraseIfInactive(values, state);
 		}
 
 		if (!has_result) {
@@ -427,20 +492,40 @@ public:
 		DelayedPartitionFlush result;
 		{
 			annotated_lock_guard<annotated_mutex> guard(lock);
-			if (buffers.empty()) {
-				return nullopt;
+			for (auto entry = partitions.begin(); entry != partitions.end(); entry++) {
+				auto &state = entry->second;
+				if (!state.HasBufferedData() || state.InFlight()) {
+					continue;
+				}
+				result = state.Take(entry->first);
+				return std::move(result);
 			}
-			auto entry = buffers.begin();
-			result.values = entry->first;
-			result.data = std::move(entry->second);
-			buffers.erase(entry);
 		}
-		return std::move(result);
+		return nullopt;
+	}
+
+	void Complete(const vector<Value> &values) DUCKDB_EXCLUDES(lock) {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		auto entry = partitions.find(values);
+		D_ASSERT(entry != partitions.end());
+		if (entry == partitions.end()) {
+			return;
+		}
+		entry->second.Complete();
+		if (!entry->second.Active()) {
+			partitions.erase(entry);
+		}
 	}
 
 private:
+	void EraseIfInactive(const vector<Value> &values, const DelayedPartitionState &state) DUCKDB_REQUIRES(lock) {
+		if (!state.Active()) {
+			partitions.erase(values);
+		}
+	}
+
 	mutable annotated_mutex lock;
-	vector_of_value_map_t<PartitionedCopyCollection> buffers DUCKDB_GUARDED_BY(lock);
+	vector_of_value_map_t<DelayedPartitionState> partitions DUCKDB_GUARDED_BY(lock);
 };
 
 //! Manages a single partitioned COPY hash bin
@@ -608,12 +693,14 @@ public:
 	void FinalizeState(PartitionedCopyState &state, InterruptState &interrupt_state) DUCKDB_REQUIRES(state.lock);
 
 	PartitionWriteInfo &GetPartitionWriteInfo(const vector<Value> &values) DUCKDB_EXCLUDES(active_writes_lock);
+	void ReleasePartitionWriteInfo(PartitionWriteInfo &write_info) DUCKDB_EXCLUDES(active_writes_lock);
 	bool HasDelayedPartition(const vector<Value> &values);
 	bool HasDelayedPartitions() const;
 	optional<DelayedPartitionFlush> BufferOrTakeReadyPartition(const vector<Value> &values,
 	                                                           PartitionedCopyCollection data, bool force = false);
 	optional<DelayedPartitionFlush> TakeNextDelayedPartition();
-	void DrainDelayedPartitions(ExecutionContext &execution_context, InterruptState &interrupt_state);
+	void CompleteDelayedPartition(const vector<Value> &values);
+	bool DrainDelayedPartitions(ExecutionContext &execution_context, InterruptState &interrupt_state);
 	unique_ptr<ColumnDataCollection> SortPartitionCollection(ExecutionContext &execution_context,
 	                                                         InterruptState &interrupt_state,
 	                                                         unique_ptr<ColumnDataCollection> collection);
@@ -683,10 +770,46 @@ public:
 	DelayedPartitionBuffers delayed_partition_buffers;
 };
 
+class PartitionWriteInfoGuard {
+public:
+	PartitionWriteInfoGuard(PartitionedCopy &partitioned_copy_p, PartitionWriteInfo &write_info_p)
+	    : partitioned_copy(partitioned_copy_p), write_info(write_info_p) {
+	}
+
+	~PartitionWriteInfoGuard();
+
+private:
+	PartitionedCopy &partitioned_copy;
+	optional_ptr<PartitionWriteInfo> write_info;
+};
+
+class DelayedPartitionFlushGuard {
+public:
+	DelayedPartitionFlushGuard(PartitionedCopy &partitioned_copy_p, const vector<Value> &values_p)
+	    : partitioned_copy(partitioned_copy_p), values(values_p) {
+	}
+
+	~DelayedPartitionFlushGuard();
+
+private:
+	PartitionedCopy &partitioned_copy;
+	const vector<Value> &values;
+};
+
 PartitionedCopyHashGroup::PartitionedCopyHashGroup(PartitionedCopy &partitioned_copy, const ChunkRow &chunk_row,
                                                    idx_t group_idx_p)
     : partitioned_copy(partitioned_copy), count(chunk_row.count), blocks(chunk_row.chunks), group_idx(group_idx_p),
       stage(PartitionedCopyStage::SORT), sorted(0), materialized(0), masked(0), batched(0), prepared(0), flushed(0) {
+}
+
+PartitionWriteInfoGuard::~PartitionWriteInfoGuard() {
+	if (write_info) {
+		partitioned_copy.ReleasePartitionWriteInfo(*write_info);
+	}
+}
+
+DelayedPartitionFlushGuard::~DelayedPartitionFlushGuard() {
+	partitioned_copy.CompleteDelayedPartition(values);
 }
 
 PartitionedCopyStage PartitionedCopyHashGroup::GetStage() const {
@@ -875,6 +998,17 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextPrepareTask() {
 			continue;
 		}
 		D_ASSERT(batch_state.mode == PartitionedCopyBatchMode::PREPARING);
+		if (batch_state.NeedsWriteInfo()) {
+			if (!batch_state.IsWriteInfoReserved() && batch_state.TryReserveWriteInfo()) {
+				PartitionedCopyTask task;
+				task.stage = PartitionedCopyStage::PREPARE;
+				task.group_idx = group_idx;
+				task.thread_idx = prepare_partition_idx;
+				task.batch_idx = DConstants::INVALID_INDEX;
+				return task;
+			}
+			return nullopt;
+		}
 		while (prepare_batch_idx < batch_state.collections.size()) {
 			if (!batch_state.NeedsPrepare(prepare_batch_idx)) {
 				++prepare_batch_idx;
@@ -1028,6 +1162,7 @@ void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 	optional_ptr<PartitionedCopyBatchState> batch_state;
 	optional_ptr<PartitionWriteInfo> write_info;
 	vector<Value> partition_values;
+	bool acquire_write_info = false;
 	bool prepare_batch = false;
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
@@ -1038,14 +1173,16 @@ void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 			const auto flush_threshold = Settings::Get<PartitionedWriteFlushThresholdSetting>(partitioned_copy.context);
 			const auto has_delayed_partition = partitioned_copy.HasDelayedPartition(batch_state->values);
 			if (batch_state->CanStartPreparing(flush_threshold, has_delayed_partition)) {
-				auto &partition_write_info = partitioned_copy.GetPartitionWriteInfo(batch_state->values);
-				batch_state->StartPreparing(partition_write_info);
+				batch_state->StartPreparing();
+				acquire_write_info = batch_state->TryReserveWriteInfo();
 			}
 		}
 
-		if (batch_state->mode == PartitionedCopyBatchMode::PREPARING) {
-			D_ASSERT(batch_state->write_info);
+		if (batch_state->mode == PartitionedCopyBatchMode::PREPARING && batch_state->write_info) {
 			write_info = batch_state->write_info;
+			partition_values = batch_state->values;
+			prepare_batch = true;
+		} else if (acquire_write_info) {
 			partition_values = batch_state->values;
 			prepare_batch = true;
 		} else {
@@ -1059,6 +1196,16 @@ void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 		return;
 	}
 
+	if (acquire_write_info) {
+		auto &partition_write_info = partitioned_copy.GetPartitionWriteInfo(partition_values);
+		{
+			annotated_lock_guard<annotated_mutex> guard(lock);
+			auto &current_batch_state = *batch_states[task.thread_idx];
+			current_batch_state.SetWriteInfo(partition_write_info);
+			write_info = current_batch_state.write_info;
+		}
+	}
+	D_ASSERT(write_info);
 	auto prepared_batch = partitioned_copy.PreparePartitionBatch(
 	    partition_values, *write_info, PartitionedCopyCollection(collection_schema, std::move(batch)));
 
@@ -1092,8 +1239,7 @@ void PartitionedCopyHashGroup::PrepareBatchStates() {
 			continue;
 		}
 
-		auto &write_info = partitioned_copy.GetPartitionWriteInfo(batch_state->values);
-		batch_state->StartPreparing(write_info);
+		batch_state->StartPreparing();
 	}
 }
 
@@ -1111,15 +1257,30 @@ void PartitionedCopyHashGroup::Prepare(ExecutionContext &execution_context, Inte
 	vector<Value> values;
 	optional_ptr<PartitionWriteInfo> write_info;
 	PartitionedCopyCollection data;
+	bool acquire_write_info = false;
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		auto &batch_state = *batch_states[task.thread_idx];
 		D_ASSERT(batch_state.mode == PartitionedCopyBatchMode::PREPARING);
-		D_ASSERT(batch_state.write_info);
-		D_ASSERT(task.batch_idx < batch_state.collections.size());
 		values = batch_state.values;
-		write_info = batch_state.write_info;
-		data = batch_state.TakeCollection(task.batch_idx);
+		if (task.batch_idx == DConstants::INVALID_INDEX) {
+			D_ASSERT(batch_state.NeedsWriteInfo());
+			D_ASSERT(batch_state.IsWriteInfoReserved());
+			acquire_write_info = true;
+		} else {
+			D_ASSERT(batch_state.write_info);
+			D_ASSERT(task.batch_idx < batch_state.collections.size());
+			write_info = batch_state.write_info;
+			data = batch_state.TakeCollection(task.batch_idx);
+		}
+	}
+
+	if (acquire_write_info) {
+		auto &partition_write_info = partitioned_copy.GetPartitionWriteInfo(values);
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		auto &batch_state = *batch_states[task.thread_idx];
+		batch_state.SetWriteInfo(partition_write_info);
+		return;
 	}
 	D_ASSERT(data.collection);
 	const auto row_count = data.Count();
@@ -1182,16 +1343,12 @@ void PartitionedCopyHashGroup::Flush(ExecutionContext &execution_context, Interr
 	}
 
 	D_ASSERT(write_info);
+	PartitionWriteInfoGuard write_guard(partitioned_copy, *write_info);
 	partitioned_copy.EnsureFreshPartitionFileForSortedRun(*write_info, values);
 
 	for (auto &batch : batches) {
 		D_ASSERT(batch);
 		partitioned_copy.FlushPreparedPartitionBatch(values, *write_info, std::move(batch));
-	}
-
-	{
-		annotated_lock_guard<annotated_mutex> guard(partitioned_copy.active_writes_lock);
-		write_info->active_writes--;
 	}
 }
 
@@ -1525,7 +1682,9 @@ public:
 			if (partitioned_copy.flushing.load(std::memory_order_relaxed)) {
 				partitioned_copy.Flush(execution_context, interrupt_state);
 			} else {
-				partitioned_copy.DrainDelayedPartitions(execution_context, interrupt_state);
+				if (!partitioned_copy.DrainDelayedPartitions(execution_context, interrupt_state)) {
+					TaskScheduler::YieldThread();
+				}
 			}
 		}
 		event->FinishTask();
@@ -1692,10 +1851,17 @@ optional<DelayedPartitionFlush> PartitionedCopy::TakeNextDelayedPartition() {
 	return delayed_partition_buffers.TakeNext();
 }
 
-void PartitionedCopy::DrainDelayedPartitions(ExecutionContext &execution_context, InterruptState &interrupt_state) {
+void PartitionedCopy::CompleteDelayedPartition(const vector<Value> &values) {
+	delayed_partition_buffers.Complete(values);
+}
+
+bool PartitionedCopy::DrainDelayedPartitions(ExecutionContext &execution_context, InterruptState &interrupt_state) {
+	bool drained = false;
 	while (auto partition = TakeNextDelayedPartition()) {
+		drained = true;
 		FlushPartitionCollection(execution_context, interrupt_state, std::move(*partition));
 	}
+	return drained;
 }
 
 unique_ptr<ColumnDataCollection> PartitionedCopy::SortPartitionCollection(ExecutionContext &execution_context,
@@ -1813,8 +1979,10 @@ void PartitionedCopy::FlushPreparedPartitionBatch(const vector<Value> &values, P
 void PartitionedCopy::FlushPartitionCollection(ExecutionContext &execution_context, InterruptState &interrupt_state,
                                                DelayedPartitionFlush flush) {
 	if (!flush.data.collection || flush.data.collection->Count() == 0) {
+		CompleteDelayedPartition(flush.values);
 		return;
 	}
+	DelayedPartitionFlushGuard delayed_guard(*this, flush.values);
 	if (flush.data.schema == PartitionedCopyCollectionSchema::RAW_SCHEMA) {
 		flush.data.collection =
 		    SortPartitionCollection(execution_context, interrupt_state, std::move(flush.data.collection));
@@ -1824,6 +1992,7 @@ void PartitionedCopy::FlushPartitionCollection(ExecutionContext &execution_conte
 	D_ASSERT(flush.data.schema == PartitionedCopyCollectionSchema::WRITE_SCHEMA);
 
 	auto &write_info = GetPartitionWriteInfo(flush.values);
+	PartitionWriteInfoGuard write_guard(*this, write_info);
 	EnsureFreshPartitionFileForSortedRun(write_info, flush.values);
 
 	DataChunk scan_chunk;
@@ -1856,11 +2025,6 @@ void PartitionedCopy::FlushPartitionCollection(ExecutionContext &execution_conte
 		}
 	}
 	flush_batch();
-
-	{
-		annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
-		write_info.active_writes--;
-	}
 }
 
 PartitionWriteInfo &PartitionedCopy::GetPartitionWriteInfo(const vector<Value> &values) {
@@ -1889,6 +2053,12 @@ PartitionWriteInfo &PartitionedCopy::GetPartitionWriteInfo(const vector<Value> &
 
 	FinalizeFileStates(std::move(files_to_finalize));
 	return *result;
+}
+
+void PartitionedCopy::ReleasePartitionWriteInfo(PartitionWriteInfo &write_info) {
+	annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
+	D_ASSERT(write_info.active_writes > 0);
+	write_info.active_writes--;
 }
 
 unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileState(const vector<Value> &values,
@@ -1950,7 +2120,7 @@ CreatePartitionFileStateResult PartitionedCopy::CreatePartitionFileStateLocked(c
 		}
 	}
 	// Initialize write
-	result.file_state = copy_gstate.CreateFileState(full_path, values);
+	result.file_state = copy_gstate.CreateFileStateLocked(full_path, values);
 	return result;
 }
 
@@ -2037,7 +2207,7 @@ string PartitionedCopy::GetOrCreateDirectory(string path, const vector<Value> &v
 //===--------------------------------------------------------------------===//
 CopyToFileGlobalState::CopyToFileGlobalState(const PhysicalCopyToFile &op_p, ClientContext &context_p)
     : op(op_p), context(context_p), initialized(false), finalized(false), prepare_global_state(nullptr),
-      create_file_state_fun([&]() DUCKDB_REQUIRES(lock) { return CreateFileState(); }), rows_copied(0),
+      create_file_state_fun([&]() DUCKDB_EXCLUDES(lock) { return CreateFileState(); }), rows_copied(0),
       last_file_offset(0) {
 }
 
@@ -2066,7 +2236,7 @@ void CopyToFileGlobalState::Initialize() {
 		return;
 	}
 	// initialize writing to the file
-	global_state = CreateFileState(op.file_path);
+	global_state = CreateFileStateLocked(op.file_path);
 	initialized = true;
 }
 
@@ -2082,8 +2252,8 @@ void CopyToFileGlobalState::CreateDir(const string &dir_path) {
 	created_directories.insert(dir_path);
 }
 
-unique_ptr<GlobalFileState> CopyToFileGlobalState::CreateFileState(string output_path,
-                                                                   optional_ptr<const vector<Value>> partition_values) {
+unique_ptr<GlobalFileState>
+CopyToFileGlobalState::CreateFileStateLocked(string output_path, optional_ptr<const vector<Value>> partition_values) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	if (output_path.empty()) {
 		output_path = op.filename_pattern.CreateFilename(fs, op.file_path, op.file_extension, last_file_offset++);
@@ -2124,6 +2294,12 @@ unique_ptr<GlobalFileState> CopyToFileGlobalState::CreateFileState(string output
 		prepare_global_state.store(res, std::memory_order_release);
 	}
 	return res;
+}
+
+unique_ptr<GlobalFileState> CopyToFileGlobalState::CreateFileState(string output_path,
+                                                                   optional_ptr<const vector<Value>> partition_values) {
+	annotated_lock_guard<annotated_mutex> guard(lock);
+	return CreateFileStateLocked(std::move(output_path), partition_values);
 }
 
 optional_ptr<CopyToFileInfo> CopyToFileGlobalState::AddFile(const string &file_name) {
@@ -2294,7 +2470,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		auto state = make_uniq<CopyToFileGlobalState>(*this, context);
 		if (!per_thread_output && Rotate() && write_empty_file) {
 			annotated_lock_guard<annotated_mutex> guard(state->lock);
-			state->global_state = state->CreateFileState();
+			state->global_state = state->CreateFileStateLocked();
 		}
 
 		if (partition_output) {
@@ -2434,7 +2610,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 		if (NumericCast<int64_t>(gstate.rows_copied.load()) == 0 && sink_state != nullptr) {
 			// no rows from source, write schema to file
 			annotated_lock_guard<annotated_mutex> guard(gstate.lock);
-			gstate.global_state = gstate.CreateFileState();
+			gstate.global_state = gstate.CreateFileStateLocked();
 		}
 	}
 
@@ -2508,6 +2684,52 @@ static void FlushLegacyCopyBatch(ClientContext &context, const CopyFunction &fun
 //===--------------------------------------------------------------------===//
 // Prepare/Flush Batch
 //===--------------------------------------------------------------------===//
+static void EnsureFileState(CopyToFileGlobalState &gstate, unique_ptr<GlobalFileState> &file_state_ptr,
+                            const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun) {
+	while (true) {
+		bool create_file_state = false;
+		{
+			annotated_lock_guard<annotated_mutex> guard(gstate.lock);
+			if (file_state_ptr) {
+				return;
+			}
+			if (!gstate.creating_file_state) {
+				gstate.creating_file_state = true;
+				create_file_state = true;
+			}
+		}
+
+		if (!create_file_state) {
+			TaskScheduler::YieldThread();
+			continue;
+		}
+
+		unique_ptr<GlobalFileState> new_file_state;
+		try {
+			new_file_state = create_file_state_fun();
+		} catch (...) {
+			annotated_lock_guard<annotated_mutex> guard(gstate.lock);
+			gstate.creating_file_state = false;
+			throw;
+		}
+
+		unique_ptr<GlobalFileState> unused_file_state;
+		{
+			annotated_lock_guard<annotated_mutex> guard(gstate.lock);
+			if (!file_state_ptr) {
+				file_state_ptr = std::move(new_file_state);
+			} else {
+				unused_file_state = std::move(new_file_state);
+			}
+			gstate.creating_file_state = false;
+		}
+		if (unused_file_state) {
+			gstate.FinalizeFileState(std::move(unused_file_state));
+		}
+		return;
+	}
+}
+
 pair<const CopyFunctionBatchAnalyzer, unique_ptr<PreparedBatchData>>
 PhysicalCopyToFile::PrepareBatch(ClientContext &context, GlobalSinkState &gstate_p,
                                  unique_ptr<GlobalFileState> &file_state_ptr,
@@ -2524,13 +2746,9 @@ PhysicalCopyToFile::PrepareBatch(ClientContext &context, GlobalSinkState &gstate
 	auto prepare_global_state = gstate.prepare_global_state.load(std::memory_order_acquire);
 	if (!prepare_global_state) {
 		D_ASSERT(!file_state_ptr);
-		annotated_unique_lock<annotated_mutex> global_guard(gstate.lock);
+		EnsureFileState(gstate, file_state_ptr, create_file_state_fun);
 		prepare_global_state = gstate.prepare_global_state.load(std::memory_order_acquire);
-		if (!prepare_global_state) {
-			file_state_ptr = create_file_state_fun();
-			prepare_global_state = gstate.prepare_global_state.load(std::memory_order_acquire);
-			D_ASSERT(prepare_global_state);
-		}
+		D_ASSERT(prepare_global_state);
 	}
 
 	// Prepare the batch
@@ -2545,19 +2763,19 @@ void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gst
 	auto &gstate = gstate_p.Cast<CopyToFileGlobalState>();
 
 	while (true) {
+		EnsureFileState(gstate, file_state_ptr, create_file_state_fun);
+
 		// Decide which file to flush to
 		annotated_unique_lock<annotated_mutex> global_guard(gstate.lock);
-		if (!file_state_ptr) {
-			file_state_ptr = create_file_state_fun();
-		}
 
 		annotated_unique_lock<annotated_mutex> file_guard(file_state_ptr->lock);
 		if (PhysicalCopyRotateNow(*this, *file_state_ptr)) {
 			// Global state must be rotated. Move to local scope, create an new one, and immediately release global lock
 			auto owned_file_state = std::move(file_state_ptr);
-			file_state_ptr = create_file_state_fun();
 			file_guard.unlock();
 			global_guard.unlock();
+
+			EnsureFileState(gstate, file_state_ptr, create_file_state_fun);
 
 			// Finalize this file!
 			gstate.FinalizeFileState(std::move(owned_file_state));
