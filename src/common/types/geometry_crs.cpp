@@ -156,10 +156,10 @@ private:
 	bool TryMatchText(string &result) {
 		const auto start = pos;
 		// First character must be alphabetic or underscore
-		if (pos < end && (isalpha(*pos) || *pos == '_')) {
+		if (pos < end && (StringUtil::CharacterIsAlpha(*pos) || *pos == '_')) {
 			pos++;
 			// Subsequent characters can also include digits
-			while (pos < end && (isalnum(*pos) || *pos == '_')) {
+			while (pos < end && (StringUtil::CharacterIsAlphaNumeric(*pos) || *pos == '_')) {
 				pos++;
 			}
 		}
@@ -286,7 +286,7 @@ private:
 	}
 
 	void SkipWhitespace() {
-		while (pos < end && isspace(*pos)) {
+		while (pos < end && StringUtil::CharacterIsSpace(*pos)) {
 			pos++;
 		}
 	}
