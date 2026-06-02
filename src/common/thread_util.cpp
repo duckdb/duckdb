@@ -1,19 +1,20 @@
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/original/std/sstream.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
 #ifndef DUCKDB_NO_THREADS
 void ThreadUtil::SleepMs(idx_t sleep_ms) {
-	static constexpr idx_t SLEEP_INTERVAL_MS = 1;
-	for (idx_t remaining = sleep_ms; remaining > 0; remaining -= std::min(remaining, SLEEP_INTERVAL_MS)) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(std::min(remaining, SLEEP_INTERVAL_MS)));
+	static constexpr idx_t SLEEP_INTERVAL_MS = 100;
+	for (idx_t remaining = sleep_ms; remaining > 0; remaining -= MinValue(remaining, SLEEP_INTERVAL_MS)) {
+		std::this_thread::sleep_for(milliseconds(MinValue(remaining, SLEEP_INTERVAL_MS)));
 	}
 }
 
 void ThreadUtil::SleepMicroSeconds(idx_t micros) {
-	std::this_thread::sleep_for(std::chrono::microseconds(micros));
+	std::this_thread::sleep_for(microseconds(micros));
 }
 
 thread_id ThreadUtil::GetThreadId() {
