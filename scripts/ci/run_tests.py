@@ -325,12 +325,10 @@ def format_batch_failure(
     stderr: str,
     message: str | None = None,
 ):
-    rerun_cmd = (
-        "printf '%s\\n' "
-        + " ".join(shlex.quote(test) for test in batch)
-        + " > /tmp/duckdb_test_batch.txt && "
-        + build_test_command(config, "/tmp/duckdb_test_batch.txt")
-    )
+    rerun_parts = [shlex.quote(config.unittest_bin)]
+    rerun_parts.extend(shlex.split(config.test_flags))
+    rerun_parts.append(",".join(batch))
+    rerun_cmd = shlex.join(rerun_parts)
     parts = [f"### failed test batch {batch_idx} ###", ""]
     if message is not None:
         parts.extend([message, ""])
