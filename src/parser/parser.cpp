@@ -299,7 +299,7 @@ void Parser::ParseQuery(const string &query) {
 						                        result.consumed_chars)) {
 							throw ParserException(
 							    "Extension returned consumed_chars=%llu — must be one of the allowed_boundaries",
-							    (unsigned long long)result.consumed_chars);
+							    (uint64_t)result.consumed_chars);
 						}
 						auto estmt = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
 						estmt->stmt_location = failure_byte;
