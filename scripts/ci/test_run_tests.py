@@ -315,7 +315,11 @@ require windows: 2
             #!/bin/sh
             # run_tests.py calls: <helper> --list-tests <pattern>
             if [ "$1" != "--list-tests" ]; then
-              exit 2
+              printf '\\n[0/2] (0%%): test/sql/slow.test\\n'
+              printf '[1/2] (50%%): test/sql/slow.test took 0.001s\\n'
+              printf '[2/2] (100%%): test/sql/fast.test took 0.002s\\n'
+              printf 'All tests passed (100 assertions in 2 test cases)\\n'
+              exit 0
             fi
             cat "$2"
             exit 2
@@ -334,7 +338,7 @@ require windows: 2
                     "--track-runtime",
                     "0",
                     "--test-command",
-                    "echo fake-run {test_list}",
+                    "{binary} {test_list}",
                     str(list_helper_path),
                     str(listed_tests_path),
                 ]
@@ -345,7 +349,9 @@ require windows: 2
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("generated test list using:", proc.stdout)
+        self.assertIn("batch_size=2", proc.stdout)
         self.assertNotIn("found 2 tests", proc.stdout)
+        self.assertNotIn("forces batch_size=1", proc.stdout)
         self.assertIn("warn: test/sql/slow.test took", proc.stdout)
         self.assertIn("warn: test/sql/fast.test took", proc.stdout)
         self.assertIn("ran tests: ", proc.stdout)

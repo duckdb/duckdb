@@ -528,14 +528,14 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 	auto &filter_value = right.Cast<BoundConstantExpression>();
-	if (filter_value.value.type() != LogicalType::BIGINT) {
+	if (filter_value.GetValue().type() != LogicalType::BIGINT) {
 		return false;
 	}
-	if (filter_value.value.IsNull()) {
+	if (filter_value.GetValue().IsNull()) {
 		return false;
 	}
 
-	const auto bigint_value = filter_value.value.GetValue<int64_t>();
+	const auto bigint_value = filter_value.GetValue().GetValue<int64_t>();
 	switch (comparison) {
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		if (bigint_value < 1) {
@@ -843,7 +843,7 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 
 	auto &filter_expr = filter.expressions[0]->Cast<BoundFunctionExpression>();
 	auto &limit_expr = BoundComparisonExpression::Right(filter_expr);
-	params.limit = limit_expr.Cast<BoundConstantExpression>().value.GetValue<int64_t>();
+	params.limit = limit_expr.Cast<BoundConstantExpression>().GetValue().GetValue<int64_t>();
 	if (filter_expr.GetExpressionType() == ExpressionType::COMPARE_LESSTHAN) {
 		--params.limit;
 	}

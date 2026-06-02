@@ -87,7 +87,7 @@ template <class TYPE, class OP, idx_t N>
 static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &lstate = state.Cast<ExecuteFunctionState>();
 	const auto &expr = lstate.expr.Cast<BoundFunctionExpression>();
-	const auto &func_name = expr.function.GetName();
+	const auto &func_name = expr.Function().GetName();
 
 	const auto count = args.size();
 	auto &lhs_child = ArrayVector::GetChildMutable(args.data[0]);
@@ -149,7 +149,7 @@ template <class TYPE, class OP>
 static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &lstate = state.Cast<ExecuteFunctionState>();
 	const auto &expr = lstate.expr.Cast<BoundFunctionExpression>();
-	const auto &func_name = expr.function.GetName();
+	const auto &func_name = expr.Function().GetName();
 
 	const auto count = args.size();
 	auto &lhs_child = ArrayVector::GetChildMutable(args.data[0]);

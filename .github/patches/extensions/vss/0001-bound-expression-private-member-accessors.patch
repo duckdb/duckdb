@@ -124,7 +124,7 @@ index cda5f09..d8203fc 100644
  			ColumnBinding index_row_number_binding(index_join->table_index, ProjectionIndex(index_join->inner_column_ids.size()));
  			expr = make_uniq<BoundColumnRefExpression>(LogicalType::BIGINT, index_row_number_binding);
 diff --git a/src/hnsw/hnsw_optimize_scan.cpp b/src/hnsw/hnsw_optimize_scan.cpp
-index 2aba1fa..b6e39a9 100644
+index 2aba1fa..d49d9d7 100644
 --- a/src/hnsw/hnsw_optimize_scan.cpp
 +++ b/src/hnsw/hnsw_optimize_scan.cpp
 @@ -64,7 +64,7 @@ public:
@@ -136,6 +136,15 @@ index 2aba1fa..b6e39a9 100644
  
  		// The projection must sit on top of a get
  		if (projection.children.size() != 1 || projection.children.front()->type != LogicalOperatorType::LOGICAL_GET) {
+@@ -136,7 +136,7 @@ public:
+ 			}
+ 
+ 			const auto vector_size = cast_index.GetVectorSize();
+-			const auto &matched_vector = const_expr_ref.get().Cast<BoundConstantExpression>().value;
++			const auto &matched_vector = const_expr_ref.get().Cast<BoundConstantExpression>().GetValue();
+ 			auto query_vector = make_unsafe_uniq_array<float>(vector_size);
+ 			auto vector_elements = ArrayValue::GetChildren(matched_vector);
+ 			for (idx_t i = 0; i < vector_size; i++) {
 @@ -214,7 +214,7 @@ public:
  						ExpressionIterator::EnumerateExpression(expr, [&](Expression &expr_ref) {
  							if (expr_ref.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
@@ -146,7 +155,7 @@ index 2aba1fa..b6e39a9 100644
  						});
  					}
 diff --git a/src/hnsw/hnsw_optimize_topk.cpp b/src/hnsw/hnsw_optimize_topk.cpp
-index aea075b..8fa7a3b 100644
+index aea075b..51c91f0 100644
 --- a/src/hnsw/hnsw_optimize_topk.cpp
 +++ b/src/hnsw/hnsw_optimize_topk.cpp
 @@ -40,9 +40,9 @@ static unique_ptr<Expression> CreateListOrderByExpr(ClientContext &context, uniq
@@ -187,6 +196,23 @@ index aea075b..8fa7a3b 100644
  
  		// we need the aggregate to be on top of a projection
  		if (agg.children.size() != 1) {
+@@ -161,14 +161,14 @@ public:
+ 			}
+ 
+ 			const auto vector_size = cast_index.GetVectorSize();
+-			const auto &matched_vector = const_expr_ref.get().Cast<BoundConstantExpression>().value;
++			const auto &matched_vector = const_expr_ref.get().Cast<BoundConstantExpression>().GetValue();
+ 
+ 			auto query_vector = make_unsafe_uniq_array<float>(vector_size);
+ 			auto vector_elements = ArrayValue::GetChildren(matched_vector);
+ 			for (idx_t i = 0; i < vector_size; i++) {
+ 				query_vector[i] = vector_elements[i].GetValue<float>();
+ 			}
+-			const auto k_limit = limit_expr->Cast<BoundConstantExpression>().value.GetValue<int32_t>();
++			const auto k_limit = limit_expr->Cast<BoundConstantExpression>().GetValue().GetValue<int32_t>();
+ 			if (k_limit <= 0 || k_limit >= STANDARD_VECTOR_SIZE) {
+ 				continue;
+ 			}
 @@ -190,7 +190,7 @@ public:
  
  		// Replace the aggregate with a list() aggregate function ordered by the distance

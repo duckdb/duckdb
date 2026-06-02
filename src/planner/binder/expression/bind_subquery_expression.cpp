@@ -60,13 +60,13 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 		return;
 	}
 	auto &function = child->Cast<BoundFunctionExpression>();
-	if (function.function.GetName() != "row") {
+	if (function.Function().GetName() != "row") {
 		// not "ROW"
 		return;
 	}
 	// we found (a, b, ...) - we can extract all children of this function
 	// note that we don't always want to do this
-	if (types.size() == 1 && TypeIsUnnamedStruct(types[0]) && function.children.size() != types.size()) {
+	if (types.size() == 1 && TypeIsUnnamedStruct(types[0]) && function.GetChildrenMutable().size() != types.size()) {
 		// old case: we have an unnamed struct INSIDE the subquery as well
 		// i.e. (a, b) IN (SELECT (a, b) ...)
 		// unnesting the struct is guaranteed to throw an error - match the structs against each-other instead
@@ -83,7 +83,7 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 		// For ordered comparisons, keep the struct intact
 		return;
 	}
-	for (auto &row_child : function.children) {
+	for (auto &row_child : function.GetChildrenMutable()) {
 		result.push_back(std::move(row_child));
 	}
 }

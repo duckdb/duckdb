@@ -40,10 +40,10 @@ static bool IsDirectNullCheckFilter(const TableFilter &filter) {
 	auto &op = expr->Cast<BoundOperatorExpression>();
 	if ((op.GetExpressionType() != ExpressionType::OPERATOR_IS_NULL &&
 	     op.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) ||
-	    op.children.size() != 1) {
+	    op.GetChildren().size() != 1) {
 		return false;
 	}
-	return op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
+	return op.GetChildren()[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
 }
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,

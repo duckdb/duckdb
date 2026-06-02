@@ -73,7 +73,7 @@ unique_ptr<FunctionLocalState> NextValLocalFunction(ExpressionState &state, cons
 template <class OP>
 void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	if (!func_expr.bind_info) {
+	if (!func_expr.BindInfo()) {
 		// no bind info - return null
 		ConstantVector::SetNull(result, count_t(args.size()));
 		return;

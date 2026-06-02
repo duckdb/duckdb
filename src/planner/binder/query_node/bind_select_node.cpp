@@ -272,10 +272,10 @@ static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression>
                                                           const vector<LogicalType> &sql_types,
                                                           const SelectBindState &bind_state) {
 	auto &constant = expr->Cast<BoundConstantExpression>();
-	switch (constant.value.type().id()) {
+	switch (constant.GetValue().type().id()) {
 	case LogicalTypeId::UBIGINT: {
 		// index
-		auto index = UBigIntValue::Get(constant.value);
+		auto index = UBigIntValue::Get(constant.GetValue());
 		return CreateOrderExpression(std::move(expr), names, sql_types, table_index, bind_state.GetFinalIndex(index));
 	}
 	case LogicalTypeId::VARCHAR: {
@@ -284,7 +284,7 @@ static unique_ptr<Expression> FinalizeBindOrderExpression(unique_ptr<Expression>
 	}
 	case LogicalTypeId::STRUCT: {
 		// collation
-		auto &struct_values = StructValue::GetChildren(constant.value);
+		auto &struct_values = StructValue::GetChildren(constant.GetValue());
 		if (struct_values.size() > 2) {
 			throw InternalException("Expected one or two children: index and optional collation");
 		}
@@ -597,7 +597,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			}
 
 			auto &expanded = expr->Cast<BoundExpandedExpression>();
-			auto &struct_expressions = expanded.expanded_expressions;
+			auto &struct_expressions = expanded.GetChildrenMutable();
 			D_ASSERT(!struct_expressions.empty());
 
 			for (auto &struct_expr : struct_expressions) {

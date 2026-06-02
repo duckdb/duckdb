@@ -35,7 +35,7 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 		// TODO: Other expression classes that can have 0 children?
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		// no children some sort of gen_random_uuid() or equivalent.
-		if (func.children.empty()) {
+		if (func.GetChildren().empty()) {
 			ret.expression = expr;
 			ret.expression_is_constant = true;
 			return ret;
@@ -467,7 +467,7 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const Tabl
 	auto &expr = *expr_filter.expr;
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conj = expr.Cast<BoundConjunctionExpression>();
-		for (auto &child : conj.children) {
+		for (auto &child : conj.GetChildren()) {
 			ExpressionFilter child_filter(child->Copy());
 			cardinality_after_filters =
 			    MinValue(cardinality_after_filters, InspectTableFilter(cardinality, child_filter, base_stats));

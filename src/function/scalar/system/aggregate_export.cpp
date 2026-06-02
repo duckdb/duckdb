@@ -39,7 +39,7 @@ struct ExportAggregateBindData : public FunctionData {
 
 	static ExportAggregateBindData &GetFrom(ExpressionState &state) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		return func_expr.bind_info->Cast<ExportAggregateBindData>();
+		return func_expr.BindInfo()->Cast<ExportAggregateBindData>();
 	}
 };
 

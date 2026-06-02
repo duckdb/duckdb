@@ -35,7 +35,8 @@
         "test/parquet/variant/variant_stats_propagation.test",
         "test/sql/types/geo/geometry_compatability.test",
         "test/sql/copy/parquet/parquet_glob_cache.test",
-        "test/optimizer/joins/fkpk_composite_key_ce.test"
+        "test/optimizer/joins/fkpk_composite_key_ce.test",
+        "test/sql/cast/signed_cast_repro.test"
       ]
     },
     {
