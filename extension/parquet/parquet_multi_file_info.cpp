@@ -93,11 +93,6 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	idx_t batch_index;
 	//! (Optional) pointer to physical operator performing the scan
 	optional_ptr<const PhysicalOperator> op;
-	//! Prefetch cost model shared across all files and threads of this scan: network throughput measured
-	//! on one file carries over to the next, instead of re-warming from the per-medium seed for every file
-	//! in a glob. Lazily created (seeded from the first scanned file's medium); guarded by cost_model_lock.
-	mutex cost_model_lock;
-	unique_ptr<PrefetchCostModelState> cost_model_state;
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
@@ -752,27 +747,9 @@ bool ParquetReader::TryInitializeScan(ClientContext &context, GlobalTableFunctio
 	return true;
 }
 
-
-static void AttachScanCostModel(ParquetReadGlobalState &gstate, ParquetReaderScanState &scan_state, bool on_disk_file) {
-	if (on_disk_file) {
-		scan_state.cost_model_state = nullptr;
-		return;
-	}
-	if (scan_state.cost_model_state) {
-		return;
-	}
-	lock_guard<mutex> guard(gstate.cost_model_lock);
-	if (!gstate.cost_model_state) {
-		gstate.cost_model_state = make_uniq<PrefetchCostModelState>();
-	}
-	scan_state.cost_model_state = gstate.cost_model_state.get();
-}
-
 void ParquetReader::PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
                                 LocalTableFunctionState &lstate_p) {
-	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
-	AttachScanCostModel(gstate, lstate.scan_state, file_handle->OnDiskFile());
 	InitializeScan(context, lstate.scan_state, lstate.group_indexes);
 }
 
@@ -794,7 +771,6 @@ AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	local_state.scan_state.op = gstate.op;
-	AttachScanCostModel(gstate, local_state.scan_state, file_handle->OnDiskFile());
 	return Scan(context, local_state.scan_state, chunk);
 }
 

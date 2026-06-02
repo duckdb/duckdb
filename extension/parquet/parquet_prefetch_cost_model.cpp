@@ -28,20 +28,17 @@ void PrefetchCostModelState::RefineFromEstimate(const NetworkThroughputEstimate 
 		return;
 	}
 
-	lock_guard<mutex> guard(lock);
 	if (!measured_adopted) {
 		model.latency_seconds = latency;
 		model.bandwidth_bytes_per_s = bandwidth;
 		measured_adopted = true;
 	} else {
-
 		model.latency_seconds = ALPHA * latency + (1.0 - ALPHA) * model.latency_seconds;
 		model.bandwidth_bytes_per_s = ALPHA * bandwidth + (1.0 - ALPHA) * model.bandwidth_bytes_per_s;
 	}
 }
 
 bool PrefetchCostModelState::TryGetColumnGapSize(uint64_t &result) const {
-	lock_guard<mutex> guard(lock);
 	if (!measured_adopted) {
 		return false;
 	}

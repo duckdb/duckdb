@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 
@@ -38,13 +37,12 @@ public:
 	//! Refine the model from a measured network throughput estimate.
 	void RefineFromEstimate(const NetworkThroughputEstimate &estimate);
 
-bool TryGetColumnGapSize(uint64_t &result) const;
+	bool TryGetColumnGapSize(uint64_t &result) const;
 
 private:
 	//! Weight applied to an estimate
 	static constexpr double ALPHA = 0.5;
 
-	mutable mutex lock;
 	//! Measured cost model
 	PrefetchCostModel model = {0, 0};
 	//! Whether we have switched from the seed to measured values

@@ -1453,12 +1453,12 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	}
 
 	uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
-	if (state.prefetch_mode && state.cost_model_state) {
+	if (state.prefetch_mode && !state.file_handle->OnDiskFile()) {
 		NetworkThroughputEstimate estimate;
 		if (state.file_handle->TryGetNetworkThroughput(estimate)) {
-			state.cost_model_state->RefineFromEstimate(estimate);
+			state.cost_model_state.RefineFromEstimate(estimate);
 		}
-		state.cost_model_state->TryGetColumnGapSize(accepted_column_gap);
+		state.cost_model_state.TryGetColumnGapSize(accepted_column_gap);
 	}
 	state.thrift_file_proto =
 	    CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode, accepted_column_gap);
@@ -1668,13 +1668,13 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		trans.ClearPrefetch();
 		state.current_group_prefetched = false;
 
-		if (state.prefetch_mode && state.cost_model_state) {
+		if (state.prefetch_mode && !state.file_handle->OnDiskFile()) {
 			NetworkThroughputEstimate estimate;
 			if (state.file_handle->TryGetNetworkThroughput(estimate)) {
-				state.cost_model_state->RefineFromEstimate(estimate);
+				state.cost_model_state.RefineFromEstimate(estimate);
 			}
 			uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
-			state.cost_model_state->TryGetColumnGapSize(accepted_column_gap);
+			state.cost_model_state.TryGetColumnGapSize(accepted_column_gap);
 			trans.SetAcceptedColumnGap(accepted_column_gap);
 		}
 

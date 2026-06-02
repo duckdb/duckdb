@@ -222,8 +222,8 @@ public:
 	//! (optional) pointer to the PhysicalOperator for logging
 	optional_ptr<const PhysicalOperator> op;
 
-	//! Prefetch cost model for this scan
-	optional_ptr<PrefetchCostModelState> cost_model_state;
+	//! Prefetch cost model
+	PrefetchCostModelState cost_model_state;
 };
 
 struct ParquetColumnDefinition {

@@ -306,7 +306,8 @@ LogicalType ParquetPrefetchLogType::GetLogType() {
 
 string ParquetPrefetchLogType::ConstructLogMessage(const string &file_path, idx_t row_group_id, bool fully_filtered,
                                                    const char *strategy, const vector<vector<string>> &prefetch_groups,
-                                                   const vector<string> &minimal_filters, uint64_t accepted_column_gap) {
+                                                   const vector<string> &minimal_filters,
+                                                   uint64_t accepted_column_gap) {
 	vector<Value> outer;
 	outer.reserve(prefetch_groups.size());
 	for (auto &group : prefetch_groups) {
