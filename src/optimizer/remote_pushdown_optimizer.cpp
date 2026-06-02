@@ -511,17 +511,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	string schema_name = func_expr.Schema();
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
-	// If the function has an explicit catalog prefix, check if it's remote
+	// If the function has an explicit catalog prefix, skip pushdown for now
 	if (!catalog_name.empty()) {
-		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
-		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
-			// Check args: a local macro or UNKNOWN expression in args blocks pushdown
-			CatalogPushdownResult result {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
-			for (auto &arg : func_expr.GetChildren()) {
-				result = Merge(result, Rewrite(*arg));
-			}
-			return result;
-		}
 		TrackLocalTable(ref);
 		return {};
 	}

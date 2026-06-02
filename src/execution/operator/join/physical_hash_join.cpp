@@ -111,7 +111,7 @@ void PhysicalHashJoin::ExtractResidualPredicateColumns(unique_ptr<Expression> &p
 	ExpressionIterator::EnumerateExpression(predicate, [&](unique_ptr<Expression> &expr) {
 		if (expr->GetExpressionClass() == ExpressionClass::BOUND_REF) {
 			auto &ref = expr->Cast<BoundReferenceExpression>();
-			idx_t col_idx = ref.index;
+			idx_t col_idx = ref.Index();
 
 			if (col_idx < probe_column_count) {
 				// Probe (LHS) column
@@ -179,7 +179,7 @@ void PhysicalHashJoin::InitializeBuildSide(const vector<LogicalType> &lhs_input_
 	idx_t cond_idx = 0;
 	for (auto &condition : conditions) {
 		if (condition.GetRHS().GetExpressionClass() == ExpressionClass::BOUND_REF) {
-			auto build_input_idx = condition.GetRHS().Cast<BoundReferenceExpression>().index;
+			auto build_input_idx = condition.GetRHS().Cast<BoundReferenceExpression>().Index();
 			build_columns_in_conditions.emplace(build_input_idx, cond_idx);
 		}
 		cond_idx++;

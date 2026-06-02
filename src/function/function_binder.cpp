@@ -853,7 +853,7 @@ unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(const Windo
 
 	auto window = make_uniq<BoundWindowFunction>(std::move(bound_function));
 	auto result = make_uniq<BoundWindowExpression>(return_type, nullptr, std::move(window), std::move(bind_info));
-	result->children = std::move(children);
+	result->GetChildrenMutable() = std::move(children);
 
 	return result;
 }

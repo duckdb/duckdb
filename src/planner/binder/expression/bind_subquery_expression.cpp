@@ -172,11 +172,11 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		if (child_expressions.size() == 1 && bound_node.types.size() > 1 &&
 		    TypeIsUnnamedStruct(child_expressions[0]->GetReturnType())) {
 			// Keep the struct as-is for proper lexicographic row comparison
-			result->children.push_back(std::move(child_expressions[0]));
+			result->GetChildrenMutable().push_back(std::move(child_expressions[0]));
 			// Store all the subquery types - they will be used to construct the RHS struct during planning
 			for (auto &subquery_type : bound_node.types) {
-				result->child_types.push_back(subquery_type);
-				result->child_targets.push_back(subquery_type);
+				result->ChildTypesMutable().push_back(subquery_type);
+				result->ChildTargetsMutable().push_back(subquery_type);
 			}
 		} else {
 			// Standard case: either no struct or struct was extracted into separate expressions
@@ -192,16 +192,16 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 					    child_type.ToString(), subquery_type);
 				}
 				child = BoundCastExpression::AddCastToType(context, std::move(child), compare_type);
-				result->child_types.push_back(subquery_type);
-				result->child_targets.push_back(compare_type);
-				result->children.push_back(std::move(child));
+				result->ChildTypesMutable().push_back(subquery_type);
+				result->ChildTargetsMutable().push_back(compare_type);
+				result->GetChildrenMutable().push_back(std::move(child));
 			}
 		}
 	}
-	result->binder = std::move(subquery_binder);
-	result->subquery = std::move(bound_node);
-	result->subquery_type = expr.GetSubqueryType();
-	result->comparison_type = expr.GetComparisonType();
+	result->GetBinderMutable() = std::move(subquery_binder);
+	result->SubqueryMutable() = std::move(bound_node);
+	result->SubqueryTypeMutable() = expr.GetSubqueryType();
+	result->ComparisonTypeMutable() = expr.GetComparisonType();
 
 	return BindResult(std::move(result));
 }
