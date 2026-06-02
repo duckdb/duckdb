@@ -783,6 +783,11 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatements(const string &qu
 	auto lock = LockContext();
 	return ParseStatementsInternal(*lock, query);
 }
+
+StatementIterator ClientContext::ExtractStatements(const string &query) {
+	return StatementIterator(query);
+}
+
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
 	try {
 		Parser parser(GetParserOptions());

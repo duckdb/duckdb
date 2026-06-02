@@ -10,10 +10,12 @@
 
 #include "duckdb/original/std/sstream.hpp"
 #include <string>
+#include <string_view>
 #include <locale>
 
 namespace duckdb {
 using std::string;
+using std::string_view;
 } // namespace duckdb
 
 namespace duckdb {

@@ -24,6 +24,7 @@
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/main/pending_query_result.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
@@ -210,6 +211,11 @@ public:
 
 	//! Parse statements from a query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ParseStatements(const string &query);
+
+	//! Extract a query's statements as a StatementIterator (iterator-style API). The caller drives
+	//! Peek(context) + GetStatement() to walk through statements one at a time. Replaces the
+	//! flat-vector form (`ParseStatements` / `ExtractStatements`) over time.
+	DUCKDB_API StatementIterator ExtractStatements(const string &query);
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);

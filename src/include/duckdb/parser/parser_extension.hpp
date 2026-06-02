@@ -74,9 +74,19 @@ struct ParserExtensionParseResult {
 	string error;
 	//! The error location (if unsuccessful)
 	optional_idx error_location;
+	//! On PARSE_SUCCESSFUL, how many bytes of `query` the extension consumed (measured from the
+	//! start of the view). The peeler resumes parsing from view-start + consumed_chars. A
+	//! successful result with consumed_chars == 0 is treated as a decline (lets the next
+	//! extension try).
+	idx_t consumed_chars = 0;
 };
 
-typedef ParserExtensionParseResult (*parse_function_t)(ParserExtensionInfo *info, const string &query);
+//! Called when the PEG parser fails to parse a statement. The extension is given a `string_view`
+//! of the query from the failure point onward and may parse any amount of it; it reports how
+//! many bytes it consumed via `consumed_chars` in the returned result. The view enforces "no
+//! peeking before the failure point" at the type level. Consuming zero bytes is treated as
+//! "decline", letting the next extension or the original PEG error surface.
+typedef ParserExtensionParseResult (*parse_function_t)(ParserExtensionInfo *info, string_view query);
 //===--------------------------------------------------------------------===//
 // Plan
 //===--------------------------------------------------------------------===//

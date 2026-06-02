@@ -91,6 +91,7 @@ enum class ParseResultType : uint8_t {
 	EXTENSION,
 	NUMBER,
 	STRING,
+	END_OF_INPUT,
 	INVALID
 };
 
@@ -120,6 +121,8 @@ inline const char *ParseResultToString(ParseResultType type) {
 		return "NUMBER";
 	case ParseResultType::STRING:
 		return "STRING";
+	case ParseResultType::END_OF_INPUT:
+		return "END_OF_INPUT";
 	case ParseResultType::INVALID:
 		return "INVALID";
 	}
@@ -193,6 +196,18 @@ struct KeywordParseResult : ParseResult {
 	                      const std::string &indent, bool is_last) const override {
 		ParseResult::ToStringInternal(ss, visited, indent, is_last);
 		ss << ": \"" << keyword << "\"\n";
+	}
+};
+
+struct EndOfInputParseResult : ParseResult {
+	static constexpr ParseResultType TYPE = ParseResultType::END_OF_INPUT;
+
+	EndOfInputParseResult() : ParseResult(TYPE, optional_idx()) {
+	}
+
+	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
+	                      const std::string &indent, bool is_last) const override {
+		ss << indent << (is_last ? "└─" : "├─") << " " << ParseResultToString(type) << "\n";
 	}
 };
 
@@ -345,6 +360,10 @@ public:
 
 	ParseResult &GetResult() {
 		return result;
+	}
+
+	idx_t GetSelectedIdx() const {
+		return selected_idx;
 	}
 
 	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,

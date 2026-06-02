@@ -258,34 +258,42 @@ void Parser::ParseQuery(const string &query) {
 			last_strict_extension_error.Throw();
 		}
 	}
-	// PEG parser: tokenize then transform
-	auto &cache = GetCache();
-	auto peg_matcher = cache.GetMatcher();
-	auto peg_factory = cache.GetTransformerFactory();
-
+	// PEG parser: tokenize, then peel one TopLevelStatement at a time. On per-statement PEG
+	// failure, hand the rest of the query to parse_function extensions; the extension reports
+	// how many bytes it consumed and we advance the token cursor past them.
 	vector<MatcherToken> tokens;
 	ParserTokenizer tokenizer(query, tokens);
 	tokenizer.TokenizeInput();
-	if (!tokens.empty()) {
+	idx_t token_cursor = 0;
+	while (token_cursor < tokens.size()) {
 		try {
-			auto peg_statements = peg_factory->Transform(tokens, options, peg_matcher->Root());
-			for (auto &stmt : peg_statements) {
+			auto stmt = ParseTopLevelStatement(tokens, token_cursor);
+			if (stmt) {
 				statements.push_back(std::move(stmt));
 			}
 		} catch (ParserException &e) {
-			// fall back to parse_function extensions for unknown statement types
 			bool parsed = false;
 			if (options.extensions && options.extensions->HasParserExtensions()) {
+				idx_t failure_byte =
+				    token_cursor < tokens.size() ? tokens[token_cursor].offset : query.size();
+				string_view tail(query.data() + failure_byte, query.size() - failure_byte);
 				for (auto &ext : options.extensions->ParserExtensions()) {
 					if (!ext.parse_function) {
 						continue;
 					}
-					auto result = ext.parse_function(ext.parser_info.get(), query);
-					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
+					auto result = ext.parse_function(ext.parser_info.get(), tail);
+					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL &&
+					    result.consumed_chars > 0) {
 						auto estmt = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
-						estmt->stmt_location = 0;
-						estmt->stmt_length = query.size();
+						estmt->stmt_location = failure_byte;
+						estmt->stmt_length = result.consumed_chars;
 						statements.push_back(std::move(estmt));
+						// Advance token_cursor past every token whose start lies inside the
+						// span the extension claimed.
+						const idx_t resume_byte = failure_byte + result.consumed_chars;
+						while (token_cursor < tokens.size() && tokens[token_cursor].offset < resume_byte) {
+							token_cursor++;
+						}
 						parsed = true;
 						break;
 					}
@@ -315,6 +323,17 @@ void Parser::ParseQuery(const string &query) {
 			}
 		}
 	}
+}
+
+unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(vector<MatcherToken> &tokens, idx_t &token_cursor) {
+	if (token_cursor >= tokens.size()) {
+		return nullptr;
+	}
+	auto &cache = GetCache();
+	auto peg_matcher = cache.GetMatcher();
+	auto peg_factory = cache.GetTransformerFactory();
+
+	return peg_factory->TransformTopLevelStatement(tokens, options, peg_matcher->TopLevelStatementRoot(), token_cursor);
 }
 
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {

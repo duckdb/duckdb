@@ -425,6 +425,37 @@ private:
 	Matcher &element;
 };
 
+class EndOfInputMatcher : public Matcher {
+public:
+	static constexpr MatcherType TYPE = MatcherType::END_OF_INPUT;
+
+public:
+	EndOfInputMatcher() : Matcher(TYPE) {
+	}
+
+	MatchResultType Match(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return MatchResultType::SUCCESS;
+		}
+		return MatchResultType::FAIL;
+	}
+
+	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
+		if (state.token_index >= state.tokens.size()) {
+			return state.allocator.Allocate(make_uniq<EndOfInputParseResult>());
+		}
+		return nullptr;
+	}
+
+	SuggestionType AddSuggestionInternal(MatchState &state) const override {
+		return SuggestionType::OPTIONAL;
+	}
+
+	string ToString() const override {
+		return "EndOfInput";
+	}
+};
+
 class IdentifierMatcher : public Matcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::VARIABLE;
@@ -996,6 +1027,9 @@ public:
 
 	//! Create a matcher from a PEG grammar
 	Matcher &CreateMatcher(const char *grammar, const char *root_rule);
+	//! Look up a matcher for a rule that was already built (as a sub-rule of a previous
+	//! CreateMatcher call). Throws if the rule has not been built.
+	Matcher &GetMatcher(const string &rule_name);
 
 private:
 	// Base primitives
@@ -1045,6 +1079,14 @@ Matcher &MatcherFactory::Optional(Matcher &matcher) const {
 
 Matcher &MatcherFactory::Repeat(Matcher &matcher) const {
 	return allocator.Allocate(make_uniq<RepeatMatcher>(matcher));
+}
+
+Matcher &MatcherFactory::GetMatcher(const string &rule_name) {
+	auto entry = matchers.find(rule_name);
+	if (entry == matchers.end()) {
+		throw InternalException("Matcher for rule '%s' has not been built", rule_name);
+	}
+	return entry->second.get();
 }
 
 Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
@@ -1375,6 +1417,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	//===--------------------------------------------------------------------===//
 	// END GENERATED RULE OVERRIDES
 	//===--------------------------------------------------------------------===//
+	AddRuleOverride("EndOfInput", allocator.Allocate(make_uniq<EndOfInputMatcher>()));
 
 	// suppress suggestions for catch-all rules that would pollute statement-level autocomplete
 	SuppressSuggestions("ExpressionStatement");
@@ -1412,6 +1455,8 @@ shared_ptr<PEGMatcher> ParserCache::GetMatcher() {
 #else
 	new_matcher->root = factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Program");
 #endif
+	// TopLevelStatement is referenced by Program, so it has already been built and cached.
+	new_matcher->top_level_root = factory.GetMatcher("TopLevelStatement");
 	std::unique_lock<std::mutex> lock(mutex);
 	if (!matcher) {
 		matcher = std::move(new_matcher);
