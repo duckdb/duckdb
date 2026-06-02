@@ -208,6 +208,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
+#include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
 
@@ -4685,6 +4686,24 @@ const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType v
 template<>
 SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value) {
 	return static_cast<SecretSerializationType>(StringUtil::StringToEnum(GetSecretSerializationTypeValues(), 2, "SecretSerializationType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSegmentTreeVerifyModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SegmentTreeVerifyMode::CONTIGUOUS), "CONTIGUOUS" },
+		{ static_cast<uint32_t>(SegmentTreeVerifyMode::NON_OVERLAPPING), "NON_OVERLAPPING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SegmentTreeVerifyMode>(SegmentTreeVerifyMode value) {
+	return StringUtil::EnumToString(GetSegmentTreeVerifyModeValues(), 2, "SegmentTreeVerifyMode", static_cast<uint32_t>(value));
+}
+
+template<>
+SegmentTreeVerifyMode EnumUtil::FromString<SegmentTreeVerifyMode>(const char *value) {
+	return static_cast<SegmentTreeVerifyMode>(StringUtil::StringToEnum(GetSegmentTreeVerifyModeValues(), 2, "SegmentTreeVerifyMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSelectivityOptionalFilterTypeValues() {

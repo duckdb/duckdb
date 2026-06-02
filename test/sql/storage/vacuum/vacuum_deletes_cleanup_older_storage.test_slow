@@ -1,8 +1,8 @@
-# name: test/sql/storage/vacuum/vacuum_deletes_cleanup.test_slow
-# description: Verify that deleting rows and re-appending does not increase storage size
+# name: test/sql/storage/vacuum/vacuum_deletes_cleanup_older_storage.test_slow
+# description: Verify that deleting rows and re-appending does not increase storage size on older storage
 # group: [vacuum]
 
-load {TEST_DIR}/vacuum_deletes_cleanup.db readwrite latest
+load {TEST_DIR}/vacuum_deletes_cleanup_older_storage.db readwrite v1.5.0
 
 foreach storage_mode no_index index
 
