@@ -136,6 +136,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(CurrentQueryId),
 	DUCKDB_SCALAR_FUNCTION(CurrentTransactionId),
 	DUCKDB_SCALAR_FUNCTION(CurrvalFun),
+	DUCKDB_SCALAR_FUNCTION_SET(DecimalDivisionFun),
 	DUCKDB_WINDOW_FUNCTION(DenseRankFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(DivideFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(EndsWithFun),

@@ -51,5 +51,13 @@
         "type": "scalar_function_set",
         "aliases": ["mod"],
         "struct": "OperatorModuloFun"
+    },
+    {
+        "name": "decimal_division",
+        "parameters": "x,y",
+        "description": "Divides two DECIMAL values using exact integer arithmetic, returning a DECIMAL result with scale determined by SQL Server semantics (result_scale = max(6, s1 + p2 + 1)).",
+        "example": "decimal_division(10.00::DECIMAL(10,2), 3.00::DECIMAL(10,2))",
+        "type": "scalar_function_set",
+        "struct": "DecimalDivisionFun"
     }
 ]

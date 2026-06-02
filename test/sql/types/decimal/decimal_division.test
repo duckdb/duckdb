@@ -1,0 +1,91 @@
+# name: test/sql/types/decimal/decimal_division.test
+# description: Test decimal_division scalar function
+# group: [decimal]
+
+# Basic division
+query I
+SELECT decimal_division(10.00, 4.00);
+----
+2.500000
+
+# Unqualified DECIMAL literals resolve to DECIMAL(18,3); result_width=40 overflows -> error
+# result_scale = max(6, 3+18+1) = 22, result_width = 18-3+3+22 = 40 > 38
+statement error
+SELECT decimal_division(DECIMAL '1.00', DECIMAL '3.000');
+----
+<REGEX>:.*could not perform an accurate division.*
+
+# Explicit small-precision inputs: p1=5 s1=2, p2=5 s2=3
+# result_scale = max(6, 2+5+1) = 8, result_width = 5-2+3+8 = 14 -> DECIMAL(14,8)
+query I
+SELECT decimal_division(1.00::DECIMAL(5,2), 3.000::DECIMAL(5,3));
+----
+0.33333333
+
+# Negative dividend
+query I
+SELECT decimal_division(-7.00, 2.00);
+----
+-3.500000
+
+# Division by a value less than 1
+query I
+SELECT decimal_division(1.00, 0.25);
+----
+4.000000
+
+# Division by zero raises an error
+statement error
+SELECT decimal_division(1.00, 0.00);
+----
+decimal_division: division by zero
+
+# INT16 inputs (p<=4) -> DECIMAL(10, 7), INT64 result physical type
+# p1=4 s1=2 p2=4 s2=1: result_scale=max(6,2+4+1)=7, result_width=4-2+1+7=10
+query I
+SELECT typeof(decimal_division(12.34::DECIMAL(4,2), 3.5::DECIMAL(4,1)));
+----
+DECIMAL(10,7)
+
+query I
+SELECT decimal_division(12.34::DECIMAL(4,2), 3.5::DECIMAL(4,1));
+----
+3.5257142
+
+# INT32 inputs (p<=9) -> DECIMAL(18, 10), INT64 result physical type
+# p1=9 s1=3 p2=6 s2=2: result_scale=max(6,3+6+1)=10, result_width=9-3+2+10=18
+query I
+SELECT typeof(decimal_division(1000.000::DECIMAL(9,3), 4.00::DECIMAL(6,2)));
+----
+DECIMAL(18,10)
+
+query I
+SELECT decimal_division(1000.000::DECIMAL(9,3), 4.00::DECIMAL(6,2));
+----
+250.0000000000
+
+# INT64 inputs (p<=18) -> DECIMAL(31, 18), INT128 result physical type
+# p1=15 s1=5 p2=12 s2=3: result_scale=max(6,5+12+1)=18, result_width=15-5+3+18=31
+query I
+SELECT typeof(decimal_division(100000.00000::DECIMAL(15,5), 8.000::DECIMAL(12,3)));
+----
+DECIMAL(31,18)
+
+query I
+SELECT decimal_division(100000.00000::DECIMAL(15,5), 8.000::DECIMAL(12,3));
+----
+12500.000000000000000000
+
+# INT128 inputs where result_width overflows (54 > 38) -> error
+# p1=28 s1=8 p2=20 s2=5: result_scale=max(6,8+20+1)=29, result_width=28-8+5+29=54
+statement error
+SELECT decimal_division(10000000000.00000000::DECIMAL(28,8), 4.00000::DECIMAL(20,5));
+----
+<REGEX>:.*could not perform an accurate division.*
+
+# result_scale overflows (40 > 38) -> error
+# p1=38 s1=2 p2=37 s2=2: result_scale=max(6,2+37+1)=40
+statement error
+SELECT decimal_division(3::decimal(38,2), 16384::decimal(37,2));
+----
+<REGEX>:.*could not perform an accurate division.*
