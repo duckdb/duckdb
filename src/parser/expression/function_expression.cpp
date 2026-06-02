@@ -36,58 +36,6 @@ string FunctionExpression::ToString() const {
 	                                                      filter.get(), order_bys.get(), export_state, true);
 }
 
-bool FunctionExpression::Equal(const FunctionExpression &a, const FunctionExpression &b) {
-	if (a.catalog != b.catalog || a.schema != b.schema || a.function_name != b.function_name ||
-	    b.distinct != a.distinct) {
-		return false;
-	}
-	if (b.children.size() != a.children.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < a.children.size(); i++) {
-		if (!a.children[i]->Equals(*b.children[i])) {
-			return false;
-		}
-	}
-	if (!ParsedExpression::Equals(a.filter, b.filter)) {
-		return false;
-	}
-	if (!OrderModifier::Equals(a.order_bys, b.order_bys)) {
-		return false;
-	}
-	if (a.export_state != b.export_state) {
-		return false;
-	}
-	return true;
-}
-
-hash_t FunctionExpression::Hash() const {
-	hash_t result = ParsedExpression::Hash();
-	result = CombineHash(result, duckdb::Hash<const char *>(schema.c_str()));
-	result = CombineHash(result, duckdb::Hash<const char *>(function_name.c_str()));
-	result = CombineHash(result, duckdb::Hash<bool>(distinct));
-	result = CombineHash(result, duckdb::Hash<bool>(export_state));
-	return result;
-}
-
-unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
-	vector<unique_ptr<ParsedExpression>> copy_children;
-	unique_ptr<ParsedExpression> filter_copy;
-	copy_children.reserve(children.size());
-	for (auto &child : children) {
-		copy_children.push_back(child->Copy());
-	}
-	if (filter) {
-		filter_copy = filter->Copy();
-	}
-	auto order_copy = order_bys ? unique_ptr_cast<ResultModifier, OrderModifier>(order_bys->Copy()) : nullptr;
-	auto copy =
-	    make_uniq<FunctionExpression>(catalog, schema, function_name, std::move(copy_children), std::move(filter_copy),
-	                                  std::move(order_copy), distinct, is_operator, export_state);
-	copy->CopyProperties(*this);
-	return std::move(copy);
-}
-
 void FunctionExpression::Verify() const {
 	D_ASSERT(!function_name.empty());
 }

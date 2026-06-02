@@ -78,7 +78,6 @@ void BinaryDecodeFunction(DataChunk &args, ExpressionState &state, Vector &resul
 			    auto target = StringVector::EmptyString(result, new_str.size());
 			    auto output = target.GetDataWriteable();
 			    memcpy(output, new_str.data(), new_str.size());
-			    output[new_str.size()] = '\0';
 			    target.Finalize();
 			    return target;
 		    }

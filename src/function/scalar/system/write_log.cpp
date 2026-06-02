@@ -126,7 +126,7 @@ void WriteLogFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() >= 1);
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<WriteLogBindData>();
+	const auto &info = func_expr.BindInfo()->Cast<WriteLogBindData>();
 
 	UnifiedVectorFormat idata;
 	args.data[0].ToUnifiedFormat(idata);

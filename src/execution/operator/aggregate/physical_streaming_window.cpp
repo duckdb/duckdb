@@ -172,8 +172,7 @@ StreamingWindowGlobalState::StreamingWindowGlobalState(ClientContext &client) {
 	local_state = make_uniq<StreamingWindowState>(client);
 }
 
-bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &client, unique_ptr<Expression> &expr) {
-	auto &wexpr = expr->Cast<BoundWindowExpression>();
+bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &client, BoundWindowExpression &wexpr) {
 	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || !wexpr.arg_orders.empty() ||
 	    wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
 		return false;

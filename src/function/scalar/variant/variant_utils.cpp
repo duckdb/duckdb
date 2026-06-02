@@ -39,7 +39,7 @@ void VariantUtils::ExecutePathFunction(DataChunk &input, const ExpressionState &
 	}
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<VariantPathBindData>();
+	auto &info = func_expr.BindInfo()->Cast<VariantPathBindData>();
 	auto n_columns = input.ColumnCount();
 
 	if (n_columns == 1) {

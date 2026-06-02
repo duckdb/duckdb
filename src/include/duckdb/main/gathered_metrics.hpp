@@ -51,12 +51,12 @@ public:
 	}
 
 	bool AnyOperatorMetricTracked() const {
-		static const string OPERATOR_PREFIX = "operator.";
-		if (MetricIsTracked(OPERATOR_PREFIX)) {
+		string operator_prefix = "operator.";
+		if (MetricIsTracked(operator_prefix)) {
 			return true;
 		}
 		for (const auto &key : tracked_exact) {
-			if (key.size() > OPERATOR_PREFIX.size() && key.compare(0, OPERATOR_PREFIX.size(), OPERATOR_PREFIX) == 0) {
+			if (key.size() > operator_prefix.size() && key.compare(0, operator_prefix.size(), operator_prefix) == 0) {
 				return true;
 			}
 		}

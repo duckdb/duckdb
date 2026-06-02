@@ -1337,4 +1337,6 @@ void ParquetWriter::SetWrittenStatistics(CopyFunctionFileStatistics &written_sta
 	//! NOTE: the actual accumulators for the writers are created after FinalizeSchema() is called
 }
 
+ParquetWriteGlobalState::ParquetWriteGlobalState() = default;
+
 } // namespace duckdb

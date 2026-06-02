@@ -6,7 +6,8 @@
 
 namespace duckdb {
 
-DPJoinNode::DPJoinNode(JoinRelationSet &set) : set(set), info(nullptr), is_leaf(true), left_set(set), right_set(set) {
+DPJoinNode::DPJoinNode(JoinRelationSet &set)
+    : set(set), info(nullptr), is_leaf(true), left_set(set), right_set(set), cost(0) {
 }
 
 DPJoinNode::DPJoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinRelationSet &left,

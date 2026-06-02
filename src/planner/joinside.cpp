@@ -82,10 +82,10 @@ JoinSide JoinSide::GetJoinSide(const Expression &expression, const unordered_set
                                const unordered_set<TableIndex> &right_bindings) {
 	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
-		if (colref.depth > 0) {
+		if (colref.Depth() > 0) {
 			throw NotImplementedException("Non-inner join on correlated columns not supported");
 		}
-		return GetJoinSide(colref.binding.table_index, left_bindings, right_bindings);
+		return GetJoinSide(colref.Binding().table_index, left_bindings, right_bindings);
 	}
 	D_ASSERT(expression.GetExpressionType() != ExpressionType::BOUND_REF);
 	if (expression.GetExpressionType() == ExpressionType::SUBQUERY) {

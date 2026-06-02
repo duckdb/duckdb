@@ -14,9 +14,9 @@ AlterBinder::AlterBinder(Binder &binder, ClientContext &context, TableCatalogEnt
 }
 
 BindResult AlterBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
-	D_ASSERT(lambda_bindings && expr.lambda_idx < lambda_bindings->size());
+	D_ASSERT(lambda_bindings && expr.LambdaIndex() < lambda_bindings->size());
 	auto &lambda_ref = expr.Cast<LambdaRefExpression>();
-	return (*lambda_bindings)[expr.lambda_idx].Bind(lambda_ref, depth);
+	return (*lambda_bindings)[expr.LambdaIndex()].Bind(lambda_ref, depth);
 }
 
 BindResult AlterBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
@@ -46,14 +46,15 @@ BindResult AlterBinder::BindColumnReference(ColumnRefExpression &col_ref, idx_t 
 		}
 	}
 
-	if (col_ref.column_names.size() > 1) {
+	if (col_ref.ColumnNames().size() > 1) {
 		return BindQualifiedColumnName(col_ref, table.name);
 	}
 
-	auto idx = table.GetColumnIndex(col_ref.column_names[0], true);
+	auto col_name = col_ref.ColumnNames()[0];
+	auto idx = table.GetColumnIndex(col_name, true);
 	if (!idx.IsValid()) {
 		throw BinderException("Table does not contain column %s referenced in alter statement!",
-		                      col_ref.column_names[0]);
+		                      col_ref.ColumnNames()[0]);
 	}
 	if (table.GetColumn(idx).Generated()) {
 		throw BinderException("Using generated columns in alter statement not supported");
