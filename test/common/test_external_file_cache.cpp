@@ -412,7 +412,7 @@ TEST_CASE("ObjectCache eviction removes zero-ref external file cache entry", "[e
 	REQUIRE(CountCachedBlocks(cache) == 0);
 }
 
-TEST_CASE("ObjectCache eviction defers active external file cache cleanup", "[external_file_cache]") {
+TEST_CASE("ObjectCache eviction removes active external file cache map entry", "[external_file_cache]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
@@ -436,11 +436,10 @@ TEST_CASE("ObjectCache eviction defers active external file cache cleanup", "[ex
 
 	const auto object_cache_memory = object_cache.GetCurrentMemory();
 	REQUIRE(object_cache.EvictToReduceMemory(object_cache_memory) == object_cache_memory);
-	REQUIRE(CountCachedBlocks(cache) == 1);
+	REQUIRE(CountCachedBlocks(cache) == 0);
 	REQUIRE(object_cache.GetCurrentMemory() == 0);
 
-	handle.reset();
-	REQUIRE(CountCachedBlocks(cache) == 0);
+	REQUIRE(ReadFull(*handle, block_size) == content);
 }
 
 TEST_CASE("Disabling external file cache clears ObjectCache sentinels", "[external_file_cache]") {
@@ -473,7 +472,7 @@ TEST_CASE("Disabling external file cache clears ObjectCache sentinels", "[extern
 	REQUIRE(CountCachedBlocks(cache) == 1);
 }
 
-TEST_CASE("Failed CachingFileHandle construction releases cached file reference", "[external_file_cache]") {
+TEST_CASE("Failed CachingFileHandle construction leaves evictable cached file entries", "[external_file_cache]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
@@ -489,9 +488,10 @@ TEST_CASE("Failed CachingFileHandle construction releases cached file reference"
 	REQUIRE_THROWS(cfs.OpenFile(MakeTestOpenFileInfo(missing_a), FileFlags::FILE_FLAGS_READ));
 	REQUIRE_THROWS(cfs.OpenFile(MakeTestOpenFileInfo(missing_b), FileFlags::FILE_FLAGS_READ));
 
-	auto cached_file = cache.GetOrCreateCachedFile(missing_a);
-	REQUIRE(cached_file->ref_count.load() == 1);
-	cache.ReleaseCachedFile(cached_file);
+	REQUIRE(cache.GetCachedFileCount() == 2);
+	auto &object_cache = db_instance.GetObjectCache();
+	EvictObjectCache(object_cache);
+	REQUIRE(cache.GetCachedFileCount() == 0);
 }
 
 } // namespace duckdb

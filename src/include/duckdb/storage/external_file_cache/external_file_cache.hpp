@@ -60,10 +60,6 @@ public:
 		string version_tag DUCKDB_GUARDED_BY(meta_lock);
 		bool can_seek DUCKDB_GUARDED_BY(meta_lock) = false;
 		bool on_disk_file DUCKDB_GUARDED_BY(meta_lock) = false;
-		//! Number of live CachingFileHandles referencing this CachedFile.
-		atomic<idx_t> ref_count {0};
-		//! Whether this file currently has a sentinel entry in the ObjectCache. Guarded by ExternalFileCache::lock.
-		bool object_cache_entry_registered = false;
 	};
 
 public:
@@ -89,8 +85,6 @@ public:
 	//! Gets the shared cached file for the given path, creating it if not yet present.
 	//! When caching is disabled, returns a transient CachedFile that is not tracked in the cached file map.
 	shared_ptr<CachedFile> GetOrCreateCachedFile(const string &path);
-	//! Releases a live CachingFileHandle reference acquired through GetOrCreateCachedFile.
-	void ReleaseCachedFile(const shared_ptr<CachedFile> &cached_file);
 
 	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
 	                               const string &current_version_tag, timestamp_t current_last_modified);
@@ -104,15 +98,9 @@ private:
 	void ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size, idx_t new_block_size)
 	    DUCKDB_REQUIRES(cached_file.map_lock);
 
-	//! Erase entries that have no live CachingFileHandle and whose cached content
-	//! has already been released by the BufferManager.
-	void PruneStaleEntries() DUCKDB_REQUIRES(lock);
-
-	//! Return true if `file` has no live handle and no resident cached content.
-	static bool IsStale(const CachedFile &file);
-	//! Register a zero-ref cached file entry in ObjectCache.
+	//! Register a cached file entry in ObjectCache.
 	void RegisterObjectCacheEntry(const string &path, const shared_ptr<CachedFile> &cached_file);
-	//! Attempts to erase a zero-ref cached file entry at ObjectCache eviction.
+	//! Attempts to erase the cached file entry at ObjectCache eviction.
 	void TryEraseCachedFile(const string &path, const weak_ptr<CachedFile> &cached_file);
 	//! Delete ObjectCache entries.
 	void DeleteObjectCacheEntries(vector<string> object_cache_keys);

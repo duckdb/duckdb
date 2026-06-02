@@ -163,7 +163,6 @@ bool CachingFileHandle::StripForceFullDownloadIfPresent() {
 
 shared_ptr<CachingFileHandle::CachedFile> CachingFileHandle::EnsureCachedFileCurrent() {
 	bool needs_reopen = false;
-	shared_ptr<CachedFile> old_cached_file;
 	{
 		annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
 		if (cached_file && cached_file->generation == external_file_cache.GetGeneration()) {
@@ -173,11 +172,7 @@ shared_ptr<CachingFileHandle::CachedFile> CachingFileHandle::EnsureCachedFileCur
 		if (needs_reopen) {
 			file_handle.reset();
 		}
-		old_cached_file = cached_file;
 		cached_file = external_file_cache.GetOrCreateCachedFile(path.path);
-	}
-	if (old_cached_file) {
-		external_file_cache.ReleaseCachedFile(old_cached_file);
 	}
 
 	if (needs_reopen) {
@@ -195,36 +190,27 @@ CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &ca
           ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetClientContext(), caching_file_system_p.db)),
       cached_file(nullptr), position(0) {
 	cached_file = external_file_cache.GetOrCreateCachedFile(path_p.path);
-	try {
-		if (!external_file_cache.IsEnabled() || Validate()) {
-			// If caching is disabled, or if we must validate cache entries, we always have to open the file
-			GetFileHandle();
-			return;
-		}
-		// If we don't have any cached blocks, we must also open the file.
-		bool needs_open = false;
-		{
-			annotated_lock_guard<annotated_mutex> guard(cached_file->map_lock);
-			needs_open = cached_file->blocks.empty();
-		}
-		if (needs_open) {
-			GetFileHandle();
-		}
-		auto needs_full_download = StripForceFullDownloadIfPresent();
-		if (needs_full_download) {
-			Read(GetFileSize(), 0);
-		}
-	} catch (...) {
-		external_file_cache.ReleaseCachedFile(cached_file);
-		cached_file.reset();
-		throw;
+	if (!external_file_cache.IsEnabled() || Validate()) {
+		// If caching is disabled, or if we must validate cache entries, we always have to open the file
+		GetFileHandle();
+		return;
+	}
+	// If we don't have any cached blocks, we must also open the file.
+	bool needs_open = false;
+	{
+		annotated_lock_guard<annotated_mutex> guard(cached_file->map_lock);
+		needs_open = cached_file->blocks.empty();
+	}
+	if (needs_open) {
+		GetFileHandle();
+	}
+	auto needs_full_download = StripForceFullDownloadIfPresent();
+	if (needs_full_download) {
+		Read(GetFileSize(), 0);
 	}
 }
 
 CachingFileHandle::~CachingFileHandle() {
-	if (cached_file) {
-		external_file_cache.ReleaseCachedFile(cached_file);
-	}
 }
 
 FileHandle &CachingFileHandle::GetFileHandle() {

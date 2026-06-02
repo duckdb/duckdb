@@ -243,49 +243,12 @@ void ExternalFileCache::SetEnabled(bool enable_p) {
 		if (!enable) {
 			keys_to_delete.reserve(cached_files.size());
 			for (auto &file : cached_files) {
-				if (file.second->object_cache_entry_registered) {
-					keys_to_delete.emplace_back(ObjectCacheKey(file.first));
-					file.second->object_cache_entry_registered = false;
-				}
+				keys_to_delete.emplace_back(ObjectCacheKey(file.first));
 			}
 			cached_files.clear();
 		}
 	}
 	DeleteObjectCacheEntries(std::move(keys_to_delete));
-}
-
-bool ExternalFileCache::IsStale(const CachedFile &file) {
-	if (file.ref_count.load() != 0) {
-		return false;
-	}
-	// The BufferManager owns CacheBlock buffers and is not aware of the file cache.
-	// An entry becomes stale when all its blocks have been evicted from the buffer
-	// pool: the skeleton CachedFile remains but holds no resident content.
-	annotated_lock_guard<annotated_mutex> map_guard(file.map_lock);
-	if (file.blocks.empty()) {
-		return true;
-	}
-	for (const auto &block_entry : file.blocks) {
-		const auto &block = *block_entry.second;
-		annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
-		if (block.state != CacheBlockState::LOADED || !block.block_handle) {
-			continue;
-		}
-		if (!block.block_handle->GetMemory().IsUnloaded()) {
-			return false; // still holds resident content
-		}
-	}
-	return true;
-}
-
-void ExternalFileCache::PruneStaleEntries() {
-	for (auto it = cached_files.begin(); it != cached_files.end();) {
-		if (!it->second->object_cache_entry_registered && IsStale(*it->second)) {
-			it = cached_files.erase(it);
-		} else {
-			++it;
-		}
-	}
 }
 
 idx_t ExternalFileCache::GetGeneration() const {
@@ -344,7 +307,6 @@ void ExternalFileCache::RegisterObjectCacheEntry(const string &path, const share
 		if (!enable || entry == cached_files.end() || entry->second.get() != cached_file.get()) {
 			return;
 		}
-		entry->second->object_cache_entry_registered = true;
 	}
 	auto entry = make_shared_ptr<ExternalFileCacheObjectCacheEntry>(*this, path, cached_file);
 	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
@@ -364,21 +326,16 @@ shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFi
 	{
 		const annotated_lock_guard<annotated_mutex> guard(lock);
 		if (!enable) {
-			result = make_shared_ptr<CachedFile>(path, generation);
-			++result->ref_count;
-			return result;
+			return make_shared_ptr<CachedFile>(path, generation);
 		}
-		PruneStaleEntries();
 		auto existing = cached_files.find(path);
 		if (existing != cached_files.end()) {
 			result = existing->second;
-			register_object_cache_entry = !result->object_cache_entry_registered;
 		} else {
 			result = make_shared_ptr<CachedFile>(path, generation);
 			cached_files.emplace(path, result);
 			register_object_cache_entry = true;
 		}
-		++result->ref_count;
 	}
 	// TODO(hjiang): we should update LRU access.
 	if (register_object_cache_entry) {
@@ -387,32 +344,13 @@ shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFi
 	return result;
 }
 
-void ExternalFileCache::ReleaseCachedFile(const shared_ptr<CachedFile> &cached_file) {
-	if (!cached_file) {
-		return;
-	}
-	const annotated_lock_guard<annotated_mutex> guard(lock);
-	auto entry = cached_files.find(cached_file->path);
-	if (entry == cached_files.end() || entry->second.get() != cached_file.get()) {
-		return;
-	}
-	ALWAYS_ASSERT(entry->second->ref_count > 0);
-	--entry->second->ref_count;
-	if (entry->second->ref_count == 0 && !entry->second->object_cache_entry_registered) {
-		cached_files.erase(entry);
-	}
-}
-
 void ExternalFileCache::TryEraseCachedFile(const string &path, const weak_ptr<CachedFile> &cached_file) {
 	const annotated_lock_guard<annotated_mutex> guard(lock);
 	auto entry = cached_files.find(path);
 	if (entry == cached_files.end() || weak_ptr<CachedFile>(entry->second) != cached_file) {
 		return;
 	}
-	entry->second->object_cache_entry_registered = false;
-	if (entry->second->ref_count == 0) {
-		cached_files.erase(entry);
-	}
+	cached_files.erase(entry);
 }
 
 } // namespace duckdb
