@@ -1457,8 +1457,8 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	// However, all the actual values should be valid, so we assert that
 
 	// Construct utility for all sort keys that we will decode
-	DecodeSortKeyData decode_data[STANDARD_VECTOR_SIZE];
-	int64_t bswapped_ints[STANDARD_VECTOR_SIZE];
+	vector<DecodeSortKeyData> decode_data(count);
+	vector<int64_t> bswapped_ints(count);
 	if (sort_key_vec.GetType() == LogicalType::BLOB) {
 		const auto sort_keys = UnifiedVectorFormat::GetData<string_t>(sort_key_vec_format);
 		if (sort_key_vec_format.sel->IsSet()) {
@@ -1498,7 +1498,7 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	for (idx_t c = 0; c < StructType::GetChildCount(result_type); c++) {
 		auto &child_vector = child_vectors[c];
 		DecodeSortKeyVectorData sort_key_data(child_vector.GetType(), bind_data.modifiers[c]);
-		DecodeSortKeyRecursive(decode_data, sort_key_data, child_vector, 0, count);
+		DecodeSortKeyRecursive(decode_data.data(), sort_key_data, child_vector, 0, count);
 	}
 }
 
