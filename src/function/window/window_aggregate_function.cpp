@@ -31,7 +31,7 @@ public:
 
 static BoundWindowExpression &SimplifyWindowedAggregate(BoundWindowExpression &wexpr, ClientContext &context) {
 	// Remove redundant/irrelevant modifiers (they can be serious performance cliffs)
-	if (wexpr.aggregate && ClientConfig::GetConfig(context).enable_optimizer) {
+	if (wexpr.aggregate && Settings::Get<EnableOptimizerSetting>(context)) {
 		const auto &aggr = wexpr.aggregate;
 		auto &arg_orders = wexpr.arg_orders;
 		if (aggr->GetDistinctDependent() != AggregateDistinctDependent::DISTINCT_DEPENDENT) {
@@ -56,7 +56,7 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
     : WindowExecutor(SimplifyWindowedAggregate(wexpr, client), shared),
       mode(Settings::Get<DebugWindowModeSetting>(client)) {
 	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
-	if (!ClientConfig::GetConfig(client).enable_optimizer || mode == WindowAggregationMode::SEPARATE) {
+	if (!Settings::Get<EnableOptimizerSetting>(client) || mode == WindowAggregationMode::SEPARATE) {
 		if (!WindowNaiveAggregator::CanAggregate(wexpr)) {
 			throw InvalidInputException("Cannot use non-aggregate window function with naive window executor!");
 		}

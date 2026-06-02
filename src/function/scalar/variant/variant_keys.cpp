@@ -323,7 +323,7 @@ static void VariantKeysFunction(DataChunk &input, ExpressionState &state, Vector
 	}
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<VariantKeysBindData>();
+	auto &info = func_expr.BindInfo()->Cast<VariantKeysBindData>();
 	auto n_columns = input.ColumnCount();
 
 	if (n_columns == 1) {

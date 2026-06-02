@@ -792,7 +792,7 @@ format-configs:
 
 
 third_party/sqllogictest:
-	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/duckdb/sqllogictest.git third_party/sqllogictest
+	git clone --depth=1 --branch ccfelius/sqlite_overflow https://github.com/duckdb/sqllogictest.git third_party/sqllogictest
 
 sqlite: release | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull

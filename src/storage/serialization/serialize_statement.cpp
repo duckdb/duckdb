@@ -8,8 +8,33 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
 
 namespace duckdb {
+
+void MergeIntoAction::Serialize(Serializer &serializer) const {
+	serializer.WriteProperty<MergeActionType>(100, "action_type", action_type);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "condition", condition);
+	serializer.WritePropertyWithDefault<unique_ptr<UpdateSetInfo>>(102, "update_info", update_info);
+	serializer.WritePropertyWithDefault<vector<string>>(103, "insert_columns", insert_columns);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "expressions", expressions);
+	serializer.WritePropertyWithDefault<InsertColumnOrder>(105, "column_order", column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	serializer.WritePropertyWithDefault<bool>(106, "default_values", default_values, false);
+	serializer.WritePropertyWithDefault<unordered_set<string>>(107, "exclude_columns", exclude_columns);
+}
+
+unique_ptr<MergeIntoAction> MergeIntoAction::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<MergeIntoAction>(new MergeIntoAction());
+	deserializer.ReadProperty<MergeActionType>(100, "action_type", result->action_type);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "condition", result->condition);
+	deserializer.ReadPropertyWithDefault<unique_ptr<UpdateSetInfo>>(102, "update_info", result->update_info);
+	deserializer.ReadPropertyWithDefault<vector<string>>(103, "insert_columns", result->insert_columns);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(104, "expressions", result->expressions);
+	deserializer.ReadPropertyWithExplicitDefault<InsertColumnOrder>(105, "column_order", result->column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	deserializer.ReadPropertyWithExplicitDefault<bool>(106, "default_values", result->default_values, false);
+	deserializer.ReadPropertyWithDefault<unordered_set<string>>(107, "exclude_columns", result->exclude_columns);
+	return result;
+}
 
 void OnConflictInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<OnConflictAction>(100, "action_type", action_type);

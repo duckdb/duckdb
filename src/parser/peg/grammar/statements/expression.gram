@@ -24,9 +24,10 @@ TrueLiteral <- 'TRUE'
 FalseLiteral <- 'FALSE'
 CastExpression <- CastOrTryCast Parens(Expression 'AS' Type)
 CastOrTryCast <- 'CAST' / 'TRY_CAST'
-
-StarExpression <- (ColId '.')* '*' ExcludeList? ReplaceList? RenameList?
-ExcludeList <- 'EXCLUDE' ExcludeNameList / ExcludeNameSingle
+ColIdDot <- ColId '.'
+StarExpression <- ColIdDot* '*' ExcludeList? ReplaceList? RenameList?
+ExcludeList <- ExcludeOrExcept ExcludeNameList / ExcludeNameSingle
+ExcludeOrExcept <- 'EXCLUDE' / 'EXCEPT'
 ExcludeNameList <- Parens(List(ExcludeName))
 ExcludeNameSingle <- ExcludeName
 ExcludeName <- DottedIdentifier / ColIdOrString
@@ -190,7 +191,7 @@ InetOperator <- '>>=' / '<<='
 JsonOperator <- '->>'
 ListOperator <- '&&' / '@>' / '<@'
 StringOperator <- '^@' / '||'
-QualifiedOperator <- 'OPERATOR' Parens(AnyOp)
+QualifiedOperator <- 'OPERATOR' Parens(ColIdDot* AnyOp)
 AnyOp <- '!~~*' / '>>=' / '<<=' / '->>' / '!~~' / '~~*' / '~~~' / '!~' / '^@' / '||' / '&&' / '@>' / '<@' / '<=' / '>=' / '<>' / '!=' / '==' / '<<' / '>>' / '//' / '**' / '->' / '~~' / '+' / '-' / '*' / '/' / '%' / '^' / '<' / '>' / '=' / '&' / '|' / '~' / '!'
 # LEVEL 9
 BitwiseExpression <- AdditiveExpression (BitOperator AdditiveExpression)*

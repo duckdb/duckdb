@@ -1,12 +1,3 @@
-From f78af8f2b40705c30924598f6b0cbc6ce279adf2 Mon Sep 17 00:00:00 2001
-From: Mytherin <mark.raasveldt@gmail.com>
-Date: Thu, 28 May 2026 11:57:55 +0200
-Subject: [PATCH 2/3] relassert_thread_safety_lock_guard.patch
-
----
- src/http_state.cpp | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
-
 diff --git a/src/http_state.cpp b/src/http_state.cpp
 index 1b09114..0ac79cf 100644
 --- a/src/http_state.cpp
@@ -20,6 +11,3 @@ index 1b09114..0ac79cf 100644
  	}
  	file = file_p;
  }
--- 
-2.39.5 (Apple Git-154)
-

@@ -22,16 +22,16 @@ static idx_t GetLambdaParamCount(vector<DummyBinding> &lambda_bindings) {
 
 static idx_t GetLambdaParamIndex(vector<DummyBinding> &lambda_bindings, const BoundLambdaExpression &bound_lambda_expr,
                                  const BoundLambdaRefExpression &bound_lambda_ref_expr) {
-	D_ASSERT(bound_lambda_ref_expr.lambda_idx < lambda_bindings.size());
+	D_ASSERT(bound_lambda_ref_expr.LambdaIndex() < lambda_bindings.size());
 	idx_t offset = 0;
 	// count the remaining lambda parameters BEFORE the current lambda parameter,
 	// as these will be in front of the current lambda parameter in the input chunk
-	for (idx_t i = bound_lambda_ref_expr.lambda_idx + 1; i < lambda_bindings.size(); i++) {
+	for (idx_t i = bound_lambda_ref_expr.LambdaIndex() + 1; i < lambda_bindings.size(); i++) {
 		offset += lambda_bindings[i].GetColumnCount();
 	}
-	offset += lambda_bindings[bound_lambda_ref_expr.lambda_idx].GetColumnCount() -
-	          bound_lambda_ref_expr.binding.column_index - 1;
-	offset += bound_lambda_expr.parameter_count;
+	offset += lambda_bindings[bound_lambda_ref_expr.LambdaIndex()].GetColumnCount() -
+	          bound_lambda_ref_expr.Binding().column_index - 1;
+	offset += bound_lambda_expr.ParameterCount();
 	return offset;
 }
 
@@ -66,18 +66,19 @@ static bool IsDoubleArrowRHS(const ParsedExpression &expr) {
 		return false;
 	}
 	auto &func = expr.Cast<FunctionExpression>();
-	return func.is_operator && func.function_name == "->>" && func.children.size() == 2;
+	return func.IsOperator() && func.FunctionName() == "->>" && func.GetChildren().size() == 2;
 }
 
 static unique_ptr<ParsedExpression> RestructureArrowChain(LambdaExpression &expr) {
-	auto &rhs_func = expr.expr->Cast<FunctionExpression>();
-	auto inner_lambda = make_uniq<LambdaExpression>(std::move(expr.lhs), std::move(rhs_func.children[0]));
-	inner_lambda->syntax_type = expr.syntax_type;
+	auto &rhs_func = expr.RightMutable()->Cast<FunctionExpression>();
+	auto inner_lambda =
+	    make_uniq<LambdaExpression>(std::move(expr.LeftMutable()), std::move(rhs_func.GetChildrenMutable()[0]));
+	inner_lambda->GetLambdaSyntaxTypeMutable() = expr.GetLambdaSyntaxType();
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(inner_lambda));
-	children.push_back(std::move(rhs_func.children[1]));
+	children.push_back(std::move(rhs_func.GetChildrenMutable()[1]));
 	auto restructured = make_uniq<FunctionExpression>("->>", std::move(children));
-	restructured->is_operator = true;
+	restructured->IsOperatorMutable() = true;
 	return std::move(restructured);
 }
 
@@ -85,32 +86,33 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
                                             const vector<LogicalType> &function_child_types,
                                             optional_ptr<bind_lambda_function_t> bind_lambda_function,
                                             optional_ptr<BindLambdaContext> bind_lambda_context) {
-	if (expr.syntax_type == LambdaSyntaxType::LAMBDA_KEYWORD && !bind_lambda_function) {
+	if (expr.GetLambdaSyntaxType() == LambdaSyntaxType::LAMBDA_KEYWORD && !bind_lambda_function) {
 		return BindResult("invalid lambda expression");
 	}
 
 	if (!bind_lambda_function) {
 		// The PEG parser produces A -> (B ->> C) where the standard parser left-associates to (A -> B) ->> C.
 		// Restructure to match standard behavior before binding.
-		if (IsDoubleArrowRHS(*expr.expr)) {
+		if (IsDoubleArrowRHS(expr.Right())) {
 			unique_ptr<ParsedExpression> restructured = RestructureArrowChain(expr);
 			return BindExpression(restructured, depth);
 		}
 
 		// This is not a lambda expression, but the JSON arrow operator.
 		// Remember the original expression in case of a binding error.
-		if (!expr.copied_expr) {
-			expr.copied_expr = expr.expr->Copy();
+		if (!expr.CopiedExprMutable()) {
+			expr.CopiedExprMutable() = expr.Right().Copy();
 		}
-		OperatorExpression arrow_expr(ExpressionType::ARROW, std::move(expr.lhs), std::move(expr.expr));
+		OperatorExpression arrow_expr(ExpressionType::ARROW, std::move(expr.LeftMutable()),
+		                              std::move(expr.RightMutable()));
 		auto bind_result = BindExpression(arrow_expr, depth);
 
 		// The arrow_expr now might contain bound nodes.
 		// Restore the original expression.
 		if (bind_result.HasError()) {
 			D_ASSERT(arrow_expr.GetChildrenMutable().size() == 2);
-			expr.lhs = std::move(arrow_expr.GetChildrenMutable()[0]);
-			expr.expr = std::move(arrow_expr.GetChildrenMutable()[1]);
+			expr.LeftMutable() = std::move(arrow_expr.GetChildrenMutable()[0]);
+			expr.RightMutable() = std::move(arrow_expr.GetChildrenMutable()[1]);
 		}
 		return bind_result;
 	}
@@ -138,10 +140,10 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	DummyBinding new_lambda_binding(column_types, column_names, table_alias);
 	lambda_bindings->push_back(new_lambda_binding);
 
-	if (expr.copied_expr) {
-		expr.expr = std::move(expr.copied_expr);
+	if (expr.CopiedExprMutable()) {
+		expr.RightMutable() = std::move(expr.CopiedExprMutable());
 	}
-	auto result = BindExpression(expr.expr, depth, false);
+	auto result = BindExpression(expr.RightMutable(), depth, false);
 	lambda_bindings->pop_back();
 
 	// successfully bound a subtree of nested lambdas, set this to nullptr in case other parts of the
@@ -171,15 +173,15 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 
 		// refers to a lambda parameter outside the current lambda function
 		// so the lambda parameter will be inside the lambda_bindings
-		if (lambda_bindings && bound_lambda_ref.lambda_idx != lambda_bindings->size()) {
-			auto &binding = (*lambda_bindings)[bound_lambda_ref.lambda_idx];
+		if (lambda_bindings && bound_lambda_ref.LambdaIndex() != lambda_bindings->size()) {
+			auto &binding = (*lambda_bindings)[bound_lambda_ref.LambdaIndex()];
 			auto &column_names = binding.GetColumnNames();
 			auto &column_types = binding.GetColumnTypes();
 			D_ASSERT(column_names.size() == column_types.size());
 
 			// find the matching dummy column in the lambda binding
 			for (idx_t column_idx = 0; column_idx < binding.GetColumnCount(); column_idx++) {
-				if (ProjectionIndex(column_idx) == bound_lambda_ref.binding.column_index) {
+				if (ProjectionIndex(column_idx) == bound_lambda_ref.Binding().column_index) {
 					// now create the replacement
 					auto index = GetLambdaParamIndex(*lambda_bindings, bound_lambda_expr, bound_lambda_ref);
 					replacement =
@@ -193,8 +195,8 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 		}
 		// refers to a lambda parameter inside the current lambda function
 		auto logical_type = (*bind_lambda_function)(context, function_child_types,
-		                                            bound_lambda_ref.binding.column_index, bind_lambda_context);
-		auto index = bound_lambda_expr.parameter_count - bound_lambda_ref.binding.column_index - 1;
+		                                            bound_lambda_ref.Binding().column_index, bind_lambda_context);
+		auto index = bound_lambda_expr.ParameterCount() - bound_lambda_ref.Binding().column_index - 1;
 		replacement = make_uniq<BoundReferenceExpression>(alias, logical_type, index);
 		return;
 	}
@@ -204,11 +206,11 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 	if (lambda_bindings) {
 		offset += GetLambdaParamCount(*lambda_bindings);
 	}
-	offset += bound_lambda_expr.parameter_count;
-	offset += bound_lambda_expr.captures.size();
+	offset += bound_lambda_expr.ParameterCount();
+	offset += bound_lambda_expr.CapturesMutable().size();
 
 	replacement = make_uniq<BoundReferenceExpression>(original->GetAlias(), original->GetReturnType(), offset);
-	bound_lambda_expr.captures.push_back(std::move(original));
+	bound_lambda_expr.CapturesMutable().push_back(std::move(original));
 }
 
 void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_expr, unique_ptr<Expression> &expr,
@@ -234,7 +236,7 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
 	    expr->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA_REF) {
 		if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 			// Search for UNNEST.
-			auto &column_binding = expr->Cast<BoundColumnRefExpression>().binding;
+			auto &column_binding = expr->Cast<BoundColumnRefExpression>().Binding();
 			ThrowIfUnnestInLambda(column_binding);
 		}
 

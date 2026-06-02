@@ -447,7 +447,7 @@ LogicalType Binder::BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &
 	// Shortcut for constant expressions
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 		auto &const_expr = expr->Cast<BoundConstantExpression>();
-		return TypeValue::GetType(const_expr.value);
+		return TypeValue::GetType(const_expr.GetValue());
 	}
 
 	// Else, evaluate the type expression

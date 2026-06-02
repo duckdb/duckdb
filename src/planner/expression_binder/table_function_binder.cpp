@@ -13,9 +13,9 @@ TableFunctionBinder::TableFunctionBinder(Binder &binder, ClientContext &context,
 }
 
 BindResult TableFunctionBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
-	D_ASSERT(lambda_bindings && expr.lambda_idx < lambda_bindings->size());
+	D_ASSERT(lambda_bindings && expr.LambdaIndex() < lambda_bindings->size());
 	auto &lambda_ref = expr.Cast<LambdaRefExpression>();
-	return (*lambda_bindings)[expr.lambda_idx].Bind(lambda_ref, depth);
+	return (*lambda_bindings)[expr.LambdaIndex()].Bind(lambda_ref, depth);
 }
 
 BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,

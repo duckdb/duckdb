@@ -655,7 +655,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 
 static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<JSONCreateFunctionData>();
+	const auto &info = func_expr.BindInfo()->Cast<JSONCreateFunctionData>();
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 
@@ -684,7 +684,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 
 static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<JSONCreateFunctionData>();
+	const auto &info = func_expr.BindInfo()->Cast<JSONCreateFunctionData>();
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 
@@ -742,7 +742,7 @@ static void ToJSONFunctionInternal(const StructNames &names, Vector &input, cons
 
 static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto &info = func_expr.bind_info->Cast<JSONCreateFunctionData>();
+	const auto &info = func_expr.BindInfo()->Cast<JSONCreateFunctionData>();
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 	auto alc = lstate.json_allocator->GetYYAlc();
 

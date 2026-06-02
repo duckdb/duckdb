@@ -35,7 +35,7 @@ public:
 	ParameterExpression();
 
 public:
-	const string &Identifier() {
+	const string &Identifier() const {
 		return identifier;
 	}
 	string &IdentifierMutable() {

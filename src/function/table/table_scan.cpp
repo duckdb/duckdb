@@ -496,14 +496,14 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
 	    expr.GetExpressionType() == ExpressionType::COMPARE_IN) {
 		auto &op = expr.Cast<BoundOperatorExpression>();
-		if (op.children.empty() || op.children[0]->GetExpressionClass() != ExpressionClass::BOUND_REF) {
+		if (op.GetChildren().empty() || op.GetChildren()[0]->GetExpressionClass() != ExpressionClass::BOUND_REF) {
 			return false;
 		}
-		for (idx_t i = 1; i < op.children.size(); i++) {
-			if (op.children[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+		for (idx_t i = 1; i < op.GetChildren().size(); i++) {
+			if (op.GetChildren()[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 				return false;
 			}
-			auto &value = op.children[i]->Cast<BoundConstantExpression>().value;
+			auto &value = op.GetChildren()[i]->Cast<BoundConstantExpression>().GetValue();
 			if (!value.IsNull()) {
 				in_values.insert(value);
 			}
@@ -518,9 +518,9 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 		bool left_is_ref = left.GetExpressionClass() == ExpressionClass::BOUND_REF;
 		bool right_is_ref = right.GetExpressionClass() == ExpressionClass::BOUND_REF;
 		if (right.GetExpressionType() == ExpressionType::VALUE_CONSTANT && left_is_ref) {
-			val = right.Cast<BoundConstantExpression>().value;
+			val = right.Cast<BoundConstantExpression>().GetValue();
 		} else if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT && right_is_ref) {
-			val = left.Cast<BoundConstantExpression>().value;
+			val = left.Cast<BoundConstantExpression>().GetValue();
 		} else {
 			return false;
 		}
@@ -536,7 +536,7 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
 	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conj = expr.Cast<BoundConjunctionExpression>();
-		for (auto &child : conj.children) {
+		for (auto &child : conj.GetChildren()) {
 			if (!CollectValuesAndComparisonsFromExpression(*child, in_values, comparisons)) {
 				return false;
 			}
@@ -545,23 +545,23 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.function.GetName() == OptionalFilterScalarFun::NAME) {
-			if (!func.bind_info) {
+		if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
+			if (!func.BindInfo()) {
 				return true;
 			}
-			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
 			return !data.child_filter_expr ||
 			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
 		}
-		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME) {
-			if (!func.bind_info) {
+		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
+			if (!func.BindInfo()) {
 				return true;
 			}
-			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
 			return !data.child_filter_expr ||
 			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
 		}
-		if (TableFilterFunctions::IsTableFilterFunction(func.function)) {
+		if (TableFilterFunctions::IsTableFilterFunction(func.Function())) {
 			return true;
 		}
 	}
@@ -686,8 +686,8 @@ bool TryScanIndex(ART &art, IndexEntry &entry, const ColumnList &column_list, Ta
 			auto &bound_column_ref_expr = expr.Cast<BoundColumnRefExpression>();
 
 			// If the bound column references the index column, use updated_index_column
-			if (bound_column_ref_expr.binding.column_index == indexed_columns[0]) {
-				bound_column_ref_expr.binding.column_index = updated_index_column;
+			if (bound_column_ref_expr.Binding().column_index == indexed_columns[0]) {
+				bound_column_ref_expr.BindingMutable().column_index = updated_index_column;
 			}
 		});
 	}

@@ -536,6 +536,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"printf", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"product", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"quack_check_token", "quack", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"quack_clear_cache", "quack", CatalogType::TABLE_FUNCTION_ENTRY},
     {"quack_identify", "quack", CatalogType::TABLE_FUNCTION_ENTRY},
     {"quack_nop_authorization", "quack", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"quack_query", "quack", CatalogType::TABLE_FUNCTION_ENTRY},

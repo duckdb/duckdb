@@ -63,7 +63,7 @@ unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, Function
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
-		expr.function.SetFunctionCallback(ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>);
+		expr.FunctionMutable().SetFunctionCallback(ScalarFunction::UnaryFunction<string_t, int64_t, StrLenOperator>);
 	}
 	return nullptr;
 }
@@ -157,7 +157,7 @@ void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &
 	const auto &dimension = args.data[1];
 
 	auto &expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &data = expr.bind_info->Cast<ArrayLengthBinaryFunctionData>();
+	auto &data = expr.BindInfo()->Cast<ArrayLengthBinaryFunctionData>();
 	auto &dimensions = data.dimensions;
 	auto max_dimension = static_cast<int64_t>(dimensions.size());
 

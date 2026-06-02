@@ -16,7 +16,6 @@ PROFILE_OUTPUT = f"PRAGMA profile_output='{PROFILE_FILENAME}'"
 
 BANNER_SIZE = 52
 RETRIES = 2
-RETRIABLE_EXIT_CODES = {134, -6}
 
 
 def run_with_retry(command, context, **kwargs):
@@ -25,9 +24,9 @@ def run_with_retry(command, context, **kwargs):
         completed = subprocess.run(command, shell=True, check=False, **kwargs)
         if completed.returncode == 0:
             return completed
-        if completed.returncode in RETRIABLE_EXIT_CODES and attempt < attempts:
+        if attempt < attempts:
             print(
-                f"Retrying crash-like failure in {context} "
+                f"Retrying failure in {context} "
                 f"(attempt {attempt + 1}/{attempts}, return code {completed.returncode})"
             )
             continue

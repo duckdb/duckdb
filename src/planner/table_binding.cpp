@@ -327,7 +327,7 @@ BindResult DummyBinding::Bind(LambdaRefExpression &lambdaref, idx_t depth) {
 	}
 	ColumnBinding binding(index, ProjectionIndex(column_index));
 	return BindResult(make_uniq<BoundLambdaRefExpression>(lambdaref.GetName(), types[column_index], binding,
-	                                                      lambdaref.lambda_idx, depth));
+	                                                      lambdaref.LambdaIndex(), depth));
 }
 
 unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colref) {
