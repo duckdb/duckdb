@@ -1183,8 +1183,8 @@ struct TryGetTypeOperation {
 struct ForceGetTypeOperation {
 	static bool Operation(optional_ptr<ClientContext> context, const LogicalType &left, const LogicalType &right,
 	                      LogicalType &result) {
-		(void)context;
-		result = LogicalType::ForceMaxLogicalType(left, right);
+		result = context ? LogicalType::ForceMaxLogicalType(*context, left, right)
+		                 : LogicalType::DefaultForceMaxLogicalType(left, right);
 		return true;
 	}
 };
@@ -1192,14 +1192,19 @@ struct ForceGetTypeOperation {
 bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right,
                                        LogicalType &result) {
 	if (Settings::Get<OldImplicitCastingSetting>(context)) {
-		result = LogicalType::ForceMaxLogicalType(left, right);
+		result = LogicalType::ForceMaxLogicalType(context, left, right);
 		return true;
 	}
+	return TryGetMaxLogicalTypeUnchecked(context, left, right, result);
+}
+
+bool LogicalType::TryGetMaxLogicalTypeUnchecked(ClientContext &context, const LogicalType &left,
+                                                const LogicalType &right, LogicalType &result) {
 	return TryGetMaxLogicalTypeInternal<TryGetTypeOperation>(&context, left, right, result);
 }
 
-bool LogicalType::TryGetMaxLogicalTypeUnchecked(const LogicalType &left, const LogicalType &right,
-                                                LogicalType &result) {
+bool LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(const LogicalType &left, const LogicalType &right,
+                                                       LogicalType &result) {
 	return TryGetMaxLogicalTypeInternal<TryGetTypeOperation>(nullptr, left, right, result);
 }
 
@@ -1305,9 +1310,10 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 	return 1000;
 }
 
-LogicalType LogicalType::ForceMaxLogicalType(const LogicalType &left, const LogicalType &right) {
+static LogicalType ForceMaxLogicalTypeInternal(optional_ptr<ClientContext> context, const LogicalType &left,
+                                               const LogicalType &right) {
 	LogicalType result;
-	if (TryGetMaxLogicalTypeInternal<ForceGetTypeOperation>(nullptr, left, right, result)) {
+	if (TryGetMaxLogicalTypeInternal<ForceGetTypeOperation>(context, left, right, result)) {
 		return result;
 	}
 	// we prefer the type with the highest score
@@ -1318,6 +1324,15 @@ LogicalType LogicalType::ForceMaxLogicalType(const LogicalType &left, const Logi
 	} else {
 		return left;
 	}
+}
+
+LogicalType LogicalType::ForceMaxLogicalType(ClientContext &context, const LogicalType &left,
+                                             const LogicalType &right) {
+	return ForceMaxLogicalTypeInternal(&context, left, right);
+}
+
+LogicalType LogicalType::DefaultForceMaxLogicalType(const LogicalType &left, const LogicalType &right) {
+	return ForceMaxLogicalTypeInternal(nullptr, left, right);
 }
 
 LogicalType LogicalType::MaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right) {
