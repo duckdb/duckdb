@@ -398,6 +398,8 @@ enum class RecursiveProbeSidePreference : uint8_t;
 
 enum class RelationType : uint8_t;
 
+enum class RemoteCapability : uint8_t;
+
 enum class RenderMode : uint8_t;
 
 enum class RequestType : uint8_t;
@@ -1093,6 +1095,9 @@ const char* EnumUtil::ToChars<RecursiveProbeSidePreference>(RecursiveProbeSidePr
 
 template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
+
+template<>
+const char* EnumUtil::ToChars<RemoteCapability>(RemoteCapability value);
 
 template<>
 const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
@@ -1862,6 +1867,9 @@ RecursiveProbeSidePreference EnumUtil::FromString<RecursiveProbeSidePreference>(
 
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);
+
+template<>
+RemoteCapability EnumUtil::FromString<RemoteCapability>(const char *value);
 
 template<>
 RenderMode EnumUtil::FromString<RenderMode>(const char *value);
