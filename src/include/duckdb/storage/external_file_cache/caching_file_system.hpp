@@ -27,6 +27,7 @@ class DatabaseInstance;
 class FileOpenFlags;
 class FileSystem;
 struct FileHandle;
+struct NetworkThroughputEstimate;
 class QueryContext;
 class CachingFileSystem;
 
@@ -56,6 +57,7 @@ public:
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsRemoteFile() const;
 	DUCKDB_API bool OnDiskFile();
+	DUCKDB_API bool TryGetNetworkThroughput(NetworkThroughputEstimate &result);
 	DUCKDB_API idx_t SeekPosition();
 	DUCKDB_API void Seek(idx_t location);
 
