@@ -456,7 +456,6 @@ static void ConvertKeyInput(DataChunk &input, DataChunk &result) {
 		}
 	}
 
-	result.SetChildCardinality(input.size());
 }
 
 void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, const Vector &row_ids,

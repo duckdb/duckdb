@@ -172,7 +172,6 @@ void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		sql.Append(Value(table_info->ToString()));
 		count++;
 	}
-	output.SetChildCardinality(count);
 }
 
 void DuckDBTablesFun::RegisterFunction(BuiltinFunctions &set) {

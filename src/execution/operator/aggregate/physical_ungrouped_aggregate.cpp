@@ -330,7 +330,6 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, DataChu
 			// Apply the filter before inserting into the hashtable
 			auto &filtered_data = sink.execute_state.filter_set.GetFilterData(idx);
 			idx_t count = filtered_data.ApplyFilter(chunk);
-			filtered_data.filtered_payload.SetChildCardinality(count);
 
 			radix_table.Sink(context, filtered_data.filtered_payload, sink_input, empty_chunk, distinct_filter);
 		} else {
@@ -599,7 +598,6 @@ TaskExecutionResult UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() 
 			for (idx_t i = 0; i < payload_cnt; i++) {
 				payload_chunk.data[i].Reference(output_chunk.data[i]);
 			}
-			payload_chunk.SetChildCardinality(output_chunk.size());
 
 			// Update the aggregate state
 			state.Sink(payload_chunk, 0, agg_idx, output_chunk.size());

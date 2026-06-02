@@ -2024,7 +2024,6 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 			}
 			ReturnStatistics(chunk, file_entry);
 		}
-		chunk.SetChildCardinality(count);
 		source_state.offset += count;
 		return source_state.offset < gstate.written_files.size() ? SourceResultType::HAVE_MORE_OUTPUT
 		                                                         : SourceResultType::FINISHED;
@@ -2050,7 +2049,6 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 	default:
 		throw NotImplementedException("Unknown CopyFunctionReturnType");
 	}
-	chunk.SetChildCardinality(1);
 
 	return SourceResultType::FINISHED;
 }

@@ -473,7 +473,6 @@ void PhysicalRangeJoin::ProjectResult(DataChunk &chunk, DataChunk &result) const
 	for (idx_t i = 0; i < right_projection_map.size(); ++i) {
 		result.data[left_projected + i].Reference(chunk.data[left_width + right_projection_map[i]]);
 	}
-	result.SetChildCardinality(chunk.size());
 }
 
 template <SortKeyType SORT_KEY_TYPE>

@@ -762,7 +762,6 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		state.group_chunk.data[grp_idx].Reference(groups.data[grp_idx]);
 	}
 	state.group_chunk.data[groups.ColumnCount()].Reference(group_hashes_v);
-	state.group_chunk.SetChildCardinality(groups.size());
 
 	// convert all vectors to unified format
 	TupleDataCollection::ToUnifiedFormat(state.partitioned_append_state.chunk_state, state.group_chunk);

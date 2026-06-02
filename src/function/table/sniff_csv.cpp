@@ -325,7 +325,6 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 	csv_read << ");";
 	output.data[11].Append(Value(csv_read.str()));
-	output.SetChildCardinality(1);
 	global_state.done = true;
 }
 

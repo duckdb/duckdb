@@ -38,7 +38,6 @@ static OperatorResultType SummaryFunction(ExecutionContext &context, TableFuncti
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 		output.data[col_idx + 1].Reference(input.data[col_idx]);
 	}
-	output.SetChildCardinality(input.size());
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 

@@ -239,7 +239,6 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntr
 			PragmaShowHelper::GetTableColumns(column, constraint_info, output);
 		}
 	}
-	output.SetChildCardinality(next - data.offset);
 	data.offset = next;
 }
 
@@ -268,7 +267,6 @@ static void PragmaTableInfoView(ClientContext &context, PragmaTableOperatorData 
 			PragmaShowHelper::GetViewColumns(i, name, type, output);
 		}
 	}
-	output.SetChildCardinality(next - data.offset);
 	data.offset = next;
 }
 

@@ -62,7 +62,6 @@ void DuckDBWhichSecretFunction(ClientContext &context, TableFunctionInput &data_
 		output.data[0].Append(Value(secret_entry.secret->GetName()));
 		output.data[1].Append(Value(EnumUtil::ToString(secret_entry.persist_type)));
 		output.data[2].Append(Value(secret_entry.storage_mode));
-		output.SetChildCardinality(1);
 	}
 	data.finished = true;
 }

@@ -56,7 +56,6 @@ void DuckDBMetricsFunction(ClientContext &context, TableFunctionInput &data_p, D
 		unit.Append(Value(entry.unit));
 		count++;
 	}
-	output.SetChildCardinality(count);
 }
 
 void DuckDBMetricsFun::RegisterFunction(BuiltinFunctions &set) {

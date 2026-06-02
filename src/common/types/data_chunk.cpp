@@ -263,7 +263,12 @@ void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t
 		}
 	}
 	CheckCardinality(current_size + sel_count);
-	count = optional_idx();
+	if (ColumnCount() == 0) {
+		// a column-less chunk has no child vectors to carry the cardinality - record it explicitly
+		count = current_size + sel_count;
+	} else {
+		count = optional_idx();
+	}
 }
 
 void DataChunk::Flatten() {

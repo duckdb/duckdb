@@ -1172,6 +1172,8 @@ void WindowLocalSourceState::GetData(ExecutionContext &context, DataChunk &resul
 	output_chunk.Verify(context.client.db);
 
 	idx_t out_idx = 0;
+	// input_chunk's cardinality is authoritative (its column buffers may still be a larger, stale capacity), so set the
+	// result cardinality explicitly here - before the references below alias input_chunk's/output_chunk's buffers.
 	result.SetChildCardinality(input_chunk.size());
 	for (idx_t col_idx = 0; col_idx < input_chunk.ColumnCount(); col_idx++) {
 		result.data[out_idx++].Reference(input_chunk.data[col_idx]);

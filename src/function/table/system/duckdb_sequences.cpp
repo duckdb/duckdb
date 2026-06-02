@@ -153,7 +153,6 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 
 		count++;
 	}
-	output.SetChildCardinality(count);
 }
 
 void DuckDBSequencesFun::RegisterFunction(BuiltinFunctions &set) {

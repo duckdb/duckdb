@@ -222,7 +222,6 @@ static void GatherChunk(DataChunk &output_chunk, DataChunk &input_chunk, const v
 	for (auto &group_idx : idx_set) {
 		output_chunk.data[chunk_index++].Reference(input_chunk.data[group_idx]);
 	}
-	output_chunk.SetChildCardinality(input_chunk.size());
 }
 
 static void ScatterChunk(DataChunk &output_chunk, DataChunk &input_chunk, const vector<idx_t> &idx_set) {

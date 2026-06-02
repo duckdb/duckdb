@@ -147,7 +147,6 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 		}
 	}
 
-	group_chunk.SetChildCardinality(chunk.size());
 
 	aggregate_input_chunk.SetChildCardinality(chunk.size());
 

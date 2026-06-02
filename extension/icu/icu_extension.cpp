@@ -411,7 +411,6 @@ static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data
 
 		++index;
 	}
-	output.SetChildCardinality(index);
 }
 
 static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parameter) {

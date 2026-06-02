@@ -369,7 +369,6 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 			D_ASSERT(it->second < chunk.data.size());
 			auto &filter_bound_ref = filter_ref.Cast<BoundReferenceExpression>();
 			filter_chunk.data[filter_bound_ref.index].Reference(chunk.data[it->second]);
-			filter_chunk.SetChildCardinality(chunk.size());
 
 			// We cant use the AggregateFilterData::ApplyFilter method, because the chunk we need to
 			// apply the filter to also has the groups, and the filtered_data.filtered_payload does not have those.
@@ -399,7 +398,6 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 				col.Reference(chunk.data[bound_ref.index]);
 				col.Slice(sel_vec, count);
 			}
-			filtered_input.SetChildCardinality(count);
 
 			radix_table.Sink(context, filtered_input, sink_input, empty_chunk, empty_filter);
 		} else {

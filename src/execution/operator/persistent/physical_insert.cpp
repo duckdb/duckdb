@@ -140,7 +140,6 @@ void CheckOnConflictCondition(ExecutionContext &context, DataChunk &conflicts, c
 	ExpressionExecutor executor(context.client, *condition);
 	result.Initialize(context.client, {LogicalType::BOOLEAN});
 	executor.Execute(conflicts, result);
-	result.SetChildCardinality(conflicts.size());
 }
 
 static void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
@@ -184,7 +183,6 @@ static void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_ch
 	// We can have a SET expression without a conflict target ONLY if there is only 1 Index on the table
 	// In which case this also can't cause a discrepancy between existing tuple count and insert tuple count
 	D_ASSERT(input_chunk.size() == scan_chunk.size());
-	result.SetChildCardinality(input_chunk.size());
 }
 
 static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, DuckTableEntry &table, Vector &row_ids,
@@ -199,7 +197,6 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, DuckT
 		do_update_filter_result.Initialize(context.client, {LogicalType::BOOLEAN});
 		ExpressionExecutor where_executor(context.client, *do_update_condition);
 		where_executor.Execute(chunk, do_update_filter_result);
-		do_update_filter_result.SetChildCardinality(chunk.size());
 		do_update_filter_result.Flatten();
 
 		SelectionVector sel(chunk.size());
@@ -232,7 +229,6 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, DuckT
 	update_chunk.Initialize(context.client, set_types, chunk.size());
 	ExpressionExecutor executor(context.client, set_expressions);
 	executor.Execute(chunk, update_chunk);
-	update_chunk.SetChildCardinality(chunk.size());
 }
 
 template <bool GLOBAL>
@@ -752,7 +748,6 @@ SourceResultType PhysicalInsert::GetDataInternal(ExecutionContext &context, Data
 	auto &insert_gstate = sink_state->Cast<InsertGlobalState>();
 	if (!return_chunk) {
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(insert_gstate.insert_count)));
-		chunk.SetChildCardinality(1);
 		return SourceResultType::FINISHED;
 	}
 

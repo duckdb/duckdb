@@ -48,7 +48,6 @@ static void PragmaCollateFunction(ClientContext &context, TableFunctionInput &da
 	for (idx_t i = data.offset; i < next; i++) {
 		collname.Append(Value(data.entries[i]));
 	}
-	output.SetChildCardinality(next - data.offset);
 	data.offset = next;
 }
 

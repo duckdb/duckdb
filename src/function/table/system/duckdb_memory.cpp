@@ -62,7 +62,6 @@ void DuckDBMemoryFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		temporary_storage_bytes.Append(Value::BIGINT(ClampReportedMemory(entry.evicted_data)));
 		count++;
 	}
-	output.SetChildCardinality(count);
 }
 
 void DuckDBMemoryFun::RegisterFunction(BuiltinFunctions &set) {

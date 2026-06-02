@@ -333,7 +333,6 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			data.offset++;
 		}
 	}
-	output.SetChildCardinality(count);
 }
 
 void DuckDBConstraintsFun::RegisterFunction(BuiltinFunctions &set) {

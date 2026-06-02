@@ -169,7 +169,6 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 		output.data[0].Sequence(current_value_i64, Hugeint::Cast<int64_t>(increment), remaining);
 		// increment the index pointer by the remaining count
 		state.current_idx += remaining;
-		output.SetChildCardinality(remaining);
 		if (remaining == 0) {
 			// move to next row
 			state.current_input_row++;

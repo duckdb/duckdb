@@ -345,7 +345,6 @@ void PhysicalStreamingWindow::ExecuteInput(ExecutionContext &context, DataChunk 
 		output.data[col_idx].Reference(input.data[col_idx]);
 		FlatVector::SetSize(output.data[col_idx], count_t(count));
 	}
-	output.SetChildCardinality(count);
 
 	ExecuteFunctions(context, output, state.delayed, gstate_p);
 }
@@ -376,7 +375,6 @@ void PhysicalStreamingWindow::ExecuteShifted(ExecutionContext &context, DataChun
 		VectorOperations::Copy(input.data[col_idx], delayed.data[col_idx], in, 0, delay - out);
 		FlatVector::SetSize(delayed.data[col_idx], count_t(new_delayed_count));
 	}
-	delayed.SetChildCardinality(new_delayed_count);
 
 	ExecuteFunctions(context, output, delayed, gstate_p);
 }
@@ -389,7 +387,6 @@ void PhysicalStreamingWindow::ExecuteDelayed(ExecutionContext &context, DataChun
 		output.data[col_idx].Reference(delayed.data[col_idx]);
 		FlatVector::SetSize(output.data[col_idx], count_t(count));
 	}
-	output.SetChildCardinality(count);
 
 	ExecuteFunctions(context, output, input, gstate_p);
 }
@@ -403,6 +400,11 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	}
 
 	auto &delayed = state.delayed;
+	if (!state.lead_count) {
+		// Without LEAD nothing is ever delayed (the delayed buffer is not even initialized), so emit the input directly.
+		ExecuteInput(context, delayed, input, output, gstate_p);
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
 	// We can Reset delayed now that no one can be referencing it (the previous output has been consumed).
 	if (state.flushed_delayed) {
 		state.ResetChunk(delayed);

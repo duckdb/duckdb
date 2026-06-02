@@ -60,7 +60,6 @@ static void ConstructSemiOrAntiJoinResult(DataChunk &left, DataChunk &result, bo
 		// reference the columns of the left side from the result
 		result.Slice(left, sel, result_count);
 	} else {
-		result.SetChildCardinality(0);
 	}
 }
 

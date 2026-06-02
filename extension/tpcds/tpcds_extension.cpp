@@ -116,7 +116,6 @@ static void TPCDSQueryFunction(ClientContext &context, TableFunctionInput &data_
 		data.offset++;
 		chunk_count++;
 	}
-	output.SetChildCardinality(chunk_count);
 }
 
 static duckdb::unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
@@ -161,7 +160,6 @@ static void TPCDSQueryAnswerFunction(ClientContext &context, TableFunctionInput 
 		data.offset++;
 		chunk_count++;
 	}
-	output.SetChildCardinality(chunk_count);
 }
 
 static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters &parameters) {

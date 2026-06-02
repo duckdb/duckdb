@@ -1030,7 +1030,6 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 		chunk.data[radix_ht.op.GroupCount() + radix_ht.op.aggregates.size() + i].Reference(radix_ht.grouping_values[i],
 		                                                                                   count_t(scan_chunk.size()));
 	}
-	chunk.SetChildCardinality(scan_chunk.size());
 	D_ASSERT(chunk.size() != 0);
 }
 

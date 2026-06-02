@@ -215,7 +215,6 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 
 		count++;
 	}
-	output.SetChildCardinality(count);
 }
 
 void DuckDBTypesFun::RegisterFunction(BuiltinFunctions &set) {
