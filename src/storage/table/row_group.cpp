@@ -1369,6 +1369,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 
 	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointOptions());
 
+	vector<idx_t> reused_columns;
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		bool column_has_changes = true;
 		if (partial_reuse) {
@@ -1382,6 +1383,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		if (!column_has_changes) {
 			// reuse this column's metadata
 			result.states.push_back(nullptr);
+			reused_columns.emplace_back(column_idx);
 			result_row_group->column_pointers[column_idx] = column_pointers[column_idx];
 			// carry forward existing column data and statistics
 			if (!ColumnIsLoaded(column_idx)) {
@@ -1406,6 +1408,17 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 			}
 			result_row_group->columns[column_idx] = CheckpointColumn(*this, column_idx, info, result);
 		}
+	}
+
+	if (!reused_columns.empty()) {
+		D_ASSERT(partial_reuse);
+		// carry forward the extras for reused columns onto the new row group, so RowGroup::Checkpoint
+		// can look them up via this->per_column_metadata_blocks
+		auto extras = per_column_metadata_blocks.GetBlocksForColumns(reused_columns);
+		for (idx_t i = 0; i < reused_columns.size(); i++) {
+			result_row_group->per_column_metadata_blocks.AddColumn(reused_columns[i], extras[i]);
+		}
+		result_row_group->has_per_column_metadata_blocks = true;
 	}
 
 	result.result_row_group = std::move(result_row_group);
@@ -1467,7 +1480,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	}
 	// write path: write column metadata to disk (with optional per-column reuse)
 	D_ASSERT(write_data.states.size() == GetColumnCount());
-	vector<idx_t> reused_columns;
 
 	// merge stats
 	{
@@ -1475,7 +1487,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 			bool is_reused = !write_data.states[column_idx];
 			if (is_reused) {
-				reused_columns.emplace_back(column_idx);
 				if (!ColumnIsLoaded(column_idx) &&
 				    collection.get().GetTypes()[column_idx].id() != LogicalTypeId::VARIANT) {
 					writer.SetHasUnloadedColumn(column_idx);
@@ -1492,28 +1503,17 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 
 	// collect blocks that need to be preserved for reused columns
 	vector<MetaBlockPointer> reused_column_blocks;
-
-	vector<vector<idx_t>> extra_blocks_for_columns;
-	if (!reused_columns.empty()) {
-		extra_blocks_for_columns = per_column_metadata_blocks.GetBlocksForColumns(reused_columns);
-	}
-	idx_t reused_column_idx = 0;
+	// per-column extras for newly written columns, collected separately and merged with the
+	// partial map of reused-column extras (carried over onto this row group by WriteToDisk).
+	PerColumnMetadataBlocks written_column_blocks;
 
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		bool is_reused = !write_data.states[column_idx];
 		if (is_reused) {
-			// reuse existing column pointer and per-column blocks
+			// reuse existing column pointer (extras are already carried on this->per_column_metadata_blocks)
 			auto col_ptr = column_pointers[column_idx];
 			row_group_pointer.data_pointers.push_back(col_ptr);
-			auto &col_blocks = extra_blocks_for_columns[reused_column_idx];
-			row_group_pointer.per_column_metadata_blocks.AddColumn(column_idx, col_blocks);
-
-			// collect all blocks for this reused column for ClearModifiedBlocks
 			reused_column_blocks.push_back(col_ptr);
-			for (auto &block_id : col_blocks) {
-				reused_column_blocks.emplace_back(block_id, 0);
-			}
-			++reused_column_idx;
 			continue;
 		}
 		// write new metadata for this column
@@ -1553,16 +1553,35 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 				col_extra_blocks.push_back(written_ptr.block_pointer);
 			}
 		}
-		row_group_pointer.per_column_metadata_blocks.AddColumn(column_idx, col_extra_blocks);
+		written_column_blocks.AddColumn(column_idx, col_extra_blocks);
 	}
 
 	if (GetCollection().SupportsPerColumnWrites()) {
-		row_group_pointer.has_per_column_metadata_blocks = true; // blocks already populated above
+		row_group_pointer.has_per_column_metadata_blocks = true;
+		if (write_data.write_action == RowGroupWriteAction::PARTIALLY_REUSE_COLUMN_METADATA) {
+			// merge reused-column extras (on this) with newly-written-column extras
+			D_ASSERT(has_per_column_metadata_blocks);
+			row_group_pointer.per_column_metadata_blocks =
+			    PerColumnMetadataBlocks::Merge(per_column_metadata_blocks, written_column_blocks);
+
+			// reused column blocks must be preserved by ClearModifiedBlocks
+			per_column_metadata_blocks.ForEachBlock(
+			    [&](idx_t, idx_t block_id) { reused_column_blocks.emplace_back(block_id, 0); });
+		} else {
+			row_group_pointer.per_column_metadata_blocks = written_column_blocks;
+		}
+		row_group_pointer.has_metadata_blocks = false;
+		row_group_pointer.extra_metadata_blocks.clear();
 	} else {
-		row_group_pointer.has_metadata_blocks = true;
-		row_group_pointer.per_column_metadata_blocks.ForEachBlock(
-		    [&](idx_t, idx_t block_id) { row_group_pointer.extra_metadata_blocks.push_back(block_id); });
+		// Per-column reuse is not supported, so instead flatten the newly-written per-column extras into
+		// extra_metadata_blocks to still allow reusing the full row-group metadata on future checkpoints.
+		D_ASSERT(write_data.write_action != RowGroupWriteAction::PARTIALLY_REUSE_COLUMN_METADATA);
+		row_group_pointer.has_per_column_metadata_blocks = false;
 		row_group_pointer.per_column_metadata_blocks = {};
+		row_group_pointer.has_metadata_blocks = true;
+		row_group_pointer.extra_metadata_blocks.clear();
+		written_column_blocks.ForEachBlock(
+		    [&](idx_t, idx_t block_id) { row_group_pointer.extra_metadata_blocks.push_back(block_id); });
 	}
 
 	if (metadata_manager) {
