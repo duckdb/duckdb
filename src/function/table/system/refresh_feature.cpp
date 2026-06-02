@@ -212,8 +212,9 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 				}
 				did_work = true;
 			} else {
-				// Step 2: Find the range of new source data (ceiling buckets > watermark,
-				//         i.e. floor bucket >= watermark since watermark is a ceiling boundary)
+				// Step 2: Find the range of new or late-arriving source data. Scan floor
+				//         buckets >= watermark - 1 gran so that late-arriving rows for the
+				//         last processed bucket (whose ceiling == watermark) are also detected.
 				auto range_sql = "SELECT MIN(DATE_TRUNC('" + gran + "', " + ts_col +
 				                 ")), "
 				                 "MAX(DATE_TRUNC('" +
@@ -221,7 +222,7 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 				                 ")) "
 				                 "FROM " +
 				                 src_table + " WHERE DATE_TRUNC('" + gran + "', " + ts_col + ") >= '" + watermark +
-				                 "'::TIMESTAMP";
+				                 "'::TIMESTAMP - INTERVAL '1 " + gran + "'";
 				auto range_result = con.Query(range_sql);
 
 				string earliest_new, latest_new;
