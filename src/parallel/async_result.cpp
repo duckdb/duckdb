@@ -25,6 +25,8 @@ private:
 };
 
 class AsyncExecutionTask : public ExecutorTask {
+	enum class CompletionSignal { BATCH_FINISHED, BATCH_ERRORED };
+
 public:
 	AsyncExecutionTask(Executor &executor, unique_ptr<AsyncTask> &&async_task, InterruptState &interrupt_state,
 	                   shared_ptr<Counter> counter)
@@ -35,10 +37,10 @@ public:
 		try {
 			async_task->Execute();
 		} catch (...) {
-			SignalCompletion(true);
+			SignalCompletion(CompletionSignal::BATCH_ERRORED);
 			throw;
 		}
-		SignalCompletion(false);
+		SignalCompletion(CompletionSignal::BATCH_FINISHED);
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
@@ -47,9 +49,9 @@ public:
 	}
 
 private:
-	void SignalCompletion(bool force_callback) {
+	void SignalCompletion(CompletionSignal signal) {
 		auto finished = counter->IterateAndCheckCounter();
-		if (force_callback || finished) {
+		if (signal == CompletionSignal::BATCH_ERRORED || finished) {
 			interrupt_state.Callback();
 		}
 	}
