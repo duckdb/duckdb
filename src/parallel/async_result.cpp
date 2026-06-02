@@ -32,10 +32,13 @@ public:
 	      counter(std::move(counter)) {
 	}
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		async_task->Execute();
-		if (counter->IterateAndCheckCounter()) {
-			interrupt_state.Callback();
+		try {
+			async_task->Execute();
+		} catch (...) {
+			SignalCompletion(true);
+			throw;
 		}
+		SignalCompletion(false);
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
@@ -44,6 +47,13 @@ public:
 	}
 
 private:
+	void SignalCompletion(bool force_callback) {
+		auto finished = counter->IterateAndCheckCounter();
+		if (force_callback || finished) {
+			interrupt_state.Callback();
+		}
+	}
+
 	unique_ptr<AsyncTask> async_task;
 	InterruptState interrupt_state;
 	shared_ptr<Counter> counter;
