@@ -360,10 +360,24 @@ SKIPPED_TESTS_PATTERN = re.compile(
 SKIP_REASON_PATTERN = re.compile(r"(.+):\s+(\d+)$")
 MODE_SKIP_REASON_PATTERN = re.compile(r"^mode skip(?:\s+(.*\S))?\s*$")
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+TEST_RUNTIME_PATTERN = re.compile(r"^\[\d+/\d+\] \(\d+%\): (.+) took ([0-9]+(?:\.[0-9]+)?)s\s*$")
 
 
 def strip_ansi(text: str):
     return ANSI_ESCAPE_PATTERN.sub("", text)
+
+
+def parse_test_runtimes(output: str):
+    runtimes = []
+    for line in strip_ansi(output).splitlines():
+        match = TEST_RUNTIME_PATTERN.match(line.strip())
+        if match:
+            runtimes.append((match.group(1), float(match.group(2))))
+    return runtimes
+
+
+def extract_test_runtimes(stdout: str, stderr: str):
+    return parse_test_runtimes(stdout) + parse_test_runtimes(stderr)
 
 
 def parse_skipped_tests_count(output: str):
@@ -549,8 +563,14 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
 
 
 def report_batch_metrics(ctx: RunContext, batch_info, result, elapsed: float):
-    if ctx.config.runtime_threshold_seconds is not None and elapsed >= ctx.config.runtime_threshold_seconds:
-        ctx.progress.print_message(f"warn: {batch_info['batch'][0]} took {elapsed:.2f}s")
+    if ctx.config.runtime_threshold_seconds is not None:
+        test_runtimes = extract_test_runtimes(result["stdout"], result["stderr"])
+        if test_runtimes:
+            for test_name, test_elapsed in test_runtimes:
+                if test_elapsed >= ctx.config.runtime_threshold_seconds:
+                    ctx.progress.print_message(f"warn: {test_name} took {test_elapsed:.2f}s")
+        elif elapsed >= ctx.config.runtime_threshold_seconds:
+            ctx.progress.print_message(f"warn: {batch_info['batch'][0]} took {elapsed:.2f}s")
     if (
         ctx.config.rss_memory_threshold_mib is not None
         and format_mib(result["peak_rss_bytes"]) >= ctx.config.rss_memory_threshold_mib
@@ -825,11 +845,7 @@ def main_impl(argv: list[str] | None = None):
     unittest_bin = args.unittest_bin
     if os.name == "nt":
         unittest_bin = unittest_bin.replace("/", "\\")
-    if args.track_runtime is not None:
-        print("enabling runtime tracking forces batch_size=1")
-        batch_size = 1
-    else:
-        batch_size = args.batch_size
+    batch_size = args.batch_size
     failed_configs = []
     if len(config_invocations) > 1:
         print(f"running {len(config_invocations)} configs")
