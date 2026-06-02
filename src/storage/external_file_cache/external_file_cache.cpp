@@ -347,7 +347,8 @@ shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFi
 void ExternalFileCache::TryEraseCachedFile(const string &path, const weak_ptr<CachedFile> &cached_file) {
 	const annotated_lock_guard<annotated_mutex> guard(lock);
 	auto entry = cached_files.find(path);
-	if (entry == cached_files.end() || weak_ptr<CachedFile>(entry->second) != cached_file) {
+	auto pinned_file = cached_file.lock();
+	if (entry == cached_files.end() || !pinned_file || entry->second.get() != pinned_file.get()) {
 		return;
 	}
 	cached_files.erase(entry);
