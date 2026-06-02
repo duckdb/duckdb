@@ -43,7 +43,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 			continue;
 		}
 		auto &window_expr = expr->Cast<BoundWindowExpression>();
-		auto &partitions = window_expr.partitions;
+		auto &partitions = window_expr.Partitions();
 		if (partitions.empty()) {
 			// If any window expression does not have partitions, we cannot push any filters.
 			// all window expressions need to be partitioned by the same column

@@ -103,7 +103,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<ListSortBindData>();
+	auto &info = func_expr.BindInfo()->Cast<ListSortBindData>();
 
 	// initialize the global and local sorting state
 	auto global_sink_state = info.sort->GetGlobalSinkState(info.context);

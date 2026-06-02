@@ -6,6 +6,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/storage/storage_options.hpp"
 #include "zstd.h"
 
 namespace duckdb {
@@ -328,7 +329,8 @@ void TemporaryFileHandle::CreateFileIfNotExists(TemporaryFileLock &) {
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto open_flags = FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
-	if (db.config.options.use_direct_io) {
+	// Temp files have no per-file IO_MODE; they follow the global default_io_mode setting.
+	if (Settings::Get<DefaultIoModeSetting>(db) == FileIOMode::DIRECT_IO) {
 		open_flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 	}
 	handle = fs.OpenFile(path, open_flags);

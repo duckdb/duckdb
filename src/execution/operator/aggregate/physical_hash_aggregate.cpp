@@ -84,13 +84,13 @@ static vector<LogicalType> CreateGroupChunkTypes(vector<unique_ptr<Expression>> 
 	for (auto &group : groups) {
 		D_ASSERT(group->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &bound_ref = group->Cast<BoundReferenceExpression>();
-		group_indices.insert(bound_ref.index);
+		group_indices.insert(bound_ref.Index());
 	}
 	idx_t highest_index = *group_indices.rbegin();
 	vector<LogicalType> types(highest_index + 1, LogicalType::SQLNULL);
 	for (auto &group : groups) {
 		auto &bound_ref = group->Cast<BoundReferenceExpression>();
-		types[bound_ref.index] = bound_ref.GetReturnType();
+		types[bound_ref.Index()] = bound_ref.GetReturnType();
 	}
 	return types;
 }
@@ -173,8 +173,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
 			auto &bound_ref_expr = filter_ref.Cast<BoundReferenceExpression>();
 			if (!filter_indexes.count(filter_ref)) {
 				// Replace the bound reference expression's index with the corresponding index of the payload chunk
-				filter_indexes[filter_ref] = bound_ref_expr.index;
-				bound_ref_expr.index = aggregate_input_idx;
+				filter_indexes[filter_ref] = bound_ref_expr.Index();
+				bound_ref_expr.IndexMutable() = aggregate_input_idx;
 			}
 			aggregate_input_idx++;
 		}
@@ -368,7 +368,7 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 			D_ASSERT(it != filter_indexes.end());
 			D_ASSERT(it->second < chunk.data.size());
 			auto &filter_bound_ref = filter_ref.Cast<BoundReferenceExpression>();
-			filter_chunk.data[filter_bound_ref.index].Reference(chunk.data[it->second]);
+			filter_chunk.data[filter_bound_ref.Index()].Reference(chunk.data[it->second]);
 
 			// We cant use the AggregateFilterData::ApplyFilter method, because the chunk we need to
 			// apply the filter to also has the groups, and the filtered_data.filtered_payload does not have those.
@@ -387,15 +387,15 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 			for (idx_t group_idx = 0; group_idx < grouped_aggregate_data.groups.size(); group_idx++) {
 				auto &group = grouped_aggregate_data.groups[group_idx];
 				auto &bound_ref = group->Cast<BoundReferenceExpression>();
-				auto &col = filtered_input.data[bound_ref.index];
-				col.Reference(chunk.data[bound_ref.index]);
+				auto &col = filtered_input.data[bound_ref.Index()];
+				col.Reference(chunk.data[bound_ref.Index()]);
 				col.Slice(sel_vec, count);
 			}
 			for (idx_t child_idx = 0; child_idx < aggregate.GetChildren().size(); child_idx++) {
 				auto &child = aggregate.GetChildren()[child_idx];
 				auto &bound_ref = child->Cast<BoundReferenceExpression>();
-				auto &col = filtered_input.data[bound_ref.index];
-				col.Reference(chunk.data[bound_ref.index]);
+				auto &col = filtered_input.data[bound_ref.Index()];
+				col.Reference(chunk.data[bound_ref.Index()]);
 				col.Slice(sel_vec, count);
 			}
 
@@ -435,8 +435,8 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 		for (auto &child_expr : aggr.GetChildren()) {
 			D_ASSERT(child_expr->GetExpressionType() == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = child_expr->Cast<BoundReferenceExpression>();
-			D_ASSERT(bound_ref_expr.index < chunk.data.size());
-			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[bound_ref_expr.index]);
+			D_ASSERT(bound_ref_expr.Index() < chunk.data.size());
+			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[bound_ref_expr.Index()]);
 		}
 	}
 	// Populate the filter vectors
@@ -793,7 +793,7 @@ TaskExecutionResult HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping
 			for (idx_t group_idx = 0; group_idx < group_by_size; group_idx++) {
 				auto &group = grouped_aggregate_data.groups[group_idx];
 				auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
-				group_chunk.data[bound_ref_expr.index].Reference(output_chunk.data[group_idx]);
+				group_chunk.data[bound_ref_expr.Index()].Reference(output_chunk.data[group_idx]);
 			}
 			group_chunk.SetChildCardinality(output_chunk.size());
 

@@ -18,15 +18,15 @@ enum class WindowDistinctSortStage : uint8_t { INIT, COMBINE, FINALIZE, SORTED, 
 // WindowDistinctAggregator
 //===--------------------------------------------------------------------===//
 bool WindowDistinctAggregator::CanAggregate(const BoundWindowExpression &wexpr) {
-	if (!wexpr.aggregate) {
+	if (!wexpr.AggregateFunction()) {
 		return false;
 	}
 
-	if (!wexpr.aggregate->CanAggregate()) {
+	if (!wexpr.AggregateFunction()->CanAggregate()) {
 		return false;
 	}
 
-	return wexpr.distinct && wexpr.exclude_clause == WindowExcludeMode::NO_OTHER && wexpr.arg_orders.empty();
+	return wexpr.Distinct() && wexpr.WindowExclude() == WindowExcludeMode::NO_OTHER && wexpr.ArgOrders().empty();
 }
 
 WindowDistinctAggregator::WindowDistinctAggregator(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared,

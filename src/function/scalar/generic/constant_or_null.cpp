@@ -27,7 +27,7 @@ public:
 
 static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<ConstantOrNullBindData>();
+	auto &info = func_expr.BindInfo()->Cast<ConstantOrNullBindData>();
 	result.Reference(info.value, count_t(args.size()));
 	for (idx_t idx = 1; idx < args.ColumnCount(); idx++) {
 		switch (args.data[idx].GetVectorType()) {
@@ -94,11 +94,11 @@ unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
 }
 
 bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value &val) {
-	if (expr.function.GetName() != "constant_or_null") {
+	if (expr.Function().GetName() != "constant_or_null") {
 		return false;
 	}
-	D_ASSERT(expr.bind_info);
-	auto &bind_data = expr.bind_info->Cast<ConstantOrNullBindData>();
+	D_ASSERT(expr.BindInfo());
+	auto &bind_data = expr.BindInfo()->Cast<ConstantOrNullBindData>();
 	D_ASSERT(bind_data.value.type() == val.type());
 	return bind_data.value == val;
 }

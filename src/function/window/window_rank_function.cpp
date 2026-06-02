@@ -23,9 +23,9 @@ public:
 			//	If the argument order is a prefix of the partition ordering
 			//	(and the optimizer is enabled), then we can just use the partition ordering.
 			auto &wexpr = executor.wexpr;
-			auto &arg_orders = executor.wexpr.arg_orders;
+			auto &arg_orders = executor.wexpr.ArgOrders();
 			const auto optimize = Settings::Get<EnableOptimizerSetting>(client);
-			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
+			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.OrderBy(), arg_orders) != arg_orders.size()) {
 				token_tree = make_uniq<WindowTokenTree>(client, arg_orders, executor.arg_order_idx, payload_count);
 			}
 		}
@@ -140,7 +140,7 @@ struct WindowPeerExecutor : public WindowExecutor {
 void WindowPeerExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
 	const auto &wexpr = executor.wexpr;
 	auto &arg_order_idx = executor.arg_order_idx;
-	for (const auto &order : wexpr.arg_orders) {
+	for (const auto &order : wexpr.ArgOrders()) {
 		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
 	}
 }
@@ -177,7 +177,7 @@ public:
 };
 
 void WindowRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-	if (wexpr.arg_orders.empty()) {
+	if (wexpr.ArgOrders().empty()) {
 		required.insert(PARTITION_BEGIN);
 		required.insert(PEER_BEGIN);
 	} else {
@@ -379,7 +379,7 @@ public:
 };
 
 void WindowPercentRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-	if (wexpr.arg_orders.empty()) {
+	if (wexpr.ArgOrders().empty()) {
 		required.insert(PARTITION_BEGIN);
 		required.insert(PARTITION_END);
 		required.insert(PEER_BEGIN);
@@ -472,7 +472,7 @@ public:
 };
 
 void WindowCumeDistExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr) {
-	if (wexpr.arg_orders.empty()) {
+	if (wexpr.ArgOrders().empty()) {
 		required.insert(PARTITION_BEGIN);
 		required.insert(PARTITION_END);
 		required.insert(PEER_END);

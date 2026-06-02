@@ -754,11 +754,11 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &
 	auto result_func = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(children),
 	                                                      std::move(bind_info), is_operator);
 
-	if (result_func->function.HasBindExpressionCallback()) {
+	if (result_func->Function().HasBindExpressionCallback()) {
 		// if a bind_expression callback is registered - call it and emit the resulting expression
-		FunctionBindExpressionInput input(context, result_func->function, result_func->bind_info.get(),
-		                                  result_func->children);
-		result = result_func->function.GetBindExpressionCallback()(input);
+		FunctionBindExpressionInput input(context, result_func->FunctionMutable(), result_func->BindInfoMutable().get(),
+		                                  result_func->GetChildrenMutable());
+		result = result_func->Function().GetBindExpressionCallback()(input);
 	}
 
 	if (!result) {
@@ -853,7 +853,7 @@ unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(const Windo
 
 	auto window = make_uniq<BoundWindowFunction>(std::move(bound_function));
 	auto result = make_uniq<BoundWindowExpression>(return_type, nullptr, std::move(window), std::move(bind_info));
-	result->children = std::move(children);
+	result->GetChildrenMutable() = std::move(children);
 
 	return result;
 }

@@ -240,7 +240,7 @@ public:
 		//	Build the argument into a shared collection, including the NULLs (so we can find them quickly.)
 		const auto &wexpr = executor.wexpr;
 		auto &child_idx = executor.child_idx;
-		child_idx.emplace_back(shared.RegisterCollection(wexpr.children[0], true));
+		child_idx.emplace_back(shared.RegisterCollection(wexpr.GetChildren()[0], true));
 	}
 
 	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
@@ -288,9 +288,9 @@ public:
 	class StreamingState : public WindowExecutorStreamingState {
 	public:
 		StreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
-		    : wexpr(wexpr), filler(Value(wexpr.children[0]->GetReturnType()), count_t(STANDARD_VECTOR_SIZE)),
-		      executor(client), arg(wexpr.children[0]->GetReturnType()) {
-			executor.AddExpression(*wexpr.children[0]);
+		    : wexpr(wexpr), filler(Value(wexpr.GetChildren()[0]->GetReturnType()), count_t(STANDARD_VECTOR_SIZE)),
+		      executor(client), arg(wexpr.GetChildren()[0]->GetReturnType()) {
+			executor.AddExpression(*wexpr.GetChildren()[0]);
 		}
 		//! The window expression
 		const BoundWindowExpression &wexpr;
@@ -805,7 +805,7 @@ static unique_ptr<FunctionLocalState> RowIdFilterInit(ExpressionState &, const B
 }
 
 static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<RowIdFilterBindData>();
+	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<RowIdFilterBindData>();
 	auto &allowed = bind_data.allowed_set;
 
 	auto &input_vec = args.data[0];

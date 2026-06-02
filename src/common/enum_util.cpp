@@ -10,6 +10,7 @@
 
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/dependency/dependency_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/common/box_renderer.hpp"
@@ -202,10 +203,12 @@
 #include "duckdb/storage/statistics/variant_stats.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/storage/storage_options.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
+#include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
 
@@ -2324,6 +2327,25 @@ FileGlobOptions EnumUtil::FromString<FileGlobOptions>(const char *value) {
 	return static_cast<FileGlobOptions>(StringUtil::StringToEnum(GetFileGlobOptionsValues(), 3, "FileGlobOptions", value));
 }
 
+const StringUtil::EnumStringLiteral *GetFileIOModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FileIOMode::BUFFERED_IO), "BUFFERED_IO" },
+		{ static_cast<uint32_t>(FileIOMode::MMAP), "MMAP" },
+		{ static_cast<uint32_t>(FileIOMode::DIRECT_IO), "DIRECT_IO" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<FileIOMode>(FileIOMode value) {
+	return StringUtil::EnumToString(GetFileIOModeValues(), 3, "FileIOMode", static_cast<uint32_t>(value));
+}
+
+template<>
+FileIOMode EnumUtil::FromString<FileIOMode>(const char *value) {
+	return static_cast<FileIOMode>(StringUtil::StringToEnum(GetFileIOModeValues(), 3, "FileIOMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetFileLockTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(FileLockType::NO_LOCK), "NO_LOCK" },
@@ -4264,19 +4286,20 @@ const StringUtil::EnumStringLiteral *GetQueryNodeTypeValues() {
 		{ static_cast<uint32_t>(QueryNodeType::STATEMENT_NODE), "STATEMENT_NODE" },
 		{ static_cast<uint32_t>(QueryNodeType::UPDATE_QUERY_NODE), "UPDATE_QUERY_NODE" },
 		{ static_cast<uint32_t>(QueryNodeType::DELETE_QUERY_NODE), "DELETE_QUERY_NODE" },
-		{ static_cast<uint32_t>(QueryNodeType::INSERT_QUERY_NODE), "INSERT_QUERY_NODE" }
+		{ static_cast<uint32_t>(QueryNodeType::INSERT_QUERY_NODE), "INSERT_QUERY_NODE" },
+		{ static_cast<uint32_t>(QueryNodeType::MERGE_QUERY_NODE), "MERGE_QUERY_NODE" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<QueryNodeType>(QueryNodeType value) {
-	return StringUtil::EnumToString(GetQueryNodeTypeValues(), 9, "QueryNodeType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetQueryNodeTypeValues(), 10, "QueryNodeType", static_cast<uint32_t>(value));
 }
 
 template<>
 QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value) {
-	return static_cast<QueryNodeType>(StringUtil::StringToEnum(GetQueryNodeTypeValues(), 9, "QueryNodeType", value));
+	return static_cast<QueryNodeType>(StringUtil::StringToEnum(GetQueryNodeTypeValues(), 10, "QueryNodeType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetQueryResultMemoryTypeValues() {
@@ -4434,6 +4457,25 @@ const char* EnumUtil::ToChars<RelationType>(RelationType value) {
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value) {
 	return static_cast<RelationType>(StringUtil::StringToEnum(GetRelationTypeValues(), 29, "RelationType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetRemoteCapabilityValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RemoteCapability::IS_REMOTE), "IS_REMOTE" },
+		{ static_cast<uint32_t>(RemoteCapability::EXECUTE_QUERY_NODE), "EXECUTE_QUERY_NODE" },
+		{ static_cast<uint32_t>(RemoteCapability::CONNECT), "CONNECT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RemoteCapability>(RemoteCapability value) {
+	return StringUtil::EnumToString(GetRemoteCapabilityValues(), 3, "RemoteCapability", static_cast<uint32_t>(value));
+}
+
+template<>
+RemoteCapability EnumUtil::FromString<RemoteCapability>(const char *value) {
+	return static_cast<RemoteCapability>(StringUtil::StringToEnum(GetRemoteCapabilityValues(), 3, "RemoteCapability", value));
 }
 
 const StringUtil::EnumStringLiteral *GetRenderModeValues() {
@@ -4644,6 +4686,24 @@ const char* EnumUtil::ToChars<SecretSerializationType>(SecretSerializationType v
 template<>
 SecretSerializationType EnumUtil::FromString<SecretSerializationType>(const char *value) {
 	return static_cast<SecretSerializationType>(StringUtil::StringToEnum(GetSecretSerializationTypeValues(), 2, "SecretSerializationType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSegmentTreeVerifyModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SegmentTreeVerifyMode::CONTIGUOUS), "CONTIGUOUS" },
+		{ static_cast<uint32_t>(SegmentTreeVerifyMode::NON_OVERLAPPING), "NON_OVERLAPPING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SegmentTreeVerifyMode>(SegmentTreeVerifyMode value) {
+	return StringUtil::EnumToString(GetSegmentTreeVerifyModeValues(), 2, "SegmentTreeVerifyMode", static_cast<uint32_t>(value));
+}
+
+template<>
+SegmentTreeVerifyMode EnumUtil::FromString<SegmentTreeVerifyMode>(const char *value) {
+	return static_cast<SegmentTreeVerifyMode>(StringUtil::StringToEnum(GetSegmentTreeVerifyModeValues(), 2, "SegmentTreeVerifyMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSelectivityOptionalFilterTypeValues() {

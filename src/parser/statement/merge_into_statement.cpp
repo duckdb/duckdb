@@ -1,86 +1,55 @@
 #include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 
 namespace duckdb {
 
-MergeIntoStatement::MergeIntoStatement() : SQLStatement(StatementType::MERGE_INTO_STATEMENT) {
+MergeIntoStatement::MergeIntoStatement()
+    : SQLStatement(StatementType::MERGE_INTO_STATEMENT), node(make_uniq<MergeQueryNode>()) {
 }
 
-MergeIntoStatement::MergeIntoStatement(const MergeIntoStatement &other) : SQLStatement(other) {
-	target = other.target->Copy();
-	source = other.source->Copy();
-	join_condition = other.join_condition ? other.join_condition->Copy() : nullptr;
-	using_columns = other.using_columns;
-	for (auto &entry : other.actions) {
-		auto &action_list = actions[entry.first];
-		for (auto &action : entry.second) {
-			action_list.push_back(action->Copy());
-		}
-	}
-	for (auto &entry : other.returning_list) {
-		returning_list.push_back(entry->Copy());
-	}
-	cte_map = other.cte_map.Copy();
-}
-
-string MergeIntoStatement::ActionConditionToString(MergeActionCondition condition) {
-	switch (condition) {
-	case MergeActionCondition::WHEN_MATCHED:
-		return "WHEN MATCHED";
-	case MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET:
-		return "WHEN NOT MATCHED";
-	case MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE:
-		return "WHEN NOT MATCHED BY SOURCE";
-	default:
-		throw InternalException("Unknown match condition");
-	}
+MergeIntoStatement::MergeIntoStatement(const MergeIntoStatement &other)
+    : SQLStatement(other), node(unique_ptr_cast<QueryNode, MergeQueryNode>(other.node->Copy())) {
 }
 
 string MergeIntoStatement::ToString() const {
-	string result;
-	result = cte_map.ToString();
-	result += "MERGE INTO ";
-	result += target->ToString();
-	result += " USING ";
-	result += source->ToString();
-	if (join_condition) {
-		result += " ON ";
-		result += join_condition->ToString();
-	} else {
-		result += " USING (";
-		for (idx_t c = 0; c < using_columns.size(); c++) {
-			if (c > 0) {
-				result += ", ";
-			}
-			result += using_columns[c];
-		}
-		result += ")";
-	}
-	for (auto &entry : actions) {
-		for (auto &action : entry.second) {
-			result += " ";
-			result += MergeIntoStatement::ActionConditionToString(entry.first);
-			result += " ";
-			result += action->ToString();
-		}
-	}
-	if (!returning_list.empty()) {
-		result += " RETURNING ";
-		for (idx_t i = 0; i < returning_list.size(); i++) {
-			if (i > 0) {
-				result += ", ";
-			}
-			auto column = returning_list[i]->ToString();
-			if (!returning_list[i]->GetAlias().empty()) {
-				column += StringUtil::Format(" AS %s", SQLIdentifier(returning_list[i]->GetAlias()));
-			}
-			result += column;
-		}
-	}
-	return result;
+	return node->ToString();
 }
 
 unique_ptr<SQLStatement> MergeIntoStatement::Copy() const {
 	return unique_ptr<MergeIntoStatement>(new MergeIntoStatement(*this));
+}
+
+bool MergeIntoAction::Equals(const MergeIntoAction &left, const MergeIntoAction &right) {
+	if (left.action_type != right.action_type) {
+		return false;
+	}
+	if (!ParsedExpression::Equals(left.condition, right.condition)) {
+		return false;
+	}
+	if (!UpdateSetInfo::Equals(left.update_info, right.update_info)) {
+		return false;
+	}
+	if (left.insert_columns != right.insert_columns) {
+		return false;
+	}
+	if (left.column_order != right.column_order) {
+		return false;
+	}
+	if (left.default_values != right.default_values) {
+		return false;
+	}
+	if (left.exclude_columns != right.exclude_columns) {
+		return false;
+	}
+	if (left.expressions.size() != right.expressions.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < left.expressions.size(); i++) {
+		if (!ParsedExpression::Equals(left.expressions[i], right.expressions[i])) {
+			return false;
+		}
+	}
+	return true;
 }
 
 string MergeIntoAction::ToString() const {

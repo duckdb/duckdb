@@ -190,7 +190,7 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 
 static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &bind_data = func_expr.bind_info->Cast<IndexKeyBindData>();
+	auto &bind_data = func_expr.BindInfo()->Cast<IndexKeyBindData>();
 
 	idx_t count = args.size();
 

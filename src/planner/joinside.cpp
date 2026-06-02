@@ -92,12 +92,12 @@ JoinSide JoinSide::GetJoinSide(const Expression &expression, const unordered_set
 		D_ASSERT(expression.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
 		auto &subquery = expression.Cast<BoundSubqueryExpression>();
 		JoinSide side = JoinSide::NONE;
-		for (auto &child : subquery.children) {
+		for (auto &child : subquery.GetChildren()) {
 			auto child_side = GetJoinSide(*child, left_bindings, right_bindings);
 			side = CombineJoinSide(side, child_side);
 		}
 		// correlated subquery, check the side of each of correlated columns in the subquery
-		for (auto &corr : subquery.binder->correlated_columns) {
+		for (auto &corr : subquery.GetBinder()->correlated_columns) {
 			if (corr.depth > 1) {
 				// correlated column has depth > 1
 				// it does not refer to any table in the current set of bindings

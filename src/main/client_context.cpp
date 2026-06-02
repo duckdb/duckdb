@@ -223,10 +223,10 @@ unique_ptr<ClientContextLock> ClientContext::LockContext() {
 
 void ClientContext::ConnectToCatalog(const shared_ptr<AttachedDatabase> &target) {
 	D_ASSERT(target);
-	// Pre-flight: IsRemoteCatalog() is the capability declaration; catalogs that return true MUST
-	// implement RemoteExecute(string). Validation runs before mutation so a throw leaves the client
-	// unbound.
-	if (!target->GetCatalog().IsRemoteCatalog()) {
+	// Pre-flight: Supports(RemoteCapability::CONNECT) is the capability declaration; catalogs that
+	// return true MUST implement RemoteExecute(string). Validation runs before mutation so a throw
+	// leaves the client unbound.
+	if (!target->GetCatalog().Supports(RemoteCapability::CONNECT)) {
 		throw InvalidInputException("Database \"%s\" does not support CONNECT", target->GetName());
 	}
 	connected_to_database = target;
@@ -1019,7 +1019,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 				        "DISCONNECT to clear the connection before running further SQL.")),
 				    query);
 			}
-			// Dispatch via the catalog — IsRemoteCatalog() was validated at CONNECT time, so RemoteExecute
+			// Dispatch via the catalog — Supports(CONNECT) was validated at CONNECT time, so RemoteExecute
 			// is contracted to be implemented. Wrap the returned TableRef into a SelectStatement.
 			auto remote_ref = live->GetCatalog().RemoteExecute(*this, query);
 			statement = WrapAsSelect(std::move(remote_ref));

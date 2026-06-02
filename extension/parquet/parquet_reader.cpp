@@ -19,6 +19,7 @@
 #include "reader/variant_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
 #include "thrift_tools.hpp"
+#include "parquet_prefetch_cost_model.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -183,7 +184,8 @@ static void LogRowGroupPrefetch(ClientContext &context, const string &file_path,
 	}
 	DUCKDB_LOG(context, ParquetPrefetchLogType, file_path, row_group_id, fully_filtered,
 	           ParquetPrefetchStrategyToString(state.prefetch_metrics.logger.strategy),
-	           state.prefetch_metrics.logger.prefetch_groups, minimal_filters);
+	           state.prefetch_metrics.logger.prefetch_groups, minimal_filters,
+	           state.prefetch_metrics.logger.accepted_column_gap);
 }
 
 using duckdb_parquet::ColumnChunk;
@@ -197,8 +199,9 @@ using duckdb_parquet::Statistics;
 using duckdb_parquet::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
-CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, bool prefetch_mode) {
-	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(file_handle, prefetch_mode);
+CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, bool prefetch_mode,
+                         uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP) {
+	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(file_handle, prefetch_mode, accepted_column_gap);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
@@ -1032,7 +1035,6 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
 		    "metadata is located at the end of the file. Write the stream to disk first and read from there instead.");
 	}
-
 	// read the extended file open info (if any)
 	optional_idx footer_size;
 	if (file.extended_info) {
@@ -1450,7 +1452,16 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		state.filter_eliminated_all_rows.assign(state.scan_filters.size(), false);
 	}
 
-	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode);
+	uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
+	if (state.prefetch_mode && !state.file_handle->OnDiskFile()) {
+		NetworkThroughputEstimate estimate;
+		if (state.file_handle->TryGetNetworkThroughput(estimate)) {
+			state.cost_model_state.RefineFromEstimate(estimate);
+		}
+		state.cost_model_state.TryGetColumnGapSize(accepted_column_gap);
+	}
+	state.thrift_file_proto =
+	    CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode, accepted_column_gap);
 
 	state.column_readers.resize(column_indexes.size());
 	for (idx_t i = 0; i < column_indexes.size(); i++) {
@@ -1657,6 +1668,16 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		trans.ClearPrefetch();
 		state.current_group_prefetched = false;
 
+		if (state.prefetch_mode && !state.file_handle->OnDiskFile()) {
+			NetworkThroughputEstimate estimate;
+			if (state.file_handle->TryGetNetworkThroughput(estimate)) {
+				state.cost_model_state.RefineFromEstimate(estimate);
+			}
+			uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
+			state.cost_model_state.TryGetColumnGapSize(accepted_column_gap);
+			trans.SetAcceptedColumnGap(accepted_column_gap);
+		}
+
 		if (log_prefetch && state.prefetch_metrics.filter_ran && state.current_group > 0) {
 			LogRowGroupPrefetch(context, file.path, state.group_idx_list[state.current_group - 1], state);
 		}
@@ -1717,6 +1738,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				} else {
 					ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
 				}
+			}
+			if (log_prefetch) {
+				state.prefetch_metrics.logger.accepted_column_gap = trans.GetAcceptedColumnGap();
 			}
 		}
 		result.Reset();

@@ -379,7 +379,7 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 
 	// get the lambda expression and put it in the bind info
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
+	auto lambda_expr = std::move(bound_lambda_expr.LambdaExprMutable());
 	if (lambda_expr->IsVolatile()) {
 		bound_function.SetVolatile();
 	}
