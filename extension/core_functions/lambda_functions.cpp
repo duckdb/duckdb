@@ -177,10 +177,6 @@ LambdaFunctions::GetMutableColumnInfo(vector<LambdaFunctions::ColumnInfo> &data)
 static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &column_info,
                               const vector<LambdaFunctions::ColumnInfo> &column_infos, const Vector &index_vector,
                               LambdaExecuteInfo &info) {
-	// NOTE: the input vectors are (re)referenced below, after which the cardinality is set (see SetChildCardinality
-	// at the end of this function). We must not set the cardinality here, as the chunk may still hold non-flat
-	// (e.g. dictionary) references from a previous invocation that cannot be resized.
-
 	// slice the child vector
 	Vector slice(column_info.vector, column_info.sel, elem_cnt);
 
