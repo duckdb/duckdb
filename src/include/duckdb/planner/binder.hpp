@@ -331,6 +331,7 @@ public:
 	static optional_ptr<ParsedExpression> GetResolvedColumnExpression(ParsedExpression &root_expr);
 
 	void SetCanContainNulls(bool can_contain_nulls);
+	bool CanContainNulls() const;
 	void SetAlwaysRequireRebind();
 
 	StatementProperties &GetStatementProperties();
@@ -360,8 +361,8 @@ private:
 	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
 	bool is_outside_flattened = true;
-	//! Whether or not the binder can contain NULLs as the root of expressions
-	bool can_contain_nulls = false;
+	//! LEGACY: Whether or not the binder can contain NULLs as the root of expressions
+	bool legacy_can_contain_nulls = false;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Used to retrieve CatalogEntry's

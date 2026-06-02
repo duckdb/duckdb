@@ -79,7 +79,7 @@ void Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &e
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list = std::move(expressions);
 	select_node->from_table = make_uniq<EmptyTableRef>();
-	binder->can_contain_nulls = true;
+	binder->SetCanContainNulls(true);
 	subquery = binder->BindNode(*select_node);
 	MoveCorrelatedExpressions(*binder);
 }
@@ -130,7 +130,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 				return false;
 			}
 			auto binder = Binder::CreateBinder(this->context, this);
-			binder->can_contain_nulls = true;
+			binder->SetCanContainNulls(true);
 			auto &se = child->Cast<SubqueryExpression>();
 			subquery = binder->BindNode(*se.Subquery()->node);
 			MoveCorrelatedExpressions(*binder);
@@ -382,7 +382,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		D_ASSERT(query_node);
 
 		auto binder = Binder::CreateBinder(context, this);
-		binder->can_contain_nulls = true;
+		binder->SetCanContainNulls(true);
 
 		binder->alias = ref.alias.empty() ? "unnamed_query" : ref.alias;
 		BoundStatement query;

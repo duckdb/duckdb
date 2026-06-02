@@ -889,6 +889,13 @@
         "default_value": "50"
     },
     {
+        "name": "legacy_disable_null_type",
+        "description": "When enabled, prevent the NULL type from leaving the binder (< v2.0 default behavior)",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "legacy_metrics_format",
         "description": "When enabled, profiling output uses the legacy flat format instead of the current grouped format",
         "type": "BOOLEAN",

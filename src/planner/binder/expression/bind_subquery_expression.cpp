@@ -95,7 +95,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	if (expr.Subquery()->node->type != QueryNodeType::BOUND_SUBQUERY_NODE) {
 		// first bind the actual subquery in a new binder
 		auto subquery_binder = Binder::CreateBinder(context, binder);
-		subquery_binder->can_contain_nulls = true;
+		subquery_binder->SetCanContainNulls(true);
 
 		subquery_binder->BeginSubqueryBind(binder, *this);
 		auto bound_node = subquery_binder->BindNode(*expr.Subquery()->node);
