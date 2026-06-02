@@ -11,17 +11,24 @@
 
 namespace duckdb {
 
-struct Counter {
-	explicit Counter(idx_t size) : counter(size) {
+struct AsyncBatchCompletion {
+	explicit AsyncBatchCompletion(idx_t size) : counter(size), callback_sent(false) {
 	}
+
 	bool IterateAndCheckCounter() {
 		D_ASSERT(counter.load() > 0);
 		idx_t post_decreast = --counter;
 		return (post_decreast == 0);
 	}
 
+	bool MarkCallbackSent() {
+		bool expected = false;
+		return callback_sent.compare_exchange_strong(expected, true);
+	}
+
 private:
 	atomic<idx_t> counter;
+	atomic<bool> callback_sent;
 };
 
 class AsyncExecutionTask : public ExecutorTask {
@@ -29,9 +36,9 @@ class AsyncExecutionTask : public ExecutorTask {
 
 public:
 	AsyncExecutionTask(Executor &executor, unique_ptr<AsyncTask> &&async_task, InterruptState &interrupt_state,
-	                   shared_ptr<Counter> counter)
+	                   shared_ptr<AsyncBatchCompletion> completion)
 	    : ExecutorTask(executor, nullptr), async_task(std::move(async_task)), interrupt_state(interrupt_state),
-	      counter(std::move(counter)) {
+	      completion(std::move(completion)) {
 	}
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		try {
@@ -50,15 +57,21 @@ public:
 
 private:
 	void SignalCompletion(CompletionSignal signal) {
-		auto finished = counter->IterateAndCheckCounter();
-		if (signal == CompletionSignal::BATCH_ERRORED || finished) {
+		auto finished = completion->IterateAndCheckCounter();
+		if ((signal == CompletionSignal::BATCH_ERRORED || finished)) {
+			SendCallback();
+		}
+	}
+
+	void SendCallback() {
+		if (completion->MarkCallbackSent()) {
 			interrupt_state.Callback();
 		}
 	}
 
 	unique_ptr<AsyncTask> async_task;
 	InterruptState interrupt_state;
-	shared_ptr<Counter> counter;
+	shared_ptr<AsyncBatchCompletion> completion;
 };
 
 AsyncResult::AsyncResult(SourceResultType t) : AsyncResult(GetAsyncResultType(t)) {
@@ -104,10 +117,10 @@ void AsyncResult::ScheduleTasks(InterruptState &interrupt_state, Executor &execu
 		throw InternalException("AsyncResult::ScheduleTasks called with no available tasks");
 	}
 
-	shared_ptr<Counter> counter = make_shared_ptr<Counter>(async_tasks.size());
+	shared_ptr<AsyncBatchCompletion> completion = make_shared_ptr<AsyncBatchCompletion>(async_tasks.size());
 
 	for (auto &async_task : async_tasks) {
-		auto task = make_uniq<AsyncExecutionTask>(executor, std::move(async_task), interrupt_state, counter);
+		auto task = make_uniq<AsyncExecutionTask>(executor, std::move(async_task), interrupt_state, completion);
 		TaskScheduler::GetScheduler(executor.context).ScheduleTask(executor.GetToken(), std::move(task));
 	}
 }
