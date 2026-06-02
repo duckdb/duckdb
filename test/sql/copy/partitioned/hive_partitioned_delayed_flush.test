@@ -83,3 +83,42 @@ FROM per_file
 WHERE prev_v IS NOT NULL AND prev_v > v;
 ----
 0
+
+statement ok
+SET partitioned_write_flush_threshold=128;
+
+statement ok
+SET partitioned_write_max_open_files=1;
+
+statement ok
+CREATE TABLE delayed_open_file_pressure AS
+SELECT
+	(i % 96)::INTEGER AS p,
+	i::INTEGER AS v
+FROM range(0, 6144) tbl(i);
+
+statement ok
+COPY delayed_open_file_pressure
+TO '{TEST_DIR}/delayed_open_file_pressure'
+(FORMAT PARQUET, PARTITION_BY (p), ROW_GROUP_SIZE 64);
+
+query II
+SELECT count(*), count(DISTINCT p)
+FROM read_parquet('{TEST_DIR}/delayed_open_file_pressure/**/*.parquet', hive_partitioning = true);
+----
+6144	96
+
+query I
+WITH files AS (
+	SELECT p, count(DISTINCT filename) AS file_count
+	FROM read_parquet(
+		'{TEST_DIR}/delayed_open_file_pressure/**/*.parquet',
+		filename = true,
+		hive_partitioning = true
+	)
+	GROUP BY p
+)
+SELECT max(file_count)
+FROM files;
+----
+1
