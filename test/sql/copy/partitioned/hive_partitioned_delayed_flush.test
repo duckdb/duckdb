@@ -1,0 +1,85 @@
+# name: test/sql/copy/partitioned/hive_partitioned_delayed_flush.test
+# description: delay flushing skewed small partitions in hive-partitioned COPY
+# group: [partitioned]
+
+require parquet
+
+statement ok
+PRAGMA threads=4;
+
+statement ok
+SET partitioned_write_flush_threshold=64;
+
+statement ok
+CREATE TABLE delayed_skew AS
+SELECT
+	CASE WHEN i % 17 = 0 THEN ((i / 17) % 64) + 1 ELSE 0 END::INTEGER AS p,
+	i::INTEGER AS v
+FROM range(0, 20000) tbl(i);
+
+statement ok
+COPY delayed_skew
+TO '{TEST_DIR}/delayed_skew'
+(FORMAT PARQUET, PARTITION_BY (p), ROW_GROUP_SIZE 64);
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/delayed_skew/**/*.parquet', hive_partitioning = true);
+----
+20000
+
+query I
+WITH files AS (
+	SELECT p, count(DISTINCT filename) AS file_count
+	FROM read_parquet(
+		'{TEST_DIR}/delayed_skew/**/*.parquet',
+		filename = true,
+		hive_partitioning = true
+	)
+	GROUP BY p
+)
+SELECT max(file_count)
+FROM files
+WHERE p <> 0;
+----
+1
+
+statement ok
+SET partitioned_write_flush_threshold=32;
+
+statement ok
+CREATE TABLE delayed_ordered AS
+SELECT
+	CASE WHEN i % 9 = 0 THEN ((i / 9) % 4) + 1 ELSE 0 END::INTEGER AS p,
+	(100000 - i)::INTEGER AS v
+FROM range(0, 8192) tbl(i);
+
+statement ok
+COPY (SELECT p, v FROM delayed_ordered ORDER BY v DESC)
+TO '{TEST_DIR}/delayed_ordered'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (v ASC), ROW_GROUP_SIZE 32);
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/delayed_ordered/**/*.parquet', hive_partitioning = true);
+----
+8192
+
+query I
+WITH per_file AS (
+	SELECT
+		filename,
+		v,
+		lag(v) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_v
+	FROM read_parquet(
+		'{TEST_DIR}/delayed_ordered/**/*.parquet',
+		filename = true,
+		file_row_number = true,
+		hive_partitioning = true
+	)
+)
+SELECT count(*)
+FROM per_file
+WHERE prev_v IS NOT NULL AND prev_v > v;
+----
+0
