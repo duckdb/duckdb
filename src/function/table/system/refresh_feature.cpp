@@ -337,16 +337,15 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 				auto gran = GranularityToSQL(feat.granularity);
 				auto ts_col = QuoteIdent(feat.timestamp_column);
 				auto src_table = QuoteIdent(feat.source_table);
-				auto new_wm_result =
-				    con.Query("SELECT MAX(feature_timestamp) FROM " + table_id +
-				              " WHERE __feature_version = " + duckdb::to_string(new_version));
+				auto new_wm_result = con.Query("SELECT MAX(feature_timestamp) FROM " + table_id +
+				                               " WHERE __feature_version = " + duckdb::to_string(new_version));
 				if (!new_wm_result->HasError() && new_wm_result->RowCount() > 0) {
 					auto new_wm_val = new_wm_result->GetValue(0, 0);
 					if (!new_wm_val.IsNull()) {
 						auto new_watermark = new_wm_val.ToString();
 						auto new_count_sql = "SELECT COUNT(*) FROM " + src_table + " WHERE DATE_TRUNC('" + gran +
-						                     "', " + ts_col + ") = '" + new_watermark +
-						                     "'::TIMESTAMP - INTERVAL '1 " + gran + "'";
+						                     "', " + ts_col + ") = '" + new_watermark + "'::TIMESTAMP - INTERVAL '1 " +
+						                     gran + "'";
 						auto new_count_result = con.Query(new_count_sql);
 						if (!new_count_result->HasError() && new_count_result->RowCount() > 0) {
 							auto cnt_val = new_count_result->GetValue(0, 0);
