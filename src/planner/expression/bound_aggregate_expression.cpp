@@ -83,7 +83,7 @@ bool BoundAggregateExpression::Equals(const BaseExpression &other_p) const {
 			return false;
 		}
 	}
-	if (!FunctionData::Equals(bind_info.get(), other.bind_info.get())) {
+	if (!FunctionData::Equals(bind_info.get(), other.BindInfo().get())) {
 		return false;
 	}
 	if (!BoundOrderModifier::Equals(order_bys, other.order_bys)) {

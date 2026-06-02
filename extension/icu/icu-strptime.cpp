@@ -182,7 +182,7 @@ struct ICUStrptime : public ICUDateFunc {
 		const auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
+		auto &info = func_expr.BindInfo()->Cast<ICUStrptimeBindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -239,7 +239,7 @@ struct ICUStrptime : public ICUDateFunc {
 		const auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
+		auto &info = func_expr.BindInfo()->Cast<ICUStrptimeBindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -585,7 +585,7 @@ struct ICUStrftime : public ICUDateFunc {
 		const auto &fmt_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = func_expr.bind_info->Cast<BindData>();
+		auto &info = func_expr.BindInfo()->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 		const auto tz_name = info.tz_setting.c_str();
 

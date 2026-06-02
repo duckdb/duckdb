@@ -231,7 +231,7 @@ void RemapNested(Vector &input, Vector &default_vector, Vector &result, idx_t re
 
 void RemapStructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<RemapStructBindData>();
+	auto &info = func_expr.BindInfo()->Cast<RemapStructBindData>();
 
 	auto &input = args.data[0];
 

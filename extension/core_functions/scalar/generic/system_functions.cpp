@@ -76,7 +76,7 @@ unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 // current_schemas
 void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<CurrentSchemasBindData>();
+	auto &info = func_expr.BindInfo()->Cast<CurrentSchemasBindData>();
 	result.Reference(info.result, count_t(input.size()));
 }
 

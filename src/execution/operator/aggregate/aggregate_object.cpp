@@ -15,7 +15,7 @@ AggregateObject::AggregateObject(BoundAggregateFunction function, FunctionData *
 }
 
 AggregateObject::AggregateObject(BoundAggregateExpression &aggr)
-    : AggregateObject(aggr.Function(), aggr.BindInfo(), aggr.GetChildren().size(),
+    : AggregateObject(aggr.Function(), aggr.BindInfoMutable().get(), aggr.GetChildren().size(),
                       AlignValue(aggr.Function().GetStateSizeCallback()(aggr.Function())), aggr.GetAggregateType(),
                       aggr.GetReturnType().InternalType(), aggr.GetFilter().get()) {
 }

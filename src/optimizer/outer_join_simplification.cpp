@@ -109,7 +109,7 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 			if (expr->GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
 			    expr->GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL) {
 				const auto &is_not_null = expr->Cast<BoundOperatorExpression>();
-				HandleExpression(*is_not_null.children[0]);
+				HandleExpression(*is_not_null.GetChildren()[0]);
 			} else if (BoundComparisonExpression::IsComparison(*expr)) {
 				if (expr->GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
 				    expr->GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {

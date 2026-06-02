@@ -177,7 +177,7 @@ unique_ptr<FunctionData> CScalarFunctionBind(BindScalarFunctionInput &input) {
 
 unique_ptr<FunctionLocalState> CScalarFunctionInit(ExpressionState &state, const BoundFunctionExpression &expr,
                                                    FunctionData *bind_data) {
-	auto &function = expr.function;
+	auto &function = expr.Function();
 	auto &info = function.GetExtraFunctionInfo().Cast<CScalarFunctionInfo>();
 	D_ASSERT(info.function);
 
@@ -196,7 +196,7 @@ unique_ptr<FunctionLocalState> CScalarFunctionInit(ExpressionState &state, const
 
 void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &function = state.expr.Cast<BoundFunctionExpression>();
-	auto &bind_info = function.bind_info;
+	auto &bind_info = function.BindInfo();
 	auto &c_bind_info = bind_info->Cast<CScalarFunctionBindData>();
 	auto &c_local_state = ExecuteFunctionState::GetFunctionState(state)->Cast<CScalarFunctionLocalState>();
 

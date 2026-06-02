@@ -1,0 +1,72 @@
+diff --git a/src/deletes/equality_delete.cpp b/src/deletes/equality_delete.cpp
+index a0e0c788..aa53225e 100644
+--- a/src/deletes/equality_delete.cpp
++++ b/src/deletes/equality_delete.cpp
+@@ -117,7 +117,7 @@ void IcebergMultiFileList::ScanEqualityDeleteFile(const IcebergManifestEntry &ma
+ 				//! Construct an OPERATOR_IS_NOT_NULL expression instead
+ 				auto is_not_null =
+ 				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
+-				is_not_null->children.push_back(std::move(bound_ref));
++				is_not_null->GetChildrenMutable().push_back(std::move(bound_ref));
+ 				equality_filter = std::move(is_not_null);
+ 			}
+ 			row.filters.emplace(std::make_pair(field_id, std::move(equality_filter)));
+diff --git a/src/iceberg_functions/iceberg_multi_file_list.cpp b/src/iceberg_functions/iceberg_multi_file_list.cpp
+index f71fa28e..71318bd8 100644
+--- a/src/iceberg_functions/iceberg_multi_file_list.cpp
++++ b/src/iceberg_functions/iceberg_multi_file_list.cpp
+@@ -135,8 +135,8 @@ static unique_ptr<Expression> ExtractFilterExpressionForPath(const Expression &e
+ 		if (result->GetChildren().empty()) {
+ 			return nullptr;
+ 		}
+-		if (result->children.size() == 1) {
+-			return std::move(result->children[0]);
++		if (result->GetChildren().size() == 1) {
++			return std::move(result->GetChildrenMutable()[0]);
+ 		}
+ 		return std::move(result);
+ 	}
+diff --git a/src/iceberg_functions/iceberg_multi_file_reader.cpp b/src/iceberg_functions/iceberg_multi_file_reader.cpp
+index 7d0598a8..279ca2ca 100644
+--- a/src/iceberg_functions/iceberg_multi_file_reader.cpp
++++ b/src/iceberg_functions/iceberg_multi_file_reader.cpp
+@@ -405,7 +405,7 @@ void IcebergMultiFileReader::ApplyEqualityDeletes(ClientContext &context, DataCh
+ 		D_ASSERT(!equalities.empty());
+ 		if (equalities.size() > 1) {
+ 			auto conjunction_or = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
+-			conjunction_or->children = std::move(equalities);
++			conjunction_or->GetChildrenMutable() = std::move(equalities);
+ 			filter = std::move(conjunction_or);
+ 		} else {
+ 			filter = std::move(equalities[0]);
+@@ -419,7 +419,7 @@ void IcebergMultiFileReader::ApplyEqualityDeletes(ClientContext &context, DataCh
+ 		equality_delete_filter = std::move(rows[0]);
+ 	} else {
+ 		auto conjunction_and = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
+-		conjunction_and->children = std::move(rows);
++		conjunction_and->GetChildrenMutable() = std::move(rows);
+ 		equality_delete_filter = std::move(conjunction_and);
+ 	}
+ 
+@@ -568,8 +568,8 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
+ 				// Create COALESCE(_row_id, computed_row_id)
+ 				auto coalesce_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, type);
+ 				auto file_row_id = make_uniq<BoundReferenceExpression>(type, local_idx.GetIndex());
+-				coalesce_expr->children.push_back(std::move(file_row_id));
+-				coalesce_expr->children.push_back(std::move(computed_row_id));
++				coalesce_expr->GetChildrenMutable().push_back(std::move(file_row_id));
++				coalesce_expr->GetChildrenMutable().push_back(std::move(computed_row_id));
+ 
+ 				// Transform virtual column to file_row_number for the reference
+ 				column_id = MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER;
+@@ -614,8 +614,8 @@ unique_ptr<Expression> IcebergMultiFileReader::GetVirtualColumnExpression(
+ 				// Create COALESCE(_last_updated_sequence_number, computed_sequence_number)
+ 				auto coalesce_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, type);
+ 				auto sequence_number = make_uniq<BoundReferenceExpression>(type, local_idx.GetIndex());
+-				coalesce_expr->children.push_back(std::move(sequence_number));
+-				coalesce_expr->children.push_back(std::move(computed_sequence_number));
++				coalesce_expr->GetChildrenMutable().push_back(std::move(sequence_number));
++				coalesce_expr->GetChildrenMutable().push_back(std::move(computed_sequence_number));
+ 
+ 				// Transform virtual column to file_row_number for the reference
+ 				column_id = MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER;

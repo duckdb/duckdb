@@ -943,9 +943,9 @@ bool BaseColumnPruner::HandleStructExtract(unique_ptr<Expression> &expr_p,
                                            reference<ColumnIndex> &path_ref,
                                            vector<ReferencedExtractComponent> &expressions) {
 	auto &function = expr_p->Cast<BoundFunctionExpression>();
-	auto &child = function.children[0];
+	auto &child = function.GetChildrenMutable()[0];
 	D_ASSERT(child->GetReturnType().id() == LogicalTypeId::STRUCT);
-	auto &bind_data = function.bind_info->Cast<StructExtractBindData>();
+	auto &bind_data = function.BindInfo()->Cast<StructExtractBindData>();
 	// struct extract, check if left child is a bound column ref
 	if (child->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		// column reference - check if it is a struct
@@ -977,9 +977,9 @@ bool BaseColumnPruner::HandleVariantExtract(unique_ptr<Expression> &expr_p,
                                             reference<ColumnIndex> &path_ref,
                                             vector<ReferencedExtractComponent> &expressions) {
 	auto &function = expr_p->Cast<BoundFunctionExpression>();
-	auto &child = function.children[0];
+	auto &child = function.GetChildrenMutable()[0];
 	D_ASSERT(child->GetReturnType().id() == LogicalTypeId::VARIANT);
-	auto &bind_data = function.bind_info->Cast<VariantExtractBindData>();
+	auto &bind_data = function.BindInfo()->Cast<VariantExtractBindData>();
 	if (bind_data.component.lookup_mode != VariantChildLookupMode::BY_KEY) {
 		//! We don't push down variant extract on ARRAY values
 		return false;
@@ -1022,14 +1022,14 @@ bool BaseColumnPruner::HandleExtractRecursive(unique_ptr<Expression> &expr_p,
 		return false;
 	}
 	auto &function = expr.Cast<BoundFunctionExpression>();
-	if (function.function.GetName() != "struct_extract_at" && function.function.GetName() != "struct_extract" &&
-	    function.function.GetName() != "array_extract" && function.function.GetName() != "variant_extract") {
+	if (function.Function().GetName() != "struct_extract_at" && function.Function().GetName() != "struct_extract" &&
+	    function.Function().GetName() != "array_extract" && function.Function().GetName() != "variant_extract") {
 		return false;
 	}
-	if (!function.bind_info) {
+	if (!function.BindInfo()) {
 		return false;
 	}
-	auto &child = function.children[0];
+	auto &child = function.GetChildrenMutable()[0];
 	auto child_type = child->GetReturnType().id();
 	switch (child_type) {
 	case LogicalTypeId::STRUCT:
