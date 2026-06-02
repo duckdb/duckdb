@@ -14,6 +14,8 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include <numeric>
 
 namespace duckdb {
@@ -998,13 +1000,15 @@ public:
 		}
 	}
 
-	static void PushdownType(ClientContext &context, optional_ptr<FunctionData> bind_data_p,
-	                         const unordered_map<idx_t, LogicalType> &new_column_types) {
-		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
-		for (auto &type : new_column_types) {
-			bind_data.types[type.first] = type.second;
-			bind_data.columns[type.first].type = type.second;
+	static bool PushdownProjectionExpression(ClientContext &context, TableFunctionProjectionExpressionInput &input) {
+		if (input.expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
+			return false;
 		}
+		auto &bind_data = input.get.bind_data->Cast<MultiFileBindData>();
+		const auto &cast = input.expr.Cast<BoundCastExpression>();
+		bind_data.types[input.proj_index] = cast.GetReturnType();
+		bind_data.columns[input.proj_index].type = cast.GetReturnType();
+		return true;
 	}
 
 private:

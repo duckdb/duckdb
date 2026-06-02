@@ -22,7 +22,7 @@ TableFunction::TableFunction(Identifier name, const vector<LogicalType> &argumen
       in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr), statistics_extended(nullptr),
       dependency(nullptr), cardinality(nullptr), get_metrics(nullptr), pushdown_complex_filter(nullptr),
       pushdown_expression(nullptr), to_string(nullptr), table_scan_progress(nullptr), get_partition_data(nullptr),
-      get_bind_info(nullptr), type_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
+      get_bind_info(nullptr), projection_expression_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
       supports_pushdown_extract(nullptr), get_partition_info(nullptr), get_partition_stats(nullptr),
       get_virtual_columns(nullptr), get_row_id_columns(nullptr), set_scan_order(nullptr), serialize(nullptr),
       deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false),
@@ -38,7 +38,7 @@ TableFunction::TableFunction(Identifier name, const vector<LogicalType> &argumen
       in_out_function(nullptr), in_out_function_final(nullptr), statistics(nullptr), statistics_extended(nullptr),
       dependency(nullptr), cardinality(nullptr), get_metrics(nullptr), pushdown_complex_filter(nullptr),
       pushdown_expression(nullptr), to_string(nullptr), table_scan_progress(nullptr), get_partition_data(nullptr),
-      get_bind_info(nullptr), type_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
+      get_bind_info(nullptr), projection_expression_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
       supports_pushdown_extract(nullptr), get_partition_info(nullptr), get_partition_stats(nullptr),
       get_virtual_columns(nullptr), get_row_id_columns(nullptr), set_scan_order(nullptr), serialize(nullptr),
       deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false),
@@ -69,7 +69,7 @@ bool TableFunction::operator==(const TableFunction &rhs) const {
 	       pushdown_complex_filter == rhs.pushdown_complex_filter && pushdown_expression == rhs.pushdown_expression &&
 	       to_string == rhs.to_string && table_scan_progress == rhs.table_scan_progress &&
 	       get_partition_data == rhs.get_partition_data && get_bind_info == rhs.get_bind_info &&
-	       type_pushdown == rhs.type_pushdown && get_multi_file_reader == rhs.get_multi_file_reader &&
+	       projection_expression_pushdown == rhs.projection_expression_pushdown && get_multi_file_reader == rhs.get_multi_file_reader &&
 	       supports_pushdown_type == rhs.supports_pushdown_type && get_partition_info == rhs.get_partition_info &&
 	       get_partition_stats == rhs.get_partition_stats && get_virtual_columns == rhs.get_virtual_columns &&
 	       get_row_id_columns == rhs.get_row_id_columns && serialize == rhs.serialize &&
