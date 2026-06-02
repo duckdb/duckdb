@@ -265,7 +265,11 @@ void Parser::ParseQuery(const string &query) {
 	ParserTokenizer tokenizer(query, tokens);
 	tokenizer.TokenizeInput();
 	idx_t token_cursor = 0;
-	while (token_cursor < tokens.size()) {
+	// The tokenizer appends an END_OF_INPUT sentinel; stop the peel loop when we reach it.
+	auto remaining_real_tokens = [&]() {
+		return token_cursor < tokens.size() && tokens[token_cursor].type != TokenType::END_OF_INPUT;
+	};
+	while (remaining_real_tokens()) {
 		try {
 			auto stmt = ParseTopLevelStatement(tokens, token_cursor);
 			if (stmt) {

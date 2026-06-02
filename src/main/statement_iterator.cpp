@@ -40,7 +40,14 @@ bool StatementIterator::Peek(ClientContext &context) {
 	// repeatedly. A nullptr return with cursor advanced means a separator-only TopLevelStatement
 	// (e.g. between statements or trailing ';'s); we loop past it. A nullptr return with cursor
 	// at end means the input is exhausted.
+	auto at_end_of_real_tokens = [&]() {
+		return token_cursor >= tokens->size() || (*tokens)[token_cursor].type == TokenType::END_OF_INPUT;
+	};
 	while (true) {
+		if (at_end_of_real_tokens()) {
+			exhausted = true;
+			return false;
+		}
 		auto stmt = parser->ParseTopLevelStatement(*tokens, token_cursor);
 		if (stmt) {
 			// ParseTopLevelStatement doesn't populate stmt->query (it operates on tokens, not the
@@ -58,7 +65,7 @@ bool StatementIterator::Peek(ClientContext &context) {
 			current_statement = std::move(stmt);
 			return true;
 		}
-		if (token_cursor >= tokens->size()) {
+		if (at_end_of_real_tokens()) {
 			exhausted = true;
 			return false;
 		}

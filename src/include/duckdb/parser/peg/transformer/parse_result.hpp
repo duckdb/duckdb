@@ -32,7 +32,13 @@ enum class TokenType {
 	TABLE_FUNCTION,
 	PRAGMA_FUNCTION,
 	SETTING_NAME,
-	ERROR
+	ERROR,
+	//! Sentinel appended by ParserTokenizer at the end of real input. The grammar's
+	//! `EndOfInput` rule matches (and consumes) this token; primitive matchers fail on it.
+	END_OF_INPUT,
+	//! Sentinel appended by tokenizers run for autocomplete. List/Repeat matchers see this
+	//! and trigger the suggestion walk for what could follow at the cursor.
+	END_NOW_AUTOCOMPLETE
 };
 
 inline string TokenTypeToString(TokenType type) {

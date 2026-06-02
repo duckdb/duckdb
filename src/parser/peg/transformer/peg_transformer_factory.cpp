@@ -75,6 +75,12 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vecto
 		if (error_token_idx >= tokens.size()) {
 			error_token_idx = tokens.size() - 1;
 		}
+		// Skip the trailing END_OF_INPUT sentinel — it has empty text and produces an unhelpful
+		// "syntax error at or near \"\"" message. Walk back to the last real token.
+		while (error_token_idx > 0 && (tokens[error_token_idx].type == TokenType::END_OF_INPUT ||
+		                               tokens[error_token_idx].type == TokenType::END_NOW_AUTOCOMPLETE)) {
+			error_token_idx--;
+		}
 		auto &error_token = tokens[error_token_idx];
 		auto error_message = "syntax error at or near \"" + error_token.text + "\"";
 		throw ParserException::SyntaxError(token_stream, error_message, error_token.offset);

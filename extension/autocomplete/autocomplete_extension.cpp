@@ -511,6 +511,11 @@ void SQLTokenizeFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 
 	while (data.offset < bind_data.tokens.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.tokens[data.offset++];
+		// Skip the END_OF_INPUT / END_NOW_AUTOCOMPLETE sentinels — they're internal markers
+		// for the matcher, not real tokens to surface to callers.
+		if (entry.type == TokenType::END_OF_INPUT || entry.type == TokenType::END_NOW_AUTOCOMPLETE) {
+			continue;
+		}
 
 		offset_col.Append(Value::INTEGER(NumericCast<int32_t>(entry.offset)));
 		token_type.Append(Value(TokenTypeToString(entry.type)));
@@ -528,14 +533,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	names.emplace_back("success");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
-	// CheckPEGParserBind feeds the input to `peg_matcher->Root().Match(state)`, which goes
-	// through `ListMatcher::Match`'s out-of-tokens autocomplete-suggestion path. That path
-	// returns FAIL whenever the next child is mandatory — and after the peeling refactor the
-	// last child is `(';'+ / EndOfInput)`, where `;'+` is mandatory. Without a `;` to consume,
-	// every well-formed query gets reported as a parse failure here. Append a `;` so the
-	// matcher reaches a clean state. The principled fix (two distinct sentinels for "real
-	// EOI" vs "autocomplete cursor") is tracked separately.
-	auto sql = StringValue::Get(input.inputs[0]) + ";";
+	const auto sql = StringValue::Get(input.inputs[0]);
 
 	vector<MatcherToken> root_tokens;
 	string clean_sql;
@@ -558,7 +556,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 
 	auto peg_matcher = PEGMatcher::Get(context);
 	auto match_result = peg_matcher->Root().Match(state);
-	if (match_result != MatchResultType::SUCCESS || state.token_index < root_tokens.size()) {
+	if (match_result != MatchResultType::SUCCESS || state.token_index + 1 < root_tokens.size()) {
 		string token_list;
 		for (idx_t i = 0; i < root_tokens.size(); i++) {
 			if (!token_list.empty()) {

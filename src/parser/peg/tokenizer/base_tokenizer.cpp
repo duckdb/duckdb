@@ -507,21 +507,31 @@ bool BaseTokenizer::TokenizeInput() {
 		}
 	}
 
+	// Append the end-of-input sentinel before handling the final state. Every tokenizer
+	// terminates its token vector with a sentinel so List/Repeat matchers and the grammar's
+	// `EndOfInput` rule have something concrete to look at instead of running off the end of
+	// the vector — independent of whether the input ended in a clean state (return value).
+	auto append_sentinel = [&]() {
+		tokens.emplace_back("", sql.size(), GetEndOfInputType());
+	};
 	// finished processing - check the final state
 	switch (state) {
 	case TokenizeState::SINGLE_LINE_COMMENT:
 	case TokenizeState::MULTI_LINE_COMMENT:
 		PushToken(last_pos, sql.size(), TokenType::COMMENT);
 		// no suggestions in comments or dollar-quoted strings
+		append_sentinel();
 		return false;
 	case TokenizeState::DOLLAR_QUOTED_STRING:
 		PushToken(last_pos, sql.size(), TokenType::STRING_LITERAL, true);
+		append_sentinel();
 		return false;
 	default:
 		break;
 	}
 	string last_word = sql.substr(last_pos, sql.size() - last_pos);
 	OnLastToken(state, std::move(last_word), last_pos);
+	append_sentinel();
 	return true;
 }
 

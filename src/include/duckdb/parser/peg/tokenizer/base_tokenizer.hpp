@@ -37,6 +37,14 @@ public:
 	virtual void OnStatementEnd(idx_t pos);
 	virtual void OnLastToken(TokenizeState state, string last_word, idx_t last_pos);
 
+	//! Sentinel appended at the end of the token vector once tokenization succeeds. Override in
+	//! autocomplete-mode tokenizers to return END_NOW_AUTOCOMPLETE so List/Repeat matchers fire
+	//! their suggestion walk at the cursor; default END_OF_INPUT is consumed by the grammar's
+	//! `EndOfInput` rule.
+	virtual TokenType GetEndOfInputType() const {
+		return TokenType::END_OF_INPUT;
+	}
+
 	bool IsSpecialOperator(idx_t pos, idx_t &op_len) const;
 	static bool IsSingleByteOperator(char c);
 	static bool CharacterIsInitialNumber(char c);

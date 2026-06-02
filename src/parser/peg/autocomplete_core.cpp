@@ -168,6 +168,10 @@ public:
 		last_pos = 0;
 	}
 
+	TokenType GetEndOfInputType() const override {
+		return TokenType::END_NOW_AUTOCOMPLETE;
+	}
+
 	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
 		if (TokenizeStateToType(state) == TokenType::STRING_LITERAL) {
 			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);

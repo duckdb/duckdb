@@ -89,6 +89,14 @@ SQLFormatter::SQLFormatter(const FormatterConfig &config) : config(config) {
 string SQLFormatter::Format(const string &sql) {
 	HighlightTokenizer tokenizer(sql);
 	tokenizer.TokenizeInput();
+	// Strip the END_OF_INPUT / END_NOW_AUTOCOMPLETE sentinel that every tokenizer appends —
+	// it's an internal marker for the matcher and shouldn't participate in formatting.
+	if (!tokenizer.tokens.empty()) {
+		auto back_type = tokenizer.tokens.back().type;
+		if (back_type == TokenType::END_OF_INPUT || back_type == TokenType::END_NOW_AUTOCOMPLETE) {
+			tokenizer.tokens.pop_back();
+		}
+	}
 	const auto &tokens = tokenizer.tokens;
 
 	if (tokens.empty()) {

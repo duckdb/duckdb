@@ -124,7 +124,13 @@ public:
 		auto saved_suggestion_size = suppress_suggestions ? list_state.suggestions.size() : 0;
 		for (idx_t child_idx = 0; child_idx < matchers.size(); child_idx++) {
 			auto &child_matcher = matchers[child_idx].get();
-			if (list_state.token_index >= list_state.tokens.size()) {
+			// Trigger the autocomplete-suggestion walk when the next token is END_NOW_AUTOCOMPLETE.
+			// All tokenizers append a sentinel, so primitive matchers' bounds checks handle the
+			// post-EOI "state past end" case — no fallback needed here.
+			bool at_autocomplete_cursor =
+			    list_state.token_index < list_state.tokens.size() &&
+			    list_state.tokens[list_state.token_index].type == TokenType::END_NOW_AUTOCOMPLETE;
+			if (at_autocomplete_cursor) {
 				if (suppress_suggestions) {
 					// this rule should not contribute autocomplete suggestions
 					// discard any suggestions added by earlier children
@@ -133,7 +139,7 @@ public:
 					                             list_state.suggestions.end());
 					return MatchResultType::FAIL;
 				}
-				// we exhausted the tokens - push suggestions for the child matcher
+				// we are at the cursor (or out of tokens) - push suggestions for what could follow
 				for (; child_idx < matchers.size(); child_idx++) {
 					auto suggestion_type = matchers[child_idx].get().AddSuggestion(list_state);
 					if (suggestion_type == SuggestionType::MANDATORY) {
@@ -356,9 +362,13 @@ public:
 			// update the token index we propagate upwards
 			state.token_index = repeat_state.token_index;
 
-			// check if we have tokens left
-			if (repeat_state.token_index >= state.tokens.size()) {
-				// we exhausted the tokens - suggest the element
+			// Stop and suggest the element when we hit the autocomplete cursor. After EOI is
+			// consumed at the top level, primitive matchers' bounds checks return FAIL, so
+			// this loop terminates without a separate post-end branch.
+			bool at_autocomplete_cursor =
+			    repeat_state.token_index < state.tokens.size() &&
+			    state.tokens[repeat_state.token_index].type == TokenType::END_NOW_AUTOCOMPLETE;
+			if (at_autocomplete_cursor) {
 				element.AddSuggestion(state);
 				return MatchResultType::SUCCESS;
 			}
@@ -434,14 +444,20 @@ public:
 	}
 
 	MatchResultType Match(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		if (state.token_index < state.tokens.size() &&
+		    state.tokens[state.token_index].type == TokenType::END_OF_INPUT) {
+			state.token_index++;
+			state.UpdateMaxTokenIndex();
 			return MatchResultType::SUCCESS;
 		}
 		return MatchResultType::FAIL;
 	}
 
 	optional_ptr<ParseResult> MatchParseResult(MatchState &state) const override {
-		if (state.token_index >= state.tokens.size()) {
+		if (state.token_index < state.tokens.size() &&
+		    state.tokens[state.token_index].type == TokenType::END_OF_INPUT) {
+			state.token_index++;
+			state.UpdateMaxTokenIndex();
 			return state.allocator.Allocate(make_uniq<EndOfInputParseResult>());
 		}
 		return nullptr;
@@ -609,6 +625,9 @@ public:
 
 private:
 	bool MatchIdentifier(MatchState &state) const {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
 		const auto &keyword_helper = PEGKeywordHelper::Instance();
@@ -694,6 +713,9 @@ public:
 
 private:
 	bool MatchReservedIdentifier(MatchState &state) const {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
 		if (!IsIdentifier(token_text)) {
 			return false;
@@ -825,6 +847,9 @@ public:
 
 private:
 	static bool MatchNumberLiteral(MatchState &state) {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
 		if (!BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
 			return false;
@@ -926,6 +951,9 @@ public:
 
 private:
 	static bool MatchOperator(MatchState &state) {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
 		// Exclude the lambda arrow and JSON arrow — these have dedicated grammar roles
 		if (token_text == "->" || token_text == "->>") {
@@ -993,6 +1021,9 @@ public:
 
 private:
 	static bool MatchArithmeticOperator(MatchState &state) {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
 		for (auto &c : token_text) {
 			if (!IsArithmeticOperatorChar(c)) {
