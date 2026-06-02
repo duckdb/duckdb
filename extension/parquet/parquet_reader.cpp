@@ -200,7 +200,7 @@ using duckdb_parquet::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
 CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, bool prefetch_mode,
-                         uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP) {
+                         uint64_t accepted_column_gap = DEFAULT_ACCEPTED_COLUMN_GAP) {
 	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(file_handle, prefetch_mode, accepted_column_gap);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
@@ -1452,7 +1452,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		state.filter_eliminated_all_rows.assign(state.scan_filters.size(), false);
 	}
 
-	uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
+	uint64_t accepted_column_gap = DEFAULT_ACCEPTED_COLUMN_GAP;
 	if (state.prefetch_mode && !state.file_handle->OnDiskFile()) {
 		NetworkThroughputEstimate estimate;
 		if (state.file_handle->TryGetNetworkThroughput(estimate)) {
@@ -1673,7 +1673,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			if (state.file_handle->TryGetNetworkThroughput(estimate)) {
 				state.cost_model_state.RefineFromEstimate(estimate);
 			}
-			uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
+			uint64_t accepted_column_gap = DEFAULT_ACCEPTED_COLUMN_GAP;
 			state.cost_model_state.TryGetColumnGapSize(accepted_column_gap);
 			trans.SetAcceptedColumnGap(accepted_column_gap);
 		}
