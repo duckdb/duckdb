@@ -1,4 +1,7 @@
 #include "duckdb/optimizer/type_pushdown.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -30,11 +33,11 @@ TypePushdown::TypePushdown(ClientContext &context) : context(context) {
 }
 
 using GetCastMap = unordered_map<column_t, LogicalType>;
-using GetConflicts = unordered_set<column_t>;
-using GetReplace = unordered_map<column_t, LogicalType>;
+using GetConflicts = unordered_set<ProjectionIndex>;
+using GetReplace = unordered_map<ProjectionIndex, LogicalType>;
 
 struct GetAnalysis {
-	LogicalGet *get;
+	reference<LogicalGet> get;
 	GetCastMap cast_map;
 	GetConflicts conflicts;
 };
@@ -53,19 +56,19 @@ static void CollectCastTypes(const Expression &expr, Analyses &analyses) {
 
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		const auto &colref = expr.Cast<BoundColumnRefExpression>();
-		if (colref.depth != 0) {
-			return;
+		if (colref.Depth() != 0) {
+			throw InternalException("BoundColumnRef with non-zero depth");
 		}
-		const auto it = analyses.find(colref.binding.table_index);
+		const auto it = analyses.find(colref.Binding().table_index);
 		if (it == analyses.end()) {
 			return;
 		}
 		GetAnalysis &analysis = it->second;
-		const column_t proj_id = colref.binding.column_index;
+		const column_t proj_id = colref.Binding().column_index;
 		if (!IsVirtualColumn(proj_id)) {
-			const column_t column_id = analysis.get->GetColumnIds()[proj_id].GetPrimaryIndex();
+			const ProjectionIndex index {analysis.get.get().GetColumnIds()[proj_id].GetPrimaryIndex()};
 			// Column is used uncasted
-			analysis.conflicts.insert(column_id);
+			analysis.conflicts.insert(index);
 		}
 		return;
 	}
@@ -75,33 +78,32 @@ static void CollectCastTypes(const Expression &expr, Analyses &analyses) {
 	}
 	const auto &bound_cast = expr.Cast<BoundCastExpression>();
 
-	if (bound_cast.child->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+	if (bound_cast.Child().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return collect_children();
 	}
-	const auto &bound_column = bound_cast.child->Cast<BoundColumnRefExpression>();
-
-	if (bound_column.depth > 0) {
-		return collect_children();
+	const auto &bound_column = bound_cast.Child().Cast<BoundColumnRefExpression>();
+	if (bound_column.Depth() > 0) {
+		throw InternalException("BoundColumnRef with non-zero depth");
 	}
 
-	const auto it = analyses.find(bound_column.binding.table_index);
+	const auto it = analyses.find(bound_column.Binding().table_index);
 	if (it == analyses.end()) {
-		return collect_children();
+		return;
 	}
 	// We're in a leaf
 
-	const column_t projection_id = bound_column.binding.column_index;
+	const column_t projection_id = bound_column.Binding().column_index;
 	if (IsVirtualColumn(projection_id)) {
 		return;
 	}
 
 	GetAnalysis &analysis = it->second;
 	GetCastMap &cast_map = analysis.cast_map;
-	const column_t column_id = analysis.get->GetColumnIds()[projection_id].GetPrimaryIndex();
-	if (auto cast_it = cast_map.find(column_id); cast_it == cast_map.end()) {
-		cast_map.emplace(column_id, bound_cast.GetReturnType());
+	const ProjectionIndex proj_idx {analysis.get.get().GetColumnIds()[projection_id].GetPrimaryIndex()};
+	if (auto cast_it = cast_map.find(proj_idx); cast_it == cast_map.end()) {
+		cast_map.emplace(proj_idx, bound_cast.GetReturnType());
 	} else if (cast_it->second != bound_cast.GetReturnType()) {
-		analysis.conflicts.insert(column_id);
+		analysis.conflicts.insert(proj_idx);
 	}
 }
 
@@ -117,21 +119,20 @@ static void ReplaceCastTypes(unique_ptr<Expression> &expr, const Replace &replac
 	}
 	const auto &bound_cast = expr->Cast<BoundCastExpression>();
 
-	if (bound_cast.child->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+	if (bound_cast.Child().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return replace_children();
 	}
-	const auto &bound_column = bound_cast.child->Cast<BoundColumnRefExpression>();
-
-	if (bound_column.depth > 0) {
-		return replace_children();
+	const auto &bound_column = bound_cast.Child().Cast<BoundColumnRefExpression>();
+	if (bound_column.Depth() > 0) {
+		throw InternalException("BoundColumnRef with non-zero depth");
 	}
 
-	const auto replace_it = replace.find(bound_column.binding.table_index);
+	const auto replace_it = replace.find(bound_column.Binding().table_index);
 	if (replace_it == replace.end()) {
 		return replace_children();
 	}
 
-	const column_t projection_id = bound_column.binding.column_index;
+	const ProjectionIndex projection_id = bound_column.Binding().column_index;
 	const auto &get_replace = replace_it->second;
 	const auto get_replace_it = get_replace.find(projection_id);
 
@@ -139,7 +140,7 @@ static void ReplaceCastTypes(unique_ptr<Expression> &expr, const Replace &replac
 		return replace_children();
 	}
 
-	expr = make_uniq<BoundColumnRefExpression>(get_replace_it->second, bound_column.binding);
+	expr = make_uniq<BoundColumnRefExpression>(get_replace_it->second, bound_column.Binding());
 }
 
 static void CollectFromOp(LogicalOperator &op, Analyses &analyses) {
@@ -157,10 +158,15 @@ static void ReplaceInOp(LogicalOperator &op, const Replace &replacements) {
 	}
 }
 
-static void FindGetsWithTypePushdown(LogicalOperator &op, vector<LogicalGet *> &gets) {
+static void FindGetsWithTypePushdown(LogicalOperator &op, vector<reference<LogicalGet>> &gets) {
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
-		if (auto &get = op.Cast<LogicalGet>(); get.function.type_pushdown != nullptr) {
-			gets.push_back(&get);
+		auto &get = op.Cast<LogicalGet>();
+		if (get.table_filters.FilterCount() > 0) {
+			throw InternalException("TypePushdown optimizer run after FilterPushdown");
+		}
+
+		if (get.function.type_pushdown != nullptr) {
+			gets.emplace_back(get);
 		}
 	}
 	for (auto &child : op.children) {
@@ -169,28 +175,28 @@ static void FindGetsWithTypePushdown(LogicalOperator &op, vector<LogicalGet *> &
 }
 
 unique_ptr<LogicalOperator> TypePushdown::Optimize(unique_ptr<LogicalOperator> op) {
-	vector<LogicalGet *> gets;
+	vector<reference<LogicalGet>> gets;
 	FindGetsWithTypePushdown(*op, gets);
 	if (gets.empty()) {
 		return op;
 	}
 
 	Analyses analyses(gets.size());
-	for (size_t i = 0; i < gets.size(); ++i) {
-		analyses.emplace(gets[i]->table_index.index, GetAnalysis {gets[i]});
+	for (idx_t i = 0; i < gets.size(); ++i) {
+		analyses.emplace(gets[i].get().table_index, GetAnalysis {gets[i]});
 	}
 	CollectFromOp(*op, analyses);
 
 	Replace replace;
 	for (auto &[table_index, analysis] : analyses) {
-		for (column_t col_id : analysis.conflicts) {
-			analysis.cast_map.erase(col_id);
+		for (ProjectionIndex idx : analysis.conflicts) {
+			analysis.cast_map.erase(idx);
 		}
 		if (analysis.cast_map.empty()) {
 			continue;
 		}
 
-		LogicalGet &get = *analysis.get;
+		LogicalGet &get = analysis.get.get();
 		get.function.type_pushdown(context, get.bind_data, analysis.cast_map);
 		for (const auto &[col_id, new_type] : analysis.cast_map) {
 			get.returned_types[col_id] = new_type;
@@ -202,7 +208,7 @@ unique_ptr<LogicalOperator> TypePushdown::Optimize(unique_ptr<LogicalOperator> o
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			const column_t col_idx = column_ids[i].GetPrimaryIndex();
 			if (const auto it = cast_map.find(col_idx); it != cast_map.end()) {
-				get_replace[i] = it->second;
+				get_replace[ProjectionIndex {i}] = it->second;
 			}
 		}
 	}
