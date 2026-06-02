@@ -30,7 +30,7 @@ Query exceeded maximum execution time
 
 # Complex aggregation
 statement ok
-SET global_timeout=5000
+SET global_timeout=50
 
 statement error
 SELECT i % 10000000 as g, COUNT(*) FROM range(100000000) t(i) GROUP BY 1
