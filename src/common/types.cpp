@@ -17,6 +17,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/common/types/type_manager.hpp"
@@ -892,7 +893,8 @@ LogicalType LogicalType::NormalizeType(const LogicalType &type) {
 }
 
 template <class OP>
-static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+static bool CombineUnequalTypes(optional_ptr<ClientContext> context, const LogicalType &left, const LogicalType &right,
+                                LogicalType &result) {
 	D_ASSERT(right.id() != left.id());
 	if (right.id() == LogicalTypeId::VARIANT) {
 		result = right;
@@ -918,9 +920,9 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 
 	// for enums, match the varchar rules
 	if (left.id() == LogicalTypeId::ENUM) {
-		return OP::Operation(LogicalType::VARCHAR, right, result);
+		return OP::Operation(context, LogicalType::VARCHAR, right, result);
 	} else if (right.id() == LogicalTypeId::ENUM) {
-		return OP::Operation(left, LogicalType::VARCHAR, result);
+		return OP::Operation(context, left, LogicalType::VARCHAR, result);
 	}
 
 	// for everything but enums - string literals also take the other type
@@ -932,9 +934,14 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 		return true;
 	}
 
-	// for other types - use implicit cast rules to check if we can combine the types
-	auto left_to_right_cost = CastRules::ImplicitCast(left, right);
-	auto right_to_left_cost = CastRules::ImplicitCast(right, left);
+	// for other types - use implicit cast rules to check if we can combine the types.
+	// When a ClientContext is available, route through CastFunctionSet so that extensions
+	// that registered casts via RegisterCastFunction(..., implicit_cost) participate.
+	// Without a context (e.g. TryGetMaxLogicalTypeUnchecked) fall back to the raw rules.
+	auto left_to_right_cost =
+	    context ? CastFunctionSet::ImplicitCastCost(*context, left, right) : CastRules::ImplicitCast(left, right);
+	auto right_to_left_cost =
+	    context ? CastFunctionSet::ImplicitCastCost(*context, right, left) : CastRules::ImplicitCast(right, left);
 	if (left_to_right_cost >= 0 && (left_to_right_cost < right_to_left_cost || right_to_left_cost < 0)) {
 		// we can implicitly cast left to right, return right
 		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
@@ -967,10 +974,10 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 	}
 	// for integer literals - rerun the operation with the underlying type
 	if (left.id() == LogicalTypeId::INTEGER_LITERAL) {
-		return OP::Operation(IntegerLiteral::GetType(left), right, result);
+		return OP::Operation(context, IntegerLiteral::GetType(left), right, result);
 	}
 	if (right.id() == LogicalTypeId::INTEGER_LITERAL) {
-		return OP::Operation(left, IntegerLiteral::GetType(right), result);
+		return OP::Operation(context, left, IntegerLiteral::GetType(right), result);
 	}
 	// for unsigned/signed comparisons we have a few fallbacks
 	if (left.IsNumeric() && right.IsNumeric()) {
@@ -989,7 +996,8 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 }
 
 template <class OP>
-static bool CombineStructTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+static bool CombineStructTypes(optional_ptr<ClientContext> context, const LogicalType &left, const LogicalType &right,
+                               LogicalType &result) {
 	auto &left_children = StructType::GetChildTypes(left);
 	auto &right_children = StructType::GetChildTypes(right);
 
@@ -1006,7 +1014,7 @@ static bool CombineStructTypes(const LogicalType &left, const LogicalType &right
 
 		for (idx_t i = 0; i < left_children.size(); i++) {
 			LogicalType child_type;
-			if (!OP::Operation(left_children[i].second, right_children[i].second, child_type)) {
+			if (!OP::Operation(context, left_children[i].second, right_children[i].second, child_type)) {
 				return false;
 			}
 			auto &child_name = left_unnamed ? right_children[i].first : left_children[i].first;
@@ -1037,7 +1045,7 @@ static bool CombineStructTypes(const LogicalType &left, const LogicalType &right
 		// We need to recurse to ensure the children have a maximum logical type.
 		LogicalType child_type;
 		auto &right_child = right_children[right_child_it->second];
-		if (!OP::Operation(left_child.second, right_child.second, child_type)) {
+		if (!OP::Operation(context, left_child.second, right_child.second, child_type)) {
 			return false;
 		}
 		child_types.emplace_back(left_child.first, std::move(child_type));
@@ -1055,7 +1063,8 @@ static bool CombineStructTypes(const LogicalType &left, const LogicalType &right
 }
 
 template <class OP>
-static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+static bool CombineEqualTypes(optional_ptr<ClientContext> context, const LogicalType &left, const LogicalType &right,
+                              LogicalType &result) {
 	// Since both left and right are equal we get the left type as our type_id for checks
 	auto type_id = left.id();
 	switch (type_id) {
@@ -1065,7 +1074,7 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 		return true;
 	case LogicalTypeId::INTEGER_LITERAL:
 		// for two integer literals we unify the underlying types
-		return OP::Operation(IntegerLiteral::GetType(left), IntegerLiteral::GetType(right), result);
+		return OP::Operation(context, IntegerLiteral::GetType(left), IntegerLiteral::GetType(right), result);
 	case LogicalTypeId::ENUM:
 		// If both types are different ENUMs we do a string comparison.
 		result = left == right ? left : LogicalType::VARCHAR;
@@ -1100,7 +1109,7 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 	case LogicalTypeId::LIST: {
 		// list: perform max recursively on child type
 		LogicalType new_child;
-		if (!OP::Operation(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
+		if (!OP::Operation(context, ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
 			return false;
 		}
 		result = LogicalType::LIST(new_child);
@@ -1108,7 +1117,7 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 	}
 	case LogicalTypeId::ARRAY: {
 		LogicalType new_child;
-		if (!OP::Operation(ArrayType::GetChildType(left), ArrayType::GetChildType(right), new_child)) {
+		if (!OP::Operation(context, ArrayType::GetChildType(left), ArrayType::GetChildType(right), new_child)) {
 			return false;
 		}
 		auto new_size = MaxValue(ArrayType::GetSize(left), ArrayType::GetSize(right));
@@ -1118,14 +1127,14 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 	case LogicalTypeId::MAP: {
 		// map: perform max recursively on child type
 		LogicalType new_child;
-		if (!OP::Operation(ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
+		if (!OP::Operation(context, ListType::GetChildType(left), ListType::GetChildType(right), new_child)) {
 			return false;
 		}
 		result = LogicalType::MAP(new_child);
 		return true;
 	}
 	case LogicalTypeId::STRUCT: {
-		return CombineStructTypes<OP>(left, right, result);
+		return CombineStructTypes<OP>(context, left, right, result);
 	}
 	case LogicalTypeId::UNION: {
 		auto left_member_count = UnionType::GetMemberCount(left);
@@ -1146,7 +1155,8 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 }
 
 template <class OP>
-static bool TryGetMaxLogicalTypeInternal(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+static bool TryGetMaxLogicalTypeInternal(optional_ptr<ClientContext> context, const LogicalType &left,
+                                         const LogicalType &right, LogicalType &result) {
 	// we always prefer aliased types
 	if (!left.GetAlias().empty()) {
 		result = left;
@@ -1157,20 +1167,23 @@ static bool TryGetMaxLogicalTypeInternal(const LogicalType &left, const LogicalT
 		return true;
 	}
 	if (left.id() != right.id()) {
-		return CombineUnequalTypes<OP>(left, right, result);
+		return CombineUnequalTypes<OP>(context, left, right, result);
 	} else {
-		return CombineEqualTypes<OP>(left, right, result);
+		return CombineEqualTypes<OP>(context, left, right, result);
 	}
 }
 
 struct TryGetTypeOperation {
-	static bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) {
-		return TryGetMaxLogicalTypeInternal<TryGetTypeOperation>(left, right, result);
+	static bool Operation(optional_ptr<ClientContext> context, const LogicalType &left, const LogicalType &right,
+	                      LogicalType &result) {
+		return TryGetMaxLogicalTypeInternal<TryGetTypeOperation>(context, left, right, result);
 	}
 };
 
 struct ForceGetTypeOperation {
-	static bool Operation(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+	static bool Operation(optional_ptr<ClientContext> context, const LogicalType &left, const LogicalType &right,
+	                      LogicalType &result) {
+		(void)context;
 		result = LogicalType::ForceMaxLogicalType(left, right);
 		return true;
 	}
@@ -1182,12 +1195,12 @@ bool LogicalType::TryGetMaxLogicalType(ClientContext &context, const LogicalType
 		result = LogicalType::ForceMaxLogicalType(left, right);
 		return true;
 	}
-	return TryGetMaxLogicalTypeUnchecked(left, right, result);
+	return TryGetMaxLogicalTypeInternal<TryGetTypeOperation>(&context, left, right, result);
 }
 
 bool LogicalType::TryGetMaxLogicalTypeUnchecked(const LogicalType &left, const LogicalType &right,
                                                 LogicalType &result) {
-	return TryGetMaxLogicalTypeInternal<TryGetTypeOperation>(left, right, result);
+	return TryGetMaxLogicalTypeInternal<TryGetTypeOperation>(nullptr, left, right, result);
 }
 
 static idx_t GetLogicalTypeScore(const LogicalType &type) {
@@ -1294,7 +1307,7 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 
 LogicalType LogicalType::ForceMaxLogicalType(const LogicalType &left, const LogicalType &right) {
 	LogicalType result;
-	if (TryGetMaxLogicalTypeInternal<ForceGetTypeOperation>(left, right, result)) {
+	if (TryGetMaxLogicalTypeInternal<ForceGetTypeOperation>(nullptr, left, right, result)) {
 		return result;
 	}
 	// we prefer the type with the highest score
