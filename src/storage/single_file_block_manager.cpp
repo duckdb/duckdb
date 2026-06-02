@@ -521,7 +521,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	}
 
 	// MAP mode opens only the mmap; other modes open the FileHandle.
-	handle = DatabaseHandle::Open(db, path, options, DatabaseOpenMode::CREATE_NEW);
+	handle = DatabaseHandle::Open(db, path, options, DatabaseOpenMode::CREATE_NEW_FILE);
 	header_buffer.Clear();
 
 	if (options.storage_version == StorageVersion::INVALID) {
@@ -623,7 +623,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 }
 
 void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
-	handle = DatabaseHandle::Open(db, path, options, DatabaseOpenMode::OPEN_EXISTING);
+	handle = DatabaseHandle::Open(db, path, options, DatabaseOpenMode::OPEN_EXISTING_FILE);
 	handle->CheckMagicBytes(context);
 
 	// otherwise, we check the metadata of the file
