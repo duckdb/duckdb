@@ -43,6 +43,8 @@ public:
 	int64_t current_version;
 	//! Timestamp of last refresh (set at creation, derived from backing table at runtime)
 	timestamp_t last_refresh_timestamp;
+	//! Row count of last processed floor bucket (for incremental late-arrival detection)
+	int64_t last_bucket_row_count;
 
 public:
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;

@@ -208,6 +208,8 @@ y	95
 z	65
 
 # ---- Scenario 2: No new data — refresh is a no-op ----
+# The row count of the last floor bucket hasn't changed, and no new data exists
+# beyond the watermark, so this is a true no-op.
 query I
 REFRESH FEATURE event_sum;
 ----
@@ -219,6 +221,7 @@ INSERT INTO events VALUES
     ('x', 100, '2024-01-05 12:00:00'),
     ('y',  80, '2024-01-06 09:00:00');
 
+# New data only — no late arrivals, so only forward processing from watermark.
 query I
 REFRESH FEATURE event_sum;
 ----
@@ -252,6 +255,7 @@ statement ok
 INSERT INTO events VALUES
     ('w', 200, '2024-01-07 10:00:00');
 
+# New entity w arrives on Jan 7; only forward processing needed.
 query I
 REFRESH FEATURE event_sum;
 ----
@@ -261,6 +265,84 @@ query II
 SELECT customer, total_value FROM event_sum WHERE feature_timestamp = '2024-01-08'::TIMESTAMP;
 ----
 w	200
+
+# ============================================================
+# INCREMENTAL refresh: late-arriving data for already-processed floor bucket
+# ============================================================
+# After an initial refresh (watermark = 2024-01-03 00:00, the ceiling of the Jan 2
+# floor bucket), a new row arrives for Jan 2.  The count-based late-arrival detection
+# notices the row count for the last floor bucket changed and recomputes accordingly.
+
+statement ok
+CREATE TABLE late_events (
+    entity VARCHAR,
+    val INTEGER,
+    ts TIMESTAMP
+);
+
+statement ok
+INSERT INTO late_events VALUES
+    ('a', 10, '2024-01-01 08:00:00'),
+    ('a', 20, '2024-01-02 08:00:00');
+
+statement ok
+CREATE FEATURE late_test ON late_events
+    ENTITY entity
+    TIMESTAMP ts
+    GRANULARITY DAY
+    WINDOW 7
+    REFRESH INCREMENTAL
+    RETAIN 1
+    AS (SELECT entity, SUM(val) AS total);
+
+# Initial materialization: a@01-02=10 (only Jan 1 in lookback), a@01-03=30 (Jan 1 + Jan 2)
+query I
+SELECT COUNT(*) FROM late_test;
+----
+2
+
+query RT rowsort
+SELECT total, feature_timestamp FROM late_test WHERE entity = 'a';
+----
+10	2024-01-02 00:00:00
+30	2024-01-03 00:00:00
+
+# Watermark is 2024-01-03 00:00, last_bucket_row_count = 1 (one row in Jan 2 floor bucket).
+# Insert a late row whose floor bucket = watermark - 1 day.
+statement ok
+INSERT INTO late_events VALUES ('a', 5, '2024-01-02 12:00:00');
+
+# Refresh detects the late arrival (source count for Jan 2 floor is now 2 != stored 1)
+# and recomputes the Jan 3 ceiling bucket.
+query I
+REFRESH FEATURE late_test;
+----
+1
+
+# Jan 2 ceiling unchanged: only the Jan 1 event (10) is in its lookback window.
+query R
+SELECT total FROM late_test WHERE entity = 'a' AND feature_timestamp = '2024-01-02'::TIMESTAMP;
+----
+10
+
+# Jan 3 ceiling recomputed: Jan 1 (10) + Jan 2 original (20) + Jan 2 late (5) = 35.
+query R
+SELECT total FROM late_test WHERE entity = 'a' AND feature_timestamp = '2024-01-03'::TIMESTAMP;
+----
+35
+
+# After the late-arrival refresh, a no-op refresh should return 0
+# (bucket count now matches: 2 rows in Jan 2 floor bucket, and no new forward data).
+query I
+REFRESH FEATURE late_test;
+----
+0
+
+statement ok
+DROP FEATURE late_test;
+
+statement ok
+DROP TABLE late_events;
 
 # ============================================================
 # Error cases
