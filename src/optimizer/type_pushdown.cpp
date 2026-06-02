@@ -4,13 +4,14 @@
 #include "duckdb/common/projection_index.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 
 /*
  * This pass implements type pushdown for file readers. If a LOGICAL_PROJECTION
@@ -32,6 +33,7 @@ namespace duckdb {
 TypePushdown::TypePushdown(ClientContext &context) : context(context) {
 }
 
+using Gets = vector<reference<LogicalGet>>;
 using GetCastMap = unordered_map<column_t, LogicalType>;
 using GetConflicts = unordered_set<ProjectionIndex>;
 using GetReplace = unordered_map<ProjectionIndex, LogicalType>;
@@ -48,117 +50,99 @@ using Replace = unordered_map<TableIndex, GetReplace>;
 // Collect expressions of form CAST(bound column, T) -> LOGICAL_GET.
 // If bound column is already cast to a different type or used uncasted, record
 // in "conflicts".
-static void CollectCastTypes(const Expression &expr, Analyses &analyses) {
-	auto collect_children = [&] {
-		ExpressionIterator::EnumerateChildren(expr,
-		                                      [&](const Expression &child) { CollectCastTypes(child, analyses); });
-	};
-
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-		const auto &colref = expr.Cast<BoundColumnRefExpression>();
-		if (colref.Depth() != 0) {
-			throw InternalException("BoundColumnRef with non-zero depth");
-		}
-		const auto it = analyses.find(colref.Binding().table_index);
-		if (it == analyses.end()) {
-			return;
-		}
-		GetAnalysis &analysis = it->second;
-		const column_t proj_id = colref.Binding().column_index;
-		if (!IsVirtualColumn(proj_id)) {
-			const ProjectionIndex index {analysis.get.get().GetColumnIds()[proj_id].GetPrimaryIndex()};
-			// Column is used uncasted
-			analysis.conflicts.insert(index);
-		}
-		return;
+struct CastCollectVisitor final : LogicalOperatorVisitor {
+	Analyses &analyses;
+	explicit CastCollectVisitor(Analyses &analyses) : analyses(analyses) {
 	}
+	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
+	unique_ptr<Expression> VisitReplace(BoundCastExpression &expr, unique_ptr<Expression> *expr_ptr) override;
+};
 
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CAST) {
-		return collect_children();
+unique_ptr<Expression> CastCollectVisitor::VisitReplace(BoundColumnRefExpression &expr,
+                                                        unique_ptr<Expression> *expr_ptr) {
+	const auto it = analyses.find(expr.Binding().table_index);
+	if (it == analyses.end()) {
+		return std::move(*expr_ptr);
 	}
-	const auto &bound_cast = expr.Cast<BoundCastExpression>();
+	GetAnalysis &analysis = it->second;
+	const column_t proj_id = expr.Binding().column_index;
+	if (!IsVirtualColumn(proj_id)) {
+		const ProjectionIndex index {analysis.get.get().GetColumnIds()[proj_id].GetPrimaryIndex()};
+		// Column is used uncasted
+		analysis.conflicts.insert(index);
+	}
+	return std::move(*expr_ptr);
+}
 
-	if (bound_cast.Child().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-		return collect_children();
+unique_ptr<Expression> CastCollectVisitor::VisitReplace(BoundCastExpression &expr, unique_ptr<Expression> *expr_ptr) {
+	if (expr.Child().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		return std::move(*expr_ptr);
 	}
-	const auto &bound_column = bound_cast.Child().Cast<BoundColumnRefExpression>();
-	if (bound_column.Depth() > 0) {
-		throw InternalException("BoundColumnRef with non-zero depth");
-	}
-
+	const auto &bound_column = expr.Child().Cast<BoundColumnRefExpression>();
 	const auto it = analyses.find(bound_column.Binding().table_index);
 	if (it == analyses.end()) {
-		return;
+		return std::move(*expr_ptr);
 	}
-	// We're in a leaf
 
+	// We're in a leaf
 	const column_t projection_id = bound_column.Binding().column_index;
 	if (IsVirtualColumn(projection_id)) {
-		return;
+		return std::move(*expr_ptr);
 	}
 
 	GetAnalysis &analysis = it->second;
 	GetCastMap &cast_map = analysis.cast_map;
-	const ProjectionIndex proj_idx {analysis.get.get().GetColumnIds()[projection_id].GetPrimaryIndex()};
+	const ColumnIndex &column_index = analysis.get.get().GetColumnIds()[projection_id];
+	if (column_index.IsPushdownExtract()) {
+		throw InternalException("PUSHDOWN_EXTRACT column in index");
+	}
+	const ProjectionIndex proj_idx {column_index.GetPrimaryIndex()};
+
 	if (auto cast_it = cast_map.find(proj_idx); cast_it == cast_map.end()) {
-		cast_map.emplace(proj_idx, bound_cast.GetReturnType());
-	} else if (cast_it->second != bound_cast.GetReturnType()) {
+		cast_map.emplace(proj_idx, expr.GetReturnType());
+	} else if (cast_it->second != expr.GetReturnType()) {
 		analysis.conflicts.insert(proj_idx);
 	}
+
+	return std::move(*expr_ptr);
 }
 
 // Replace CAST(BoundColumn, T) where BoundColumn is a leaf with a ColumnRef(T)
-static void ReplaceCastTypes(unique_ptr<Expression> &expr, const Replace &replace) {
-	auto replace_children = [&] {
-		ExpressionIterator::EnumerateChildren(*expr,
-		                                      [&](unique_ptr<Expression> &child) { ReplaceCastTypes(child, replace); });
-	};
-
-	if (expr->GetExpressionClass() != ExpressionClass::BOUND_CAST) {
-		return replace_children();
+struct CastReplaceVisitor final : LogicalOperatorVisitor {
+	const Replace &replace;
+	explicit CastReplaceVisitor(const Replace &replace) : replace(replace) {
 	}
-	const auto &bound_cast = expr->Cast<BoundCastExpression>();
 
-	if (bound_cast.Child().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-		return replace_children();
+	unique_ptr<Expression> VisitReplace(BoundCastExpression &expr, unique_ptr<Expression> *expr_ptr) override;
+};
+
+unique_ptr<Expression> CastReplaceVisitor::VisitReplace(BoundCastExpression &expr, unique_ptr<Expression> *expr_ptr) {
+	if (expr.Child().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+		return std::move(*expr_ptr);
 	}
-	const auto &bound_column = bound_cast.Child().Cast<BoundColumnRefExpression>();
+
+	const auto &bound_column = expr.Child().Cast<BoundColumnRefExpression>();
 	if (bound_column.Depth() > 0) {
 		throw InternalException("BoundColumnRef with non-zero depth");
 	}
 
 	const auto replace_it = replace.find(bound_column.Binding().table_index);
 	if (replace_it == replace.end()) {
-		return replace_children();
+		return std::move(*expr_ptr);
 	}
 
 	const ProjectionIndex projection_id = bound_column.Binding().column_index;
 	const auto &get_replace = replace_it->second;
 	const auto get_replace_it = get_replace.find(projection_id);
 
-	if (get_replace_it == get_replace.end() || get_replace_it->second != bound_cast.GetReturnType()) {
-		return replace_children();
+	if (get_replace_it == get_replace.end() || get_replace_it->second != expr.GetReturnType()) {
+		return std::move(*expr_ptr);
 	}
 
-	expr = make_uniq<BoundColumnRefExpression>(get_replace_it->second, bound_column.Binding());
+	return make_uniq<BoundColumnRefExpression>(get_replace_it->second, bound_column.Binding());
 }
 
-static void CollectFromOp(LogicalOperator &op, Analyses &analyses) {
-	LogicalOperatorVisitor::EnumerateExpressions(op, [&](auto *expr_ptr) { CollectCastTypes(**expr_ptr, analyses); });
-	for (auto &child : op.children) {
-		CollectFromOp(*child, analyses);
-	}
-}
-
-static void ReplaceInOp(LogicalOperator &op, const Replace &replacements) {
-	LogicalOperatorVisitor::EnumerateExpressions(op,
-	                                             [&](auto *expr_ptr) { ReplaceCastTypes(*expr_ptr, replacements); });
-	for (auto &child : op.children) {
-		ReplaceInOp(*child, replacements);
-	}
-}
-
-static void FindGetsWithTypePushdown(LogicalOperator &op, vector<reference<LogicalGet>> &gets) {
+static void FindGetsWithTypePushdown(LogicalOperator &op, Gets &gets) {
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
 		auto &get = op.Cast<LogicalGet>();
 		if (get.table_filters.FilterCount() > 0) {
@@ -175,7 +159,7 @@ static void FindGetsWithTypePushdown(LogicalOperator &op, vector<reference<Logic
 }
 
 unique_ptr<LogicalOperator> TypePushdown::Optimize(unique_ptr<LogicalOperator> op) {
-	vector<reference<LogicalGet>> gets;
+	Gets gets;
 	FindGetsWithTypePushdown(*op, gets);
 	if (gets.empty()) {
 		return op;
@@ -185,7 +169,7 @@ unique_ptr<LogicalOperator> TypePushdown::Optimize(unique_ptr<LogicalOperator> o
 	for (idx_t i = 0; i < gets.size(); ++i) {
 		analyses.emplace(gets[i].get().table_index, GetAnalysis {gets[i]});
 	}
-	CollectFromOp(*op, analyses);
+	CastCollectVisitor {analyses}.VisitOperator(op);
 
 	Replace replace;
 	for (auto &[table_index, analysis] : analyses) {
@@ -214,7 +198,7 @@ unique_ptr<LogicalOperator> TypePushdown::Optimize(unique_ptr<LogicalOperator> o
 	}
 
 	if (!replace.empty()) {
-		ReplaceInOp(*op, replace);
+		CastReplaceVisitor {replace}.VisitOperator(op);
 	}
 	return op;
 }
