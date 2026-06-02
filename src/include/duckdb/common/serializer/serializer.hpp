@@ -348,7 +348,7 @@ protected:
 		OnObjectEnd();
 	}
 
-protected:
+public:
 	// Hooks for subclasses to override to implement custom behavior
 	virtual void OnPropertyBegin(const field_id_t field_id, const char *tag) = 0;
 	virtual void OnPropertyEnd() = 0;
