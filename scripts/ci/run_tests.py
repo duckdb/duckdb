@@ -354,7 +354,9 @@ def normalize_output(output):
     return output or ""
 
 
-SKIPPED_TESTS_PATTERN = re.compile(r"All tests passed \((\d+) skipped tests,")
+SKIPPED_TESTS_PATTERN = re.compile(
+    r"(?:All tests passed \(|All tests were skipped \(total skipped )(\d+)(?: skipped tests,|\))"
+)
 SKIP_REASON_PATTERN = re.compile(r"(.+):\s+(\d+)$")
 MODE_SKIP_REASON_PATTERN = re.compile(r"^mode skip(?:\s+(.*\S))?\s*$")
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
