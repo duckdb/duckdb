@@ -542,7 +542,7 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
 		auto &expr = *order.expression;
 		if (expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
 			auto &ref = expr.Cast<BoundReferenceExpression>();
-			sort_ids.emplace_back(ref.index);
+			sort_ids.emplace_back(ref.Index());
 			continue;
 		}
 

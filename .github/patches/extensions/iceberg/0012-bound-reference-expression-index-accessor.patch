@@ -1,0 +1,39 @@
+diff --git a/src/iceberg_predicate.cpp b/src/iceberg_predicate.cpp
+index e29aa075..b0a9711c 100644
+--- a/src/iceberg_predicate.cpp
++++ b/src/iceberg_predicate.cpp
+@@ -22,7 +22,7 @@ public:
+ 
+ public:
+ 	unique_ptr<Expression> VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr) override {
+-		if (expr.index != 0) {
++		if (expr.Index() != 0) {
+ 			return nullptr;
+ 		}
+ 		auto &return_type = expr.GetReturnType();
+diff --git a/src/storage/iceberg_delete.cpp b/src/storage/iceberg_delete.cpp
+index 2110dfd3..8ee2807f 100644
+--- a/src/storage/iceberg_delete.cpp
++++ b/src/storage/iceberg_delete.cpp
+@@ -438,7 +438,7 @@ PhysicalOperator &IcebergCatalog::PlanDelete(ClientContext &context, PhysicalPla
+ 	}
+ 	for (idx_t i = 0; i < 2; i++) {
+ 		auto &bound_ref = op.expressions[column_offset + i]->Cast<BoundReferenceExpression>();
+-		row_id_indexes.push_back(bound_ref.index);
++		row_id_indexes.push_back(bound_ref.Index());
+ 	}
+ 
+ 	auto allows_positional_deletes =
+diff --git a/src/storage/iceberg_update.cpp b/src/storage/iceberg_update.cpp
+index 363816d0..bf7b15f4 100644
+--- a/src/storage/iceberg_update.cpp
++++ b/src/storage/iceberg_update.cpp
+@@ -117,7 +117,7 @@ SinkResultType IcebergUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
+ 
+ 		D_ASSERT(expressions[i]->GetExpressionType() == ExpressionType::BOUND_REF);
+ 		auto &binding = expressions[i]->Cast<BoundReferenceExpression>();
+-		update_chunk.data[i].Reference(chunk.data[binding.index]);
++		update_chunk.data[i].Reference(chunk.data[binding.Index()]);
+ 	}
+ 
+ 	insert_chunk.SetCardinality(chunk.size());
