@@ -3096,9 +3096,9 @@ void ShellState::Initialize() {
 	showHeader = true;
 	main_prompt = make_uniq<Prompt>();
 	string default_prompt;
-	default_prompt =
-	    "{max_length:50}{highlight_element:prompt_connect}{setting:connect_prefix}{highlight_element:prompt}{setting:current_database_and_schema}"
-	    "{color:reset} D ";
+	default_prompt = "{max_length:50}{highlight_element:prompt_connect}{setting:connect_name_prefix}{highlight_element:"
+	                 "prompt}{setting:current_database_and_schema}"
+	                 "{color:reset} D ";
 	main_prompt->ParsePrompt(default_prompt);
 	vector<string> default_components;
 	default_components.push_back("{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}");

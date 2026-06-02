@@ -259,7 +259,8 @@ void ShellHighlight::ToggleMode(HighlightMode mode) {
 		SetColor(HighlightElementType::CONTINUATION_SELECTED, PrintColor::GREEN, PrintIntensity::STANDARD,
 		         user_configured);
 		SetColor(HighlightElementType::PROMPT, PrintColor::DARKORANGE, PrintIntensity::BOLD, user_configured);
-		SetColor(HighlightElementType::PROMPT_CONNECT, PrintColor::DARKORANGE, PrintIntensity::STANDARD, user_configured);
+		SetColor(HighlightElementType::PROMPT_CONNECT, PrintColor::DARKORANGE, PrintIntensity::STANDARD,
+		         user_configured);
 		SetColor(HighlightElementType::DATABASE_NAME, PrintColor::ORANGE3, PrintIntensity::STANDARD, user_configured);
 		SetColor(HighlightElementType::SCHEMA_NAME, PrintColor::DEEPSKYBLUE1, PrintIntensity::STANDARD,
 		         user_configured);
@@ -285,7 +286,8 @@ void ShellHighlight::ToggleMode(HighlightMode mode) {
 		SetColor(HighlightElementType::CONTINUATION_SELECTED, PrintColor::DODGERBLUE2, PrintIntensity::STANDARD,
 		         user_configured);
 		SetColor(HighlightElementType::PROMPT, PrintColor::DARKORANGE4, PrintIntensity::BOLD, user_configured);
-		SetColor(HighlightElementType::PROMPT_CONNECT, PrintColor::DARKORANGE4, PrintIntensity::STANDARD, user_configured);
+		SetColor(HighlightElementType::PROMPT_CONNECT, PrintColor::DARKORANGE4, PrintIntensity::STANDARD,
+		         user_configured);
 		SetColor(HighlightElementType::ERROR_TOKEN, PrintColor::RED3, PrintIntensity::STANDARD, user_configured);
 		SetColor(HighlightElementType::ERROR_EMPHASIS, PrintColor::RED3, PrintIntensity::BOLD, user_configured);
 		SetColor(HighlightElementType::ERROR_SUGGESTION, PrintColor::RED3, PrintIntensity::BOLD, user_configured);
