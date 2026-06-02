@@ -213,7 +213,7 @@ duckdb::Connection &Prompt::GetConnection(ShellState &state) {
 
 vector<string> Prompt::GetSupportedSettings() {
 	return vector<string> {"current_database", "current_schema", "current_database_and_schema",
-	                       "connect_suffix",   "memory_limit",   "memory_usage",
+	                       "connect_prefix",   "memory_limit",   "memory_usage",
 	                       "swap_usage",       "swap_max",       "bytes_written",
 	                       "bytes_read"};
 }
@@ -264,15 +264,15 @@ string Prompt::HandleSetting(ShellState &state, const PromptComponent &component
 			return ExecuteSQL(state, "SELECT CASE WHEN current_schema() = 'main' THEN current_database() "
 			                         "ELSE current_database() || '.' || current_schema() END");
 		}
-		if (component.literal == "connect_suffix") {
+		if (component.literal == "connect_prefix") {
 			auto connected = context.TryGetConnectedCatalog();
 			if (connected) {
-				return " @ " + connected->GetCatalog().GetConnectDisplay();
+				return connected->GetCatalog().GetConnectDisplay() + " ";
 			}
 			return string();
 		}
 	}
-	if (component.literal == "connect_suffix") {
+	if (component.literal == "connect_prefix") {
 		return string();
 	}
 	auto &current_db = duckdb::DatabaseManager::GetDefaultDatabase(context);
