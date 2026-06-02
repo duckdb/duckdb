@@ -207,11 +207,9 @@ void UngroupedAggregateExecuteState::Sink(LocalUngroupedAggregateState &state, D
 			chunk_count = filtered_data.ApplyFilter(input);
 
 			child_executor.SetChunk(filtered_data.filtered_payload);
-			payload_chunk.SetChildCardinality(chunk_count);
 		} else {
 			chunk_count = input.size();
 			child_executor.SetChunk(input);
-			payload_chunk.SetChildCardinality(chunk_count);
 		}
 
 		// resolve the child expressions of the aggregate (if any)

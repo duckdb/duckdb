@@ -383,6 +383,8 @@ static void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &da
 			column_offset = 0;
 		}
 	}
+	// WriteColumns appends to the child vectors - record the resulting cardinality on the chunk
+	output.SetChildCardinality(output.data[0].size());
 	data.offset = next;
 	data.column_offset = column_offset;
 }

@@ -280,9 +280,10 @@ public:
 
 	void Reset(ExecutionContext &context, GlobalSinkState &gstate_p) override {
 		auto &gstate = gstate_p.Cast<HashAggregateGlobalSinkState>();
-		// Sink repopulates every aggregate-input column by reference before use, so we only need to clear cardinality
-		// here.
-		aggregate_input_chunk.SetChildCardinality(0);
+		// Sink repopulates every aggregate-input column by reference before use, so we just clear it here.
+		// Use Reset() rather than SetChildCardinality(0): the chunk may still hold non-flat (e.g. dictionary)
+		// references from a previous iteration that SetChildCardinality cannot resize.
+		aggregate_input_chunk.Reset();
 		for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
 			auto &grouping = op.groupings[grouping_idx];
 			auto &grouping_gstate = gstate.grouping_states[grouping_idx];

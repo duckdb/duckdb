@@ -881,6 +881,8 @@ vector<RenderDataCollection> BoxRendererImplementation::PivotCollections(vector<
 				}
 			}
 		}
+		// the appends above add exactly one row (per column) to the child vectors - record it on the chunk
+		row_chunk.SetChildCardinality(row_chunk.size() + 1);
 		if (row_chunk.size() == STANDARD_VECTOR_SIZE || c + 1 == column_names.size()) {
 			res_coll.Append(append_state, row_chunk);
 			row_chunk.Reset();

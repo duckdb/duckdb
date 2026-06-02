@@ -132,6 +132,8 @@ BoundStatement Binder::BindShowQuery(ShowRef &ref) {
 			output.data[5].Append(Value());
 		}
 
+		// both branches above append exactly one row to the child vectors - record it on the chunk
+		output.SetChildCardinality(output.size() + 1);
 		if (output.size() == STANDARD_VECTOR_SIZE) {
 			collection->Append(append_state, output);
 			output.Reset();
