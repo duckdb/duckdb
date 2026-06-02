@@ -645,10 +645,9 @@ void ColumnData::RevertAppend(row_t new_count_p) {
 			return;
 		}
 	}
-	auto &last_segment = last_segment_node->GetNode();
-	if (new_count >= last_segment_node->GetRowStart() + last_segment.count) {
+	if (new_count >= last_segment_node->GetRowEnd()) {
 		// the start row is equal to the final portion of the column data: nothing was ever appended here
-		D_ASSERT(new_count == last_segment_node->GetRowStart() + last_segment.count);
+		D_ASSERT(new_count == last_segment_node->GetRowEnd());
 		return;
 	}
 	// find the segment index that the current row belongs to
