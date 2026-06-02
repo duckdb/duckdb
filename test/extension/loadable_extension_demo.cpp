@@ -362,8 +362,11 @@ public:
 		parser_override = QuackParser;
 	}
 
-	static ParserExtensionParseResult QuackParseFunction(ParserExtensionInfo *info, string_view query) {
-		// Operate on the view we're handed; consume its full length on a successful claim.
+	static ParserExtensionParseResult QuackParseFunction(ParserExtensionInfo *info, string_view query,
+	                                                     const vector<idx_t> &allowed_boundaries) {
+		// Operate on the view we're handed; consume its full length on a successful claim
+		// (= allowed_boundaries.back() == query.size(), always a valid boundary).
+		(void)allowed_boundaries;
 		string segment(query);
 		auto lcase = StringUtil::Lower(segment);
 		if (!StringUtil::Contains(lcase, "quack")) {

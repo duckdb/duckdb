@@ -78,15 +78,22 @@ struct ParserExtensionParseResult {
 	//! start of the view). The peeler resumes parsing from view-start + consumed_chars. A
 	//! successful result with consumed_chars == 0 is treated as a decline (lets the next
 	//! extension try).
+	//!
+	//! On success, `consumed_chars` MUST be one of the values in the `allowed_boundaries` vector
+	//! passed to the parse function. Otherwise the peeler throws a ParserException.
 	idx_t consumed_chars = 0;
 };
 
-//! Called when the PEG parser fails to parse a statement. The extension is given a `string_view`
-//! of the query from the failure point onward and may parse any amount of it; it reports how
-//! many bytes it consumed via `consumed_chars` in the returned result. The view enforces "no
-//! peeking before the failure point" at the type level. Consuming zero bytes is treated as
-//! "decline", letting the next extension or the original PEG error surface.
-typedef ParserExtensionParseResult (*parse_function_t)(ParserExtensionInfo *info, string_view query);
+//! Called when the PEG parser fails to parse a statement.
+//!
+//! `query` is the tail of the source from the PEG failure point onward.
+//! `allowed_boundaries` is the set of valid stopping points inside `query` — the start AND end
+//! offsets of every token, plus a final entry equal to `query.size()`. Sorted ascending,
+//! deduplicated (adjacent tokens with no whitespace between them contribute a single shared
+//! boundary). On success, the extension must report `consumed_chars` equal to one of these
+//! values. Reporting 0 declines and lets the next extension or the original PEG error surface.
+typedef ParserExtensionParseResult (*parse_function_t)(ParserExtensionInfo *info, string_view query,
+                                                       const vector<idx_t> &allowed_boundaries);
 //===--------------------------------------------------------------------===//
 // Plan
 //===--------------------------------------------------------------------===//
