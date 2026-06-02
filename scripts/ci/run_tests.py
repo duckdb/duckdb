@@ -18,6 +18,8 @@ from pathlib import Path
 
 DEFAULT_BATCH_SIZE = 10
 DEFAULT_BATCH_TIMEOUT_SECONDS = 600
+HIGH_WORKER_BATCH_TIMEOUT_SECONDS = 300
+HIGH_WORKER_BATCH_TIMEOUT_THRESHOLD = 10
 DEFAULT_RSS_MEMORY_THRESHOLD_MIB = 1024
 DEFAULT_RUNTIME_THRESHOLD_SECONDS = 10
 DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.05
@@ -257,6 +259,14 @@ def resolve_workers(workers: str):
         percentage = int(workers[:-1])
         return max(1, int(cpu_count * (percentage / 100.0)))
     return max(1, int(workers))
+
+
+def resolve_batch_timeout(batch_timeout: float | None, workers: int):
+    if batch_timeout is not None:
+        return batch_timeout
+    if workers >= HIGH_WORKER_BATCH_TIMEOUT_THRESHOLD:
+        return HIGH_WORKER_BATCH_TIMEOUT_SECONDS
+    return DEFAULT_BATCH_TIMEOUT_SECONDS
 
 
 def generate_test_list(
@@ -600,7 +610,7 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--retry", type=int, default=0)
     parser.add_argument("--max-retries", type=int, default=DEFAULT_MAX_RETRIES)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
-    parser.add_argument("--batch-timeout", type=float, default=DEFAULT_BATCH_TIMEOUT_SECONDS)
+    parser.add_argument("--batch-timeout", type=float)
     parser.add_argument(
         "--fail-require-skip",
         action="store_true",
@@ -811,6 +821,7 @@ def main_impl(argv: list[str] | None = None):
         print("CI detected, enabling retry=2 per batch")
     max_retries = max(0, args.max_retries)
     workers = resolve_workers(args.workers)
+    args.batch_timeout = resolve_batch_timeout(args.batch_timeout, workers)
     unittest_bin = args.unittest_bin
     if os.name == "nt":
         unittest_bin = unittest_bin.replace("/", "\\")
