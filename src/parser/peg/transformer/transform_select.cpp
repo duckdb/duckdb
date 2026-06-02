@@ -1294,13 +1294,8 @@ unique_ptr<ResultModifier> PEGTransformerFactory::VerifyLimitOffset(LimitPercent
 	if (offset.is_percent) {
 		throw ParserException("Percentage for offsets are not supported.");
 	}
-	if (limit.is_percent) {
-		auto result = make_uniq<LimitPercentModifier>();
-		result->limit = std::move(limit.expression);
-		result->offset = std::move(offset.expression);
-		return std::move(result);
-	}
 	auto result = make_uniq<LimitModifier>();
+	result->limit_type = limit.is_percent ? LimitValueType::PERCENTAGE : LimitValueType::ROW_COUNT;
 	if (limit.expression) {
 		result->limit = std::move(limit.expression);
 	}

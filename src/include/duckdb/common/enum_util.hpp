@@ -278,6 +278,8 @@ enum class LambdaSyntaxType : uint8_t;
 
 enum class LimitNodeType : uint8_t;
 
+enum class LimitValueType : uint8_t;
+
 enum class LoadType : uint8_t;
 
 enum class LogContextScope : uint8_t;
@@ -919,6 +921,9 @@ const char* EnumUtil::ToChars<LambdaSyntaxType>(LambdaSyntaxType value);
 
 template<>
 const char* EnumUtil::ToChars<LimitNodeType>(LimitNodeType value);
+
+template<>
+const char* EnumUtil::ToChars<LimitValueType>(LimitValueType value);
 
 template<>
 const char* EnumUtil::ToChars<LoadType>(LoadType value);
@@ -1697,6 +1702,9 @@ LambdaSyntaxType EnumUtil::FromString<LambdaSyntaxType>(const char *value);
 
 template<>
 LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value);
+
+template<>
+LimitValueType EnumUtil::FromString<LimitValueType>(const char *value);
 
 template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value);
