@@ -294,9 +294,14 @@ int64_t ClientContext::GetTimeoutValue() const {
 
 	if (max_execution_time > 0 && global_timeout > 0) {
 		return MinValue(max_execution_time, global_timeout);
-	} else {
-		return MaxValue(max_execution_time, global_timeout);
+	} else if (max_execution_time > 0) {
+		return max_execution_time;
+	} else if (global_timeout > 0) {
+		return global_timeout;
 	}
+
+	// no exec time limit
+	return 0;
 }
 
 void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &query) {
