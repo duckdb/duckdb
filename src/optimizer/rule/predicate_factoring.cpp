@@ -23,7 +23,7 @@ static bool ExpressionIsDisjunction(const Expression &expr) {
 static void ExtractDisjunctedPredicates(Expression &expression, vector<reference<Expression>> &disjuncted_children) {
 	if (ExpressionIsDisjunction(expression)) {
 		auto &disjunction = expression.Cast<BoundConjunctionExpression>();
-		for (auto &child : disjunction.children) {
+		for (auto &child : disjunction.GetChildren()) {
 			ExtractDisjunctedPredicates(*child, disjuncted_children);
 		}
 	} else {
@@ -45,8 +45,8 @@ static bool GetSingleColumnBinding(const Expression &expr, ColumnBinding &column
 	bool found_multiple = false;
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
 		if (!ColumnBindingIsvalid(column_binding)) {
-			column_binding = colref.binding;
-		} else if (column_binding != colref.binding) {
+			column_binding = colref.Binding();
+		} else if (column_binding != colref.Binding()) {
 			found_multiple = true;
 		}
 	});
@@ -60,7 +60,7 @@ static void ExtractDisjunctedPredicates(Expression &expression,
 static void ExtractConjunctedPredicates(BoundConjunctionExpression &conjunction,
                                         column_binding_map_t<vector<reference<Expression>>> &binding_map) {
 	D_ASSERT(conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_AND);
-	for (auto &conjunction_child : conjunction.children) {
+	for (auto &conjunction_child : conjunction.GetChildren()) {
 		if (conjunction_child->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
 		    conjunction_child->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 			ExtractConjunctedPredicates(conjunction_child->Cast<BoundConjunctionExpression>(), binding_map);
@@ -161,8 +161,8 @@ unique_ptr<Expression> PredicateFactoringRule::Apply(LogicalOperator &op, vector
 				column_filter = expr.get().Copy();
 			} else {
 				auto new_disjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
-				new_disjunction->children.push_back(std::move(column_filter));
-				new_disjunction->children.push_back(expr.get().Copy());
+				new_disjunction->GetChildrenMutable().push_back(std::move(column_filter));
+				new_disjunction->GetChildrenMutable().push_back(expr.get().Copy());
 				column_filter = std::move(new_disjunction);
 			}
 		}
@@ -172,16 +172,16 @@ unique_ptr<Expression> PredicateFactoringRule::Apply(LogicalOperator &op, vector
 			derived_filter = std::move(column_filter);
 		} else {
 			auto new_conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-			new_conjunction->children.push_back(std::move(column_filter));
-			new_conjunction->children.push_back(std::move(derived_filter));
+			new_conjunction->GetChildrenMutable().push_back(std::move(column_filter));
+			new_conjunction->GetChildrenMutable().push_back(std::move(derived_filter));
 			derived_filter = std::move(new_conjunction);
 		}
 	}
 
 	// Now add the derived filter as an AND to the original expression
 	auto result = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-	result->children.push_back(bindings[0].get().Copy());
-	result->children.push_back(std::move(derived_filter));
+	result->GetChildrenMutable().push_back(bindings[0].get().Copy());
+	result->GetChildrenMutable().push_back(std::move(derived_filter));
 	return std::move(result);
 }
 

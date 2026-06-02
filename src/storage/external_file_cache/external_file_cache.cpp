@@ -17,12 +17,12 @@ namespace duckdb {
 class ExternalFileCache::ExternalFileCacheObjectCacheEntry : public ObjectCacheEntry {
 public:
 	ExternalFileCacheObjectCacheEntry(ExternalFileCache &cache_p, string path_p,
-	                                  ExternalFileCache::CachedFile &cached_file_p)
+	                                  const shared_ptr<ExternalFileCache::CachedFile> &cached_file_p)
 	    : cache(cache_p), path(std::move(path_p)), cached_file(cached_file_p) {
 	}
 
 	~ExternalFileCacheObjectCacheEntry() override {
-		cache.EraseCachedFile(path, cached_file);
+		cache.TryEraseCachedFile(path, cached_file);
 	}
 
 	static string ObjectType() {
@@ -41,7 +41,7 @@ public:
 private:
 	ExternalFileCache &cache;
 	string path;
-	ExternalFileCache::CachedFile &cached_file;
+	weak_ptr<ExternalFileCache::CachedFile> cached_file;
 };
 
 idx_t ExternalFileCache::GetCacheBlockSize(const string &path) const {
@@ -177,7 +177,8 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(Cached
 	return blocks;
 }
 
-ExternalFileCache::CachedFile::CachedFile(string path_p) : path(std::move(path_p)) {
+ExternalFileCache::CachedFile::CachedFile(string path_p, idx_t generation_p)
+    : path(std::move(path_p)), generation(generation_p) {
 }
 
 bool ExternalFileCache::CachedFile::IsValid(bool validate, const string &current_version_tag,
@@ -223,7 +224,7 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 }
 
 ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)
-    : buffer_manager(BufferManager::GetBufferManager(db)), enable(enable_p) {
+    : buffer_manager(BufferManager::GetBufferManager(db)), enable(enable_p), generation(0) {
 }
 
 bool ExternalFileCache::IsEnabled() const {
@@ -232,17 +233,22 @@ bool ExternalFileCache::IsEnabled() const {
 
 void ExternalFileCache::SetEnabled(bool enable_p) {
 	vector<string> keys_to_delete;
-	unordered_map<string, unique_ptr<CachedFile>> cached_files_to_destroy;
 	{
 		const annotated_lock_guard<annotated_mutex> guard(lock);
+		if (enable == enable_p) {
+			return;
+		}
 		enable = enable_p;
+		generation++;
 		if (!enable) {
-			// TODO(hjiang): only evict cache entries with zero ref count.
 			keys_to_delete.reserve(cached_files.size());
 			for (auto &file : cached_files) {
-				keys_to_delete.emplace_back(ObjectCacheKey(file.first));
+				if (file.second->object_cache_entry_registered) {
+					keys_to_delete.emplace_back(ObjectCacheKey(file.first));
+					file.second->object_cache_entry_registered = false;
+				}
 			}
-			cached_files_to_destroy = std::move(cached_files);
+			cached_files.clear();
 		}
 	}
 	DeleteObjectCacheEntries(std::move(keys_to_delete));
@@ -274,12 +280,16 @@ bool ExternalFileCache::IsStale(const CachedFile &file) {
 
 void ExternalFileCache::PruneStaleEntries() {
 	for (auto it = cached_files.begin(); it != cached_files.end();) {
-		if (IsStale(*it->second)) {
+		if (!it->second->object_cache_entry_registered && IsStale(*it->second)) {
 			it = cached_files.erase(it);
 		} else {
 			++it;
 		}
 	}
+}
+
+idx_t ExternalFileCache::GetGeneration() const {
+	return generation;
 }
 
 vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() const {
@@ -305,6 +315,11 @@ vector<CachedFileInformation> ExternalFileCache::GetCachedFileInformation() cons
 	return result;
 }
 
+idx_t ExternalFileCache::GetCachedFileCount() const {
+	const annotated_lock_guard<annotated_mutex> files_guard(lock);
+	return cached_files.size();
+}
+
 ExternalFileCache &ExternalFileCache::Get(DatabaseInstance &db) {
 	return db.GetExternalFileCache();
 }
@@ -321,8 +336,16 @@ BufferManager &ExternalFileCache::GetBufferManager() const {
 	return buffer_manager;
 }
 
-void ExternalFileCache::RegisterObjectCacheEntry(const string &path, CachedFile &cached_file) {
+void ExternalFileCache::RegisterObjectCacheEntry(const string &path, const shared_ptr<CachedFile> &cached_file) {
 	const auto key = ObjectCacheKey(path);
+	{
+		const annotated_lock_guard<annotated_mutex> guard(lock);
+		auto entry = cached_files.find(path);
+		if (!enable || entry == cached_files.end() || entry->second.get() != cached_file.get()) {
+			return;
+		}
+		entry->second->object_cache_entry_registered = true;
+	}
 	auto entry = make_shared_ptr<ExternalFileCacheObjectCacheEntry>(*this, path, cached_file);
 	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
 	object_cache.Put(key, std::move(entry));
@@ -335,20 +358,28 @@ void ExternalFileCache::DeleteObjectCacheEntries(vector<string> object_cache_key
 	}
 }
 
-ExternalFileCache::CachedFile &ExternalFileCache::GetOrCreateCachedFile(const string &path) {
+shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFile(const string &path) {
 	bool register_object_cache_entry = false;
-	CachedFile &result = [&]() -> CachedFile & {
+	shared_ptr<CachedFile> result;
+	{
 		const annotated_lock_guard<annotated_mutex> guard(lock);
+		if (!enable) {
+			result = make_shared_ptr<CachedFile>(path, generation);
+			++result->ref_count;
+			return result;
+		}
+		PruneStaleEntries();
 		auto existing = cached_files.find(path);
 		if (existing != cached_files.end()) {
-			++existing->second->ref_count;
-			return *existing->second;
+			result = existing->second;
+			register_object_cache_entry = !result->object_cache_entry_registered;
+		} else {
+			result = make_shared_ptr<CachedFile>(path, generation);
+			cached_files.emplace(path, result);
+			register_object_cache_entry = true;
 		}
-		auto inserted = cached_files.emplace(path, make_uniq<CachedFile>(path)).first;
-		++inserted->second->ref_count;
-		register_object_cache_entry = true;
-		return *inserted->second;
-	}();
+		++result->ref_count;
+	}
 	// TODO(hjiang): we should update LRU access.
 	if (register_object_cache_entry) {
 		RegisterObjectCacheEntry(path, result);
@@ -356,21 +387,30 @@ ExternalFileCache::CachedFile &ExternalFileCache::GetOrCreateCachedFile(const st
 	return result;
 }
 
-void ExternalFileCache::ReleaseCachedFile(CachedFile &cached_file) {
+void ExternalFileCache::ReleaseCachedFile(const shared_ptr<CachedFile> &cached_file) {
+	if (!cached_file) {
+		return;
+	}
 	const annotated_lock_guard<annotated_mutex> guard(lock);
-	auto entry = cached_files.find(cached_file.path);
-	ALWAYS_ASSERT(entry != cached_files.end());
+	auto entry = cached_files.find(cached_file->path);
+	if (entry == cached_files.end() || entry->second.get() != cached_file.get()) {
+		return;
+	}
 	ALWAYS_ASSERT(entry->second->ref_count > 0);
 	--entry->second->ref_count;
+	if (entry->second->ref_count == 0 && !entry->second->object_cache_entry_registered) {
+		cached_files.erase(entry);
+	}
 }
 
-void ExternalFileCache::EraseCachedFile(const string &path, CachedFile &cached_file) {
-	unique_ptr<CachedFile> cached_file_to_destroy;
-	{
-		const annotated_lock_guard<annotated_mutex> guard(lock);
-		auto entry = cached_files.find(path);
-		ALWAYS_ASSERT(entry != cached_files.end());
-		cached_file_to_destroy = std::move(entry->second);
+void ExternalFileCache::TryEraseCachedFile(const string &path, const weak_ptr<CachedFile> &cached_file) {
+	const annotated_lock_guard<annotated_mutex> guard(lock);
+	auto entry = cached_files.find(path);
+	if (entry == cached_files.end() || weak_ptr<CachedFile>(entry->second) != cached_file) {
+		return;
+	}
+	entry->second->object_cache_entry_registered = false;
+	if (entry->second->ref_count == 0) {
 		cached_files.erase(entry);
 	}
 }

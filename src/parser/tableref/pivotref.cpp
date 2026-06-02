@@ -142,11 +142,11 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 	switch (expr.GetExpressionType()) {
 	case ExpressionType::FUNCTION: {
 		auto &function = expr.Cast<FunctionExpression>();
-		if (function.function_name == "struct_pack") {
+		if (function.FunctionName() == "struct_pack") {
 			unordered_set<string> unique_names;
 			child_list_t<Value> values;
-			values.reserve(function.children.size());
-			for (const auto &child : function.children) {
+			values.reserve(function.GetChildren().size());
+			for (const auto &child : function.GetChildren()) {
 				if (!unique_names.insert(child->GetAlias()).second) {
 					return false;
 				}
@@ -158,10 +158,10 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 			}
 			value = Value::STRUCT(std::move(values));
 			return true;
-		} else if (function.function_name == "list_value") {
+		} else if (function.FunctionName() == "list_value") {
 			vector<Value> values;
-			values.reserve(function.children.size());
-			for (const auto &child : function.children) {
+			values.reserve(function.GetChildren().size());
+			for (const auto &child : function.GetChildren()) {
 				Value child_value;
 				if (!TryFoldConstantForBackwardsCompatibility(*child, child_value)) {
 					return false;
@@ -178,14 +178,14 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 			// finally create the list
 			value = Value::LIST(child_type, values);
 			return true;
-		} else if (function.function_name == "map") {
+		} else if (function.FunctionName() == "map") {
 			Value keys;
-			if (!TryFoldConstantForBackwardsCompatibility(*function.children[0], keys)) {
+			if (!TryFoldConstantForBackwardsCompatibility(*function.GetChildren()[0], keys)) {
 				return false;
 			}
 
 			Value values;
-			if (!TryFoldConstantForBackwardsCompatibility(*function.children[1], values)) {
+			if (!TryFoldConstantForBackwardsCompatibility(*function.GetChildren()[1], values)) {
 				return false;
 			}
 
@@ -207,14 +207,14 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 	case ExpressionType::OPERATOR_CAST: {
 		auto &cast = expr.Cast<CastExpression>();
 		Value dummy_value;
-		if (!TryFoldConstantForBackwardsCompatibility(*cast.child, dummy_value)) {
+		if (!TryFoldConstantForBackwardsCompatibility(cast.Child(), dummy_value)) {
 			return false;
 		}
 
 		// Try to default bind cast
 		LogicalType cast_type;
 		try {
-			cast_type = UnboundType::TryDefaultBind(cast.cast_type);
+			cast_type = UnboundType::TryDefaultBind(cast.TargetType());
 		} catch (...) {
 			return false;
 		}
@@ -250,10 +250,10 @@ static bool TryFoldForBackwardsCompatibility(const unique_ptr<ParsedExpression> 
 	}
 	case ExpressionType::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
-		if (function.function_name != "row") {
+		if (function.FunctionName() != "row") {
 			return false;
 		}
-		for (auto &child : function.children) {
+		for (auto &child : function.GetChildren()) {
 			if (!TryFoldForBackwardsCompatibility(child, values)) {
 				return false;
 			}

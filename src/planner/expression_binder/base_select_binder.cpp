@@ -49,7 +49,7 @@ ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		if (!colref.IsQualified()) {
-			auto alias_entry = alias_map.find(colref.column_names[0]);
+			auto alias_entry = alias_map.find(colref.ColumnNames()[0]);
 			if (alias_entry != alias_map.end()) {
 				// found entry!
 				return alias_entry->second;
@@ -81,13 +81,13 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 		return BindResult(BinderException(op, "GROUPING statement cannot be used without groups"));
 	}
 	vector<ProjectionIndex> group_indexes;
-	if (op.children.empty()) {
+	if (op.GetChildren().empty()) {
 		// No arguments provided - use all group columns
 		for (idx_t i = 0; i < node.groups.group_expressions.size(); i++) {
 			group_indexes.push_back(ProjectionIndex(i));
 		}
 	} else {
-		for (auto &child : op.children) {
+		for (auto &child : op.GetChildrenMutable()) {
 			ExpressionBinder::QualifyColumnNames(binder, child);
 			auto idx = TryBindGroup(*child);
 			if (!idx.IsValid()) {
@@ -130,7 +130,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 
 		auto sql_null = make_uniq<BoundConstantExpression>(Value(return_type));
 		auto when_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
-		when_expr->children.push_back(std::move(collated_group_expression));
+		when_expr->GetChildrenMutable().push_back(std::move(collated_group_expression));
 		auto then_expr = make_uniq<BoundConstantExpression>(Value(return_type));
 		auto else_expr = std::move(uncollated_first_expression);
 		auto case_expr =

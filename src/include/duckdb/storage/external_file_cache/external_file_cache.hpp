@@ -19,6 +19,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/weak_ptr_ipp.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache_block.hpp"
@@ -38,13 +39,14 @@ public:
 	//! Cached files
 	struct CachedFile {
 	public:
-		explicit CachedFile(string path_p);
+		CachedFile(string path_p, idx_t generation_p);
 
 	public:
 		//! Whether the CachedFile is still valid given the current modified/version tag
 		bool IsValid(bool validate, const string &current_version_tag, timestamp_t current_last_modified);
 
 		const string path;
+		const idx_t generation;
 
 		mutable annotated_mutex map_lock;
 		//! The block size used to index the current block map. Invalid if no blocks have been cached yet.
@@ -60,6 +62,8 @@ public:
 		bool on_disk_file DUCKDB_GUARDED_BY(meta_lock) = false;
 		//! Number of live CachingFileHandles referencing this CachedFile.
 		atomic<idx_t> ref_count {0};
+		//! Whether this file currently has a sentinel entry in the ObjectCache. Guarded by ExternalFileCache::lock.
+		bool object_cache_entry_registered = false;
 	};
 
 public:
@@ -71,7 +75,10 @@ public:
 
 	bool IsEnabled() const;
 	void SetEnabled(bool enable);
+	idx_t GetGeneration() const;
 	vector<CachedFileInformation> GetCachedFileInformation() const;
+	//! Number of files tracked in the cache map, expose for testing purpose.
+	idx_t GetCachedFileCount() const;
 
 	//! Re-index to `current_block_size` if it differs from the cache block size.
 	//! Return the blocks cached for the given range.
@@ -79,8 +86,11 @@ public:
 	                                                       idx_t first_block, idx_t num_blocks);
 
 	BufferManager &GetBufferManager() const;
-	//! Gets the cached file, or creates it if is not yet present
-	CachedFile &GetOrCreateCachedFile(const string &path);
+	//! Gets the shared cached file for the given path, creating it if not yet present.
+	//! When caching is disabled, returns a transient CachedFile that is not tracked in the cached file map.
+	shared_ptr<CachedFile> GetOrCreateCachedFile(const string &path);
+	//! Releases a live CachingFileHandle reference acquired through GetOrCreateCachedFile.
+	void ReleaseCachedFile(const shared_ptr<CachedFile> &cached_file);
 
 	DUCKDB_API static bool IsValid(bool validate, const string &cached_version_tag, timestamp_t cached_last_modified,
 	                               const string &current_version_tag, timestamp_t current_last_modified);
@@ -101,9 +111,9 @@ private:
 	//! Return true if `file` has no live handle and no resident cached content.
 	static bool IsStale(const CachedFile &file);
 	//! Register a zero-ref cached file entry in ObjectCache.
-	void RegisterObjectCacheEntry(const string &path, CachedFile &cached_file);
+	void RegisterObjectCacheEntry(const string &path, const shared_ptr<CachedFile> &cached_file);
 	//! Attempts to erase a zero-ref cached file entry at ObjectCache eviction.
-	void TryEraseCachedFile(const string &path, CachedFile &cached_file);
+	void TryEraseCachedFile(const string &path, const weak_ptr<CachedFile> &cached_file);
 	//! Delete ObjectCache entries.
 	void DeleteObjectCacheEntries(vector<string> object_cache_keys);
 
@@ -111,11 +121,12 @@ private:
 	BufferManager &buffer_manager;
 	//! Whether or not file caching is enabled
 	atomic<bool> enable;
+	//! Generation counter, incremented whenever cache enablement changes.
+	atomic<idx_t> generation;
+	//! Mapping from file path to cached file with cached blocks
+	unordered_map<string, shared_ptr<CachedFile>> cached_files DUCKDB_GUARDED_BY(lock);
 	//! Lock for accessing cached_files.
 	mutable annotated_mutex lock;
-	//! Mapping from file path to cached file with cached blocks
-	//! Invariant: all entrie keys are stored in object cache, which are evicted by buffer pool manager.
-	unordered_map<string, unique_ptr<CachedFile>> cached_files DUCKDB_GUARDED_BY(lock);
 };
 
 } // namespace duckdb

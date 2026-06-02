@@ -205,6 +205,8 @@ void CreateTriggerInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(206, "columns", columns);
 	serializer.WriteProperty<TriggerForEach>(207, "for_each", for_each);
 	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(208, "trigger_action", trigger_action);
+	serializer.WritePropertyWithDefault<string>(209, "referencing_new_table", referencing_new_table);
+	serializer.WritePropertyWithDefault<string>(210, "referencing_old_table", referencing_old_table);
 }
 
 unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer) {
@@ -217,6 +219,8 @@ unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer
 	deserializer.ReadPropertyWithDefault<vector<string>>(206, "columns", result->columns);
 	deserializer.ReadProperty<TriggerForEach>(207, "for_each", result->for_each);
 	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(208, "trigger_action", result->trigger_action);
+	deserializer.ReadPropertyWithDefault<string>(209, "referencing_new_table", result->referencing_new_table);
+	deserializer.ReadPropertyWithDefault<string>(210, "referencing_old_table", result->referencing_old_table);
 	return std::move(result);
 }
 

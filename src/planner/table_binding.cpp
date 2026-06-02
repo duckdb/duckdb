@@ -175,7 +175,7 @@ static void ReplaceAliases(ParsedExpression &root_expr, const ColumnList &list,
                            const unordered_map<idx_t, string> &alias_map) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
 		D_ASSERT(!colref.IsQualified());
-		auto &col_names = colref.column_names;
+		auto &col_names = colref.ColumnNamesMutable();
 		D_ASSERT(col_names.size() == 1);
 		auto idx_entry = list.GetColumnIndex(col_names[0]);
 		auto &alias = alias_map.at(idx_entry.index);
@@ -186,7 +186,7 @@ static void ReplaceAliases(ParsedExpression &root_expr, const ColumnList &list,
 static void BakeTableName(ParsedExpression &root_expr, const BindingAlias &binding_alias) {
 	ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(root_expr, [&](ColumnRefExpression &colref) {
 		D_ASSERT(!colref.IsQualified());
-		auto &col_names = colref.column_names;
+		auto &col_names = colref.ColumnNamesMutable();
 		col_names.insert(col_names.begin(), binding_alias.GetAlias());
 		if (!binding_alias.GetSchema().empty()) {
 			col_names.insert(col_names.begin(), binding_alias.GetSchema());
@@ -327,7 +327,7 @@ BindResult DummyBinding::Bind(LambdaRefExpression &lambdaref, idx_t depth) {
 	}
 	ColumnBinding binding(index, ProjectionIndex(column_index));
 	return BindResult(make_uniq<BoundLambdaRefExpression>(lambdaref.GetName(), types[column_index], binding,
-	                                                      lambdaref.lambda_idx, depth));
+	                                                      lambdaref.LambdaIndex(), depth));
 }
 
 unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colref) {

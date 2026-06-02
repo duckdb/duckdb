@@ -1,5 +1,5 @@
 diff --git a/src/httpfs_curl_client.cpp b/src/httpfs_curl_client.cpp
-index efdc87d..8f19c91 100644
+index efdc87d..c893468 100644
 --- a/src/httpfs_curl_client.cpp
 +++ b/src/httpfs_curl_client.cpp
 @@ -409,6 +409,34 @@ public:

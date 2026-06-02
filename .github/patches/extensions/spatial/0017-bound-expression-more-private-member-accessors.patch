@@ -1,0 +1,40 @@
+diff --git a/src/spatial/index/rtree/rtree_index_create_logical.cpp b/src/spatial/index/rtree/rtree_index_create_logical.cpp
+index 70dd812..9539b16 100644
+--- a/src/spatial/index/rtree/rtree_index_create_logical.cpp
++++ b/src/spatial/index/rtree/rtree_index_create_logical.cpp
+@@ -47,7 +47,7 @@ static PhysicalOperator &CreateNullFilter(PhysicalPlanGenerator &generator, cons
+ 	auto is_not_null_expr =
+ 	    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
+ 	auto bound_ref = make_uniq<BoundReferenceExpression>(types[0], 0);
+-	is_not_null_expr->children.push_back(bound_ref->Copy());
++	is_not_null_expr->GetChildrenMutable().push_back(bound_ref->Copy());
+ 
+ 	// Filter IS_NOT_EMPTY on the GEOMETRY column
+ 	auto &catalog = Catalog::GetSystemCatalog(context);
+@@ -60,7 +60,7 @@ static PhysicalOperator &CreateNullFilter(PhysicalPlanGenerator &generator, cons
+ 	auto is_empty_expr = is_empty_func.Bind(context, std::move(is_empty_args));
+ 
+ 	auto is_not_empty_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
+-	is_not_empty_expr->children.push_back(std::move(is_empty_expr));
++	is_not_empty_expr->GetChildrenMutable().push_back(std::move(is_empty_expr));
+ 
+ 	// Combine into an AND
+ 	auto and_expr = make_uniq_base<Expression, BoundConjunctionExpression>(
+diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
+index 2664d41..c330385 100644
+--- a/src/spatial/operators/spatial_join_physical.cpp
++++ b/src/spatial/operators/spatial_join_physical.cpp
+@@ -555,11 +555,11 @@ public:
+ 
+ 		auto is_not_empty_expr =
+ 		    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalTypeId::BOOLEAN);
+-		is_not_empty_expr->children.push_back(std::move(is_empty_expr));
++		is_not_empty_expr->GetChildrenMutable().push_back(std::move(is_empty_expr));
+ 
+ 		auto is_not_null_expr =
+ 		    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalTypeId::BOOLEAN);
+-		is_not_null_expr->children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(geom_type, 0));
++		is_not_null_expr->GetChildrenMutable().push_back(make_uniq_base<Expression, BoundReferenceExpression>(geom_type, 0));
+ 
+ 		auto filter_expr = make_uniq_base<Expression, BoundConjunctionExpression>(
+ 		    ExpressionType::CONJUNCTION_AND, std::move(is_not_empty_expr), std::move(is_not_null_expr));

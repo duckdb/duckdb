@@ -115,6 +115,15 @@ jobs:
         timestamp-rfc3161:            http://timestamp.acs.microsoft.com
         timestamp-digest:             SHA256
 
+    - name: CLI check
+      shell: bash
+      run: |
+        ./duckdb.exe -c "PRAGMA platform; PRAGMA version;"
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          # Fail on non-zero major version.
+          ./duckdb.exe -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v';
+        fi
+
     - name: Deploy
       shell: bash
       env:
@@ -136,12 +145,6 @@ jobs:
         path: |
           libduckdb-windows-amd64.zip
           duckdb_cli-windows-amd64.zip
-
-    - name: Set up MSVC environment for export check (x64)
-      uses: ./.github/actions/setup-msvc-env
-    - name: Duckdb.dll export symbols with C++ on Windows
-      shell: bash
-      run: cl /std:c++17 -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/duckdb.lib
 
  win-release-32:
     name: Windows (32 Bit)

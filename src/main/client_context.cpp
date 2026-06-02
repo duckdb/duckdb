@@ -27,6 +27,9 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -216,6 +219,47 @@ ClientContext::~ClientContext() {
 
 unique_ptr<ClientContextLock> ClientContext::LockContext() {
 	return make_uniq<ClientContextLock>(context_lock);
+}
+
+void ClientContext::ConnectToCatalog(const shared_ptr<AttachedDatabase> &target) {
+	D_ASSERT(target);
+	// Pre-flight: IsRemoteCatalog() is the capability declaration; catalogs that return true MUST
+	// implement RemoteExecute(string). Validation runs before mutation so a throw leaves the client
+	// unbound.
+	if (!target->GetCatalog().IsRemoteCatalog()) {
+		throw InvalidInputException("Database \"%s\" does not support CONNECT", target->GetName());
+	}
+	connected_to_database = target;
+	is_connected = true;
+}
+
+void ClientContext::DisconnectFromCatalog() {
+	connected_to_database.reset();
+	is_connected = false;
+}
+
+shared_ptr<AttachedDatabase> ClientContext::TryGetConnectedCatalog() const {
+	if (!is_connected) {
+		return nullptr;
+	}
+	return connected_to_database.lock();
+}
+
+//! True if `type` is a CONNECT control statement that must execute against LOCAL even while a
+//! CONNECT binding is active (i.e. the chokepoint must let it fall through, not rewrite it).
+static bool IsConnectControlStatement(StatementType type) {
+	return type == StatementType::CONNECT_STATEMENT || type == StatementType::DISCONNECT_STATEMENT;
+}
+
+//! Wrap a TableRef returned from Catalog::RemoteExecute into `SELECT * FROM <ref>` for the chokepoint.
+static unique_ptr<SQLStatement> WrapAsSelect(unique_ptr<TableRef> from_ref) {
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(from_ref);
+
+	auto select_stmt = make_uniq<SelectStatement>();
+	select_stmt->node = std::move(select_node);
+	return std::move(select_stmt);
 }
 
 void ClientContext::Destroy() {
@@ -464,7 +508,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 		}
 	}
 
-	bool optimize = config.enable_optimizer;
+	bool optimize = Settings::Get<EnableOptimizerSetting>(*this);
 	if (Settings::Get<DebugDisableOptimizerSetting>(*this)) {
 		// verify disable optimizer - disable EXCEPT for explain, otherwise every single EXPLAIN query breaks
 		if (logical_plan->type != LogicalOperatorType::LOGICAL_EXPLAIN) {
@@ -786,10 +830,8 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 
 		plan = std::move(planner.plan);
 
-		if (config.enable_optimizer) {
-			Optimizer optimizer(*planner.binder, *this);
-			plan = optimizer.Optimize(std::move(plan));
-		}
+		Optimizer optimizer(*planner.binder, *this);
+		plan = optimizer.Optimize(std::move(plan));
 
 		ColumnBindingResolver resolver;
 		resolver.Verify(*this, *plan);
@@ -944,6 +986,46 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatement(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
+	// CONNECT chokepoint: when connected, non-control SQL is rewritten in place and falls through to
+	// the normal pipeline. No recursion — the rewrite goes through PendingStatementInternal, not back here.
+	if (is_connected) {
+		bool is_control = false;
+		if (statement && IsConnectControlStatement(statement->type)) {
+			is_control = true;
+		}
+		if (!is_control) {
+			if (!statement) {
+				// Prepared-statement execution path (statement is null, prepared is set). Parameterized
+				// prepared statements would need parameter substitution we don't do in v0 — reject.
+				// No-param prepared statements have a fully-resolved `query` already, route them.
+				if (!prepared || prepared->properties.parameter_count > 0) {
+					return ErrorResult<PendingQueryResult>(
+					    ErrorData(InvalidInputException(
+					        "Parameterized prepared statements cannot be executed while CONNECT-ed; "
+					        "DISCONNECT first, or run the SQL as a fresh statement to route through "
+					        "the CONNECT binding")),
+					    query);
+				}
+				// Clear prepared so the rest of the function takes the fresh-statement path on the
+				// rewritten SELECT below.
+				prepared.reset();
+			}
+			auto live = connected_to_database.lock();
+			if (!live) {
+				// Target was detached elsewhere; user must explicitly DISCONNECT to clear is_connected.
+				return ErrorResult<PendingQueryResult>(
+				    ErrorData(InvalidInputException(
+				        "The connected database has been detached out from under this connection. Issue "
+				        "DISCONNECT to clear the connection before running further SQL.")),
+				    query);
+			}
+			// Dispatch via the catalog — IsRemoteCatalog() was validated at CONNECT time, so RemoteExecute
+			// is contracted to be implemented. Wrap the returned TableRef into a SelectStatement.
+			auto remote_ref = live->GetCatalog().RemoteExecute(*this, query);
+			statement = WrapAsSelect(std::move(remote_ref));
+			// statement is now SELECT * FROM <remote-ref>; fall through.
+		}
+	}
 	unique_ptr<PendingQueryResult> pending;
 	try {
 		BeginQueryInternal(lock, query);

@@ -13,6 +13,7 @@
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 
 #include <atomic>
 #include <functional>
