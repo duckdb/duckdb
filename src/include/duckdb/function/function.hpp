@@ -208,7 +208,7 @@ public:
 	}
 
 	auto AddParameter(LogicalType type) -> FunctionSignature & {
-		auto name = parameters.empty() ? string("col") : string("col") + to_string(parameters.size());
+		auto name = StringUtil::Format("col%d", parameters.size());
 		parameters.emplace_back(name, std::move(type));
 		return *this;
 	}

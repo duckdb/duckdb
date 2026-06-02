@@ -625,6 +625,7 @@ hash_t FunctionExpression::Hash() const {
 
 unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	auto copy = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
+	copy->is_legacy_function_call = is_legacy_function_call;
 	copy->function_name = function_name;
 	copy->schema = schema;
 	copy->filter = filter ? filter->Copy() : nullptr;
