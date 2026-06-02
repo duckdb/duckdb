@@ -432,7 +432,7 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.filter_pushdown = true;
 	table_function.filter_prune = true;
 	table_function.late_materialization = true;
-	table_function.type_pushdown = MultiFileFunction<ParquetMultiFileInfo>::PushdownType;
+	table_function.projection_expression_pushdown = MultiFileFunction<ParquetMultiFileInfo>::PushdownProjectionExpression;
 
 	return MultiFileReader::CreateFunctionSet(static_cast<TableFunction>(table_function));
 }

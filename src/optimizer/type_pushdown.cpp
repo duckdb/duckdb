@@ -6,6 +6,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
@@ -17,8 +18,8 @@
  * This pass implements type pushdown for file readers. If a LOGICAL_PROJECTION
  * has a LOGICAL_GET as a child, and for some column that's cast in
  * LOGICAL_PROJECTION there is no other usage (including uncasted) in the query,
- * and file reader supports type pushdown, we can push down the type cast into
- * LOGICAL_GET.
+ * and file reader supports projection expression pushdown, we can push down the
+ * type cast into LOGICAL_GET.
  *
  * Example: SELECT ts::TIMESTAMP FROM file_reader();
  * We can push TIMESTAMP as ts's output type to file_reader();
@@ -34,7 +35,7 @@ TypePushdown::TypePushdown(ClientContext &context) : context(context) {
 }
 
 using Gets = vector<reference<LogicalGet>>;
-using GetCastMap = unordered_map<column_t, LogicalType>;
+using GetCastMap = unordered_map<ProjectionIndex, const BoundCastExpression &>;
 using GetConflicts = unordered_set<ProjectionIndex>;
 using GetReplace = unordered_map<ProjectionIndex, LogicalType>;
 
@@ -99,8 +100,8 @@ unique_ptr<Expression> CastCollectVisitor::VisitReplace(BoundCastExpression &exp
 	const ProjectionIndex proj_idx {column_index.GetPrimaryIndex()};
 
 	if (auto cast_it = cast_map.find(proj_idx); cast_it == cast_map.end()) {
-		cast_map.emplace(proj_idx, expr.GetReturnType());
-	} else if (cast_it->second != expr.GetReturnType()) {
+		cast_map.emplace(proj_idx, expr);
+	} else if (cast_it->second.GetReturnType() != expr.GetReturnType()) {
 		analysis.conflicts.insert(proj_idx);
 	}
 
@@ -142,25 +143,25 @@ unique_ptr<Expression> CastReplaceVisitor::VisitReplace(BoundCastExpression &exp
 	return make_uniq<BoundColumnRefExpression>(get_replace_it->second, bound_column.Binding());
 }
 
-static void FindGetsWithTypePushdown(LogicalOperator &op, Gets &gets) {
+static void FindGetsWithProjectionExpressionPushdown(LogicalOperator &op, Gets &gets) {
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
 		auto &get = op.Cast<LogicalGet>();
 		if (get.table_filters.FilterCount() > 0) {
 			throw InternalException("TypePushdown optimizer run after FilterPushdown");
 		}
 
-		if (get.function.type_pushdown != nullptr) {
+		if (get.function.projection_expression_pushdown != nullptr) {
 			gets.emplace_back(get);
 		}
 	}
 	for (auto &child : op.children) {
-		FindGetsWithTypePushdown(*child, gets);
+		FindGetsWithProjectionExpressionPushdown(*child, gets);
 	}
 }
 
 unique_ptr<LogicalOperator> TypePushdown::Optimize(unique_ptr<LogicalOperator> op) {
 	Gets gets;
-	FindGetsWithTypePushdown(*op, gets);
+	FindGetsWithProjectionExpressionPushdown(*op, gets);
 	if (gets.empty()) {
 		return op;
 	}
@@ -169,7 +170,7 @@ unique_ptr<LogicalOperator> TypePushdown::Optimize(unique_ptr<LogicalOperator> o
 	for (idx_t i = 0; i < gets.size(); ++i) {
 		analyses.emplace(gets[i].get().table_index, GetAnalysis {gets[i]});
 	}
-	CastCollectVisitor {analyses}.VisitOperator(op);
+	CastCollectVisitor(analyses).VisitOperator(op);
 
 	Replace replace;
 	for (auto &[table_index, analysis] : analyses) {
@@ -181,24 +182,29 @@ unique_ptr<LogicalOperator> TypePushdown::Optimize(unique_ptr<LogicalOperator> o
 		}
 
 		LogicalGet &get = analysis.get.get();
-		get.function.type_pushdown(context, get.bind_data, analysis.cast_map);
-		for (const auto &[col_id, new_type] : analysis.cast_map) {
-			get.returned_types[col_id] = new_type;
-		}
-
 		const vector<ColumnIndex> &column_ids = get.GetColumnIds();
 		GetReplace &get_replace = replace[table_index];
 		const GetCastMap &cast_map = analysis.cast_map;
+
 		for (idx_t i = 0; i < column_ids.size(); i++) {
-			const column_t col_idx = column_ids[i].GetPrimaryIndex();
-			if (const auto it = cast_map.find(col_idx); it != cast_map.end()) {
-				get_replace[ProjectionIndex {i}] = it->second;
+			const ProjectionIndex projection_idx {column_ids[i].GetPrimaryIndex()};
+			const auto it = cast_map.find(projection_idx);
+			if (it == cast_map.end()) {
+				continue;
 			}
+			TableFunctionProjectionExpressionInput input {get, it->second, projection_idx};
+			if (!get.function.projection_expression_pushdown(context, input)) {
+				continue;
+			}
+
+			const ProjectionIndex column_idx {i};
+			get.returned_types[projection_idx] = it->second.GetReturnType();
+			get_replace[column_idx] = it->second.GetReturnType();
 		}
 	}
 
 	if (!replace.empty()) {
-		CastReplaceVisitor {replace}.VisitOperator(op);
+		CastReplaceVisitor(replace).VisitOperator(op);
 	}
 	return op;
 }
