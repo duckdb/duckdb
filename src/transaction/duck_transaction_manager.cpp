@@ -446,6 +446,8 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			if (skip_wal_write_due_to_checkpoint) {
 				error.Merge(ErrorData(ex));
 			}
+			// in any case, we can't recover from an error during checkpoint - so we need to invalidate the database
+			ValidChecker::Invalidate(db.GetDatabase(), ErrorData(ex).RawMessage());
 		}
 	}
 
