@@ -1737,6 +1737,16 @@ struct SecretDirectorySetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct StandardVectorSizeSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "standard_vector_size";
+	static constexpr const char *Description = "The compiled-in STANDARD_VECTOR_SIZE (read-only)";
+	static constexpr const char *InputType = "UBIGINT";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct StorageBlockPrefetchSetting {
 	using RETURN_TYPE = StorageBlockPrefetch;
 	static constexpr const char *Name = "storage_block_prefetch";

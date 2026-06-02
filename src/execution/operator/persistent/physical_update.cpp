@@ -125,7 +125,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 		D_ASSERT(expressions[i]->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &binding = expressions[i]->Cast<BoundReferenceExpression>();
-		update_chunk.data[i].Reference(chunk.data[binding.index]);
+		update_chunk.data[i].Reference(chunk.data[binding.Index()]);
 	}
 
 	auto &row_ids = chunk.data[chunk.ColumnCount() - 1];

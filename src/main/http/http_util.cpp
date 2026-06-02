@@ -265,20 +265,14 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 		}
 
 		try {
-			if (request.have_request_timing) {
-				request.request_start = Timestamp::GetCurrentTimestamp();
-			}
+			request.request_start = Timestamp::GetCurrentTimestamp();
 			response = client->Request(request);
 		} catch (...) {
-			if (request.have_request_timing) {
-				request.request_end = Timestamp::GetCurrentTimestamp();
-			}
+			request.request_end = Timestamp::GetCurrentTimestamp();
 			LogRequest(request, nullptr);
 			throw;
 		}
-		if (request.have_request_timing) {
-			request.request_end = Timestamp::GetCurrentTimestamp();
-		}
+		request.request_end = Timestamp::GetCurrentTimestamp();
 		LogRequest(request, response ? response.get() : nullptr);
 		return response;
 	});

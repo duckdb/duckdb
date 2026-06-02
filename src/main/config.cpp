@@ -213,6 +213,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(SchemaSetting),
     DUCKDB_LOCAL(SearchPathSetting),
     DUCKDB_GLOBAL(SecretDirectorySetting),
+    DUCKDB_GLOBAL(StandardVectorSizeSetting),
     DUCKDB_SETTING_CALLBACK(StorageBlockPrefetchSetting),
     DUCKDB_GLOBAL(StorageCompatibilityVersionSetting),
     DUCKDB_LOCAL(StreamingBufferSizeSetting),
@@ -236,9 +237,9 @@ static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("confi
                                                      DUCKDB_SETTING_ALIAS("memory_limit", 119),
                                                      DUCKDB_SETTING_ALIAS("null_order", 53),
                                                      DUCKDB_SETTING_ALIAS("profiling_output", 140),
-                                                     DUCKDB_SETTING_ALIAS("user", 156),
+                                                     DUCKDB_SETTING_ALIAS("user", 157),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 26),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 154),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 155),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

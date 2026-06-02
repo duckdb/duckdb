@@ -1183,6 +1183,17 @@
         "custom_implementation": true
     },
     {
+        "name": "standard_vector_size",
+        "description": "The compiled-in STANDARD_VECTOR_SIZE (read-only)",
+        "type": "UBIGINT",
+        "scope": "global",
+        "custom_implementation": [
+            "get",
+            "set",
+            "reset"
+        ]
+    },
+    {
         "name": "storage_block_prefetch",
         "description": "In which scenarios to use storage block prefetching",
         "type": "ENUM<StorageBlockPrefetch>",

@@ -317,8 +317,8 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
 		auto row_number = RowNumberFun::GetFunction().Bind(context);
-		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
-		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+		row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+		row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_ROWS;
 		string ordinality_alias = ordinality_column_name;
 		if (return_names.size() < column_name_alias.size()) {
 			row_number->SetAlias(column_name_alias[return_names.size()]);

@@ -162,7 +162,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 				if (result_type.id() == LogicalTypeId::INVALID) {
 					result_type = child_col_type;
 				} else {
-					result_type = LogicalType::ForceMaxLogicalType(result_type, child_col_type);
+					result_type = LogicalType::ForceMaxLogicalType(context, result_type, child_col_type);
 				}
 				if (i != col_idx_in_child) {
 					// the column exists - but the children are out-of-order, so we need to re-order anyway
@@ -278,7 +278,7 @@ BoundStatement Binder::BindNode(SetOperationNode &statement) {
 			auto result_type = result.bound_children[0].types[i];
 			for (idx_t child_idx = 1; child_idx < result.bound_children.size(); ++child_idx) {
 				auto &child_types = result.bound_children[child_idx].types;
-				result_type = LogicalType::ForceMaxLogicalType(result_type, child_types[i]);
+				result_type = LogicalType::ForceMaxLogicalType(context, result_type, child_types[i]);
 			}
 			if (!CanContainNulls()) {
 				if (ExpressionBinder::ContainsNullType(result_type)) {

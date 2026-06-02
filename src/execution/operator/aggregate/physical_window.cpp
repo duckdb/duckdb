@@ -317,13 +317,13 @@ PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> 
 		auto &expr = select_list[i];
 		D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &bound_window = expr->Cast<BoundWindowExpression>();
-		if (bound_window.partitions.empty() && bound_window.orders.empty()) {
+		if (bound_window.Partitions().empty() && bound_window.OrderBy().empty()) {
 			is_order_dependent = true;
 		}
 
-		if (bound_window.orders.size() > max_orders) {
+		if (bound_window.OrderBy().size() > max_orders) {
 			order_idx = i;
-			max_orders = bound_window.orders.size();
+			max_orders = bound_window.OrderBy().size();
 		}
 	}
 }
@@ -339,7 +339,7 @@ static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &w
 	if (wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE) {
 		return make_uniq<WindowAggregateExecutor>(wexpr, client, shared);
 	} else {
-		if (!wexpr.window.get()) {
+		if (!wexpr.WindowFunction().get()) {
 			throw InternalException("Window expression type %s", ExpressionTypeToString(wexpr.GetExpressionType()));
 		}
 		return make_uniq<WindowExecutor>(wexpr, shared);
@@ -359,14 +359,15 @@ WindowGlobalSinkState::WindowGlobalSinkState(const PhysicalWindow &op, ClientCon
 	}
 
 	if (!op.partition_info.RequiresPartitionColumns()) {
-		sort_strategy = SortStrategy::Factory(client, wexpr.partitions, wexpr.orders, op.children[0].get().GetTypes(),
-		                                      wexpr.partitions_stats, op.estimated_cardinality);
+		sort_strategy =
+		    SortStrategy::Factory(client, wexpr.Partitions(), wexpr.OrderBy(), op.children[0].get().GetTypes(),
+		                          wexpr.PartitionsStats(), op.estimated_cardinality);
 		GetOrCreatePartition(client, Value());
 	} else {
 		//	Pipeline does the partitioning for us, so leave them out
 		vector<unique_ptr<Expression>> unpartitioned;
 		vector<unique_ptr<BaseStatistics>> partitions_stats;
-		sort_strategy = SortStrategy::Factory(client, unpartitioned, wexpr.orders, op.children[0].get().GetTypes(),
+		sort_strategy = SortStrategy::Factory(client, unpartitioned, wexpr.OrderBy(), op.children[0].get().GetTypes(),
 		                                      partitions_stats, op.estimated_cardinality);
 	}
 }
@@ -667,8 +668,8 @@ void WindowHashGroup::AllocateMasks() {
 	for (auto &wexec : executors) {
 		auto &wexpr = wexec->wexpr;
 
-		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : wexpr.partitions.size();
-		auto &order_mask = order_masks[order_begin + wexpr.orders.size()];
+		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : wexpr.Partitions().size();
+		auto &order_mask = order_masks[order_begin + wexpr.OrderBy().size()];
 		if (order_mask.IsMaskSet()) {
 			continue;
 		}
@@ -705,8 +706,8 @@ void WindowHashGroup::ComputeMasks(const idx_t block_begin, const idx_t block_en
 	const auto &wexpr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
 
 	//	Set up the partition compare structs
-	const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : wexpr.partitions.size();
-	if (!order_begin && wexpr.orders.empty()) {
+	const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : wexpr.Partitions().size();
+	if (!order_begin && wexpr.OrderBy().empty()) {
 		return;
 	}
 
@@ -904,8 +905,8 @@ WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::GetGlobalStates(ClientCo
 	// These can be large so we defer building them until we are ready.
 	for (auto &wexec : executors) {
 		auto &wexpr = wexec->wexpr;
-		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : wexpr.partitions.size();
-		auto &order_mask = order_masks[order_begin + wexpr.orders.size()];
+		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : wexpr.Partitions().size();
+		auto &order_mask = order_masks[order_begin + wexpr.OrderBy().size()];
 		gestates.emplace_back(wexec->GetGlobalState(client, count, partition_mask, order_mask));
 	}
 
@@ -1204,17 +1205,17 @@ bool PhysicalWindow::SupportsPartitioning(const OperatorPartitionInfo &partition
 	//	We can only preserve order for single partitioning
 	//	or work stealing causes out of order batch numbers
 	auto &wexpr = select_list[order_idx]->Cast<BoundWindowExpression>();
-	return wexpr.partitions.empty(); // NOLINT
+	return wexpr.Partitions().empty(); // NOLINT
 }
 
 OrderPreservationType PhysicalWindow::SourceOrder() const {
 	auto &wexpr = select_list[order_idx]->Cast<BoundWindowExpression>();
-	if (!wexpr.partitions.empty()) {
+	if (!wexpr.Partitions().empty()) {
 		// if we have partitions the window order is not defined
 		return OrderPreservationType::NO_ORDER;
 	}
 	// without partitions we can maintain order
-	if (wexpr.orders.empty()) {
+	if (wexpr.OrderBy().empty()) {
 		// if we have no orders we maintain insertion order
 		return OrderPreservationType::INSERTION_ORDER;
 	}
