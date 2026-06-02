@@ -43,7 +43,7 @@ static unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> e
 		}
 	}
 	auto result = make_uniq<BoundCastExpression>(std::move(expr), target_type, std::move(bound_cast), try_cast);
-	result->SetQueryLocation(result->child->GetQueryLocation());
+	result->SetQueryLocation(result->Child().GetQueryLocation());
 	return std::move(result);
 }
 
@@ -241,7 +241,7 @@ unique_ptr<Expression> BoundCastExpression::Copy() const {
 bool BoundCastExpression::CanThrow() const {
 	const auto child_type = child->GetReturnType();
 	if (return_type.id() != child_type.id() &&
-	    LogicalType::ForceMaxLogicalType(return_type, child_type) == child_type.id()) {
+	    LogicalType::DefaultForceMaxLogicalType(return_type, child_type) == child_type.id()) {
 		return true;
 	}
 	// Casting VARCHAR to JSON involves parsing and validation that can throw on malformed input

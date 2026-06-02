@@ -11,6 +11,8 @@
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
 
 namespace duckdb {
 
@@ -34,6 +36,9 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &deserializer) {
 		break;
 	case QueryNodeType::INSERT_QUERY_NODE:
 		result = InsertQueryNode::Deserialize(deserializer);
+		break;
+	case QueryNodeType::MERGE_QUERY_NODE:
+		result = MergeQueryNode::Deserialize(deserializer);
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 		result = RecursiveCTENode::Deserialize(deserializer);
@@ -120,6 +125,27 @@ unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", result->table_ref);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(208, "default_values", result->default_values, false);
 	deserializer.ReadPropertyWithExplicitDefault<InsertColumnOrder>(209, "column_order", result->column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	return std::move(result);
+}
+
+void MergeQueryNode::Serialize(Serializer &serializer) const {
+	QueryNode::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "target", target);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(201, "source", source);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(202, "join_condition", join_condition);
+	serializer.WritePropertyWithDefault<vector<string>>(203, "using_columns", using_columns);
+	serializer.WritePropertyWithDefault<map<MergeActionCondition, vector<unique_ptr<MergeIntoAction>>>>(204, "actions", actions);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "returning_list", returning_list);
+}
+
+unique_ptr<QueryNode> MergeQueryNode::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<MergeQueryNode>(new MergeQueryNode());
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(200, "target", result->target);
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(201, "source", result->source);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(202, "join_condition", result->join_condition);
+	deserializer.ReadPropertyWithDefault<vector<string>>(203, "using_columns", result->using_columns);
+	deserializer.ReadPropertyWithDefault<map<MergeActionCondition, vector<unique_ptr<MergeIntoAction>>>>(204, "actions", result->actions);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "returning_list", result->returning_list);
 	return std::move(result);
 }
 

@@ -1,0 +1,50 @@
+diff --git a/src/hnsw/hnsw_index_plan.cpp b/src/hnsw/hnsw_index_plan.cpp
+index d96e1cf..51bc123 100644
+--- a/src/hnsw/hnsw_index_plan.cpp
++++ b/src/hnsw/hnsw_index_plan.cpp
+@@ -123,7 +123,7 @@ PhysicalOperator &HNSWIndex::CreatePlan(PlanIndexInput &input) {
+ 		auto is_not_null_expr =
+ 		    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
+ 		auto bound_ref = make_uniq<BoundReferenceExpression>(new_column_types[i], i);
+-		is_not_null_expr->children.push_back(std::move(bound_ref));
++		is_not_null_expr->GetChildrenMutable().push_back(std::move(bound_ref));
+ 		filter_select_list.push_back(std::move(is_not_null_expr));
+ 	}
+ 
+diff --git a/src/hnsw/hnsw_optimize_expr.cpp b/src/hnsw/hnsw_optimize_expr.cpp
+index c3a999e..89f48b2 100644
+--- a/src/hnsw/hnsw_optimize_expr.cpp
++++ b/src/hnsw/hnsw_optimize_expr.cpp
+@@ -46,14 +46,14 @@ unique_ptr<Expression> CosineDistanceRule::Apply(LogicalOperator &op, vector<ref
+ 	const auto &const_expr = bindings[1].get().Cast<BoundConstantExpression>();
+ 	auto &similarity_expr = bindings[2].get().Cast<BoundFunctionExpression>();
+ 
+-	if (!const_expr.value.IsNull() && const_expr.value.GetValue<float>() == 1.0) {
++	if (!const_expr.GetValue().IsNull() && const_expr.GetValue().GetValue<float>() == 1.0) {
+ 		// Create the new array_cosine_distance function
+ 		vector<unique_ptr<Expression>> args;
+ 		vector<LogicalType> arg_types;
+-		arg_types.push_back(similarity_expr.children[0]->GetReturnType());
+-		arg_types.push_back(similarity_expr.children[1]->GetReturnType());
+-		args.push_back(std::move(similarity_expr.children[0]));
+-		args.push_back(std::move(similarity_expr.children[1]));
++		arg_types.push_back(similarity_expr.GetChildren()[0]->GetReturnType());
++		arg_types.push_back(similarity_expr.GetChildren()[1]->GetReturnType());
++		args.push_back(std::move(similarity_expr.GetChildrenMutable()[0]));
++		args.push_back(std::move(similarity_expr.GetChildrenMutable()[1]));
+ 
+ 		auto &context = GetContext();
+ 		auto func_entry = Catalog::GetEntry<ScalarFunctionCatalogEntry>(context, "", "", "array_cosine_distance",
+diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
+index d8203fc..390ba22 100644
+--- a/src/hnsw/hnsw_optimize_join.cpp
++++ b/src/hnsw/hnsw_optimize_join.cpp
+@@ -457,7 +457,7 @@ bool HNSWIndexJoinOptimizer::TryOptimize(Binder &binder, ClientContext &context,
+ 	if (constant_expr.GetReturnType() != LogicalType::BIGINT) {
+ 		return false;
+ 	}
+-	auto k_value = constant_expr.value.GetValue<int64_t>();
++	auto k_value = constant_expr.GetValue().GetValue<int64_t>();
+ 	if (k_value < 0 || k_value >= STANDARD_VECTOR_SIZE) {
+ 		// Can only optimize up to SVS
+ 		return false;

@@ -97,7 +97,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			auto bound_expr = expression_binder.Bind(expr);
 			auto &bound_ref = bound_expr->Cast<BoundColumnRefExpression>();
 
-			auto column_index = bound_ref.binding.column_index;
+			auto column_index = bound_ref.Binding().column_index;
 			if (key_references.find(column_index) != key_references.end()) {
 				continue;
 			}
@@ -166,7 +166,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 					    expr->GetQueryLocation(),
 					    "In USING KEY, an aggregate must either have a column reference or an alias.");
 				}
-				aggregate_idx = bound_children[0]->Cast<BoundColumnRefExpression>().binding.column_index;
+				aggregate_idx = bound_children[0]->Cast<BoundColumnRefExpression>().Binding().column_index;
 			}
 
 			// Find the best matching aggregate function

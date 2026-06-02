@@ -805,7 +805,7 @@ static unique_ptr<FunctionLocalState> RowIdFilterInit(ExpressionState &, const B
 }
 
 static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<RowIdFilterBindData>();
+	auto &bind_data = state.expr.Cast<BoundFunctionExpression>().BindInfo()->Cast<RowIdFilterBindData>();
 	auto &allowed = bind_data.allowed_set;
 
 	auto &input_vec = args.data[0];

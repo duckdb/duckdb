@@ -100,7 +100,7 @@ void LogicalUpdate::RewriteInPlaceUpdates(LogicalOperator &update_op) {
 
 				// Update the target binding.
 				target_binding =
-				    proj.expressions[target_binding.column_index]->Cast<BoundColumnRefExpression>().binding;
+				    proj.expressions[target_binding.column_index]->Cast<BoundColumnRefExpression>().Binding();
 
 				// Traverse the child.
 				stack.push_back(proj.children.back());

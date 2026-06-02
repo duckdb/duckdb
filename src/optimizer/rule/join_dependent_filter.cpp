@@ -17,7 +17,7 @@ JoinDependentFilterRule::JoinDependentFilterRule(ExpressionRewriter &rewriter) :
 
 static void GetTableIndices(const Expression &root_expr, unordered_set<TableIndex> &table_idxs) {
 	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-	    root_expr, [&](const BoundColumnRefExpression &colref) { table_idxs.insert(colref.binding.table_index); });
+	    root_expr, [&](const BoundColumnRefExpression &colref) { table_idxs.insert(colref.Binding().table_index); });
 }
 
 static inline bool ExpressionReferencesMultipleTables(const Expression &binding) {
@@ -30,7 +30,7 @@ static inline void ExtractConjunctedExpressions(Expression &expression,
                                                 unordered_map<TableIndex, unique_ptr<Expression>> &expressions) {
 	if (expression.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conjunction = expression.Cast<BoundConjunctionExpression>();
-		for (auto &child : conjunction.children) {
+		for (auto &child : conjunction.GetChildren()) {
 			ExtractConjunctedExpressions(*child, expressions);
 		}
 	} else if (!expression.IsVolatile()) {
@@ -85,7 +85,7 @@ unique_ptr<Expression> JoinDependentFilterRule::Apply(LogicalOperator &op, vecto
 	}
 
 	// Must have at least one join-dependent AND expression
-	auto &children = conjunction.children;
+	const auto &children = conjunction.GetChildren();
 	bool eligible = false;
 	for (const auto &child : children) {
 		if (child->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
@@ -109,7 +109,7 @@ unique_ptr<Expression> JoinDependentFilterRule::Apply(LogicalOperator &op, vecto
 	auto derived_filter = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 	for (auto &entry : conjuncted_expressions[0]) {
 		auto derived_entry_filter = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
-		derived_entry_filter->children.push_back(entry.second->Copy());
+		derived_entry_filter->GetChildrenMutable().push_back(entry.second->Copy());
 
 		bool found = true;
 		for (idx_t conj_idx = 1; conj_idx < children.size(); conj_idx++) {
@@ -119,29 +119,29 @@ unique_ptr<Expression> JoinDependentFilterRule::Apply(LogicalOperator &op, vecto
 				found = false;
 				break; // Expression does not appear in every conjuncted expression, cannot derive any restriction
 			}
-			derived_entry_filter->children.push_back(other_it->second->Copy());
+			derived_entry_filter->GetChildrenMutable().push_back(other_it->second->Copy());
 		}
 
 		if (!found) {
 			continue; // Expression must show up in every entry
 		}
 
-		derived_filter->children.push_back(std::move(derived_entry_filter));
+		derived_filter->GetChildrenMutable().push_back(std::move(derived_entry_filter));
 	}
 
-	if (derived_filter->children.empty()) {
+	if (derived_filter->GetChildrenMutable().empty()) {
 		return nullptr; // Could not derive filters that can be pushed down
 	}
 
 	// Add the derived expression to the original expression with an AND
 	auto result = make_uniq_base<Expression, BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
 	auto &result_conjunction = result->Cast<BoundConjunctionExpression>();
-	result_conjunction.children.push_back(conjunction.Copy());
+	result_conjunction.GetChildrenMutable().push_back(conjunction.Copy());
 
-	if (derived_filter->children.size() == 1) {
-		result_conjunction.children.push_back(std::move(derived_filter->children[0]));
+	if (derived_filter->GetChildrenMutable().size() == 1) {
+		result_conjunction.GetChildrenMutable().push_back(std::move(derived_filter->GetChildrenMutable()[0]));
 	} else {
-		result_conjunction.children.push_back(std::move(derived_filter));
+		result_conjunction.GetChildrenMutable().push_back(std::move(derived_filter));
 	}
 	return result;
 }

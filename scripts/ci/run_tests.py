@@ -18,6 +18,8 @@ from pathlib import Path
 
 DEFAULT_BATCH_SIZE = 10
 DEFAULT_BATCH_TIMEOUT_SECONDS = 600
+HIGH_WORKER_BATCH_TIMEOUT_SECONDS = 300
+HIGH_WORKER_BATCH_TIMEOUT_THRESHOLD = 10
 DEFAULT_RSS_MEMORY_THRESHOLD_MIB = 1024
 DEFAULT_RUNTIME_THRESHOLD_SECONDS = 10
 DEFAULT_RSS_POLL_INTERVAL_SECONDS = 0.05
@@ -259,6 +261,14 @@ def resolve_workers(workers: str):
     return max(1, int(workers))
 
 
+def resolve_batch_timeout(batch_timeout: float | None, workers: int):
+    if batch_timeout is not None:
+        return batch_timeout
+    if workers >= HIGH_WORKER_BATCH_TIMEOUT_THRESHOLD:
+        return HIGH_WORKER_BATCH_TIMEOUT_SECONDS
+    return DEFAULT_BATCH_TIMEOUT_SECONDS
+
+
 def generate_test_list(
     test_file,
     unittest_bin: str,
@@ -315,12 +325,10 @@ def format_batch_failure(
     stderr: str,
     message: str | None = None,
 ):
-    rerun_cmd = (
-        "printf '%s\\n' "
-        + " ".join(shlex.quote(test) for test in batch)
-        + " > /tmp/duckdb_test_batch.txt && "
-        + build_test_command(config, "/tmp/duckdb_test_batch.txt")
-    )
+    rerun_parts = [shlex.quote(config.unittest_bin)]
+    rerun_parts.extend(shlex.split(config.test_flags))
+    rerun_parts.append(",".join(batch))
+    rerun_cmd = shlex.join(rerun_parts)
     parts = [f"### failed test batch {batch_idx} ###", ""]
     if message is not None:
         parts.extend([message, ""])
@@ -346,14 +354,30 @@ def normalize_output(output):
     return output or ""
 
 
-SKIPPED_TESTS_PATTERN = re.compile(r"All tests passed \((\d+) skipped tests,")
+SKIPPED_TESTS_PATTERN = re.compile(
+    r"(?:All tests passed \(|All tests were skipped \(total skipped )(\d+)(?: skipped tests,|\))"
+)
 SKIP_REASON_PATTERN = re.compile(r"(.+):\s+(\d+)$")
 MODE_SKIP_REASON_PATTERN = re.compile(r"^mode skip(?:\s+(.*\S))?\s*$")
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+TEST_RUNTIME_PATTERN = re.compile(r"^\[\d+/\d+\] \(\d+%\): (.+) took ([0-9]+(?:\.[0-9]+)?)s\s*$")
 
 
 def strip_ansi(text: str):
     return ANSI_ESCAPE_PATTERN.sub("", text)
+
+
+def parse_test_runtimes(output: str):
+    runtimes = []
+    for line in strip_ansi(output).splitlines():
+        match = TEST_RUNTIME_PATTERN.match(line.strip())
+        if match:
+            runtimes.append((match.group(1), float(match.group(2))))
+    return runtimes
+
+
+def extract_test_runtimes(stdout: str, stderr: str):
+    return parse_test_runtimes(stdout) + parse_test_runtimes(stderr)
 
 
 def parse_skipped_tests_count(output: str):
@@ -539,8 +563,14 @@ def handle_failed_batch(ctx: RunContext, batch_info, result):
 
 
 def report_batch_metrics(ctx: RunContext, batch_info, result, elapsed: float):
-    if ctx.config.runtime_threshold_seconds is not None and elapsed >= ctx.config.runtime_threshold_seconds:
-        ctx.progress.print_message(f"warn: {batch_info['batch'][0]} took {elapsed:.2f}s")
+    if ctx.config.runtime_threshold_seconds is not None:
+        test_runtimes = extract_test_runtimes(result["stdout"], result["stderr"])
+        if test_runtimes:
+            for test_name, test_elapsed in test_runtimes:
+                if test_elapsed >= ctx.config.runtime_threshold_seconds:
+                    ctx.progress.print_message(f"warn: {test_name} took {test_elapsed:.2f}s")
+        elif elapsed >= ctx.config.runtime_threshold_seconds:
+            ctx.progress.print_message(f"warn: {batch_info['batch'][0]} took {elapsed:.2f}s")
     if (
         ctx.config.rss_memory_threshold_mib is not None
         and format_mib(result["peak_rss_bytes"]) >= ctx.config.rss_memory_threshold_mib
@@ -600,7 +630,7 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--retry", type=int, default=0)
     parser.add_argument("--max-retries", type=int, default=DEFAULT_MAX_RETRIES)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
-    parser.add_argument("--batch-timeout", type=float, default=DEFAULT_BATCH_TIMEOUT_SECONDS)
+    parser.add_argument("--batch-timeout", type=float)
     parser.add_argument(
         "--fail-require-skip",
         action="store_true",
@@ -811,14 +841,11 @@ def main_impl(argv: list[str] | None = None):
         print("CI detected, enabling retry=2 per batch")
     max_retries = max(0, args.max_retries)
     workers = resolve_workers(args.workers)
+    args.batch_timeout = resolve_batch_timeout(args.batch_timeout, workers)
     unittest_bin = args.unittest_bin
     if os.name == "nt":
         unittest_bin = unittest_bin.replace("/", "\\")
-    if args.track_runtime is not None:
-        print("enabling runtime tracking forces batch_size=1")
-        batch_size = 1
-    else:
-        batch_size = args.batch_size
+    batch_size = args.batch_size
     failed_configs = []
     if len(config_invocations) > 1:
         print(f"running {len(config_invocations)} configs")
