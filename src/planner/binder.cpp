@@ -609,11 +609,16 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 		}
 	}
 	expanded_tables.insert(table);
-	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, triggers));
+	auto bound = ExpandAfterTriggers(node, returning_list, triggers);
+
+	// Erasing from the set, so we will track expanded tables only while we're on the same node in the recursive stack,
+	// meaning we're on the same "trigger" in the trigger chain.
+	expanded_tables.erase(table);
+	return make_uniq<BoundStatement>(std::move(bound));
 }
 
 static constexpr const char *TRIGGER_BASE_CTE_PREFIX = "__duckdb_trigger_base_";
-static constexpr const char *TRIGGER_BODY_CTE_PREFIX = "__duckdb_trigger_1_";
+static constexpr const char *TRIGGER_BODY_CTE_PREFIX = "__duckdb_trigger_body_";
 
 static unique_ptr<CommonTableExpressionInfo> MakeTransitionTableAliasCTE(const string &base_cte_name) {
 	auto alias_cte = make_uniq<CommonTableExpressionInfo>();
@@ -629,26 +634,18 @@ static unique_ptr<CommonTableExpressionInfo> MakeTransitionTableAliasCTE(const s
 
 BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
                                            const vector<const_reference<TriggerCatalogEntry>> &triggers) {
-	// multiple triggers per table are not yet supported
-	D_ASSERT(triggers.size() == 1);
+	D_ASSERT(!triggers.empty());
 
 	D_ASSERT(returning_list.empty());
 	returning_list.push_back(make_uniq<StarExpression>());
 
 	auto uuid_suffix = UUID::ToString(UUID::GenerateRandomUUID());
 	auto base_cte_name = TRIGGER_BASE_CTE_PREFIX + uuid_suffix;
-	auto body_cte_name = TRIGGER_BODY_CTE_PREFIX + uuid_suffix;
 
 	auto base_cte = make_uniq<CommonTableExpressionInfo>();
 	base_cte->query_node = node.Copy();
 	base_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 	base_cte->is_trigger_generated = true;
-
-	auto &trigger = triggers[0].get();
-	auto trig_cte = make_uniq<CommonTableExpressionInfo>();
-	trig_cte->query_node = trigger.trigger_action->Copy();
-	trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
-	trig_cte->is_trigger_generated = true;
 
 	// count(*) over the base CTE gives CHANGED_ROWS ("N rows affected") to the client
 	auto outer = make_uniq<SelectNode>();
@@ -657,13 +654,30 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 	from_ref->table_name = base_cte_name;
 	outer->from_table = std::move(from_ref);
 	outer->cte_map.map[base_cte_name] = std::move(base_cte);
-	if (!trigger.referencing_new_table.empty()) {
-		outer->cte_map.map[trigger.referencing_new_table] = MakeTransitionTableAliasCTE(base_cte_name);
+
+	// Expand each trigger as a DML CTE.
+	// Alphabetical order by name (case-insensitive) - see GetTriggersForEvent.
+	for (idx_t i = 0; i < triggers.size(); i++) {
+		auto &trigger = triggers[i].get();
+		auto body_cte_name = string(TRIGGER_BODY_CTE_PREFIX) + to_string(i + 1) + "_" + uuid_suffix;
+
+		auto trig_cte = make_uniq<CommonTableExpressionInfo>();
+		trig_cte->query_node = trigger.trigger_action->Copy();
+		trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+		trig_cte->is_trigger_generated = true;
+
+		// Inject alias CTEs into the trigger body's own CTE map so each trigger' aliases won't be visible
+		// a local WITH shadows the alias
+		auto &body_map = trig_cte->query_node->cte_map.map;
+		if (!trigger.referencing_new_table.empty() && body_map.find(trigger.referencing_new_table) == body_map.end()) {
+			body_map[trigger.referencing_new_table] = MakeTransitionTableAliasCTE(base_cte_name);
+		}
+		if (!trigger.referencing_old_table.empty() && body_map.find(trigger.referencing_old_table) == body_map.end()) {
+			body_map[trigger.referencing_old_table] = MakeTransitionTableAliasCTE(base_cte_name);
+		}
+
+		outer->cte_map.map[body_cte_name] = std::move(trig_cte);
 	}
-	if (!trigger.referencing_old_table.empty()) {
-		outer->cte_map.map[trigger.referencing_old_table] = MakeTransitionTableAliasCTE(base_cte_name);
-	}
-	outer->cte_map.map[body_cte_name] = std::move(trig_cte);
 
 	auto bound = Bind(*outer);
 	auto &properties = GetStatementProperties();
