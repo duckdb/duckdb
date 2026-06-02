@@ -3,6 +3,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/operator_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -131,7 +132,24 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 		throw InvalidInputException("decimal_division: both arguments must be DECIMAL");
 	}
 
-	uint8_t result_scale = MaxValue<uint8_t>(6, s1 + p2 + 1);
+	uint8_t min_scale = 6;
+	if (arguments.size() == 3) {
+		if (!arguments[2]->IsFoldable()) {
+			throw NotImplementedException("decimal_division: min_scale argument must be a constant integer");
+		}
+		Value min_scale_val = ExpressionExecutor::EvaluateScalar(input.GetClientContext(), *arguments[2]);
+		if (min_scale_val.IsNull()) {
+			throw InvalidInputException("decimal_division: min_scale argument must not be NULL");
+		}
+		int32_t min_scale_i = min_scale_val.GetValue<int32_t>();
+		if (min_scale_i < 0 || min_scale_i > Decimal::MAX_WIDTH_DECIMAL) {
+			throw InvalidInputException("decimal_division: min_scale must be between 0 and %d, got %d",
+			                            Decimal::MAX_WIDTH_DECIMAL, min_scale_i);
+		}
+		min_scale = UnsafeNumericCast<uint8_t>(min_scale_i);
+	}
+
+	uint8_t result_scale = MaxValue<uint8_t>(min_scale, s1 + p2 + 1);
 	uint8_t result_width = p1 - s1 + s2 + result_scale;
 
 	if (result_scale > Decimal::MAX_WIDTH_DECIMAL) {
@@ -203,10 +221,17 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 ScalarFunctionSet DecimalDivisionFun::GetFunctions() {
 	auto decimal_type = LogicalType(LogicalTypeId::DECIMAL);
 	ScalarFunctionSet set("decimal_division");
-	ScalarFunction func({decimal_type, decimal_type}, decimal_type, DecimalDivExecute<hugeint_t, hugeint_t, hugeint_t>,
-	                    DecimalDivisionBind);
-	func.SetFallible();
-	set.AddFunction(func);
+
+	ScalarFunction two_arg({decimal_type, decimal_type}, decimal_type,
+	                       DecimalDivExecute<hugeint_t, hugeint_t, hugeint_t>, DecimalDivisionBind);
+	two_arg.SetFallible();
+	set.AddFunction(two_arg);
+
+	ScalarFunction three_arg({decimal_type, decimal_type, LogicalType::INTEGER}, decimal_type,
+	                         DecimalDivExecute<hugeint_t, hugeint_t, hugeint_t>, DecimalDivisionBind);
+	three_arg.SetFallible();
+	set.AddFunction(three_arg);
+
 	return set;
 }
 

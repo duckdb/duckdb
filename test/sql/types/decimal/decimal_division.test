@@ -89,3 +89,39 @@ statement error
 SELECT decimal_division(3::decimal(38,2), 16384::decimal(37,2));
 ----
 <REGEX>:.*could not perform an accurate division.*
+
+# Optional min_scale argument
+# min_scale=2: result_scale=max(2,2+4+1)=7, same result as default for this input
+query I
+SELECT decimal_division(12.34::DECIMAL(4,2), 3.5::DECIMAL(4,1), 2);
+----
+3.5257142
+
+# min_scale=0: result_scale=max(0,2+4+1)=7, still driven by s1+p2+1
+query I
+SELECT decimal_division(12.34::DECIMAL(4,2), 3.5::DECIMAL(4,1), 0);
+----
+3.5257142
+
+# min_scale=10: overrides s1+p2+1=7, result_scale=10
+# result_width=4-2+1+10=13
+query I
+SELECT typeof(decimal_division(12.34::DECIMAL(4,2), 3.5::DECIMAL(4,1), 10));
+----
+DECIMAL(13,10)
+
+query I
+SELECT decimal_division(12.34::DECIMAL(4,2), 3.5::DECIMAL(4,1), 10);
+----
+3.5257142857
+
+# min_scale out of range
+statement error
+SELECT decimal_division(1.0::DECIMAL(4,1), 3.0::DECIMAL(4,1), -1);
+----
+<REGEX>:.*min_scale must be between.*
+
+statement error
+SELECT decimal_division(1.0::DECIMAL(4,1), 3.0::DECIMAL(4,1), 39);
+----
+<REGEX>:.*min_scale must be between.*
