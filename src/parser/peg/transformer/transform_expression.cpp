@@ -1042,7 +1042,20 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformOtherOperatorExpres
 			vector<unique_ptr<ParsedExpression>> children_function;
 			children_function.push_back(std::move(expr));
 			children_function.push_back(std::move(right_expr));
-			auto func_expr = make_uniq<FunctionExpression>(std::move(other_operator), std::move(children_function));
+			vector split_operator = StringUtil::Split(other_operator, ".");
+			string schema_name = INVALID_SCHEMA;
+			string func_name = "";
+			if (split_operator.size() == 1) {
+				func_name = split_operator[0];
+			} else if (split_operator.size() == 2) {
+				schema_name = split_operator[0];
+				func_name = split_operator[1];
+			} else {
+				throw ParserException("Too many identifiers found, expected schema.operator or operator");
+			}
+
+			auto func_expr = make_uniq<FunctionExpression>(INVALID_CATALOG, std::move(schema_name),
+			                                               std::move(func_name), std::move(children_function));
 			func_expr->IsOperatorMutable() = true;
 			expr = std::move(func_expr);
 		}
@@ -1060,11 +1073,20 @@ string PEGTransformerFactory::TransformOtherOperator(PEGTransformer &transformer
 	return transformer.Transform<string>(child);
 }
 
-// QualifiedOperator <- 'OPERATOR' Parens(AnyOp)
+// QualifiedOperator <- 'OPERATOR' Parens(ColId* AnyOp)
 string PEGTransformerFactory::TransformQualifiedOperator(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &any_op_pr = ExtractResultFromParens(list_pr.GetChild(1));
-	return transformer.Transform<string>(any_op_pr);
+	auto &any_op_pr = ExtractResultFromParens(list_pr.GetChild(1)).Cast<ListParseResult>();
+	auto &repeat_colid_opt = any_op_pr.Child<OptionalParseResult>(0);
+	vector<string> result;
+	if (repeat_colid_opt.HasResult()) {
+		auto &repeat_colid = repeat_colid_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto &colid : repeat_colid.GetChildren()) {
+			result.push_back(transformer.Transform<string>(colid));
+		}
+	}
+	result.push_back(transformer.Transform<string>(any_op_pr.GetChild(1)));
+	return StringUtil::Join(result, ".");
 }
 
 // AnyOp <- '!~~*' / '>>=' / ... / '!'
@@ -1742,6 +1764,10 @@ string PEGTransformerFactory::TransformTableQualification(PEGTransformer &transf
 	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
 
+string PEGTransformerFactory::TransformColIdDot(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<string>(list_pr.GetChild(0));
+}
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGTransformer &transformer,
                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -1753,8 +1779,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStarExpression(PEGT
 		if (repeat_colid.GetChildren().size() > 1) {
 			throw ParserException("Did not expect more than one column in front of a star expression");
 		}
-		auto &colid_list = repeat_colid.GetChildren()[0].get().Cast<ListParseResult>();
-		result->RelationNameMutable() = transformer.Transform<string>(colid_list.Child<ListParseResult>(0));
+		result->RelationNameMutable() = transformer.Transform<string>(repeat_colid.Child<ListParseResult>(0));
 	}
 	transformer.TransformOptional<qualified_column_set_t>(list_pr, 2, result->ExcludeListMutable());
 	auto &replace_list_opt = list_pr.Child<OptionalParseResult>(3);
