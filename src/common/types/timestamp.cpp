@@ -30,12 +30,7 @@ static bool CanStartTimestampSuffix(char c) {
 	return c == 'Z' || c == '+' || c == '-' || StringUtil::CharacterIsSpace(c);
 }
 
-static bool TryConvertTimestampTimePrefix(const char *str, idx_t len, idx_t &time_pos, dtime_t &time,
-                                          optional_ptr<int32_t> nanos) {
-	if (Time::TryConvertInterval(str, len, time_pos, time, false, nanos)) {
-		return true;
-	}
-
+static idx_t TimestampTimeLength(const char *str, idx_t len) {
 	idx_t suffix_pos = 0;
 	while (suffix_pos < len && StringUtil::CharacterIsSpace(str[suffix_pos])) {
 		suffix_pos++;
@@ -43,16 +38,7 @@ static bool TryConvertTimestampTimePrefix(const char *str, idx_t len, idx_t &tim
 	while (suffix_pos < len && !CanStartTimestampSuffix(str[suffix_pos])) {
 		suffix_pos++;
 	}
-	if (suffix_pos == 0 || suffix_pos == len) {
-		return false;
-	}
-
-	// HH:MM is valid when it is followed by a timestamp suffix that is parsed below.
-	time_pos = 0;
-	if (!Time::TryConvertInterval(str, suffix_pos, time_pos, time, false, nanos)) {
-		return false;
-	}
-	return time_pos == suffix_pos;
+	return suffix_pos;
 }
 
 // timestamp/datetime uses 64 bits, high 32 bits for date and low 32 bits for time
@@ -92,10 +78,10 @@ TimestampCastResult Timestamp::TryConvertTimestampTZ(const char *str, idx_t len,
 		pos++;
 	}
 	idx_t time_pos = 0;
-	// TryConvertTime may recursively call us, so TryConvertTimestampTimePrefix
-	// uses TryConvertInterval. Note that we can't pass strict== true here
-	// because we want to process any suffix.
-	if (!TryConvertTimestampTimePrefix(str + pos, len - pos, time_pos, time, nanos)) {
+	// TryConvertTime may recursively call us, so we use TryConvertInterval.
+	// Note that we can't pass strict== true here because we want to process any suffix.
+	auto time_len = TimestampTimeLength(str + pos, len - pos);
+	if (!Time::TryConvertInterval(str + pos, time_len, time_pos, time, false, nanos) || time_pos != time_len) {
 		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
 	}
 	//	We parsed an interval, so make sure it is in range.
