@@ -247,6 +247,10 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 	return *file_handle;
 }
 
+Allocator &CachingFileHandle::GetBufferAllocator() const {
+	return external_file_cache.GetBufferManager().GetBufferAllocator();
+}
+
 FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t location) {
 	if (nr_bytes == 0) {
 		return FileBufferHandleGroup();
