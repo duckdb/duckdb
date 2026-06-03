@@ -322,7 +322,15 @@ BindingMode Binder::GetBindingMode() {
 }
 
 void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
-	can_contain_nulls = can_contain_nulls_p;
+	legacy_can_contain_nulls = can_contain_nulls_p;
+}
+
+bool Binder::CanContainNulls() const {
+	if (!Settings::Get<LegacyDisableNullTypeSetting>(context)) {
+		// if this legacy setting is not enabled nulls are not special - they can just occur anywhere
+		return true;
+	}
+	return legacy_can_contain_nulls;
 }
 
 void Binder::SetAlwaysRequireRebind() {

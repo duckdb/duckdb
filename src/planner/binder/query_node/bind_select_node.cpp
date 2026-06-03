@@ -497,8 +497,8 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		// the statement has a GROUP BY clause, bind it
 		GroupBinder group_binder(*this, context, result.group_index, bind_state);
 		// Allow NULL constants in GROUP BY to maintain their SQLNULL type
-		auto prev_can_contain_nulls = this->can_contain_nulls;
-		this->can_contain_nulls = true;
+		auto prev_can_contain_nulls = CanContainNulls();
+		SetCanContainNulls(true);
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
 			// bind the groups
 			LogicalType group_type;
@@ -529,7 +529,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			}
 			result.groups.group_expressions.push_back(std::move(bound_expr));
 		}
-		this->can_contain_nulls = prev_can_contain_nulls;
+		SetCanContainNulls(prev_can_contain_nulls);
 	}
 	result.groups.grouping_sets = std::move(statement.groups.grouping_sets);
 

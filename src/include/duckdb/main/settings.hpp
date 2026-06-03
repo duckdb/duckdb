@@ -1316,6 +1316,17 @@ struct LateMaterializationMaxRowsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct LegacyDisableNullTypeSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "legacy_disable_null_type";
+	static constexpr const char *Description =
+	    "When enabled, prevent the NULL type from leaving the binder (< v2.0 default behavior)";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct LegacyMetricsFormatSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "legacy_metrics_format";

@@ -174,6 +174,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(IntegerDivisionSetting),
     DUCKDB_SETTING_CALLBACK(LambdaSyntaxSetting),
     DUCKDB_SETTING(LateMaterializationMaxRowsSetting),
+    DUCKDB_SETTING(LegacyDisableNullTypeSetting),
     DUCKDB_SETTING(LegacyMetricsFormatSetting),
     DUCKDB_SETTING(LockConfigurationSetting),
     DUCKDB_SETTING_CALLBACK(LogQueryPathSetting),
@@ -233,12 +234,12 @@ static const ConfigurationOption internal_options[] = {
 
 static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 27),
                                                      DUCKDB_SETTING_ALIAS("custom_profiling_settings", 27),
-                                                     DUCKDB_SETTING_ALIAS("memory_limit", 118),
+                                                     DUCKDB_SETTING_ALIAS("memory_limit", 119),
                                                      DUCKDB_SETTING_ALIAS("null_order", 53),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 139),
-                                                     DUCKDB_SETTING_ALIAS("user", 156),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 140),
+                                                     DUCKDB_SETTING_ALIAS("user", 157),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 26),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 154),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 155),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
