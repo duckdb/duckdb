@@ -90,12 +90,14 @@ unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Deserialize(Deserialize
 void BoundCaseCheck::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(100, "when_expr", when_expr);
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(101, "then_expr", then_expr);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(102, "compare_expr", compare_expr);
 }
 
 BoundCaseCheck BoundCaseCheck::Deserialize(Deserializer &deserializer) {
 	BoundCaseCheck result;
 	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(100, "when_expr", result.when_expr);
 	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "then_expr", result.then_expr);
+	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(102, "compare_expr", result.compare_expr);
 	return result;
 }
 

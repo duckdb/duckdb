@@ -35,6 +35,9 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 	case ExpressionClass::BOUND_CASE: {
 		auto &case_expr = expr.Cast<BoundCaseExpression>();
+		if (case_expr.CaseExpr()) {
+			callback(case_expr.CaseExprMutable());
+		}
 		for (auto &case_check : case_expr.CaseChecksMutable()) {
 			callback(case_check.when_expr);
 			callback(case_check.then_expr);

@@ -89,6 +89,7 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &deserializer) {
 void BoundCaseExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
 	serializer.WriteProperty<LogicalType>(200, "return_type", return_type);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(203, "case_expr", case_expr);
 	serializer.WritePropertyWithDefault<vector<BoundCaseCheck>>(201, "case_checks", case_checks);
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(202, "else_expr", else_expr);
 }
@@ -96,6 +97,7 @@ void BoundCaseExpression::Serialize(Serializer &serializer) const {
 unique_ptr<Expression> BoundCaseExpression::Deserialize(Deserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto result = duckdb::unique_ptr<BoundCaseExpression>(new BoundCaseExpression(std::move(return_type)));
+	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(203, "case_expr", result->case_expr);
 	deserializer.ReadPropertyWithDefault<vector<BoundCaseCheck>>(201, "case_checks", result->case_checks);
 	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(202, "else_expr", result->else_expr);
 	return std::move(result);

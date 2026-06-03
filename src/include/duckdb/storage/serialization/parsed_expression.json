@@ -75,6 +75,14 @@
     "enum": "CASE",
     "members": [
       {
+        "id": 202,
+        "name": "case_expr",
+        "type": "ParsedExpression*",
+        "accessor_mut": "CaseExprMutable()",
+        "accessor": "CaseExpr()",
+        "nullable": true
+      },
+      {
         "id": 200,
         "name": "case_checks",
         "type": "vector<CaseCheck>",

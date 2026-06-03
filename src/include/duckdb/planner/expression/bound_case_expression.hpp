@@ -15,6 +15,7 @@ namespace duckdb {
 struct BoundCaseCheck {
 	unique_ptr<Expression> when_expr;
 	unique_ptr<Expression> then_expr;
+	unique_ptr<Expression> compare_expr;
 
 	void Serialize(Serializer &serializer) const;
 	static BoundCaseCheck Deserialize(Deserializer &deserializer);
@@ -33,8 +34,14 @@ public:
 	const vector<BoundCaseCheck> &CaseChecks() const {
 		return case_checks;
 	}
+	const unique_ptr<Expression> &CaseExpr() const {
+		return case_expr;
+	}
 	vector<BoundCaseCheck> &CaseChecksMutable() {
 		return case_checks;
+	}
+	unique_ptr<Expression> &CaseExprMutable() {
+		return case_expr;
 	}
 	const Expression &Else() const {
 		return *else_expr;
@@ -50,10 +57,13 @@ public:
 
 	unique_ptr<Expression> Copy() const override;
 
+	bool CanThrow() const override;
+
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 
 private:
+	unique_ptr<Expression> case_expr;
 	vector<BoundCaseCheck> case_checks;
 	unique_ptr<Expression> else_expr;
 };

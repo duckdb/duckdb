@@ -26,6 +26,9 @@ bool BoundCaseExpression::Equals(const BaseExpression &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<BoundCaseExpression>();
+	if (!Expression::Equals(case_expr, other.case_expr)) {
+		return false;
+	}
 	if (case_checks.size() != other.case_checks.size()) {
 		return false;
 	}
@@ -34,6 +37,9 @@ bool BoundCaseExpression::Equals(const BaseExpression &other_p) const {
 			return false;
 		}
 		if (!Expression::Equals(*case_checks[i].then_expr, *other.case_checks[i].then_expr)) {
+			return false;
+		}
+		if (!Expression::Equals(case_checks[i].compare_expr, other.case_checks[i].compare_expr)) {
 			return false;
 		}
 	}
@@ -45,16 +51,34 @@ bool BoundCaseExpression::Equals(const BaseExpression &other_p) const {
 
 unique_ptr<Expression> BoundCaseExpression::Copy() const {
 	auto new_case = make_uniq<BoundCaseExpression>(return_type);
+	if (case_expr) {
+		new_case->case_expr = case_expr->Copy();
+	}
 	for (auto &check : case_checks) {
 		BoundCaseCheck new_check;
 		new_check.when_expr = check.when_expr->Copy();
 		new_check.then_expr = check.then_expr->Copy();
+		if (check.compare_expr) {
+			new_check.compare_expr = check.compare_expr->Copy();
+		}
 		new_case->case_checks.push_back(std::move(new_check));
 	}
 	new_case->else_expr = else_expr->Copy();
 
 	new_case->CopyProperties(*this);
 	return std::move(new_case);
+}
+
+bool BoundCaseExpression::CanThrow() const {
+	if (Expression::CanThrow()) {
+		return true;
+	}
+	for (auto &check : case_checks) {
+		if (check.compare_expr && check.compare_expr->CanThrow()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 } // namespace duckdb

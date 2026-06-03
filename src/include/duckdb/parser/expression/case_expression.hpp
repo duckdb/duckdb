@@ -33,11 +33,17 @@ public:
 	const vector<CaseCheck> &CaseChecks() const {
 		return case_checks;
 	}
+	const unique_ptr<ParsedExpression> &CaseExpr() const {
+		return case_expr;
+	}
 	const ParsedExpression &Else() const {
 		return *else_expr;
 	}
 	vector<CaseCheck> &CaseChecksMutable() {
 		return case_checks;
+	}
+	unique_ptr<ParsedExpression> &CaseExprMutable() {
+		return case_expr;
 	}
 	unique_ptr<ParsedExpression> &ElseMutable() {
 		return else_expr;
@@ -57,6 +63,9 @@ public:
 	template <class T, class BASE>
 	static string ToString(const T &entry) {
 		string case_str = "CASE ";
+		if (entry.CaseExpr()) {
+			case_str += "(" + entry.CaseExpr()->ToString() + ")";
+		}
 		for (auto &check : entry.CaseChecks()) {
 			case_str += " WHEN (" + check.when_expr->ToString() + ")";
 			case_str += " THEN (" + check.then_expr->ToString() + ")";
@@ -67,6 +76,7 @@ public:
 	}
 
 private:
+	unique_ptr<ParsedExpression> case_expr;
 	vector<CaseCheck> case_checks;
 	unique_ptr<ParsedExpression> else_expr;
 };

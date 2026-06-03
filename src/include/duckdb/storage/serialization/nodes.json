@@ -168,6 +168,11 @@
         "id": 101,
         "name": "then_expr",
         "type": "Expression*"
+      },
+      {
+        "id": 102,
+        "name": "compare_expr",
+        "type": "Expression*"
       }
     ],
     "pointer_type": "none"

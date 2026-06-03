@@ -79,6 +79,11 @@
         "type": "LogicalType"
       },
       {
+        "id": 203,
+        "name": "case_expr",
+        "type": "Expression*"
+      },
+      {
         "id": 201,
         "name": "case_checks",
         "type": "vector<BoundCaseCheck>"
