@@ -1508,6 +1508,10 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 			result_row_group->per_column_metadata_blocks.AddColumn(reused_columns[i], extras[i]);
 		}
 		result_row_group->has_per_column_metadata_blocks = true;
+	} else if (partial_reuse) {
+		// we planned to partially re-use column metadata, but every column ended up being rewritten -
+		// downgrade to a full checkpoint as there is no column metadata to carry forward
+		result.write_action = RowGroupWriteAction::FULLY_CHECKPOINT_ROW_GROUP;
 	}
 
 	result.result_row_group = std::move(result_row_group);

@@ -357,6 +357,11 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 		if (base_column->GetType().id() == LogicalTypeId::GEOMETRY) {
 			// Get the stats from the base column.
 			checkpoint_state->global_stats = checkpoint_state->inner_column_state->GetStatistics();
+		} else if (checkpoint_state->storage_type == GeometryStorageType::SPATIAL) {
+			// Legacy spatial storage - we cannot interpret the stats of the old format
+			auto new_stats = checkpoint_state->inner_column_state->GetStatistics();
+			checkpoint_state->global_stats = GeometryStats::CreateUnknown(type).ToUnique();
+			checkpoint_state->global_stats->CopyBase(*new_stats);
 		} else {
 			// Otherwise interpret stats from shredded column
 			const auto types = Geometry::GetSpecializedType(checkpoint_state->storage_type);
