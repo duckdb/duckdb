@@ -75,6 +75,17 @@ public:
 	double denom;
 };
 
+struct LeftJoinDenomInfo {
+public:
+	LeftJoinDenomInfo(JoinRelationSet &numerator_relations, double denominator)
+	    : numerator_relations(numerator_relations), denominator(denominator) {
+	}
+
+public:
+	JoinRelationSet &numerator_relations;
+	double denominator;
+};
+
 struct CompositeJoinPairStats {
 public:
 	//! The row-count cap is only plausible when the candidate key cardinality is within the same order of magnitude
@@ -351,7 +362,9 @@ JoinRelationSet &CardinalityEstimator::UpdateNumeratorRelations(Subgraph2Denomin
                                                                 FilterInfoWithTotalDomains &filter) {
 	auto &predicate = filter.GetPredicate();
 	switch (predicate.GetJoinType()) {
-	case JoinType::LEFT:
+	case JoinType::LEFT: {
+		return CalculateLeftJoinDenomInfo(left, right, filter).numerator_relations;
+	}
 	case JoinType::SEMI:
 	case JoinType::ANTI: {
 		if (JoinRelationSet::IsSubset(*left.relations, predicate.GetLeftSet()) &&
@@ -394,14 +407,34 @@ double CardinalityEstimator::CalculateInnerJoinDenom(double base_denom, FilterIn
 	return ApplyComparisonRatio(base_denom, comparison_type, effective_d);
 }
 
+LeftJoinDenomInfo CardinalityEstimator::CalculateLeftJoinDenomInfo(Subgraph2Denominator &left,
+                                                                   Subgraph2Denominator &right,
+                                                                   FilterInfoWithTotalDomains &filter) {
+	auto &predicate = filter.GetPredicate();
+	D_ASSERT(left.relations && right.relations);
+	D_ASSERT(left.numerator_relations && right.numerator_relations);
+	D_ASSERT(left.denom > 0 && right.denom > 0);
+	auto left_is_preserved = JoinRelationSet::IsSubset(*left.relations, predicate.GetLeftSet()) &&
+	                         JoinRelationSet::IsSubset(*right.relations, predicate.GetRightSet());
+	auto &preserved_numerator = left_is_preserved ? *left.numerator_relations : *right.numerator_relations;
+	auto preserved_denom = left_is_preserved ? left.denom : right.denom;
+
+	auto &inner_numerator = set_manager.Union(*left.numerator_relations, *right.numerator_relations);
+	auto inner_denom = CalculateInnerJoinDenom(left.denom * right.denom, filter);
+	if (inner_denom <= 0) {
+		return LeftJoinDenomInfo(preserved_numerator, preserved_denom);
+	}
+	auto inner_cardinality = GetNumerator(inner_numerator) / inner_denom;
+	auto preserved_cardinality = GetNumerator(preserved_numerator) / preserved_denom;
+	if (inner_cardinality > preserved_cardinality) {
+		return LeftJoinDenomInfo(inner_numerator, inner_denom);
+	}
+	return LeftJoinDenomInfo(preserved_numerator, preserved_denom);
+}
+
 double CardinalityEstimator::CalculateLeftJoinDenom(Subgraph2Denominator &left, Subgraph2Denominator &right,
                                                     FilterInfoWithTotalDomains &filter) {
-	auto &predicate = filter.GetPredicate();
-	if (JoinRelationSet::IsSubset(*left.relations, predicate.GetLeftSet()) &&
-	    JoinRelationSet::IsSubset(*right.relations, predicate.GetRightSet())) {
-		return left.denom;
-	}
-	return right.denom;
+	return CalculateLeftJoinDenomInfo(left, right, filter).denominator;
 }
 
 double CardinalityEstimator::CalculateSemiAntiJoinDenom(double base_denom, Subgraph2Denominator &left,
@@ -670,9 +703,11 @@ void CardinalityEstimator::CreateDenominatorSubgraph(FilterInfoWithTotalDomains 
 	left_subgraph.numerator_relations = &edge_left_set;
 	right_subgraph.relations = &edge_right_set;
 	right_subgraph.numerator_relations = &edge_right_set;
-	left_subgraph.numerator_relations = &UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
+	auto &numerator_relations = UpdateNumeratorRelations(left_subgraph, right_subgraph, edge);
+	auto denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
+	left_subgraph.numerator_relations = &numerator_relations;
 	left_subgraph.relations = &set_manager.Union(edge_left_set, edge_right_set);
-	left_subgraph.denom = CalculateUpdatedDenom(left_subgraph, right_subgraph, edge);
+	left_subgraph.denom = denom;
 	ApplyCompositeJoinPairCaps(left_subgraph.denom, *left_subgraph.relations, state.join_pair_stats,
 	                           state.capped_join_pairs);
 	state.subgraphs.push_back(left_subgraph);
@@ -701,9 +736,11 @@ void CardinalityEstimator::ExtendDenominatorSubgraph(idx_t subgraph_index, Filte
 		return;
 	}
 
-	left_subgraph->numerator_relations = &UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
+	auto &numerator_relations = UpdateNumeratorRelations(*left_subgraph, right_subgraph, edge);
+	auto denom = CalculateUpdatedDenom(*left_subgraph, right_subgraph, edge);
+	left_subgraph->numerator_relations = &numerator_relations;
 	left_subgraph->relations = &set_manager.Union(*left_subgraph->relations, *right_subgraph.relations);
-	left_subgraph->denom = CalculateUpdatedDenom(*left_subgraph, right_subgraph, edge);
+	left_subgraph->denom = denom;
 	ApplyCompositeJoinPairCaps(left_subgraph->denom, *left_subgraph->relations, state.join_pair_stats,
 	                           state.capped_join_pairs);
 }
@@ -714,11 +751,12 @@ void CardinalityEstimator::MergeDenominatorSubgraphs(const vector<idx_t> &subgra
 	D_ASSERT(subgraph_connections.at(0) < subgraph_connections.at(1));
 	auto subgraph_to_merge_into = &state.subgraphs.at(subgraph_connections.at(0));
 	auto subgraph_to_delete = &state.subgraphs.at(subgraph_connections.at(1));
+	auto &numerator_relations = UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
+	auto denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
 	subgraph_to_merge_into->relations =
 	    &set_manager.Union(*subgraph_to_merge_into->relations, *subgraph_to_delete->relations);
-	subgraph_to_merge_into->numerator_relations =
-	    &UpdateNumeratorRelations(*subgraph_to_merge_into, *subgraph_to_delete, edge);
-	subgraph_to_merge_into->denom = CalculateUpdatedDenom(*subgraph_to_merge_into, *subgraph_to_delete, edge);
+	subgraph_to_merge_into->numerator_relations = &numerator_relations;
+	subgraph_to_merge_into->denom = denom;
 	ApplyCompositeJoinPairCaps(subgraph_to_merge_into->denom, *subgraph_to_merge_into->relations, state.join_pair_stats,
 	                           state.capped_join_pairs);
 	subgraph_to_delete->relations = nullptr;
