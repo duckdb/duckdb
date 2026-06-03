@@ -151,19 +151,7 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveDefaultsProjection(LogicalInsert
 					children.push_back(make_uniq<BoundConstantExpression>(CreateStructMapping(original_type, "")));
 
 					//! defaults
-					child_list_t<Value> default_children;
-					auto &struct_default_children = StructValue::GetChildren(bound_default.value);
-					auto &struct_default_type_children = StructType::GetChildTypes(bound_default.value.type());
-					for (idx_t i = 0; i < struct_default_children.size(); i++) {
-						auto &child_default = struct_default_children[i];
-						auto &child_name = struct_default_type_children[i].first;
-						if (child_default.type().id() == LogicalTypeId::STRUCT) {
-							default_children.emplace_back(child_name, CreateStructDefault(child_default));
-						} else {
-							default_children.emplace_back(child_name, child_default);
-						}
-					}
-					children.push_back(make_uniq<BoundConstantExpression>(Value::STRUCT(std::move(default_children))));
+					children.push_back(make_uniq<BoundConstantExpression>(CreateStructDefault(bound_default.value)));
 					select_list.push_back(RemapStructFun::GetFunction().Bind(context, std::move(children)));
 				} else {
 					select_list.push_back(make_uniq<BoundReferenceExpression>(col.Type(), mapped_index));
