@@ -276,14 +276,8 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			}
 		}
 
-		// Update the view to point to the new version table (only if we created one)
+		// Garbage-collect old version tables beyond retain limit (only if we created a new version)
 		if (did_work) {
-			auto view_sql = "CREATE OR REPLACE VIEW " + QuoteIdent(feature_name) + " AS SELECT * FROM " + new_table_id;
-			auto view_result = con.Query(view_sql);
-			if (view_result->HasError()) {
-				throw InternalException("Failed to update view for '%s': %s", feature_name, view_result->GetError());
-			}
-
 			// Garbage-collect old version tables beyond retain limit
 			int64_t min_retain_version = new_version - feat.retain_versions + 1;
 			if (min_retain_version > 1) {

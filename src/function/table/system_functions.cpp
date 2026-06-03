@@ -45,6 +45,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	DuckDBFeaturesFun::RegisterFunction(*this);
 	RefreshFeatureFun::RegisterFunction(*this);
 	FeatureAtVersionFun::RegisterFunction(*this);
+	CurrentFeatureFun::RegisterFunction(*this);
 	ServeFeatureFun::RegisterFunction(*this);
 	DuckDBSettingsFun::RegisterFunction(*this);
 	DuckDBTablesFun::RegisterFunction(*this);

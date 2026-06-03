@@ -151,6 +151,10 @@ struct FeatureAtVersionFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct CurrentFeatureFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct ServeFeatureFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

@@ -53,10 +53,10 @@ unique_ptr<GlobalSinkState> PhysicalCreateFeature::GetGlobalSinkState(ClientCont
 	auto table_entry = catalog.CreateTable(transaction, schema, *bound_info);
 	result->table = &table_entry->Cast<DuckTableEntry>();
 
-	// Create a view named feature_name pointing to the versioned table
+	// Create a view named feature_name that resolves via current_feature()
 	auto view_info = make_uniq<CreateViewInfo>(info->catalog, info->schema, info->feature_name);
 	view_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
-	auto select_sql = "SELECT * FROM " + SQLIdentifier::ToString(versioned_table_name);
+	auto select_sql = "SELECT * FROM current_feature('" + info->feature_name + "')";
 	view_info->query = CreateViewInfo::ParseSelect(select_sql);
 	auto view_entry = catalog.CreateView(context, *view_info);
 
