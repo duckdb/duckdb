@@ -8,10 +8,10 @@ statement ok
 set prefetch_all_parquet_files=true;
 
 statement ok
-copy (select range i from range(8000000)) to '{TEST_DIR}/prefetch_tracked_big.parquet';
+copy (select range i from range(8000000)) to '{TEST_DIR}/prefetch_tracked_big.parquet' (ROW_GROUP_SIZE 8000000);
 
 statement ok
-set memory_limit='32mb';
+set memory_limit='140mb';
 
 statement error
 select count(*), sum(i) from '{TEST_DIR}/prefetch_tracked_big.parquet';
