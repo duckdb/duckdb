@@ -207,16 +207,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(RecursiveCTENode &node) {
 			}
 			break;
 		}
-		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-			auto &limit_mod = modifier->Cast<LimitPercentModifier>();
-			if (limit_mod.limit) {
-				result = Merge(result, Rewrite(*limit_mod.limit));
-			}
-			if (limit_mod.offset) {
-				result = Merge(result, Rewrite(*limit_mod.offset));
-			}
-			break;
-		}
 		case ResultModifierType::DISTINCT_MODIFIER: {
 			auto &distinct_mod = modifier->Cast<DistinctModifier>();
 			for (auto &expr : distinct_mod.distinct_on_targets) {
@@ -265,16 +255,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SelectNode &node) {
 		}
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &limit_mod = modifier->Cast<LimitModifier>();
-			if (limit_mod.limit) {
-				result = Merge(result, Rewrite(*limit_mod.limit));
-			}
-			if (limit_mod.offset) {
-				result = Merge(result, Rewrite(*limit_mod.offset));
-			}
-			break;
-		}
-		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-			auto &limit_mod = modifier->Cast<LimitPercentModifier>();
 			if (limit_mod.limit) {
 				result = Merge(result, Rewrite(*limit_mod.limit));
 			}
@@ -420,18 +400,6 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(SetOperationNode &node) {
 			}
 			break;
 		}
-		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-			auto &limit_mod = modifier->Cast<LimitPercentModifier>();
-			if (limit_mod.limit) {
-				result = Merge(result, Rewrite(*limit_mod.limit));
-				has_expression_modifiers = true;
-			}
-			if (limit_mod.offset) {
-				result = Merge(result, Rewrite(*limit_mod.offset));
-				has_expression_modifiers = true;
-			}
-			break;
-		}
 		case ResultModifierType::DISTINCT_MODIFIER: {
 			auto &distinct_mod = modifier->Cast<DistinctModifier>();
 			for (auto &expr : distinct_mod.distinct_on_targets) {
@@ -511,17 +479,8 @@ CatalogPushdownResult RemotePushdownOptimizer::Rewrite(TableFunctionRef &ref) {
 	string schema_name = func_expr.Schema();
 	Binder::BindSchemaOrCatalog(binder.context, catalog_name, schema_name);
 
-	// If the function has an explicit catalog prefix, check if it's remote
+	// If the function has an explicit catalog prefix, skip pushdown for now
 	if (!catalog_name.empty()) {
-		auto catalog = Catalog::GetCatalogEntry(binder.context, catalog_name);
-		if (catalog && catalog->Supports(RemoteCapability::EXECUTE_QUERY_NODE)) {
-			// Check args: a local macro or UNKNOWN expression in args blocks pushdown
-			CatalogPushdownResult result {CatalogReferenceType::SINGLE_REMOTE_CATALOG, catalog};
-			for (auto &arg : func_expr.GetChildren()) {
-				result = Merge(result, Rewrite(*arg));
-			}
-			return result;
-		}
 		TrackLocalTable(ref);
 		return {};
 	}
@@ -984,16 +943,6 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 				}
 				break;
 			}
-			case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-				auto &limit_mod = modifier->Cast<LimitPercentModifier>();
-				if (limit_mod.limit) {
-					StripCatalogName(*limit_mod.limit, catalog_name);
-				}
-				if (limit_mod.offset) {
-					StripCatalogName(*limit_mod.offset, catalog_name);
-				}
-				break;
-			}
 			case ResultModifierType::DISTINCT_MODIFIER: {
 				auto &distinct_mod = modifier->Cast<DistinctModifier>();
 				for (auto &expr : distinct_mod.distinct_on_targets) {
@@ -1129,16 +1078,6 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 				}
 				break;
 			}
-			case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-				auto &limit_mod = modifier->Cast<LimitPercentModifier>();
-				if (limit_mod.limit) {
-					StripCatalogName(*limit_mod.limit, catalog_name);
-				}
-				if (limit_mod.offset) {
-					StripCatalogName(*limit_mod.offset, catalog_name);
-				}
-				break;
-			}
 			case ResultModifierType::DISTINCT_MODIFIER: {
 				auto &distinct_mod = modifier->Cast<DistinctModifier>();
 				for (auto &expr : distinct_mod.distinct_on_targets) {
@@ -1176,16 +1115,6 @@ void RemotePushdownOptimizer::StripCatalogName(QueryNode &node, const string &ca
 			}
 			case ResultModifierType::LIMIT_MODIFIER: {
 				auto &limit_mod = modifier->Cast<LimitModifier>();
-				if (limit_mod.limit) {
-					StripCatalogName(*limit_mod.limit, catalog_name);
-				}
-				if (limit_mod.offset) {
-					StripCatalogName(*limit_mod.offset, catalog_name);
-				}
-				break;
-			}
-			case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-				auto &limit_mod = modifier->Cast<LimitPercentModifier>();
 				if (limit_mod.limit) {
 					StripCatalogName(*limit_mod.limit, catalog_name);
 				}
