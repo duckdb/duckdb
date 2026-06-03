@@ -100,21 +100,20 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 // Find aggregate expression children
 void ExpressionBinder::FindAggregateExprs(unique_ptr<ParsedExpression> &expr,
                                           vector<reference<unique_ptr<ParsedExpression>>> &exprs) {
-	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &expr) {
-		if ((expr->GetExpressionType() == ExpressionType::FUNCTION)) {
-			auto &fn_expr = expr->Cast<FunctionExpression>();
-			EntryLookupInfo fn_entry(CatalogType::SCALAR_FUNCTION_ENTRY, fn_expr.FunctionName());
-			auto entry = GetCatalogEntry(fn_expr.Catalog(), fn_expr.Schema(), fn_entry, OnEntryNotFound::RETURN_NULL);
+	if ((expr->GetExpressionType() == ExpressionType::FUNCTION)) {
+		auto &fn_expr = expr->Cast<FunctionExpression>();
 
-			if (entry) {
-				exprs.push_back(expr);
-			}
-		}
+		// Look up the function in the catalog, check to see if it is actually an aggregate function
+		EntryLookupInfo fn_entry(CatalogType::AGGREGATE_FUNCTION_ENTRY, fn_expr.FunctionName());
+		auto entry = GetCatalogEntry(fn_expr.Catalog(), fn_expr.Schema(), fn_entry, OnEntryNotFound::RETURN_NULL);
 
-		for (auto &child : expr->ChildrenMutable()) {
-			FindAggregateExprs(child, exprs);
+		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
+			exprs.push_back(expr);
 		}
-	});
+	}
+
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child_expr) { FindAggregateExprs(child_expr, exprs); });
 }
 
 void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> &expr, ScalarMacroFunction &macro_def) {
