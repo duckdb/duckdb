@@ -136,4 +136,25 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformServeFeatureStatement(P
 	return std::move(result);
 }
 
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformFeatureAtVersionStatement(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	// FeatureAtVersionStatement <- 'FEATURE' IdentifierOrStringLiteral 'AT' 'VERSION' NumberLiteral
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	// index 0: 'FEATURE' keyword
+	auto feature_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1)).name;
+	// index 2: 'AT' keyword
+	// index 3: 'VERSION' keyword
+	auto &version_num = list_pr.Child<NumberParseResult>(4);
+	int64_t version = std::stoll(version_num.number);
+
+	// Rewrite to: CALL feature_at_version('feature_name', version)
+	auto result = make_uniq<CallStatement>();
+	vector<unique_ptr<ParsedExpression>> args;
+	args.push_back(make_uniq<ConstantExpression>(Value(feature_name)));
+	args.push_back(make_uniq<ConstantExpression>(Value::BIGINT(version)));
+	auto function_expression = make_uniq<FunctionExpression>("feature_at_version", std::move(args));
+	result->function = std::move(function_expression);
+	return std::move(result);
+}
+
 } // namespace duckdb

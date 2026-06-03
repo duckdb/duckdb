@@ -11,6 +11,8 @@ FeatureRefreshIncremental <- 'INCREMENTAL'
 
 RefreshFeatureStatement <- 'REFRESH' 'FEATURE' IdentifierOrStringLiteral
 
+FeatureAtVersionStatement <- 'FEATURE' IdentifierOrStringLiteral 'AT' 'VERSION' NumberLiteral
+
 ServeFeatureStatement <- 'SERVE' ServeFeatureKw List(IdentifierOrStringLiteral) 'FOR' IdentifierOrStringLiteral ServeFeatureEntity? ServeFeatureAsOf?
 
 ServeFeatureKw <- 'FEATURES' / 'FEATURE'

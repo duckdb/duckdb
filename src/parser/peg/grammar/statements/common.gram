@@ -36,6 +36,7 @@ Statement <-
 	DisconnectStatement /
 	ServeFeatureStatement /
 	RefreshFeatureStatement /
+	FeatureAtVersionStatement /
 	ExpressionStatement
 
 ExpressionStatement <- List(ExpressionAlias)

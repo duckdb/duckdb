@@ -157,8 +157,11 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 		}
 	}
 
-	auto table_id = QuoteIdent(feature_name);
 	int64_t new_version = feat.current_version + 1;
+	auto new_table_name = feature_name + "__v" + duckdb::to_string(new_version);
+	auto new_table_id = QuoteIdent(new_table_name);
+	auto cur_table_name = feature_name + "__v" + duckdb::to_string(feat.current_version);
+	auto cur_table_id = QuoteIdent(cur_table_name);
 	bool did_work = false;
 
 	// Wrap all operations in a single transaction for atomicity
@@ -166,17 +169,18 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 
 	try {
 		if (feat.refresh_mode == FeatureRefreshMode::FULL) {
-			// FULL refresh: compute all rows with new version tag
+			// FULL refresh: create new version table with all rows
 			auto pit_sql = BuildPITQuery(feat, "");
-			auto insert_sql = "INSERT INTO " + table_id + " SELECT *, " + duckdb::to_string(new_version) +
-			                  " AS __feature_version FROM (" + pit_sql + ")";
-			auto ins_result = con.Query(insert_sql);
-			if (ins_result->HasError()) {
-				throw InternalException("Failed to refresh feature '%s': %s", feature_name, ins_result->GetError());
+			auto create_sql = "CREATE TABLE " + new_table_id + " AS " + pit_sql;
+			auto create_result = con.Query(create_sql);
+			if (create_result->HasError()) {
+				throw InternalException("Failed to refresh feature '%s': %s", feature_name, create_result->GetError());
 			}
 
-			if (ins_result->RowCount() > 0) {
-				state.rows_affected = ins_result->GetValue(0, 0).GetValue<idx_t>();
+			// Count rows inserted
+			auto count_result = con.Query("SELECT COUNT(*) FROM " + new_table_id);
+			if (!count_result->HasError() && count_result->RowCount() > 0) {
+				state.rows_affected = count_result->GetValue(0, 0).GetValue<idx_t>();
 			}
 			did_work = true;
 
@@ -186,9 +190,8 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			auto ts_col = QuoteIdent(feat.timestamp_column);
 			auto src_table = QuoteIdent(feat.source_table);
 
-			// Step 1: Get watermark (last materialized bucket in latest version)
-			auto max_result = con.Query("SELECT MAX(feature_timestamp) FROM " + table_id +
-			                            " WHERE __feature_version = " + duckdb::to_string(feat.current_version));
+			// Step 1: Get watermark (last materialized bucket in current version table)
+			auto max_result = con.Query("SELECT MAX(feature_timestamp) FROM " + cur_table_id);
 			string watermark;
 			if (!max_result->HasError() && max_result->RowCount() > 0) {
 				auto val = max_result->GetValue(0, 0);
@@ -198,16 +201,17 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			}
 
 			if (watermark.empty()) {
-				// No existing data — do a full materialization with new version
+				// No existing data — do a full materialization into new version table
 				auto pit_sql = BuildPITQuery(feat, "");
-				auto insert_sql = "INSERT INTO " + table_id + " SELECT *, " + duckdb::to_string(new_version) +
-				                  " AS __feature_version FROM (" + pit_sql + ")";
-				auto ins_result = con.Query(insert_sql);
-				if (ins_result->HasError()) {
-					throw InternalException("Failed to refresh feature '%s': %s", feature_name, ins_result->GetError());
+				auto create_sql = "CREATE TABLE " + new_table_id + " AS " + pit_sql;
+				auto create_result = con.Query(create_sql);
+				if (create_result->HasError()) {
+					throw InternalException("Failed to refresh feature '%s': %s", feature_name,
+					                        create_result->GetError());
 				}
-				if (ins_result->RowCount() > 0) {
-					state.rows_affected = ins_result->GetValue(0, 0).GetValue<idx_t>();
+				auto count_result = con.Query("SELECT COUNT(*) FROM " + new_table_id);
+				if (!count_result->HasError() && count_result->RowCount() > 0) {
+					state.rows_affected = count_result->GetValue(0, 0).GetValue<idx_t>();
 				}
 				did_work = true;
 			} else {
@@ -242,26 +246,23 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 					auto window_interval = StringUtil::Format("%d %s", feat.window_size, gran);
 					string upper_bound = "'" + latest_new + "'::TIMESTAMP + INTERVAL '" + window_interval + "'";
 
-					// Step 4: Copy unaffected rows from current version to new version
-					auto copy_sql = "INSERT INTO " + table_id + " SELECT * REPLACE (" + duckdb::to_string(new_version) +
-					                " AS __feature_version) FROM " + table_id +
-					                " WHERE __feature_version = " + duckdb::to_string(feat.current_version) +
-					                " AND NOT (feature_timestamp >= '" + earliest_new +
-					                "'::TIMESTAMP AND feature_timestamp < " + upper_bound + ")";
-					auto copy_result = con.Query(copy_sql);
-					if (copy_result->HasError()) {
+					// Step 4: Create new version table with unaffected rows from current version
+					auto create_sql = "CREATE TABLE " + new_table_id + " AS SELECT * FROM " + cur_table_id +
+					                  " WHERE NOT (feature_timestamp >= '" + earliest_new +
+					                  "'::TIMESTAMP AND feature_timestamp < " + upper_bound + ")";
+					auto create_result = con.Query(create_sql);
+					if (create_result->HasError()) {
 						throw InternalException("Failed to copy unaffected rows for '%s': %s", feature_name,
-						                        copy_result->GetError());
+						                        create_result->GetError());
 					}
 
-					// Step 5: Recompute affected range with new version tag
+					// Step 5: Recompute affected range and insert into new version table
 					string filter = " WHERE DATE_TRUNC('" + gran + "', " + ts_col + ") >= '" + earliest_new +
 					                "'::TIMESTAMP"
 					                " AND DATE_TRUNC('" +
 					                gran + "', " + ts_col + ") < " + upper_bound;
 					auto pit_sql = BuildPITQuery(feat, filter);
-					auto insert_sql = "INSERT INTO " + table_id + " SELECT *, " + duckdb::to_string(new_version) +
-					                  " AS __feature_version FROM (" + pit_sql + ")";
+					auto insert_sql = "INSERT INTO " + new_table_id + " SELECT * FROM (" + pit_sql + ")";
 					auto ins_result = con.Query(insert_sql);
 					if (ins_result->HasError()) {
 						throw InternalException("Failed to incrementally refresh feature '%s': %s", feature_name,
@@ -275,16 +276,25 @@ static void RefreshFeatureFunction(ClientContext &context, TableFunctionInput &d
 			}
 		}
 
-		// Garbage-collect old versions beyond retain limit (only if we created a new version)
+		// Update the view to point to the new version table (only if we created one)
 		if (did_work) {
+			auto view_sql = "CREATE OR REPLACE VIEW " + QuoteIdent(feature_name) + " AS SELECT * FROM " + new_table_id;
+			auto view_result = con.Query(view_sql);
+			if (view_result->HasError()) {
+				throw InternalException("Failed to update view for '%s': %s", feature_name, view_result->GetError());
+			}
+
+			// Garbage-collect old version tables beyond retain limit
 			int64_t min_retain_version = new_version - feat.retain_versions + 1;
 			if (min_retain_version > 1) {
-				auto gc_sql =
-				    "DELETE FROM " + table_id + " WHERE __feature_version < " + duckdb::to_string(min_retain_version);
-				auto gc_result = con.Query(gc_sql);
-				if (gc_result->HasError()) {
-					throw InternalException("Failed to garbage-collect old versions for '%s': %s", feature_name,
-					                        gc_result->GetError());
+				for (int64_t v = min_retain_version - 1; v >= 1; v--) {
+					auto old_table_name = feature_name + "__v" + duckdb::to_string(v);
+					auto drop_sql = "DROP TABLE IF EXISTS " + QuoteIdent(old_table_name);
+					auto drop_result = con.Query(drop_sql);
+					if (drop_result->HasError()) {
+						throw InternalException("Failed to garbage-collect version table '%s': %s", old_table_name,
+						                        drop_result->GetError());
+					}
 				}
 			}
 		}

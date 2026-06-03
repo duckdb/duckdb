@@ -5,10 +5,13 @@
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 
 namespace duckdb {
 
@@ -33,23 +36,29 @@ unique_ptr<GlobalSinkState> PhysicalCreateFeature::GetGlobalSinkState(ClientCont
 		}
 	}
 
-	// Create the backing table using Catalog::CreateTable (same transaction, no deadlock)
+	// Create the versioned backing table: feature_name__v1
+	auto versioned_table_name = info->feature_name + "__v1";
 	auto table_info = make_uniq<CreateTableInfo>();
 	table_info->catalog = info->catalog;
 	table_info->schema = info->schema;
-	table_info->table = info->feature_name;
+	table_info->table = versioned_table_name;
 	table_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 	table_info->temporary = false;
 
 	for (idx_t i = 0; i < info->result_names.size(); i++) {
 		table_info->columns.AddColumn(ColumnDefinition(info->result_names[i], info->result_types[i]));
 	}
-	// Add the version tracking column
-	table_info->columns.AddColumn(ColumnDefinition("__feature_version", LogicalType::BIGINT));
 
 	auto bound_info = make_uniq<BoundCreateTableInfo>(schema, std::move(table_info));
 	auto table_entry = catalog.CreateTable(transaction, schema, *bound_info);
 	result->table = &table_entry->Cast<DuckTableEntry>();
+
+	// Create a view named feature_name pointing to the versioned table
+	auto view_info = make_uniq<CreateViewInfo>(info->catalog, info->schema, info->feature_name);
+	view_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+	auto select_sql = "SELECT * FROM " + SQLIdentifier::ToString(versioned_table_name);
+	view_info->query = CreateViewInfo::ParseSelect(select_sql);
+	auto view_entry = catalog.CreateView(context, *view_info);
 
 	// Create the feature catalog entry
 	auto &duck_schema = schema.Cast<DuckSchemaEntry>();
@@ -61,10 +70,10 @@ unique_ptr<GlobalSinkState> PhysicalCreateFeature::GetGlobalSinkState(ClientCont
 		throw CatalogException::EntryAlreadyExists(CatalogType::FEATURE_ENTRY, info->feature_name);
 	}
 
-	// Make the feature own the backing table so dropping feature cascades to table
+	// Make the feature own the view so dropping feature cascades to the view
 	auto feature_entry = set.GetEntry(transaction, info->feature_name);
 	auto &duck_catalog = catalog.Cast<DuckCatalog>();
-	duck_catalog.GetDependencyManager()->AddOwnership(transaction, *feature_entry, *table_entry);
+	duck_catalog.GetDependencyManager()->AddOwnership(transaction, *feature_entry, *view_entry);
 
 	return std::move(result);
 }
@@ -80,22 +89,8 @@ SinkResultType PhysicalCreateFeature::Sink(ExecutionContext &context, DataChunk 
 	auto &storage = gstate.table->GetStorage();
 	chunk.Flatten();
 
-	// Append __feature_version column (version 1 for initial materialization)
-	DataChunk versioned_chunk;
-	vector<LogicalType> types;
-	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
-		types.push_back(chunk.data[i].GetType());
-	}
-	types.push_back(LogicalType::BIGINT);
-	versioned_chunk.Initialize(Allocator::DefaultAllocator(), types);
-	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
-		versioned_chunk.data[i].Reference(chunk.data[i]);
-	}
-	versioned_chunk.data[chunk.ColumnCount()].Reference(Value::BIGINT(1), count_t(chunk.size()));
-	versioned_chunk.SetCardinality(chunk.size());
-
 	vector<unique_ptr<BoundConstraint>> empty_constraints;
-	storage.LocalAppend(*gstate.table, context.client, versioned_chunk, empty_constraints, true);
+	storage.LocalAppend(*gstate.table, context.client, chunk, empty_constraints, true);
 	gstate.insert_count += chunk.size();
 	return SinkResultType::NEED_MORE_INPUT;
 }

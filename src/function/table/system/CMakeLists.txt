@@ -27,6 +27,7 @@ add_library_unity(
   duckdb_triggers.cpp
   duckdb_features.cpp
   refresh_feature.cpp
+  feature_at_version.cpp
   serve_feature.cpp
   duckdb_settings.cpp
   duckdb_tables.cpp
