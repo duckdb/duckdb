@@ -356,8 +356,11 @@ void FileLogStorage::Truncate() {
 		}
 		// Truncate the file writer
 		file_writer->Truncate(0);
-		// Re-initialize the corresponding CSVWriter
-		GetWriter(it.first).Initialize(true);
+		auto &writer = GetWriter(it.first);
+		// Reset writer and header option, then re-initialize
+		writer.Reset(nullptr);
+		writer.options.dialect_options.header = CSVOption<bool>(true);
+		writer.Initialize(true);
 	}
 }
 
