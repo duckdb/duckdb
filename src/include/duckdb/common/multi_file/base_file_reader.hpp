@@ -46,7 +46,7 @@ public:
 	unique_ptr<TableFilterSet> filters;
 	//! Expression to execute for a given column (BEFORE executing the filter)
 	//! NOTE: this is only set when we have filters - it can be ignored for readers that don't have filter pushdown
-	unordered_map<column_t, unique_ptr<Expression>> expression_map;
+	unordered_map<idx_t, unique_ptr<Expression>> expression_map;
 	//! The final types for various expressions - this is ONLY used if UseCastMap() is explicitly enabled
 	unordered_map<column_t, LogicalType> cast_map;
 

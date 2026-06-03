@@ -60,6 +60,9 @@ public:
 
 	idx_t Read(ColumnReaderInput &input, Vector &result) override;
 
+	void Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
+	            idx_t approved_tuple_count) override;
+
 	void Skip(idx_t num_values) override;
 	idx_t GroupRowsAvailable() override;
 

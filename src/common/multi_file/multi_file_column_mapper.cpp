@@ -1084,7 +1084,6 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 		}
 		auto &map_entry = local_it->second;
 		auto local_id = map_entry.mapping.index;
-		auto filter_idx = reader.column_indexes[local_id].GetPrimaryIndex();
 		auto &local_type = map_entry.local_type;
 		auto &global_type = map_entry.global_type;
 
@@ -1113,7 +1112,7 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 			// we need to set the index of the references inside the expression to 0
 			auto &expr = reader_data.expressions[global_index.GetIndex()];
 			SetIndexToZero(expr);
-			reader.expression_map[filter_idx] = std::move(expr);
+			reader.expression_map[local_id] = std::move(expr);
 
 			// reset the expression - since we are evaluating it in the reader we can just reference it
 			expr = make_uniq<BoundReferenceExpression>(global_type, local_id);
