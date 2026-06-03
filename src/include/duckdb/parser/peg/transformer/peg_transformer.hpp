@@ -724,8 +724,8 @@ private:
 	static DistinctClause TransformDistinctAll(PEGTransformer &transformer, ParseResult &parse_result);
 	static FunctionArgument TransformFunctionArgument(PEGTransformer &transformer, ParseResult &parse_result);
 	static MacroParameter TransformNamedParameter(PEGTransformer &transformer, ParseResult &parse_result);
-	static vector<unique_ptr<ParsedExpression>> TransformTableFunctionArguments(PEGTransformer &transformer,
-	                                                                            ParseResult &parse_result);
+	static vector<FunctionArgument> TransformTableFunctionArguments(PEGTransformer &transformer,
+	                                                                ParseResult &parse_result);
 
 	static unique_ptr<BaseTableRef> TransformBaseTableName(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<BaseTableRef> TransformSchemaReservedTable(PEGTransformer &transformer,
@@ -1046,9 +1046,9 @@ private:
 	                                                        const vector<GenericCopyOption> &generic_copy_option_list);
 	static unique_ptr<TransformResultValue> TransformCallStatementInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
-	static unique_ptr<SQLStatement>
-	TransformCallStatement(PEGTransformer &transformer, const QualifiedName &qualified_table_function,
-	                       vector<unique_ptr<ParsedExpression>> table_function_arguments);
+	static unique_ptr<SQLStatement> TransformCallStatement(PEGTransformer &transformer,
+	                                                       const QualifiedName &qualified_table_function,
+	                                                       vector<FunctionArgument> table_function_arguments);
 	static unique_ptr<TransformResultValue> TransformCheckpointStatementInternal(PEGTransformer &transformer,
 	                                                                             ParseResult &parse_result);
 	static unique_ptr<SQLStatement>
@@ -1711,9 +1711,8 @@ private:
 	static string TransformDropSecretStorage(PEGTransformer &transformer, const string &identifier);
 	static unique_ptr<TransformResultValue> TransformExecuteStatementInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
-	static unique_ptr<SQLStatement>
-	TransformExecuteStatement(PEGTransformer &transformer, const string &identifier,
-	                          vector<unique_ptr<ParsedExpression>> table_function_arguments);
+	static unique_ptr<SQLStatement> TransformExecuteStatement(PEGTransformer &transformer, const string &identifier,
+	                                                          vector<FunctionArgument> table_function_arguments);
 	static unique_ptr<TransformResultValue> TransformExplainStatementInternal(PEGTransformer &transformer,
 	                                                                          ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformExplainStatement(PEGTransformer &transformer, const bool &explain_analyze,

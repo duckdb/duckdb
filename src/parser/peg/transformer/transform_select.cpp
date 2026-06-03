@@ -365,8 +365,8 @@ MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &tr
 	return parameter;
 }
 
-vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformTableFunctionArguments(PEGTransformer &transformer,
-                                                                                            ParseResult &parse_result) {
+vector<FunctionArgument> PEGTransformerFactory::TransformTableFunctionArguments(PEGTransformer &transformer,
+                                                                                ParseResult &parse_result) {
 	// TableFunctionArguments <- Parens(List(FunctionArgument)?)
 	vector<FunctionArgument> result;
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -378,14 +378,7 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformTableFuncti
 		}
 	}
 
-	// TODO: Pass this further
-	vector<unique_ptr<ParsedExpression>> expressions;
-	for (auto &argument : result) {
-		expressions.push_back(std::move(argument.GetExpressionMutable()));
-		expressions.back()->SetAlias(argument.GetName());
-	}
-
-	return expressions;
+	return result;
 }
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformBaseTableName(PEGTransformer &transformer,
@@ -981,8 +974,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(PEG
 	auto result = make_uniq<TableFunctionRef>();
 
 	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
-	auto table_function_arguments =
-	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
+	auto table_function_arguments = transformer.Transform<vector<FunctionArgument>>(list_pr.Child<ListParseResult>(2));
 	result->with_ordinality = list_pr.Child<OptionalParseResult>(3).HasResult() ? OrdinalityType::WITH_ORDINALITY
 	                                                                            : OrdinalityType::WITHOUT_ORDINALITY;
 	result->function =
@@ -1004,8 +996,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(PEG
 	auto table_alias = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 
 	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
-	auto table_function_arguments =
-	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
+	auto table_function_arguments = transformer.Transform<vector<FunctionArgument>>(list_pr.Child<ListParseResult>(2));
 
 	auto result = make_uniq<TableFunctionRef>();
 	result->with_ordinality = list_pr.Child<OptionalParseResult>(3).HasResult() ? OrdinalityType::WITH_ORDINALITY
