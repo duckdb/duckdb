@@ -1661,93 +1661,98 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 
 	// see if we have to switch to the next row group in the parquet file
 	if (state.current_group < 0 || (int64_t)state.offset_in_group >= GetGroup(state).num_rows) {
-		state.current_group++;
-		state.offset_in_group = 0;
-
-		auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
-		trans.ClearPrefetch();
-		state.current_group_prefetched = false;
-
-		if (state.prefetch_mode && !state.file_handle->OnDiskFile()) {
-			NetworkThroughputEstimate estimate;
-			if (state.file_handle->TryGetNetworkThroughput(estimate)) {
-				state.cost_model_state.RefineFromEstimate(estimate);
-			}
-			uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
-			state.cost_model_state.TryGetColumnGapSize(accepted_column_gap);
-			trans.SetAcceptedColumnGap(accepted_column_gap);
-		}
-
-		if (log_prefetch && state.prefetch_metrics.filter_ran && state.current_group > 0) {
-			LogRowGroupPrefetch(context, file.path, state.group_idx_list[state.current_group - 1], state);
-		}
-		state.prefetch_metrics.FinalizeRowGroupSelectivity();
-
-		if ((idx_t)state.current_group == state.group_idx_list.size()) {
-			state.finished = true;
-			return SourceResultType::FINISHED;
-		}
-
-		// TODO: only need this if we have a deletion vector?
-		state.group_offset = GetRowGroupOffset(*this, state.group_idx_list[state.current_group]);
-
-		uint64_t to_scan_compressed_bytes = 0;
-		for (idx_t i = 0; i < column_ids.size(); i++) {
-			auto col_idx = MultiFileLocalIndex(i);
-			PrepareRowGroupBuffer(state, col_idx);
-			to_scan_compressed_bytes += state.GetColumnReader(i).TotalCompressedSize();
-		}
-
-		auto &group = GetGroup(state);
-		if (state.op) {
-			DUCKDB_LOG(context, PhysicalOperatorLogType, *state.op, "ParquetReader",
-			           state.offset_in_group == (idx_t)group.num_rows ? "SkipRowGroup" : "ReadRowGroup",
-			           {{"file", file.path}, {"row_group_id", to_string(state.group_idx_list[state.current_group])}});
-		}
-
-		if (state.prefetch_mode && state.offset_in_group != (idx_t)group.num_rows) {
-			uint64_t total_row_group_span = GetGroupSpan(state);
-
-			double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);
-
-			if (to_scan_compressed_bytes > total_row_group_span) {
-				throw IOException(
-				    "The parquet file '%s' seems to have incorrectly set page offsets. This interferes with DuckDB's "
-				    "prefetching optimization. DuckDB may still be able to scan this file by manually disabling the "
-				    "prefetching mechanism using: 'SET disable_parquet_prefetching=true'.",
-				    GetFileName());
-			}
-
-			if (parquet_options.prefetch_strategy == ParquetPrefetchStrategyOption::WHOLE_GROUP) {
-				WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
-			} else {
-				bool filters_look_unselective = false;
-				if (filters) {
-					if (state.prefetch_metrics.row_groups_executed == 0) {
-						filters_look_unselective = true;
-					} else if (static_cast<double>(state.prefetch_metrics.row_groups_with_matches) /
-					               static_cast<double>(state.prefetch_metrics.row_groups_executed) >
-					           ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO) {
-						filters_look_unselective = true;
-					}
-				}
-
-				if ((!filters || filters_look_unselective) &&
-				    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
-					WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
-				} else {
-					ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
-				}
-			}
-			if (log_prefetch) {
-				state.prefetch_metrics.logger.accepted_column_gap = trans.GetAcceptedColumnGap();
-			}
-		}
-		result.Reset();
-		return SourceResultType::HAVE_MORE_OUTPUT;
+		return Schedule(context, state, result, log_prefetch);
 	}
 
 	return Process(state, result, log_prefetch);
+}
+
+AsyncResult ParquetReader::Schedule(ClientContext &context, ParquetReaderScanState &state, DataChunk &result,
+                                    bool log_prefetch) {
+	state.current_group++;
+	state.offset_in_group = 0;
+
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
+	trans.ClearPrefetch();
+	state.current_group_prefetched = false;
+
+	if (state.prefetch_mode && !state.file_handle->OnDiskFile()) {
+		NetworkThroughputEstimate estimate;
+		if (state.file_handle->TryGetNetworkThroughput(estimate)) {
+			state.cost_model_state.RefineFromEstimate(estimate);
+		}
+		uint64_t accepted_column_gap = ReadHeadComparator::DEFAULT_ACCEPTED_COLUMN_GAP;
+		state.cost_model_state.TryGetColumnGapSize(accepted_column_gap);
+		trans.SetAcceptedColumnGap(accepted_column_gap);
+	}
+
+	if (log_prefetch && state.prefetch_metrics.filter_ran && state.current_group > 0) {
+		LogRowGroupPrefetch(context, file.path, state.group_idx_list[state.current_group - 1], state);
+	}
+	state.prefetch_metrics.FinalizeRowGroupSelectivity();
+
+	if ((idx_t)state.current_group == state.group_idx_list.size()) {
+		state.finished = true;
+		return SourceResultType::FINISHED;
+	}
+
+	// TODO: only need this if we have a deletion vector?
+	state.group_offset = GetRowGroupOffset(*this, state.group_idx_list[state.current_group]);
+
+	uint64_t to_scan_compressed_bytes = 0;
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto col_idx = MultiFileLocalIndex(i);
+		PrepareRowGroupBuffer(state, col_idx);
+		to_scan_compressed_bytes += state.GetColumnReader(i).TotalCompressedSize();
+	}
+
+	auto &group = GetGroup(state);
+	if (state.op) {
+		DUCKDB_LOG(context, PhysicalOperatorLogType, *state.op, "ParquetReader",
+		           state.offset_in_group == (idx_t)group.num_rows ? "SkipRowGroup" : "ReadRowGroup",
+		           {{"file", file.path}, {"row_group_id", to_string(state.group_idx_list[state.current_group])}});
+	}
+
+	if (state.prefetch_mode && state.offset_in_group != (idx_t)group.num_rows) {
+		uint64_t total_row_group_span = GetGroupSpan(state);
+
+		double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);
+
+		if (to_scan_compressed_bytes > total_row_group_span) {
+			throw IOException(
+			    "The parquet file '%s' seems to have incorrectly set page offsets. This interferes with DuckDB's "
+			    "prefetching optimization. DuckDB may still be able to scan this file by manually disabling the "
+			    "prefetching mechanism using: 'SET disable_parquet_prefetching=true'.",
+			    GetFileName());
+		}
+
+		if (parquet_options.prefetch_strategy == ParquetPrefetchStrategyOption::WHOLE_GROUP) {
+			WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
+		} else {
+			bool filters_look_unselective = false;
+			if (filters) {
+				if (state.prefetch_metrics.row_groups_executed == 0) {
+					filters_look_unselective = true;
+				} else if (static_cast<double>(state.prefetch_metrics.row_groups_with_matches) /
+				               static_cast<double>(state.prefetch_metrics.row_groups_executed) >
+				           ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO) {
+					filters_look_unselective = true;
+				}
+			}
+
+			if ((!filters || filters_look_unselective) &&
+			    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+				WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
+			} else {
+				ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
+			}
+		}
+		if (log_prefetch) {
+			state.prefetch_metrics.logger.accepted_column_gap = trans.GetAcceptedColumnGap();
+		}
+	}
+	result.Reset();
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 SourceResultType ParquetReader::Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch) {
