@@ -327,18 +327,26 @@ void ExternalFileCache::DeleteObjectCacheEntries(const vector<string> &object_ca
 shared_ptr<ExternalFileCache::CachedFile> ExternalFileCache::GetOrCreateCachedFile(const string &path) {
 	const auto object_cache_key = ObjectCacheKey(path);
 	auto &object_cache = buffer_manager.GetDatabase().GetObjectCache();
-	const auto current_generation = generation.load();
+	while (true) {
+		const auto current_generation = generation.load();
+		if (!enable) {
+			return make_shared_ptr<CachedFile>(path, current_generation);
+		}
 
-	if (!enable) {
-		return make_shared_ptr<CachedFile>(path, current_generation);
+		auto entry = object_cache.GetOrCreate<ExternalFileCacheObjectCacheEntry>(
+		    object_cache_key, *this, object_cache_key, path, current_generation);
+		auto cached_file = entry->GetCachedFile();
+
+		if (!enable) {
+			object_cache.Delete(object_cache_key);
+			return make_shared_ptr<CachedFile>(path, current_generation);
+		}
+		if (cached_file->generation != current_generation) {
+			object_cache.Delete(object_cache_key);
+			continue;
+		}
+		return cached_file;
 	}
-
-	// When external file cache is disabled, all object cache entries are deleted.
-	auto entry = object_cache.GetOrCreate<ExternalFileCacheObjectCacheEntry>(object_cache_key, *this, object_cache_key,
-	                                                                         path, current_generation);
-	auto cached_file = entry->GetCachedFile();
-	ALWAYS_ASSERT(cached_file->generation == current_generation);
-	return entry->GetCachedFile();
 }
 
 void ExternalFileCache::InsertCachedFileKey(const string &object_cache_key) {
