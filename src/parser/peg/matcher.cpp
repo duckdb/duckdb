@@ -620,6 +620,9 @@ public:
 
 private:
 	bool MatchIdentifier(MatchState &state) const {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
 		const auto &keyword_helper = PEGKeywordHelper::Instance();
@@ -705,6 +708,9 @@ public:
 
 private:
 	bool MatchReservedIdentifier(MatchState &state) const {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
 		if (!IsIdentifier(token_text)) {
 			return false;
@@ -836,8 +842,11 @@ public:
 
 private:
 	static bool MatchNumberLiteral(MatchState &state) {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
-		if (!BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
+		if (token_text.empty() || !BaseTokenizer::CharacterIsInitialNumber(token_text[0])) {
 			return false;
 		}
 		// A lone '.' is a dot operator, not a number literal (e.g., '?.method()' should not consume '.')
@@ -937,6 +946,9 @@ public:
 
 private:
 	static bool MatchOperator(MatchState &state) {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
 		// Exclude the lambda arrow and JSON arrow — these have dedicated grammar roles
 		if (token_text == "->" || token_text == "->>") {
@@ -1004,6 +1016,9 @@ public:
 
 private:
 	static bool MatchArithmeticOperator(MatchState &state) {
+		if (state.token_index >= state.tokens.size()) {
+			return false;
+		}
 		auto &token_text = state.tokens[state.token_index].text;
 		for (auto &c : token_text) {
 			if (!IsArithmeticOperatorChar(c)) {
