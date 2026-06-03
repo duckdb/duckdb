@@ -373,8 +373,7 @@ def generate_choice_internal_with_typed_body(rule_name, return_type, return_by_v
     """
     arg = "std::move(child)" if child_by_value else "child"
     child_extraction = (
-        "\tauto &choice_result = choice_pr.GetResult();\n"
-        + _emit_string_result_extraction("child", "choice_result")
+        "\tauto &choice_result = choice_pr.GetResult();\n" + _emit_string_result_extraction("child", "choice_result")
         if child_type == "string"
         else f"\tauto child = transformer.Transform<{child_type}>(choice_pr.GetResult());\n"
     )
