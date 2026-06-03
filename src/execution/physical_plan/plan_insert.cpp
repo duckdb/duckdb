@@ -75,6 +75,15 @@ bool PhysicalPlanGenerator::UseBatchIndex(PhysicalOperator &plan) {
 	return UseBatchIndex(context, plan);
 }
 
+namespace {
+
+//! Used to determine if the field of a struct is mapped or not
+struct StructFieldMapping {
+	case_insensitive_map_t<StructFieldMapping> child_mapping;
+};
+
+} // namespace
+
 static Value CreateStructMapping(const LogicalType &struct_type, const string &name) {
 	child_list_t<Value> field_mapping;
 
@@ -96,7 +105,7 @@ static Value CreateStructMapping(const LogicalType &struct_type, const string &n
 	return Value::STRUCT({{"", Value(name)}, {"", struct_value}});
 }
 
-static Value CreateStructDefault(const Value &value) {
+static Value CreateStructDefault(const Value &value, const case_insensitive_map_t<StructFieldMapping> &mapping = {}) {
 	child_list_t<Value> field_defaults;
 	auto &field_values = StructValue::GetChildren(value);
 	auto &struct_children = StructType::GetChildTypes(value.type());
@@ -105,17 +114,33 @@ static Value CreateStructDefault(const Value &value) {
 		auto &field_type = struct_children[j].second;
 		auto &field_value = field_values[j];
 
-		if (field_name == "d") {
-			continue;
-		}
+		auto it = mapping.find(field_name);
+		const bool is_mapped = it != mapping.end();
 
 		Value field_default;
 		if (field_type.id() == LogicalTypeId::STRUCT) {
-			field_default = CreateStructDefault(field_value);
+			if (is_mapped) {
+				field_default = CreateStructDefault(field_value, it->second.child_mapping);
+			} else {
+				field_default = CreateStructDefault(field_value);
+			}
+
+			if (field_default.IsNull()) {
+				//! All fields were skipped, no need to include this value
+				continue;
+			}
 		} else {
+			if (is_mapped) {
+				continue;
+			}
 			field_default = field_value;
 		}
+
 		field_defaults.emplace_back(field_name, field_default);
+	}
+	if (field_defaults.empty()) {
+		//! Skipped all fields, signal that the value should be omitted
+		return Value();
 	}
 	return Value::STRUCT(field_defaults);
 }
@@ -151,7 +176,9 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveDefaultsProjection(LogicalInsert
 					children.push_back(make_uniq<BoundConstantExpression>(CreateStructMapping(original_type, "")));
 
 					//! defaults
-					children.push_back(make_uniq<BoundConstantExpression>(CreateStructDefault(bound_default.value)));
+					case_insensitive_map_t<StructFieldMapping> mapping;
+					mapping["b"].child_mapping["d"];
+					children.push_back(make_uniq<BoundConstantExpression>(CreateStructDefault(bound_default.value, mapping)));
 					select_list.push_back(RemapStructFun::GetFunction().Bind(context, std::move(children)));
 				} else {
 					select_list.push_back(make_uniq<BoundReferenceExpression>(col.Type(), mapped_index));
