@@ -19,7 +19,6 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/common/weak_ptr_ipp.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache_block.hpp"
@@ -100,8 +99,10 @@ private:
 
 	//! Register a cached file entry in ObjectCache.
 	void RegisterObjectCacheEntry(const string &path, const shared_ptr<CachedFile> &cached_file);
+	//! Access a cached file entry in ObjectCache.
+	void AccessObjectCacheEntry(const string &path);
 	//! Attempts to erase the cached file entry at ObjectCache eviction.
-	void TryEraseCachedFile(const string &path, const weak_ptr<CachedFile> &cached_file);
+	void EraseCachedFile(const string &path);
 	//! Delete ObjectCache entries.
 	void DeleteObjectCacheEntries(const vector<string> &object_cache_keys);
 
@@ -112,6 +113,7 @@ private:
 	//! Generation counter, incremented whenever cache enablement changes.
 	atomic<idx_t> generation;
 	//! Mapping from file path to cached file with cached blocks
+	//! Invariant: all entry keys are stored in ObjectCache, which are evicted by buffer pool manager.
 	unordered_map<string, shared_ptr<CachedFile>> cached_files DUCKDB_GUARDED_BY(lock);
 	//! Lock for accessing cached_files.
 	mutable annotated_mutex lock;
