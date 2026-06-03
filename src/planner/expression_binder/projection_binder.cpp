@@ -10,7 +10,12 @@ ProjectionBinder::ProjectionBinder(Binder &binder, ClientContext &context, idx_t
 }
 
 BindResult ProjectionBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	if (in_child_projection) {
+		return ExpressionBinder::BindExpression(expr_ptr, depth);
+	}
+	in_child_projection = true;
 	auto result = ExpressionBinder::BindExpression(expr_ptr, depth);
+	in_child_projection = false;
 	if (result.HasError()) {
 		return result;
 	}
@@ -33,6 +38,7 @@ BindResult ProjectionBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	case ExpressionClass::WINDOW:
 		return BindUnsupportedExpression(expr, depth, clause + " cannot contain window functions!");
 	case ExpressionClass::COLUMN_REF:
+	case ExpressionClass::SUBQUERY:
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
