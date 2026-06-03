@@ -1,12 +1,15 @@
-#include "duckdb/common/string_map_set.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -25,48 +28,9 @@ LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector
 	LogicalType max_type = ExpressionBinder::GetExpressionReturnType(*children[0]);
 	bool is_in_operator = (op.GetExpressionType() == ExpressionType::COMPARE_IN ||
 	                       op.GetExpressionType() == ExpressionType::COMPARE_NOT_IN);
-
-	// Look up the domain for ENUM (NOT) IN STRING_LITERAL
-	vector<unique_ptr<Expression>> in_children;
-	string_map_t<uint64_t> enum_domain;
-	idx_t literals = 0;
-	if (is_in_operator && max_type.id() == LogicalTypeId::ENUM) {
-		auto strings = FlatVector::GetData<string_t>(EnumType::GetValuesInsertOrder(max_type));
-		for (uint64_t i = 0; i < EnumType::GetSize(max_type); ++i) {
-			enum_domain[strings[i]] = i;
-		}
-		in_children.emplace_back(children[0]->Copy());
-		++literals;
-	}
-
 	for (idx_t i = 1; i < children.size(); i++) {
-		auto &child = *children[i];
 		auto child_return = ExpressionBinder::GetExpressionReturnType(*children[i]);
 		if (is_in_operator) {
-			if (max_type.id() == LogicalTypeId::ENUM) {
-				switch (child_return.id()) {
-				case LogicalTypeId::STRING_LITERAL: {
-					//	ENUM (NOT) IN STRING_LITERAL
-					++literals;
-					auto s = child.Cast<BoundConstantExpression>().GetValue().ToString();
-					auto it = enum_domain.find(s);
-					if (it != enum_domain.end()) {
-						//	The literal is in the ENUM domain, so translate it
-						Value literal = Value::ENUM(it->second, max_type);
-						in_children.emplace_back(make_uniq<BoundConstantExpression>(literal));
-					}
-					// Not in the domain, so ignore it.
-					continue;
-				}
-				case LogicalTypeId::SQLNULL:
-					//	ENUM (NOT) IN NULL
-					++literals;
-					in_children.emplace_back(child.Copy());
-					continue;
-				default:
-					break;
-				}
-			}
 			// If it's IN/NOT_IN operator, adjust DECIMAL and VARCHAR returned type.
 			if (!BoundComparisonExpression::TryBindComparison(context, max_type, child_return, max_type,
 			                                                  op.GetExpressionType())) {
@@ -83,12 +47,6 @@ LogicalType ExpressionBinder::ResolveCoalesceType(OperatorExpression &op, vector
 				    max_type.ToString(), child_return.ToString());
 			}
 		}
-	}
-
-	//	If ALL the children are string literals being matched against an ENUM (NOT) IN,
-	//	then swap out the children for the valid ENUM values
-	if (literals == children.size() && in_children.size() > 1) {
-		children.swap(in_children);
 	}
 
 	// cast all children to the same type
