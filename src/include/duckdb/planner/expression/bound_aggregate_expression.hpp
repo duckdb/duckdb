@@ -40,8 +40,8 @@ public:
 	vector<unique_ptr<Expression>> &GetChildrenMutable() {
 		return children;
 	}
-	FunctionData *BindInfo() const {
-		return bind_info.get();
+	const unique_ptr<FunctionData> &BindInfo() const {
+		return bind_info;
 	}
 	unique_ptr<FunctionData> &BindInfoMutable() {
 		return bind_info;

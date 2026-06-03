@@ -126,7 +126,7 @@ struct ICUListRange : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &bind_info = func_expr.bind_info->Cast<BindData>();
+		auto &bind_info = func_expr.BindInfo()->Cast<BindData>();
 		TZCalendar calendar(*bind_info.calendar, bind_info.cal_setting);
 
 		RangeInfoStruct<INCLUSIVE_BOUND> info(args);

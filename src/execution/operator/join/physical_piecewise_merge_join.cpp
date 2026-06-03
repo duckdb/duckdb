@@ -708,7 +708,6 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 					chunk.data[col_idx].Reference(state.rhs_input.data[col_idx - left_cols]);
 				}
 			}
-			chunk.SetCardinality(result_count);
 
 			auto sel = FlatVector::IncrementalSelectionVector();
 			if (tail_cols) {
@@ -745,7 +744,6 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 					}
 				}
 			}
-			chunk.SetCardinality(result_count);
 
 			//	Apply any arbitrary predicate
 			if (predicate) {
@@ -904,7 +902,6 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetDataInternal(ExecutionContext &c
 			for (idx_t col_idx = 0; col_idx < right_column_count; ++col_idx) {
 				result.data[left_column_count + col_idx].Slice(rhs_chunk.data[col_idx], rsel, result_count);
 			}
-			result.SetCardinality(result_count);
 			break;
 		}
 	}

@@ -200,16 +200,16 @@ void UngroupedAggregateExecuteState::Sink(LocalUngroupedAggregateState &state, D
 		}
 
 		idx_t payload_cnt = 0;
+		idx_t chunk_count;
 		// resolve the filter (if any)
 		if (aggregate.GetFilter()) {
 			auto &filtered_data = filter_set.GetFilterData(aggr_idx);
-			auto count = filtered_data.ApplyFilter(input);
+			chunk_count = filtered_data.ApplyFilter(input);
 
 			child_executor.SetChunk(filtered_data.filtered_payload);
-			payload_chunk.SetCardinality(count);
 		} else {
+			chunk_count = input.size();
 			child_executor.SetChunk(input);
-			payload_chunk.SetCardinality(input);
 		}
 
 		// resolve the child expressions of the aggregate (if any)
@@ -218,7 +218,7 @@ void UngroupedAggregateExecuteState::Sink(LocalUngroupedAggregateState &state, D
 			payload_cnt++;
 		}
 
-		state.Sink(payload_chunk, payload_idx, aggr_idx);
+		state.Sink(payload_chunk, payload_idx, aggr_idx, chunk_count);
 	}
 }
 
@@ -329,8 +329,7 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, DataChu
 
 			// Apply the filter before inserting into the hashtable
 			auto &filtered_data = sink.execute_state.filter_set.GetFilterData(idx);
-			idx_t count = filtered_data.ApplyFilter(chunk);
-			filtered_data.filtered_payload.SetCardinality(count);
+			filtered_data.ApplyFilter(chunk);
 
 			radix_table.Sink(context, filtered_data.filtered_payload, sink_input, empty_chunk, distinct_filter);
 		} else {
@@ -354,9 +353,9 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, DataC
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_idx, idx_t aggr_idx) {
+void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_idx, idx_t aggr_idx, idx_t count) {
 #ifdef DEBUG
-	state.counts[aggr_idx] += payload_chunk.size();
+	state.counts[aggr_idx] += count;
 #endif
 	auto &aggregate = state.aggregate_expressions[aggr_idx]->Cast<BoundAggregateExpression>();
 	idx_t payload_cnt = aggregate.GetChildren().size();
@@ -366,11 +365,10 @@ void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_
 	auto cluster_update = aggregate.Function().GetStateClusterUpdateCallback();
 	if (cluster_update) {
 		ClusteredAggr clustered;
-		clustered.SetSingleRun(state.aggregate_data[aggr_idx].get(), payload_chunk.size());
+		clustered.SetSingleRun(state.aggregate_data[aggr_idx].get(), count);
 		aggr_input_data.clustered = &clustered;
-		cluster_update(start_of_input, aggr_input_data, payload_cnt, clustered, payload_chunk.size());
+		cluster_update(start_of_input, aggr_input_data, payload_cnt, clustered, count);
 	} else {
-		auto count = payload_chunk.size();
 		auto state_ptr = CastPointerToValue(state.aggregate_data[aggr_idx].get());
 		auto state_data = FlatVector::Writer<uintptr_t>(repeated_state_vector, count);
 		for (idx_t i = 0; i < count; i++) {
@@ -581,7 +579,7 @@ TaskExecutionResult UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() 
 
 		DataChunk payload_chunk;
 		payload_chunk.InitializeEmpty(distinct_data.grouped_aggregate_data[table_idx]->group_types);
-		payload_chunk.SetCardinality(0);
+		payload_chunk.SetChildCardinality(0);
 
 		while (true) {
 			output_chunk.Reset();
@@ -600,10 +598,9 @@ TaskExecutionResult UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() 
 			for (idx_t i = 0; i < payload_cnt; i++) {
 				payload_chunk.data[i].Reference(output_chunk.data[i]);
 			}
-			payload_chunk.SetCardinality(output_chunk);
 
 			// Update the aggregate state
-			state.Sink(payload_chunk, 0, agg_idx);
+			state.Sink(payload_chunk, 0, agg_idx, output_chunk.size());
 		}
 		blocked = false;
 	}
@@ -663,7 +660,7 @@ void VerifyNullHandling(DataChunk &chunk, UngroupedAggregateState &state,
 }
 
 void GlobalUngroupedAggregateState::Finalize(DataChunk &result, idx_t column_offset) {
-	result.SetCardinality(1);
+	result.SetChildCardinality(1);
 	for (idx_t aggr_idx = 0; aggr_idx < state.aggregate_expressions.size(); aggr_idx++) {
 		auto &aggregate = state.aggregate_expressions[aggr_idx]->Cast<BoundAggregateExpression>();
 

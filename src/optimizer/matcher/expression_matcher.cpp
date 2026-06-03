@@ -42,7 +42,7 @@ bool ComparisonExpressionMatcher::Match(Expression &expr_p, vector<reference<Exp
 	if (!BoundComparisonExpression::IsComparison(expr.GetExpressionType())) {
 		return false;
 	}
-	return SetMatcher::Match(matchers, expr.children, bindings, policy);
+	return SetMatcher::Match(matchers, expr.GetChildrenMutable(), bindings, policy);
 }
 
 bool CastExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
@@ -65,7 +65,7 @@ bool InClauseExpressionMatcher::Match(Expression &expr_p, vector<reference<Expre
 	    expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN) {
 		return false;
 	}
-	return SetMatcher::Match(matchers, expr.children, bindings, policy);
+	return SetMatcher::Match(matchers, expr.GetChildrenMutable(), bindings, policy);
 }
 
 bool ConjunctionExpressionMatcher::Match(Expression &expr_p, vector<reference<Expression>> &bindings) {
@@ -73,7 +73,7 @@ bool ConjunctionExpressionMatcher::Match(Expression &expr_p, vector<reference<Ex
 		return false;
 	}
 	auto &expr = expr_p.Cast<BoundConjunctionExpression>();
-	if (!SetMatcher::Match(matchers, expr.children, bindings, policy)) {
+	if (!SetMatcher::Match(matchers, expr.GetChildrenMutable(), bindings, policy)) {
 		return false;
 	}
 	return true;
@@ -84,10 +84,10 @@ bool FunctionExpressionMatcher::Match(Expression &expr_p, vector<reference<Expre
 		return false;
 	}
 	auto &expr = expr_p.Cast<BoundFunctionExpression>();
-	if (!FunctionMatcher::Match(function, expr.function.GetName())) {
+	if (!FunctionMatcher::Match(function, expr.Function().GetName())) {
 		return false;
 	}
-	if (!SetMatcher::Match(matchers, expr.children, bindings, policy)) {
+	if (!SetMatcher::Match(matchers, expr.GetChildrenMutable(), bindings, policy)) {
 		return false;
 	}
 	return true;

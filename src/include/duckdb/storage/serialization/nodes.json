@@ -589,6 +589,11 @@
         "name": "filename_column",
         "type": "string",
         "default": "MultiFileOptions::DEFAULT_FILENAME_COLUMN"
+      },
+      {
+        "id": 107,
+        "name": "allow_empty",
+        "type": "bool"
       }
     ],
     "pointer_type": "none"

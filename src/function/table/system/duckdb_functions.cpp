@@ -779,7 +779,6 @@ void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p,
 		}
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBFunctionsFun::RegisterFunction(BuiltinFunctions &set) {

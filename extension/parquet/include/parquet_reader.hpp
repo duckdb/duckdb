@@ -29,6 +29,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "column_reader.hpp"
+#include "parquet_prefetch_cost_model.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_types.h"
@@ -147,11 +148,14 @@ struct ParquetLoggerPrefetchMetrics {
 	vector<bool> filters_used;
 	//! Prefetch strategy chosen for the current row group
 	ParquetPrefetchStrategy strategy = ParquetPrefetchStrategy::NONE;
+	//! Accepted column gap (bytes)
+	uint64_t accepted_column_gap = 0;
 
 	void Reset() {
 		prefetch_groups.clear();
 		std::fill(filters_used.begin(), filters_used.end(), false);
 		strategy = ParquetPrefetchStrategy::NONE;
+		accepted_column_gap = 0;
 	}
 
 	//! Build a prefetch group
@@ -217,6 +221,9 @@ public:
 
 	//! (optional) pointer to the PhysicalOperator for logging
 	optional_ptr<const PhysicalOperator> op;
+
+	//! Prefetch cost model
+	PrefetchCostModelState cost_model_state;
 };
 
 struct ParquetColumnDefinition {

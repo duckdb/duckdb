@@ -27,6 +27,7 @@ class DatabaseInstance;
 class FileOpenFlags;
 class FileSystem;
 struct FileHandle;
+struct NetworkThroughputEstimate;
 class QueryContext;
 class CachingFileSystem;
 
@@ -36,7 +37,7 @@ public:
 
 public:
 	DUCKDB_API CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system, const OpenFileInfo &path,
-	                             FileOpenFlags flags, optional_ptr<FileOpener> opener, CachedFile &cached_file);
+	                             FileOpenFlags flags, optional_ptr<FileOpener> opener);
 	DUCKDB_API ~CachingFileHandle();
 
 public:
@@ -56,12 +57,15 @@ public:
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsRemoteFile() const;
 	DUCKDB_API bool OnDiskFile();
+	DUCKDB_API bool TryGetNetworkThroughput(NetworkThroughputEstimate &result);
 	DUCKDB_API idx_t SeekPosition();
 	DUCKDB_API void Seek(idx_t location);
 
 private:
 	//! Remove the 'force_full_download' option from the file handle if present, and return whether it was present
 	bool StripForceFullDownloadIfPresent();
+	//! Refresh the cached file if the global cache state has changed.
+	shared_ptr<CachedFile> EnsureCachedFileCurrent();
 
 private:
 	QueryContext context;
@@ -78,8 +82,8 @@ private:
 	optional_ptr<FileOpener> opener;
 	//! Cache validation mode for this file
 	CacheValidationMode validate;
-	//! The associated CachedFile with cached blocks
-	CachedFile &cached_file;
+	//! Associated cached file.
+	shared_ptr<CachedFile> cached_file;
 
 	//! Used to ensure file handle and cached file metadata is only initialized once.
 	annotated_mutex file_handle_mutex;

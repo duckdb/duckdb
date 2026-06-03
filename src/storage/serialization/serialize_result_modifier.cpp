@@ -21,11 +21,11 @@ unique_ptr<ResultModifier> ResultModifier::Deserialize(Deserializer &deserialize
 	case ResultModifierType::DISTINCT_MODIFIER:
 		result = DistinctModifier::Deserialize(deserializer);
 		break;
+	case ResultModifierType::LEGACY_LIMIT_PERCENT_MODIFIER:
+		result = LegacyLimitPercentModifier::Deserialize(deserializer);
+		break;
 	case ResultModifierType::LIMIT_MODIFIER:
 		result = LimitModifier::Deserialize(deserializer);
-		break;
-	case ResultModifierType::LIMIT_PERCENT_MODIFIER:
-		result = LimitPercentModifier::Deserialize(deserializer);
 		break;
 	case ResultModifierType::ORDER_MODIFIER:
 		result = OrderModifier::Deserialize(deserializer);
@@ -57,29 +57,35 @@ unique_ptr<ResultModifier> DistinctModifier::Deserialize(Deserializer &deseriali
 	return std::move(result);
 }
 
-void LimitModifier::Serialize(Serializer &serializer) const {
+void LegacyLimitPercentModifier::Serialize(Serializer &serializer) const {
 	ResultModifier::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "limit", limit);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "offset", offset);
+}
+
+unique_ptr<ResultModifier> LegacyLimitPercentModifier::Deserialize(Deserializer &deserializer) {
+	auto limit = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "limit");
+	auto offset = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(201, "offset");
+	auto result = LegacyLimitPercentModifier::DeserializeLegacyLimitPercentModifier(std::move(limit), std::move(offset));
+	return result;
+}
+
+void LimitModifier::Serialize(Serializer &serializer) const {
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0) && UseLegacySerialization()) {
+		LegacySerialize(serializer);
+		return;
+	}
+	ResultModifier::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "limit", limit);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "offset", offset);
+	serializer.WritePropertyWithDefault<LimitValueType>(202, "limit_type", limit_type, LimitValueType::ROW_COUNT);
 }
 
 unique_ptr<ResultModifier> LimitModifier::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LimitModifier>(new LimitModifier());
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "limit", result->limit);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(201, "offset", result->offset);
-	return std::move(result);
-}
-
-void LimitPercentModifier::Serialize(Serializer &serializer) const {
-	ResultModifier::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "limit", limit);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "offset", offset);
-}
-
-unique_ptr<ResultModifier> LimitPercentModifier::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<LimitPercentModifier>(new LimitPercentModifier());
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "limit", result->limit);
-	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(201, "offset", result->offset);
+	deserializer.ReadPropertyWithExplicitDefault<LimitValueType>(202, "limit_type", result->limit_type, LimitValueType::ROW_COUNT);
 	return std::move(result);
 }
 

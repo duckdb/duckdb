@@ -89,6 +89,14 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	TestArrowRoundtrip("SELECT * FROM test_all_types()", false, true);
 }
 
+TEST_CASE("Test arrow NULL value roundtrip", "[arrow]") {
+	// null types
+	TestArrowRoundtrip("SELECT NULL");
+	TestArrowRoundtrip("SELECT [NULL, NULL]");
+	TestArrowRoundtrip("SELECT {'x': NULL, 'y': NULL}");
+	TestArrowRoundtrip("SELECT [{'x': NULL, 'y': NULL}, {'x': NULL, 'y': NULL}]");
+}
+
 TEST_CASE("Test Arrow fixed-size binary format parsing", "[arrow]") {
 	// Verify that GetTypeFromFormat correctly parses the size from "w:NN" format strings.
 	// Regression test for duckdb/duckdb-wasm#2199: format.find(':') would match colons

@@ -89,7 +89,7 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		ExecuteExpression(i, result.data[i]);
 	}
-	result.SetCardinality(input ? input->size() : 1);
+	result.SetChildCardinality(input ? input->size() : 1);
 	result.Verify(context);
 }
 

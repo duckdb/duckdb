@@ -37,7 +37,6 @@ SourceResultType PhysicalUpdateExtensions::GetDataInternal(ExecutionContext &con
 		data.offset++;
 		count++;
 	}
-	chunk.SetCardinality(count);
 
 	return data.offset >= data.update_result_entries.size() ? SourceResultType::FINISHED
 	                                                        : SourceResultType::HAVE_MORE_OUTPUT;

@@ -412,7 +412,7 @@ void DataTable::RebuildIndexes() {
 			for (idx_t i = 0; i < col_ids.size(); i++) {
 				table_chunk.data[col_ids[i]].Reference(scan_chunk.data[i]);
 			}
-			table_chunk.SetCardinality(scan_chunk);
+			table_chunk.SetChildCardinality(scan_chunk.size());
 			Vector &row_ids = scan_chunk.data[col_ids.size()];
 
 			auto error = bound_index.Append(table_chunk, row_ids);
@@ -546,7 +546,7 @@ void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vec
 	for (idx_t col = 0; col < result.ColumnCount(); col++) {
 		VectorOperations::Copy(local_chunk.data[col], result.data[col], local_count, 0, committed_count);
 	}
-	result.SetCardinality(committed_count + local_count);
+	result.SetChildCardinality(committed_count + local_count);
 
 	// Build inverse permutation to restore original row order.
 	// Current layout: [committed rows in relative order | local rows in relative order].
@@ -695,7 +695,7 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 	}
 
 	auto count = chunk.size();
-	dst_chunk.SetCardinality(count);
+	dst_chunk.SetChildCardinality(count);
 	if (count <= 0) {
 		return;
 	}
@@ -1154,7 +1154,7 @@ void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state
 		                           GetTableName(), TableModification());
 	}
 	state.table_lock = transaction.SharedLockTable(*info);
-	state.row_start = NumericCast<row_t>(row_groups->GetTotalRows());
+	state.row_start = NumericCast<row_t>(row_groups->GetNextRowId());
 	state.current_row = state.row_start;
 	auto &transaction_manager = transaction.GetTransactionManager();
 	auto active_checkpoint = transaction_manager.GetActiveCheckpoint();
@@ -1323,7 +1323,9 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 		idx_t current_row_base = start_row;
 		row_t row_data[STANDARD_VECTOR_SIZE];
 		Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_data), STANDARD_VECTOR_SIZE);
-		idx_t scan_count = MinValue<idx_t>(count, row_groups->GetTotalRows() - start_row);
+		auto next_row_id = row_groups->GetNextRowId();
+		D_ASSERT(start_row <= next_row_id);
+		idx_t scan_count = MinValue<idx_t>(count, next_row_id - start_row);
 		ScanTableSegment(transaction, start_row, scan_count, [&](DataChunk &chunk) {
 			auto row_id_writer = FlatVector::Writer<row_t>(row_identifiers, chunk.size());
 			for (idx_t i = 0; i < chunk.size(); i++) {
@@ -1630,7 +1632,7 @@ static void CreateMockChunk(vector<LogicalType> &types, const vector<PhysicalInd
 	for (column_t i = 0; i < column_ids.size(); i++) {
 		mock_chunk.data[column_ids[i].index].Reference(chunk.data[i]);
 	}
-	mock_chunk.SetCardinality(chunk.size());
+	mock_chunk.SetChildCardinality(chunk.size());
 }
 
 static bool CreateMockChunk(TableCatalogEntry &table, const vector<PhysicalIndex> &column_ids,
@@ -1752,6 +1754,7 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 	if (n_local_update > 0) {
 		updates_slice.Slice(updates, sel_local_update, n_local_update);
 		updates_slice.Flatten();
+		updates_slice.SetChildCardinality(n_local_update);
 		row_ids_slice.Slice(row_ids, sel_local_update, n_local_update);
 		row_ids_slice.Flatten();
 
@@ -1763,6 +1766,7 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 		auto &transaction = DuckTransaction::Get(context, db);
 		updates_slice.Slice(updates, sel_global_update, n_global_update);
 		updates_slice.Flatten();
+		updates_slice.SetChildCardinality(n_global_update);
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
 		row_ids_slice.Flatten();
 
@@ -1859,6 +1863,10 @@ idx_t DataTable::ColumnCount() const {
 
 idx_t DataTable::GetTotalRows() const {
 	return row_groups->GetTotalRows();
+}
+
+idx_t DataTable::GetNextRowId() const {
+	return row_groups->GetNextRowId();
 }
 
 void DataTable::CommitDropTable(CommitDropState &drop_state) {

@@ -2,6 +2,7 @@
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/parser/query_node/list.hpp"
@@ -21,13 +22,9 @@ struct BoundCTEData {
 	shared_ptr<CTEBindState> cte_bind_state;
 };
 
-static bool IsDMLQueryNode(const CommonTableExpressionInfo &cte) {
-	if (!cte.query_node) {
-		return false;
-	}
-	auto t = cte.query_node->type;
+static bool IsDMLQueryNode(QueryNodeType t) {
 	return t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
-	       t == QueryNodeType::DELETE_QUERY_NODE;
+	       t == QueryNodeType::DELETE_QUERY_NODE || t == QueryNodeType::MERGE_QUERY_NODE;
 }
 
 BoundStatement Binder::BindNode(QueryNode &node) {
@@ -35,7 +32,7 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 	vector<BoundCTEData> bound_ctes;
 	idx_t dml_cte_count = 0;
 	for (auto &cte : node.cte_map.map) {
-		if (IsDMLQueryNode(*cte.second)) {
+		if (IsDMLQueryNode(cte.second->query_node->type)) {
 			if (parent && !cte.second->is_trigger_generated) {
 				throw BinderException("WITH clause containing a data-modifying statement must be at the top level");
 			}
@@ -67,6 +64,9 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 		break;
 	case QueryNodeType::INSERT_QUERY_NODE:
 		result = current_binder.get().BindNode(node.Cast<InsertQueryNode>());
+		break;
+	case QueryNodeType::MERGE_QUERY_NODE:
+		result = current_binder.get().BindNode(node.Cast<MergeQueryNode>());
 		break;
 	default:
 		throw InternalException("Unsupported query node type");
@@ -171,8 +171,7 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 BoundStatement Binder::FinishCTE(BoundCTEData &bound_cte, BoundStatement child) {
 	if (!bound_cte.cte_bind_state->IsBound()) {
 		auto node_type = bound_cte.cte_bind_state->cte_def.type;
-		bool is_dml = node_type == QueryNodeType::INSERT_QUERY_NODE || node_type == QueryNodeType::UPDATE_QUERY_NODE ||
-		              node_type == QueryNodeType::DELETE_QUERY_NODE;
+		bool is_dml = IsDMLQueryNode(node_type);
 		if (is_dml) {
 			// DML CTEs always execute even if not referenced - force bind now
 			auto dummy_binding =

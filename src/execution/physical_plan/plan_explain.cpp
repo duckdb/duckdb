@@ -46,7 +46,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	for (idx_t i = 0; i < keys.size(); i++) {
 		chunk.data[0].Append(Value(keys[i]));
 		chunk.data[1].Append(Value(values[i]));
-		chunk.SetCardinality(chunk.size() + 1);
+		// the appends grow the child vectors - record the new cardinality on the chunk itself
+		chunk.CheckCardinality(chunk.data[0].size());
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {
 			collection->Append(chunk);
 			chunk.Reset();

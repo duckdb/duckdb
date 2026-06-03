@@ -36,6 +36,12 @@ select * from (select 42 as col1, 'woot' as col2) UNPIVOT ("value" FOR "name" IN
 col1	42
 col2	woot
 
+query II
+FROM (SELECT 42 c1) AS t
+UNPIVOT (c1 FOR 'v' IN ((c1, 40 + 2)));
+----
+c1	(42, 42)
+
 # subqueries
 statement error
 unpivot (select 42 as col1, 'woot' as col2)
