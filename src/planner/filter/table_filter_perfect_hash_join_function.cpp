@@ -54,7 +54,7 @@ PerfectHashJoinInitLocalState(ExpressionState &state, const BoundFunctionExpress
 
 static void PerfectHashJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &func_data = func_expr.bind_info->Cast<PerfectHashJoinFunctionData>();
+	auto &func_data = func_expr.BindInfo()->Cast<PerfectHashJoinFunctionData>();
 	auto local_state_ptr = ExecuteFunctionState::GetFunctionState(state);
 	auto tracking_state = local_state_ptr ? &local_state_ptr->Cast<SelectivityTrackingLocalState>() : nullptr;
 
@@ -74,7 +74,7 @@ static void PerfectHashJoinFunction(DataChunk &args, ExpressionState &state, Vec
 static idx_t PerfectHashJoinSelect(DataChunk &args, ExpressionState &state, optional_ptr<const SelectionVector> sel,
                                    optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &func_data = func_expr.bind_info->Cast<PerfectHashJoinFunctionData>();
+	auto &func_data = func_expr.BindInfo()->Cast<PerfectHashJoinFunctionData>();
 	auto local_state_ptr = ExecuteFunctionState::GetFunctionState(state);
 	auto tracking_state = local_state_ptr ? &local_state_ptr->Cast<SelectivityTrackingLocalState>() : nullptr;
 

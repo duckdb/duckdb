@@ -692,6 +692,18 @@ struct DefaultCollationSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DefaultIoModeSetting {
+	using RETURN_TYPE = FileIOMode;
+	static constexpr const char *Name = "default_io_mode";
+	static constexpr const char *Description =
+	    "The default IO_MODE for newly attached database files when no explicit IO_MODE is given (BUFFERED_IO or MMAP)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "BUFFERED_IO";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct DefaultNullOrderSetting {
 	using RETURN_TYPE = DefaultOrderByNullType;
 	static constexpr const char *Name = "default_null_order";
@@ -1385,7 +1397,7 @@ struct MaxExecutionTimeSetting {
 	static constexpr const char *Description = "The maximum execution time per query in milliseconds (0 = no limit)";
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr const char *DefaultValue = "0";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_ONLY;
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
@@ -1721,6 +1733,16 @@ struct SecretDirectorySetting {
 	static constexpr const char *Name = "secret_directory";
 	static constexpr const char *Description = "Set the directory to which persistent secrets are stored";
 	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct StandardVectorSizeSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "standard_vector_size";
+	static constexpr const char *Description = "The compiled-in STANDARD_VECTOR_SIZE (read-only)";
+	static constexpr const char *InputType = "UBIGINT";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);

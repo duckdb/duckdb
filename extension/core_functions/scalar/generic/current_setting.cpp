@@ -29,7 +29,7 @@ public:
 
 void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<CurrentSettingBindData>();
+	auto &info = func_expr.BindInfo()->Cast<CurrentSettingBindData>();
 	result.Reference(info.value, count_t(args.size()));
 }
 

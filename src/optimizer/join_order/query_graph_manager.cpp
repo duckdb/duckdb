@@ -251,7 +251,7 @@ void QueryGraphManager::BindFilterEndpoints() {
 			D_ASSERT(filter_info->left_set);
 			D_ASSERT(filter_info->right_set);
 			D_ASSERT(filter_info->join_type == JoinType::SEMI || filter_info->join_type == JoinType::ANTI);
-			for (auto &child_comp : conjunction.children) {
+			for (auto &child_comp : conjunction.GetChildren()) {
 				if (!BoundComparisonExpression::IsComparison(*child_comp)) {
 					continue;
 				}
@@ -455,7 +455,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 					join->conditions.push_back(std::move(cond));
 				} else if (condition->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 					auto &conjunction = condition->Cast<BoundConjunctionExpression>();
-					for (auto &child : conjunction.children) {
+					for (auto &child : conjunction.GetChildrenMutable()) {
 						D_ASSERT(BoundComparisonExpression::IsComparison(*child));
 						auto cond = MaybeInvertConditions(std::move(child), invert_children);
 						join->conditions.push_back(std::move(cond));

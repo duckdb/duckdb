@@ -1,0 +1,26 @@
+diff --git a/src/storage/postgres_delete.cpp b/src/storage/postgres_delete.cpp
+index ecc6322..318daf9 100644
+--- a/src/storage/postgres_delete.cpp
++++ b/src/storage/postgres_delete.cpp
+@@ -129,7 +129,7 @@ PhysicalOperator &PostgresCatalog::PlanDelete(ClientContext &context, PhysicalPl
+ 	auto &bound_ref = op.expressions[0]->Cast<BoundReferenceExpression>();
+ 	PostgresCatalog::MaterializePostgresScans(plan);
+ 
+-	auto &delete_op = planner.Make<PostgresDelete>(op, op.table, bound_ref.index);
++	auto &delete_op = planner.Make<PostgresDelete>(op, op.table, bound_ref.Index());
+ 	delete_op.children.push_back(plan);
+ 	return delete_op;
+ }
+diff --git a/src/storage/postgres_update.cpp b/src/storage/postgres_update.cpp
+index b990f67..3b7d94b 100644
+--- a/src/storage/postgres_update.cpp
++++ b/src/storage/postgres_update.cpp
+@@ -119,7 +119,7 @@ SinkResultType PostgresUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
+ 
+ 		D_ASSERT(expressions[i]->GetExpressionType() == ExpressionType::BOUND_REF);
+ 		auto &binding = expressions[i]->Cast<BoundReferenceExpression>();
+-		gstate.insert_chunk.data[i].Reference(chunk.data[binding.index]);
++		gstate.insert_chunk.data[i].Reference(chunk.data[binding.Index()]);
+ 	}
+ 	// convert our row ids back into ctids
+ 	auto &row_identifiers = chunk.data[chunk.ColumnCount() - 1];

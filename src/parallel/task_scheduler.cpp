@@ -308,7 +308,7 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 		    "DuckDB was compiled without threads! Setting total_threads != external_threads is not allowed.");
 	}
 #endif
-	GetPool(TaskSchedulerType::REGULAR).SetThreads(total_threads - external_threads);
+	SetThreadsInternal(TaskSchedulerType::REGULAR, total_threads - external_threads);
 }
 
 void TaskScheduler::SetAsyncThreads(idx_t n) {
@@ -318,7 +318,7 @@ void TaskScheduler::SetAsyncThreads(idx_t n) {
 		    "DuckDB was compiled without threads! Setting async threads != 0 is not allowed.");
 	}
 #endif
-	GetPool(TaskSchedulerType::ASYNC).SetThreads(n);
+	SetThreadsInternal(TaskSchedulerType::ASYNC, n);
 }
 
 void TaskScheduler::Signal(idx_t n) {

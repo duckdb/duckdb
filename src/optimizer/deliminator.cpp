@@ -230,7 +230,7 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 		    cond.GetComparisonType() != ExpressionType::COMPARE_DISTINCT_FROM) {
 			auto is_not_null_expr =
 			    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-			is_not_null_expr->children.push_back(other_side.Copy());
+			is_not_null_expr->GetChildrenMutable().push_back(other_side.Copy());
 			filter_expressions.push_back(std::move(is_not_null_expr));
 		}
 	}

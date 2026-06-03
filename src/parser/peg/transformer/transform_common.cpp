@@ -571,4 +571,9 @@ string PEGTransformerFactory::TransformStringLiteral(PEGTransformer &transformer
 	auto &string_literal_pr = parse_result.Cast<StringLiteralParseResult>();
 	return string_literal_pr.result;
 }
+
+string PEGTransformerFactory::TransformConstraintName(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<string>(list_pr.GetChild(0));
+}
 } // namespace duckdb

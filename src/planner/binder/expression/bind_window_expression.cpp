@@ -282,19 +282,19 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		auto window_bound_function = function_binder.BindWindowFunction(
 		    bound_function, std::move(children), window.OrderByMutable(), window.ArgOrdersMutable());
 
-		window_func = std::move(window_bound_function->window);
-		bind_info = std::move(window_bound_function->bind_info);
-		children = std::move(window_bound_function->children);
+		window_func = std::move(window_bound_function->WindowFunctionMutable());
+		bind_info = std::move(window_bound_function->BindInfoMutable());
+		children = std::move(window_bound_function->GetChildrenMutable());
 		sql_type = window_bound_function->GetReturnType();
 	}
 	auto result =
 	    make_uniq<BoundWindowExpression>(sql_type, std::move(aggregate), std::move(window_func), std::move(bind_info));
-	result->children = std::move(children);
+	result->GetChildrenMutable() = std::move(children);
 	for (auto &child : window.PartitionsMutable()) {
-		result->partitions.push_back(GetExpression(child));
+		result->PartitionsMutable().push_back(GetExpression(child));
 	}
-	result->ignore_nulls = window.IgnoreNulls();
-	result->distinct = window.Distinct();
+	result->IgnoreNullsMutable() = window.IgnoreNulls();
+	result->DistinctMutable() = window.Distinct();
 
 	// Convert RANGE boundary expressions to ORDER +/- expressions.
 	// Note that PRECEDING and FOLLOWING refer to the sequential order in the frame,
@@ -359,7 +359,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		auto type = config.ResolveOrder(context, order.type);
 		auto null_order = config.ResolveNullOrder(context, type, order.null_order);
 		auto expression = GetExpression(order.expression);
-		result->orders.emplace_back(type, null_order, std::move(expression));
+		result->OrderByMutable().emplace_back(type, null_order, std::move(expression));
 	}
 
 	// Argument orders are just like arguments, not frames
@@ -367,15 +367,15 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		auto type = config.ResolveOrder(context, order.type);
 		auto null_order = config.ResolveNullOrder(context, type, order.null_order);
 		auto expression = GetExpression(order.expression);
-		result->arg_orders.emplace_back(type, null_order, std::move(expression));
+		result->ArgOrdersMutable().emplace_back(type, null_order, std::move(expression));
 	}
 
-	result->filter_expr = CastWindowExpression(window.FilterMutable(), LogicalType::BOOLEAN);
-	result->start_expr = CastWindowExpression(window.StartExprMutable(), start_type);
-	result->end_expr = CastWindowExpression(window.EndExprMutable(), end_type);
-	result->start = window.WindowStart();
-	result->end = window.WindowEnd();
-	result->exclude_clause = window.WindowExclude();
+	result->FilterMutable() = CastWindowExpression(window.FilterMutable(), LogicalType::BOOLEAN);
+	result->StartExprMutable() = CastWindowExpression(window.StartExprMutable(), start_type);
+	result->EndExprMutable() = CastWindowExpression(window.EndExprMutable(), end_type);
+	result->WindowStartMutable() = window.WindowStart();
+	result->WindowEndMutable() = window.WindowEnd();
+	result->WindowExcludeMutable() = window.WindowExclude();
 
 	// move the WINDOW expression into the set of bound windows
 	auto &window_type = result->GetReturnType();

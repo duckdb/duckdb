@@ -281,7 +281,7 @@ static void VariantExtractFunction(DataChunk &input, ExpressionState &state, Vec
 	(void)path;
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = func_expr.bind_info->Cast<VariantExtractBindData>();
+	auto &info = func_expr.BindInfo()->Cast<VariantExtractBindData>();
 	VariantUtils::VariantExtract(variant_vec, {info.component}, result, count);
 }
 

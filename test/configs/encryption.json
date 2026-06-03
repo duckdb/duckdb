@@ -79,7 +79,8 @@
         "test/sql/trigger/trigger_after_update.test",
         "test/sql/trigger/trigger_after_update_referencing.test",
         "test/sql/trigger/trigger_after_delete_referencing.test",
-        "test/sql/trigger/trigger_referencing_validation.test"
+        "test/sql/trigger/trigger_referencing_validation.test",
+        "test/sql/trigger/trigger_multiple_per_event.test"
       ]
     },
     {

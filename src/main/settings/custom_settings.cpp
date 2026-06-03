@@ -1463,6 +1463,21 @@ Value StorageCompatibilityVersionSetting::GetSetting(const ClientContext &contex
 }
 
 //===----------------------------------------------------------------------===//
+// Standard Vector Size
+//===----------------------------------------------------------------------===//
+void StandardVectorSizeSetting::SetGlobal(DatabaseInstance *, DBConfig &, const Value &) {
+	throw InvalidInputException("standard_vector_size is a read-only setting determined at compile time");
+}
+
+void StandardVectorSizeSetting::ResetGlobal(DatabaseInstance *, DBConfig &) {
+	throw InvalidInputException("standard_vector_size is a read-only setting determined at compile time");
+}
+
+Value StandardVectorSizeSetting::GetSetting(const ClientContext &) {
+	return Value::UBIGINT(DuckDB::StandardVectorSize());
+}
+
+//===----------------------------------------------------------------------===//
 // Streaming Buffer Size
 //===----------------------------------------------------------------------===//
 void StreamingBufferSizeSetting::SetLocal(ClientContext &context, const Value &input) {

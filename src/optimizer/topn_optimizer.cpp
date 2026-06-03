@@ -120,8 +120,8 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 			auto or_filter = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
 			auto is_null = ExpressionFilter::CreateNullCheckExpression(
 			    make_uniq<BoundReferenceExpression>(type, idx_t(0)), ExpressionType::OPERATOR_IS_NULL);
-			or_filter->children.push_back(std::move(is_null));
-			or_filter->children.push_back(std::move(pushed_expr));
+			or_filter->GetChildrenMutable().push_back(std::move(is_null));
+			or_filter->GetChildrenMutable().push_back(std::move(pushed_expr));
 			pushed_expr = std::move(or_filter);
 		}
 

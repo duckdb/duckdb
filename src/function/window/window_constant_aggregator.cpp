@@ -124,27 +124,27 @@ WindowConstantAggregatorLocalState::WindowConstantAggregatorLocalState(
 // WindowConstantAggregator
 //===--------------------------------------------------------------------===//
 bool WindowConstantAggregator::CanAggregate(const BoundWindowExpression &wexpr) {
-	if (!wexpr.aggregate) {
+	if (!wexpr.AggregateFunction()) {
 		return false;
 	}
 
 	// The function must be able to be used as an aggregate
-	if (!wexpr.aggregate->CanAggregate()) {
+	if (!wexpr.AggregateFunction()->CanAggregate()) {
 		return false;
 	}
 
 	// window exclusion cannot be handled by constant aggregates
-	if (wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
+	if (wexpr.WindowExclude() != WindowExcludeMode::NO_OTHER) {
 		return false;
 	}
 
 	// 	DISTINCT aggregation cannot be handled by constant aggregation
-	if (wexpr.distinct) {
+	if (wexpr.Distinct()) {
 		return false;
 	}
 
 	//	COUNT(*) is already handled efficiently by segment trees.
-	if (wexpr.children.empty()) {
+	if (wexpr.GetChildren().empty()) {
 		return false;
 	}
 
@@ -165,11 +165,11 @@ bool WindowConstantAggregator::CanAggregate(const BoundWindowExpression &wexpr) 
 	    offset PRECEDING and offset FOLLOWING options vary in meaning
 	    depending on the frame mode.
 	*/
-	switch (wexpr.start) {
+	switch (wexpr.WindowStart()) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
-		if (!wexpr.orders.empty()) {
+		if (!wexpr.OrderBy().empty()) {
 			return false;
 		}
 		break;
@@ -177,11 +177,11 @@ bool WindowConstantAggregator::CanAggregate(const BoundWindowExpression &wexpr) 
 		return false;
 	}
 
-	switch (wexpr.end) {
+	switch (wexpr.WindowEnd()) {
 	case WindowBoundary::UNBOUNDED_FOLLOWING:
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
-		if (!wexpr.orders.empty()) {
+		if (!wexpr.OrderBy().empty()) {
 			return false;
 		}
 		break;
@@ -202,7 +202,7 @@ WindowConstantAggregator::WindowConstantAggregator(BoundWindowExpression &wexpr,
                                                    ClientContext &context)
     : WindowAggregator(RebindAggregate(context, wexpr)) {
 	// We only need these values for Sink
-	for (auto &child : wexpr.children) {
+	for (auto &child : wexpr.GetChildren()) {
 		child_idx.emplace_back(shared.RegisterSink(child));
 	}
 }

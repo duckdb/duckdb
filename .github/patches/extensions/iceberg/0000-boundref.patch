@@ -1,0 +1,26 @@
+diff --git a/src/execution/operator/iceberg_delete.cpp b/src/execution/operator/iceberg_delete.cpp
+index 398dfc40..dbcb29aa 100644
+--- a/src/execution/operator/iceberg_delete.cpp
++++ b/src/execution/operator/iceberg_delete.cpp
+@@ -525,7 +525,7 @@ PhysicalOperator &IcebergCatalog::PlanDelete(ClientContext &context, PhysicalPla
+ 	}
+ 	for (idx_t i = 0; i < 2; i++) {
+ 		auto &bound_ref = op.expressions[column_offset + i]->Cast<BoundReferenceExpression>();
+-		row_id_indexes.push_back(bound_ref.index);
++		row_id_indexes.push_back(bound_ref.Index());
+ 	}
+ 
+ 	auto allows_positional_deletes = updated_table_entry.table_info.table_metadata.PropertiesAllowPositionalDeletes(
+diff --git a/src/planning/pruning/iceberg_predicate.cpp b/src/planning/pruning/iceberg_predicate.cpp
+index 4f77002c..1e794937 100644
+--- a/src/planning/pruning/iceberg_predicate.cpp
++++ b/src/planning/pruning/iceberg_predicate.cpp
+@@ -27,7 +27,7 @@ public:
+ 
+ public:
+ 	unique_ptr<Expression> VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr) override {
+-		if (expr.index != 0) {
++		if (expr.Index() != 0) {
+ 			return nullptr;
+ 		}
+ 		auto &return_type = expr.GetReturnType();

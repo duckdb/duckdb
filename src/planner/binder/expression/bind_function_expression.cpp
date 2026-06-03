@@ -116,7 +116,7 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 
 	const bool has_initial = function_child_types.size() == 3;
 	auto &bound_lambda_expr = bind_lambda_result.expression->Cast<BoundLambdaExpression>();
-	const auto &lambda_return_type = bound_lambda_expr.lambda_expr->GetReturnType();
+	const auto &lambda_return_type = bound_lambda_expr.LambdaExpr()->GetReturnType();
 
 	auto list_child_type = function_child_types[0];
 	if (list_child_type.id() != LogicalTypeId::SQLNULL && list_child_type.id() != LogicalTypeId::UNKNOWN) {
@@ -160,16 +160,16 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 		// Avoid repeated rebinds for DECIMAL type widening by forcing the lambda return type to the chosen
 		// accumulator type when decimals are involved.
 		if (TypeContainsDecimal(accumulator_type) ||
-		    TypeContainsDecimal(rebound_lambda_expr.lambda_expr->GetReturnType())) {
-			if (rebound_lambda_expr.lambda_expr->GetReturnType() != accumulator_type) {
-				const auto old_return_type = rebound_lambda_expr.lambda_expr->GetReturnType();
-				auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(rebound_lambda_expr.lambda_expr),
-				                                                    accumulator_type);
+		    TypeContainsDecimal(rebound_lambda_expr.LambdaExpr()->GetReturnType())) {
+			if (rebound_lambda_expr.LambdaExpr()->GetReturnType() != accumulator_type) {
+				const auto old_return_type = rebound_lambda_expr.LambdaExpr()->GetReturnType();
+				auto cast_expr = BoundCastExpression::AddCastToType(
+				    context, std::move(rebound_lambda_expr.LambdaExprMutable()), accumulator_type);
 				if (!cast_expr) {
 					throw BinderException("Could not cast lambda return type %s to accumulator type %s",
 					                      old_return_type.ToString(), accumulator_type.ToString());
 				}
-				rebound_lambda_expr.lambda_expr = std::move(cast_expr);
+				rebound_lambda_expr.LambdaExprMutable() = std::move(cast_expr);
 			}
 		}
 		result.did_rebind = true;
@@ -345,7 +345,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	}
 	if (result->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &bound_function = result->Cast<BoundFunctionExpression>();
-		if (bound_function.function.GetStability() == FunctionStability::CONSISTENT_WITHIN_QUERY) {
+		if (bound_function.Function().GetStability() == FunctionStability::CONSISTENT_WITHIN_QUERY) {
 			binder.SetAlwaysRequireRebind();
 		}
 	}
@@ -467,7 +467,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// capture the (lambda) columns
 	auto &bound_lambda_expr = children[lambda_expr_idx]->Cast<BoundLambdaExpression>();
-	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, capture_bind_lambda,
+	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.LambdaExprMutable(), capture_bind_lambda,
 	                     override_bind_lambda_context, capture_child_types);
 
 	FunctionBinder function_binder(binder);
@@ -481,8 +481,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	auto &bound_function_expr = result->Cast<BoundFunctionExpression>();
 
 	// remove the lambda expression from the children
-	auto lambda = std::move(bound_function_expr.children[lambda_expr_idx]);
-	bound_function_expr.children.erase_at(lambda_expr_idx);
+	auto lambda = std::move(bound_function_expr.GetChildrenMutable()[lambda_expr_idx]);
+	bound_function_expr.GetChildrenMutable().erase_at(lambda_expr_idx);
 	auto &bound_lambda = lambda->Cast<BoundLambdaExpression>();
 
 	// push back (in reverse order) any nested lambda parameters so that we can later use them in the lambda
@@ -501,14 +501,14 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(column_names[column_idx - 1],
 				                                                              column_types[column_idx - 1], offset);
 				offset++;
-				bound_function_expr.children.push_back(std::move(bound_lambda_param));
+				bound_function_expr.GetChildrenMutable().push_back(std::move(bound_lambda_param));
 			}
 		}
 	}
 
 	// push back the captures into the children vector
-	for (auto &capture : bound_lambda.captures) {
-		bound_function_expr.children.push_back(std::move(capture));
+	for (auto &capture : bound_lambda.CapturesMutable()) {
+		bound_function_expr.GetChildrenMutable().push_back(std::move(capture));
 	}
 
 	return BindResult(std::move(result));
