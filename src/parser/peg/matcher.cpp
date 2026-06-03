@@ -1053,6 +1053,9 @@ public:
 
 	//! Create a matcher from a PEG grammar
 	Matcher &CreateMatcher(const char *grammar, const char *root_rule);
+	//! Look up a matcher for a rule that was already built (as a sub-rule of a previous
+	//! CreateMatcher call). Throws if the rule has not been built.
+	Matcher &GetMatcher(const string &rule_name);
 
 private:
 	// Base primitives
@@ -1102,6 +1105,14 @@ Matcher &MatcherFactory::Optional(Matcher &matcher) const {
 
 Matcher &MatcherFactory::Repeat(Matcher &matcher) const {
 	return allocator.Allocate(make_uniq<RepeatMatcher>(matcher));
+}
+
+Matcher &MatcherFactory::GetMatcher(const string &rule_name) {
+	auto entry = matchers.find(rule_name);
+	if (entry == matchers.end()) {
+		throw InternalException("Matcher for rule '%s' has not been built", rule_name);
+	}
+	return entry->second.get();
 }
 
 Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name) {
@@ -1432,6 +1443,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	//===--------------------------------------------------------------------===//
 	// END GENERATED RULE OVERRIDES
 	//===--------------------------------------------------------------------===//
+	AddRuleOverride("EndOfInput", allocator.Allocate(make_uniq<EndOfInputMatcher>()));
 
 	// EndOfInput has no grammar body; satisfied here (outside the regenerated block).
 	AddRuleOverride("EndOfInput", allocator.Allocate(make_uniq<EndOfInputMatcher>()));
@@ -1472,6 +1484,8 @@ shared_ptr<PEGMatcher> ParserCache::GetMatcher() {
 #else
 	new_matcher->root = factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Program");
 #endif
+	// TopLevelStatement is referenced by Program, so it has already been built and cached.
+	new_matcher->top_level_root = factory.GetMatcher("TopLevelStatement");
 	std::unique_lock<std::mutex> lock(mutex);
 	if (!matcher) {
 		matcher = std::move(new_matcher);

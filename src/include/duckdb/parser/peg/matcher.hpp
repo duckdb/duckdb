@@ -116,8 +116,8 @@ struct MatcherSuggestion {
 
 struct MatchState {
 	MatchState(vector<MatcherToken> &tokens, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index, bool preserve_identifier_case_p = true)
-	    : tokens(tokens), suggestions(suggestions), token_index(0), allocator(allocator),
+	           idx_t &max_token_index, bool preserve_identifier_case_p = true, idx_t starting_token_index = 0)
+	    : tokens(tokens), suggestions(suggestions), token_index(starting_token_index), allocator(allocator),
 	      max_token_index(max_token_index), preserve_identifier_case(preserve_identifier_case_p) {
 	}
 	MatchState(MatchState &state)
@@ -226,6 +226,9 @@ struct PEGMatcher {
 	Matcher &Root() {
 		return *root;
 	}
+	Matcher &TopLevelStatementRoot() {
+		return *top_level_root;
+	}
 
 	static shared_ptr<PEGMatcher> Get(ClientContext &context);
 	static shared_ptr<PEGMatcher> Get(DatabaseInstance &db);
@@ -233,6 +236,7 @@ struct PEGMatcher {
 private:
 	friend struct ParserCache;
 	optional_ptr<Matcher> root;
+	optional_ptr<Matcher> top_level_root;
 };
 
 //! Per-database cache holder for the compiled PEG root matcher and transformer factory.

@@ -225,9 +225,12 @@ class PEGTransformerFactory {
 public:
 	explicit PEGTransformerFactory();
 
-	//! Helper functions
-	vector<unique_ptr<SQLStatement>> Transform(vector<MatcherToken> &tokens, ParserOptions &options,
-	                                           Matcher &root_matcher);
+	//! Match a single TopLevelStatement from `tokens` starting at `token_cursor` and transform it
+	//! into a SQLStatement. Returns nullptr if the matched TLS was separator-only (no statement).
+	//! Throws on syntax error. `token_cursor` is in/out: it's the token index where matching
+	//! starts, and on return holds the token index immediately past the last consumed token.
+	unique_ptr<SQLStatement> TransformTopLevelStatement(vector<MatcherToken> &tokens, ParserOptions &options,
+	                                                    Matcher &root_matcher, idx_t &token_cursor);
 	static ParseResult &ExtractResultFromParens(ParseResult &parse_result);
 	static vector<reference<ParseResult>> ExtractParseResultsFromList(ParseResult &parse_result);
 	static bool ExpressionIsEmptyStar(ParsedExpression &expr);

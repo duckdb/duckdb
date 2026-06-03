@@ -1,0 +1,39 @@
+# name: test/sql/extensions/quack_peeling.test
+# description: Demonstrate per-segment parse_function — the QUACK extension claims its own
+# group: [extensions]
+
+#              statement (three consecutive "quack"s), PEG handles SQL statements
+#              interleaved with it.
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+require notmingw
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+# A QUACK statement: three "quack"s in a row (PEG fails at three idents without separators)
+statement ok
+quack quack quack;
+
+# Case-insensitive
+statement ok
+QUACK quack QuAcK;
+
+# QUACK statement followed by SQL — extension claims the triplet, PEG handles the SELECT
+statement ok
+quack quack quack; SELECT 42;
+
+# SQL followed by a QUACK
+statement ok
+SELECT 1; quack quack quack;
+
+# Two QUACK triplets interleaved with SQL — peeler claims each triplet independently
+statement ok
+quack quack quack quack quack quack; SELECT 42;
+
+# QUACK interleaved between two SELECTs
+statement ok
+SELECT 1; quack quack quack; SELECT 42;
