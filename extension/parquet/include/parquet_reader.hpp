@@ -386,6 +386,9 @@ private:
 	//! Column-wise prefetch strategy.
 	void ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
 	                        const duckdb_parquet::RowGroup &group, bool filters_look_unselective, bool log_prefetch);
+	//! Process up to STANDARD_VECTOR_SIZE rows of the current row group into result.
+	//! Assumes the I/O for the group has already been scheduled/prefetched (see the group-switch branch of Scan).
+	SourceResultType Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch);
 	ParquetColumnSchema ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
 	                                      idx_t schema_index, idx_t column_index,
 	                                      ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);

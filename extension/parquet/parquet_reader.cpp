@@ -1747,6 +1747,10 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
+	return Process(state, result, log_prefetch);
+}
+
+SourceResultType ParquetReader::Process(ParquetReaderScanState &state, DataChunk &result, bool log_prefetch) {
 	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.offset_in_group);
 	result.SetChildCardinality(scan_count);
 
