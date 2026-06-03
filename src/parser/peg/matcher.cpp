@@ -580,7 +580,7 @@ private:
 	bool MatchIdentifier(MatchState &state) const {
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
-		const auto &keyword_helper = PEGKeywordHelper::Instance();
+		const auto &keyword_helper = state.keyword_helper;
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_TYPE_NAME:
 			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED) ||
@@ -1434,10 +1434,26 @@ shared_ptr<PEGTransformerFactory> ParserCache::GetTransformerFactory() {
 	return transformer_factory;
 }
 
+shared_ptr<PEGKeywordHelper> ParserCache::GetKeywordHelper() {
+	{
+		std::unique_lock<std::mutex> lock(mutex);
+		if (keyword_helper) {
+			return keyword_helper;
+		}
+	}
+	auto new_helper = make_shared_ptr<PEGKeywordHelper>();
+	std::unique_lock<std::mutex> lock(mutex);
+	if (!keyword_helper) {
+		keyword_helper = std::move(new_helper);
+	}
+	return keyword_helper;
+}
+
 void ParserCache::Invalidate() {
 	std::unique_lock<std::mutex> lock(mutex);
 	matcher = nullptr;
 	transformer_factory = nullptr;
+	keyword_helper = nullptr;
 }
 
 } // namespace duckdb

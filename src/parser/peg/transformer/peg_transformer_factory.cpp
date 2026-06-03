@@ -54,7 +54,8 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 }
 
 vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options,
-                                                                  Matcher &root_matcher) {
+                                                                  Matcher &root_matcher,
+                                                                  PEGKeywordHelper &keyword_helper) {
 	if (tokens.empty()) {
 		return {};
 	}
@@ -65,7 +66,8 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_result_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index, options.preserve_identifier_case);
+	MatchState state(tokens, suggestions, parse_result_allocator, max_token_index, keyword_helper,
+	                 options.preserve_identifier_case);
 	auto &matcher = root_matcher;
 	auto match_result = matcher.MatchParseResult(state);
 	if (match_result == nullptr || state.token_index < state.tokens.size()) {
@@ -87,7 +89,7 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 			for (idx_t i = stmt_start; i < stmt_end; i++) {
 				statement_tokens.push_back(tokens[i]);
 			}
-			Transform(statement_tokens, options, root_matcher);
+			Transform(statement_tokens, options, root_matcher, keyword_helper);
 		}
 
 		auto &error_token = tokens[error_token_idx];
