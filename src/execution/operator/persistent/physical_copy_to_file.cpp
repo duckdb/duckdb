@@ -49,6 +49,21 @@ struct VectorOfValuesEquality {
 	}
 };
 
+struct VectorOfValuesLess {
+	bool operator()(const vector<Value> &a, const vector<Value> &b) const {
+		const auto count = MinValue(a.size(), b.size());
+		for (idx_t i = 0; i < count; i++) {
+			if (ValueOperations::DistinctLessThan(a[i], b[i])) {
+				return true;
+			}
+			if (ValueOperations::DistinctLessThan(b[i], a[i])) {
+				return false;
+			}
+		}
+		return a.size() < b.size();
+	}
+};
+
 template <class T>
 using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHashFunction, VectorOfValuesEquality>;
 
@@ -494,12 +509,18 @@ public:
 		DelayedPartitionFlush result;
 		{
 			annotated_lock_guard<annotated_mutex> guard(lock);
+			auto next = partitions.end();
 			for (auto entry = partitions.begin(); entry != partitions.end(); entry++) {
 				auto &state = entry->second;
 				if (!state.HasBufferedData() || state.InFlight()) {
 					continue;
 				}
-				result = state.Take(entry->first);
+				if (next == partitions.end() || VectorOfValuesLess()(entry->first, next->first)) {
+					next = entry;
+				}
+			}
+			if (next != partitions.end()) {
+				result = next->second.Take(next->first);
 				return std::move(result);
 			}
 		}
