@@ -11,18 +11,44 @@ namespace duckdb {
 
 struct CaseExpressionState : public ExpressionState {
 	CaseExpressionState(const Expression &expr, ExpressionExecutorState &root)
-	    : ExpressionState(expr, root), true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE) {
+	    : ExpressionState(expr, root), true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE),
+	      case_false_sel(STANDARD_VECTOR_SIZE), local_true_sel(STANDARD_VECTOR_SIZE),
+	      local_false_sel(STANDARD_VECTOR_SIZE) {
 	}
 
 	SelectionVector true_sel;
 	SelectionVector false_sel;
+	SelectionVector case_false_sel;
+	SelectionVector local_true_sel;
+	SelectionVector local_false_sel;
+};
+
+struct CaseComparisonChunkGuard {
+	CaseComparisonChunkGuard(ExpressionExecutor &executor, DataChunk &chunk) : executor(executor) {
+		previous_chunk = executor.chunk;
+		executor.SetChunk(chunk);
+	}
+
+	~CaseComparisonChunkGuard() {
+		executor.SetChunk(previous_chunk);
+	}
+
+	ExpressionExecutor &executor;
+	DataChunk *previous_chunk;
 };
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<CaseExpressionState>(expr, root);
+	if (expr.CaseExpr()) {
+		result->AddChild(*expr.CaseExpr());
+	}
 	for (auto &case_check : expr.CaseChecks()) {
 		result->AddChild(*case_check.when_expr);
+		if (expr.CaseExpr()) {
+			D_ASSERT(case_check.compare_expr);
+			result->AddChild(*case_check.compare_expr);
+		}
 		result->AddChild(*case_check.then_expr);
 	}
 	result->AddChild(expr.Else());
@@ -36,6 +62,76 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 	auto &state = state_p->Cast<CaseExpressionState>();
 
 	state.intermediate_chunk.Reset();
+
+	if (expr.CaseExpr()) {
+		auto &case_result = state.intermediate_chunk.data[0];
+		Execute(*expr.CaseExpr(), state.child_states[0].get(), sel, count, case_result);
+
+		auto current_sel = sel ? sel : FlatVector::IncrementalSelectionVector();
+		auto current_case_sel = FlatVector::IncrementalSelectionVector();
+		idx_t current_count = count;
+		idx_t child_idx = 1;
+		for (idx_t i = 0; i < expr.CaseChecks().size(); i++) {
+			auto &case_check = expr.CaseChecks()[i];
+			auto &when_result = state.intermediate_chunk.data[child_idx];
+			auto when_state = state.child_states[child_idx++].get();
+			auto compare_state = state.child_states[child_idx++].get();
+			auto &intermediate_result = state.intermediate_chunk.data[child_idx];
+			auto then_state = state.child_states[child_idx++].get();
+
+			Execute(*case_check.when_expr, when_state, current_sel, current_count, when_result);
+
+			DataChunk compare_chunk;
+			compare_chunk.InitializeEmpty({case_result.GetType(), when_result.GetType()});
+			compare_chunk.data[0].Slice(case_result, *current_case_sel, current_count);
+			compare_chunk.data[1].Reference(when_result);
+			compare_chunk.CheckCardinality(current_count);
+
+			idx_t tcount;
+			{
+				CaseComparisonChunkGuard guard(*this, compare_chunk);
+				tcount = Select(*case_check.compare_expr, compare_state, nullptr, current_count, &state.local_true_sel,
+				                &state.local_false_sel);
+			}
+			if (tcount == 0) {
+				continue;
+			}
+			for (idx_t entry_idx = 0; entry_idx < tcount; entry_idx++) {
+				auto local_idx = state.local_true_sel.get_index(entry_idx);
+				state.true_sel.set_index(entry_idx, current_sel->get_index(local_idx));
+			}
+			Execute(*case_check.then_expr, then_state, &state.true_sel, tcount, intermediate_result);
+			FillSwitch(intermediate_result, result, state.true_sel, NumericCast<sel_t>(tcount));
+
+			idx_t fcount = current_count - tcount;
+			if (fcount == 0) {
+				current_count = 0;
+				break;
+			}
+			for (idx_t entry_idx = 0; entry_idx < fcount; entry_idx++) {
+				auto local_idx = state.local_false_sel.get_index(entry_idx);
+				state.false_sel.set_index(entry_idx, current_sel->get_index(local_idx));
+				state.case_false_sel.set_index(entry_idx, current_case_sel->get_index(local_idx));
+			}
+			current_sel = &state.false_sel;
+			current_case_sel = &state.case_false_sel;
+			current_count = fcount;
+		}
+		if (current_count > 0) {
+			auto else_state = state.child_states.back().get();
+			if (current_count == count) {
+				Execute(expr.Else(), else_state, sel, count, result);
+				return;
+			}
+			auto &intermediate_result = state.intermediate_chunk.data.back();
+			Execute(expr.Else(), else_state, current_sel, current_count, intermediate_result);
+			FillSwitch(intermediate_result, result, *current_sel, NumericCast<sel_t>(current_count));
+		}
+		if (sel) {
+			result.Slice(*sel, count);
+		}
+		return;
+	}
 
 	// first execute the check expression
 	auto current_true_sel = &state.true_sel;

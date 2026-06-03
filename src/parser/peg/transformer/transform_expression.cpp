@@ -2464,17 +2464,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCaseExpression(PEGT
 	auto result = make_uniq<CaseExpression>();
 	unique_ptr<ParsedExpression> opt_expr;
 	transformer.TransformOptional<unique_ptr<ParsedExpression>>(list_pr, 1, opt_expr);
+	result->CaseExprMutable() = std::move(opt_expr);
 
 	auto cases_pr = list_pr.Child<RepeatParseResult>(2).GetChildren();
 	for (auto &case_pr : cases_pr) {
 		auto case_expr = transformer.Transform<CaseCheck>(case_pr);
 		CaseCheck new_case;
-		if (opt_expr) {
-			new_case.when_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, opt_expr->Copy(),
-			                                                     std::move(case_expr.when_expr));
-		} else {
-			new_case.when_expr = std::move(case_expr.when_expr);
-		}
+		new_case.when_expr = std::move(case_expr.when_expr);
 		new_case.then_expr = std::move(case_expr.then_expr);
 		result->CaseChecksMutable().push_back(std::move(new_case));
 	}
