@@ -253,7 +253,7 @@ struct PartitionedCopyBatch {
 };
 
 struct PartitionWriteInfo {
-	//! Serializes file-state rotation and flushes for this partition writer.
+	//! Serializes operations that need a complete partition writer run boundary.
 	annotated_mutex lock;
 	unique_ptr<GlobalFileState> file_state;
 	idx_t active_writes = 0;
@@ -700,6 +700,7 @@ public:
 	             InterruptState &interrupt_state, PartitionedCopyCombineType combine_type);
 	void Finalize(Pipeline &pipeline, Event &event, InterruptState &interrupt_state);
 	void Flush(ExecutionContext &execution_context, InterruptState &interrupt_state);
+	bool RequiresSerializedPartitionWrites() const;
 
 	void InitializeFlush() DUCKDB_REQUIRES(lock);
 	void FinalizeState(PartitionedCopyState &state, InterruptState &interrupt_state) DUCKDB_REQUIRES(state.lock);
@@ -1368,7 +1369,10 @@ void PartitionedCopyHashGroup::Flush(ExecutionContext &execution_context, Interr
 
 	D_ASSERT(write_info);
 	PartitionWriteInfoGuard write_guard(partitioned_copy, *write_info);
-	annotated_lock_guard<annotated_mutex> write_info_guard(write_info->lock);
+	annotated_unique_lock<annotated_mutex> run_guard(write_info->lock, std::defer_lock);
+	if (partitioned_copy.RequiresSerializedPartitionWrites()) {
+		run_guard.lock();
+	}
 
 	partitioned_copy.EnsureFreshPartitionFileForSortedRun(*write_info, values);
 	for (auto &batch : batches) {
@@ -1584,6 +1588,13 @@ void PartitionedCopy::CreateNextState() {
 bool PartitionedCopy::ShouldStopFlushing() const {
 	return !finalized.load(std::memory_order_relaxed) &&
 	       locals.load(std::memory_order_relaxed) == combined.load(std::memory_order_relaxed);
+}
+
+bool PartitionedCopy::RequiresSerializedPartitionWrites() const {
+	// A full partition writer run must remain serialized when the run boundary has file-state semantics.
+	// ORDER BY uses the boundary to start a fresh file per sorted run. Rotation is currently rejected with
+	// PARTITION_BY in the binder, but keeping it here makes the intended locking policy explicit for future support.
+	return !op.order_columns.empty() || op.Rotate();
 }
 
 void PartitionedCopy::InitializeFlush() {
@@ -2019,7 +2030,10 @@ void PartitionedCopy::FlushPartitionCollection(ExecutionContext &execution_conte
 			auto &write_info = GetPartitionWriteInfo(flush.values);
 			PartitionWriteInfoGuard write_guard(*this, write_info);
 			{
-				annotated_lock_guard<annotated_mutex> write_info_guard(write_info.lock);
+				annotated_unique_lock<annotated_mutex> run_guard(write_info.lock, std::defer_lock);
+				if (RequiresSerializedPartitionWrites()) {
+					run_guard.lock();
+				}
 				EnsureFreshPartitionFileForSortedRun(write_info, flush.values);
 
 				DataChunk scan_chunk;
