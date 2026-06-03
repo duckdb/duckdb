@@ -138,6 +138,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CONNECT";
 	case LogicalOperatorType::LOGICAL_DISCONNECT:
 		return "DISCONNECT";
+	case LogicalOperatorType::LOGICAL_CONNECT_EXECUTE:
+		return "CONNECT_EXECUTE";
 	}
 	return "INVALID";
 }

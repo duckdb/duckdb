@@ -5,6 +5,7 @@ add_library_unity(
   attach_statement.cpp
   call_statement.cpp
   connect_statement.cpp
+  connect_execute_statement.cpp
   copy_statement.cpp
   copy_database_statement.cpp
   create_statement.cpp
@@ -20,6 +21,7 @@ add_library_unity(
   load_statement.cpp
   merge_into_statement.cpp
   multi_statement.cpp
+  passthrough_statement.cpp
   pragma_statement.cpp
   prepare_statement.cpp
   relation_statement.cpp

@@ -87,6 +87,18 @@ private:
 	//! one-at-a-time across subsequent Peek calls before parsing the next raw statement.
 	vector<unique_ptr<SQLStatement>> preprocess_buffer;
 	idx_t preprocess_buffer_cursor = 0;
+	//! Set when the most recently parsed statement was a CONNECT_EXECUTE marker. The marker is
+	//! consumed inline (never yielded). On the next Peek:
+	//!   - `needs_passthrough == true`  → the parsed statement's source bytes are wrapped in a
+	//!     PassthroughStatement targeting `target`.
+	//!   - `needs_passthrough == false` → CONNECT LOCAL EXECUTE; emit the statement unwrapped so
+	//!     it runs against the local catalog.
+	struct PendingConnectExecute {
+		bool active = false;
+		bool needs_passthrough = false;
+		string target;
+	};
+	PendingConnectExecute pending_connect_execute;
 };
 
 } // namespace duckdb

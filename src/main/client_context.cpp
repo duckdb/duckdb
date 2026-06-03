@@ -245,10 +245,11 @@ shared_ptr<AttachedDatabase> ClientContext::TryGetConnectedCatalog() const {
 	return connected_to_database.lock();
 }
 
-//! True if `type` is a CONNECT control statement that must execute against LOCAL even while a
-//! CONNECT binding is active (i.e. the chokepoint must let it fall through, not rewrite it).
+//! Statements the chokepoint lets past without applying the sticky-CONNECT rewrite.
+//! PASSTHROUGH carries its own explicit target so the binding must not clobber it.
 static bool IsConnectControlStatement(StatementType type) {
-	return type == StatementType::CONNECT_STATEMENT || type == StatementType::DISCONNECT_STATEMENT;
+	return type == StatementType::CONNECT_STATEMENT || type == StatementType::DISCONNECT_STATEMENT ||
+	       type == StatementType::PASSTHROUGH_STATEMENT;
 }
 
 //! Wrap a TableRef returned from Catalog::RemoteExecute into `SELECT * FROM <ref>` for the chokepoint.

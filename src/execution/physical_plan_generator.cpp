@@ -159,6 +159,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_DETACH:
 	case LogicalOperatorType::LOGICAL_CONNECT:
 	case LogicalOperatorType::LOGICAL_DISCONNECT:
+	case LogicalOperatorType::LOGICAL_CONNECT_EXECUTE:
 		return CreatePlan(op.Cast<LogicalSimple>());
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		return CreatePlan(op.Cast<LogicalRecursiveCTE>());

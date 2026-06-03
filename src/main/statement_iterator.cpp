@@ -9,7 +9,9 @@
 #include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/parser/sql_statement.hpp"
+#include "duckdb/parser/statement/connect_execute_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/passthrough_statement.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
@@ -146,26 +148,64 @@ bool StatementIterator::Peek(ClientContext &context) {
 				auto &create = stmt->Cast<CreateStatement>();
 				create.info->sql = stmt->query;
 			}
+			// CONNECT_EXECUTE marker: stash target, loop, then handle the next peel below.
+			if (stmt->type == StatementType::CONNECT_EXECUTE_STATEMENT) {
+				auto &marker = stmt->Cast<ConnectExecuteStatement>();
+				pending_connect_execute.active = true;
+				pending_connect_execute.target = marker.target;
+				pending_connect_execute.needs_passthrough = !marker.target_is_local;
+				continue;
+			}
+			// Remote CONNECT … EXECUTE: ship the source bytes verbatim. The local parser already
+			// ran for boundary detection but the payload is whatever the remote understands —
+			// no local preprocessing.
+			if (pending_connect_execute.active && pending_connect_execute.needs_passthrough) {
+				auto saved_query = stmt->query;
+				auto passthrough =
+				    make_uniq<PassthroughStatement>(std::move(pending_connect_execute.target), std::move(saved_query));
+				passthrough->query = stmt->query;
+				pending_connect_execute = PendingConnectExecute();
+				current_statement = std::move(passthrough);
+				return true;
+			}
+			// Everything below runs locally: top-level statement, OR `CONNECT LOCAL EXECUTE …`
+			// whose inner runs locally. preprocess_on_peek drives PRAGMA reparse /
+			// MULTI_STATEMENT unpack / transaction wrapping the same way the eager API did.
+			const bool wrap_as_local_passthrough = pending_connect_execute.active;
+			if (wrap_as_local_passthrough) {
+				pending_connect_execute = PendingConnectExecute();
+			}
 			if (preprocess_on_peek) {
-				// Drive PRAGMA reparse / MULTI_STATEMENT unpacking / transaction wrapping. One
-				// peeled statement can expand into multiple; we park the tail in preprocess_buffer
-				// and yield them across subsequent Peek calls.
 				preprocess_buffer.clear();
 				preprocess_buffer_cursor = 0;
 				preprocess_buffer.push_back(std::move(stmt));
 				context.PreprocessStatements(preprocess_buffer);
 				if (preprocess_buffer.empty()) {
-					// Preprocessor swallowed the statement; loop and parse the next.
 					continue;
+				}
+				if (wrap_as_local_passthrough) {
+					// Wrap each preprocessed expansion so the chokepoint lets it past the sticky
+					// CONNECT binding; bind delegates to the inner.
+					for (auto &s : preprocess_buffer) {
+						s = make_uniq<PassthroughStatement>(std::move(s));
+					}
 				}
 				current_statement = std::move(preprocess_buffer[0]);
 				preprocess_buffer_cursor = 1;
 				return true;
 			}
+			if (wrap_as_local_passthrough) {
+				stmt = make_uniq<PassthroughStatement>(std::move(stmt));
+			}
 			current_statement = std::move(stmt);
 			return true;
 		}
 		if (at_end_of_real_tokens()) {
+			if (pending_connect_execute.active) {
+				throw ParserException("CONNECT %s EXECUTE expects a following SQL statement",
+				                      pending_connect_execute.needs_passthrough ? pending_connect_execute.target
+				                                                                : string("LOCAL"));
+			}
 			exhausted = true;
 			return false;
 		}

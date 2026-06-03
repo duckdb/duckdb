@@ -88,16 +88,31 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vecto
 	// Advance the caller's cursor past the consumed tokens.
 	token_cursor = state.token_index;
 
-	// TopLevelStatement <- Statement? (';'+ / EndOfInput)
-	//   child 0: Optional<Statement>
-	//   child 1: bracket-wrapper list around Choice<';'+ | EndOfInput>
+	// TopLevelStatement <- ConnectExecuteStatement / (Statement? (';'+ / EndOfInput))
+	//   arm 0 → ConnectExecuteStatement (marker, no terminator)
+	//   arm 1 → bracket wrapping [Optional<Statement>, Choice<';'+ | EndOfInput>]
 	auto &tls = match_result->Cast<ListParseResult>();
-	auto &stmt_opt = tls.Child<OptionalParseResult>(0);
+	auto &outer_choice = tls.Child<ChoiceParseResult>(0);
+
+	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
+	PEGTransformerState transformer_state(tokens);
+	PEGTransformer transformer(transformer_allocator, transformer_state, sql_transform_functions, parser.rules,
+	                           enum_mappings, options);
+
+	auto &arm = outer_choice.GetResult();
+	if (arm.name == "ConnectExecuteStatement") {
+		// Marker. The *next* peel is the verbatim payload that the iterator scans up to the
+		// next `;` and ships to the target. No terminator offset.
+		return ExtractAndTransformStatement(transformer, tokens, arm, optional_idx());
+	}
+
+	auto &inner_list = arm.Cast<ListParseResult>();
+	auto &stmt_opt = inner_list.Child<OptionalParseResult>(0);
 	if (!stmt_opt.HasResult()) {
 		// separator-only or EOI-only TopLevelStatement — no statement to yield
 		return nullptr;
 	}
-	auto &term_wrapper = tls.Child<ListParseResult>(1);
+	auto &term_wrapper = inner_list.Child<ListParseResult>(1);
 	auto &term_inner = term_wrapper.Child<ChoiceParseResult>(0).GetResult();
 	optional_idx terminator_offset;
 	if (term_inner.type != ParseResultType::END_OF_INPUT) {
@@ -106,11 +121,6 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(vecto
 			terminator_offset = semi_children[0].get().offset;
 		}
 	}
-
-	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
-	PEGTransformerState transformer_state(tokens);
-	PEGTransformer transformer(transformer_allocator, transformer_state, sql_transform_functions, parser.rules,
-	                           enum_mappings, options);
 
 	return ExtractAndTransformStatement(transformer, tokens, stmt_opt.GetResult(), terminator_offset);
 }
@@ -415,9 +425,11 @@ void PEGTransformerFactory::RegisterExpression() {
 }
 
 void PEGTransformerFactory::RegisterConnect() {
-	// connect.gram — both rules are hand-written; the generator skips them because of the
-	// optional SessionTarget sub-rule.
+	// connect.gram — these rules are hand-written; the generator skips them because of the
+	// optional SessionTarget sub-rule (ConnectStatement) or the no-terminator shape
+	// (ConnectExecuteStatement, which the generator's TopLevelStatement wrapping doesn't fit).
 	REGISTER_TRANSFORM(TransformConnectStatement);
+	REGISTER_TRANSFORM(TransformConnectExecuteStatement);
 }
 
 void PEGTransformerFactory::RegisterPivot() {

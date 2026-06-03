@@ -132,6 +132,10 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<ConnectStatement>());
 	case StatementType::DISCONNECT_STATEMENT:
 		return Bind(statement.Cast<DisconnectStatement>());
+	case StatementType::CONNECT_EXECUTE_STATEMENT:
+		return Bind(statement.Cast<ConnectExecuteStatement>());
+	case StatementType::PASSTHROUGH_STATEMENT:
+		return Bind(statement.Cast<PassthroughStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));

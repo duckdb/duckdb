@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_connect.hpp"
+#include "duckdb/execution/operator/helper/physical_connect_execute.hpp"
 #include "duckdb/execution/operator/helper/physical_disconnect.hpp"
 #include "duckdb/execution/operator/helper/physical_load.hpp"
 #include "duckdb/execution/operator/helper/physical_transaction.hpp"
@@ -42,6 +43,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSimple &op) {
 	case LogicalOperatorType::LOGICAL_DISCONNECT:
 		return Make<PhysicalDisconnect>(unique_ptr_cast<ParseInfo, DisconnectInfo>(std::move(op.info)),
 		                                op.estimated_cardinality);
+	case LogicalOperatorType::LOGICAL_CONNECT_EXECUTE:
+		return Make<PhysicalConnectExecute>(unique_ptr_cast<ParseInfo, ConnectInfo>(std::move(op.info)),
+		                                    op.estimated_cardinality);
 	default:
 		throw NotImplementedException("Unimplemented type for logical simple operator");
 	}

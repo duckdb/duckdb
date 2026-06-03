@@ -1,3 +1,11 @@
 ConnectStatement <- 'CONNECT' SessionTarget?
 DisconnectStatement <- 'DISCONNECT'
 SessionTarget <- 'LOCAL' / StringLiteral / CatalogName
+
+# Marker form. Recognised at top-level (TopLevelStatement / ConnectedTopLevelStatement);
+# no terminator on this rule because the *following* peel is the verbatim payload bytes
+# shipped to <target>, and the iterator scans for the next ';' to delimit it.
+# Splitting the target into the LOCAL keyword vs CatalogName lets the PEG parser tell us
+# whether the user typed the unquoted keyword (run-locally semantics) or an identifier
+# (passthrough to a catalog of that name, including a catalog literally named "local").
+ConnectExecuteStatement <- 'CONNECT' ('LOCAL' / CatalogName) 'EXECUTE'
