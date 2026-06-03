@@ -154,9 +154,10 @@ struct AllocatorFlushThresholdSetting {
 	static constexpr const char *Description =
 	    "Peak allocation threshold at which to flush the allocator after completing a task.";
 	static constexpr const char *InputType = "VARCHAR";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "134217728B";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct AllowCommunityExtensionsSetting {
@@ -312,6 +313,17 @@ struct AsofLoopJoinThresholdSetting {
 	static constexpr const char *DefaultValue = "64";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct AsyncThreadsSetting {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "async_threads";
+	static constexpr const char *Description =
+	    "The number of total async threads used by the system for tasks like I/O.";
+	static constexpr const char *InputType = "BIGINT";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct AutoCheckpointSkipWalThresholdSetting {
@@ -1316,6 +1328,17 @@ struct LateMaterializationMaxRowsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct LegacyDisableNullTypeSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "legacy_disable_null_type";
+	static constexpr const char *Description =
+	    "When enabled, prevent the NULL type from leaving the binder (< v2.0 default behavior)";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct LegacyMetricsFormatSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "legacy_metrics_format";
@@ -1385,7 +1408,7 @@ struct MaxExecutionTimeSetting {
 	static constexpr const char *Description = "The maximum execution time per query in milliseconds (0 = no limit)";
 	static constexpr const char *InputType = "BIGINT";
 	static constexpr const char *DefaultValue = "0";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_ONLY;
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 

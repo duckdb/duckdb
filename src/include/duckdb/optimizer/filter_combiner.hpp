@@ -51,6 +51,8 @@ public:
 
 	void GenerateFilters(const std::function<void(unique_ptr<Expression> filter)> &callback);
 	bool HasFilters();
+	void GenerateEquivalentFilters(const Expression &filter,
+	                               const std::function<void(unique_ptr<Expression> filter)> &callback);
 	TableFilterSet GenerateTableScanFilters(const vector<ColumnIndex> &column_ids,
 	                                        vector<FilterPushdownResult> &pushdown_results);
 

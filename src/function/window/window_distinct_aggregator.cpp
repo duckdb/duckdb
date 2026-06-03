@@ -269,7 +269,6 @@ void WindowDistinctAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 	for (column_t c = 0; c < child_idx.size(); ++c) {
 		sort_chunk.data[c].Reference(coll_chunk.data[child_idx[c]]);
 	}
-	sort_chunk.SetCardinality(sink_chunk);
 
 	//	Apply FILTER clause, if any
 	if (filter_sel) {

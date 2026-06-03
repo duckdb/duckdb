@@ -690,7 +690,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	analyze_offsets.Initialize(
 	    Allocator::DefaultAllocator(),
 	    {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER}, count);
-	analyze_offsets.SetCardinality(count);
+	analyze_offsets.SetChildCardinality(count);
 	variant::InitializeOffsets(analyze_offsets, count);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -713,7 +713,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	conversion_offsets.Initialize(
 	    Allocator::DefaultAllocator(),
 	    {LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER, LogicalType::UINTEGER}, count);
-	conversion_offsets.SetCardinality(count);
+	conversion_offsets.SetChildCardinality(count);
 	variant::InitializeOffsets(conversion_offsets, count);
 
 	VariantVectorData variant_data(result);

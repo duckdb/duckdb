@@ -216,7 +216,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 		// if all arguments are constant temporarily set the child cardinality to 1
 		arguments.SetChildCardinality(1ULL);
 	} else {
-		arguments.SetCardinality(count);
+		arguments.SetChildCardinality(count);
 	}
 	arguments.Verify(context);
 
@@ -272,9 +272,10 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 		}
 	}
 	if (all_constant) {
+		// if all arguments are constant we only need to run the function on one value
 		arguments.SetChildCardinality(1ULL);
 	} else {
-		arguments.SetCardinality(count);
+		arguments.SetChildCardinality(count);
 	}
 	arguments.Verify(context);
 	if (all_constant) {
@@ -284,6 +285,10 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 			result.FlattenAndSetConstant();
 		} else {
 			ExecuteConstantSelectFunction(expr, arguments, *state, result);
+		}
+		// restore the input cardinality
+		for (auto &arg : arguments.data) {
+			arg.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 		arguments.SetChildCardinality(count);
 		return SelectBooleanResult(result, sel, count, true_sel, false_sel);

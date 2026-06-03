@@ -197,7 +197,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 			auto col_id = mapped_column_ids[i].GetPrimaryIndex();
 			table_chunk.data[col_id].Reference(index_chunk.data[i]);
 		}
-		table_chunk.SetCardinality(index_chunk);
+		table_chunk.SetChildCardinality(index_chunk.size());
 
 		// Pass both the table and the index chunk.
 		// We need the table chunk for the bound indexes,

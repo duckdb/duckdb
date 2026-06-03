@@ -102,7 +102,6 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 		is_dst.Append(Value::BOOLEAN(dst_offset_ms != 0));
 		++index;
 	}
-	output.SetCardinality(index);
 }
 
 struct ICUFromNaiveTimestamp : public ICUDateFunc {

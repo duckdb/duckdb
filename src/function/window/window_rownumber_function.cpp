@@ -180,7 +180,7 @@ unique_ptr<LocalSinkState> WindowRowNumberExecutor::GetLocal(ExecutionContext &c
 void WindowRowNumberExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
                                       Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 	auto rdata = FlatVector::Writer<int64_t>(result, count);
 
 	if (grstate.use_framing) {
@@ -252,7 +252,7 @@ unique_ptr<LocalSinkState> WindowNtileExecutor::GetLocal(ExecutionContext &conte
 void WindowNtileExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
                                   idx_t row_idx, OperatorSinkInput &sink) {
 	auto &grstate = sink.global_state.Cast<WindowRowNumberGlobalState>();
-	const auto count = eval_chunk.size();
+	const auto count = bounds.size();
 
 	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto partition_end = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);

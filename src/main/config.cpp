@@ -68,7 +68,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(AccessModeSetting),
     DUCKDB_SETTING_CALLBACK(AllocatorBackgroundThreadsSetting),
     DUCKDB_GLOBAL(AllocatorBulkDeallocationFlushThresholdSetting),
-    DUCKDB_GLOBAL(AllocatorFlushThresholdSetting),
+    DUCKDB_SETTING_CALLBACK(AllocatorFlushThresholdSetting),
     DUCKDB_SETTING_CALLBACK(AllowCommunityExtensionsSetting),
     DUCKDB_SETTING(AllowExtensionsMetadataMismatchSetting),
     DUCKDB_SETTING_CALLBACK(AllowParserOverrideExtensionSetting),
@@ -83,6 +83,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ArrowOutputListViewSetting),
     DUCKDB_SETTING_CALLBACK(ArrowOutputVersionSetting),
     DUCKDB_SETTING(AsofLoopJoinThresholdSetting),
+    DUCKDB_GLOBAL(AsyncThreadsSetting),
     DUCKDB_SETTING(AutoCheckpointSkipWalThresholdSetting),
     DUCKDB_SETTING(AutoinstallExtensionRepositorySetting),
     DUCKDB_SETTING(AutoinstallKnownExtensionsSetting),
@@ -174,6 +175,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(IntegerDivisionSetting),
     DUCKDB_SETTING_CALLBACK(LambdaSyntaxSetting),
     DUCKDB_SETTING(LateMaterializationMaxRowsSetting),
+    DUCKDB_SETTING(LegacyDisableNullTypeSetting),
     DUCKDB_SETTING(LegacyMetricsFormatSetting),
     DUCKDB_SETTING(LockConfigurationSetting),
     DUCKDB_SETTING_CALLBACK(LogQueryPathSetting),
@@ -231,14 +233,14 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
-static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 27),
-                                                     DUCKDB_SETTING_ALIAS("custom_profiling_settings", 27),
-                                                     DUCKDB_SETTING_ALIAS("memory_limit", 118),
-                                                     DUCKDB_SETTING_ALIAS("null_order", 53),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 139),
-                                                     DUCKDB_SETTING_ALIAS("user", 156),
-                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 26),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 154),
+static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("configure_metrics", 28),
+                                                     DUCKDB_SETTING_ALIAS("custom_profiling_settings", 28),
+                                                     DUCKDB_SETTING_ALIAS("memory_limit", 120),
+                                                     DUCKDB_SETTING_ALIAS("null_order", 54),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 141),
+                                                     DUCKDB_SETTING_ALIAS("user", 158),
+                                                     DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 27),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 156),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
@@ -618,6 +620,14 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 #else
 	return MaxValue<idx_t>(physical_cores, 1);
 #endif
+#endif
+}
+
+idx_t DBConfig::GetSystemMaxAsyncThreads(FileSystem &fs) {
+#ifdef DUCKDB_NO_THREADS
+	return 0;
+#else
+	return GetSystemMaxThreads(fs);
 #endif
 }
 

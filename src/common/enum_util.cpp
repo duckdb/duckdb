@@ -72,6 +72,7 @@
 #include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/common/enums/tableref_type.hpp"
+#include "duckdb/common/enums/task_scheduler_type.hpp"
 #include "duckdb/common/enums/thread_pin_mode.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
 #include "duckdb/common/enums/tuple_data_layout_enums.hpp"
@@ -2942,6 +2943,24 @@ LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value) {
 	return static_cast<LimitNodeType>(StringUtil::StringToEnum(GetLimitNodeTypeValues(), 5, "LimitNodeType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetLimitValueTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LimitValueType::ROW_COUNT), "ROW_COUNT" },
+		{ static_cast<uint32_t>(LimitValueType::PERCENTAGE), "PERCENTAGE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LimitValueType>(LimitValueType value) {
+	return StringUtil::EnumToString(GetLimitValueTypeValues(), 2, "LimitValueType", static_cast<uint32_t>(value));
+}
+
+template<>
+LimitValueType EnumUtil::FromString<LimitValueType>(const char *value) {
+	return static_cast<LimitValueType>(StringUtil::StringToEnum(GetLimitValueTypeValues(), 2, "LimitValueType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetLoadTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(LoadType::LOAD), "LOAD" },
@@ -4523,7 +4542,7 @@ const StringUtil::EnumStringLiteral *GetResultModifierTypeValues() {
 		{ static_cast<uint32_t>(ResultModifierType::LIMIT_MODIFIER), "LIMIT_MODIFIER" },
 		{ static_cast<uint32_t>(ResultModifierType::ORDER_MODIFIER), "ORDER_MODIFIER" },
 		{ static_cast<uint32_t>(ResultModifierType::DISTINCT_MODIFIER), "DISTINCT_MODIFIER" },
-		{ static_cast<uint32_t>(ResultModifierType::LIMIT_PERCENT_MODIFIER), "LIMIT_PERCENT_MODIFIER" }
+		{ static_cast<uint32_t>(ResultModifierType::LEGACY_LIMIT_PERCENT_MODIFIER), "LEGACY_LIMIT_PERCENT_MODIFIER" }
 	};
 	return values;
 }
@@ -5566,6 +5585,25 @@ const char* EnumUtil::ToChars<TaskExecutionResult>(TaskExecutionResult value) {
 template<>
 TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value) {
 	return static_cast<TaskExecutionResult>(StringUtil::StringToEnum(GetTaskExecutionResultValues(), 4, "TaskExecutionResult", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTaskSchedulerTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TaskSchedulerType::REGULAR), "REGULAR" },
+		{ static_cast<uint32_t>(TaskSchedulerType::ASYNC), "ASYNC" },
+		{ static_cast<uint32_t>(TaskSchedulerType::ENUM_SIZE), "ENUM_SIZE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TaskSchedulerType>(TaskSchedulerType value) {
+	return StringUtil::EnumToString(GetTaskSchedulerTypeValues(), 3, "TaskSchedulerType", static_cast<uint32_t>(value));
+}
+
+template<>
+TaskSchedulerType EnumUtil::FromString<TaskSchedulerType>(const char *value) {
+	return static_cast<TaskSchedulerType>(StringUtil::StringToEnum(GetTaskSchedulerTypeValues(), 3, "TaskSchedulerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTemporaryBufferSizeValues() {

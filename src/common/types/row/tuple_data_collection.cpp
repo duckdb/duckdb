@@ -651,7 +651,7 @@ bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) {
 		if (!segments.empty()) {
 			FinalizePinState(state.pin_state, *segments[segment_index_before]);
 		}
-		result.SetCardinality(0);
+		result.SetChildCardinality(0);
 		return false;
 	}
 	if (segment_index_before != DConstants::INVALID_INDEX && segment_index != segment_index_before) {
@@ -671,7 +671,7 @@ bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLoca
 			if (!segments.empty()) {
 				FinalizePinState(lstate.pin_state, *segments[segment_index_before]);
 			}
-			result.SetCardinality(0);
+			result.SetChildCardinality(0);
 			return false;
 		}
 	}

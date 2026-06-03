@@ -50,17 +50,6 @@ void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
 				callback(limit_modifier.offset);
 			}
 		} break;
-
-		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-			auto &limit_modifier = modifier->Cast<LimitPercentModifier>();
-			if (limit_modifier.limit) {
-				callback(limit_modifier.limit);
-			}
-			if (limit_modifier.offset) {
-				callback(limit_modifier.offset);
-			}
-		} break;
-
 		case ResultModifierType::ORDER_MODIFIER: {
 			auto &order_modifier = modifier->Cast<OrderModifier>();
 			for (auto &order : order_modifier.orders) {

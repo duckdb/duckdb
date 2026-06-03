@@ -278,6 +278,8 @@ enum class LambdaSyntaxType : uint8_t;
 
 enum class LimitNodeType : uint8_t;
 
+enum class LimitValueType : uint8_t;
+
 enum class LoadType : uint8_t;
 
 enum class LogContextScope : uint8_t;
@@ -493,6 +495,8 @@ enum class TableReferenceType : uint8_t;
 enum class TaskExecutionMode : uint8_t;
 
 enum class TaskExecutionResult : uint8_t;
+
+enum class TaskSchedulerType : uint8_t;
 
 enum class TemporaryBufferSize : uint64_t;
 
@@ -921,6 +925,9 @@ template<>
 const char* EnumUtil::ToChars<LimitNodeType>(LimitNodeType value);
 
 template<>
+const char* EnumUtil::ToChars<LimitValueType>(LimitValueType value);
+
+template<>
 const char* EnumUtil::ToChars<LoadType>(LoadType value);
 
 template<>
@@ -1243,6 +1250,9 @@ const char* EnumUtil::ToChars<TaskExecutionMode>(TaskExecutionMode value);
 
 template<>
 const char* EnumUtil::ToChars<TaskExecutionResult>(TaskExecutionResult value);
+
+template<>
+const char* EnumUtil::ToChars<TaskSchedulerType>(TaskSchedulerType value);
 
 template<>
 const char* EnumUtil::ToChars<TemporaryBufferSize>(TemporaryBufferSize value);
@@ -1699,6 +1709,9 @@ template<>
 LimitNodeType EnumUtil::FromString<LimitNodeType>(const char *value);
 
 template<>
+LimitValueType EnumUtil::FromString<LimitValueType>(const char *value);
+
+template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value);
 
 template<>
@@ -2021,6 +2034,9 @@ TaskExecutionMode EnumUtil::FromString<TaskExecutionMode>(const char *value);
 
 template<>
 TaskExecutionResult EnumUtil::FromString<TaskExecutionResult>(const char *value);
+
+template<>
+TaskSchedulerType EnumUtil::FromString<TaskSchedulerType>(const char *value);
 
 template<>
 TemporaryBufferSize EnumUtil::FromString<TemporaryBufferSize>(const char *value);

@@ -122,7 +122,6 @@ static void DuckDBCoordinateSystemsFunction(ClientContext &context, TableFunctio
 
 		count++;
 	}
-	output.SetCardinality(count);
 }
 
 void DuckDBCoordinateSystemsFun::RegisterFunction(BuiltinFunctions &set) {
