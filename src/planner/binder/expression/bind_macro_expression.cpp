@@ -1,5 +1,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/catalog/entry_lookup_info.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
@@ -100,7 +102,13 @@ void ExpressionBinder::FindAggregateExprs(unique_ptr<ParsedExpression> &expr,
                                           vector<reference<unique_ptr<ParsedExpression>>> &exprs) {
 	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &expr) {
 		if ((expr->GetExpressionType() == ExpressionType::FUNCTION)) {
-			exprs.push_back(expr);
+			auto &fn_expr = expr->Cast<FunctionExpression>();
+			EntryLookupInfo fn_entry(CatalogType::SCALAR_FUNCTION_ENTRY, fn_expr.FunctionName());
+			auto entry = GetCatalogEntry(fn_expr.Catalog(), fn_expr.Schema(), fn_entry, OnEntryNotFound::RETURN_NULL);
+
+			if (entry) {
+				exprs.push_back(expr);
+			}
 		}
 
 		for (auto &child : expr->ChildrenMutable()) {
@@ -120,7 +128,8 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 	}
 
 	// The window spec is pushed down to the aggregate function target within the macro body
-	auto &agg_fn_expr = aggregate_exprs[0].get()->Cast<FunctionExpression>();
+	unique_ptr<ParsedExpression> &agg_expr_ref = aggregate_exprs[0];
+	auto &agg_fn_expr = agg_expr_ref->Cast<FunctionExpression>();
 
 	// Transfer the macro function attributes
 	auto &window_expr = expr->Cast<WindowExpression>();
@@ -145,6 +154,10 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 		auto clone = agg_fn_expr.OrderBy()->Copy();
 		window_expr.ArgOrdersMutable() = std::move(clone->Cast<OrderModifier>().orders);
 	}
+
+	// Replace the aggregate expression with the new window expression
+	agg_expr_ref = std::move(expr);
+	expr = std::move(macro_copy);
 }
 
 void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
