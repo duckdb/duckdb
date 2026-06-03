@@ -73,6 +73,11 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 		if (error_token_idx >= tokens.size()) {
 			error_token_idx = tokens.size() - 1;
 		}
+		// Walk back past the EOI sentinel so the error message names a real token.
+		while (error_token_idx > 0 && (tokens[error_token_idx].type == TokenType::END_OF_INPUT ||
+		                               tokens[error_token_idx].type == TokenType::END_NOW_AUTOCOMPLETE)) {
+			error_token_idx--;
+		}
 		idx_t stmt_start = error_token_idx;
 		while (stmt_start > 0 && tokens[stmt_start - 1].text != ";") {
 			stmt_start--;
@@ -96,10 +101,11 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 	}
 	match_result->name = "Program";
 
-	// Program <- Statement? (';'+ Statement)* ';'*
+	// Program <- Statement? (';'+ Statement)* ';'* EndOfInput
 	// Program[0] = optional first Statement
 	// Program[1] = optional repeat of groups: (';'+ Statement)
 	// Program[2] = optional repeat of trailing ';'
+	// Program[3] = EndOfInput (sentinel, not walked here)
 	auto &prog = match_result->Cast<ListParseResult>();
 
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
