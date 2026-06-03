@@ -940,7 +940,7 @@
         "name": "max_execution_time",
         "description": "The maximum execution time per query in milliseconds (0 = no limit)",
         "type": "BIGINT",
-        "scope": "local",
+        "default_scope": "local",
         "default_value": "0"
     },
     {
