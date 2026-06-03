@@ -61,7 +61,9 @@
       "reason": "Relies on exact hash function output.",
       "paths": [
         "test/sql/function/generic/hash_func.test",
-        "test/sql/copy/file_size_bytes.test"
+        "test/sql/copy/file_size_bytes.test",
+        "test/sql/copy/parquet/parquet_prefetch_projection.test",
+        "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test"
       ]
     }
   ]
