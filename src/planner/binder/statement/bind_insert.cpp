@@ -63,7 +63,7 @@ void Binder::TryReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, con
 
 void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry &table,
                                        optional_ptr<ExpressionListRef> values_list,
-                                       const vector<LogicalIndex> &named_column_map, bool bind_expected_types) {
+                                       const vector<LogicalIndex> &named_column_map, bool preserve_struct_types) {
 	if (!values_list) {
 		return;
 	}
@@ -72,9 +72,7 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 	// special case: check if we are inserting from a VALUES statement
 	if (values_list) {
 		auto &expr_list = values_list->Cast<ExpressionListRef>();
-		if (bind_expected_types) {
-			expr_list.expected_types.resize(expected_columns);
-		}
+		expr_list.expected_types.resize(expected_columns);
 		expr_list.expected_names.resize(expected_columns);
 
 		D_ASSERT(!expr_list.values.empty());
@@ -87,9 +85,9 @@ void Binder::ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry 
 
 			// set the expected types as the types for the INSERT statement
 			auto &column = table.GetColumn(table_col_idx);
-			if (bind_expected_types) {
-				expr_list.expected_types[col_idx] = column.Type();
-			}
+			expr_list.expected_types[col_idx] = preserve_struct_types && column.Type().id() == LogicalTypeId::STRUCT
+			                                        ? LogicalType::INVALID
+			                                        : column.Type();
 			expr_list.expected_names[col_idx] = column.Name();
 
 			// now replace any DEFAULT values with the corresponding default expression
@@ -636,7 +634,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	// Exclude the generated columns from this amount
 	idx_t expected_columns = node.columns.empty() ? table.GetColumns().PhysicalColumnCount() : node.columns.size();
 	ExpandDefaultInValuesList(node, table, values_list, named_column_map,
-	                          node.column_order != InsertColumnOrder::INSERT_BY_POSITION);
+	                          node.column_order == InsertColumnOrder::INSERT_BY_POSITION);
 
 	// parse select statement and add to logical plan
 	unique_ptr<LogicalOperator> root;
