@@ -59,6 +59,8 @@ public:
 
 	bool CanThrow() const override;
 
+	vector<BoundCaseCheck> CaseChecksForSerialization(Serializer &serializer) const;
+
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 

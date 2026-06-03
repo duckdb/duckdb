@@ -59,6 +59,8 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
+	vector<CaseCheck> CaseChecksForSerialization(Serializer &serializer) const;
+
 public:
 	template <class T, class BASE>
 	static string ToString(const T &entry) {

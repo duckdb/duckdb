@@ -89,8 +89,10 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &deserializer) {
 void BoundCaseExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
 	serializer.WriteProperty<LogicalType>(200, "return_type", return_type);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(203, "case_expr", case_expr);
-	serializer.WritePropertyWithDefault<vector<BoundCaseCheck>>(201, "case_checks", case_checks);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<unique_ptr<Expression>>(203, "case_expr", case_expr);
+	}
+	serializer.WritePropertyWithDefault<vector<BoundCaseCheck>>(201, "case_checks", CaseChecksForSerialization(serializer));
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(202, "else_expr", else_expr);
 }
 

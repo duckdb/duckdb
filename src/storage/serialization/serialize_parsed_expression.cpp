@@ -107,8 +107,10 @@ unique_ptr<ParsedExpression> BetweenExpression::Deserialize(Deserializer &deseri
 
 void CaseExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(202, "case_expr", case_expr);
-	serializer.WritePropertyWithDefault<vector<CaseCheck>>(200, "case_checks", case_checks);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(202, "case_expr", case_expr);
+	}
+	serializer.WritePropertyWithDefault<vector<CaseCheck>>(200, "case_checks", CaseChecksForSerialization(serializer));
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "else_expr", else_expr);
 }
 

@@ -173,6 +173,7 @@
         "id": 102,
         "name": "compare_expr",
         "type": "Expression*",
+        "version": "v2.0.0",
         "nullable": true
       }
     ],

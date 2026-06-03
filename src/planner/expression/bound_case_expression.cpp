@@ -1,5 +1,10 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
+
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -79,6 +84,54 @@ bool BoundCaseExpression::CanThrow() const {
 		}
 	}
 	return false;
+}
+
+static BoundCaseCheck CopyCaseCheck(const BoundCaseCheck &check) {
+	BoundCaseCheck result;
+	result.when_expr = check.when_expr->Copy();
+	result.then_expr = check.then_expr->Copy();
+	if (check.compare_expr) {
+		result.compare_expr = check.compare_expr->Copy();
+	}
+	return result;
+}
+
+static unique_ptr<Expression> CreateLegacyCaseComparison(const Expression &case_expr, const BoundCaseCheck &check) {
+	D_ASSERT(check.compare_expr);
+	auto comparison = check.compare_expr->Copy();
+	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
+	    comparison, [&](BoundReferenceExpression &ref, unique_ptr<Expression> &expr) {
+		    switch (ref.Index()) {
+		    case 0:
+			    expr = case_expr.Copy();
+			    break;
+		    case 1:
+			    expr = check.when_expr->Copy();
+			    break;
+		    default:
+			    throw InternalException("Unexpected simple CASE comparison reference index");
+		    }
+	    });
+	return comparison;
+}
+
+vector<BoundCaseCheck> BoundCaseExpression::CaseChecksForSerialization(Serializer &serializer) const {
+	vector<BoundCaseCheck> result;
+	result.reserve(case_checks.size());
+	if (!case_expr || serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		for (auto &check : case_checks) {
+			result.push_back(CopyCaseCheck(check));
+		}
+		return result;
+	}
+
+	for (auto &check : case_checks) {
+		BoundCaseCheck legacy_check;
+		legacy_check.when_expr = CreateLegacyCaseComparison(*case_expr, check);
+		legacy_check.then_expr = check.then_expr->Copy();
+		result.push_back(std::move(legacy_check));
+	}
+	return result;
 }
 
 } // namespace duckdb
