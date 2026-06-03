@@ -172,7 +172,8 @@
       {
         "id": 102,
         "name": "compare_expr",
-        "type": "Expression*"
+        "type": "Expression*",
+        "nullable": true
       }
     ],
     "pointer_type": "none"
