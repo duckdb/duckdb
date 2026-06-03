@@ -216,7 +216,6 @@ SourceResultType PhysicalLimitedDistinct::GetDataInternal(ExecutionContext &cont
 		chunk.data[col].Reference(gstate_source.payload_chunk.data[i]);
 		col++;
 	}
-	chunk.SetCardinality(gstate_source.group_chunk.size());
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }

@@ -503,7 +503,7 @@ OperatorFinalizeResultType CachingPhysicalOperator::FinalExecute(ExecutionContex
 		chunk.Move(*state.cached_chunk);
 		state.cached_chunk.reset();
 	} else {
-		chunk.SetCardinality(0);
+		chunk.SetChildCardinality(0);
 	}
 	return OperatorFinalizeResultType::FINISHED;
 }

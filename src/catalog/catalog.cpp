@@ -353,6 +353,10 @@ unique_ptr<TableRef> Catalog::RemoteExecute(ClientContext &context, const string
 	throw NotImplementedException("RemoteExecute(string) not supported by this catalog");
 }
 
+string Catalog::GetConnectDisplay() {
+	return GetAttached().GetName();
+}
+
 //===--------------------------------------------------------------------===//
 // Lookup Structures
 //===--------------------------------------------------------------------===//
@@ -439,7 +443,7 @@ SchemaCatalogEntry &Catalog::GetSchema(CatalogTransaction transaction, const Ent
 }
 
 bool Catalog::CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &schema) {
-	if (IsRemoteCatalog()) {
+	if (Supports(RemoteCapability::IS_REMOTE)) {
 		// skip this check for remote catalogs
 		return false;
 	}

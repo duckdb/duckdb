@@ -20,10 +20,20 @@ public:
 public:
 	explicit BoundParameterExpression(const string &identifier);
 
-	string identifier;
-	shared_ptr<BoundParameterData> parameter_data;
-
 public:
+	const string &Identifier() const {
+		return identifier;
+	}
+	string &IdentifierMutable() {
+		return identifier;
+	}
+	const shared_ptr<BoundParameterData> &ParameterData() const {
+		return parameter_data;
+	}
+	shared_ptr<BoundParameterData> &ParameterDataMutable() {
+		return parameter_data;
+	}
+
 	//! Invalidate a bound parameter expression - forcing a rebind on any subsequent filters
 	DUCKDB_API static void Invalidate(Expression &expr);
 	//! Invalidate all parameters within an expression
@@ -46,6 +56,10 @@ public:
 private:
 	BoundParameterExpression(bound_parameter_map_t &global_parameter_set, string identifier, LogicalType return_type,
 	                         shared_ptr<BoundParameterData> parameter_data);
+
+private:
+	string identifier;
+	shared_ptr<BoundParameterData> parameter_data;
 };
 
 } // namespace duckdb

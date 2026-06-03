@@ -511,6 +511,51 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 	return result_statement;
 }
 
+static void BindPivotConstantInList(unique_ptr<ParsedExpression> &expr, vector<Value> &values, Binder &binder) {
+	Value val;
+	ConstantBinder const_binder(binder, binder.context, "PIVOT IN list");
+	auto bound_expr = const_binder.Bind(expr);
+	if (!bound_expr->IsFoldable()) {
+		throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain constant expressions");
+	}
+	auto folded_value = ExpressionExecutor::EvaluateScalar(binder.context, *bound_expr);
+	values.push_back(folded_value);
+}
+
+static bool TryExtractUnpivotList(ParsedExpression &expr, vector<string> &column_names) {
+	auto initial_size = column_names.size();
+	switch (expr.GetExpressionType()) {
+	case ExpressionType::COLUMN_REF: {
+		auto &colref = expr.Cast<ColumnRefExpression>();
+		if (colref.IsQualified()) {
+			return false;
+		}
+		column_names.push_back(colref.GetColumnName());
+		return true;
+	}
+	case ExpressionType::VALUE_CONSTANT: {
+		auto &constant = expr.Cast<ConstantExpression>();
+		column_names.push_back(constant.GetValue().ToString());
+		return true;
+	}
+	case ExpressionType::FUNCTION: {
+		auto &function = expr.Cast<FunctionExpression>();
+		if (function.FunctionName() != "row") {
+			return false;
+		}
+		for (auto &child : function.GetChildrenMutable()) {
+			if (!TryExtractUnpivotList(*child, column_names)) {
+				column_names.resize(initial_size);
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
 static void BindPivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &values, Binder &binder) {
 	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
@@ -522,22 +567,16 @@ static void BindPivotInList(unique_ptr<ParsedExpression> &expr, vector<Value> &v
 	} break;
 	case ExpressionType::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
-		if (function.FunctionName() != "row") {
-			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain columns or lists of columns");
-		}
-		for (auto &child : function.GetChildrenMutable()) {
-			BindPivotInList(child, values, binder);
+		if (function.FunctionName() == "row") {
+			for (auto &child : function.GetChildrenMutable()) {
+				BindPivotInList(child, values, binder);
+			}
+		} else {
+			BindPivotConstantInList(expr, values, binder);
 		}
 	} break;
 	default: {
-		Value val;
-		ConstantBinder const_binder(binder, binder.context, "PIVOT IN list");
-		auto bound_expr = const_binder.Bind(expr);
-		if (!bound_expr->IsFoldable()) {
-			throw BinderException(expr->GetQueryLocation(), "PIVOT IN list must contain constant expressions");
-		}
-		auto folded_value = ExpressionExecutor::EvaluateScalar(binder.context, *bound_expr);
-		values.push_back(folded_value);
+		BindPivotConstantInList(expr, values, binder);
 	} break;
 	}
 }
@@ -702,17 +741,6 @@ struct UnpivotEntry {
 
 void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry,
                                    vector<UnpivotEntry> &unpivot_entries) {
-	// Try to bind the entry expression as values
-	try {
-		auto expr_copy = entry.expr->Copy();
-		BindPivotInList(expr_copy, entry.values, child_binder);
-		// successfully bound as values - clear the expression
-		entry.expr = nullptr;
-	} catch (...) {
-		// ignore binder exceptions here - we fall back to expression mode
-		entry.values.clear();
-	}
-
 	if (!entry.expr) {
 		// pivot entry without an expression - generate one
 		UnpivotEntry unpivot_entry;
@@ -727,6 +755,21 @@ void Binder::ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry
 		unpivot_entries.push_back(std::move(unpivot_entry));
 		return;
 	}
+
+	vector<string> column_names;
+	if (TryExtractUnpivotList(*entry.expr, column_names)) {
+		UnpivotEntry unpivot_entry;
+		unpivot_entry.alias = entry.alias;
+		for (auto &column_name : column_names) {
+			if (column_name.empty()) {
+				throw BinderException("UNPIVOT - empty column name not supported");
+			}
+			unpivot_entry.expressions.push_back(make_uniq<ColumnRefExpression>(column_name));
+		}
+		unpivot_entries.push_back(std::move(unpivot_entry));
+		return;
+	}
+
 	D_ASSERT(entry.values.empty());
 	// expand star expressions (if any)
 	vector<unique_ptr<ParsedExpression>> star_columns;

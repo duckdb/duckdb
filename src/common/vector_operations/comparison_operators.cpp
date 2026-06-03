@@ -571,7 +571,7 @@ static void VariantComparator(const Vector &left, const Vector &right, int8_t *r
 		auto right_val = VariantUtils::ConvertVariantToValue(right_variant, rhs_sel.get_index(i), 0);
 
 		LogicalType max_logical_type;
-		if (!LogicalType::TryGetMaxLogicalTypeUnchecked(left_val.type(), right_val.type(), max_logical_type)) {
+		if (!LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(left_val.type(), right_val.type(), max_logical_type)) {
 			throw InvalidInputException(
 			    "Can't compare values of type %s (%s) and type %s (%s) - an explicit cast is required",
 			    left_val.type().ToString(), left_val.ToString(), right_val.type().ToString(), right_val.ToString());

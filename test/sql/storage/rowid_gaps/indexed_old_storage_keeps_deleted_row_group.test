@@ -1,0 +1,69 @@
+# name: test/sql/storage/rowid_gaps/indexed_old_storage_keeps_deleted_row_group.test
+# description: old storage keeps fully deleted indexed row groups instead of densely rewriting rowids
+# group: [rowid_gaps]
+
+require noforcestorage
+
+# Old storage versions cannot persist rowid gaps by serializing next_row_id. If
+# an indexed table cannot rebuild indexes, checkpoint must keep a fully deleted
+# row group instead of dropping it and densely shifting later rowids.
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_indexed_old_storage.db' AS rowid_gap_old_storage_idx (STORAGE_VERSION 'v1.5.0', ROW_GROUP_SIZE 2048);
+
+statement ok
+SET max_vacuum_tasks = 99;
+
+statement ok
+CREATE TABLE rowid_gap_old_storage_idx.t AS SELECT i FROM range(6144) tbl(i);
+
+statement ok
+CHECKPOINT rowid_gap_old_storage_idx;
+
+statement ok
+CREATE INDEX t_i_idx ON rowid_gap_old_storage_idx.t(i);
+
+statement ok
+DELETE FROM rowid_gap_old_storage_idx.t WHERE i >= 2048 AND i < 4096;
+
+statement ok
+CHECKPOINT rowid_gap_old_storage_idx;
+
+statement ok
+DETACH rowid_gap_old_storage_idx;
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_indexed_old_storage.db' AS rowid_gap_old_storage_idx;
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('rowid_gap_old_storage_idx.t');
+----
+3
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM rowid_gap_old_storage_idx.t;
+----
+0	6143	4096
+
+query I
+SELECT count(*) FROM rowid_gap_old_storage_idx.t WHERE rowid >= 2048 AND rowid < 4096;
+----
+0
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM rowid_gap_old_storage_idx.t WHERE i = 4096;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+SELECT rowid, i FROM rowid_gap_old_storage_idx.t WHERE i = 4096;
+----
+4096	4096
+
+# If checkpoint had densely renumbered the live row group after the deleted middle row group,
+# this row would have moved from rowid 4096 to rowid 2048.
+query T
+SELECT CASE rowid WHEN 4096 THEN 'preserved' WHEN 2048 THEN 'dense-renumbered' ELSE CAST(rowid AS VARCHAR) END
+FROM rowid_gap_old_storage_idx.t WHERE i = 4096;
+----
+preserved

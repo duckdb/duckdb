@@ -63,6 +63,7 @@ public:
 
 public:
 	idx_t GetTotalRows() const;
+	idx_t GetNextRowId() const;
 	idx_t GetRowGroupCount() const;
 	Allocator &GetAllocator() const;
 
@@ -209,6 +210,9 @@ private:
 	const idx_t row_group_size;
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
+	//! Next rowid offset relative to the row group tree base rowid.
+	//! For main table storage the base is 0, so this is also the absolute next rowid.
+	atomic<idx_t> next_row_id;
 	//! The data table info
 	shared_ptr<DataTableInfo> info;
 	//! The column types of the row group collection

@@ -589,7 +589,7 @@ TEST_CASE("Test appending with an active default column", "[appender]") {
 
 	chunk.data[0].Append(Value::INTEGER(42));
 	chunk.data[0].Append(Value::INTEGER(43));
-	chunk.SetCardinality(2);
+	chunk.SetChildCardinality(2);
 	appender.AppendDataChunk(chunk);
 	appender.Close();
 
@@ -628,7 +628,7 @@ TEST_CASE("Test appending with two active normal columns", "[appender]") {
 				col_data.WriteValue(static_cast<int32_t>(offset + k));
 			}
 		}
-		chunk.SetCardinality(STANDARD_VECTOR_SIZE);
+		chunk.SetChildCardinality(STANDARD_VECTOR_SIZE);
 		appender.AppendDataChunk(chunk);
 		chunk.Reset();
 	}
@@ -660,7 +660,7 @@ TEST_CASE("Test changing the active column configuration", "[appender]") {
 	chunk_all_types.data[1].Append(Value::INTEGER(111));
 	chunk_all_types.data[2].Append(Value::INTEGER(50));
 
-	chunk_all_types.SetCardinality(1);
+	chunk_all_types.SetChildCardinality(1);
 	appender.AppendDataChunk(chunk_all_types);
 
 	appender.AddColumn("j");
@@ -673,7 +673,7 @@ TEST_CASE("Test changing the active column configuration", "[appender]") {
 	chunk_j_i.data[0].Append(Value::INTEGER(111));
 	chunk_j_i.data[1].Append(Value::INTEGER(42));
 
-	chunk_j_i.SetCardinality(1);
+	chunk_j_i.SetChildCardinality(1);
 	appender.AppendDataChunk(chunk_j_i);
 
 	appender.ClearColumns();
@@ -687,7 +687,7 @@ TEST_CASE("Test changing the active column configuration", "[appender]") {
 
 	chunk_k.data[0].Append(Value::INTEGER(50));
 
-	chunk_k.SetCardinality(1);
+	chunk_k.SetChildCardinality(1);
 	appender.AppendDataChunk(chunk_k);
 	appender.Close();
 

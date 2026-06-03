@@ -321,5 +321,46 @@
         "default": "InsertColumnOrder::INSERT_BY_POSITION"
       }
     ]
+  },
+  {
+    "class": "MergeQueryNode",
+    "base": "QueryNode",
+    "enum": "MERGE_QUERY_NODE",
+    "includes": [
+      "duckdb/parser/query_node/merge_query_node.hpp",
+      "duckdb/parser/statement/merge_into_statement.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "target",
+        "type": "TableRef*"
+      },
+      {
+        "id": 201,
+        "name": "source",
+        "type": "TableRef*"
+      },
+      {
+        "id": 202,
+        "name": "join_condition",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 203,
+        "name": "using_columns",
+        "type": "vector<string>"
+      },
+      {
+        "id": 204,
+        "name": "actions",
+        "type": "map<MergeActionCondition, vector<unique_ptr<MergeIntoAction>>>"
+      },
+      {
+        "id": 205,
+        "name": "returning_list",
+        "type": "vector<ParsedExpression*>"
+      }
+    ]
   }
 ]

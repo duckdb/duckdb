@@ -1,0 +1,26 @@
+# name: test/sql/types/geo/geometry_nonascii_cast.test
+# description: WKT with non-ascii bytes must not pass a negative char to ctype helpers
+# group: [geo]
+
+# The high-bit bytes of 'ä' (0xC3 0xA4) used to reach tolower/isspace/isalpha
+# as negative chars while parsing the WKT string, which is undefined behavior.
+
+statement error
+select 'pä int(0 1)'::GEOMETRY
+----
+Invalid Input Error
+
+statement error
+select 'ä POINT(0 1)'::GEOMETRY
+----
+Invalid Input Error
+
+# valid geometry still parses
+query I
+select 'POINT(0 1)'::GEOMETRY::VARCHAR
+----
+POINT (0 1)
+
+# non-ascii bytes in a CRS definition string must not crash the WKT2 parser
+statement ok
+select ST_SetCRS('POINT(0 1)'::GEOMETRY, 'GEäDCRS')

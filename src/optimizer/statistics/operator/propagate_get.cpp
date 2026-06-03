@@ -22,7 +22,7 @@ static bool IsDirectFilterColumnRef(const Expression &expr) {
 static void GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, string &alias) {
 	if (expr->GetExpressionType() == ExpressionType::BOUND_REF) {
 		auto &bound_ref = expr->Cast<BoundReferenceExpression>();
-		index = bound_ref.index;
+		index = bound_ref.Index();
 		alias = bound_ref.GetAlias();
 		return;
 	}

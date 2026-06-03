@@ -83,7 +83,7 @@ SELECT COUNT(*) FROM strict_log;
 ----
 1
 
-# Multiple triggers on the same event are not yet supported
+# Multiple triggers on the same event are supported
 statement ok
 CREATE TABLE t_multi (id INTEGER);
 
@@ -94,11 +94,20 @@ statement ok
 CREATE TRIGGER trg_multi_a AFTER DELETE ON t_multi FOR EACH STATEMENT
     INSERT INTO t_multi_audit VALUES ('a');
 
-statement error
+statement ok
 CREATE TRIGGER trg_multi_b AFTER DELETE ON t_multi FOR EACH STATEMENT
     INSERT INTO t_multi_audit VALUES ('b');
+
+statement ok
+INSERT INTO t_multi VALUES (1);
+
+statement ok
+DELETE FROM t_multi;
+
+query I
+SELECT COUNT(*) FROM t_multi_audit;
 ----
-Not implemented Error: Multiple triggers per table event are not yet supported
+2
 
 # Trigger body can be an UPDATE statement
 statement ok

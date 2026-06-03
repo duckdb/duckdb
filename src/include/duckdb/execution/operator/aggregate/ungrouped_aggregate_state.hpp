@@ -72,7 +72,7 @@ public:
 	Vector repeated_state_vector;
 
 public:
-	void Sink(DataChunk &payload_chunk, idx_t payload_idx, idx_t aggr_idx);
+	void Sink(DataChunk &payload_chunk, idx_t payload_idx, idx_t aggr_idx, idx_t count);
 };
 
 struct UngroupedAggregateExecuteState {
